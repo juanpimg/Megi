@@ -2,11 +2,16 @@
 name = "paint"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+description = "Megi Engine — Decoupled Display Lists, CSS 2.2 painting order and 2D software rasterization"
 
 [dependencies]
 dom = { workspace = true }
 css = { workspace = true }
 layout = { workspace = true }
+
+[dev-dependencies]
+html = { workspace = true }

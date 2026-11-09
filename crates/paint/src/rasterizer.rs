@@ -8,6 +8,37 @@ use css::Color;
 use layout::{EdgeSizes, Rect};
 
 use crate::display_list::{DisplayItem, DisplayList};
+use crate::png;
+
+/// Configuration for a rasterization pass.
+///
+/// The default is an opaque white canvas, matching the user-agent canvas color
+/// expected by the Phase 4 PNG pipeline (CSS 2.2 §14.2). Setting
+/// [`transparent`](Self::transparent) starts from fully transparent pixels
+/// instead, which is useful to composite the page onto a custom background or
+/// as a layer in a future windowed shell.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RenderConfig {
+    /// Canvas color used when [`transparent`](Self::transparent) is `false`.
+    pub background: Color,
+    /// If `true`, the pixmap starts fully transparent and `background` is
+    /// ignored.
+    pub transparent: bool,
+}
+
+impl RenderConfig {
+    /// Opaque white canvas (the default rendering configuration).
+    pub const OPAQUE_WHITE: Self = Self {
+        background: Color::WHITE,
+        transparent: false,
+    };
+}
+
+impl Default for RenderConfig {
+    fn default() -> Self {
+        Self::OPAQUE_WHITE
+    }
+}
 
 /// In-memory RGBA pixel buffer.
 #[derive(Clone, Debug, PartialEq)]
@@ -172,39 +203,60 @@ impl Pixmap {
     }
 
     /// Renders text into the pixmap using a built-in bitmap glyph font.
+    ///
+    /// This is the standalone entry point with the historical 0.6 em advance.
+    /// Display-list rendering uses [`Pixmap::draw_text_run`] so that the
+    /// painted advance matches the width measured by layout.
     pub fn draw_text(&mut self, text: &str, rect: Rect, color: Color, font_size: f32) {
-        if color.a == 0 || text.is_empty() {
+        self.draw_text_run(text, rect, color, font_size, 0.6 * font_size);
+    }
+
+    /// Renders one text run into `rect` using an explicit per-character
+    /// advance in pixels.
+    ///
+    /// The advance comes from the layout [`TextNode`](layout::BoxType::TextNode)
+    /// width (`rect.width / char_count`) so that the rasterized run occupies
+    /// exactly the box the layout engine reserved for it. Glyphs are drawn with
+    /// the built-in 8×8 bitmap font until real font loading lands in WP-4.4.
+    pub fn draw_text_run(
+        &mut self,
+        text: &str,
+        rect: Rect,
+        color: Color,
+        font_size: f32,
+        advance: f32,
+    ) {
+        if color.a == 0 || text.is_empty() || !advance.is_finite() || advance <= 0.0 {
             return;
         }
 
-        // Scale factor relative to baseline 8x8 font
-        let scale = (font_size / 8.0).max(1.0);
-        let char_width = 8.0 * scale * 0.6; // ~60% aspect ratio
+        // Vertical scale relative to the baseline 8x8 bitmap font.
+        let line_scale = (font_size / 8.0).max(0.0);
+        // Horizontal scale makes the 8 glyph columns fit the measured advance.
+        let column_width = advance / 8.0;
         let mut cursor_x = rect.x;
 
         for ch in text.chars() {
-            if ch == ' ' {
-                cursor_x += char_width;
+            if ch.is_whitespace() || ch == '\u{00AD}' {
+                // Whitespace advances the cursor but paints nothing; soft
+                // hyphens are invisible unless the line breaks there (CSS Text 3).
+                cursor_x += advance;
                 continue;
             }
 
             let glyph = get_glyph_bitmap(ch);
-            let gx0 = cursor_x;
-            let gy0 = rect.y;
 
             for (row_idx, row_byte) in glyph.iter().enumerate() {
                 for col_idx in 0..8 {
                     if (row_byte & (1 << (7 - col_idx))) != 0 {
-                        let px = gx0 + (col_idx as f32) * scale * 0.6;
-                        let py = gy0 + (row_idx as f32) * scale;
-                        let pw = (scale * 0.6).max(1.0);
-                        let ph = scale.max(1.0);
-                        self.fill_rect(Rect::new(px, py, pw, ph), color);
+                        let px = cursor_x + (col_idx as f32) * column_width;
+                        let py = rect.y + (row_idx as f32) * line_scale;
+                        self.fill_rect(Rect::new(px, py, column_width, line_scale), color);
                     }
                 }
             }
 
-            cursor_x += char_width;
+            cursor_x += advance;
         }
     }
 
@@ -223,7 +275,8 @@ impl Pixmap {
     /// Transparent pixels are blended over a white `#FFFFFF` canvas.
     pub fn to_ppm(&self) -> Vec<u8> {
         let header = format!("P6\n{} {}\n255\n", self.width, self.height);
-        let mut bytes = Vec::with_capacity(header.len() + (self.width * self.height * 3) as usize);
+        let pixel_bytes = (self.width as usize) * (self.height as usize) * 3;
+        let mut bytes = Vec::with_capacity(header.len() + pixel_bytes);
         bytes.extend_from_slice(header.as_bytes());
 
         for pixel in &self.pixels {
@@ -246,11 +299,53 @@ impl Pixmap {
 
         bytes
     }
+
+    /// Exports the pixmap as raw row-major RGBA bytes (4 bytes per pixel).
+    ///
+    /// This is the canonical deterministic representation used by golden-image
+    /// tests: it is independent of the PNG encoder and of any metadata.
+    pub fn to_rgba_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(self.pixels.len() * 4);
+        for pixel in &self.pixels {
+            bytes.extend_from_slice(&[pixel.r, pixel.g, pixel.b, pixel.a]);
+        }
+        bytes
+    }
+
+    /// Encodes the pixmap as a valid PNG file (8-bit RGBA, color type 6).
+    ///
+    /// See [`crate::png`] for the dependency-free encoding strategy and its
+    /// size trade-off. A zero-sized pixmap yields an empty vector.
+    pub fn to_png(&self) -> Vec<u8> {
+        png::encode_rgba(self.width, self.height, &self.to_rgba_bytes())
+    }
+
+    /// Explicit-RGBA variant of [`Pixmap::to_png`], kept as a named API so
+    /// callers can state the assumed pixel format.
+    pub fn to_png_rgba(&self) -> Vec<u8> {
+        self.to_png()
+    }
 }
 
-/// Executes all drawing instructions in [`DisplayList`] onto a new [`Pixmap`].
+/// Executes all drawing instructions in [`DisplayList`] onto a new [`Pixmap`]
+/// using the default [`RenderConfig`] (opaque white canvas).
 pub fn rasterize_display_list(dl: &DisplayList, width: u32, height: u32) -> Pixmap {
-    let mut pixmap = Pixmap::new(width, height);
+    rasterize_display_list_with_config(dl, width, height, RenderConfig::default())
+}
+
+/// Executes all drawing instructions in [`DisplayList`] onto a new [`Pixmap`]
+/// initialized according to `config`.
+pub fn rasterize_display_list_with_config(
+    dl: &DisplayList,
+    width: u32,
+    height: u32,
+    config: RenderConfig,
+) -> Pixmap {
+    let mut pixmap = if config.transparent {
+        Pixmap::new(width, height)
+    } else {
+        Pixmap::new_with_background(width, height, config.background)
+    };
 
     for item in dl {
         match item {
@@ -269,9 +364,10 @@ pub fn rasterize_display_list(dl: &DisplayList, width: u32, height: u32) -> Pixm
                 rect,
                 color,
                 font_size,
+                advance,
                 ..
             } => {
-                pixmap.draw_text(text, *rect, *color, *font_size);
+                pixmap.draw_text_run(text, *rect, *color, *font_size, *advance);
             }
             DisplayItem::PushClip { rect } => {
                 pixmap.push_clip(*rect);

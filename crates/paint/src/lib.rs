@@ -2,15 +2,35 @@
 //!
 //! Generates decoupled CSS Display Lists according to CSS 2.1 Appendix E painting order
 //! and performs pure safe Rust 2D rasterization into an RGBA pixel buffer ([`Pixmap`]).
+//!
+//! The crate also owns the Phase 4 **HTML → PNG** building blocks:
+//!
+//! - [`build_display_list`] turns a laid-out [`layout::LayoutBox`] tree into a
+//!   flat display list, painting the canvas background following CSS 2.2 §14.2
+//!   (root/`body` background propagation).
+//! - [`rasterize_display_list`] executes the list into a [`Pixmap`] starting
+//!   from an opaque white canvas (configurable through [`RenderConfig`]).
+//! - [`Pixmap::to_png`] encodes the buffer as a valid PNG with a
+//!   dependency-free, deterministic writer (see [`png`]).
+//! - [`collect_style_text`] / [`resolve_embedded_styles`] extract and resolve
+//!   the author CSS embedded in `<style>` elements.
+//!
+//! See `crates/paint/examples/html_to_png.rs` for the end-to-end driver.
 
 pub mod display_list;
 pub mod painter;
+pub mod png;
 pub mod rasterizer;
+pub mod style;
 
 pub use css::Color;
 pub use display_list::{DisplayItem, DisplayList};
 pub use painter::build_display_list;
-pub use rasterizer::{Pixmap, rasterize_display_list};
+pub use png::encode_rgba;
+pub use rasterizer::{
+    Pixmap, RenderConfig, rasterize_display_list, rasterize_display_list_with_config,
+};
+pub use style::{collect_style_text, resolve_embedded_styles};
 
 #[cfg(test)]
 mod tests {
@@ -41,6 +61,7 @@ mod tests {
         s.border_color.right = border_color;
         s.border_color.bottom = border_color;
         s.border_color.left = border_color;
+        s.border_style = css::RectEdges::all(css::BorderStyle::Solid);
         s
     }
 
@@ -96,7 +117,7 @@ mod tests {
         let viewport = Rect::new(0.0, 0.0, 800.0, 600.0);
         let layout_tree = layout_document(&doc, &styles, viewport).expect("layout tree");
 
-        let display_list = build_display_list(&layout_tree);
+        let display_list = build_display_list(&layout_tree, viewport);
         assert!(!display_list.is_empty(), "Display list should not be empty");
 
         // Verify that SolidColor (red bg), Border (blue), and Text ("Hello Megi") exist in display list
@@ -186,6 +207,7 @@ mod tests {
             color: Color::BLUE,
             font_size: 16.0,
             font_family: "monospace".to_string(),
+            advance: 20.0,
         });
 
         let pixmap = rasterize_display_list(&dl, 100, 100);
@@ -194,7 +216,7 @@ mod tests {
         assert_eq!(pixmap.pixel(0, 0), Color::WHITE);
         // Inside box, outside text -> red
         assert_eq!(pixmap.pixel(12, 12), Color::RED);
-        // Inside 'A' glyph -> blue text pixel
-        assert_eq!(pixmap.pixel(22, 22), Color::BLUE);
+        // Inside 'A' glyph (first non-empty glyph cell row) -> blue text pixel
+        assert_eq!(pixmap.pixel(26, 20), Color::BLUE);
     }
 }

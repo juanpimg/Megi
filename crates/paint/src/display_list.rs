@@ -18,12 +18,17 @@ pub enum DisplayItem {
         color: Color,
     },
     /// Renders a text run within a bounding box.
+    ///
+    /// `advance` is the per-character advance in pixels that layout reserved
+    /// for this run (`rect.width / char_count`). The rasterizer must use it
+    /// verbatim so that painted text stays inside the measured text box.
     Text {
         text: String,
         rect: Rect,
         color: Color,
         font_size: f32,
         font_family: String,
+        advance: f32,
     },
     /// Pushes a rectangular clipping boundary onto the clip stack.
     PushClip { rect: Rect },

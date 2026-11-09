@@ -1,60 +1,217 @@
 //! # Display List Painter
 //!
-//! Traverses the CSS [`LayoutBox`] tree in CSS 2.1 Appendix E painting order
+//! Traverses the CSS [`LayoutBox`] tree in CSS 2.2 Appendix E painting order
 //! to produce a decoupled, flat [`DisplayList`].
+//!
+//! ## Canvas and root/`body` background propagation
+//!
+//! CSS 2.2 §14.2 (`https://www.w3.org/TR/CSS22/colors.html#background`) and
+//! CSS Backgrounds 3 §2.11.2 define the *canvas* as the infinite surface the
+//! document is rendered onto. The canvas background is not painted by an
+//! element:
+//!
+//! - If the root element (`html`) has a non-transparent background, that
+//!   background is propagated to the canvas and extends over the whole
+//!   viewport; the root element does not paint it again.
+//! - If the root element is transparent (the initial value), the background of
+//!   the first HTML `body` child element is propagated instead, and the `body`
+//!   element does not paint it again.
+//!
+//! [`build_display_list`] emits the propagated color as the first display item,
+//! covering `viewport`, and suppresses the corresponding element background.
+//! When neither element has a background the display list carries no canvas
+//! item and the rasterizer default ([`RenderConfig`](crate::RenderConfig))
+//! shows through; the Phase 4 pipeline uses opaque white.
 
-use css::Color;
-use layout::{BoxType, LayoutBox};
+use css::{BorderStyle, Color};
+use dom::NodeId;
+use layout::{BoxType, LayoutBox, Rect};
 
 use crate::display_list::{DisplayItem, DisplayList};
 
+/// Background color propagated from the root element or `body` to the canvas.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum CanvasBackground {
+    /// Nothing to propagate; the renderer default canvas color applies.
+    None,
+    /// `html` paints the canvas; the root box must skip its own background.
+    Root(Color),
+    /// `html` is transparent and `body` paints the canvas; `body` must skip its
+    /// own background.
+    Body { color: Color, node: NodeId },
+}
+
+/// Whether the root/`body` background painting should be skipped for an
+/// already-propagated background.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct PaintSkip {
+    root_background: bool,
+    body_node: Option<NodeId>,
+}
+
 /// Builds a deterministic [`DisplayList`] from a laid-out [`LayoutBox`] tree.
 ///
-/// Painting order per box:
+/// `viewport` is the canvas rectangle (normally `Rect::new(0.0, 0.0, w, h)`);
+/// it is used for the propagated root/`body` canvas background.
+///
+/// Painting order per box (CSS 2.2 Appendix E, common in-flow case):
 /// 1. Background color fill over the padding box.
 /// 2. Border outlines around the border box.
 /// 3. Text runs for inline text fragments.
 /// 4. Children traversed recursively in tree order.
-pub fn build_display_list(root: &LayoutBox) -> DisplayList {
+///
+/// Element backgrounds are skipped for format-only boxes
+/// ([`BoxType::LineBox`], [`BoxType::AnonymousBlock`], [`BoxType::TextNode`]):
+/// those never have a background of their own in the CSS box model (audit
+/// finding F-02).
+pub fn build_display_list(root: &LayoutBox, viewport: Rect) -> DisplayList {
+    let canvas = canvas_background(root);
     let mut list = DisplayList::new();
-    paint_box(root, &mut list);
-    list
-}
 
-fn paint_box(layout_box: &LayoutBox, list: &mut DisplayList) {
-    let style = layout_box.style.as_ref();
-
-    // 1. Background color
-    if let Some(s) = style
-        && s.background_color.a > 0
-    {
-        list.push(DisplayItem::SolidColor {
-            rect: layout_box.dimensions.padding_box(),
-            color: s.background_color,
-        });
-    }
-
-    // 2. Borders
-    if let Some(s) = style {
-        let b = layout_box.dimensions.border;
-        let has_border = b.top > 0.0 || b.right > 0.0 || b.bottom > 0.0 || b.left > 0.0;
-        if has_border && s.border_color.top.a > 0 {
-            list.push(DisplayItem::Border {
-                rect: layout_box.dimensions.border_box(),
-                border_width: b,
-                color: s.border_color.top,
+    match canvas {
+        CanvasBackground::None => {}
+        CanvasBackground::Root(color) | CanvasBackground::Body { color, .. } => {
+            list.push(DisplayItem::SolidColor {
+                rect: viewport,
+                color,
             });
         }
     }
 
-    // 3. Text content
-    if let BoxType::TextNode(ref text) = layout_box.box_type
-        && !text.is_empty()
+    let skip = PaintSkip {
+        root_background: matches!(canvas, CanvasBackground::Root(_)),
+        body_node: match canvas {
+            CanvasBackground::Body { node, .. } => Some(node),
+            _ => None,
+        },
+    };
+    paint_box(root, &mut list, skip, true);
+    list
+}
+
+/// Returns the first block-level child of the root box, interpreted as `body`.
+///
+/// The layout tree drops `display: none` descendants (including `head`), so
+/// the first block-level element child of `html` is the document `body` for
+/// HTML documents produced by the HTML parser (`html::parse_document`).
+///
+/// This is a structural inference: a future WP can thread explicit root/`body`
+/// [`NodeId`]s through the painter API once `<body>` can be matched by tag name
+/// without making `paint` depend on the `html` crate.
+fn first_body_box(root: &LayoutBox) -> Option<&LayoutBox> {
+    root.children
+        .iter()
+        .find(|child| matches!(child.box_type, BoxType::BlockNode(_)))
+}
+
+/// Computes the canvas background propagated from `html`/`body` (CSS 2.2 §14.2).
+fn canvas_background(root: &LayoutBox) -> CanvasBackground {
+    let root_background = root
+        .style
+        .as_ref()
+        .map_or(Color::TRANSPARENT, |style| style.background_color);
+
+    if root_background.a > 0 {
+        return CanvasBackground::Root(root_background);
+    }
+
+    let Some(body) = first_body_box(root) else {
+        return CanvasBackground::None;
+    };
+    let body_background = body
+        .style
+        .as_ref()
+        .map_or(Color::TRANSPARENT, |style| style.background_color);
+
+    match body.node_id() {
+        Some(node) if body_background.a > 0 => CanvasBackground::Body {
+            color: body_background,
+            node,
+        },
+        _ => CanvasBackground::None,
+    }
+}
+
+/// Returns the first opaque border color among the four sides, if the box has
+/// a visible border (non-zero width, a `border-style` other than
+/// `none`/`hidden`, and an opaque color on at least one side).
+fn visible_border_color(style: &css::ComputedStyle, border: layout::EdgeSizes) -> Option<Color> {
+    let has_width =
+        border.top > 0.0 || border.right > 0.0 || border.bottom > 0.0 || border.left > 0.0;
+    if !has_width {
+        return None;
+    }
+
+    let sides = [
+        style.border_style.top,
+        style.border_style.right,
+        style.border_style.bottom,
+        style.border_style.left,
+    ];
+    if sides
+        .iter()
+        .all(|style| matches!(style, BorderStyle::None | BorderStyle::Hidden))
     {
-        let (color, font_size, font_family) = if let Some(s) = style {
-            (s.color, s.font_size, s.font_family.clone())
+        return None;
+    }
+
+    [
+        style.border_color.top,
+        style.border_color.right,
+        style.border_color.bottom,
+        style.border_color.left,
+    ]
+    .into_iter()
+    .find(|color| color.a > 0)
+}
+
+/// Recursively emits the painting instructions for `layout_box`.
+fn paint_box(layout_box: &LayoutBox, list: &mut DisplayList, skip: PaintSkip, is_root: bool) {
+    let style = layout_box.style.as_ref();
+    let is_element = layout_box.node_id().is_some();
+
+    // 1. Background color (element boxes only, CSS 2.2 §14.2).
+    let background_is_propagated =
+        (is_root && skip.root_background) || (is_element && layout_box.node_id() == skip.body_node);
+    if is_element
+        && !background_is_propagated
+        && let Some(style) = style
+        && style.background_color.a > 0
+    {
+        list.push(DisplayItem::SolidColor {
+            rect: layout_box.dimensions.padding_box(),
+            color: style.background_color,
+        });
+    }
+
+    // 2. Borders (CSS 2.2 §8.5.3: `border-style: none` computes a zero width).
+    if is_element
+        && let Some(style) = style
+        && let Some(color) = visible_border_color(style, layout_box.dimensions.border)
+    {
+        list.push(DisplayItem::Border {
+            rect: layout_box.dimensions.border_box(),
+            border_width: layout_box.dimensions.border,
+            color,
+        });
+    }
+
+    // 3. Text content of inline-level text fragments.
+    if let BoxType::TextNode(text) = &layout_box.box_type
+        && !text.trim().is_empty()
+    {
+        let (color, font_size, font_family) = if let Some(style) = style {
+            (style.color, style.font_size, style.font_family.clone())
         } else {
             (Color::BLACK, 16.0, "serif".to_string())
+        };
+
+        let char_count = text.chars().count();
+        let measured_width = layout_box.dimensions.content.width;
+        let advance = if char_count > 0 && measured_width > 0.0 {
+            measured_width / char_count as f32
+        } else {
+            0.6 * font_size
         };
 
         list.push(DisplayItem::Text {
@@ -63,11 +220,12 @@ fn paint_box(layout_box: &LayoutBox, list: &mut DisplayList) {
             color,
             font_size,
             font_family,
+            advance,
         });
     }
 
-    // 4. Children
+    // 4. Children in tree order (Ap. E step 4/7 in the in-flow case).
     for child in &layout_box.children {
-        paint_box(child, list);
+        paint_box(child, list, skip, false);
     }
 }
