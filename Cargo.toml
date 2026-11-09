@@ -4,6 +4,7 @@ members = [
     "crates/dom",
     "crates/html",
     "crates/css",
+    "crates/layout",
     "crates/test_harness",
 ]
 
@@ -19,5 +20,7 @@ repository = "https://github.com/juanpimg/Megi"
 dom = { path = "crates/dom" }
 html = { path = "crates/html" }
 css = { path = "crates/css" }
+layout = { path = "crates/layout" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+

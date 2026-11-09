@@ -1,0 +1,13 @@
+[package]
+name = "layout"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Megi Engine — CSS Box Tree, Block Formatting Context & Layout Engine"
+
+[dependencies]
+dom.workspace = true
+css.workspace = true
