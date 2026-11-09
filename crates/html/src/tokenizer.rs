@@ -5,6 +5,8 @@
 //! `last_start_tag`, Processing Instruction states (§13.2.5.72–76), numeric/named
 //! character references (§13.2.5.77–84), and all 7 emitted token variants.
 
+use std::collections::HashSet;
+
 use crate::input_stream::{
     is_ascii_whitespace, is_control_character_in_stream, is_noncharacter, is_surrogate,
     preprocess_code_points,
@@ -405,6 +407,10 @@ struct PendingTag {
     name: String,
     self_closing: bool,
     attributes: Vec<(String, String)>,
+    /// Set of attribute names already present in `attributes`, used to detect
+    /// duplicates in amortized `O(1)` instead of a linear scan (which made a tag with
+    /// many attributes quadratic per tag; see the tokenizer anti-DoS notes).
+    attribute_names: HashSet<String>,
     current_attr_name: String,
     current_attr_value: String,
     has_current_attr: bool,
@@ -417,6 +423,7 @@ impl PendingTag {
             name: String::new(),
             self_closing: false,
             attributes: Vec::new(),
+            attribute_names: HashSet::new(),
             current_attr_name: String::new(),
             current_attr_value: String::new(),
             has_current_attr: false,
@@ -429,6 +436,7 @@ impl PendingTag {
             name: String::new(),
             self_closing: false,
             attributes: Vec::new(),
+            attribute_names: HashSet::new(),
             current_attr_name: String::new(),
             current_attr_value: String::new(),
             has_current_attr: false,
@@ -452,14 +460,18 @@ impl PendingTag {
         }
         let name = std::mem::take(&mut self.current_attr_name);
         let value = std::mem::take(&mut self.current_attr_value);
-        if self.attributes.iter().any(|(k, _)| k == &name) {
+        // First occurrence wins; later duplicates are reported and dropped. The
+        // `HashSet` keeps this amortized O(1) per attribute (a quadratic `.any()` scan
+        // here was an algorithmic DoS: a single tag with tens of thousands of
+        // attributes could burn seconds of CPU).
+        if self.attribute_names.insert(name.clone()) {
+            self.attributes.push((name, value));
+        } else {
             errors.push(ParseError {
                 code: ParseErrorCode::DuplicateAttribute,
                 line: 1,
                 col: 1,
             });
-        } else {
-            self.attributes.push((name, value));
         }
     }
 }

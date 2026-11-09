@@ -9,11 +9,15 @@ pub mod serializer;
 pub mod tokenizer;
 pub mod tree_builder;
 
+pub use dom::{Document, Namespace};
 pub use serializer::serialize_dom_for_test;
 pub use tokenizer::{
     ParseError, ParseErrorCode, Token, Tokenizer, TokenizerConfig, TokenizerState,
 };
-pub use tree_builder::{InsertionMode, TreeBuilder, parse_document, parse_fragment};
+pub use tree_builder::{
+    InsertionMode, LimitViolations, ParseOptions, ParseOutcome, TreeBuilder, parse_document,
+    parse_document_with_options, parse_fragment, parse_fragment_with_options,
+};
 
 #[cfg(test)]
 mod tests {

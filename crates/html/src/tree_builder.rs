@@ -260,10 +260,10 @@ fn determine_doctype_quirks_mode(
         return QuirksMode::Quirks;
     }
 
-    if let Some(sys) = system_id {
-        if sys.eq_ignore_ascii_case("http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd") {
-            return QuirksMode::Quirks;
-        }
+    if let Some(sys) = system_id
+        && sys.eq_ignore_ascii_case("http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd")
+    {
+        return QuirksMode::Quirks;
     }
 
     if let Some(pub_id) = public_id {
@@ -561,6 +561,89 @@ pub fn is_special_category(ns: Namespace, local_name: &str) -> bool {
     }
 }
 
+/// Hard parsing limits applied by [`parse_document_with_options`] /
+/// [`parse_fragment_with_options`].
+///
+/// These are **anti-DoS defenses**, not conformance knobs: real-world pages and the
+/// complete `html5lib-tests` corpus stay far below every default, so enabling the
+/// defaults never changes the resulting tree for conforming input. Hostile input that
+/// exceeds a limit is handled by *ignoring* further insertions and counting a
+/// [`LimitViolations`] entry instead of panicking, aborting or recursing without bound.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ParseOptions {
+    /// Maximum element nesting depth (length of the stack of open elements). Deeper
+    /// start tags are dropped. Bounds the recursion depth of downstream consumers
+    /// (layout, paint) as well.
+    pub max_depth: usize,
+    /// Maximum number of nodes allocated in the document arena. Further start tags,
+    /// comments and text are dropped.
+    pub max_nodes: usize,
+    /// Maximum number of attributes kept on a single element. Excess attributes are
+    /// dropped (the first ones win, matching the duplicate-attribute rule).
+    pub max_attributes_per_element: usize,
+    /// Maximum number of input bytes tokenized. The input is truncated on a UTF-8
+    /// character boundary; a violation is recorded in the outcome.
+    pub max_input_bytes: usize,
+}
+
+impl ParseOptions {
+    /// Generous defaults, well above every official html5lib fixture (largest fixture is
+    /// a few KB, at most a handful of attributes and nesting levels), but far below the
+    /// input sizes that make the tokenizer/tree builder consume seconds of CPU or
+    /// exhaust the stack.
+    pub const DEFAULT: Self = Self {
+        max_depth: 4096,
+        max_nodes: 1_000_000,
+        max_attributes_per_element: 4096,
+        max_input_bytes: 16 * 1024 * 1024,
+    };
+}
+
+impl Default for ParseOptions {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+/// Counter of parsing limits hit while processing a document; see [`ParseOptions`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LimitViolations {
+    /// The input was truncated because it exceeded [`ParseOptions::max_input_bytes`].
+    pub input_truncated: bool,
+    /// Number of start tags ignored because [`ParseOptions::max_depth`] was reached.
+    pub depth_exceeded: u64,
+    /// Number of tokens ignored because [`ParseOptions::max_nodes`] was reached.
+    pub nodes_exceeded: u64,
+    /// Number of attributes dropped because
+    /// [`ParseOptions::max_attributes_per_element`] was exceeded.
+    pub attributes_dropped: u64,
+}
+
+impl LimitViolations {
+    /// Returns `true` when no limit was exceeded.
+    pub const fn is_empty(&self) -> bool {
+        !self.input_truncated
+            && self.depth_exceeded == 0
+            && self.nodes_exceeded == 0
+            && self.attributes_dropped == 0
+    }
+
+    /// Total number of recorded violations (the input truncation counts as one).
+    pub const fn total(&self) -> u64 {
+        let truncated = self.input_truncated as u64;
+        truncated + self.depth_exceeded + self.nodes_exceeded + self.attributes_dropped
+    }
+}
+
+/// Result of a limited parse: the produced tree plus which (if any) safety limits fired.
+#[derive(Debug)]
+pub struct ParseOutcome {
+    /// The parsed document (possibly truncated/downgraded by [`ParseOptions`]).
+    pub document: Document,
+    /// Limits that were exceeded while parsing.
+    pub limit_violations: LimitViolations,
+}
+
 /// WHATWG HTML §13.2.6 Tree Builder state machine.
 pub struct TreeBuilder {
     pub doc: Document,
@@ -578,10 +661,23 @@ pub struct TreeBuilder {
     pub fragment_context: Option<(Namespace, String)>,
     pub fragment_context_node: Option<NodeId>,
     pub pending_table_characters: Vec<char>,
+    /// Hard safety limits for this parse (anti-DoS).
+    pub parse_options: ParseOptions,
+    /// Limits that have been exceeded so far.
+    pub limit_violations: LimitViolations,
+    /// Whether any HTML `<select>` element was inserted; lets the end-of-parse
+    /// `<selectedcontent>` fixup (which walks the whole tree) be skipped entirely for
+    /// the overwhelmingly common documents without a `<select>`.
+    has_select_element: bool,
 }
 
 impl TreeBuilder {
     pub fn new(scripting_enabled: bool) -> Self {
+        Self::with_options(scripting_enabled, ParseOptions::default())
+    }
+
+    /// Creates a tree builder with explicit anti-DoS [`ParseOptions`].
+    pub fn with_options(scripting_enabled: bool, parse_options: ParseOptions) -> Self {
         Self {
             doc: Document::new(),
             mode: InsertionMode::Initial,
@@ -598,6 +694,9 @@ impl TreeBuilder {
             fragment_context: None,
             fragment_context_node: None,
             pending_table_characters: Vec::new(),
+            parse_options,
+            limit_violations: LimitViolations::default(),
+            has_select_element: false,
         }
     }
 
@@ -635,10 +734,10 @@ impl TreeBuilder {
     }
 
     pub fn is_adjusted_current_node_foreign(&self) -> bool {
-        if let Some(id) = self.adjusted_current_node() {
-            if let Some(el) = self.doc.node(id).as_element() {
-                return el.namespace != Namespace::Html;
-            }
+        if let Some(id) = self.adjusted_current_node()
+            && let Some(el) = self.doc.node(id).as_element()
+        {
+            return el.namespace != Namespace::Html;
         }
         false
     }
@@ -708,12 +807,12 @@ impl TreeBuilder {
             }
         }
 
-        if el.namespace == Namespace::MathMl && el.local_name == "annotation-xml" {
-            if let Token::StartTag { name, .. } = token {
-                if name == "svg" {
-                    return false;
-                }
-            }
+        if el.namespace == Namespace::MathMl
+            && el.local_name == "annotation-xml"
+            && let Token::StartTag { name, .. } = token
+            && name == "svg"
+        {
+            return false;
         }
 
         if self.is_html_integration_point(adjusted_node) {
@@ -766,13 +865,12 @@ impl TreeBuilder {
             if node_id == target_node {
                 return true;
             }
-            if let Some(el) = self.doc.node(node_id).as_element() {
-                if DEFAULT_SCOPE_ELEMENTS
+            if let Some(el) = self.doc.node(node_id).as_element()
+                && DEFAULT_SCOPE_ELEMENTS
                     .iter()
                     .any(|&(s_name, s_ns)| el.namespace == s_ns && el.local_name == s_name)
-                {
-                    return false;
-                }
+            {
+                return false;
             }
         }
         false
@@ -922,16 +1020,40 @@ impl TreeBuilder {
         }
     }
 
+    /// Converts raw `(name, value)` attribute pairs into [`Attribute`]s, enforcing
+    /// [`ParseOptions::max_attributes_per_element`] and counting dropped attributes.
+    fn build_attributes(&mut self, raw_attrs: &[(String, String)]) -> Vec<Attribute> {
+        let kept = self.cap_attribute_slice(raw_attrs).len();
+        raw_attrs[..kept]
+            .iter()
+            .map(|(k, v)| Attribute::new(k.clone(), v.clone()))
+            .collect()
+    }
+
+    /// Truncates `raw_attrs` to the configured per-element limit, counting violations.
+    fn cap_attribute_slice<'a>(
+        &mut self,
+        raw_attrs: &'a [(String, String)],
+    ) -> &'a [(String, String)] {
+        let max = self.parse_options.max_attributes_per_element;
+        if raw_attrs.len() > max {
+            self.limit_violations.attributes_dropped += (raw_attrs.len() - max) as u64;
+            &raw_attrs[..max]
+        } else {
+            raw_attrs
+        }
+    }
+
     fn insert_element(
         &mut self,
         namespace: Namespace,
         name: &str,
         raw_attrs: &[(String, String)],
     ) -> NodeId {
-        let attrs: Vec<Attribute> = raw_attrs
-            .iter()
-            .map(|(k, v)| Attribute::new(k.clone(), v.clone()))
-            .collect();
+        if namespace == Namespace::Html && name == "select" {
+            self.has_select_element = true;
+        }
+        let attrs = self.build_attributes(raw_attrs);
         let el_id = self.doc.create_element(namespace, name, attrs);
         self.insert_node_at_adjusted_location(el_id);
         self.open_elements.push(el_id);
@@ -943,10 +1065,7 @@ impl TreeBuilder {
     }
 
     fn create_html_element(&mut self, name: &str, raw_attrs: &[(String, String)]) -> NodeId {
-        let attrs: Vec<Attribute> = raw_attrs
-            .iter()
-            .map(|(k, v)| Attribute::new(k.clone(), v.clone()))
-            .collect();
+        let attrs = self.build_attributes(raw_attrs);
         self.doc.create_element(Namespace::Html, name, attrs)
     }
 
@@ -966,6 +1085,7 @@ impl TreeBuilder {
             }
         }
 
+        let raw_attrs = self.cap_attribute_slice(raw_attrs);
         let mut attrs: Vec<Attribute> = Vec::with_capacity(raw_attrs.len());
         for (raw_k, v) in raw_attrs {
             let mut k = raw_k.clone();
@@ -1148,15 +1268,16 @@ impl TreeBuilder {
     }
 
     fn run_adoption_agency_algorithm(&mut self, subject: &str) {
-        if let Some(curr) = self.current_node() {
-            if self.node_in_html(curr, subject) {
-                let in_active = self.active_formatting.iter().any(
-                    |e| matches!(e, FormattingEntry::Element { node_id, .. } if *node_id == curr),
-                );
-                if !in_active {
-                    self.open_elements.pop();
-                    return;
-                }
+        if let Some(curr) = self.current_node()
+            && self.node_in_html(curr, subject)
+        {
+            let in_active = self
+                .active_formatting
+                .iter()
+                .any(|e| matches!(e, FormattingEntry::Element { node_id, .. } if *node_id == curr));
+            if !in_active {
+                self.open_elements.pop();
+                return;
             }
         }
 
@@ -1255,12 +1376,12 @@ impl TreeBuilder {
                 let node_fmt_idx = self.active_formatting.iter().rposition(
                     |e| matches!(e, FormattingEntry::Element { node_id, .. } if *node_id == node),
                 );
-                if inner_loop_counter > 3 {
-                    if let Some(idx) = node_fmt_idx {
-                        self.active_formatting.remove(idx);
-                        if idx <= bookmark && bookmark > 0 {
-                            bookmark -= 1;
-                        }
+                if inner_loop_counter > 3
+                    && let Some(idx) = node_fmt_idx
+                {
+                    self.active_formatting.remove(idx);
+                    if idx <= bookmark && bookmark > 0 {
+                        bookmark -= 1;
                     }
                 }
 
@@ -1591,6 +1712,31 @@ impl TreeBuilder {
             self.skip_next_lf = false;
             if token == Token::Character(0x0A) {
                 return None;
+            }
+        }
+
+        // Anti-DoS: stop growing the tree once a hard limit is reached. The token is
+        // ignored (never inserted) and the violation is counted; parsing continues so
+        // the rest of the input is drained in linear time instead of panicking/aborting.
+        match token {
+            Token::StartTag { .. } => {
+                if self.open_elements.len() >= self.parse_options.max_depth {
+                    self.limit_violations.depth_exceeded += 1;
+                    return None;
+                }
+                if self.doc.len() >= self.parse_options.max_nodes {
+                    self.limit_violations.nodes_exceeded += 1;
+                    return None;
+                }
+            }
+            // Comments, doctypes, PIs and characters can also allocate nodes (or
+            // coalesce into new ones), so the node budget gates them too.
+            Token::Eof => {}
+            _ => {
+                if self.doc.len() >= self.parse_options.max_nodes {
+                    self.limit_violations.nodes_exceeded += 1;
+                    return None;
+                }
             }
         }
 
@@ -2502,10 +2648,10 @@ impl TreeBuilder {
                 ref attributes,
                 ..
             } if name == "input" => {
-                if let Some((_, ref ctx_name)) = self.fragment_context {
-                    if ctx_name == "select" {
-                        return None;
-                    }
+                if let Some((_, ref ctx_name)) = self.fragment_context
+                    && ctx_name == "select"
+                {
+                    return None;
                 }
                 if self.has_element_in_scope("select") {
                     while let Some(popped) = self.open_elements.pop() {
@@ -2778,10 +2924,10 @@ impl TreeBuilder {
                 ref attributes,
                 ..
             } if name == "select" => {
-                if let Some((_, ref ctx_name)) = self.fragment_context {
-                    if ctx_name == "select" {
-                        return None;
-                    }
+                if let Some((_, ref ctx_name)) = self.fragment_context
+                    && ctx_name == "select"
+                {
+                    return None;
                 }
                 if self.has_element_in_scope("select") {
                     while let Some(popped) = self.open_elements.pop() {
@@ -2803,10 +2949,10 @@ impl TreeBuilder {
             } if name == "optgroup" => {
                 if self.has_element_in_scope("select") {
                     self.generate_implied_end_tags(None);
-                } else if let Some(curr) = self.current_node() {
-                    if self.node_in_html(curr, "option") {
-                        self.open_elements.pop();
-                    }
+                } else if let Some(curr) = self.current_node()
+                    && self.node_in_html(curr, "option")
+                {
+                    self.open_elements.pop();
                 }
                 self.reconstruct_active_formatting_elements();
                 self.insert_html_element("optgroup", attributes);
@@ -2819,10 +2965,10 @@ impl TreeBuilder {
             } if name == "option" => {
                 if self.has_element_in_scope("select") {
                     self.generate_implied_end_tags(Some("optgroup"));
-                } else if let Some(curr) = self.current_node() {
-                    if self.node_in_html(curr, "option") {
-                        self.open_elements.pop();
-                    }
+                } else if let Some(curr) = self.current_node()
+                    && self.node_in_html(curr, "option")
+                {
+                    self.open_elements.pop();
                 }
                 self.reconstruct_active_formatting_elements();
                 self.insert_html_element("option", attributes);
@@ -3451,21 +3597,46 @@ impl TreeBuilder {
         }
     }
 
+    /// Collects, in document order, the descendants of `parent` named `name` (HTML
+    /// namespace), *not* descending into nested `<select>` elements.
+    ///
+    /// Iterative on purpose: the previous recursive implementation overflowed the call
+    /// stack (SIGABRT) on ~100k nested elements, and this fixup runs on **every** parse
+    /// (audit finding F1). The explicit heap stack keeps memory `O(nodes)` worst case
+    /// but never grows the call stack.
     fn collect_descendants_within_select(&self, parent: NodeId, name: &str, out: &mut Vec<NodeId>) {
-        let mut curr = self.doc.node(parent).first_child;
-        while let Some(child_id) = curr {
-            let next = self.doc.node(child_id).next_sibling;
-            if self.node_in_html(child_id, name) {
-                out.push(child_id);
+        let mut stack = vec![parent];
+        while let Some(current) = stack.pop() {
+            if current != parent && self.node_in_html(current, name) {
+                out.push(current);
             }
-            if !self.node_in_html(child_id, "select") {
-                self.collect_descendants_within_select(child_id, name, out);
+            // The recursive walk never descended into nested `<select>` elements: match
+            // that by visiting the select itself but not its children. (`parent` is the
+            // select itself in the `<selectedcontent>`/`<option>` queries, so it is always
+            // descended into.)
+            if current != parent && self.node_in_html(current, "select") {
+                continue;
             }
-            curr = next;
+            // Collect children, then push them reversed so they are popped in document
+            // order (pre-order DFS, same order as the previous recursive walk).
+            let mut children = Vec::new();
+            let mut curr = self.doc.node(current).first_child;
+            while let Some(child_id) = curr {
+                children.push(child_id);
+                curr = self.doc.node(child_id).next_sibling;
+            }
+            for child_id in children.into_iter().rev() {
+                stack.push(child_id);
+            }
         }
     }
 
     pub fn update_selectedcontent_elements(&mut self) {
+        // No `<select>` was ever inserted: the `<selectedcontent>` fixup cannot possibly
+        // do anything, so skip the whole-tree walk (this is what runs on every parse).
+        if !self.has_select_element {
+            return;
+        }
         let root = self.doc.root();
         let mut selects = Vec::new();
         self.collect_descendants_within_select(root, "select", &mut selects);
@@ -3515,32 +3686,32 @@ impl TreeBuilder {
     }
 }
 
-/// Parses a complete HTML document string into a [`dom::Document`] (§13.2).
+/// Parses a complete HTML document string into a [`dom::Document`] (§13.2) using the
+/// default anti-DoS [`ParseOptions`].
+///
+/// The signature is unchanged for callers that only need the tree; use
+/// [`parse_document_with_options`] when the limit outcomes must be inspected.
 pub fn parse_document(input: &str, scripting_enabled: bool) -> Document {
-    let mut tok = Tokenizer::from_str_input(input, TokenizerConfig::default());
-    let mut tb = TreeBuilder::new(scripting_enabled);
+    parse_document_with_options(input, scripting_enabled, &ParseOptions::default()).document
+}
 
-    loop {
-        tok.allow_cdata = tb.is_adjusted_current_node_foreign();
-        let prev_len = tok.tokens.len();
-        tok.step();
-        if tok.tokens.len() > prev_len {
-            let emitted: Vec<Token> = tok.tokens.drain(prev_len..).collect();
-            let mut saw_eof = false;
-            for token in emitted {
-                if token == Token::Eof {
-                    saw_eof = true;
-                }
-                if let Some(new_state) = tb.process_token(token) {
-                    tok.state = new_state;
-                }
-                tok.allow_cdata = tb.is_adjusted_current_node_foreign();
-            }
-            if saw_eof {
-                break;
-            }
-        }
-    }
+/// Parses a complete HTML document string with explicit anti-DoS [`ParseOptions`].
+///
+/// The parser is a pure function of `(truncated input, options)`: when a hard limit is
+/// exceeded the offending tokens are ignored and counted in
+/// [`ParseOutcome::limit_violations`], so hostile input can never make this function
+/// panic, abort, recurse without bound, or tokenize more than `max_input_bytes`.
+pub fn parse_document_with_options(
+    input: &str,
+    scripting_enabled: bool,
+    options: &ParseOptions,
+) -> ParseOutcome {
+    let (input, input_truncated) = truncate_input(input, options.max_input_bytes);
+    let mut tok = Tokenizer::from_str_input(input, TokenizerConfig::default());
+    let mut tb = TreeBuilder::with_options(scripting_enabled, *options);
+    tb.limit_violations.input_truncated = input_truncated;
+
+    drive_tokenizer(&mut tok, &mut tb);
 
     // Ensure `<html>`, `<head>`, and `<body>` exist if parsing ended before `InBody`
     let root = tb.doc.root();
@@ -3577,17 +3748,46 @@ pub fn parse_document(input: &str, scripting_enabled: bool) -> Document {
     }
 
     tb.update_selectedcontent_elements();
-    tb.doc
+    let TreeBuilder {
+        doc,
+        limit_violations,
+        ..
+    } = tb;
+    ParseOutcome {
+        document: doc,
+        limit_violations,
+    }
 }
 
 /// Parses an HTML fragment in the context of `(context_namespace, context_local_name)` (§13.4)
-/// and returns a [`dom::Document`] whose root contains the resulting fragment children.
+/// and returns a [`dom::Document`] whose root contains the resulting fragment children,
+/// using the default anti-DoS [`ParseOptions`].
 pub fn parse_fragment(
     input: &str,
     context_namespace: Namespace,
     context_local_name: &str,
     scripting_enabled: bool,
 ) -> Document {
+    parse_fragment_with_options(
+        input,
+        context_namespace,
+        context_local_name,
+        scripting_enabled,
+        &ParseOptions::default(),
+    )
+    .document
+}
+
+/// Parses an HTML fragment with explicit anti-DoS [`ParseOptions`]; see
+/// [`parse_fragment`] and [`parse_document_with_options`].
+pub fn parse_fragment_with_options(
+    input: &str,
+    context_namespace: Namespace,
+    context_local_name: &str,
+    scripting_enabled: bool,
+    options: &ParseOptions,
+) -> ParseOutcome {
+    let (input, input_truncated) = truncate_input(input, options.max_input_bytes);
     let initial_tok_state = if context_namespace == Namespace::Html {
         match context_local_name {
             "title" | "textarea" => TokenizerState::Rcdata,
@@ -3609,7 +3809,8 @@ pub fn parse_fragment(
         },
     );
 
-    let mut tb = TreeBuilder::new(scripting_enabled);
+    let mut tb = TreeBuilder::with_options(scripting_enabled, *options);
+    tb.limit_violations.input_truncated = input_truncated;
     tb.fragment_context = Some((context_namespace, context_local_name.to_owned()));
     let ctx_node = tb
         .doc
@@ -3625,6 +3826,29 @@ pub fn parse_fragment(
     }
     tb.reset_insertion_mode_appropriately();
 
+    drive_tokenizer(&mut tok, &mut tb);
+
+    // Move children of synthetic `<html>` directly under `doc.root()` for canonical fragment serialization
+    let root = tb.doc.root();
+    tb.doc.reparent_children(html_root, root);
+    tb.doc.detach(html_root);
+    if let Some(ctx_id) = tb.fragment_context_node {
+        tb.doc.detach(ctx_id);
+    }
+    tb.update_selectedcontent_elements();
+    let TreeBuilder {
+        doc,
+        limit_violations,
+        ..
+    } = tb;
+    ParseOutcome {
+        document: doc,
+        limit_violations,
+    }
+}
+
+/// Runs the tokenizer → tree-builder loop until EOF.
+fn drive_tokenizer(tok: &mut Tokenizer, tb: &mut TreeBuilder) {
     loop {
         tok.allow_cdata = tb.is_adjusted_current_node_foreign();
         let prev_len = tok.tokens.len();
@@ -3646,14 +3870,17 @@ pub fn parse_fragment(
             }
         }
     }
+}
 
-    // Move children of synthetic `<html>` directly under `doc.root()` for canonical fragment serialization
-    let root = tb.doc.root();
-    tb.doc.reparent_children(html_root, root);
-    tb.doc.detach(html_root);
-    if let Some(ctx_id) = tb.fragment_context_node {
-        tb.doc.detach(ctx_id);
+/// Truncates `input` to at most `max_bytes` bytes on a UTF-8 character boundary.
+/// Returns the prefix and whether any truncation happened.
+fn truncate_input(input: &str, max_bytes: usize) -> (&str, bool) {
+    if input.len() <= max_bytes {
+        return (input, false);
     }
-    tb.update_selectedcontent_elements();
-    tb.doc
+    let mut end = max_bytes;
+    while end > 0 && !input.is_char_boundary(end) {
+        end -= 1;
+    }
+    (&input[..end], true)
 }

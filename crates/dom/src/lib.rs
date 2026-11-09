@@ -325,15 +325,64 @@ impl Document {
     }
 
     /// Borrows a node by its [`NodeId`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `id` does not belong to this document (or is otherwise out of range).
+    /// Use [`Document::try_node`] for a non-panicking lookup.
     #[inline]
     pub fn node(&self, id: NodeId) -> &Node {
         &self.nodes[id.index()]
     }
 
     /// Mutably borrows a node by its [`NodeId`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `id` does not belong to this document (or is otherwise out of range).
+    /// Use [`Document::try_node_mut`] for a non-panicking lookup.
     #[inline]
     pub fn node_mut(&mut self, id: NodeId) -> &mut Node {
         &mut self.nodes[id.index()]
+    }
+
+    /// Non-panicking fallible lookup: returns `None` when `id` does not name a node
+    /// allocated in this document's arena.
+    ///
+    /// [`NodeId`] values are only meaningful for the [`Document`] that allocated them;
+    /// passing an id from another document either yields `None` or (if the numeric index
+    /// happens to be in range) aliases an unrelated node. Callers that mix documents
+    /// must keep track of arena identity themselves.
+    #[inline]
+    pub fn try_node(&self, id: NodeId) -> Option<&Node> {
+        self.nodes.get(id.index())
+    }
+
+    /// Non-panicking mutable fallible lookup; see [`Document::try_node`].
+    #[inline]
+    pub fn try_node_mut(&mut self, id: NodeId) -> Option<&mut Node> {
+        self.nodes.get_mut(id.index())
+    }
+
+    /// Returns `true` when `ancestor` is `node` itself or one of its ancestors.
+    ///
+    /// The parent-chain walk is bounded by the arena length so that a corrupted
+    /// (cyclic) chain cannot hang the caller; in that case the function reports `true`
+    /// and mutation is rejected.
+    fn is_self_or_ancestor_of(&self, ancestor: NodeId, node: NodeId) -> bool {
+        let mut current = Some(node);
+        let mut steps = 0usize;
+        while let Some(id) = current {
+            if id == ancestor {
+                return true;
+            }
+            if steps > self.nodes.len() {
+                return true;
+            }
+            steps += 1;
+            current = self.try_node(id).and_then(|n| n.parent);
+        }
+        false
     }
 
     /// Detaches `node_id` from its current parent and siblings in `O(1)` time.
@@ -367,8 +416,22 @@ impl Document {
 
     /// Appends `child_id` as the last child of `parent_id` in `O(1)` time.
     /// If `child_id` is already attached elsewhere, it is detached first.
-    pub fn append_child(&mut self, parent_id: NodeId, child_id: NodeId) {
-        debug_assert_ne!(parent_id, child_id, "Cannot append a node to itself");
+    ///
+    /// Returns `false` (leaving the document unchanged) when the mutation would
+    /// corrupt the arena by creating a cycle: `parent_id == child_id`, or
+    /// `child_id` is an ancestor of `parent_id`. This is enforced in release builds
+    /// too, not just via `debug_assert!`.
+    pub fn append_child(&mut self, parent_id: NodeId, child_id: NodeId) -> bool {
+        if parent_id == child_id {
+            return false;
+        }
+        // A node with no children cannot be an ancestor of another node, which keeps
+        // the overwhelmingly common parser append path branch-free of the walk.
+        if self.node(child_id).first_child.is_some()
+            && self.is_self_or_ancestor_of(child_id, parent_id)
+        {
+            return false;
+        }
         if self.node(child_id).parent.is_some() {
             self.detach(child_id);
         }
@@ -385,23 +448,38 @@ impl Document {
         child.parent = Some(parent_id);
         child.prev_sibling = old_last;
         child.next_sibling = None;
+        true
     }
 
     /// Inserts `new_node_id` immediately before `reference_sibling_id` in `O(1)` time.
     /// Used heavily by foster parenting and the Adoption Agency Algorithm.
-    pub fn insert_before(&mut self, reference_sibling_id: NodeId, new_node_id: NodeId) {
-        debug_assert_ne!(reference_sibling_id, new_node_id);
+    ///
+    /// Returns `false` (leaving the document unchanged) when the reference sibling is
+    /// not attached to a parent, or when the move would create a cycle. Callers that
+    /// depend on the old `expect("reference_sibling must have a parent")` invariant
+    /// should check the boolean result.
+    pub fn insert_before(&mut self, reference_sibling_id: NodeId, new_node_id: NodeId) -> bool {
+        if reference_sibling_id == new_node_id {
+            return false;
+        }
+
+        let (parent_id, prev_id) = match self.node(reference_sibling_id).parent {
+            Some(parent) => (parent, self.node(reference_sibling_id).prev_sibling),
+            None => return false,
+        };
+        if new_node_id == parent_id {
+            return false;
+        }
+
+        if self.node(new_node_id).first_child.is_some()
+            && self.is_self_or_ancestor_of(new_node_id, parent_id)
+        {
+            return false;
+        }
+
         if self.node(new_node_id).parent.is_some() {
             self.detach(new_node_id);
         }
-
-        let (parent_id, prev_id) = {
-            let sib = self.node(reference_sibling_id);
-            (
-                sib.parent.expect("reference_sibling must have a parent"),
-                sib.prev_sibling,
-            )
-        };
 
         if let Some(prev) = prev_id {
             self.node_mut(prev).next_sibling = Some(new_node_id);
@@ -415,6 +493,7 @@ impl Document {
         new_node.parent = Some(parent_id);
         new_node.prev_sibling = prev_id;
         new_node.next_sibling = Some(reference_sibling_id);
+        true
     }
 
     /// Moves all children from `old_parent_id` to the end of `new_parent_id`.
@@ -460,20 +539,77 @@ impl Document {
         text_id
     }
 
-    /// Clones `node_id`. If `deep` is true, recursively clones all descendant subtrees.
+    /// Clones `node_id`. If `deep` is true, iteratively clones all descendant subtrees.
+    ///
+    /// `<template>` elements are special-cased per the DOM Standard: the clone always
+    /// gets its **own** inert `DocumentFragment` and the fragment's children are always
+    /// cloned deeply (`subtree = true`), even when `deep` is false, so that the clone
+    /// never shares template contents with the original.
+    ///
+    /// The traversal uses an explicit heap stack, so deep trees cannot overflow the
+    /// call stack.
     pub fn clone_node(&mut self, node_id: NodeId, deep: bool) -> NodeId {
-        let kind = self.node(node_id).kind.clone();
-        let cloned_id = self.create_node(kind);
+        let cloned_root = self.clone_node_shallow(node_id);
+
+        // Work stack of `(source, clone, deep)` frames; template contents are always deep.
+        let mut stack: Vec<(NodeId, NodeId, bool)> = Vec::new();
+        if let Some((src_contents, clone_contents)) =
+            self.template_contents_pair(node_id, cloned_root)
+        {
+            stack.push((src_contents, clone_contents, true));
+        }
         if deep {
-            let mut curr = self.node(node_id).first_child;
+            stack.push((node_id, cloned_root, true));
+        }
+
+        while let Some((source_id, clone_id, descend)) = stack.pop() {
+            if !descend {
+                continue;
+            }
+            let mut curr = self.node(source_id).first_child;
             while let Some(child_id) = curr {
                 let next = self.node(child_id).next_sibling;
-                let cloned_child = self.clone_node(child_id, true);
-                self.append_child(cloned_id, cloned_child);
+                let cloned_child = self.clone_node_shallow(child_id);
+                self.append_child(clone_id, cloned_child);
+                if let Some((src_contents, clone_contents)) =
+                    self.template_contents_pair(child_id, cloned_child)
+                {
+                    stack.push((src_contents, clone_contents, true));
+                }
+                stack.push((child_id, cloned_child, true));
                 curr = next;
             }
         }
+
+        cloned_root
+    }
+
+    /// Allocates a shallow clone of `node_id` (no children) in `O(1)` arena allocations.
+    ///
+    /// HTML `<template>` elements get a freshly allocated empty `DocumentFragment`
+    /// linked from `template_contents` instead of aliasing the original's fragment.
+    fn clone_node_shallow(&mut self, node_id: NodeId) -> NodeId {
+        let kind = self.node(node_id).kind.clone();
+        let cloned_id = self.create_node(kind);
+        let needs_fresh_contents = self
+            .node(cloned_id)
+            .as_element()
+            .is_some_and(|el| el.namespace == Namespace::Html && el.local_name == "template");
+        if needs_fresh_contents {
+            let fragment_id = self.create_node(NodeKind::DocumentFragment);
+            if let Some(el) = self.node_mut(cloned_id).as_element_mut() {
+                el.template_contents = Some(fragment_id);
+            }
+        }
         cloned_id
+    }
+
+    /// Returns the `(source_template_contents, clone_template_contents)` pair when both
+    /// nodes are HTML `<template>` elements with allocated `template_contents`.
+    fn template_contents_pair(&self, source: NodeId, clone: NodeId) -> Option<(NodeId, NodeId)> {
+        let source_contents = self.node(source).as_element()?.template_contents?;
+        let clone_contents = self.node(clone).as_element()?.template_contents?;
+        Some((source_contents, clone_contents))
     }
 
     /// Returns an iterator over the direct children of `parent_id`.
@@ -618,5 +754,112 @@ mod tests {
         assert_eq!(moved, vec![c1, c2]);
         assert_eq!(doc.node(c1).parent, Some(new_p));
         assert_eq!(doc.node(c2).parent, Some(new_p));
+    }
+
+    #[test]
+    fn test_append_child_rejects_self_and_ancestor_cycles_in_release() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let outer = doc.create_element(Namespace::Html, "div", vec![]);
+        let inner = doc.create_element(Namespace::Html, "p", vec![]);
+        let grandchild = doc.create_element(Namespace::Html, "span", vec![]);
+        assert!(doc.append_child(root, outer));
+        assert!(doc.append_child(outer, inner));
+        assert!(doc.append_child(inner, grandchild));
+
+        // Self-insertion must be rejected, not corrupt the arena.
+        assert!(!doc.append_child(inner, inner));
+        assert_eq!(doc.node(inner).parent, Some(outer));
+
+        // Ancestor under descendant must be rejected (would create a cycle and make
+        // `ancestors()` iterate forever).
+        assert!(!doc.append_child(grandchild, outer));
+        assert!(!doc.append_child(inner, outer));
+        assert_eq!(doc.node(outer).parent, Some(root));
+        assert_eq!(doc.node(outer).first_child, Some(inner));
+        assert_eq!(doc.children(root).collect::<Vec<_>>(), vec![outer]);
+
+        // `ancestors()` terminates on the intact tree.
+        let ancestors: Vec<NodeId> = doc.ancestors(grandchild).collect();
+        assert_eq!(ancestors, vec![inner, outer, root]);
+    }
+
+    #[test]
+    fn test_insert_before_detached_reference_does_not_panic() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let detached_ref = doc.create_element(Namespace::Html, "b", vec![]);
+        let node = doc.create_element(Namespace::Html, "i", vec![]);
+        let sibling = doc.create_element(Namespace::Html, "u", vec![]);
+        doc.append_child(root, sibling);
+
+        // Reference sibling without a parent: clean early return, no panic.
+        assert!(!doc.insert_before(detached_ref, node));
+        assert_eq!(doc.node(node).parent, None);
+        assert_eq!(doc.node(sibling).parent, Some(root));
+
+        // Self-insertion and ancestor-into-descendant are rejected too.
+        assert!(doc.insert_before(sibling, node));
+        assert_eq!(doc.children(root).collect::<Vec<_>>(), vec![node, sibling]);
+        assert!(!doc.insert_before(node, node));
+        let nested = doc.create_element(Namespace::Html, "div", vec![]);
+        let child = doc.create_element(Namespace::Html, "em", vec![]);
+        assert!(doc.append_child(nested, child));
+        assert!(doc.append_child(root, nested));
+        // `nested` is an ancestor of `child`; inserting it before `child` would cycle.
+        assert!(!doc.insert_before(child, nested));
+        assert_eq!(doc.node(nested).parent, Some(root));
+    }
+
+    #[test]
+    fn test_clone_node_template_gets_independent_contents() {
+        let mut doc = Document::new();
+        let tmpl = doc.create_element(Namespace::Html, "template", vec![]);
+        let original_frag = doc
+            .node(tmpl)
+            .as_element()
+            .and_then(|el| el.template_contents)
+            .expect("template has contents fragment");
+        let span = doc.create_element(Namespace::Html, "span", vec![]);
+        doc.append_child(original_frag, span);
+        doc.append_text(span, "Inert");
+
+        let cloned = doc.clone_node(tmpl, false);
+        assert_ne!(cloned, tmpl);
+        let cloned_frag = doc
+            .node(cloned)
+            .as_element()
+            .and_then(|el| el.template_contents)
+            .expect("clone has contents fragment");
+        assert_ne!(
+            cloned_frag, original_frag,
+            "template contents must not be shared"
+        );
+
+        // Template contents are always cloned deeply, even for a shallow clone.
+        let cloned_children: Vec<NodeId> = doc.children(cloned_frag).collect();
+        assert_eq!(cloned_children.len(), 1);
+        let cloned_span = cloned_children[0];
+        assert_ne!(cloned_span, span);
+        assert_eq!(
+            doc.node(cloned_span).as_element().unwrap().local_name,
+            "span"
+        );
+        assert_eq!(doc.node(cloned_span).parent, Some(cloned_frag));
+        let cloned_text = doc.children(cloned_span).next();
+        assert!(cloned_text.is_some());
+        assert_eq!(doc.node(cloned_text.unwrap()).as_text(), Some("Inert"));
+
+        // The original template is untouched.
+        assert_eq!(doc.children(original_frag).collect::<Vec<_>>(), vec![span]);
+    }
+
+    #[test]
+    fn test_try_node_is_fallible_for_out_of_range_ids() {
+        let mut doc = Document::new();
+        let out_of_range = NodeId::from_index(9999);
+        assert!(doc.try_node(out_of_range).is_none());
+        assert!(doc.try_node_mut(out_of_range).is_none());
+        assert!(doc.try_node(doc.root()).is_some());
     }
 }
