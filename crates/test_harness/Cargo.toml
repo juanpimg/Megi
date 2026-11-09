@@ -1,0 +1,15 @@
+[package]
+name = "test_harness"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Megi Engine — Closed-Loop Conformance Harness for html5lib-tests and WPT HTML Parsing"
+
+[dependencies]
+dom.workspace = true
+html.workspace = true
+serde.workspace = true
+serde_json.workspace = true

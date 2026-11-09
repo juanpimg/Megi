@@ -1,0 +1,824 @@
+{
+  "source_file": "tests2.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<!DOCTYPE html>Test",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"Test\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<textarea>test</div>test",
+      "errors": [
+        "(1,10): expected-doctype-but-got-start-tag",
+        "(1,24): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <textarea>\n|       \"test</div>test\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<table><td>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,11): unexpected-cell-in-table-body",
+        "(1,11): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<table><td>test</tbody></table>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,11): unexpected-cell-in-table-body"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             \"test\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<frame>test",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,7): unexpected-start-tag-ignored"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"test\""
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<!DOCTYPE html><frameset>test",
+      "errors": [
+        "(1,29): unexpected-char-in-frameset",
+        "(1,29): unexpected-char-in-frameset",
+        "(1,29): unexpected-char-in-frameset",
+        "(1,29): unexpected-char-in-frameset",
+        "(1,29): eof-in-frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<!DOCTYPE html><frameset> te st",
+      "errors": [
+        "(1,29): unexpected-char-in-frameset",
+        "(1,29): unexpected-char-in-frameset",
+        "(1,29): unexpected-char-in-frameset",
+        "(1,29): unexpected-char-in-frameset",
+        "(1,29): eof-in-frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <frameset>\n|     \"  \""
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<!DOCTYPE html><frameset></frameset> te st",
+      "errors": [
+        "(1,29): unexpected-char-after-frameset",
+        "(1,29): unexpected-char-after-frameset",
+        "(1,29): unexpected-char-after-frameset",
+        "(1,29): unexpected-char-after-frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <frameset>\n|   \"  \""
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<!DOCTYPE html><frameset><!DOCTYPE html>",
+      "errors": [
+        "(1,40): unexpected-doctype",
+        "(1,40): eof-in-frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<!DOCTYPE html><font><p><b>test</font>",
+      "errors": [
+        "(1,38): adoption-agency-1.3",
+        "(1,38): adoption-agency-1.3"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <font>\n|     <p>\n|       <font>\n|         <b>\n|           \"test\""
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<!DOCTYPE html><dt><div><dd>",
+      "errors": [
+        "(1,28): end-tag-too-early"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <dt>\n|       <div>\n|     <dd>"
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<script></x",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,11): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</x\"\n|   <body>"
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<table><plaintext><td>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,18): unexpected-start-tag-implies-table-voodoo",
+        "(1,22): foster-parenting-character-in-table",
+        "(1,22): foster-parenting-character-in-table",
+        "(1,22): foster-parenting-character-in-table",
+        "(1,22): foster-parenting-character-in-table",
+        "(1,22): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <plaintext>\n|       \"<td>\"\n|     <table>"
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<plaintext></plaintext>",
+      "errors": [
+        "(1,11): expected-doctype-but-got-start-tag",
+        "(1,23): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <plaintext>\n|       \"</plaintext>\""
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<!DOCTYPE html><table><tr>TEST",
+      "errors": [
+        "(1,30): foster-parenting-character-in-table",
+        "(1,30): foster-parenting-character-in-table",
+        "(1,30): foster-parenting-character-in-table",
+        "(1,30): foster-parenting-character-in-table",
+        "(1,30): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"TEST\"\n|     <table>\n|       <tbody>\n|         <tr>"
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<!DOCTYPE html><body t1=1><body t2=2><body t3=3 t4=4>",
+      "errors": [
+        "(1,37): unexpected-start-tag",
+        "(1,53): unexpected-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     t1=\"1\"\n|     t2=\"2\"\n|     t3=\"3\"\n|     t4=\"4\""
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "</b test",
+      "errors": [
+        "(1,8): eof-in-attribute-name",
+        "(1,8): expected-doctype-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:9) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<!DOCTYPE html></b test<b &=&amp>X",
+      "errors": [
+        "(1,24): invalid-character-in-attribute-name",
+        "(1,32): named-entity-without-semicolon",
+        "(1,33): attributes-in-end-tag",
+        "(1,33): unexpected-end-tag-before-html"
+      ],
+      "new_errors": [
+        "(1:24) unexpected-character-in-attribute-name",
+        "(1:33) missing-semicolon-after-character-reference",
+        "(1:33) end-tag-with-attributes"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"X\""
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<!doctypehtml><scrIPt type=text/x-foobar;baz>X</SCRipt",
+      "errors": [
+        "(1,9): need-space-after-doctype",
+        "(1,54): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:10) missing-whitespace-before-doctype-name"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       type=\"text/x-foobar;baz\"\n|       \"X</SCRipt\"\n|   <body>"
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "&",
+      "errors": [
+        "(1,1): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"&\""
+    },
+    {
+      "index": 20,
+      "description": null,
+      "data": "&#",
+      "errors": [
+        "(1,2): expected-numeric-entity",
+        "(1,2): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [
+        "(1:3) absence-of-digits-in-numeric-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"&#\""
+    },
+    {
+      "index": 21,
+      "description": null,
+      "data": "&#X",
+      "errors": [
+        "(1,3): expected-numeric-entity",
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [
+        "(1:4) absence-of-digits-in-numeric-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"&#X\""
+    },
+    {
+      "index": 22,
+      "description": null,
+      "data": "&#x",
+      "errors": [
+        "(1,3): expected-numeric-entity",
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [
+        "(1:4) absence-of-digits-in-numeric-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"&#x\""
+    },
+    {
+      "index": 23,
+      "description": null,
+      "data": "&#45",
+      "errors": [
+        "(1,4): numeric-entity-without-semicolon",
+        "(1,4): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [
+        "(1:5) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"-\""
+    },
+    {
+      "index": 24,
+      "description": null,
+      "data": "&x-test",
+      "errors": [
+        "(1,2): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"&x-test\""
+    },
+    {
+      "index": 25,
+      "description": null,
+      "data": "<!doctypehtml><p><li>",
+      "errors": [
+        "(1,9): need-space-after-doctype"
+      ],
+      "new_errors": [
+        "(1:10) missing-whitespace-before-doctype-name"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|     <li>"
+    },
+    {
+      "index": 26,
+      "description": null,
+      "data": "<!doctypehtml><p><dt>",
+      "errors": [
+        "(1,9): need-space-after-doctype"
+      ],
+      "new_errors": [
+        "(1:10) missing-whitespace-before-doctype-name"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|     <dt>"
+    },
+    {
+      "index": 27,
+      "description": null,
+      "data": "<!doctypehtml><p><dd>",
+      "errors": [
+        "(1,9): need-space-after-doctype"
+      ],
+      "new_errors": [
+        "(1:10) missing-whitespace-before-doctype-name"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|     <dd>"
+    },
+    {
+      "index": 28,
+      "description": null,
+      "data": "<!doctypehtml><p><form>",
+      "errors": [
+        "(1,9): need-space-after-doctype",
+        "(1,23): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:10) missing-whitespace-before-doctype-name"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|     <form>"
+    },
+    {
+      "index": 29,
+      "description": null,
+      "data": "<!DOCTYPE html><p></P>X",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|     \"X\""
+    },
+    {
+      "index": 30,
+      "description": null,
+      "data": "&AMP",
+      "errors": [
+        "(1,4): named-entity-without-semicolon",
+        "(1,4): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [
+        "(1:5) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"&\""
+    },
+    {
+      "index": 31,
+      "description": null,
+      "data": "&AMp;",
+      "errors": [
+        "(1,3): expected-named-entity",
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [
+        "(1:5) unknown-named-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"&AMp;\""
+    },
+    {
+      "index": 32,
+      "description": null,
+      "data": "<!DOCTYPE html><html><head></head><body><thisISasillyTESTelementNameToMakeSureCrazyTagNamesArePARSEDcorrectLY>",
+      "errors": [
+        "(1,110): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <thisisasillytestelementnametomakesurecrazytagnamesareparsedcorrectly>"
+    },
+    {
+      "index": 33,
+      "description": null,
+      "data": "<!DOCTYPE html>X</body>X",
+      "errors": [
+        "(1,24): unexpected-char-after-body"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"XX\""
+    },
+    {
+      "index": 34,
+      "description": null,
+      "data": "<!DOCTYPE html><!-- X",
+      "errors": [
+        "(1,21): eof-in-comment"
+      ],
+      "new_errors": [
+        "(1:22) eof-in-comment"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <!--  X -->\n| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 35,
+      "description": null,
+      "data": "<!DOCTYPE html><table><caption>test TEST</caption><td>test",
+      "errors": [
+        "(1,54): unexpected-cell-in-table-body",
+        "(1,58): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <caption>\n|         \"test TEST\"\n|       <tbody>\n|         <tr>\n|           <td>\n|             \"test\""
+    },
+    {
+      "index": 36,
+      "description": null,
+      "data": "<!DOCTYPE html><select><option><optgroup>",
+      "errors": [
+        "(1,41): eof-in-select"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <option>\n|       <optgroup>"
+    },
+    {
+      "index": 37,
+      "description": null,
+      "data": "<!DOCTYPE html><select><optgroup><option></optgroup><option><select><option>",
+      "errors": [
+        "1:61: ERROR: Start tag 'select' isn't allowed here. Currently open tags: html, body, select, option."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <optgroup>\n|         <option>\n|       <option>\n|     <option>"
+    },
+    {
+      "index": 38,
+      "description": null,
+      "data": "<!DOCTYPE html><select><optgroup><option><optgroup>",
+      "errors": [
+        "(1,51): eof-in-select"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <optgroup>\n|         <option>\n|       <optgroup>"
+    },
+    {
+      "index": 39,
+      "description": null,
+      "data": "<!DOCTYPE html><datalist><option>foo</datalist>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <datalist>\n|       <option>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 40,
+      "description": null,
+      "data": "<!DOCTYPE html><font><input><input></font>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <font>\n|       <input>\n|       <input>"
+    },
+    {
+      "index": 41,
+      "description": null,
+      "data": "<!DOCTYPE html><!-- XXX - XXX -->",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <!--  XXX - XXX  -->\n| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 42,
+      "description": null,
+      "data": "<!DOCTYPE html><!-- XXX - XXX",
+      "errors": [
+        "(1,29): eof-in-comment"
+      ],
+      "new_errors": [
+        "(1:30) eof-in-comment"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <!--  XXX - XXX -->\n| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 43,
+      "description": null,
+      "data": "<!DOCTYPE html><!-- XXX - XXX - XXX -->",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <!--  XXX - XXX - XXX  -->\n| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 44,
+      "description": null,
+      "data": "<!DOCTYPE html> <!DOCTYPE html>",
+      "errors": [
+        "Line: 1 Col: 31 Unexpected DOCTYPE. Ignored."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 45,
+      "description": null,
+      "data": "test\ntest",
+      "errors": [
+        "(2,4): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"test\ntest\""
+    },
+    {
+      "index": 46,
+      "description": null,
+      "data": "<!DOCTYPE html><body><title>test</body></title>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <title>\n|       \"test</body>\""
+    },
+    {
+      "index": 47,
+      "description": null,
+      "data": "<!DOCTYPE html><body><title>X</title><meta name=z><link rel=foo><style>\nx { content:\"</style\" } </style>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <title>\n|       \"X\"\n|     <meta>\n|       name=\"z\"\n|     <link>\n|       rel=\"foo\"\n|     <style>\n|       \"\nx { content:\"</style\" } \""
+    },
+    {
+      "index": 48,
+      "description": null,
+      "data": "<!DOCTYPE html><select><optgroup></optgroup></select>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <optgroup>"
+    },
+    {
+      "index": 49,
+      "description": null,
+      "data": " \n ",
+      "errors": [
+        "(2,1): expected-doctype-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 50,
+      "description": null,
+      "data": "<!DOCTYPE html>  <html>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 51,
+      "description": null,
+      "data": "<!DOCTYPE html><script>\n</script>  <title>x</title>  </head>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"\n\"\n|     \"  \"\n|     <title>\n|       \"x\"\n|     \"  \"\n|   <body>"
+    },
+    {
+      "index": 52,
+      "description": null,
+      "data": "<!DOCTYPE html><html><body><html id=x>",
+      "errors": [
+        "(1,38): non-html-root"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   id=\"x\"\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 53,
+      "description": null,
+      "data": "<!DOCTYPE html>X</body><html id=\"x\">",
+      "errors": [
+        "(1,36): non-html-root"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   id=\"x\"\n|   <head>\n|   <body>\n|     \"X\""
+    },
+    {
+      "index": 54,
+      "description": null,
+      "data": "<!DOCTYPE html><head><html id=x>",
+      "errors": [
+        "(1,32): non-html-root"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   id=\"x\"\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 55,
+      "description": null,
+      "data": "<!DOCTYPE html>X</html>X",
+      "errors": [
+        "(1,24): expected-eof-but-got-char"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"XX\""
+    },
+    {
+      "index": 56,
+      "description": null,
+      "data": "<!DOCTYPE html>X</html> ",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"X \""
+    },
+    {
+      "index": 57,
+      "description": null,
+      "data": "<!DOCTYPE html>X</html><p>X",
+      "errors": [
+        "(1,26): expected-eof-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"X\"\n|     <p>\n|       \"X\""
+    },
+    {
+      "index": 58,
+      "description": null,
+      "data": "<!DOCTYPE html>X<p/x/y/z>",
+      "errors": [
+        "(1,19): unexpected-character-after-solidus-in-tag",
+        "(1,21): unexpected-character-after-solidus-in-tag",
+        "(1,23): unexpected-character-after-solidus-in-tag"
+      ],
+      "new_errors": [
+        "(1:20) unexpected-solidus-in-tag",
+        "(1:22) unexpected-solidus-in-tag",
+        "(1:24) unexpected-solidus-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"X\"\n|     <p>\n|       x=\"\"\n|       y=\"\"\n|       z=\"\""
+    },
+    {
+      "index": 59,
+      "description": null,
+      "data": "<!DOCTYPE html><!--x--",
+      "errors": [
+        "(1,22): eof-in-comment-double-dash"
+      ],
+      "new_errors": [
+        "(1:23) eof-in-comment"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <!-- x -->\n| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 60,
+      "description": null,
+      "data": "<!DOCTYPE html><table><tr><td></p></table>",
+      "errors": [
+        "(1,34): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             <p>"
+    },
+    {
+      "index": 61,
+      "description": null,
+      "data": "<!DOCTYPE <!DOCTYPE HTML>><!--<!--x-->-->",
+      "errors": [
+        "(1,20): expected-space-or-right-bracket-in-doctype",
+        "(1,25): unknown-doctype",
+        "(1,35): unexpected-char-in-comment"
+      ],
+      "new_errors": [
+        "(1:21) invalid-character-sequence-after-doctype-name",
+        "(1:35) nested-comment"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE <!doctype>\n| <html>\n|   <head>\n|   <body>\n|     \">\"\n|     <!-- <!--x -->\n|     \"-->\""
+    },
+    {
+      "index": 62,
+      "description": null,
+      "data": "<!doctype html><div><form></form><div></div></div>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <form>\n|       <div>"
+    }
+  ]
+}

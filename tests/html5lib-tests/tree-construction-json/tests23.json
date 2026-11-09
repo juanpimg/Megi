@@ -1,0 +1,76 @@
+{
+  "source_file": "tests23.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<p><font size=4><font color=red><font size=4><font size=4><font size=4><font size=4><font size=4><font color=red><p>X",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,116): unexpected-end-tag",
+        "(1,117): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <font>\n|         size=\"4\"\n|         <font>\n|           color=\"red\"\n|           <font>\n|             size=\"4\"\n|             <font>\n|               size=\"4\"\n|               <font>\n|                 size=\"4\"\n|                 <font>\n|                   size=\"4\"\n|                   <font>\n|                     size=\"4\"\n|                     <font>\n|                       color=\"red\"\n|     <p>\n|       <font>\n|         color=\"red\"\n|         <font>\n|           size=\"4\"\n|           <font>\n|             size=\"4\"\n|             <font>\n|               size=\"4\"\n|               <font>\n|                 color=\"red\"\n|                 \"X\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<p><font size=4><font size=4><font size=4><font size=4><p>X",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,58): unexpected-end-tag",
+        "(1,59): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <font>\n|         size=\"4\"\n|         <font>\n|           size=\"4\"\n|           <font>\n|             size=\"4\"\n|             <font>\n|               size=\"4\"\n|     <p>\n|       <font>\n|         size=\"4\"\n|         <font>\n|           size=\"4\"\n|           <font>\n|             size=\"4\"\n|             \"X\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<p><font size=4><font size=4><font size=4><font size=\"5\"><font size=4><p>X",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,73): unexpected-end-tag",
+        "(1,74): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <font>\n|         size=\"4\"\n|         <font>\n|           size=\"4\"\n|           <font>\n|             size=\"4\"\n|             <font>\n|               size=\"5\"\n|               <font>\n|                 size=\"4\"\n|     <p>\n|       <font>\n|         size=\"4\"\n|         <font>\n|           size=\"4\"\n|           <font>\n|             size=\"5\"\n|             <font>\n|               size=\"4\"\n|               \"X\""
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<p><font size=4 id=a><font size=4 id=b><font size=4><font size=4><p>X",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,68): unexpected-end-tag",
+        "(1,69): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <font>\n|         id=\"a\"\n|         size=\"4\"\n|         <font>\n|           id=\"b\"\n|           size=\"4\"\n|           <font>\n|             size=\"4\"\n|             <font>\n|               size=\"4\"\n|     <p>\n|       <font>\n|         id=\"a\"\n|         size=\"4\"\n|         <font>\n|           id=\"b\"\n|           size=\"4\"\n|           <font>\n|             size=\"4\"\n|             <font>\n|               size=\"4\"\n|               \"X\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<p><b id=a><b id=a><b id=a><b><object><b id=a><b id=a>X</object><p>Y",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,64): end-tag-too-early",
+        "(1,67): unexpected-end-tag",
+        "(1,68): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <b>\n|         id=\"a\"\n|         <b>\n|           id=\"a\"\n|           <b>\n|             id=\"a\"\n|             <b>\n|               <object>\n|                 <b>\n|                   id=\"a\"\n|                   <b>\n|                     id=\"a\"\n|                     \"X\"\n|     <p>\n|       <b>\n|         id=\"a\"\n|         <b>\n|           id=\"a\"\n|           <b>\n|             id=\"a\"\n|             <b>\n|               \"Y\""
+    }
+  ]
+}

@@ -1,0 +1,533 @@
+{
+  "source_file": "blocks.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<!doctype html><p>foo<address>bar<p>baz",
+      "errors": [
+        "(1,39): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <address>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<!doctype html><address><p>foo</address>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <address>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<!doctype html><p>foo<article>bar<p>baz",
+      "errors": [
+        "(1,39): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <article>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<!doctype html><article><p>foo</article>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <article>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<!doctype html><p>foo<aside>bar<p>baz",
+      "errors": [
+        "(1,37): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <aside>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<!doctype html><aside><p>foo</aside>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <aside>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<!doctype html><p>foo<blockquote>bar<p>baz",
+      "errors": [
+        "(1,42): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <blockquote>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<!doctype html><blockquote><p>foo</blockquote>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <blockquote>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<!doctype html><p>foo<center>bar<p>baz",
+      "errors": [
+        "(1,38): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <center>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<!doctype html><center><p>foo</center>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <center>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<!doctype html><p>foo<details>bar<p>baz",
+      "errors": [
+        "(1,39): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <details>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<!doctype html><details><p>foo</details>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <details>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<!doctype html><p>foo<dialog>bar<p>baz",
+      "errors": [
+        "(1,38): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <dialog>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<!doctype html><dialog><p>foo</dialog>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <dialog>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<!doctype html><p>foo<dir>bar<p>baz",
+      "errors": [
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <dir>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<!doctype html><dir><p>foo</dir>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <dir>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<!doctype html><p>foo<div>bar<p>baz",
+      "errors": [
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <div>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<!doctype html><div><p>foo</div>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<!doctype html><p>foo<dl>bar<p>baz",
+      "errors": [
+        "(1,34): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <dl>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "<!doctype html><dl><p>foo</dl>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <dl>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 20,
+      "description": null,
+      "data": "<!doctype html><p>foo<fieldset>bar<p>baz",
+      "errors": [
+        "(1,40): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <fieldset>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 21,
+      "description": null,
+      "data": "<!doctype html><fieldset><p>foo</fieldset>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <fieldset>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 22,
+      "description": null,
+      "data": "<!doctype html><p>foo<figcaption>bar<p>baz",
+      "errors": [
+        "(1,42): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <figcaption>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 23,
+      "description": null,
+      "data": "<!doctype html><figcaption><p>foo</figcaption>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <figcaption>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 24,
+      "description": null,
+      "data": "<!doctype html><p>foo<figure>bar<p>baz",
+      "errors": [
+        "(1,38): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <figure>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 25,
+      "description": null,
+      "data": "<!doctype html><figure><p>foo</figure>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <figure>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 26,
+      "description": null,
+      "data": "<!doctype html><p>foo<footer>bar<p>baz",
+      "errors": [
+        "(1,38): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <footer>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 27,
+      "description": null,
+      "data": "<!doctype html><footer><p>foo</footer>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <footer>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 28,
+      "description": null,
+      "data": "<!doctype html><p>foo<header>bar<p>baz",
+      "errors": [
+        "(1,38): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <header>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 29,
+      "description": null,
+      "data": "<!doctype html><header><p>foo</header>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <header>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 30,
+      "description": null,
+      "data": "<!doctype html><p>foo<hgroup>bar<p>baz",
+      "errors": [
+        "(1,38): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <hgroup>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 31,
+      "description": null,
+      "data": "<!doctype html><hgroup><p>foo</hgroup>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <hgroup>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 32,
+      "description": null,
+      "data": "<!doctype html><p>foo<listing>bar<p>baz",
+      "errors": [
+        "(1,39): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <listing>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 33,
+      "description": null,
+      "data": "<!doctype html><listing><p>foo</listing>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <listing>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 34,
+      "description": null,
+      "data": "<!doctype html><p>foo<menu>bar<p>baz",
+      "errors": [
+        "(1,36): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <menu>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 35,
+      "description": null,
+      "data": "<!doctype html><menu><p>foo</menu>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <menu>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 36,
+      "description": null,
+      "data": "<!doctype html><p>foo<nav>bar<p>baz",
+      "errors": [
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <nav>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 37,
+      "description": null,
+      "data": "<!doctype html><nav><p>foo</nav>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <nav>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 38,
+      "description": null,
+      "data": "<!doctype html><p>foo<ol>bar<p>baz",
+      "errors": [
+        "(1,34): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <ol>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 39,
+      "description": null,
+      "data": "<!doctype html><ol><p>foo</ol>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <ol>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 40,
+      "description": null,
+      "data": "<!doctype html><p>foo<pre>bar<p>baz",
+      "errors": [
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <pre>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 41,
+      "description": null,
+      "data": "<!doctype html><pre><p>foo</pre>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <pre>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 42,
+      "description": null,
+      "data": "<!doctype html><p>foo<section>bar<p>baz",
+      "errors": [
+        "(1,39): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <section>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 43,
+      "description": null,
+      "data": "<!doctype html><section><p>foo</section>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <section>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 44,
+      "description": null,
+      "data": "<!doctype html><p>foo<summary>bar<p>baz",
+      "errors": [
+        "(1,39): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <summary>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 45,
+      "description": null,
+      "data": "<!doctype html><summary><p>foo</summary>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <summary>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 46,
+      "description": null,
+      "data": "<!doctype html><p>foo<ul>bar<p>baz",
+      "errors": [
+        "(1,34): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <ul>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 47,
+      "description": null,
+      "data": "<!doctype html><ul><p>foo</ul>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <ul>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    }
+  ]
+}

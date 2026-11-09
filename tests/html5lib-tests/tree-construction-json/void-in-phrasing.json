@@ -1,0 +1,135 @@
+{
+  "source_file": "void-in-phrasing.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<!DOCTYPE html><body><p><br></p>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <br>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<!DOCTYPE html><body><p><br>text</p>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <br>\n|       \"text\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<!DOCTYPE html><body><p>before<br>after</p>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"before\"\n|       <br>\n|       \"after\""
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<!DOCTYPE html><body><p><br><br></p>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <br>\n|       <br>"
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<!DOCTYPE html><body><p>a<br>b<br>c</p>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"a\"\n|       <br>\n|       \"b\"\n|       <br>\n|       \"c\""
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<!DOCTYPE html><body><h1><br></h1>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <h1>\n|       <br>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<!DOCTYPE html><body><p><input></p>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <input>"
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<!DOCTYPE html><body><p><img></p>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <img>"
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<!DOCTYPE html><body><p><wbr></p>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <wbr>"
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<!DOCTYPE html><body><p><embed></p>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <embed>"
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<!DOCTYPE html><body><h2><input></h2>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <h2>\n|       <input>"
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<!DOCTYPE html><body><em><br></em>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <em>\n|       <br>"
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<!DOCTYPE html><body><strong><br>text</strong>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <strong>\n|       <br>\n|       \"text\""
+    }
+  ]
+}

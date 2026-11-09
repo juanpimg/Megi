@@ -1,0 +1,103 @@
+{
+  "source_file": "search-element.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": "search start tag closes an open p element",
+      "data": "<!doctype html><p>foo<search>bar<p>baz",
+      "errors": [
+        "(1,38): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <search>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<!doctype html><search><p>foo</search>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <search>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<!DOCTYPE html>xxx<svg><x><g><a><search><b>",
+      "errors": [
+        " * (1,44) unexpected HTML-like start tag token in foreign content",
+        " * (1,44) unexpected end of file"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"xxx\"\n|     <svg svg>\n|       <svg x>\n|         <svg g>\n|           <svg a>\n|             <svg search>\n|     <b>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<!doctype html><a><search>x</a>y",
+      "errors": [
+        " * (1,32) adoption agency: formatting element is not the current node",
+        " * (1,33) unexpected end of file"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <a>\n|     <search>\n|       <a>\n|         \"x\"\n|       \"y\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<!doctype html><a><search>x<p>y<a>z",
+      "errors": [
+        " * (1,34) unexpected start tag a implies end tag a",
+        " * (1,35) unexpected end of file"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <a>\n|     <search>\n|       <a>\n|         \"x\"\n|       <p>\n|         <a>\n|           \"y\"\n|         <a>\n|           \"z\""
+    },
+    {
+      "index": 5,
+      "description": "search is in the special category, so an li start tag does not close the li outside it",
+      "data": "<!doctype html><li>a<search><li>b",
+      "errors": [
+        " * (1,35) unexpected end of file"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <li>\n|       \"a\"\n|       <search>\n|         <li>\n|           \"b\""
+    },
+    {
+      "index": 6,
+      "description": "search is in the special category, so a dt start tag does not close the dd outside it",
+      "data": "<!doctype html><dd>a<search><dt>b",
+      "errors": [
+        " * (1,35) unexpected end of file"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <dd>\n|       \"a\"\n|       <search>\n|         <dt>\n|           \"b\""
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<!doctype html><x><search></x>y",
+      "errors": [
+        " * (1,30) unexpected end tag x",
+        " * (1,31) unexpected end of file"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <x>\n|       <search>\n|         \"y\""
+    }
+  ]
+}

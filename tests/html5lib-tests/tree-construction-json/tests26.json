@@ -1,0 +1,330 @@
+{
+  "source_file": "tests26.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<!DOCTYPE html><body><a href='#1'><nobr>1<nobr></a><br><a href='#2'><nobr>2<nobr></a><br><a href='#3'><nobr>3<nobr></a>",
+      "errors": [
+        "(1,47): unexpected-start-tag-implies-end-tag",
+        "(1,51): adoption-agency-1.3",
+        "(1,74): unexpected-start-tag-implies-end-tag",
+        "(1,74): adoption-agency-1.3",
+        "(1,81): unexpected-start-tag-implies-end-tag",
+        "(1,85): adoption-agency-1.3",
+        "(1,108): unexpected-start-tag-implies-end-tag",
+        "(1,108): adoption-agency-1.3",
+        "(1,115): unexpected-start-tag-implies-end-tag",
+        "(1,119): adoption-agency-1.3"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <a>\n|       href=\"#1\"\n|       <nobr>\n|         \"1\"\n|       <nobr>\n|     <nobr>\n|       <br>\n|       <a>\n|         href=\"#2\"\n|     <a>\n|       href=\"#2\"\n|       <nobr>\n|         \"2\"\n|       <nobr>\n|     <nobr>\n|       <br>\n|       <a>\n|         href=\"#3\"\n|     <a>\n|       href=\"#3\"\n|       <nobr>\n|         \"3\"\n|       <nobr>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<!DOCTYPE html><body><b><nobr>1<nobr></b><i><nobr>2<nobr></i>3",
+      "errors": [
+        "(1,37): unexpected-start-tag-implies-end-tag",
+        "(1,41): adoption-agency-1.3",
+        "(1,50): unexpected-start-tag-implies-end-tag",
+        "(1,50): adoption-agency-1.3",
+        "(1,57): unexpected-start-tag-implies-end-tag",
+        "(1,61): adoption-agency-1.3",
+        "(1,62): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <b>\n|       <nobr>\n|         \"1\"\n|       <nobr>\n|     <nobr>\n|       <i>\n|     <i>\n|       <nobr>\n|         \"2\"\n|       <nobr>\n|     <nobr>\n|       \"3\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<!DOCTYPE html><body><b><nobr>1<table><nobr></b><i><nobr>2<nobr></i>3",
+      "errors": [
+        "(1,44): foster-parenting-start-tag",
+        "(1,48): foster-parenting-end-tag",
+        "(1,48): adoption-agency-1.3",
+        "(1,51): foster-parenting-start-tag",
+        "(1,57): foster-parenting-start-tag",
+        "(1,57): nobr-already-in-scope",
+        "(1,57): adoption-agency-1.2",
+        "(1,58): foster-parenting-character",
+        "(1,64): foster-parenting-start-tag",
+        "(1,64): nobr-already-in-scope",
+        "(1,68): foster-parenting-end-tag",
+        "(1,68): adoption-agency-1.2",
+        "(1,69): foster-parenting-character",
+        "(1,69): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <b>\n|       <nobr>\n|         \"1\"\n|         <nobr>\n|           <i>\n|         <i>\n|           <nobr>\n|             \"2\"\n|           <nobr>\n|         <nobr>\n|           \"3\"\n|         <table>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<!DOCTYPE html><body><b><nobr>1<table><tr><td><nobr></b><i><nobr>2<nobr></i>3",
+      "errors": [
+        "(1,56): unexpected-end-tag",
+        "(1,65): unexpected-start-tag-implies-end-tag",
+        "(1,65): adoption-agency-1.3",
+        "(1,72): unexpected-start-tag-implies-end-tag",
+        "(1,76): adoption-agency-1.3",
+        "(1,77): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <b>\n|       <nobr>\n|         \"1\"\n|         <table>\n|           <tbody>\n|             <tr>\n|               <td>\n|                 <nobr>\n|                   <i>\n|                 <i>\n|                   <nobr>\n|                     \"2\"\n|                   <nobr>\n|                 <nobr>\n|                   \"3\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<!DOCTYPE html><body><b><nobr>1<div><nobr></b><i><nobr>2<nobr></i>3",
+      "errors": [
+        "(1,42): unexpected-start-tag-implies-end-tag",
+        "(1,42): adoption-agency-1.3",
+        "(1,46): adoption-agency-1.3",
+        "(1,46): adoption-agency-1.3",
+        "(1,55): unexpected-start-tag-implies-end-tag",
+        "(1,55): adoption-agency-1.3",
+        "(1,62): unexpected-start-tag-implies-end-tag",
+        "(1,66): adoption-agency-1.3",
+        "(1,67): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <b>\n|       <nobr>\n|         \"1\"\n|     <div>\n|       <b>\n|         <nobr>\n|         <nobr>\n|       <nobr>\n|         <i>\n|       <i>\n|         <nobr>\n|           \"2\"\n|         <nobr>\n|       <nobr>\n|         \"3\""
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<!DOCTYPE html><body><b><nobr>1<nobr></b><div><i><nobr>2<nobr></i>3",
+      "errors": [
+        "(1,37): unexpected-start-tag-implies-end-tag",
+        "(1,41): adoption-agency-1.3",
+        "(1,55): unexpected-start-tag-implies-end-tag",
+        "(1,55): adoption-agency-1.3",
+        "(1,62): unexpected-start-tag-implies-end-tag",
+        "(1,66): adoption-agency-1.3",
+        "(1,67): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <b>\n|       <nobr>\n|         \"1\"\n|       <nobr>\n|     <div>\n|       <nobr>\n|         <i>\n|       <i>\n|         <nobr>\n|           \"2\"\n|         <nobr>\n|       <nobr>\n|         \"3\""
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<!DOCTYPE html><body><b><nobr>1<nobr><ins></b><i><nobr>",
+      "errors": [
+        "(1,37): unexpected-start-tag-implies-end-tag",
+        "(1,46): adoption-agency-1.3",
+        "(1,55): unexpected-start-tag-implies-end-tag",
+        "(1,55): adoption-agency-1.3",
+        "(1,55): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <b>\n|       <nobr>\n|         \"1\"\n|       <nobr>\n|         <ins>\n|     <nobr>\n|       <i>\n|     <i>\n|       <nobr>"
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<!DOCTYPE html><body><b><nobr>1<ins><nobr></b><i>2",
+      "errors": [
+        "(1,42): unexpected-start-tag-implies-end-tag",
+        "(1,42): adoption-agency-1.3",
+        "(1,46): adoption-agency-1.3",
+        "(1,50): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <b>\n|       <nobr>\n|         \"1\"\n|         <ins>\n|       <nobr>\n|     <nobr>\n|       <i>\n|         \"2\""
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<!DOCTYPE html><body><b>1<nobr></b><i><nobr>2</i>",
+      "errors": [
+        "(1,35): adoption-agency-1.3",
+        "(1,44): unexpected-start-tag-implies-end-tag",
+        "(1,44): adoption-agency-1.3",
+        "(1,49): adoption-agency-1.3"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <b>\n|       \"1\"\n|       <nobr>\n|     <nobr>\n|       <i>\n|     <i>\n|       <nobr>\n|         \"2\""
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<p><code x</code></p>\n",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,11): invalid-character-in-attribute-name",
+        "(1,12): unexpected-character-after-solidus-in-tag",
+        "(1,21): unexpected-end-tag",
+        "(2,0): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:11) unexpected-character-in-attribute-name",
+        "(1:13) unexpected-solidus-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <code>\n|         code=\"\"\n|         x<=\"\"\n|     <code>\n|       code=\"\"\n|       x<=\"\"\n|       \"\n\""
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<!DOCTYPE html><svg><foreignObject><p><i></p>a",
+      "errors": [
+        "(1,45): unexpected-end-tag",
+        "(1,46): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg foreignObject>\n|         <p>\n|           <i>\n|         <i>\n|           \"a\""
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<!DOCTYPE html><table><tr><td><svg><foreignObject><p><i></p>a",
+      "errors": [
+        "(1,60): unexpected-end-tag",
+        "(1,61): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             <svg svg>\n|               <svg foreignObject>\n|                 <p>\n|                   <i>\n|                 <i>\n|                   \"a\""
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<!DOCTYPE html><math><mtext><p><i></p>a",
+      "errors": [
+        "(1,38): unexpected-end-tag",
+        "(1,39): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mtext>\n|         <p>\n|           <i>\n|         <i>\n|           \"a\""
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<!DOCTYPE html><table><tr><td><math><mtext><p><i></p>a",
+      "errors": [
+        "(1,53): unexpected-end-tag",
+        "(1,54): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             <math math>\n|               <math mtext>\n|                 <p>\n|                   <i>\n|                 <i>\n|                   \"a\""
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<!DOCTYPE html><body><div><!/div>a",
+      "errors": [
+        "(1,28): expected-dashes-or-doctype",
+        "(1,34): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:29) incorrectly-opened-comment"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <!-- /div -->\n|       \"a\""
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<button><p><button>",
+      "errors": [
+        "Line 1 Col 8 Unexpected start tag (button). Expected DOCTYPE.",
+        "Line 1 Col 19 Unexpected start tag (button) implies end tag (button).",
+        "Line 1 Col 19 Expected closing tag. Unexpected end of file."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <button>\n|       <p>\n|     <button>"
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<svg></p><foo>",
+      "errors": [
+        "(1:1) Missing doctype",
+        "9: HTML end tag “p” in a foreign namespace context.",
+        "(1:6) Unexpected </p> from in body insertion mode",
+        "(1:16) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|     <p>\n|     <foo>"
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<svg></br><foo>",
+      "errors": [
+        "(1:1) Missing doctype",
+        "10: HTML end tag “br” in a foreign namespace context.",
+        "(1:6) Unexpected </br> from in body insertion mode",
+        "(1:16) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|     <br>\n|     <foo>"
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<math></p><foo>",
+      "errors": [
+        "(1:1) Missing doctype",
+        "10: HTML end tag “p” in a foreign namespace context.",
+        "(1:7) Unexpected </p> from in body insertion mode",
+        "(1:16) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|     <p>\n|     <foo>"
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "<math></br><foo>",
+      "errors": [
+        "(1:1) Missing doctype",
+        "11: HTML end tag “br” in a foreign namespace context.",
+        "(1:7) Unexpected </br> from in body insertion mode",
+        "(1:17) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|     <br>\n|     <foo>"
+    }
+  ]
+}

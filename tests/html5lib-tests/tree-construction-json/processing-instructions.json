@@ -1,0 +1,1245 @@
+{
+  "source_file": "processing-instructions.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<body><?something>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?something ?>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<body><?something><span>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?something ?>\n|     <span>"
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<body><?something good>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?something good?>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<body><?something else is good>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?something else is good?>"
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<body><?one><?two>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?one ?>\n|     <?two ?>"
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<body><?a$><?b$><?good?>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?a$ -->\n|     <!-- ?b$ -->\n|     <?good ?>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<body><?hey there?>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?hey there?>"
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<body><?hey   there?>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?hey there?>"
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<body><?hey?there>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?hey ?there?>"
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<body><?hey\tthere=1?>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?hey there=1?>"
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<body><?hey\nthere=1?>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?hey there=1?>"
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<body><?hey\nthere=1?>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?hey there=1?>"
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<body><?hey\fthere=1?>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?hey there=1?>"
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<body><?something ? >",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?something ? ?>"
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<body><?something x >",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?something x ?>"
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<body><?something ?\\t   ??>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?something ?\\t   ??>"
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<body><?t d > ?>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?t d ?>\n|     \" ?>\""
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<body><?module-handler>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?module-handler ?>"
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<body><?module-handler data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?module-handler data?>"
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "<body><?view-port>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?view-port ?>"
+    },
+    {
+      "index": 20,
+      "description": null,
+      "data": "<body><?view-port data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?view-port data?>"
+    },
+    {
+      "index": 21,
+      "description": null,
+      "data": "<body><?config-v2>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?config-v2 ?>"
+    },
+    {
+      "index": 22,
+      "description": null,
+      "data": "<body><?config-v2 data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?config-v2 data?>"
+    },
+    {
+      "index": 23,
+      "description": null,
+      "data": "<body><?x>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?x ?>"
+    },
+    {
+      "index": 24,
+      "description": null,
+      "data": "<body><?x data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?x data?>"
+    },
+    {
+      "index": 25,
+      "description": null,
+      "data": "<body><?zz2op>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?zz2op ?>"
+    },
+    {
+      "index": 26,
+      "description": null,
+      "data": "<body><?zz2op data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?zz2op data?>"
+    },
+    {
+      "index": 27,
+      "description": null,
+      "data": "<body><?xla->",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?xla- ?>"
+    },
+    {
+      "index": 28,
+      "description": null,
+      "data": "<body><?xla- data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?xla- data?>"
+    },
+    {
+      "index": 29,
+      "description": null,
+      "data": "<body><?a-b-c>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?a-b-c ?>"
+    },
+    {
+      "index": 30,
+      "description": null,
+      "data": "<body><?a-b-c data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?a-b-c data?>"
+    },
+    {
+      "index": 31,
+      "description": null,
+      "data": "<body><?v-123>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?v-123 ?>"
+    },
+    {
+      "index": 32,
+      "description": null,
+      "data": "<body><?v-123 data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?v-123 data?>"
+    },
+    {
+      "index": 33,
+      "description": null,
+      "data": "<body><?a0-b1-c2>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?a0-b1-c2 ?>"
+    },
+    {
+      "index": 34,
+      "description": null,
+      "data": "<body><?a0-b1-c2 data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?a0-b1-c2 data?>"
+    },
+    {
+      "index": 35,
+      "description": null,
+      "data": "<body><?page-404>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?page-404 ?>"
+    },
+    {
+      "index": 36,
+      "description": null,
+      "data": "<body><?page-404 data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?page-404 data?>"
+    },
+    {
+      "index": 37,
+      "description": null,
+      "data": "<body><?r2-d2>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?r2-d2 ?>"
+    },
+    {
+      "index": 38,
+      "description": null,
+      "data": "<body><?r2-d2 data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?r2-d2 data?>"
+    },
+    {
+      "index": 39,
+      "description": null,
+      "data": "<body><?level-99>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?level-99 ?>"
+    },
+    {
+      "index": 40,
+      "description": null,
+      "data": "<body><?level-99 data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?level-99 data?>"
+    },
+    {
+      "index": 41,
+      "description": null,
+      "data": "<body><?UPPERCASE>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?UPPERCASE ?>"
+    },
+    {
+      "index": 42,
+      "description": null,
+      "data": "<body><?UPPERCASE data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?UPPERCASE data?>"
+    },
+    {
+      "index": 43,
+      "description": null,
+      "data": "<body><?all-KINDS-of-CaSeS>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?all-KINDS-of-CaSeS ?>"
+    },
+    {
+      "index": 44,
+      "description": null,
+      "data": "<body><?all-KINDS-of-CaSeS data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?all-KINDS-of-CaSeS data?>"
+    },
+    {
+      "index": 45,
+      "description": null,
+      "data": "<body><?user_name>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?user_name ?>"
+    },
+    {
+      "index": 46,
+      "description": null,
+      "data": "<body><?user_name data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?user_name data?>"
+    },
+    {
+      "index": 47,
+      "description": null,
+      "data": "<body><?S_S-S_S>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?S_S-S_S ?>"
+    },
+    {
+      "index": 48,
+      "description": null,
+      "data": "<body><?S_S-S_S data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?S_S-S_S data?>"
+    },
+    {
+      "index": 49,
+      "description": null,
+      "data": "<body><?b_>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?b_ ?>"
+    },
+    {
+      "index": 50,
+      "description": null,
+      "data": "<body><?b_ data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?b_ data?>"
+    },
+    {
+      "index": 51,
+      "description": null,
+      "data": "<body><?_prefix>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?_prefix ?>"
+    },
+    {
+      "index": 52,
+      "description": null,
+      "data": "<body><?_prefix data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?_prefix data?>"
+    },
+    {
+      "index": 53,
+      "description": null,
+      "data": "<body><?_x132>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?_x132 ?>"
+    },
+    {
+      "index": 54,
+      "description": null,
+      "data": "<body><?_x132 data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?_x132 data?>"
+    },
+    {
+      "index": 55,
+      "description": null,
+      "data": "<body><?_-_>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?_-_ ?>"
+    },
+    {
+      "index": 56,
+      "description": null,
+      "data": "<body><?_-_ data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?_-_ data?>"
+    },
+    {
+      "index": 57,
+      "description": null,
+      "data": "<body><?_>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?_ ?>"
+    },
+    {
+      "index": 58,
+      "description": null,
+      "data": "<body><?_ data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?_ data?>"
+    },
+    {
+      "index": 59,
+      "description": null,
+      "data": "<body><?A---------------->",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?A---------------- ?>"
+    },
+    {
+      "index": 60,
+      "description": null,
+      "data": "<body><?A---------------- data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?A---------------- data?>"
+    },
+    {
+      "index": 61,
+      "description": null,
+      "data": "<body><?z0123456789>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?z0123456789 ?>"
+    },
+    {
+      "index": 62,
+      "description": null,
+      "data": "<body><?z0123456789 data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?z0123456789 data?>"
+    },
+    {
+      "index": 63,
+      "description": null,
+      "data": "<body><?m-0>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?m-0 ?>"
+    },
+    {
+      "index": 64,
+      "description": null,
+      "data": "<body><?m-0 data>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <?m-0 data?>"
+    },
+    {
+      "index": 65,
+      "description": null,
+      "data": "<body><?xml>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?xml -->"
+    },
+    {
+      "index": 66,
+      "description": null,
+      "data": "<body><?xml-stylesheet>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?xml-stylesheet -->"
+    },
+    {
+      "index": 67,
+      "description": null,
+      "data": "<body><?XML>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?XML -->"
+    },
+    {
+      "index": 68,
+      "description": null,
+      "data": "<body><?XML-stylesheet>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?XML-stylesheet -->"
+    },
+    {
+      "index": 69,
+      "description": null,
+      "data": "<body><?xML>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?xML -->"
+    },
+    {
+      "index": 70,
+      "description": null,
+      "data": "<body><?xml-STYLesheet>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?xml-STYLesheet -->"
+    },
+    {
+      "index": 71,
+      "description": null,
+      "data": "<body><?1st-place>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?1st-place -->"
+    },
+    {
+      "index": 72,
+      "description": null,
+      "data": "<body><?2-factor>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?2-factor -->"
+    },
+    {
+      "index": 73,
+      "description": null,
+      "data": "<body><?99-problems>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?99-problems -->"
+    },
+    {
+      "index": 74,
+      "description": null,
+      "data": "<body><?٥-star>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?٥-star -->"
+    },
+    {
+      "index": 75,
+      "description": null,
+      "data": "<body><?-prefix>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?-prefix -->"
+    },
+    {
+      "index": 76,
+      "description": null,
+      "data": "<body><?--internal>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?--internal -->"
+    },
+    {
+      "index": 77,
+      "description": null,
+      "data": "<body><?-data->",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?-data- -->"
+    },
+    {
+      "index": 78,
+      "description": null,
+      "data": "<body><?-100>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?-100 -->"
+    },
+    {
+      "index": 79,
+      "description": null,
+      "data": "<body><?·middle-dot>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?·middle-dot -->"
+    },
+    {
+      "index": 80,
+      "description": null,
+      "data": "<body><?͵greek-numeral>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?͵greek-numeral -->"
+    },
+    {
+      "index": 81,
+      "description": null,
+      "data": "<body><?́accent-start>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?́accent-start -->"
+    },
+    {
+      "index": 82,
+      "description": null,
+      "data": "<body><?price$value>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?price$value -->"
+    },
+    {
+      "index": 83,
+      "description": null,
+      "data": "<body><?user@domain>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?user@domain -->"
+    },
+    {
+      "index": 84,
+      "description": null,
+      "data": "<body><?tag#id>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?tag#id -->"
+    },
+    {
+      "index": 85,
+      "description": null,
+      "data": "<body><?a+b>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?a+b -->"
+    },
+    {
+      "index": 86,
+      "description": null,
+      "data": "<body><?100%>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?100% -->"
+    },
+    {
+      "index": 87,
+      "description": null,
+      "data": "<body><?data.v1>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?data.v1 -->"
+    },
+    {
+      "index": 88,
+      "description": null,
+      "data": "<body><?namespace:tag>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?namespace:tag -->"
+    },
+    {
+      "index": 89,
+      "description": null,
+      "data": "<body><?error!code>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?error!code -->"
+    },
+    {
+      "index": 90,
+      "description": null,
+      "data": "<body><?x=y>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?x=y -->"
+    },
+    {
+      "index": 91,
+      "description": null,
+      "data": "<body><?a<b>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?a<b -->"
+    },
+    {
+      "index": 92,
+      "description": null,
+      "data": "<body><?true&false>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?true&false -->"
+    },
+    {
+      "index": 93,
+      "description": null,
+      "data": "<body><?not|or>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?not|or -->"
+    },
+    {
+      "index": 94,
+      "description": null,
+      "data": "<body><?lit$123456789>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?lit$123456789 -->"
+    },
+    {
+      "index": 95,
+      "description": null,
+      "data": "<body><?lit$$4x>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?lit$$4x -->"
+    },
+    {
+      "index": 96,
+      "description": null,
+      "data": "<body><?🚀-launch>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?🚀-launch -->"
+    },
+    {
+      "index": 97,
+      "description": null,
+      "data": "<body><?error-⚠️>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?error-⚠️ -->"
+    },
+    {
+      "index": 98,
+      "description": null,
+      "data": "<body><?fire-🔥>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?fire-🔥 -->"
+    },
+    {
+      "index": 99,
+      "description": null,
+      "data": "<body><?v1-✅>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?v1-✅ -->"
+    },
+    {
+      "index": 100,
+      "description": null,
+      "data": "<body><?start",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 101,
+      "description": null,
+      "data": "<body><?start?",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 102,
+      "description": null,
+      "data": "<body><?start ",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 103,
+      "description": null,
+      "data": "<body><?start data",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 104,
+      "description": null,
+      "data": "<body><?start ? ?",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 105,
+      "description": null,
+      "data": "<body><?",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 106,
+      "description": null,
+      "data": "<body><? ",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- ?  -->"
+    },
+    {
+      "index": 107,
+      "description": null,
+      "data": "<div><?something></div>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <?something ?>"
+    },
+    {
+      "index": 108,
+      "description": null,
+      "data": "<div><?something good></div>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <?something good?>"
+    },
+    {
+      "index": 109,
+      "description": null,
+      "data": "<table><?something></table>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <?something ?>"
+    },
+    {
+      "index": 110,
+      "description": null,
+      "data": "<table><tr><?something></tr></table>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <?something ?>"
+    },
+    {
+      "index": 111,
+      "description": null,
+      "data": "<script><?something></script>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<?something>\"\n|   <body>"
+    },
+    {
+      "index": 112,
+      "description": null,
+      "data": "<style><?something></style>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \"<?something>\"\n|   <body>"
+    },
+    {
+      "index": 113,
+      "description": null,
+      "data": "<?something>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <?something ?>\n| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 114,
+      "description": null,
+      "data": "<head><?something>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <?something ?>\n|   <body>"
+    },
+    {
+      "index": 115,
+      "description": null,
+      "data": "<html><?something><head>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <?something ?>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 116,
+      "description": null,
+      "data": "<html><head></head><?something><body>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <?something ?>\n|   <body>"
+    },
+    {
+      "index": 117,
+      "description": null,
+      "data": "<html><body></body><?something>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|   <?something ?>"
+    },
+    {
+      "index": 118,
+      "description": null,
+      "data": "<html><body></body></html><?something>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n| <?something ?>"
+    },
+    {
+      "index": 119,
+      "description": null,
+      "data": "<body><template><?something></template>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <?something ?>"
+    },
+    {
+      "index": 120,
+      "description": null,
+      "data": "<body><textarea><?something></textarea>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <textarea>\n|       \"<?something>\""
+    },
+    {
+      "index": 121,
+      "description": null,
+      "data": "<body><title><?something></title>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <title>\n|       \"<?something>\""
+    },
+    {
+      "index": 122,
+      "description": null,
+      "data": "<noscript><?pi>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-off",
+      "document": "| <html>\n|   <head>\n|     <noscript>\n|       <?pi ?>\n|   <body>"
+    },
+    {
+      "index": 123,
+      "description": null,
+      "data": "<template><?pi>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <?pi ?>\n|   <body>\n"
+    }
+  ]
+}

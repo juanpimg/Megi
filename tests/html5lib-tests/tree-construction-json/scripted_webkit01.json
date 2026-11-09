@@ -1,0 +1,25 @@
+{
+  "source_file": "scripted_webkit01.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "1<script>document.write(\"2\")</script>3",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-on",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"1\"\n|     <script>\n|       \"document.write(\"2\")\"\n|     \"23\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "1<script>document.write(\"<script>document.write('2')</scr\"+ \"ipt><script>document.write('3')</scr\" + \"ipt>\")</script>4",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-on",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"1\"\n|     <script>\n|       \"document.write(\"<script>document.write('2')</scr\"+ \"ipt><script>document.write('3')</scr\" + \"ipt>\")\"\n|     <script>\n|       \"document.write('2')\"\n|     \"2\"\n|     <script>\n|       \"document.write('3')\"\n|     \"34\""
+    }
+  ]
+}

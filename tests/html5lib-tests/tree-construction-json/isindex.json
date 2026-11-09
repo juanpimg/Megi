@@ -1,0 +1,54 @@
+{
+  "source_file": "isindex.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<isindex>",
+      "errors": [
+        "(1,9): expected-doctype-but-got-start-tag",
+        "(1,9): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <isindex>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<isindex name=\"A\" action=\"B\" prompt=\"C\" foo=\"D\">",
+      "errors": [
+        "(1,48): expected-doctype-but-got-start-tag",
+        "(1,48): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <isindex>\n|       action=\"B\"\n|       foo=\"D\"\n|       name=\"A\"\n|       prompt=\"C\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<form><isindex>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,15): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <form>\n|       <isindex>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<!doctype html><isindex>x</isindex>x",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <isindex>\n|       \"x\"\n|     \"x\""
+    }
+  ]
+}

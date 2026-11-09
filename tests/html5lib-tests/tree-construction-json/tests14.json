@@ -1,0 +1,81 @@
+{
+  "source_file": "tests14.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<!DOCTYPE html><html><body><xyz:abc></xyz:abc>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <xyz:abc>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<!DOCTYPE html><html><body><xyz:abc></xyz:abc><span></span>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <xyz:abc>\n|     <span>"
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<!DOCTYPE html><html><html abc:def=gh><xyz:abc></xyz:abc>",
+      "errors": [
+        "(1,38): non-html-root"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   abc:def=\"gh\"\n|   <head>\n|   <body>\n|     <xyz:abc>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<!DOCTYPE html><html xml:lang=bar><html xml:lang=foo>",
+      "errors": [
+        "(1,53): non-html-root"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   xml:lang=\"bar\"\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<!DOCTYPE html><html 123=456>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   123=\"456\"\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<!DOCTYPE html><html 123=456><html 789=012>",
+      "errors": [
+        "(1,43): non-html-root"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   123=\"456\"\n|   789=\"012\"\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<!DOCTYPE html><html><body 789=012>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     789=\"012\""
+    }
+  ]
+}

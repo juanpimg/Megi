@@ -1,0 +1,22 @@
+{
+  "source_file": "namespace-sensitivity.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<body><table><tr><td><svg><td><foreignObject><span></td>Foo",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,56): unexpected-end-tag",
+        "(1,60): foster-parenting-character",
+        "(1,60): foster-parenting-character",
+        "(1,60): foster-parenting-character",
+        "(1,60): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"Foo\"\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             <svg svg>\n|               <svg td>\n|                 <svg foreignObject>\n|                   <span>"
+    }
+  ]
+}

@@ -1,0 +1,1098 @@
+{
+  "source_file": "entities01.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "FOO&gt;BAR",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO>BAR\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "FOO&gtBAR",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,6): named-entity-without-semicolon"
+      ],
+      "new_errors": [
+        "(1:7) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO>BAR\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "FOO&gt BAR",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,6): named-entity-without-semicolon"
+      ],
+      "new_errors": [
+        "(1:7) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO> BAR\""
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "FOO&gt;;;BAR",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO>;;BAR\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "I'm &notit; I tell you",
+      "errors": [
+        "(1,4): expected-doctype-but-got-chars",
+        "(1,9): named-entity-without-semicolon"
+      ],
+      "new_errors": [
+        "(1:9) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"I'm ¬it; I tell you\""
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "I'm &notin; I tell you",
+      "errors": [
+        "(1,4): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"I'm ∉ I tell you\""
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "&ammmp;",
+      "errors": [
+        "(1,1): expected-doctype-but-got-chars",
+        "(1,7): unknown-named-character-reference"
+      ],
+      "new_errors": [
+        "(1:7) unknown-named-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"&ammmp;\""
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "&ammmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmp;",
+      "errors": [
+        "(1,1): expected-doctype-but-got-chars",
+        "(1,950): unknown-named-character-reference"
+      ],
+      "new_errors": [
+        "(1:950) unknown-named-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"&ammmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmp;\""
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "FOO& BAR",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO& BAR\""
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "FOO&<BAR>",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,9): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO&\"\n|     <bar>"
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "FOO&&&&gt;BAR",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO&&&>BAR\""
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "FOO&#41;BAR",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO)BAR\""
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "FOO&#x41;BAR",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOABAR\""
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "FOO&#X41;BAR",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOABAR\""
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "FOO&#BAR",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,5): expected-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:6) absence-of-digits-in-numeric-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO&#BAR\""
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "FOO&#ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,5): expected-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:6) absence-of-digits-in-numeric-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO&#ZOO\""
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "FOO&#xBAR",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,7): expected-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:9) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOºR\""
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "FOO&#xZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,6): expected-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:7) absence-of-digits-in-numeric-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO&#xZOO\""
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "FOO&#XZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,6): expected-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:7) absence-of-digits-in-numeric-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO&#XZOO\""
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "FOO&#41BAR",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,7): numeric-entity-without-semicolon"
+      ],
+      "new_errors": [
+        "(1:8) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO)BAR\""
+    },
+    {
+      "index": 20,
+      "description": null,
+      "data": "FOO&#x41BAR",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,10): numeric-entity-without-semicolon"
+      ],
+      "new_errors": [
+        "(1:11) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO䆺R\""
+    },
+    {
+      "index": 21,
+      "description": null,
+      "data": "FOO&#x41ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,8): numeric-entity-without-semicolon"
+      ],
+      "new_errors": [
+        "(1:9) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOAZOO\""
+    },
+    {
+      "index": 22,
+      "description": null,
+      "data": "FOO&#x0000;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) null-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO�ZOO\""
+    },
+    {
+      "index": 23,
+      "description": null,
+      "data": "FOO&#x0078;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOxZOO\""
+    },
+    {
+      "index": 24,
+      "description": null,
+      "data": "FOO&#x0079;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOyZOO\""
+    },
+    {
+      "index": 25,
+      "description": null,
+      "data": "FOO&#x0080;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO€ZOO\""
+    },
+    {
+      "index": 26,
+      "description": null,
+      "data": "FOO&#x0081;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOZOO\""
+    },
+    {
+      "index": 27,
+      "description": null,
+      "data": "FOO&#x0082;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO‚ZOO\""
+    },
+    {
+      "index": 28,
+      "description": null,
+      "data": "FOO&#x0083;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOƒZOO\""
+    },
+    {
+      "index": 29,
+      "description": null,
+      "data": "FOO&#x0084;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO„ZOO\""
+    },
+    {
+      "index": 30,
+      "description": null,
+      "data": "FOO&#x0085;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO…ZOO\""
+    },
+    {
+      "index": 31,
+      "description": null,
+      "data": "FOO&#x0086;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO†ZOO\""
+    },
+    {
+      "index": 32,
+      "description": null,
+      "data": "FOO&#x0087;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO‡ZOO\""
+    },
+    {
+      "index": 33,
+      "description": null,
+      "data": "FOO&#x0088;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOˆZOO\""
+    },
+    {
+      "index": 34,
+      "description": null,
+      "data": "FOO&#x0089;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO‰ZOO\""
+    },
+    {
+      "index": 35,
+      "description": null,
+      "data": "FOO&#x008A;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOŠZOO\""
+    },
+    {
+      "index": 36,
+      "description": null,
+      "data": "FOO&#x008B;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO‹ZOO\""
+    },
+    {
+      "index": 37,
+      "description": null,
+      "data": "FOO&#x008C;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOŒZOO\""
+    },
+    {
+      "index": 38,
+      "description": null,
+      "data": "FOO&#x008D;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOZOO\""
+    },
+    {
+      "index": 39,
+      "description": null,
+      "data": "FOO&#x008E;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOŽZOO\""
+    },
+    {
+      "index": 40,
+      "description": null,
+      "data": "FOO&#x008F;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOZOO\""
+    },
+    {
+      "index": 41,
+      "description": null,
+      "data": "FOO&#x0090;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOZOO\""
+    },
+    {
+      "index": 42,
+      "description": null,
+      "data": "FOO&#x0091;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO‘ZOO\""
+    },
+    {
+      "index": 43,
+      "description": null,
+      "data": "FOO&#x0092;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO’ZOO\""
+    },
+    {
+      "index": 44,
+      "description": null,
+      "data": "FOO&#x0093;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO“ZOO\""
+    },
+    {
+      "index": 45,
+      "description": null,
+      "data": "FOO&#x0094;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO”ZOO\""
+    },
+    {
+      "index": 46,
+      "description": null,
+      "data": "FOO&#x0095;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO•ZOO\""
+    },
+    {
+      "index": 47,
+      "description": null,
+      "data": "FOO&#x0096;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO–ZOO\""
+    },
+    {
+      "index": 48,
+      "description": null,
+      "data": "FOO&#x0097;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO—ZOO\""
+    },
+    {
+      "index": 49,
+      "description": null,
+      "data": "FOO&#x0098;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO˜ZOO\""
+    },
+    {
+      "index": 50,
+      "description": null,
+      "data": "FOO&#x0099;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO™ZOO\""
+    },
+    {
+      "index": 51,
+      "description": null,
+      "data": "FOO&#x009A;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOšZOO\""
+    },
+    {
+      "index": 52,
+      "description": null,
+      "data": "FOO&#x009B;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO›ZOO\""
+    },
+    {
+      "index": 53,
+      "description": null,
+      "data": "FOO&#x009C;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOœZOO\""
+    },
+    {
+      "index": 54,
+      "description": null,
+      "data": "FOO&#x009D;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOZOO\""
+    },
+    {
+      "index": 55,
+      "description": null,
+      "data": "FOO&#x009E;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOžZOO\""
+    },
+    {
+      "index": 56,
+      "description": null,
+      "data": "FOO&#x009F;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOŸZOO\""
+    },
+    {
+      "index": 57,
+      "description": null,
+      "data": "FOO&#x00A0;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO ZOO\""
+    },
+    {
+      "index": 58,
+      "description": null,
+      "data": "FOO&#xD7FF;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO퟿ZOO\""
+    },
+    {
+      "index": 59,
+      "description": null,
+      "data": "FOO&#xD800;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) surrogate-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO�ZOO\""
+    },
+    {
+      "index": 60,
+      "description": null,
+      "data": "FOO&#xD801;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) surrogate-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO�ZOO\""
+    },
+    {
+      "index": 61,
+      "description": null,
+      "data": "FOO&#xDFFE;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) surrogate-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO�ZOO\""
+    },
+    {
+      "index": 62,
+      "description": null,
+      "data": "FOO&#xDFFF;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) surrogate-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO�ZOO\""
+    },
+    {
+      "index": 63,
+      "description": null,
+      "data": "FOO&#xE000;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOOZOO\""
+    },
+    {
+      "index": 64,
+      "description": null,
+      "data": "FOO&#x10FFFE;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,13): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:14) noncharacter-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO􏿾ZOO\""
+    },
+    {
+      "index": 65,
+      "description": null,
+      "data": "FOO&#x1087D4;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO􈟔ZOO\""
+    },
+    {
+      "index": 66,
+      "description": null,
+      "data": "FOO&#x10FFFF;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,13): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:14) noncharacter-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO􏿿ZOO\""
+    },
+    {
+      "index": 67,
+      "description": null,
+      "data": "FOO&#x110000;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,13): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:14) character-reference-outside-unicode-range"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO�ZOO\""
+    },
+    {
+      "index": 68,
+      "description": null,
+      "data": "FOO&#xFFFFFF;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,13): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:14) character-reference-outside-unicode-range"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO�ZOO\""
+    },
+    {
+      "index": 69,
+      "description": null,
+      "data": "FOO&#11111111111",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,13): illegal-codepoint-for-numeric-entity",
+        "(1,13): eof-in-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:17) missing-semicolon-after-character-reference",
+        "(1:17) character-reference-outside-unicode-range"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO�\""
+    },
+    {
+      "index": 70,
+      "description": null,
+      "data": "FOO&#1111111111",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,13): illegal-codepoint-for-numeric-entity",
+        "(1,13): eof-in-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:16) missing-semicolon-after-character-reference",
+        "(1:16) character-reference-outside-unicode-range"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO�\""
+    },
+    {
+      "index": 71,
+      "description": null,
+      "data": "FOO&#111111111111",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,13): illegal-codepoint-for-numeric-entity",
+        "(1,13): eof-in-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:18) missing-semicolon-after-character-reference",
+        "(1:18) character-reference-outside-unicode-range"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO�\""
+    },
+    {
+      "index": 72,
+      "description": null,
+      "data": "FOO&#11111111111ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,16): numeric-entity-without-semicolon",
+        "(1,16): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:17) missing-semicolon-after-character-reference",
+        "(1:17) character-reference-outside-unicode-range"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO�ZOO\""
+    },
+    {
+      "index": 73,
+      "description": null,
+      "data": "FOO&#1111111111ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,15): numeric-entity-without-semicolon",
+        "(1,15): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:16) missing-semicolon-after-character-reference",
+        "(1:16) character-reference-outside-unicode-range"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO�ZOO\""
+    },
+    {
+      "index": 74,
+      "description": null,
+      "data": "FOO&#111111111111ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,17): numeric-entity-without-semicolon",
+        "(1,17): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:18) missing-semicolon-after-character-reference",
+        "(1:18) character-reference-outside-unicode-range"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO�ZOO\""
+    }
+  ]
+}

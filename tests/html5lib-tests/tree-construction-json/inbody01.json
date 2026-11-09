@@ -1,0 +1,60 @@
+{
+  "source_file": "inbody01.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<button>1</foo>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,15): unexpected-end-tag",
+        "(1,15): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <button>\n|       \"1\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<foo>1<p>2</foo>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,16): unexpected-end-tag",
+        "(1,16): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <foo>\n|       \"1\"\n|       <p>\n|         \"2\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<dd>1</foo>",
+      "errors": [
+        "(1,4): expected-doctype-but-got-start-tag",
+        "(1,11): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <dd>\n|       \"1\""
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<foo>1<dd>2</foo>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,17): unexpected-end-tag",
+        "(1,17): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <foo>\n|       \"1\"\n|       <dd>\n|         \"2\""
+    }
+  ]
+}

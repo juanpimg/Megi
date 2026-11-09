@@ -1,0 +1,12 @@
+[package]
+name = "css"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Megi Engine — W3C CSS Syntax Module Level 3 & Selectors Level 4 Foundation"
+
+[dependencies]
+dom.workspace = true

@@ -1,0 +1,835 @@
+{
+  "source_file": "plain-text-unsafe.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "FOO&#x000D;ZOO",
+      "errors": [
+        "(1,3): expected-doctype-but-got-chars",
+        "(1,11): illegal-codepoint-for-numeric-entity"
+      ],
+      "new_errors": [
+        "(1:12) control-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"FOO\nZOO\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<html>\u0000<frameset></frameset>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,7): invalid-codepoint",
+        "(1,7): invalid-codepoint-in-body",
+        "(1,17): unexpected-start-tag"
+      ],
+      "new_errors": [
+        "(1:7) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<html> \u0000 <frameset></frameset>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,8): invalid-codepoint",
+        "(1,8): invalid-codepoint-in-body",
+        "(1,19): unexpected-start-tag"
+      ],
+      "new_errors": [
+        "(1:8) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<html>a\u0000a<frameset></frameset>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,8): invalid-codepoint",
+        "(1,8): invalid-codepoint-in-body",
+        "(1,19): unexpected-start-tag",
+        "(1,30): unexpected-end-tag"
+      ],
+      "new_errors": [
+        "(1:8) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"aa\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<html>\u0000\u0000<frameset></frameset>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,7): invalid-codepoint",
+        "(1,7): invalid-codepoint-in-body",
+        "(1,8): invalid-codepoint",
+        "(1,8): invalid-codepoint-in-body",
+        "(1,18): unexpected-start-tag"
+      ],
+      "new_errors": [
+        "(1:7) unexpected-null-character",
+        "(1:8) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<html>\u0000\n<frameset></frameset>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,7): invalid-codepoint",
+        "(1,7): invalid-codepoint-in-body",
+        "(2,11): unexpected-start-tag"
+      ],
+      "new_errors": [
+        "(1:7) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<html><select>\u0000",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,15): invalid-codepoint",
+        "(1,15): invalid-codepoint-in-select",
+        "(1,15): eof-in-select"
+      ],
+      "new_errors": [
+        "(1:15) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <select>"
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "\u0000",
+      "errors": [
+        "(1,1): invalid-codepoint",
+        "(1,1): expected-doctype-but-got-chars",
+        "(1,1): invalid-codepoint-in-body"
+      ],
+      "new_errors": [
+        "(1:1) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<body>\u0000",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,7): invalid-codepoint",
+        "(1,7): invalid-codepoint-in-body"
+      ],
+      "new_errors": [
+        "(1:7) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<plaintext>\u0000filler\u0000text\u0000",
+      "errors": [
+        "(1,11): expected-doctype-but-got-start-tag",
+        "(1,12): invalid-codepoint",
+        "(1,19): invalid-codepoint",
+        "(1,24): invalid-codepoint",
+        "(1,24): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:12) unexpected-null-character",
+        "(1:19) unexpected-null-character",
+        "(1:24) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <plaintext>\n|       \"�filler�text�\""
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<svg><![CDATA[\u0000filler\u0000text\u0000]]>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,30): invalid-codepoint",
+        "(1,30): invalid-codepoint",
+        "(1,30): invalid-codepoint",
+        "(1,30): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       \"�filler�text�\""
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<body><!\u0000>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,8): expected-dashes-or-doctype",
+        "(1,9): unexpected-null-character"
+      ],
+      "new_errors": [
+        "(1:9) incorrectly-opened-comment",
+        "(1:9) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- � -->"
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<body><!\u0000filler\u0000text>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,8): expected-dashes-or-doctype",
+        "(1:9) unexpected-null-character",
+        "(1:16) unexpected-null-character"
+      ],
+      "new_errors": [
+        "(1:9) incorrectly-opened-comment",
+        "(1:9) unexpected-null-character",
+        "(1:16) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <!-- �filler�text -->"
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<body><svg><foreignObject>\u0000filler\u0000text",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,27): invalid-codepoint",
+        "(1,27): invalid-codepoint-in-body",
+        "(1,34): invalid-codepoint",
+        "(1,34): invalid-codepoint-in-body",
+        "(1,38): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:27) unexpected-null-character",
+        "(1:34) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg foreignObject>\n|         \"fillertext\""
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<svg>\u0000filler\u0000text",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,6): invalid-codepoint",
+        "(1,6): invalid-codepoint-in-foreign-content",
+        "(1,13): invalid-codepoint",
+        "(1,13): invalid-codepoint-in-foreign-content",
+        "(1,17): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:6) unexpected-null-character",
+        "(1:13) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       \"�filler�text\""
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<svg>\u0000<frameset>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,6): invalid-codepoint",
+        "(1,6): invalid-codepoint-in-foreign-content",
+        "(1,16): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:6) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       \"�\"\n|       <svg frameset>"
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<svg>\u0000 <frameset>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,6): invalid-codepoint",
+        "(1,6): invalid-codepoint-in-foreign-content",
+        "(1,17): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:6) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       \"� \"\n|       <svg frameset>"
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<svg>\u0000a<frameset>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,6): invalid-codepoint",
+        "(1,6): invalid-codepoint-in-foreign-content",
+        "(1,17): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:6) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       \"�a\"\n|       <svg frameset>"
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<svg>\u0000</svg><frameset>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,6): invalid-codepoint",
+        "(1,6): invalid-codepoint-in-foreign-content",
+        "(1,22): unexpected-start-tag",
+        "(1,22): eof-in-frameset"
+      ],
+      "new_errors": [
+        "(1:6) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "<svg>\u0000 </svg><frameset>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,6): invalid-codepoint",
+        "(1,6): invalid-codepoint-in-foreign-content",
+        "(1,23): unexpected-start-tag",
+        "(1,23): eof-in-frameset"
+      ],
+      "new_errors": [
+        "(1:6) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 20,
+      "description": null,
+      "data": "<svg>\u0000a</svg><frameset>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,6): invalid-codepoint",
+        "(1,6): invalid-codepoint-in-foreign-content",
+        "(1,23): unexpected-start-tag"
+      ],
+      "new_errors": [
+        "(1:6) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       \"�a\""
+    },
+    {
+      "index": 21,
+      "description": "U+0000 NULL in a CDATA section in foreign content does not set frameset-ok to \"not ok\"",
+      "data": "<svg><![CDATA[\u0000]]></svg><frameset>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,18): invalid-codepoint",
+        "(1,34): unexpected-start-tag",
+        "(1,34): eof-in-frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 22,
+      "description": "U+0000 NULL in a CDATA section at an HTML integration point does not set frameset-ok to \"not ok\"",
+      "data": "<svg><foreignObject><![CDATA[\u0000]]></foreignObject></svg><frameset>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,33): invalid-codepoint",
+        "(1,65): unexpected-start-tag",
+        "(1,65): eof-in-frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 23,
+      "description": "U+FFFD after U+0000 NULL in foreign content sets frameset-ok to \"not ok\"",
+      "data": "<svg>\u0000&#xFFFD;</svg><frameset>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,6): invalid-codepoint",
+        "(1,6): invalid-codepoint-in-foreign-content",
+        "(1,30): unexpected-start-tag"
+      ],
+      "new_errors": [
+        "(1:6) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       \"��\""
+    },
+    {
+      "index": 24,
+      "description": "U+0000 NULL after a less-than sign is ignored in body",
+      "data": "<!DOCTYPE html><body>a<\u0000b",
+      "errors": [
+        "(1,23): expected-tag-name",
+        "(1,24): invalid-codepoint",
+        "(1,24): invalid-codepoint-in-body"
+      ],
+      "new_errors": [
+        "(1:24) invalid-first-character-of-tag-name",
+        "(1:24) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"a<b\""
+    },
+    {
+      "index": 25,
+      "description": "U+0000 NULL in a CDATA section at an HTML integration point is ignored",
+      "data": "<svg><foreignObject><![CDATA[a\u0000b]]>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,35): invalid-codepoint",
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg foreignObject>\n|         \"ab\""
+    },
+    {
+      "index": 26,
+      "description": null,
+      "data": "<svg><path></path></svg><frameset>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,34): unexpected-start-tag",
+        "(1,34): eof-in-frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 27,
+      "description": null,
+      "data": "<svg><p><frameset>",
+      "errors": [
+        "(1, 5) expected-doctype-but-got-start-tag",
+        "(1, 8) unexpected-html-element-in-foreign-content",
+        "(1, 18) unexpected-start-tag",
+        "(1, 18) eof-in-frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 28,
+      "description": null,
+      "data": "<!DOCTYPE html><pre>\n\nA</pre>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <pre>\n|       \"\nA\""
+    },
+    {
+      "index": 29,
+      "description": null,
+      "data": "<!DOCTYPE html><pre>\n\nA</pre>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <pre>\n|       \"\nA\""
+    },
+    {
+      "index": 30,
+      "description": null,
+      "data": "<!DOCTYPE html><pre>\nA</pre>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <pre>\n|       \"A\""
+    },
+    {
+      "index": 31,
+      "description": null,
+      "data": "<!DOCTYPE html><table><tr><td><math><mtext>\u0000a",
+      "errors": [
+        "(1,44): invalid-codepoint",
+        "(1,44): invalid-codepoint-in-body",
+        "(1,45): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:44) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             <math math>\n|               <math mtext>\n|                 \"a\""
+    },
+    {
+      "index": 32,
+      "description": null,
+      "data": "<!DOCTYPE html><table><tr><td><svg><foreignObject>\u0000a",
+      "errors": [
+        "(1,51): invalid-codepoint",
+        "(1,51): invalid-codepoint-in-body",
+        "(1,52): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:51) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             <svg svg>\n|               <svg foreignObject>\n|                 \"a\""
+    },
+    {
+      "index": 33,
+      "description": null,
+      "data": "<!DOCTYPE html><math><mi>a\u0000b",
+      "errors": [
+        "(1,27): invalid-codepoint",
+        "(1,27): invalid-codepoint-in-body",
+        "(1,28): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:27) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mi>\n|         \"ab\""
+    },
+    {
+      "index": 34,
+      "description": null,
+      "data": "<!DOCTYPE html><math><mo>a\u0000b",
+      "errors": [
+        "(1,27): invalid-codepoint",
+        "(1,27): invalid-codepoint-in-body",
+        "(1,28): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:27) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mo>\n|         \"ab\""
+    },
+    {
+      "index": 35,
+      "description": null,
+      "data": "<!DOCTYPE html><math><mn>a\u0000b",
+      "errors": [
+        "(1,27): invalid-codepoint",
+        "(1,27): invalid-codepoint-in-body",
+        "(1,28): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:27) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mn>\n|         \"ab\""
+    },
+    {
+      "index": 36,
+      "description": null,
+      "data": "<!DOCTYPE html><math><ms>a\u0000b",
+      "errors": [
+        "(1,27): invalid-codepoint",
+        "(1,27): invalid-codepoint-in-body",
+        "(1,28): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:27) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math ms>\n|         \"ab\""
+    },
+    {
+      "index": 37,
+      "description": null,
+      "data": "<!DOCTYPE html><math><mtext>a\u0000b",
+      "errors": [
+        "(1,30): invalid-codepoint",
+        "(1,30): invalid-codepoint-in-body",
+        "(1,31): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:30) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mtext>\n|         \"ab\""
+    },
+    {
+      "index": 38,
+      "description": null,
+      "data": "<math>\u0000filler\u0000text",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,7): invalid-codepoint",
+        "(1,7): invalid-codepoint-in-foreign-content",
+        "(1,14): invalid-codepoint",
+        "(1,14): invalid-codepoint-in-foreign-content",
+        "(1,18): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:7) unexpected-null-character",
+        "(1:14) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       \"�filler�text\""
+    },
+    {
+      "index": 39,
+      "description": null,
+      "data": "<math><![CDATA[\u0000filler\u0000text\u0000]]>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,31): invalid-codepoint",
+        "(1,31): invalid-codepoint",
+        "(1,31): invalid-codepoint",
+        "(1,31): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       \"�filler�text�\""
+    },
+    {
+      "index": 40,
+      "description": null,
+      "data": "<math><annotation-xml>\u0000x",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,23): invalid-codepoint",
+        "(1,23): invalid-codepoint-in-foreign-content",
+        "(1,24): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:23) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         \"�x\""
+    },
+    {
+      "index": 41,
+      "description": null,
+      "data": "<math><annotation-xml encoding=\"text/html\">\u0000x",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,44): invalid-codepoint",
+        "(1,44): invalid-codepoint-in-body",
+        "(1,45): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:44) unexpected-null-character"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         encoding=\"text/html\"\n|         \"x\""
+    },
+    {
+      "index": 42,
+      "description": null,
+      "data": "\u0000filler\u0000text",
+      "errors": [],
+      "new_errors": [
+        "(1:1) unexpected-null-character",
+        "(1:8) unexpected-null-character"
+      ],
+      "document_fragment": "svg path",
+      "script_mode": "both",
+      "document": "| \"�filler�text\""
+    },
+    {
+      "index": 43,
+      "description": null,
+      "data": "\u0000filler\u0000text",
+      "errors": [],
+      "new_errors": [
+        "(1:1) unexpected-null-character",
+        "(1:8) unexpected-null-character"
+      ],
+      "document_fragment": "svg title",
+      "script_mode": "both",
+      "document": "| \"fillertext\""
+    },
+    {
+      "index": 44,
+      "description": null,
+      "data": "\u0000filler\u0000text",
+      "errors": [],
+      "new_errors": [
+        "(1:1) unexpected-null-character",
+        "(1:8) unexpected-null-character"
+      ],
+      "document_fragment": "math ms",
+      "script_mode": "both",
+      "document": "| \"fillertext\""
+    },
+    {
+      "index": 45,
+      "description": null,
+      "data": "\u0000x",
+      "errors": [],
+      "new_errors": [
+        "(1:1) unexpected-null-character"
+      ],
+      "document_fragment": "math annotation-xml",
+      "script_mode": "both",
+      "document": "| \"�x\""
+    },
+    {
+      "index": 46,
+      "description": null,
+      "data": "\u0000filler\u0000text",
+      "errors": [],
+      "new_errors": [
+        "(1:1) unexpected-null-character",
+        "(1:8) unexpected-null-character"
+      ],
+      "document_fragment": "textarea",
+      "script_mode": "both",
+      "document": "| \"�filler�text\""
+    },
+    {
+      "index": 47,
+      "description": null,
+      "data": "\u0000filler\u0000text",
+      "errors": [],
+      "new_errors": [
+        "(1:1) unexpected-null-character",
+        "(1:8) unexpected-null-character"
+      ],
+      "document_fragment": "title",
+      "script_mode": "both",
+      "document": "| \"�filler�text\""
+    },
+    {
+      "index": 48,
+      "description": null,
+      "data": "\u0000filler\u0000text",
+      "errors": [],
+      "new_errors": [
+        "(1:1) unexpected-null-character",
+        "(1:8) unexpected-null-character"
+      ],
+      "document_fragment": "style",
+      "script_mode": "both",
+      "document": "| \"�filler�text\""
+    },
+    {
+      "index": 49,
+      "description": null,
+      "data": "\u0000filler\u0000text",
+      "errors": [],
+      "new_errors": [
+        "(1:1) unexpected-null-character",
+        "(1:8) unexpected-null-character"
+      ],
+      "document_fragment": "xmp",
+      "script_mode": "both",
+      "document": "| \"�filler�text\""
+    },
+    {
+      "index": 50,
+      "description": null,
+      "data": "\u0000filler\u0000text",
+      "errors": [],
+      "new_errors": [
+        "(1:1) unexpected-null-character",
+        "(1:8) unexpected-null-character"
+      ],
+      "document_fragment": "script",
+      "script_mode": "both",
+      "document": "| \"�filler�text\""
+    },
+    {
+      "index": 51,
+      "description": null,
+      "data": "\u0000filler\u0000text",
+      "errors": [],
+      "new_errors": [
+        "(1:1) unexpected-null-character",
+        "(1:8) unexpected-null-character"
+      ],
+      "document_fragment": "plaintext",
+      "script_mode": "both",
+      "document": "| \"�filler�text\""
+    },
+    {
+      "index": 52,
+      "description": null,
+      "data": "\u0000filler\u0000text",
+      "errors": [],
+      "new_errors": [
+        "(1:1) unexpected-null-character",
+        "(1:8) unexpected-null-character"
+      ],
+      "document_fragment": "div",
+      "script_mode": "both",
+      "document": "| \"fillertext\""
+    }
+  ]
+}

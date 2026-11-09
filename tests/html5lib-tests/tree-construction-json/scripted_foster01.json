@@ -1,0 +1,25 @@
+{
+  "source_file": "scripted_foster01.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<table><tr><script>var t=document.querySelector('table');document.documentElement.remove();document.appendChild(t)</script><b>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-on",
+      "document": "| <table>\n|   <tbody>\n|     <tr>\n|       <script>\n|         \"var t=document.querySelector('table');document.documentElement.remove();document.appendChild(t)\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<table><tr><script>var t=document.querySelector('table');document.documentElement.remove();document.appendChild(t)</script>FOSTERTEXT",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-on",
+      "document": "| <table>\n|   <tbody>\n|     <tr>\n|       <script>\n|         \"var t=document.querySelector('table');document.documentElement.remove();document.appendChild(t)\""
+    }
+  ]
+}

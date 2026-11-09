@@ -1,0 +1,116 @@
+{
+  "source_file": "math.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<math><tr><td><mo><tr>",
+      "errors": [
+        "(1,22): unexpected-start-tag",
+        "(1,23): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <math math>\n|   <math tr>\n|     <math td>\n|       <math mo>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<math><tr><td><mo><tr>",
+      "errors": [
+        "(1,6): foster-parenting-start-tag",
+        "(1,22): expected-tr-in-table-scope",
+        "(1,23): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "tr",
+      "script_mode": "both",
+      "document": "| <math math>\n|   <math tr>\n|     <math td>\n|       <math mo>"
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<math><thead><mo><tbody>",
+      "errors": [
+        "(1,6): foster-parenting-start-tag",
+        "(1,24): expected-table-part-in-table-scope",
+        "(1,25): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "thead",
+      "script_mode": "both",
+      "document": "| <math math>\n|   <math thead>\n|     <math mo>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<math><tfoot><mo><tbody>",
+      "errors": [
+        "(1,6): foster-parenting-start-tag",
+        "(1,24): expected-table-part-in-table-scope",
+        "(1,25): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "tfoot",
+      "script_mode": "both",
+      "document": "| <math math>\n|   <math tfoot>\n|     <math mo>"
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<math><tbody><mo><tfoot>",
+      "errors": [
+        "(1,6): foster-parenting-start-tag",
+        "(1,24): expected-table-part-in-table-scope",
+        "(1,25): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <math math>\n|   <math tbody>\n|     <math mo>"
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<math><tbody><mo></table>",
+      "errors": [
+        "(1,6): foster-parenting-start-tag",
+        "(1,25): unexpected-end-tag-in-math",
+        "(1,26): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <math math>\n|   <math tbody>\n|     <math mo>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<math><thead><mo></table>",
+      "errors": [
+        "(1,6): foster-parenting-start-tag",
+        "(1,25): unexpected-end-tag-in-math",
+        "(1,26): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <math math>\n|   <math thead>\n|     <math mo>"
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<math><tfoot><mo></table>",
+      "errors": [
+        "(1,6): foster-parenting-start-tag",
+        "(1,25): unexpected-end-tag-in-math",
+        "(1,26): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <math math>\n|   <math tfoot>\n|     <math mo>"
+    }
+  ]
+}

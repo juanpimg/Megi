@@ -1,0 +1,1700 @@
+{
+  "source_file": "template.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<body><template>Hello</template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         \"Hello\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<template>Hello</template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         \"Hello\"\n|   <body>"
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<template></template><div></div>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|   <body>\n|     <div>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<html><template>Hello</template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         \"Hello\"\n|   <body>"
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<head><template><div></div></template></head>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <div>\n|   <body>"
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<div><template><div><span></template><b>",
+      "errors": [
+        " * (1,6) missing DOCTYPE",
+        " * (1,38) mismatched template end tag",
+        " * (1,41) unexpected end of file"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <template>\n|         content\n|           <div>\n|             <span>\n|       <b>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<div><template></div>Hello",
+      "errors": [
+        " * (1,6) missing DOCTYPE",
+        " * (1,22) unexpected token in template",
+        " * (1,27) unexpected end of file in template",
+        " * (1,27) unexpected end of file"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <template>\n|         content\n|           \"Hello\""
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<div></template></div>",
+      "errors": [
+        " * (1,6) missing DOCTYPE",
+        " * (1,17) unexpected template end tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>"
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<table><template></template></table>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <template>\n|         content"
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<table><template></template></div>",
+      "errors": [
+        " * (1,8) missing DOCTYPE",
+        " * (1,35) unexpected token in table - foster parenting",
+        " * (1,35) unexpected end tag",
+        " * (1,35) unexpected end of file"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <template>\n|         content"
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<table><div><template></template></div>",
+      "errors": [
+        " * (1,8) missing DOCTYPE",
+        " * (1,13) unexpected token in table - foster parenting",
+        " * (1,40) unexpected token in table - foster parenting",
+        " * (1,40) unexpected end of file"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <template>\n|         content\n|     <table>"
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<table><template></template><div></div>",
+      "errors": [
+        "no doctype",
+        "bad div in table",
+        "bad /div in table",
+        "eof in table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|     <table>\n|       <template>\n|         content"
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<table>   <template></template></table>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       \"   \"\n|       <template>\n|         content"
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<table><tbody><template></template></tbody>",
+      "errors": [
+        "no doctype",
+        "eof in table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <template>\n|           content"
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<table><tbody><template></tbody></template>",
+      "errors": [
+        "no doctype",
+        "bad /tbody",
+        "eof in table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <template>\n|           content"
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<table><tbody><template></template></tbody></table>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <template>\n|           content"
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<table><thead><template></template></thead>",
+      "errors": [
+        "no doctype",
+        "eof in table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <thead>\n|         <template>\n|           content"
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<table><tfoot><template></template></tfoot>",
+      "errors": [
+        "no doctype",
+        "eof in table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tfoot>\n|         <template>\n|           content"
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<select><template></template></select>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <template>\n|         content"
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "<select><template><option></option></template></select>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <template>\n|         content\n|           <option>"
+    },
+    {
+      "index": 20,
+      "description": null,
+      "data": "<template><option></option></select><option></option></template>",
+      "errors": [
+        "no doctype",
+        "bad /select"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <option>\n|         <option>\n|   <body>"
+    },
+    {
+      "index": 21,
+      "description": null,
+      "data": "<select><template></template><option></select>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <template>\n|         content\n|       <option>"
+    },
+    {
+      "index": 22,
+      "description": null,
+      "data": "<select><option><template></template></select>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <option>\n|         <template>\n|           content"
+    },
+    {
+      "index": 23,
+      "description": null,
+      "data": "<select><template>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in select"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <template>\n|         content"
+    },
+    {
+      "index": 24,
+      "description": null,
+      "data": "<select><option></option><template>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in select"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <option>\n|       <template>\n|         content"
+    },
+    {
+      "index": 25,
+      "description": null,
+      "data": "<select><option></option><template><option>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in select"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <option>\n|       <template>\n|         content\n|           <option>"
+    },
+    {
+      "index": 26,
+      "description": null,
+      "data": "<table><thead><template><td></template></table>",
+      "errors": [
+        " * (1,8) missing DOCTYPE"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <thead>\n|         <template>\n|           content\n|             <td>"
+    },
+    {
+      "index": 27,
+      "description": null,
+      "data": "<table><template><thead></template></table>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <template>\n|         content\n|           <thead>"
+    },
+    {
+      "index": 28,
+      "description": null,
+      "data": "<body><table><template><td></tr><div></template></table>",
+      "errors": [
+        "no doctype",
+        "bad </tr>",
+        "missing </div>"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <template>\n|         content\n|           <td>\n|             <div>"
+    },
+    {
+      "index": 29,
+      "description": null,
+      "data": "<table><template><thead></template></thead></table>",
+      "errors": [
+        "no doctype",
+        "bad /thead after /template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <template>\n|         content\n|           <thead>"
+    },
+    {
+      "index": 30,
+      "description": null,
+      "data": "<table><thead><template><tr></template></table>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <thead>\n|         <template>\n|           content\n|             <tr>"
+    },
+    {
+      "index": 31,
+      "description": null,
+      "data": "<table><template><tr></template></table>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <template>\n|         content\n|           <tr>"
+    },
+    {
+      "index": 32,
+      "description": null,
+      "data": "<table><tr><template><td>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <template>\n|             content\n|               <td>"
+    },
+    {
+      "index": 33,
+      "description": null,
+      "data": "<table><template><tr><template><td></template></tr></template></table>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <template>\n|         content\n|           <tr>\n|             <template>\n|               content\n|                 <td>"
+    },
+    {
+      "index": 34,
+      "description": null,
+      "data": "<table><template><tr><template><td></td></template></tr></template></table>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <template>\n|         content\n|           <tr>\n|             <template>\n|               content\n|                 <td>"
+    },
+    {
+      "index": 35,
+      "description": null,
+      "data": "<table><template><td></template>",
+      "errors": [
+        "no doctype",
+        "eof in table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <template>\n|         content\n|           <td>"
+    },
+    {
+      "index": 36,
+      "description": null,
+      "data": "<body><template><td></td></template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <td>"
+    },
+    {
+      "index": 37,
+      "description": null,
+      "data": "<body><template><template><tr></tr></template><td></td></template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <tr>\n|         <td>"
+    },
+    {
+      "index": 38,
+      "description": null,
+      "data": "<table><colgroup><template><col>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <colgroup>\n|         <template>\n|           content\n|             <col>"
+    },
+    {
+      "index": 39,
+      "description": null,
+      "data": "<frameset><template><frame></frame></template></frameset>",
+      "errors": [
+        " * (1,11) missing DOCTYPE",
+        " * (1,21) unexpected start tag token",
+        " * (1,36) unexpected end tag token",
+        " * (1,47) unexpected end tag token"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <frameset>\n|     <frame>"
+    },
+    {
+      "index": 40,
+      "description": null,
+      "data": "<template><frame></frame></frameset><frame></frame></template>",
+      "errors": [
+        " * (1,11) missing DOCTYPE",
+        " * (1,18) unexpected start tag",
+        " * (1,26) unexpected end tag",
+        " * (1,37) unexpected end tag",
+        " * (1,44) unexpected start tag",
+        " * (1,52) unexpected end tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|   <body>"
+    },
+    {
+      "index": 41,
+      "description": null,
+      "data": "<template><div><frameset><span></span></div><span></span></template>",
+      "errors": [
+        "no doctype",
+        "bad frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <div>\n|           <span>\n|         <span>\n|   <body>"
+    },
+    {
+      "index": 42,
+      "description": null,
+      "data": "<body><template><div><frameset><span></span></div><span></span></template></body>",
+      "errors": [
+        "no doctype",
+        "bad frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <div>\n|           <span>\n|         <span>"
+    },
+    {
+      "index": 43,
+      "description": null,
+      "data": "<head><template></template></head><p><frameset>",
+      "errors": [
+        "no doctype",
+        "bad frameset",
+        "eof in frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|   <frameset>"
+    },
+    {
+      "index": 44,
+      "description": null,
+      "data": "<template>x</template><p><frameset>",
+      "errors": [
+        "no doctype",
+        "bad frameset",
+        "eof in frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         \"x\"\n|   <frameset>"
+    },
+    {
+      "index": 45,
+      "description": null,
+      "data": "<head></head><template></template><p><frameset>",
+      "errors": [
+        "no doctype",
+        "bad template",
+        "bad frameset",
+        "eof in frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|   <frameset>"
+    },
+    {
+      "index": 46,
+      "description": null,
+      "data": "<p><template></template><frameset>",
+      "errors": [
+        "no doctype",
+        "bad frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <template>\n|         content"
+    },
+    {
+      "index": 47,
+      "description": null,
+      "data": "<p><template><frameset></template>",
+      "errors": [
+        "no doctype",
+        "bad frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <template>\n|         content"
+    },
+    {
+      "index": 48,
+      "description": null,
+      "data": "<template></template>x<frameset>",
+      "errors": [
+        "no doctype",
+        "bad frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|   <body>\n|     \"x\""
+    },
+    {
+      "index": 49,
+      "description": null,
+      "data": "<body><template><script>var i = 1;</script><td></td></template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <script>\n|           \"var i = 1;\"\n|         <td>"
+    },
+    {
+      "index": 50,
+      "description": null,
+      "data": "<body><template><tr><div></div></tr></template>",
+      "errors": [
+        "no doctype",
+        "foster-parented div",
+        "foster-parented /div"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <tr>\n|         <div>"
+    },
+    {
+      "index": 51,
+      "description": null,
+      "data": "<table><template><tr><div></div></tr></template>",
+      "errors": [
+        "no doctype",
+        "foster-parented div",
+        "foster-parented /div",
+        "eof in table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <template>\n|         content\n|           <tr>\n|           <div>"
+    },
+    {
+      "index": 52,
+      "description": null,
+      "data": "<body><template><tr></tr><td></td></template>",
+      "errors": [
+        "no doctype",
+        "unexpected <td>"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <tr>\n|         <tr>\n|           <td>"
+    },
+    {
+      "index": 53,
+      "description": null,
+      "data": "<body><template><td></td></tr><td></td></template>",
+      "errors": [
+        "no doctype",
+        "bad </tr>"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <td>\n|         <td>"
+    },
+    {
+      "index": 54,
+      "description": null,
+      "data": "<body><template><td></td><tbody><td></td></template>",
+      "errors": [
+        "no doctype",
+        "bad <tbody>"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <td>\n|         <td>"
+    },
+    {
+      "index": 55,
+      "description": null,
+      "data": "<body><template><td></td><caption></caption><td></td></template>",
+      "errors": [
+        " * (1,7) missing DOCTYPE",
+        " * (1,35) unexpected start tag in table row",
+        " * (1,45) unexpected end tag in table row"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <td>\n|         <td>"
+    },
+    {
+      "index": 56,
+      "description": null,
+      "data": "<body><template><td></td><colgroup></caption><td></td></template>",
+      "errors": [
+        " * (1,7) missing DOCTYPE",
+        " * (1,36) unexpected start tag in table row",
+        " * (1,46) unexpected end tag in table row"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <td>\n|         <td>"
+    },
+    {
+      "index": 57,
+      "description": null,
+      "data": "<body><template><td></td></table><td></td></template>",
+      "errors": [
+        "no doctype",
+        "bad </table>"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <td>\n|         <td>"
+    },
+    {
+      "index": 58,
+      "description": null,
+      "data": "<body><template><tr></tr><tbody><tr></tr></template>",
+      "errors": [
+        "no doctype",
+        "bad <tbody>"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <tr>\n|         <tr>"
+    },
+    {
+      "index": 59,
+      "description": null,
+      "data": "<body><template><tr></tr><caption><tr></tr></template>",
+      "errors": [
+        "no doctype",
+        "bad <caption>"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <tr>\n|         <tr>"
+    },
+    {
+      "index": 60,
+      "description": null,
+      "data": "<body><template><tr></tr></table><tr></tr></template>",
+      "errors": [
+        "no doctype",
+        "bad </table>"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <tr>\n|         <tr>"
+    },
+    {
+      "index": 61,
+      "description": null,
+      "data": "<body><template><thead></thead><caption></caption><tbody></tbody></template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <thead>\n|         <caption>\n|         <tbody>"
+    },
+    {
+      "index": 62,
+      "description": null,
+      "data": "<body><template><thead></thead></table><tbody></tbody></template></body>",
+      "errors": [
+        "no doctype",
+        "bad </table>"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <thead>\n|         <tbody>"
+    },
+    {
+      "index": 63,
+      "description": null,
+      "data": "<body><template><div><tr></tr></div></template>",
+      "errors": [
+        "no doctype",
+        "bad tr",
+        "bad /tr"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <div>"
+    },
+    {
+      "index": 64,
+      "description": null,
+      "data": "<body><template><em>Hello</em></template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <em>\n|           \"Hello\""
+    },
+    {
+      "index": 65,
+      "description": null,
+      "data": "<body><template><!--comment--></template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <!-- comment -->"
+    },
+    {
+      "index": 66,
+      "description": null,
+      "data": "<body><template><style></style><td></td></template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <style>\n|         <td>"
+    },
+    {
+      "index": 67,
+      "description": null,
+      "data": "<body><template><meta><td></td></template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <meta>\n|         <td>"
+    },
+    {
+      "index": 68,
+      "description": null,
+      "data": "<body><template><link><td></td></template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <link>\n|         <td>"
+    },
+    {
+      "index": 69,
+      "description": null,
+      "data": "<body><table><colgroup><template><col></col></template></colgroup></table></body>",
+      "errors": [
+        "no doctype",
+        "bad /col"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <colgroup>\n|         <template>\n|           content\n|             <col>"
+    },
+    {
+      "index": 70,
+      "description": null,
+      "data": "<body a=b><template><div></div><body c=d><div></div></body></template></body>",
+      "errors": [
+        "no doctype",
+        "bad <body>",
+        "bad </body>"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     a=\"b\"\n|     <template>\n|       content\n|         <div>\n|         <div>"
+    },
+    {
+      "index": 71,
+      "description": null,
+      "data": "<html a=b><template><div><html b=c><span></template>",
+      "errors": [
+        "no doctype",
+        "bad <html>",
+        "missing end tags in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   a=\"b\"\n|   <head>\n|     <template>\n|       content\n|         <div>\n|           <span>\n|   <body>"
+    },
+    {
+      "index": 72,
+      "description": null,
+      "data": "<html a=b><template><col></col><html b=c><col></col></template>",
+      "errors": [
+        "no doctype",
+        "bad /col",
+        "bad html",
+        "bad /col"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   a=\"b\"\n|   <head>\n|     <template>\n|       content\n|         <col>\n|         <col>\n|   <body>"
+    },
+    {
+      "index": 73,
+      "description": null,
+      "data": "<html a=b><template><frame></frame><html b=c><frame></frame></template>",
+      "errors": [
+        "no doctype",
+        "bad frame",
+        "bad /frame",
+        "bad html",
+        "bad frame",
+        "bad /frame"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   a=\"b\"\n|   <head>\n|     <template>\n|       content\n|   <body>"
+    },
+    {
+      "index": 74,
+      "description": null,
+      "data": "<body><template><tr></tr><template></template><td></td></template>",
+      "errors": [
+        "no doctype",
+        "unexpected <td>"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <tr>\n|         <template>\n|           content\n|         <tr>\n|           <td>"
+    },
+    {
+      "index": 75,
+      "description": null,
+      "data": "<body><template><thead></thead><template><tr></tr></template><tr></tr><tfoot></tfoot></template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <thead>\n|         <template>\n|           content\n|             <tr>\n|         <tbody>\n|           <tr>\n|         <tfoot>"
+    },
+    {
+      "index": 76,
+      "description": null,
+      "data": "<body><template><template><b><template></template></template>text</template>",
+      "errors": [
+        "no doctype",
+        "missing </b>"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <b>\n|               <template>\n|                 content\n|         \"text\""
+    },
+    {
+      "index": 77,
+      "description": null,
+      "data": "<body><template><col><colgroup>",
+      "errors": [
+        "no doctype",
+        "bad colgroup",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <col>"
+    },
+    {
+      "index": 78,
+      "description": null,
+      "data": "<body><template><col></colgroup>",
+      "errors": [
+        "no doctype",
+        "bogus /colgroup",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <col>"
+    },
+    {
+      "index": 79,
+      "description": null,
+      "data": "<body><template><col><colgroup></template></body>",
+      "errors": [
+        "no doctype",
+        "bad colgroup"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <col>"
+    },
+    {
+      "index": 80,
+      "description": null,
+      "data": "<body><template><col><div>",
+      "errors": [
+        " * (1,7) missing DOCTYPE",
+        " * (1,27) unexpected token",
+        " * (1,27) unexpected end of file in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <col>"
+    },
+    {
+      "index": 81,
+      "description": null,
+      "data": "<body><template><col></div>",
+      "errors": [
+        "no doctype",
+        "bad /div",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <col>"
+    },
+    {
+      "index": 82,
+      "description": null,
+      "data": "<body><template><col>Hello",
+      "errors": [
+        "no doctype",
+        "(1,27): foster-parenting-character",
+        "(1,27): foster-parenting-character",
+        "(1,27): foster-parenting-character",
+        "(1,27): foster-parenting-character",
+        "(1,27): foster-parenting-character",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <col>"
+    },
+    {
+      "index": 83,
+      "description": null,
+      "data": "<body><template><i><menu>Foo</i>",
+      "errors": [
+        "no doctype",
+        "missing /menu",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <i>\n|         <menu>\n|           <i>\n|             \"Foo\""
+    },
+    {
+      "index": 84,
+      "description": null,
+      "data": "<body><template></div><div>Foo</div><template></template><tr></tr>",
+      "errors": [
+        "no doctype",
+        "bogus /div",
+        "bogus tr",
+        "bogus /tr",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content\n|         <div>\n|           \"Foo\"\n|         <template>\n|           content"
+    },
+    {
+      "index": 85,
+      "description": null,
+      "data": "<body><div><template></div><tr><td>Foo</td></tr></template>",
+      "errors": [
+        " * (1,7) missing DOCTYPE",
+        " * (1,28) unexpected token in template",
+        " * (1,60) unexpected end of file"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <template>\n|         content\n|           <tr>\n|             <td>\n|               \"Foo\""
+    },
+    {
+      "index": 86,
+      "description": null,
+      "data": "<template></figcaption><sub><table></table>",
+      "errors": [
+        "no doctype",
+        "bad /figcaption",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <sub>\n|           <table>\n|   <body>"
+    },
+    {
+      "index": 87,
+      "description": null,
+      "data": "<template><template>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|   <body>"
+    },
+    {
+      "index": 88,
+      "description": null,
+      "data": "<template><div>",
+      "errors": [
+        "no doctype",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <div>\n|   <body>"
+    },
+    {
+      "index": 89,
+      "description": null,
+      "data": "<template><template><div>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <div>\n|   <body>"
+    },
+    {
+      "index": 90,
+      "description": null,
+      "data": "<template><template><table>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <table>\n|   <body>"
+    },
+    {
+      "index": 91,
+      "description": null,
+      "data": "<template><template><tbody>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <tbody>\n|   <body>"
+    },
+    {
+      "index": 92,
+      "description": null,
+      "data": "<template><template><tr>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <tr>\n|   <body>"
+    },
+    {
+      "index": 93,
+      "description": null,
+      "data": "<template><template><td>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <td>\n|   <body>"
+    },
+    {
+      "index": 94,
+      "description": null,
+      "data": "<template><template><caption>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <caption>\n|   <body>"
+    },
+    {
+      "index": 95,
+      "description": null,
+      "data": "<template><template><colgroup>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <colgroup>\n|   <body>"
+    },
+    {
+      "index": 96,
+      "description": null,
+      "data": "<template><template><col>",
+      "errors": [
+        "no doctype",
+        "eof in template",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <col>\n|   <body>"
+    },
+    {
+      "index": 97,
+      "description": null,
+      "data": "<template><template><tbody><select>",
+      "errors": [
+        " * (1,11) missing DOCTYPE",
+        " * (1,36) unexpected token in table - foster parenting",
+        " * (1,36) unexpected end of file in template",
+        " * (1,36) unexpected end of file in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <tbody>\n|             <select>\n|   <body>"
+    },
+    {
+      "index": 98,
+      "description": null,
+      "data": "<template><template><table>Foo",
+      "errors": [
+        "no doctype",
+        "foster-parenting text F",
+        "foster-parenting text o",
+        "foster-parenting text o",
+        "eof",
+        "eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|             \"Foo\"\n|             <table>\n|   <body>"
+    },
+    {
+      "index": 99,
+      "description": null,
+      "data": "<template><template><frame>",
+      "errors": [
+        "no doctype",
+        "bad tag",
+        "eof",
+        "eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|   <body>"
+    },
+    {
+      "index": 100,
+      "description": null,
+      "data": "<template><template><script>var i",
+      "errors": [
+        "no doctype",
+        "eof in script",
+        "eof in template",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <script>\n|               \"var i\"\n|   <body>"
+    },
+    {
+      "index": 101,
+      "description": null,
+      "data": "<template><template><style>var i",
+      "errors": [
+        "no doctype",
+        "eof in style",
+        "eof in template",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <style>\n|               \"var i\"\n|   <body>"
+    },
+    {
+      "index": 102,
+      "description": null,
+      "data": "<template><table></template><body><span>Foo",
+      "errors": [
+        "no doctype",
+        "missing /table",
+        "bad eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <table>\n|   <body>\n|     <span>\n|       \"Foo\""
+    },
+    {
+      "index": 103,
+      "description": null,
+      "data": "<template><td></template><body><span>Foo",
+      "errors": [
+        "no doctype",
+        "bad eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <td>\n|   <body>\n|     <span>\n|       \"Foo\""
+    },
+    {
+      "index": 104,
+      "description": null,
+      "data": "<template><object></template><body><span>Foo",
+      "errors": [
+        "no doctype",
+        "missing /object",
+        "bad eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <object>\n|   <body>\n|     <span>\n|       \"Foo\""
+    },
+    {
+      "index": 105,
+      "description": null,
+      "data": "<template><svg><template>",
+      "errors": [
+        "no doctype",
+        "eof in template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <svg svg>\n|           <svg template>\n|   <body>"
+    },
+    {
+      "index": 106,
+      "description": null,
+      "data": "<template><svg><foo><template><foreignObject><div></template><div>",
+      "errors": [
+        "no doctype",
+        "ugly template closure",
+        "bad eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <svg svg>\n|           <svg foo>\n|             <svg template>\n|               <svg foreignObject>\n|                 <div>\n|   <body>\n|     <div>"
+    },
+    {
+      "index": 107,
+      "description": null,
+      "data": "<dummy><template><span></dummy>",
+      "errors": [
+        "no doctype",
+        "bad end tag </dummy>",
+        "eof in template",
+        "eof in dummy"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <dummy>\n|       <template>\n|         content\n|           <span>"
+    },
+    {
+      "index": 108,
+      "description": null,
+      "data": "<body><table><tr><td><select><template>Foo</template><caption>A</table>",
+      "errors": [
+        "no doctype",
+        "(1,62): unexpected-caption-in-select-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             <select>\n|               <template>\n|                 content\n|                   \"Foo\"\n|       <caption>\n|         \"A\""
+    },
+    {
+      "index": 109,
+      "description": null,
+      "data": "<body></body><template>",
+      "errors": [
+        "no doctype",
+        "(1,23): template-after-body",
+        "(1,24): eof-in-template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <template>\n|       content"
+    },
+    {
+      "index": 110,
+      "description": null,
+      "data": "<head></head><template>",
+      "errors": [
+        "no doctype",
+        "(1,23): template-after-head",
+        "(1,24): eof-in-template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|   <body>"
+    },
+    {
+      "index": 111,
+      "description": null,
+      "data": "<head></head><template>Foo</template>",
+      "errors": [
+        "no doctype",
+        "(1,23): template-after-head"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         \"Foo\"\n|   <body>"
+    },
+    {
+      "index": 112,
+      "description": null,
+      "data": "<html><head></head><template></template><head>",
+      "errors": [
+        "no doctype",
+        "template-after-head",
+        "head-after-head"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|   <body>"
+    },
+    {
+      "index": 113,
+      "description": null,
+      "data": "<!DOCTYPE HTML><dummy><table><template><table><template><table><script>",
+      "errors": [
+        "eof script",
+        "eof template",
+        "eof template",
+        "eof table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <dummy>\n|       <table>\n|         <template>\n|           content\n|             <table>\n|               <template>\n|                 content\n|                   <table>\n|                     <script>"
+    },
+    {
+      "index": 114,
+      "description": null,
+      "data": "<template><a><table><a>",
+      "errors": [
+        "(1,10): expected-doctype-but-got-start-tag",
+        "(1,23): foster-parenting-start-tag",
+        "(1,23): unexpected-start-tag",
+        "(1,23): formatting-element-not-in-scope",
+        "(1,24): eof-in-template"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <a>\n|           <a>\n|           <table>\n|   <body>"
+    },
+    {
+      "index": 115,
+      "description": null,
+      "data": "<template><form><input name=\"q\"></form><div>second</div></template>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "template",
+      "script_mode": "both",
+      "document": "| <template>\n|   content\n|     <form>\n|       <input>\n|         name=\"q\"\n|     <div>\n|       \"second\""
+    },
+    {
+      "index": 116,
+      "description": null,
+      "data": "<template><table><form></table></template>",
+      "errors": [
+        "no doctype",
+        "unexpected form in table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <table>\n|           <form>\n|   <body>"
+    },
+    {
+      "index": 117,
+      "description": null,
+      "data": "<table><form></table>",
+      "errors": [
+        "unexpected form in table"
+      ],
+      "new_errors": [],
+      "document_fragment": "template",
+      "script_mode": "both",
+      "document": "| <table>\n|   <form>"
+    },
+    {
+      "index": 118,
+      "description": "form start tags inside template do not set the form element pointer, so nested forms are kept",
+      "data": "<template><form><form><input></template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <form>\n|           <form>\n|             <input>\n|   <body>"
+    },
+    {
+      "index": 119,
+      "description": null,
+      "data": "<form><form>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "template",
+      "script_mode": "both",
+      "document": "| <form>\n|   <form>"
+    },
+    {
+      "index": 120,
+      "description": null,
+      "data": "<template><form><template></template><form></template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <form>\n|           <template>\n|             content\n|           <form>\n|   <body>"
+    },
+    {
+      "index": 121,
+      "description": null,
+      "data": "<template><template><form></template><form></template>",
+      "errors": [
+        "no doctype"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <template>\n|       content\n|         <template>\n|           content\n|             <form>\n|         <form>\n|   <body>"
+    },
+    {
+      "index": 122,
+      "description": null,
+      "data": "<form><template><form></template><form>",
+      "errors": [
+        "no doctype",
+        "nested form ignored"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <form>\n|       <template>\n|         content\n|           <form>"
+    },
+    {
+      "index": 123,
+      "description": null,
+      "data": "<br>BC<form>D<div>E</form>F</div>G",
+      "errors": [
+        "unexpected end tag",
+        "unexpected end tag"
+      ],
+      "new_errors": [],
+      "document_fragment": "template",
+      "script_mode": "both",
+      "document": "| <br>\n| \"BC\"\n| <form>\n|   \"D\"\n|   <div>\n|     \"E\"\n| \"FG\""
+    },
+    {
+      "index": 124,
+      "description": null,
+      "data": "<!DOCTYPE HTML><template><tr><td>cell</td></tr></template>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <template>\n|       content\n|         <tr>\n|           <td>\n|             \"cell\"\n|   <body>"
+    },
+    {
+      "index": 125,
+      "description": null,
+      "data": "<!DOCTYPE HTML><template> <tr> <td>cell</td> </tr> </template>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <template>\n|       content\n|         \" \"\n|         <tr>\n|           \" \"\n|           <td>\n|             \"cell\"\n|           \" \"\n|         \" \"\n|   <body>"
+    },
+    {
+      "index": 126,
+      "description": null,
+      "data": "<!DOCTYPE HTML><template><tr><td>cell</td></tr>a</template>",
+      "errors": [
+        "(1,59): foster-parenting-character"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <template>\n|       content\n|         <tr>\n|           <td>\n|             \"cell\"\n|         \"a\"\n|   <body>"
+    }
+  ]
+}

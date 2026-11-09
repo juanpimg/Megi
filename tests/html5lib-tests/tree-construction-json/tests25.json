@@ -1,0 +1,286 @@
+{
+  "source_file": "tests25.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<!DOCTYPE html><body><foo>A",
+      "errors": [
+        "(1,27): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <foo>\n|       \"A\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<!DOCTYPE html><body><area>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <area>\n|     \"A\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<!DOCTYPE html><body><base>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <base>\n|     \"A\""
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<!DOCTYPE html><body><basefont>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <basefont>\n|     \"A\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<!DOCTYPE html><body><bgsound>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <bgsound>\n|     \"A\""
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<!DOCTYPE html><body><br>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <br>\n|     \"A\""
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<!DOCTYPE html><body><col>A",
+      "errors": [
+        "(1,26): unexpected-start-tag-ignored"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"A\""
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<!DOCTYPE html><body><command>A",
+      "errors": [
+        "eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <command>\n|       \"A\""
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<!DOCTYPE html><body><embed>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <embed>\n|     \"A\""
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<!DOCTYPE html><body><frame>A",
+      "errors": [
+        "(1,28): unexpected-start-tag-ignored"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"A\""
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<!DOCTYPE html><body><hr>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <hr>\n|     \"A\""
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<!DOCTYPE html><body><img>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <img>\n|     \"A\""
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<!DOCTYPE html><body><input>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <input>\n|     \"A\""
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<!DOCTYPE html><body><keygen>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <keygen>\n|     \"A\""
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<!DOCTYPE html><keygen>A</keygen>B",
+      "errors": [
+        "33: Stray end tag “keygen”."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <keygen>\n|     \"AB\""
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "</keygen>A",
+      "errors": [
+        "9: End tag seen without seeing a doctype first. Expected “<!DOCTYPE html>”.",
+        "9: Stray end tag “keygen”."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"A\""
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<!DOCTYPE html></keygen>A",
+      "errors": [
+        "24: Stray end tag “keygen”."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"A\""
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<!DOCTYPE html><head></keygen>A",
+      "errors": [
+        "30: Stray end tag “keygen”."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"A\""
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<!DOCTYPE html><head></head></keygen>A",
+      "errors": [
+        "30: Stray end tag “keygen”."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"A\""
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "<!DOCTYPE html><body></keygen>A",
+      "errors": [
+        "30: Stray end tag “keygen”."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"A\""
+    },
+    {
+      "index": 20,
+      "description": null,
+      "data": "<!DOCTYPE html><body><link>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <link>\n|     \"A\""
+    },
+    {
+      "index": 21,
+      "description": null,
+      "data": "<!DOCTYPE html><body><meta>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <meta>\n|     \"A\""
+    },
+    {
+      "index": 22,
+      "description": null,
+      "data": "<!DOCTYPE html><body><param>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <param>\n|     \"A\""
+    },
+    {
+      "index": 23,
+      "description": null,
+      "data": "<!DOCTYPE html><body><source>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <source>\n|     \"A\""
+    },
+    {
+      "index": 24,
+      "description": null,
+      "data": "<!DOCTYPE html><body><track>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <track>\n|     \"A\""
+    },
+    {
+      "index": 25,
+      "description": null,
+      "data": "<!DOCTYPE html><body><wbr>A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <wbr>\n|     \"A\""
+    }
+  ]
+}

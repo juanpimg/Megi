@@ -1,0 +1,85 @@
+{
+  "source_file": "tests24.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<!DOCTYPE html>&NotEqualTilde;",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"≂̸\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<!DOCTYPE html>&NotEqualTilde;A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"≂̸A\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<!DOCTYPE html>&ThickSpace;",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"  \""
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<!DOCTYPE html>&ThickSpace;A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"  A\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<!DOCTYPE html>&NotSubset;",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"⊂⃒\""
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<!DOCTYPE html>&NotSubset;A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"⊂⃒A\""
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<!DOCTYPE html>&Gopf;",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"𝔾\""
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<!DOCTYPE html>&Gopf;A",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"𝔾A\""
+    }
+  ]
+}

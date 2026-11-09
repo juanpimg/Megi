@@ -1,0 +1,116 @@
+{
+  "source_file": "svg.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<svg><tr><td><title><tr>",
+      "errors": [
+        "(1:21) Unexpected <tr> tag",
+        "(1:25) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <svg svg>\n|   <svg tr>\n|     <svg td>\n|       <svg title>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<svg><tr><td><title><tr>",
+      "errors": [
+        "(1:1) Unexpected <svg> tag",
+        "(1:21) Unexpected <tr> tag",
+        "(1:25) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "tr",
+      "script_mode": "both",
+      "document": "| <svg svg>\n|   <svg tr>\n|     <svg td>\n|       <svg title>"
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<svg><thead><title><tbody>",
+      "errors": [
+        "(1:1) Unexpected <svg> tag",
+        "(1:20) Unexpected <tbody> tag",
+        "(1:27) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "thead",
+      "script_mode": "both",
+      "document": "| <svg svg>\n|   <svg thead>\n|     <svg title>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<svg><tfoot><title><tbody>",
+      "errors": [
+        "(1:1) Unexpected <svg> tag",
+        "(1:20) Unexpected <tbody> tag",
+        "(1:27) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "tfoot",
+      "script_mode": "both",
+      "document": "| <svg svg>\n|   <svg tfoot>\n|     <svg title>"
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<svg><tbody><title><tfoot>",
+      "errors": [
+        "(1:1) Unexpected <svg> tag",
+        "(1:20) Unexpected <tfoot> tag",
+        "(1:27) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <svg svg>\n|   <svg tbody>\n|     <svg title>"
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<svg><tbody><title></table>",
+      "errors": [
+        "(1:1) Unexpected <svg> tag",
+        "(1:20) Unexpected </table> tag",
+        "(1:28) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <svg svg>\n|   <svg tbody>\n|     <svg title>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<svg><thead><title></table>",
+      "errors": [
+        "(1:1) Unexpected <svg> tag",
+        "(1:20) Unexpected </table> tag",
+        "(1:28) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <svg svg>\n|   <svg thead>\n|     <svg title>"
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<svg><tfoot><title></table>",
+      "errors": [
+        "(1:1) Unexpected <svg> tag",
+        "(1:20) Unexpected </table> tag",
+        "(1:28) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <svg svg>\n|   <svg tfoot>\n|     <svg title>"
+    }
+  ]
+}

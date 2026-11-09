@@ -1,0 +1,217 @@
+{
+  "source_file": "tests5.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<style> <!-- </style>x",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \" <!-- \"\n|   <body>\n|     \"x\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<style> <!-- </style> --> </style>x",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,34): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \" <!-- \"\n|     \" \"\n|   <body>\n|     \"--> x\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<style> <!--> </style>x",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \" <!--> \"\n|   <body>\n|     \"x\""
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<style> <!---> </style>x",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \" <!---> \"\n|   <body>\n|     \"x\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<iframe> <!---> </iframe>x",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <iframe>\n|       \" <!---> \"\n|     \"x\""
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<iframe> <!--- </iframe>->x</iframe> --> </iframe>x",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,36): unexpected-end-tag",
+        "(1,50): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <iframe>\n|       \" <!--- \"\n|     \"->x --> x\""
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<script> <!-- </script> --> </script>x",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,37): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \" <!-- \"\n|     \" \"\n|   <body>\n|     \"--> x\""
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<title> <!-- </title> --> </title>x",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,34): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <title>\n|       \" <!-- \"\n|     \" \"\n|   <body>\n|     \"--> x\""
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<textarea> <!--- </textarea>->x</textarea> --> </textarea>x",
+      "errors": [
+        "(1,10): expected-doctype-but-got-start-tag",
+        "(1,42): unexpected-end-tag",
+        "(1,58): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <textarea>\n|       \" <!--- \"\n|     \"->x --> x\""
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<style> <!</-- </style>x",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \" <!</-- \"\n|   <body>\n|     \"x\""
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<p><xmp></xmp>",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|     <xmp>"
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<xmp> <!-- > --> </xmp>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <xmp>\n|       \" <!-- > --> \""
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<title>&amp;</title>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <title>\n|       \"&\"\n|   <body>"
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<title><!--&amp;--></title>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <title>\n|       \"<!--&-->\"\n|   <body>"
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<title><!--</title>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <title>\n|       \"<!--\"\n|   <body>"
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<noscript><!--</noscript>--></noscript>",
+      "errors": [
+        "(1,10): expected-doctype-but-got-start-tag",
+        "(1,39): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-on",
+      "document": "| <html>\n|   <head>\n|     <noscript>\n|       \"<!--\"\n|   <body>\n|     \"-->\""
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<noscript><!--</noscript>--></noscript>",
+      "errors": [
+        "(1,10): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-off",
+      "document": "| <html>\n|   <head>\n|     <noscript>\n|       <!-- </noscript> -->\n|   <body>"
+    }
+  ]
+}

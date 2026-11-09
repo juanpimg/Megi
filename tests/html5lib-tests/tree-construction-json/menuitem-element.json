@@ -1,0 +1,249 @@
+{
+  "source_file": "menuitem-element.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<menuitem>",
+      "errors": [
+        "10: Start tag seen without seeing a doctype first. Expected “<!DOCTYPE html>”.",
+        "10: End of file seen and there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <menuitem>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "</menuitem>",
+      "errors": [
+        "11: End tag seen without seeing a doctype first. Expected “<!DOCTYPE html>”.",
+        "11: Stray end tag “menuitem”."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<!DOCTYPE html><body><menuitem>A",
+      "errors": [
+        "32: End of file seen and there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <menuitem>\n|       \"A\""
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<!DOCTYPE html><body><menuitem>A<menuitem>B",
+      "errors": [
+        "43: End of file seen and there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <menuitem>\n|       \"A\"\n|       <menuitem>\n|         \"B\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<!DOCTYPE html><body><menuitem>A<menu>B</menu>",
+      "errors": [
+        "46: End of file seen and there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <menuitem>\n|       \"A\"\n|       <menu>\n|         \"B\""
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<!DOCTYPE html><body><menuitem>A<hr>B",
+      "errors": [
+        "37: End of file seen and there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <menuitem>\n|       \"A\"\n|       <hr>\n|       \"B\""
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<!DOCTYPE html><li><menuitem><li>",
+      "errors": [
+        "33: End tag “li” implied, but there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <li>\n|       <menuitem>\n|     <li>"
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<!DOCTYPE html><menuitem><p></menuitem>x",
+      "errors": [
+        "39: Stray end tag “menuitem”.",
+        "40: End of file seen and there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <menuitem>\n|       <p>\n|         \"x\""
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<!DOCTYPE html><p><b></p><menuitem>",
+      "errors": [
+        "25: End tag “p” seen, but there were open elements.",
+        "35: End of file seen and there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <b>\n|     <b>\n|       <menuitem>"
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<!DOCTYPE html><menuitem><asdf></menuitem>x",
+      "errors": [
+        "42: End tag “menuitem” seen, but there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <menuitem>\n|       <asdf>\n|     \"x\""
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<!DOCTYPE html></menuitem>",
+      "errors": [
+        "26: Stray end tag “menuitem”."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<!DOCTYPE html><html></menuitem>",
+      "errors": [
+        "26: Stray end tag “menuitem”."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<!DOCTYPE html><head></menuitem>",
+      "errors": [
+        "26: Stray end tag “menuitem”."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>"
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<!DOCTYPE html><select><menuitem></select>",
+      "errors": [
+        "1:34: ERROR: End tag 'select' isn't allowed here. Currently open tags: html, body, select, menuitem."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <menuitem>"
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<!DOCTYPE html><option><menuitem>",
+      "errors": [
+        "33: End of file seen and there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <option>\n|       <menuitem>"
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<!DOCTYPE html><menuitem><option>",
+      "errors": [
+        "33: End of file seen and there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <menuitem>\n|       <option>"
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<!DOCTYPE html><menuitem></body>",
+      "errors": [
+        "32: End tag for  “body” seen, but there were unclosed elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <menuitem>"
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<!DOCTYPE html><menuitem></html>",
+      "errors": [
+        "32: End tag for  “html” seen, but there were unclosed elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <menuitem>"
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<!DOCTYPE html><menuitem><p>",
+      "errors": [
+        "28: End of file seen and there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <menuitem>\n|       <p>"
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "<!DOCTYPE html><menuitem><li>",
+      "errors": [
+        "29: End of file seen and there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <menuitem>\n|       <li>"
+    }
+  ]
+}

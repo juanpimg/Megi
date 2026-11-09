@@ -1,0 +1,799 @@
+{
+  "source_file": "tests20.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<!doctype html><p><button><button>",
+      "errors": [
+        "(1,34): unexpected-start-tag-implies-end-tag",
+        "(1,34): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|       <button>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<!doctype html><p><button><address>",
+      "errors": [
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <address>"
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<!doctype html><p><button><article>",
+      "errors": [
+        "(1,36): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <article>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<!doctype html><p><button><aside>",
+      "errors": [
+        "(1,34): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <aside>"
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<!doctype html><p><button><blockquote>",
+      "errors": [
+        "(1,38): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <blockquote>"
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<!doctype html><p><button><center>",
+      "errors": [
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <center>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<!doctype html><p><button><details>",
+      "errors": [
+        "(1,36): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <details>"
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<!doctype html><p><button><dialog>",
+      "errors": [
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <dialog>"
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<!doctype html><p><button><dir>",
+      "errors": [
+        "(1,32): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <dir>"
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<!doctype html><p><button><div>",
+      "errors": [
+        "(1,32): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <div>"
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<!doctype html><p><button><dl>",
+      "errors": [
+        "(1,31): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <dl>"
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<!doctype html><p><button><fieldset>",
+      "errors": [
+        "(1,37): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <fieldset>"
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<!doctype html><p><button><figcaption>",
+      "errors": [
+        "(1,39): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <figcaption>"
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<!doctype html><p><button><figure>",
+      "errors": [
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <figure>"
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<!doctype html><p><button><footer>",
+      "errors": [
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <footer>"
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<!doctype html><p><button><header>",
+      "errors": [
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <header>"
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<!doctype html><p><button><hgroup>",
+      "errors": [
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <hgroup>"
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<!doctype html><p><button><main>",
+      "errors": [
+        "(1,33): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <main>"
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<!doctype html><p><button><menu>",
+      "errors": [
+        "(1,32): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <menu>"
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "<!doctype html><p><button><nav>",
+      "errors": [
+        "(1,32): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <nav>"
+    },
+    {
+      "index": 20,
+      "description": null,
+      "data": "<!doctype html><p><button><ol>",
+      "errors": [
+        "(1,31): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <ol>"
+    },
+    {
+      "index": 21,
+      "description": null,
+      "data": "<!doctype html><p><button><p>",
+      "errors": [
+        "(1,29): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <p>"
+    },
+    {
+      "index": 22,
+      "description": null,
+      "data": "<!doctype html><p><button><search>",
+      "errors": [
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <search>"
+    },
+    {
+      "index": 23,
+      "description": null,
+      "data": "<!doctype html><p><button><section>",
+      "errors": [
+        "(1,36): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <section>"
+    },
+    {
+      "index": 24,
+      "description": null,
+      "data": "<!doctype html><p><button><summary>",
+      "errors": [
+        "(1,36): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <summary>"
+    },
+    {
+      "index": 25,
+      "description": null,
+      "data": "<!doctype html><p><button><ul>",
+      "errors": [
+        "(1,30): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <ul>"
+    },
+    {
+      "index": 26,
+      "description": null,
+      "data": "<!doctype html><p><button><h1>",
+      "errors": [
+        "(1,30): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <h1>"
+    },
+    {
+      "index": 27,
+      "description": null,
+      "data": "<!doctype html><p><button><h6>",
+      "errors": [
+        "(1,30): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <h6>"
+    },
+    {
+      "index": 28,
+      "description": null,
+      "data": "<!doctype html><p><button><listing>",
+      "errors": [
+        "(1,35): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <listing>"
+    },
+    {
+      "index": 29,
+      "description": null,
+      "data": "<!doctype html><p><button><pre>",
+      "errors": [
+        "(1,31): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <pre>"
+    },
+    {
+      "index": 30,
+      "description": null,
+      "data": "<!doctype html><p><button><form>",
+      "errors": [
+        "(1,32): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <form>"
+    },
+    {
+      "index": 31,
+      "description": null,
+      "data": "<!doctype html><p><button><li>",
+      "errors": [
+        "(1,30): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <li>"
+    },
+    {
+      "index": 32,
+      "description": null,
+      "data": "<!doctype html><p><button><dd>",
+      "errors": [
+        "(1,30): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <dd>"
+    },
+    {
+      "index": 33,
+      "description": null,
+      "data": "<!doctype html><p><button><dt>",
+      "errors": [
+        "(1,30): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <dt>"
+    },
+    {
+      "index": 34,
+      "description": null,
+      "data": "<!doctype html><p><button><plaintext>",
+      "errors": [
+        "(1,37): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <plaintext>"
+    },
+    {
+      "index": 35,
+      "description": null,
+      "data": "<!doctype html><p><button><table>",
+      "errors": [
+        "(1,33): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <table>"
+    },
+    {
+      "index": 36,
+      "description": null,
+      "data": "<!doctype html><p><button><hr>",
+      "errors": [
+        "(1,30): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <hr>"
+    },
+    {
+      "index": 37,
+      "description": null,
+      "data": "<!doctype html><p><button><xmp>",
+      "errors": [
+        "(1,31): expected-named-closing-tag-but-got-eof",
+        "(1,31): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <xmp>"
+    },
+    {
+      "index": 38,
+      "description": null,
+      "data": "<!doctype html><p><button></p>",
+      "errors": [
+        "(1,30): unexpected-end-tag",
+        "(1,30): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <button>\n|         <p>"
+    },
+    {
+      "index": 39,
+      "description": null,
+      "data": "<!doctype html><button><p></button>x",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <button>\n|       <p>\n|     \"x\""
+    },
+    {
+      "index": 40,
+      "description": null,
+      "data": "<!doctype html><address><button></address>a",
+      "errors": [
+        "(1,42): end-tag-too-early"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <address>\n|       <button>\n|     \"a\""
+    },
+    {
+      "index": 41,
+      "description": null,
+      "data": "<p><table></p>",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,14): unexpected-end-tag-implies-table-voodoo",
+        "(1,14): unexpected-end-tag",
+        "(1,14): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <p>\n|       <table>"
+    },
+    {
+      "index": 42,
+      "description": null,
+      "data": "<!doctype html><svg>",
+      "errors": [
+        "(1,20): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>"
+    },
+    {
+      "index": 43,
+      "description": null,
+      "data": "<!doctype html><p><figcaption>",
+      "errors": [
+        "(1,30): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|     <figcaption>"
+    },
+    {
+      "index": 44,
+      "description": null,
+      "data": "<!doctype html><p><summary>",
+      "errors": [
+        "(1,27): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|     <summary>"
+    },
+    {
+      "index": 45,
+      "description": null,
+      "data": "<!doctype html><form><table><form>",
+      "errors": [
+        "(1,34): unexpected-form-in-table",
+        "(1,34): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <form>\n|       <table>"
+    },
+    {
+      "index": 46,
+      "description": null,
+      "data": "<!doctype html><table><form><form>",
+      "errors": [
+        "(1,28): unexpected-form-in-table",
+        "(1,34): unexpected-form-in-table",
+        "(1,34): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <form>"
+    },
+    {
+      "index": 47,
+      "description": null,
+      "data": "<!doctype html><table><form></table><form>",
+      "errors": [
+        "(1,28): unexpected-form-in-table",
+        "(1,42): unexpected-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <form>"
+    },
+    {
+      "index": 48,
+      "description": null,
+      "data": "<!doctype html><svg><foreignObject><p>",
+      "errors": [
+        "(1,38): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg foreignObject>\n|         <p>"
+    },
+    {
+      "index": 49,
+      "description": null,
+      "data": "<!doctype html><svg><title>abc",
+      "errors": [
+        "(1,30): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg title>\n|         \"abc\""
+    },
+    {
+      "index": 50,
+      "description": null,
+      "data": "<option><span><option>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,22): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <option>\n|       <span>\n|         <option>"
+    },
+    {
+      "index": 51,
+      "description": null,
+      "data": "<option><option>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <option>\n|     <option>"
+    },
+    {
+      "index": 52,
+      "description": null,
+      "data": "<math><annotation-xml><div>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,27): unexpected-html-element-in-foreign-content",
+        "(1,27): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|     <div>"
+    },
+    {
+      "index": 53,
+      "description": null,
+      "data": "<math><annotation-xml encoding=\"application/svg+xml\"><div>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,58): unexpected-html-element-in-foreign-content",
+        "(1,58): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         encoding=\"application/svg+xml\"\n|     <div>"
+    },
+    {
+      "index": 54,
+      "description": null,
+      "data": "<math><annotation-xml encoding=\"application/xhtml+xml\"><div>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,60): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         encoding=\"application/xhtml+xml\"\n|         <div>"
+    },
+    {
+      "index": 55,
+      "description": null,
+      "data": "<math><annotation-xml encoding=\"aPPlication/xhtmL+xMl\"><div>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,60): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         encoding=\"aPPlication/xhtmL+xMl\"\n|         <div>"
+    },
+    {
+      "index": 56,
+      "description": null,
+      "data": "<math><annotation-xml encoding=\"text/html\"><div>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,48): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         encoding=\"text/html\"\n|         <div>"
+    },
+    {
+      "index": 57,
+      "description": null,
+      "data": "<math><annotation-xml encoding=\"Text/htmL\"><div>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,48): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         encoding=\"Text/htmL\"\n|         <div>"
+    },
+    {
+      "index": 58,
+      "description": null,
+      "data": "<math><annotation-xml encoding=\" text/html \"><div>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,50): unexpected-html-element-in-foreign-content",
+        "(1,50): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         encoding=\" text/html \"\n|     <div>"
+    },
+    {
+      "index": 59,
+      "description": null,
+      "data": "<math><annotation-xml> </annotation-xml>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,40): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         \" \""
+    },
+    {
+      "index": 60,
+      "description": null,
+      "data": "<math><annotation-xml>c</annotation-xml>",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,40): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         \"c\""
+    },
+    {
+      "index": 61,
+      "description": null,
+      "data": "<math><annotation-xml><!--foo-->",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,32): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         <!-- foo -->"
+    },
+    {
+      "index": 62,
+      "description": null,
+      "data": "<math><annotation-xml></svg>x",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,28): unexpected-end-tag-in-math",
+        "(1,28): unexpected-end-tag",
+        "(1,29): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         \"x\""
+    },
+    {
+      "index": 63,
+      "description": null,
+      "data": "<math><annotation-xml><svg>x",
+      "errors": [
+        "(1,6): expected-doctype-but-got-start-tag",
+        "(1,28): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         <svg svg>\n|           \"x\""
+    }
+  ]
+}

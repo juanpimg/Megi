@@ -1,0 +1,341 @@
+{
+  "source_file": "entities02.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<div bar=\"ZZ&gt;YY\"></div>",
+      "errors": [
+        "(1,20): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ>YY\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<div bar=\"ZZ&\"></div>",
+      "errors": [
+        "(1,15): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ&\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<div bar='ZZ&'></div>",
+      "errors": [
+        "(1,15): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ&\""
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<div bar=ZZ&></div>",
+      "errors": [
+        "(1,13): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ&\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<div bar=\"ZZ&gt=YY\"></div>",
+      "errors": [
+        "(1,20): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ&gt=YY\""
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<div bar=\"ZZ&gt0YY\"></div>",
+      "errors": [
+        "(1,20): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ&gt0YY\""
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<div bar=\"ZZ&gt9YY\"></div>",
+      "errors": [
+        "(1,20): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ&gt9YY\""
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<div bar=\"ZZ&gtaYY\"></div>",
+      "errors": [
+        "(1,20): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ&gtaYY\""
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<div bar=\"ZZ&gtZYY\"></div>",
+      "errors": [
+        "(1,20): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ&gtZYY\""
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<div bar=\"ZZ&gt YY\"></div>",
+      "errors": [
+        "(1,15): named-entity-without-semicolon",
+        "(1,20): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [
+        "(1:16) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ> YY\""
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<div bar=\"ZZ&gt\"></div>",
+      "errors": [
+        "(1,15): named-entity-without-semicolon",
+        "(1,17): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [
+        "(1:16) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ>\""
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<div bar='ZZ&gt'></div>",
+      "errors": [
+        "(1,15): named-entity-without-semicolon",
+        "(1,17): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [
+        "(1:16) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ>\""
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<div bar=ZZ&gt></div>",
+      "errors": [
+        "(1,14): named-entity-without-semicolon",
+        "(1,15): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [
+        "(1:15) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ>\""
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<div bar=\"ZZ&pound_id=23\"></div>",
+      "errors": [
+        "(1,18): named-entity-without-semicolon",
+        "(1,26): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [
+        "(1:19) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ£_id=23\""
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<div bar=\"ZZ&prod_id=23\"></div>",
+      "errors": [
+        "(1,25): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ&prod_id=23\""
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<div bar=\"ZZ&pound;_id=23\"></div>",
+      "errors": [
+        "(1,27): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ£_id=23\""
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<div bar=\"ZZ&prod;_id=23\"></div>",
+      "errors": [
+        "(1,26): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ∏_id=23\""
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<div bar=\"ZZ&pound=23\"></div>",
+      "errors": [
+        "(1,23): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ&pound=23\""
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<div bar=\"ZZ&prod=23\"></div>",
+      "errors": [
+        "(1,22): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       bar=\"ZZ&prod=23\""
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "<div>ZZ&pound_id=23</div>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,13): named-entity-without-semicolon"
+      ],
+      "new_errors": [
+        "(1:14) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       \"ZZ£_id=23\""
+    },
+    {
+      "index": 20,
+      "description": null,
+      "data": "<div>ZZ&prod_id=23</div>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       \"ZZ&prod_id=23\""
+    },
+    {
+      "index": 21,
+      "description": null,
+      "data": "<div>ZZ&pound;_id=23</div>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       \"ZZ£_id=23\""
+    },
+    {
+      "index": 22,
+      "description": null,
+      "data": "<div>ZZ&prod;_id=23</div>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       \"ZZ∏_id=23\""
+    },
+    {
+      "index": 23,
+      "description": null,
+      "data": "<div>ZZ&pound=23</div>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,13): named-entity-without-semicolon"
+      ],
+      "new_errors": [
+        "(1:14) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       \"ZZ£=23\""
+    },
+    {
+      "index": 24,
+      "description": null,
+      "data": "<div>ZZ&prod=23</div>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       \"ZZ&prod=23\""
+    },
+    {
+      "index": 25,
+      "description": null,
+      "data": "<div>ZZ&AElig=</div>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1:14) missing-semicolon-after-character-reference"
+      ],
+      "new_errors": [
+        "(1:14) missing-semicolon-after-character-reference"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       \"ZZÆ=\""
+    }
+  ]
+}

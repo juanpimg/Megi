@@ -1,0 +1,697 @@
+{
+  "source_file": "tests10.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<!DOCTYPE html><svg></svg>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<!DOCTYPE html><svg></svg><![CDATA[a]]>",
+      "errors": [
+        "(1,28) expected-dashes-or-doctype"
+      ],
+      "new_errors": [
+        "(1:35) cdata-in-html-content"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|     <!-- [CDATA[a]] -->"
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<!DOCTYPE html><body><svg></svg>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<!DOCTYPE html><body><select><svg></svg></select>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <svg svg>"
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<!DOCTYPE html><body><select><option><svg></svg></option></select>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <option>\n|         <svg svg>"
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<!DOCTYPE html><body><table><svg></svg></table>",
+      "errors": [
+        "(1,33) foster-parenting-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|     <table>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<!DOCTYPE html><body><table><svg><g>foo</g></svg></table>",
+      "errors": [
+        "(1,33) foster-parenting-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg g>\n|         \"foo\"\n|     <table>"
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<!DOCTYPE html><body><table><svg><g>foo</g><g>bar</g></svg></table>",
+      "errors": [
+        "(1,33) foster-parenting-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg g>\n|         \"foo\"\n|       <svg g>\n|         \"bar\"\n|     <table>"
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<!DOCTYPE html><body><table><tbody><svg><g>foo</g><g>bar</g></svg></tbody></table>",
+      "errors": [
+        "(1,40) foster-parenting-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg g>\n|         \"foo\"\n|       <svg g>\n|         \"bar\"\n|     <table>\n|       <tbody>"
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<!DOCTYPE html><body><table><tbody><tr><svg><g>foo</g><g>bar</g></svg></tr></tbody></table>",
+      "errors": [
+        "(1,44) foster-parenting-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg g>\n|         \"foo\"\n|       <svg g>\n|         \"bar\"\n|     <table>\n|       <tbody>\n|         <tr>"
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<!DOCTYPE html><body><table><tbody><tr><td><svg><g>foo</g><g>bar</g></svg></td></tr></tbody></table>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             <svg svg>\n|               <svg g>\n|                 \"foo\"\n|               <svg g>\n|                 \"bar\""
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<!DOCTYPE html><body><table><tbody><tr><td><svg><g>foo</g><g>bar</g></svg><p>baz</td></tr></tbody></table>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             <svg svg>\n|               <svg g>\n|                 \"foo\"\n|               <svg g>\n|                 \"bar\"\n|             <p>\n|               \"baz\""
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g></svg><p>baz</caption></table>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <caption>\n|         <svg svg>\n|           <svg g>\n|             \"foo\"\n|           <svg g>\n|             \"bar\"\n|         <p>\n|           \"baz\""
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g><p>baz</table><p>quux",
+      "errors": [
+        "(1,65) unexpected-html-element-in-foreign-content"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <caption>\n|         <svg svg>\n|           <svg g>\n|             \"foo\"\n|           <svg g>\n|             \"bar\"\n|         <p>\n|           \"baz\"\n|     <p>\n|       \"quux\""
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g>baz</table><p>quux",
+      "errors": [
+        "(1,73) unexpected-end-tag",
+        "(1,73) expected-one-end-tag-but-got-another"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <caption>\n|         <svg svg>\n|           <svg g>\n|             \"foo\"\n|           <svg g>\n|             \"bar\"\n|           \"baz\"\n|     <p>\n|       \"quux\""
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<!DOCTYPE html><body><table><colgroup><svg><g>foo</g><g>bar</g><p>baz</table><p>quux",
+      "errors": [
+        "(1,43) foster-parenting-start-tag svg",
+        "(1,66) unexpected HTML-like start tag token in foreign content",
+        "(1,66) foster-parenting-start-tag",
+        "(1,67) foster-parenting-character",
+        "(1,68) foster-parenting-character",
+        "(1,69) foster-parenting-character"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg g>\n|         \"foo\"\n|       <svg g>\n|         \"bar\"\n|     <p>\n|       \"baz\"\n|     <table>\n|       <colgroup>\n|     <p>\n|       \"quux\""
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<!DOCTYPE html><body><table><tr><td><select><svg><g>foo</g><g>bar</g><p>baz</table><p>quux",
+      "errors": [
+        "1:70: ERROR: Start tag 'p' isn't allowed here. Currently open tags: html, body, table, tbody, tr, td, select, svg.",
+        "1:76: ERROR: End tag 'table' isn't allowed here. Currently open tags: html, body, table, tbody, tr, td, select."
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             <select>\n|               <svg svg>\n|                 <svg g>\n|                   \"foo\"\n|                 <svg g>\n|                   \"bar\"\n|               <p>\n|                 \"baz\"\n|     <p>\n|       \"quux\""
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<!DOCTYPE html><body><table><select><svg><g>foo</g><g>bar</g><p>baz</table><p>quux",
+      "errors": [
+        "1:29: ERROR: Start tag 'select' isn't allowed here. Currently open tags: html, body, table.",
+        "1:37: ERROR: Start tag 'svg' isn't allowed here. Currently open tags: html, body, table, select.",
+        "1:62: ERROR: Start tag 'p' isn't allowed here. Currently open tags: html, body, table, select, svg.",
+        "1:62: ERROR: Start tag 'p' isn't allowed here. Currently open tags: html, body, table, select.",
+        "1:65: ERROR: Character tokens aren't legal here",
+        "1:66: ERROR: Character tokens aren't legal here",
+        "1:67: ERROR: Character tokens aren't legal here"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>\n|       <svg svg>\n|         <svg g>\n|           \"foo\"\n|         <svg g>\n|           \"bar\"\n|       <p>\n|         \"baz\"\n|     <table>\n|     <p>\n|       \"quux\""
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<!DOCTYPE html><body></body></html><svg><g>foo</g><g>bar</g><p>baz",
+      "errors": [
+        "(1,40) expected-eof-but-got-start-tag",
+        "(1,63) unexpected-html-element-in-foreign-content"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg g>\n|         \"foo\"\n|       <svg g>\n|         \"bar\"\n|     <p>\n|       \"baz\""
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "<!DOCTYPE html><body></body><svg><g>foo</g><g>bar</g><p>baz",
+      "errors": [
+        "(1,33) unexpected-start-tag-after-body",
+        "(1,56) unexpected-html-element-in-foreign-content"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg g>\n|         \"foo\"\n|       <svg g>\n|         \"bar\"\n|     <p>\n|       \"baz\""
+    },
+    {
+      "index": 20,
+      "description": null,
+      "data": "<!DOCTYPE html><frameset><svg><g></g><g></g><p><span>",
+      "errors": [
+        "(1,30) unexpected-start-tag-in-frameset",
+        "(1,33) unexpected-start-tag-in-frameset",
+        "(1,37) unexpected-end-tag-in-frameset",
+        "(1,40) unexpected-start-tag-in-frameset",
+        "(1,44) unexpected-end-tag-in-frameset",
+        "(1,47) unexpected-start-tag-in-frameset",
+        "(1,53) unexpected-start-tag-in-frameset",
+        "(1,53) eof-in-frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 21,
+      "description": null,
+      "data": "<!DOCTYPE html><frameset></frameset><svg><g></g><g></g><p><span>",
+      "errors": [
+        "(1,41) unexpected-start-tag-after-frameset",
+        "(1,44) unexpected-start-tag-after-frameset",
+        "(1,48) unexpected-end-tag-after-frameset",
+        "(1,51) unexpected-start-tag-after-frameset",
+        "(1,55) unexpected-end-tag-after-frameset",
+        "(1,58) unexpected-start-tag-after-frameset",
+        "(1,64) unexpected-start-tag-after-frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 22,
+      "description": null,
+      "data": "<!DOCTYPE html><body xlink:href=foo><svg xlink:href=foo></svg>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     xlink:href=\"foo\"\n|     <svg svg>\n|       xlink href=\"foo\""
+    },
+    {
+      "index": 23,
+      "description": null,
+      "data": "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo></g></svg>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     xlink:href=\"foo\"\n|     xml:lang=\"en\"\n|     <svg svg>\n|       <svg g>\n|         xlink href=\"foo\"\n|         xml lang=\"en\""
+    },
+    {
+      "index": 24,
+      "description": null,
+      "data": "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo /></svg>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     xlink:href=\"foo\"\n|     xml:lang=\"en\"\n|     <svg svg>\n|       <svg g>\n|         xlink href=\"foo\"\n|         xml lang=\"en\""
+    },
+    {
+      "index": 25,
+      "description": null,
+      "data": "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo />bar</svg>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     xlink:href=\"foo\"\n|     xml:lang=\"en\"\n|     <svg svg>\n|       <svg g>\n|         xlink href=\"foo\"\n|         xml lang=\"en\"\n|       \"bar\""
+    },
+    {
+      "index": 26,
+      "description": null,
+      "data": "<svg></path>",
+      "errors": [
+        "(1,5) expected-doctype-but-got-start-tag",
+        "(1,12) unexpected-end-tag",
+        "(1,12) unexpected-end-tag",
+        "(1,12) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>"
+    },
+    {
+      "index": 27,
+      "description": null,
+      "data": "<div><svg></div>a",
+      "errors": [
+        "(1,5) expected-doctype-but-got-start-tag",
+        "(1,16) unexpected-end-tag",
+        "(1,16) end-tag-too-early"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <svg svg>\n|     \"a\""
+    },
+    {
+      "index": 28,
+      "description": null,
+      "data": "<div><svg><path></div>a",
+      "errors": [
+        "(1,5) expected-doctype-but-got-start-tag",
+        "(1,22) unexpected-end-tag",
+        "(1,22) end-tag-too-early"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <svg svg>\n|         <svg path>\n|     \"a\""
+    },
+    {
+      "index": 29,
+      "description": null,
+      "data": "<div><svg><path></svg><path>",
+      "errors": [
+        "(1,5) expected-doctype-but-got-start-tag",
+        "(1,22) unexpected-end-tag",
+        "(1,28) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <svg svg>\n|         <svg path>\n|       <path>"
+    },
+    {
+      "index": 30,
+      "description": null,
+      "data": "<div><svg><path><foreignObject><math></div>a",
+      "errors": [
+        "(1,5) expected-doctype-but-got-start-tag",
+        "(1,43) unexpected-end-tag",
+        "(1,43) end-tag-too-early",
+        "(1,44) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <svg svg>\n|         <svg path>\n|           <svg foreignObject>\n|             <math math>\n|               \"a\""
+    },
+    {
+      "index": 31,
+      "description": null,
+      "data": "<div><svg><path><foreignObject><p></div>a",
+      "errors": [
+        "(1,5) expected-doctype-but-got-start-tag",
+        "(1,40) end-tag-too-early",
+        "(1,41) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <svg svg>\n|         <svg path>\n|           <svg foreignObject>\n|             <p>\n|               \"a\""
+    },
+    {
+      "index": 32,
+      "description": null,
+      "data": "<!DOCTYPE html><svg><desc><div><svg><ul>a",
+      "errors": [
+        "(1,40) unexpected-html-element-in-foreign-content",
+        "(1,41) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg desc>\n|         <div>\n|           <svg svg>\n|           <ul>\n|             \"a\""
+    },
+    {
+      "index": 33,
+      "description": null,
+      "data": "<!DOCTYPE html><svg><desc><svg><ul>a",
+      "errors": [
+        "(1,35) unexpected-html-element-in-foreign-content",
+        "(1,36) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg desc>\n|         <svg svg>\n|         <ul>\n|           \"a\""
+    },
+    {
+      "index": 34,
+      "description": null,
+      "data": "<!DOCTYPE html><p><svg><desc><p>",
+      "errors": [
+        "(1,32) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <svg svg>\n|         <svg desc>\n|           <p>"
+    },
+    {
+      "index": 35,
+      "description": null,
+      "data": "<!DOCTYPE html><p><svg><title><p>",
+      "errors": [
+        "(1,33) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <svg svg>\n|         <svg title>\n|           <p>"
+    },
+    {
+      "index": 36,
+      "description": null,
+      "data": "<div><svg><path><foreignObject><p></foreignObject><p>",
+      "errors": [
+        "(1,5) expected-doctype-but-got-start-tag",
+        "(1,50) unexpected-end-tag",
+        "(1,53) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <svg svg>\n|         <svg path>\n|           <svg foreignObject>\n|             <p>\n|             <p>"
+    },
+    {
+      "index": 37,
+      "description": null,
+      "data": "<math><mi><div><object><div><span></span></div></object></div></mi><mi>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,71) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mi>\n|         <div>\n|           <object>\n|             <div>\n|               <span>\n|       <math mi>"
+    },
+    {
+      "index": 38,
+      "description": null,
+      "data": "<math><mi><svg><foreignObject><div><div></div></div></foreignObject></svg></mi><mi>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,83) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mi>\n|         <svg svg>\n|           <svg foreignObject>\n|             <div>\n|               <div>\n|       <math mi>"
+    },
+    {
+      "index": 39,
+      "description": null,
+      "data": "<svg><script></script><path>",
+      "errors": [
+        "(1,5) expected-doctype-but-got-start-tag",
+        "(1,28) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|       <svg script>\n|       <svg path>"
+    },
+    {
+      "index": 40,
+      "description": null,
+      "data": "<table><svg></svg><tr>",
+      "errors": [
+        "(1,7) expected-doctype-but-got-start-tag",
+        "(1,12) unexpected-start-tag-implies-table-voodoo",
+        "(1,22) eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <svg svg>\n|     <table>\n|       <tbody>\n|         <tr>"
+    },
+    {
+      "index": 41,
+      "description": null,
+      "data": "<math><mi><mglyph>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,18) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mi>\n|         <math mglyph>"
+    },
+    {
+      "index": 42,
+      "description": null,
+      "data": "<math><mi><malignmark>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,22) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mi>\n|         <math malignmark>"
+    },
+    {
+      "index": 43,
+      "description": null,
+      "data": "<math><mo><mglyph>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,18) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mo>\n|         <math mglyph>"
+    },
+    {
+      "index": 44,
+      "description": null,
+      "data": "<math><mo><malignmark>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,22) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mo>\n|         <math malignmark>"
+    },
+    {
+      "index": 45,
+      "description": null,
+      "data": "<math><mn><mglyph>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,18) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mn>\n|         <math mglyph>"
+    },
+    {
+      "index": 46,
+      "description": null,
+      "data": "<math><mn><malignmark>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,22) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mn>\n|         <math malignmark>"
+    },
+    {
+      "index": 47,
+      "description": null,
+      "data": "<math><ms><mglyph>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,18) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math ms>\n|         <math mglyph>"
+    },
+    {
+      "index": 48,
+      "description": null,
+      "data": "<math><ms><malignmark>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,22) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math ms>\n|         <math malignmark>"
+    },
+    {
+      "index": 49,
+      "description": null,
+      "data": "<math><mtext><mglyph>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,21) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mtext>\n|         <math mglyph>"
+    },
+    {
+      "index": 50,
+      "description": null,
+      "data": "<math><mtext><malignmark>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,25) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math mtext>\n|         <math malignmark>"
+    },
+    {
+      "index": 51,
+      "description": null,
+      "data": "<math><annotation-xml><svg></svg></annotation-xml><mi>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,54) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         <svg svg>\n|       <math mi>"
+    },
+    {
+      "index": 52,
+      "description": null,
+      "data": "<math><annotation-xml><svg><foreignObject><div><math><mi></mi></math><span></span></div></foreignObject><path></path></svg></annotation-xml><mi>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,144) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         <svg svg>\n|           <svg foreignObject>\n|             <div>\n|               <math math>\n|                 <math mi>\n|               <span>\n|           <svg path>\n|       <math mi>"
+    },
+    {
+      "index": 53,
+      "description": null,
+      "data": "<math><annotation-xml><svg><foreignObject><math><mi><svg></svg></mi><mo></mo></math><span></span></foreignObject><path></path></svg></annotation-xml><mi>",
+      "errors": [
+        "(1,6) expected-doctype-but-got-start-tag",
+        "(1,153) expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <math math>\n|       <math annotation-xml>\n|         <svg svg>\n|           <svg foreignObject>\n|             <math math>\n|               <math mi>\n|                 <svg svg>\n|               <math mo>\n|             <span>\n|           <svg path>\n|       <math mi>"
+    }
+  ]
+}

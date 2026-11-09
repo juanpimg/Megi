@@ -1,0 +1,1032 @@
+{
+  "source_file": "tests_innerHTML_1.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<body><span>",
+      "errors": [
+        "(1,6): unexpected-start-tag",
+        "(1,12): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "body",
+      "script_mode": "both",
+      "document": "| <span>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<span><body>",
+      "errors": [
+        "(1,12): unexpected-start-tag",
+        "(1,12): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "body",
+      "script_mode": "both",
+      "document": "| <span>"
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<span><body>",
+      "errors": [
+        "(1,12): unexpected-start-tag",
+        "(1,12): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "div",
+      "script_mode": "both",
+      "document": "| <span>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<body><span>",
+      "errors": [
+        "(1,12): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "html",
+      "script_mode": "both",
+      "document": "| <head>\n| <body>\n|   <span>"
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<frameset><span>",
+      "errors": [
+        "(1,10): unexpected-start-tag",
+        "(1,16): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "body",
+      "script_mode": "both",
+      "document": "| <span>"
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<span><frameset>",
+      "errors": [
+        "(1,16): unexpected-start-tag",
+        "(1,16): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "body",
+      "script_mode": "both",
+      "document": "| <span>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<span><frameset>",
+      "errors": [
+        "(1,16): unexpected-start-tag",
+        "(1,16): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "div",
+      "script_mode": "both",
+      "document": "| <span>"
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<frameset><span>",
+      "errors": [
+        "(1,16): unexpected-start-tag-in-frameset",
+        "(1,16): eof-in-frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": "html",
+      "script_mode": "both",
+      "document": "| <head>\n| <frameset>"
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<table><tr>",
+      "errors": [
+        "(1,7): unexpected-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": "table",
+      "script_mode": "both",
+      "document": "| <tbody>\n|   <tr>"
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "</table><tr>",
+      "errors": [
+        "(1,8): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": "table",
+      "script_mode": "both",
+      "document": "| <tbody>\n|   <tr>"
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<a>",
+      "errors": [
+        "(1,3): unexpected-start-tag-implies-table-voodoo",
+        "(1,3): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": "table",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<a><caption>a",
+      "errors": [
+        "(1,3): unexpected-start-tag-implies-table-voodoo",
+        "(1,13): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "table",
+      "script_mode": "both",
+      "document": "| <a>\n| <caption>\n|   \"a\""
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<a><colgroup><col>",
+      "errors": [
+        "(1,3): foster-parenting-start-token",
+        "(1,18): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "table",
+      "script_mode": "both",
+      "document": "| <a>\n| <colgroup>\n|   <col>"
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<a><tbody><tr>",
+      "errors": [
+        "(1,3): foster-parenting-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": "table",
+      "script_mode": "both",
+      "document": "| <a>\n| <tbody>\n|   <tr>"
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<a><tfoot><tr>",
+      "errors": [
+        "(1,3): foster-parenting-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": "table",
+      "script_mode": "both",
+      "document": "| <a>\n| <tfoot>\n|   <tr>"
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<a><thead><tr>",
+      "errors": [
+        "(1,3): foster-parenting-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": "table",
+      "script_mode": "both",
+      "document": "| <a>\n| <thead>\n|   <tr>"
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<a><tr>",
+      "errors": [
+        "(1,3): foster-parenting-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": "table",
+      "script_mode": "both",
+      "document": "| <a>\n| <tbody>\n|   <tr>"
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<a><th>",
+      "errors": [
+        "(1,3): unexpected-start-tag-implies-table-voodoo",
+        "(1,7): unexpected-cell-in-table-body"
+      ],
+      "new_errors": [],
+      "document_fragment": "table",
+      "script_mode": "both",
+      "document": "| <a>\n| <tbody>\n|   <tr>\n|     <th>"
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<a><td>",
+      "errors": [
+        "(1,3): unexpected-start-tag-implies-table-voodoo",
+        "(1,7): unexpected-cell-in-table-body"
+      ],
+      "new_errors": [],
+      "document_fragment": "table",
+      "script_mode": "both",
+      "document": "| <a>\n| <tbody>\n|   <tr>\n|     <td>"
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "<table></table><tbody>",
+      "errors": [
+        "(1,22): unexpected-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <table>"
+    },
+    {
+      "index": 20,
+      "description": null,
+      "data": "</table><span>",
+      "errors": [
+        "(1,8): unexpected-end-tag",
+        "(1,14): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>"
+    },
+    {
+      "index": 21,
+      "description": null,
+      "data": "<span></table>",
+      "errors": [
+        "(1,14): unexpected-end-tag",
+        "(1,14): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>"
+    },
+    {
+      "index": 22,
+      "description": null,
+      "data": "</caption><span>",
+      "errors": [
+        "(1,10): XXX-undefined-error",
+        "(1,16): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>"
+    },
+    {
+      "index": 23,
+      "description": null,
+      "data": "<span></caption><span>",
+      "errors": [
+        "(1,16): XXX-undefined-error",
+        "(1,22): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>\n|   <span>"
+    },
+    {
+      "index": 24,
+      "description": null,
+      "data": "<span><caption><span>",
+      "errors": [
+        "(1,15): unexpected-start-tag",
+        "(1,21): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>\n|   <span>"
+    },
+    {
+      "index": 25,
+      "description": null,
+      "data": "<span><col><span>",
+      "errors": [
+        "(1,11): unexpected-start-tag",
+        "(1,17): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>\n|   <span>"
+    },
+    {
+      "index": 26,
+      "description": null,
+      "data": "<span><colgroup><span>",
+      "errors": [
+        "(1,16): unexpected-start-tag",
+        "(1,22): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>\n|   <span>"
+    },
+    {
+      "index": 27,
+      "description": null,
+      "data": "<span><html><span>",
+      "errors": [
+        "(1,12): non-html-root",
+        "(1,18): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>\n|   <span>"
+    },
+    {
+      "index": 28,
+      "description": null,
+      "data": "<span><tbody><span>",
+      "errors": [
+        "(1,13): unexpected-start-tag",
+        "(1,19): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>\n|   <span>"
+    },
+    {
+      "index": 29,
+      "description": null,
+      "data": "<span><td><span>",
+      "errors": [
+        "(1,10): unexpected-start-tag",
+        "(1,16): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>\n|   <span>"
+    },
+    {
+      "index": 30,
+      "description": null,
+      "data": "<span><tfoot><span>",
+      "errors": [
+        "(1,13): unexpected-start-tag",
+        "(1,19): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>\n|   <span>"
+    },
+    {
+      "index": 31,
+      "description": null,
+      "data": "<span><thead><span>",
+      "errors": [
+        "(1,13): unexpected-start-tag",
+        "(1,19): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>\n|   <span>"
+    },
+    {
+      "index": 32,
+      "description": null,
+      "data": "<span><th><span>",
+      "errors": [
+        "(1,10): unexpected-start-tag",
+        "(1,16): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>\n|   <span>"
+    },
+    {
+      "index": 33,
+      "description": null,
+      "data": "<span><tr><span>",
+      "errors": [
+        "(1,10): unexpected-start-tag",
+        "(1,16): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>\n|   <span>"
+    },
+    {
+      "index": 34,
+      "description": null,
+      "data": "<span></table><span>",
+      "errors": [
+        "(1,14): unexpected-end-tag",
+        "(1,20): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "caption",
+      "script_mode": "both",
+      "document": "| <span>\n|   <span>"
+    },
+    {
+      "index": 35,
+      "description": null,
+      "data": "</colgroup><col>",
+      "errors": [
+        "(1,11): XXX-undefined-error"
+      ],
+      "new_errors": [],
+      "document_fragment": "colgroup",
+      "script_mode": "both",
+      "document": "| <col>"
+    },
+    {
+      "index": 36,
+      "description": null,
+      "data": "<a><col>",
+      "errors": [
+        "(1,3): XXX-undefined-error"
+      ],
+      "new_errors": [],
+      "document_fragment": "colgroup",
+      "script_mode": "both",
+      "document": "| <col>"
+    },
+    {
+      "index": 37,
+      "description": null,
+      "data": "<caption><a>",
+      "errors": [
+        "(1,9): XXX-undefined-error",
+        "(1,12): unexpected-start-tag-implies-table-voodoo",
+        "(1,12): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 38,
+      "description": null,
+      "data": "<col><a>",
+      "errors": [
+        "(1,5): XXX-undefined-error",
+        "(1,8): unexpected-start-tag-implies-table-voodoo",
+        "(1,8): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 39,
+      "description": null,
+      "data": "<colgroup><a>",
+      "errors": [
+        "(1,10): XXX-undefined-error",
+        "(1,13): unexpected-start-tag-implies-table-voodoo",
+        "(1,13): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 40,
+      "description": null,
+      "data": "<tbody><a>",
+      "errors": [
+        "(1,7): XXX-undefined-error",
+        "(1,10): unexpected-start-tag-implies-table-voodoo",
+        "(1,10): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 41,
+      "description": null,
+      "data": "<tfoot><a>",
+      "errors": [
+        "(1,7): XXX-undefined-error",
+        "(1,10): unexpected-start-tag-implies-table-voodoo",
+        "(1,10): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 42,
+      "description": null,
+      "data": "<thead><a>",
+      "errors": [
+        "(1,7): XXX-undefined-error",
+        "(1,10): unexpected-start-tag-implies-table-voodoo",
+        "(1,10): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 43,
+      "description": null,
+      "data": "</table><a>",
+      "errors": [
+        "(1,8): XXX-undefined-error",
+        "(1,11): unexpected-start-tag-implies-table-voodoo",
+        "(1,11): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 44,
+      "description": null,
+      "data": "<a><tr>",
+      "errors": [
+        "(1,3): unexpected-start-tag-implies-table-voodoo"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <a>\n| <tr>"
+    },
+    {
+      "index": 45,
+      "description": null,
+      "data": "<a><td>",
+      "errors": [
+        "(1,3): unexpected-start-tag-implies-table-voodoo",
+        "(1,7): unexpected-cell-in-table-body"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <a>\n| <tr>\n|   <td>"
+    },
+    {
+      "index": 46,
+      "description": null,
+      "data": "<td><table><tbody><a><tr>",
+      "errors": [
+        "(1,4): unexpected-cell-in-table-body",
+        "(1,21): unexpected-start-tag-implies-table-voodoo",
+        "(1,25): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": "tbody",
+      "script_mode": "both",
+      "document": "| <tr>\n|   <td>\n|     <a>\n|     <table>\n|       <tbody>\n|         <tr>"
+    },
+    {
+      "index": 47,
+      "description": null,
+      "data": "</tr><td>",
+      "errors": [
+        "(1,5): XXX-undefined-error"
+      ],
+      "new_errors": [],
+      "document_fragment": "tr",
+      "script_mode": "both",
+      "document": "| <td>"
+    },
+    {
+      "index": 48,
+      "description": null,
+      "data": "<td><table><a><tr></tr><tr>",
+      "errors": [
+        "(1,14): unexpected-start-tag-implies-table-voodoo",
+        "(1,27): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": "tr",
+      "script_mode": "both",
+      "document": "| <td>\n|   <a>\n|   <table>\n|     <tbody>\n|       <tr>\n|       <tr>"
+    },
+    {
+      "index": 49,
+      "description": null,
+      "data": "<caption><td>",
+      "errors": [
+        "(1,9): XXX-undefined-error"
+      ],
+      "new_errors": [],
+      "document_fragment": "tr",
+      "script_mode": "both",
+      "document": "| <td>"
+    },
+    {
+      "index": 50,
+      "description": null,
+      "data": "<col><td>",
+      "errors": [
+        "(1,5): XXX-undefined-error"
+      ],
+      "new_errors": [],
+      "document_fragment": "tr",
+      "script_mode": "both",
+      "document": "| <td>"
+    },
+    {
+      "index": 51,
+      "description": null,
+      "data": "<colgroup><td>",
+      "errors": [
+        "(1,10): XXX-undefined-error"
+      ],
+      "new_errors": [],
+      "document_fragment": "tr",
+      "script_mode": "both",
+      "document": "| <td>"
+    },
+    {
+      "index": 52,
+      "description": null,
+      "data": "<tbody><td>",
+      "errors": [
+        "(1,7): XXX-undefined-error"
+      ],
+      "new_errors": [],
+      "document_fragment": "tr",
+      "script_mode": "both",
+      "document": "| <td>"
+    },
+    {
+      "index": 53,
+      "description": null,
+      "data": "<tfoot><td>",
+      "errors": [
+        "(1,7): XXX-undefined-error"
+      ],
+      "new_errors": [],
+      "document_fragment": "tr",
+      "script_mode": "both",
+      "document": "| <td>"
+    },
+    {
+      "index": 54,
+      "description": null,
+      "data": "<thead><td>",
+      "errors": [
+        "(1,7): XXX-undefined-error"
+      ],
+      "new_errors": [],
+      "document_fragment": "tr",
+      "script_mode": "both",
+      "document": "| <td>"
+    },
+    {
+      "index": 55,
+      "description": null,
+      "data": "<tr><td>",
+      "errors": [
+        "(1,4): XXX-undefined-error"
+      ],
+      "new_errors": [],
+      "document_fragment": "tr",
+      "script_mode": "both",
+      "document": "| <td>"
+    },
+    {
+      "index": 56,
+      "description": null,
+      "data": "</table><td>",
+      "errors": [
+        "(1,8): XXX-undefined-error"
+      ],
+      "new_errors": [],
+      "document_fragment": "tr",
+      "script_mode": "both",
+      "document": "| <td>"
+    },
+    {
+      "index": 57,
+      "description": null,
+      "data": "<td><table></table><td>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "tr",
+      "script_mode": "both",
+      "document": "| <td>\n|   <table>\n| <td>"
+    },
+    {
+      "index": 58,
+      "description": null,
+      "data": "<caption><a>",
+      "errors": [
+        "(1,9): XXX-undefined-error",
+        "(1,12): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 59,
+      "description": null,
+      "data": "<col><a>",
+      "errors": [
+        "(1,5): XXX-undefined-error",
+        "(1,8): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 60,
+      "description": null,
+      "data": "<colgroup><a>",
+      "errors": [
+        "(1,10): XXX-undefined-error",
+        "(1,13): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 61,
+      "description": null,
+      "data": "<tbody><a>",
+      "errors": [
+        "(1,7): XXX-undefined-error",
+        "(1,10): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 62,
+      "description": null,
+      "data": "<tfoot><a>",
+      "errors": [
+        "(1,7): XXX-undefined-error",
+        "(1,10): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 63,
+      "description": null,
+      "data": "<th><a>",
+      "errors": [
+        "(1,4): XXX-undefined-error",
+        "(1,7): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 64,
+      "description": null,
+      "data": "<thead><a>",
+      "errors": [
+        "(1,7): XXX-undefined-error",
+        "(1,10): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 65,
+      "description": null,
+      "data": "<tr><a>",
+      "errors": [
+        "(1,4): XXX-undefined-error",
+        "(1,7): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 66,
+      "description": null,
+      "data": "</table><a>",
+      "errors": [
+        "(1,8): XXX-undefined-error",
+        "(1,11): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 67,
+      "description": null,
+      "data": "</tbody><a>",
+      "errors": [
+        "(1,8): XXX-undefined-error",
+        "(1,11): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 68,
+      "description": null,
+      "data": "</td><a>",
+      "errors": [
+        "(1,5): unexpected-end-tag",
+        "(1,8): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 69,
+      "description": null,
+      "data": "</tfoot><a>",
+      "errors": [
+        "(1,8): XXX-undefined-error",
+        "(1,11): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 70,
+      "description": null,
+      "data": "</thead><a>",
+      "errors": [
+        "(1,8): XXX-undefined-error",
+        "(1,11): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 71,
+      "description": null,
+      "data": "</th><a>",
+      "errors": [
+        "(1,5): unexpected-end-tag",
+        "(1,8): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 72,
+      "description": null,
+      "data": "</tr><a>",
+      "errors": [
+        "(1,5): XXX-undefined-error",
+        "(1,8): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <a>"
+    },
+    {
+      "index": 73,
+      "description": null,
+      "data": "<table><td><td>",
+      "errors": [
+        "(1,11): unexpected-cell-in-table-body",
+        "(1,15): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "td",
+      "script_mode": "both",
+      "document": "| <table>\n|   <tbody>\n|     <tr>\n|       <td>\n|       <td>"
+    },
+    {
+      "index": 74,
+      "description": null,
+      "data": "</select><option>",
+      "errors": [
+        "(1,9): XXX-undefined-error"
+      ],
+      "new_errors": [],
+      "document_fragment": "select",
+      "script_mode": "both",
+      "document": "| <option>"
+    },
+    {
+      "index": 75,
+      "description": null,
+      "data": "<input><option>",
+      "errors": [
+        "(1,7): XXX-undefined-error"
+      ],
+      "new_errors": [],
+      "document_fragment": "select",
+      "script_mode": "both",
+      "document": "| <option>"
+    },
+    {
+      "index": 76,
+      "description": null,
+      "data": "<keygen><option>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "select",
+      "script_mode": "both",
+      "document": "| <keygen>\n| <option>"
+    },
+    {
+      "index": 77,
+      "description": null,
+      "data": "<textarea><option>",
+      "errors": [
+        "1:19: ERROR: Premature end of file. Currently open tags: html, textarea."
+      ],
+      "new_errors": [],
+      "document_fragment": "select",
+      "script_mode": "both",
+      "document": "| <textarea>\n|   \"<option>\""
+    },
+    {
+      "index": 78,
+      "description": null,
+      "data": "</html><!--abc-->",
+      "errors": [
+        "(1,7): unexpected-end-tag-after-body-innerhtml"
+      ],
+      "new_errors": [],
+      "document_fragment": "html",
+      "script_mode": "both",
+      "document": "| <head>\n| <body>\n| <!-- abc -->"
+    },
+    {
+      "index": 79,
+      "description": null,
+      "data": "</frameset><frame>",
+      "errors": [
+        "(1,11): unexpected-frameset-in-frameset-innerhtml"
+      ],
+      "new_errors": [],
+      "document_fragment": "frameset",
+      "script_mode": "both",
+      "document": "| <frame>"
+    },
+    {
+      "index": 80,
+      "description": null,
+      "data": "",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "html",
+      "script_mode": "both",
+      "document": "| <head>\n| <body>"
+    }
+  ]
+}

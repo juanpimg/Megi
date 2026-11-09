@@ -1,0 +1,2618 @@
+{
+  "source_file": "tests16.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<!doctype html><script>",
+      "errors": [
+        "(1,23): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|   <body>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<!doctype html><script>a",
+      "errors": [
+        "(1,24): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"a\"\n|   <body>"
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<!doctype html><script><",
+      "errors": [
+        "(1,24): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<\"\n|   <body>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<!doctype html><script></",
+      "errors": [
+        "(1,25): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"</\"\n|   <body>"
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<!doctype html><script></S",
+      "errors": [
+        "(1,26): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"</S\"\n|   <body>"
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<!doctype html><script></SC",
+      "errors": [
+        "(1,27): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"</SC\"\n|   <body>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<!doctype html><script></SCR",
+      "errors": [
+        "(1,28): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"</SCR\"\n|   <body>"
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<!doctype html><script></SCRI",
+      "errors": [
+        "(1,29): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"</SCRI\"\n|   <body>"
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<!doctype html><script></SCRIP",
+      "errors": [
+        "(1,30): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"</SCRIP\"\n|   <body>"
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<!doctype html><script></SCRIPT",
+      "errors": [
+        "(1,31): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"</SCRIPT\"\n|   <body>"
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<!doctype html><script></SCRIPT ",
+      "errors": [
+        "(1,32): expected-attribute-name-but-got-eof",
+        "(1,32): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:33) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|   <body>"
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<!doctype html><script></s",
+      "errors": [
+        "(1,26): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"</s\"\n|   <body>"
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<!doctype html><script></sc",
+      "errors": [
+        "(1,27): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"</sc\"\n|   <body>"
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<!doctype html><script></scr",
+      "errors": [
+        "(1,28): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"</scr\"\n|   <body>"
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<!doctype html><script></scri",
+      "errors": [
+        "(1,29): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"</scri\"\n|   <body>"
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<!doctype html><script></scrip",
+      "errors": [
+        "(1,30): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"</scrip\"\n|   <body>"
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<!doctype html><script></script",
+      "errors": [
+        "(1,31): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"</script\"\n|   <body>"
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<!doctype html><script></script ",
+      "errors": [
+        "(1,32): expected-attribute-name-but-got-eof",
+        "(1,32): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:33) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|   <body>"
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<!doctype html><script><!",
+      "errors": [
+        "(1,25): expected-script-data-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!\"\n|   <body>"
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "<!doctype html><script><!a",
+      "errors": [
+        "(1,26): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!a\"\n|   <body>"
+    },
+    {
+      "index": 20,
+      "description": null,
+      "data": "<!doctype html><script><!-",
+      "errors": [
+        "(1,26): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!-\"\n|   <body>"
+    },
+    {
+      "index": 21,
+      "description": null,
+      "data": "<!doctype html><script><!-a",
+      "errors": [
+        "(1,27): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!-a\"\n|   <body>"
+    },
+    {
+      "index": 22,
+      "description": null,
+      "data": "<!doctype html><script><!--",
+      "errors": [
+        "(1,27): expected-named-closing-tag-but-got-eof",
+        "(1,27): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:28) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--\"\n|   <body>"
+    },
+    {
+      "index": 23,
+      "description": null,
+      "data": "<!doctype html><script><!--a",
+      "errors": [
+        "(1,28): expected-named-closing-tag-but-got-eof",
+        "(1,28): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:29) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--a\"\n|   <body>"
+    },
+    {
+      "index": 24,
+      "description": null,
+      "data": "<!doctype html><script><!--<",
+      "errors": [
+        "(1,28): expected-named-closing-tag-but-got-eof",
+        "(1,28): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:29) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<\"\n|   <body>"
+    },
+    {
+      "index": 25,
+      "description": null,
+      "data": "<!doctype html><script><!--<a",
+      "errors": [
+        "(1,29): expected-named-closing-tag-but-got-eof",
+        "(1,29): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:30) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<a\"\n|   <body>"
+    },
+    {
+      "index": 26,
+      "description": null,
+      "data": "<!doctype html><script><!--</",
+      "errors": [
+        "(1,29): expected-named-closing-tag-but-got-eof",
+        "(1,29): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:30) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--</\"\n|   <body>"
+    },
+    {
+      "index": 27,
+      "description": null,
+      "data": "<!doctype html><script><!--</script",
+      "errors": [
+        "(1,35): expected-named-closing-tag-but-got-eof",
+        "(1,35): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:36) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--</script\"\n|   <body>"
+    },
+    {
+      "index": 28,
+      "description": null,
+      "data": "<!doctype html><script><!--</script ",
+      "errors": [
+        "(1,36): expected-attribute-name-but-got-eof",
+        "(1,36): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:37) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--\"\n|   <body>"
+    },
+    {
+      "index": 29,
+      "description": null,
+      "data": "<!doctype html><script><!--<s",
+      "errors": [
+        "(1,29): expected-named-closing-tag-but-got-eof",
+        "(1,29): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:30) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<s\"\n|   <body>"
+    },
+    {
+      "index": 30,
+      "description": null,
+      "data": "<!doctype html><script><!--<script",
+      "errors": [
+        "(1,34): expected-named-closing-tag-but-got-eof",
+        "(1,34): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:35) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script\"\n|   <body>"
+    },
+    {
+      "index": 31,
+      "description": null,
+      "data": "<!doctype html><script><!--<script ",
+      "errors": [
+        "(1,35): eof-in-script-in-script",
+        "(1,35): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:36) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script \"\n|   <body>"
+    },
+    {
+      "index": 32,
+      "description": null,
+      "data": "<!doctype html><script><!--<script <",
+      "errors": [
+        "(1,36): eof-in-script-in-script",
+        "(1,36): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:37) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script <\"\n|   <body>"
+    },
+    {
+      "index": 33,
+      "description": null,
+      "data": "<!doctype html><script><!--<script <a",
+      "errors": [
+        "(1,37): eof-in-script-in-script",
+        "(1,37): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:38) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script <a\"\n|   <body>"
+    },
+    {
+      "index": 34,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </",
+      "errors": [
+        "(1,37): eof-in-script-in-script",
+        "(1,37): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:38) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </\"\n|   <body>"
+    },
+    {
+      "index": 35,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </s",
+      "errors": [
+        "(1,38): eof-in-script-in-script",
+        "(1,38): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:39) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </s\"\n|   <body>"
+    },
+    {
+      "index": 36,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </script",
+      "errors": [
+        "(1,43): eof-in-script-in-script",
+        "(1,43): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:44) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script\"\n|   <body>"
+    },
+    {
+      "index": 37,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </scripta",
+      "errors": [
+        "(1,44): eof-in-script-in-script",
+        "(1,44): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:45) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </scripta\"\n|   <body>"
+    },
+    {
+      "index": 38,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </script ",
+      "errors": [
+        "(1,44): expected-named-closing-tag-but-got-eof",
+        "(1,44): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:45) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script \"\n|   <body>"
+    },
+    {
+      "index": 39,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </script>",
+      "errors": [
+        "(1,44): expected-named-closing-tag-but-got-eof",
+        "(1,44): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:45) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script>\"\n|   <body>"
+    },
+    {
+      "index": 40,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </script/",
+      "errors": [
+        "(1,44): expected-named-closing-tag-but-got-eof",
+        "(1,44): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:45) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script/\"\n|   <body>"
+    },
+    {
+      "index": 41,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </script <",
+      "errors": [
+        "(1,45): expected-named-closing-tag-but-got-eof",
+        "(1,45): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:46) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script <\"\n|   <body>"
+    },
+    {
+      "index": 42,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </script <a",
+      "errors": [
+        "(1,46): expected-named-closing-tag-but-got-eof",
+        "(1,46): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:47) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script <a\"\n|   <body>"
+    },
+    {
+      "index": 43,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </script </",
+      "errors": [
+        "(1,46): expected-named-closing-tag-but-got-eof",
+        "(1,46): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:47) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script </\"\n|   <body>"
+    },
+    {
+      "index": 44,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </script </script",
+      "errors": [
+        "(1,52): expected-named-closing-tag-but-got-eof",
+        "(1,52): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:53) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script </script\"\n|   <body>"
+    },
+    {
+      "index": 45,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </script </script ",
+      "errors": [
+        "(1,53): expected-attribute-name-but-got-eof",
+        "(1,53): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:54) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script \"\n|   <body>"
+    },
+    {
+      "index": 46,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </script </script/",
+      "errors": [
+        "(1,53): unexpected-EOF-after-solidus-in-tag",
+        "(1,53): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:54) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script \"\n|   <body>"
+    },
+    {
+      "index": 47,
+      "description": null,
+      "data": "<!doctype html><script><!--<script </script </script>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script \"\n|   <body>"
+    },
+    {
+      "index": 48,
+      "description": null,
+      "data": "<!doctype html><script><!--<script -",
+      "errors": [
+        "(1,36): eof-in-script-in-script",
+        "(1,36): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:37) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script -\"\n|   <body>"
+    },
+    {
+      "index": 49,
+      "description": null,
+      "data": "<!doctype html><script><!--<script -a",
+      "errors": [
+        "(1,37): eof-in-script-in-script",
+        "(1,37): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:38) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script -a\"\n|   <body>"
+    },
+    {
+      "index": 50,
+      "description": null,
+      "data": "<!doctype html><script><!--<script -<",
+      "errors": [
+        "(1,37): eof-in-script-in-script",
+        "(1,37): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:38) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script -<\"\n|   <body>"
+    },
+    {
+      "index": 51,
+      "description": null,
+      "data": "<!doctype html><script><!--<script --",
+      "errors": [
+        "(1,37): eof-in-script-in-script",
+        "(1,37): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:38) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script --\"\n|   <body>"
+    },
+    {
+      "index": 52,
+      "description": null,
+      "data": "<!doctype html><script><!--<script --a",
+      "errors": [
+        "(1,38): eof-in-script-in-script",
+        "(1,38): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:39) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script --a\"\n|   <body>"
+    },
+    {
+      "index": 53,
+      "description": null,
+      "data": "<!doctype html><script><!--<script --<",
+      "errors": [
+        "(1,38): eof-in-script-in-script",
+        "(1,38): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:39) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script --<\"\n|   <body>"
+    },
+    {
+      "index": 54,
+      "description": null,
+      "data": "<!doctype html><script><!--<script -->",
+      "errors": [
+        "(1,38): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script -->\"\n|   <body>"
+    },
+    {
+      "index": 55,
+      "description": null,
+      "data": "<!doctype html><script><!--<script --><",
+      "errors": [
+        "(1,39): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script --><\"\n|   <body>"
+    },
+    {
+      "index": 56,
+      "description": null,
+      "data": "<!doctype html><script><!--<script --></",
+      "errors": [
+        "(1,40): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script --></\"\n|   <body>"
+    },
+    {
+      "index": 57,
+      "description": null,
+      "data": "<!doctype html><script><!--<script --></script",
+      "errors": [
+        "(1,46): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script --></script\"\n|   <body>"
+    },
+    {
+      "index": 58,
+      "description": null,
+      "data": "<!doctype html><script><!--<script --></script ",
+      "errors": [
+        "(1,47): expected-attribute-name-but-got-eof",
+        "(1,47): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:48) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script -->\"\n|   <body>"
+    },
+    {
+      "index": 59,
+      "description": null,
+      "data": "<!doctype html><script><!--<script --></script/",
+      "errors": [
+        "(1,47): unexpected-EOF-after-solidus-in-tag",
+        "(1,47): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:48) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script -->\"\n|   <body>"
+    },
+    {
+      "index": 60,
+      "description": null,
+      "data": "<!doctype html><script><!--<script --></script>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script -->\"\n|   <body>"
+    },
+    {
+      "index": 61,
+      "description": null,
+      "data": "<!doctype html><script><!--<script><\\/script>--></script>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script><\\/script>-->\"\n|   <body>"
+    },
+    {
+      "index": 62,
+      "description": null,
+      "data": "<!doctype html><script><!--<script></scr'+'ipt>--></script>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></scr'+'ipt>-->\"\n|   <body>"
+    },
+    {
+      "index": 63,
+      "description": null,
+      "data": "<!doctype html><script><!--<script></script><script></script></script>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></script><script></script>\"\n|   <body>"
+    },
+    {
+      "index": 64,
+      "description": null,
+      "data": "<!doctype html><script><!--<script></script><script></script>--><!--</script>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></script><script></script>--><!--\"\n|   <body>"
+    },
+    {
+      "index": 65,
+      "description": null,
+      "data": "<!doctype html><script><!--<script></script><script></script>-- ></script>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></script><script></script>-- >\"\n|   <body>"
+    },
+    {
+      "index": 66,
+      "description": null,
+      "data": "<!doctype html><script><!--<script></script><script></script>- -></script>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></script><script></script>- ->\"\n|   <body>"
+    },
+    {
+      "index": 67,
+      "description": null,
+      "data": "<!doctype html><script><!--<script></script><script></script>- - ></script>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></script><script></script>- - >\"\n|   <body>"
+    },
+    {
+      "index": 68,
+      "description": null,
+      "data": "<!doctype html><script><!--<script></script><script></script>-></script>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></script><script></script>->\"\n|   <body>"
+    },
+    {
+      "index": 69,
+      "description": null,
+      "data": "<!doctype html><script><!--<script>--!></script>X",
+      "errors": [
+        "(1,49): expected-named-closing-tag-but-got-eof",
+        "(1,49): unexpected-EOF-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:50) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script>--!></script>X\"\n|   <body>"
+    },
+    {
+      "index": 70,
+      "description": null,
+      "data": "<!doctype html><script><!--<scr'+'ipt></script>--></script>",
+      "errors": [
+        "(1,59): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<scr'+'ipt>\"\n|   <body>\n|     \"-->\""
+    },
+    {
+      "index": 71,
+      "description": null,
+      "data": "<!doctype html><script><!--<script></scr'+'ipt></script>X",
+      "errors": [
+        "(1,57): expected-named-closing-tag-but-got-eof",
+        "(1,57): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:58) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></scr'+'ipt></script>X\"\n|   <body>"
+    },
+    {
+      "index": 72,
+      "description": null,
+      "data": "<!doctype html><style><!--<style></style>--></style>",
+      "errors": [
+        "(1,52): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <style>\n|       \"<!--<style>\"\n|   <body>\n|     \"-->\""
+    },
+    {
+      "index": 73,
+      "description": null,
+      "data": "<!doctype html><style><!--</style>X",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <style>\n|       \"<!--\"\n|   <body>\n|     \"X\""
+    },
+    {
+      "index": 74,
+      "description": null,
+      "data": "<!doctype html><style><!--...</style>...--></style>",
+      "errors": [
+        "(1,51): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <style>\n|       \"<!--...\"\n|   <body>\n|     \"...-->\""
+    },
+    {
+      "index": 75,
+      "description": null,
+      "data": "<!doctype html><style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style></style>X",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <style>\n|       \"<!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style>\"\n|   <body>\n|     \"X\""
+    },
+    {
+      "index": 76,
+      "description": null,
+      "data": "<!doctype html><style><!--...<style><!--...--!></style>--></style>",
+      "errors": [
+        "(1,66): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <style>\n|       \"<!--...<style><!--...--!>\"\n|   <body>\n|     \"-->\""
+    },
+    {
+      "index": 77,
+      "description": null,
+      "data": "<!doctype html><style><!--...</style><!-- --><style>@import ...</style>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <style>\n|       \"<!--...\"\n|     <!--   -->\n|     <style>\n|       \"@import ...\"\n|   <body>"
+    },
+    {
+      "index": 78,
+      "description": null,
+      "data": "<!doctype html><style>...<style><!--...</style><!-- --></style>",
+      "errors": [
+        "(1,63): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <style>\n|       \"...<style><!--...\"\n|     <!--   -->\n|   <body>"
+    },
+    {
+      "index": 79,
+      "description": null,
+      "data": "<!doctype html><style>...<!--[if IE]><style>...</style>X",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <style>\n|       \"...<!--[if IE]><style>...\"\n|   <body>\n|     \"X\""
+    },
+    {
+      "index": 80,
+      "description": null,
+      "data": "<!doctype html><title><!--<title></title>--></title>",
+      "errors": [
+        "(1,52): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <title>\n|       \"<!--<title>\"\n|   <body>\n|     \"-->\""
+    },
+    {
+      "index": 81,
+      "description": null,
+      "data": "<!doctype html><title>&lt;/title></title>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <title>\n|       \"</title>\"\n|   <body>"
+    },
+    {
+      "index": 82,
+      "description": null,
+      "data": "<!doctype html><title>foo/title><link></head><body>X",
+      "errors": [
+        "(1,52): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <title>\n|       \"foo/title><link></head><body>X\"\n|   <body>"
+    },
+    {
+      "index": 83,
+      "description": null,
+      "data": "<!doctype html><noscript><!--<noscript></noscript>--></noscript>",
+      "errors": [
+        "(1,64): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-on",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <noscript>\n|       \"<!--<noscript>\"\n|   <body>\n|     \"-->\""
+    },
+    {
+      "index": 84,
+      "description": null,
+      "data": "<!doctype html><noscript><!--<noscript></noscript>--></noscript>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-off",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <noscript>\n|       <!-- <noscript></noscript> -->\n|   <body>"
+    },
+    {
+      "index": 85,
+      "description": null,
+      "data": "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-on",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <noscript>\n|       \"<!--\"\n|   <body>\n|     \"X\"\n|     <noscript>\n|       \"-->\""
+    },
+    {
+      "index": 86,
+      "description": null,
+      "data": "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-off",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <noscript>\n|       <!-- </noscript>X<noscript> -->\n|   <body>"
+    },
+    {
+      "index": 87,
+      "description": null,
+      "data": "<!doctype html><noscript><iframe></noscript>X",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-on",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <noscript>\n|       \"<iframe>\"\n|   <body>\n|     \"X\""
+    },
+    {
+      "index": 88,
+      "description": null,
+      "data": "<!doctype html><noscript><iframe></noscript>X",
+      "errors": [
+        " * (1,34) unexpected token in head noscript",
+        " * (1,46) unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-off",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <noscript>\n|   <body>\n|     <iframe>\n|       \"</noscript>X\""
+    },
+    {
+      "index": 89,
+      "description": null,
+      "data": "<!doctype html><noframes><!--<noframes></noframes>--></noframes>",
+      "errors": [
+        "(1,64): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <noframes>\n|       \"<!--<noframes>\"\n|   <body>\n|     \"-->\""
+    },
+    {
+      "index": 90,
+      "description": null,
+      "data": "<!doctype html><noframes><body><script><!--...</script></body></noframes></html>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|     <noframes>\n|       \"<body><script><!--...</script></body>\"\n|   <body>"
+    },
+    {
+      "index": 91,
+      "description": null,
+      "data": "<!doctype html><textarea><!--<textarea></textarea>--></textarea>",
+      "errors": [
+        "(1,64): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <textarea>\n|       \"<!--<textarea>\"\n|     \"-->\""
+    },
+    {
+      "index": 92,
+      "description": null,
+      "data": "<!doctype html><textarea>&lt;/textarea></textarea>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <textarea>\n|       \"</textarea>\""
+    },
+    {
+      "index": 93,
+      "description": null,
+      "data": "<!doctype html><textarea>&lt;</textarea>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <textarea>\n|       \"<\""
+    },
+    {
+      "index": 94,
+      "description": null,
+      "data": "<!doctype html><textarea>a&lt;b</textarea>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <textarea>\n|       \"a<b\""
+    },
+    {
+      "index": 95,
+      "description": null,
+      "data": "<!doctype html><iframe><!--<iframe></iframe>--></iframe>",
+      "errors": [
+        "(1,56): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <iframe>\n|       \"<!--<iframe>\"\n|     \"-->\""
+    },
+    {
+      "index": 96,
+      "description": null,
+      "data": "<!doctype html><iframe>...<!--X->...<!--/X->...</iframe>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <iframe>\n|       \"...<!--X->...<!--/X->...\""
+    },
+    {
+      "index": 97,
+      "description": null,
+      "data": "<!doctype html><xmp><!--<xmp></xmp>--></xmp>",
+      "errors": [
+        "(1,44): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <xmp>\n|       \"<!--<xmp>\"\n|     \"-->\""
+    },
+    {
+      "index": 98,
+      "description": null,
+      "data": "<!doctype html><noembed><!--<noembed></noembed>--></noembed>",
+      "errors": [
+        "(1,60): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <noembed>\n|       \"<!--<noembed>\"\n|     \"-->\""
+    },
+    {
+      "index": 99,
+      "description": null,
+      "data": "<script>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,8): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|   <body>"
+    },
+    {
+      "index": 100,
+      "description": null,
+      "data": "<script>a",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,9): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"a\"\n|   <body>"
+    },
+    {
+      "index": 101,
+      "description": null,
+      "data": "<script><",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,9): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<\"\n|   <body>"
+    },
+    {
+      "index": 102,
+      "description": null,
+      "data": "<script></",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,10): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</\"\n|   <body>"
+    },
+    {
+      "index": 103,
+      "description": null,
+      "data": "<script></S",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,11): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</S\"\n|   <body>"
+    },
+    {
+      "index": 104,
+      "description": null,
+      "data": "<script></SC",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,12): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</SC\"\n|   <body>"
+    },
+    {
+      "index": 105,
+      "description": null,
+      "data": "<script></SCR",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,13): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</SCR\"\n|   <body>"
+    },
+    {
+      "index": 106,
+      "description": null,
+      "data": "<script></SCRI",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,14): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</SCRI\"\n|   <body>"
+    },
+    {
+      "index": 107,
+      "description": null,
+      "data": "<script></SCRIP",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,15): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</SCRIP\"\n|   <body>"
+    },
+    {
+      "index": 108,
+      "description": null,
+      "data": "<script></SCRIPT",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,16): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</SCRIPT\"\n|   <body>"
+    },
+    {
+      "index": 109,
+      "description": null,
+      "data": "<script></SCRIPT ",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,17): expected-attribute-name-but-got-eof",
+        "(1,17): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:18) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|   <body>"
+    },
+    {
+      "index": 110,
+      "description": null,
+      "data": "<script></s",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,11): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</s\"\n|   <body>"
+    },
+    {
+      "index": 111,
+      "description": null,
+      "data": "<script></sc",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,12): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</sc\"\n|   <body>"
+    },
+    {
+      "index": 112,
+      "description": null,
+      "data": "<script></scr",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,13): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</scr\"\n|   <body>"
+    },
+    {
+      "index": 113,
+      "description": null,
+      "data": "<script></scri",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,14): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</scri\"\n|   <body>"
+    },
+    {
+      "index": 114,
+      "description": null,
+      "data": "<script></scrip",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,15): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</scrip\"\n|   <body>"
+    },
+    {
+      "index": 115,
+      "description": null,
+      "data": "<script></script",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,16): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"</script\"\n|   <body>"
+    },
+    {
+      "index": 116,
+      "description": null,
+      "data": "<script></script ",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,17): expected-attribute-name-but-got-eof",
+        "(1,17): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:18) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|   <body>"
+    },
+    {
+      "index": 117,
+      "description": null,
+      "data": "<script><!",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,10): expected-script-data-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!\"\n|   <body>"
+    },
+    {
+      "index": 118,
+      "description": null,
+      "data": "<script><!a",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,11): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!a\"\n|   <body>"
+    },
+    {
+      "index": 119,
+      "description": null,
+      "data": "<script><!-",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,11): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!-\"\n|   <body>"
+    },
+    {
+      "index": 120,
+      "description": null,
+      "data": "<script><!-a",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,12): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!-a\"\n|   <body>"
+    },
+    {
+      "index": 121,
+      "description": null,
+      "data": "<script><!--",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,12): expected-named-closing-tag-but-got-eof",
+        "(1,12): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:13) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--\"\n|   <body>"
+    },
+    {
+      "index": 122,
+      "description": null,
+      "data": "<script><!--a",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,13): expected-named-closing-tag-but-got-eof",
+        "(1,13): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:14) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--a\"\n|   <body>"
+    },
+    {
+      "index": 123,
+      "description": null,
+      "data": "<script><!--<",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,13): expected-named-closing-tag-but-got-eof",
+        "(1,13): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:14) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<\"\n|   <body>"
+    },
+    {
+      "index": 124,
+      "description": null,
+      "data": "<script><!--<a",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,14): expected-named-closing-tag-but-got-eof",
+        "(1,14): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:15) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<a\"\n|   <body>"
+    },
+    {
+      "index": 125,
+      "description": null,
+      "data": "<script><!--</",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,14): expected-named-closing-tag-but-got-eof",
+        "(1,14): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:15) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--</\"\n|   <body>"
+    },
+    {
+      "index": 126,
+      "description": null,
+      "data": "<script><!--</script",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,20): expected-named-closing-tag-but-got-eof",
+        "(1,20): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:21) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--</script\"\n|   <body>"
+    },
+    {
+      "index": 127,
+      "description": null,
+      "data": "<script><!--</script ",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,21): expected-attribute-name-but-got-eof",
+        "(1,21): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:22) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--\"\n|   <body>"
+    },
+    {
+      "index": 128,
+      "description": null,
+      "data": "<script><!--<s",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,14): expected-named-closing-tag-but-got-eof",
+        "(1,14): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:15) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<s\"\n|   <body>"
+    },
+    {
+      "index": 129,
+      "description": null,
+      "data": "<script><!--<script",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,19): expected-named-closing-tag-but-got-eof",
+        "(1,19): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:20) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script\"\n|   <body>"
+    },
+    {
+      "index": 130,
+      "description": null,
+      "data": "<script><!--<script ",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,20): eof-in-script-in-script",
+        "(1,20): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:21) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script \"\n|   <body>"
+    },
+    {
+      "index": 131,
+      "description": null,
+      "data": "<script><!--<script <",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,21): eof-in-script-in-script",
+        "(1,21): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:22) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script <\"\n|   <body>"
+    },
+    {
+      "index": 132,
+      "description": null,
+      "data": "<script><!--<script <a",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,22): eof-in-script-in-script",
+        "(1,22): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:23) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script <a\"\n|   <body>"
+    },
+    {
+      "index": 133,
+      "description": null,
+      "data": "<script><!--<script </",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,22): eof-in-script-in-script",
+        "(1,22): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:23) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </\"\n|   <body>"
+    },
+    {
+      "index": 134,
+      "description": null,
+      "data": "<script><!--<script </s",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,23): eof-in-script-in-script",
+        "(1,23): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:24) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </s\"\n|   <body>"
+    },
+    {
+      "index": 135,
+      "description": null,
+      "data": "<script><!--<script </script",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,28): eof-in-script-in-script",
+        "(1,28): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:29) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script\"\n|   <body>"
+    },
+    {
+      "index": 136,
+      "description": null,
+      "data": "<script><!--<script </scripta",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,29): eof-in-script-in-script",
+        "(1,29): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:30) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </scripta\"\n|   <body>"
+    },
+    {
+      "index": 137,
+      "description": null,
+      "data": "<script><!--<script </script ",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,29): expected-named-closing-tag-but-got-eof",
+        "(1,29): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:30) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script \"\n|   <body>"
+    },
+    {
+      "index": 138,
+      "description": null,
+      "data": "<script><!--<script </script>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,29): expected-named-closing-tag-but-got-eof",
+        "(1,29): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:30) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script>\"\n|   <body>"
+    },
+    {
+      "index": 139,
+      "description": null,
+      "data": "<script><!--<script </script/",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,29): expected-named-closing-tag-but-got-eof",
+        "(1,29): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:30) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script/\"\n|   <body>"
+    },
+    {
+      "index": 140,
+      "description": null,
+      "data": "<script><!--<script </script <",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,30): expected-named-closing-tag-but-got-eof",
+        "(1,30): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:31) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script <\"\n|   <body>"
+    },
+    {
+      "index": 141,
+      "description": null,
+      "data": "<script><!--<script </script <a",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,31): expected-named-closing-tag-but-got-eof",
+        "(1,31): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:32) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script <a\"\n|   <body>"
+    },
+    {
+      "index": 142,
+      "description": null,
+      "data": "<script><!--<script </script </",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,31): expected-named-closing-tag-but-got-eof",
+        "(1,31): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:32) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script </\"\n|   <body>"
+    },
+    {
+      "index": 143,
+      "description": null,
+      "data": "<script><!--<script </script </script",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,37): expected-named-closing-tag-but-got-eof",
+        "(1,37): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:38) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script </script\"\n|   <body>"
+    },
+    {
+      "index": 144,
+      "description": null,
+      "data": "<script><!--<script </script </script ",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,38): expected-attribute-name-but-got-eof",
+        "(1,38): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:39) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script \"\n|   <body>"
+    },
+    {
+      "index": 145,
+      "description": null,
+      "data": "<script><!--<script </script </script/",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,38): unexpected-EOF-after-solidus-in-tag",
+        "(1,38): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:39) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script \"\n|   <body>"
+    },
+    {
+      "index": 146,
+      "description": null,
+      "data": "<script><!--<script </script </script>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script </script \"\n|   <body>"
+    },
+    {
+      "index": 147,
+      "description": null,
+      "data": "<script><!--<script -",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,21): eof-in-script-in-script",
+        "(1,21): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:22) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script -\"\n|   <body>"
+    },
+    {
+      "index": 148,
+      "description": null,
+      "data": "<script><!--<script -a",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,22): eof-in-script-in-script",
+        "(1,22): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:23) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script -a\"\n|   <body>"
+    },
+    {
+      "index": 149,
+      "description": null,
+      "data": "<script><!--<script --",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,22): eof-in-script-in-script",
+        "(1,22): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:23) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script --\"\n|   <body>"
+    },
+    {
+      "index": 150,
+      "description": null,
+      "data": "<script><!--<script --a",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,23): eof-in-script-in-script",
+        "(1,23): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:24) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script --a\"\n|   <body>"
+    },
+    {
+      "index": 151,
+      "description": null,
+      "data": "<script><!--<script -->",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,23): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script -->\"\n|   <body>"
+    },
+    {
+      "index": 152,
+      "description": null,
+      "data": "<script><!--<script --><",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,24): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script --><\"\n|   <body>"
+    },
+    {
+      "index": 153,
+      "description": null,
+      "data": "<script><!--<script --></",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,25): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script --></\"\n|   <body>"
+    },
+    {
+      "index": 154,
+      "description": null,
+      "data": "<script><!--<script --></script",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,31): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script --></script\"\n|   <body>"
+    },
+    {
+      "index": 155,
+      "description": null,
+      "data": "<script><!--<script --></script ",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,32): expected-attribute-name-but-got-eof",
+        "(1,32): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:33) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script -->\"\n|   <body>"
+    },
+    {
+      "index": 156,
+      "description": null,
+      "data": "<script><!--<script --></script/",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,32): unexpected-EOF-after-solidus-in-tag",
+        "(1,32): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [
+        "(1:33) eof-in-tag"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script -->\"\n|   <body>"
+    },
+    {
+      "index": 157,
+      "description": null,
+      "data": "<script><!--<script --></script>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script -->\"\n|   <body>"
+    },
+    {
+      "index": 158,
+      "description": null,
+      "data": "<script><!--<script><\\/script>--></script>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script><\\/script>-->\"\n|   <body>"
+    },
+    {
+      "index": 159,
+      "description": null,
+      "data": "<script><!--<script></scr'+'ipt>--></script>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></scr'+'ipt>-->\"\n|   <body>"
+    },
+    {
+      "index": 160,
+      "description": null,
+      "data": "<script><!--<script></script><script></script></script>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></script><script></script>\"\n|   <body>"
+    },
+    {
+      "index": 161,
+      "description": null,
+      "data": "<script><!--<script></script><script></script>--><!--</script>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></script><script></script>--><!--\"\n|   <body>"
+    },
+    {
+      "index": 162,
+      "description": null,
+      "data": "<script><!--<script></script><script></script>-- ></script>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></script><script></script>-- >\"\n|   <body>"
+    },
+    {
+      "index": 163,
+      "description": null,
+      "data": "<script><!--<script></script><script></script>- -></script>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></script><script></script>- ->\"\n|   <body>"
+    },
+    {
+      "index": 164,
+      "description": null,
+      "data": "<script><!--<script></script><script></script>- - ></script>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></script><script></script>- - >\"\n|   <body>"
+    },
+    {
+      "index": 165,
+      "description": null,
+      "data": "<script><!--<script></script><script></script>-></script>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></script><script></script>->\"\n|   <body>"
+    },
+    {
+      "index": 166,
+      "description": null,
+      "data": "<script><!--<script>--!></script>X",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,34): expected-named-closing-tag-but-got-eof",
+        "(1,34): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:35) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script>--!></script>X\"\n|   <body>"
+    },
+    {
+      "index": 167,
+      "description": null,
+      "data": "<script><!--<scr'+'ipt></script>--></script>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,44): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<scr'+'ipt>\"\n|   <body>\n|     \"-->\""
+    },
+    {
+      "index": 168,
+      "description": null,
+      "data": "<script><!--<script></scr'+'ipt></script>X",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,42): expected-named-closing-tag-but-got-eof",
+        "(1,42): unexpected-eof-in-text-mode"
+      ],
+      "new_errors": [
+        "(1:43) eof-in-script-html-comment-like-text"
+      ],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <script>\n|       \"<!--<script></scr'+'ipt></script>X\"\n|   <body>"
+    },
+    {
+      "index": 169,
+      "description": null,
+      "data": "<style><!--<style></style>--></style>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,37): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \"<!--<style>\"\n|   <body>\n|     \"-->\""
+    },
+    {
+      "index": 170,
+      "description": null,
+      "data": "<style><!--</style>X",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \"<!--\"\n|   <body>\n|     \"X\""
+    },
+    {
+      "index": 171,
+      "description": null,
+      "data": "<style><!--...</style>...--></style>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,36): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \"<!--...\"\n|   <body>\n|     \"...-->\""
+    },
+    {
+      "index": 172,
+      "description": null,
+      "data": "<style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style></style>X",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \"<!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style>\"\n|   <body>\n|     \"X\""
+    },
+    {
+      "index": 173,
+      "description": null,
+      "data": "<style><!--...<style><!--...--!></style>--></style>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,51): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \"<!--...<style><!--...--!>\"\n|   <body>\n|     \"-->\""
+    },
+    {
+      "index": 174,
+      "description": null,
+      "data": "<style><!--...</style><!-- --><style>@import ...</style>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \"<!--...\"\n|     <!--   -->\n|     <style>\n|       \"@import ...\"\n|   <body>"
+    },
+    {
+      "index": 175,
+      "description": null,
+      "data": "<style>...<style><!--...</style><!-- --></style>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,48): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \"...<style><!--...\"\n|     <!--   -->\n|   <body>"
+    },
+    {
+      "index": 176,
+      "description": null,
+      "data": "<style>...<!--[if IE]><style>...</style>X",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <style>\n|       \"...<!--[if IE]><style>...\"\n|   <body>\n|     \"X\""
+    },
+    {
+      "index": 177,
+      "description": null,
+      "data": "<title><!--<title></title>--></title>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,37): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <title>\n|       \"<!--<title>\"\n|   <body>\n|     \"-->\""
+    },
+    {
+      "index": 178,
+      "description": null,
+      "data": "<title>&lt;/title></title>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <title>\n|       \"</title>\"\n|   <body>"
+    },
+    {
+      "index": 179,
+      "description": null,
+      "data": "<title>foo/title><link></head><body>X",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,37): expected-named-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <title>\n|       \"foo/title><link></head><body>X\"\n|   <body>"
+    },
+    {
+      "index": 180,
+      "description": null,
+      "data": "<noscript><!--<noscript></noscript>--></noscript>",
+      "errors": [
+        "(1,10): expected-doctype-but-got-start-tag",
+        "(1,49): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-on",
+      "document": "| <html>\n|   <head>\n|     <noscript>\n|       \"<!--<noscript>\"\n|   <body>\n|     \"-->\""
+    },
+    {
+      "index": 181,
+      "description": null,
+      "data": "<noscript><!--<noscript></noscript>--></noscript>",
+      "errors": [
+        " * (1,11) missing DOCTYPE"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-off",
+      "document": "| <html>\n|   <head>\n|     <noscript>\n|       <!-- <noscript></noscript> -->\n|   <body>"
+    },
+    {
+      "index": 182,
+      "description": null,
+      "data": "<noscript><!--</noscript>X<noscript>--></noscript>",
+      "errors": [
+        "(1,10): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-on",
+      "document": "| <html>\n|   <head>\n|     <noscript>\n|       \"<!--\"\n|   <body>\n|     \"X\"\n|     <noscript>\n|       \"-->\""
+    },
+    {
+      "index": 183,
+      "description": null,
+      "data": "<noscript><!--</noscript>X<noscript>--></noscript>",
+      "errors": [
+        "(1,10): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-off",
+      "document": "| <html>\n|   <head>\n|     <noscript>\n|       <!-- </noscript>X<noscript> -->\n|   <body>"
+    },
+    {
+      "index": 184,
+      "description": null,
+      "data": "<noscript><iframe></noscript>X",
+      "errors": [
+        "(1,10): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-on",
+      "document": "| <html>\n|   <head>\n|     <noscript>\n|       \"<iframe>\"\n|   <body>\n|     \"X\""
+    },
+    {
+      "index": 185,
+      "description": null,
+      "data": "<noscript><iframe></noscript>X",
+      "errors": [
+        " * (1,11) missing DOCTYPE",
+        " * (1,19) unexpected token in head noscript",
+        " * (1,31) unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-off",
+      "document": "| <html>\n|   <head>\n|     <noscript>\n|   <body>\n|     <iframe>\n|       \"</noscript>X\""
+    },
+    {
+      "index": 186,
+      "description": null,
+      "data": "<noframes><!--<noframes></noframes>--></noframes>",
+      "errors": [
+        "(1,10): expected-doctype-but-got-start-tag",
+        "(1,49): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <noframes>\n|       \"<!--<noframes>\"\n|   <body>\n|     \"-->\""
+    },
+    {
+      "index": 187,
+      "description": null,
+      "data": "<noframes><body><script><!--...</script></body></noframes></html>",
+      "errors": [
+        "(1,10): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|     <noframes>\n|       \"<body><script><!--...</script></body>\"\n|   <body>"
+    },
+    {
+      "index": 188,
+      "description": null,
+      "data": "<textarea><!--<textarea></textarea>--></textarea>",
+      "errors": [
+        "(1,10): expected-doctype-but-got-start-tag",
+        "(1,49): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <textarea>\n|       \"<!--<textarea>\"\n|     \"-->\""
+    },
+    {
+      "index": 189,
+      "description": null,
+      "data": "<textarea>&lt;/textarea></textarea>",
+      "errors": [
+        "(1,10): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <textarea>\n|       \"</textarea>\""
+    },
+    {
+      "index": 190,
+      "description": null,
+      "data": "<iframe><!--<iframe></iframe>--></iframe>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag",
+        "(1,41): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <iframe>\n|       \"<!--<iframe>\"\n|     \"-->\""
+    },
+    {
+      "index": 191,
+      "description": null,
+      "data": "<iframe>...<!--X->...<!--/X->...</iframe>",
+      "errors": [
+        "(1,8): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <iframe>\n|       \"...<!--X->...<!--/X->...\""
+    },
+    {
+      "index": 192,
+      "description": null,
+      "data": "<xmp><!--<xmp></xmp>--></xmp>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,29): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <xmp>\n|       \"<!--<xmp>\"\n|     \"-->\""
+    },
+    {
+      "index": 193,
+      "description": null,
+      "data": "<noembed><!--<noembed></noembed>--></noembed>",
+      "errors": [
+        "(1,9): expected-doctype-but-got-start-tag",
+        "(1,45): unexpected-end-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <noembed>\n|       \"<!--<noembed>\"\n|     \"-->\""
+    },
+    {
+      "index": 194,
+      "description": null,
+      "data": "<!doctype html><table>\n",
+      "errors": [
+        "(2,0): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       \"\n\""
+    },
+    {
+      "index": 195,
+      "description": null,
+      "data": "<!doctype html><table><td><span><font></span><span>",
+      "errors": [
+        "(1,26): unexpected-cell-in-table-body",
+        "(1,45): unexpected-end-tag",
+        "(1,51): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             <span>\n|               <font>\n|             <font>\n|               <span>"
+    },
+    {
+      "index": 196,
+      "description": null,
+      "data": "<!doctype html><form><table></form><form></table></form>",
+      "errors": [
+        "(1,35): unexpected-end-tag-implies-table-voodoo",
+        "(1,35): unexpected-end-tag",
+        "(1,41): unexpected-form-in-table",
+        "(1,56): unexpected-end-tag",
+        "(1,56): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <form>\n|       <table>\n|         <form>"
+    }
+  ]
+}

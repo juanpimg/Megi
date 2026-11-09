@@ -1,0 +1,32 @@
+# Rust / Cargo build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Agent & Teamwork metadata (never tracked in repository)
+/.agents/
+.agents/
+
+# Local specification cache (downloaded HTML/JSON specs)
+/.cache/
+.cache/
+
+# Sparse WPT checkout (kept locally for inspection; html5lib-tests is tracked in tests/html5lib-tests)
+/tests/wpt/
+/tests/html5lib-tests/.git/
+
+# Python bytecode & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/

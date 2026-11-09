@@ -1,0 +1,15 @@
+{
+  "source_file": "scripted_ark.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<p><font size=4><font size=4><font size=4><script>document.getElementsByTagName(\"font\")[2].setAttribute(\"size\", \"5\");</script><font size=4><p>X",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-on",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <font>\n|         size=\"4\"\n|         <font>\n|           size=\"4\"\n|           <font>\n|             size=\"5\"\n|             <script>\n|               \"document.getElementsByTagName(\"font\")[2].setAttribute(\"size\", \"5\");\"\n|             <font>\n|               size=\"4\"\n|     <p>\n|       <font>\n|         size=\"4\"\n|         <font>\n|           size=\"4\"\n|           <font>\n|             size=\"4\"\n|             \"X\""
+    }
+  ]
+}

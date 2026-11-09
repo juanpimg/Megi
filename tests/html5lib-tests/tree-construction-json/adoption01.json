@@ -1,0 +1,268 @@
+{
+  "source_file": "adoption01.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<a><p></a></p>",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,10): adoption-agency-1.3"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <a>\n|     <p>\n|       <a>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<a>1<p>2</a>3</p>",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,12): adoption-agency-1.3"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <a>\n|       \"1\"\n|     <p>\n|       <a>\n|         \"2\"\n|       \"3\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<a>1<button>2</a>3</button>",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,17): adoption-agency-1.3"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <a>\n|       \"1\"\n|     <button>\n|       <a>\n|         \"2\"\n|       \"3\""
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<a>1<b>2</a>3</b>",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,12): adoption-agency-1.3"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <a>\n|       \"1\"\n|       <b>\n|         \"2\"\n|     <b>\n|       \"3\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<a>1<div>2<div>3</a>4</div>5</div>",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,20): adoption-agency-1.3",
+        "(1,20): adoption-agency-1.3"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <a>\n|       \"1\"\n|     <div>\n|       <a>\n|         \"2\"\n|       <div>\n|         <a>\n|           \"3\"\n|         \"4\"\n|       \"5\""
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<table><a>1<p>2</a>3</p>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,10): unexpected-start-tag-implies-table-voodoo",
+        "(1,11): unexpected-character-implies-table-voodoo",
+        "(1,14): unexpected-start-tag-implies-table-voodoo",
+        "(1,15): unexpected-character-implies-table-voodoo",
+        "(1,19): unexpected-end-tag-implies-table-voodoo",
+        "(1,19): adoption-agency-1.3",
+        "(1,20): unexpected-character-implies-table-voodoo",
+        "(1,24): unexpected-end-tag-implies-table-voodoo",
+        "(1,24): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <a>\n|       \"1\"\n|     <p>\n|       <a>\n|         \"2\"\n|       \"3\"\n|     <table>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<b><b><a><p></a>",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,16): adoption-agency-1.3",
+        "(1,16): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <b>\n|       <b>\n|         <a>\n|         <p>\n|           <a>"
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<b><a><b><p></a>",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,16): adoption-agency-1.3",
+        "(1,16): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <b>\n|       <a>\n|         <b>\n|       <b>\n|         <p>\n|           <a>"
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<a><b><b><p></a>",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,16): adoption-agency-1.3",
+        "(1,16): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <a>\n|       <b>\n|         <b>\n|     <b>\n|       <b>\n|         <p>\n|           <a>"
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<p>1<s id=\"A\">2<b id=\"B\">3</p>4</s>5</b>",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,30): unexpected-end-tag",
+        "(1,35): adoption-agency-1.3"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"1\"\n|       <s>\n|         id=\"A\"\n|         \"2\"\n|         <b>\n|           id=\"B\"\n|           \"3\"\n|     <s>\n|       id=\"A\"\n|       <b>\n|         id=\"B\"\n|         \"4\"\n|     <b>\n|       id=\"B\"\n|       \"5\""
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<table><a>1<td>2</td>3</table>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,10): unexpected-start-tag-implies-table-voodoo",
+        "(1,11): unexpected-character-implies-table-voodoo",
+        "(1,15): unexpected-cell-in-table-body",
+        "(1,30): unexpected-implied-end-tag-in-table-view"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <a>\n|       \"1\"\n|     <a>\n|       \"3\"\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             \"2\""
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<table>A<td>B</td>C</table>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,8): unexpected-character-implies-table-voodoo",
+        "(1,12): unexpected-cell-in-table-body",
+        "(1,22): unexpected-character-implies-table-voodoo"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     \"AC\"\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             \"B\""
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<a><svg><tr><input></a>",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,23): unexpected-end-tag",
+        "(1,23): adoption-agency-1.3"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <a>\n|       <svg svg>\n|         <svg tr>\n|           <svg input>"
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "<div><a><b><div><div><div><div><div><div><div><div><div><div></a>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,65): adoption-agency-1.3",
+        "(1,65): adoption-agency-1.3",
+        "(1,65): adoption-agency-1.3",
+        "(1,65): adoption-agency-1.3",
+        "(1,65): adoption-agency-1.3",
+        "(1,65): adoption-agency-1.3",
+        "(1,65): adoption-agency-1.3",
+        "(1,65): adoption-agency-1.3",
+        "(1,65): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <a>\n|         <b>\n|       <b>\n|         <div>\n|           <a>\n|           <div>\n|             <a>\n|             <div>\n|               <a>\n|               <div>\n|                 <a>\n|                 <div>\n|                   <a>\n|                   <div>\n|                     <a>\n|                     <div>\n|                       <a>\n|                       <div>\n|                         <a>\n|                           <div>\n|                             <div>"
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "<div><a><b><u><i><code><div></a>",
+      "errors": [
+        "(1,5): expected-doctype-but-got-start-tag",
+        "(1,32): adoption-agency-1.3",
+        "(1,32): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <div>\n|       <a>\n|         <b>\n|           <u>\n|             <i>\n|               <code>\n|       <u>\n|         <i>\n|           <code>\n|             <div>\n|               <a>"
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "<b><b><b><b>x</b></b></b></b>y",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <b>\n|       <b>\n|         <b>\n|           <b>\n|             \"x\"\n|     \"y\""
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "<p><b><b><b><b><p>x",
+      "errors": [
+        "(1,3): expected-doctype-but-got-start-tag",
+        "(1,18): unexpected-end-tag",
+        "(1,19): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <b>\n|         <b>\n|           <b>\n|             <b>\n|     <p>\n|       <b>\n|         <b>\n|           <b>\n|             \"x\""
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "<b><em><foo><foob><fooc><aside></b></em>",
+      "errors": [
+        "(1,35): adoption-agency-1.3",
+        "(1,40): adoption-agency-1.3",
+        "(1,40): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "div",
+      "script_mode": "both",
+      "document": "| <b>\n|   <em>\n|     <foo>\n|       <foob>\n|         <fooc>\n| <aside>\n|   <b>"
+    }
+  ]
+}

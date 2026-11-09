@@ -1,0 +1,778 @@
+{
+  "source_file": "foreign-fragment.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<nobr>X",
+      "errors": [
+        "6: HTML start tag “nobr” in a foreign namespace context.",
+        "7: End of file seen and there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg path",
+      "script_mode": "both",
+      "document": "| <nobr>\n|   \"X\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<font color></font>X",
+      "errors": [
+        "12: HTML start tag “font” in a foreign namespace context."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg path",
+      "script_mode": "both",
+      "document": "| <font>\n|   color=\"\"\n| \"X\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<font></font>X",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "svg path",
+      "script_mode": "both",
+      "document": "| <svg font>\n| \"X\""
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<g></path>X",
+      "errors": [
+        "10: End tag “path” did not match the name of the current open element (“g”).",
+        "11: End of file seen and there were open elements."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg path",
+      "script_mode": "both",
+      "document": "| <svg g>\n|   \"X\""
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "</path>X",
+      "errors": [
+        "5: Stray end tag “path”."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg path",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "</foreignObject>X",
+      "errors": [
+        "5: Stray end tag “foreignobject”."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg foreignObject",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "</desc>X",
+      "errors": [
+        "5: Stray end tag “desc”."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg desc",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "</title>X",
+      "errors": [
+        "5: Stray end tag “title”."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg title",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "</svg>X",
+      "errors": [
+        "5: Stray end tag “svg”."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg svg",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "</mfenced>X",
+      "errors": [
+        "5: Stray end tag “mfenced”."
+      ],
+      "new_errors": [],
+      "document_fragment": "math mfenced",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "</malignmark>X",
+      "errors": [
+        "5: Stray end tag “malignmark”."
+      ],
+      "new_errors": [],
+      "document_fragment": "math malignmark",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "</math>X",
+      "errors": [
+        "5: Stray end tag “math”."
+      ],
+      "new_errors": [],
+      "document_fragment": "math math",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "</annotation-xml>X",
+      "errors": [
+        "5: Stray end tag “annotation-xml”."
+      ],
+      "new_errors": [],
+      "document_fragment": "math annotation-xml",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 13,
+      "description": null,
+      "data": "</mtext>X",
+      "errors": [
+        "5: Stray end tag “mtext”."
+      ],
+      "new_errors": [],
+      "document_fragment": "math mtext",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 14,
+      "description": null,
+      "data": "</mi>X",
+      "errors": [
+        "5: Stray end tag “mi”."
+      ],
+      "new_errors": [],
+      "document_fragment": "math mi",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 15,
+      "description": null,
+      "data": "</mo>X",
+      "errors": [
+        "5: Stray end tag “mo”."
+      ],
+      "new_errors": [],
+      "document_fragment": "math mo",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 16,
+      "description": null,
+      "data": "</mn>X",
+      "errors": [
+        "5: Stray end tag “mn”."
+      ],
+      "new_errors": [],
+      "document_fragment": "math mn",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 17,
+      "description": null,
+      "data": "</ms>X",
+      "errors": [
+        "5: Stray end tag “ms”."
+      ],
+      "new_errors": [],
+      "document_fragment": "math ms",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 18,
+      "description": null,
+      "data": "<b></b><mglyph/><i></i><malignmark/><u></u><ms/>X",
+      "errors": [
+        "51: Self-closing syntax (“/>”) used on a non-void HTML element. Ignoring the slash and treating as a start tag.",
+        "52: End of file seen and there were open elements."
+      ],
+      "new_errors": [
+        "(1:44-1:49) non-void-html-element-start-tag-with-trailing-solidus"
+      ],
+      "document_fragment": "math ms",
+      "script_mode": "both",
+      "document": "| <b>\n| <math mglyph>\n| <i>\n| <math malignmark>\n| <u>\n| <ms>\n|   \"X\""
+    },
+    {
+      "index": 19,
+      "description": null,
+      "data": "<malignmark></malignmark>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math ms",
+      "script_mode": "both",
+      "document": "| <math malignmark>"
+    },
+    {
+      "index": 20,
+      "description": null,
+      "data": "<div></div>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math ms",
+      "script_mode": "both",
+      "document": "| <div>"
+    },
+    {
+      "index": 21,
+      "description": null,
+      "data": "<figure></figure>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math ms",
+      "script_mode": "both",
+      "document": "| <figure>"
+    },
+    {
+      "index": 22,
+      "description": null,
+      "data": "<b></b><mglyph/><i></i><malignmark/><u></u><mn/>X",
+      "errors": [
+        "51: Self-closing syntax (“/>”) used on a non-void HTML element. Ignoring the slash and treating as a start tag.",
+        "52: End of file seen and there were open elements."
+      ],
+      "new_errors": [
+        "(1:44-1:49) non-void-html-element-start-tag-with-trailing-solidus"
+      ],
+      "document_fragment": "math mn",
+      "script_mode": "both",
+      "document": "| <b>\n| <math mglyph>\n| <i>\n| <math malignmark>\n| <u>\n| <mn>\n|   \"X\""
+    },
+    {
+      "index": 23,
+      "description": null,
+      "data": "<malignmark></malignmark>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math mn",
+      "script_mode": "both",
+      "document": "| <math malignmark>"
+    },
+    {
+      "index": 24,
+      "description": null,
+      "data": "<div></div>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math mn",
+      "script_mode": "both",
+      "document": "| <div>"
+    },
+    {
+      "index": 25,
+      "description": null,
+      "data": "<figure></figure>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math mn",
+      "script_mode": "both",
+      "document": "| <figure>"
+    },
+    {
+      "index": 26,
+      "description": null,
+      "data": "<b></b><mglyph/><i></i><malignmark/><u></u><mo/>X",
+      "errors": [
+        "51: Self-closing syntax (“/>”) used on a non-void HTML element. Ignoring the slash and treating as a start tag.",
+        "52: End of file seen and there were open elements."
+      ],
+      "new_errors": [
+        "(1:44-1:49) non-void-html-element-start-tag-with-trailing-solidus"
+      ],
+      "document_fragment": "math mo",
+      "script_mode": "both",
+      "document": "| <b>\n| <math mglyph>\n| <i>\n| <math malignmark>\n| <u>\n| <mo>\n|   \"X\""
+    },
+    {
+      "index": 27,
+      "description": null,
+      "data": "<malignmark></malignmark>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math mo",
+      "script_mode": "both",
+      "document": "| <math malignmark>"
+    },
+    {
+      "index": 28,
+      "description": null,
+      "data": "<div></div>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math mo",
+      "script_mode": "both",
+      "document": "| <div>"
+    },
+    {
+      "index": 29,
+      "description": null,
+      "data": "<figure></figure>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math mo",
+      "script_mode": "both",
+      "document": "| <figure>"
+    },
+    {
+      "index": 30,
+      "description": null,
+      "data": "<b></b><mglyph/><i></i><malignmark/><u></u><mi/>X",
+      "errors": [
+        "51: Self-closing syntax (“/>”) used on a non-void HTML element. Ignoring the slash and treating as a start tag.",
+        "52: End of file seen and there were open elements."
+      ],
+      "new_errors": [
+        "(1:44-1:49) non-void-html-element-start-tag-with-trailing-solidus"
+      ],
+      "document_fragment": "math mi",
+      "script_mode": "both",
+      "document": "| <b>\n| <math mglyph>\n| <i>\n| <math malignmark>\n| <u>\n| <mi>\n|   \"X\""
+    },
+    {
+      "index": 31,
+      "description": null,
+      "data": "<malignmark></malignmark>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math mi",
+      "script_mode": "both",
+      "document": "| <math malignmark>"
+    },
+    {
+      "index": 32,
+      "description": null,
+      "data": "<div></div>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math mi",
+      "script_mode": "both",
+      "document": "| <div>"
+    },
+    {
+      "index": 33,
+      "description": null,
+      "data": "<figure></figure>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math mi",
+      "script_mode": "both",
+      "document": "| <figure>"
+    },
+    {
+      "index": 34,
+      "description": null,
+      "data": "<b></b><mglyph/><i></i><malignmark/><u></u><mtext/>X",
+      "errors": [
+        "51: Self-closing syntax (“/>”) used on a non-void HTML element. Ignoring the slash and treating as a start tag.",
+        "52: End of file seen and there were open elements."
+      ],
+      "new_errors": [
+        "(1:44-1:52) non-void-html-element-start-tag-with-trailing-solidus"
+      ],
+      "document_fragment": "math mtext",
+      "script_mode": "both",
+      "document": "| <b>\n| <math mglyph>\n| <i>\n| <math malignmark>\n| <u>\n| <mtext>\n|   \"X\""
+    },
+    {
+      "index": 35,
+      "description": null,
+      "data": "<malignmark></malignmark>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math mtext",
+      "script_mode": "both",
+      "document": "| <math malignmark>"
+    },
+    {
+      "index": 36,
+      "description": null,
+      "data": "<div></div>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math mtext",
+      "script_mode": "both",
+      "document": "| <div>"
+    },
+    {
+      "index": 37,
+      "description": null,
+      "data": "<figure></figure>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math mtext",
+      "script_mode": "both",
+      "document": "| <figure>"
+    },
+    {
+      "index": 38,
+      "description": null,
+      "data": "<div></div>",
+      "errors": [
+        "5: HTML start tag “div” in a foreign namespace context."
+      ],
+      "new_errors": [],
+      "document_fragment": "math annotation-xml",
+      "script_mode": "both",
+      "document": "| <div>"
+    },
+    {
+      "index": 39,
+      "description": null,
+      "data": "<figure></figure>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math annotation-xml",
+      "script_mode": "both",
+      "document": "| <math figure>"
+    },
+    {
+      "index": 40,
+      "description": null,
+      "data": "<div></div>",
+      "errors": [
+        "5: HTML start tag “div” in a foreign namespace context."
+      ],
+      "new_errors": [],
+      "document_fragment": "math math",
+      "script_mode": "both",
+      "document": "| <div>"
+    },
+    {
+      "index": 41,
+      "description": null,
+      "data": "<figure></figure>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "math math",
+      "script_mode": "both",
+      "document": "| <math figure>"
+    },
+    {
+      "index": 42,
+      "description": null,
+      "data": "<div></div>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "svg foreignObject",
+      "script_mode": "both",
+      "document": "| <div>"
+    },
+    {
+      "index": 43,
+      "description": null,
+      "data": "<figure></figure>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "svg foreignObject",
+      "script_mode": "both",
+      "document": "| <figure>"
+    },
+    {
+      "index": 44,
+      "description": null,
+      "data": "<div></div>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "svg title",
+      "script_mode": "both",
+      "document": "| <div>"
+    },
+    {
+      "index": 45,
+      "description": null,
+      "data": "<figure></figure>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "svg title",
+      "script_mode": "both",
+      "document": "| <figure>"
+    },
+    {
+      "index": 46,
+      "description": null,
+      "data": "<figure></figure>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "svg desc",
+      "script_mode": "both",
+      "document": "| <figure>"
+    },
+    {
+      "index": 47,
+      "description": null,
+      "data": "<div><h1>X</h1></div>",
+      "errors": [
+        "5: HTML start tag “div” in a foreign namespace context."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg svg",
+      "script_mode": "both",
+      "document": "| <div>\n|   <h1>\n|     \"X\""
+    },
+    {
+      "index": 48,
+      "description": null,
+      "data": "<div></div>",
+      "errors": [
+        "5: HTML start tag “div” in a foreign namespace context."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg svg",
+      "script_mode": "both",
+      "document": "| <div>"
+    },
+    {
+      "index": 49,
+      "description": null,
+      "data": "<div></div>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": "svg desc",
+      "script_mode": "both",
+      "document": "| <div>"
+    },
+    {
+      "index": 50,
+      "description": null,
+      "data": "<plaintext><foo>",
+      "errors": [
+        "(1,16): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": "svg desc",
+      "script_mode": "both",
+      "document": "| <plaintext>\n|   \"<foo>\""
+    },
+    {
+      "index": 51,
+      "description": null,
+      "data": "<frameset>X",
+      "errors": [
+        "6: Stray start tag “frameset”."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg desc",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 52,
+      "description": null,
+      "data": "<head>X",
+      "errors": [
+        "6: Stray start tag “head”."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg desc",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 53,
+      "description": null,
+      "data": "<body>X",
+      "errors": [
+        "6: Stray start tag “body”."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg desc",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 54,
+      "description": null,
+      "data": "<html>X",
+      "errors": [
+        "6: Stray start tag “html”."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg desc",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 55,
+      "description": null,
+      "data": "<html class=\"foo\">X",
+      "errors": [
+        "6: Stray start tag “html”."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg desc",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 56,
+      "description": null,
+      "data": "<body class=\"foo\">X",
+      "errors": [
+        "6: Stray start tag “body”."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg desc",
+      "script_mode": "both",
+      "document": "| \"X\""
+    },
+    {
+      "index": 57,
+      "description": null,
+      "data": "<svg><p>",
+      "errors": [
+        "8: HTML start tag “p” in a foreign namespace context."
+      ],
+      "new_errors": [],
+      "document_fragment": "div",
+      "script_mode": "both",
+      "document": "| <svg svg>\n| <p>"
+    },
+    {
+      "index": 58,
+      "description": null,
+      "data": "<p>",
+      "errors": [
+        "3: HTML start tag “p” in a foreign namespace context."
+      ],
+      "new_errors": [],
+      "document_fragment": "svg svg",
+      "script_mode": "both",
+      "document": "| <p>"
+    },
+    {
+      "index": 59,
+      "description": null,
+      "data": "<svg></p><foo>",
+      "errors": [
+        "9: HTML end tag “p” in a foreign namespace context.",
+        "(1:6) Unexpected </p> from in body insertion mode",
+        "(1:15) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "div",
+      "script_mode": "both",
+      "document": "| <svg svg>\n| <p>\n| <foo>"
+    },
+    {
+      "index": 60,
+      "description": null,
+      "data": "<svg></br><foo>",
+      "errors": [
+        "10: HTML end tag “br” in a foreign namespace context.",
+        "(1:6) Unexpected </br> from in body insertion mode",
+        "(1:16) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "div",
+      "script_mode": "both",
+      "document": "| <svg svg>\n| <br>\n| <foo>"
+    },
+    {
+      "index": 61,
+      "description": null,
+      "data": "</p><foo>",
+      "errors": [
+        "4: HTML end tag “p” in a foreign namespace context.",
+        "(1:1) Unexpected </p> from in body insertion mode",
+        "(1:10) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "svg svg",
+      "script_mode": "both",
+      "document": "| <p>\n| <svg foo>"
+    },
+    {
+      "index": 62,
+      "description": null,
+      "data": "</br><foo>",
+      "errors": [
+        "5: HTML end tag “br” in a foreign namespace context.",
+        "(1:1) Unexpected </br> from in body insertion mode",
+        "(1:11) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "svg svg",
+      "script_mode": "both",
+      "document": "| <br>\n| <svg foo>"
+    },
+    {
+      "index": 63,
+      "description": null,
+      "data": "<body><foo>",
+      "errors": [
+        "6: HTML start tag “body” in a foreign namespace context.",
+        "(1:1) Unexpected <body> from in body insertion mode",
+        "(1:12) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "svg svg",
+      "script_mode": "both",
+      "document": "| <svg foo>"
+    },
+    {
+      "index": 64,
+      "description": null,
+      "data": "<p><foo>",
+      "errors": [
+        "3: HTML start tag “p” in a foreign namespace context.",
+        "(1:9) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "svg svg",
+      "script_mode": "both",
+      "document": "| <p>\n|   <foo>"
+    },
+    {
+      "index": 65,
+      "description": null,
+      "data": "<p></p><foo>",
+      "errors": [
+        "3: HTML start tag “p” in a foreign namespace context.",
+        "(1:13) Unexpected EOF"
+      ],
+      "new_errors": [],
+      "document_fragment": "svg svg",
+      "script_mode": "both",
+      "document": "| <p>\n| <svg foo>"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+[alias]
+test-all = "test --workspace"
+test-harness = "test -p test_harness"
+lint = "clippy --workspace --all-targets -- -D warnings"
+doc-check = "doc --workspace --no-deps"

@@ -1,0 +1,171 @@
+{
+  "source_file": "tests17.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<!doctype html><table><tbody><select><tr>",
+      "errors": [
+        "(1,30): unexpected-start-tag",
+        "(1,42): premature-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>\n|     <table>\n|       <tbody>\n|         <tr>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<!doctype html><table><tr><select><td>",
+      "errors": [
+        "(1,27): unexpected-start-tag",
+        "(1,39): premature-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>"
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<!doctype html><table><tr><td><select><td>",
+      "errors": [
+        "(1,42): unexpected-table-element-start-tag-in-select-in-table",
+        "(1,42): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             <select>\n|           <td>"
+    },
+    {
+      "index": 3,
+      "description": null,
+      "data": "<!doctype html><table><tr><th><select><td>",
+      "errors": [
+        "(1,42): unexpected-table-element-start-tag-in-select-in-table",
+        "(1,42): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <th>\n|             <select>\n|           <td>"
+    },
+    {
+      "index": 4,
+      "description": null,
+      "data": "<!doctype html><table><caption><select><tr>",
+      "errors": [
+        "(1,43): unexpected-table-element-start-tag-in-select-in-table",
+        "(1,43): eof-in-table"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <caption>\n|         <select>\n|       <tbody>\n|         <tr>"
+    },
+    {
+      "index": 5,
+      "description": null,
+      "data": "<!doctype html><select><tr>",
+      "errors": [
+        "(1,27): unexpected-start-tag-in-select",
+        "(1,27): eof-in-select"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>"
+    },
+    {
+      "index": 6,
+      "description": null,
+      "data": "<!doctype html><select><td>",
+      "errors": [
+        "(1,27): unexpected-start-tag-in-select",
+        "(1,27): eof-in-select"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>"
+    },
+    {
+      "index": 7,
+      "description": null,
+      "data": "<!doctype html><select><th>",
+      "errors": [
+        "(1,27): unexpected-start-tag-in-select",
+        "(1,27): eof-in-select"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>"
+    },
+    {
+      "index": 8,
+      "description": null,
+      "data": "<!doctype html><select><tbody>",
+      "errors": [
+        "(1,30): unexpected-start-tag-in-select",
+        "(1,30): eof-in-select"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>"
+    },
+    {
+      "index": 9,
+      "description": null,
+      "data": "<!doctype html><select><thead>",
+      "errors": [
+        "(1,30): unexpected-start-tag-in-select",
+        "(1,30): eof-in-select"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>"
+    },
+    {
+      "index": 10,
+      "description": null,
+      "data": "<!doctype html><select><tfoot>",
+      "errors": [
+        "(1,30): unexpected-start-tag-in-select",
+        "(1,30): eof-in-select"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>"
+    },
+    {
+      "index": 11,
+      "description": null,
+      "data": "<!doctype html><select><caption>",
+      "errors": [
+        "(1,32): unexpected-start-tag-in-select",
+        "(1,32): eof-in-select"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <select>"
+    },
+    {
+      "index": 12,
+      "description": null,
+      "data": "<!doctype html><table><tr></table>a",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|     \"a\""
+    }
+  ]
+}

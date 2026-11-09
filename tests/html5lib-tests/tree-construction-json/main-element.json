@@ -1,0 +1,40 @@
+{
+  "source_file": "main-element.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<!doctype html><p>foo<main>bar<p>baz",
+      "errors": [
+        "(1,36): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <p>\n|       \"foo\"\n|     <main>\n|       \"bar\"\n|       <p>\n|         \"baz\""
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<!doctype html><main><p>foo</main>bar",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <main>\n|       <p>\n|         \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<!DOCTYPE html>xxx<svg><x><g><a><main><b>",
+      "errors": [
+        " * (1,42) unexpected HTML-like start tag token in foreign content",
+        " * (1,42) unexpected end of file"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     \"xxx\"\n|     <svg svg>\n|       <svg x>\n|         <svg g>\n|           <svg a>\n|             <svg main>\n|     <b>"
+    }
+  ]
+}

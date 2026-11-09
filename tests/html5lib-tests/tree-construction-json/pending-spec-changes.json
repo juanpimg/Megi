@@ -1,0 +1,47 @@
+{
+  "source_file": "pending-spec-changes.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<input type=\"hidden\"><frameset>",
+      "errors": [
+        "(1,21): expected-doctype-but-got-start-tag",
+        "(1,31): unexpected-start-tag",
+        "(1,31): eof-in-frameset"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <frameset>"
+    },
+    {
+      "index": 1,
+      "description": null,
+      "data": "<!DOCTYPE html><table><caption><svg>foo</table>bar",
+      "errors": [
+        "(1,47): unexpected-end-tag",
+        "(1,47): end-table-tag-in-caption"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <!DOCTYPE html>\n| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <caption>\n|         <svg svg>\n|           \"foo\"\n|     \"bar\""
+    },
+    {
+      "index": 2,
+      "description": null,
+      "data": "<table><tr><td><svg><desc><td></desc><circle>",
+      "errors": [
+        "(1,7): expected-doctype-but-got-start-tag",
+        "(1,30): unexpected-cell-end-tag",
+        "(1,37): unexpected-end-tag",
+        "(1,45): expected-closing-tag-but-got-eof"
+      ],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "both",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <table>\n|       <tbody>\n|         <tr>\n|           <td>\n|             <svg svg>\n|               <svg desc>\n|           <td>\n|             <circle>"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "source_file": "scripted_adoption01.dat",
+  "tests": [
+    {
+      "index": 0,
+      "description": null,
+      "data": "<p><b id=\"A\"><script>document.getElementById(\"A\").id = \"B\"</script></p>TEXT</b>",
+      "errors": [],
+      "new_errors": [],
+      "document_fragment": null,
+      "script_mode": "script-on",
+      "document": "| <html>\n|   <head>\n|   <body>\n|     <p>\n|       <b>\n|         id=\"B\"\n|         <script>\n|           \"document.getElementById(\"A\").id = \"B\"\"\n|     <b>\n|       id=\"A\"\n|       \"TEXT\""
+    }
+  ]
+}
