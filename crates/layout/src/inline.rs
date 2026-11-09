@@ -228,6 +228,12 @@ fn collect_inline_tokens(
                 let style = child.style.clone().unwrap_or_else(ComputedStyle::initial);
                 tokenize_text(txt, &style, measurer, tokens);
             }
+            // `<br>` forces a line break (CSS 2.2 §16.6.1). It has no width and no edges.
+            BoxType::LineBreak => {
+                tokens.push(InlineToken::ForcedBreak {
+                    style: ComputedStyle::initial(),
+                });
+            }
             _ => {}
         }
     }
@@ -654,10 +660,12 @@ fn format_line(
     let mut max_descent = strut_descent;
 
     for token in &tokens {
-        let style = match token {
-            InlineToken::Word { style, .. }
-            | InlineToken::Space { style, .. }
-            | InlineToken::BoxStart { style, .. } => style,
+        // `vertical-align` applies to inline boxes, not to the text runs they contain:
+        // text tokens always contribute their baseline metrics, while `BoxStart` tokens
+        // contribute the shifted metrics of the inline box itself (CSS 2.2 §10.8.1).
+        let (style, align_applies) = match token {
+            InlineToken::BoxStart { style, .. } => (style, true),
+            InlineToken::Word { style, .. } | InlineToken::Space { style, .. } => (style, false),
             _ => continue,
         };
 
@@ -667,7 +675,11 @@ fn format_line(
         let mut a_prime = metrics.ascent + half_leading;
         let mut d_prime = metrics.descent + half_leading;
 
-        match style.vertical_align {
+        match if align_applies {
+            style.vertical_align
+        } else {
+            VerticalAlign::Baseline
+        } {
             VerticalAlign::Baseline => {}
             VerticalAlign::Sub => {
                 let shift = 0.20 * container_style.font_size;
@@ -817,7 +829,13 @@ fn format_line(
                 let d_prime = metrics.descent + half_leading;
                 let box_h = a_prime + d_prime;
 
-                match style.vertical_align {
+                // `vertical-align` belongs to the innermost inline box containing this
+                // text run, not to the text formatting artifact itself.
+                let vertical_align = active_stack
+                    .last()
+                    .map_or(VerticalAlign::Baseline, |frame| frame.style.vertical_align);
+
+                match vertical_align {
                     VerticalAlign::Baseline => {}
                     VerticalAlign::Sub => {
                         let shift = 0.20 * container_style.font_size;
@@ -854,15 +872,14 @@ fn format_line(
                     &mut line_children
                 };
 
-                if let Some(last) = target_list.last_mut() {
-                    if let BoxType::TextNode(ref mut last_text) = last.box_type {
-                        if last.style.as_ref() == Some(&style) {
-                            last_text.push_str(&text);
-                            last.dimensions.content.width += width;
-                            curr_x += width;
-                            continue;
-                        }
-                    }
+                if let Some(last) = target_list.last_mut()
+                    && let BoxType::TextNode(ref mut last_text) = last.box_type
+                    && last.style.as_ref() == Some(&style)
+                {
+                    last_text.push_str(&text);
+                    last.dimensions.content.width += width;
+                    curr_x += width;
+                    continue;
                 }
 
                 let y_in_line =
@@ -935,7 +952,11 @@ fn format_line(
     outgoing_active.reverse();
 
     // 6. Assemble the LineBox
-    let mut line_box = LayoutBox::new(BoxType::LineBox, Some(container_style.clone()));
+    //
+    // Line boxes are pure formatting artifacts: they must not carry a painting style
+    // (no background, border or padding), otherwise paint duplicates the container's
+    // decoration once per line (audit finding F-02).
+    let mut line_box = LayoutBox::new(BoxType::LineBox, None);
     line_box.dimensions.content = Rect::new(container_x, line_y, container_width, line_height);
     line_box.children = line_children;
 

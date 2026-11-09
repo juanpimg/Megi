@@ -27,6 +27,10 @@ pub use tree_builder::build_layout_tree;
 /// 1. Constructs the CSS Box Tree (handling `display: none` and anonymous block wrappers).
 /// 2. Performs Block Formatting Context layout from the root containing block.
 ///
+/// The initial containing block (ICB) has the dimensions of the viewport (CSS 2.2
+/// §10.1), so the root element's percentage heights and the reported page height have a
+/// meaningful reference.
+///
 /// Returns the root [`LayoutBox`] with populated geometric coordinates and dimensions.
 pub fn layout_document(
     doc: &Document,
@@ -36,7 +40,7 @@ pub fn layout_document(
     let mut root_box = build_layout_tree(doc, styles)?;
 
     let initial_containing_block = Dimensions {
-        content: Rect::new(viewport.x, viewport.y, viewport.width, 0.0),
+        content: Rect::new(viewport.x, viewport.y, viewport.width, viewport.height),
         padding: EdgeSizes::ZERO,
         border: EdgeSizes::ZERO,
         margin: EdgeSizes::ZERO,

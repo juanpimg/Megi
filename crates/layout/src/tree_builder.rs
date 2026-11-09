@@ -6,9 +6,9 @@
 use std::collections::HashMap;
 
 use css::{ComputedStyle, Display};
-use dom::{Document, NodeId, NodeKind};
+use dom::{Document, Namespace, NodeId, NodeKind};
 
-use crate::box_tree::{BoxType, LayoutBox};
+use crate::box_tree::{BoxType, LayoutBox, anonymous_style_from, is_collapsible_whitespace_box};
 
 /// Builds the layout box tree for the document root element.
 pub fn build_layout_tree(
@@ -30,6 +30,13 @@ pub fn build_layout_tree(
     build_box_for_node(doc, root_node_id, styles, None)
 }
 
+/// Returns `true` if the node is an HTML `<br>` element.
+fn is_html_br(node: &dom::Node) -> bool {
+    node.as_element().is_some_and(|el| {
+        el.namespace == Namespace::Html && el.local_name.eq_ignore_ascii_case("br")
+    })
+}
+
 /// Recursively builds a layout box for a DOM node.
 fn build_box_for_node(
     doc: &Document,
@@ -40,11 +47,20 @@ fn build_box_for_node(
     let node = doc.node(node_id);
     match &node.kind {
         NodeKind::Element(_) => {
-            let style = styles.get(&node_id)?;
+            let style = styles.get(&node_id);
             // display: none elements generate no boxes and suppress descendant boxes
-            if style.display == Display::None {
+            if style.is_some_and(|style| style.display == Display::None) {
                 return None;
             }
+
+            // `<br>` is a forced line break: a formatting artifact with no box decoration.
+            // It is handled before requiring a resolved style so a missing style entry
+            // cannot silently drop an explicit line break.
+            if is_html_br(node) {
+                return Some(LayoutBox::new(BoxType::LineBreak, None));
+            }
+
+            let style = style?;
 
             let box_type = match style.display {
                 Display::Block
@@ -66,10 +82,12 @@ fn build_box_for_node(
                 curr = doc.node(child_id).next_sibling;
             }
 
-            let children = if matches!(box_type, BoxType::BlockNode(_)) {
-                normalize_block_children(raw_children, Some(style))
-            } else {
-                raw_children
+            let children = match box_type {
+                BoxType::BlockNode(_) => normalize_block_children(raw_children, Some(style)),
+                // CSS 2.2 §9.2.1.1: block-level children inside an inline box implicitly
+                // break the inline around them. Full normalization is out of scope for
+                // this milestone; the IFC flattens the inline subtree as-is.
+                _ => raw_children,
             };
 
             Some(LayoutBox {
@@ -80,23 +98,14 @@ fn build_box_for_node(
             })
         }
         NodeKind::Text(txt) => {
-            let is_pre = parent_style.is_some_and(|s| {
-                matches!(
-                    s.white_space,
-                    css::WhiteSpace::Pre | css::WhiteSpace::PreWrap
-                )
-            });
-            if !is_pre {
-                // Discard pure whitespace text nodes that are empty
-                let trimmed = txt.trim_matches(|c: char| c == '\r' || c == '\n' || c == '\t');
-                if trimmed.is_empty() {
-                    return None;
-                }
+            // An empty text node generates no inline content.
+            if txt.is_empty() {
+                return None;
             }
-            Some(LayoutBox::new(
-                BoxType::TextNode(txt.clone()),
-                parent_style.cloned(),
-            ))
+            // Text boxes are formatting artifacts: they must only carry inherited
+            // properties, never the parent's margins/borders/background (F-02).
+            let parent = parent_style.map(anonymous_style_from);
+            Some(LayoutBox::new(BoxType::TextNode(txt.clone()), parent))
         }
         _ => None,
     }
@@ -105,7 +114,10 @@ fn build_box_for_node(
 /// Normalizes children inside a block container box per CSS 2.2 §9.2.1.1.
 ///
 /// If a block container has both inline-level and block-level children, contiguous runs
-/// of inline-level children are wrapped into an [`BoxType::AnonymousBlock`] box.
+/// of inline-level children are wrapped into an [`BoxType::AnonymousBlock`] box. Runs
+/// consisting solely of collapsible whitespace are discarded: they are insignificant
+/// between block-level siblings and would otherwise create phantom vertical gaps in
+/// pretty-printed HTML (audit finding F-02).
 fn normalize_block_children(
     children: Vec<LayoutBox>,
     parent_style: Option<&ComputedStyle>,
@@ -118,27 +130,39 @@ fn normalize_block_children(
         return children;
     }
 
+    let anonymous_style = parent_style.map(anonymous_style_from);
     let mut normalized = Vec::new();
     let mut current_inline_run: Vec<LayoutBox> = Vec::new();
 
     for child in children {
         if child.is_block() {
-            if !current_inline_run.is_empty() {
-                let mut anon = LayoutBox::new(BoxType::AnonymousBlock, parent_style.cloned());
-                anon.children = std::mem::take(&mut current_inline_run);
-                normalized.push(anon);
-            }
+            flush_inline_run(&mut current_inline_run, &mut normalized, &anonymous_style);
             normalized.push(child);
         } else {
             current_inline_run.push(child);
         }
     }
 
-    if !current_inline_run.is_empty() {
-        let mut anon = LayoutBox::new(BoxType::AnonymousBlock, parent_style.cloned());
-        anon.children = current_inline_run;
-        normalized.push(anon);
-    }
-
+    flush_inline_run(&mut current_inline_run, &mut normalized, &anonymous_style);
     normalized
+}
+
+/// Wraps a contiguous run of inline-level children in an anonymous block, unless the
+/// run is made of collapsible whitespace only.
+fn flush_inline_run(
+    run: &mut Vec<LayoutBox>,
+    normalized: &mut Vec<LayoutBox>,
+    anonymous_style: &Option<ComputedStyle>,
+) {
+    if run.is_empty() {
+        return;
+    }
+    let significant = run.iter().any(|c| !is_collapsible_whitespace_box(c));
+    if significant {
+        let mut anon = LayoutBox::new(BoxType::AnonymousBlock, anonymous_style.clone());
+        anon.children = std::mem::take(run);
+        normalized.push(anon);
+    } else {
+        run.clear();
+    }
 }
