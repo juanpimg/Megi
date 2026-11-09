@@ -19,6 +19,8 @@ pub enum BoxType {
     AnonymousBlock,
     /// An inline text fragment.
     TextNode(String),
+    /// A horizontal line box generated in an IFC (CSS 2.2 §9.4.2).
+    LineBox,
 }
 
 /// A node in the CSS layout box tree.
@@ -64,6 +66,12 @@ impl LayoutBox {
     #[inline]
     pub fn is_anonymous(&self) -> bool {
         matches!(self.box_type, BoxType::AnonymousBlock)
+    }
+
+    /// Returns `true` if this box is a line box.
+    #[inline]
+    pub fn is_line_box(&self) -> bool {
+        matches!(self.box_type, BoxType::LineBox)
     }
 
     /// Returns the DOM `NodeId` if this box corresponds directly to an element.

@@ -135,6 +135,16 @@ fn padding_left(b: &LayoutBox) -> f32 {
 }
 
 fn layout_block_children(layout_box: &mut LayoutBox) {
+    if layout_box.children.is_empty() {
+        return;
+    }
+
+    // If children are inline-level, establish an Inline Formatting Context (CSS 2.1 §9.4.2)
+    if layout_box.children.iter().all(|c| c.is_inline()) {
+        crate::inline::layout_inline_formatting_context(layout_box);
+        return;
+    }
+
     let mut child_cb = Dimensions {
         content: layout_box.dimensions.content,
         padding: EdgeSizes::ZERO,

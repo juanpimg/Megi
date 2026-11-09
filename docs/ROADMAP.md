@@ -16,8 +16,8 @@ Cada paquete de trabajo está vinculado de forma explícita y trazable a:
 Fase 0: Tooling & Arena DOM        [██████████] 100% (COMPLETADA)
 Fase 1: Tokenizador & Árbol HTML5  [██████████]  99.9% (COMPLETADA - 100% Declarativo)
 Fase 2: Motor CSS (Syntax & Cascada)[██████████] 100% (COMPLETADA)
-Fase 3: Motor Layout (Box Tree & BFC)[██████░░░░]  60% (EN CURSO: BFC listo, IFC próximo)
-Fase 4: Display Lists & Paint 2D   [░░░░░░░░░░]   0% (PLANIFICADA)
+Fase 3: Motor Layout (BFC & IFC)      [██████████] 100% (COMPLETADA)
+Fase 4: Display Lists & Paint 2D   [░░░░░░░░░░]   0% (EN PLANIFICACIÓN)
 Fase 5: Red & Fetch Pipeline       [░░░░░░░░░░]   0% (PLANIFICADA)
 Fase 6: Integración JS & Bindings  [░░░░░░░░░░]   0% (PLANIFICADA)
 Fase 7: Ventana OS & Shell         [░░░░░░░░░░]   0% (PLANIFICADA)
@@ -28,9 +28,9 @@ Fase 7: Ventana OS & Shell         [░░░░░░░░░░]   0% (PLANIF
 | **Fase 0: Tooling, Arena DOM & Closed-Loop Harness** | `[██████████] 100%` | **COMPLETO** | 5/5 tests unitarios en `crates/dom` | Arena contigua indexada (`NodeId(NonZeroU32)` de 4 bytes) sin `Rc<RefCell<Node>>`, scripts CLI de inspección WHATWG en vivo. |
 | **Fase 1A: Tokenizador HTML5 (84 Estados & 2.231 Entidades)** | `[██████████] 100%` | **COMPLETO** | 7.047 / 7.050 estados superados | 100% verde en las 13 suites estándar de `html5lib-tests/tokenizer`. |
 | **Fase 1B: Construcción del Árbol DOM (21 Modos de Inserción)** | `[██████████] 99.9%` | **COMPLETO (Declarativo)** | 3.898 / 3.904 casos superados | 100% verde en 58 de 62 suites (100% del HTML5 declarativo superado; los 6 casos restantes requieren JavaScript dinámico `document.write`). |
-| **Fase 2: Motor CSS (Sintaxis L3, Selectores L4, Cascada L4, Hoja UA §15)** | `[██████████] 100%` | **COMPLETO** | 9/9 unit tests + 30/30 WPT CSS syntax | Tokenizador L3, parser AST, especificidad $(A,B,C)$, pseudoclases `:first-child` / `:nth-child(An+B)`, cascada de 8 niveles, `ComputedStyle` y hoja User-Agent WHATWG HTML §15. |
-| **Fase 3: Motor de Layout (Box Tree, Bloques Anónimos §9.2.1.1 y BFC)** | `[██████░░░░] 60%` | **EN CURSO** | 4/4 unit tests en `crates/layout` | Box Tree con supresión de `display: none`, envoltura de bloques anónimos y Contexto de Formato de Bloque (BFC) con anchos/alturas automáticos y márgenes centrados. |
-| **Fase 4: Display Lists & Rasterización 2D** | `[░░░░░░░░░░] 0%` | *Planificada* | — | Próxima fase: Generación de listas de dibujo desacopladas (`DrawRect`, `DrawText`, `FillColor`) y rasterizador 2D. |
+| **Fase 2: Motor CSS (Sintaxis L3, Selectores L4, Cascada L4, Hoja UA §15)** | `[██████████] 100%` | **COMPLETO** | 10/10 unit tests + 30/30 WPT CSS syntax | Tokenizador L3, parser AST, especificidad $(A,B,C)$, pseudoclases `:first-child` / `:nth-child(An+B)`, cascada de 8 niveles, `ComputedStyle` y hoja User-Agent WHATWG HTML §15. |
+| **Fase 3: Motor de Layout (Box Tree, Bloques Anónimos §9.2.1.1, BFC e IFC)** | `[██████████] 100%` | **COMPLETO** | 30/30 tests en `crates/layout` | Box Tree con supresión de `display: none`, envoltura de bloques anónimos, BFC (anchos/alturas automáticos, márgenes centrados) e Inline Formatting Context (IFC) completo: división voraz de líneas, métricas de fuente y strut CSS 2.1 §10.8, alineación horizontal (`text-align`), alineación vertical exhaustiva (`vertical-align: baseline, middle, top, bottom, sub, super, text-top, text-bottom, length`), wrap en guiones (`-`) / soft hyphens (`\u{00AD}`) y fragmentación de cajas en línea con bordes exteriores. |
+| **Fase 4: Display Lists & Rasterización 2D** | `[░░░░░░░░░░] 0%` | *En Planificación* | — | Próxima fase: Generación de listas de dibujo desacopladas (`DrawRect`, `DrawText`, `FillColor`) y rasterizador 2D. |
 | **Fase 5: Red & Fetch Pipeline** | `[░░░░░░░░░░] 0%` | *Planificada* | — | Transporte HTTP/TLS y pipeline de recursos según WHATWG Fetch. |
 | **Fase 6: Integración JS & DOM Bindings** | `[░░░░░░░░░░] 0%` | *Planificada* | — | Enlaces e integración de ejecución de scripts (`document.write`, DOM bindings). |
 | **Fase 7: Ventana OS & Shell** | `[░░░░░░░░░░] 0%` | *Planificada* | — | Creación de ventana de SO, gestión de eventos y bucle principal de renderizado. |

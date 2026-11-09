@@ -6,6 +6,7 @@
 pub mod block;
 pub mod box_tree;
 pub mod geometry;
+pub mod inline;
 pub mod tree_builder;
 
 use std::collections::HashMap;
@@ -16,6 +17,9 @@ use dom::{Document, NodeId};
 pub use block::layout_block;
 pub use box_tree::{BoxType, LayoutBox};
 pub use geometry::{Dimensions, EdgeSizes, Rect};
+pub use inline::{
+    DefaultTextMeasurer, FontMetrics, TextMeasurer, layout_inline_formatting_context,
+};
 pub use tree_builder::build_layout_tree;
 
 /// Completely lays out a DOM document against a viewport rectangle.
@@ -45,40 +49,15 @@ pub fn layout_document(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use css::{BoxSizing, Color, Display, FontStyle, Length, Position, RectEdges, TextAlign};
+    use css::{Display, Length};
     use dom::{Document, Namespace};
 
     fn make_style(display: Display, width: Length, height: Length) -> ComputedStyle {
-        ComputedStyle {
-            display,
-            position: Position::Static,
-            box_sizing: BoxSizing::ContentBox,
-            top: Length::Auto,
-            right: Length::Auto,
-            bottom: Length::Auto,
-            left: Length::Auto,
-            z_index: None,
-            width,
-            height,
-            min_width: Length::Auto,
-            max_width: Length::Auto,
-            min_height: Length::Auto,
-            max_height: Length::Auto,
-            margin: RectEdges::all(Length::ZERO),
-            padding: RectEdges::all(Length::ZERO),
-            border_width: RectEdges::all(0.0),
-            border_color: RectEdges::all(Color::BLACK),
-            border_style: RectEdges::all(css::BorderStyle::None),
-            color: Color::BLACK,
-            background_color: Color::TRANSPARENT,
-            font_size: 16.0,
-            font_weight: 400,
-            font_style: FontStyle::Normal,
-            font_family: "sans-serif".to_string(),
-            line_height: None,
-            text_align: TextAlign::Left,
-            opacity: 1.0,
-        }
+        let mut s = ComputedStyle::initial();
+        s.display = display;
+        s.width = width;
+        s.height = height;
+        s
     }
 
     #[test]

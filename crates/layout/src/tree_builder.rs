@@ -27,7 +27,7 @@ pub fn build_layout_tree(
     }
 
     let root_node_id = root_el_id?;
-    build_box_for_node(doc, root_node_id, styles)
+    build_box_for_node(doc, root_node_id, styles, None)
 }
 
 /// Recursively builds a layout box for a DOM node.
@@ -35,6 +35,7 @@ fn build_box_for_node(
     doc: &Document,
     node_id: NodeId,
     styles: &HashMap<NodeId, ComputedStyle>,
+    parent_style: Option<&ComputedStyle>,
 ) -> Option<LayoutBox> {
     let node = doc.node(node_id);
     match &node.kind {
@@ -59,14 +60,14 @@ fn build_box_for_node(
             let mut raw_children = Vec::new();
             let mut curr = node.first_child;
             while let Some(child_id) = curr {
-                if let Some(child_box) = build_box_for_node(doc, child_id, styles) {
+                if let Some(child_box) = build_box_for_node(doc, child_id, styles, Some(style)) {
                     raw_children.push(child_box);
                 }
                 curr = doc.node(child_id).next_sibling;
             }
 
             let children = if matches!(box_type, BoxType::BlockNode(_)) {
-                normalize_block_children(raw_children)
+                normalize_block_children(raw_children, Some(style))
             } else {
                 raw_children
             };
@@ -79,13 +80,23 @@ fn build_box_for_node(
             })
         }
         NodeKind::Text(txt) => {
-            // Discard pure whitespace text nodes that are empty
-            let trimmed = txt.trim_matches(|c: char| c == '\r' || c == '\n' || c == '\t');
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(LayoutBox::new(BoxType::TextNode(txt.clone()), None))
+            let is_pre = parent_style.is_some_and(|s| {
+                matches!(
+                    s.white_space,
+                    css::WhiteSpace::Pre | css::WhiteSpace::PreWrap
+                )
+            });
+            if !is_pre {
+                // Discard pure whitespace text nodes that are empty
+                let trimmed = txt.trim_matches(|c: char| c == '\r' || c == '\n' || c == '\t');
+                if trimmed.is_empty() {
+                    return None;
+                }
             }
+            Some(LayoutBox::new(
+                BoxType::TextNode(txt.clone()),
+                parent_style.cloned(),
+            ))
         }
         _ => None,
     }
@@ -95,7 +106,10 @@ fn build_box_for_node(
 ///
 /// If a block container has both inline-level and block-level children, contiguous runs
 /// of inline-level children are wrapped into an [`BoxType::AnonymousBlock`] box.
-fn normalize_block_children(children: Vec<LayoutBox>) -> Vec<LayoutBox> {
+fn normalize_block_children(
+    children: Vec<LayoutBox>,
+    parent_style: Option<&ComputedStyle>,
+) -> Vec<LayoutBox> {
     let has_block = children.iter().any(|c| c.is_block());
     let has_inline = children.iter().any(|c| c.is_inline());
 
@@ -110,7 +124,7 @@ fn normalize_block_children(children: Vec<LayoutBox>) -> Vec<LayoutBox> {
     for child in children {
         if child.is_block() {
             if !current_inline_run.is_empty() {
-                let mut anon = LayoutBox::new(BoxType::AnonymousBlock, None);
+                let mut anon = LayoutBox::new(BoxType::AnonymousBlock, parent_style.cloned());
                 anon.children = std::mem::take(&mut current_inline_run);
                 normalized.push(anon);
             }
@@ -121,7 +135,7 @@ fn normalize_block_children(children: Vec<LayoutBox>) -> Vec<LayoutBox> {
     }
 
     if !current_inline_run.is_empty() {
-        let mut anon = LayoutBox::new(BoxType::AnonymousBlock, None);
+        let mut anon = LayoutBox::new(BoxType::AnonymousBlock, parent_style.cloned());
         anon.children = current_inline_run;
         normalized.push(anon);
     }

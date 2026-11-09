@@ -66,6 +66,7 @@ p {
     margin-block: 1em;
 }
 pre {
+    white-space: pre;
     font-family: monospace;
     margin-block: 1em;
 }

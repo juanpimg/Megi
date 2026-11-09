@@ -21,7 +21,7 @@ pub use component_value::{ComponentValue, FunctionCall, SimpleBlock};
 pub use parser::{TokenStream, consume_declaration, parse_list_of_declarations, parse_stylesheet};
 pub use properties::{
     BorderStyle, BoxSizing, Color, ComputedStyle, Display, FontStyle, Length, Position, RectEdges,
-    TextAlign,
+    TextAlign, VerticalAlign, WhiteSpace,
 };
 pub use rule::{AtRule, Declaration, Rule, StyleRule, Stylesheet};
 pub use selector::{
@@ -286,5 +286,66 @@ mod tests {
         assert_eq!(p_style.font_family, "Arial");
         // Paragraph from UA has display: block
         assert_eq!(p_style.display, Display::Block);
+    }
+
+    #[test]
+    fn test_white_space_and_vertical_align() {
+        let mut doc = Document::new();
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        let pre = doc.create_element(Namespace::Html, "pre", vec![]);
+        let span = doc.create_element(Namespace::Html, "span", vec![]);
+        let sup = doc.create_element(Namespace::Html, "span", vec![]);
+        doc.append_child(doc.root(), body);
+        doc.append_child(body, pre);
+        doc.append_child(pre, span);
+        doc.append_child(body, sup);
+
+        let author_css = "
+            body { white-space: nowrap; }
+            span.custom { vertical-align: 5px; }
+            span.super { vertical-align: super; }
+        ";
+        let styles = resolve_document_styles(&doc, Some(author_css));
+
+        let body_style = styles.get(&body).expect("body style");
+        assert_eq!(body_style.white_space, WhiteSpace::Nowrap);
+
+        // Pre has UA rule: white-space: pre ! (overrides inherited nowrap because UA/author cascade)
+        // Wait, pre has UA rule white-space: pre; author rule is body { white-space: nowrap },
+        // Author rule on body inherits to pre, BUT UA rule on pre is directly targeted at pre!
+        let pre_style = styles.get(&pre).expect("pre style");
+        assert_eq!(pre_style.white_space, WhiteSpace::Pre);
+        assert_eq!(pre_style.font_family, "monospace");
+
+        // Span inside pre inherits white-space: pre from pre
+        let span_style = styles.get(&span).expect("span style");
+        assert_eq!(span_style.white_space, WhiteSpace::Pre);
+
+        // Test VerticalAlign parsing
+        assert_eq!(
+            VerticalAlign::parse("baseline"),
+            Some(VerticalAlign::Baseline)
+        );
+        assert_eq!(VerticalAlign::parse("middle"), Some(VerticalAlign::Middle));
+        assert_eq!(VerticalAlign::parse("top"), Some(VerticalAlign::Top));
+        assert_eq!(VerticalAlign::parse("bottom"), Some(VerticalAlign::Bottom));
+        assert_eq!(VerticalAlign::parse("sub"), Some(VerticalAlign::Sub));
+        assert_eq!(VerticalAlign::parse("super"), Some(VerticalAlign::Super));
+        assert_eq!(
+            VerticalAlign::parse("text-top"),
+            Some(VerticalAlign::TextTop)
+        );
+        assert_eq!(
+            VerticalAlign::parse("text-bottom"),
+            Some(VerticalAlign::TextBottom)
+        );
+        assert_eq!(
+            VerticalAlign::parse("12px"),
+            Some(VerticalAlign::Length(12.0))
+        );
+        assert_eq!(
+            VerticalAlign::parse("-4px"),
+            Some(VerticalAlign::Length(-4.0))
+        );
     }
 }

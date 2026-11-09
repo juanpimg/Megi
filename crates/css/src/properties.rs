@@ -323,6 +323,70 @@ impl TextAlign {
     }
 }
 
+/// CSS `white-space` property.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum WhiteSpace {
+    #[default]
+    Normal,
+    Nowrap,
+    Pre,
+    PreWrap,
+    PreLine,
+}
+
+impl WhiteSpace {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "normal" => Some(Self::Normal),
+            "nowrap" => Some(Self::Nowrap),
+            "pre" => Some(Self::Pre),
+            "pre-wrap" => Some(Self::PreWrap),
+            "pre-line" => Some(Self::PreLine),
+            _ => None,
+        }
+    }
+}
+
+/// CSS `vertical-align` property.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub enum VerticalAlign {
+    #[default]
+    Baseline,
+    Middle,
+    Top,
+    Bottom,
+    Sub,
+    Super,
+    TextTop,
+    TextBottom,
+    Length(f32),
+}
+
+impl VerticalAlign {
+    pub fn parse(s: &str) -> Option<Self> {
+        let s = s.trim().to_ascii_lowercase();
+        match s.as_str() {
+            "baseline" => Some(Self::Baseline),
+            "middle" => Some(Self::Middle),
+            "top" => Some(Self::Top),
+            "bottom" => Some(Self::Bottom),
+            "sub" => Some(Self::Sub),
+            "super" => Some(Self::Super),
+            "text-top" => Some(Self::TextTop),
+            "text-bottom" => Some(Self::TextBottom),
+            other => {
+                if let Some(val) = other.strip_suffix("px") {
+                    val.trim().parse::<f32>().ok().map(Self::Length)
+                } else if let Ok(val) = other.parse::<f32>() {
+                    Some(Self::Length(val))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
 /// CSS `font-style` property.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum FontStyle {
@@ -436,6 +500,8 @@ pub struct ComputedStyle {
     pub font_family: String,
     pub line_height: Option<f32>,
     pub text_align: TextAlign,
+    pub white_space: WhiteSpace,
+    pub vertical_align: VerticalAlign,
 
     // Visibility
     pub opacity: f32,
@@ -482,6 +548,8 @@ impl ComputedStyle {
             font_family: "sans-serif".to_string(),
             line_height: None,
             text_align: TextAlign::Left,
+            white_space: WhiteSpace::Normal,
+            vertical_align: VerticalAlign::Baseline,
 
             opacity: 1.0,
         }
@@ -543,7 +611,19 @@ impl ComputedStyle {
             parent.and_then(|p| p.line_height)
         };
 
+        let white_space = if let Some(decl) = cascaded.get("white-space") {
+            WhiteSpace::parse(&decl.raw_value)
+                .unwrap_or_else(|| parent.map_or(WhiteSpace::Normal, |p| p.white_space))
+        } else {
+            parent.map_or(WhiteSpace::Normal, |p| p.white_space)
+        };
+
         // 3. Non-inherited properties
+        let vertical_align = cascaded
+            .get("vertical-align")
+            .and_then(|d| VerticalAlign::parse(&d.raw_value))
+            .unwrap_or(VerticalAlign::Baseline);
+
         let display = cascaded
             .get("display")
             .and_then(|d| Display::parse(&d.raw_value))
@@ -664,8 +744,22 @@ impl ComputedStyle {
             font_family,
             line_height,
             text_align,
+            white_space,
+            vertical_align,
             opacity,
         }
+    }
+
+    /// Inherits properties from a parent style according to CSS cascading rules.
+    pub fn inherit_from(&mut self, parent: &ComputedStyle) {
+        self.color = parent.color;
+        self.font_size = parent.font_size;
+        self.font_weight = parent.font_weight;
+        self.font_style = parent.font_style;
+        self.font_family = parent.font_family.clone();
+        self.line_height = parent.line_height;
+        self.text_align = parent.text_align;
+        self.white_space = parent.white_space;
     }
 
     fn compute_font_size(val: &str, parent_size: f32, root_size: f32) -> f32 {
