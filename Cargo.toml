@@ -5,6 +5,7 @@ members = [
     "crates/html",
     "crates/css",
     "crates/layout",
+    "crates/fonts",
     "crates/paint",
     "crates/test_harness",
 ]
@@ -12,7 +13,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "MIT OR Apache-2.0"
 authors = ["Megi Engine Contributors"]
 repository = "https://github.com/juanpimg/Megi"
@@ -22,7 +23,13 @@ dom = { path = "crates/dom" }
 html = { path = "crates/html" }
 css = { path = "crates/css" }
 layout = { path = "crates/layout" }
+fonts = { path = "crates/fonts" }
 paint = { path = "crates/paint" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
+# Low-level font dependencies authorized by docs/ARCHITECTURE.md §3.1.
+ab_glyph = "0.2"
+fontdb = "0.23"
+rustybuzz = "0.20"
+ttf-parser = "0.25"

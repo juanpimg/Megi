@@ -1,0 +1,15 @@
+[package]
+name = "fonts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Megi Engine — Font discovery, metrics, shaping and glyph rasterization"
+
+[dependencies]
+ab_glyph.workspace = true
+fontdb.workspace = true
+rustybuzz.workspace = true
+ttf-parser.workspace = true
