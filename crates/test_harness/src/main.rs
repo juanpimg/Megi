@@ -97,5 +97,27 @@ fn main() {
             }
         }
     }
-    println!("Tree Construction Total: {tree_passed_total} / {tree_runs_total} mode-runs passed");
+    println!("Tree Construction Total: {tree_passed_total} / {tree_runs_total} mode-runs passed\n");
+
+    let wpt_css_dir = test_harness::wpt_css_syntax_dir();
+    if wpt_css_dir.exists() {
+        println!("--- WPT CSS Syntax Suites (tests/wpt/css/css-syntax/*.html) ---");
+        let mut css_results = Vec::new();
+        css_results
+            .extend(test_harness::css_harness::run_wpt_declarations_trim_whitespace(&wpt_css_dir));
+        css_results.extend(test_harness::css_harness::run_wpt_input_preprocessing());
+        css_results.extend(test_harness::css_harness::run_wpt_anb_parsing());
+
+        let css_passed = css_results.iter().filter(|r| r.passed).count();
+        let css_total = css_results.len();
+
+        for r in &css_results {
+            let status = if r.passed { "PASS" } else { "FAIL" };
+            println!("  [{status}] {}", r.name);
+            if !r.passed && verbose {
+                println!("    expected: {}\n    actual:   {}", r.expected, r.actual);
+            }
+        }
+        println!("CSS Syntax Total: {css_passed} / {css_total} tests passed\n");
+    }
 }

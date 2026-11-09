@@ -4,6 +4,7 @@
 //! - `html5lib-tests/tokenizer/*.test` JSON fixtures ([`tokenizer_harness`]).
 //! - `html5lib-tests/tree-construction/*.dat` and `.json` fixtures ([`tree_harness`]).
 
+pub mod css_harness;
 pub mod tokenizer_harness;
 pub mod tree_harness;
 
@@ -32,4 +33,9 @@ pub fn tree_construction_dat_dir() -> PathBuf {
 /// Returns the path to `tests/html5lib-tests/tree-construction-json`.
 pub fn tree_construction_json_dir() -> PathBuf {
     workspace_root().join("tests/html5lib-tests/tree-construction-json")
+}
+
+/// Returns the path to `tests/wpt/css/css-syntax`.
+pub fn wpt_css_syntax_dir() -> PathBuf {
+    workspace_root().join("tests/wpt/css/css-syntax")
 }

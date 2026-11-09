@@ -214,6 +214,15 @@ impl Node {
         }
     }
 
+    /// Returns a reference to the text string if this node is a `Text` node.
+    #[inline]
+    pub fn as_text(&self) -> Option<&str> {
+        match &self.kind {
+            NodeKind::Text(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+
     /// Returns a mutable reference to [`ElementData`] if this node is an `Element`.
     #[inline]
     pub fn as_element_mut(&mut self) -> Option<&mut ElementData> {

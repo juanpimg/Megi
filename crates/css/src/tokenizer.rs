@@ -35,6 +35,36 @@ pub fn preprocess_css_input(input: &str) -> Vec<char> {
     out
 }
 
+/// Preprocesses arbitrary Unicode code points per W3C CSS Syntax Level 3 §3.3.
+/// Allows direct verification of surrogate code points (`0xD800..=0xDFFF`) as tested in W3C WPT.
+pub fn preprocess_css_codepoints(codepoints: &[u32]) -> Vec<char> {
+    let mut out = Vec::with_capacity(codepoints.len());
+    let mut idx = 0;
+    while idx < codepoints.len() {
+        let cp = codepoints[idx];
+        match cp {
+            0x0D => {
+                if idx + 1 < codepoints.len() && codepoints[idx + 1] == 0x0A {
+                    idx += 1;
+                }
+                out.push('\n');
+            }
+            0x0C => out.push('\n'),
+            0x00 => out.push('\u{FFFD}'),
+            0xD800..=0xDFFF => out.push('\u{FFFD}'),
+            valid => {
+                if let Some(ch) = char::from_u32(valid) {
+                    out.push(ch);
+                } else {
+                    out.push('\u{FFFD}');
+                }
+            }
+        }
+        idx += 1;
+    }
+    out
+}
+
 #[inline]
 pub fn is_whitespace(ch: char) -> bool {
     matches!(ch, '\n' | '\t' | ' ')

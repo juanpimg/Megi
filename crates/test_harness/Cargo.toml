@@ -9,6 +9,7 @@ repository.workspace = true
 description = "Megi Engine — Closed-Loop Conformance Harness for html5lib-tests and WPT HTML Parsing"
 
 [dependencies]
+css.workspace = true
 dom.workspace = true
 html.workspace = true
 serde.workspace = true

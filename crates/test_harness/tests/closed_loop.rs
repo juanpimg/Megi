@@ -152,3 +152,45 @@ fn test_closed_loop_tree_construction_suites_100_percent_green() {
         );
     }
 }
+
+#[test]
+fn test_closed_loop_wpt_css_syntax_suites() {
+    let wpt_css_dir = test_harness::wpt_css_syntax_dir();
+    if !wpt_css_dir.exists() {
+        return;
+    }
+
+    // 1. Declarations trim whitespace
+    let decl_results =
+        test_harness::css_harness::run_wpt_declarations_trim_whitespace(&wpt_css_dir);
+    assert_eq!(decl_results.len(), 9);
+    for r in &decl_results {
+        assert!(
+            r.passed,
+            "WPT test failed: {} (expected: {}, actual: {})",
+            r.name, r.expected, r.actual
+        );
+    }
+
+    // 2. Input preprocessing
+    let prep_results = test_harness::css_harness::run_wpt_input_preprocessing();
+    assert_eq!(prep_results.len(), 13);
+    for r in &prep_results {
+        assert!(
+            r.passed,
+            "WPT test failed: {} (expected: {}, actual: {})",
+            r.name, r.expected, r.actual
+        );
+    }
+
+    // 3. An+B parsing
+    let anb_results = test_harness::css_harness::run_wpt_anb_parsing();
+    assert_eq!(anb_results.len(), 8);
+    for r in &anb_results {
+        assert!(
+            r.passed,
+            "WPT test failed: {} (expected: {}, actual: {})",
+            r.name, r.expected, r.actual
+        );
+    }
+}

@@ -29,7 +29,7 @@ pub use selector::{
     PseudoClass, SelectorList, Specificity, parse_selectors,
 };
 pub use token::{CssToken, HashType, NumberType};
-pub use tokenizer::{CssTokenizer, preprocess_css_input, tokenize};
+pub use tokenizer::{CssTokenizer, preprocess_css_codepoints, preprocess_css_input, tokenize};
 pub use user_agent::{
     USER_AGENT_STYLESHEET, create_user_agent_style_collection, parse_user_agent_stylesheet,
 };

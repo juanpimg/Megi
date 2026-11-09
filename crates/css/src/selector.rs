@@ -114,6 +114,44 @@ impl AnPlusB {
     }
 }
 
+/// Parses an An+B formula according to W3C CSS Syntax Level 3 §3.3 & Selectors Level 4 §15.
+pub fn parse_an_plus_b(s: &str) -> Option<AnPlusB> {
+    let s = s.trim();
+    if s.is_empty() {
+        return None;
+    }
+    if s.eq_ignore_ascii_case("odd") {
+        return Some(AnPlusB { a: 2, b: 1 });
+    }
+    if s.eq_ignore_ascii_case("even") {
+        return Some(AnPlusB { a: 2, b: 0 });
+    }
+
+    // Integer only `B`
+    if let Ok(b) = s.parse::<i32>() {
+        return Some(AnPlusB { a: 0, b });
+    }
+
+    // Must contain 'n' or 'N'
+    let n_idx = s.find(['n', 'N'])?;
+    let (prefix, suffix) = (&s[..n_idx], &s[n_idx + 1..]);
+
+    let a = match prefix.trim() {
+        "" | "+" => 1,
+        "-" => -1,
+        num_str => num_str.parse::<i32>().ok()?,
+    };
+
+    let suffix_trimmed = suffix.replace(' ', "");
+    let b = if suffix_trimmed.is_empty() {
+        0
+    } else {
+        suffix_trimmed.parse::<i32>().ok()?
+    };
+
+    Some(AnPlusB { a, b })
+}
+
 /// Supported pseudo-classes in Selectors Level 4.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PseudoClass {
@@ -547,6 +585,15 @@ fn tokenize_selector_parts(input: &str) -> Vec<String> {
                     }
                 }
             }
+            '(' => {
+                current.push('(');
+                for inner in chars.by_ref() {
+                    current.push(inner);
+                    if inner == ')' {
+                        break;
+                    }
+                }
+            }
             other => current.push(other),
         }
     }
@@ -619,12 +666,31 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
                 {
                     pseudo.push(chars.next().unwrap());
                 }
+                let mut arg = None;
+                if chars.peek() == Some(&'(') {
+                    chars.next();
+                    let mut arg_str = String::new();
+                    for inner in chars.by_ref() {
+                        if inner == ')' {
+                            break;
+                        }
+                        arg_str.push(inner);
+                    }
+                    arg = Some(arg_str);
+                }
                 match pseudo.to_ascii_lowercase().as_str() {
                     "first-child" => compound.pseudo_classes.push(PseudoClass::FirstChild),
                     "last-child" => compound.pseudo_classes.push(PseudoClass::LastChild),
                     "only-child" => compound.pseudo_classes.push(PseudoClass::OnlyChild),
                     "empty" => compound.pseudo_classes.push(PseudoClass::Empty),
                     "root" => compound.pseudo_classes.push(PseudoClass::Root),
+                    "nth-child" => {
+                        if let Some(arg_str) = arg {
+                            if let Some(anb) = parse_an_plus_b(&arg_str) {
+                                compound.pseudo_classes.push(PseudoClass::NthChild(anb));
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
