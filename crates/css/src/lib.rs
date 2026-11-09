@@ -3,22 +3,36 @@
 //! Foundational types, W3C CSS Syntax Module Level 3 tokenizer & parser, and Selectors Level 4
 //! matching engine operating over [`dom::Document`] and [`dom::NodeId`].
 
+pub mod cascade;
 pub mod component_value;
 pub mod parser;
+pub mod properties;
 pub mod rule;
 pub mod selector;
 pub mod token;
 pub mod tokenizer;
+pub mod user_agent;
 
+pub use cascade::{
+    CascadeOriginImportance, CompiledRule, MatchedDeclaration, Origin, StyleCollection,
+    resolve_cascaded_properties, resolve_document_styles,
+};
 pub use component_value::{ComponentValue, FunctionCall, SimpleBlock};
 pub use parser::{TokenStream, consume_declaration, parse_list_of_declarations, parse_stylesheet};
+pub use properties::{
+    BorderStyle, BoxSizing, Color, ComputedStyle, Display, FontStyle, Length, Position, RectEdges,
+    TextAlign,
+};
 pub use rule::{AtRule, Declaration, Rule, StyleRule, Stylesheet};
 pub use selector::{
     AnPlusB, AttrOperator, AttributeSelector, Combinator, ComplexSelector, CompoundSelector,
-    PseudoClass, SelectorList, parse_selectors,
+    PseudoClass, SelectorList, Specificity, parse_selectors,
 };
 pub use token::{CssToken, HashType, NumberType};
 pub use tokenizer::{CssTokenizer, preprocess_css_input, tokenize};
+pub use user_agent::{
+    USER_AGENT_STYLESHEET, create_user_agent_style_collection, parse_user_agent_stylesheet,
+};
 
 /// A basic compound selector (tag name, `#id`, `.class`) for matching DOM elements.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -192,5 +206,85 @@ mod tests {
 
         let empty_sel = parse_selectors("li:empty");
         assert!(empty_sel.matches(&doc, first));
+    }
+
+    #[test]
+    fn test_selector_specificity_calculation() {
+        let sel_id = parse_selectors("#main");
+        assert_eq!(sel_id.max_specificity(), Specificity::new(1, 0, 0));
+
+        let sel_class = parse_selectors(".container.active");
+        assert_eq!(sel_class.max_specificity(), Specificity::new(0, 2, 0));
+
+        let sel_complex = parse_selectors("div#main > ul.nav li:first-child[data-role]");
+        // div#main: 1 id, 1 tag = (1, 0, 1)
+        // ul.nav: 1 class, 1 tag = (0, 1, 1)
+        // li:first-child[data-role]: 1 pseudo, 1 attr, 1 tag = (0, 2, 1)
+        // Total: a = 1, b = 3, c = 3
+        assert_eq!(sel_complex.max_specificity(), Specificity::new(1, 3, 3));
+
+        // Order check
+        assert!(Specificity::new(1, 0, 0) > Specificity::new(0, 10, 10));
+        assert!(Specificity::new(0, 2, 0) > Specificity::new(0, 1, 5));
+    }
+
+    #[test]
+    fn test_cascade_origin_and_importance() {
+        let mut doc = Document::new();
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        let h1 = doc.create_element(
+            Namespace::Html,
+            "h1",
+            vec![
+                Attribute::new("id", "heading"),
+                Attribute::new("class", "title main"),
+                Attribute::new("style", "color: red;"),
+            ],
+        );
+        doc.append_child(doc.root(), body);
+        doc.append_child(body, h1);
+
+        let author_css = r#"
+            h1 { color: black; font-size: 20px; }
+            .title { color: green; font-size: 24px; }
+            #heading { color: orange; font-size: 28px; }
+            p { color: purple !important; }
+        "#;
+
+        let styles = resolve_document_styles(&doc, Some(author_css));
+        let h1_style = styles.get(&h1).expect("h1 computed style");
+
+        // Specificity: #heading (1,0,0) beats .title (0,1,0) and h1 (0,0,1) for font-size
+        assert_eq!(h1_style.font_size, 28.0);
+        // Inline style `color: red` beats author stylesheet `color: orange`
+        assert_eq!(h1_style.color, Color::RED);
+        // From User-Agent stylesheet: h1 has display: block and font-weight: 700
+        assert_eq!(h1_style.display, Display::Block);
+        assert_eq!(h1_style.font_weight, 700);
+    }
+
+    #[test]
+    fn test_document_style_resolution_and_inheritance() {
+        let mut doc = Document::new();
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        let p = doc.create_element(Namespace::Html, "p", vec![]);
+        doc.append_child(doc.root(), body);
+        doc.append_child(body, p);
+
+        let author_css = "body { color: rgb(0, 128, 0); font-family: Arial; }";
+        let styles = resolve_document_styles(&doc, Some(author_css));
+
+        let body_style = styles.get(&body).expect("body computed style");
+        let p_style = styles.get(&p).expect("p computed style");
+
+        // Body defaults from User-Agent: margin 8px
+        assert_eq!(body_style.margin.top, Length::Px(8.0));
+        assert_eq!(body_style.margin.left, Length::Px(8.0));
+
+        // Paragraph inherits color and font-family from body
+        assert_eq!(p_style.color, Color::new(0, 128, 0, 255));
+        assert_eq!(p_style.font_family, "Arial");
+        // Paragraph from UA has display: block
+        assert_eq!(p_style.display, Display::Block);
     }
 }

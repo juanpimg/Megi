@@ -196,6 +196,56 @@ impl PseudoClass {
     }
 }
 
+/// Specificity of a selector per W3C Selectors Level 4 §16.
+/// Represented as a 3-tuple `(a, b, c)`:
+/// - `a`: ID selectors (`#id`)
+/// - `b`: class selectors (`.class`), attribute selectors (`[attr]`), and pseudo-classes (`:first-child`)
+/// - `c`: type selectors (`div`) and pseudo-elements (`::before`)
+///
+/// Universal selector (`*`) and combinators (` `, `>`, `+`, `~`) contribute zero.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Specificity {
+    pub a: u32,
+    pub b: u32,
+    pub c: u32,
+}
+
+impl Specificity {
+    pub const ZERO: Self = Self { a: 0, b: 0, c: 0 };
+
+    pub const fn new(a: u32, b: u32, c: u32) -> Self {
+        Self { a, b, c }
+    }
+}
+
+impl std::ops::Add for Specificity {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self {
+        Self {
+            a: self.a + rhs.a,
+            b: self.b + rhs.b,
+            c: self.c + rhs.c,
+        }
+    }
+}
+
+impl std::ops::AddAssign for Specificity {
+    #[inline]
+    fn add_assign(&mut self, rhs: Self) {
+        self.a += rhs.a;
+        self.b += rhs.b;
+        self.c += rhs.c;
+    }
+}
+
+impl std::fmt::Display for Specificity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {}, {})", self.a, self.b, self.c)
+    }
+}
+
 /// A compound selector without combinators (e.g. `div#main.active[data-kind]:first-child`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CompoundSelector {
@@ -207,6 +257,18 @@ pub struct CompoundSelector {
 }
 
 impl CompoundSelector {
+    /// Calculates the specificity of this compound selector according to Selectors Level 4 §16.
+    pub fn specificity(&self) -> Specificity {
+        let a = if self.id.is_some() { 1 } else { 0 };
+        let b = (self.classes.len() + self.attributes.len() + self.pseudo_classes.len()) as u32;
+        let c = if self.tag_name.as_deref().is_some_and(|t| t != "*") {
+            1
+        } else {
+            0
+        };
+        Specificity::new(a, b, c)
+    }
+
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
         let Some(el) = doc.node(node_id).as_element() else {
             return false;
@@ -293,6 +355,15 @@ impl ComplexSelector {
         self.matches_from_right(doc, node_id, last_idx)
     }
 
+    /// Calculates the total specificity of this complex selector chain (§16).
+    pub fn specificity(&self) -> Specificity {
+        let mut spec = Specificity::ZERO;
+        for (compound, _) in &self.compounds {
+            spec += compound.specificity();
+        }
+        spec
+    }
+
     fn matches_from_right(&self, doc: &Document, current_node: NodeId, index: usize) -> bool {
         if index == 0 {
             return true;
@@ -367,6 +438,25 @@ pub struct SelectorList {
 impl SelectorList {
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
         self.selectors.iter().any(|sel| sel.matches(doc, node_id))
+    }
+
+    /// If this selector list matches the given element, returns the maximum specificity
+    /// among all the complex selectors in the list that matched.
+    pub fn matching_specificity(&self, doc: &Document, node_id: NodeId) -> Option<Specificity> {
+        self.selectors
+            .iter()
+            .filter(|sel| sel.matches(doc, node_id))
+            .map(|sel| sel.specificity())
+            .max()
+    }
+
+    /// Calculates the maximum specificity among all selectors in this list.
+    pub fn max_specificity(&self) -> Specificity {
+        self.selectors
+            .iter()
+            .map(|s| s.specificity())
+            .max()
+            .unwrap_or(Specificity::ZERO)
     }
 }
 
