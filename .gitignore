@@ -11,8 +11,13 @@
 /.cache/
 .cache/
 
-# Sparse WPT checkout (kept locally for inspection; html5lib-tests is tracked in tests/html5lib-tests)
-/tests/wpt/
+# Sparse WPT checkout (kept locally for inspection; html5lib-tests is tracked in tests/html5lib-tests).
+# Everything under tests/wpt/ stays untracked EXCEPT the vendored CSS Syntax conformance fixtures,
+# which are needed for `cargo test -p test_harness` / `test_harness --summary` to run offline.
+/tests/wpt/*
+!/tests/wpt/css/
+/tests/wpt/css/*
+!/tests/wpt/css/css-syntax/
 /tests/html5lib-tests/.git/
 
 # Python bytecode & virtual environments

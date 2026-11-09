@@ -3,12 +3,67 @@
 //! Provides the closed-loop automated conformance runner for:
 //! - `html5lib-tests/tokenizer/*.test` JSON fixtures ([`tokenizer_harness`]).
 //! - `html5lib-tests/tree-construction/*.dat` and `.json` fixtures ([`tree_harness`]).
+//! - Vendored WPT CSS Syntax fixtures in `tests/wpt/css/css-syntax` ([`css_harness`]).
+//!
+//! ## Conformance gate
+//!
+//! The constants and allowlists below are the **single source of truth** for the gate shared by
+//! the `test_harness` CLI (`--summary`) and the `closed_loop` integration tests. Every failure not
+//! listed here is a regression and must fail both `cargo test -p test_harness` and
+//! `tools/dev.sh all`.
 
 pub mod css_harness;
 pub mod tokenizer_harness;
 pub mod tree_harness;
 
 use std::path::{Path, PathBuf};
+
+/// Locations of the tracked `html5lib-tests` fixtures.
+pub const TOKENIZER_SUITE_COUNT: usize = 14;
+/// Total `(case, initial state)` runs across all 14 tokenizer suites.
+pub const TOKENIZER_EXPECTED_RUNS: usize = 7050;
+/// Passing tokenizer runs: 7046 across the 13 standard suites + 1/4 `xmlViolation.test`.
+pub const TOKENIZER_EXPECTED_PASSED: usize = 7047;
+/// Known tokenizer conformance gap: `xmlViolation.test` exercises the XML-infoset coercion of
+/// HTML §13.2.9, which Megi does not implement yet (3/4 failures: U+FFFF, U+000C, `--`).
+pub const KNOWN_TOKENIZER_FAILURES: &[(&str, usize)] = &[("xmlViolation.test", 3)];
+
+/// Number of `tree-construction/*.dat` suites.
+pub const TREE_SUITE_COUNT: usize = 62;
+/// Total mode-runs (case × scripting mode) across all 62 tree-construction suites.
+pub const TREE_EXPECTED_RUNS: usize = 3904;
+/// Passing tree-construction mode-runs.
+pub const TREE_EXPECTED_PASSED: usize = 3898;
+/// Known tree-construction failures: all four `scripted_*` suites are `#script-on` cases that
+/// require a JavaScript engine (DOM mutation APIs / `document.write`), unavailable until Phase 6.
+pub const KNOWN_TREE_FAILURES: &[(&str, usize)] = &[
+    ("scripted_adoption01.dat", 1),
+    ("scripted_ark.dat", 1),
+    ("scripted_foster01.dat", 2),
+    ("scripted_webkit01.dat", 2),
+];
+
+/// Number of CSS Syntax results reported by [`css_harness`] (9 declarations + 13 preprocessing
+/// + 8 An+B).
+pub const CSS_EXPECTED_RESULTS: usize = 30;
+
+/// Expected number of allowed failures for `suite_name` in a known-failure allowlist.
+pub fn allowed_failures(allowlist: &[(&str, usize)], suite_name: &str) -> usize {
+    allowlist
+        .iter()
+        .find(|(name, _)| *name == suite_name)
+        .map(|(_, count)| *count)
+        .unwrap_or(0)
+}
+
+/// Renders a known-failure allowlist as human-readable `name: count` pairs.
+pub fn format_allowlist(allowlist: &[(&str, usize)]) -> String {
+    allowlist
+        .iter()
+        .map(|(name, count)| format!("{name}: {count}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
 /// Locates the workspace root directory containing `tests/html5lib-tests`.
 pub fn workspace_root() -> PathBuf {

@@ -24,14 +24,16 @@ case "$cmd" in
         cargo run -p test_harness -- --summary
         ;;
     all)
-        echo "==> [1/4] Checking formatting..."
+        echo "==> [1/5] Checking formatting..."
         cargo fmt --all -- --check
-        echo "==> [2/4] Running clippy across workspace..."
+        echo "==> [2/5] Running clippy across workspace..."
         cargo clippy --workspace --all-targets -- -D warnings
-        echo "==> [3/4] Running closed-loop workspace tests..."
+        echo "==> [3/5] Running closed-loop workspace tests..."
         cargo test --workspace
-        echo "==> [4/4] Building workspace documentation..."
+        echo "==> [4/5] Building workspace documentation..."
         cargo doc --workspace --no-deps
+        echo "==> [5/5] Running conformance gate (test_harness --summary)..."
+        cargo run -p test_harness -- --summary
         echo "==> All checks passed!"
         ;;
     *)

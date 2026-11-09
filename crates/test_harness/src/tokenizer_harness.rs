@@ -142,26 +142,44 @@ fn str_to_cps(s: &str) -> Vec<u32> {
     s.chars().map(|c| c as u32).collect()
 }
 
+fn missing_token_field(kind: &str, slot: usize) -> String {
+    format!("malformed expected {kind} token: missing/non-string slot {slot}")
+}
+
 /// Parses an expected token array from `test.output` JSON into [`NormalizedToken`].
-pub fn parse_expected_token(val: &Value, double_escaped: bool) -> Option<NormalizedToken> {
-    let arr = val.as_array()?;
-    let kind = arr.first()?.as_str()?;
+///
+/// Returns an error (instead of silently dropping the token) for unknown token kinds or malformed
+/// shapes: an unparsed expectation must fail the suite, never shrink the denominator.
+pub fn parse_expected_token(val: &Value, double_escaped: bool) -> Result<NormalizedToken, String> {
+    let arr = val
+        .as_array()
+        .ok_or_else(|| format!("expected a token array, got {val}"))?;
+    let kind = arr
+        .first()
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("expected a token array starting with a type string, got {val}"))?;
     match kind {
         "DOCTYPE" => {
             let name = arr
-                .get(1)?
+                .get(1)
+                .ok_or_else(|| missing_token_field(kind, 1))?
                 .as_str()
                 .map(|s| decode_test_string(s, double_escaped));
             let public_id = arr
-                .get(2)?
+                .get(2)
+                .ok_or_else(|| missing_token_field(kind, 2))?
                 .as_str()
                 .map(|s| decode_test_string(s, double_escaped));
             let system_id = arr
-                .get(3)?
+                .get(3)
+                .ok_or_else(|| missing_token_field(kind, 3))?
                 .as_str()
                 .map(|s| decode_test_string(s, double_escaped));
-            let correctness = arr.get(4)?.as_bool()?;
-            Some(NormalizedToken::Doctype {
+            let correctness = arr
+                .get(4)
+                .and_then(Value::as_bool)
+                .ok_or_else(|| missing_token_field(kind, 4))?;
+            Ok(NormalizedToken::Doctype {
                 name,
                 public_id,
                 system_id,
@@ -169,43 +187,79 @@ pub fn parse_expected_token(val: &Value, double_escaped: bool) -> Option<Normali
             })
         }
         "StartTag" => {
-            let name = decode_test_string(arr.get(1)?.as_str()?, double_escaped);
-            let attrs_obj = arr.get(2)?.as_object()?;
+            let name = decode_test_string(
+                arr.get(1)
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| missing_token_field(kind, 1))?,
+                double_escaped,
+            );
+            let attrs_obj = arr
+                .get(2)
+                .and_then(Value::as_object)
+                .ok_or_else(|| missing_token_field(kind, 2))?;
             let mut attributes = BTreeMap::new();
             for (k, v) in attrs_obj {
                 let k_cps = decode_test_string(k, double_escaped);
-                let v_cps = decode_test_string(v.as_str()?, double_escaped);
+                let v_cps = decode_test_string(
+                    v.as_str().ok_or_else(|| {
+                        format!(
+                            "malformed expected StartTag attribute {k:?}: value is not a string"
+                        )
+                    })?,
+                    double_escaped,
+                );
                 attributes.insert(k_cps, v_cps);
             }
-            let self_closing = arr.get(3).and_then(|v| v.as_bool()).unwrap_or(false);
-            Some(NormalizedToken::StartTag {
+            // The html5lib-tests format makes `self_closing` optional (absent == false).
+            let self_closing = arr.get(3).and_then(Value::as_bool).unwrap_or(false);
+            Ok(NormalizedToken::StartTag {
                 name,
                 attributes,
                 self_closing,
             })
         }
         "EndTag" => {
-            let name = decode_test_string(arr.get(1)?.as_str()?, double_escaped);
-            Some(NormalizedToken::EndTag { name })
+            let name = decode_test_string(
+                arr.get(1)
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| missing_token_field(kind, 1))?,
+                double_escaped,
+            );
+            Ok(NormalizedToken::EndTag { name })
         }
         "Comment" => {
-            let data = decode_test_string(arr.get(1)?.as_str()?, double_escaped);
-            Some(NormalizedToken::Comment(data))
+            let data = decode_test_string(
+                arr.get(1)
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| missing_token_field(kind, 1))?,
+                double_escaped,
+            );
+            Ok(NormalizedToken::Comment(data))
         }
         "ProcessingInstruction" => {
-            let target = decode_test_string(arr.get(1)?.as_str()?, double_escaped);
+            let target = decode_test_string(
+                arr.get(1)
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| missing_token_field(kind, 1))?,
+                double_escaped,
+            );
             let data = arr
                 .get(2)
-                .and_then(|v| v.as_str())
+                .and_then(Value::as_str)
                 .map(|s| decode_test_string(s, double_escaped))
                 .unwrap_or_default();
-            Some(NormalizedToken::ProcessingInstruction { target, data })
+            Ok(NormalizedToken::ProcessingInstruction { target, data })
         }
         "Character" => {
-            let data = decode_test_string(arr.get(1)?.as_str()?, double_escaped);
-            Some(NormalizedToken::Character(data))
+            let data = decode_test_string(
+                arr.get(1)
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| missing_token_field(kind, 1))?,
+                double_escaped,
+            );
+            Ok(NormalizedToken::Character(data))
         }
-        _ => None,
+        other => Err(format!("unknown expected token type `{other}`")),
     }
 }
 
@@ -284,11 +338,20 @@ pub fn normalize_engine_tokens(tokens: &[Token]) -> Vec<NormalizedToken> {
 }
 
 /// Loads all test cases from a `tokenizer/*.test` JSON file.
+///
+/// Refuses fixtures that define both `tests` and `xmlViolationTests`: the old implementation
+/// silently dropped `tests` in that case.
 pub fn load_tokenizer_test_file(path: &Path) -> Result<(bool, Vec<RawTokenizerCase>), String> {
     let content = std::fs::read_to_string(path)
         .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
     let parsed: RawTokenizerFile = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse JSON in {}: {e}", path.display()))?;
+    if !parsed.xml_violation_tests.is_empty() && !parsed.tests.is_empty() {
+        return Err(format!(
+            "{} defines both `tests` and `xmlViolationTests`; refusing to silently drop one of them",
+            path.display()
+        ));
+    }
     if !parsed.xml_violation_tests.is_empty() {
         Ok((true, parsed.xml_violation_tests))
     } else {
@@ -307,17 +370,30 @@ pub fn run_tokenizer_suite_file(path: &Path) -> Result<Vec<TokenizerRunResult>, 
     let mut results = Vec::new();
 
     for (idx, case) in cases.iter().enumerate() {
+        if case.initial_states.is_empty() {
+            return Err(format!(
+                "{file_name} #{idx} has an empty `initialStates` array; expected at least one state"
+            ));
+        }
         let input_cps = decode_test_string(&case.input, case.double_escaped);
         let expected_raw: Vec<NormalizedToken> = case
             .output
             .iter()
-            .filter_map(|v| parse_expected_token(v, case.double_escaped))
-            .collect();
+            .enumerate()
+            .map(|(token_idx, value)| {
+                parse_expected_token(value, case.double_escaped)
+                    .map_err(|e| format!("{file_name} #{idx} output[{token_idx}]: {e}"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         let expected = coalesce_normalized_tokens(expected_raw);
 
         for state_name in &case.initial_states {
-            let initial_state =
-                TokenizerState::from_test_name(state_name).unwrap_or(TokenizerState::Data);
+            let initial_state = TokenizerState::from_test_name(state_name).ok_or_else(|| {
+                format!(
+                    "{file_name} #{idx} requests unsupported initial state {state_name:?}; \
+                     refusing to silently run it as Data state"
+                )
+            })?;
             let mut tok = Tokenizer::new(
                 &input_cps,
                 TokenizerConfig {
