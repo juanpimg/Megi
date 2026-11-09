@@ -181,6 +181,126 @@ const BLOCK_END_TAG_ELEMENTS: &[&str] = &[
     "ul",
 ];
 
+const QUIRKS_PUBLIC_EXACT: &[&str] = &[
+    "-//w3o//dtd w3 html strict 3.0//en//",
+    "-/w3c/dtd html 4.0 transitional/en",
+    "html",
+];
+
+const QUIRKS_PUBLIC_PREFIXES: &[&str] = &[
+    "+//silmaril//dtd html pro v0r11 19970101//",
+    "-//as//dtd html 3.0 aswedit + extensions//",
+    "-//advasoft ltd//dtd html 3.0 aswedit + extensions//",
+    "-//ietf//dtd html 2.0 level 1//",
+    "-//ietf//dtd html 2.0 level 2//",
+    "-//ietf//dtd html 2.0 strict level 1//",
+    "-//ietf//dtd html 2.0 strict level 2//",
+    "-//ietf//dtd html 2.0 strict//",
+    "-//ietf//dtd html 2.0//",
+    "-//ietf//dtd html 2.1e//",
+    "-//ietf//dtd html 3.0//",
+    "-//ietf//dtd html 3.2 final//",
+    "-//ietf//dtd html 3.2//",
+    "-//ietf//dtd html 3//",
+    "-//ietf//dtd html level 0//",
+    "-//ietf//dtd html level 1//",
+    "-//ietf//dtd html level 2//",
+    "-//ietf//dtd html level 3//",
+    "-//ietf//dtd html strict level 0//",
+    "-//ietf//dtd html strict level 1//",
+    "-//ietf//dtd html strict level 2//",
+    "-//ietf//dtd html strict level 3//",
+    "-//ietf//dtd html strict//",
+    "-//ietf//dtd html//",
+    "-//metrius//dtd metrius presentational//",
+    "-//microsoft//dtd internet explorer 2.0 html strict//",
+    "-//microsoft//dtd internet explorer 2.0 html//",
+    "-//microsoft//dtd internet explorer 2.0 tables//",
+    "-//microsoft//dtd internet explorer 3.0 html strict//",
+    "-//microsoft//dtd internet explorer 3.0 html//",
+    "-//microsoft//dtd internet explorer 3.0 tables//",
+    "-//netscape comm. corp.//dtd html//",
+    "-//netscape comm. corp.//dtd strict html//",
+    "-//o'reilly and associates//dtd html 2.0//",
+    "-//o'reilly and associates//dtd html extended 1.0//",
+    "-//o'reilly and associates//dtd html extended relaxed 1.0//",
+    "-//sq//dtd html 2.0 hotmetal + extensions//",
+    "-//softquad software//dtd hotmetal pro 6.0::19990601::extensions to html 4.0//",
+    "-//softquad//dtd hotmetal pro 4.0::19971010::extensions to html 4.0//",
+    "-//spyglass//dtd html 2.0 extended//",
+    "-//sun microsystems corp.//dtd hotjava html//",
+    "-//sun microsystems corp.//dtd hotjava strict html//",
+    "-//w3c//dtd html 3 1995-03-24//",
+    "-//w3c//dtd html 3.2 draft//",
+    "-//w3c//dtd html 3.2 final//",
+    "-//w3c//dtd html 3.2//",
+    "-//w3c//dtd html 3.2s draft//",
+    "-//w3c//dtd html 4.0 frameset//",
+    "-//w3c//dtd html 4.0 transitional//",
+    "-//w3c//dtd html experimental 19960712//",
+    "-//w3c//dtd html experimental 970421//",
+    "-//w3c//dtd w3 html//",
+    "-//w3o//dtd w3 html 3.0//",
+    "-//webtechs//dtd mozilla html 2.0//",
+    "-//webtechs//dtd mozilla html//",
+];
+
+const LIMITED_QUIRKS_PREFIXES: &[&str] = &[
+    "-//w3c//dtd xhtml 1.0 frameset//",
+    "-//w3c//dtd xhtml 1.0 transitional//",
+];
+
+fn determine_doctype_quirks_mode(
+    force_quirks: bool,
+    name: Option<&str>,
+    public_id: Option<&str>,
+    system_id: Option<&str>,
+) -> QuirksMode {
+    if force_quirks || name.is_none() || !name.unwrap().eq_ignore_ascii_case("html") {
+        return QuirksMode::Quirks;
+    }
+
+    if let Some(sys) = system_id {
+        if sys.eq_ignore_ascii_case("http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd") {
+            return QuirksMode::Quirks;
+        }
+    }
+
+    if let Some(pub_id) = public_id {
+        let pub_lower = pub_id.to_ascii_lowercase();
+        if QUIRKS_PUBLIC_EXACT.contains(&pub_lower.as_str()) {
+            return QuirksMode::Quirks;
+        }
+        if QUIRKS_PUBLIC_PREFIXES
+            .iter()
+            .any(|prefix| pub_lower.starts_with(prefix))
+        {
+            return QuirksMode::Quirks;
+        }
+        if system_id.is_none()
+            && (pub_lower.starts_with("-//w3c//dtd html 4.01 frameset//")
+                || pub_lower.starts_with("-//w3c//dtd html 4.01 transitional//"))
+        {
+            return QuirksMode::Quirks;
+        }
+
+        if LIMITED_QUIRKS_PREFIXES
+            .iter()
+            .any(|prefix| pub_lower.starts_with(prefix))
+        {
+            return QuirksMode::LimitedQuirks;
+        }
+        if system_id.is_some()
+            && (pub_lower.starts_with("-//w3c//dtd html 4.01 frameset//")
+                || pub_lower.starts_with("-//w3c//dtd html 4.01 transitional//"))
+        {
+            return QuirksMode::LimitedQuirks;
+        }
+    }
+
+    QuirksMode::NoQuirks
+}
+
 const SVG_ELEMENT_NAME_ADJUSTMENTS: &[(&str, &str)] = &[
     ("altglyph", "altGlyph"),
     ("altglyphdef", "altGlyphDef"),
@@ -1017,14 +1137,7 @@ impl TreeBuilder {
             if self.node_in_html(node_id, name) {
                 self.generate_implied_end_tags(Some(name));
                 while self.open_elements.len() > idx {
-                    if let Some(popped) = self.open_elements.pop() {
-                        self.active_formatting.retain(|e| {
-                            !matches!(
-                                e,
-                                FormattingEntry::Element { node_id: f_id, .. } if *f_id == popped
-                            )
-                        });
-                    }
+                    self.open_elements.pop();
                 }
                 break;
             }
@@ -1509,9 +1622,12 @@ impl TreeBuilder {
                     system_id,
                     force_quirks,
                 } => {
-                    if force_quirks || name.as_deref() != Some("html") {
-                        self.doc.quirks_mode = QuirksMode::Quirks;
-                    }
+                    self.doc.quirks_mode = determine_doctype_quirks_mode(
+                        force_quirks,
+                        name.as_deref(),
+                        public_id.as_deref(),
+                        system_id.as_deref(),
+                    );
                     let dt_id = self.doc.create_node(NodeKind::Doctype {
                         name: name.unwrap_or_default(),
                         public_id: public_id.unwrap_or_default(),
@@ -1570,6 +1686,10 @@ impl TreeBuilder {
                     self.insert_comment(&data, None);
                     None
                 }
+                Token::ProcessingInstruction { target, data } => {
+                    self.insert_processing_instruction(&target, &data);
+                    None
+                }
                 Token::Doctype { .. } => None,
                 Token::StartTag {
                     ref name,
@@ -1610,7 +1730,9 @@ impl TreeBuilder {
                     None
                 }
                 Token::Character(0x09 | 0x0A | 0x0C | 0x0D | 0x20) => self.process_in_head(token),
-                Token::Comment(_) => self.process_in_head(token),
+                Token::Comment(_) | Token::ProcessingInstruction { .. } => {
+                    self.process_in_head(token)
+                }
                 Token::StartTag { ref name, .. }
                     if matches!(
                         name.as_str(),
@@ -1644,6 +1766,10 @@ impl TreeBuilder {
                 }
                 Token::Comment(data) => {
                     self.insert_comment(&data, None);
+                    None
+                }
+                Token::ProcessingInstruction { target, data } => {
+                    self.insert_processing_instruction(&target, &data);
                     None
                 }
                 Token::Doctype { .. } => None,
@@ -1857,6 +1983,10 @@ impl TreeBuilder {
                     self.insert_comment(&data, None);
                     None
                 }
+                Token::ProcessingInstruction { target, data } => {
+                    self.insert_processing_instruction(&target, &data);
+                    None
+                }
                 Token::StartTag {
                     ref name,
                     ref attributes,
@@ -1866,12 +1996,14 @@ impl TreeBuilder {
                     None
                 }
                 Token::EndTag { ref name, .. } if name == "frameset" => {
-                    if self.open_elements.len() > 1 {
-                        self.open_elements.pop();
+                    if self.open_elements.len() <= 1 {
+                        return None;
                     }
-                    if !self
-                        .current_node()
-                        .is_some_and(|id| self.node_in_html(id, "frameset"))
+                    self.open_elements.pop();
+                    if self.fragment_context.is_none()
+                        && !self
+                            .current_node()
+                            .is_some_and(|id| self.node_in_html(id, "frameset"))
                     {
                         self.mode = InsertionMode::AfterFrameset;
                     }
@@ -1901,6 +2033,10 @@ impl TreeBuilder {
                     self.insert_comment(&data, None);
                     None
                 }
+                Token::ProcessingInstruction { target, data } => {
+                    self.insert_processing_instruction(&target, &data);
+                    None
+                }
                 Token::EndTag { ref name, .. } if name == "html" => {
                     self.mode = InsertionMode::AfterAfterFrameset;
                     None
@@ -1913,14 +2049,38 @@ impl TreeBuilder {
 
             InsertionMode::AfterAfterBody => match token {
                 Token::Comment(data) => {
-                    self.insert_comment(&data, Some(self.doc.root()));
+                    let parent = if self
+                        .fragment_context
+                        .as_ref()
+                        .is_some_and(|(_, n)| n == "html")
+                    {
+                        self.open_elements
+                            .first()
+                            .copied()
+                            .unwrap_or(self.doc.root())
+                    } else {
+                        self.doc.root()
+                    };
+                    self.insert_comment(&data, Some(parent));
                     None
                 }
                 Token::ProcessingInstruction { target, data } => {
+                    let parent = if self
+                        .fragment_context
+                        .as_ref()
+                        .is_some_and(|(_, n)| n == "html")
+                    {
+                        self.open_elements
+                            .first()
+                            .copied()
+                            .unwrap_or(self.doc.root())
+                    } else {
+                        self.doc.root()
+                    };
                     let pi_id = self
                         .doc
                         .create_node(NodeKind::ProcessingInstruction { target, data });
-                    self.doc.append_child(self.doc.root(), pi_id);
+                    self.doc.append_child(parent, pi_id);
                     None
                 }
                 Token::Doctype { .. } => self.process_in_body(token),
@@ -1938,7 +2098,15 @@ impl TreeBuilder {
                     self.insert_comment(&data, Some(self.doc.root()));
                     None
                 }
+                Token::ProcessingInstruction { target, data } => {
+                    let pi_id = self
+                        .doc
+                        .create_node(NodeKind::ProcessingInstruction { target, data });
+                    self.doc.append_child(self.doc.root(), pi_id);
+                    None
+                }
                 Token::Character(0x09 | 0x0A | 0x0C | 0x0D | 0x20) => self.process_in_body(token),
+                Token::StartTag { ref name, .. } if name == "html" => self.process_in_body(token),
                 Token::StartTag { ref name, .. } if name == "noframes" => {
                     self.process_in_head(token)
                 }
@@ -2209,10 +2377,14 @@ impl TreeBuilder {
                         }
                         break;
                     }
-                    if let Some(el) = self.doc.node(node_id).as_element()
-                        && el.namespace == Namespace::Html
-                        && !matches!(el.local_name.as_str(), "address" | "div" | "p")
-                        && P_CLOSING_BLOCK_ELEMENTS.contains(&el.local_name.as_str())
+                    if self.is_node_special(node_id)
+                        && !matches!(
+                            self.doc
+                                .node(node_id)
+                                .as_element()
+                                .map(|el| (el.namespace, el.local_name.as_str())),
+                            Some((Namespace::Html, "address" | "div" | "p"))
+                        )
                     {
                         break;
                     }
@@ -2230,8 +2402,11 @@ impl TreeBuilder {
             } if matches!(name.as_str(), "dd" | "dt") => {
                 self.frameset_ok = false;
                 for &node_id in self.open_elements.clone().iter().rev() {
-                    if self.node_in_html(node_id, "dd") || self.node_in_html(node_id, "dt") {
-                        self.generate_implied_end_tags(Some(name.as_str()));
+                    let is_dd = self.node_in_html(node_id, "dd");
+                    let is_dt = self.node_in_html(node_id, "dt");
+                    if is_dd || is_dt {
+                        let except = if is_dd { "dd" } else { "dt" };
+                        self.generate_implied_end_tags(Some(except));
                         while let Some(popped) = self.open_elements.pop() {
                             if popped == node_id {
                                 break;
@@ -2239,10 +2414,14 @@ impl TreeBuilder {
                         }
                         break;
                     }
-                    if let Some(el) = self.doc.node(node_id).as_element()
-                        && el.namespace == Namespace::Html
-                        && !matches!(el.local_name.as_str(), "address" | "div" | "p")
-                        && P_CLOSING_BLOCK_ELEMENTS.contains(&el.local_name.as_str())
+                    if self.is_node_special(node_id)
+                        && !matches!(
+                            self.doc
+                                .node(node_id)
+                                .as_element()
+                                .map(|el| (el.namespace, el.local_name.as_str())),
+                            Some((Namespace::Html, "address" | "div" | "p"))
+                        )
                     {
                         break;
                     }
@@ -2322,15 +2501,50 @@ impl TreeBuilder {
                 ref name,
                 ref attributes,
                 ..
+            } if name == "input" => {
+                if let Some((_, ref ctx_name)) = self.fragment_context {
+                    if ctx_name == "select" {
+                        return None;
+                    }
+                }
+                if self.has_element_in_scope("select") {
+                    while let Some(popped) = self.open_elements.pop() {
+                        if self.node_in_html(popped, "select") {
+                            break;
+                        }
+                    }
+                }
+                self.reconstruct_active_formatting_elements();
+                self.insert_html_element("input", attributes);
+                self.open_elements.pop();
+                let is_hidden = attributes.iter().any(|(k, v)| {
+                    k.eq_ignore_ascii_case("type") && v.eq_ignore_ascii_case("hidden")
+                });
+                if !is_hidden {
+                    self.frameset_ok = false;
+                }
+                None
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
             } if VOID_ELEMENTS.contains(&name.as_str()) => {
-                if name == "hr" && self.has_element_in_button_scope("p") {
-                    self.close_p_element();
+                if name == "hr" {
+                    if self.has_element_in_button_scope("p") {
+                        self.close_p_element();
+                    }
+                    if self.has_element_in_scope("select") {
+                        self.generate_implied_end_tags(None);
+                    }
                 } else {
                     self.reconstruct_active_formatting_elements();
                 }
                 self.insert_html_element(name, attributes);
                 self.open_elements.pop();
-                self.frameset_ok = false;
+                if !matches!(name.as_str(), "param" | "source" | "track") {
+                    self.frameset_ok = false;
+                }
                 None
             }
             Token::StartTag {
@@ -2819,6 +3033,10 @@ impl TreeBuilder {
                 self.insert_comment(&data, None);
                 None
             }
+            Token::ProcessingInstruction { target, data } => {
+                self.insert_processing_instruction(&target, &data);
+                None
+            }
             Token::Doctype { .. } => None,
             Token::StartTag {
                 ref name,
@@ -2902,6 +3120,19 @@ impl TreeBuilder {
                 if !parsing_template {
                     self.form_element = Some(form_id);
                 }
+                self.open_elements.pop();
+                None
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "input"
+                && attributes.iter().any(|(k, v)| {
+                    k.eq_ignore_ascii_case("type") && v.eq_ignore_ascii_case("hidden")
+                }) =>
+            {
+                self.insert_html_element("input", attributes);
                 self.open_elements.pop();
                 None
             }
@@ -3009,6 +3240,10 @@ impl TreeBuilder {
             }
             Token::Comment(data) => {
                 self.insert_comment(&data, None);
+                None
+            }
+            Token::ProcessingInstruction { target, data } => {
+                self.insert_processing_instruction(&target, &data);
                 None
             }
             Token::StartTag {
@@ -3215,6 +3450,69 @@ impl TreeBuilder {
             other => self.process_in_body(other),
         }
     }
+
+    fn collect_descendants_within_select(&self, parent: NodeId, name: &str, out: &mut Vec<NodeId>) {
+        let mut curr = self.doc.node(parent).first_child;
+        while let Some(child_id) = curr {
+            let next = self.doc.node(child_id).next_sibling;
+            if self.node_in_html(child_id, name) {
+                out.push(child_id);
+            }
+            if !self.node_in_html(child_id, "select") {
+                self.collect_descendants_within_select(child_id, name, out);
+            }
+            curr = next;
+        }
+    }
+
+    pub fn update_selectedcontent_elements(&mut self) {
+        let root = self.doc.root();
+        let mut selects = Vec::new();
+        self.collect_descendants_within_select(root, "select", &mut selects);
+
+        for select_id in selects {
+            let mut selectedcontents = Vec::new();
+            self.collect_descendants_within_select(
+                select_id,
+                "selectedcontent",
+                &mut selectedcontents,
+            );
+            if selectedcontents.is_empty() {
+                continue;
+            }
+
+            let mut options = Vec::new();
+            self.collect_descendants_within_select(select_id, "option", &mut options);
+            if options.is_empty() {
+                continue;
+            }
+
+            let selected_option = options
+                .iter()
+                .copied()
+                .rfind(|&opt_id| {
+                    if let Some(el) = self.doc.node(opt_id).as_element() {
+                        el.attributes.iter().any(|a| a.local_name == "selected")
+                    } else {
+                        false
+                    }
+                })
+                .unwrap_or(options[0]);
+
+            for sc_id in selectedcontents {
+                while let Some(child) = self.doc.node(sc_id).first_child {
+                    self.doc.detach(child);
+                }
+                let mut curr = self.doc.node(selected_option).first_child;
+                while let Some(child_id) = curr {
+                    let next = self.doc.node(child_id).next_sibling;
+                    let cloned = self.doc.clone_node(child_id, true);
+                    self.doc.append_child(sc_id, cloned);
+                    curr = next;
+                }
+            }
+        }
+    }
 }
 
 /// Parses a complete HTML document string into a [`dom::Document`] (§13.2).
@@ -3278,6 +3576,7 @@ pub fn parse_document(input: &str, scripting_enabled: bool) -> Document {
         }
     }
 
+    tb.update_selectedcontent_elements();
     tb.doc
 }
 
@@ -3306,7 +3605,7 @@ pub fn parse_fragment(
         input,
         TokenizerConfig {
             initial_state: initial_tok_state,
-            last_start_tag: Some(context_local_name.to_owned()),
+            last_start_tag: None,
         },
     );
 
@@ -3355,5 +3654,6 @@ pub fn parse_fragment(
     if let Some(ctx_id) = tb.fragment_context_node {
         tb.doc.detach(ctx_id);
     }
+    tb.update_selectedcontent_elements();
     tb.doc
 }

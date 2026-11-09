@@ -112,6 +112,11 @@ pub fn parse_dat_str(raw: &str) -> Vec<TreeConstructionCase> {
     }
 
     if !key.is_empty() {
+        if let Some(val) = current.get_mut(&key)
+            && val.ends_with('\n')
+        {
+            val.pop();
+        }
         test_maps.push(current);
     }
 

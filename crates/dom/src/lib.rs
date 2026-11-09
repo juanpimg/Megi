@@ -451,6 +451,22 @@ impl Document {
         text_id
     }
 
+    /// Clones `node_id`. If `deep` is true, recursively clones all descendant subtrees.
+    pub fn clone_node(&mut self, node_id: NodeId, deep: bool) -> NodeId {
+        let kind = self.node(node_id).kind.clone();
+        let cloned_id = self.create_node(kind);
+        if deep {
+            let mut curr = self.node(node_id).first_child;
+            while let Some(child_id) = curr {
+                let next = self.node(child_id).next_sibling;
+                let cloned_child = self.clone_node(child_id, true);
+                self.append_child(cloned_id, cloned_child);
+                curr = next;
+            }
+        }
+        cloned_id
+    }
+
     /// Returns an iterator over the direct children of `parent_id`.
     pub fn children(&self, parent_id: NodeId) -> ChildrenIter<'_> {
         ChildrenIter {
