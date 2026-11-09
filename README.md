@@ -1,10 +1,11 @@
 # Megi Web Engine 🌐🦀
 
-[![Rust](https://img.shields.io/badge/Rust-Edition%202024%20(1.85+)-orange.svg?logo=rust)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Rust-Edition%202024%20(MSRV%201.88%2B)-orange.svg?logo=rust)](https://www.rust-lang.org/)
+[![CI](https://github.com/juanpimg/Megi/actions/workflows/ci.yml/badge.svg)](https://github.com/juanpimg/Megi/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 [![Clippy](https://img.shields.io/badge/Clippy-0%20warnings%20(-D%20warnings)-brightgreen.svg)]()
-[![HTML5 Conformance](https://img.shields.io/badge/HTML5%20Conformance-99.85%25%20(3898%2F3904)-success.svg)]()
-[![WPT CSS](https://img.shields.io/badge/WPT%20CSS%20Syntax-100%25%20(30%2F30)-success.svg)]()
+[![HTML5 Conformance](https://img.shields.io/badge/HTML5%20Conformance-3.898%2F3.904%20(declarativo)-success.svg)]()
+[![CSS Syntax](https://img.shields.io/badge/CSS%20Syntax%20WPT-30%2F30%20(reproducible)-success.svg)]()
 
 > **Megi** es un motor de navegación web moderno, open source e independiente desarrollado desde cero en **Rust** (Edición 2024), sin bifurcar (*fork*) Blink, WebKit ni Gecko. Todo su diseño se rige estrictamente por las especificaciones formales vivas de **WHATWG** y **W3C**, con verificación continua en bucle cerrado (*closed-loop testing*) contra **Web Platform Tests (WPT)** y **`html5lib-tests`**.
 
@@ -12,30 +13,35 @@
 
 ## 📊 Estado del Proyecto y Barra de Progreso por Módulos
 
-El desarrollo de Megi se estructura en paquetes de trabajo atómicos de máxima observabilidad. A continuación se presenta el estado de implementación detallado por subsistema:
+Fases 0–3 completadas (DOM, HTML, CSS, Layout). La **Fase 4 (paint + tipografía)** está **en curso**: el pipeline `HTML → CSS → layout → display list → PNG` ya funciona de extremo a extremo y el motor tipográfico existe como crate independiente, pero aún no está integrado en layout/paint. Las fases 5–7 están planificadas. El detalle de qué falta exactamente está en [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md).
 
-| Módulo / Crate | Barra de Progreso | Estado | Conformidad y Tests | Capacidades Implementadas |
+| Módulo / Crate | Barra de Progreso | Estado | Tests | Capacidades Implementadas |
 |---|:---:|:---:|---|---|
-| [`crates/dom`](crates/dom) | `[██████████] 100%` | **COMPLETO** | 5/5 unit tests | Arena contigua indexada (`NodeId(NonZeroU32)` de 4 bytes), enlaces intrusivos de 20 bytes, mutaciones $O(1)$, coalescencia de texto y fragmentos inertes para `<template>`. |
-| [`crates/html`](crates/html) | `[██████████] 99.9%` | **COMPLETO (Declarativo)** | 7/7 unit tests<br>`7.047 / 7.050` estados tokenizer<br>`3.898 / 3.904` modos árbol | Preprocesador de flujo (§13.2.3.5), 2.231 entidades nombradas (§13.5), máquina de 84 estados del tokenizador (§13.2.5), 21 modos de inserción del árbol DOM (§13.2.6), adopción de formato (AAA), foster parenting y fragmentos HTML (`innerHTML`). 58 de 62 suites oficiales al 100% verde. |
-| [`crates/css`](crates/css) | `[██████████] 100%` | **COMPLETO** | 10/10 unit tests<br>30/30 tests WPT | Tokenizador y parser W3C CSS Syntax L3, Selectores L4 (atributos, combinadores, pseudoclases `:first-child`, `:nth-child(An+B)`), cálculo de especificidad $(A,B,C)$, cascada de 8 niveles, valores computados (`ComputedStyle`), herencia de propiedades y hoja User-Agent WHATWG HTML §15. |
-| [`crates/layout`](crates/layout) | `[██████████] 100%` | **COMPLETO (BFC + IFC)** | 30/30 tests en layout (4 unitarios + 26 integración/adversariales) | Geometría 2D (`Rect`, `Dimensions`), árbol de cajas (`LayoutBox`), normalización de bloques anónimos (§9.2.1.1), BFC (márgenes automáticos, colapso vertical) e Inline Formatting Context (IFC) completo: división greedy, métricas de fuente y strut CSS 2.1 §10.8, alineación horizontal (`text-align`), alineación vertical exhaustiva (`vertical-align: baseline, middle, top, bottom, sub, super, text-top, text-bottom, length`), wrap en guiones (`-`) / soft hyphens (`\u{00AD}`) y fragmentación de cajas en línea. |
-| [`crates/test_harness`](crates/test_harness) | `[██████████] 100%` | **COMPLETO** | 5/5 closed-loop tests | Ejecutor en bucle cerrado que valida de forma autónoma los 14 archivos JSON de tokenizer (6.824 casos), los 62 archivos `.dat`/`.json` de árbol DOM (1.973 casos) y suites WPT de sintaxis CSS. |
-| `crates/paint` | `[████░░░░░░] 40%` | *En Desarrollo (Fase 4)* | 4/4 | `DisplayList`, `build_display_list`, `Pixmap` con alpha blending, `to_ppm`, fuente bitmap 8x8 (stub). Faltan stacking contexts, bordes por lado, fuentes reales, clip, PNG. |
+| [`crates/dom`](crates/dom) | `[██████████] 100%` | **COMPLETO** | 9/9 unit | Arena contigua indexada (`NodeId(NonZeroU32)` de 4 bytes), enlaces intrusivos de 20 bytes, mutaciones $O(1)$, coalescencia de texto, `<template>` y `try_node`; `append_child`/`insert_before` validan ciclos y devuelven `bool`. |
+| [`crates/html`](crates/html) | `[██████████] 99.9%` | **COMPLETO (declarativo)** | 7/7 unit + 13 robustez | Tokenizador de 84 estados (§13.2.5), 21 modos de construcción del árbol (§13.2.6), 2.231 entidades (§13.5), AAA y *foster parenting*, `innerHTML`; **límites anti-DoS** mediante `ParseOptions` (profundidad 4.096, 1 M nodos, 4.096 atributos, 16 MiB de entrada) y serializador iterativo. |
+| [`crates/css`](crates/css) | `[██████████] 100%` | **COMPLETO (Fase 2)** | 23/23 unit + 30/30 WPT | Tokenizador/parser CSS Syntax L3, Selectores L4, cascada y especificidad, `ComputedStyle` y hoja UA WHATWG HTML §15; en Fase 4 amplía bordes por lado/shorthands, `border-style: none` ⇒ ancho 0, `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type` y correcciones de selectores. |
+| [`crates/layout`](crates/layout) | `[█████████░] 90%` | **Fase 3 completa + correcciones Fase 4** | 61 tests | Box Tree, cajas anónimas *inherit-only* (§9.2.1.1), BFC con **colapso de márgenes** (§8.3.1), ICB con altura de viewport, `box-sizing`/`min-max`/alturas porcentuales, sobre-restringido; IFC con `<br>` forzado. Tablas, floats, `position` e `inline-block` siguen planificados en Fase 4. |
+| [`crates/fonts`](crates/fonts) | `[█████░░░░░] 50%` | **Fase 4 (nuevo, en curso)** | 13 + 1 doctest | Motor tipográfico real: `fontdb` + `ttf-parser` + `rustybuzz` + `ab_glyph`; descubrimiento/fallback de fuentes, `FontMetrics`, `measure_text`, shaping LTR (kern/ligaduras), rasterización de glifos a máscaras alfa; fuente DejaVu determinista empaquetada con licencia. **Aún no integrado en `layout`/`paint`.** |
+| [`crates/paint`](crates/paint) | `[█████░░░░░] 55%` | **Fase 4 (en curso)** | 33 tests | Display lists desacopladas, rasterizador 2D con blending, **pipeline HTML → PNG de extremo a extremo** (ejemplo `html_to_png`), codificador PNG propio sin dependencias, canvas blanco con propagación de fondo raíz/`body` (CSS 2.2 §14.2), `RenderConfig`, extracción de `<style>` y golden determinista. Pendientes: integración de fuentes reales, bordes por lado en el raster, stacking contexts, `opacity`, clip y antialiasing. |
+| [`crates/test_harness`](crates/test_harness) | `[██████████] 100%` | **COMPLETO** | 5/5 closed-loop | Runner de `html5lib-tests` (14 suites de tokenizador, 62 suites de árbol) y de las fixtures WPT de CSS Syntax **vendorizadas**; **gate de conformidad** con allowlist documentada (`--summary` exit 0, `--strict` exit 1). |
 | `crates/net` | `[░░░░░░░░░░] 0%` | *Planificado (Fase 5)* | — | Transporte HTTP/TLS y pipeline de recursos según WHATWG Fetch. |
-| `crates/js` | `[░░░░░░░░░░] 0%` | *Planificado (Fase 6)* | — | Enlaces e integración de ejecución de scripts JavaScript (`document.write`, DOM bindings). |
-| `crates/shell` | `[░░░░░░░░░░] 0%` | *Planificado (Fase 7)* | — | Creación de ventana en el sistema operativo, gestión de eventos y bucle principal de renderizado. |
+| `crates/js` | `[░░░░░░░░░░] 0%` | *Planificado (Fase 6)* | — | Integración de ejecución de scripts JavaScript y DOM bindings. |
+| `crates/shell` | `[░░░░░░░░░░] 0%` | *Planificado (Fase 7)* | — | Ventana del sistema operativo, eventos y bucle principal de renderizado. |
+
+**Total del workspace: 165 tests, 0 fallos.** Reparto: `css` 23, `dom` 9, `fonts` 13 + 1 doctest, `html` 7 unit + 13 robustez, `layout` 61, `paint` 33, `test_harness` 5.
 
 ---
 
 ## 🏆 Hitos Principales Logrados
 
-- [x] **Arquitectura Zero-Overhead Arena DOM**: Eliminación total de conteo dinámico de referencias (`Rc<RefCell<Node>>`). Manejadores compactos `NodeId(NonZeroU32)` con mutaciones $O(1)$ y memoria contigua con máxima localidad de caché.
-- [x] **Paridad del 99.85% en Construcción de Árbol HTML5**: 58 de las 62 suites oficiales de `html5lib-tests` pasan al 100% verde de forma ininterrumpida. El 100% del HTML5 declarativo es soportado fielmente a la especificación viva.
-- [x] **Motor CSS Sintáctico y de Cascada Normativo**: Tokenizador y parser que pasan el 100% de las pruebas WPT de sintaxis, cálculo formal de especificidad de Selectores Nivel 4 y cascada con hoja de estilo por defecto según WHATWG HTML §15.
-- [x] **Box Tree & Block Formatting Context (BFC)**: Creación del árbol de cajas de diseño desacoplado del DOM, normalización de bloques anónimos según CSS 2.2 §9.2.1.1 y cálculo automático de geometrías de bloque.
-- [x] **Inline Formatting Context (IFC) y Renderizado Tipográfico Multilínea**: Motor de salto de línea voraz (*greedy line breaking*) con colapso de espacios, wrap opportunities en guiones (`-`) y soft-hyphens (`\u{00AD}`), cálculo del strut CSS 2.1 §10.8, alineación vertical completa (`middle`, `baseline`, `super`, `sub`, etc.) y fragmentación de cajas en línea con bordes/márgenes exteriores.
-- [x] **Tooling Autónomo y Closed-Loop**: Scripts de consulta en vivo de especificaciones WHATWG (`tools/whatwg_spec.py`), inspector de casos de prueba (`tools/test_inspector.py`) y script de verificación estricta (`tools/dev.sh`).
+- [x] **Arquitectura Zero-Overhead Arena DOM**: arena contigua de nodos con `NodeId(NonZeroU32)` de 4 bytes, mutaciones $O(1)$ y cero `Rc<RefCell<Node>>`.
+- [x] **Conformidad HTML5 declarativa verificada y gate reproducible**: tokenizador **7.047/7.050** (allowlist `xmlViolation.test`: 3), construcción de árbol **3.898/3.904** (allowlist: 4 suites `scripted_*`: 6 mode-runs). `cargo run -p test_harness -- --summary` devuelve **PASS con exit 0**; las fixtures WPT de CSS Syntax están vendorizadas (30/30 comprobaciones, sin red).
+- [x] **Robustez anti-DoS del núcleo**: parsear 100.000/200.000 `<div>` anidados ya **no aborta el proceso** (~70 ms; antes SIGABRT por recursión) y 40.000 atributos en un start-tag bajan de ~1.276 ms a ~10 ms; límites duros en `ParseOptions` reportados vía `LimitViolations`, serializador iterativo y DOM con `try_node`/`clone_node` de `<template>`.
+- [x] **Motor CSS con cascada normativa**: 23 tests y 30/30 comprobaciones WPT, con bases de Fase 4 (bordes por lado, `border-style: none`, `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type`) y selectores corregidos (pseudo-clases desconocidas invalidadas, SVG/MathML, comas en atributos).
+- [x] **BFC/IFC con correcciones de Fase 4**: cajas anónimas *inherit-only* (fin de márgenes y fondos fantasma), `<br>`, colapso de márgenes §8.3.1, altura del bloque contenedor inicial, `box-sizing`/`min-max`/porcentajes y sobre-restringido; 61 tests.
+- [x] **Pipeline HTML → PNG real**: primer render de extremo a extremo con codificador PNG propio (DEFLATE *stored*, sin dependencias), canvas blanco (0 % de píxeles transparentes frente al 88,7 % anterior), propagación del fondo raíz/`body` y golden determinista de 800×600.
+- [x] **Motor tipográfico real (`crates/fonts`)**: métricas OpenType, shaping LTR con kern/ligaduras, fallback de fuentes y rasterización de glifos a máscaras alfa, con dependencias de bajo nivel autorizadas por `docs/ARCHITECTURE.md` §3.1.
+- [x] **Infraestructura de proyecto**: CI (`.github/workflows/ci.yml`: fmt, clippy `-D warnings`, tests, doc, gate de conformidad y job MSRV), licencias MIT/Apache, `rust-version = "1.88"` verificado con `rustup` (el código usa `let-chains`, estabilizadas en Rust 1.88) y `./tools/dev.sh all` como puerta única de calidad.
 
 ---
 
@@ -46,52 +52,82 @@ Megi está diseñado como un **Grafo Acíclico Dirigido (DAG)** sin dependencias
 ```mermaid
 graph TD
     dom["crates/dom<br/>(Arena DOM, NodeId 4B, O(1) mutations)"]
-    html["crates/html<br/>(Tokenizer 84 estados, TreeBuilder 21 modos)"]
+    html["crates/html<br/>(Tokenizer 84 estados, TreeBuilder 21 modos, ParseOptions)"]
     css["crates/css<br/>(CSS Syntax L3, Selectors L4, Cascade & Styles)"]
-    layout["crates/layout<br/>(Box Tree, BFC, Geometría 2D)"]
+    layout["crates/layout<br/>(Box Tree, BFC/IFC, margin collapsing)"]
+    fonts["crates/fonts (Fase 4)<br/>(FontDatabase, shaping, glyph masks)"]
+    paint["crates/paint (Fase 4)<br/>(Display List, 2D raster, HTML→PNG)"]
     test_harness["crates/test_harness<br/>(Closed-Loop Runner WPT & html5lib)"]
-    paint["crates/paint (Fase 4)<br/>(Display List & 2D Raster)"]
 
     dom --> html
     dom --> css
     dom --> layout
     css --> layout
+    layout --> paint
+    fonts -.->|"integración pendiente (WP-4.4 fase 2)"| layout
+    fonts -.->|"integración pendiente (WP-4.4 fase 2)"| paint
     dom --> test_harness
     html --> test_harness
     css --> test_harness
-    layout --> paint
 ```
+
+Crates planificados: `crates/net` (Fase 5), `crates/js` (Fase 6) y `crates/shell` (Fase 7).
 
 ---
 
 ## 🚀 Inicio Rápido y Flujo de Trabajo
 
 ### Requisitos
-- **Rust 1.85+ (Edition 2024)** (`rustup update stable`)
-- **Git** y **Python 3** (para scripts auxiliares de tooling)
+- **Rust 1.88+ (Edition 2024)**; MSRV declarada en `Cargo.toml` y verificada en CI (`rustup toolchain install 1.88`).
+- **Git** y **Python 3** (scripts de tooling: especificaciones, inspección de tests y `png_check.py`).
 
 ### Compilar y Verificar Todo el Workspace
-Ejecuta el script unificado de control de calidad (formato, linter clippy estricto, tests unitarios, tests de bucle cerrado y documentación):
 
 ```bash
 ./tools/dev.sh all
 ```
 
-### Ejecutar el Arnés de Pruebas de Conformidad (HTML5 & WPT)
+Ejecuta, en orden: `cargo fmt --check` → `cargo clippy --workspace --all-targets -- -D warnings` → `cargo test --workspace` → `cargo doc --workspace --no-deps` → **gate de conformidad** (`test_harness --summary`). Ruta de comprobación equivalente, paso a paso:
 
 ```bash
-# Reporte resumido de las 14 suites de tokenizador, 62 suites de árbol y WPT CSS
+cargo +1.88 check --workspace --all-targets   # MSRV
+cargo test --workspace                         # 165 tests
+cargo run -p test_harness -- --summary         # gate: PASS, exit 0
+```
+
+### Gate de Conformidad (HTML5 + WPT vendorizado)
+
+```bash
+# Resumen completo: tokenizador, árbol DOM y CSS Syntax
 cargo run -p test_harness -- --summary
 
-# Ejecutar una suite específica
+# Modo estricto: cualquier fallo (incluidos los de la allowlist) hace exit 1
+cargo run -p test_harness -- --summary --strict
+
+# Ejecutar una suite concreta
 cargo run -p test_harness -- template.dat
 cargo run -p test_harness -- test3.test
+```
+
+### Renderizar HTML a PNG (pipeline de Fase 4)
+
+```bash
+cargo run -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
+python3 tools/png_check.py /tmp/basic.png
+```
+
+El ejemplo acepta `[width] [height]` (por defecto 800×600) y `--rgba <ruta>` para volcar la imagen RGBA canónica usada por los golden tests. Ver [`tests/fixtures/phase4/README.md`](tests/fixtures/phase4/README.md).
+
+### Motor Tipográfico (crate `fonts`)
+
+```bash
+cargo run -p fonts --example report    # métricas, shaping y glifo con DejaVu Sans @16px
+cargo test -p fonts
 ```
 
 ### Consultar las Especificaciones Oficiales desde Terminal
 
 ```bash
-# Consultar secciones normativas de WHATWG HTML
 python3 tools/whatwg_spec.py html "#data-state"
 python3 tools/whatwg_spec.py html "#the-after-after-body-insertion-mode"
 ```
@@ -100,17 +136,24 @@ python3 tools/whatwg_spec.py html "#the-after-after-body-insertion-mode"
 
 ## 📖 Documentación del Proyecto
 
-- 🏛️ [**`docs/ARCHITECTURE.md`**](docs/ARCHITECTURE.md): Explicación exhaustiva del modelo de memoria del DOM en arena, diseño de crates, flujo de datos y dependencias autorizadas.
-- 🗺️ [**`docs/ROADMAP.md`**](docs/ROADMAP.md): Desglose atómico de las fases de desarrollo con asignación exacta de especificaciones WHATWG/W3C, suites de prueba y criterios de aceptación.
-- 🛠️ [**`docs/TOOLING.md`**](docs/TOOLING.md): Guía de herramientas CLI y servidores para inspección de especificaciones y tests.
-- 🤝 [**`CONTRIBUTING.md`**](CONTRIBUTING.md): Guía de contribución, enfoque filosófico del proyecto, buenas prácticas y flujo de trabajo para colaborar.
+- 🏛️ [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): modelo de crates y DAG, arena DOM, política de dependencias externas (§3) y decisión de codificador PNG propio (§3.2).
+- 🗺️ [`docs/ROADMAP.md`](docs/ROADMAP.md): hoja de ruta por fases y micro-paquetes `WP-*`, incluida la **Fase 4 (`WP-4.0`…`WP-4.13`)** con estado y criterios de aceptación.
+- 🧭 [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md): matriz de soporte CSS 2.2 de la Fase 4 (implementado / parcial / pendiente) y decisiones de alcance.
+- 🤝 [`CONTRIBUTING.md`](CONTRIBUTING.md): filosofía, convenciones de código/commits, CI y flujo de PR.
+- 🛠️ [`docs/TOOLING.md`](docs/TOOLING.md): scripts CLI, fixtures vendorizadas, validación PNG y skills de agentes.
+- 📦 [`docs/HANDOFF.md`](docs/HANDOFF.md): estado de la última iteración, comandos de verificación y deuda técnica priorizada.
 
 ---
 
 ## 📄 Licencia
 
 Megi se publica bajo doble licencia:
-- **Licencia MIT** ([LICENSE-MIT](LICENSE-MIT) o <http://opensource.org/licenses/MIT>)
-- **Licencia Apache 2.0** ([LICENSE-APACHE](LICENSE-APACHE) o <http://www.apache.org/licenses/LICENSE-2.0>)
 
-a tu elección.
+- **Licencia MIT** ([`LICENSE-MIT`](LICENSE-MIT))
+- **Licencia Apache 2.0** ([`LICENSE-APACHE`](LICENSE-APACHE))
+
+a tu elección. La fuente de test DejaVu Sans empaquetada en `crates/fonts/tests/fixtures/` conserva su propia licencia (ver `LICENSE-DejaVu.txt`).
+
+---
+
+> **Estado**: proyecto en desarrollo activo, sin releases publicadas. La Fase 4 no está cerrada; consulta [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md) antes de asumir soporte de una propiedad CSS.

@@ -18,14 +18,14 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 
 ### 1.2 Independencia Absoluta (Zero Engine Forks & Pure Safe Rust)
 - Megi **no es una bifurcación (*fork*)** ni un envoltorio de Blink (Chromium), WebKit (Safari), Gecko (Firefox), ni de los motores de layout de Servo o Blitz.
-- Los crates de parsing fundamentales (`crates/dom`, `crates/html`, `crates/css`, `crates/layout`) se desarrollan exclusivamente con la **biblioteca estándar de Rust (`std`)**, sin librerías externas de parsing en crates.io. Esto asegura control milimétrico sobre el rendimiento, la memoria y la exactitud formal.
+- Los crates de parsing/layout fundamentales (`crates/dom`, `crates/html`, `crates/css`, `crates/layout`) se desarrollan exclusivamente con la **biblioteca estándar de Rust (`std`)**, sin librerías externas de parsing en crates.io. La única excepción autorizada son las dependencias tipográficas de bajo nivel de `crates/fonts` (`fontdb`, `ttf-parser`, `rustybuzz`, `ab_glyph`), listadas en `docs/ARCHITECTURE.md` §3.1; el rasterizador y el codificador PNG de `crates/paint` son propios y no usan dependencias externas (decisión D3, §3.2).
 
 ### 1.3 Auto-Testeo Continuo en Bucle Cerrado (Closed-Loop Testing)
 - Ninguna funcionalidad se considera completada sin una prueba de conformidad que la valide.
 - Trabajamos con las suites de prueba de referencia de la industria:
   - **`html5lib-tests`**: Más de 7.000 pruebas para el tokenizador y más de 1.900 árboles para la construcción del DOM.
   - **Web Platform Tests (WPT)**: Pruebas oficiales compartidas por todos los motores de navegación modernos.
-- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente.
+- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. Las cifras de referencia son **7.047/7.050** (tokenizador, allowlist `xmlViolation.test`: 3), **3.898/3.904** (construcción de árbol, allowlist 4 suites `scripted_*`: 6 mode-runs) y **30/30** en las fixtures WPT de CSS Syntax **vendorizadas** en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo).
 
 ### 1.4 Modelo de Memoria en Arena (Sin `Rc<RefCell<Node>>`)
 - Uno de los mayores cuellos de botella y fuentes de *memory leaks* en motores web en Rust es el uso de `Rc<RefCell<Node>>` o recolectores de basura pesados.
@@ -38,7 +38,8 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 - El proyecto mantiene una política estricta de **cero advertencias**:
   - `cargo fmt --check`: Formateo canónico con `rustfmt`.
   - `cargo clippy --workspace --all-targets -- -D warnings`: Cero advertencias de linter permitidas.
-  - `./tools/dev.sh all`: Script integral que debe pasar al 100% verde antes de cualquier commit o Pull Request.
+  - `cargo +1.88 check --workspace --all-targets`: verificación contra la MSRV declarada (`rust-version = "1.88"`).
+  - `./tools/dev.sh all`: script integral (fmt, clippy, tests, doc y **gate de conformidad**) que debe pasar al 100% verde antes de cualquier commit o Pull Request.
 
 ---
 
@@ -48,11 +49,13 @@ El espacio de trabajo se organiza como un **Grafo Acíclico Dirigido (DAG)** de 
 
 ```text
 crates/
-├── dom/           # Núcleo: Arena DOM, NodeId(NonZeroU32), mutaciones O(1). [0 dependencias]
-├── html/          # HTML5: Tokenizador de 84 estados, TreeBuilder de 21 modos, InputStream. [Depende solo de dom]
+├── dom/           # Núcleo: Arena DOM, NodeId(NonZeroU32), mutaciones O(1) y robustez de API. [0 dependencias]
+├── html/          # HTML5: Tokenizador de 84 estados, TreeBuilder de 21 modos, ParseOptions anti-DoS. [Depende solo de dom]
 ├── css/           # CSS: Sintaxis L3, Selectores L4, Cascada L4, ComputedStyle, Hoja UA §15. [Depende solo de dom]
-├── layout/        # Layout: Box Tree, Anonymous Blocks §9.2.1.1, Block Formatting Context (BFC). [Depende de dom y css]
-└── test_harness/  # Runner de WPT y html5lib-tests para verificación en bucle cerrado.
+├── layout/        # Layout: Box Tree, Anonymous Blocks §9.2.1.1, BFC (+ colapso de márgenes) e IFC. [Depende de dom y css]
+├── fonts/         # Tipografía (Fase 4): fontdb + ttf-parser + rustybuzz + ab_glyph. [0 deps internas]
+├── paint/         # Paint (Fase 4): Display Lists, raster 2D, canvas §14.2 y PNG propio. [Depende de dom, css y layout]
+└── test_harness/  # Gate de conformidad: WPT (fixtures vendorizadas) y html5lib-tests.
 ```
 
 ---
@@ -65,19 +68,26 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
 3. El crate y módulo responsable.
 4. El criterio de aceptación verificable por test.
 
-### Áreas activas donde puedes aportar hoy:
-- **Layout Engine (`crates/layout`)**:
-  - Implementación del Contexto de Formato en Línea (*Inline Formatting Context / IFC*) y cálculo de cajas de línea (*line boxes*).
-  - Algoritmo de división y flujo de texto (*line breaking*).
-  - Soporte de Contextos de Apilamiento (*Stacking Contexts*) y `z-index`.
-- **CSS Engine (`crates/css`)**:
-  - Ampliación de pseudoclases en Selectors L4 (`:is()`, `:where()`, `:not()`, `:has()`).
-  - Expansión de propiedades de caja flexibles (*Flexbox*) o tablas.
+### Áreas activas donde puedes aportar hoy (Fase 4: paint + tipografía):
+- **Tipografía (`crates/fonts`)**:
+  - Integración del motor tipográfico en `layout`/`paint` (WP-4.4 fase 2): `TextMeasurer` real, `ShapedRun`/glyph runs, baseline y `line-height: normal`.
+  - Cobertura de shaping para más scripts, fallback entre familias y métricas de fuentes variables.
+- **Paint (`crates/paint`)**:
+  - Pintado de bordes por lado/estilo y fondos en *border box* (WP-4.3); `background-clip`.
+  - Contextos de apilamiento, `position`/`z-index`/`opacity` (WP-4.6) y `overflow`/clip (WP-4.10).
+  - Calidad del rasterizador: cobertura por píxel, antialiasing y compresión PNG (WP-4.11).
+- **Layout (`crates/layout`)**:
+  - Posicionamiento absoluto/relativo y floats; tablas CSS 2.1; `inline-block` y marcadores de listas (WP-4.6–4.9).
+  - IFC pendiente: oportunidades de salto UAX #14, soft hyphens y `vertical-align` §10.8.1 (WP-4.5).
+- **CSS (`crates/css`)**:
+  - Propiedades de presentación de Fase 4 y ampliación de Selectors L4 (`:is()`, `:where()`, `:not()`).
 - **Harness & Tooling (`crates/test_harness`, `tools/`)**:
-  - Integración de más suites WPT de `tests/wpt/css/`.
-  - Herramientas visuales de comparación de renderizado.
-- **Display Lists & Paint (`crates/paint`)**:
-  - Scaffolding de comandos de pintura desacoplados (`DrawRect`, `DrawText`, `FillColor`).
+  - Más fixtures vendorizadas de WPT y ampliación de la cobertura An+B del gate.
+  - Comparación visual de renderizado y nuevas golden images.
+- **Rendimiento/robustez (`crates/html`, `crates/dom`)**:
+  - Eliminar la CPU cuadrática restante del tree builder (hallazgo F2 de la auditoría) y presupuestos de tiempo.
+
+La matriz de soporte por propiedad CSS y el estado exacto de cada paquete de Fase 4 están en [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md) (sección «FASE 4»).
 
 ---
 
@@ -89,9 +99,10 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
 git clone https://github.com/juanpimg/Megi.git
 cd Megi
 
-# Verificar que tu entorno de Rust esté actualizado (Edition 2024 / Rust 1.85+)
+# Verificar que tu entorno de Rust cumple la MSRV declarada (Edition 2024 / Rust 1.88+)
+rustup toolchain install 1.88
 rustc --version
-cargo --version
+cargo +1.88 check --workspace --all-targets
 ```
 
 ### 4.2 Utilizar las Herramientas de Inspección
@@ -117,11 +128,21 @@ Antes de enviar cualquier cambio, ejecuta:
 # Formatear el código
 cargo fmt
 
-# Ejecutar el script maestro que valida formato, clippy, tests y documentación
+# Ejecutar el script maestro: fmt, clippy, tests, doc y gate de conformidad
 ./tools/dev.sh all
+
+# Comprobaciones individuales útiles
+cargo test --workspace
+cargo +1.88 check --workspace --all-targets
+cargo run -p test_harness -- --summary          # gate: PASS, exit 0
+cargo run -p test_harness -- --summary --strict # exit 1 si hay fallos no aceptados
+
+# Pipeline HTML → PNG (Fase 4) y validación de la imagen
+cargo run -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
+python3 tools/png_check.py /tmp/basic.png
 ```
 
-Si `./tools/dev.sh all` reporta `==> All checks passed!`, tu código está listo para ser revisado.
+Si `./tools/dev.sh all` reporta `==> All checks passed!`, tu código está listo para ser revisado. La CI remota (`.github/workflows/ci.yml`) ejecuta los mismos pasos: `quality` (fmt, clippy, tests, doc), `conformance` (gate `--summary`) y `msrv` (`cargo check` con Rust 1.88).
 
 ---
 
@@ -155,10 +176,16 @@ Utilizamos commits atómicos, descriptivos y en formato semántico:
    git checkout -b feat/inline-formatting-context
    ```
 2. **Haz commits atómicos y claros** vinculando tus cambios al paquete de trabajo correspondiente.
-3. **Verifica que `./tools/dev.sh all` pase al 100%**.
+3. **Verifica que `./tools/dev.sh all` pase al 100%** (incluye el gate de conformidad) y que la MSRV siga verde con `cargo +1.88 check --workspace --all-targets`.
 4. **Abre el Pull Request en GitHub** detallando:
    - Resumen del cambio y motivación.
    - Enlace a la sección de la especificación WHATWG o W3C implementada.
    - Comando de prueba que valida la funcionalidad (`cargo test -p ...`).
+
+## 7. Licencias
+
+El proyecto se distribuye bajo doble licencia **MIT OR Apache-2.0** (`LICENSE-MIT`, `LICENSE-APACHE`). Al enviar una contribución aceptas que se publique bajo estos términos. Las fuentes empaquetadas para tests (`crates/fonts/tests/fixtures/`) conservan su licencia original, incluida junto a los ficheros (`LICENSE-DejaVu.txt`).
+
+---
 
 ¡Esperamos con entusiasmo tus contribuciones para hacer de **Megi** un motor web independiente de referencia! 🚀
