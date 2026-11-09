@@ -2,6 +2,18 @@
 //!
 //! Provides compound and complex selector representation, token stream parsing,
 //! and high-performance matching over [`dom::Document`] and [`dom::NodeId`].
+//!
+//! Supported: type/universal selectors (case-insensitive for HTML elements, case-sensitive
+//! for foreign SVG/MathML elements), `#id`, `.class`, attribute selectors (`=`, `~=`, `|=`,
+//! `^=`, `$=`, `*=` plus the `i` flag), descendant/child/next-sibling/subsequent-sibling
+//! combinators, and the structural pseudo-classes `:first-child`, `:last-child`,
+//! `:only-child`, `:empty`, `:root` and `:nth-child(An+B)`.
+//!
+//! Still pending (documented, out of scope for this milestone): `@media` and other at-rules
+//! in the cascade, `:is()`, `:where()`, `:not()`, `:has()`, `:nth-of-type()`/`:nth-last-*`,
+//! `:lang()`, namespace prefixes and pseudo-element boxes. Dynamic pseudo-classes without
+//! tracked interaction state match nothing, and unknown/unsupported pseudo-classes invalidate
+//! the whole selector list instead of silently over-matching (audit findings F13/F14/F15/F16).
 
 use dom::{Document, Namespace, NodeId, NodeKind};
 
@@ -153,6 +165,16 @@ pub fn parse_an_plus_b(s: &str) -> Option<AnPlusB> {
 }
 
 /// Supported pseudo-classes in Selectors Level 4.
+///
+/// Pseudo-classes that depend on interaction or document state that this engine does not
+/// track yet (`:hover`, `:active`, `:focus`, `:visited`, `:link`, ...) and pseudo-elements
+/// (`::before`, `::after`, ...) are parsed as [`PseudoClass::Never`]: the selector stays
+/// valid but can never match, instead of over-matching every element like the previous
+/// fallback did.
+///
+/// Not implemented yet (selectors using them are currently rejected as invalid):
+/// `:is()`, `:where()`, `:not()`, `:has()`, `:nth-of-type()`/`:nth-last-*`, `:lang()`,
+/// attribute namespaces and the `s`/`i` case-sensitivity flags of `@namespace`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PseudoClass {
     FirstChild,
@@ -161,6 +183,8 @@ pub enum PseudoClass {
     Empty,
     Root,
     NthChild(AnPlusB),
+    /// Known pseudo-class/pseudo-element whose state this engine cannot observe.
+    Never,
 }
 
 impl PseudoClass {
@@ -171,6 +195,7 @@ impl PseudoClass {
                 let parent = doc.node(node_id).parent;
                 parent == Some(doc.root())
             }
+            Self::Never => false,
             Self::Empty => {
                 // No element children and no non-empty text children
                 let mut curr = doc.node(node_id).first_child;
@@ -307,25 +332,34 @@ impl CompoundSelector {
         Specificity::new(a, b, c)
     }
 
+    /// Matches this compound selector against a DOM element.
+    ///
+    /// Type selectors match HTML elements case-insensitively and foreign (SVG/MathML)
+    /// elements case-sensitively. Unlike the previous implementation, type/class/id/attribute
+    /// and universal selectors are no longer restricted to the HTML namespace, so styles now
+    /// apply to SVG/MathML elements (F14).
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
         let Some(el) = doc.node(node_id).as_element() else {
             return false;
         };
 
-        if el.namespace != Namespace::Html {
+        if let Some(tag) = self.tag_name.as_deref()
+            && tag != "*"
+        {
+            let name_matches = if el.namespace == Namespace::Html {
+                el.local_name.eq_ignore_ascii_case(tag)
+            } else {
+                el.local_name == tag
+            };
+            if !name_matches {
+                return false;
+            }
+        }
+
+        if let Some(expected_id) = self.id.as_deref()
+            && el.get_attribute("id") != Some(expected_id)
+        {
             return false;
-        }
-
-        if let Some(ref tag) = self.tag_name {
-            if tag != "*" && !el.local_name.eq_ignore_ascii_case(tag) {
-                return false;
-            }
-        }
-
-        if let Some(ref expected_id) = self.id {
-            if el.get_attribute("id") != Some(expected_id.as_str()) {
-                return false;
-            }
         }
 
         if !self.classes.is_empty() {
@@ -499,48 +533,116 @@ impl SelectorList {
 }
 
 /// Parses a selector string into a [`SelectorList`].
+///
+/// Commas only split the list at the top level: commas inside attribute values, functional
+/// pseudo-class arguments or quoted strings do not start a new selector (F15). Per CSS Syntax
+/// Level 3 §5.4.4, a selector list containing one invalid or unsupported selector is itself
+/// invalid, so the whole list is dropped instead of silently over-matching with its valid
+/// parts (F13).
+///
+/// Pending and not implemented in this milestone: `@media`/at-rules in the cascade, and
+/// `:is()`, `:where()`, `:not()`, `:has()`, which currently invalidate the selector list.
 pub fn parse_selectors(input: &str) -> SelectorList {
-    let mut list = SelectorList::default();
-    for part in input.split(',') {
-        let trimmed = part.trim();
-        if trimmed.is_empty() {
+    if input.trim().is_empty() {
+        return SelectorList::default();
+    }
+    let parts = split_top_level_commas(input);
+    let mut selectors = Vec::with_capacity(parts.len());
+    for part in parts {
+        let Some(complex) = parse_complex_selector(part.trim()) else {
+            return SelectorList::default();
+        };
+        selectors.push(complex);
+    }
+    SelectorList { selectors }
+}
+
+/// Splits a selector list on top-level commas, ignoring commas nested in blocks or strings.
+fn split_top_level_commas(input: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    for ch in input.chars() {
+        if escaped {
+            current.push(ch);
+            escaped = false;
             continue;
         }
-        if let Some(complex) = parse_complex_selector(trimmed) {
-            list.selectors.push(complex);
+        if let Some(q) = quote {
+            current.push(ch);
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == q {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '"' | '\'' => {
+                quote = Some(ch);
+                current.push(ch);
+            }
+            '(' | '[' => {
+                depth += 1;
+                current.push(ch);
+            }
+            ')' | ']' => {
+                depth = depth.saturating_sub(1);
+                current.push(ch);
+            }
+            ',' if depth == 0 => parts.push(std::mem::take(&mut current)),
+            c => current.push(c),
         }
     }
-    list
+    if !current.is_empty() || !parts.is_empty() {
+        parts.push(current);
+    }
+    parts
 }
 
 /// Parses a single complex selector string.
 fn parse_complex_selector(input: &str) -> Option<ComplexSelector> {
-    let mut compounds = Vec::new();
     let mut tokens = tokenize_selector_parts(input);
-    if tokens.is_empty() {
-        return None;
-    }
+    let mut compounds = Vec::new();
 
-    while !tokens.is_empty() {
+    loop {
         let compound = parse_compound_selector(&mut tokens)?;
-        let comb = if tokens.is_empty() {
-            None
-        } else {
-            let next = tokens.remove(0);
-            match next.as_str() {
-                ">" => Some(Combinator::Child),
-                "+" => Some(Combinator::NextSibling),
-                "~" => Some(Combinator::SubsequentSibling),
-                " " => Some(Combinator::Descendant),
-                _ => Some(Combinator::Descendant),
-            }
+        if tokens.is_empty() {
+            compounds.push((compound, None));
+            break;
+        }
+        let combinator = match tokens.remove(0).as_str() {
+            ">" => Combinator::Child,
+            "+" => Combinator::NextSibling,
+            "~" => Combinator::SubsequentSibling,
+            " " => Combinator::Descendant,
+            _ => return None,
         };
-        compounds.push((compound, comb));
+        compounds.push((compound, Some(combinator)));
     }
 
     Some(ComplexSelector { compounds })
 }
 
+/// Appends the currently accumulated selector chunk to `parts`, if it is not blank.
+fn push_selector_chunk(parts: &mut Vec<String>, current: &mut String) {
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        parts.push(trimmed.to_string());
+        current.clear();
+    } else {
+        current.clear();
+    }
+}
+
+/// Splits a complex selector into compound-selector chunks and combinator tokens.
+///
+/// Whitespace becomes an explicit `" "` descendant-combinator token; `>`, `+` and `~` become
+/// combinator tokens. Whitespace and combinators nested in `[...]`, `(...)` or strings stay
+/// inside their chunk, so attribute values such as `[title="Hello, world"]` survive intact
+/// (F15).
 fn tokenize_selector_parts(input: &str) -> Vec<String> {
     let mut parts = Vec::new();
     let mut current = String::new();
@@ -549,74 +651,126 @@ fn tokenize_selector_parts(input: &str) -> Vec<String> {
     while let Some(ch) = chars.next() {
         match ch {
             '>' | '+' | '~' => {
-                let trimmed = current.trim();
-                if !trimmed.is_empty() {
-                    parts.push(trimmed.to_string());
-                    current.clear();
-                }
+                push_selector_chunk(&mut parts, &mut current);
                 parts.push(ch.to_string());
             }
-            ' ' | '\t' | '\n' => {
-                let trimmed = current.trim();
-                if !trimmed.is_empty() {
-                    parts.push(trimmed.to_string());
-                    current.clear();
-                }
+            c if c.is_whitespace() => {
+                push_selector_chunk(&mut parts, &mut current);
                 while chars.peek().copied().is_some_and(|c| c.is_whitespace()) {
                     chars.next();
                 }
-                if let Some(&next_c) = chars.peek() {
-                    if !matches!(next_c, '>' | '+' | '~')
-                        && !parts.is_empty()
-                        && parts.last().map(|s| s.as_str()) != Some(">")
-                        && parts.last().map(|s| s.as_str()) != Some("+")
-                        && parts.last().map(|s| s.as_str()) != Some("~")
-                    {
-                        parts.push(" ".to_string());
-                    }
+                let next = chars.peek().copied();
+                let prev_is_combinator =
+                    matches!(parts.last().map(String::as_str), Some(">" | "+" | "~"));
+                if next.is_some()
+                    && !matches!(next, Some('>' | '+' | '~'))
+                    && !parts.is_empty()
+                    && !prev_is_combinator
+                {
+                    parts.push(" ".to_string());
                 }
             }
-            '[' => {
-                current.push('[');
+            '[' | '(' => {
+                let (open, close) = if ch == '[' { ('[', ']') } else { ('(', ')') };
+                current.push(open);
+                let mut depth = 1usize;
+                let mut quote: Option<char> = None;
+                let mut escaped = false;
                 for inner in chars.by_ref() {
-                    current.push(inner);
-                    if inner == ']' {
-                        break;
+                    if escaped {
+                        current.push(inner);
+                        escaped = false;
+                        continue;
                     }
-                }
-            }
-            '(' => {
-                current.push('(');
-                for inner in chars.by_ref() {
-                    current.push(inner);
-                    if inner == ')' {
-                        break;
+                    if let Some(q) = quote {
+                        current.push(inner);
+                        if inner == '\\' {
+                            escaped = true;
+                        } else if inner == q {
+                            quote = None;
+                        }
+                        continue;
+                    }
+                    match inner {
+                        '"' | '\'' => {
+                            quote = Some(inner);
+                            current.push(inner);
+                        }
+                        c if c == open => {
+                            depth += 1;
+                            current.push(c);
+                        }
+                        c if c == close => {
+                            depth -= 1;
+                            current.push(c);
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        c => current.push(c),
                     }
                 }
             }
             other => current.push(other),
         }
     }
-    let trimmed = current.trim();
-    if !trimmed.is_empty() {
-        parts.push(trimmed.to_string());
+    if !current.trim().is_empty() {
+        parts.push(current.trim().to_string());
     }
     parts
 }
+
+/// Dynamic pseudo-classes whose state this engine does not track yet.
+///
+/// They are accepted by the parser but mapped to [`PseudoClass::Never`]: a rule such as
+/// `a:hover { ... }` must not match every `a` element (CSS Selectors Level 4 §3).
+const DYNAMIC_PSEUDO_CLASSES: &[&str] = &[
+    "hover",
+    "active",
+    "focus",
+    "focus-visible",
+    "focus-within",
+    "target",
+    "target-within",
+    "visited",
+    "link",
+    "any-link",
+    "local-link",
+    "checked",
+    "indeterminate",
+    "default",
+    "disabled",
+    "enabled",
+    "required",
+    "optional",
+    "valid",
+    "invalid",
+    "in-range",
+    "out-of-range",
+    "read-only",
+    "read-write",
+    "placeholder-shown",
+    "autofill",
+    "fullscreen",
+    "modal",
+    "picture-in-picture",
+    "playing",
+    "paused",
+];
 
 fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector> {
     if tokens.is_empty() {
         return None;
     }
     let s = tokens.remove(0);
-    if s == " " || s == ">" || s == "+" || s == "~" {
+    if matches!(s.as_str(), " " | ">" | "+" | "~") {
         return None;
     }
 
     let mut compound = CompoundSelector::default();
     let mut chars = s.chars().peekable();
 
-    // Check tag name
+    // Optional type selector or universal selector prefix.
     if chars
         .peek()
         .copied()
@@ -629,6 +783,9 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
             .is_some_and(|c| c.is_alphanumeric() || c == '*' || c == '-' || c == '_')
         {
             tag.push(chars.next().unwrap());
+        }
+        if tag.is_empty() {
+            return None;
         }
         compound.tag_name = Some(tag);
     }
@@ -644,6 +801,9 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
                 {
                     id.push(chars.next().unwrap());
                 }
+                if id.is_empty() {
+                    return None;
+                }
                 compound.id = Some(id);
             }
             '.' => {
@@ -655,58 +815,123 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
                 {
                     class.push(chars.next().unwrap());
                 }
+                if class.is_empty() {
+                    return None;
+                }
                 compound.classes.push(class);
             }
             ':' => {
+                let is_pseudo_element = chars.peek() == Some(&':');
+                if is_pseudo_element {
+                    chars.next();
+                }
                 let mut pseudo = String::new();
                 while chars
                     .peek()
                     .copied()
-                    .is_some_and(|c| c.is_alphabetic() || c == '-')
+                    .is_some_and(|c| c.is_alphanumeric() || c == '-' || c == '_')
                 {
                     pseudo.push(chars.next().unwrap());
                 }
-                let mut arg = None;
+                if pseudo.is_empty() {
+                    return None;
+                }
+
+                let mut argument = None;
                 if chars.peek() == Some(&'(') {
                     chars.next();
-                    let mut arg_str = String::new();
+                    let mut depth = 1usize;
+                    let mut arg = String::new();
                     for inner in chars.by_ref() {
-                        if inner == ')' {
-                            break;
-                        }
-                        arg_str.push(inner);
-                    }
-                    arg = Some(arg_str);
-                }
-                match pseudo.to_ascii_lowercase().as_str() {
-                    "first-child" => compound.pseudo_classes.push(PseudoClass::FirstChild),
-                    "last-child" => compound.pseudo_classes.push(PseudoClass::LastChild),
-                    "only-child" => compound.pseudo_classes.push(PseudoClass::OnlyChild),
-                    "empty" => compound.pseudo_classes.push(PseudoClass::Empty),
-                    "root" => compound.pseudo_classes.push(PseudoClass::Root),
-                    "nth-child" => {
-                        if let Some(arg_str) = arg {
-                            if let Some(anb) = parse_an_plus_b(&arg_str) {
-                                compound.pseudo_classes.push(PseudoClass::NthChild(anb));
+                        match inner {
+                            '(' => {
+                                depth += 1;
+                                arg.push(inner);
                             }
+                            ')' => {
+                                depth -= 1;
+                                if depth == 0 {
+                                    break;
+                                }
+                                arg.push(inner);
+                            }
+                            c => arg.push(c),
                         }
                     }
-                    _ => {}
+                    if depth != 0 {
+                        return None; // unbalanced functional pseudo-class
+                    }
+                    argument = Some(arg);
                 }
+
+                if is_pseudo_element {
+                    // Pseudo-element boxes are not generated yet: the selector stays valid
+                    // but can never match an element (F13).
+                    compound.pseudo_classes.push(PseudoClass::Never);
+                    continue;
+                }
+
+                let name = pseudo.to_ascii_lowercase();
+                let pseudo_class = match name.as_str() {
+                    "first-child" if argument.is_none() => PseudoClass::FirstChild,
+                    "last-child" if argument.is_none() => PseudoClass::LastChild,
+                    "only-child" if argument.is_none() => PseudoClass::OnlyChild,
+                    "empty" if argument.is_none() => PseudoClass::Empty,
+                    "root" if argument.is_none() => PseudoClass::Root,
+                    "nth-child" => PseudoClass::NthChild(parse_an_plus_b(argument.as_deref()?)?),
+                    // Legacy single-colon pseudo-element syntax (`:before`, `:first-line`, ...).
+                    "before" | "after" | "first-line" | "first-letter" if argument.is_none() => {
+                        PseudoClass::Never
+                    }
+                    _ if DYNAMIC_PSEUDO_CLASSES.contains(&name.as_str()) && argument.is_none() => {
+                        PseudoClass::Never
+                    }
+                    // `:is()`/`:where()`/`:not()`/`:has()` and unknown pseudo-classes
+                    // invalidate the selector list instead of over-matching (F13).
+                    _ => return None,
+                };
+                compound.pseudo_classes.push(pseudo_class);
             }
             '[' => {
                 let mut attr_spec = String::new();
+                let mut quote: Option<char> = None;
+                let mut escaped = false;
+                let mut closed = false;
                 for inner in chars.by_ref() {
-                    if inner == ']' {
-                        break;
+                    if escaped {
+                        attr_spec.push(inner);
+                        escaped = false;
+                        continue;
                     }
-                    attr_spec.push(inner);
+                    if let Some(q) = quote {
+                        attr_spec.push(inner);
+                        if inner == '\\' {
+                            escaped = true;
+                        } else if inner == q {
+                            quote = None;
+                        }
+                        continue;
+                    }
+                    match inner {
+                        '"' | '\'' => {
+                            quote = Some(inner);
+                            attr_spec.push(inner);
+                        }
+                        ']' => {
+                            closed = true;
+                            break;
+                        }
+                        c => attr_spec.push(c),
+                    }
                 }
-                if let Some(attr_sel) = parse_attribute_selector(&attr_spec) {
-                    compound.attributes.push(attr_sel);
+                if !closed {
+                    return None;
                 }
+                compound
+                    .attributes
+                    .push(parse_attribute_selector(&attr_spec)?);
             }
-            _ => {}
+            _ => return None,
         }
     }
 
@@ -719,38 +944,119 @@ fn parse_attribute_selector(spec: &str) -> Option<AttributeSelector> {
         return None;
     }
 
-    let ops = [
-        ("~=", AttrOperator::Includes),
-        ("|=", AttrOperator::DashMatch),
-        ("^=", AttrOperator::Prefix),
-        ("$=", AttrOperator::Suffix),
-        ("*=", AttrOperator::Substring),
-        ("=", AttrOperator::Exact),
-    ];
-
-    for (op_str, op) in ops {
-        if let Some(idx) = spec.find(op_str) {
-            let name = spec[..idx].trim().to_string();
-            let mut val_part = spec[idx + op_str.len()..].trim();
-            let mut case_insensitive = false;
-            if val_part.ends_with(" i") || val_part.ends_with(" I") {
-                case_insensitive = true;
-                val_part = val_part[..val_part.len() - 2].trim();
+    // Find the operator outside quoted strings.
+    let mut operator = None;
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    for (byte_index, ch) in spec.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if let Some(q) = quote {
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == q {
+                quote = None;
             }
-            let val = val_part.trim_matches(|c| c == '"' || c == '\'').to_string();
-            return Some(AttributeSelector {
-                name,
-                operator: Some(op),
-                value: Some(val),
-                case_insensitive,
-            });
+            continue;
+        }
+        let rest = &spec[byte_index + ch.len_utf8()..];
+        match ch {
+            '"' | '\'' => quote = Some(ch),
+            '~' | '^' | '$' | '*' if rest.starts_with('=') => {
+                let op = match ch {
+                    '~' => AttrOperator::Includes,
+                    '^' => AttrOperator::Prefix,
+                    '$' => AttrOperator::Suffix,
+                    _ => AttrOperator::Substring,
+                };
+                operator = Some((byte_index, op, 2usize));
+                break;
+            }
+            '|' if rest.starts_with('=') => {
+                operator = Some((byte_index, AttrOperator::DashMatch, 2usize));
+                break;
+            }
+            '=' => {
+                operator = Some((byte_index, AttrOperator::Exact, 1usize));
+                break;
+            }
+            // Attribute namespaces (`[ns|attr]`) are not supported yet.
+            '|' => return None,
+            _ => {}
         }
     }
 
+    let Some((op_index, op, op_len)) = operator else {
+        // Presence selector `[attr]`.
+        if !is_valid_attribute_name(spec) {
+            return None;
+        }
+        return Some(AttributeSelector {
+            name: spec.to_string(),
+            operator: None,
+            value: None,
+            case_insensitive: false,
+        });
+    };
+
+    let name = spec[..op_index].trim();
+    if !is_valid_attribute_name(name) {
+        return None;
+    }
+
+    let mut value_part = spec[op_index + op_len..].trim();
+    let mut case_insensitive = false;
+    if let Some((rest, flag)) = split_case_flag(value_part) {
+        value_part = rest;
+        case_insensitive = flag;
+    }
+    let value = strip_attribute_value_quotes(value_part)?;
+
     Some(AttributeSelector {
-        name: spec.to_string(),
-        operator: None,
-        value: None,
-        case_insensitive: false,
+        name: name.to_string(),
+        operator: Some(op),
+        value: Some(value),
+        case_insensitive,
     })
+}
+
+/// Returns whether `name` looks like a valid attribute local name for a selector.
+fn is_valid_attribute_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.chars().any(|c| {
+            c.is_ascii_whitespace()
+                || matches!(
+                    c,
+                    '"' | '\'' | '[' | ']' | '=' | '~' | '^' | '$' | '*' | '|'
+                )
+        })
+}
+
+/// Splits a trailing `i`/`s` case-sensitivity flag from an attribute selector value.
+fn split_case_flag(value: &str) -> Option<(&str, bool)> {
+    let (rest, flag) = value.trim_end().rsplit_once(char::is_whitespace)?;
+    let case_insensitive = match flag {
+        "i" | "I" => true,
+        "s" | "S" => false,
+        _ => return None,
+    };
+    Some((rest.trim_end(), case_insensitive))
+}
+
+/// Removes the surrounding quotes of an attribute selector value, validating unquoted values.
+fn strip_attribute_value_quotes(value: &str) -> Option<String> {
+    let value = value.trim();
+    if let Some(first) = value.chars().next()
+        && matches!(first, '"' | '\'')
+        && value.len() >= 2
+        && value.ends_with(first)
+    {
+        return Some(value[1..value.len() - 1].to_string());
+    }
+    if value.is_empty() || value.contains(char::is_whitespace) {
+        return None;
+    }
+    Some(value.to_string())
 }

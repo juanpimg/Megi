@@ -78,6 +78,12 @@ ul, ol {
     margin-block: 1em;
     padding-inline: 40px;
 }
+ul {
+    list-style-type: disc;
+}
+ol {
+    list-style-type: decimal;
+}
 
 /* Text-level semantics (§15.3.7) */
 b, strong {
