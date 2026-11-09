@@ -619,3 +619,249 @@ fn test_adversarial_text_align_right_with_styled_span() {
         right_edge
     );
 }
+
+#[test]
+fn test_adversarial_text_align_right_nested_styled_spans() {
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html", vec![]);
+    let body = doc.create_element(Namespace::Html, "body", vec![]);
+    let p = doc.create_element(Namespace::Html, "p", vec![]);
+    let outer = doc.create_element(Namespace::Html, "span", vec![]);
+    let inner = doc.create_element(Namespace::Html, "span", vec![]);
+
+    doc.append_child(doc.root(), html);
+    doc.append_child(html, body);
+    doc.append_child(body, p);
+    doc.append_child(p, outer);
+    doc.append_child(outer, inner);
+    doc.append_text(inner, "Nested");
+
+    let mut p_style = make_block_style(Length::Px(200.0), Length::Auto);
+    p_style.text_align = TextAlign::Right;
+    p_style.font_family = "monospace".to_string();
+    p_style.font_size = 10.0;
+    p_style.line_height = Some(20.0);
+
+    let mut outer_style = make_inline_style();
+    outer_style.font_family = "monospace".to_string();
+    outer_style.font_size = 10.0;
+    outer_style.margin.left = Length::Px(5.0);
+    outer_style.margin.right = Length::Px(5.0);
+    outer_style.border_width.left = 3.0;
+    outer_style.border_width.right = 3.0;
+    outer_style.padding.left = Length::Px(7.0);
+    outer_style.padding.right = Length::Px(7.0); // outer edges = 15.0 left, 15.0 right
+
+    let mut inner_style = make_inline_style();
+    inner_style.font_family = "monospace".to_string();
+    inner_style.font_size = 10.0;
+    inner_style.margin.left = Length::Px(4.0);
+    inner_style.margin.right = Length::Px(4.0);
+    inner_style.border_width.left = 2.0;
+    inner_style.border_width.right = 2.0;
+    inner_style.padding.left = Length::Px(6.0);
+    inner_style.padding.right = Length::Px(6.0); // inner edges = 12.0 left, 12.0 right
+
+    let mut styles = HashMap::new();
+    styles.insert(html, make_block_style(Length::Auto, Length::Auto));
+    styles.insert(body, make_block_style(Length::Auto, Length::Auto));
+    styles.insert(p, p_style);
+    styles.insert(outer, outer_style);
+    styles.insert(inner, inner_style);
+
+    let viewport = Rect::new(0.0, 0.0, 800.0, 600.0);
+    let layout_tree = layout_document(&doc, &styles, viewport).expect("layout tree");
+
+    let p_box = &layout_tree.children[0].children[0];
+    let line_box = &p_box.children[0];
+    let outer_box = &line_box.children[0];
+    let inner_box = &outer_box.children[0];
+    let text_box = &inner_box.children[0];
+
+    // "Nested" monospace 10px = 6 chars * 6.0 = 36.0px.
+    // Total content width = 15.0 (outer left) + 12.0 (inner left) + 36.0 + 12.0 (inner right) + 15.0 (outer right) = 90.0px.
+    // Remaining width = 200.0 - 90.0 = 110.0px.
+    // Outer content.x = 110.0 + 15.0 = 125.0px.
+    // Inner content.x = 125.0 + 12.0 = 137.0px.
+    // Text content.x = 137.0px.
+    // Outer right border edge = 125.0 + (12.0 + 36.0 + 12.0) + 3.0 = 188.0 + 7.0 (padding) + 5.0 (margin) = 200.0px.
+    let outer_right_edge = outer_box.dimensions.content.x
+        + outer_box.dimensions.content.width
+        + outer_box.dimensions.padding.right
+        + outer_box.dimensions.border.right
+        + outer_box.dimensions.margin.right;
+
+    println!("Outer content.x = {}", outer_box.dimensions.content.x);
+    println!("Inner content.x = {}", inner_box.dimensions.content.x);
+    println!("Text content.x = {}", text_box.dimensions.content.x);
+    println!("Outer right edge = {}", outer_right_edge);
+
+    assert_eq!(outer_box.dimensions.content.x, 125.0);
+    assert_eq!(inner_box.dimensions.content.x, 137.0);
+    assert_eq!(text_box.dimensions.content.x, 137.0);
+    assert_eq!(outer_right_edge, 200.0);
+}
+
+#[test]
+fn test_adversarial_text_align_right_multiline_box_splitting_edges() {
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html", vec![]);
+    let body = doc.create_element(Namespace::Html, "body", vec![]);
+    let p = doc.create_element(Namespace::Html, "p", vec![]);
+    let span = doc.create_element(Namespace::Html, "span", vec![]);
+
+    doc.append_child(doc.root(), html);
+    doc.append_child(html, body);
+    doc.append_child(body, p);
+    doc.append_child(p, span);
+    doc.append_text(span, "AAA BBB");
+
+    // Monospace 10px -> 6px/char. "AAA" = 18px. "BBB" = 18px.
+    // Span border-left = 10px, border-right = 20px.
+    // Container width = 45px.
+    // Line 1: left border 10px + "AAA" 18px = 28px <= 45px.
+    // With space (6px) + "BBB" (18px) + border-right (20px), total = 72px > 45px -> wraps to Line 2!
+    let mut p_style = make_block_style(Length::Px(45.0), Length::Auto);
+    p_style.text_align = TextAlign::Right;
+    p_style.font_family = "monospace".to_string();
+    p_style.font_size = 10.0;
+    p_style.line_height = Some(20.0);
+
+    let mut span_style = make_inline_style();
+    span_style.font_family = "monospace".to_string();
+    span_style.font_size = 10.0;
+    span_style.border_width.left = 10.0;
+    span_style.border_width.right = 20.0;
+
+    let mut styles = HashMap::new();
+    styles.insert(html, make_block_style(Length::Auto, Length::Auto));
+    styles.insert(body, make_block_style(Length::Auto, Length::Auto));
+    styles.insert(p, p_style);
+    styles.insert(span, span_style);
+
+    let viewport = Rect::new(0.0, 0.0, 800.0, 600.0);
+    let layout_tree = layout_document(&doc, &styles, viewport).expect("layout tree");
+
+    let p_box = &layout_tree.children[0].children[0];
+    assert_eq!(p_box.children.len(), 2, "Must break into 2 lines");
+
+    let line1 = &p_box.children[0];
+    let line2 = &p_box.children[1];
+
+    let span_frag1 = &line1.children[0];
+    let span_frag2 = &line2.children[0];
+
+    // Line 1: Left border = 10.0, Right border = 0.0.
+    // line_content_width = 10.0 + 18.0 = 28.0px.
+    // Remaining = 45.0 - 28.0 = 17.0px.
+    // span content.x = 17.0 + 10.0 = 27.0px.
+    // Rightmost point of text on line 1 = 27.0 + 18.0 = 45.0px (flush with container width!).
+    assert_eq!(span_frag1.dimensions.border.left, 10.0);
+    assert_eq!(span_frag1.dimensions.border.right, 0.0);
+    assert_eq!(span_frag1.dimensions.content.x, 27.0);
+    assert_eq!(span_frag1.dimensions.content.width, 18.0);
+    assert_eq!(
+        span_frag1.dimensions.content.x + span_frag1.dimensions.content.width,
+        45.0
+    );
+
+    // Line 2: Left border = 0.0, Right border = 20.0.
+    // line_content_width = 18.0 + 20.0 = 38.0px.
+    // Remaining = 45.0 - 38.0 = 7.0px.
+    // span content.x = 7.0 + 0.0 = 7.0px.
+    // Right border edge = 7.0 + 18.0 + 20.0 = 45.0px (flush with container width!).
+    assert_eq!(span_frag2.dimensions.border.left, 0.0);
+    assert_eq!(span_frag2.dimensions.border.right, 20.0);
+    assert_eq!(span_frag2.dimensions.content.x, 7.0);
+    assert_eq!(span_frag2.dimensions.content.width, 18.0);
+    assert_eq!(
+        span_frag2.dimensions.content.x
+            + span_frag2.dimensions.content.width
+            + span_frag2.dimensions.border.right,
+        45.0
+    );
+}
+
+#[test]
+fn test_adversarial_vertical_align_middle_heterogeneous_font_sizes() {
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html", vec![]);
+    let body = doc.create_element(Namespace::Html, "body", vec![]);
+    let p = doc.create_element(Namespace::Html, "p", vec![]);
+    let span_normal = doc.create_element(Namespace::Html, "span", vec![]);
+    let span_large = doc.create_element(Namespace::Html, "span", vec![]);
+    let span_small = doc.create_element(Namespace::Html, "span", vec![]);
+
+    doc.append_child(doc.root(), html);
+    doc.append_child(html, body);
+    doc.append_child(body, p);
+    doc.append_child(p, span_normal);
+    doc.append_text(span_normal, "Normal ");
+    doc.append_child(p, span_large);
+    doc.append_text(span_large, "Large ");
+    doc.append_child(p, span_small);
+    doc.append_text(span_small, "Small");
+
+    let mut p_style = make_block_style(Length::Px(800.0), Length::Auto);
+    p_style.font_size = 16.0;
+    p_style.line_height = Some(20.0);
+
+    let mut normal_style = make_inline_style();
+    normal_style.font_size = 16.0;
+    normal_style.line_height = Some(20.0);
+    normal_style.vertical_align = VerticalAlign::Baseline;
+
+    let mut large_style = make_inline_style();
+    large_style.font_size = 32.0;
+    large_style.line_height = Some(40.0);
+    large_style.vertical_align = VerticalAlign::Middle;
+
+    let mut small_style = make_inline_style();
+    small_style.font_size = 8.0;
+    small_style.line_height = Some(10.0);
+    small_style.vertical_align = VerticalAlign::Middle;
+
+    let mut styles = HashMap::new();
+    styles.insert(html, make_block_style(Length::Auto, Length::Auto));
+    styles.insert(body, make_block_style(Length::Auto, Length::Auto));
+    styles.insert(p, p_style);
+    styles.insert(span_normal, normal_style);
+    styles.insert(span_large, large_style);
+    styles.insert(span_small, small_style);
+
+    let viewport = Rect::new(0.0, 0.0, 800.0, 600.0);
+    let layout_tree = layout_document(&doc, &styles, viewport).expect("layout tree");
+
+    let p_box = &layout_tree.children[0].children[0];
+    let line_box = &p_box.children[0];
+    let line_y = line_box.dimensions.content.y;
+    let line_h = line_box.dimensions.content.height;
+
+    println!("LineBox: y={}, h={}", line_y, line_h);
+
+    for span_child in &line_box.children {
+        for text_child in &span_child.children {
+            let top = text_child.dimensions.content.y;
+            let bottom = top + text_child.dimensions.content.height;
+            println!(
+                "Text node bounds: top={}, bottom={}, line_bounds=[{}, {}]",
+                top,
+                bottom,
+                line_y,
+                line_y + line_h
+            );
+            assert!(
+                top >= line_y - 0.001,
+                "Fragment top {} must be within line box (line_y = {})",
+                top,
+                line_y
+            );
+            assert!(
+                bottom <= line_y + line_h + 0.001,
+                "Fragment bottom {} must be within line box (line_bottom = {})",
+                bottom,
+                line_y + line_h
+            );
+        }
+    }
+}
