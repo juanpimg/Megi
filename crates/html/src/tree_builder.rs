@@ -113,7 +113,6 @@ const IMPLIED_END_TAG_ELEMENTS: &[&str] = &[
 
 const P_CLOSING_BLOCK_ELEMENTS: &[&str] = &[
     "address",
-    "applet",
     "article",
     "aside",
     "blockquote",
@@ -139,10 +138,8 @@ const P_CLOSING_BLOCK_ELEMENTS: &[&str] = &[
     "hr",
     "listing",
     "main",
-    "marquee",
     "menu",
     "nav",
-    "object",
     "ol",
     "p",
     "pre",
@@ -152,6 +149,297 @@ const P_CLOSING_BLOCK_ELEMENTS: &[&str] = &[
     "table",
     "ul",
 ];
+
+const BLOCK_END_TAG_ELEMENTS: &[&str] = &[
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "button",
+    "center",
+    "details",
+    "dialog",
+    "dir",
+    "div",
+    "dl",
+    "fieldset",
+    "figcaption",
+    "figure",
+    "footer",
+    "header",
+    "hgroup",
+    "listing",
+    "main",
+    "menu",
+    "nav",
+    "ol",
+    "pre",
+    "search",
+    "section",
+    "select",
+    "summary",
+    "ul",
+];
+
+const SVG_ELEMENT_NAME_ADJUSTMENTS: &[(&str, &str)] = &[
+    ("altglyph", "altGlyph"),
+    ("altglyphdef", "altGlyphDef"),
+    ("altglyphitem", "altGlyphItem"),
+    ("animatecolor", "animateColor"),
+    ("animatemotion", "animateMotion"),
+    ("animatetransform", "animateTransform"),
+    ("clippath", "clipPath"),
+    ("feblend", "feBlend"),
+    ("fecolormatrix", "feColorMatrix"),
+    ("fecomponenttransfer", "feComponentTransfer"),
+    ("fecomposite", "feComposite"),
+    ("feconvolvematrix", "feConvolveMatrix"),
+    ("fediffuselighting", "feDiffuseLighting"),
+    ("fedisplacementmap", "feDisplacementMap"),
+    ("fedistantlight", "feDistantLight"),
+    ("fedropshadow", "feDropShadow"),
+    ("feflood", "feFlood"),
+    ("fefunca", "feFuncA"),
+    ("fefuncb", "feFuncB"),
+    ("fefuncg", "feFuncG"),
+    ("fefuncr", "feFuncR"),
+    ("fegaussianblur", "feGaussianBlur"),
+    ("feimage", "feImage"),
+    ("femerge", "feMerge"),
+    ("femergenode", "feMergeNode"),
+    ("femorphology", "feMorphology"),
+    ("feoffset", "feOffset"),
+    ("fepointlight", "fePointLight"),
+    ("fespecularlighting", "feSpecularLighting"),
+    ("fespotlight", "feSpotLight"),
+    ("fetile", "feTile"),
+    ("feturbulence", "feTurbulence"),
+    ("foreignobject", "foreignObject"),
+    ("glyphref", "glyphRef"),
+    ("lineargradient", "linearGradient"),
+    ("radialgradient", "radialGradient"),
+    ("textpath", "textPath"),
+];
+
+const SVG_ATTRIBUTE_ADJUSTMENTS: &[(&str, &str)] = &[
+    ("attributename", "attributeName"),
+    ("attributetype", "attributeType"),
+    ("basefrequency", "baseFrequency"),
+    ("baseprofile", "baseProfile"),
+    ("calcmode", "calcMode"),
+    ("clippathunits", "clipPathUnits"),
+    ("diffuseconstant", "diffuseConstant"),
+    ("edgemode", "edgeMode"),
+    ("filterunits", "filterUnits"),
+    ("glyphref", "glyphRef"),
+    ("gradienttransform", "gradientTransform"),
+    ("gradientunits", "gradientUnits"),
+    ("kernelmatrix", "kernelMatrix"),
+    ("kernelunitlength", "kernelUnitLength"),
+    ("keypoints", "keyPoints"),
+    ("keysplines", "keySplines"),
+    ("keytimes", "keyTimes"),
+    ("lengthadjust", "lengthAdjust"),
+    ("limitingconeangle", "limitingConeAngle"),
+    ("markerheight", "markerHeight"),
+    ("markerunits", "markerUnits"),
+    ("markerwidth", "markerWidth"),
+    ("maskcontentunits", "maskContentUnits"),
+    ("maskunits", "maskUnits"),
+    ("numoctaves", "numOctaves"),
+    ("pathlength", "pathLength"),
+    ("patterncontentunits", "patternContentUnits"),
+    ("patterntransform", "patternTransform"),
+    ("patternunits", "patternUnits"),
+    ("pointsatx", "pointsAtX"),
+    ("pointsaty", "pointsAtY"),
+    ("pointsatz", "pointsAtZ"),
+    ("preservealpha", "preserveAlpha"),
+    ("preserveaspectratio", "preserveAspectRatio"),
+    ("primitiveunits", "primitiveUnits"),
+    ("refx", "refX"),
+    ("refy", "refY"),
+    ("repeatcount", "repeatCount"),
+    ("repeatdur", "repeatDur"),
+    ("requiredextensions", "requiredExtensions"),
+    ("requiredfeatures", "requiredFeatures"),
+    ("specularconstant", "specularConstant"),
+    ("specularexponent", "specularExponent"),
+    ("spreadmethod", "spreadMethod"),
+    ("startoffset", "startOffset"),
+    ("stddeviation", "stdDeviation"),
+    ("stitchtiles", "stitchTiles"),
+    ("surfacescale", "surfaceScale"),
+    ("systemlanguage", "systemLanguage"),
+    ("tablevalues", "tableValues"),
+    ("targetx", "targetX"),
+    ("targety", "targetY"),
+    ("textlength", "textLength"),
+    ("viewbox", "viewBox"),
+    ("viewtarget", "viewTarget"),
+    ("xchannelselector", "xChannelSelector"),
+    ("ychannelselector", "yChannelSelector"),
+    ("zoomandpan", "zoomAndPan"),
+];
+
+const FOREIGN_ATTRIBUTE_ADJUSTMENTS: &[(&str, Option<&str>, &str, Namespace)] = &[
+    ("xlink:actuate", Some("xlink"), "actuate", Namespace::XLink),
+    ("xlink:arcrole", Some("xlink"), "arcrole", Namespace::XLink),
+    ("xlink:href", Some("xlink"), "href", Namespace::XLink),
+    ("xlink:role", Some("xlink"), "role", Namespace::XLink),
+    ("xlink:show", Some("xlink"), "show", Namespace::XLink),
+    ("xlink:title", Some("xlink"), "title", Namespace::XLink),
+    ("xlink:type", Some("xlink"), "type", Namespace::XLink),
+    ("xml:lang", Some("xml"), "lang", Namespace::Xml),
+    ("xml:space", Some("xml"), "space", Namespace::Xml),
+    ("xmlns", None, "xmlns", Namespace::Xmlns),
+    ("xmlns:xlink", Some("xmlns"), "xlink", Namespace::Xmlns),
+];
+
+const FOREIGN_BREAKOUT_TAGS: &[&str] = &[
+    "b",
+    "big",
+    "blockquote",
+    "body",
+    "br",
+    "center",
+    "code",
+    "dd",
+    "div",
+    "dl",
+    "dt",
+    "em",
+    "embed",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "head",
+    "hr",
+    "i",
+    "img",
+    "li",
+    "listing",
+    "menu",
+    "meta",
+    "nobr",
+    "ol",
+    "p",
+    "pre",
+    "ruby",
+    "s",
+    "small",
+    "span",
+    "strong",
+    "strike",
+    "sub",
+    "sup",
+    "table",
+    "tt",
+    "u",
+    "ul",
+    "var",
+];
+
+/// Checks if an element is in the "special" category (§13.2.4.2).
+pub fn is_special_category(ns: Namespace, local_name: &str) -> bool {
+    match ns {
+        Namespace::Html => matches!(
+            local_name,
+            "address"
+                | "applet"
+                | "area"
+                | "article"
+                | "aside"
+                | "base"
+                | "basefont"
+                | "bgsound"
+                | "blockquote"
+                | "body"
+                | "br"
+                | "button"
+                | "caption"
+                | "center"
+                | "col"
+                | "colgroup"
+                | "dd"
+                | "details"
+                | "dir"
+                | "div"
+                | "dl"
+                | "dt"
+                | "embed"
+                | "fieldset"
+                | "figcaption"
+                | "figure"
+                | "footer"
+                | "form"
+                | "frame"
+                | "frameset"
+                | "h1"
+                | "h2"
+                | "h3"
+                | "h4"
+                | "h5"
+                | "h6"
+                | "head"
+                | "header"
+                | "hgroup"
+                | "hr"
+                | "html"
+                | "iframe"
+                | "img"
+                | "input"
+                | "keygen"
+                | "li"
+                | "link"
+                | "listing"
+                | "main"
+                | "marquee"
+                | "menu"
+                | "meta"
+                | "nav"
+                | "noembed"
+                | "noframes"
+                | "noscript"
+                | "object"
+                | "ol"
+                | "p"
+                | "param"
+                | "plaintext"
+                | "pre"
+                | "script"
+                | "search"
+                | "section"
+                | "select"
+                | "source"
+                | "style"
+                | "summary"
+                | "table"
+                | "tbody"
+                | "td"
+                | "template"
+                | "textarea"
+                | "tfoot"
+                | "th"
+                | "thead"
+                | "title"
+                | "tr"
+                | "track"
+                | "ul"
+                | "wbr"
+                | "xmp"
+        ),
+        Namespace::MathMl => matches!(
+            local_name,
+            "mi" | "mo" | "mn" | "ms" | "mtext" | "annotation-xml"
+        ),
+        Namespace::Svg => matches!(local_name, "foreignObject" | "desc" | "title"),
+        _ => false,
+    }
+}
 
 /// WHATWG HTML §13.2.6 Tree Builder state machine.
 pub struct TreeBuilder {
@@ -168,6 +456,8 @@ pub struct TreeBuilder {
     pub foster_parenting: bool,
     pub skip_next_lf: bool,
     pub fragment_context: Option<(Namespace, String)>,
+    pub fragment_context_node: Option<NodeId>,
+    pub pending_table_characters: Vec<char>,
 }
 
 impl TreeBuilder {
@@ -186,6 +476,8 @@ impl TreeBuilder {
             foster_parenting: false,
             skip_next_lf: false,
             fragment_context: None,
+            fragment_context_node: None,
+            pending_table_characters: Vec::new(),
         }
     }
 
@@ -203,6 +495,117 @@ impl TreeBuilder {
 
     fn node_in_html(&self, node_id: NodeId, name: &str) -> bool {
         self.node_is(node_id, Namespace::Html, name)
+    }
+
+    pub fn is_node_special(&self, node_id: NodeId) -> bool {
+        self.doc
+            .node(node_id)
+            .as_element()
+            .is_some_and(|el| is_special_category(el.namespace, &el.local_name))
+    }
+
+    pub fn adjusted_current_node(&self) -> Option<NodeId> {
+        if self.open_elements.len() == 1
+            && let Some(ctx_node) = self.fragment_context_node
+        {
+            Some(ctx_node)
+        } else {
+            self.current_node()
+        }
+    }
+
+    pub fn is_adjusted_current_node_foreign(&self) -> bool {
+        if let Some(id) = self.adjusted_current_node() {
+            if let Some(el) = self.doc.node(id).as_element() {
+                return el.namespace != Namespace::Html;
+            }
+        }
+        false
+    }
+
+    pub fn is_mathml_text_integration_point(&self, node_id: NodeId) -> bool {
+        self.doc.node(node_id).as_element().is_some_and(|el| {
+            el.namespace == Namespace::MathMl
+                && matches!(el.local_name.as_str(), "mi" | "mo" | "mn" | "ms" | "mtext")
+        })
+    }
+
+    pub fn is_html_integration_point(&self, node_id: NodeId) -> bool {
+        self.doc
+            .node(node_id)
+            .as_element()
+            .is_some_and(|el| match el.namespace {
+                Namespace::MathMl if el.local_name == "annotation-xml" => {
+                    el.attributes.iter().any(|attr| {
+                        attr.local_name == "encoding"
+                            && (attr.value.eq_ignore_ascii_case("text/html")
+                                || attr.value.eq_ignore_ascii_case("application/xhtml+xml"))
+                    })
+                }
+                Namespace::Svg => {
+                    matches!(el.local_name.as_str(), "foreignObject" | "desc" | "title")
+                }
+                _ => false,
+            })
+    }
+
+    pub fn is_integration_point_or_html(&self, node_id: NodeId) -> bool {
+        self.doc.node(node_id).as_element().is_some_and(|el| {
+            el.namespace == Namespace::Html
+                || self.is_mathml_text_integration_point(node_id)
+                || self.is_html_integration_point(node_id)
+        })
+    }
+
+    pub fn should_dispatch_to_foreign(&self, token: &Token) -> bool {
+        if self.open_elements.is_empty() {
+            return false;
+        }
+        let Some(adjusted_node) = self.adjusted_current_node() else {
+            return false;
+        };
+        let Some(el) = self.doc.node(adjusted_node).as_element() else {
+            return false;
+        };
+
+        if el.namespace == Namespace::Html {
+            return false;
+        }
+
+        if matches!(token, Token::Eof) {
+            return false;
+        }
+
+        if self.is_mathml_text_integration_point(adjusted_node) {
+            match token {
+                Token::StartTag { name, .. } if name != "mglyph" && name != "malignmark" => {
+                    return false;
+                }
+                Token::Character(_) => {
+                    return false;
+                }
+                _ => {}
+            }
+        }
+
+        if el.namespace == Namespace::MathMl && el.local_name == "annotation-xml" {
+            if let Token::StartTag { name, .. } = token {
+                if name == "svg" {
+                    return false;
+                }
+            }
+        }
+
+        if self.is_html_integration_point(adjusted_node) {
+            match token {
+                Token::StartTag { .. } | Token::Character(_) => {
+                    return false;
+                }
+                _ => {}
+            }
+        }
+
+        true
     }
 
     /// Checks whether an HTML element with `target_name` is in the specific scope defined
@@ -238,6 +641,23 @@ impl TreeBuilder {
         self.has_element_in_specific_scope(target_name, DEFAULT_SCOPE_ELEMENTS, &[])
     }
 
+    pub fn has_node_in_scope(&self, target_node: NodeId) -> bool {
+        for &node_id in self.open_elements.iter().rev() {
+            if node_id == target_node {
+                return true;
+            }
+            if let Some(el) = self.doc.node(node_id).as_element() {
+                if DEFAULT_SCOPE_ELEMENTS
+                    .iter()
+                    .any(|&(s_name, s_ns)| el.namespace == s_ns && el.local_name == s_name)
+                {
+                    return false;
+                }
+            }
+        }
+        false
+    }
+
     pub fn has_element_in_button_scope(&self, target_name: &str) -> bool {
         self.has_element_in_specific_scope(target_name, DEFAULT_SCOPE_ELEMENTS, &["button"])
     }
@@ -253,6 +673,12 @@ impl TreeBuilder {
             ("template", Namespace::Html),
         ];
         self.has_element_in_specific_scope(target_name, TABLE_SCOPE, &[])
+    }
+
+    pub fn has_table_body_in_table_scope(&self) -> bool {
+        self.has_element_in_table_scope("tbody")
+            || self.has_element_in_table_scope("thead")
+            || self.has_element_in_table_scope("tfoot")
     }
 
     pub fn generate_implied_end_tags(&mut self, except: Option<&str>) {
@@ -396,6 +822,76 @@ impl TreeBuilder {
         self.insert_element(Namespace::Html, name, raw_attrs)
     }
 
+    fn create_html_element(&mut self, name: &str, raw_attrs: &[(String, String)]) -> NodeId {
+        let attrs: Vec<Attribute> = raw_attrs
+            .iter()
+            .map(|(k, v)| Attribute::new(k.clone(), v.clone()))
+            .collect();
+        self.doc.create_element(Namespace::Html, name, attrs)
+    }
+
+    fn create_foreign_element(
+        &mut self,
+        ns: Namespace,
+        mut name: String,
+        raw_attrs: &[(String, String)],
+    ) -> NodeId {
+        if ns == Namespace::Svg {
+            let name_lower = name.to_ascii_lowercase();
+            if let Some(&(_, adj_name)) = SVG_ELEMENT_NAME_ADJUSTMENTS
+                .iter()
+                .find(|&&(orig, _)| orig == name_lower)
+            {
+                name = adj_name.to_owned();
+            }
+        }
+
+        let mut attrs: Vec<Attribute> = Vec::with_capacity(raw_attrs.len());
+        for (raw_k, v) in raw_attrs {
+            let mut k = raw_k.clone();
+            if ns == Namespace::MathMl && k == "definitionurl" {
+                k = "definitionURL".to_owned();
+            }
+            if ns == Namespace::Svg {
+                let k_lower = k.to_ascii_lowercase();
+                if let Some(&(_, adj_attr)) = SVG_ATTRIBUTE_ADJUSTMENTS
+                    .iter()
+                    .find(|&&(orig, _)| orig == k_lower)
+                {
+                    k = adj_attr.to_owned();
+                }
+            }
+
+            if let Some(&(_, prefix, local, attr_ns)) = FOREIGN_ATTRIBUTE_ADJUSTMENTS
+                .iter()
+                .find(|&&(orig, _, _, _)| orig == k)
+            {
+                attrs.push(Attribute {
+                    namespace: attr_ns,
+                    prefix: prefix.map(str::to_owned),
+                    local_name: local.to_owned(),
+                    value: v.clone(),
+                });
+            } else {
+                attrs.push(Attribute::new(k, v.clone()));
+            }
+        }
+
+        self.doc.create_element(ns, name, attrs)
+    }
+
+    fn insert_foreign_element(
+        &mut self,
+        ns: Namespace,
+        name: String,
+        raw_attrs: &[(String, String)],
+    ) -> NodeId {
+        let el_id = self.create_foreign_element(ns, name, raw_attrs);
+        self.insert_node_at_adjusted_location(el_id);
+        self.open_elements.push(el_id);
+        el_id
+    }
+
     fn insert_comment(&mut self, data: &str, override_parent: Option<NodeId>) {
         let comment_id = self.doc.create_node(NodeKind::Comment(data.to_owned()));
         if let Some(parent_id) = override_parent {
@@ -507,6 +1003,244 @@ impl TreeBuilder {
         });
     }
 
+    fn clear_active_formatting_to_last_marker(&mut self) {
+        while let Some(entry) = self.active_formatting.pop() {
+            if entry == FormattingEntry::Marker {
+                break;
+            }
+        }
+    }
+
+    fn process_any_other_end_tag(&mut self, name: &str) {
+        for idx in (0..self.open_elements.len()).rev() {
+            let node_id = self.open_elements[idx];
+            if self.node_in_html(node_id, name) {
+                self.generate_implied_end_tags(Some(name));
+                while self.open_elements.len() > idx {
+                    if let Some(popped) = self.open_elements.pop() {
+                        self.active_formatting.retain(|e| {
+                            !matches!(
+                                e,
+                                FormattingEntry::Element { node_id: f_id, .. } if *f_id == popped
+                            )
+                        });
+                    }
+                }
+                break;
+            }
+            if self.is_node_special(node_id) {
+                break;
+            }
+        }
+    }
+
+    fn run_adoption_agency_algorithm(&mut self, subject: &str) {
+        if let Some(curr) = self.current_node() {
+            if self.node_in_html(curr, subject) {
+                let in_active = self.active_formatting.iter().any(
+                    |e| matches!(e, FormattingEntry::Element { node_id, .. } if *node_id == curr),
+                );
+                if !in_active {
+                    self.open_elements.pop();
+                    return;
+                }
+            }
+        }
+
+        let mut outer_loop_counter = 0;
+
+        loop {
+            if outer_loop_counter >= 8 {
+                return;
+            }
+            outer_loop_counter += 1;
+
+            let mut formatting_idx = None;
+            for (idx, entry) in self.active_formatting.iter().enumerate().rev() {
+                match entry {
+                    FormattingEntry::Marker => break,
+                    FormattingEntry::Element { tag_name, .. } if tag_name == subject => {
+                        formatting_idx = Some(idx);
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+
+            let Some(fmt_idx) = formatting_idx else {
+                self.process_any_other_end_tag(subject);
+                return;
+            };
+
+            let (fmt_node_id, fmt_name, fmt_attrs) = match &self.active_formatting[fmt_idx] {
+                FormattingEntry::Element {
+                    node_id,
+                    tag_name,
+                    attributes,
+                } => (*node_id, tag_name.clone(), attributes.clone()),
+                FormattingEntry::Marker => unreachable!(),
+            };
+
+            let Some(fmt_stack_pos) = self.open_elements.iter().rposition(|&id| id == fmt_node_id)
+            else {
+                self.active_formatting.remove(fmt_idx);
+                return;
+            };
+
+            if !self.has_element_in_scope(&fmt_name) {
+                return;
+            }
+
+            let furthest_block_idx = self.open_elements[fmt_stack_pos + 1..]
+                .iter()
+                .position(|&id| self.is_node_special(id))
+                .map(|p| fmt_stack_pos + 1 + p);
+
+            let Some(furthest_block_pos) = furthest_block_idx else {
+                while let Some(popped) = self.open_elements.pop() {
+                    if popped == fmt_node_id {
+                        break;
+                    }
+                }
+                if let Some(pos) = self.active_formatting.iter().rposition(|e| {
+                    matches!(e, FormattingEntry::Element { node_id, .. } if *node_id == fmt_node_id)
+                }) {
+                    self.active_formatting.remove(pos);
+                }
+                return;
+            };
+
+            let furthest_block_id = self.open_elements[furthest_block_pos];
+            let common_ancestor_id = self.open_elements[fmt_stack_pos - 1];
+            let mut bookmark = fmt_idx;
+            let mut node = furthest_block_id;
+            let mut last_node = furthest_block_id;
+            let mut inner_loop_counter = 0;
+            let mut bookmark_moved = false;
+            let mut next_node_override = None;
+
+            loop {
+                inner_loop_counter += 1;
+
+                let above_node = if let Some(n) = next_node_override.take() {
+                    n
+                } else {
+                    let Some(pos) = self.open_elements.iter().rposition(|&id| id == node) else {
+                        break;
+                    };
+                    if pos == 0 {
+                        break;
+                    }
+                    self.open_elements[pos - 1]
+                };
+                node = above_node;
+
+                if node == fmt_node_id {
+                    break;
+                }
+
+                let node_fmt_idx = self.active_formatting.iter().rposition(
+                    |e| matches!(e, FormattingEntry::Element { node_id, .. } if *node_id == node),
+                );
+                if inner_loop_counter > 3 {
+                    if let Some(idx) = node_fmt_idx {
+                        self.active_formatting.remove(idx);
+                        if idx <= bookmark && bookmark > 0 {
+                            bookmark -= 1;
+                        }
+                    }
+                }
+
+                let Some(fmt_entry_pos) = self.active_formatting.iter().rposition(
+                    |e| matches!(e, FormattingEntry::Element { node_id, .. } if *node_id == node),
+                ) else {
+                    if let Some(pos) = self.open_elements.iter().rposition(|&id| id == node) {
+                        next_node_override = if pos > 0 {
+                            Some(self.open_elements[pos - 1])
+                        } else {
+                            None
+                        };
+                        self.open_elements.remove(pos);
+                    }
+                    continue;
+                };
+
+                let (n_name, n_attrs) = match &self.active_formatting[fmt_entry_pos] {
+                    FormattingEntry::Element {
+                        tag_name,
+                        attributes,
+                        ..
+                    } => (tag_name.clone(), attributes.clone()),
+                    _ => unreachable!(),
+                };
+                let new_node = self.create_html_element(&n_name, &n_attrs);
+                self.active_formatting[fmt_entry_pos] = FormattingEntry::Element {
+                    node_id: new_node,
+                    tag_name: n_name,
+                    attributes: n_attrs,
+                };
+                let stack_pos = self
+                    .open_elements
+                    .iter()
+                    .rposition(|&id| id == node)
+                    .unwrap();
+                self.open_elements[stack_pos] = new_node;
+                node = new_node;
+
+                if !bookmark_moved {
+                    bookmark = fmt_entry_pos + 1;
+                    bookmark_moved = true;
+                }
+
+                self.doc.detach(last_node);
+                self.doc.append_child(node, last_node);
+                last_node = node;
+            }
+
+            let loc = self.appropriate_place_for_inserting_node(Some(common_ancestor_id));
+            self.doc.detach(last_node);
+            if let Some(before) = loc.insert_before_sibling {
+                self.doc.insert_before(before, last_node);
+            } else {
+                self.doc.append_child(loc.parent, last_node);
+            }
+
+            let new_element = self.create_html_element(&fmt_name, &fmt_attrs);
+            self.doc.reparent_children(furthest_block_id, new_element);
+            self.doc.append_child(furthest_block_id, new_element);
+
+            if let Some(old_pos) = self.active_formatting.iter().rposition(|e| {
+                matches!(e, FormattingEntry::Element { node_id, .. } if *node_id == fmt_node_id)
+            }) {
+                self.active_formatting.remove(old_pos);
+                if old_pos < bookmark && bookmark > 0 {
+                    bookmark -= 1;
+                }
+            }
+            let insert_bookmark = bookmark.min(self.active_formatting.len());
+            self.active_formatting.insert(
+                insert_bookmark,
+                FormattingEntry::Element {
+                    node_id: new_element,
+                    tag_name: fmt_name,
+                    attributes: fmt_attrs,
+                },
+            );
+
+            if let Some(old_stack_pos) =
+                self.open_elements.iter().rposition(|&id| id == fmt_node_id)
+            {
+                self.open_elements.remove(old_stack_pos);
+            }
+            let fb_stack_pos = self
+                .open_elements
+                .iter()
+                .rposition(|&id| id == furthest_block_id)
+                .expect("furthest_block must be in open_elements");
+            self.open_elements.insert(fb_stack_pos + 1, new_element);
+        }
+    }
+
     fn clear_stack_back_to_table_context(&mut self) {
         while let Some(curr) = self.current_node() {
             if self.node_in_html(curr, "table")
@@ -557,6 +1291,10 @@ impl TreeBuilder {
             };
 
             if ns != Namespace::Html {
+                if last {
+                    self.mode = InsertionMode::InBody;
+                    return;
+                }
                 continue;
             }
 
@@ -621,6 +1359,119 @@ impl TreeBuilder {
         self.mode = InsertionMode::InBody;
     }
 
+    fn process_in_foreign_content(&mut self, token: Token) -> Option<TokenizerState> {
+        let adjusted_node = self
+            .adjusted_current_node()
+            .expect("adjusted node in foreign");
+        let adjusted_ns = self
+            .doc
+            .node(adjusted_node)
+            .as_element()
+            .map(|el| el.namespace)
+            .unwrap_or(Namespace::Html);
+
+        match token {
+            Token::Character(0x00) => {
+                self.insert_character(0xFFFD);
+                None
+            }
+            Token::Character(cp @ (0x09 | 0x0A | 0x0C | 0x0D | 0x20)) => {
+                self.insert_character(cp);
+                None
+            }
+            Token::Character(cp) => {
+                self.insert_character(cp);
+                self.frameset_ok = false;
+                None
+            }
+            Token::Comment(data) => {
+                self.insert_comment(&data, None);
+                None
+            }
+            Token::ProcessingInstruction { target, data } => {
+                self.insert_processing_instruction(&target, &data);
+                None
+            }
+            Token::Doctype { .. } => None,
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if FOREIGN_BREAKOUT_TAGS.contains(&name.as_str())
+                || (name == "font"
+                    && attributes
+                        .iter()
+                        .any(|(k, _)| matches!(k.as_str(), "color" | "face" | "size"))) =>
+            {
+                while let Some(curr) = self.current_node() {
+                    if self.is_integration_point_or_html(curr) {
+                        break;
+                    }
+                    self.open_elements.pop();
+                }
+                self.process_token_html(token)
+            }
+            Token::EndTag { ref name, .. } if matches!(name.as_str(), "br" | "p") => {
+                while let Some(curr) = self.current_node() {
+                    if self.is_integration_point_or_html(curr) {
+                        break;
+                    }
+                    self.open_elements.pop();
+                }
+                self.process_token_html(token)
+            }
+            Token::StartTag {
+                name,
+                attributes,
+                self_closing,
+            } => {
+                self.insert_foreign_element(adjusted_ns, name, &attributes);
+                if self_closing {
+                    self.open_elements.pop();
+                }
+                None
+            }
+            Token::EndTag { ref name, .. }
+                if name == "script"
+                    && self
+                        .current_node()
+                        .is_some_and(|id| self.node_is(id, Namespace::Svg, "script")) =>
+            {
+                self.open_elements.pop();
+                None
+            }
+            Token::EndTag { ref name, .. } => {
+                let name_lower = name.to_ascii_lowercase();
+                let mut current_idx = self.open_elements.len().saturating_sub(1);
+                loop {
+                    if current_idx == 0 {
+                        return None;
+                    }
+                    let node_id = self.open_elements[current_idx];
+                    let el = self.doc.node(node_id).as_element()?;
+                    if el.local_name.eq_ignore_ascii_case(&name_lower) {
+                        while self.open_elements.len() > current_idx {
+                            self.open_elements.pop();
+                        }
+                        return None;
+                    }
+                    current_idx -= 1;
+                    let prev_node_id = self.open_elements[current_idx];
+                    let prev_el = self.doc.node(prev_node_id).as_element()?;
+                    if prev_el.namespace != Namespace::Html {
+                        continue;
+                    }
+                    return self.process_token_html(Token::EndTag {
+                        name: name.clone(),
+                        attributes: Vec::new(),
+                        self_closing: false,
+                    });
+                }
+            }
+            Token::Eof => self.process_token_html(Token::Eof),
+        }
+    }
+
     /// Processes a single token and returns an optional [`TokenizerState`] switch for the tokenizer.
     pub fn process_token(&mut self, token: Token) -> Option<TokenizerState> {
         if self.skip_next_lf {
@@ -630,11 +1481,26 @@ impl TreeBuilder {
             }
         }
 
+        if self.should_dispatch_to_foreign(&token) {
+            self.process_in_foreign_content(token)
+        } else {
+            self.process_token_html(token)
+        }
+    }
+
+    fn process_token_html(&mut self, token: Token) -> Option<TokenizerState> {
         match self.mode {
             InsertionMode::Initial => match token {
                 Token::Character(0x09 | 0x0A | 0x0C | 0x0D | 0x20) => None,
                 Token::Comment(data) => {
                     self.insert_comment(&data, Some(self.doc.root()));
+                    None
+                }
+                Token::ProcessingInstruction { target, data } => {
+                    let pi_id = self
+                        .doc
+                        .create_node(NodeKind::ProcessingInstruction { target, data });
+                    self.doc.append_child(self.doc.root(), pi_id);
                     None
                 }
                 Token::Doctype {
@@ -666,6 +1532,13 @@ impl TreeBuilder {
                 Token::Doctype { .. } => None,
                 Token::Comment(data) => {
                     self.insert_comment(&data, Some(self.doc.root()));
+                    None
+                }
+                Token::ProcessingInstruction { target, data } => {
+                    let pi_id = self
+                        .doc
+                        .create_node(NodeKind::ProcessingInstruction { target, data });
+                    self.doc.append_child(self.doc.root(), pi_id);
                     None
                 }
                 Token::Character(0x09 | 0x0A | 0x0C | 0x0D | 0x20) => None,
@@ -856,7 +1729,7 @@ impl TreeBuilder {
             },
 
             InsertionMode::InTable => self.process_in_table(token),
-            InsertionMode::InTableText => self.process_in_body(token),
+            InsertionMode::InTableText => self.process_in_table_text(token),
             InsertionMode::InCaption => self.process_in_caption(token),
             InsertionMode::InColumnGroup => self.process_in_column_group(token),
             InsertionMode::InTableBody => self.process_in_table_body(token),
@@ -951,6 +1824,17 @@ impl TreeBuilder {
                     self.insert_comment(&data, html_id);
                     None
                 }
+                Token::ProcessingInstruction { target, data } => {
+                    let pi_id = self
+                        .doc
+                        .create_node(NodeKind::ProcessingInstruction { target, data });
+                    if let Some(&html_id) = self.open_elements.first() {
+                        self.doc.append_child(html_id, pi_id);
+                    } else {
+                        self.doc.append_child(self.doc.root(), pi_id);
+                    }
+                    None
+                }
                 Token::Doctype { .. } => None,
                 Token::StartTag { ref name, .. } if name == "html" => self.process_in_body(token),
                 Token::EndTag { ref name, .. } if name == "html" => {
@@ -1030,6 +1914,13 @@ impl TreeBuilder {
             InsertionMode::AfterAfterBody => match token {
                 Token::Comment(data) => {
                     self.insert_comment(&data, Some(self.doc.root()));
+                    None
+                }
+                Token::ProcessingInstruction { target, data } => {
+                    let pi_id = self
+                        .doc
+                        .create_node(NodeKind::ProcessingInstruction { target, data });
+                    self.doc.append_child(self.doc.root(), pi_id);
                     None
                 }
                 Token::Doctype { .. } => self.process_in_body(token),
@@ -1143,7 +2034,6 @@ impl TreeBuilder {
             } if name == "template" => {
                 self.insert_html_element("template", attributes);
                 self.active_formatting.push(FormattingEntry::Marker);
-                self.frameset_ok = false;
                 self.mode = InsertionMode::InTemplate;
                 self.template_modes.push(InsertionMode::InTemplate);
                 None
@@ -1192,7 +2082,9 @@ impl TreeBuilder {
             Token::Character(cp) => {
                 self.reconstruct_active_formatting_elements();
                 self.insert_character(cp);
-                self.frameset_ok = false;
+                if self.template_modes.is_empty() {
+                    self.frameset_ok = false;
+                }
                 None
             }
             Token::Comment(data) => {
@@ -1233,10 +2125,13 @@ impl TreeBuilder {
                         | "noframes"
                         | "script"
                         | "style"
-                        | "template"
                         | "title"
                 ) =>
             {
+                self.process_in_head(token)
+            }
+            Token::StartTag { ref name, .. } if name == "template" => {
+                self.frameset_ok = false;
                 self.process_in_head(token)
             }
             Token::EndTag { ref name, .. } if name == "template" => self.process_in_head(token),
@@ -1377,6 +2272,56 @@ impl TreeBuilder {
                 ref name,
                 ref attributes,
                 ..
+            } if name == "plaintext" => {
+                if self.has_element_in_button_scope("p") {
+                    self.close_p_element();
+                }
+                self.insert_html_element("plaintext", attributes);
+                Some(TokenizerState::Plaintext)
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "frameset" => {
+                if self.open_elements.len() <= 1
+                    || !self.node_in_html(self.open_elements[1], "body")
+                    || !self.frameset_ok
+                {
+                    return None;
+                }
+                let body_id = self.open_elements[1];
+                self.doc.detach(body_id);
+                while self.open_elements.len() > 1 {
+                    self.open_elements.pop();
+                }
+                self.insert_html_element("frameset", attributes);
+                self.mode = InsertionMode::InFrameset;
+                None
+            }
+            Token::StartTag { ref name, .. }
+                if matches!(
+                    name.as_str(),
+                    "caption"
+                        | "col"
+                        | "colgroup"
+                        | "frame"
+                        | "head"
+                        | "tbody"
+                        | "td"
+                        | "tfoot"
+                        | "th"
+                        | "thead"
+                        | "tr"
+                ) =>
+            {
+                // Parse error. Ignore the token.
+                None
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
             } if VOID_ELEMENTS.contains(&name.as_str()) => {
                 if name == "hr" && self.has_element_in_button_scope("p") {
                     self.close_p_element();
@@ -1392,11 +2337,132 @@ impl TreeBuilder {
                 ref name,
                 ref attributes,
                 ..
+            } if matches!(name.as_str(), "applet" | "marquee" | "object") => {
+                self.reconstruct_active_formatting_elements();
+                self.insert_html_element(name, attributes);
+                self.active_formatting.push(FormattingEntry::Marker);
+                self.frameset_ok = false;
+                None
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if matches!(name.as_str(), "rb" | "rtc") => {
+                if self.has_element_in_scope("ruby") {
+                    self.generate_implied_end_tags(None);
+                }
+                self.insert_html_element(name, attributes);
+                None
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if matches!(name.as_str(), "rp" | "rt") => {
+                if self.has_element_in_scope("ruby") {
+                    self.generate_implied_end_tags(Some("rtc"));
+                }
+                self.insert_html_element(name, attributes);
+                None
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "form" => {
+                let parsing_template = !self.template_modes.is_empty()
+                    || self
+                        .open_elements
+                        .iter()
+                        .any(|&id| self.node_in_html(id, "template"));
+                if self.form_element.is_some() && !parsing_template {
+                    return None;
+                }
+                if self.has_element_in_button_scope("p") {
+                    self.close_p_element();
+                }
+                let form_id = self.insert_html_element("form", attributes);
+                if !parsing_template {
+                    self.form_element = Some(form_id);
+                }
+                None
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "button" => {
+                if self.has_element_in_scope("button") {
+                    self.generate_implied_end_tags(None);
+                    while let Some(popped) = self.open_elements.pop() {
+                        if self.node_in_html(popped, "button") {
+                            break;
+                        }
+                    }
+                }
+                self.reconstruct_active_formatting_elements();
+                self.insert_html_element("button", attributes);
+                self.frameset_ok = false;
+                None
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
             } if P_CLOSING_BLOCK_ELEMENTS.contains(&name.as_str()) => {
                 if self.has_element_in_button_scope("p") {
                     self.close_p_element();
                 }
                 self.insert_html_element(name, attributes);
+                None
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "a" => {
+                let mut existing_a = None;
+                for entry in self.active_formatting.iter().rev() {
+                    match entry {
+                        FormattingEntry::Marker => break,
+                        FormattingEntry::Element {
+                            node_id, tag_name, ..
+                        } if tag_name == "a" => {
+                            existing_a = Some(*node_id);
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+                if let Some(a_id) = existing_a {
+                    self.run_adoption_agency_algorithm("a");
+                    if let Some(pos) = self.active_formatting.iter().rposition(|e| {
+                        matches!(e, FormattingEntry::Element { node_id, .. } if *node_id == a_id)
+                    }) {
+                        self.active_formatting.remove(pos);
+                    }
+                    if let Some(pos) = self.open_elements.iter().rposition(|&id| id == a_id) {
+                        self.open_elements.remove(pos);
+                    }
+                }
+                self.reconstruct_active_formatting_elements();
+                let id = self.insert_html_element(name, attributes);
+                self.push_active_formatting(id, name, attributes);
+                None
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "nobr" => {
+                self.reconstruct_active_formatting_elements();
+                if self.has_element_in_scope("nobr") {
+                    self.run_adoption_agency_algorithm("nobr");
+                    self.reconstruct_active_formatting_elements();
+                }
+                let id = self.insert_html_element(name, attributes);
+                self.push_active_formatting(id, name, attributes);
                 None
             }
             Token::StartTag {
@@ -1420,10 +2486,132 @@ impl TreeBuilder {
                     Namespace::MathMl
                 };
                 self.reconstruct_active_formatting_elements();
-                self.insert_element(ns, name, attributes);
+                self.insert_foreign_element(ns, name.clone(), attributes);
                 if self_closing {
                     self.open_elements.pop();
                 }
+                None
+            }
+            Token::StartTag {
+                name,
+                attributes,
+                self_closing,
+            } if name == "image" => self.process_in_body(Token::StartTag {
+                name: "img".to_owned(),
+                attributes,
+                self_closing,
+            }),
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "textarea" => {
+                self.insert_html_element("textarea", attributes);
+                self.skip_next_lf = true;
+                self.original_mode = self.mode;
+                self.frameset_ok = false;
+                self.mode = InsertionMode::Text;
+                Some(TokenizerState::Rcdata)
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "xmp" => {
+                if self.has_element_in_button_scope("p") {
+                    self.close_p_element();
+                }
+                self.reconstruct_active_formatting_elements();
+                self.frameset_ok = false;
+                self.insert_html_element("xmp", attributes);
+                self.original_mode = self.mode;
+                self.mode = InsertionMode::Text;
+                Some(TokenizerState::Rawtext)
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "iframe" => {
+                self.frameset_ok = false;
+                self.insert_html_element("iframe", attributes);
+                self.original_mode = self.mode;
+                self.mode = InsertionMode::Text;
+                Some(TokenizerState::Rawtext)
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "noembed" => {
+                self.insert_html_element("noembed", attributes);
+                self.original_mode = self.mode;
+                self.mode = InsertionMode::Text;
+                Some(TokenizerState::Rawtext)
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "noscript" && self.scripting_enabled => {
+                self.insert_html_element("noscript", attributes);
+                self.original_mode = self.mode;
+                self.mode = InsertionMode::Text;
+                Some(TokenizerState::Rawtext)
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "select" => {
+                if let Some((_, ref ctx_name)) = self.fragment_context {
+                    if ctx_name == "select" {
+                        return None;
+                    }
+                }
+                if self.has_element_in_scope("select") {
+                    while let Some(popped) = self.open_elements.pop() {
+                        if self.node_in_html(popped, "select") {
+                            break;
+                        }
+                    }
+                } else {
+                    self.reconstruct_active_formatting_elements();
+                    self.insert_html_element("select", attributes);
+                    self.frameset_ok = false;
+                }
+                None
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "optgroup" => {
+                if self.has_element_in_scope("select") {
+                    self.generate_implied_end_tags(None);
+                } else if let Some(curr) = self.current_node() {
+                    if self.node_in_html(curr, "option") {
+                        self.open_elements.pop();
+                    }
+                }
+                self.reconstruct_active_formatting_elements();
+                self.insert_html_element("optgroup", attributes);
+                None
+            }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "option" => {
+                if self.has_element_in_scope("select") {
+                    self.generate_implied_end_tags(Some("optgroup"));
+                } else if let Some(curr) = self.current_node() {
+                    if self.node_in_html(curr, "option") {
+                        self.open_elements.pop();
+                    }
+                }
+                self.reconstruct_active_formatting_elements();
+                self.insert_html_element("option", attributes);
                 None
             }
             Token::StartTag {
@@ -1499,6 +2687,62 @@ impl TreeBuilder {
                 }
                 None
             }
+            Token::EndTag { ref name, .. } if name == "form" => {
+                let parsing_template = !self.template_modes.is_empty()
+                    || self
+                        .open_elements
+                        .iter()
+                        .any(|&id| self.node_in_html(id, "template"));
+                if !parsing_template {
+                    let node = self.form_element.take();
+                    let node_id = node?;
+                    if !self.has_node_in_scope(node_id) {
+                        return None;
+                    }
+                    self.generate_implied_end_tags(None);
+                    if let Some(pos) = self.open_elements.iter().rposition(|&id| id == node_id) {
+                        self.open_elements.remove(pos);
+                    }
+                } else {
+                    if !self.has_element_in_scope("form") {
+                        return None;
+                    }
+                    self.generate_implied_end_tags(None);
+                    while let Some(popped) = self.open_elements.pop() {
+                        if self.node_in_html(popped, "form") {
+                            break;
+                        }
+                    }
+                }
+                None
+            }
+            Token::EndTag { ref name, .. } if BLOCK_END_TAG_ELEMENTS.contains(&name.as_str()) => {
+                if !self.has_element_in_scope(name) {
+                    return None;
+                }
+                self.generate_implied_end_tags(None);
+                while let Some(popped) = self.open_elements.pop() {
+                    if self.node_in_html(popped, name) {
+                        break;
+                    }
+                }
+                None
+            }
+            Token::EndTag { ref name, .. }
+                if matches!(name.as_str(), "applet" | "marquee" | "object") =>
+            {
+                if !self.has_element_in_scope(name) {
+                    return None;
+                }
+                self.generate_implied_end_tags(None);
+                while let Some(popped) = self.open_elements.pop() {
+                    if self.node_in_html(popped, name) {
+                        break;
+                    }
+                }
+                self.clear_active_formatting_to_last_marker();
+                None
+            }
             Token::EndTag { ref name, .. } if name == "br" => {
                 self.reconstruct_active_formatting_elements();
                 self.insert_html_element("br", &[]);
@@ -1506,39 +2750,71 @@ impl TreeBuilder {
                 self.frameset_ok = false;
                 None
             }
+            Token::EndTag { ref name, .. } if FORMATTING_ELEMENTS.contains(&name.as_str()) => {
+                self.run_adoption_agency_algorithm(name);
+                None
+            }
             Token::EndTag { ref name, .. } => {
-                // "Any other end tag" in "in body" mode (§13.2.6.4.7)
-                for idx in (0..self.open_elements.len()).rev() {
-                    let node_id = self.open_elements[idx];
-                    if self.node_in_html(node_id, name) {
-                        self.generate_implied_end_tags(Some(name));
-                        while self.open_elements.len() > idx {
-                            if let Some(popped) = self.open_elements.pop() {
-                                self.active_formatting.retain(|e| {
-                                    !matches!(
-                                        e,
-                                        FormattingEntry::Element { node_id: f_id, .. } if *f_id == popped
-                                    )
-                                });
-                            }
-                        }
-                        break;
-                    }
-                    if self.doc.node(node_id).as_element().is_some_and(|el| {
-                        el.namespace == Namespace::Html
-                            && P_CLOSING_BLOCK_ELEMENTS.contains(&el.local_name.as_str())
-                    }) {
-                        break;
-                    }
-                }
+                self.process_any_other_end_tag(name);
                 None
             }
             Token::Eof => None,
         }
     }
 
+    fn is_table_text_current_node(&self) -> bool {
+        self.current_node().is_some_and(|id| {
+            self.doc.node(id).as_element().is_some_and(|el| {
+                el.namespace == Namespace::Html
+                    && matches!(
+                        el.local_name.as_str(),
+                        "table" | "tbody" | "template" | "tfoot" | "thead" | "tr"
+                    )
+            })
+        })
+    }
+
+    fn process_in_table_text(&mut self, token: Token) -> Option<TokenizerState> {
+        match token {
+            Token::Character(0x00) => None,
+            Token::Character(ch) => {
+                self.pending_table_characters
+                    .push(char::from_u32(ch).unwrap_or('\u{FFFD}'));
+                None
+            }
+            other => {
+                let has_non_whitespace = self
+                    .pending_table_characters
+                    .iter()
+                    .any(|&c| !matches!(c, '\t' | '\n' | '\x0C' | '\r' | ' '));
+
+                let chars = std::mem::take(&mut self.pending_table_characters);
+                if has_non_whitespace {
+                    let prev_fp = self.foster_parenting;
+                    self.foster_parenting = true;
+                    for c in chars {
+                        self.process_in_body(Token::Character(c as u32));
+                    }
+                    self.foster_parenting = prev_fp;
+                } else {
+                    for c in chars {
+                        self.insert_character(c as u32);
+                    }
+                }
+                self.mode = self.original_mode;
+                self.process_token(other)
+            }
+        }
+    }
+
     fn process_in_table(&mut self, token: Token) -> Option<TokenizerState> {
         match token {
+            Token::Character(_) if self.is_table_text_current_node() => {
+                self.pending_table_characters.clear();
+                self.original_mode = self.mode;
+                self.mode = InsertionMode::InTableText;
+                self.process_in_table_text(token)
+            }
             Token::Comment(data) => {
                 self.insert_comment(&data, None);
                 None
@@ -1610,6 +2886,25 @@ impl TreeBuilder {
                 }
                 None
             }
+            Token::StartTag {
+                ref name,
+                ref attributes,
+                ..
+            } if name == "form" => {
+                let parsing_template = self
+                    .open_elements
+                    .iter()
+                    .any(|&id| self.node_in_html(id, "template"));
+                if self.form_element.is_some() && !parsing_template {
+                    return None;
+                }
+                let form_id = self.insert_html_element("form", attributes);
+                if !parsing_template {
+                    self.form_element = Some(form_id);
+                }
+                self.open_elements.pop();
+                None
+            }
             Token::StartTag { ref name, .. }
                 if matches!(name.as_str(), "style" | "script" | "template") =>
             {
@@ -1631,20 +2926,75 @@ impl TreeBuilder {
     fn process_in_caption(&mut self, token: Token) -> Option<TokenizerState> {
         match token {
             Token::EndTag { ref name, .. } if name == "caption" => {
-                if self.has_element_in_table_scope("caption") {
-                    self.generate_implied_end_tags(None);
-                    while let Some(popped) = self.open_elements.pop() {
-                        if self.node_in_html(popped, "caption") {
-                            break;
-                        }
-                    }
-                    while let Some(entry) = self.active_formatting.pop() {
-                        if entry == FormattingEntry::Marker {
-                            break;
-                        }
-                    }
-                    self.mode = InsertionMode::InTable;
+                if !self.has_element_in_table_scope("caption") {
+                    return None;
                 }
+                self.generate_implied_end_tags(None);
+                while let Some(popped) = self.open_elements.pop() {
+                    if self.node_in_html(popped, "caption") {
+                        break;
+                    }
+                }
+                self.clear_active_formatting_to_last_marker();
+                self.mode = InsertionMode::InTable;
+                None
+            }
+            Token::StartTag { ref name, .. }
+                if matches!(
+                    name.as_str(),
+                    "caption"
+                        | "col"
+                        | "colgroup"
+                        | "tbody"
+                        | "td"
+                        | "tfoot"
+                        | "th"
+                        | "thead"
+                        | "tr"
+                ) =>
+            {
+                if !self.has_element_in_table_scope("caption") {
+                    return None;
+                }
+                self.generate_implied_end_tags(None);
+                while let Some(popped) = self.open_elements.pop() {
+                    if self.node_in_html(popped, "caption") {
+                        break;
+                    }
+                }
+                self.clear_active_formatting_to_last_marker();
+                self.mode = InsertionMode::InTable;
+                self.process_token(token)
+            }
+            Token::EndTag { ref name, .. } if name == "table" => {
+                if !self.has_element_in_table_scope("caption") {
+                    return None;
+                }
+                self.generate_implied_end_tags(None);
+                while let Some(popped) = self.open_elements.pop() {
+                    if self.node_in_html(popped, "caption") {
+                        break;
+                    }
+                }
+                self.clear_active_formatting_to_last_marker();
+                self.mode = InsertionMode::InTable;
+                self.process_token(token)
+            }
+            Token::EndTag { ref name, .. }
+                if matches!(
+                    name.as_str(),
+                    "body"
+                        | "col"
+                        | "colgroup"
+                        | "html"
+                        | "tbody"
+                        | "td"
+                        | "tfoot"
+                        | "th"
+                        | "thead"
+                        | "tr"
+                ) =>
+            {
                 None
             }
             other => self.process_in_body(other),
@@ -1730,12 +3080,18 @@ impl TreeBuilder {
                     "caption" | "col" | "colgroup" | "tbody" | "tfoot" | "thead"
                 ) =>
             {
+                if !self.has_table_body_in_table_scope() {
+                    return None;
+                }
                 self.clear_stack_back_to_table_body_context();
                 self.open_elements.pop();
                 self.mode = InsertionMode::InTable;
                 self.process_token(token)
             }
             Token::EndTag { ref name, .. } if name == "table" => {
+                if !self.has_table_body_in_table_scope() {
+                    return None;
+                }
                 self.clear_stack_back_to_table_body_context();
                 self.open_elements.pop();
                 self.mode = InsertionMode::InTable;
@@ -1867,6 +3223,7 @@ pub fn parse_document(input: &str, scripting_enabled: bool) -> Document {
     let mut tb = TreeBuilder::new(scripting_enabled);
 
     loop {
+        tok.allow_cdata = tb.is_adjusted_current_node_foreign();
         let prev_len = tok.tokens.len();
         tok.step();
         if tok.tokens.len() > prev_len {
@@ -1879,6 +3236,7 @@ pub fn parse_document(input: &str, scripting_enabled: bool) -> Document {
                 if let Some(new_state) = tb.process_token(token) {
                     tok.state = new_state;
                 }
+                tok.allow_cdata = tb.is_adjusted_current_node_foreign();
             }
             if saw_eof {
                 break;
@@ -1954,6 +3312,10 @@ pub fn parse_fragment(
 
     let mut tb = TreeBuilder::new(scripting_enabled);
     tb.fragment_context = Some((context_namespace, context_local_name.to_owned()));
+    let ctx_node = tb
+        .doc
+        .create_element(context_namespace, context_local_name, vec![]);
+    tb.fragment_context_node = Some(ctx_node);
 
     let html_root = tb.doc.create_element(Namespace::Html, "html", vec![]);
     tb.doc.append_child(tb.doc.root(), html_root);
@@ -1965,6 +3327,7 @@ pub fn parse_fragment(
     tb.reset_insertion_mode_appropriately();
 
     loop {
+        tok.allow_cdata = tb.is_adjusted_current_node_foreign();
         let prev_len = tok.tokens.len();
         tok.step();
         if tok.tokens.len() > prev_len {
@@ -1977,6 +3340,7 @@ pub fn parse_fragment(
                 if let Some(new_state) = tb.process_token(token) {
                     tok.state = new_state;
                 }
+                tok.allow_cdata = tb.is_adjusted_current_node_foreign();
             }
             if saw_eof {
                 break;
@@ -1988,5 +3352,8 @@ pub fn parse_fragment(
     let root = tb.doc.root();
     tb.doc.reparent_children(html_root, root);
     tb.doc.detach(html_root);
+    if let Some(ctx_id) = tb.fragment_context_node {
+        tb.doc.detach(ctx_id);
+    }
     tb.doc
 }

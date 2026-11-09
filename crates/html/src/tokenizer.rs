@@ -521,6 +521,7 @@ pub struct Tokenizer {
     pending_pi_target: String,
     pending_pi_data: String,
     char_ref_code: u32,
+    pub allow_cdata: bool,
     pub tokens: Vec<Token>,
     pub errors: Vec<ParseError>,
 }
@@ -544,6 +545,7 @@ impl Tokenizer {
             pending_pi_target: String::new(),
             pending_pi_data: String::new(),
             char_ref_code: 0,
+            allow_cdata: false,
             tokens: Vec::new(),
             errors,
         }
@@ -1594,10 +1596,14 @@ impl Tokenizer {
                     self.state = TokenizerState::Doctype;
                 } else if self.peek_slice_ascii_eq("[CDATA[", false) {
                     self.pos += 7;
-                    // In HTML content without foreign adjusted node, CDATA is a parse error
-                    self.record_error(ParseErrorCode::CdataInHtmlContent);
-                    self.pending_comment = String::from("[CDATA[");
-                    self.state = TokenizerState::BogusComment;
+                    if self.allow_cdata {
+                        self.state = TokenizerState::CdataSection;
+                    } else {
+                        // In HTML content without foreign adjusted node, CDATA is a parse error
+                        self.record_error(ParseErrorCode::CdataInHtmlContent);
+                        self.pending_comment = String::from("[CDATA[");
+                        self.state = TokenizerState::BogusComment;
+                    }
                 } else {
                     self.record_error(ParseErrorCode::IncorrectlyOpenedComment);
                     self.pending_comment.clear();
