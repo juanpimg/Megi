@@ -9,6 +9,7 @@
 use dom::{Attribute, Document, Namespace, NodeId, NodeKind, QuirksMode};
 
 use crate::fast_hash::{FastMap, FastSet};
+use crate::scripting::{ScriptExecution, ScriptExecutor};
 use crate::tokenizer::{Token, Tokenizer, TokenizerConfig, TokenizerState};
 
 /// All 21 insertion modes of the WHATWG HTML Living Standard (§13.2.6.4.1 – §13.2.6.4.21).
@@ -643,6 +644,9 @@ pub struct ParseOutcome {
     pub document: Document,
     /// Limits that were exceeded while parsing.
     pub limit_violations: LimitViolations,
+    /// Non-fatal errors from parser-inserted scripts (WP-6.4). Empty when no executor is
+    /// installed, scripting is off, or every script ran successfully.
+    pub script_errors: Vec<String>,
 }
 
 /// WHATWG HTML §13.2.6 Tree Builder state machine.
@@ -680,6 +684,18 @@ pub struct TreeBuilder {
     /// Number of currently-open non-HTML (SVG/MathML) elements. Allows the per-token
     /// foreign-content dispatch to skip all node lookups for HTML-only pages.
     open_foreign_count: u32,
+    /// WP-6.4: host-provided executor for parser-inserted `<script>` elements. `None` keeps
+    /// the parser byte-for-byte identical to the pre-WP-6.4 parser (scripts are not run).
+    script_executor: Option<Box<dyn ScriptExecutor>>,
+    /// HTML written through `document.write` by the script processed in the current token.
+    /// The tokenizer driver moves it into the tokenizer right after the token is handled.
+    pending_written_html: String,
+    /// Non-fatal parser-inserted script errors, exposed through [`ParseOutcome::script_errors`].
+    script_errors: Vec<String>,
+    /// Whether this parse ever created an `<html>` element. A script may detach it
+    /// (`document.documentElement.remove()`); the end-of-parse synthetic html/head/body fixup
+    /// must then be skipped, or it would resurrect a detached skeleton (`scripted_foster01`).
+    html_element_seen: bool,
 }
 
 impl TreeBuilder {
@@ -726,6 +742,29 @@ impl TreeBuilder {
             open_html_counts: FastMap::default(),
             open_ids: FastSet::default(),
             open_foreign_count: 0,
+            script_executor: None,
+            pending_written_html: String::new(),
+            script_errors: Vec::new(),
+            html_element_seen: false,
+        }
+    }
+
+    /// Installs a host-provided executor for parser-inserted scripts (WP-6.4).
+    ///
+    /// The parser only calls it for inline HTML `<script>` elements closed while
+    /// [`Self::scripting_enabled`] is true; see [`crate::scripting`] for the documented
+    /// cases and for how `document.write` output is re-tokenized in place.
+    pub fn with_script_executor(mut self, executor: Box<dyn ScriptExecutor>) -> Self {
+        self.script_executor = Some(executor);
+        self
+    }
+
+    /// Takes the HTML written by `document.write` while handling the token just processed.
+    fn take_pending_written_html(&mut self) -> Option<String> {
+        if self.pending_written_html.is_empty() {
+            None
+        } else {
+            Some(std::mem::take(&mut self.pending_written_html))
         }
     }
 
@@ -1163,8 +1202,83 @@ impl TreeBuilder {
         loc
     }
 
+    /// Returns the current node when it is the HTML `<script>` element whose text content
+    /// has just been tokenized by the "text" insertion mode.
+    fn current_script_element(&self) -> Option<NodeId> {
+        let current = self.current_node()?;
+        self.doc
+            .node(current)
+            .as_element()
+            .filter(|element| {
+                element.namespace == Namespace::Html && element.local_name == "script"
+            })
+            .map(|_| current)
+    }
+
+    /// WP-6.4: executes a parser-inserted `<script>` element (inline scripts only).
+    ///
+    /// Called from the "text" insertion mode once the script's end tag (or EOF) has been
+    /// seen, i.e. after the tokenizer stored the script data as the element's text child and
+    /// before the parser continues with the following input. The executor may mutate the DOM
+    /// and write HTML with `document.write`; written HTML is queued and inserted into the
+    /// tokenizer at the current position by [`drive_tokenizer`], so it is re-tokenized before
+    /// the rest of the input. Execution errors are non-fatal and collected in
+    /// [`ParseOutcome::script_errors`].
+    ///
+    /// External scripts (`src`) are skipped: fetching external resources belongs to the host
+    /// (the render pipeline runs them post-parse), so the parser hook does not attempt it.
+    fn execute_parser_inserted_script(&mut self, script_id: NodeId) {
+        if !self.scripting_enabled || self.script_executor.is_none() {
+            return;
+        }
+        let has_src = self
+            .doc
+            .node(script_id)
+            .as_element()
+            .is_some_and(|element| element.get_attribute("src").is_some());
+        if has_src {
+            return;
+        }
+        // §13.2.6.4.7 inserted the script data as text children of the script element.
+        let mut script_text = String::new();
+        let mut child = self.doc.node(script_id).first_child;
+        while let Some(child_id) = child {
+            if let Some(data) = self.doc.node(child_id).as_text() {
+                script_text.push_str(data);
+            }
+            child = self.doc.node(child_id).next_sibling;
+        }
+        let Self {
+            doc,
+            script_executor,
+            pending_written_html,
+            script_errors,
+            ..
+        } = self;
+        let Some(executor) = script_executor.as_mut() else {
+            return;
+        };
+        let ScriptExecution {
+            written_html,
+            error,
+        } = executor.execute(doc, &script_text, "<script>");
+        if !written_html.is_empty() {
+            pending_written_html.push_str(&written_html);
+        }
+        if let Some(error) = error {
+            script_errors.push(error);
+        }
+    }
+
     fn insert_node_at_adjusted_location(&mut self, node_id: NodeId) {
         let loc = self.appropriate_place_for_inserting_node(None);
+        // §13.2.6 inserts at the adjusted location, but once a script has detached the
+        // document element the location can be the Document node itself. Browsers drop such
+        // tokens instead of creating a second document element (`scripted_foster01`); this
+        // mirrors the pre-existing guard in `insert_character`/`insert_text_run`.
+        if loc.parent == self.doc.root() && self.html_element_seen {
+            return;
+        }
         if let Some(sib) = loc.insert_before_sibling {
             self.doc.insert_before(sib, node_id);
         } else {
@@ -2072,8 +2186,8 @@ impl TreeBuilder {
                     ref attributes,
                     ..
                 } if name == "html" => {
-                    let html_id = self.insert_html_element("html", attributes);
-                    let _ = html_id;
+                    self.insert_html_element("html", attributes);
+                    self.html_element_seen = true;
                     self.mode = InsertionMode::BeforeHead;
                     None
                 }
@@ -2084,6 +2198,7 @@ impl TreeBuilder {
                 }
                 other => {
                     self.insert_html_element("html", &[]);
+                    self.html_element_seen = true;
                     self.mode = InsertionMode::BeforeHead;
                     self.process_token(other)
                 }
@@ -2250,14 +2365,30 @@ impl TreeBuilder {
                     self.insert_character(cp);
                     None
                 }
+                // WP-6.4 / §13.2.6.4.8 "the text insertion mode": a parser-inserted
+                // `<script>` executes when its end tag (or EOF) is reached, with the
+                // partially-built tree visible; `document.write` output is re-tokenized
+                // immediately after this token by `drive_tokenizer`.
                 Token::Eof => {
+                    let script = self.current_script_element();
                     self.pop_open_element();
                     self.mode = self.original_mode;
+                    if let Some(script_id) = script {
+                        self.execute_parser_inserted_script(script_id);
+                    }
                     self.process_token(Token::Eof)
                 }
-                Token::EndTag { .. } => {
+                Token::EndTag { ref name, .. } => {
+                    let script = if name == "script" {
+                        self.current_script_element()
+                    } else {
+                        None
+                    };
                     self.pop_open_element();
                     self.mode = self.original_mode;
+                    if let Some(script_id) = script {
+                        self.execute_parser_inserted_script(script_id);
+                    }
                     None
                 }
                 _ => None,
@@ -3944,17 +4075,38 @@ pub fn parse_document_with_options(
     scripting_enabled: bool,
     options: &ParseOptions,
 ) -> ParseOutcome {
+    parse_document_with_options_and_executor(input, scripting_enabled, options, None)
+}
+
+/// Parses a complete HTML document with a host-provided **parser-inserted script executor**
+/// (WP-6.4). See [`crate::scripting`] for the documented semantics.
+///
+/// `script_executor = None` behaves exactly like [`parse_document_with_options`] (the
+/// zero-cost path: no script is executed and the tokenizer is untouched).
+pub fn parse_document_with_options_and_executor(
+    input: &str,
+    scripting_enabled: bool,
+    options: &ParseOptions,
+    script_executor: Option<Box<dyn crate::scripting::ScriptExecutor>>,
+) -> ParseOutcome {
     let (input, input_truncated) = truncate_input(input, options.max_input_bytes);
     let mut tok = Tokenizer::from_str_input(input, TokenizerConfig::default());
     let mut tb = TreeBuilder::with_options(scripting_enabled, *options);
     tb.limit_violations.input_truncated = input_truncated;
+    tb.script_executor = script_executor;
 
     drive_tokenizer(&mut tok, &mut tb);
 
-    // Ensure `<html>`, `<head>`, and `<body>` exist if parsing ended before `InBody`
+    // Ensure `<html>`, `<head>`, and `<body>` exist if parsing ended before `InBody`.
+    // If a parser-inserted script detached the document element during the parse, the
+    // synthetic skeleton must NOT be re-created (`scripted_foster01`): the fixture expects
+    // the post-script document (e.g. a lone detached table at the document root).
     let root = tb.doc.root();
     let has_html = tb.doc.children(root).any(|id| tb.node_in_html(id, "html"));
-    if !has_html && tb.mode != InsertionMode::InFrameset && tb.mode != InsertionMode::AfterFrameset
+    if !tb.html_element_seen
+        && !has_html
+        && tb.mode != InsertionMode::InFrameset
+        && tb.mode != InsertionMode::AfterFrameset
     {
         let html_id = tb.doc.create_element(Namespace::Html, "html", vec![]);
         let head_id = tb.doc.create_element(Namespace::Html, "head", vec![]);
@@ -3989,12 +4141,29 @@ pub fn parse_document_with_options(
     let TreeBuilder {
         doc,
         limit_violations,
+        script_errors,
         ..
     } = tb;
     ParseOutcome {
         document: doc,
         limit_violations,
+        script_errors,
     }
+}
+
+/// Convenience wrapper for [`parse_document_with_options_and_executor`] using the default
+/// anti-DoS [`ParseOptions`].
+pub fn parse_document_with_script_executor(
+    input: &str,
+    scripting_enabled: bool,
+    executor: Box<dyn ScriptExecutor>,
+) -> ParseOutcome {
+    parse_document_with_options_and_executor(
+        input,
+        scripting_enabled,
+        &ParseOptions::default(),
+        Some(executor),
+    )
 }
 
 /// Parses an HTML fragment in the context of `(context_namespace, context_local_name)` (§13.4)
@@ -4037,11 +4206,13 @@ pub fn parse_fragment_with_options(
     let TreeBuilder {
         doc,
         limit_violations,
+        script_errors,
         ..
     } = tb;
     ParseOutcome {
         document: doc,
         limit_violations,
+        script_errors,
     }
 }
 
@@ -4168,7 +4339,8 @@ fn drive_tokenizer(tok: &mut Tokenizer, tb: &mut TreeBuilder) {
     loop {
         // Fast path: plain text in the "data" state can be consumed straight into the
         // character run without emitting/handling one `Token::Character` per code point.
-        if tb.mode == InsertionMode::InBody
+        if tok.state == TokenizerState::Data
+            && tb.mode == InsertionMode::InBody
             && tb.doc.len() < tb.parse_options.max_nodes
             && !tb.may_have_foreign_content()
         {
@@ -4212,6 +4384,12 @@ fn drive_tokenizer(tok: &mut Tokenizer, tb: &mut TreeBuilder) {
                 }
                 if let Some(new_state) = tb.process_token(token) {
                     tok.state = new_state;
+                }
+                // WP-6.4: a parser-inserted script may have written HTML with
+                // `document.write`; re-tokenize it at the current position (immediately
+                // after the token that closed the script, before the remaining input).
+                if let Some(written) = tb.take_pending_written_html() {
+                    tok.insert_input(&written);
                 }
                 refresh_cdata(tok, tb, &mut cdata_key);
             }

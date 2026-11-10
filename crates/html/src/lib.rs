@@ -9,6 +9,7 @@ pub mod browser;
 pub mod entities;
 pub(crate) mod fast_hash;
 pub mod input_stream;
+pub mod scripting;
 pub mod serializer;
 pub mod tokenizer;
 pub mod tree_builder;
@@ -18,6 +19,7 @@ pub use browser::{
     set_outer_html, set_outer_html_with_options,
 };
 pub use dom::{Document, DomError, Namespace, NodeId};
+pub use scripting::{ScriptExecution, ScriptExecutor};
 pub use serializer::{
     HtmlSerializeOptions, serialize_dom_for_test, serialize_fragment,
     serialize_fragment_with_options, serialize_html, serialize_html_with_options,
@@ -28,7 +30,9 @@ pub use tokenizer::{
 };
 pub use tree_builder::{
     InsertionMode, LimitViolations, ParseOptions, ParseOutcome, TreeBuilder, parse_document,
-    parse_document_with_options, parse_fragment, parse_fragment_into, parse_fragment_with_options,
+    parse_document_with_options, parse_document_with_options_and_executor,
+    parse_document_with_script_executor, parse_fragment, parse_fragment_into,
+    parse_fragment_with_options,
 };
 
 #[cfg(test)]

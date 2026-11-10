@@ -5,11 +5,11 @@
 //! `last_start_tag`, Processing Instruction states (§13.2.5.72–76), numeric/named
 //! character references (§13.2.5.77–84), and all 7 emitted token variants.
 
-use crate::fast_hash::FastSet;
 use crate::input_stream::{
     is_ascii_whitespace, is_control_character_in_stream, is_noncharacter, is_surrogate,
     preprocess_str_with_line_starts, preprocess_stream,
 };
+use std::collections::HashSet;
 
 /// All 52 normative parse error codes defined in WHATWG HTML §13.2.2 (`#parse-errors`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -495,7 +495,7 @@ struct PendingTag {
     /// Set of attribute names already present in `attributes`, used to detect
     /// duplicates in amortized `O(1)` instead of a linear scan (which made a tag with
     /// many attributes quadratic per tag; see the tokenizer anti-DoS notes).
-    attribute_names: FastSet<String>,
+    attribute_names: HashSet<String>,
     current_attr_name: String,
     current_attr_value: String,
     has_current_attr: bool,
@@ -512,7 +512,7 @@ impl PendingTag {
             name: String::new(),
             self_closing: false,
             attributes: Vec::new(),
-            attribute_names: FastSet::default(),
+            attribute_names: HashSet::new(),
             current_attr_name: String::new(),
             current_attr_value: String::new(),
             has_current_attr: false,
@@ -527,7 +527,7 @@ impl PendingTag {
             name: String::new(),
             self_closing: false,
             attributes: Vec::new(),
-            attribute_names: FastSet::default(),
+            attribute_names: HashSet::new(),
             current_attr_name: String::new(),
             current_attr_value: String::new(),
             has_current_attr: false,
@@ -741,6 +741,64 @@ impl Tokenizer {
             consumed += 1;
         }
         consumed
+    }
+
+    /// WP-6.4: inserts `html` into the input stream at the tokenizer's current position.
+    ///
+    /// The tree builder calls this with the HTML written by `document.write` from a
+    /// parser-inserted `<script>`; the written markup must be tokenized **immediately after**
+    /// the `</script>` token (WHATWG HTML §13.2.6.4.7), before the remaining document input.
+    /// The string is preprocessed like the document input (§13.2.3.5: CRLF/CR normalization
+    /// plus input-stream errors) and the line-start table is shifted so later parse errors
+    /// keep their `(line, column)` positions.
+    ///
+    /// Cost: this method is only called when a script actually wrote with `document.write`;
+    /// documents without scripts never reach it.
+    pub(crate) fn insert_input(&mut self, html: &str) {
+        if html.is_empty() {
+            return;
+        }
+        let (inserted, errors, inserted_line_starts) = preprocess_str_with_line_starts(html);
+        self.errors.extend(errors);
+        if inserted.is_empty() {
+            return;
+        }
+        // A reconsume request means the next character to process is already at `pos - 1`.
+        let insert_at = if self.reconsume {
+            self.pos.saturating_sub(1)
+        } else {
+            self.pos
+        }
+        .min(self.input.len());
+        let inserted_len = inserted.len();
+
+        // Shift the remaining line starts, then merge the inserted text's own line starts.
+        for start in &mut self.line_starts {
+            if *start > insert_at {
+                *start += inserted_len;
+            }
+        }
+        for start in inserted_line_starts.iter().skip(1) {
+            let absolute = insert_at + start;
+            let index = self
+                .line_starts
+                .partition_point(|&existing| existing < absolute);
+            self.line_starts.insert(index, absolute);
+        }
+
+        self.input.splice(insert_at..insert_at, inserted);
+
+        // UTF-16 column prefix sums (html5lib `(line, UTF-16 column)` positions) only need
+        // rebuilding when astral code points are involved.
+        if self.wide_prefix.is_some() || self.input.iter().any(|cp| *cp > 0xFFFF) {
+            let mut prefix = Vec::with_capacity(self.input.len() + 1);
+            prefix.push(0u32);
+            for cp in &self.input {
+                let previous = *prefix.last().expect("prefix starts with 0");
+                prefix.push(previous + u32::from(*cp > 0xFFFF));
+            }
+            self.wide_prefix = Some(prefix);
+        }
     }
 
     fn consume_next(&mut self) -> Option<u32> {
