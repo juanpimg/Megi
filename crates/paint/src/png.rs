@@ -5,42 +5,37 @@
 //! §3.1: the core crates build only on the Rust standard library, and the PNG
 //! encoder is not on the authorized-dependency list (audit decision D3).
 //!
-//! The generated stream is intentionally simple and fully deterministic:
+//! The generated stream is deterministic:
 //!
 //! - **IHDR**: 8 bits per channel, color type 6 (truecolor + alpha), no
 //!   interlace, compression/filter methods 0.
-//! - **IDAT**: a zlib stream (RFC 1950) whose DEFLATE payload (RFC 1951) uses
-//!   only *stored* blocks (`BTYPE=00`), so no Huffman/LZ77 machinery is
-//!   required. A stored DEFLATE payload is just the raw bytes split into
-//!   blocks of at most 65 535 bytes, prefixed with `BFINAL`/`BTYPE`, `LEN` and
-//!   `NLEN` (one's complement of `LEN`), and followed by a big-endian
-//!   Adler-32 checksum of the uncompressed data.
+//! - **IDAT**: a zlib stream (RFC 1950) produced by the in-tree DEFLATE
+//!   encoder ([`crate::deflate`]): LZ77 with a 32 KiB window and fixed Huffman
+//!   codes. The previous *stored* DEFLATE writer produced a 1.92 MB PNG for
+//!   800×600 RGBA; real compression is required for versioned golden images.
 //! - **IEND**: empty terminator chunk.
+//!
+//! Scanlines are filtered adaptively (the classic libpng heuristic): for every
+//! row the encoder tries `None`, `Sub`, `Up`, `Average` and `Paeth`, scores each
+//! candidate with the sum of absolute signed deviations and keeps the cheapest.
+//! Filtered data is dominated by long zero runs, which the LZ77 match finder
+//! turns into a handful of length/distance pairs.
 //!
 //! Every chunk carries a big-endian CRC-32 (IEEE 802.3 polynomial
 //! `0xEDB8_8320`) over its type and payload.
 //!
-//! The trade-off is size: an *uncompressed* 800×600 RGBA image occupies about
-//! 1.9 MB instead of the usually much smaller deflate-compressed file. That is
-//! acceptable for Phase 4 (PNG output for tests and golden images); actual
-//! compression is tracked as future work in WP-4.11. See
-//! `docs/ARCHITECTURE.md` §3.1 for the dependency policy that motivates this
-//! implementation.
-//!
 //! Typical use is through [`Pixmap::to_png`](crate::Pixmap::to_png), which
 //! feeds the raw RGBA bytes to [`encode_rgba`].
 
-/// The 8-byte PNG magic signature (PNG spec §5.2):
-/// `\x89PNG\r\n\x1a\n`.
+use crate::deflate;
+
+/// The 8-byte PNG magic signature (PNG spec §5.2): `\x89PNG\r\n\x1a\n`.
 pub const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
 /// CRC-32 lookup table for the IEEE polynomial, computed at compile time.
 const CRC_TABLE: [u32; 256] = build_crc_table();
 
 /// Builds the CRC-32 (IEEE 802.3) lookup table in a `const` context.
-///
-/// Rust `const fn` supports `while` loops (but not `for`), hence the manual
-/// counters.
 const fn build_crc_table() -> [u32; 256] {
     let mut table = [0u32; 256];
     let mut n = 0usize;
@@ -61,8 +56,7 @@ const fn build_crc_table() -> [u32; 256] {
     table
 }
 
-/// Feeds one byte into a running CRC-32 register (pre/post inversion handled
-/// by the caller).
+/// Feeds one byte into a running CRC-32 register.
 fn crc32_update(mut crc: u32, bytes: &[u8]) -> u32 {
     for &byte in bytes {
         let index = ((crc ^ u32::from(byte)) & 0xFF) as usize;
@@ -78,8 +72,6 @@ pub fn crc32(bytes: &[u8]) -> u32 {
 
 /// Computes the Adler-32 checksum of `bytes` (RFC 1950 §9).
 pub fn adler32(bytes: &[u8]) -> u32 {
-    // Largest n such that 255 * n * (n + 1) / 2 + (n + 1) * (MOD - 1) fits in
-    // a u32; deferring the modulo keeps the inner loop branch-free.
     const MOD: u32 = 65_521;
     const CHUNK: usize = 5_552;
     let mut a = 1u32;
@@ -97,8 +89,7 @@ pub fn adler32(bytes: &[u8]) -> u32 {
 
 /// Appends a PNG chunk (`length`, `type`, `data`, `CRC`) to `out`.
 fn write_chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
-    let length = data.len() as u32;
-    out.extend_from_slice(&length.to_be_bytes());
+    out.extend_from_slice(&(data.len() as u32).to_be_bytes());
     out.extend_from_slice(kind);
 
     let mut crc = crc32_update(0xFFFF_FFFF, kind);
@@ -109,48 +100,62 @@ fn write_chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&crc.to_be_bytes());
 }
 
-/// Wraps `data` in a zlib stream whose DEFLATE body uses stored blocks only.
-///
-/// The emitted bytes are a valid zlib stream (RFC 1950): 2-byte header with
-/// `CM=8`, `CINFO=7`, `FCHECK` chosen so the header is a multiple of 31, the
-/// stored DEFLATE blocks, and the big-endian Adler-32 of the uncompressed
-/// input.
-fn zlib_stored(data: &[u8]) -> Vec<u8> {
-    // 0x78 = CMF (deflate, 32 KiB window), 0x01 = FLG such that
-    // (0x78 << 8 | 0x01) % 31 == 0, no preset dictionary, no compression hint.
-    let mut out = Vec::with_capacity(data.len() + data.len() / 65_535 * 5 + 16);
-    out.extend_from_slice(&[0x78, 0x01]);
-
-    if data.is_empty() {
-        // A final empty stored block is required to terminate the stream.
-        out.extend_from_slice(&[0x01, 0x00, 0x00, 0xFF, 0xFF]);
+/// PNG `Paeth` predictor (PNG spec §6.6) for one byte position.
+#[inline]
+fn paeth_predictor(left: u8, above: u8, upper_left: u8) -> u8 {
+    let p = i32::from(left) + i32::from(above) - i32::from(upper_left);
+    let pa = (p - i32::from(left)).abs();
+    let pb = (p - i32::from(above)).abs();
+    let pc = (p - i32::from(upper_left)).abs();
+    if pa <= pb && pa <= pc {
+        left
+    } else if pb <= pc {
+        above
     } else {
-        let total = data.len();
-        for (index, block) in data.chunks(65_535).enumerate() {
-            let is_final = (index + 1) * 65_535 >= total;
-            let len = block.len() as u16;
-            let nlen = !len;
-            // BFINAL in bit 0, BTYPE=00 (stored) in bits 1..3 ⇒ 0x00 or 0x01.
-            out.push(u8::from(is_final));
-            out.extend_from_slice(&len.to_le_bytes());
-            out.extend_from_slice(&nlen.to_le_bytes());
-            out.extend_from_slice(block);
-        }
+        upper_left
     }
-
-    out.extend_from_slice(&adler32(data).to_be_bytes());
-    out
 }
 
-/// Prefixes each RGBA scanline with the PNG filter type `0` (`None`).
-fn build_scanlines(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
+/// Builds the filtered PNG image data (one filter byte + filtered row per
+/// scanline), choosing the cheapest of the five standard PNG filters per row.
+pub fn filter_scanlines(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
     let stride = width as usize * 4;
-    let mut raw = Vec::with_capacity(height as usize * (stride + 1));
-    for row in rgba.chunks(stride) {
-        raw.push(0);
-        raw.extend_from_slice(row);
+    let mut filtered = Vec::with_capacity(height as usize * (stride + 1));
+    let mut previous = vec![0u8; stride];
+    let mut candidates: [Vec<u8>; 5] = std::array::from_fn(|_| vec![0u8; stride]);
+
+    for row_index in 0..height as usize {
+        let row = &rgba[row_index * stride..(row_index + 1) * stride];
+        candidates[0].copy_from_slice(row);
+        for x in 0..stride {
+            let left = if x >= 4 { row[x - 4] } else { 0 };
+            let above = previous[x];
+            let upper_left = if x >= 4 { previous[x - 4] } else { 0 };
+            candidates[1][x] = row[x].wrapping_sub(left); // Sub
+            candidates[2][x] = row[x].wrapping_sub(above); // Up
+            let average = ((u16::from(left) + u16::from(above)) / 2) as u8;
+            candidates[3][x] = row[x].wrapping_sub(average); // Average
+            candidates[4][x] = row[x].wrapping_sub(paeth_predictor(left, above, upper_left)); // Paeth
+        }
+
+        // libpng heuristic: minimise the sum of absolute signed deviations.
+        let mut best_filter = 0usize;
+        let mut best_score = u64::MAX;
+        for (filter, candidate) in candidates.iter().enumerate() {
+            let score: u64 = candidate
+                .iter()
+                .map(|&byte| u64::from((byte as i8).unsigned_abs()))
+                .sum();
+            if score < best_score {
+                best_score = score;
+                best_filter = filter;
+            }
+        }
+        filtered.push(best_filter as u8);
+        filtered.extend_from_slice(&candidates[best_filter]);
+        previous.copy_from_slice(row);
     }
-    raw
+    filtered
 }
 
 /// Encodes raw `rgba` bytes (row-major, 4 bytes per pixel) as a PNG file.
@@ -169,8 +174,8 @@ pub fn encode_rgba(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
         return Vec::new();
     }
 
-    let raw = build_scanlines(width, height, rgba);
-    let mut out = Vec::with_capacity(raw.len() + 128);
+    let raw = filter_scanlines(width, height, rgba);
+    let mut out = Vec::with_capacity(raw.len() / 4 + 128);
     out.extend_from_slice(&PNG_SIGNATURE);
 
     // IHDR: width, height, bit depth 8, color type 6 (RGBA), compression 0,
@@ -182,7 +187,7 @@ pub fn encode_rgba(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
     ihdr[9] = 6;
     write_chunk(&mut out, b"IHDR", &ihdr);
 
-    write_chunk(&mut out, b"IDAT", &zlib_stored(&raw));
+    write_chunk(&mut out, b"IDAT", &deflate::zlib_compress(&raw));
     write_chunk(&mut out, b"IEND", &[]);
 
     out
@@ -191,6 +196,7 @@ pub fn encode_rgba(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::inflate::inflate_zlib;
 
     /// Parsed chunk: `(type, payload)`.
     type Chunk = (String, Vec<u8>);
@@ -230,44 +236,40 @@ mod tests {
         }
         assert_eq!(pos, png.len(), "trailing bytes after IEND");
 
-        (chunks, inflate_stored(&idat))
+        (
+            chunks,
+            inflate_zlib(&idat).expect("valid zlib/IDAT payload"),
+        )
     }
 
-    /// Minimal zlib decompressor that understands the stored-block subset
-    /// emitted by this module.
-    fn inflate_stored(zlib: &[u8]) -> Vec<u8> {
-        assert!(zlib.len() >= 6, "zlib stream too short");
-        assert_eq!(zlib[0] & 0x0F, 8, "not a deflate stream");
-        let mut pos = 2;
-        let mut out = Vec::new();
-        loop {
-            assert!(pos < zlib.len(), "missing stored block header");
-            let header = zlib[pos];
-            assert_eq!(header & 0b110, 0, "expected stored DEFLATE block");
-            let is_final = header & 1 == 1;
-            pos += 1;
-
-            let len = u16::from_le_bytes(zlib[pos..pos + 2].try_into().unwrap());
-            let nlen = u16::from_le_bytes(zlib[pos + 2..pos + 4].try_into().unwrap());
-            assert_eq!(len, !nlen, "LEN/NLEN mismatch");
-            pos += 4;
-            out.extend_from_slice(&zlib[pos..pos + len as usize]);
-            pos += len as usize;
-            if is_final {
-                break;
-            }
-        }
-        let stored_adler = u32::from_be_bytes(zlib[pos..pos + 4].try_into().unwrap());
-        assert_eq!(stored_adler, adler32(&out), "adler-32 mismatch");
-        out
-    }
-
-    fn rgba_of(scanlines: &[u8], width: u32, height: u32) -> Vec<u8> {
+    /// Reverses the PNG scanline filters of an 8-bit RGBA image.
+    fn rgba_from_scanlines(raw: &[u8], width: u32, height: u32) -> Vec<u8> {
         let stride = width as usize * 4;
         let mut rgba = Vec::with_capacity(stride * height as usize);
-        for row in scanlines.chunks(stride + 1) {
-            assert_eq!(row[0], 0, "unexpected filter type");
-            rgba.extend_from_slice(&row[1..]);
+        let mut previous = vec![0u8; stride];
+        for row_index in 0..height as usize {
+            let start = row_index * (stride + 1);
+            let filter = raw[start];
+            let mut row = raw[start + 1..start + 1 + stride].to_vec();
+            for x in 0..stride {
+                let left = if x >= 4 { row[x - 4] } else { 0 };
+                let above = previous[x];
+                let upper_left = if x >= 4 { previous[x - 4] } else { 0 };
+                let predicted = match filter {
+                    0 => 0,
+                    1 => left,
+                    2 => above,
+                    3 => {
+                        let sum = u16::from(left) + u16::from(above);
+                        (sum / 2) as u8
+                    }
+                    4 => paeth_predictor(left, above, upper_left),
+                    other => panic!("invalid filter {other}"),
+                };
+                row[x] = row[x].wrapping_add(predicted);
+            }
+            rgba.extend_from_slice(&row);
+            previous = row;
         }
         rgba
     }
@@ -305,27 +307,25 @@ mod tests {
 
         // 2 rows × (1 filter byte + 2 pixels × 4 bytes).
         assert_eq!(inflated.len(), 2 * (1 + 8));
-        assert_eq!(rgba_of(&inflated, 2, 2), rgba);
+        assert_eq!(rgba_from_scanlines(&inflated, 2, 2), rgba);
     }
 
     #[test]
-    fn test_png_multiblock_stored_deflate() {
-        // > 65 535 bytes of image data forces more than one stored block.
+    fn test_flat_image_compresses_well() {
         let width = 200u32;
         let height = 100u32;
         let mut rgba = Vec::with_capacity((width * height * 4) as usize);
-        for i in 0..(width * height) {
-            rgba.extend_from_slice(&[
-                (i % 256) as u8,
-                ((i / 3) % 256) as u8,
-                ((i / 7) % 256) as u8,
-                255,
-            ]);
+        for _ in 0..(width * height) {
+            rgba.extend_from_slice(&[12, 200, 34, 255]);
         }
         let png = encode_rgba(width, height, &rgba);
         let (_, inflated) = parse_png(&png);
-        assert_eq!(inflated.len(), height as usize * (1 + width as usize * 4));
-        assert_eq!(rgba_of(&inflated, width, height), rgba);
+        assert_eq!(rgba_from_scanlines(&inflated, width, height), rgba);
+        assert!(
+            png.len() < 1024,
+            "flat 200x100 image should compress below 1 KiB, got {} bytes",
+            png.len()
+        );
     }
 
     #[test]
@@ -333,7 +333,7 @@ mod tests {
         let rgba = [12u8, 34, 56, 78];
         let png = encode_rgba(1, 1, &rgba);
         let (_, inflated) = parse_png(&png);
-        assert_eq!(rgba_of(&inflated, 1, 1), rgba);
+        assert_eq!(rgba_from_scanlines(&inflated, 1, 1), rgba);
     }
 
     #[test]

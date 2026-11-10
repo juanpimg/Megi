@@ -146,6 +146,14 @@ impl DisplayItem {
     }
 }
 
+/// Hard upper bound on the number of items a [`DisplayList`] may hold.
+///
+/// Painting stops appending new instructions once the list reaches this size
+/// (deterministic truncation). The cap bounds memory on hostile/pathological
+/// documents (WP-4.12): a real 1 MiB page produces ~25 k items, so 5 M is a
+/// four-orders-of-magnitude safety margin, not a layout/quality limit.
+pub const MAX_DISPLAY_LIST_ITEMS: usize = 5_000_000;
+
 /// A sequential list of [`DisplayItem`]s ready for 2D software or hardware rasterization.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DisplayList {
@@ -159,8 +167,13 @@ impl DisplayList {
     }
 
     /// Appends a new display item to the list.
+    ///
+    /// Appends are silently dropped once [`MAX_DISPLAY_LIST_ITEMS`] is reached;
+    /// see the constant documentation for the rationale.
     pub fn push(&mut self, item: DisplayItem) {
-        self.items.push(item);
+        if self.items.len() < MAX_DISPLAY_LIST_ITEMS {
+            self.items.push(item);
+        }
     }
 
     /// Returns the number of display items.

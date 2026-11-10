@@ -8,14 +8,21 @@ used by the WP-4.1 HTML → PNG pipeline tests and golden images.
 | File | Purpose |
 |---|---|
 | `basic.html` | 800×600 document exercising `h1`, `p`, `br`, colored/bold `span`, `ul/li`, a `div` with padding + border + background, `hr` and `a`. |
-| `basic.rgba` | Golden image: raw row-major RGBA bytes (800×600, 4 bytes/pixel, 1 920 000 bytes) of the deterministic render of `basic.html`. Compared byte-for-byte by `crates/paint/tests/end_to_end_html.rs`. |
+| `basic.rgba` | Golden image: raw row-major RGBA bytes (800×600, 4 bytes/pixel, 1 920 000 bytes) of the deterministic render of `basic.html`. Compared byte-for-byte by `crates/paint/tests/end_to_end_html.rs`. It is unaffected by PNG compression changes. |
 
 Golden checksums (md5):
 
 | Artifact | md5 |
 |---|---|
-| `basic.rgba` | `4139fdd8fec9364b03139d8d7cf32a8b` |
-| `basic.png` (rendered from the fixture) | `d97c67dc107313749a6cd28f161e0f63` |
+| `basic.rgba` | `60f8984ecf01e0db67976867172c0eee` |
+| `basic.png` (rendered from the fixture, compressed DEFLATE) | `9e95717795744335bc0dfc7cade782ee` |
+
+`basic.png` is **42 853 bytes** after WP-4.11 compression (it was 1 920 813
+bytes with the former *stored* DEFLATE writer: a 44.8× reduction). The encoder
+uses adaptive PNG row filters (`None`/`Sub`/`Up`/`Average`/`Paeth`, chosen per
+row by the sum of absolute deviations) plus an in-tree DEFLATE implementation
+(LZ77, 32 KiB window, hash chains, fixed Huffman codes); the zlib wrapper and
+Adler-32 follow RFC 1950. See `crates/paint/src/{png,deflate,inflate}.rs`.
 
 The fixture exercises, besides the WP-4.1 pipeline features:
 
@@ -31,7 +38,11 @@ The fixture exercises, besides the WP-4.1 pipeline features:
 - a `position: relative` stage with two `position: absolute` children
   (`#under` with `z-index: 1`, `#badge` with `z-index: 3` and
   `opacity: 0.7`): the badge must paint over the in-flow/under content and
-  blend with it as a single offscreen opacity group (WP-4.6).
+  blend with it as a single offscreen opacity group (WP-4.6);
+- the painter is iterative (explicit stacks) and bounded: 20 000-level layout
+  chains are covered by `crates/paint/tests/robustness.rs`, with documented
+  caps for stacking-context depth (256), float nesting (64) and display-list
+  size (5 000 000 items).
 
 ## Regenerating the golden image
 

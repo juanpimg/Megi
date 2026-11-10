@@ -124,37 +124,24 @@ pub fn parse_png(png: &[u8]) -> ParsedPng {
     ParsedPng { chunks, raw }
 }
 
-/// Minimal zlib/DEFLATE decompressor for the stored-block subset produced by
-/// the dependency-free encoder in `paint::png`.
+/// Decompresses a zlib stream with the paint crate's verification decoder.
 pub fn inflate_stored_zlib(zlib: &[u8]) -> Vec<u8> {
-    assert!(zlib.len() >= 6, "zlib stream too short");
-    assert_eq!(zlib[0] & 0x0F, 8, "CM must be 8 (deflate)");
-    assert_eq!(
-        (u16::from(zlib[0]) << 8 | u16::from(zlib[1])) % 31,
-        0,
-        "zlib FCHECK must make the header a multiple of 31"
-    );
+    paint::inflate_zlib(zlib).expect("valid zlib/IDAT payload")
+}
 
-    let mut pos = 2;
-    let mut out = Vec::new();
-    loop {
-        assert!(pos < zlib.len(), "missing stored DEFLATE block header");
-        let header = zlib[pos];
-        assert_eq!(header & 0b110, 0, "expected a stored DEFLATE block");
-        pos += 1;
-        let len = u16::from_le_bytes(zlib[pos..pos + 2].try_into().unwrap());
-        let nlen = u16::from_le_bytes(zlib[pos + 2..pos + 4].try_into().unwrap());
-        assert_eq!(len, !nlen, "stored block LEN/NLEN mismatch");
-        pos += 4;
-        out.extend_from_slice(&zlib[pos..pos + len as usize]);
-        pos += len as usize;
-        if header & 1 == 1 {
-            break;
-        }
+/// PNG `Paeth` predictor (PNG spec §6.6).
+fn paeth_predictor(left: u8, above: u8, upper_left: u8) -> u8 {
+    let p = i32::from(left) + i32::from(above) - i32::from(upper_left);
+    let pa = (p - i32::from(left)).abs();
+    let pb = (p - i32::from(above)).abs();
+    let pc = (p - i32::from(upper_left)).abs();
+    if pa <= pb && pa <= pc {
+        left
+    } else if pb <= pc {
+        above
+    } else {
+        upper_left
     }
-    let stored_adler = u32::from_be_bytes(zlib[pos..pos + 4].try_into().unwrap());
-    assert_eq!(stored_adler, adler32(&out), "zlib Adler-32 mismatch");
-    out
 }
 
 /// Reads a big-endian `u32` at `offset` of `bytes`.
@@ -170,7 +157,7 @@ pub fn ihdr_fields(parsed: &ParsedPng) -> (u32, u32, u8, u8) {
 }
 
 /// Converts the inflated scanlines of an 8-bit RGBA PNG into raw RGBA bytes,
-/// asserting that every scanline uses filter type 0.
+/// reversing all five standard PNG row filters.
 pub fn rgba_from_scanlines(raw: &[u8], width: u32, height: u32) -> Vec<u8> {
     let stride = width as usize * 4;
     assert_eq!(
@@ -179,9 +166,27 @@ pub fn rgba_from_scanlines(raw: &[u8], width: u32, height: u32) -> Vec<u8> {
         "unexpected inflated image size"
     );
     let mut rgba = Vec::with_capacity(stride * height as usize);
-    for row in raw.chunks(stride + 1) {
-        assert_eq!(row[0], 0, "expected filter type 0 (None)");
-        rgba.extend_from_slice(&row[1..]);
+    let mut previous = vec![0u8; stride];
+    for row_index in 0..height as usize {
+        let start = row_index * (stride + 1);
+        let filter = raw[start];
+        let mut row = raw[start + 1..start + 1 + stride].to_vec();
+        for x in 0..stride {
+            let left = if x >= 4 { row[x - 4] } else { 0 };
+            let above = previous[x];
+            let upper_left = if x >= 4 { previous[x - 4] } else { 0 };
+            let predicted = match filter {
+                0 => 0,
+                1 => left,
+                2 => above,
+                3 => ((u16::from(left) + u16::from(above)) / 2) as u8,
+                4 => paeth_predictor(left, above, upper_left),
+                other => panic!("invalid PNG filter type {other} on row {row_index}"),
+            };
+            row[x] = row[x].wrapping_add(predicted);
+        }
+        rgba.extend_from_slice(&row);
+        previous = row;
     }
     rgba
 }

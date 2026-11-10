@@ -368,6 +368,29 @@ fn test_render_basic_html_produces_valid_png() {
 }
 
 #[test]
+fn test_fixture_png_is_compressed_below_400_kb() {
+    // WP-4.11/WP-4.12: real DEFLATE (LZ77 + fixed Huffman) plus adaptive PNG
+    // row filtering must shrink the fixture PNG from 1.92 MB to <400 KB
+    // (in practice well below 200 KB).
+    let source = fixture("basic.html");
+    let (pixmap, _) = render(&source, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    let png = pixmap.to_png();
+    let limit = 400 * 1024;
+    assert!(
+        png.len() < limit,
+        "fixture PNG is {} bytes, expected < {limit} bytes",
+        png.len()
+    );
+    // Sanity-check the roundtrip through the in-tree zlib decoder.
+    let parsed = parse_png(&png);
+    let (width, height, _, _) = ihdr_fields(&parsed);
+    assert_eq!(
+        common::rgba_from_scanlines(&parsed.raw, width, height),
+        pixmap.to_rgba_bytes()
+    );
+}
+
+#[test]
 fn test_render_basic_html_png_matches_golden() {
     let source = fixture("basic.html");
     let golden_path = fixture_dir().join("basic.rgba");

@@ -20,15 +20,19 @@
 
 #![forbid(unsafe_code)]
 
+pub mod deflate;
 pub mod display_list;
+pub mod inflate;
 pub mod painter;
 pub mod png;
 pub mod rasterizer;
 pub mod style;
 
 pub use css::Color;
-pub use display_list::{BorderSide, DisplayItem, DisplayList, MarkerKind};
-pub use painter::build_display_list;
+pub use deflate::zlib_compress;
+pub use display_list::{BorderSide, DisplayItem, DisplayList, MAX_DISPLAY_LIST_ITEMS, MarkerKind};
+pub use inflate::inflate_zlib;
+pub use painter::{MAX_FLOAT_DEPTH, MAX_STACKING_CONTEXT_DEPTH, build_display_list};
 pub use png::encode_rgba;
 pub use rasterizer::{
     MAX_PIXMAP_PIXELS, Pixmap, RasterStats, RenderConfig, bundled_font_database,

@@ -98,10 +98,33 @@ enum Phase {
     Positive,
 }
 
+/// Maximum nesting of stacking contexts the painter recurses into.
+///
+/// Deeper contexts are painted as flat in-flow content (their own visual box is
+/// still painted) instead of recursing further. This bounds stack usage for
+/// hostile documents. 256 levels is far beyond any real page (browsers cap
+/// `z-index`/nesting behaviour long before that).
+pub const MAX_STACKING_CONTEXT_DEPTH: usize = 256;
+
+/// Maximum nesting of floats the painter follows recursively (see
+/// [`MAX_STACKING_CONTEXT_DEPTH`]; floats beyond this depth are painted as
+/// in-flow content).
+pub const MAX_FLOAT_DEPTH: usize = 64;
+
 /// Builds a deterministic [`DisplayList`] from a laid-out [`LayoutBox`] tree.
 ///
 /// `viewport` is the canvas rectangle (normally `Rect::new(0.0, 0.0, w, h)`);
 /// it is used for the propagated root/`body` canvas background.
+///
+/// # Robustness
+///
+/// All tree traversals use explicit stacks (iterative pre-order walks) instead
+/// of native recursion, so deeply nested trees (tested with 20 000 levels) do
+/// not overflow the process stack. Stacking-context nesting and float nesting
+/// are additionally capped by [`MAX_STACKING_CONTEXT_DEPTH`] and
+/// [`MAX_FLOAT_DEPTH`]; beyond the caps the subtree is painted as flat in-flow
+/// content. The resulting list is bounded by
+/// [`MAX_DISPLAY_LIST_ITEMS`](crate::MAX_DISPLAY_LIST_ITEMS).
 pub fn build_display_list(root: &LayoutBox, viewport: Rect) -> DisplayList {
     let canvas = canvas_background(root);
     let mut list = DisplayList::new();
@@ -123,7 +146,7 @@ pub fn build_display_list(root: &LayoutBox, viewport: Rect) -> DisplayList {
             _ => None,
         },
     };
-    paint_stacking_context(root, &mut list, skip, false, true);
+    paint_stacking_context(root, &mut list, skip, false, true, 0);
     list
 }
 
@@ -238,6 +261,7 @@ fn paint_stacking_context(
     skip: PaintSkip,
     inherited_hidden: bool,
     is_root: bool,
+    depth: usize,
 ) {
     let start = list.len();
     let hidden = inherited_hidden || is_hidden(layout_box);
@@ -253,6 +277,18 @@ fn paint_stacking_context(
         list.push(DisplayItem::PushClip { rect });
     }
 
+    if depth >= MAX_STACKING_CONTEXT_DEPTH {
+        // Depth guard: paint the remaining subtree as flat in-flow content
+        // instead of recursing into further stacking contexts.
+        paint_block_backgrounds(layout_box, list, skip, hidden, 1.0);
+        paint_floats(layout_box, list, skip, hidden, 1.0, depth);
+        paint_inline_content(layout_box, list, skip, hidden, TextDecoration::NONE, 1.0);
+        if clip.is_some() {
+            list.push(DisplayItem::PopClip);
+        }
+        return;
+    }
+
     // Split the participating descendant contexts into phase buckets.
     let mut negative: Vec<&LayoutBox> = Vec::new();
     let mut zero: Vec<&LayoutBox> = Vec::new();
@@ -263,22 +299,22 @@ fn paint_stacking_context(
 
     // Step 3: negative z-index contexts.
     for context in negative {
-        paint_stacking_context(context, list, skip, hidden, false);
+        paint_stacking_context(context, list, skip, hidden, false, depth + 1);
     }
 
     // Steps 4-6: in-flow block backgrounds, floats, inline content.
     paint_block_backgrounds(layout_box, list, skip, hidden, 1.0);
-    paint_floats(layout_box, list, skip, hidden, 1.0);
+    paint_floats(layout_box, list, skip, hidden, 1.0, depth);
     paint_inline_content(layout_box, list, skip, hidden, TextDecoration::NONE, 1.0);
 
     // Step 7: positioned z-index auto/0 and z-index 0 contexts.
     for context in zero {
-        paint_stacking_context(context, list, skip, hidden, false);
+        paint_stacking_context(context, list, skip, hidden, false, depth + 1);
     }
 
     // Step 8: positive z-index contexts.
     for context in positive {
-        paint_stacking_context(context, list, skip, hidden, false);
+        paint_stacking_context(context, list, skip, hidden, false, depth + 1);
     }
 
     if clip.is_some() {
@@ -299,23 +335,46 @@ fn paint_stacking_context(
 
 /// Collects the stacking contexts that participate in the context rooted at
 /// `layout_box` (nearest-context descendants, in tree order).
+///
+/// Iterative by design: a 20 000-level layout tree must not exhaust the stack.
 fn collect_context_boxes<'a>(
     layout_box: &'a LayoutBox,
     negative: &mut Vec<&'a LayoutBox>,
     zero: &mut Vec<&'a LayoutBox>,
     positive: &mut Vec<&'a LayoutBox>,
 ) {
-    for child in &layout_box.children {
+    let mut stack: Vec<&'a LayoutBox> = Vec::new();
+    for child in layout_box.children.iter().rev() {
+        stack.push(child);
+    }
+    while let Some(child) = stack.pop() {
         match phase(child) {
             Phase::Negative => negative.push(child),
             Phase::Zero => zero.push(child),
             Phase::Positive => positive.push(child),
-            Phase::Float | Phase::InFlow => collect_context_boxes(child, negative, zero, positive),
+            Phase::Float | Phase::InFlow => {
+                for grandchild in child.children.iter().rev() {
+                    stack.push(grandchild);
+                }
+            }
         }
     }
 }
 
+/// Explicit-stack task for the iterative block-background traversal.
+enum BlockTask<'a> {
+    Visit {
+        layout_box: &'a LayoutBox,
+        inherited_hidden: bool,
+        alpha_scale: f32,
+    },
+    PopClip,
+}
+
 /// Paints background and borders of in-flow block-level descendants (step 4).
+///
+/// Iterative: uses an explicit stack instead of recursion so deeply nested
+/// documents cannot overflow the native stack.
 fn paint_block_backgrounds(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
@@ -323,40 +382,72 @@ fn paint_block_backgrounds(
     inherited_hidden: bool,
     alpha_scale: f32,
 ) {
-    for child in &layout_box.children {
-        if phase(child) != Phase::InFlow {
-            // Floats, positioned boxes and stacking contexts have their own
-            // steps; their block descendants are painted there.
-            continue;
-        }
-        let hidden = inherited_hidden || is_hidden(child);
-        let alpha = alpha_scale * child.opacity.clamp(0.0, 1.0);
-        let clipped = child.clip;
-        if let Some(rect) = clipped {
-            list.push(DisplayItem::PushClip { rect });
-        }
-        if child.is_block() && !hidden {
-            paint_background_border(child, list, skip, false, alpha);
-        }
-        paint_block_backgrounds(child, list, skip, hidden, alpha);
-        if clipped.is_some() {
-            list.push(DisplayItem::PopClip);
+    let mut stack: Vec<BlockTask<'_>> = Vec::new();
+    push_block_children(layout_box, inherited_hidden, alpha_scale, &mut stack);
+    while let Some(task) = stack.pop() {
+        match task {
+            BlockTask::PopClip => list.push(DisplayItem::PopClip),
+            BlockTask::Visit {
+                layout_box: child,
+                inherited_hidden,
+                alpha_scale,
+            } => {
+                let hidden = inherited_hidden || is_hidden(child);
+                let alpha = alpha_scale * child.opacity.clamp(0.0, 1.0);
+                if let Some(rect) = child.clip {
+                    list.push(DisplayItem::PushClip { rect });
+                    stack.push(BlockTask::PopClip);
+                }
+                if child.is_block() && !hidden {
+                    paint_background_border(child, list, skip, false, alpha);
+                }
+                push_block_children(child, hidden, alpha, &mut stack);
+            }
         }
     }
 }
 
+fn push_block_children<'a>(
+    parent: &'a LayoutBox,
+    inherited_hidden: bool,
+    alpha_scale: f32,
+    stack: &mut Vec<BlockTask<'a>>,
+) {
+    for child in parent.children.iter().rev() {
+        if phase(child) != Phase::InFlow {
+            continue;
+        }
+        stack.push(BlockTask::Visit {
+            layout_box: child,
+            inherited_hidden,
+            alpha_scale,
+        });
+    }
+}
+
 /// Paints non-positioned floats (step 5), in tree order.
+///
+/// Iterative; nested floats recurse only up to [`MAX_FLOAT_DEPTH`].
 fn paint_floats(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
     skip: PaintSkip,
     inherited_hidden: bool,
     alpha_scale: f32,
+    depth: usize,
 ) {
-    for child in &layout_box.children {
+    let mut stack: Vec<&LayoutBox> = Vec::new();
+    for child in layout_box.children.iter().rev() {
+        stack.push(child);
+    }
+    while let Some(child) = stack.pop() {
         match phase(child) {
-            Phase::Float => paint_float(child, list, skip, inherited_hidden, alpha_scale),
-            Phase::InFlow => paint_floats(child, list, skip, inherited_hidden, alpha_scale),
+            Phase::Float => paint_float(child, list, skip, inherited_hidden, alpha_scale, depth),
+            Phase::InFlow => {
+                for grandchild in child.children.iter().rev() {
+                    stack.push(grandchild);
+                }
+            }
             Phase::Negative | Phase::Zero | Phase::Positive => {}
         }
     }
@@ -370,6 +461,7 @@ fn paint_float(
     skip: PaintSkip,
     inherited_hidden: bool,
     alpha_scale: f32,
+    depth: usize,
 ) {
     let hidden = inherited_hidden || is_hidden(layout_box);
     let alpha = alpha_scale * layout_box.opacity.clamp(0.0, 1.0);
@@ -381,15 +473,31 @@ fn paint_float(
         paint_background_border(layout_box, list, skip, false, alpha);
     }
     paint_block_backgrounds(layout_box, list, skip, hidden, alpha);
-    paint_floats(layout_box, list, skip, hidden, alpha);
+    if depth < MAX_FLOAT_DEPTH {
+        paint_floats(layout_box, list, skip, hidden, alpha, depth + 1);
+    }
     paint_inline_content(layout_box, list, skip, hidden, TextDecoration::NONE, alpha);
     if clipped.is_some() {
         list.push(DisplayItem::PopClip);
     }
 }
 
+/// Explicit-stack task for the iterative inline-content traversal.
+enum InlineTask<'a> {
+    Visit {
+        layout_box: &'a LayoutBox,
+        inherited_hidden: bool,
+        inherited_decoration: TextDecoration,
+        alpha: f32,
+        ordinal: u32,
+    },
+    PopClip,
+}
+
 /// Paints in-flow inline content (step 6): inline boxes, text runs with their
 /// decorations and list markers, in tree order.
+///
+/// Iterative: explicit stack, so deep inline nesting cannot overflow the stack.
 fn paint_inline_content(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
@@ -398,65 +506,129 @@ fn paint_inline_content(
     inherited_decoration: TextDecoration,
     alpha_scale: f32,
 ) {
+    let mut stack: Vec<InlineTask<'_>> = Vec::new();
+    push_inline_children(
+        layout_box,
+        inherited_hidden,
+        inherited_decoration,
+        alpha_scale,
+        &mut stack,
+    );
+    while let Some(task) = stack.pop() {
+        match task {
+            InlineTask::PopClip => list.push(DisplayItem::PopClip),
+            InlineTask::Visit {
+                layout_box: child,
+                inherited_hidden,
+                inherited_decoration,
+                alpha,
+                ordinal,
+            } => {
+                let parent_decoration = inherited_decoration
+                    | child
+                        .style
+                        .as_ref()
+                        .map_or(TextDecoration::NONE, |style| style.text_decoration);
+                let hidden = inherited_hidden || is_hidden(child);
+                let clipped = child.clip;
+                if let Some(rect) = clipped {
+                    list.push(DisplayItem::PushClip { rect });
+                    stack.push(InlineTask::PopClip);
+                }
+
+                match &child.box_type {
+                    BoxType::TextNode(text) if !text.trim().is_empty() => {
+                        if !hidden {
+                            paint_text_run(child, text, list, alpha);
+                            paint_text_decorations(
+                                child,
+                                parent_decoration
+                                    | child.style.as_ref().map_or(TextDecoration::NONE, |style| {
+                                        style.text_decoration
+                                    }),
+                                list,
+                                alpha,
+                            );
+                        }
+                    }
+                    BoxType::TextNode(_) | BoxType::LineBreak => {}
+                    BoxType::InlineNode(_) => {
+                        if !hidden {
+                            paint_background_border(child, list, skip, false, alpha);
+                        }
+                        push_inline_children(child, hidden, parent_decoration, alpha, &mut stack);
+                    }
+                    BoxType::BlockNode(_) | BoxType::AnonymousBlock | BoxType::LineBox => {
+                        if is_list_item(child) && !hidden {
+                            paint_marker(child, ordinal, list, alpha);
+                        }
+                        push_inline_children(child, hidden, parent_decoration, alpha, &mut stack);
+                    }
+                    // Table internals, inline-block wrappers and replaced boxes
+                    // are painted through their descendants (the background and
+                    // border phases only run for element boxes).
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+/// Pushes the inline tasks of `parent`'s children (reversed, so the stack pops
+/// them in tree order), computing per-box hidden/decoration/alpha state and
+/// `list-item` ordinals.
+///
+/// Allocation-free: a single backwards pass derives the ordinals directly
+/// instead of collecting intermediate task vectors (this hot path runs for
+/// every box of the layout tree).
+fn push_inline_children<'a>(
+    parent: &'a LayoutBox,
+    inherited_hidden: bool,
+    inherited_decoration: TextDecoration,
+    alpha_scale: f32,
+    stack: &mut Vec<InlineTask<'a>>,
+) {
     let parent_decoration = inherited_decoration
-        | layout_box
+        | parent
             .style
             .as_ref()
             .map_or(TextDecoration::NONE, |style| style.text_decoration);
-    let mut list_item_ordinal = 0u32;
+    // 1-based ordinal of the last list item in this parent, decremented while
+    // walking the children backwards.
+    let mut next_ordinal = parent
+        .children
+        .iter()
+        .filter(|child| {
+            !matches!(
+                phase(child),
+                Phase::Float | Phase::Negative | Phase::Zero | Phase::Positive
+            ) && is_list_item(child)
+        })
+        .count() as u32;
 
-    for child in &layout_box.children {
+    for child in parent.children.iter().rev() {
         if matches!(
             phase(child),
             Phase::Float | Phase::Negative | Phase::Zero | Phase::Positive
         ) {
-            // Floats and positioned/context boxes have their own phases.
             continue;
         }
+        let ordinal = if is_list_item(child) {
+            let ordinal = next_ordinal.max(1);
+            next_ordinal = next_ordinal.saturating_sub(1);
+            ordinal
+        } else {
+            0
+        };
         let hidden = inherited_hidden || is_hidden(child);
         let alpha = alpha_scale * child.opacity.clamp(0.0, 1.0);
-        if is_list_item(child) {
-            list_item_ordinal += 1;
-        }
-        let clipped = child.clip;
-        if let Some(rect) = clipped {
-            list.push(DisplayItem::PushClip { rect });
-        }
-
-        match &child.box_type {
-            BoxType::TextNode(text) if !text.trim().is_empty() => {
-                if !hidden {
-                    paint_text_run(child, text, list, alpha);
-                    paint_text_decorations(
-                        child,
-                        parent_decoration
-                            | child
-                                .style
-                                .as_ref()
-                                .map_or(TextDecoration::NONE, |style| style.text_decoration),
-                        list,
-                        alpha,
-                    );
-                }
-            }
-            BoxType::InlineNode(_) => {
-                if !hidden {
-                    paint_background_border(child, list, skip, false, alpha);
-                }
-                paint_inline_content(child, list, skip, hidden, parent_decoration, alpha);
-            }
-            BoxType::TextNode(_) | BoxType::LineBreak => {}
-            BoxType::BlockNode(_) | BoxType::AnonymousBlock | BoxType::LineBox => {
-                if is_list_item(child) && !hidden {
-                    paint_marker(child, list_item_ordinal, list, alpha);
-                }
-                paint_inline_content(child, list, skip, hidden, parent_decoration, alpha);
-            }
-        }
-
-        if clipped.is_some() {
-            list.push(DisplayItem::PopClip);
-        }
+        stack.push(InlineTask::Visit {
+            layout_box: child,
+            inherited_hidden: hidden,
+            inherited_decoration: parent_decoration,
+            alpha,
+            ordinal,
+        });
     }
 }
 
@@ -590,13 +762,21 @@ fn is_list_item(layout_box: &LayoutBox) -> bool {
 
 /// Returns the absolute baseline of the first non-empty text fragment inside
 /// `layout_box`, used to align list markers with the first line.
+///
+/// Iterative pre-order walk (no recursion: deep list-item chains are safe).
 fn first_text_baseline(layout_box: &LayoutBox) -> Option<f32> {
-    if let BoxType::TextNode(text) = &layout_box.box_type
-        && !text.trim().is_empty()
-    {
-        return Some(layout_box.dimensions.content.y + layout_box.baseline);
+    let mut stack: Vec<&LayoutBox> = vec![layout_box];
+    while let Some(current) = stack.pop() {
+        if let BoxType::TextNode(text) = &current.box_type
+            && !text.trim().is_empty()
+        {
+            return Some(current.dimensions.content.y + current.baseline);
+        }
+        for child in current.children.iter().rev() {
+            stack.push(child);
+        }
     }
-    layout_box.children.iter().find_map(first_text_baseline)
+    None
 }
 
 /// Paints one list marker in front of the content box (CSS 2.2 §12.5).
