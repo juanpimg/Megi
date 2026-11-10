@@ -3,10 +3,10 @@
 //! Defines [`LayoutBox`], [`BoxType`], and tree structural invariants according to
 //! CSS 2.2 §9 and CSS Display Module Level 3.
 
-use css::ComputedStyle;
+use css::{ComputedStyle, Float, Position};
 use dom::NodeId;
 
-use crate::geometry::Dimensions;
+use crate::geometry::{Dimensions, Rect};
 
 /// The nature of a box in the layout tree.
 #[derive(Clone, Debug, PartialEq)]
@@ -43,6 +43,29 @@ pub struct LayoutBox {
     /// glyphs at `content.y + baseline`. Non-text boxes carry `0.0` unless a
     /// future formatting context defines a meaningful baseline.
     pub baseline: f32,
+    /// Used CSS `position` (CSS 2.2 §9.3). `sticky` is preserved for paint but behaves
+    /// like `relative` in this layout engine (no scrolling yet).
+    pub position: Position,
+    /// Used `z-index`; `auto` is normalized to `0`. Only meaningful for positioned boxes
+    /// (static boxes always carry `0`).
+    pub z_index: i32,
+    /// Used `opacity` (1.0 = fully opaque).
+    pub opacity: f32,
+    /// `true` when this box establishes a new stacking context (CSS 2.2 Appendix E):
+    /// the root element, a positioned box with a non-`auto` `z-index`, a `fixed` box,
+    /// or a box with `opacity < 1`.
+    pub establishes_stacking_context: bool,
+    /// Absolute-coordinate clip rectangle inherited by this box and its descendants.
+    ///
+    /// `None` means "not clipped". A box that establishes clipping through
+    /// `overflow: hidden|clip|scroll|auto` carries its own padding box here; descendants
+    /// inherit the intersection with every ancestor clip. Paint applies it to the box
+    /// content (a clipping box's own border/background follow CSS 2.2 §11 rules).
+    pub clip: Option<Rect>,
+    /// `true` when the box is a float (`float: left|right`, CSS 2.2 §9.5).
+    pub is_float: bool,
+    /// Used `float` side (`Float::None` for non-floated boxes).
+    pub float_side: Float,
     /// Child boxes in layout order.
     pub children: Vec<LayoutBox>,
 }
@@ -55,6 +78,13 @@ impl LayoutBox {
             box_type,
             style,
             baseline: 0.0,
+            position: Position::Static,
+            z_index: 0,
+            opacity: 1.0,
+            establishes_stacking_context: false,
+            clip: None,
+            is_float: false,
+            float_side: Float::None,
             children: Vec::new(),
         }
     }

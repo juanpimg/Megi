@@ -3,6 +3,8 @@
 //! Box Tree construction, Block Formatting Context (BFC), and 2D box geometry layout
 //! per CSS 2.2 §8–10 and CSS Display Module Level 3.
 
+#![forbid(unsafe_code)]
+
 pub mod block;
 pub mod box_tree;
 pub mod geometry;
@@ -12,9 +14,10 @@ pub mod tree_builder;
 
 use std::collections::HashMap;
 
-use css::ComputedStyle;
+use css::{ComputedStyle, Overflow, Position};
 use dom::{Document, NodeId};
 
+use block::layout_block_with_viewport;
 pub use block::{layout_block, layout_block_with_measurer};
 pub use box_tree::{BoxType, LayoutBox};
 pub use geometry::{Dimensions, EdgeSizes, Rect};
@@ -66,8 +69,46 @@ pub fn layout_document_with_measurer(
         margin: EdgeSizes::ZERO,
     };
 
-    layout_block_with_measurer(&mut root_box, &initial_containing_block, measurer);
+    layout_block_with_viewport(&mut root_box, &initial_containing_block, measurer, viewport);
+    finalize_layout_metadata(&mut root_box, None, true);
     Some(root_box)
+}
+
+/// Fills in the derived layout metadata consumed by paint (WP-4.6/4.10 contract):
+///
+/// * `establishes_stacking_context` per CSS 2.2 Appendix E (root element, `fixed`
+///   boxes, positioned boxes with a non-`auto` `z-index`, and `opacity < 1`);
+/// * `clip`: absolute-coordinate clip rectangle inherited from ancestors and narrowed
+///   by every box whose `overflow` is not `visible` (CSS 2.2 §11.1). The clipping box
+///   itself carries its own padding box.
+fn finalize_layout_metadata(node: &mut LayoutBox, inherited_clip: Option<Rect>, is_root: bool) {
+    let mut effective_clip = inherited_clip;
+    if let Some(style) = node.style.as_ref()
+        && !matches!(style.overflow, Overflow::Visible)
+    {
+        let padding_box = node.dimensions.padding_box();
+        effective_clip = Some(match inherited_clip {
+            Some(parent_clip) => parent_clip.intersect(padding_box).unwrap_or(Rect::new(
+                padding_box.x.max(parent_clip.x),
+                padding_box.y.max(parent_clip.y),
+                0.0,
+                0.0,
+            )),
+            None => padding_box,
+        });
+    }
+    node.clip = effective_clip;
+
+    node.establishes_stacking_context = is_root
+        || node.style.as_ref().is_some_and(|style| {
+            style.opacity < 1.0
+                || matches!(style.position, Position::Fixed)
+                || (style.position != Position::Static && style.z_index.is_some())
+        });
+
+    for child in &mut node.children {
+        finalize_layout_metadata(child, effective_clip, false);
+    }
 }
 
 #[cfg(test)]

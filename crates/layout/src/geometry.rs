@@ -33,6 +33,20 @@ impl Rect {
     pub fn contains_point(&self, px: f32, py: f32) -> bool {
         px >= self.x && px <= self.x + self.width && py >= self.y && py <= self.y + self.height
     }
+
+    /// Returns the geometric intersection of two rectangles, or `None` when they do not
+    /// overlap. Used to compose inherited `overflow` clip rectangles (CSS 2.2 §11.1).
+    pub fn intersect(&self, other: Rect) -> Option<Rect> {
+        let x = self.x.max(other.x);
+        let y = self.y.max(other.y);
+        let right = (self.x + self.width).min(other.x + other.width);
+        let bottom = (self.y + self.height).min(other.y + other.height);
+        if right <= x || bottom <= y {
+            None
+        } else {
+            Some(Rect::new(x, y, right - x, bottom - y))
+        }
+    }
 }
 
 /// 4-sided edge offsets in pixels (used for margins, paddings, borders).

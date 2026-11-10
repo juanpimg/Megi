@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Display};
+use css::{ComputedStyle, Display, Float, Position};
 use dom::{Document, Namespace, NodeId, NodeKind};
 
 use crate::box_tree::{BoxType, LayoutBox, anonymous_style_from, is_collapsible_whitespace_box};
@@ -62,6 +62,10 @@ fn build_box_for_node(
 
             let style = style?;
 
+            // CSS 2.2 §9.7: `float` blockifies the box; §9.6/§9.3: absolutely
+            // positioned boxes are out of flow and also blockified.
+            let blockified = style.float != Float::None
+                || matches!(style.position, Position::Absolute | Position::Fixed);
             let box_type = match style.display {
                 Display::Block
                 | Display::Table
@@ -70,6 +74,7 @@ fn build_box_for_node(
                 | Display::Flex
                 | Display::Grid
                 | Display::ListItem => BoxType::BlockNode(node_id),
+                _ if blockified => BoxType::BlockNode(node_id),
                 _ => BoxType::InlineNode(node_id),
             };
 
@@ -90,13 +95,19 @@ fn build_box_for_node(
                 _ => raw_children,
             };
 
-            Some(LayoutBox {
-                dimensions: Default::default(),
-                box_type,
-                style: Some(style.clone()),
-                baseline: 0.0,
-                children,
-            })
+            let mut layout_box = LayoutBox::new(box_type, Some(style.clone()));
+            // Data contract consumed by `paint` (stacking/clip metadata).
+            layout_box.position = style.position;
+            layout_box.z_index = if style.position == Position::Static {
+                0
+            } else {
+                style.z_index.unwrap_or(0)
+            };
+            layout_box.opacity = style.opacity;
+            layout_box.is_float = style.float != Float::None;
+            layout_box.float_side = style.float;
+            layout_box.children = children;
+            Some(layout_box)
         }
         NodeKind::Text(txt) => {
             // An empty text node generates no inline content.

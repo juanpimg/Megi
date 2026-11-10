@@ -91,6 +91,19 @@ pub trait TextMeasurer {
 }
 
 /// Measures `text` with the run's weight and style from a computed style.
+///
+/// Exposed to the block layout algorithm for intrinsic (shrink-to-fit) width
+/// calculations of floats and absolutely positioned boxes.
+#[inline]
+pub(crate) fn measure_text_width(
+    measurer: &dyn TextMeasurer,
+    text: &str,
+    style: &ComputedStyle,
+) -> f32 {
+    measure_styled(measurer, text, style)
+}
+
+/// Measures `text` with the run's weight and style from a computed style.
 #[inline]
 fn measure_styled(measurer: &dyn TextMeasurer, text: &str, style: &ComputedStyle) -> f32 {
     measurer.measure_text_styled(

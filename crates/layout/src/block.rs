@@ -6,9 +6,15 @@
 //!
 //! ## Scope and known simplifications
 //!
-//! * Floats, `clear`, `overflow` and `position` are not modelled yet, so boxes that
-//!   would establish a new BFC through those properties are laid out as normal blocks.
-//!   `display: flex/grid/table*` are treated as independent formatting contexts for
+//! * Floats are placed in the current formatting context and in-flow block children
+//!   are narrowed to the right/left float edge. Line boxes are shortened at block
+//!   granularity (a full float-aware inline layout is out of scope).
+//! * Absolutely positioned boxes are laid out after the normal flow of their parent;
+//!   `bottom`/percentage offsets against an auto-height positioned ancestor are treated
+//!   as `auto` (the ancestor height is not yet known at that point).
+//! * Floats/positioned boxes nested inside an inline formatting context are ignored by
+//!   the IFC (block-in-inline normalization is still out of scope).
+//! * `display: flex/grid/table*` are treated as independent formatting contexts for
 //!   margin collapsing purposes.
 //! * Margins of self-collapsing boxes (no border, padding, content or height) are not
 //!   collapsed through in this milestone.
@@ -17,11 +23,23 @@
 //! * Percentage `height` resolves against a definite containing block height; against
 //!   an auto-height containing block it behaves as `auto` (CSS 2.2 §10.5).
 
-use css::{BoxSizing, ComputedStyle, Display, Length};
+use css::{BoxSizing, Clear, ComputedStyle, Display, Float, Length, Overflow, Position};
 
-use crate::box_tree::LayoutBox;
+use crate::box_tree::{BoxType, LayoutBox};
 use crate::geometry::{Dimensions, EdgeSizes, Rect};
 use crate::inline::{DefaultTextMeasurer, TextMeasurer};
+
+/// Positioning context inherited down the box tree (CSS 2.2 §9.6, §10.1).
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PositioningContext {
+    /// Padding box of the nearest positioned ancestor: containing block for
+    /// `position: absolute` descendants (or the initial containing block).
+    abs_cb: Rect,
+    /// Definite height of `abs_cb`, if known (for `bottom` and percentage heights).
+    abs_cb_height: Option<f32>,
+    /// Viewport rectangle: containing block for `position: fixed` (CSS 2.2 §10.1).
+    viewport: Rect,
+}
 
 /// Performs block formatting context layout on a layout box within a containing block.
 ///
@@ -43,6 +61,22 @@ pub fn layout_block_with_measurer(
     containing_block: &Dimensions,
     measurer: &dyn TextMeasurer,
 ) {
+    layout_block_with_viewport(
+        layout_box,
+        containing_block,
+        measurer,
+        containing_block.content,
+    );
+}
+
+/// Entry point with an explicit viewport: the containing block for `position: fixed`
+/// boxes and the root of the positioning context chain (CSS 2.2 §9.6).
+pub(crate) fn layout_block_with_viewport(
+    layout_box: &mut LayoutBox,
+    containing_block: &Dimensions,
+    measurer: &dyn TextMeasurer,
+    viewport: Rect,
+) {
     let cb = containing_block.content;
     calculate_block_width(layout_box, cb.width);
     resolve_vertical_edges(layout_box, cb.width);
@@ -54,7 +88,14 @@ pub fn layout_block_with_measurer(
         + layout_box.dimensions.margin.top
         + layout_box.dimensions.border.top
         + layout_box.dimensions.padding.top;
-    layout_box_contents(layout_box, Some(cb.height), true, measurer);
+    let root_pos = PositioningContext {
+        abs_cb: cb,
+        abs_cb_height: Some(cb.height),
+        viewport,
+    };
+    let self_pos = self_positioning_context(layout_box, root_pos);
+    layout_box_contents(layout_box, Some(cb.height), true, measurer, self_pos);
+    apply_relative_offset(layout_box, cb.width, Some(cb.height));
 }
 
 /// Lays out a block-level child inside its parent's content box.
@@ -68,6 +109,7 @@ fn layout_child_box(
     parent_definite_height: Option<f32>,
     border_top_y: f32,
     measurer: &dyn TextMeasurer,
+    pos: PositioningContext,
 ) {
     calculate_block_width(child, cb.width);
     resolve_vertical_edges(child, cb.width);
@@ -77,7 +119,32 @@ fn layout_child_box(
         + child.dimensions.padding.left;
     child.dimensions.content.y =
         border_top_y + child.dimensions.border.top + child.dimensions.padding.top;
-    layout_box_contents(child, parent_definite_height, false, measurer);
+    let child_pos = self_positioning_context(child, pos);
+    layout_box_contents(child, parent_definite_height, false, measurer, child_pos);
+    apply_relative_offset(child, cb.width, parent_definite_height);
+}
+
+/// Returns the positioning context inherited by the absolute descendants of `layout_box`:
+/// its own padding box when the box is positioned, or the inherited one otherwise.
+fn self_positioning_context(
+    layout_box: &LayoutBox,
+    inherited: PositioningContext,
+) -> PositioningContext {
+    let positioned = layout_box
+        .style
+        .as_ref()
+        .is_some_and(|style| style.position != Position::Static);
+    if !positioned {
+        return inherited;
+    }
+    let padding_box = layout_box.dimensions.padding_box();
+    let definite = definite_content_height(layout_box, inherited.abs_cb_height)
+        .map(|height| height + padding_box.height - layout_box.dimensions.content.height);
+    PositioningContext {
+        abs_cb: padding_box,
+        abs_cb_height: definite,
+        viewport: inherited.viewport,
+    }
 }
 
 /// Lays out the contents of a block container and computes its used height.
@@ -90,10 +157,24 @@ fn layout_box_contents(
     cb_height: Option<f32>,
     is_root: bool,
     measurer: &dyn TextMeasurer,
+    pos: PositioningContext,
 ) {
     let definite_height = definite_content_height(layout_box, cb_height);
-    layout_block_children(layout_box, definite_height, is_root, measurer);
-    calculate_block_height(layout_box, cb_height, definite_height, is_root);
+    let children_layout =
+        layout_block_children(layout_box, definite_height, is_root, measurer, pos);
+    calculate_block_height(
+        layout_box,
+        cb_height,
+        definite_height,
+        is_root,
+        children_layout.float_extent,
+    );
+    layout_out_of_flow_children(
+        layout_box,
+        pos,
+        &children_layout.absolute_static_positions,
+        measurer,
+    );
 }
 
 /// Resolves the used widths of a block-level box per CSS 2.2 §10.3.3 / §10.4.
@@ -279,39 +360,219 @@ fn definite_content_height(layout_box: &LayoutBox, cb_height: Option<f32>) -> Op
     })
 }
 
+/// Layout results of a block container's children needed to finish the box.
+#[derive(Default)]
+struct ChildrenLayout {
+    /// Bottom edge of the floats in this formatting context, as an offset from the
+    /// content box top (CSS 2.2 §10.6.7).
+    float_extent: Option<f32>,
+    /// Static positions recorded for absolutely positioned children:
+    /// `(child index, content x, content y)`.
+    absolute_static_positions: Vec<(usize, f32, f32)>,
+}
+
+/// A float already placed in the current formatting context.
+#[derive(Clone, Copy)]
+struct PlacedFloat {
+    side: Float,
+    margin_box: Rect,
+}
+
+/// Places a float and returns its margin box bottom edge (absolute y).
+fn place_float(
+    child: &mut LayoutBox,
+    cb: Rect,
+    flow_offset: f32,
+    floats: &[PlacedFloat],
+    measurer: &dyn TextMeasurer,
+    pos: PositioningContext,
+) -> (PlacedFloat, f32) {
+    let side = child.float_side;
+    let available = cb.width;
+    calculate_shrink_to_fit_width(child, cb.width, available, measurer);
+    let margin_box_w = child.dimensions.margin_box().width;
+    let margin_box_h = child.dimensions.border_box().height
+        + child.dimensions.margin.top
+        + child.dimensions.margin.bottom;
+
+    let mut top = cb.y + flow_offset;
+    // Move down until the float fits next to the floats already placed.
+    loop {
+        let left_limit = floats
+            .iter()
+            .filter(|placed| {
+                placed.side == Float::Left && placed.margin_box.y + placed.margin_box.height > top
+            })
+            .map(|placed| placed.margin_box.x + placed.margin_box.width)
+            .fold(cb.x, f32::max);
+        let right_limit = floats
+            .iter()
+            .filter(|placed| {
+                placed.side == Float::Right && placed.margin_box.y + placed.margin_box.height > top
+            })
+            .map(|placed| placed.margin_box.x)
+            .fold(cb.x + cb.width, f32::min);
+
+        let x = if side == Float::Left {
+            left_limit
+        } else {
+            right_limit - margin_box_w
+        };
+        if x >= cb.x && x + margin_box_w <= right_limit + 0.001 {
+            // Fits: position the float border box at the chosen margin box origin.
+            child.dimensions.content.x = x
+                + child.dimensions.margin.left
+                + child.dimensions.border.left
+                + child.dimensions.padding.left;
+            child.dimensions.content.y = top
+                + child.dimensions.margin.top
+                + child.dimensions.border.top
+                + child.dimensions.padding.top;
+            let child_pos = self_positioning_context(child, pos);
+            layout_box_contents(child, None, false, measurer, child_pos);
+            let margin_box = Rect::new(
+                x,
+                top,
+                margin_box_w,
+                child.dimensions.border_box().height
+                    + child.dimensions.margin.top
+                    + child.dimensions.margin.bottom,
+            );
+            return (
+                PlacedFloat { side, margin_box },
+                margin_box.y + margin_box.height,
+            );
+        }
+        // Does not fit: move below the floats blocking this side (and keep the height).
+        let next_top = floats
+            .iter()
+            .filter(|placed| placed.margin_box.y + placed.margin_box.height > top)
+            .map(|placed| placed.margin_box.y + placed.margin_box.height)
+            .fold(top + margin_box_h, f32::max);
+        if next_top <= top {
+            break;
+        }
+        top = next_top;
+    }
+    (
+        PlacedFloat {
+            side,
+            margin_box: Rect::new(cb.x, top, margin_box_w, margin_box_h),
+        },
+        top + margin_box_h,
+    )
+}
+
+/// Returns the horizontal space taken by floats at `y` inside `cb`.
+fn float_exclusions(floats: &[PlacedFloat], cb: Rect, y: f32) -> (f32, f32) {
+    let left = floats
+        .iter()
+        .filter(|placed| {
+            placed.side == Float::Left
+                && placed.margin_box.y + placed.margin_box.height > y
+                && placed.margin_box.y < y + 1.0
+        })
+        .map(|placed| (placed.margin_box.x + placed.margin_box.width - cb.x).max(0.0))
+        .fold(0.0, f32::max);
+    let right = floats
+        .iter()
+        .filter(|placed| {
+            placed.side == Float::Right
+                && placed.margin_box.y + placed.margin_box.height > y
+                && placed.margin_box.y < y + 1.0
+        })
+        .map(|placed| (cb.x + cb.width - placed.margin_box.x).max(0.0))
+        .fold(0.0, f32::max);
+    (left, right)
+}
+
 /// Lays out the in-flow children of a block container and stacks them vertically,
-/// collapsing adjoining vertical margins (CSS 2.2 §8.3.1).
+/// collapsing adjoining vertical margins (CSS 2.2 §8.3.1). Floats are placed out of
+/// flow (CSS 2.2 §9.5) and absolutely positioned children are postponed until the
+/// parent height is known.
 fn layout_block_children(
     layout_box: &mut LayoutBox,
     definite_height: Option<f32>,
     is_root: bool,
     measurer: &dyn TextMeasurer,
-) {
+    pos: PositioningContext,
+) -> ChildrenLayout {
+    let mut result = ChildrenLayout::default();
     if layout_box.children.is_empty() {
-        return;
+        return result;
     }
 
     // If children are inline-level, establish an Inline Formatting Context
     // (CSS 2.2 §9.4.2).
     if layout_box.children.iter().all(|c| c.is_inline()) {
         crate::inline::layout_inline_formatting_context_with_measurer(layout_box, measurer);
-        return;
+        return result;
     }
 
     let cb = layout_box.dimensions.content;
     let collapses_with_first = !is_root && collapses_with_first_child(layout_box);
-    // Offset (relative to the content box top) at which the next child's *border box*
-    // starts. Adjoining margins are collapsed into `flow` as we go.
     let mut flow = 0.0_f32;
-    // Collapsed (used) bottom margin of the previous in-flow block-level sibling.
     let mut previous_bottom_margin: Option<f32> = None;
+    let mut floats: Vec<PlacedFloat> = Vec::new();
 
-    for child in &mut layout_box.children {
+    for (index, child) in layout_box.children.iter_mut().enumerate() {
+        let position = child
+            .style
+            .as_ref()
+            .map_or(Position::Static, |style| style.position);
+
+        // Out of flow: absolutely positioned boxes are laid out after the parent height
+        // is known (their static position is recorded here).
+        if matches!(position, Position::Absolute | Position::Fixed) {
+            let (margin_left, margin_top) = child.style.as_ref().map_or((0.0, 0.0), |style| {
+                (
+                    resolve_length(style.margin.left, cb.width),
+                    resolve_length(style.margin.top, cb.width),
+                )
+            });
+            result.absolute_static_positions.push((
+                index,
+                cb.x + margin_left,
+                cb.y + flow + margin_top,
+            ));
+            continue;
+        }
+
+        // Floats are out of flow: they do not advance the block flow.
+        if child.is_float {
+            let (placed, _bottom) = place_float(child, cb, flow, &floats, measurer, pos);
+            floats.push(placed);
+            result.float_extent = Some(
+                result
+                    .float_extent
+                    .unwrap_or(0.0)
+                    .max(placed.margin_box.y + placed.margin_box.height - cb.y),
+            );
+            continue;
+        }
+
+        // `clear` moves the in-flow box below the relevant floats (CSS 2.2 §9.5.2).
+        if let Some(style) = child.style.as_ref() {
+            let clear_bottom = match style.clear {
+                Clear::None => None,
+                Clear::Left | Clear::Right | Clear::Both => floats
+                    .iter()
+                    .filter(|placed| match style.clear {
+                        Clear::Left => placed.side == Float::Left,
+                        Clear::Right => placed.side == Float::Right,
+                        _ => true,
+                    })
+                    .map(|placed| placed.margin_box.y + placed.margin_box.height - cb.y)
+                    .reduce(f32::max),
+            };
+            if let Some(bottom) = clear_bottom {
+                flow = flow.max(bottom);
+            }
+        }
+
         let child_top_margin = collapsed_top_margin(child, cb.width);
         let gap = match previous_bottom_margin {
             None => {
-                // Parent/child top margins are adjoining: the child's top margin already
-                // collapsed into the parent's margin and was applied outside it.
                 if collapses_with_first {
                     0.0
                 } else {
@@ -322,10 +583,198 @@ fn layout_block_children(
         };
         flow += gap;
 
+        // In-flow block boxes are narrowed to the float edges they overlap
+        // (CSS 2.2 §9.5: "line boxes next to a float are shortened").
+        let (left_exclusion, right_exclusion) = float_exclusions(&floats, cb, cb.y + flow);
+        let child_cb = Rect::new(
+            cb.x + left_exclusion,
+            cb.y,
+            (cb.width - left_exclusion - right_exclusion).max(0.0),
+            cb.height,
+        );
         let border_top_y = cb.y + flow;
-        layout_child_box(child, cb, definite_height, border_top_y, measurer);
+        layout_child_box(
+            child,
+            child_cb,
+            definite_height,
+            border_top_y,
+            measurer,
+            pos,
+        );
         flow += child.dimensions.border_box().height;
         previous_bottom_margin = Some(collapsed_bottom_margin(child, cb.width));
+    }
+
+    result
+}
+
+/// Lays out absolutely (and fixed) positioned children once the parent height is known.
+fn layout_out_of_flow_children(
+    layout_box: &mut LayoutBox,
+    pos: PositioningContext,
+    static_positions: &[(usize, f32, f32)],
+    measurer: &dyn TextMeasurer,
+) {
+    for &(index, static_x, static_y) in static_positions {
+        let Some(child) = layout_box.children.get_mut(index) else {
+            continue;
+        };
+        let position = child
+            .style
+            .as_ref()
+            .map_or(Position::Static, |style| style.position);
+        let (cb_rect, cb_height) = if position == Position::Fixed {
+            (pos.viewport, Some(pos.viewport.height))
+        } else {
+            (pos.abs_cb, pos.abs_cb_height)
+        };
+        layout_absolutely_positioned(child, cb_rect, cb_height, static_x, static_y, pos, measurer);
+    }
+}
+
+/// Lays out one absolutely (or fixed) positioned box (CSS 2.2 §9.6, §10.3.7, §10.6.4).
+fn layout_absolutely_positioned(
+    child: &mut LayoutBox,
+    cb: Rect,
+    cb_height: Option<f32>,
+    static_x: f32,
+    static_y: f32,
+    pos: PositioningContext,
+    measurer: &dyn TextMeasurer,
+) {
+    resolve_vertical_edges(child, cb.width);
+    // Absolute margins: `auto` behaves as 0 (CSS 2.2 §10.3.7 simplification).
+    let (
+        margin_left,
+        margin_right,
+        margin_top,
+        margin_bottom,
+        border_left,
+        border_right,
+        border_top,
+        border_bottom,
+        padding_left,
+        padding_right,
+        padding_top,
+        padding_bottom,
+    ) = match child.style.as_ref() {
+        Some(style) => (
+            resolve_length(style.margin.left, cb.width),
+            resolve_length(style.margin.right, cb.width),
+            resolve_length(style.margin.top, cb.width),
+            resolve_length(style.margin.bottom, cb.width),
+            style.border_width.left,
+            style.border_width.right,
+            style.border_width.top,
+            style.border_width.bottom,
+            resolve_length(style.padding.left, cb.width),
+            resolve_length(style.padding.right, cb.width),
+            resolve_length(style.padding.top, cb.width),
+            resolve_length(style.padding.bottom, cb.width),
+        ),
+        None => (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+    };
+    let edges_h = border_left + border_right + padding_left + padding_right;
+    let edges_v = border_top + border_bottom + padding_top + padding_bottom;
+
+    let (left, right, top, bottom, specified_width, specified_height, is_border_box) =
+        if let Some(style) = child.style.clone() {
+            (
+                resolve_offset(style.left, Some(cb.width)),
+                resolve_offset(style.right, Some(cb.width)),
+                resolve_offset(style.top, cb_height),
+                resolve_offset(style.bottom, cb_height),
+                match style.width {
+                    Length::Px(px) => Some(px),
+                    Length::Percent(pct) => Some(cb.width * (pct / 100.0)),
+                    Length::Auto => None,
+                },
+                match style.height {
+                    Length::Px(px) => Some(px),
+                    Length::Percent(pct) => cb_height.map(|height| height * (pct / 100.0)),
+                    Length::Auto => None,
+                },
+                style.box_sizing == BoxSizing::BorderBox,
+            )
+        } else {
+            (None, None, None, None, None, None, false)
+        };
+
+    let to_content = |border_box: f32| {
+        if is_border_box {
+            (border_box - edges_h).max(0.0)
+        } else {
+            border_box
+        }
+    };
+    let available_content = (cb.width - margin_left - margin_right - edges_h).max(0.0);
+    let content_width = match (specified_width, left, right) {
+        (Some(width), _, _) => to_content(width),
+        (None, Some(left), Some(right)) => (available_content - left - right).max(0.0),
+        (None, _, _) => {
+            let usable = (available_content - left.unwrap_or(0.0) - right.unwrap_or(0.0)).max(0.0);
+            shrink_to_fit_content_width(child, usable, cb.width, measurer)
+        }
+    };
+
+    let content_x = match (left, right) {
+        (Some(left), _) => cb.x + left + margin_left + border_left + padding_left,
+        (None, Some(right)) => {
+            cb.x + cb.width - right - margin_right - border_right - padding_right - content_width
+        }
+        (None, None) => static_x,
+    };
+
+    let specified_content_height = match (specified_height, top, bottom) {
+        (Some(height), _, _) => {
+            if is_border_box {
+                Some((height - edges_v).max(0.0))
+            } else {
+                Some(height)
+            }
+        }
+        (None, Some(_), Some(bottom)) => cb_height.map(|height| {
+            (height - top.unwrap_or(0.0) - bottom - margin_top - margin_bottom - edges_v).max(0.0)
+        }),
+        _ => None,
+    };
+
+    let content_y = match (top, bottom) {
+        (Some(top), _) => cb.y + top + margin_top + border_top + padding_top,
+        (None, Some(bottom)) if specified_content_height.is_some() => {
+            cb.y + cb_height.unwrap_or(0.0)
+                - bottom
+                - margin_bottom
+                - border_bottom
+                - padding_bottom
+                - specified_content_height.unwrap_or(0.0)
+        }
+        _ => static_y,
+    };
+
+    child.dimensions.content.x = content_x;
+    child.dimensions.content.y = content_y;
+    child.dimensions.content.width = content_width;
+    // Width edges were already resolved; overwrite the used width after the shrink-to-fit
+    // calculation above.
+    child.dimensions.padding.left = padding_left;
+    child.dimensions.padding.right = padding_right;
+    child.dimensions.border.left = border_left;
+    child.dimensions.border.right = border_right;
+    child.dimensions.margin.left = margin_left;
+    child.dimensions.margin.right = margin_right;
+
+    let child_pos = self_positioning_context(
+        child,
+        PositioningContext {
+            abs_cb: cb,
+            abs_cb_height: cb_height,
+            viewport: pos.viewport,
+        },
+    );
+    layout_box_contents(child, cb_height, false, measurer, child_pos);
+    if let Some(height) = specified_content_height {
+        child.dimensions.content.height = height;
     }
 }
 
@@ -335,11 +784,20 @@ fn calculate_block_height(
     cb_height: Option<f32>,
     definite_height: Option<f32>,
     is_root: bool,
+    float_extent: Option<f32>,
 ) {
     let mut content_height = match definite_height {
         Some(height) => height,
         None => intrinsic_content_height(layout_box, is_root),
     };
+
+    // CSS 2.2 §10.6.7: the height of a formatting context root encloses its floats.
+    if definite_height.is_none()
+        && (is_root || establishes_independent_formatting_context(layout_box))
+        && let Some(extent) = float_extent
+    {
+        content_height = content_height.max(extent);
+    }
 
     if let Some(style) = layout_box.style.as_ref() {
         let edges_v = layout_box.dimensions.padding.top
@@ -468,7 +926,10 @@ fn collapse_margins(first: f32, second: f32) -> f32 {
 }
 
 fn first_block_child(layout_box: &LayoutBox) -> Option<&LayoutBox> {
-    layout_box.children.iter().find(|child| child.is_block())
+    layout_box
+        .children
+        .iter()
+        .find(|child| child.is_block() && is_in_flow(child))
 }
 
 fn last_block_child(layout_box: &LayoutBox) -> Option<&LayoutBox> {
@@ -476,7 +937,7 @@ fn last_block_child(layout_box: &LayoutBox) -> Option<&LayoutBox> {
         .children
         .iter()
         .rev()
-        .find(|child| child.is_block())
+        .find(|child| child.is_block() && is_in_flow(child))
 }
 
 /// Boxes that establish an independent formatting context do not collapse margins with
@@ -488,7 +949,24 @@ fn establishes_independent_formatting_context(layout_box: &LayoutBox) -> bool {
             style.display,
             Display::Flex | Display::Grid | Display::Table | Display::TableRow | Display::TableCell
         )
+            // CSS 2.2 §9.4.1: floats, absolutely positioned boxes, and boxes with
+            // `overflow` other than `visible` establish a new block formatting context.
+            || style.float != Float::None
+            || style.position != Position::Static
+            || !matches!(style.overflow, Overflow::Visible)
     })
+}
+
+/// Returns `true` when the child participates in the normal block flow (i.e. it is
+/// neither a float nor absolutely positioned).
+fn is_in_flow(child: &LayoutBox) -> bool {
+    if child.is_float {
+        return false;
+    }
+    child
+        .style
+        .as_ref()
+        .is_none_or(|style| !matches!(style.position, Position::Absolute | Position::Fixed))
 }
 
 fn min_height_is_zero(style: &ComputedStyle) -> bool {
@@ -540,5 +1018,217 @@ fn resolve_max_height(length: Length, cb_height: Option<f32>) -> Option<f32> {
         Length::Px(px) => Some(px),
         Length::Percent(pct) => cb_height.map(|height| height * (pct / 100.0)),
         Length::Auto => None,
+    }
+}
+
+/// Applies `position: relative` offsets to a box and its subtree without affecting the
+/// normal flow of its siblings (CSS 2.2 §9.7). `sticky` is treated like `relative`
+/// (no scrolling support yet).
+fn apply_relative_offset(layout_box: &mut LayoutBox, cb_width: f32, cb_height: Option<f32>) {
+    let Some(style) = layout_box.style.clone() else {
+        return;
+    };
+    if !matches!(style.position, Position::Relative | Position::Sticky) {
+        return;
+    }
+    let left = resolve_offset(style.left, Some(cb_width));
+    let right = resolve_offset(style.right, Some(cb_width));
+    let top = resolve_offset(style.top, cb_height);
+    let bottom = resolve_offset(style.bottom, cb_height);
+    let dx = match (left, right) {
+        (Some(left), _) => left,
+        (None, Some(right)) => -right,
+        (None, None) => 0.0,
+    };
+    let dy = match (top, bottom) {
+        (Some(top), _) => top,
+        (None, Some(bottom)) => -bottom,
+        (None, None) => 0.0,
+    };
+    if dx != 0.0 || dy != 0.0 {
+        translate_box(layout_box, dx, dy);
+    }
+}
+
+/// Translates a box and its whole subtree by `(dx, dy)` in absolute coordinates.
+fn translate_box(layout_box: &mut LayoutBox, dx: f32, dy: f32) {
+    layout_box.dimensions.content.x += dx;
+    layout_box.dimensions.content.y += dy;
+    for child in &mut layout_box.children {
+        translate_box(child, dx, dy);
+    }
+}
+
+/// Resolves a positioning offset (`top|right|bottom|left`) into pixels.
+///
+/// `None` stands for `auto` (and percentages against an indefinite dimension).
+fn resolve_offset(length: Length, reference: Option<f32>) -> Option<f32> {
+    match length {
+        Length::Px(px) => Some(px),
+        Length::Percent(pct) => reference.map(|value| value * (pct / 100.0)),
+        Length::Auto => None,
+    }
+}
+
+/// Sets the used width of a shrink-to-fit box (floats, absolutely positioned boxes):
+/// `min(max(preferred minimum, available), preferred maximum)` (CSS 2.2 §10.3.5).
+fn calculate_shrink_to_fit_width(
+    layout_box: &mut LayoutBox,
+    cb_width: f32,
+    available: f32,
+    measurer: &dyn TextMeasurer,
+) {
+    let Some(style) = layout_box.style.clone() else {
+        layout_box.dimensions.content.width = available.max(0.0);
+        return;
+    };
+    resolve_vertical_edges(layout_box, cb_width);
+    let padding_left = resolve_length(style.padding.left, cb_width);
+    let padding_right = resolve_length(style.padding.right, cb_width);
+    let border_left = style.border_width.left;
+    let border_right = style.border_width.right;
+    let edges_h = padding_left + padding_right + border_left + border_right;
+    let margin_left = resolve_length(style.margin.left, cb_width);
+    let margin_right = resolve_length(style.margin.right, cb_width);
+    let is_border_box = style.box_sizing == BoxSizing::BorderBox;
+    let to_content = |border_box: f32| {
+        if is_border_box {
+            (border_box - edges_h).max(0.0)
+        } else {
+            border_box
+        }
+    };
+    let content_width = match style.width {
+        Length::Px(px) => to_content(px),
+        Length::Percent(pct) => to_content(cb_width * (pct / 100.0)),
+        Length::Auto => {
+            let usable = (available - margin_left - margin_right - edges_h).max(0.0);
+            shrink_to_fit_content_width(layout_box, usable, cb_width, measurer)
+        }
+    };
+
+    layout_box.dimensions.content.width = content_width;
+    layout_box.dimensions.padding.left = padding_left;
+    layout_box.dimensions.padding.right = padding_right;
+    layout_box.dimensions.border.left = border_left;
+    layout_box.dimensions.border.right = border_right;
+    layout_box.dimensions.margin.left = margin_left;
+    layout_box.dimensions.margin.right = margin_right;
+}
+
+/// Computes the shrink-to-fit content width of a box against `available` space.
+fn shrink_to_fit_content_width(
+    layout_box: &LayoutBox,
+    available: f32,
+    cb_width: f32,
+    measurer: &dyn TextMeasurer,
+) -> f32 {
+    let (preferred_minimum, preferred_maximum) =
+        intrinsic_content_widths(layout_box, cb_width, measurer);
+    // CSS 2.2 §10.3.5: min(max(preferred minimum width, available width), preferred width).
+    available
+        .max(preferred_minimum)
+        .min(preferred_maximum)
+        .max(0.0)
+}
+
+/// Approximate intrinsic content widths: `(preferred minimum, preferred maximum)`.
+///
+/// Text contributes its widest word as the minimum and its whole (space-collapsed)
+/// width as the maximum; inline boxes add their horizontal margins/borders/paddings.
+/// Floats/absolutely positioned descendants are ignored.
+fn intrinsic_content_widths(
+    layout_box: &LayoutBox,
+    cb_width: f32,
+    measurer: &dyn TextMeasurer,
+) -> (f32, f32) {
+    let mut minimum: f32 = 0.0;
+    let mut maximum: f32 = 0.0;
+    collect_intrinsic_widths(layout_box, cb_width, measurer, &mut minimum, &mut maximum);
+    (minimum, maximum)
+}
+
+fn collect_intrinsic_widths(
+    layout_box: &LayoutBox,
+    cb_width: f32,
+    measurer: &dyn TextMeasurer,
+    minimum: &mut f32,
+    maximum: &mut f32,
+) {
+    match &layout_box.box_type {
+        BoxType::TextNode(text) => {
+            let style = layout_box
+                .style
+                .clone()
+                .unwrap_or_else(ComputedStyle::initial);
+            let max_content = crate::inline::measure_text_width(measurer, text, &style);
+            let min_content = text
+                .split_whitespace()
+                .map(|word| crate::inline::measure_text_width(measurer, word, &style))
+                .fold(0.0_f32, f32::max);
+            *minimum = minimum.max(min_content);
+            *maximum = maximum.max(max_content);
+        }
+        BoxType::InlineNode(_) => {
+            if let Some(style) = layout_box.style.as_ref() {
+                let edges = resolve_length(style.margin.left, cb_width)
+                    + resolve_length(style.margin.right, cb_width)
+                    + style.border_width.left
+                    + style.border_width.right
+                    + resolve_length(style.padding.left, cb_width)
+                    + resolve_length(style.padding.right, cb_width);
+                for child in &layout_box.children {
+                    // Absolutely positioned descendants do not contribute to intrinsic
+                    // widths (CSS 2.2 §10.3.5).
+                    if child.style.as_ref().is_some_and(|child_style| {
+                        matches!(child_style.position, Position::Absolute | Position::Fixed)
+                    }) {
+                        continue;
+                    }
+                    let mut child_min = 0.0;
+                    let mut child_max = 0.0;
+                    collect_intrinsic_widths(
+                        child,
+                        cb_width,
+                        measurer,
+                        &mut child_min,
+                        &mut child_max,
+                    );
+                    *minimum = minimum.max(child_min + edges);
+                    *maximum = maximum.max(child_max + edges);
+                }
+            }
+        }
+        BoxType::BlockNode(_) | BoxType::AnonymousBlock => {
+            if let Some(style) = layout_box.style.as_ref() {
+                let edges = resolve_length(style.margin.left, cb_width)
+                    + resolve_length(style.margin.right, cb_width)
+                    + style.border_width.left
+                    + style.border_width.right
+                    + resolve_length(style.padding.left, cb_width)
+                    + resolve_length(style.padding.right, cb_width);
+                for child in &layout_box.children {
+                    // Absolutely positioned descendants do not contribute to intrinsic
+                    // widths (CSS 2.2 §10.3.5).
+                    if child.style.as_ref().is_some_and(|child_style| {
+                        matches!(child_style.position, Position::Absolute | Position::Fixed)
+                    }) {
+                        continue;
+                    }
+                    let mut child_min = 0.0;
+                    let mut child_max = 0.0;
+                    collect_intrinsic_widths(
+                        child,
+                        cb_width,
+                        measurer,
+                        &mut child_min,
+                        &mut child_max,
+                    );
+                    *minimum = minimum.max(child_min + edges);
+                    *maximum = maximum.max(child_max + edges);
+                }
+            }
+        }
+        BoxType::LineBox | BoxType::LineBreak => {}
     }
 }
