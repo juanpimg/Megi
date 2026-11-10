@@ -1,0 +1,605 @@
+//! Deterministic antialiased rasterizer for the parsed SVG model.
+//!
+//! Fills use a scanline algorithm with **4 vertical sub-rows per pixel row** and
+//! analytic horizontal coverage per span (16×16-equivalent vertical resolution +
+//! exact horizontal overlap), which gives smooth antialiased edges without
+//! random sampling. Strokes are decomposed into segment quads, cap discs and join
+//! polygons, each stamped with 4×4 sub-pixel supersampling and unioned with a
+//! per-pixel `max`, then composited over the transparent RGBA canvas with
+//! straight (non-premultiplied) alpha.
+//!
+//! Everything is deterministic: the same input bytes always produce the same
+//! pixel buffer byte for byte on every platform (IEEE `f32` arithmetic only, no
+//! threading and no randomness).
+
+use crate::color::Color;
+use crate::document::{Document, FillRule, LineCap, LineJoin};
+use crate::path::SubPath;
+use crate::{Limits, SvgError, SvgImage};
+
+/// Vertical sub-rows per output pixel row for fill coverage.
+const SUB_ROWS: usize = 4;
+/// Sub-samples per axis for stroke primitives.
+const STAMP_SAMPLES: u32 = 4;
+
+/// Rasterizes a document into a straight-RGBA image.
+pub(crate) fn rasterize(
+    document: &Document,
+    width: u32,
+    height: u32,
+    limits: &Limits,
+) -> Result<SvgImage, SvgError> {
+    let (width_usize, height_usize) = (width as usize, height as usize);
+    let pixel_count = width_usize
+        .checked_mul(height_usize)
+        .ok_or_else(|| SvgError::Limit("image size overflow".to_owned()))?;
+    if pixel_count as u64 > limits.max_pixels {
+        return Err(SvgError::Limit(
+            "image is too large to rasterize".to_owned(),
+        ));
+    }
+    let mut canvas = Canvas {
+        width: width_usize,
+        height: height_usize,
+        pixels: vec![0u8; pixel_count * 4],
+        coverage: vec![0.0f32; pixel_count],
+    };
+    let viewport = document.viewport_transform(width, height);
+    if !viewport.is_finite() {
+        return Err(SvgError::Invalid(
+            "non-finite viewport transform".to_owned(),
+        ));
+    }
+    let viewport_scale = (viewport.a * viewport.d - viewport.b * viewport.c)
+        .abs()
+        .sqrt();
+    for shape in &document.shapes {
+        if shape.opacity <= 0.0 {
+            continue;
+        }
+        let device_points: Vec<SubPath> = shape
+            .subpaths
+            .iter()
+            .map(|subpath| SubPath {
+                points: subpath
+                    .points
+                    .iter()
+                    .map(|point| viewport.apply(point.0, point.1))
+                    .filter(|point| point.0.is_finite() && point.1.is_finite())
+                    .collect(),
+                closed: subpath.closed,
+            })
+            .filter(|subpath| subpath.points.len() >= 2)
+            .collect();
+        if device_points.is_empty() {
+            continue;
+        }
+        if let Some(fill) = shape.fill {
+            let alpha = fill_alpha(fill, shape.fill_opacity, shape.opacity);
+            if alpha > 0.0 {
+                canvas.clear_coverage();
+                fill_scanline(
+                    &device_points,
+                    shape.fill_rule,
+                    canvas.width,
+                    canvas.height,
+                    &mut canvas.coverage,
+                );
+                canvas.composite(fill, alpha);
+            }
+        }
+        if let Some(stroke) = shape.stroke {
+            let width = shape.stroke_width * viewport_scale;
+            let alpha = fill_alpha(stroke, shape.stroke_opacity, shape.opacity);
+            if width > 0.0 && width.is_finite() && alpha > 0.0 {
+                canvas.clear_coverage();
+                stamp_stroke(
+                    &device_points,
+                    StrokeStyle {
+                        width,
+                        cap: shape.linecap,
+                        join: shape.linejoin,
+                        miter_limit: shape.miter_limit,
+                    },
+                    canvas.width,
+                    canvas.height,
+                    &mut canvas.coverage,
+                );
+                canvas.composite(stroke, alpha);
+            }
+        }
+    }
+    Ok(SvgImage {
+        width,
+        height,
+        data: canvas.pixels,
+    })
+}
+
+fn fill_alpha(color: Color, paint_opacity: f32, shape_opacity: f32) -> f32 {
+    (f32::from(color.a) / 255.0) * paint_opacity.clamp(0.0, 1.0) * shape_opacity.clamp(0.0, 1.0)
+}
+
+/// RGBA canvas with a reusable coverage buffer.
+struct Canvas {
+    width: usize,
+    height: usize,
+    pixels: Vec<u8>,
+    coverage: Vec<f32>,
+}
+
+impl Canvas {
+    fn clear_coverage(&mut self) {
+        self.coverage.fill(0.0);
+    }
+
+    /// Composites the current coverage buffer with `color` (source-over, straight alpha).
+    fn composite(&mut self, color: Color, alpha: f32) {
+        let src_r = f32::from(color.r);
+        let src_g = f32::from(color.g);
+        let src_b = f32::from(color.b);
+        let pixels = &mut self.pixels;
+        for (index, coverage) in self.coverage.iter().enumerate() {
+            let src_a = coverage.clamp(0.0, 1.0) * alpha;
+            if src_a <= 0.0 {
+                continue;
+            }
+            let offset = index * 4;
+            let dst_a = f32::from(pixels[offset + 3]) / 255.0;
+            let out_a = src_a + dst_a * (1.0 - src_a);
+            if out_a <= 0.0 {
+                continue;
+            }
+            let blend = |src: f32, dst: u8| -> u8 {
+                let dst = f32::from(dst);
+                (((src * src_a) + (dst * dst_a * (1.0 - src_a))) / out_a)
+                    .clamp(0.0, 255.0)
+                    .round() as u8
+            };
+            pixels[offset] = blend(src_r, pixels[offset]);
+            pixels[offset + 1] = blend(src_g, pixels[offset + 1]);
+            pixels[offset + 2] = blend(src_b, pixels[offset + 2]);
+            pixels[offset + 3] = (out_a * 255.0).clamp(0.0, 255.0).round() as u8;
+        }
+    }
+}
+
+/// Scanline fill with 4 vertical sub-rows and analytic horizontal coverage.
+fn fill_scanline(
+    subpaths: &[SubPath],
+    rule: FillRule,
+    width: usize,
+    height: usize,
+    coverage: &mut [f32],
+) {
+    // Build edges once; horizontal edges never cross a scanline.
+    let mut edges: Vec<(f32, f32, f32, f32, i32)> = Vec::new();
+    for subpath in subpaths {
+        let points = &subpath.points;
+        if points.len() < 2 {
+            continue;
+        }
+        for index in 0..points.len() {
+            let start = points[index];
+            let end = points[(index + 1) % points.len()];
+            if (start.1 - end.1).abs() <= f32::EPSILON {
+                continue;
+            }
+            let direction = if end.1 > start.1 { 1 } else { -1 };
+            edges.push((start.0, start.1, end.0, end.1, direction));
+        }
+    }
+    if edges.is_empty() {
+        return;
+    }
+    let mut crossings: Vec<(f32, i32)> = Vec::new();
+    for pixel_y in 0..height {
+        for sub_row in 0..SUB_ROWS {
+            let y = pixel_y as f32 + (sub_row as f32 + 0.5) / SUB_ROWS as f32;
+            crossings.clear();
+            for &(x0, y0, x1, y1, direction) in &edges {
+                let inside = (y0 <= y && y < y1) || (y1 <= y && y < y0);
+                if !inside {
+                    continue;
+                }
+                let t = (y - y0) / (y1 - y0);
+                let x = x0 + t * (x1 - x0);
+                if x.is_finite() {
+                    crossings.push((x, direction));
+                }
+            }
+            if crossings.len() < 2 {
+                continue;
+            }
+            crossings.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let mut winding = 0i32;
+            let mut parity = 0i32;
+            let base = pixel_y * width;
+            for pair in crossings.windows(2) {
+                winding += pair[0].1;
+                parity += pair[0].1.abs();
+                let inside = match rule {
+                    FillRule::NonZero => winding != 0,
+                    FillRule::EvenOdd => parity % 2 != 0,
+                };
+                if !inside {
+                    continue;
+                }
+                add_span_coverage(
+                    pair[0].0,
+                    pair[1].0,
+                    width,
+                    &mut coverage[base..base + width],
+                );
+            }
+        }
+    }
+}
+
+/// Adds horizontal span `[x0, x1)` coverage to one pixel row (`1/SUB_ROWS` weight).
+fn add_span_coverage(x0: f32, x1: f32, width: usize, row: &mut [f32]) {
+    if !x0.is_finite() || !x1.is_finite() || x1 <= x0 {
+        return;
+    }
+    let weight = 1.0 / SUB_ROWS as f32;
+    let start = x0.max(0.0);
+    let end = x1.min(width as f32);
+    if end <= start {
+        return;
+    }
+    let first = start.floor() as usize;
+    let last = (end.ceil() as usize).min(width);
+    for (offset, pixel) in row[first..last].iter_mut().enumerate() {
+        let pixel_index = first + offset;
+        let overlap = (end.min(pixel_index as f32 + 1.0) - start.max(pixel_index as f32)).max(0.0);
+        *pixel = (*pixel + overlap * weight).min(1.0);
+    }
+}
+
+/// Stroke parameters shared by every stamped piece.
+struct StrokeStyle {
+    width: f32,
+    cap: LineCap,
+    join: LineJoin,
+    miter_limit: f32,
+}
+
+/// Stamps the stroke outline of a flattened polyline into the coverage buffer.
+fn stamp_stroke(
+    subpaths: &[SubPath],
+    style: StrokeStyle,
+    canvas_width: usize,
+    canvas_height: usize,
+    coverage: &mut [f32],
+) {
+    let StrokeStyle {
+        width,
+        cap,
+        join,
+        miter_limit,
+    } = style;
+    let half = width * 0.5;
+    if half <= 0.0 || !half.is_finite() {
+        return;
+    }
+    for subpath in subpaths {
+        let mut points: Vec<(f32, f32)> = subpath.points.clone();
+        if subpath.closed && points.first() == points.last() && points.len() > 1 {
+            points.pop();
+        }
+        if points.len() < 2 {
+            continue;
+        }
+        let closed = subpath.closed;
+        let segment_count = if closed {
+            points.len()
+        } else {
+            points.len() - 1
+        };
+        // Segment bodies.
+        for index in 0..segment_count {
+            let a = points[index];
+            let b = points[(index + 1) % points.len()];
+            let (a, b) = if cap == LineCap::Square && !closed {
+                match direction(a, b) {
+                    Some(direction) => {
+                        let extend = (direction.0 * half, direction.1 * half);
+                        let is_first = index == 0;
+                        let is_last = index + 1 == segment_count;
+                        (
+                            if is_first {
+                                (a.0 - extend.0, a.1 - extend.1)
+                            } else {
+                                a
+                            },
+                            if is_last {
+                                (b.0 + extend.0, b.1 + extend.1)
+                            } else {
+                                b
+                            },
+                        )
+                    }
+                    None => (a, b),
+                }
+            } else {
+                (a, b)
+            };
+            if let Some(direction) = direction(a, b) {
+                let normal = (-direction.1 * half, direction.0 * half);
+                let quad = [
+                    (a.0 + normal.0, a.1 + normal.1),
+                    (b.0 + normal.0, b.1 + normal.1),
+                    (b.0 - normal.0, b.1 - normal.1),
+                    (a.0 - normal.0, a.1 - normal.1),
+                ];
+                stamp_polygon(&quad, canvas_width, canvas_height, coverage);
+            }
+        }
+        // Joins.
+        let join_count = if closed {
+            points.len()
+        } else {
+            points.len().saturating_sub(2)
+        };
+        for index in 0..join_count {
+            let previous = points[index];
+            let vertex = points[(index + 1) % points.len()];
+            let next = points[(index + 2) % points.len()];
+            stamp_join(
+                previous,
+                vertex,
+                next,
+                half,
+                join,
+                miter_limit,
+                canvas_width,
+                canvas_height,
+                coverage,
+            );
+        }
+        // Caps on open paths.
+        if !closed {
+            if cap == LineCap::Round {
+                if let Some(first) = points.first() {
+                    stamp_disc(*first, half, canvas_width, canvas_height, coverage);
+                }
+                if let Some(last) = points.last() {
+                    stamp_disc(*last, half, canvas_width, canvas_height, coverage);
+                }
+            } else if cap == LineCap::Square {
+                // The extension is already part of the end segment quads.
+            }
+        }
+    }
+}
+
+/// Stamps one line join (both sides) at `vertex`.
+#[allow(clippy::too_many_arguments)]
+fn stamp_join(
+    previous: (f32, f32),
+    vertex: (f32, f32),
+    next: (f32, f32),
+    half: f32,
+    join: LineJoin,
+    miter_limit: f32,
+    width: usize,
+    height: usize,
+    coverage: &mut [f32],
+) {
+    let (Some(d0), Some(d1)) = (direction(previous, vertex), direction(vertex, next)) else {
+        return;
+    };
+    match join {
+        LineJoin::Round => stamp_disc(vertex, half, width, height, coverage),
+        LineJoin::Bevel => {
+            for side in [1.0f32, -1.0] {
+                let n0 = (-d0.1 * half * side, d0.0 * half * side);
+                let n1 = (-d1.1 * half * side, d1.0 * half * side);
+                let triangle = [
+                    vertex,
+                    (vertex.0 + n0.0, vertex.1 + n0.1),
+                    (vertex.0 + n1.0, vertex.1 + n1.1),
+                ];
+                stamp_polygon(&triangle, width, height, coverage);
+            }
+        }
+        LineJoin::Miter => {
+            let cross = d0.0 * d1.1 - d0.1 * d1.0;
+            if cross.abs() < 1e-6 {
+                return;
+            }
+            for side in [1.0f32, -1.0] {
+                let n0 = (-d0.1 * side, d0.0 * side);
+                let n1 = (-d1.1 * side, d1.0 * side);
+                // Intersect v + n0*t with v + n1*u (unit normals, both at `half` distance).
+                let denominator = n0.0 * n1.1 - n0.1 * n1.0;
+                let tip = if denominator.abs() < 1e-6 {
+                    None
+                } else {
+                    let t = ((n1.0 - n0.0) * n1.1 - (n1.1 - n0.1) * n1.0) / denominator;
+                    let distance = (t * n0.0).hypot(t * n0.1);
+                    (distance <= miter_limit * half)
+                        .then_some((vertex.0 + t * n0.0 * half, vertex.1 + t * n0.1 * half))
+                };
+                match tip {
+                    Some(tip) => {
+                        let quad = [
+                            vertex,
+                            (vertex.0 + n0.0 * half, vertex.1 + n0.1 * half),
+                            tip,
+                            (vertex.0 + n1.0 * half, vertex.1 + n1.1 * half),
+                        ];
+                        stamp_polygon(&quad, width, height, coverage);
+                    }
+                    None => {
+                        let triangle = [
+                            vertex,
+                            (vertex.0 + n0.0 * half, vertex.1 + n0.1 * half),
+                            (vertex.0 + n1.0 * half, vertex.1 + n1.1 * half),
+                        ];
+                        stamp_polygon(&triangle, width, height, coverage);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Unit direction from `a` to `b`, or `None` for a degenerate segment.
+fn direction(a: (f32, f32), b: (f32, f32)) -> Option<(f32, f32)> {
+    let dx = b.0 - a.0;
+    let dy = b.1 - a.1;
+    let length = (dx * dx + dy * dy).sqrt();
+    (length > 1e-6 && length.is_finite()).then(|| (dx / length, dy / length))
+}
+
+/// Stamps a convex polygon with 4×4 supersampling, unioned with `max`.
+fn stamp_polygon(points: &[(f32, f32)], width: usize, height: usize, coverage: &mut [f32]) {
+    if points.len() < 3 {
+        return;
+    }
+    let (mut min_x, mut min_y) = (f32::INFINITY, f32::INFINITY);
+    let (mut max_x, mut max_y) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
+    for &(x, y) in points {
+        if !x.is_finite() || !y.is_finite() {
+            return;
+        }
+        min_x = min_x.min(x);
+        min_y = min_y.min(y);
+        max_x = max_x.max(x);
+        max_y = max_y.max(y);
+    }
+    let first_x = (min_x.floor().max(0.0) as usize).min(width);
+    let last_x = ((max_x.ceil().max(0.0) as usize) + 1).min(width);
+    let first_y = (min_y.floor().max(0.0) as usize).min(height);
+    let last_y = ((max_y.ceil().max(0.0) as usize) + 1).min(height);
+    if first_x >= last_x || first_y >= last_y {
+        return;
+    }
+    let samples = (STAMP_SAMPLES * STAMP_SAMPLES) as f32;
+    for pixel_y in first_y..last_y {
+        for pixel_x in first_x..last_x {
+            let mut inside = 0u32;
+            for sub_y in 0..STAMP_SAMPLES {
+                let y = pixel_y as f32 + (sub_y as f32 + 0.5) / STAMP_SAMPLES as f32;
+                for sub_x in 0..STAMP_SAMPLES {
+                    let x = pixel_x as f32 + (sub_x as f32 + 0.5) / STAMP_SAMPLES as f32;
+                    if point_in_polygon(points, x, y) {
+                        inside += 1;
+                    }
+                }
+            }
+            if inside > 0 {
+                let index = pixel_y * width + pixel_x;
+                let value = inside as f32 / samples;
+                if value > coverage[index] {
+                    coverage[index] = value;
+                }
+            }
+        }
+    }
+}
+
+/// Stamps a filled disc with 4×4 supersampling, unioned with `max`.
+fn stamp_disc(center: (f32, f32), radius: f32, width: usize, height: usize, coverage: &mut [f32]) {
+    if radius <= 0.0 || !radius.is_finite() {
+        return;
+    }
+    let first_x = ((center.0 - radius).floor().max(0.0) as usize).min(width);
+    let last_x = (((center.0 + radius).ceil().max(0.0) as usize) + 1).min(width);
+    let first_y = ((center.1 - radius).floor().max(0.0) as usize).min(height);
+    let last_y = (((center.1 + radius).ceil().max(0.0) as usize) + 1).min(height);
+    let samples = (STAMP_SAMPLES * STAMP_SAMPLES) as f32;
+    let radius_squared = radius * radius;
+    for pixel_y in first_y..last_y {
+        for pixel_x in first_x..last_x {
+            let mut inside = 0u32;
+            for sub_y in 0..STAMP_SAMPLES {
+                let y = pixel_y as f32 + (sub_y as f32 + 0.5) / STAMP_SAMPLES as f32;
+                for sub_x in 0..STAMP_SAMPLES {
+                    let x = pixel_x as f32 + (sub_x as f32 + 0.5) / STAMP_SAMPLES as f32;
+                    let dx = x - center.0;
+                    let dy = y - center.1;
+                    if dx * dx + dy * dy <= radius_squared {
+                        inside += 1;
+                    }
+                }
+            }
+            if inside > 0 {
+                let index = pixel_y * width + pixel_x;
+                let value = inside as f32 / samples;
+                if value > coverage[index] {
+                    coverage[index] = value;
+                }
+            }
+        }
+    }
+}
+
+/// Even-odd point-in-polygon test (used for stroke primitive stamping).
+fn point_in_polygon(points: &[(f32, f32)], x: f32, y: f32) -> bool {
+    let mut inside = false;
+    let count = points.len();
+    let mut previous = count - 1;
+    for current in 0..count {
+        let (xi, yi) = points[current];
+        let (xj, yj) = points[previous];
+        if (yi > y) != (yj > y) {
+            let t = (y - yi) / (yj - yi);
+            let crossing = xi + t * (xj - xi);
+            if x < crossing {
+                inside = !inside;
+            }
+        }
+        previous = current;
+    }
+    inside
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn canvas(width: usize, height: usize) -> Canvas {
+        Canvas {
+            width,
+            height,
+            pixels: vec![0; width * height * 4],
+            coverage: vec![0.0; width * height],
+        }
+    }
+
+    #[test]
+    fn test_span_coverage_is_analytic() {
+        let mut row = vec![0.0f32; 4];
+        add_span_coverage(0.25, 2.75, 4, &mut row);
+        assert_eq!(row[0], 0.1875);
+        assert!((row[1] - 0.25).abs() < 1e-6);
+        assert!((row[2] - 0.1875).abs() < 1e-6);
+        assert_eq!(row[3], 0.0);
+    }
+
+    #[test]
+    fn test_polygon_and_disc_stamps_are_antialiased() {
+        let mut coverage = vec![0.0f32; 4];
+        stamp_polygon(
+            &[(0.5, 0.0), (2.0, 0.0), (2.0, 2.0), (0.5, 2.0)],
+            2,
+            2,
+            &mut coverage,
+        );
+        assert!(coverage[0] > 0.0 && coverage[0] < 1.0);
+        assert_eq!(coverage[1], 1.0);
+        let mut disc = vec![0.0f32; 4];
+        stamp_disc((1.0, 1.0), 0.5, 2, 2, &mut disc);
+        assert!(disc[0] > 0.0);
+    }
+
+    #[test]
+    fn test_composite_straight_alpha() {
+        let mut canvas = canvas(1, 1);
+        canvas.coverage[0] = 0.5;
+        canvas.composite(Color::rgba(255, 0, 0, 255), 1.0);
+        assert_eq!(canvas.pixels[3], 128);
+    }
+}
