@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+  <head><meta charset="utf-8"><title>js event domcontentloaded</title></head>
+  <body>
+    <div id="out">before</div>
+    <script>
+      // The host dispatches DOMContentLoaded at the window target (bubbling) through the
+      // Rust-side event API; the js crate does not expose `document` as an EventTarget yet.
+      window.addEventListener('DOMContentLoaded', function () {
+        document.getElementById('out').textContent = 'dcl-fired';
+      });
+    </script>
+  </body>
+</html>

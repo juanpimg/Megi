@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+  <head><meta charset="utf-8"><title>js event loop</title></head>
+  <body>
+    <div id="out">before</div>
+    <script>
+      var ticks = 0;
+      function schedule() {
+        setTimeout(function () {
+          ticks += 1;
+          document.getElementById('out').textContent = 'ticks:' + ticks;
+          schedule();
+        }, 10);
+      }
+      schedule();
+    </script>
+  </body>
+</html>

@@ -17,9 +17,13 @@
 //!    64 scripts by default). Failures are non-fatal warnings.
 //! 3. [`execute_scripts`] runs the scripts in document order through
 //!    [`js::JsRuntime::with_document`] with a per-script [`ScriptBudget`] *and* a total
-//!    loop-iteration budget, drains promise microtasks and queued timer callbacks (bounded
-//!    by [`ScriptingLimits::max_tasks`]), captures the `console` output and returns the
-//!    mutated [`Document`] so the pipeline can re-run styles → layout → paint.
+//!    loop-iteration budget, then runs a **minimal event loop** on a deterministic virtual
+//!    clock: promise microtasks → `DOMContentLoaded` on `document` → timers in `(due, id)`
+//!    order (delays > 0 included, clock advanced in 1 ms virtual steps up to
+//!    [`ScriptingLimits::max_virtual_time_ms`]) → `load` on `window` → remaining timers
+//!    scheduled by `load` listeners. Timer callbacks are bounded by
+//!    [`ScriptingLimits::max_tasks`]. The mutated [`Document`] is returned so the pipeline
+//!    re-runs styles → layout → paint **once** at the end.
 //!
 //! ## Deliberate limitations (WP-6.4 and later)
 //!
@@ -30,8 +34,17 @@
 //! - `async`/`defer` are recorded but every script runs in document order after parsing
 //!   (there is no parser blocking yet); `async` ordering across external downloads is not
 //!   emulated.
-//! - Timers run in registration order when the host pumps the queue; there is no
-//!   wall-clock event loop. Promise jobs run after each script and after timer batches.
+//! - The event loop is **virtual-time only** (no wall-clock waiting): the clock starts at
+//!   0 ms when scripting begins, timers run in `(due, id)` order, and the loop stops when no
+//!   tasks remain or the `max_tasks`/`max_virtual_time_ms` budgets are exhausted
+//!   (`ScriptExecution::limited` plus a warning). Timer resolution is 1 ms. Promise jobs run
+//!   after each script, after each dispatch and after every timer batch.
+//! - Lifecycle events are dispatched through `js::JsRuntime::dispatch_simple_event(None, …)`
+//!   (the `window` target with bubbling): `DOMContentLoaded` listeners registered on
+//!   `window` fire and `document` **capture-phase** listeners are visited. The `js` crate
+//!   does not expose the `document` object as an EventTarget yet, so
+//!   `document.addEventListener('DOMContentLoaded', …)` is a documented follow-up
+//!   (coordinated with the JS lane); `load` listeners on `window` work as expected.
 //! - Script types/modules/workers/imports/network APIs are not supported.
 //! - Without the `js` crate feature this module compiles to a no-op: scripts are counted
 //!   as skipped and the DOM is left untouched (documented in [`crate::ScriptingMode`]).
@@ -51,6 +64,10 @@ pub const DEFAULT_MAX_SCRIPTS: usize = 64;
 pub const DEFAULT_MAX_TOTAL_LOOP_ITERATIONS: u64 = 1_000_000;
 /// Default maximum number of timer callbacks pumped after the scripts.
 pub const DEFAULT_MAX_TASKS: usize = 10_000;
+/// Default virtual-time budget of the event loop (milliseconds).
+pub const DEFAULT_MAX_VIRTUAL_TIME_MS: u64 = 1_000;
+/// Virtual clock step used between timer batches (milliseconds).
+pub const VIRTUAL_TIME_STEP_MS: u64 = 1;
 
 /// Per-script execution budget (mirrors the `js` crate's `Budget` without requiring the
 /// feature to be compiled in, so [`ScriptingLimits`] is part of the stable render API).
@@ -94,6 +111,9 @@ pub struct ScriptingLimits {
     pub total_loop_iterations: u64,
     /// Maximum number of timer callbacks pumped after execution.
     pub max_tasks: usize,
+    /// Maximum virtual time the event loop may advance (milliseconds). Timers whose delay
+    /// would need more virtual time are left pending and the run is marked limited.
+    pub max_virtual_time_ms: u64,
 }
 
 impl Default for ScriptingLimits {
@@ -105,6 +125,7 @@ impl Default for ScriptingLimits {
             budget: ScriptBudget::default(),
             total_loop_iterations: DEFAULT_MAX_TOTAL_LOOP_ITERATIONS,
             max_tasks: DEFAULT_MAX_TASKS,
+            max_virtual_time_ms: DEFAULT_MAX_VIRTUAL_TIME_MS,
         }
     }
 }
@@ -170,6 +191,16 @@ pub struct ScriptExecution {
     pub tasks_ran: usize,
     /// `true` when the total loop-iteration budget or the timer budget ran out.
     pub limited: bool,
+    /// Event-loop iterations (timer batches + virtual-time steps).
+    pub loop_iterations: usize,
+    /// Virtual time advanced by the event loop (milliseconds).
+    pub virtual_time_ms: u64,
+    /// Timers still pending when the event loop stopped.
+    pub timers_pending: usize,
+    /// Lifecycle events successfully dispatched (`DOMContentLoaded`, `load`).
+    pub events_dispatched: usize,
+    /// Wall-clock duration of the event-loop stage (microtasks + events + timers).
+    pub event_loop: std::time::Duration,
 }
 
 /// Returns `true` when `type_attr` denotes a classic JavaScript script.
@@ -383,6 +414,11 @@ pub fn execute_scripts(
         console: Vec::new(),
         tasks_ran: 0,
         limited: false,
+        loop_iterations: 0,
+        virtual_time_ms: 0,
+        timers_pending: 0,
+        events_dispatched: 0,
+        event_loop: std::time::Duration::ZERO,
     };
     if scripts.is_empty() {
         return execution;
@@ -399,6 +435,10 @@ pub fn execute_scripts(
             return execution;
         }
     };
+
+    // Deterministic virtual clock: freeze `now` at 0 ms before any script runs, so relative
+    // timers scheduled during evaluation have stable due times and `Date.now()` is stable.
+    let _ = runtime.run_until(0);
 
     let mut remaining_loops = limits.total_loop_iterations;
     for script in scripts {
@@ -428,38 +468,52 @@ pub fn execute_scripts(
             }
         }
         // Promise jobs scheduled by the script (microtask checkpoint).
-        if let Err(error) = runtime.run_microtasks() {
-            warnings.push(format!("script microtasks failed: {error}"));
-        }
+        drain_microtasks(&mut runtime, warnings);
     }
 
-    // Pump the timer queue once, bounded by `max_tasks` (no wall-clock event loop).
-    loop {
-        let remaining = limits.max_tasks.saturating_sub(execution.tasks_ran);
-        if remaining == 0 {
-            if runtime.pending_timers() > 0 {
-                execution.limited = true;
-                warnings.push(format!(
-                    "timer task budget exhausted ({} tasks); dropping remaining callbacks",
-                    limits.max_tasks
-                ));
-            }
-            break;
-        }
-        match runtime.run_tasks(remaining) {
-            Ok(0) => break,
-            Ok(ran) => {
-                execution.tasks_ran += ran;
-                if let Err(error) = runtime.run_microtasks() {
-                    warnings.push(format!("timer microtasks failed: {error}"));
-                }
-            }
-            Err(error) => {
-                warnings.push(format!("timer callback failed: {error}"));
-                break;
-            }
-        }
+    let event_loop_start = std::time::Instant::now();
+    // Lifecycle events and timers run with a fresh budget: the per-script loop budget must
+    // not be exhausted by the last script when its `DOMContentLoaded` listener fires.
+    runtime.set_budget(js::Budget {
+        loop_iterations: limits.budget.loop_iterations,
+        recursion_limit: limits.budget.recursion_limit,
+        stack_size_limit: limits.budget.stack_size_limit,
+    });
+
+    let mut loop_state = EventLoopState::default();
+    drain_microtasks(&mut runtime, warnings);
+
+    // 1. `DOMContentLoaded` (after scripts, before timers). The event is dispatched at the
+    // `window` target with bubbling: `window.addEventListener('DOMContentLoaded', ...)`
+    // listeners fire and capture-phase `document` listeners are visited. The `js` crate does
+    // not expose the `document` object itself as an EventTarget yet, so `document.addEventListener(
+    // 'DOMContentLoaded', ...)` is a documented follow-up (coordinated with the JS lane).
+    match runtime.dispatch_simple_event(None, "DOMContentLoaded", true) {
+        Ok(_) => execution.events_dispatched += 1,
+        Err(error) => warnings.push(format!("dispatching DOMContentLoaded failed: {error}")),
     }
+    drain_microtasks(&mut runtime, warnings);
+
+    // 2. Timers (delays included) on the virtual clock, bounded by max_tasks/max_virtual_time.
+    run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);
+
+    // 3. `load` on `window` through the Rust-side dispatch API, then timers scheduled by
+    // `load` listeners (same budget). (`DOMContentLoaded` targets `document`, which the
+    // current dispatch API cannot address yet — it is dispatched via `dispatchEvent` above;
+    // migrating that one to Rust is a documented follow-up.)
+    match runtime.dispatch_simple_event(None, "load", true) {
+        Ok(_) => execution.events_dispatched += 1,
+        Err(error) => warnings.push(format!("dispatching load failed: {error}")),
+    }
+    drain_microtasks(&mut runtime, warnings);
+    run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);
+
+    execution.event_loop = event_loop_start.elapsed();
+    execution.tasks_ran = loop_state.tasks;
+    execution.loop_iterations = loop_state.iterations;
+    execution.virtual_time_ms = loop_state.virtual_time_ms;
+    execution.limited |= loop_state.limited;
+    execution.timers_pending = runtime.pending_timers();
 
     for entry in runtime.take_console() {
         let message = ConsoleMessage {
@@ -473,6 +527,91 @@ pub fn execute_scripts(
     }
     execution.document = std::mem::take(&mut *runtime.document_mut());
     execution
+}
+
+/// Progress of one event-loop drain (shared by the initial timers and the `load` pass).
+#[cfg(feature = "js")]
+#[derive(Default)]
+struct EventLoopState {
+    tasks: usize,
+    iterations: usize,
+    virtual_time_ms: u64,
+    limited: bool,
+}
+
+#[cfg(feature = "js")]
+fn drain_microtasks(runtime: &mut js::JsRuntime, warnings: &mut Vec<String>) {
+    if let Err(error) = runtime.run_microtasks() {
+        warnings.push(format!("microtasks failed: {error}"));
+    }
+}
+
+/// Runs due timers until the queue is empty or the task/virtual-time budgets are exhausted.
+///
+/// Order: pending microtasks are drained before each batch, then every timer due at the
+/// current virtual time runs in `(due, id)` order; when nothing is due the clock advances
+/// [`VIRTUAL_TIME_STEP_MS`] and the timers that just became due run. The clock never
+/// exceeds `max_virtual_time_ms` and the callbacks never exceed `max_tasks`; hitting either
+/// cap sets [`EventLoopState::limited`] and leaves the remaining timers pending.
+#[cfg(feature = "js")]
+fn run_event_loop(
+    runtime: &mut js::JsRuntime,
+    limits: &ScriptingLimits,
+    state: &mut EventLoopState,
+    warnings: &mut Vec<String>,
+) {
+    loop {
+        drain_microtasks(runtime, warnings);
+        let remaining = limits.max_tasks.saturating_sub(state.tasks);
+        if remaining == 0 {
+            if runtime.pending_timers() > 0 {
+                state.limited = true;
+                warnings.push(format!(
+                    "timer task budget exhausted ({} tasks); dropping remaining callbacks",
+                    limits.max_tasks
+                ));
+            }
+            return;
+        }
+        match runtime.run_tasks(remaining) {
+            Ok(0) => {}
+            Ok(ran) => {
+                state.tasks += ran;
+                state.iterations += 1;
+                continue;
+            }
+            Err(error) => {
+                warnings.push(format!("timer callback failed: {error}"));
+                state.limited = true;
+                return;
+            }
+        }
+        if runtime.pending_timers() == 0 {
+            return;
+        }
+        if state.virtual_time_ms >= limits.max_virtual_time_ms {
+            state.limited = true;
+            warnings.push(format!(
+                "virtual-time budget exhausted ({} ms); dropping {} pending timer(s)",
+                limits.max_virtual_time_ms,
+                runtime.pending_timers()
+            ));
+            return;
+        }
+        let next = state.virtual_time_ms.saturating_add(VIRTUAL_TIME_STEP_MS);
+        match runtime.run_until(next) {
+            Ok(ran) => {
+                state.tasks += ran;
+                state.iterations += 1;
+                state.virtual_time_ms = runtime.now_ms();
+            }
+            Err(error) => {
+                warnings.push(format!("timer callback failed: {error}"));
+                state.limited = true;
+                return;
+            }
+        }
+    }
 }
 
 /// No-op execution used when the crate is built without the `js` feature.
@@ -497,6 +636,11 @@ pub fn execute_scripts(
         console: Vec::new(),
         tasks_ran: 0,
         limited: false,
+        loop_iterations: 0,
+        virtual_time_ms: 0,
+        timers_pending: 0,
+        events_dispatched: 0,
+        event_loop: std::time::Duration::ZERO,
     }
 }
 

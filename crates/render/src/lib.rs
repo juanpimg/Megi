@@ -22,7 +22,8 @@
 //! [`RenderOutput::stats`] exposes per-stage timings (fetch, decode, styles, layout,
 //! paint, raster), the resolved charset, HTTP status (for `http(s)` documents), author
 //! CSS volume, external stylesheet count, display-item **and hit-region** counts,
-//! `<img>`/background-image load counts/bytes, cookies currently stored in the render jar,
+//! `<img>`/background-image load counts/bytes, event-loop counters (tasks, iterations,
+//! virtual time, lifecycle events, pending timers), cookies currently stored in the render jar,
 //! the main document's `Content-Encoding` (evidence that `gzip`/`deflate` was decoded),
 //! HTML parser anti-DoS limit violations and non-fatal warnings (e.g. a 404 stylesheet, a
 //! missing background image or a denied cross-origin resource).
@@ -61,10 +62,20 @@
 //! still run until the total budget is spent. With `--no-default-features` the stage is a
 //! no-op and the default mode is [`ScriptingMode::Disabled`].
 //!
+//! After the scripts, a **minimal event loop** runs on a deterministic virtual clock (no
+//! wall-clock sleeps): promise microtasks are drained, `DOMContentLoaded` is dispatched on
+//! `document`, timers (`setTimeout`/`setInterval`, delays included) run in `(due, id)`
+//! order while the clock advances in 1 ms steps up to
+//! [`ScriptingLimits::max_virtual_time_ms`] (default 1000 ms) with at most
+//! [`ScriptingLimits::max_tasks`] callbacks (default 10.000), then `load` is dispatched on
+//! `window` and its timers are drained. The DOM is re-rendered **once** at the end. Stats:
+//! [`RenderStats::script_tasks`]/`script_loop_iterations`/`script_virtual_time_ms`/
+//! `script_events`/`script_timers_pending`, plus [`RenderTimings::event_loop`].
+//!
 //! Not yet supported: executing scripts *during* parsing (needed for the html5lib
 //! `scripted_*` cases and script-driven `document.write` re-tokenization — WP-6.4),
-//! `async` ordering, ES modules, event listeners/wall-clock event loops, and
-//! `getComputedStyle`.
+//! `async` ordering, ES modules, `requestAnimationFrame`/real-event-driven loops, inline
+//! `onclick`-style handler attributes, and `getComputedStyle`.
 //!
 //! ## Deliberate limitations (this WP)
 //!
@@ -307,8 +318,12 @@ pub struct RenderTimings {
     pub images: Duration,
     /// Background-image/`list-style-image` discovery, fetching and decoding (WP-5.9).
     pub backgrounds: Duration,
-    /// Script discovery, fetching, execution, microtasks and timer pumping (WP-6.2/6.3).
+    /// Script discovery, fetching, evaluation and microtasks (WP-6.2/6.3), excluding the
+    /// event-loop stage below.
     pub scripting: Duration,
+    /// Minimal event loop: microtasks, `DOMContentLoaded`/`load` dispatch and virtual-time
+    /// timer callbacks (subset of the scripting stage).
+    pub event_loop: Duration,
     /// Display-list construction.
     pub paint: Duration,
     /// Rasterization (and PNG encoding happens after this measurement).
@@ -361,6 +376,16 @@ pub struct RenderStats {
     pub script_bytes: usize,
     /// Captured `console.*` entries (see also warnings for `warn`/`error` levels).
     pub console: Vec<ConsoleMessage>,
+    /// Timer callbacks executed by the event loop (`setTimeout`/`setInterval`).
+    pub script_tasks: usize,
+    /// Event-loop iterations (timer batches + 1 ms virtual-time steps).
+    pub script_loop_iterations: usize,
+    /// Virtual time advanced by the event loop, in milliseconds.
+    pub script_virtual_time_ms: u64,
+    /// Lifecycle events dispatched (`DOMContentLoaded` on `document`, `load` on `window`).
+    pub script_events: usize,
+    /// Timers still pending when the event loop stopped (budget exhausted or interval).
+    pub script_timers_pending: usize,
     /// Number of display-list items painted.
     pub display_items: usize,
     /// Additive hit-testing regions recorded while painting (same display list: the PNG is
@@ -529,9 +554,29 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         scripting_execution = Some(execution);
     }
     let scripting_time = scripting_start.elapsed();
-    let (scripts_executed, scripts_failed, console) = match scripting_execution {
-        Some(execution) => (execution.executed, execution.failed, execution.console),
-        None => (0, 0, Vec::new()),
+    let (
+        scripts_executed,
+        scripts_failed,
+        console,
+        script_tasks,
+        script_loop_iterations,
+        script_virtual_time_ms,
+        script_events,
+        script_timers_pending,
+        event_loop_time,
+    ) = match scripting_execution {
+        Some(execution) => (
+            execution.executed,
+            execution.failed,
+            execution.console,
+            execution.tasks_ran,
+            execution.loop_iterations,
+            execution.virtual_time_ms,
+            execution.events_dispatched,
+            execution.timers_pending,
+            execution.event_loop,
+        ),
+        None => (0, 0, Vec::new(), 0, 0, 0, 0, 0, Duration::ZERO),
     };
 
     let styles_start = Instant::now();
@@ -668,6 +713,11 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             scripts_failed,
             script_bytes,
             console,
+            script_tasks,
+            script_loop_iterations,
+            script_virtual_time_ms,
+            script_events,
+            script_timers_pending,
             display_items,
             hit_regions: hit_region_count,
             cookies_stored,
@@ -679,7 +729,10 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
                 styles: styles_time,
                 images: images_time,
                 backgrounds: backgrounds_time,
-                scripting: scripting_time,
+                scripting: scripting_time
+                    .checked_sub(event_loop_time)
+                    .unwrap_or_default(),
+                event_loop: event_loop_time,
                 layout: layout_time,
                 paint: paint_time,
                 raster: raster_time,

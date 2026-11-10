@@ -97,15 +97,18 @@ fn run() -> Result<(), CliError> {
     } else {
         let stats = &output.stats;
         println!(
-            "rendered {input} -> {} ({}x{}, {} bytes, {} display items, {} images, {} background images, {} scripts, {} external stylesheets, {} ms)",
+            "rendered {input} -> {} ({}x{}, {} bytes, {} display items, {} hit regions, {} images, {} background images, {} scripts + {} timer tasks / {} events, {} external stylesheets, {} ms)",
             args.output.display(),
             output.pixmap.width,
             output.pixmap.height,
             output.png.len(),
             stats.display_items,
+            stats.hit_regions,
             stats.images_loaded,
             stats.background_images_loaded,
             stats.scripts_executed,
+            stats.script_tasks,
+            stats.script_events,
             stats.external_stylesheets,
             stats.timings.total.as_millis()
         );
@@ -223,9 +226,11 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
             "\"images_loaded\":{},\"images_failed\":{},\"image_bytes\":{},",
             "\"background_images_loaded\":{},\"background_images_failed\":{},\"background_bytes\":{},",
             "\"scripts_executed\":{},\"scripts_failed\":{},\"script_bytes\":{},\"console_entries\":{},",
+            "\"script_events\":{},\"script_tasks\":{},\"script_loop_iterations\":{},",
+            "\"script_virtual_time_ms\":{},\"script_timers_pending\":{},",
             "\"external_stylesheets\":{},\"inline_stylesheets\":{},\"css_bytes\":{},",
             "\"timings_us\":{{\"fetch\":{},\"decode_parse\":{},\"styles\":{},\"images\":{},",
-            "\"backgrounds\":{},\"scripting\":{},\"layout\":{},",
+            "\"backgrounds\":{},\"scripting\":{},\"event_loop\":{},\"layout\":{},",
             "\"paint\":{},\"raster\":{},\"total\":{}}},",
             "\"warnings\":[{}]}}"
         ),
@@ -257,6 +262,11 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
         stats.scripts_failed,
         stats.script_bytes,
         stats.console.len(),
+        stats.script_events,
+        stats.script_tasks,
+        stats.script_loop_iterations,
+        stats.script_virtual_time_ms,
+        stats.script_timers_pending,
         stats.external_stylesheets,
         stats.inline_stylesheets,
         stats.css_bytes,
@@ -266,6 +276,7 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
         timings.images.as_micros(),
         timings.backgrounds.as_micros(),
         timings.scripting.as_micros(),
+        timings.event_loop.as_micros(),
         timings.layout.as_micros(),
         timings.paint.as_micros(),
         timings.raster.as_micros(),

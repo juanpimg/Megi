@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+  <head><meta charset="utf-8"><title>js event load</title></head>
+  <body>
+    <div id="out">before</div>
+    <script>
+      window.addEventListener('load', function () {
+        document.getElementById('out').textContent = 'load-fired';
+        setTimeout(function () {
+          document.getElementById('out').textContent = 'load-timer-fired';
+        }, 5);
+      });
+    </script>
+  </body>
+</html>
