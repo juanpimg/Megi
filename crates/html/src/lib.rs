@@ -10,7 +10,11 @@ pub mod tokenizer;
 pub mod tree_builder;
 
 pub use dom::{Document, Namespace};
-pub use serializer::serialize_dom_for_test;
+pub use serializer::{
+    HtmlSerializeOptions, serialize_dom_for_test, serialize_fragment,
+    serialize_fragment_with_options, serialize_html, serialize_html_with_options,
+    serialize_outer_html, serialize_outer_html_with_options,
+};
 pub use tokenizer::{
     ParseError, ParseErrorCode, Token, Tokenizer, TokenizerConfig, TokenizerState,
 };

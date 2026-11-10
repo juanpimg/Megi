@@ -13,6 +13,7 @@
 //! `tools/dev.sh all`.
 
 pub mod css_harness;
+pub mod serializer_harness;
 pub mod tokenizer_harness;
 pub mod tree_harness;
 
@@ -59,6 +60,29 @@ pub const KNOWN_TREE_FAILURES: &[(&str, usize)] = &[
     ("scripted_webkit01.dat", 2),
 ];
 
+/// Number of vendored `tests/html5lib-tests/serializer/*.test` suites.
+pub const SERIALIZER_SUITE_COUNT: usize = 5;
+/// Exact case count per serializer suite (asserted by the gate).
+pub const SERIALIZER_SUITE_TOTALS: &[(&str, usize)] = &[
+    ("core.test", 23),
+    ("injectmeta.test", 9),
+    ("optionaltags.test", 181),
+    ("options.test", 9),
+    ("whitespace.test", 8),
+];
+/// Total serializer fixture cases across the five suites.
+pub const SERIALIZER_EXPECTED_TESTS: usize = 230;
+/// Passing serializer cases: all 230. The fixtures encode html5lib's legacy serializer options
+/// (`quote_attr_values`, `omit_optional_tags`, `inject_meta_charset`, `strip_whitespace`, ...);
+/// [`serializer_harness`] implements that option-driven dialect faithfully so no failure is
+/// expected. `tests/html5lib-tests/serializer` is tracked, so a clean clone reproduces this.
+pub const SERIALIZER_EXPECTED_PASSED: usize = 230;
+/// Known serializer failures: none.
+pub const KNOWN_SERIALIZER_FAILURES: &[(&str, usize)] = &[];
+/// Fixture cases that ship an `xhtml` alternative. Megi implements HTML serialization only, so the
+/// XHTML strings are not exercised; every case still has to match an `expected` HTML string.
+pub const SERIALIZER_XHTML_ALTERNATIVES_IGNORED: usize = 18;
+
 /// Number of CSS Syntax results reported by [`css_harness`] (9 declarations + 13 preprocessing
 /// + 8 An+B).
 pub const CSS_EXPECTED_RESULTS: usize = 30;
@@ -104,6 +128,11 @@ pub fn tree_construction_dat_dir() -> PathBuf {
 /// Returns the path to `tests/html5lib-tests/tree-construction-json`.
 pub fn tree_construction_json_dir() -> PathBuf {
     workspace_root().join("tests/html5lib-tests/tree-construction-json")
+}
+
+/// Returns the path to `tests/html5lib-tests/serializer`.
+pub fn serializer_tests_dir() -> PathBuf {
+    workspace_root().join("tests/html5lib-tests/serializer")
 }
 
 /// Returns the path to `tests/wpt/css/css-syntax`.
