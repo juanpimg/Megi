@@ -61,7 +61,9 @@ use css::{BorderStyle, Color, Display, ListStyleType, Position, TextDecoration, 
 use dom::NodeId;
 use layout::{BoxType, LayoutBox, Rect};
 
-use crate::display_list::{BorderSide, DisplayItem, DisplayList, ImageStore, MarkerKind};
+use crate::display_list::{
+    BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MarkerKind,
+};
 
 /// Background color propagated from the root element or `body` to the canvas.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -81,6 +83,17 @@ enum CanvasBackground {
 struct PaintSkip {
     root_background: bool,
     body_node: Option<NodeId>,
+}
+
+/// Decoded image resources available to one paint pass.
+///
+/// Bundled so the internal painting helpers thread a single reference: replaced
+/// elements are keyed by [`dom::NodeId`] ([`ImageStore`]) while CSS background
+/// and list-marker images are keyed by their raw CSS URL string
+/// ([`BackgroundImages`]).
+struct PaintResources<'a> {
+    images: &'a ImageStore,
+    backgrounds: &'a BackgroundImages,
 }
 
 /// Appendix E phase a box belongs to inside its nearest stacking context.
@@ -148,6 +161,39 @@ pub fn build_display_list_with_images(
     viewport: Rect,
     images: &ImageStore,
 ) -> DisplayList {
+    build_display_list_with_images_and_backgrounds(root, viewport, images, &BackgroundImages::new())
+}
+
+/// Builds a deterministic [`DisplayList`] from a laid-out [`LayoutBox`] tree
+/// with **replaced elements** (`<img>`, from `images`) and **CSS image
+/// backgrounds / list markers** (`background-image` and `list-style-image`,
+/// looked up by their raw URL string in `backgrounds`).
+///
+/// Painting rules (Phase 4/5 contract):
+///
+/// - `background-color` first, then `background-image` stretched over the
+///   **padding box** (bilinear filtering, antialiased edges, clip stack).
+///   `background-repeat`, `background-size`, `background-position` and
+///   `background-clip` are **not** implemented; the image is always stretched
+///   (documented limitation, WP-5.7 follow-up).
+/// - If the URL of a `background-image` is absent from `backgrounds` nothing is
+///   painted for it (no noisy placeholder; the color still paints). Canvas
+///   propagation (`html`/`body` background) only propagates the *color*.
+/// - A `list-item` with `list-style-image` present in `backgrounds` paints that
+///   image (~1 em square, replacing `disc`/`decimal`); when the URL is missing
+///   it falls back to the computed `list-style-type` marker.
+///
+/// `build_display_list_with_images` is equivalent with an empty background map.
+pub fn build_display_list_with_images_and_backgrounds(
+    root: &LayoutBox,
+    viewport: Rect,
+    images: &ImageStore,
+    backgrounds: &BackgroundImages,
+) -> DisplayList {
+    let resources = PaintResources {
+        images,
+        backgrounds,
+    };
     let canvas = canvas_background(root);
     let mut list = DisplayList::new();
 
@@ -168,7 +214,7 @@ pub fn build_display_list_with_images(
             _ => None,
         },
     };
-    paint_stacking_context(root, &mut list, skip, images, false, true, 0);
+    paint_stacking_context(root, &mut list, skip, &resources, false, true, 0);
     list
 }
 
@@ -281,7 +327,7 @@ fn paint_stacking_context(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
     skip: PaintSkip,
-    images: &ImageStore,
+    resources: &PaintResources<'_>,
     inherited_hidden: bool,
     is_root: bool,
     depth: usize,
@@ -292,7 +338,7 @@ fn paint_stacking_context(
 
     // Step 2: background and borders of the element establishing the context.
     if !hidden {
-        paint_background_border(layout_box, list, skip, is_root, 1.0);
+        paint_background_border(layout_box, list, skip, resources, is_root, 1.0);
     }
 
     let clip = layout_box.clip;
@@ -303,13 +349,13 @@ fn paint_stacking_context(
     if depth >= MAX_STACKING_CONTEXT_DEPTH {
         // Depth guard: paint the remaining subtree as flat in-flow content
         // instead of recursing into further stacking contexts.
-        paint_block_backgrounds(layout_box, list, skip, hidden, 1.0);
-        paint_floats(layout_box, list, skip, images, hidden, 1.0, depth);
+        paint_block_backgrounds(layout_box, list, skip, resources, hidden, 1.0);
+        paint_floats(layout_box, list, skip, resources, hidden, 1.0, depth);
         paint_inline_content(
             layout_box,
             list,
             skip,
-            images,
+            resources,
             hidden,
             TextDecoration::NONE,
             1.0,
@@ -330,17 +376,17 @@ fn paint_stacking_context(
 
     // Step 3: negative z-index contexts.
     for context in negative {
-        paint_stacking_context(context, list, skip, images, hidden, false, depth + 1);
+        paint_stacking_context(context, list, skip, resources, hidden, false, depth + 1);
     }
 
     // Steps 4-6: in-flow block backgrounds, floats, inline content.
-    paint_block_backgrounds(layout_box, list, skip, hidden, 1.0);
-    paint_floats(layout_box, list, skip, images, hidden, 1.0, depth);
+    paint_block_backgrounds(layout_box, list, skip, resources, hidden, 1.0);
+    paint_floats(layout_box, list, skip, resources, hidden, 1.0, depth);
     paint_inline_content(
         layout_box,
         list,
         skip,
-        images,
+        resources,
         hidden,
         TextDecoration::NONE,
         1.0,
@@ -348,12 +394,12 @@ fn paint_stacking_context(
 
     // Step 7: positioned z-index auto/0 and z-index 0 contexts.
     for context in zero {
-        paint_stacking_context(context, list, skip, images, hidden, false, depth + 1);
+        paint_stacking_context(context, list, skip, resources, hidden, false, depth + 1);
     }
 
     // Step 8: positive z-index contexts.
     for context in positive {
-        paint_stacking_context(context, list, skip, images, hidden, false, depth + 1);
+        paint_stacking_context(context, list, skip, resources, hidden, false, depth + 1);
     }
 
     if clip.is_some() {
@@ -418,6 +464,7 @@ fn paint_block_backgrounds(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
     skip: PaintSkip,
+    resources: &PaintResources<'_>,
     inherited_hidden: bool,
     alpha_scale: f32,
 ) {
@@ -438,7 +485,7 @@ fn paint_block_backgrounds(
                     stack.push(BlockTask::PopClip);
                 }
                 if child.is_block() && !hidden {
-                    paint_background_border(child, list, skip, false, alpha);
+                    paint_background_border(child, list, skip, resources, false, alpha);
                 }
                 push_block_children(child, hidden, alpha, &mut stack);
             }
@@ -471,7 +518,7 @@ fn paint_floats(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
     skip: PaintSkip,
-    images: &ImageStore,
+    resources: &PaintResources<'_>,
     inherited_hidden: bool,
     alpha_scale: f32,
     depth: usize,
@@ -486,7 +533,7 @@ fn paint_floats(
                 child,
                 list,
                 skip,
-                images,
+                resources,
                 inherited_hidden,
                 alpha_scale,
                 depth,
@@ -507,7 +554,7 @@ fn paint_float(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
     skip: PaintSkip,
-    images: &ImageStore,
+    resources: &PaintResources<'_>,
     inherited_hidden: bool,
     alpha_scale: f32,
     depth: usize,
@@ -519,17 +566,17 @@ fn paint_float(
         list.push(DisplayItem::PushClip { rect });
     }
     if !hidden {
-        paint_background_border(layout_box, list, skip, false, alpha);
+        paint_background_border(layout_box, list, skip, resources, false, alpha);
     }
-    paint_block_backgrounds(layout_box, list, skip, hidden, alpha);
+    paint_block_backgrounds(layout_box, list, skip, resources, hidden, alpha);
     if depth < MAX_FLOAT_DEPTH {
-        paint_floats(layout_box, list, skip, images, hidden, alpha, depth + 1);
+        paint_floats(layout_box, list, skip, resources, hidden, alpha, depth + 1);
     }
     paint_inline_content(
         layout_box,
         list,
         skip,
-        images,
+        resources,
         hidden,
         TextDecoration::NONE,
         alpha,
@@ -559,7 +606,7 @@ fn paint_inline_content(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
     skip: PaintSkip,
-    images: &ImageStore,
+    resources: &PaintResources<'_>,
     inherited_hidden: bool,
     inherited_decoration: TextDecoration,
     alpha_scale: f32,
@@ -612,25 +659,38 @@ fn paint_inline_content(
                     BoxType::TextNode(_) | BoxType::LineBreak => {}
                     BoxType::Replaced(node_id) => {
                         if !hidden {
-                            paint_background_border(child, list, skip, false, alpha);
-                            paint_replaced_element(child, *node_id, list, images, alpha);
+                            paint_background_border(child, list, skip, resources, false, alpha);
+                            paint_replaced_element(child, *node_id, list, resources, alpha);
                         }
                     }
                     BoxType::InlineNode(_) => {
                         if !hidden {
-                            paint_background_border(child, list, skip, false, alpha);
+                            paint_background_border(child, list, skip, resources, false, alpha);
                         }
                         push_inline_children(child, hidden, parent_decoration, alpha, &mut stack);
                     }
                     BoxType::BlockNode(_) | BoxType::AnonymousBlock | BoxType::LineBox => {
                         if is_list_item(child) && !hidden {
-                            paint_marker(child, ordinal, list, alpha);
+                            paint_marker(child, ordinal, list, resources, alpha);
                         }
                         push_inline_children(child, hidden, parent_decoration, alpha, &mut stack);
                     }
-                    // Table internals, inline-block wrappers and replaced boxes
-                    // are painted through their descendants (the background and
-                    // border phases only run for element boxes).
+                    // Table internals and inline-block wrappers: backgrounds and
+                    // borders are emitted by the block-background pass, but their
+                    // inline content (line boxes, text runs, decorations) must be
+                    // visited here as well or table cells' text never paints
+                    // (reported by the layout lane, task-53).
+                    BoxType::InlineBlock(_)
+                    | BoxType::Table(_)
+                    | BoxType::TableRowGroup(_)
+                    | BoxType::TableRow(_)
+                    | BoxType::TableCell(_)
+                    | BoxType::TableCaption(_)
+                    | BoxType::TableColumn(_)
+                    | BoxType::AnonymousTableRow
+                    | BoxType::AnonymousTableCell => {
+                        push_inline_children(child, hidden, parent_decoration, alpha, &mut stack);
+                    }
                     _ => {}
                 }
             }
@@ -703,14 +763,14 @@ fn paint_replaced_element(
     layout_box: &LayoutBox,
     node_id: dom::NodeId,
     list: &mut DisplayList,
-    images: &ImageStore,
+    resources: &PaintResources<'_>,
     alpha_scale: f32,
 ) {
     let rect = layout_box.dimensions.content;
     if rect.width <= 0.0 || rect.height <= 0.0 {
         return;
     }
-    match images.get(&node_id) {
+    match resources.images.get(&node_id) {
         Some(image) if !image.is_empty() => {
             list.push(DisplayItem::Image {
                 rect,
@@ -739,6 +799,7 @@ fn paint_background_border(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
     skip: PaintSkip,
+    resources: &PaintResources<'_>,
     is_root: bool,
     alpha_scale: f32,
 ) {
@@ -756,6 +817,19 @@ fn paint_background_border(
         list.push(DisplayItem::SolidColor {
             rect: layout_box.dimensions.border_box(),
             color: scaled(style.background_color, alpha_scale),
+        });
+    }
+
+    // `background-image`: stretched over the padding box, on top of the color.
+    // Missing URL => paint nothing (documented; no placeholder for backgrounds).
+    if !background_is_propagated
+        && let Some(url) = style.background_image.as_deref()
+        && let Some(image) = resources.backgrounds.get(url)
+        && !image.is_empty()
+    {
+        list.push(DisplayItem::Image {
+            rect: layout_box.dimensions.padding_box(),
+            image: std::sync::Arc::clone(image),
         });
     }
 
@@ -887,7 +961,13 @@ fn first_text_baseline(layout_box: &LayoutBox) -> Option<f32> {
 /// fixed `0.5 * font-size` to the left of the content box and the bullet size
 /// is `0.35 em` (documented approximation, WP-4.9 follow-up when layout expose
 /// the marker margin).
-fn paint_marker(layout_box: &LayoutBox, ordinal: u32, list: &mut DisplayList, alpha_scale: f32) {
+fn paint_marker(
+    layout_box: &LayoutBox,
+    ordinal: u32,
+    list: &mut DisplayList,
+    resources: &PaintResources<'_>,
+    alpha_scale: f32,
+) {
     let Some(style) = layout_box.style.as_ref() else {
         return;
     };
@@ -896,6 +976,21 @@ fn paint_marker(layout_box: &LayoutBox, ordinal: u32, list: &mut DisplayList, al
         .unwrap_or(layout_box.dimensions.content.y + font_size * 0.8);
     let right = layout_box.dimensions.content.x - font_size * 0.5;
     let color = scaled(style.color, alpha_scale);
+
+    // `list-style-image`: paint the decoded bitmap (~1 em square) in place of
+    // the geometric/decimal marker. A missing URL falls back to list-style-type.
+    if let Some(url) = style.list_style_image.as_deref()
+        && let Some(image) = resources.backgrounds.get(url)
+        && !image.is_empty()
+    {
+        let size = font_size.max(1.0);
+        let center_y = baseline - font_size * 0.35;
+        list.push(DisplayItem::Image {
+            rect: Rect::new(right - size, center_y - size / 2.0, size, size),
+            image: std::sync::Arc::clone(image),
+        });
+        return;
+    }
 
     match style.list_style_type {
         ListStyleType::None => {}

@@ -31,12 +31,13 @@ pub mod style;
 pub use css::Color;
 pub use deflate::zlib_compress;
 pub use display_list::{
-    BorderSide, DisplayItem, DisplayList, ImageStore, MAX_DISPLAY_LIST_ITEMS, MarkerKind,
+    BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MAX_DISPLAY_LIST_ITEMS,
+    MarkerKind,
 };
 pub use inflate::inflate_zlib;
 pub use painter::{
     IMAGE_PLACEHOLDER, MAX_FLOAT_DEPTH, MAX_STACKING_CONTEXT_DEPTH, build_display_list,
-    build_display_list_with_images,
+    build_display_list_with_images, build_display_list_with_images_and_backgrounds,
 };
 pub use png::encode_rgba;
 pub use rasterizer::{

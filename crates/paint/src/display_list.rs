@@ -20,6 +20,17 @@ use layout::Rect;
 /// consumed by painting. A decoded image is straight-alpha RGBA8.
 pub type ImageStore = HashMap<NodeId, Arc<image::RgbaImage>>;
 
+/// Decoded background/embedded images keyed by their **raw CSS URL string**.
+///
+/// CSS keeps `background-image: url(...)` and `list-style-image: url(...)` as
+/// the unresolved URL text (`ComputedStyle::background_image` /
+/// `ComputedStyle::list_style_image`). The integration crate (`render`) resolves
+/// each URL against the document base URL, fetches it and decodes it, then puts
+/// the bitmap here under the original (unresolved) URL string so paint can look
+/// it up while walking the layout tree. A URL that is absent from the map simply
+/// paints nothing (backgrounds) or falls back to the default list marker.
+pub type BackgroundImages = HashMap<String, Arc<image::RgbaImage>>;
+
 /// One painted side of a CSS border box.
 ///
 /// Widths are the computed `border-*-width` values in px; a side whose style is
