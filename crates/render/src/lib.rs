@@ -141,6 +141,7 @@ pub mod backgrounds;
 pub mod charset;
 pub mod error;
 pub mod images;
+mod inline_svg;
 pub mod scripts;
 pub mod stylesheets;
 mod svg_assets;
@@ -388,6 +389,9 @@ pub struct RenderStats {
     pub background_bytes: usize,
     /// SVG images (from `<img>` or CSS backgrounds) rasterized through the `svg` crate.
     pub svgs_rendered: usize,
+    /// Inline `<svg>` elements replaced by synthetic `<img>` data URLs before layout (they
+    /// are also counted by [`Self::images_loaded`]/[`Self::svgs_rendered`]).
+    pub inline_svgs: usize,
     /// Web fonts successfully fetched, decoded and registered.
     pub fonts_loaded: usize,
     /// Web fonts skipped or failed (network, caps, decode, registration).
@@ -611,6 +615,12 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         None => (0, 0, Vec::new(), 0, 0, 0, 0, 0, Duration::ZERO),
     };
 
+    // Inline `<svg>` elements become synthetic `<img>` data URLs after scripts (so DOM
+    // mutations are honored) and before style resolution/layout; the existing SVG image
+    // pipeline then supplies intrinsic size, caps and warnings.
+    let inline_svg_report = inline_svg::replace_inline_svgs(&mut document);
+    warnings.extend(inline_svg_report.warnings.iter().cloned());
+
     let styles_start = Instant::now();
     let media_context = css::MediaContext::with_viewport(
         options.viewport.width as f32,
@@ -748,6 +758,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             background_images_failed: loaded_backgrounds.failed,
             background_bytes: loaded_backgrounds.downloaded_bytes,
             svgs_rendered: loaded_images.svgs_rendered + loaded_backgrounds.svgs_rendered,
+            inline_svgs: inline_svg_report.replaced,
             fonts_loaded: loaded_webfonts.loaded,
             fonts_failed: loaded_webfonts.failed,
             font_bytes: loaded_webfonts.bytes,

@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Inline SVG use fixture</title>
+<style>html, body { margin: 0; padding: 0; background-color: #ffffff; }
+svg, img { display: block; }</style></head>
+<body>
+<svg width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <rect id="tile" width="16" height="16" fill="#ff8800"/>
+    <rect id="other" width="8" height="8" fill="#8800ff"/>
+  </defs>
+  <use href="#tile" x="0" y="0"/>
+  <use xlink:href="#other" x="20" y="20"/>
+</svg>
+</body>
+</html>

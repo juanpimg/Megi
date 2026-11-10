@@ -41,6 +41,11 @@ cargo run -q -p render -- tests/fixtures/render/svg_img.html "$outdir/megi-svg-i
 python3 tools/png_check.py "$outdir/megi-svg-img.png"
 md5sum "$outdir/megi-svg-img.png"
 
+echo "==> Inline SVG fixture (800x600, <svg> replaced by synthetic <img> data URL)"
+cargo run -q -p render -- tests/fixtures/render/svg_inline_simple.html "$outdir/megi-svg-inline.png" --json
+python3 tools/png_check.py "$outdir/megi-svg-inline.png"
+md5sum "$outdir/megi-svg-inline.png"
+
 echo "==> showcase fixture (1024x768, @import + media + images + backgrounds + table)"
 cargo run -q -p render -- tests/fixtures/render/showcase/index.html \
     "$outdir/megi-showcase.png" --width 1024 --height 768 --json

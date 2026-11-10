@@ -19,6 +19,13 @@ network, no JavaScript.
 | `svg_corrupt.html` | Malformed SVG: non-fatal warning + placeholder, while the rest of the page paints. |
 | `svg_background.html` | `background-image: url(assets/svg_bg.svg)` on a 160×80 box (SVG stretched like a PNG). |
 | `assets/svg_*.svg` | Deterministic SVG fixtures: red circle, viewBox square, default-size rectangle, corrupt payload, background tile and an oversized (20000×20000) document for the render cap. |
+| `svg_inline_simple.html` | WP-5.11: inline `<svg>` (64×64 red circle) serialized to a synthetic `<img>` data URL before layout. |
+| `svg_inline_viewbox.html` | Inline SVG scaled by CSS width/height (`style="width:40px;height:40px"`) through the synthetic `<img>`. |
+| `svg_inline_block.html` | Inline SVG inside a `display:inline-block` container; keeps its 32×32 CSS size. |
+| `svg_inline_class.html` | Inline SVG sized by a CSS class (`.icon {width:48px;height:24px}`) copied onto the synthetic `<img>`. |
+| `svg_inline_corrupt.html` | Inline SVG that fails to rasterize (`width="0"`): non-fatal warning + placeholder, rest of the page paints. |
+| `svg_inline_multiple.html` | Three inline SVG icons in one page (each rasterized and painted). |
+| `svg_inline_use.html` | Inline SVG with internal `<use href>` and `<use xlink:href>` references. |
 | `js_text.html` | WP-6.2/6.3: inline classic script changes `textContent` and `style.color` of a paragraph (large red text) after parsing. |
 | `js_create.html` | Inline script calls `createElement` + `appendChild` with a green `style.backgroundColor` box that layout/paint must render. |
 | `js_external.html` + `assets/js_mutation.js` | External classic script (`src`) over `file:` that mutates text/colour; the same script is served over loopback HTTP by the tests. |
@@ -42,7 +49,10 @@ placeholders. Regenerate `assets/px.png` only alongside the documented quadrants
 magenta list markers, the green fallback for the missing image, the color-only box,
 `--no-network`, the background caps (32/8 MiB/16 MiB) and non-PNG rejection.
 
-`crates/render/tests/svg_tests.rs` renders the `svg_*.html` fixtures offline and checks the
+`crates/render/tests/inline_svg_tests.rs` renders the `svg_inline_*.html` fixtures offline
+(pixel checks, viewBox/class sizing, inline-block, corrupt payload, `<use>`, determinism,
+`--no-network`, and the 256/1 MiB/8 MiB inline-SVG limits). `crates/render/tests/svg_tests.rs`
+renders the `svg_*.html` fixtures offline and checks the
 painted pixels (`<img>` shape/colour, viewBox scaling, 300×150 default, background SVG,
 corrupt/oversized warnings, Content-Type + sniffing over loopback HTTP, direct SVG
 navigation and determinism). `crates/render/tests/scripting_tests.rs` renders these fixtures with the embedded Boa

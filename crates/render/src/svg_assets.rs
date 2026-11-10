@@ -59,16 +59,40 @@ fn sniff_svg(bytes: &[u8]) -> bool {
     if starts_with_ignore_ascii_case(head, b"<svg") {
         return true;
     }
-    if starts_with_ignore_ascii_case(head, b"<?xml")
-        || starts_with_ignore_ascii_case(head, b"<!doctype")
-    {
-        let window = &head[..head.len().min(1024)];
-        return head
-            .windows(4)
-            .take(window.len().saturating_sub(3))
-            .any(|window| window.eq_ignore_ascii_case(b"<svg"));
+    // Only treat XML prologs as SVG when the document body starts with `<svg`.
+    if starts_with_ignore_ascii_case(head, b"<?xml") {
+        return contains_svg_tag(head);
+    }
+    // A `<!doctype>` prolog: `<!doctype html>` documents are HTML (they may contain inline
+    // `<svg>` elements, which must not classify the whole page as an SVG image). Only an
+    // explicit `<!doctype svg>` (or an unknown doctype followed by `<svg`) counts as SVG.
+    if starts_with_ignore_ascii_case(head, b"<!doctype") {
+        let mut rest = &head[b"<!doctype".len()..];
+        while matches!(rest.first(), Some(byte) if byte.is_ascii_whitespace()) {
+            rest = &rest[1..];
+        }
+        let name_len = rest
+            .iter()
+            .position(|byte| !byte.is_ascii_alphanumeric())
+            .unwrap_or(rest.len());
+        let name = &rest[..name_len];
+        if name.eq_ignore_ascii_case(b"html") {
+            return false;
+        }
+        if name.eq_ignore_ascii_case(b"svg") {
+            return true;
+        }
+        return contains_svg_tag(head);
     }
     false
+}
+
+/// Returns `true` when a `<svg` element opener appears in the first 1 KiB of `head`.
+fn contains_svg_tag(head: &[u8]) -> bool {
+    let window_len = head.len().min(1024);
+    head[..window_len]
+        .windows(4)
+        .any(|window| window.eq_ignore_ascii_case(b"<svg"))
 }
 
 fn starts_with_ignore_ascii_case(haystack: &[u8], needle: &[u8]) -> bool {
