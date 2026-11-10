@@ -72,14 +72,41 @@
 //! [`RenderStats::script_tasks`]/`script_loop_iterations`/`script_virtual_time_ms`/
 //! `script_events`/`script_timers_pending`, plus [`RenderTimings::event_loop`].
 //!
+//! ### Browser APIs exposed to scripts (R96)
+//!
+//! - Before scripts run, the author+UA cascade is resolved **once** over the parsed DOM into
+//!   a snapshot ([`ScriptingHostContext`]); `window.getComputedStyle(element)` returns the
+//!   agreed property list (color/background-color, font size/family/weight/style, box
+//!   width/height, margin-*/padding-*, display, position, text-align, line-height,
+//!   border-*-width/color/style and opacity) serialized as CSS values. The snapshot
+//!   describes the **pre-script** DOM: later `getComputedStyle` calls keep returning it
+//!   even after script mutations (layout/paint *are* recomputed from the mutated DOM).
+//! - `window.matchMedia(query).matches` is evaluated with the same [`css::MediaContext`]
+//!   (render viewport, screen medium) as the stylesheet cascade, and
+//!   `innerWidth`/`innerHeight`/`devicePixelRatio` (fixed 1.0) come from the render
+//!   viewport, so scripts and layout agree.
+//! - `requestAnimationFrame` callbacks are queued 16 virtual milliseconds ahead and pumped
+//!   by the deterministic event loop (timestamp = absolute virtual ms), so script-driven
+//!   animations mutate the DOM and reach the PNG; `cancelAnimationFrame` is supported.
+//! - `document.readyState` transitions `loading` (during scripts) → `interactive`
+//!   (`DOMContentLoaded`) → `complete` (`load`). Uncaught exceptions from `eval`, timers
+//!   and microtasks invoke `document.onerror`/`window.onerror`; they and `console.error`
+//!   become non-fatal warnings ([`RenderStats::console_errors`] counts the latter). The
+//!   pre-script pass is measured by [`RenderTimings::styles_pre_script`].
+//! - The stylesheet collection loaded by the pre-script pass is reused by the post-script
+//!   pass unless scripts added/removed `<style>`/`<link rel=stylesheet>` elements, so
+//!   script-inserted stylesheets still apply.
+//!
 //! Not yet supported: executing scripts *during* parsing (needed for the html5lib
 //! `scripted_*` cases and script-driven `document.write` re-tokenization — WP-6.4),
-//! `async` ordering, ES modules, `requestAnimationFrame`/real-event-driven loops, inline
-//! `onclick`-style handler attributes, and `getComputedStyle`.
+//! `async` ordering, ES modules, real-wall-clock/event-driven loops (`change` events on
+//! `MediaQueryList` are not fired), inline `onclick`-style handler attributes and used-px
+//! `width`/`height` in `getComputedStyle` (specified values are returned).
 //!
 //! ## Deliberate limitations (this WP)
 //!
-//! - **No JavaScript** (scripts are parsed but never executed).
+//! - **JavaScript**: enabled by default through the `js` feature (see above); builds with
+//!   `--no-default-features` parse scripts but never execute them.
 //! - **Images**: `<img src>` is fetched (HTTP cache/redirects/TLS from `net`,
 //!   honoring `--no-network` and the [`RenderOptions`] image caps) and decoded
 //!   with the in-tree PNG decoder or the dependency-free `svg` crate. SVGs are
@@ -90,7 +117,8 @@
 //!   into the content box (`object-fit: fill`). Missing / too-large / corrupt /
 //!   unsupported images become gray placeholders plus warnings. SVG `text`, CSS,
 //!   gradients, filters and animation are not rendered (svg crate limitations).
-//! - **CSS backgrounds (WP-5.9)**: `background-image` and `list-style-image` URLs are
+//! - **CSS backgrounds (WP-5.9/R97)**: `background-image`, every layer of
+//!   `background_layers` (multi-layer backgrounds) and `list-style-image` URLs are
 //!   collected from the computed styles, resolved against the **document** base URL,
 //!   deduplicated, fetched with the shared loader (honoring `--no-network`) and decoded
 //!   with the in-tree PNG decoder. They are handed to `paint` as
@@ -138,6 +166,7 @@
 //! - Canvas is opaque white, the PNG encoder is the deterministic paint writer.
 
 pub mod backgrounds;
+mod browser_host;
 pub mod charset;
 pub mod error;
 pub mod images;
@@ -327,8 +356,12 @@ pub struct RenderTimings {
     pub fetch: Duration,
     /// Charset detection/decoding + HTML parsing.
     pub decode_parse: Duration,
-    /// Stylesheet collection, external loading and cascade/UA resolution.
+    /// Stylesheet collection, external loading and cascade/UA resolution for the
+    /// post-script pass (the pass that feeds layout/paint).
     pub styles: Duration,
+    /// Pre-script style pass (R96): stylesheet collection/loading plus the author+UA
+    /// cascade snapshot exposed to `getComputedStyle`. Zero when the page ran no scripts.
+    pub styles_pre_script: Duration,
     /// Web-font (`@font-face`) fetching, WOFF2 decoding and registration.
     pub fonts: Duration,
     /// Layout (box tree + BFC/IFC with real metrics).
@@ -406,6 +439,8 @@ pub struct RenderStats {
     pub script_bytes: usize,
     /// Captured `console.*` entries (see also warnings for `warn`/`error` levels).
     pub console: Vec<ConsoleMessage>,
+    /// Number of captured `console.error` entries (also mirrored as warnings).
+    pub console_errors: usize,
     /// Timer callbacks executed by the event loop (`setTimeout`/`setInterval`).
     pub script_tasks: usize,
     /// Event-loop iterations (timer batches + 1 ms virtual-time steps).
@@ -553,23 +588,72 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         base_url = override_base.clone().unwrap_or(document_url.clone());
     }
 
+    // Media context shared by the stylesheet cascade, the pre-script style snapshot and
+    // the script `matchMedia`/viewport providers (same viewport as layout).
+    let media_context = css::MediaContext::with_viewport(
+        options.viewport.width as f32,
+        options.viewport.height as f32,
+    );
+
+    // Discover the page's classic scripts early (cheap DOM walk): the pre-script style
+    // snapshot is only computed for pages that will actually run scripts. Discovery
+    // warnings are collected once and merged with the scripting stage warnings.
+    let mut script_warnings = Vec::new();
+    let script_requested = options.scripting == ScriptingMode::Enabled;
+    let script_candidates = if script_requested && cfg!(feature = "js") {
+        scripts::discover_scripts(&document, &mut script_warnings)
+    } else {
+        Vec::new()
+    };
+
+    // Pre-script style pass (R96): resolve the author+UA cascade once over the parsed DOM so
+    // `window.getComputedStyle` exposes real styles to scripts. The collection is reused by
+    // the post-script pass when scripts did not add/remove `<style>`/`<link>` elements;
+    // otherwise the post-script pass recollects (script-inserted stylesheets still apply).
+    let mut styles_pre_script = Duration::ZERO;
+    let mut pre_script_styles: Option<Arc<HashMap<NodeId, ComputedStyle>>> = None;
+    let mut reusable_stylesheets: Option<(
+        css::StyleCollection,
+        StyleSummary,
+        Vec<webfonts::LocatedFontFace>,
+        usize,
+    )> = None;
+    let mut pre_warnings = Vec::new();
+    if !script_candidates.is_empty() {
+        let pre_start = Instant::now();
+        let stylesheet_elements_before = count_stylesheet_elements(&document);
+        if let Ok((collection, summary, fonts)) = collect_styles(
+            &document,
+            &base_url,
+            &mut loader,
+            options,
+            &media_context,
+            &mut pre_warnings,
+        ) {
+            pre_script_styles = Some(Arc::new(resolve_styles_with_collection(
+                &document,
+                &collection,
+            )));
+            reusable_stylesheets = Some((collection, summary, fonts, stylesheet_elements_before));
+        }
+        styles_pre_script = pre_start.elapsed();
+    }
+
     let scripting_start = Instant::now();
     let mut script_bytes = 0usize;
     let mut scripting_execution: Option<scripts::ScriptExecution> = None;
-    if options.scripting == ScriptingMode::Enabled && !cfg!(feature = "js") {
+    if script_requested && !cfg!(feature = "js") {
         warnings.push(
             "scripting was requested but this build has no `js` feature; scripts are ignored"
                 .to_owned(),
         );
     }
-    if options.scripting == ScriptingMode::Enabled && cfg!(feature = "js") {
-        let mut script_warnings = Vec::new();
-        let candidates = scripts::discover_scripts(&document, &mut script_warnings);
-        let load_report = if candidates.is_empty() {
+    if script_requested && cfg!(feature = "js") {
+        let load_report = if script_candidates.is_empty() {
             scripts::ScriptLoadReport::default()
         } else {
             scripts::load_scripts(
-                &candidates,
+                &script_candidates,
                 &base_url,
                 &mut loader,
                 options.scripting_limits,
@@ -578,16 +662,24 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             )
         };
         script_bytes = load_report.script_bytes;
+        let host_context = scripts::ScriptingHostContext::new(
+            pre_script_styles.clone(),
+            media_context,
+            (options.viewport.width, options.viewport.height),
+        );
         let mut execution = scripts::execute_scripts(
             document,
             &document_url,
             load_report.scripts,
             options.scripting_limits,
+            &host_context,
             &mut script_warnings,
         );
         document = std::mem::take(&mut execution.document);
         warnings.extend(script_warnings);
         scripting_execution = Some(execution);
+    } else {
+        warnings.extend(script_warnings);
     }
     let scripting_time = scripting_start.elapsed();
     let (
@@ -622,21 +714,22 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     warnings.extend(inline_svg_report.warnings.iter().cloned());
 
     let styles_start = Instant::now();
-    let media_context = css::MediaContext::with_viewport(
-        options.viewport.width as f32,
-        options.viewport.height as f32,
-    );
-    let collected = stylesheets::collect_stylesheets(&document, &base_url, &media_context);
-    warnings.extend(collected.warnings.iter().cloned());
-
-    let (stylesheet_collection, style_summary, font_faces) = build_author_stylesheet_collection(
-        &collected,
-        &base_url,
-        &mut loader,
-        options,
-        &media_context,
-        &mut warnings,
-    )?;
+    let (stylesheet_collection, style_summary, font_faces) = match reusable_stylesheets {
+        Some((collection, summary, fonts, stylesheet_elements_before))
+            if count_stylesheet_elements(&document) == stylesheet_elements_before =>
+        {
+            warnings.extend(pre_warnings);
+            (collection, summary, fonts)
+        }
+        _ => collect_styles(
+            &document,
+            &base_url,
+            &mut loader,
+            options,
+            &media_context,
+            &mut warnings,
+        )?,
+    };
     let styles = resolve_styles_with_collection(&document, &stylesheet_collection);
     let styles_time = styles_start.elapsed();
 
@@ -730,6 +823,10 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         })
         .unwrap_or(0);
     let content_encoding = loaded.content_encoding.clone();
+    let console_errors = console
+        .iter()
+        .filter(|entry| entry.level == "error")
+        .count();
     let total = total_start.elapsed();
     Ok(RenderOutput {
         png,
@@ -750,7 +847,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             imports_loaded: style_summary.imports_loaded,
             imports_skipped: style_summary.imports_skipped,
             max_import_depth: style_summary.max_import_depth,
-            media_skipped: collected.media_skipped,
+            media_skipped: style_summary.media_skipped,
             images_loaded: loaded_images.loaded,
             images_failed: loaded_images.failed,
             image_bytes: loaded_images.downloaded_bytes,
@@ -766,6 +863,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             scripts_failed,
             script_bytes,
             console,
+            console_errors,
             script_tasks,
             script_loop_iterations,
             script_virtual_time_ms,
@@ -780,6 +878,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
                 fetch: fetch_time,
                 decode_parse: decode_parse_time,
                 styles: styles_time,
+                styles_pre_script,
                 fonts: fonts_time,
                 images: images_time,
                 backgrounds: backgrounds_time,
@@ -900,6 +999,7 @@ struct StyleSummary {
     imports_loaded: usize,
     imports_skipped: usize,
     max_import_depth: usize,
+    media_skipped: usize,
 }
 
 /// Mutable state shared by the recursive `@import` walk.
@@ -917,6 +1017,56 @@ struct ImportWalk<'a> {
 
 /// Builds the author [`css::StyleCollection`] in cascade order, resolving `@import`
 /// directives recursively (depth-limited, deduplicated, media-gated, non-fatal errors).
+/// Collects the author stylesheets and builds the cascade collection for `document`.
+///
+/// Shared by the pre-script style pass (for `getComputedStyle`) and the post-script pass
+/// that feeds layout/paint, so both use exactly the same cascade order and media context.
+fn collect_styles(
+    document: &Document,
+    base_url: &Url,
+    loader: &mut ResourceLoader,
+    options: &RenderOptions,
+    media: &css::MediaContext,
+    warnings: &mut Vec<String>,
+) -> Result<
+    (
+        css::StyleCollection,
+        StyleSummary,
+        Vec<webfonts::LocatedFontFace>,
+    ),
+    RenderError,
+> {
+    let collected = stylesheets::collect_stylesheets(document, base_url, media);
+    warnings.extend(collected.warnings.iter().cloned());
+    build_author_stylesheet_collection(&collected, base_url, loader, options, media, warnings)
+}
+
+/// Counts stylesheet-producing elements (`<style>` and `<link rel=stylesheet>`).
+///
+/// The post-script style pass can reuse the pre-script collection when scripts did not
+/// change the stylesheet set; only an added/removed `<style>`/`<link>` forces a recollect.
+fn count_stylesheet_elements(document: &Document) -> usize {
+    let mut count = 0usize;
+    for node_id in document.descendants(document.root()) {
+        let Some(element) = document.node(node_id).as_element() else {
+            continue;
+        };
+        if element.namespace != dom::Namespace::Html {
+            continue;
+        }
+        let is_style = element.local_name == "style";
+        let is_stylesheet_link = element.local_name == "link"
+            && element.get_attribute("rel").is_some_and(|rel| {
+                rel.split_ascii_whitespace()
+                    .any(|token| token.eq_ignore_ascii_case("stylesheet"))
+            });
+        if is_style || is_stylesheet_link {
+            count += 1;
+        }
+    }
+    count
+}
+
 fn build_author_stylesheet_collection(
     collected: &stylesheets::CollectedStyles,
     base_url: &Url,
@@ -942,6 +1092,7 @@ fn build_author_stylesheet_collection(
         imports_loaded: 0,
         imports_skipped: 0,
         max_import_depth: 0,
+        media_skipped: collected.media_skipped,
     };
     let mut walk = ImportWalk {
         loader,

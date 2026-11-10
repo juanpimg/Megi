@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Browser APIs fixture</title>
+<style>
+html, body { margin: 0; padding: 0; background-color: #ffffff; }
+#box { color: rgb(255, 0, 0); background-color: #00ff00; font-size: 20px;
+       font-family: "DejaVu Sans", sans-serif; font-weight: 700; font-style: italic;
+       width: 120px; height: 40px; margin: 5px; padding: 3px;
+       display: block; position: static; text-align: center; line-height: 24px;
+       border-top-width: 2px; border-top-style: solid; border-top-color: #0000ff;
+       opacity: 0.5; }
+</style>
+</head>
+<body>
+<div id="box">box</div>
+<div id="out"></div>
+<pre id="report"></pre>
+<script>
+(function () {
+  var box = document.getElementById('box');
+  var style = window.getComputedStyle(box);
+  var out = document.getElementById('out');
+  out.setAttribute('data-color', style.getPropertyValue('color'));
+  out.setAttribute('data-background', style.getPropertyValue('background-color'));
+  out.setAttribute('data-font-size', style.getPropertyValue('font-size'));
+  out.setAttribute('data-font-weight', style.getPropertyValue('font-weight'));
+  out.setAttribute('data-font-style', style.getPropertyValue('font-style'));
+  out.setAttribute('data-display', style.getPropertyValue('display'));
+  out.setAttribute('data-position', style.getPropertyValue('position'));
+  out.setAttribute('data-text-align', style.getPropertyValue('text-align'));
+  out.setAttribute('data-line-height', style.getPropertyValue('line-height'));
+  out.setAttribute('data-width', style.getPropertyValue('width'));
+  out.setAttribute('data-margin-top', style.getPropertyValue('margin-top'));
+  out.setAttribute('data-padding-left', style.getPropertyValue('padding-left'));
+  out.setAttribute('data-border-top-width', style.getPropertyValue('border-top-width'));
+  out.setAttribute('data-border-top-style', style.getPropertyValue('border-top-style'));
+  out.setAttribute('data-opacity', style.getPropertyValue('opacity'));
+  out.setAttribute('data-css-text-has-color', style.cssText.indexOf('color') >= 0 ? 'yes' : 'no');
+  out.setAttribute('data-ready-script', document.readyState);
+  // The provider is a pre-script snapshot: mutating the DOM does not change it (documented).
+  box.style.setProperty('color', 'rgb(0, 0, 0)');
+  out.setAttribute('data-color-after-mutation',
+    window.getComputedStyle(box).getPropertyValue('color'));
+  out.setAttribute('data-inline-color', box.style.getPropertyValue('color'));
+  window.addEventListener('load', function () {
+    document.getElementById('report').setAttribute('data-ready-load', document.readyState);
+  });
+
+  var report = document.getElementById('report');
+  var small = window.matchMedia('(max-width: 600px)').matches;
+  var large = window.matchMedia('(min-width: 700px)').matches;
+  var wide = window.matchMedia('(min-width: ' + window.innerWidth + 'px)').matches;
+  report.setAttribute('data-small', small ? 'yes' : 'no');
+  report.setAttribute('data-large', large ? 'yes' : 'no');
+  report.setAttribute('data-wide', wide ? 'yes' : 'no');
+  report.setAttribute('data-inner-width', String(window.innerWidth));
+  report.setAttribute('data-inner-height', String(window.innerHeight));
+  report.setAttribute('data-dpr', String(window.devicePixelRatio));
+  report.setAttribute('data-ready', document.readyState);
+})();
+</script>
+</body>
+</html>

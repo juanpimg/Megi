@@ -26,6 +26,11 @@ network, no JavaScript.
 | `svg_inline_corrupt.html` | Inline SVG that fails to rasterize (`width="0"`): non-fatal warning + placeholder, rest of the page paints. |
 | `svg_inline_multiple.html` | Three inline SVG icons in one page (each rasterized and painted). |
 | `svg_inline_use.html` | Inline SVG with internal `<use href>` and `<use xlink:href>` references. |
+| `browser_api.html` | R96: script reads `getComputedStyle` (color/background/font/box/display/position/text-align/line-height/border/opacity), `matchMedia`, `innerWidth`/`innerHeight`/`devicePixelRatio`, `document.readyState` and verifies the pre-script snapshot limitation. |
+| `raf_animation.html` | `requestAnimationFrame` animation: three virtual frames mutate the DOM and the final green frame reaches the PNG. |
+| `script_errors.html` | Uncaught timer exception → `window.onerror` runs (mutates the DOM) and the error becomes a non-fatal warning. |
+| `console_messages.html` | `console.log/warn/error` capture: warn/error become warnings and `console_errors` counts the errors. |
+| `background_layers.html` | R97 multi-layer `background-image`: top-first order (magenta bullet over a checker pattern), per-layer `repeat`/`size`/`position`, `background-origin`/`background-clip: content-box`. Pixel-tested in `background_layers_tests.rs`. |
 | `js_text.html` | WP-6.2/6.3: inline classic script changes `textContent` and `style.color` of a paragraph (large red text) after parsing. |
 | `js_create.html` | Inline script calls `createElement` + `appendChild` with a green `style.backgroundColor` box that layout/paint must render. |
 | `js_external.html` + `assets/js_mutation.js` | External classic script (`src`) over `file:` that mutates text/colour; the same script is served over loopback HTTP by the tests. |

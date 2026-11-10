@@ -132,7 +132,28 @@ pub fn collect_background_references(
         let Some(style) = styles.get(&node_id) else {
             continue;
         };
-        if let Some(raw_url) = style.background_image.as_deref() {
+        // Multi-layer backgrounds: one reference per layer image (top-first order, which
+        // is what paint expects). `background_image` remains the mirror of the first layer
+        // for compatibility; it is only used when the layer list has no image at all so a
+        // singular declaration is not counted twice.
+        let mut mirrored_first_layer = false;
+        for (index, layer) in style.background_layers.iter().enumerate() {
+            let Some(raw_url) = layer.image.as_deref() else {
+                continue;
+            };
+            if !mirrored_first_layer
+                && style.background_image.as_deref() == Some(raw_url)
+                && index == 0
+            {
+                mirrored_first_layer = true;
+            }
+            references.push(BackgroundReference {
+                node: node_id,
+                raw_url: raw_url.to_owned(),
+                kind: BackgroundKind::Background,
+            });
+        }
+        if !mirrored_first_layer && let Some(raw_url) = style.background_image.as_deref() {
             references.push(BackgroundReference {
                 node: node_id,
                 raw_url: raw_url.to_owned(),
@@ -386,7 +407,13 @@ mod unit_tests {
     #[test]
     fn background_cap_counts_distinct_urls() {
         let (doc, styles) = styled_divs(&["a.png", "b.png", "c.png"], &[]);
-        let base = Url::parse("file:///tmp/index.html").expect("file URL");
+        // Unique base directory so unrelated files in /tmp (from other tools or parallel
+        // test runs) cannot make the "file not found" assertions flaky.
+        let base = Url::parse(&format!(
+            "file:///tmp/megi-render-backgrounds-cap-{}/index.html",
+            std::process::id()
+        ))
+        .expect("file URL");
         let mut loader = ResourceLoader::with_options(options());
         let mut warnings = Vec::new();
         let limits = BackgroundLimits {

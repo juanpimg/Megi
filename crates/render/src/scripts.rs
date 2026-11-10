@@ -50,7 +50,9 @@
 //!   as skipped and the DOM is left untouched (documented in [`crate::ScriptingMode`]).
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
+use css::ComputedStyle;
 use dom::{Document, NodeId};
 use net::{ResourceLoader, Scheme, Url};
 
@@ -68,6 +70,14 @@ pub const DEFAULT_MAX_TASKS: usize = 10_000;
 pub const DEFAULT_MAX_VIRTUAL_TIME_MS: u64 = 1_000;
 /// Virtual clock step used between timer batches (milliseconds).
 pub const VIRTUAL_TIME_STEP_MS: u64 = 1;
+/// Absolute virtual-time origin used for script execution.
+///
+/// The js host clock is monotonic and its `run_until` setter uses `max(real elapsed, deadline)`,
+/// so starting at 0 would leak a few milliseconds of real startup time into timer/rAF due
+/// times and make `script_virtual_time_ms` machine-speed dependent (CI flake). Pinning a
+/// large fixed origin (16 min) before any script runs gives every callback a stable absolute
+/// timestamp; the reported virtual time is relative to this origin.
+const VIRTUAL_EPOCH_MS: u64 = 1_000_000;
 
 /// Per-script execution budget (mirrors the `js` crate's `Budget` without requiring the
 /// feature to be compiled in, so [`ScriptingLimits`] is part of the stable render API).
@@ -165,6 +175,47 @@ pub struct ScriptLoadReport {
     pub script_bytes: usize,
     /// Candidates dropped before execution (unsupported type, cap, duplicate, fetch error).
     pub skipped: usize,
+}
+
+/// Host environment exposed to page scripts (WP-6.5): the **pre-script computed style
+/// snapshot**, the render's media context and the real viewport.
+///
+/// The style snapshot is taken right after parsing (author + UA cascade) and before scripts
+/// run, so `getComputedStyle` reads what the page looked like when scripting started;
+/// layout/paint are recomputed afterwards from the mutated DOM. `matchMedia` and
+/// `innerWidth`/`innerHeight` use the same viewport as the stylesheet cascade and layout.
+pub struct ScriptingHostContext {
+    /// Snapshot of the computed styles (pre-script) used by `getComputedStyle`.
+    pub styles: Option<Arc<std::collections::HashMap<NodeId, ComputedStyle>>>,
+    /// Media context (viewport + screen medium) used to evaluate `matchMedia` queries.
+    pub media: css::MediaContext,
+    /// Viewport size in CSS pixels (`window.innerWidth`/`innerHeight`).
+    pub viewport: (u32, u32),
+}
+
+impl ScriptingHostContext {
+    /// Creates the host context for a render.
+    pub fn new(
+        styles: Option<Arc<std::collections::HashMap<NodeId, ComputedStyle>>>,
+        media: css::MediaContext,
+        viewport: (u32, u32),
+    ) -> Self {
+        Self {
+            styles,
+            media,
+            viewport,
+        }
+    }
+
+    /// Empty context for direct `execute_scripts` callers: no style snapshot, default media
+    /// and a 800x600 viewport (matches the pipeline default).
+    pub fn empty() -> Self {
+        Self {
+            styles: None,
+            media: css::MediaContext::with_viewport(800.0, 600.0),
+            viewport: (800, 600),
+        }
+    }
 }
 
 /// A captured `console.*` call (level + already-stringified message).
@@ -405,6 +456,7 @@ pub fn execute_scripts(
     document_url: &Url,
     scripts: Vec<LoadedScript>,
     limits: ScriptingLimits,
+    host: &ScriptingHostContext,
     warnings: &mut Vec<String>,
 ) -> ScriptExecution {
     let mut execution = ScriptExecution {
@@ -436,9 +488,32 @@ pub fn execute_scripts(
         }
     };
 
-    // Deterministic virtual clock: freeze `now` at 0 ms before any script runs, so relative
-    // timers scheduled during evaluation have stable due times and `Date.now()` is stable.
-    let _ = runtime.run_until(0);
+    // Browser-facing host providers (R96): getComputedStyle reads the pre-script snapshot,
+    // matchMedia evaluates with the render's MediaContext (same viewport as the cascade),
+    // and innerWidth/innerHeight/devicePixelRatio come from the real viewport (DPR 1.0).
+    if let Some(styles) = host.styles.clone() {
+        runtime.set_computed_style_provider(Box::new(move |document, node_id| {
+            crate::browser_host::computed_style_for(&styles, document, node_id)
+        }));
+    }
+    let media = host.media;
+    runtime.set_media_provider(Box::new(move |query: &str| {
+        crate::browser_host::media_matches(&media, query)
+    }));
+    let viewport_info = js::host::ViewportInfo {
+        width: host.viewport.0,
+        height: host.viewport.1,
+        device_pixel_ratio: 1.0,
+        scroll_x: 0.0,
+        scroll_y: 0.0,
+    };
+    runtime.set_viewport_provider(Box::new(move || viewport_info));
+    runtime.set_ready_state("loading");
+
+    // Deterministic virtual clock: pin `now` to a fixed epoch before any script runs (the
+    // host clock never goes backwards, so `run_until(0)` would keep the real startup
+    // elapsed time and make timer/rAF due times machine-speed dependent).
+    let _ = runtime.run_until(VIRTUAL_EPOCH_MS);
 
     let mut remaining_loops = limits.total_loop_iterations;
     for script in scripts {
@@ -480,9 +555,13 @@ pub fn execute_scripts(
         stack_size_limit: limits.budget.stack_size_limit,
     });
 
-    let mut loop_state = EventLoopState::default();
+    let mut loop_state = EventLoopState {
+        virtual_time_ms: VIRTUAL_EPOCH_MS,
+        ..EventLoopState::default()
+    };
     drain_microtasks(&mut runtime, warnings);
 
+    runtime.set_ready_state("interactive");
     // 1. `DOMContentLoaded` (after scripts, before timers), dispatched at the real
     // `document` target with bubbling: `document.addEventListener('DOMContentLoaded', ...)`
     // listeners fire, then capture/bubble visitors and (with `bubbles: true`) the single
@@ -496,6 +575,7 @@ pub fn execute_scripts(
     // 2. Timers (delays included) on the virtual clock, bounded by max_tasks/max_virtual_time.
     run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);
 
+    runtime.set_ready_state("complete");
     // 3. `load` on `window`, then timers scheduled by `load` listeners (same budget).
     match runtime.dispatch_event(js::JsEventTarget::Window, "load", true) {
         Ok(_) => execution.events_dispatched += 1,
@@ -504,10 +584,13 @@ pub fn execute_scripts(
     drain_microtasks(&mut runtime, warnings);
     run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);
 
+    if let Some(error) = runtime.last_event_error() {
+        warnings.push(format!("uncaught script error: {error}"));
+    }
     execution.event_loop = event_loop_start.elapsed();
     execution.tasks_ran = loop_state.tasks;
     execution.loop_iterations = loop_state.iterations;
-    execution.virtual_time_ms = loop_state.virtual_time_ms;
+    execution.virtual_time_ms = loop_state.virtual_time_ms.saturating_sub(VIRTUAL_EPOCH_MS);
     execution.limited |= loop_state.limited;
     execution.timers_pending = runtime.pending_timers();
 
@@ -590,7 +673,7 @@ fn run_event_loop(
         if runtime.pending_timers() == 0 {
             return;
         }
-        if state.virtual_time_ms >= limits.max_virtual_time_ms {
+        if state.virtual_time_ms.saturating_sub(VIRTUAL_EPOCH_MS) >= limits.max_virtual_time_ms {
             state.limited = true;
             warnings.push(format!(
                 "virtual-time budget exhausted ({} ms); dropping {} pending timer(s)",
@@ -624,6 +707,7 @@ pub fn execute_scripts(
     _document_url: &Url,
     scripts: Vec<LoadedScript>,
     _limits: ScriptingLimits,
+    _host: &ScriptingHostContext,
     warnings: &mut Vec<String>,
 ) -> ScriptExecution {
     if !scripts.is_empty() {

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Multi-layer background fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #ffffff; }
+  .layers {
+    width: 120px; height: 80px; margin: 10px;
+    padding: 10px; border: 4px solid #000000;
+    background-color: #000000;
+    background-image: url("assets/bullet.png"), url("assets/pattern.png");
+    background-repeat: no-repeat, repeat;
+    background-size: 20px 20px, auto;
+    background-position: center, 0 0;
+  }
+  .clipped {
+    width: 120px; height: 80px; margin: 10px;
+    padding: 10px; border: 4px solid #000000;
+    background-color: #000000;
+    background-image: url("assets/bullet.png");
+    background-repeat: no-repeat;
+    background-size: 20px 20px;
+    background-position: center;
+    background-origin: content-box;
+    background-clip: content-box;
+  }
+</style></head>
+<body><div class="layers"></div><div class="clipped"></div></body></html>

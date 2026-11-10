@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Script errors fixture</title>
+<style>html, body { margin: 0; padding: 0; background-color: #ffffff; }
+.ok { width: 32px; height: 32px; background-color: #ff00ff; }</style>
+</head>
+<body>
+<div class="ok"></div>
+<div id="status">pending</div>
+<script>
+window.onerror = function (message) {
+  document.getElementById('status').textContent = 'caught: ' + message;
+  document.getElementById('status').setAttribute('data-onerror', 'yes');
+};
+console.error('console error from fixture', 42);
+console.warn('console warning from fixture');
+setTimeout(function () { throw new Error('boom from timer'); }, 0);
+</script>
+</body>
+</html>

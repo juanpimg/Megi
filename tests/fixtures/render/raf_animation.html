@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>requestAnimationFrame fixture</title>
+<style>html, body { margin: 0; padding: 0; background-color: #ffffff; }
+#tile { position: absolute; top: 0; left: 0; width: 100px; height: 100px; background-color: #ffffff; }</style>
+</head>
+<body>
+<div id="tile"></div>
+<div id="frames">0</div>
+<script>
+(function () {
+  var tile = document.getElementById('tile');
+  var label = document.getElementById('frames');
+  var frame = 0;
+  function step(timestamp) {
+    frame += 1;
+    label.textContent = String(frame);
+    label.setAttribute('data-frame', String(frame));
+    if (frame >= 3) {
+      tile.style.backgroundColor = '#00ff00';
+      label.setAttribute('data-done', 'yes');
+    } else {
+      tile.style.backgroundColor = '#0000ff';
+      requestAnimationFrame(step);
+    }
+  }
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>
