@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 pub mod css_harness;
+pub mod js_executor;
 pub mod serializer_harness;
 pub mod tokenizer_harness;
 pub mod tree_harness;
@@ -51,16 +52,15 @@ pub const XML_VIOLATION_UNANNOTATED_ERRORS: usize = 1;
 pub const TREE_SUITE_COUNT: usize = 62;
 /// Total mode-runs (case × scripting mode) across all 62 tree-construction suites.
 pub const TREE_EXPECTED_RUNS: usize = 3904;
-/// Passing tree-construction mode-runs.
-pub const TREE_EXPECTED_PASSED: usize = 3898;
-/// Known tree-construction failures: all four `scripted_*` suites are `#script-on` cases that
-/// require a JavaScript engine (DOM mutation APIs / `document.write`), unavailable until Phase 6.
-pub const KNOWN_TREE_FAILURES: &[(&str, usize)] = &[
-    ("scripted_adoption01.dat", 1),
-    ("scripted_ark.dat", 1),
-    ("scripted_foster01.dat", 2),
-    ("scripted_webkit01.dat", 2),
-];
+/// Passing tree-construction mode-runs: all `TREE_EXPECTED_RUNS`.
+///
+/// The four `#script-on` `scripted_*` suites run parser-inserted scripts through
+/// [`js_executor::JsScriptExecutor`] on top of `html`'s `ScriptExecutor` hook (WP-6.4),
+/// including `document.write` re-tokenization and DOM mutation during parsing.
+pub const TREE_EXPECTED_PASSED: usize = 3904;
+/// Known tree-construction failures: none. The `scripted_*` suites pass with the WP-6.4
+/// parser-inserted script hook enabled in the harness.
+pub const KNOWN_TREE_FAILURES: &[(&str, usize)] = &[];
 
 /// Number of vendored `tests/html5lib-tests/serializer/*.test` suites.
 pub const SERIALIZER_SUITE_COUNT: usize = 5;

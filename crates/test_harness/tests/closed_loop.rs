@@ -12,7 +12,9 @@
 //!    the WHATWG HTML §13.2.9 XML-infoset coercion enabled.
 //! 4. All 2,769 fixture parse-error annotations (2,779 run-level checks) match `(code, line, col)`;
 //!    only 37 documented order-only differences remain.
-//! 5. All 62 tree-construction suites run: 3,898/3,904 mode-runs (6 known `scripted_*` failures).
+//! 5. All 62 tree-construction suites run: **3,904/3,904** mode-runs. The four `#script-on`
+//!    `scripted_*` suites execute parser-inserted scripts (WP-6.4) through the JS executor
+//!    installed by `test_harness::tree_harness`; there are no known tree failures.
 //! 6. The vendored WPT CSS Syntax fixtures run with no skip: 30/30 results.
 //! 7. The five tracked html5lib HTML-serializer suites run: 230/230 cases.
 
@@ -372,6 +374,46 @@ fn test_closed_loop_tree_construction_all_62_suites_exact_gate() {
         (passed_total, runs_total),
         (TREE_EXPECTED_PASSED, TREE_EXPECTED_RUNS),
         "Tree-construction totals regressed: expected {TREE_EXPECTED_PASSED}/{TREE_EXPECTED_RUNS}"
+    );
+}
+
+/// WP-6.4 milestone: the four `#script-on` `scripted_*` suites must execute their
+/// parser-inserted scripts (DOM mutation + `document.write` re-tokenization) and pass, and
+/// the tree allowlist must stay empty (3,904/3,904 mode-runs).
+#[test]
+fn test_scripted_parser_inserted_suites_pass_with_js_executor() {
+    const SCRIPTED_SUITES: [&str; 4] = [
+        "scripted_adoption01.dat",
+        "scripted_ark.dat",
+        "scripted_foster01.dat",
+        "scripted_webkit01.dat",
+    ];
+    assert!(
+        KNOWN_TREE_FAILURES.is_empty(),
+        "the tree allowlist must stay empty now that parser-inserted scripts run: {}",
+        format_allowlist(KNOWN_TREE_FAILURES)
+    );
+    let mut runs = 0usize;
+    for suite in SCRIPTED_SUITES {
+        let path = tree_construction_dat_dir().join(suite);
+        let results = run_tree_suite_file(&path)
+            .unwrap_or_else(|e| panic!("scripted suite {suite} failed to run: {e}"));
+        assert!(
+            !results.is_empty(),
+            "{suite} must contain at least one mode-run"
+        );
+        for result in &results {
+            assert!(
+                result.passed,
+                "{suite} case {} failed in script-on mode:\ninput: {}\n--- expected ---\n{}\n--- actual ---\n{}",
+                result.index, result.input, result.expected_document, result.actual_document
+            );
+        }
+        runs += results.len();
+    }
+    assert_eq!(
+        runs, 6,
+        "the four scripted_* suites are 6 script-on mode-runs"
     );
 }
 

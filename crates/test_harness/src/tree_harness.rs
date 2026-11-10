@@ -14,8 +14,13 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use dom::Namespace;
-use html::{parse_document, parse_fragment, serialize_dom_for_test};
+use html::{
+    parse_document, parse_document_with_options_and_executor, parse_fragment,
+    serialize_dom_for_test,
+};
 use serde::Deserialize;
+
+use crate::js_executor::JsScriptExecutor;
 
 /// Script execution mode directive for a tree-construction test case.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
@@ -197,6 +202,11 @@ fn parse_fragment_context(spec: &str) -> (Namespace, &str) {
 }
 
 /// Executes a single [`TreeConstructionCase`] in the specified `scripting_enabled` mode.
+///
+/// In script-on mode the document is parsed with the WP-6.4 parser-inserted script hook:
+/// the `scripted_*` suites need a real JS engine (`document.write` re-tokenization and DOM
+/// mutation during parsing), provided by [`JsScriptExecutor`]. Fragment parses keep the
+/// plain parser: the fixtures never execute scripts in fragment mode.
 pub fn execute_tree_case(
     file_name: &str,
     case: &TreeConstructionCase,
@@ -205,6 +215,14 @@ pub fn execute_tree_case(
     let doc = if let Some(ref frag_spec) = case.document_fragment {
         let (ns, local_name) = parse_fragment_context(frag_spec);
         parse_fragment(&case.data, ns, local_name, scripting_enabled)
+    } else if scripting_enabled {
+        parse_document_with_options_and_executor(
+            &case.data,
+            true,
+            &html::ParseOptions::default(),
+            Some(Box::new(JsScriptExecutor::new())),
+        )
+        .document
     } else {
         parse_document(&case.data, scripting_enabled)
     };

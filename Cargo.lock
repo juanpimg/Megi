@@ -2299,6 +2299,7 @@ dependencies = [
  "css",
  "dom",
  "html",
+ "js",
  "serde",
  "serde_json",
 ]

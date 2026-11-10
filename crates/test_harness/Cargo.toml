@@ -12,5 +12,6 @@ description = "Megi Engine — Closed-Loop Conformance Harness for html5lib-test
 css.workspace = true
 dom.workspace = true
 html.workspace = true
+js.workspace = true
 serde.workspace = true
 serde_json.workspace = true

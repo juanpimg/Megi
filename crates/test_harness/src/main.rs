@@ -8,9 +8,10 @@
 //! 2,779 `(case, initial state)` checks): every `(code, line, col)` must match, modulo 37 documented
 //! order-only differences and the one documented unannotated `xmlViolation.test` input-stream error.
 //!
-//! `--strict` treats even the documented known failures (the four `scripted_*` tree suites, the
-//! tokenizer error-order differences and the `xmlViolation.test` unannotated error) as gate
-//! failures. `--verbose`/`-v` prints failure details. A positional filter limits the report to
+//! `--strict` treats even the documented known failures (the tokenizer error-order differences
+//! and the `xmlViolation.test` unannotated error) as gate failures. The tree-construction gate
+//! has no allowlist anymore: the four `#script-on` `scripted_*` suites execute parser-inserted
+//! scripts through the WP-6.4 hook and pass (3,904/3,904). `--verbose`/`-v` prints failure details. A positional filter limits the report to
 //! suites whose file name contains the given substring (totals are not gated in that mode).
 
 use test_harness::{
@@ -413,7 +414,14 @@ fn main() {
         "  tokenizer errors: order-only {:?}, xmlViolation unannotated: {XML_VIOLATION_UNANNOTATED_ERRORS}",
         KNOWN_TOKENIZER_ERROR_ORDER_GAPS
     );
-    println!("  tree:      {}", format_allowlist(KNOWN_TREE_FAILURES));
+    println!(
+        "  tree:      {}",
+        if KNOWN_TREE_FAILURES.is_empty() {
+            "(none)".to_string()
+        } else {
+            format_allowlist(KNOWN_TREE_FAILURES)
+        }
+    );
     if strict {
         let documented_error_diffs = tok_error_order_gaps + xml_violation_unannotated_errors;
         if known_failures_total > 0 || documented_error_diffs > 0 {
