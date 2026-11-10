@@ -386,3 +386,20 @@ fn test_container_without_flex_is_unchanged() {
     assert_eq!(item_box.dimensions.content.x, 0.0);
     assert_eq!(item_box.dimensions.content.y, 0.0);
 }
+
+#[test]
+fn test_order_reorders_flex_items_stably() {
+    let mut first = item_style(Length::Px(50.0), Length::Px(10.0));
+    first.order = 5;
+    let mut second = item_style(Length::Px(50.0), Length::Px(10.0));
+    second.order = 1;
+    let mut third = item_style(Length::Px(50.0), Length::Px(10.0));
+    third.order = 1;
+    let case = layout_case(
+        flex_container_style(Length::Px(300.0), Length::Px(20.0)),
+        vec![first, second, third],
+    );
+    assert_eq!(case.item(1).dimensions.content.x, 0.0);
+    assert_eq!(case.item(2).dimensions.content.x, 50.0);
+    assert_eq!(case.item(0).dimensions.content.x, 100.0);
+}

@@ -401,6 +401,9 @@ pub(crate) fn layout_flex_children(
         calculate_block_height(layout_box, definite_height, Some(height), is_root, None);
         return;
     }
+    // `order` reorders flex items visually (stable: document order is the
+    // tiebreak). Without `order` this sort is a no-op, so geometry is unchanged.
+    items.sort_by_key(|item| item.style.order);
     let reference = container_main.unwrap_or(container_width);
 
     // 2. Group items into lines.
