@@ -6,6 +6,62 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 9 — JavaScript executed in render, paint hit-testing and navigable shell (2026-11-10)
+
+#### Added
+
+- **Phase 6, WP-6.2 host — JavaScript in the render pipeline**: `render::ScriptingMode
+  { Enabled, Disabled }` (default Enabled with the `js` feature, Disabled with
+  `--no-default-features`), `RenderOptions::{scripting, scripting_limits}`,
+  `ScriptingLimits`/`ScriptBudget::SMALL` and the `--no-scripting` CLI flag.
+  Classic `<script>` elements are discovered in document order (inline/`src`;
+  ES modules warned and skipped, `nomodule` ignored), external scripts are fetched
+  through the `ResourceLoader` (`--no-network`, dedupe, caps **8 MiB/script,
+  32 MiB total, 64 scripts**), executed with `js::JsRuntime::with_document` under a
+  **per-script and cumulative budget**, with drained microtasks and up to 10,000
+  timers, captured `console` (`scripts_executed/failed/bytes/console`,
+  `timings.scripting`) and a **styles→layout→paint re-run over the mutated DOM**
+  (mutations visible in the PNG). 7 `js_*` fixtures and 12 tests → **67** render
+  tests. Limitation: execution is **post-parse only** (no `document.write`
+  re-tokenization ⇒ WP-6.4 for `scripted_*`), no real `async`/`defer`, modules,
+  events or wall-clock event loop.
+- **Paint hit-testing (additive)**: `hit_test` module with `HitKind`,
+  `HitRegion { rect, node_id, kind }` in paint order with clip applied,
+  `hit_test`/`hit_test_all` (topmost wins), `HitLink`/`find_link_at` (walks up to
+  the HTML `<a href>`, raw href) and the additive builders
+  `build_display_list_with_hit_regions`/`build_display_list_and_hit_regions`.
+  Classic entry points stay **byte-identical** and the cost is opt-in. 11 new
+  tests → **108** paint. Limits: box/run granularity, no `pointer-events`/
+  transforms, page CSS-px coordinates (the host applies scroll/scale).
+- **Navigable shell (Phase 7, WP-7.5)**: left click on a link resolves it with
+  `Url::join` and renders it in the worker (generation-checked) with history;
+  pure `NavigationState` (back/forward/replace/reload, cap 256, forward
+  truncation, same-URL no-op, failures keep the entry). Shortcuts:
+  Alt+Left/Backspace/`b` back, Alt+Right/`n` forward, `r` reload, `q`/Esc quit,
+  full scroll and HiDPI. Dynamic title `<title>` + short URL + scroll % +
+  `[recortado]`, error titles `Megi — error: …`; hit regions and title come from
+  the **same render as the pixels**; HTTP redirects replace the history entry.
+  34 new tests → **80** shell. Follow-up: adopt `paint::find_link_at` once
+  `render::RenderOutput` exposes `hit_regions` (one-function change; PNG/golden
+  unchanged).
+- **Docs**: round-9 synchronization of README/ROADMAP/ARCHITECTURE/HANDOFF/
+  PHASE4-SUPPORT/TOOLING/SECURITY/CONTRIBUTING/CHANGELOG/JAVASCRIPT-STRATEGY.
+
+#### Changed
+
+- Test suite: **793 tests, 0 failures** (was 734): css 57, dom 28, fonts 13+1
+  doctest, html 53, image 45+1, js 12, layout 133, net 180, **paint 108**,
+  **render 67** (56 without the `js` feature), **shell 80**, bench 8,
+  test_harness 7. fmt, clippy `-D warnings`, `cargo doc`, 4-suite gate PASS and
+  MSRV 1.88 verified.
+- Phase status: Phase 4 functionally complete, Phase 5 ≈90 %, **Phase 6 ≈30 %**
+  (WP-6.1 + WP-6.2 host done), **Phase 7 ≈60 %** (navigation/history/title done).
+- Golden images unchanged by round 9: showcase 80,220 B `md5 c95c7eff…`, render
+  basic 15,498 B `md5 7324e851…`, Phase-4 `basic.rgba` byte-identical
+  (`md5 60f8984e…`). Evidence for scripting: `js_text.html` 15,876 B
+  `md5 e1da51d432804fd540792d40398b72eb` with scripts vs 15,499 B
+  `md5 53f67e77a335a8b024e0896497e63999` with `--no-scripting`.
+
 ### Round 8 — JavaScript (Boa), cookies/CORS/gzip, CSS backgrounds E2E and table-text fix (2026-11-10)
 
 #### Added

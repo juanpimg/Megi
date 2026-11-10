@@ -4,44 +4,34 @@ Este documento describe el arnés de benchmarks del proyecto (`crates/bench`) y
 publica la **baseline de rendimiento vigente**, para que cualquier regresión de
 complejidad sea detectable comparando números en lugar de discutir impresiones.
 
-- **Fecha de medición**: 2026-11-10, 16:49–17:05 (Europe/Madrid). Ronda 8:
-  texto de tablas en paint, `background-image`/`list-style-image` end to end,
-  golden showcase 1024×768 actualizado, `net` (cookies/CORS/gzip) y **Boa 0.21**
-  embebido en `crates/js` (Fase 6, WP-6.1).
-- **Repo**: `Megi`, rama `sprint/robustez-fase4`, **HEAD `31e5139`**
-  (`feat(net): cookies, CORS and gzip/deflate with bomb protection`).
-- **Estado del árbol**: código limpio en `31e5139` durante toda la ventana de
-  medida; otro agente actualizó documentación en paralelo (`README.md`,
-  `docs/ARCHITECTURE.md`, `docs/HANDOFF.md`, `docs/ROADMAP.md`,
-  `docs/images/showcase.png`). A partir de ~16:59 (ya cerrada la ventana) otros
-  agentes empezaron cambios de código sin commitear de la integración de Fase 6
-  (`crates/js`, `paint`, `render`, `shell`, `Cargo.lock`): no afectan a las
-  cifras, que corresponden a builds de `31e5139`.
-- **Binario medido**: `target/release/bench` (los binarios `megi`/`render` se
-  comparten con los demás agentes y se re-enlazan durante el trabajo en
-  paralelo; las medidas de §7 usaron los presentes en la ventana y su salida se
-  validó contra el golden). Compilado con
-  `cargo build --release -p bench`. Se recompiló una vez dentro de la ventana
-  (mismo código): las 3 pasadas JSON usaron
-  `sha256 = ed7006e9265350b6467b31143d8416c7af9d5863163a71abc96985d899f30a6e`
-  (4 274 768 B) y la pasada canónica de `./tools/bench.sh` usó
-  `sha256 = 4c7eb74bb526dbda1de3140aeb60edc0ef262da3cd477d9501c5c29bda322b6f`
-  (4 273 848 B); las cifras difieren <1 % entre ambas builds.
-- **Artefactos guardados** (gitignored, no versionados):
-  - `target/bench-r8-run1.json` … `target/bench-r8-run3.json` — pasadas
-    completas usadas para la tabla (mediana por fila); shas `e9db72b4…`,
-    `99bce652…`, `3b05aeef…`.
-  - `target/bench-aggregate-r8.json` — medianas agregadas
-    (`sha256 = 021db0565535515b01afd677b948637122b34eff2b3590704f59aa879d747922`).
-  - `target/bench-latest.txt` / `-meta.txt` — pasada del script
-    (`TOTAL 511.102 ms`, `f0832c23…`).
-  - `target/perf-r8-render-timings.json`, `target/perf-r8-meta.json`,
-    `target/perf-r8-js-builds.json`, `target/perf-r8-showcase-variants.json`,
-    `target/perf-r8-cargo-test.json`, `target/perf-r8-cold-build.json` — el
-    resto de medidas de la ronda.
+- **Fecha de medición**: 2026-11-10, 17:12–17:20 (Europe/Madrid). Ronda 9:
+  ejecución de `<script>` en el pipeline `render` (con re-render del DOM
+  mutado), navegación/enlaces/títulos dinámicos en el shell, API **opt-in** de
+  hit-testing en `paint` y sincronización documental.
+- **Repo**: `Megi`, rama `sprint/robustez-fase4`, **HEAD `c86682c`**
+  (`feat(render): execute page scripts and re-render the mutated DOM`).
+- **Estado del árbol**: **limpio durante toda la ventana** (`worktree_dirty =
+  false` en las 3 pasadas). Otro agente actualizó el resto de documentación en
+  paralelo, pero no había cambios de código sin commitear: los binarios medidos
+  corresponden a `c86682c`.
+- **Binario de bench medido**: `target/release/bench`,
+  `sha256 = 43f7748d…` (4 278 144 B) en las 3 pasadas JSON y la pasada del
+  script (`TOTAL 480.105 ms`). Como el `target/` es compartido entre agentes, el
+  binario se recompiló después (`871e136e…`, mismo código): de ahí que los
+  shas de artefactos no coincidan con el `sha256sum` actual.
+- **Artefactos guardados** (gitignored):
+  - `target/bench-r9-run1..3.json` (shas `199c7ce0…`, `13a36d0f…`,
+    `95cd05f1…`) y `target/bench-aggregate-r9.json`
+    (`sha256 = fb25b8a3…`).
+  - `target/bench-latest.txt` / `-meta.txt` (pasada del script;
+    `sha256 = c81272ed…`).
+  - `target/bench-js-r9/` — matriz de los 7 fixtures JS con/sin scripting:
+    JSON de `render --json`, `.summary.json` y muestras de pared por fixture.
+  - `target/perf-r9-render-timings2.json`, `target/perf-r9-cargo-test.json`,
+    `target/perf-r9-test-cold.json`, `target/perf-r9-cold-build.json`.
 
 > Las baselines anteriores quedan **reemplazadas**; sus cifras se conservan en
-> la comparación histórica de §11 (rondas 2–7).
+> la comparación histórica de §11 (rondas 2–8).
 
 ---
 
@@ -54,30 +44,32 @@ Todas las cargas se generan en memoria con funciones puras
 flujo de bytes. El *fixture* se construye **fuera** del cronómetro; los
 benchmarks de parse incluyen la construcción y liberación del `Document`.
 
-**El crate `bench` no cambió en esta ronda**, así que todas las diferencias
-r7 → r8 son de código del motor. Además, `bench` solo depende de
-`dom/html/css/layout/paint` (y `fonts` opcional): **no enlaza `net`, `js` ni
-`image`**, y sus generadores no contienen `url(...)`/`background-image`, así que
-ni Boa, ni la red, ni las imágenes de fondo intervienen en las cifras de §3
-(ver §5 y §8).
+**El crate `bench` no cambió en esta ronda**, así que las diferencias r8 → r9
+son de condiciones del host o del código del motor. `bench` solo depende de
+`dom/html/css/layout/paint` (y `fonts` opcional): **no enlaza `net`, `js`,
+`image` ni `shell`**, no ejecuta JavaScript y no usa la API de hit-testing
+(opt-in, §5.2). Sus generadores no contienen `url(...)`/`background-image`.
 
 ### 1.2 Medición
 
 - Reloj: `std::time::Instant`; por benchmark `--warmup` (1) + `--iterations`
   (5, *heavy* 3).
-- La tabla de §3 es la **mediana, por fila, de 3 pasadas completas** (cada
-  pasada ya es una mediana de 5/3 iteraciones). Rango = mínimo–máximo de las 3
-  medianas. Una cuarta pasada canónica con `./tools/bench.sh` dio
-  `TOTAL 511.102 ms` (vs 512.440 de la mediana de las 3 pasadas JSON).
-- Para cada pasada el propio binario construye y parsea sus fixtures:
-  `setup_ms` = 263,9–270,6 ms (no cronometrado).
-- Ventana: **load average 2,90–3,25** durante las 3 pasadas del bench (otros
-  agentes compilaban en paralelo; picos de 5,9–7,4 en los builds y en la
-  ventana de render). Los benchmarks son monohilo y la máquina tiene 20 hilos
-  lógicos, por eso las cifras siguen siendo comparables a r7 (±1–5 %); aun así
-  las medidas de pared con load alto se tratan como orientativas.
-- Las medidas del CLI `render`/`megi` usan cronómetro de pared de Python
-  (7–15 ejecuciones intercaladas, mediana; el entorno no tiene `/usr/bin/time`).
+- La tabla de §3 es la **mediana, por fila, de 3 pasadas completas**. Rango =
+  mínimo–máximo de las 3 medianas. Una cuarta pasada canónica con
+  `./tools/bench.sh` dio `TOTAL 480.105 ms` (vs 485.132 de la mediana de las 3
+  pasadas JSON).
+- `setup_ms` de las pasadas: 254,5–258,1 ms (no cronometrado).
+- Ventana: **load average 2,91–3,35** en las 3 pasadas del bench; builds y
+  medidas de pared hasta load 9,5 (otros agentes compilando en paralelo). Los
+  benchmarks son monohilo y la máquina tiene 20 hilos lógicos; aun así las
+  medidas de pared con load alto se reportan con rango.
+- **Matriz JS**: `render --json` una vez por fixture/modo para extraer
+  `timings.scripting`, `scripts_executed`, `timings_us.total` y `png_bytes`; el
+  tiempo de pared es la mediana de **7 ejecuciones intercaladas** por modo con
+  el propio binario `target/release/render` (se excluye el overhead de
+  `cargo run`). Load 3–5 en esa sub-ventana.
+- Las medidas de render/shell usan cronómetro de pared de Python (11
+  ejecuciones intercaladas, mediana; el entorno no tiene `/usr/bin/time`).
 - `--scale` multiplica los tamaños (p. ej. `0.25` para smoke tests).
 
 ### 1.3 Máquina y condiciones
@@ -88,8 +80,8 @@ ni Boa, ni la red, ni las imágenes de fondo intervienen en las cifras de §3
 | CPU visibles | `nproc` = **20 hilos lógicos** (afinidad 0-19) |
 | RAM | 15 GiB |
 | SO / kernel | CachyOS Linux, kernel `7.3.1-1-cachyos`, x86_64 |
-| Compilador | `rustc 1.99.1 (58cf8f9c3 2026-10-13)`, perfil `release` por defecto (sin `[profile.release]` en el workspace) |
-| Carga de fondo | bench: load 2,90–3,25; builds/render: 2,9–7,4 |
+| Compilador | `rustc 1.99.1 (58cf8f9c3 2026-10-13)`, perfil `release` por defecto |
+| Carga de fondo | bench: 2,91–3,35; builds/render: 3–9,5 |
 
 ### 1.4 Comandos
 
@@ -101,31 +93,26 @@ cd /home/jp/Escritorio/Proyectos/Megi
 
 # Las 3 pasadas usadas para la tabla de esta baseline
 for i in 1 2 3; do
-  target/release/bench --json > "target/bench-r8-run$i.json"
+  target/release/bench --json > "target/bench-r9-run$i.json"
 done
 
 # Smoke rápido (~1 s)
 ./tools/bench.sh --scale 0.1 --iterations 2
 
-# Un grupo o un benchmark concreto
-./tools/bench.sh --filter layout
-cargo run --release -p bench -- --filter layout/realistic-1mb
+# Coste de JS en el pipeline (cada fixture, con y sin scripting)
+for f in js_text js_create js_external js_document_write js_throw js_loop js_console; do
+  target/release/render "tests/fixtures/render/$f.html" "/tmp/$f.png" --json \
+      > "target/bench-js-r9/$f.scripting.json"
+  target/release/render "tests/fixtures/render/$f.html" "/tmp/$f-nojs.png" --json \
+      --no-scripting > "target/bench-js-r9/$f.noscripting.json"
+done
 
-# Render del showcase 1024x768 (fixture real con @import, media, <img> y fondos)
-cargo run --release -p render -- \
-    tests/fixtures/render/showcase/index.html /tmp/showcase.png \
+# Render del showcase 1024x768 y shell headless
+target/release/render tests/fixtures/render/showcase/index.html /tmp/showcase.png \
     --width 1024 --height 768 --json
-
-# Shell headless (mismo pipeline, sin ventana)
-cargo run --release -p shell -- \
-    tests/fixtures/render/showcase/index.html \
+target/release/shell  # (el binario se llama megi)
+target/release/megi tests/fixtures/render/showcase/index.html \
     --screenshot /tmp/showcase.png --width 1024 --height 768
-
-# Coste de la Fase 6 (build y tests, ver §8)
-cargo build --release --workspace                      # frío: 43,3 s
-cargo build --release -p js                            # frío (Boa): 27,9 s
-cargo build --release -p js --no-default-features      # frío (stub): 1,5 s
-cargo test --workspace                                 # frío: 30,1 s
 ```
 
 ---
@@ -145,44 +132,47 @@ cargo test --workspace                                 # frío: 30,1 s
 | css | `css/resolve-styles-2k/10k-nodes` | Cascada + `ComputedStyle` sobre ~2 005 / ~10 005 elementos. |
 | css | `css/selector-match-simple` | 4 selectores simples sobre 10 005 elementos. |
 | css | `css/selector-match-descendant` | 4 selectores con combinadores sobre 10 005 elementos. |
-| layout | `layout/realistic-1mb` | `layout_document` sobre el documento realista (28 195 elementos, 88 155 cajas), 800×600. Usa el fast path de tablas. |
-| paint | `paint/build-display-list` | Display list: **34 158 items** (r7: 24 762; +9 396 = 1 044 tablas × 9 celdas, texto de tabla). |
+| layout | `layout/realistic-1mb` | `layout_document` sobre el documento realista (28 195 elementos, 88 155 cajas), 800×600. Fast path de tablas. |
+| paint | `paint/build-display-list` | Display list: 34 158 items (sin hit regions: opt-in, §5.2). |
 | paint | `paint/rasterize-800x600` | Rasterizado software con culling/cachés y AA. |
-| paint | `paint/render-to-png-800x600` | Rasterizado + `to_png()` DEFLATE (**57 422 B**; r7: 54 526 B). |
+| paint | `paint/render-to-png-800x600` | Rasterizado + `to_png()` DEFLATE (57 422 B). |
 | pipeline | `pipeline/html-to-png-800x600` | Pipeline completo: parse → styles → layout → display list → raster → PNG. |
-| fonts | (`feature fonts`) | No re-medido en r8 (sin cambios en `crates/fonts`; referencia r6: measure 0,456 ms, shape 8,119 ms). |
+| fonts | (`feature fonts`) | No re-medido en r9 (sin cambios en `crates/fonts`; referencia r6: measure 0,456 ms, shape 8,119 ms). |
+
+**Nuevos en esta ronda (fuera del bench)**: matriz de ejecución JS sobre los 7
+fixtures `js_*.html` (§8.1); `paint` ganó una API de hit-testing **aditiva y
+opt-in** que el bench no invoca.
 
 ---
 
-## 3. Baseline vigente (2026-11-10, HEAD `31e5139`)
+## 3. Baseline vigente (2026-11-10, HEAD `c86682c`)
 
 Mediana por fila de **3 pasadas completas** (5 iteraciones, 1 warm-up; *heavy*
-3). `setup`: 263,9–270,6 ms (no cronometrado). Binario
-`sha256 = ed7006e9…` (3 pasadas JSON; la pasada del script con `4c7eb74b…` dio
-`TOTAL 511.102 ms`). La suma de medianas da `TOTAL 512.440 ms`.
+3). `setup`: 254,5–258,1 ms. Binario `sha256 = 43f7748d…`. La suma de medianas
+da `TOTAL 485.132 ms`; la pasada del script dio `TOTAL 480.105 ms`.
 
 | Benchmark | Carga | mediana (ms) | rango 3 pasadas (ms) | throughput |
 |---|---|---:|---:|---:|
-| `html/realistic-1mb` | 1.00 MiB, 1 044 secciones, 135 reglas CSS | **56.140** | 55.524–56.821 | 17,8 MiB/s |
-| `html/nested-div-10k` | 10 000 divs anidados, 0.10 MiB | **3.811** | 3.776–3.824 | 27,5 MiB/s |
-| `html/nested-div-32k` | 32 000 divs anidados, 0.34 MiB | **12.128** | 12.014–12.350 | 27,7 MiB/s |
-| `html/nested-div-64k` | 64 000 divs anidados, 0.67 MiB | **24.772** | 24.721–24.955 | 27,1 MiB/s |
-| `html/nested-div-64k-default-limits` | 64 000 divs, profundidad máx. 4096 | **14.949** | 14.808–15.147 | — (59 906 start tags descartados) |
-| `html/massive-end-p` | 100 000 `</p>`, 0.38 MiB | **23.879** | 23.741–24.648 | 4,19 M tags/s |
-| `html/massive-formatting` | 10 000 bloques mal anidados, 0.24 MiB | **16.292** | 16.108–16.369 | 614 k bloques/s |
-| `html/tag-40k-attrs` | 40 000 atributos, 0.59 MiB | **13.187** | 12.753–13.281 | 3,03 M attrs/s |
-| `html/pretty-5k-blocks` | 5 000 bloques indentados, 0.55 MiB | **26.800** | 26.751–26.984 | 187 k bloques/s |
-| `css/parse-10k-rules` | 10 000 reglas, 0.60 MiB | **14.941** | 14.759–15.444 | 39,9 MiB/s |
-| `css/resolve-styles-2k-nodes` | 2 005 elementos, 130 reglas | **6.097** | 6.018–6.400 | 329 k elementos/s |
-| `css/resolve-styles-10k-nodes` | 10 005 elementos, 130 reglas | **28.662** | 28.430–29.029 | 349 k elementos/s |
-| `css/selector-match-simple` | 10 005 el × 4 selectores | **0.665** | 0.655–0.668 | 60,1 M matches/s |
-| `css/selector-match-descendant` | 10 005 el × 4 selectores | **1.272** | 1.263–1.273 | 31,5 M matches/s |
-| `layout/realistic-1mb` | 28 195 elementos, 88 155 cajas, 800×600 | **59.767** | 59.020–60.197 | 472 k elementos/s |
-| `paint/build-display-list` | 34 158 items | **15.090** | 15.043–15.186 | — |
-| `paint/rasterize-800x600` | 34 158 items → pixmap 800×600 | **0.993** | 0.978–1.024 | 484 MPix/s |
-| `paint/render-to-png-800x600` | raster + PNG (57 422 B) | **13.296** | 13.109–13.563 | 4,12 MiB/s |
-| `pipeline/html-to-png-800x600` | parse+styles+layout+dl+raster+PNG | **179.699** | 176.771–181.674 | — |
-| **TOTAL (suma)** | | **512.440** | | |
+| `html/realistic-1mb` | 1.00 MiB, 1 044 secciones, 135 reglas CSS | **55.316** | 54.292–56.627 | 18,1 MiB/s |
+| `html/nested-div-10k` | 10 000 divs anidados, 0.10 MiB | **3.662** | 3.604–3.685 | 28,7 MiB/s |
+| `html/nested-div-32k` | 32 000 divs anidados, 0.34 MiB | **11.611** | 11.587–11.769 | 28,9 MiB/s |
+| `html/nested-div-64k` | 64 000 divs anidados, 0.67 MiB | **24.022** | 23.575–24.085 | 28,0 MiB/s |
+| `html/nested-div-64k-default-limits` | 64 000 divs, profundidad máx. 4096 | **13.963** | 13.740–13.995 | — (59 906 start tags descartados) |
+| `html/massive-end-p` | 100 000 `</p>`, 0.38 MiB | **23.729** | 23.382–23.735 | 4,21 M tags/s |
+| `html/massive-formatting` | 10 000 bloques mal anidados, 0.24 MiB | **15.113** | 15.045–15.204 | 662 k bloques/s |
+| `html/tag-40k-attrs` | 40 000 atributos, 0.59 MiB | **11.645** | 11.385–11.737 | 3,43 M attrs/s |
+| `html/pretty-5k-blocks` | 5 000 bloques indentados, 0.55 MiB | **25.863** | 25.482–26.182 | 193 k bloques/s |
+| `css/parse-10k-rules` | 10 000 reglas, 0.60 MiB | **13.698** | 13.456–13.786 | 43,5 MiB/s |
+| `css/resolve-styles-2k-nodes` | 2 005 elementos, 130 reglas | **5.940** | 5.896–5.971 | 338 k elementos/s |
+| `css/resolve-styles-10k-nodes` | 10 005 elementos, 130 reglas | **28.241** | 28.053–28.243 | 354 k elementos/s |
+| `css/selector-match-simple` | 10 005 el × 4 selectores | **0.666** | 0.653–0.668 | 60,1 M matches/s |
+| `css/selector-match-descendant` | 10 005 el × 4 selectores | **1.228** | 1.227–1.257 | 32,6 M matches/s |
+| `layout/realistic-1mb` | 28 195 elementos, 88 155 cajas, 800×600 | **55.140** | 54.885–55.843 | 511 k elementos/s |
+| `paint/build-display-list` | 34 158 items | **14.050** | 13.875–14.424 | — |
+| `paint/rasterize-800x600` | 34 158 items → pixmap 800×600 | **0.881** | 0.878–0.903 | 545 MPix/s |
+| `paint/render-to-png-800x600` | raster + PNG (57 422 B) | **12.283** | 12.229–12.295 | 4,46 MiB/s |
+| `pipeline/html-to-png-800x600` | parse+styles+layout+dl+raster+PNG | **168.081** | 167.688–168.383 | — |
+| **TOTAL (suma)** | | **485.132** | | |
 
 > **Aviso**: el TOTAL suma etapas y pipeline end-to-end (solapados); no es un
 > presupuesto de página.
@@ -195,193 +185,195 @@ Escalados con el mismo binario, complementarios a §3:
 
 | Serie | Muestras | Lectura |
 |---|---|---|
-| `html/nested-div-*` | 10k: 3.81 ms · 32k: 12.13 ms · 64k: 24.77 ms | **Lineal**: 3,2× input → 3,18× tiempo; 2× → 2,04×. |
-| `html/tag-40k-attrs` | 10k: 2.66 ms · 20k: 6.50 ms · 40k: 12.46 ms | **Lineal** (~0,3 µs/atributo). |
-| `css/parse-10k-rules` | 5k: 6.69 ms · 10k: 14.26 ms · 20k: 30.50 ms | **Lineal** (2,13× y 2,14× por cada 2×). |
-| `css/resolve-styles-2k/10k` | 2 005 el: 6.10 ms · 10 005 el: 28.66 ms | **Lineal**: 5× elementos → 4,70× tiempo (~349 k el/s). |
-| `paint/build-display-list` | 24 762 items (r7): 12.46 ms · 34 158: 15.09 ms | **+21,1 %** por los 9 396 items legítimos de texto de tabla (~0,28 µs/item). |
-| `paint/rasterize-800x600` | 24 762 items: 0.843 ms · 34 158: 0.993 ms | **Plano respecto al nº de items**: el coste lo fija el viewport (+0,15 ms por el AA de los glifos de tabla). |
-| `layout/realistic-1mb` | 28 195 elementos → 59.77 ms (88 155 cajas) | **−2,6 % respecto a r7** (61,35 ms), dentro del ruido de la ventana. |
+| `html/nested-div-*` | 10k: 3.66 ms · 32k: 11.61 ms · 64k: 24.02 ms | **Lineal**: 3,2× input → 3,17×; 2× → 2,07×. |
+| `html/tag-40k-attrs` | 10k: 2.66 ms · 20k: 6.50 ms · 40k: 11.65 ms | **Lineal** (~0,29 µs/atributo). |
+| `css/parse-10k-rules` | 5k: 6.69 ms · 10k: 13.70 ms · 20k: 30.50 ms | **Lineal** (≈2× por cada 2×). |
+| `css/resolve-styles-2k/10k` | 2 005 el: 5.94 ms · 10 005 el: 28.24 ms | **Lineal**: 5× elementos → 4,75× tiempo (~354 k el/s). |
+| `paint/build-display-list` | 24 762 items (r7): 12.46 · 34 158: 14.05 ms | **+21 % acumulado por los 9 396 items de texto de tabla** (~0,28 µs/item); estable desde r8. |
+| `paint/rasterize-800x600` | 34 158 items: 0.881 ms | **Plano respecto al nº de items**: lo fija el viewport. |
+| `layout/realistic-1mb` | 28 195 elementos → 55.14 ms (88 155 cajas) | **−7,7 % vs r8**, dentro de la variación entre ventanas. |
 
 ---
 
-## 5. Ronda 8: texto de tablas, imágenes y red
+## 5. Ronda 9: JS en el pipeline, hit-testing opt-in y estabilidad del bench
 
 ### 5.1 Qué entró en la ronda
 
-- `be72a25 feat(paint): background-image/list-style-image rendering and table
-  cell content`: pinta `<img>` de fondo estiradas al padding box
-  (bilineal/AA, sin repeat/size/position) y marcadores `list-style-image`;
-  además corrige la causa real de que faltara el texto de tabla:
-  `paint_inline_content` ahora desciende en cajas
-  `Table/TableRowGroup/TableRow/TableCell/TableCaption/…` en vez de cortar en
-  el brazo genérico. El golden de `paint` (`basic.rgba`, sin tablas) sigue
-  byte-idéntico.
-- `0f556bd test(layout): pin the table content tree model`: 4 tests que fijan
-  el árbol de contenido de tablas (sin cambios de rendimiento).
-- `debc1e8 feat(render): background-image and list-style-image end to end` y
-  nuevo golden showcase 1024×768 (`c95c7eff…`, 80 220 B).
-- `f3d9eef feat(js): embed Boa and the first DOM bindings` (Fase 6) — coste de
-  build/CI en §8; **no** interviene en el bench.
-- `31e5139 feat(net): cookies, CORS and gzip/deflate`: `net` tampoco es
-  dependencia del bench; solo afecta al build del workspace.
+- `c86682c feat(render): execute page scripts and re-render the mutated DOM`:
+  el pipeline `render` crea un `JsRuntime`, ejecuta `<script>` inline/externo y,
+  si el DOM cambió, **re-renderiza** (nueva cascada + layout + paint) antes de
+  pintar. `--no-scripting` desactiva todo (DOM intacto). La etapa `scripting`
+  del JSON mide creación del runtime + ejecución (sin el re-render).
+- `4ac56ba feat(shell): clickable links, navigation history and dynamic
+  titles`: shell usa la nueva API de hit-testing; añade navegación e historial.
+- `429a30f feat(paint): aditive hit-testing API with paint-order regions`:
+  API **opt-in** (`build_display_list_with_hit_regions`,
+  `build_display_list_and_hit_regions`, `hit_test`/`find_link_at`). Las
+  funciones históricas (`build_display_list`, `…with_images_and_backgrounds`)
+  no cambian.
+- Sincronización documental (`40817d9` y el resto de docs de la ronda).
 
-### 5.2 Efecto medido en el bench
+### 5.2 El bench no paga hit-regions ni JS
 
-| Métrica | r7 | r8 | Δ | Lectura |
-|---|---:|---:|---:|---|
-| items de display list | 24 762 | **34 158** | **+9 396 (+37,9 %)** | exactamente 1 044 tablas × 9 celdas: el texto de celda que antes no se pintaba |
-| `paint/build-display-list` | 12.458 ms | **15.090 ms** | **+21,1 %** | trabajo legítimo: ~0,28 µs por item nuevo |
-| `paint/rasterize-800x600` | 0.843 ms | **0.993 ms** | **+17,8 %** | AA de los glifos nuevos; sigue en <1 ms |
-| `paint/render-to-png-800x600` | 13.045 ms | **13.296 ms** | +1,9 % | el encoder PNG domina (≈12,3 ms) |
-| PNG del bench | 54 526 B | **57 422 B** | +5,3 % | ahora se ven los textos de tabla |
-| `pipeline/html-to-png-800x600` | 178.791 ms | **179.699 ms** | **+0,5 %** | dentro del ruido y del presupuesto (≤200 ms) |
+- El bench llama `paint::build_display_list` (sin hit regions): verificado en
+  `crates/bench/src/benches.rs`; el render llama
+  `build_display_list_with_images_and_backgrounds`, tampoco las construye. Por
+  tanto la fila `paint/build-display-list` no incluye el coste de hit-regions,
+  que es **opt-in** y solo lo activa el shell.
+- `bench` **no** enlaza `js` ni ejecuta scripts: el bench no tiene coste JS de
+  runtime. La fila `pipeline/html-to-png-800x600` es el pipeline *sin*
+  scripting (`crates/bench` no depende de render).
 
-El crecimiento del display list **no es una regresión de complejidad**: es el
-producto correcto (el texto de las tablas ya se pinta). El coste por item se
-mantiene lineal y el pipeline end-to-end solo sube 0,9 ms.
+### 5.3 Estabilidad del bench r8 → r9
 
-Las **imágenes de fondo no aparecen en el bench** (los generadores no usan
-`url(...)`; verificado con `grep`): su coste solo se ve en el pipeline `render`
-del showcase (§7) y se aísla en §5.3. Igual ocurre con `net` y con Boa: no son
-dependencias de `crates/bench`.
+| Métrica | r8 | r9 | Δ |
+|---|---:|---:|---:|
+| items de display list | 34 158 | 34 158 | 0 |
+| PNG del bench | 57 422 B | 57 422 B | 0 |
+| `paint/build-display-list` | 15.090 ms | 14.050 ms | −6,9 % |
+| `paint/rasterize-800x600` | 0.993 ms | 0.881 ms | −11,3 % |
+| `pipeline/html-to-png-800x600` | 179.699 ms | 168.081 ms | −6,5 % |
+| **TOTAL (suma)** | **512.440** | **485.132** | **−5,3 %** |
 
-### 5.3 Coste aislado de `background-image` (showcase 1024×768)
-
-Variante del fixture copiada a `/tmp` eliminando las líneas `background-image:`
-de los CSS (7 ejecuciones intercaladas con el fixture completo; load alto,
-útil solo como delta):
-
-| Variante | pared (ms) | items | raster (µs) | PNG |
-|---|---:|---:|---:|---:|
-| showcase completo | 32,33 | 80 | 9 650 | 80 220 B |
-| sin `background-image` | **25,89** | 78 | **2 775** | 77 109 B |
-| **coste de 2 fondos** | **+6,4 ms** | +2 items | **+6 875 µs** | +3 111 B |
-
-El rasterizado es el que paga el precio: el muestreo bilineal/AA de los fondos
-estirados sobre áreas grandes (hero y stage) multiplica por ~3,5 el coste de la
-etapa. El resto del pipeline (parse/styles/layout/paint) no cambia. Es
-coherente con lo documentado en el commit: no hay `background-repeat`/`size`/
-`position`, se estira al padding box.
+La mejora es **sistemática en todas las filas** (incluidas HTML/CSS, que no se
+tocaron en r9) y el crate `bench`/generadores no cambió: se atribuye a las
+condiciones del host (frecuencia/térmica; r8 se midió tras una tormenta de
+compilaciones y con más presión térmica, mientras que r9 se tomó con el árbol
+limpio y carga similar pero menos sostenida). **No hay regresión**: el código
+nuevo de la ronda (hit regions, scripting) no participa en las filas del bench,
+como se detalla en §5.2. Para la comparación histórica (§11) se usan las cifras
+de cada ventana; la varianza entre ventanas es ~±5 %.
 
 ---
 
 ## 6. Compresión PNG (bench)
 
-| Métrica | r6 | r7 | r8 | Notas |
+| Métrica | r7 | r8 | r9 | Notas |
 |---|---:|---:|---:|---|
-| PNG del bench (documento realista 800×600) | 54 526 B | 54 526 B | **57 422 B** | +2 896 B por el texto de tabla |
-| `paint/render-to-png-800x600` | 13.016 ms | 13.045 ms | **13.296 ms** | estable (+1,9 %) |
-| — rasterizar | 0.890 ms | 0.843 ms | **0.993 ms** | +AA de glifos de tabla |
-| — codificar PNG (por diferencia) | ~12,1 ms | ~12,2 ms | **~12,3 ms** | sigue siendo el mayor coste de pintado |
+| PNG del bench (documento realista 800×600) | 54 526 B | 57 422 B | **57 422 B** | sin cambio en r9 |
+| `paint/render-to-png-800x600` | 13.045 ms | 13.296 ms | **12.283 ms** | encoder + raster |
+| — rasterizar | 0.843 ms | 0.993 ms | **0.881 ms** | mismo display list |
+| — codificar PNG (por diferencia) | ~12,2 ms | ~12,3 ms | **~11,4 ms** | sigue siendo el mayor coste de pintado |
 
 ---
 
-## 7. Pipeline `render` y shell headless (ronda 8)
+## 7. Pipeline `render` y shell headless (ronda 9)
 
-### 7.1 Showcase 1024×768 (golden nuevo)
+### 7.1 Showcase 1024×768 (golden sin cambios en r9)
 
-`cargo run --release -p render -- tests/fixtures/render/showcase/index.html
-/tmp/s.png --width 1024 --height 768 --json`; **9 ejecuciones** intercaladas
-con `basic`. Golden verificado byte a byte:
+`target/release/render tests/fixtures/render/showcase/index.html /tmp/s.png
+--width 1024 --height 768 --json`; **11 ejecuciones** intercaladas con `basic`,
+mediana de pared (load 4,46). Golden verificado byte a byte:
 
 - PNG **80 220 B**, **md5 `c95c7eff83e7bd08f815631aa42afdb0`**
-  (`sha256 0fc70eae…`), 1024×768, opaco. Sustituye al golden r7
-  (`570aa554…`, 65 151 B) e incluye el texto de tabla y los dos fondos.
-- Metadatos: `@import` 1 (`theme.css`), hojas externas 1, hojas saltadas por
-  media 1 (`print`), `<img>` 2, imágenes de fondo 2 (185 B), items 80,
-  `document_bytes` 2 383, `css_bytes` 4 163.
+  (`sha256 0fc70eae…`), 1024×768, opaco. Sin cambios respecto a r8: el showcase
+  no tiene `<script>` (`scripts_executed = 0`).
+- Metadatos: `@import` 1, hojas externas 1, hojas saltadas por media 1,
+  `<img>` 2, fondos 2 (185 B), items 80, `document_bytes` 2 383,
+  `css_bytes` 4 163.
 
-| Etapa (single run, µs) | fetch | decode/parse | styles | images | backgrounds | layout | paint | raster | **total** |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| r8 showcase | 15 | 178 | 570 | 98 | 35 | 1 466 | 22 | **9 475** | **29 679** |
-| r7 showcase (referencia) | 23 | 256 | 626 | 114 | — | 1 530 | 19 | 3 018 | 23 641 |
+| Etapa (single run, µs) | fetch | decode/parse | styles | images | backgrounds | scripting | layout | paint | raster | **total** |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| r9 showcase | 14 | 200 | 595 | 100 | 33 | **9** | 1 472 | 20 | **9 282** | **28 941** |
+| r8 (referencia) | 15 | 178 | 570 | 98 | 35 | — | 1 466 | 22 | 9 475 | 29 679 |
 
 | Variante | pared (ms) | rango (ms) | PNG |
 |---|---:|---:|---:|
-| **showcase 1024×768 (render)** | **30,47** | 29,99–31,96 | 80 220 B (golden) |
-| showcase sin fondos (§5.3, ventana aparte) | 25,89 | — | 77 109 B |
-| `basic.html` 800×600 | **14,01** | 13,74–16,06 | 21 090 B (`e943565d…`) |
-| `images.html` 800×600 | — | — | 15 625 B (2 tags `<img>`: 1 OK, 1 fallback; `1de31699…`) |
-| `backgrounds.html` 800×600 | — | — | 15 778 B (2 fondos; `2dbb0832…`) |
+| **showcase 1024×768 (render, 11 runs)** | **31,23** | 30,05–32,74 | 80 220 B (golden) |
+| `basic.html` 800×600 | **15,00** | 13,79–16,36 | 21 090 B (`e943565d…`) |
+| `images.html` 800×600 | — | — | 15 625 B (2 tags `<img>`: 1 OK, 1 fallback) |
+| `backgrounds.html` 800×600 | — | — | 15 778 B (2 fondos) |
 
-El sobrecoste de pared del showcase r7 → r8 (25,18 → 30,47 ms, **+5,3 ms**) es
-el muestreo de los fondos (+6,9 ms de raster en la variante aislada, §5.3),
-compensado en parte por layout/estilos estables. La **etapa PNG+driver sigue
-siendo ~60 %** del total (29,68 ms total − 11,86 ms de etapas medidas ≈ 17,8 ms
-de encode/setup/escritura). El presupuesto de render (≤35 ms) queda al **87 %**.
+El total de etapas baja ligeramente (28,94 vs 29,68 ms en r8) y el raster
+también (−193 µs); la pared sube ~0,8 ms por ruido de arranque/escritura y
+scheduling. El **PNG+driver sigue siendo ~59 %** del total (17,2 de 28,9 ms).
 
 ### 7.2 Shell headless (`megi --screenshot`, mismo pipeline, sin ventana)
 
 | Fixture | pared (ms) | rango | PNG |
 |---|---:|---:|---:|
-| showcase 1024×768 | **31,31** | 29,75–32,12 | 80 220 B (golden, idéntico a `render`) |
-| basic.html 800×600 | **14,50** | 14,11–17,28 | 21 090 B |
+| showcase 1024×768 | **32,02** | 29,97–36,07 | 80 220 B (golden, byte-idéntico a `render`) |
+| basic.html 800×600 | **15,80** | 13,57–20,48 | 21 090 B |
 
-El shell headless no crea ventana ni `EventLoop`; produce **PNG byte-idéntico**
-al CLI `render`. Su sobrecoste es <1 ms (carga del binario + args + escritura).
-`megi` no enlaza Boa hoy (shell depende de render/paint/net/winit/softbuffer;
-`js` es un crate independiente), así que estas cifras no incluyen JS.
+Rangos altos por load 3–5 de agentes en paralelo (carga del binario de 22 MB y
+arranque del proceso incluidos). El shell **no** crea ventana ni `EventLoop` en
+`--screenshot`.
 
 ---
 
-## 8. Coste de la Fase 6 (build y runtime)
+## 8. Coste de la Fase 6 (build, binario y **ejecución real de JS**)
 
-Boa 0.21 se embebió en `crates/js` detrás de la feature **`js` (activa por
-defecto)**; `--no-default-features` compila un stub que devuelve
-`JsError::FeatureDisabled`. Medido en esta ventana (20 hilos; load 2,9–7,4):
+### 8.1 Ejecución de JS en el pipeline (nuevo en r9)
 
-### 8.1 Build y CI
+7 fixtures `tests/fixtures/render/js_*.html`; por modo: 1 run `--json` + **7
+ejecuciones intercaladas** de pared con el binario release (media de la mediana).
+`timings.scripting` = crear runtime + ejecutar scripts (sin re-render).
+
+| Fixture | pared JS (ms) | pared sin JS (ms) | Δ pared | `timings.scripting` | scripts OK | Δ PNG | Qué hace |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `js_text` | 15,42 | 14,75 | **+0,67** | 698 µs | 1 | **+377 B** | cambia texto/estilos del DOM |
+| `js_create` | 14,68 | 13,43 | **+1,25** | 698 µs | 1 | +7 B | `createElement` + `appendChild` |
+| `js_external` | 16,44 | 14,62 | **+1,82** | 704 µs | 1 | **+1 112 B** | `<script src>` externo |
+| `js_document_write` | 14,73 | 13,83 | **+0,91** | 561 µs | 1 | **+2 948 B** | `document.write` |
+| `js_throw` | 15,92 | 14,08 | **+1,84** | 553 µs | 0 | 0 B | excepción: DOM intacto |
+| `js_loop` | 16,41 | 14,43 | **+1,98** | 1 965 µs | 0 | 0 B | bucle infinito cortado por **budget** (100k iters) |
+| `js_console` | 14,91 | 13,63 | **+1,27** | 655 µs | 1 | 0 B | `console.*` (DOM intacto) |
+
+**Lectura**:
+
+- Ejecutar JS en una página cuesta **≈0,55–0,7 ms de scripting** (fixtures
+  normales) y **≈2,0 ms** cuando el script agota el budget anti-DoS (100 000
+  iteraciones). El Δpared mediano es **+1,27 ms** (0,7–2,0 ms) porque el
+  pipeline re-renderiza si el DOM cambió (Tabla §5.1) y por el arranque del
+  realm; en los fixtures que no mutan el DOM (`js_throw`, `js_console`,
+  `js_loop`) el ΔPNG es 0.
+- Es un **2–7 % del render de una página pequeña** (~14–16 ms pared) y
+  despreciable frente al pipeline del showcase (30 ms, sin scripts). El coste
+  dominante del pipeline sigue siendo **PNG+driver (~17 ms)**.
+- `js_loop` demuestra que el budget funciona: el script no bloquea el render y
+  el coste está acotado (~2 ms en este caso).
+- Artefactos: `target/bench-js-r9/{fixture}.{scripting,noscripting}.json`,
+  `.summary.json` y `.times` por muestra.
+
+### 8.2 Build y CI
 
 | Comando | Tiempo | Notas |
 |---|---:|---|
-| `cargo build --release --workspace` (frío, `CARGO_TARGET_DIR` vacío) | **43,3 s** | incluye Boa, winit, rustls/net, shell y todos los crates |
-| `cargo build --release --workspace` (incremental sobre target existente) | **30,8 s** | solo crates pendientes (Boa, shell, net, fonts, render…) |
-| `cargo build --release -p js` (frío, feature `js`) | **27,9 s** | Boa + transitivas dominan (~390 MB de target) |
-| `cargo build --release -p js --no-default-features` (frío, stub) | **1,5 s** | 5,7 MB de target |
-| `cargo test --workspace` (frío, target vacío; debug + tests) | **30,1 s** | 68 suites, 734 tests, todo OK; 3,5 GB de target |
-| `cargo test --workspace` (incremental) | **25,7 s** | 68 suites, 734 tests, todo OK |
+| `cargo build --release --workspace` (frío, `CARGO_TARGET_DIR` vacío) | **37,3 s** | incluye Boa, winit, rustls/net, shell y todos los crates (r8: 43,3 s; varianza de host) |
+| `cargo build --release -p render` (frío, feature `js`) | **33,0 s** | enlaza Boa; 18,03 MiB de binario |
+| `cargo build --release -p render --no-default-features` (frío) | **10,4 s** | sin `js`; 6,16 MiB |
+| `cargo test --workspace` (frío, target vacío) | **31,8 s** | **70 suites, 793 tests**, todo OK; 4,2 GB de target |
+| `cargo test --workspace` (incremental, target compartido) | **8,1 s** | 70 suites, 793 tests, todo OK |
 
-**Lectura**: la feature de JS añade **≈26 s de compilación en frío** al crate
-`js` (27,9 s vs 1,5 s del stub, ~94 % del tiempo del crate) y es la mayor parte
-del crecimiento del build del workspace (43,3 s fríos). Un build incremental
-del workspace con JS ya compilado baja a pocos segundos (no medido aquí; el
-bench incremental fue 0,6 s). Para CI: **≈44 s de build release frío** y
-**≈30 s de `cargo test --workspace` frío** en esta máquina de 20 hilos; en
-runners de 2–4 núcleos será varias veces mayor por el paralelismo de Boa.
+**Lectura**: la feature `js` añade **≈22,7 s de compilación en frío** al crate
+`render` (33,0 s vs 10,4 s) porque arrastra Boa; es el mayor coste individual de
+build de la Fase 6. Para CI: **≈37 s de build release frío** y **≈32 s de
+`cargo test --workspace` frío** en esta máquina de 20 hilos (±varianza de host);
+en runners de 2–4 núcleos será varias veces mayor por el paralelismo de Boa.
 
-### 8.2 Binarios
+### 8.3 Binarios (r9 ya enlazan Boa)
 
-| Binario | Tamaño | `sha256` |
-|---|---:|---|
-| `target/release/megi` (shell) | **9,99 MiB** (10 476 672 B) | `c02d04fd…` |
-| `target/release/render` | **6,15 MiB** (6 454 664 B) | `fa0df155…` |
-| `target/release/bench` | **4,08 MiB** (4 273 848 B) | `4c7eb74b…` |
-| sonda release con Boa (js+dom+html+css) | **12,86 MiB** (13 486 216 B) | — |
-| misma sonda sin `js` (stub) | **0,43 MiB** (446 072 B) | — |
+| Binario | r9 | r8 | Δ |
+|---|---:|---:|---:|
+| `target/release/render` (con JS) | **18,03 MiB** (18 907 360 B) | 6,15 MiB (6 454 664 B) | **+11,87 MiB** |
+| `target/release/megi` (shell, vía render) | **21,89 MiB** (22 955 984 B) | 9,99 MiB (10 476 672 B) | **+11,90 MiB** |
+| `target/release/render --no-default-features` | 6,16 MiB (6 460 840 B) | — | — |
+| `target/release/bench` | 4,08 MiB (4 279 032 B) | 4,08 MiB | ≈0 |
 
-**Coste en tamaño de Boa cuando se enlaza: +12,4 MiB** (12,86 vs 0,43 MiB en
-una sonda mínima). Hoy `megi`/`render` **no** enlazan `js`, así que sus tamaños
-no incluyen Boa; cuando `render`/`shell` ejecuten `<script>` ese será el
-sobrecoste esperado de binario (más el de `net`, ya presente).
+**El coste de enlazar Boa es ≈+11,87 MiB** de binario (render con `js` vs sin
+`js`, misma build/código): pasa a ser el mayor sobrecoste de distribución de la
+Fase 6 (el binario casi se triplica). `megi` lo hereda al depender de `render`.
+`bench` no enlaza JS y no cambia de tamaño. `sha256` de la ventana:
+`render ca23f2aa…`, `megi 8d48ce49…`.
 
-### 8.3 Runtime JS (arranque y eval)
+### 8.4 Runtime del motor JS (arranque/eval)
 
-Sonda mínima release creada **bajo `target/`** (no versionada) con
-`js::JsRuntime::new()`/`eval`; 20 arranques y 50 evaluaciones tras warm-up:
-
-| Medida | Mediana | Mínimo |
-|---|---:|---:|
-| `JsRuntime::new()` (realm Boa + contexto + bindings) | **0,096 ms** | 0,066 ms |
-| `eval("1+1")` en realm caliente | **0,002 ms** | 0,001 ms |
-| arranque + primer eval | **0,084 ms** | 0,070 ms |
-| script con bucle de 10 000 iteraciones (+ suma), caliente | **5,19 ms** | 4,82 ms |
-
-**Lectura**: el coste de arranque del runtime es despreciable (<0,1 ms, dos
-órdenes de magnitud por debajo del pipeline de render); el coste de Fase 6 está
-en **build/CI y tamaño de binario**, no en runtime de página. El bucle de 10k
-iteraciones a ~0,5 µs/iteración refleja los *budgets* anti-DoS instalados por
-`eval`; no es representativo de un benchmark JS real (no hay uno todavía).
+La crate `js` **no cambió entre r8 y r9** (sin commits en el rango), así que se
+mantienen las cifras de la sonda r8: `JsRuntime::new()` **0,096 ms** (mediana;
+mín. 0,066), `eval("1+1")` en realm caliente **0,002 ms**, arranque+primer eval
+**0,084 ms**; script de 10 000 iteraciones 5,19 ms (budgets). El coste de Fase 6
+está en **build, CI y tamaño de binario**, no en el arranque del runtime; el
+coste real de ejecución en una página está medido en §8.1.
 
 ---
 
@@ -406,86 +398,86 @@ El documento realista del bench no usa floats ni opacidad; no interviene en §3.
 Rasterizador software, monohilo, sin GPU. Objetivo global: **pipeline ≤ 200 ms**
 y **render showcase ≤ 35 ms**.
 
-| Benchmark / medida | Baseline r8 | Presupuesto | Estado |
+| Benchmark / medida | Baseline r9 | Presupuesto | Estado |
 |---|---:|---:|---|
-| `html/realistic-1mb` | 56 ms | ≤ 100 ms | ✅ (56 %) |
-| `html/nested-div-64k` | 25 ms | ≤ 100 ms | ✅ |
+| `html/realistic-1mb` | 55 ms | ≤ 100 ms | ✅ (55 %) |
+| `html/nested-div-64k` | 24 ms | ≤ 100 ms | ✅ |
 | `html/massive-end-p` | 24 ms | ≤ 50 ms | ✅ |
-| `html/tag-40k-attrs` | 13 ms | ≤ 50 ms | ✅ |
-| `html/pretty-5k-blocks` | 27 ms | ≤ 75 ms | ✅ |
-| `css/parse-10k-rules` | 15 ms | ≤ 30 ms | ✅ |
-| `css/resolve-styles-10k-nodes` | 29 ms | ≤ 75 ms | ✅ |
-| `layout/realistic-1mb` | 60 ms | ≤ 150 ms | ✅ |
-| `paint/build-display-list` | 15,1 ms | ≤ 20 ms | ✅ (**75 %**; +21 % legítimo por texto de tabla) |
-| `paint/rasterize-800x600` | 0,99 ms | ≤ 25 ms | ✅ |
-| `paint/render-to-png-800x600` | 13,3 ms | ≤ 50 ms | ✅ |
-| `pipeline/html-to-png-800x600` | **179,7 ms** | **≤ 200 ms** | ✅ (**89,9 %**, margen 20,3 ms) |
-| `render` showcase 1024×768 | **30,5 ms** | **≤ 35 ms** | ✅ (**87,1 %**, margen 4,5 ms) |
-| shell headless showcase | **31,3 ms** | **≤ 35 ms** | ✅ (**89,5 %**, margen 3,7 ms) |
-| build release workspace frío (con JS) | 43,3 s | — (CI) | ⚠️ coste Fase 6, ver §8 |
+| `html/tag-40k-attrs` | 12 ms | ≤ 50 ms | ✅ |
+| `html/pretty-5k-blocks` | 26 ms | ≤ 75 ms | ✅ |
+| `css/parse-10k-rules` | 14 ms | ≤ 30 ms | ✅ |
+| `css/resolve-styles-10k-nodes` | 28 ms | ≤ 75 ms | ✅ |
+| `layout/realistic-1mb` | 55 ms | ≤ 150 ms | ✅ |
+| `paint/build-display-list` | 14,1 ms | ≤ 20 ms | ✅ (**70 %**) |
+| `paint/rasterize-800x600` | 0,88 ms | ≤ 25 ms | ✅ |
+| `paint/render-to-png-800x600` | 12,3 ms | ≤ 50 ms | ✅ |
+| `pipeline/html-to-png-800x600` | **168,1 ms** | **≤ 200 ms** | ✅ (**84,0 %**, margen 31,9 ms) |
+| `render` showcase 1024×768 | **31,2 ms** | **≤ 35 ms** | ✅ (**89,2 %**, margen 3,8 ms) |
+| shell headless showcase | **32,0 ms** | **≤ 35 ms** | ✅ (**91,5 %**, margen 3,0 ms) |
+| JS scripting por página (7 fixtures) | 0,7–2,0 ms de pared | — | ✅ (2–7 % del render) |
 
-Todos los presupuestos se cumplen. El más ajustado pasa a ser el **showcase de
-render** (87 %), seguido del pipeline (90 %) y del build-display-list (75 %);
-layout (60 ms) y parse HTML (56 ms) siguen siendo el 64 % del pipeline.
+Todos los presupuestos se cumplen. El pipeline gana margen (84 % vs 90 % en
+r8); en cambio, el **render/shell del showcase queda al 89–92 %**, el más
+ajustado: si el pipeline de render crece (p. ej. fuentes reales o más JS), el
+presupuesto de 35 ms es el primero que habría que revisar.
 
 ---
 
 ## 11. Comparación histórica
 
-Siete baselines en la misma máquina, mismo arnés:
+Ocho baselines en la misma máquina, mismo arnés:
 
-| | R2 | R3 | R4 | R5 | R6 | R7 | R8 (vigente) |
-|---|---|---|---|---|---|---|---|
-| Fecha | 09:45 | 14:09 | 14:41 | 15:15 | 15:43 | 16:18 | **16:49** |
-| HEAD | `9cca2e1` | `532bb6a` | `3cc8449` | `49a2792` | `13e9945` | `c002ec0` | **`31e5139`** |
-| Árbol | dirty (42) | limpio | limpio | limpio | limpio | limpio al inicio | **code limpio; docs dirty** |
-| Binario | `0fd520aa…` | `9936527c…` | `d752a856…` | `e9fceca…` | `f2ea6d77…` | `687627e0…` | **`ed7006e9…` / `4c7eb74b…`** |
-| Load | — | — | — | — | — | 0,99–1,52 | **2,90–3,25 (bench)** |
+| | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 (vigente) |
+|---|---|---|---|---|---|---|---|---|
+| Fecha | 09:45 | 14:09 | 14:41 | 15:15 | 15:43 | 16:18 | 16:49 | **17:12** |
+| HEAD | `9cca2e1` | `532bb6a` | `3cc8449` | `49a2792` | `13e9945` | `c002ec0` | `31e5139` | **`c86682c`** |
+| Árbol | dirty (42) | limpio | limpio | limpio | limpio | limpio | docs dirty | **limpio** |
+| Binario | `0fd520aa…` | `9936527c…` | `d752a856…` | `e9fceca…` | `f2ea6d77…` | `687627e0…` | `ed7006e9…` | **`43f7748d…`** |
+| Load (bench) | — | — | — | — | — | 0,99–1,52 | 2,90–3,25 | **2,91–3,35** |
 
 Filas clave (mediana, ms):
 
-| Benchmark | R2 | R3 | R4 | R5 | R6 | R7 | R8 |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| `html/realistic-1mb` | 51.179 | 52.530 | 55.569 | 57.234 | 58.738 | 55.926 | **56.140** |
-| `html/nested-div-64k` | 21.262 | 23.534 | 24.050 | 24.564 | 25.658 | 25.084 | **24.772** |
-| `css/resolve-styles-10k-nodes` | 61.908 | 27.037 | 27.604 | 28.199 | 29.595 | 29.853 | **28.662** |
-| `layout/realistic-1mb` | 49.506 | 63.541 | 69.248 | 84.958 | 57.742 | 61.350 | **59.767** |
-| `paint/build-display-list` | 3.356 | 3.802 | 8.108 | 12.237 | 12.745 | 12.458 | **15.090** |
-| `paint/rasterize-800x600` | 1 484.776 | 0.861 | 0.932 | 0.899 | 0.890 | 0.843 | **0.993** |
-| `paint/render-to-png-800x600` | 1 513.860 | 5.194 | 5.852 | 12.964 | 13.016 | 13.045 | **13.296** |
-| `pipeline/html-to-png-800x600` | 1 766.298 | 152.519 | 168.612 | 214.159 | 173.305 | 178.791 | **179.699** |
-| **TOTAL (suma)** | **5 075.985** | **452.445** | **489.190** | **570.064** | **508.408** | **512.047** | **512.440** |
+| Benchmark | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `html/realistic-1mb` | 51.179 | 52.530 | 55.569 | 57.234 | 58.738 | 55.926 | 56.140 | **55.316** |
+| `html/nested-div-64k` | 21.262 | 23.534 | 24.050 | 24.564 | 25.658 | 25.084 | 24.772 | **24.022** |
+| `css/resolve-styles-10k-nodes` | 61.908 | 27.037 | 27.604 | 28.199 | 29.595 | 29.853 | 28.662 | **28.241** |
+| `layout/realistic-1mb` | 49.506 | 63.541 | 69.248 | 84.958 | 57.742 | 61.350 | 59.767 | **55.140** |
+| `paint/build-display-list` | 3.356 | 3.802 | 8.108 | 12.237 | 12.745 | 12.458 | 15.090 | **14.050** |
+| `paint/rasterize-800x600` | 1 484.776 | 0.861 | 0.932 | 0.899 | 0.890 | 0.843 | 0.993 | **0.881** |
+| `paint/render-to-png-800x600` | 1 513.860 | 5.194 | 5.852 | 12.964 | 13.016 | 13.045 | 13.296 | **12.283** |
+| `pipeline/html-to-png-800x600` | 1 766.298 | 152.519 | 168.612 | 214.159 | 173.305 | 178.791 | 179.699 | **168.081** |
+| **TOTAL (suma)** | **5 075.985** | **452.445** | **489.190** | **570.064** | **508.408** | **512.047** | **512.440** | **485.132** |
 
-### Ronda 7 → ronda 8, fila a fila
+### Ronda 8 → ronda 9, fila a fila
 
-| Benchmark | R7 (ms) | R8 (ms) | Δ |
+| Benchmark | R8 (ms) | R9 (ms) | Δ |
 |---|---:|---:|---:|
-| `html/realistic-1mb` | 55.926 | **56.140** | +0,4 % |
-| `html/nested-div-10k` | 3.897 | **3.811** | −2,2 % |
-| `html/nested-div-32k` | 12.492 | **12.128** | −2,9 % |
-| `html/nested-div-64k` | 25.084 | **24.772** | −1,2 % |
-| `html/nested-div-64k-default-limits` | 14.625 | **14.949** | +2,2 % |
-| `html/massive-end-p` | 24.656 | **23.879** | −3,2 % |
-| `html/massive-formatting` | 16.382 | **16.292** | −0,5 % |
-| `html/tag-40k-attrs` | 12.899 | **13.187** | +2,2 % |
-| `html/pretty-5k-blocks` | 26.994 | **26.800** | −0,7 % |
-| `css/parse-10k-rules` | 14.470 | **14.941** | +3,3 % |
-| `css/resolve-styles-2k-nodes` | 6.253 | **6.097** | −2,5 % |
-| `css/resolve-styles-10k-nodes` | 29.853 | **28.662** | −4,0 % |
-| `css/selector-match-simple` | 0.718 | **0.665** | −7,4 % |
-| `css/selector-match-descendant` | 1.311 | **1.272** | −3,0 % |
-| `layout/realistic-1mb` | 61.350 | **59.767** | −2,6 % |
-| `paint/build-display-list` | 12.458 | **15.090** | **+21,1 %** (texto de tabla, legítimo) |
-| `paint/rasterize-800x600` | 0.843 | **0.993** | **+17,8 %** (AA de glifos) |
-| `paint/render-to-png-800x600` | 13.045 | **13.296** | +1,9 % |
-| `pipeline/html-to-png-800x600` | 178.791 | **179.699** | +0,5 % |
-| **TOTAL (suma)** | **512.047** | **512.440** | **+0,1 %** |
+| `html/realistic-1mb` | 56.140 | **55.316** | −1,5 % |
+| `html/nested-div-10k` | 3.811 | **3.662** | −3,9 % |
+| `html/nested-div-32k` | 12.128 | **11.611** | −4,3 % |
+| `html/nested-div-64k` | 24.772 | **24.022** | −3,0 % |
+| `html/nested-div-64k-default-limits` | 14.949 | **13.963** | −6,6 % |
+| `html/massive-end-p` | 23.879 | **23.729** | −0,6 % |
+| `html/massive-formatting` | 16.292 | **15.113** | −7,2 % |
+| `html/tag-40k-attrs` | 13.187 | **11.645** | −11,7 % |
+| `html/pretty-5k-blocks` | 26.800 | **25.863** | −3,5 % |
+| `css/parse-10k-rules` | 14.941 | **13.698** | −8,3 % |
+| `css/resolve-styles-2k-nodes` | 6.097 | **5.940** | −2,6 % |
+| `css/resolve-styles-10k-nodes` | 28.662 | **28.241** | −1,5 % |
+| `css/selector-match-simple` | 0.665 | **0.666** | +0,2 % |
+| `css/selector-match-descendant` | 1.272 | **1.228** | −3,5 % |
+| `layout/realistic-1mb` | 59.767 | **55.140** | −7,7 % |
+| `paint/build-display-list` | 15.090 | **14.050** | −6,9 % |
+| `paint/rasterize-800x600` | 0.993 | **0.881** | −11,3 % |
+| `paint/render-to-png-800x600` | 13.296 | **12.283** | −7,6 % |
+| `pipeline/html-to-png-800x600` | 179.699 | **168.081** | −6,5 % |
+| **TOTAL (suma)** | **512.440** | **485.132** | **−5,3 %** |
 
-Las subidas de HTML/CSS (±1–7 %) están dentro de la varianza de una máquina
-compartida (esta ventana además tuvo load 2,9–3,25, mayor que r7) y no hay
-regresiones de complejidad: los escalados siguen siendo lineales (r2 → r8, el
-coste por unidad de HTML es incluso menor). Las dos subidas de paint están
-explicadas y son producto (texto de tabla y su AA), no deuda.
+La mejora es homogénea y afecta a filas que no cambiaron de código (HTML/CSS),
+por lo que se atribuye a condiciones del host (térmica/frecuencia), no a una
+optimización de r9; los cambios r9 medidos fuera del bench están en §5 y §8
+(scripting añade 0,7–2,0 ms por página; hit-regions no participa).
 
 ---
 
@@ -507,17 +499,13 @@ explicadas y son producto (texto de tabla y su AA), no deuda.
    EOF
    ```
 3. Regresión si la mediana empeora >15 % de forma reproducible; dispersión
-   típica aquí ~1–6 %.
+   típica aquí ~1–6 % intra-ventana y hasta ±5–10 % entre ventanas.
 4. Para complejidad, usar `--scale 0.5` vs `1.0`: ratios ≈1.
-5. Suite completa ~2,9 s + ~0,27 s de fixtures; smoke
+5. Suite completa ~2,8 s + ~0,26 s de fixtures; smoke
    `--scale 0.1 --iterations 2` ~1 s.
-6. Para el pipeline, además del bench: `render --json` (etapas en µs) y el
-   golden showcase (`md5 c95c7eff…)`; un cambio de golden exige justificar el
-   diff de píxeles en el commit.
-
-JSON schema (`megi-bench-v1`): `schema`, `generated_unix_ms`, `commit`,
-`worktree_dirty`, `rustc`, `cpu`, `cores`, `scale`, `iterations`, `warmup`,
-`setup_ms`, `total_median_ms`, `results[]` y `skipped[]`.
+6. Para el pipeline, además del bench: `render --json` (etapas en µs), la
+   matriz JS de §8.1 y el golden showcase (`md5 c95c7eff…`); un cambio de golden
+   exige justificar el diff de píxeles en el commit.
 
 ---
 
@@ -539,9 +527,9 @@ jobs:
       - run: ./tools/bench.sh --scale 0.25 --iterations 2
 ```
 
-Coste de referencia de CI en esta máquina (20 hilos, §8.1):
-`cargo build --release --workspace` frío **43,3 s**; `cargo test --workspace`
-frío **30,1 s** (68 suites, 734 tests). Los números de CI no son comparables
+Coste de referencia de CI en esta máquina (20 hilos, §8.2):
+`cargo build --release --workspace` frío **37,3 s**; `cargo test --workspace`
+frío **31,8 s** (70 suites, 793 tests). Los números de CI no son comparables
 (otra CPU, runners compartidos); el job solo comprueba que compila y ejecuta, y
 deja el JSON como artefacto.
 
@@ -549,41 +537,33 @@ deja el JSON como artefacto.
 
 ## 14. Limitaciones y notas
 
-- **Baseline sobre commit limpio de código**: `31e5139`; durante la ventana otro
-  agente editó documentación (`README`, `docs/*`, `docs/images/showcase.png`),
-  por lo que `worktree_dirty` es `true` en los JSON, pero **no había cambios de
-  código sin commitear**. El binario se recompiló una vez (`ed7006e9` →
-  `4c7eb74b`, mismo código).
-- **Host compartido**: load 2,90–3,25 en las pasadas del bench (frente a
-  0,99–1,52 en r7) y 2,9–7,4 en builds/render, por otros agentes compilando en
-  paralelo. Variabilidad ±1–6 %; las cifras de pared del pipeline se tomaron con
-  load alto y son orientativas. Las cifras absolutas no son comparables con CI.
-- **`bench` no cubre todo el motor**: no enlaza `net`, `js` ni `image`, y sus
-  generadores no tienen `url(...)`/`background-image`; por eso los fondos, la
-  red y Boa se miden aparte (§5.3, §7, §8). Ampliar el catálogo con un
-  benchmark de página con imágenes/JS es el siguiente foco natural.
-- **Render showcase**: la variante «sin `background-image`» se genera copiando
-  el fixture a `/tmp` y borrando las líneas `background-image:` de los CSS; el
-  delta se reporta como rango (load alto en esa sub-ventana), no como cifra
-  absoluta.
-- **Sonda JS**: los micro-benchmarks de arranque/eval se hicieron con un crate
-  mínimo bajo `target/` (gitignored) enlazando `crates/js`; las build dirs
-  temporales (`target/perf-r8-*`, 4,6 GB) se borraron tras extraer las cifras.
-  Los JSON/LOG de medidas se conservan en `target/`.
-- **Shell headless**: `--screenshot` no crea ventana/`EventLoop` ni usa el
-  worker; mide el proceso completo (carga del binario + render + escritura del
-  PNG). El modo ventana (scroll/worker/HiDPI) no se benchmarkea aquí.
-- **Artefactos de release compartidos**: `target/release/{bench,megi,render}`
-  pueden ser re-enlazados por otros agentes durante la ventana (se observó un
-  re-link de `render`); las cifras de §7 se validaron con la salida byte a byte
-  contra el golden y el JSON de etapas esperado, y la ventana de medida terminó
-  antes de los cambios sin commitear de Fase 6 (~16:59). Los `sha256`
-  registrados son una foto al cierre, no una garantía de reproducibilidad
-  exacta.
-- **Fase 6**: aún no hay página real con `<script>` ejecutándose en el
-  pipeline; el coste de Boa en runtime de página no está medido de extremo a
-  extremo (solo arranque/eval de la sonda, §8.3). El binario `megi`/`render`
-  actuales no enlazan Boa.
+- **Baseline sobre commit limpio**: `c86682c`, `worktree_dirty = false` en las 3
+  pasadas. El `target/` es compartido: `target/release/bench` se recompiló
+  después con la misma fuente (`43f7748d…` → `871e136e…`), por lo que el
+  `sha256sum` actual del binario puede no coincidir con el de la tabla.
+- **Host compartido**: load 2,91–3,35 en el bench y hasta 9,5 en builds/render
+  (otros agentes). Variabilidad intra-ventana ±1–6 %; entre ventanas, hasta
+  ±5–10 % (la mejora r8 → r9 es sistemática y se atribuye al host, §5.3).
+  Las cifras absolutas no son comparables con CI.
+- **`bench` no cubre todo el motor**: no enlaza `net`, `js`, `image`, `shell` ni
+  hit regions (opt-in) y sus generadores no tienen `url(...)`; el coste JS se
+  mide con la matriz de fixtures de §8.1 y los fondos/render en §7.
+- **Matriz JS**: los fixtures resuelven `js_external` por `file://` (sin red);
+  el tiempo de pared excluye `cargo run` (se usa el binario release) pero
+  incluye arranque de proceso y escritura del PNG (~0,7–1 ms). Los fixtures que
+  mutan el DOM fuerzan un re-render completo, que no está descontado del Δpared
+  (el JSON sí separa `timings.scripting`).
+- **Render/shell showcase**: rangos amplios por load de agentes; el golden y
+  los metadatos de etapas se validaron byte a byte/idénticos en cada corrida.
+  Las build dirs temporales (`target/perf-r9-*`, ~5,5 GB) se borraron tras
+  extraer cifras; se conservan los JSON de medidas en `target/`.
+- **Hit regions**: API aditiva y opt-in; solo el shell la usa. El bench y el
+  render por defecto no la invocan (verificado en código), así que no hay coste
+  en las cifras de §3.
+- **Fase 6**: medido el scripting del pipeline con 7 fixtures pequeños; no hay
+  todavía una página JS «real» de referencia ni un bench end-to-end con JS en
+  `crates/bench`. Es el siguiente foco natural junto con el encoder PNG (~58 %
+  del pipeline de render).
 - **Fast path de tablas (r7)**: la comparación 67,2 → 61,4 ms usa el valor
   intermedio documentado por el commit de layout; no hay un commit compilable
   con el camino avanzado sin fast path.

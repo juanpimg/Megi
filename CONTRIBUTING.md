@@ -25,7 +25,7 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 - Trabajamos con las suites de prueba de referencia de la industria:
   - **`html5lib-tests`**: Más de 7.000 pruebas de tokenizador, ~1.900 de construcción del DOM y las suites oficiales de **serialización HTML** (`serializer/*.test`).
   - **Web Platform Tests (WPT)**: Pruebas oficiales compartidas por todos los motores de navegación modernos (fixtures de CSS Syntax vendorizadas).
-- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), árbol **3.898/3.904** (allowlist 4 suites `scripted_*`: 6 mode-runs), **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El workspace tiene **734 tests**.
+- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), árbol **3.898/3.904** (allowlist 4 suites `scripted_*`: 6 mode-runs), **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El workspace tiene **793 tests**.
 
 ### 1.4 Modelo de Memoria en Arena (Sin `Rc<RefCell<Node>>`)
 - Uno de los mayores cuellos de botella y fuentes de *memory leaks* en motores web en Rust es el uso de `Rc<RefCell<Node>>` o recolectores de basura pesados.
@@ -54,12 +54,12 @@ crates/
 ├── css/           # CSS: Sintaxis L3, Selectores L4, Cascada L4, ComputedStyle, Hoja UA §15. [Depende solo de dom]
 ├── layout/        # Layout: Box Tree, BFC/IFC, posicionamiento/floats, tablas §17, inline-block y reemplazados. [Depende de dom y css]
 ├── fonts/         # Tipografía (Fase 4): fontdb + ttf-parser + rustybuzz + ab_glyph, integrado en layout/paint. [0 deps internas]
-├── paint/         # Paint (Fase 4): Display Lists, raster con AA/culling, bordes por lado, canvas §14.2 y PNG propio. [Depende de dom, css, layout y fonts]
+├── paint/         # Paint (Fase 4): Display Lists, raster con AA/culling, bordes por lado, canvas §14.2, PNG propio y hit-testing aditivo. [Depende de dom, css, layout y fonts]
 ├── net/           # Red (Fase 5): URL, HTTP/1.1+TLS (rustls/webpki-roots), caché, data:, file://, MIME y loader.
 ├── image/         # Decoder PNG + inflate zlib/DEFLATE propios (std puro, sin deps).
-├── render/        # Pipeline de navegador (Fase 5): URL → net → HTML → CSS externo → layout → PNG (+ <img>, backgrounds E2E).
-├── js/            # JS (Fase 6, WP-6.1): runtime Boa 0.21.1 + bindings DOM; feature `js` ON por defecto (stub --no-default-features); 12 tests.
-├── shell/         # Ventana (Fase 7): winit+softbuffer, scroll/entrada/HiDPI, worker y screenshot headless. [Depende de render/paint/net]
+├── render/        # Pipeline de navegador (Fase 5/6): URL → net → HTML → CSS externo → layout → PNG (+ <img>, backgrounds E2E, ejecución de <script> y re-render del DOM mutado).
+├── js/            # JS (Fase 6, WP-6.1 + WP-6.2 host): runtime Boa 0.21.1 + bindings DOM; feature `js` ON por defecto (stub --no-default-features); consumido por render; 12 tests.
+├── shell/         # Ventana (Fase 7): winit+softbuffer, scroll/entrada/HiDPI, worker, navegación/historial/título y screenshot headless. [Depende de render/paint/net]
 ├── bench/         # Benchmarks reproducibles (parseo, estilos, layout, paint, PNG). [Solo crates internos]
 └── test_harness/  # Gate de conformidad: tokenizer, árbol, serializer y CSS Syntax.
 ```
@@ -74,17 +74,18 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
 3. El crate y módulo responsable.
 4. El criterio de aceptación verificable por test.
 
-### Áreas activas donde puedes aportar hoy (cierre de Fase 4 y arranque de Fase 5):
+### Áreas activas donde puedes aportar hoy (Fases 4–7 en curso):
 - **Layout (`crates/layout`) — Fase 4 funcionalmente cerrada**:
   - Pendiente menor: block-in-inline, colores de conflictos de `border-collapse` y auto-colapso de bloques vacíos.
   - Ya hechos (ronda 8): BFC/IFC, posicionamiento, floats, overflow, tablas §17 (rowspan/fixed/inline-table/collapse + fast path), inline-block, reemplazados, árbol de celdas expuesto y verificado (133 tests).
 - **Paint (`crates/paint`)**:
   - `background-repeat`/`size`/`position`, `border-image` y pulido de conflictos de `border-collapse` (colores).
-  - Glyph cache global y presupuestos de memoria/tiempo y capas de opacidad.
+  - Glyph cache global, presupuestos de memoria/tiempo y capas de opacidad.
+  - Ya hecho (ronda 9): **hit-testing aditivo** (`HitRegion`/`hit_test`/`find_link_at`, 11 tests) sin cambiar golden; pendiente cablearlo en `render`.
 - **Red y render (`crates/net`, `crates/render`, `crates/image`) — Fase 5 (≈90 %)**:
   - `Referrer-Policy`, `br`/encodings apilados, HTTP/2 y streaming; SameSite/PSL y CORS completo (WP-5.9).
-  - Endurecer tests HTTP/TLS y ampliar fixtures de backgrounds.
-  - Ya hechos: TLS, caché, `data:`, pipeline URL→PNG, `<img>` E2E, `@import`+media, **backgrounds E2E**, **cookies RFC 6265 + CORS básico + gzip/deflate con caps** y decoder PNG/inflate.
+  - Endurecer tests HTTP/TLS y ampliar fixtures de backgrounds; **integración de scripts** (7 fixtures `js_*`, caps/budgets, stats y re-render del DOM mutado ya hechos en la ronda 9).
+  - Ya hechos: TLS, caché, `data:`, pipeline URL→PNG, `<img>` E2E, `@import`+media, **backgrounds E2E**, **cookies RFC 6265 + CORS básico + gzip/deflate con caps**, **ejecución JS (WP-6.2 host)** y decoder PNG/inflate.
 - **Tipografía (`crates/fonts`)**:
   - Mejoras de shaping para más scripts, fallback entre familias y métricas de fuentes variables.
 - **Rendimiento/robustez (`crates/html`, `crates/dom`, `layout`, `paint`)**:
@@ -92,8 +93,9 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
   - Benchmarks reproducibles (`./tools/bench.sh`) y regresiones de complejidad.
 - **Fuzzing (`fuzz/`)**:
   - Ampliar corpus y targets; mejorar la señal de la CI nocturna. Ver [`docs/FUZZING.md`](docs/FUZZING.md).
-- **Fase 7 — shell (`crates/shell`)**: scroll, **hit-testing** (`NodeId`/`LayoutBox` ↔ `DisplayItem`), navegación/historial, inputs de ratón/teclado, zoom/HiDPI, render en worker y pruebas de ventana con Xvfb.
-- **Fase 6 — JS (`crates/js`, WP-6.1 HECHO en ronda 8, ≈10 %)**: Boa 0.21.1 con feature `js` ON por defecto (mantener build mínimo `--no-default-features`), bindings `NodeId↔JsValue` generacionales y scheduler base. Siguientes: integrar `<script>` en `render`, eventos/timers de reloj, CSSOM/`getComputedStyle` y caché de identidad de wrappers (WP-6.2–6.7). Ver [`docs/JAVASCRIPT-STRATEGY.md`](docs/JAVASCRIPT-STRATEGY.md).
+- **Fase 7 — shell (`crates/shell`, ≈60 %)**: ya hechos ventana/worker/scroll/entrada/HiDPI y **navegación real con historial y título dinámico** (WP-7.5). Siguientes: cablear `render::RenderOutput.hit_regions`/`paint::find_link_at`, formularios, pestañas, zoom, JS en el host y pruebas de ventana con Xvfb.
+- **Fase 6 — JS (`crates/js` + `crates/render`, WP-6.1 y WP-6.2 host HECHOS, ≈30 %)**: Boa 0.21.1 con feature `js` ON por defecto (build mínimo `--no-default-features`), bindings `NodeId↔handle` generacionales y scheduler base; **`render` ya ejecuta los `<script>`** (post-parseo, caps/budgets) y re-renderiza el DOM mutado. Siguientes: **WP-A** eventos/timers de reloj, **WP-B** CSSOM/`getComputedStyle`, **WP-6.4** ejecución durante el parsing para `scripted_*`, caché de identidad de wrappers y fuzz JS. Ver [`docs/JAVASCRIPT-STRATEGY.md`](docs/JAVASCRIPT-STRATEGY.md).
+- **Rendimiento (`parse`+`layout`)**: reducir coste de parseo/estilos/layout con `./tools/bench.sh` como medidor (baseline en [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)); layout realista ya en ~59 ms con el fast path de tablas.
 - **Harness & Tooling (`crates/test_harness`, `tools/`)**:
   - Más fixtures vendorizadas de WPT, ampliación de An+B y comparación visual/golden images.
 
@@ -142,7 +144,7 @@ cargo fmt
 ./tools/dev.sh all
 
 # Comprobaciones individuales útiles
-cargo test --workspace                         # 734 tests (con JS por defecto)
+cargo test --workspace                         # 793 tests (con JS por defecto)
 cargo test --workspace --no-default-features   # build mínimo sin JS (CI)
 cargo +1.88 check --workspace --all-targets
 cargo run -p test_harness -- --summary          # gate 4 suites: PASS, exit 0
@@ -159,7 +161,12 @@ python3 tools/png_check.py /tmp/basic.png
 cargo test -p net -p render -p image
 cargo test -p js
 cargo test -p js --no-default-features   # stub mínimo sin Boa
+cargo test -p render --test scripting_tests   # JS ejecutado y visible en el PNG (7 fixtures js_*)
+cargo test -p paint --test hit_testing        # hit-testing aditivo (topmost, links, clip)
+cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_on.png   # con JS
+cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
 cargo run -p render -- tests/fixtures/render/showcase/index.html /tmp/showcase.png --width 1024 --height 768
+cargo run -p shell -- tests/fixtures/render/showcase/index.html              # navegación: clic, Alt+←/→, b/n, r
 cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png   # Fase 7 headless
 tools/megi.sh tests/fixtures/render/showcase/index.html                             # ventana usable (X11/Wayland)
 

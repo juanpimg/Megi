@@ -225,7 +225,7 @@ tools/megi.sh tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png
 md5sum /tmp/megi-shot.png     # 7324e851… (idéntico al pipeline render)
 ```
 
-`megi` presenta el `Pixmap` como framebuffer `0RGB` con `softbuffer` (winit 0.30, backends X11/Wayland por dlopen, sin GPU). `--screenshot` usa el mismo pipeline `render` sin `EventLoop` y se testea en CI. Limitaciones: sin scroll/hit-testing/navegación/zoom/JS, HiDPI scale 1 y render en el hilo de eventos. Ver `crates/shell/src/lib.rs`.
+`megi` presenta el `Pixmap` como framebuffer `0RGB` con `softbuffer` (winit 0.30, backends X11/Wayland por dlopen, sin GPU). `--screenshot` usa el mismo pipeline `render` sin `EventLoop` y se testea en CI. **Navegación (ronda 9)**: clic izquierdo en enlaces (`Url::join`), historial `NavigationState` (back/forward/replace/reload, cap 256, truncado forward; fallos conservan la entrada), **Alt+←/Backspace/b** atrás, **Alt+→/n** adelante, **r** recargar, **q/Esc** cerrar, scroll completo, HiDPI y **título dinámico** `<title>`+URL+% scroll+`[recortado]` (errores «Megi — error: …»); hit regions y título del mismo render que los píxeles. 80 tests. Limitaciones: formularios/pestañas/zoom/descargas, fragmentos = nueva navegación, >8192 CSS px recortado, JS no en el bucle del host y ventana no testeada en CI. Ver `crates/shell/src/lib.rs`.
 
 ### 2.12 Fixtures de imágenes y captura E2E
 
@@ -258,9 +258,17 @@ El golden del showcase compara byte a byte (1024×768, **80.220 B**, `md5 c95c7e
 
 `crates/js` embebe **Boa 0.21.1** detrás de la feature `js`, **ON por defecto**; con `--no-default-features` queda un stub std-only (sin Boa) para CI y auditoría. Expone `JsRuntime::eval` sobre un realm persistente, `console.*` capturado, bindings DOM (`document.write`, `getElementById`, `querySelector(All)`, `innerHTML`, `style`, `classList`, árbol/atributos) y un scheduler base (`setTimeout`/microtasks). Anti-DoS: `Budget` mapeado a Boa `RuntimeLimits` (5.000.000 iteraciones de bucle, recursión 512, pila VM 20.480; `Budget::SMALL` para páginas/tests) y side-table `NodeId↔handle` capada a 1.000.000; sin APIs de red/FS. Aún **no integrado en `render`**.
 
+`render` integra el runtime (WP-6.2 host): descubre los `<script>` clásicos (inline/`src`, en orden; módulos avisados y saltados), los ejecuta con `JsRuntime::with_document` bajo `ScriptingLimits`/`ScriptBudget` (budget por script + total), drena microtasks y hasta 10.000 timers, captura `console` (`scripts_executed/failed/bytes/console`, `timings.scripting`) y **re-renderiza estilos→layout→paint sobre el DOM mutado** (mutaciones visibles en el PNG). Caps: 8 MiB/script, 32 MiB total, 64 scripts; `--no-scripting` desactiva todo y `--no-network` bloquea `src` externos.
+
 ```bash
 cargo test -p js                        # 12 tests (feature js por defecto)
 cargo test -p js --no-default-features  # stub mínimo sin Boa (CI)
+
+# JS del documento ejecutado de extremo a extremo (7 fixtures js_*)
+cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_on.png
+cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
+md5sum /tmp/js_on.png /tmp/js_off.png   # e1da51d4… (15.876 B) vs 53f67e77… (15.499 B)
+cargo test -p render --test scripting_tests
 ```
 
 ### 2.15 `crates/net` — cookies, CORS y compresión (Fase 5, WP-5.9)
@@ -281,6 +289,15 @@ python3 tools/png_check.py /tmp/backgrounds.png
 cargo test -p render --test backgrounds_tests
 ```
 
+### 2.16b `paint::hit_test` — hit-testing aditivo (ronda 9)
+
+La API aditiva de `crates/paint` mapea píxeles a cajas/DOM en **orden de pintado**:
+`HitRegion { rect, node_id, kind }`, `hit_test`/`hit_test_all` (gana el topmost), `HitLink`/`find_link_at` (sube al `<a href>` HTML y devuelve el href crudo) y los builders `build_display_list_with_hit_regions`/`build_display_list_and_hit_regions`. Las entradas clásicas (`build_display_list`) no cambian ni un byte de golden y el coste es opt-in. Límites: granularidad caja/run, sin `pointer-events`/transforms, coordenadas CSS de página (el host ajusta scroll/scale).
+
+```bash
+cargo test -p paint --test hit_testing   # 11 tests nuevos (108 paint)
+```
+
 ### 2.17 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
 
 Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-spec-driven-dev/SKILL.md` (directorio ignorado en `.gitignore` para mantener limpio el árbol Git de metadatos de agentes, mientras su documentación permanente reside en este archivo `docs/TOOLING.md`). Esta skill estandariza el protocolo operativo para cualquier agente que trabaje en la Fase 1 y posteriores:
@@ -294,7 +311,7 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 734 tests, doc y gate de conformidad
+./tools/dev.sh all                     # fmt, clippy, 793 tests, doc y gate de conformidad
 cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 
@@ -304,9 +321,10 @@ cargo run -p render -- tests/fixtures/render/basic.html /tmp/render.png --width 
 bash tools/render_fixture.sh
 cargo test -p net -p render -p image -p shell
 cargo test -p js && cargo test -p js --no-default-features
+cargo test -p paint --test hit_testing
 cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png
 ./tools/bench.sh --scale 0.1
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Cifras de referencia de esta ronda: **734 tests** (bench 8, css 57, dom 28, fonts 13+1 doctest, html 53, image 45+1 doctest, js 12, layout 133, net 180, paint 97, render 53, shell 46, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+Cifras de referencia de esta ronda: **793 tests** (bench 8, css 57, dom 28, fonts 13+1 doctest, html 53, image 45+1 doctest, js 12, layout 133, net 180, paint 108, render 67, shell 80, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.

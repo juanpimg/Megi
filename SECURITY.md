@@ -89,13 +89,16 @@ after a fix is available.
   `RenderOutput::stats` instead of aborting the render. CSS `background-image`/
   `list-style-image` reuse the image caps (**32 background images, 8 MiB each,
   16 MiB total per page**) and downgrade failures to the background color /
-  no marker plus a warning.
+  no marker plus a warning. Document scripts are capped at **64 scripts, 8 MiB
+  per script and 32 MiB total**, downloads honor `--no-network`, and each script
+  runs under a per-script and cumulative `ScriptingLimits` budget; `--no-scripting`
+  disables execution entirely (and `--no-default-features` builds without Boa).
 - **Image decoding limits** (`crates/image`): the PNG decoder enforces
   `PngLimits` (16384 px per side, 16 Mpx total, 64 MiB per chunk, 256 MiB of
   IDAT) before/while inflating, verifies chunk CRCs and never panics on
   malformed input; the inflate implementation is the crate's own and is
   fuzzed alongside the parsers.
-- **JavaScript (Phase 6, ADR-001 accepted)**: the chosen engine is Boa 0.21.x (pure Rust, `Unlicense OR MIT`) with feature `js` **enabled by default**; the dependency is isolated in `crates/js`, which itself keeps `#![forbid(unsafe_code)]`, and every script must run under instruction/time/memory/stack budgets with no network/filesystem capabilities by default. The CI keeps a `--no-default-features` build so the minimal std-only engine can be audited and shipped without the JS dependency.
+- **JavaScript (Phase 6, ADR-001 accepted; WP-6.1 + WP-6.2 host done)**: the chosen engine is Boa 0.21.x (pure Rust, `Unlicense OR MIT`) with feature `js` **enabled by default**; the dependency is isolated in `crates/js`, which itself keeps `#![forbid(unsafe_code)]`, and every script must run under instruction/time/stack budgets with no network/filesystem capabilities. `crates/render` now executes the document's classic `<script>` elements **after parsing** under per-script and total `ScriptingLimits` (caps above), drains a bounded microtask/timer queue and re-renders the mutated DOM; ES modules are warned and skipped, and `async`/`defer` semantics are pending. The CI keeps a `--no-default-features` build so the minimal std-only engine can be audited and shipped without the JS dependency.
 - **Image pipeline limits** (`crates/render`): at most 64 `<img>` resources per
   document, 8 MiB per image and 32 MiB of image bytes total; downloads honor the
   `net` caps and `--no-network`; undecodable or missing images downgrade to a
@@ -104,7 +107,7 @@ after a fix is available.
   only windowing dependencies (authorized by ARCHITECTURE §3.1) and their X11 /
   Wayland backends are loaded dynamically (`dlopen`); there is no GPU,
   compositor or external process. `--screenshot` runs fully headless without
-  creating an `EventLoop`. Window mode renders off the event loop in a **worker thread** with generation checks, cancellation and coalescing, supports vertical scroll (pages taller than **8192 CSS px** are clipped with a visible marker), mouse/keyboard input and HiDPI scaling; it only consumes local files/URLs. There is still no navigation, DOM hit-testing, zoom or JS (Phase 6/7), so the attack surface is limited to the render pipeline and the worker boundary.
+  creating an `EventLoop`. Window mode renders off the event loop in a **worker thread** with generation checks, cancellation and coalescing, supports vertical scroll (pages taller than **8192 CSS px** are clipped with a visible marker), mouse/keyboard input, HiDPI scaling and **link navigation with bounded history** (`NavigationState`: cap 256 entries, forward truncation; only `http`/`https`/`file`/`data` URLs resolved through `crates/net`, HTTP redirects honored). Navigation regions come from the **same render** as the pixels, and paint's hit-testing API is purely geometric (no new input parser). There is still no JS in the host loop, forms, tabs, zoom or window-level DOM events, so the attack surface remains the render pipeline plus the already-bounded network surface.
 - **DOM identity**: generational `NodeId` handles (20-bit slot + 12-bit
   generation, free-list reuse) reject stale/foreign handles and give clear
   panics instead of corrupting the arena; `descendants`/`ancestors` are
@@ -116,9 +119,10 @@ after a fix is available.
   hanging or overflowing the native stack. The DOM bridge is a **side table of
   numeric handles capped at 1,000,000** entries: the generation-checked
   `NodeId` never leaves Rust and stale/foreign nodes raise a typed `TypeError`.
-  No network, filesystem or wall-clock APIs are exposed. The runtime is **not
-  yet wired into `render`**, so `<script>` execution, events/timers and CSSOM
-  remain pending (WP-6.2–6.7).
+  No network, filesystem or wall-clock APIs are exposed to scripts. `render`
+  wires the runtime into the pipeline with per-script + total budgets and the
+  script caps above; events/`EventTarget`, real-clock timers and CSSOM remain
+  pending (WP-A/WP-B/WP-6.4).
 
 ## Out of scope
 

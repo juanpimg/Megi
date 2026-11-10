@@ -1,19 +1,26 @@
-# Handoff de sesión — ronda 8 (Fase 6 arrancada con Boa, red avanzada, backgrounds E2E, texto de tablas)
+# Handoff de sesión — ronda 9 (JS ejecutado en render, hit-testing y shell navegable)
 
 **Fecha**: 2026-11-10 (Europe/Madrid)
-**Rama**: `sprint/robustez-fase4` — HEAD `31e5139` (árbol limpio)
-**Estado**: **734 tests, 0 fallos**; gate de 4 suites PASS; Fase 4 funcionalmente completa, Fase 5 ≈90 %, **Fase 6 ≈10 % (WP-6.1 HECHO)**, Fase 7 ≈40 %.
+**Rama**: `sprint/robustez-fase4` — HEAD `c86682c` (árbol limpio)
+**Estado**: **793 tests, 0 fallos**; gate de 4 suites PASS; Fase 4 funcionalmente completa, Fase 5 ≈90 %, **Fase 6 ≈30 % (WP-6.1 + WP-6.2 host HECHOS)**, **Fase 7 ≈60 % (WP-7.5 navegación HECHA)**.
 **Docs**: [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md) · [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md) · [`PERFORMANCE.md`](PERFORMANCE.md) · [`FUZZING.md`](FUZZING.md) · [`ROADMAP.md`](ROADMAP.md).
 
-## Qué se hizo en la ronda 8 (5 commits)
+## Qué se hizo en la ronda 9 (4 commits)
 
 | Commit | Bloque | Resultado |
 |---|---|---|
-| `f3d9eef` `feat(js)` | **Fase 6 WP-6.1** | Nuevo crate `js` con **Boa 0.21.1** (`#![forbid(unsafe_code)]`, feature `js` **ON por defecto** y stub `--no-default-features`): `JsRuntime` (eval persistente, console capture, `Budget`/`RuntimeLimits` anti-bucle, `JsError` tipado), **bindings DOM** (`document.write`, `getElementById`, `getElementsByTagName/ClassName`, `querySelector(All)`, `createElement/TextNode`, `documentElement/body/head/title/URL`; wrappers con `tagName/id/className/textContent/innerHTML/outerHTML`, atributos, `appendChild/insertBefore/removeChild/replaceChild`, `children/parentNode/firstChild/nextSibling`, `style` y `classList`; **NodeId stale ⇒ TypeError**, nunca panic) y scheduler base (`setTimeout/Interval` encolan, `run_tasks`/`run_microtasks`). **12 tests**. Aún **no integrado en `render`**. |
-| `be72a25` `feat(paint)` | Backgrounds + texto de tablas | `BackgroundImages` y `build_display_list_with_images_and_backgrounds`; background-image estirada al *padding box* (color debajo) y `list-style-image` como marcador (~1em); **fix del texto de celdas de tabla** (`paint_inline_content` no descendía en cajas de tabla; ahora sí). 9 tests nuevos → **97** paint; `basic.rgba` sin cambios. |
-| `0f556bd` `test(layout)` | Modelo de tablas | Documentado y fijado por 4 tests el árbol `table > rowgroup > row > TableCell > LineBox > TextNode` → **133** tests layout. |
-| `debc1e8` `feat(render)` | Backgrounds E2E + golden | Resolución de `url(...)` relativa al documento, dedupe y caps (32 recursos / 8 MiB / 16 MiB), stats y warnings no fatales; fixtures `backgrounds.html` + assets; **golden showcase regenerado: 1024×768, 80.220 B, `md5 c95c7eff83e7bd08f815631aa42afdb0`** (antes `c95c7eff…`), 80 display items, determinista file://==HTTP. `basic` sigue 15.498 B `md5 7324e851…`. **53** tests render. |
-| `31e5139` `feat(net)` | Red avanzada (Fase 5) | **Cookies RFC 6265** (subset: dominio/path/secure/httpOnly/expiry, `Set-Cookie`, `Cookie` header, `FetchOptions::cookie_jar` por hop), **CORS básico** (Origin, ACAO exacto/`*`, credentials, preflight OPTIONS, `FetchError::Cors`) y **gzip/deflate** (`Accept-Encoding: gzip` por defecto, wrapper gzip RFC 1952 con CRC32/ISIZE, inflate compartido de `crates/image`, **caps anti-bomba** 64 MiB y ratio 1000:1, `max_response_bytes` sobre descomprimido). +95 tests → **180** net. |
+| `429a30f` `feat(paint)` | **Fase 4 — hit-testing aditivo** | Módulo `hit_test`: `HitKind`, `HitRegion { rect, node_id, kind }` en **orden de pintado** con clip aplicado, `hit_test`/`hit_test_all` (topmost gana) y `HitLink`/`find_link_at` (sube al `<a href>` HTML, href crudo); builders aditivos `build_display_list_with_hit_regions`/`build_display_list_and_hit_regions`. Las entradas clásicas quedan **byte-idénticas** (golden intacto) y el coste es opt-in. 11 tests nuevos → **108** paint. |
+| `4ac56ba` `feat(shell)` | **Fase 7 WP-7.5 — navegación real** | Clic izquierdo en enlace ⇒ resolución con `Url::join` ⇒ render en worker (generación) + historial; `NavigationState` puro (back/forward/replace/reload, cap 256, truncado forward, no-op misma URL, fallos conservan entrada). Atajos: Alt+←/Backspace/b atrás, Alt+→/n adelante, `r` recarga, `q`/Esc cierra. Título dinámico `<title>` + URL corta + % scroll + `[recortado]`; errores «Megi — error: …»; hit regions y título del **mismo** render que los píxeles; redirects HTTP replace. 34 tests nuevos → **80** shell. |
+| `c86682c` `feat(render)` | **Fase 6 WP-6.2 host — JS en el pipeline** | `render::ScriptingMode { Enabled, Disabled }` (default Enabled con feature `js`; Disabled con `--no-default-features`), `RenderOptions::{scripting, scripting_limits}`, `ScriptingLimits`/`ScriptBudget::SMALL` y CLI `--no-scripting`. Descubre `<script>` clásicos en orden (inline/`src`; módulos avisados y saltados, `nomodule` ignorado), carga externos con el ResourceLoader (`--no-network`, dedupe, caps 8 MiB/script, 32 MiB total, 64 scripts), ejecuta con `js::JsRuntime::with_document` con budget por script + total, drena microtasks y hasta 10.000 timers, captura console (`scripts_executed/failed/bytes/console` + `timings.scripting`) y **recalcula estilos→layout→paint sobre el DOM mutado** (mutaciones visibles en el PNG). 7 fixtures `js_*` y 12 tests → **67** render. |
+| `40817d9` `docs` | Cierre ronda 8 | Sincronización de README/ROADMAP/ARCHITECTURE/HANDOFF/PHASE4-SUPPORT/TOOLING/SECURITY/CONTRIBUTING/CHANGELOG con la ronda 8 (734 tests, backgrounds E2E, golden `c95c7eff…`). |
+
+## Evidencia verificada
+
+- `cargo test --workspace` → **793 tests, 0 fallos**; fmt, clippy `-D warnings`, `cargo doc` y MSRV 1.88 OK.
+- Gate de conformidad: tokenizer **7.050/7.050**, árbol **3.898/3.904** (allowlist `scripted_*` hasta WP-6.4), serializador **230/230**, CSS Syntax **30/30**; `--summary` exit 0.
+- **JS en render**: `js_text.html` con scripting 15.876 B `md5 e1da51d432804fd540792d40398b72eb` vs `--no-scripting` 15.499 B `md5 53f67e77a335a8b024e0896497e63999`. Showcase golden intacto: 1024×768, 80.220 B, `md5 c95c7eff83e7bd08f815631aa42afdb0`. Basic fixture: 15.498 B, `md5 7324e8512e831de132b1172965332a73`. Phase-4 `basic.rgba` byte-idéntico (`md5 60f8984e…`).
+- **Hit-testing**: `paint` 108 tests; `basic.rgba` y PNG del showcase sin cambios byte a byte.
+- **Shell**: 80 tests (incluye `NavigationState`, título, worker; ventana real no testeada en CI por falta de servidor gráfico).
 
 ## Estado actual por crate
 
@@ -21,58 +28,56 @@
 |---|---|---|
 | `dom` | COMPLETO: arena generacional, API de navegador | 28 |
 | `html` | COMPLETO: parser, serializador §13.3, `innerHTML`/`document.write` | 53 |
-| `css` | COMPLETO + query API + `@import`/media + `background-image` parsing | 57 |
-| `layout` | COMPLETO Fase 4: tablas avanzadas y modelo de celdas fijado | 133 |
+| `css` | COMPLETO: selectores/cascada/@media/query API, background-image parsing | 57 |
+| `layout` | COMPLETO Fase 4: tablas §17, árbol de celdas fijado | 133 |
 | `fonts` | COMPLETO (base LTR) | 13 + 1 doctest |
-| `paint` | COMPLETO Fase 4 + backgrounds + texto de tabla | 97 |
+| `paint` | COMPLETO Fase 4 + backgrounds + **hit-testing** | 108 |
 | `net` | Fase 5: TLS/caché/data:/cookies/CORS/gzip | 180 |
 | `image` | Decoder PNG + inflate propios | 45 + 1 doctest |
-| `js` | **Fase 6 WP-6.1**: Boa 0.21.1 + bindings DOM + budgets | 12 |
-| `render` | Pipeline URL→PNG + imágenes/backgrounds E2E + `@import`/media | 53 |
-| `shell` | Fase 7 usable: scroll/entrada/HiDPI/worker + headless | 46 |
-| `bench` | Benchmarks deterministas + baseline | 8 |
-| `test_harness` | Gate de 4 suites + allowlists | 7 |
+| `js` | **Fase 6 WP-6.1**: Boa 0.21.1 + bindings DOM + budgets; consumido por `render` | 12 |
+| `render` | Pipeline URL→PNG + imágenes/backgrounds + **scripts E2E** | 67 |
+| `shell` | Fase 7 usable: scroll/entrada/HiDPI/worker + **navegación/historial/título** | 80 |
+| `bench` | Benchmarks reproducibles (parseo/estilos/layout/paint/PNG) | 8 |
+| `test_harness` | Gate de conformidad 4 suites + allowlist | 7 |
 
-**Total workspace: 734 tests, 0 fallos.** MSRV Rust 1.88 (incluye `boa_engine 0.21.1`); `#![forbid(unsafe_code)]` en todos los crates; `fuzz/` workspace aparte.
-
-## Comandos de verificación exactos
+## Comandos de verificación
 
 ```bash
-export CARGO_HOME=/home/jp/Escritorio/Proyectos/.cargo-home   # sólo en el sandbox del equipo
-cd /home/jp/Escritorio/Proyectos/Megi
+./tools/dev.sh all                                  # fmt, clippy, 793 tests, doc y gate
+cargo test --workspace                              # 793 tests (con JS por defecto)
+cargo test --workspace --no-default-features        # stub sin Boa (build mínimo)
+cargo test -p js && cargo test -p js --no-default-features
+cargo test -p paint && cargo test -p render && cargo test -p shell
 
-./tools/dev.sh all                                  # fmt, clippy, 734 tests, doc y gate
-cargo +1.88 check --workspace --all-targets         # MSRV (incluye boa_engine 0.21.1)
-cargo test --workspace                              # 734 tests (con JS por defecto)
-cargo test --workspace --no-default-features        # build mínimo sin JS (stub)
-cargo run -p test_harness -- --summary              # gate 4 suites: PASS, exit 0
+# JS en el pipeline (mutaciones visibles en el PNG)
+cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_on.png
+cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
+md5sum /tmp/js_on.png /tmp/js_off.png               # e1da51d4… vs 53f67e77…
 
-cargo test -p js                                    # 12 tests (Boa, feature js ON)
-cargo test -p js --no-default-features              # stub sin motor
+# Hit-testing (API aditiva; PNG/golden no cambian)
+cargo test -p paint --test hit_testing
 
-# Backgrounds + showcase (1024×768, golden determinista)
+# Shell navegable (controles: clic izq enlace, Alt+←/→, b/n, r, q/Esc)
+cargo run -p shell -- tests/fixtures/render/showcase/index.html
+cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png --width 640 --height 400
+
+# Showcase / fase 4
 cargo run -p render -- tests/fixtures/render/showcase/index.html docs/images/showcase.png --width 1024 --height 768
-md5sum docs/images/showcase.png                     # c95c7eff… (80.220 B, 80 items)
-python3 tools/png_check.py docs/images/showcase.png
-
-# Shell, red avanzada, rendimiento y fuzz
-cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png --width 640 --height 400
-cargo test -p net -p render -p paint -p layout
-./tools/bench.sh
-cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
+cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/phase4.png
+python3 tools/png_check.py /tmp/phase4.png
+./tools/bench.sh --scale 0.1
 ```
 
-Evidencia: showcase **80.220 B `md5 c95c7eff83e7bd08f815631aa42afdb0`** (80 display items, `background_images_loaded: 2`); basic shell/render **15.498 B `md5 7324e851…`**; Phase-4 golden `basic.rgba` `md5 60f8984e…`; gate PASS.
+## Deuda priorizada
 
-## Deuda técnica priorizada (siguiente ronda)
-
-1. **Integrar JS en `render` (WP-6.2/6.3)**: ejecutar `<script>` parser-inserted y `document.write` durante el parseo; hito: cerrar los `scripted_*` (árbol 3.904/3.904) y ejecutar JS en `render`/`shell`. Después WP-6.4–6.7: eventos/timers de reloj real, CSSOM/`getComputedStyle`, `MutationObserver`, fuzz de bindings.
-2. **Fase 5 restante**: HTTP/2, CORS completo (preflight real, `SameSite`/PSL), streaming de cuerpos, `Referrer-Policy`; `background-repeat/size/position` y colores de `border-collapse` (Fase 4).
-3. **Fase 7**: hit-testing (`NodeId`/`LayoutBox` ↔ `DisplayItem`), navegación/historial, eventos DOM/foco, zoom y pulido de HiDPI; tests de ventana en CI con Xvfb.
-4. **Rendimiento**: perfil de parseo+layout (según baseline, ~65 % del pipeline), tablas grandes, compresión PNG en páginas grandes y glyph cache global; evaluar memoria de Boa por realm.
-5. **Robustez/seguridad**: budgets JS (ya hay `RuntimeLimits`), fuzz targets nuevos (`render`, `js` host bridge), caps de backgrounds y anti-bomba gzip; límites de memoria del runtime JS.
-6. **Fixtures/goldens**: `real_page.html`/`torture.html`, goldens con tolerancia para AA y nuevos casos de tablas/backgrounds.
-7. **Documentación**: mantener README/ROADMAP/ARCHITECTURE/HANDOFF/PHASE4-SUPPORT/TOOLING/SECURITY/CONTRIBUTING/CHANGELOG y ADR sincronizados por ronda.
+1. **WP-A (js)**: `EventTarget`/eventos y timers de reloj real (hoy sólo scheduler base y microtasks); **WP-B (js)**: CSSOM/`getComputedStyle` y utilidades; caché de identidad de wrappers.
+2. **WP-6.4 (render+js)**: ejecución **durante el parsing** (`parser-inserted` + `document.write` con re-tokenización) para sacar los `scripted_*` de la allowlist (criterio árbol **3.904/3.904**); luego `async`/`defer` y módulos ES avisados.
+3. **Cablear `paint::find_link_at` en `render`** (`RenderOutput.hit_regions`) para que el shell use la API de paint (follow-up de una función; PNG/golden no cambian).
+4. **Rendimiento**: parseo+layout (baseline en `docs/PERFORMANCE.md`), fast path de tablas ya en ~59 ms.
+5. **Fase 4**: `background-repeat/size/position`, colores de conflictos `border-collapse`, block-in-inline.
+6. **Fase 5**: HTTP/2 y streaming, CORS completo (SameSite/PSL), `br`.
+7. **Fase 7**: formularios, pestañas, zoom, JS en el bucle del host, tests de ventana con Xvfb.
+8. **Fuzzing**: targets `render`/`js` además de los 4 actuales (`html_parse`, `css_parse`, `selectors`, `net_url`).
 
 ## Reglas del repositorio (recordatorio)
 
