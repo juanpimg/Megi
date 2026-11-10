@@ -22,6 +22,7 @@
 
 pub mod deflate;
 pub mod display_list;
+pub mod hit_test;
 pub mod inflate;
 pub mod painter;
 pub mod png;
@@ -34,9 +35,11 @@ pub use display_list::{
     BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MAX_DISPLAY_LIST_ITEMS,
     MarkerKind,
 };
+pub use hit_test::{HitKind, HitLink, HitRegion, find_link_at, hit_test, hit_test_all};
 pub use inflate::inflate_zlib;
 pub use painter::{
     IMAGE_PLACEHOLDER, MAX_FLOAT_DEPTH, MAX_STACKING_CONTEXT_DEPTH, build_display_list,
+    build_display_list_and_hit_regions, build_display_list_with_hit_regions,
     build_display_list_with_images, build_display_list_with_images_and_backgrounds,
 };
 pub use png::encode_rgba;

@@ -61,9 +61,12 @@ use css::{BorderStyle, Color, Display, ListStyleType, Position, TextDecoration, 
 use dom::NodeId;
 use layout::{BoxType, LayoutBox, Rect};
 
+use std::cell::RefCell;
+
 use crate::display_list::{
     BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MarkerKind,
 };
+use crate::hit_test::{HitKind, HitRegion, RegionCollector};
 
 /// Background color propagated from the root element or `body` to the canvas.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -94,6 +97,42 @@ struct PaintSkip {
 struct PaintResources<'a> {
     images: &'a ImageStore,
     backgrounds: &'a BackgroundImages,
+    /// Optional hit-testing sink; `None` for the classic painting entry points,
+    /// which must stay allocation- and output-identical.
+    regions: Option<&'a RefCell<RegionCollector>>,
+}
+
+impl PaintResources<'_> {
+    /// Records a painted primitive for hit-testing (no-op when regions are off).
+    fn record(&self, rect: Rect, node_id: Option<dom::NodeId>, kind: HitKind) {
+        if let Some(collector) = self.regions {
+            collector.borrow_mut().record(rect, node_id, kind);
+        }
+    }
+
+    fn push_clip(&self, rect: Rect) {
+        if let Some(collector) = self.regions {
+            collector.borrow_mut().push_clip(rect);
+        }
+    }
+
+    fn pop_clip(&self) {
+        if let Some(collector) = self.regions {
+            collector.borrow_mut().pop_clip();
+        }
+    }
+}
+
+/// Emits a `PushClip` display item and mirrors it into the hit-region clip stack.
+fn push_clip_item(list: &mut DisplayList, resources: &PaintResources<'_>, rect: Rect) {
+    list.push(DisplayItem::PushClip { rect });
+    resources.push_clip(rect);
+}
+
+/// Emits a `PopClip` display item and mirrors it into the hit-region clip stack.
+fn pop_clip_item(list: &mut DisplayList, resources: &PaintResources<'_>) {
+    list.push(DisplayItem::PopClip);
+    resources.pop_clip();
 }
 
 /// Appendix E phase a box belongs to inside its nearest stacking context.
@@ -190,9 +229,46 @@ pub fn build_display_list_with_images_and_backgrounds(
     images: &ImageStore,
     backgrounds: &BackgroundImages,
 ) -> DisplayList {
+    build_display_list_inner(root, viewport, images, backgrounds, None).0
+}
+
+/// Variant of [`build_display_list_with_images_and_backgrounds`] that also
+/// returns the [`HitRegion`] list used by the shell for clicks/hover.
+///
+/// The display list is byte-identical to the one produced without hit regions;
+/// the regions are an additive side-channel in painting order.
+pub fn build_display_list_with_hit_regions(
+    root: &LayoutBox,
+    viewport: Rect,
+    images: &ImageStore,
+    backgrounds: &BackgroundImages,
+) -> (DisplayList, Vec<HitRegion>) {
+    let collector = RefCell::new(RegionCollector::default());
+    build_display_list_inner(root, viewport, images, backgrounds, Some(&collector))
+}
+
+/// Convenience hit-region variant without decoded images/backgrounds.
+pub fn build_display_list_and_hit_regions(
+    root: &LayoutBox,
+    viewport: Rect,
+) -> (DisplayList, Vec<HitRegion>) {
+    let images = ImageStore::new();
+    let backgrounds = BackgroundImages::new();
+    let collector = RefCell::new(RegionCollector::default());
+    build_display_list_inner(root, viewport, &images, &backgrounds, Some(&collector))
+}
+
+fn build_display_list_inner(
+    root: &LayoutBox,
+    viewport: Rect,
+    images: &ImageStore,
+    backgrounds: &BackgroundImages,
+    regions: Option<&RefCell<RegionCollector>>,
+) -> (DisplayList, Vec<HitRegion>) {
     let resources = PaintResources {
         images,
         backgrounds,
+        regions,
     };
     let canvas = canvas_background(root);
     let mut list = DisplayList::new();
@@ -214,8 +290,17 @@ pub fn build_display_list_with_images_and_backgrounds(
             _ => None,
         },
     };
+    if resources.regions.is_some() {
+        // The canvas background is the bottom-most hit region: any click on the
+        // page background reports the root element.
+        resources.record(viewport, root.node_id(), HitKind::Background);
+    }
     paint_stacking_context(root, &mut list, skip, &resources, false, true, 0);
-    list
+    let regions = match regions {
+        Some(collector) => collector.borrow_mut().take_regions(),
+        None => Vec::new(),
+    };
+    (list, regions)
 }
 
 /// Returns the first block-level child of the root box, interpreted as `body`.
@@ -343,7 +428,7 @@ fn paint_stacking_context(
 
     let clip = layout_box.clip;
     if let Some(rect) = clip {
-        list.push(DisplayItem::PushClip { rect });
+        push_clip_item(list, resources, rect);
     }
 
     if depth >= MAX_STACKING_CONTEXT_DEPTH {
@@ -361,7 +446,7 @@ fn paint_stacking_context(
             1.0,
         );
         if clip.is_some() {
-            list.push(DisplayItem::PopClip);
+            pop_clip_item(list, resources);
         }
         return;
     }
@@ -403,7 +488,7 @@ fn paint_stacking_context(
     }
 
     if clip.is_some() {
-        list.push(DisplayItem::PopClip);
+        pop_clip_item(list, resources);
     }
 
     // Opacity group: the whole subtree is composited once with `opacity`.
@@ -472,7 +557,7 @@ fn paint_block_backgrounds(
     push_block_children(layout_box, inherited_hidden, alpha_scale, &mut stack);
     while let Some(task) = stack.pop() {
         match task {
-            BlockTask::PopClip => list.push(DisplayItem::PopClip),
+            BlockTask::PopClip => pop_clip_item(list, resources),
             BlockTask::Visit {
                 layout_box: child,
                 inherited_hidden,
@@ -481,7 +566,7 @@ fn paint_block_backgrounds(
                 let hidden = inherited_hidden || is_hidden(child);
                 let alpha = alpha_scale * child.opacity.clamp(0.0, 1.0);
                 if let Some(rect) = child.clip {
-                    list.push(DisplayItem::PushClip { rect });
+                    push_clip_item(list, resources, rect);
                     stack.push(BlockTask::PopClip);
                 }
                 if child.is_block() && !hidden {
@@ -563,7 +648,7 @@ fn paint_float(
     let alpha = alpha_scale * layout_box.opacity.clamp(0.0, 1.0);
     let clipped = layout_box.clip;
     if let Some(rect) = clipped {
-        list.push(DisplayItem::PushClip { rect });
+        push_clip_item(list, resources, rect);
     }
     if !hidden {
         paint_background_border(layout_box, list, skip, resources, false, alpha);
@@ -582,7 +667,7 @@ fn paint_float(
         alpha,
     );
     if clipped.is_some() {
-        list.push(DisplayItem::PopClip);
+        pop_clip_item(list, resources);
     }
 }
 
@@ -594,6 +679,8 @@ enum InlineTask<'a> {
         inherited_decoration: TextDecoration,
         alpha: f32,
         ordinal: u32,
+        /// Nearest element `NodeId` (for text/decoration hit regions).
+        owner: Option<dom::NodeId>,
     },
     PopClip,
 }
@@ -611,24 +698,28 @@ fn paint_inline_content(
     inherited_decoration: TextDecoration,
     alpha_scale: f32,
 ) {
+    let owner = layout_box.node_id();
     let mut stack: Vec<InlineTask<'_>> = Vec::new();
     push_inline_children(
         layout_box,
         inherited_hidden,
         inherited_decoration,
         alpha_scale,
+        owner,
         &mut stack,
     );
     while let Some(task) = stack.pop() {
         match task {
-            InlineTask::PopClip => list.push(DisplayItem::PopClip),
+            InlineTask::PopClip => pop_clip_item(list, resources),
             InlineTask::Visit {
                 layout_box: child,
                 inherited_hidden,
                 inherited_decoration,
                 alpha,
                 ordinal,
+                owner,
             } => {
+                let own_owner = child.node_id().or(owner);
                 let parent_decoration = inherited_decoration
                     | child
                         .style
@@ -637,14 +728,14 @@ fn paint_inline_content(
                 let hidden = inherited_hidden || is_hidden(child);
                 let clipped = child.clip;
                 if let Some(rect) = clipped {
-                    list.push(DisplayItem::PushClip { rect });
+                    push_clip_item(list, resources, rect);
                     stack.push(InlineTask::PopClip);
                 }
 
                 match &child.box_type {
                     BoxType::TextNode(text) if !text.trim().is_empty() => {
                         if !hidden {
-                            paint_text_run(child, text, list, alpha);
+                            paint_text_run(child, text, list, resources, own_owner, alpha);
                             paint_text_decorations(
                                 child,
                                 parent_decoration
@@ -652,6 +743,8 @@ fn paint_inline_content(
                                         style.text_decoration
                                     }),
                                 list,
+                                resources,
+                                own_owner,
                                 alpha,
                             );
                         }
@@ -667,13 +760,27 @@ fn paint_inline_content(
                         if !hidden {
                             paint_background_border(child, list, skip, resources, false, alpha);
                         }
-                        push_inline_children(child, hidden, parent_decoration, alpha, &mut stack);
+                        push_inline_children(
+                            child,
+                            hidden,
+                            parent_decoration,
+                            alpha,
+                            own_owner,
+                            &mut stack,
+                        );
                     }
                     BoxType::BlockNode(_) | BoxType::AnonymousBlock | BoxType::LineBox => {
                         if is_list_item(child) && !hidden {
                             paint_marker(child, ordinal, list, resources, alpha);
                         }
-                        push_inline_children(child, hidden, parent_decoration, alpha, &mut stack);
+                        push_inline_children(
+                            child,
+                            hidden,
+                            parent_decoration,
+                            alpha,
+                            own_owner,
+                            &mut stack,
+                        );
                     }
                     // Table internals and inline-block wrappers: backgrounds and
                     // borders are emitted by the block-background pass, but their
@@ -689,7 +796,14 @@ fn paint_inline_content(
                     | BoxType::TableColumn(_)
                     | BoxType::AnonymousTableRow
                     | BoxType::AnonymousTableCell => {
-                        push_inline_children(child, hidden, parent_decoration, alpha, &mut stack);
+                        push_inline_children(
+                            child,
+                            hidden,
+                            parent_decoration,
+                            alpha,
+                            own_owner,
+                            &mut stack,
+                        );
                     }
                     _ => {}
                 }
@@ -710,6 +824,7 @@ fn push_inline_children<'a>(
     inherited_hidden: bool,
     inherited_decoration: TextDecoration,
     alpha_scale: f32,
+    owner: Option<dom::NodeId>,
     stack: &mut Vec<InlineTask<'a>>,
 ) {
     let parent_decoration = inherited_decoration
@@ -752,6 +867,7 @@ fn push_inline_children<'a>(
             inherited_decoration: parent_decoration,
             alpha,
             ordinal,
+            owner: child.node_id().or(owner),
         });
     }
 }
@@ -770,6 +886,7 @@ fn paint_replaced_element(
     if rect.width <= 0.0 || rect.height <= 0.0 {
         return;
     }
+    resources.record(rect, Some(node_id), HitKind::Image);
     match resources.images.get(&node_id) {
         Some(image) if !image.is_empty() => {
             list.push(DisplayItem::Image {
@@ -811,6 +928,13 @@ fn paint_background_border(
         return;
     };
 
+    let node_id = layout_box.node_id();
+    resources.record(
+        layout_box.dimensions.border_box(),
+        node_id,
+        HitKind::Background,
+    );
+
     let background_is_propagated = (is_root && skip.root_background)
         || layout_box.node_id().is_some() && layout_box.node_id() == skip.body_node;
     if !background_is_propagated && style.background_color.a > 0 {
@@ -835,6 +959,7 @@ fn paint_background_border(
 
     let sides = border_sides(style, layout_box.dimensions.border);
     if sides.iter().any(BorderSide::is_visible) {
+        resources.record(layout_box.dimensions.border_box(), node_id, HitKind::Border);
         list.push(DisplayItem::Border {
             rect: layout_box.dimensions.border_box(),
             sides: sides.map(|side| BorderSide {
@@ -846,7 +971,14 @@ fn paint_background_border(
 }
 
 /// Emits one shaped text run.
-fn paint_text_run(layout_box: &LayoutBox, text: &str, list: &mut DisplayList, alpha_scale: f32) {
+fn paint_text_run(
+    layout_box: &LayoutBox,
+    text: &str,
+    list: &mut DisplayList,
+    resources: &PaintResources<'_>,
+    owner: Option<dom::NodeId>,
+    alpha_scale: f32,
+) {
     let style = layout_box.style.as_ref();
     let (color, font_size, font_family) = if let Some(style) = style {
         (style.color, style.font_size, style.font_family.clone())
@@ -869,6 +1001,7 @@ fn paint_text_run(layout_box: &LayoutBox, text: &str, list: &mut DisplayList, al
         )
     });
 
+    resources.record(layout_box.dimensions.content, owner, HitKind::Text);
     list.push(DisplayItem::Text {
         text: text.to_string(),
         rect: layout_box.dimensions.content,
@@ -887,6 +1020,8 @@ fn paint_text_decorations(
     layout_box: &LayoutBox,
     decoration: TextDecoration,
     list: &mut DisplayList,
+    resources: &PaintResources<'_>,
+    owner: Option<dom::NodeId>,
     alpha_scale: f32,
 ) {
     if decoration.is_empty() {
@@ -905,26 +1040,19 @@ fn paint_text_decorations(
     let thickness = (font_size / 14.0).max(1.0);
     let width = rect.width;
 
+    let mut record_line = |y: f32| {
+        let line = Rect::new(rect.x, y - thickness / 2.0, width, thickness);
+        resources.record(line, owner, HitKind::Decoration);
+        list.push(DisplayItem::TextDecoration { rect: line, color });
+    };
     if decoration.contains(TextDecoration::UNDERLINE) {
-        let y = baseline + font_size * 0.12;
-        list.push(DisplayItem::TextDecoration {
-            rect: Rect::new(rect.x, y - thickness / 2.0, width, thickness),
-            color,
-        });
+        record_line(baseline + font_size * 0.12);
     }
     if decoration.contains(TextDecoration::OVERLINE) {
-        let y = baseline - font_size * 0.8;
-        list.push(DisplayItem::TextDecoration {
-            rect: Rect::new(rect.x, y - thickness / 2.0, width, thickness),
-            color,
-        });
+        record_line(baseline - font_size * 0.8);
     }
     if decoration.contains(TextDecoration::LINE_THROUGH) {
-        let y = baseline - font_size * 0.3;
-        list.push(DisplayItem::TextDecoration {
-            rect: Rect::new(rect.x, y - thickness / 2.0, width, thickness),
-            color,
-        });
+        record_line(baseline - font_size * 0.3);
     }
 }
 
@@ -985,8 +1113,10 @@ fn paint_marker(
     {
         let size = font_size.max(1.0);
         let center_y = baseline - font_size * 0.35;
+        let marker_rect = Rect::new(right - size, center_y - size / 2.0, size, size);
+        resources.record(marker_rect, layout_box.node_id(), HitKind::Marker);
         list.push(DisplayItem::Image {
-            rect: Rect::new(right - size, center_y - size / 2.0, size, size),
+            rect: marker_rect,
             image: std::sync::Arc::clone(image),
         });
         return;
@@ -998,6 +1128,7 @@ fn paint_marker(
             let text = format!("{ordinal}.");
             let width = text.chars().count() as f32 * font_size * 0.5;
             let rect = Rect::new(right - width, baseline - font_size * 0.8, width, font_size);
+            resources.record(rect, layout_box.node_id(), HitKind::Marker);
             list.push(DisplayItem::Text {
                 text,
                 rect,
@@ -1017,6 +1148,7 @@ fn paint_marker(
             let size = (font_size * 0.35).max(2.0);
             let center_y = baseline - font_size * 0.35;
             let rect = Rect::new(right - size, center_y - size / 2.0, size, size);
+            resources.record(rect, layout_box.node_id(), HitKind::Marker);
             let kind = match kind {
                 ListStyleType::Disc => MarkerKind::Disc,
                 ListStyleType::Circle => MarkerKind::Circle,
