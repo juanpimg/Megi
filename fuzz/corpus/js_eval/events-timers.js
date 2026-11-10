@@ -1,0 +1,1 @@
+document.addEventListener("click", function(){ document.getElementById("field").setAttribute("value", "x"); }); setTimeout(function(){ document.body.innerHTML = "<p>later</p>"; }, 10);

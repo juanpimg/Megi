@@ -1,8 +1,10 @@
 name: Fuzz (nightly)
 
-# Nightly libFuzzer smoke runs over every parser that consumes untrusted input.
-# Not a substitute for a long-running fuzzing farm: it is a cheap daily regression gate
-# (5 minutes per target) that keeps the harnesses compiling and catches shallow crashes.
+# Nightly libFuzzer smoke runs over every parser/renderer surface that consumes untrusted
+# input, plus a fast "build every target" job on pull requests.
+# Not a substitute for a long-running fuzzing farm: the scheduled job is a cheap daily
+# regression gate (5 minutes per target) that keeps the harnesses compiling and catches
+# shallow crashes.
 #
 # Run it on demand from the Actions tab (`workflow_dispatch`) or locally:
 #   cd fuzz && cargo +nightly fuzz build
@@ -14,6 +16,10 @@ on:
     # Every day at 03:17 UTC (off-peak, away from the top-of-hour Actions spike).
     - cron: "17 3 * * *"
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "fuzz/**"
+      - ".github/workflows/fuzz-nightly.yml"
 
 permissions:
   contents: read
@@ -23,18 +29,59 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  # Fast PR gate: cargo-fuzz needs nightly (it passes `-Zsanitizer=…` to rustc), so a
+  # stable-only build job is not viable. This job compiles every target on nightly but does
+  # not run libFuzzer, keeping PR feedback cheap (~few minutes with the rust-cache below).
+  build:
+    name: build all fuzz targets
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz -> target
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Build every target
+        working-directory: fuzz
+        run: cargo +nightly fuzz build
+
   fuzz:
     name: fuzz ${{ matrix.target }}
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - html_parse
-          - css_parse
-          - selectors
-          - net_url
+        include:
+          # Round 1-7 parsers.
+          - target: html_parse
+            extra: ""
+          - target: css_parse
+            extra: ""
+          - target: selectors
+            extra: ""
+          - target: net_url
+            extra: ""
+          # Round 18 (R105): render pipeline, JavaScript host and SVG.
+          - target: render_pipeline
+            extra: ""
+          - target: js_eval
+            # Boa 0.21 leaks a constant ~56 bytes / 2 allocations once per process (checked
+            # with -runs=1/10/50: it does not grow per iteration). This is a third-party
+            # one-time allocation, not a memory-safety bug in the host; run without LSan
+            # like other Boa embeddings do, see docs/FUZZING.md.
+            extra: "-detect_leaks=0"
+          - target: svg_parse
+            extra: ""
     steps:
       - uses: actions/checkout@v4
 
@@ -62,6 +109,7 @@ jobs:
           -max_total_time=300
           -rss_limit_mb=2048
           -timeout=25
+          ${{ matrix.extra }}
           -print_final_stats=1
 
       - name: Upload crash artifacts

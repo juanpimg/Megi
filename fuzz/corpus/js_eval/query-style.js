@@ -1,0 +1,1 @@
+document.querySelectorAll(".item").forEach(function(node){ node.style.color = "red"; });

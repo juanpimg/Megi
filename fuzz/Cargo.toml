@@ -19,6 +19,9 @@ dom = { path = "../crates/dom" }
 html = { path = "../crates/html" }
 css = { path = "../crates/css" }
 net = { path = "../crates/net" }
+render = { path = "../crates/render" }
+js = { path = "../crates/js" }
+svg = { path = "../crates/svg" }
 
 [[bin]]
 name = "html_parse"
@@ -44,6 +47,28 @@ bench = false
 [[bin]]
 name = "net_url"
 path = "fuzz_targets/net_url.rs"
+test = false
+doc = false
+bench = false
+
+# Round 18 (R105): new surfaces.
+[[bin]]
+name = "render_pipeline"
+path = "fuzz_targets/render_pipeline.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "js_eval"
+path = "fuzz_targets/js_eval.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "svg_parse"
+path = "fuzz_targets/svg_parse.rs"
 test = false
 doc = false
 bench = false
