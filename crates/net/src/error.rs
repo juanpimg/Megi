@@ -93,6 +93,8 @@ pub enum FetchError {
     UnsupportedFileHost(String),
     /// A `data:` URL is malformed (bad mediatype, invalid base64, ...).
     InvalidDataUrl(String),
+    /// A `Range`/`Content-Range` operation failed (invalid or unsatisfiable range).
+    InvalidRange(String),
     /// A `304 Not Modified` response arrived without a cached representation to
     /// revalidate (e.g. the cache was cleared, or the server misbehaves).
     UnconditionalNotModified,
@@ -150,6 +152,7 @@ impl fmt::Display for FetchError {
                 write!(f, "file: URLs can only name the local host, got `{host}`")
             }
             Self::InvalidDataUrl(reason) => write!(f, "invalid data: URL: {reason}"),
+            Self::InvalidRange(reason) => write!(f, "invalid byte range: {reason}"),
             Self::UnconditionalNotModified => {
                 write!(f, "received 304 Not Modified without a cached response")
             }

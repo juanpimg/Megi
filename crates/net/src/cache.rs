@@ -3,8 +3,9 @@
 //! This module implements the subset of RFC 9111 needed by the [`crate::ResourceLoader`]
 //! HTTP cache:
 //!
-//! - `Cache-Control` response directives: `max-age`, `s-maxage` (ignored for a private
-//!   cache), `no-store`, `no-cache`, `must-revalidate` (treated as `no-cache`), `private`
+//! - `Cache-Control` response directives: `max-age`, `s-maxage` (parsed and exposed; used
+//!   as a private-cache fallback when `max-age` is absent, documented), `no-store`,
+//!   `no-cache`, `must-revalidate` (stored, always revalidated once stale), `private`
 //!   (kept, single-user browser cache).
 //! - `Expires` (IMF-fixdate only, e.g. `Sun, 06 Nov 1994 08:49:37 GMT`).
 //! - `ETag` and `Last-Modified` validators for conditional revalidation.
@@ -18,8 +19,11 @@
 //!   `Content-Encoding` is negotiated or decoded (kept raw, see `http` module docs).
 //! - Only one variant per URL is stored; when the stored `Vary` key does not match the
 //!   current request the entry is treated as a cache miss.
-//! - No shared-cache directives (`s-maxage`, `public`, `stale-while-revalidate`) and no
-//!   heuristic cache of partial/`206` responses.
+//! - `s-maxage` is only a fallback lifetime for this private cache (shared-cache/proxy
+//!   semantics are out of scope); `public`/`stale-while-revalidate` are ignored and there is
+//!   no heuristic cache of partial/`206` responses.
+//! - `Age` is parsed from responses and subtracted from the freshness lifetime at store
+//!   time; a monotonic per-entry age counter is not maintained between requests.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -28,10 +32,17 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub struct CachePolicy {
     /// `no-store`: never persist the response in the cache.
     pub no_store: bool,
-    /// `no-cache`/`must-revalidate`: store, but always revalidate before reuse.
+    /// `no-cache`: store, but always revalidate before reuse (even if fresh).
     pub no_cache: bool,
+    /// `must-revalidate`: once stale the entry may not be served without revalidation.
+    pub must_revalidate: bool,
     /// `max-age` in seconds, if valid.
     pub max_age: Option<u64>,
+    /// `s-maxage` in seconds, if valid (shared-cache lifetime; used here only as a fallback
+    /// for a private cache when `max-age` is absent — documented approximation).
+    pub s_maxage: Option<u64>,
+    /// `Age` response header in seconds, if valid (time already spent in intermediate caches).
+    pub age: Option<u64>,
     /// Absolute expiry from `Expires`, if valid and in the future at parse time.
     pub expires_at: Option<SystemTime>,
     /// `ETag` validator (quoted string preserved).
@@ -65,8 +76,28 @@ impl CachePolicy {
         if let Some(max_age) = self.max_age {
             return Some(Duration::from_secs(max_age));
         }
+        // `s-maxage` normally only applies to shared caches; this private cache uses it as
+        // a fallback when no `max-age` is present (documented approximation).
+        if let Some(s_maxage) = self.s_maxage {
+            return Some(Duration::from_secs(s_maxage));
+        }
         self.expires_at
             .map(|expires| expires.duration_since(now).unwrap_or(Duration::ZERO))
+    }
+
+    /// Freshness lifetime minus the response's `Age` (RFC 9111 §4.2.3), if explicit.
+    ///
+    /// Used by the loader when storing an entry, so a response that already spent time in
+    /// an intermediate cache is revalidated sooner.
+    pub fn freshness_lifetime(&self, now: SystemTime) -> Option<Duration> {
+        let lifetime = self.explicit_lifetime(now)?;
+        let age = Duration::from_secs(self.age.unwrap_or(0));
+        Some(lifetime.saturating_sub(age))
+    }
+
+    /// `true` when the storage may keep the body but must revalidate before every reuse.
+    pub const fn requires_revalidation(&self) -> bool {
+        self.no_cache || self.must_revalidate
     }
 
     /// True when the response must not be stored at all.
@@ -105,6 +136,11 @@ pub fn parse_cache_policy(headers: &[(String, String)], now: SystemTime) -> Cach
             }
         } else if name.eq_ignore_ascii_case("vary") {
             vary_values.extend(value.split(',').map(|token| token.trim().to_owned()));
+        } else if name.eq_ignore_ascii_case("age")
+            && policy.age.is_none()
+            && let Ok(seconds) = value.trim().parse::<u64>()
+        {
+            policy.age = Some(seconds);
         }
     }
     for token in vary_values {
@@ -134,10 +170,10 @@ fn parse_cache_control(value: &str, now: SystemTime, policy: &mut CachePolicy) {
         };
         if name.eq_ignore_ascii_case("no-store") {
             policy.no_store = true;
-        } else if name.eq_ignore_ascii_case("no-cache")
-            || name.eq_ignore_ascii_case("must-revalidate")
-        {
+        } else if name.eq_ignore_ascii_case("no-cache") {
             policy.no_cache = true;
+        } else if name.eq_ignore_ascii_case("must-revalidate") {
+            policy.must_revalidate = true;
         } else if name.eq_ignore_ascii_case("max-age") {
             if let Some(argument) = argument
                 && policy.max_age.is_none()
@@ -145,8 +181,12 @@ fn parse_cache_control(value: &str, now: SystemTime, policy: &mut CachePolicy) {
             {
                 policy.max_age = Some(seconds);
             }
-        } else if name.eq_ignore_ascii_case("s-maxage") {
-            // Private-cache directive: ignored on purpose (documented).
+        } else if name.eq_ignore_ascii_case("s-maxage")
+            && let Some(argument) = argument
+            && policy.s_maxage.is_none()
+            && let Ok(seconds) = argument.parse::<u64>()
+        {
+            policy.s_maxage = Some(seconds);
         }
     }
     let _ = now;
@@ -265,7 +305,8 @@ mod unit_tests {
             now,
         );
         assert_eq!(policy.max_age, Some(60));
-        assert!(policy.no_cache);
+        assert!(policy.must_revalidate);
+        assert!(!policy.no_cache);
         assert_eq!(policy.etag.as_deref(), Some("\"abc\""));
         assert!(policy.vary.accept_encoding && policy.vary.user_agent);
     }

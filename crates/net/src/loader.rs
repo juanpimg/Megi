@@ -32,6 +32,16 @@
 //!
 //! `data:` URLs are decoded on every load (they are trivially cheap and immutable).
 //!
+//! ## Referrer policy and byte ranges
+//!
+//! [`ResourceLoader::set_referrer`] installs a [`ReferrerConfig`] used for **every**
+//! subsequent HTTP(S) fetch, so subresources send a policy-computed `Referer` header
+//! (the render pipeline sets it once the document URL/policy is known; see
+//! [`crate::ReferrerPolicy`]). [`ResourceLoader::load_range`] performs a one-shot partial
+//! fetch (`Range: bytes=...`): HTTP(S) responses may be `206` (the raw status is only
+//! visible through [`crate::http::fetch`]), `file:`/`data:` resources are sliced locally.
+//! Range loads bypass the cache and do not implement `If-Range`, resume or streaming.
+//!
 //! [`Resource`] is returned behind [`std::sync::Arc`] so sharing it with the DOM/CSS
 //! pipeline does not copy the payload.
 
@@ -45,6 +55,8 @@ use crate::error::{FetchError, LoadError};
 use crate::file::load_file_url;
 use crate::http::{FetchOptions, Headers, Response, fetch, fetch_with_headers};
 use crate::mime::{self, MimeHint};
+use crate::range::ByteRange;
+use crate::referrer::ReferrerConfig;
 use crate::url::{Scheme, Url};
 
 /// Heuristic freshness lifetime for responses without explicit cache metadata
@@ -83,8 +95,10 @@ struct CachedEntry {
     resource: Arc<Resource>,
     stored_at: Instant,
     freshness: Duration,
-    /// `no-cache`/`must-revalidate`: always revalidate before reuse.
+    /// `no-cache`: always revalidate before reuse.
     no_cache: bool,
+    /// `must-revalidate`: once stale, revalidate before reuse (RFC 9111 §5.2.2.2).
+    must_revalidate: bool,
     etag: Option<String>,
     last_modified: Option<String>,
     /// `Vary: User-Agent` value at store time (None when the response does not vary).
@@ -93,7 +107,7 @@ struct CachedEntry {
 
 impl CachedEntry {
     fn is_fresh(&self) -> bool {
-        !self.no_cache && self.stored_at.elapsed() < self.freshness
+        !self.no_cache && !self.must_revalidate && self.stored_at.elapsed() < self.freshness
     }
 
     fn matches_request(&self, user_agent: &str) -> bool {
@@ -333,7 +347,9 @@ impl ResourceLoader {
                 if policy.uncacheable() {
                     return;
                 }
-                let freshness = policy.explicit_lifetime(now).unwrap_or(HEURISTIC_FRESHNESS);
+                let freshness = policy
+                    .freshness_lifetime(now)
+                    .unwrap_or(HEURISTIC_FRESHNESS);
                 (policy, freshness)
             }
             // `file://` (and synthetic) resources: heuristic freshness, no validators.
@@ -351,6 +367,7 @@ impl ResourceLoader {
                 stored_at: Instant::now(),
                 freshness,
                 no_cache: policy.no_cache,
+                must_revalidate: policy.must_revalidate,
                 etag: policy.etag,
                 last_modified: policy.last_modified,
                 vary_user_agent,
@@ -362,6 +379,61 @@ impl ResourceLoader {
     pub fn load_str(&mut self, url: &str) -> Result<Arc<Resource>, LoadError> {
         let parsed = Url::parse(url)?;
         self.load(&parsed)
+    }
+
+    /// Installs the referrer configuration applied to every subsequent HTTP(S) fetch.
+    ///
+    /// Pass `Some(ReferrerConfig::with_policy(document_url, policy))` once the document
+    /// URL and its `Referrer-Policy` are known; `None` disables the `Referer` header.
+    pub fn set_referrer(&mut self, referrer: Option<ReferrerConfig>) {
+        self.options.referrer = referrer;
+    }
+
+    /// Returns the currently installed referrer configuration, if any.
+    pub fn referrer(&self) -> Option<&ReferrerConfig> {
+        self.options.referrer.as_ref()
+    }
+
+    /// Performs a one-shot byte-range fetch of `url` (not cached).
+    ///
+    /// For `http(s)` the request carries `Range: bytes=...` and the returned bytes are the
+    /// server's partial body (the status/`Content-Range` are available through
+    /// [`crate::http::fetch`] when needed). `file:`/`data:` payloads are sliced locally.
+    /// Invalid/unsatisfiable ranges are [`crate::FetchError::InvalidRange`].
+    pub fn load_range(&mut self, url: &Url, range: ByteRange) -> Result<Resource, LoadError> {
+        match url.scheme() {
+            Scheme::Http | Scheme::Https => {
+                let mut options = self.options.clone();
+                options.range = Some(range);
+                let response = fetch(url, &options)?;
+                if response.status == 304 {
+                    return Err(FetchError::UnconditionalNotModified.into());
+                }
+                Ok(Resource {
+                    url: response.final_url,
+                    content_type: mime::resolve_content_type(&response.headers, &response.body),
+                    bytes: response.body,
+                })
+            }
+            Scheme::File => {
+                let bytes = load_file_url(url)?;
+                let slice = slice_bytes(&bytes, range)?;
+                Ok(Resource {
+                    url: url.clone(),
+                    content_type: mime::sniff(&slice).mime_type().to_owned(),
+                    bytes: slice,
+                })
+            }
+            Scheme::Data => {
+                let data = decode_data_url(url)?;
+                let slice = slice_bytes(&data.bytes, range)?;
+                Ok(Resource {
+                    url: url.clone(),
+                    content_type: data.mime_type,
+                    bytes: slice,
+                })
+            }
+        }
     }
 
     /// Returns `true` when a successful load for `url` (without fragment) is cached.
@@ -399,6 +471,17 @@ impl ResourceLoader {
     }
 }
 
+/// Slices `bytes` with `range`, mapping unsatisfiable ranges to [`FetchError::InvalidRange`].
+fn slice_bytes(bytes: &[u8], range: ByteRange) -> Result<Vec<u8>, FetchError> {
+    let Some((start, end)) = range.resolve(bytes.len() as u64) else {
+        return Err(FetchError::InvalidRange(format!(
+            "range {range} is unsatisfiable for {} bytes",
+            bytes.len()
+        )));
+    };
+    Ok(bytes[start as usize..=end as usize].to_vec())
+}
+
 /// Builds a [`Resource`] from an HTTP response, resolving its content type.
 fn resource_from_response(response: Response) -> Resource {
     let content_type = mime::resolve_content_type(&response.headers, &response.body);
@@ -415,12 +498,14 @@ fn updated_entry(mut entry: CachedEntry, policy: &CachePolicy, user_agent: Strin
         // A `304` with `no-store` invalidates the stored representation.
         entry.freshness = Duration::ZERO;
         entry.no_cache = true;
+        entry.must_revalidate = true;
     } else {
         let freshness = policy
-            .explicit_lifetime(SystemTime::now())
+            .freshness_lifetime(SystemTime::now())
             .unwrap_or(HEURISTIC_FRESHNESS);
         entry.freshness = freshness;
         entry.no_cache = policy.no_cache;
+        entry.must_revalidate = policy.must_revalidate;
         if policy.etag.is_some() {
             entry.etag = policy.etag.clone();
         }

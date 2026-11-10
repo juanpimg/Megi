@@ -16,11 +16,17 @@
 //!
 //! ## Deliberate limitations
 //!
-//! - `SameSite` is parsed-and-ignored (documented: no cross-site context in this client;
-//!   every request is a top-level navigation-equivalent).
-//! - No Public Suffix List: a `Domain` cookie is accepted for any domain that
-//!   domain-matches the request host, so a server on `evil.example` cannot scope to
-//!   `.example`, but super-cookie protection (`co.uk`) is not implemented.
+//! - `SameSite=Strict|Lax|None` is parsed and enforced against an **approximate**
+//!   top-level model: [`RequestSite`] classifies a request as same-site,
+//!   cross-site top-level navigation (safe GET) or cross-site subresource. `Strict`
+//!   cookies are only sent same-site, `Lax` also on cross-site top-level navigations, and
+//!   `None` requires `Secure` (otherwise the cookie is rejected). Missing `SameSite`
+//!   defaults to `Lax` (RFC 6265bis browser default), so existing same-site tests keep
+//!   passing; [`CookieJar::header_for_url`] keeps the legacy "same-site" behaviour.
+//! - A **reduced PSL** ([`crate::psl`]) rejects `Domain` cookies scoped to public
+//!   suffixes (e.g. `co.uk`, `github.io`) and is used to compute registrable domains for
+//!   the SameSite model. It is a curated subset with a last-label fallback, not the full
+//!   list (documented in the PSL module).
 //! - No `document.cookie` / JS surface (Phase 6), no `HttpOnly` enforcement beyond the
 //!   flag being stored (there is no script engine to hide it from), no cookie prefixes
 //!   (`__Host-`/`__Secure-`), no RFC 6265bis `SameSite=Lax-by-default`, no date formats
@@ -38,10 +44,81 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crate::cache::parse_http_date;
+use crate::psl;
 use crate::url::{Scheme, Url};
 
 /// Injectable clock: returns the current wall-clock time.
 pub type Clock = Arc<dyn Fn() -> SystemTime + Send + Sync>;
+
+/// `SameSite` cookie attribute (RFC 6265bis §4.1.2.7).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SameSite {
+    /// Sent only for same-site requests.
+    Strict,
+    /// Sent for same-site requests and for safe top-level cross-site navigations.
+    #[default]
+    Lax,
+    /// Sent for every request; requires the `Secure` attribute.
+    None,
+}
+
+impl SameSite {
+    /// Parses a `SameSite` attribute value (ASCII case-insensitive).
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "strict" => Some(Self::Strict),
+            "lax" => Some(Self::Lax),
+            "none" => Some(Self::None),
+            _ => None,
+        }
+    }
+
+    /// Returns the wire name of the attribute value.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Strict => "Strict",
+            Self::Lax => "Lax",
+            Self::None => "None",
+        }
+    }
+}
+
+/// Approximate site context of a request used to enforce `SameSite`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RequestSite {
+    /// The request target is the same site as the initiator (or there is no initiator).
+    #[default]
+    SameSite,
+    /// Safe (`GET`) top-level navigation from a cross-site initiator.
+    CrossSiteNavigation,
+    /// Cross-site subresource request (images, scripts, XHR, iframes, ...).
+    CrossSiteSubresource,
+}
+
+impl RequestSite {
+    /// Classifies a request from `initiator` (the document URL) to `target`.
+    ///
+    /// `top_level_navigation` should be `true` only for user-initiated top-level
+    /// navigations with a safe method (GET); everything else is a subresource request.
+    pub fn classify(
+        initiator: &crate::url::Url,
+        target: &crate::url::Url,
+        top_level_navigation: bool,
+    ) -> Self {
+        if psl::same_site(initiator, target) {
+            Self::SameSite
+        } else if top_level_navigation {
+            Self::CrossSiteNavigation
+        } else {
+            Self::CrossSiteSubresource
+        }
+    }
+
+    /// Returns `true` when the request is cross-site.
+    pub const fn is_cross_site(self) -> bool {
+        !matches!(self, Self::SameSite)
+    }
+}
 
 /// Maximum number of cookies kept in a jar before eviction.
 pub const MAX_COOKIES: usize = 4096;
@@ -61,6 +138,8 @@ pub struct Cookie {
     pub path: String,
     /// Only send over `https:`.
     pub secure: bool,
+    /// `SameSite` enforcement policy (missing attribute defaults to `Lax`).
+    pub same_site: SameSite,
     /// Not exposed to script (stored for completeness; there is no script engine yet).
     pub http_only: bool,
     /// Expiry instant; `None` means a session cookie.
@@ -92,6 +171,10 @@ pub enum SetCookieError {
     InvalidPath(String),
     /// The `Max-Age` attribute is not an integer.
     InvalidMaxAge(String),
+    /// `SameSite=None` without the `Secure` attribute (rejected by browsers).
+    SameSiteNoneRequiresSecure,
+    /// The `Domain` attribute is a public suffix (super-cookie protection).
+    PublicSuffixDomain(String),
 }
 
 impl fmt::Display for SetCookieError {
@@ -103,6 +186,12 @@ impl fmt::Display for SetCookieError {
             Self::InvalidDomain(domain) => write!(f, "invalid cookie domain `{domain}`"),
             Self::InvalidPath(path) => write!(f, "invalid cookie path `{path}`"),
             Self::InvalidMaxAge(value) => write!(f, "invalid cookie Max-Age `{value}`"),
+            Self::SameSiteNoneRequiresSecure => {
+                f.write_str("SameSite=None requires the Secure attribute")
+            }
+            Self::PublicSuffixDomain(domain) => {
+                write!(f, "cookie Domain `{domain}` is a public suffix")
+            }
         }
     }
 }
@@ -122,6 +211,8 @@ pub struct ParsedSetCookie {
     pub path: Option<String>,
     /// `Secure` attribute.
     pub secure: bool,
+    /// `SameSite` attribute (defaults to `Lax` when absent/invalid).
+    pub same_site: SameSite,
     /// `HttpOnly` attribute.
     pub http_only: bool,
     /// Absolute expiry (`Expires` / `Max-Age`), `None` for session cookies.
@@ -190,6 +281,7 @@ pub fn parse_set_cookie(
         path: None,
         secure: false,
         http_only: false,
+        same_site: SameSite::default(),
         expires: None,
     };
     let mut max_age: Option<SystemTime> = None;
@@ -240,6 +332,10 @@ pub fn parse_set_cookie(
                         raw_attribute_value.to_owned(),
                     ));
                 }
+                // Super-cookie protection: a `Domain` cookie may not name a public suffix.
+                if psl::is_public_suffix(&domain) {
+                    return Err(SetCookieError::PublicSuffixDomain(domain));
+                }
                 parsed.domain = Some(domain);
             }
             "path" => {
@@ -251,11 +347,19 @@ pub fn parse_set_cookie(
             }
             "secure" => parsed.secure = true,
             "httponly" => parsed.http_only = true,
-            // `SameSite` (and unknown attributes) are ignored by design; see module docs.
+            "samesite" => {
+                // Unknown values are ignored (browser behaviour): the default Lax applies.
+                if let Some(same_site) = SameSite::parse(raw_attribute_value) {
+                    parsed.same_site = same_site;
+                }
+            }
             _ => {}
         }
     }
 
+    if parsed.same_site == SameSite::None && !parsed.secure {
+        return Err(SetCookieError::SameSiteNoneRequiresSecure);
+    }
     // RFC 6265 §5.3: `Max-Age` has precedence over `Expires`.
     parsed.expires = max_age.or(expires);
     Ok(parsed)
@@ -432,6 +536,7 @@ impl CookieJar {
             host_only,
             path,
             secure: parsed.secure,
+            same_site: parsed.same_site,
             http_only: parsed.http_only,
             expires: parsed.expires,
             created: creation,
@@ -474,7 +579,20 @@ impl CookieJar {
 
     /// Returns the cookies that would be sent for `url` at the current clock, in
     /// RFC 6265 §5.4 order (longest path first, then earliest creation).
+    ///
+    /// This keeps the legacy "same-site context" behaviour: every `SameSite` value is
+    /// sent. Use [`CookieJar::cookies_for_url_with_site`] when the request may be
+    /// cross-site.
     pub fn cookies_for_url(&self, url: &Url) -> Vec<&Cookie> {
+        self.cookies_for_url_with_site(url, RequestSite::SameSite)
+    }
+
+    /// Returns the cookies that would be sent for `url` in the given [`RequestSite`].
+    ///
+    /// `SameSite=Strict` cookies are omitted for any cross-site request,
+    /// `SameSite=Lax` cookies for cross-site subresources, and `SameSite=None` cookies are
+    /// always candidates (they are only stored with `Secure`).
+    pub fn cookies_for_url_with_site(&self, url: &Url, site: RequestSite) -> Vec<&Cookie> {
         let now = self.now();
         let host = url.host().to_ascii_lowercase();
         let request_path = url.path();
@@ -492,6 +610,11 @@ impl CookieJar {
             })
             .filter(|cookie| path_matches(request_path, &cookie.path))
             .filter(|cookie| !cookie.secure || secure_request)
+            .filter(|cookie| match cookie.same_site {
+                SameSite::Strict => site == RequestSite::SameSite,
+                SameSite::Lax => !matches!(site, RequestSite::CrossSiteSubresource),
+                SameSite::None => true,
+            })
             .collect();
         matching.sort_by(|a, b| {
             b.path
@@ -503,8 +626,15 @@ impl CookieJar {
     }
 
     /// Builds the `Cookie` request header value for `url` (RFC 6265 §5.4), if any.
+    ///
+    /// Legacy same-site-context behaviour (see [`CookieJar::header_for_url_with_site`]).
     pub fn header_for_url(&self, url: &Url) -> Option<String> {
-        let matching = self.cookies_for_url(url);
+        self.header_for_url_with_site(url, RequestSite::SameSite)
+    }
+
+    /// Builds the `Cookie` request header for `url` honoring `SameSite` for `site`.
+    pub fn header_for_url_with_site(&self, url: &Url, site: RequestSite) -> Option<String> {
+        let matching = self.cookies_for_url_with_site(url, site);
         if matching.is_empty() {
             return None;
         }

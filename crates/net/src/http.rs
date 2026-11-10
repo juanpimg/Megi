@@ -57,9 +57,11 @@ use std::time::Duration;
 use std::sync::{Arc, Mutex};
 
 use crate::compression::{AcceptEncoding, CompressionLimits, ContentEncoding, decode_body};
-use crate::cookies::CookieJar;
+use crate::cookies::{CookieJar, RequestSite};
 use crate::cors;
 use crate::error::FetchError;
+use crate::range::{ByteRange, ContentRange};
+use crate::referrer::ReferrerConfig;
 use crate::url::{Scheme, Url};
 
 /// Default `User-Agent` sent by [`fetch`].
@@ -98,6 +100,12 @@ pub struct FetchOptions {
     /// hop and the matching `Cookie` request header is sent. `None` (default) means the
     /// client is cookie-less; setting a jar also enables credentialed CORS mode.
     pub cookie_jar: Option<Arc<Mutex<CookieJar>>>,
+    /// Approximate site context used to enforce cookie `SameSite` on every hop. Defaults
+    /// to [`RequestSite::SameSite`]; when a [`ReferrerConfig`] source is installed and this
+    /// field is left at its default, the client auto-classifies subresource requests as
+    /// cross-site when the source and target are on different sites (see
+    /// [`crate::cookies::RequestSite::classify`]). Set it explicitly to override.
+    pub request_site: RequestSite,
     /// Optional CORS `Origin` header value (e.g. `https://app.example`). When set, the
     /// client sends `Origin` and validates cross-origin responses against
     /// `Access-Control-Allow-Origin`/`Access-Control-Allow-Credentials`; `None` (default)
@@ -110,6 +118,12 @@ pub struct FetchOptions {
     pub accept_encoding: AcceptEncoding,
     /// Anti-bomb caps applied when decompressing a response body.
     pub compression_limits: CompressionLimits,
+    /// Optional single byte range to request (`Range: bytes=...`). The response may be
+    /// `206 Partial Content`; its [`Response::content_range`] describes the slice.
+    pub range: Option<ByteRange>,
+    /// Optional `Referrer-Policy`/`Referer` configuration. When set, every hop of the
+    /// request sends a `Referer` header computed from the source URL with that policy.
+    pub referrer: Option<ReferrerConfig>,
     /// Custom TLS client configuration (root store, client auth, protocol versions).
     ///
     /// `None` (the default) uses the built-in webpki-roots (Mozilla) trust anchors and
@@ -129,9 +143,12 @@ impl Default for FetchOptions {
             max_header_bytes: DEFAULT_MAX_HEADER_BYTES,
             user_agent: DEFAULT_USER_AGENT.to_owned(),
             cookie_jar: None,
+            request_site: RequestSite::default(),
             origin: None,
             accept_encoding: AcceptEncoding::Gzip,
             compression_limits: CompressionLimits::default(),
+            range: None,
+            referrer: None,
             #[cfg(feature = "tls")]
             tls_config: None,
         }
@@ -154,6 +171,10 @@ pub struct Response {
     pub body: Vec<u8>,
     /// Final URL after following redirects.
     pub final_url: Url,
+    /// Parsed `Content-Range` header (`206 Partial Content` responses).
+    pub content_range: Option<ContentRange>,
+    /// `true` when the server advertised `Accept-Ranges: bytes`.
+    pub accept_ranges: bool,
 }
 
 impl Response {
@@ -173,6 +194,24 @@ impl Response {
     /// Returns `true` when the status code is in the `2xx` range.
     pub const fn is_success(&self) -> bool {
         self.status >= 200 && self.status < 300
+    }
+
+    /// Returns `true` for a `206 Partial Content` response.
+    pub const fn is_partial(&self) -> bool {
+        self.status == 206
+    }
+
+    /// Returns the server's parsed `Accept-Ranges` header value, if any.
+    pub fn accept_ranges_header(&self) -> Option<&str> {
+        self.header("accept-ranges")
+    }
+
+    /// Parses the first valid `Referrer-Policy` response header, if present.
+    ///
+    /// The render pipeline uses this (or [`crate::ReferrerPolicy::from_meta_html`]) to
+    /// install a [`crate::ReferrerConfig`] for subresource fetches.
+    pub fn referrer_policy(&self) -> Option<crate::ReferrerPolicy> {
+        crate::ReferrerPolicy::from_headers(&self.headers)
     }
 }
 
@@ -217,12 +256,25 @@ pub fn fetch_with_headers(
                 )?;
             }
             let body = decode_response_body(&raw.headers, raw.body, options)?;
+            let content_range = raw
+                .headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case("content-range"))
+                .and_then(|(_, value)| ContentRange::parse(value));
+            let accept_ranges = raw.headers.iter().any(|(name, value)| {
+                name.eq_ignore_ascii_case("accept-ranges")
+                    && value
+                        .split(',')
+                        .any(|token| token.trim().eq_ignore_ascii_case("bytes"))
+            });
             return Ok(Response {
                 status: raw.status,
                 reason: raw.reason,
                 headers: raw.headers,
                 body,
                 final_url: current,
+                content_range,
+                accept_ranges,
             });
         }
         if redirects >= options.max_redirects {
@@ -446,12 +498,33 @@ fn fetch_once(
         request.push_str(origin);
         request.push_str("\r\n");
     }
+    // Cookie `SameSite` context: an explicit non-default `request_site` wins; otherwise a
+    // configured referrer source lets us classify subresource requests automatically.
+    let request_site = if options.request_site != RequestSite::SameSite {
+        options.request_site
+    } else if let Some(referrer) = &options.referrer {
+        RequestSite::classify(&referrer.source, url, false)
+    } else {
+        RequestSite::SameSite
+    };
     if include_cookies
         && let Some(jar) = &options.cookie_jar
-        && let Some(cookie_header) = lock_jar(jar).header_for_url(url)
+        && let Some(cookie_header) = lock_jar(jar).header_for_url_with_site(url, request_site)
     {
         request.push_str("Cookie: ");
         request.push_str(&cookie_header);
+        request.push_str("\r\n");
+    }
+    if let Some(range) = &options.range {
+        request.push_str("Range: ");
+        request.push_str(&range.header_value());
+        request.push_str("\r\n");
+    }
+    if let Some(referrer) = &options.referrer
+        && let Some(referer) = referrer.referer_for(url)
+    {
+        request.push_str("Referer: ");
+        request.push_str(&referer);
         request.push_str("\r\n");
     }
     request.push_str("Connection: close\r\n");

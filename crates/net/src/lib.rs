@@ -28,8 +28,8 @@
 //!   [`loader::Resource`] values (URL + bytes + resolved content type).
 //! - **[`cookies`]**: RFC 6265 subset [`CookieJar`] (domain/path/secure/httpOnly/expiry,
 //!   `Set-Cookie` parsing, `Cookie` request header) integrated optionally through
-//!   [`FetchOptions::cookie_jar`](http::FetchOptions::cookie_jar). `SameSite` and the
-//!   Public Suffix List are not implemented (documented).
+//!   [`FetchOptions::cookie_jar`](http::FetchOptions::cookie_jar). `SameSite` enforcement
+//!   and a reduced Public Suffix List are covered in the "Browser features" section below.
 //! - **[`cors`]**: CORS subset: [`Origin`], response validation with
 //!   `Access-Control-Allow-Origin`/`-Credentials`, preflight (`OPTIONS`) validation and
 //!   [`http::preflight`], enabled by [`FetchOptions::origin`](http::FetchOptions::origin).
@@ -75,6 +75,28 @@
 //! tests use temporary files. There are no sleeps (beyond short socket timeouts used as a
 //! safety net) and no external connections, so `cargo test -p net` passes in CI without
 //! network access.
+//!
+//! ## Browser features (R109)
+//!
+//! - **Cookies**: `SameSite=Strict|Lax|None` (None requires `Secure`), enforced through an
+//!   approximate [`RequestSite`] model (same-site / cross-site top-level navigation /
+//!   cross-site subresource) using a **reduced PSL** ([`psl`]) that also rejects domain
+//!   cookies scoped to public suffixes; missing `SameSite` defaults to `Lax`.
+//! - **Referrer policy**: all eight [`ReferrerPolicy`] variants, parsed from the response
+//!   header ([`Response::referrer_policy`]) or `<meta name="referrer">`
+//!   ([`ReferrerPolicy::from_meta_html`]); [`ReferrerConfig`] on [`FetchOptions::referrer`]
+//!   makes every HTTP(S) hop send a policy-computed `Referer` (`https`→`http` downgrades
+//!   blocked per policy; render should install it once the document is fetched).
+//! - **Ranges**: [`ByteRange`] parsing/serialization and [`ContentRange`] response parsing;
+//!   [`FetchOptions::range`] sends `Range: bytes=...` (single range only) and
+//!   [`ResourceLoader::load_range`] performs a one-shot partial load (HTTP `206`, plus
+//!   local slicing of `file:`/`data:` resources; no `If-Range`/resume/streaming).
+//! - **Cache-Control**: `no-cache` vs `must-revalidate` are distinguished,
+//!   `s-maxage`/`Age`/`Expires` feed [`CachePolicy::freshness_lifetime`] (Age subtracted),
+//!   and conditional revalidation (`ETag`/`Last-Modified`) keeps working unchanged.
+//!
+//! Limits: the PSL is curated (not the full list), the top-level navigation model is
+//! approximate, no HTTP/2 or streaming, and range requests bypass the HTTP cache.
 
 #![forbid(unsafe_code)]
 
@@ -88,6 +110,9 @@ pub mod file;
 pub mod http;
 pub mod loader;
 pub mod mime;
+pub mod psl;
+pub mod range;
+pub mod referrer;
 pub mod url;
 
 pub use cache::{CachePolicy, parse_cache_policy, parse_http_date};
@@ -96,8 +121,8 @@ pub use compression::{
     DEFAULT_MAX_DECOMPRESSED_BYTES, decode_body as decode_content_encoding,
 };
 pub use cookies::{
-    Clock, Cookie, CookieJar, ParsedSetCookie, SetCookieError, default_cookie_path, domain_matches,
-    is_valid_cookie_name, parse_set_cookie, path_matches,
+    Clock, Cookie, CookieJar, ParsedSetCookie, RequestSite, SameSite, SetCookieError,
+    default_cookie_path, domain_matches, is_valid_cookie_name, parse_set_cookie, path_matches,
 };
 pub use cors::{Origin, requires_preflight, validate_preflight_response, validate_response};
 pub use data::{DataUrl, base64_decode, base64_encode, decode_data_url};
@@ -106,4 +131,9 @@ pub use file::load_file_url;
 pub use http::{FetchOptions, Response, fetch, fetch_with_headers, preflight};
 pub use loader::{HEURISTIC_FRESHNESS, Resource, ResourceLoader};
 pub use mime::{MimeHint, resolve_content_type, sniff};
+pub use psl::{
+    is_public_suffix, normalize_host, registrable_domain, same_origin, same_site, site_for_url,
+};
+pub use range::{ByteRange, ContentRange, RangeError};
+pub use referrer::{ReferrerConfig, ReferrerPolicy, referer_value};
 pub use url::{Scheme, Url};
