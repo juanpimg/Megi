@@ -3,9 +3,9 @@
 [![Rust](https://img.shields.io/badge/Rust-Edition%202024%20(MSRV%201.88%2B)-orange.svg?logo=rust)](https://www.rust-lang.org/)
 [![CI](https://github.com/juanpimg/Megi/actions/workflows/ci.yml/badge.svg)](https://github.com/juanpimg/Megi/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-301%20passing-success.svg)]()
 [![Clippy](https://img.shields.io/badge/Clippy-0%20warnings%20(-D%20warnings)-brightgreen.svg)]()
-[![HTML5 Conformance](https://img.shields.io/badge/HTML5%20Conformance-3.898%2F3.904%20(declarativo)-success.svg)]()
-[![CSS Syntax](https://img.shields.io/badge/CSS%20Syntax%20WPT-30%2F30%20(reproducible)-success.svg)]()
+[![HTML5 Conformance](https://img.shields.io/badge/HTML5-tokenizer%207050%2F7050%20·%20tree%203898%2F3904%20·%20serializer%20230%2F230-success.svg)]()
 
 > **Megi** es un motor de navegación web moderno, open source e independiente desarrollado desde cero en **Rust** (Edición 2024), sin bifurcar (*fork*) Blink, WebKit ni Gecko. Todo su diseño se rige estrictamente por las especificaciones formales vivas de **WHATWG** y **W3C**, con verificación continua en bucle cerrado (*closed-loop testing*) contra **Web Platform Tests (WPT)** y **`html5lib-tests`**.
 
@@ -13,35 +13,44 @@
 
 ## 📊 Estado del Proyecto y Barra de Progreso por Módulos
 
-Fases 0–3 completadas (DOM, HTML, CSS, Layout). La **Fase 4 (paint + tipografía)** está **en curso**: el pipeline `HTML → CSS → layout → display list → PNG` ya funciona de extremo a extremo y el motor tipográfico existe como crate independiente, pero aún no está integrado en layout/paint. Las fases 5–7 están planificadas. El detalle de qué falta exactamente está en [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md).
+Fases 0–3 completadas (DOM, HTML, CSS, Layout). La **Fase 4 (paint + tipografía)** está **casi cerrada (~90 %)**: el pipeline `HTML → CSS → layout → display list → PNG` renderiza texto real, con bordes por lado, antialiasing y determinismo byte a byte. La **Fase 5 (red)** acaba de arrancar con el crate `net`. Las fases 6–7 están planificadas. El detalle exacto de qué falta está en [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 | Módulo / Crate | Barra de Progreso | Estado | Tests | Capacidades Implementadas |
 |---|:---:|:---:|---|---|
-| [`crates/dom`](crates/dom) | `[██████████] 100%` | **COMPLETO** | 9/9 unit | Arena contigua indexada (`NodeId(NonZeroU32)` de 4 bytes), enlaces intrusivos de 20 bytes, mutaciones $O(1)$, coalescencia de texto, `<template>` y `try_node`; `append_child`/`insert_before` validan ciclos y devuelven `bool`. |
-| [`crates/html`](crates/html) | `[██████████] 99.9%` | **COMPLETO (declarativo)** | 7/7 unit + 13 robustez | Tokenizador de 84 estados (§13.2.5), 21 modos de construcción del árbol (§13.2.6), 2.231 entidades (§13.5), AAA y *foster parenting*, `innerHTML`; **límites anti-DoS** mediante `ParseOptions` (profundidad 4.096, 1 M nodos, 4.096 atributos, 16 MiB de entrada) y serializador iterativo. |
-| [`crates/css`](crates/css) | `[██████████] 100%` | **COMPLETO (Fase 2)** | 23/23 unit + 30/30 WPT | Tokenizador/parser CSS Syntax L3, Selectores L4, cascada y especificidad, `ComputedStyle` y hoja UA WHATWG HTML §15; en Fase 4 amplía bordes por lado/shorthands, `border-style: none` ⇒ ancho 0, `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type` y correcciones de selectores. |
-| [`crates/layout`](crates/layout) | `[█████████░] 90%` | **Fase 3 completa + correcciones Fase 4** | 61 tests | Box Tree, cajas anónimas *inherit-only* (§9.2.1.1), BFC con **colapso de márgenes** (§8.3.1), ICB con altura de viewport, `box-sizing`/`min-max`/alturas porcentuales, sobre-restringido; IFC con `<br>` forzado. Tablas, floats, `position` e `inline-block` siguen planificados en Fase 4. |
-| [`crates/fonts`](crates/fonts) | `[█████░░░░░] 50%` | **Fase 4 (nuevo, en curso)** | 13 + 1 doctest | Motor tipográfico real: `fontdb` + `ttf-parser` + `rustybuzz` + `ab_glyph`; descubrimiento/fallback de fuentes, `FontMetrics`, `measure_text`, shaping LTR (kern/ligaduras), rasterización de glifos a máscaras alfa; fuente DejaVu determinista empaquetada con licencia. **Aún no integrado en `layout`/`paint`.** |
-| [`crates/paint`](crates/paint) | `[█████░░░░░] 55%` | **Fase 4 (en curso)** | 33 tests | Display lists desacopladas, rasterizador 2D con blending, **pipeline HTML → PNG de extremo a extremo** (ejemplo `html_to_png`), codificador PNG propio sin dependencias, canvas blanco con propagación de fondo raíz/`body` (CSS 2.2 §14.2), `RenderConfig`, extracción de `<style>` y golden determinista. Pendientes: integración de fuentes reales, bordes por lado en el raster, stacking contexts, `opacity`, clip y antialiasing. |
-| [`crates/test_harness`](crates/test_harness) | `[██████████] 100%` | **COMPLETO** | 5/5 closed-loop | Runner de `html5lib-tests` (14 suites de tokenizador, 62 suites de árbol) y de las fixtures WPT de CSS Syntax **vendorizadas**; **gate de conformidad** con allowlist documentada (`--summary` exit 0, `--strict` exit 1). |
-| `crates/net` | `[░░░░░░░░░░] 0%` | *Planificado (Fase 5)* | — | Transporte HTTP/TLS y pipeline de recursos según WHATWG Fetch. |
+| [`crates/dom`](crates/dom) | `[██████████] 100%` | **COMPLETO** | 9 | Arena contigua indexada (`NodeId(NonZeroU32)` de 4 bytes), enlaces intrusivos de 20 bytes, mutaciones $O(1)$, coalescencia de texto, `<template>`, `try_node`; `append_child`/`insert_before` validan ciclos y devuelven `bool`. |
+| [`crates/html`](crates/html) | `[██████████] 99.9%` | **COMPLETO (declarativo)** | 14 unit + 6 rendimiento + 13 robustez | Tokenizador de 84 estados (**7.050/7.050** en el gate), 21 modos de árbol (**3.898/3.904**), 2.231 entidades, AAA y *foster parenting*, `innerHTML`, **serializador público WHATWG HTML §13.3** (`serialize_html`, `serialize_fragment`, `serialize_outer_html`, `*_with_options`) con **230/230** casos de `html5lib-tests/serializer/`; límites anti-DoS `ParseOptions` y serializador iterativo. |
+| [`crates/css`](crates/css) | `[██████████] 100%` | **COMPLETO (Fase 2)** | 41 + 30 WPT | CSS Syntax L3, **Selectores L4 funcionales** (`:is/:where/:not/:has`) y estructurales (`:nth-of-type`, `:first/last/only-of-type`, `:nth-last-*`), especificidad correcta, expansión de shorthands antes de la cascada, `font` shorthand, `@media` básico (`resolve_document_styles_with_media`), índice de reglas (**2,1×** en resolve-styles con 10k nodos) y bases de Fase 4 (bordes por lado, `border-style: none`, `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type`). |
+| [`crates/layout`](crates/layout) | `[████████░░] 85%` | **BFC/IFC completos; faltan posicionados/floats/tablas** | 80 | Box Tree, cajas anónimas *inherit-only* (§9.2.1.1), BFC con colapso de márgenes (§8.3.1), ICB, `box-sizing`/min-max/%, sobre-restringido; **IFC**: saltos sólo en oportunidades reales (UAX #14), soft hyphen de ancho cero, `line-height` numérico heredado como factor, `vertical-align: top/bottom` (§10.8.1) y `text-align: justify`. Pendientes: `position`, floats, tablas e `inline-block`. |
+| [`crates/fonts`](crates/fonts) | `[█████████░] 90%` | **COMPLETO (base LTR)** | 13 + 1 doctest | Motor tipográfico real (`fontdb` + `ttf-parser` + `rustybuzz` + `ab_glyph`): descubrimiento/fallback, métricas OpenType, shaping LTR (kern/ligaduras), rasterización de glifos a máscaras alfa y fuente DejaVu determinista. **Integrado en layout y paint** (texto real en el PNG). Limitaciones documentadas: bidi/scripts complejos/fuentes variables fuera de alcance. |
+| [`crates/paint`](crates/paint) | `[█████████░] 90%` | **Fase 4 casi completa** | 52 | Display lists, rasterizador con **antialiasing exacto**, alfa straight, **culling** y cachés por pasada; **bordes por lado** (color/ancho/estilo `solid`/`dashed`/`dotted`/`double`/`none|hidden`, esquinas a inglete) y fondo bajo el *border box*; **pipeline HTML → PNG** con codificador PNG propio sin dependencias, canvas propagado (CSS 2.2 §14.2) y golden determinista (PNG `md5 d97c67dc…`). Pendientes: `position`/stacking/`opacity`, clip desde `overflow` y compresión PNG. |
+| [`crates/net`](crates/net) | `[█░░░░░░░░░] 10%` | **Fase 5 (arrancada)** | 57 | Bootstrap de red **std-only** (`#![forbid(unsafe_code)]`): URL WHATWG (subset `http`/`https`/`file` + `join`), cliente HTTP/1.1 `GET` (timeouts, `Content-Length`, *chunked*, redirecciones 301/302/303/307/308 con límite, caps 16 MiB/64 KiB), `file://`, *sniffing* MIME WHATWG (subset) y `ResourceLoader` con caché. HTTPS devuelve `TlsUnsupported` (TLS es el siguiente WP). Tests 100 % offline con `TcpListener` local. |
+| [`crates/bench`](crates/bench) | `[██████████] 100%` | **COMPLETO (tooling)** | 8 | Arnés de benchmarks reproducible sin dependencias (`std`), cargas sintéticas deterministas, grupos de parseo/estilos/layout/paint/PNG y baseline publicada en [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md). |
+| [`crates/test_harness`](crates/test_harness) | `[██████████] 100%` | **COMPLETO** | 7 | Gate de conformidad con **4 suites**: tokenizer (7.050/7.050), árbol (3.898/3.904), **serializador HTML (230/230)** y CSS Syntax WPT vendorizado (30/30); allowlist documentada, `--summary` exit 0 y `--strict` exit 1. |
 | `crates/js` | `[░░░░░░░░░░] 0%` | *Planificado (Fase 6)* | — | Integración de ejecución de scripts JavaScript y DOM bindings. |
-| `crates/shell` | `[░░░░░░░░░░] 0%` | *Planificado (Fase 7)* | — | Ventana del sistema operativo, eventos y bucle principal de renderizado. |
+| `crates/shell` | `[░░░░░░░░░░] 0%` | *Planificado (Fase 7)* | — | Ventana del sistema operativo, eventos y bucle principal; reutilizará el `Pixmap` del pipeline de Fase 4. |
 
-**Total del workspace: 165 tests, 0 fallos.** Reparto: `css` 23, `dom` 9, `fonts` 13 + 1 doctest, `html` 7 unit + 13 robustez, `layout` 61, `paint` 33, `test_harness` 5.
+**Total del workspace: 301 tests, 0 fallos.** Reparto: `bench` 8, `css` 41, `dom` 9, `fonts` 13 + 1 doctest, `html` 14 + 6 + 13, `layout` 80, `net` 56 + 1 doctest, `paint` 52, `test_harness` 7.
+
+---
+
+## 🖼️ Resultado actual: HTML → PNG
+
+![Render real de Fase 4: HTML → PNG con texto tipografiado, fondo de canvas propagado y una tarjeta con bordes por lado](docs/images/phase4-basic.png)
+
+*Render determinista 800×600 de [`tests/fixtures/phase4/basic.html`](tests/fixtures/phase4/basic.html) generado por `cargo run --release -p paint --example html_to_png`: tipografía real (DejaVu), fondo de canvas propagado desde `html` (CSS 2.2 §14.2), párrafos con `br`, enlace y una tarjeta con **bordes por lado** (sólido + discontinuo) y antialiasing. La captura comprimida vive en [`docs/images/phase4-basic.png`](docs/images/phase4-basic.png); el PNG crudo del pipeline (sin compresión, 1,92 MB) se valida con `tools/png_check.py`.*
 
 ---
 
 ## 🏆 Hitos Principales Logrados
 
-- [x] **Arquitectura Zero-Overhead Arena DOM**: arena contigua de nodos con `NodeId(NonZeroU32)` de 4 bytes, mutaciones $O(1)$ y cero `Rc<RefCell<Node>>`.
-- [x] **Conformidad HTML5 declarativa verificada y gate reproducible**: tokenizador **7.047/7.050** (allowlist `xmlViolation.test`: 3), construcción de árbol **3.898/3.904** (allowlist: 4 suites `scripted_*`: 6 mode-runs). `cargo run -p test_harness -- --summary` devuelve **PASS con exit 0**; las fixtures WPT de CSS Syntax están vendorizadas (30/30 comprobaciones, sin red).
-- [x] **Robustez anti-DoS del núcleo**: parsear 100.000/200.000 `<div>` anidados ya **no aborta el proceso** (~70 ms; antes SIGABRT por recursión) y 40.000 atributos en un start-tag bajan de ~1.276 ms a ~10 ms; límites duros en `ParseOptions` reportados vía `LimitViolations`, serializador iterativo y DOM con `try_node`/`clone_node` de `<template>`.
-- [x] **Motor CSS con cascada normativa**: 23 tests y 30/30 comprobaciones WPT, con bases de Fase 4 (bordes por lado, `border-style: none`, `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type`) y selectores corregidos (pseudo-clases desconocidas invalidadas, SVG/MathML, comas en atributos).
-- [x] **BFC/IFC con correcciones de Fase 4**: cajas anónimas *inherit-only* (fin de márgenes y fondos fantasma), `<br>`, colapso de márgenes §8.3.1, altura del bloque contenedor inicial, `box-sizing`/`min-max`/porcentajes y sobre-restringido; 61 tests.
-- [x] **Pipeline HTML → PNG real**: primer render de extremo a extremo con codificador PNG propio (DEFLATE *stored*, sin dependencias), canvas blanco (0 % de píxeles transparentes frente al 88,7 % anterior), propagación del fondo raíz/`body` y golden determinista de 800×600.
-- [x] **Motor tipográfico real (`crates/fonts`)**: métricas OpenType, shaping LTR con kern/ligaduras, fallback de fuentes y rasterización de glifos a máscaras alfa, con dependencias de bajo nivel autorizadas por `docs/ARCHITECTURE.md` §3.1.
-- [x] **Infraestructura de proyecto**: CI (`.github/workflows/ci.yml`: fmt, clippy `-D warnings`, tests, doc, gate de conformidad y job MSRV), licencias MIT/Apache, `rust-version = "1.88"` verificado con `rustup` (el código usa `let-chains`, estabilizadas en Rust 1.88) y `./tools/dev.sh all` como puerta única de calidad.
+- [x] **Conformidad ampliada y gate reproducible**: tokenizador **7.050/7.050** (100 %, allowlist vacía), árbol **3.898/3.904**, **serializador HTML 230/230** (5 suites upstream) y CSS Syntax WPT **30/30** (fixtures vendorizadas, sin red). `cargo run -p test_harness -- --summary` → **PASS, exit 0**; `--strict` → exit 1 por los fallos conocidos.
+- [x] **Pipeline HTML → PNG con tipografía real y determinismo**: `crates/fonts` integrado en layout/paint (shaping + máscaras de glifo), bordes por lado con estilos `solid`/`dashed`/`dotted`/`double`, antialiasing exacto en rectángulos fraccionarios, fondo bajo el *border box* y golden byte a byte regenerado (`basic.rgba`, `md5 4139fdd8…`; PNG `md5 d97c67dc…`).
+- [x] **Serializador HTML público (WHATWG HTML §13.3)**: `html::serialize_html`, `serialize_fragment` (`innerHTML`), `serialize_outer_html` y variantes `*_with_options(HtmlSerializeOptions { scripting_enabled })`, con las 5 suites oficiales de serialización en el gate.
+- [x] **Rendimiento medido y regresiones detectables**: tree builder de complejidad **lineal** (eliminada la CPU cuadrática), índice de reglas CSS (**2,1×** en resolve-styles), rasterizador con **culling** y cachés por pasada → raster 800×600 **1598,8 → 0,9 ms**, render-to-PNG **1628 → 7,7 ms** y pipeline completo **1842 → 170,7 ms** (**10,8×**). Metodología y baseline en [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
+- [x] **Núcleo CSS/IFC de Fase 4**: Selectores L4 funcionales y estructurales, `@media` básico, `font` shorthand, `line-height` numérico heredado como factor, soft hyphen invisible de ancho cero (guion sólo al romper), `vertical-align: top/bottom` conforme a §10.8.1 y `text-align: justify`.
+- [x] **Robustez anti-DoS**: parsear 100.000/200.000 `<div>` anidados ya **no aborta** (límite de profundidad 4.096 reportado en `LimitViolations`), 40.000 atributos en un start-tag bajan de ~1.276 ms a ~10 ms; serializador iterativo y DOM con `try_node`/validación de ciclos.
+- [x] **Fase 5 arrancada (`crates/net`)**: URL/HTTP1.1/`file://`/MIME/`ResourceLoader` **sin dependencias externas** y con 57 tests offline; el siguiente paso es TLS con `rustls`.
+- [x] **Infraestructura de proyecto**: CI (`.github/workflows/ci.yml`: fmt, clippy `-D warnings`, tests, doc, gate de conformidad y job MSRV), licencias MIT/Apache, `rust-version = "1.88"` verificado y `./tools/dev.sh all` como puerta única de calidad.
 
 ---
 
@@ -52,26 +61,31 @@ Megi está diseñado como un **Grafo Acíclico Dirigido (DAG)** sin dependencias
 ```mermaid
 graph TD
     dom["crates/dom<br/>(Arena DOM, NodeId 4B, O(1) mutations)"]
-    html["crates/html<br/>(Tokenizer 84 estados, TreeBuilder 21 modos, ParseOptions)"]
+    html["crates/html<br/>(Tokenizer 84 estados, TreeBuilder 21 modos, Serializer §13.3)"]
     css["crates/css<br/>(CSS Syntax L3, Selectors L4, Cascade & Styles)"]
     layout["crates/layout<br/>(Box Tree, BFC/IFC, margin collapsing)"]
-    fonts["crates/fonts (Fase 4)<br/>(FontDatabase, shaping, glyph masks)"]
-    paint["crates/paint (Fase 4)<br/>(Display List, 2D raster, HTML→PNG)"]
-    test_harness["crates/test_harness<br/>(Closed-Loop Runner WPT & html5lib)"]
+    fonts["crates/fonts<br/>(FontDatabase, shaping, glyph masks)"]
+    paint["crates/paint<br/>(Display List, raster AA, HTML→PNG)"]
+    net["crates/net (Fase 5)<br/>(URL, HTTP/1.1, file://, MIME, loader)"]
+    bench["crates/bench<br/>(benchmarks reproducibles)"]
+    test_harness["crates/test_harness<br/>(Gate de conformidad: 4 suites)"]
 
     dom --> html
     dom --> css
     dom --> layout
     css --> layout
     layout --> paint
-    fonts -.->|"integración pendiente (WP-4.4 fase 2)"| layout
-    fonts -.->|"integración pendiente (WP-4.4 fase 2)"| paint
-    dom --> test_harness
+    fonts --> layout
+    fonts --> paint
+    dom --> net
     html --> test_harness
     css --> test_harness
+    layout --> bench
+    paint --> bench
+    fonts -.-> bench
 ```
 
-Crates planificados: `crates/net` (Fase 5), `crates/js` (Fase 6) y `crates/shell` (Fase 7).
+`crates/net` no depende de ningún crate interno (std puro) y su integración con `html`/`paint` llegará al completar la Fase 5. Crates planificados: `crates/js` (Fase 6) y `crates/shell` (Fase 7).
 
 ---
 
@@ -87,18 +101,18 @@ Crates planificados: `crates/net` (Fase 5), `crates/js` (Fase 6) y `crates/shell
 ./tools/dev.sh all
 ```
 
-Ejecuta, en orden: `cargo fmt --check` → `cargo clippy --workspace --all-targets -- -D warnings` → `cargo test --workspace` → `cargo doc --workspace --no-deps` → **gate de conformidad** (`test_harness --summary`). Ruta de comprobación equivalente, paso a paso:
+Ejecuta, en orden: `cargo fmt --check` → `cargo clippy --workspace --all-targets -- -D warnings` → `cargo test --workspace` (**301 tests**) → `cargo doc --workspace --no-deps` → **gate de conformidad** (`test_harness --summary`). Ruta de comprobación equivalente, paso a paso:
 
 ```bash
 cargo +1.88 check --workspace --all-targets   # MSRV
-cargo test --workspace                         # 165 tests
+cargo test --workspace                         # 301 tests
 cargo run -p test_harness -- --summary         # gate: PASS, exit 0
 ```
 
-### Gate de Conformidad (HTML5 + WPT vendorizado)
+### Gate de Conformidad (4 suites)
 
 ```bash
-# Resumen completo: tokenizador, árbol DOM y CSS Syntax
+# Tokenizer + árbol DOM + serializador HTML + CSS Syntax
 cargo run -p test_harness -- --summary
 
 # Modo estricto: cualquier fallo (incluidos los de la allowlist) hace exit 1
@@ -112,11 +126,22 @@ cargo run -p test_harness -- test3.test
 ### Renderizar HTML a PNG (pipeline de Fase 4)
 
 ```bash
-cargo run -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
+cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
 python3 tools/png_check.py /tmp/basic.png
+cargo test -p paint --test end_to_end_html
 ```
 
-El ejemplo acepta `[width] [height]` (por defecto 800×600) y `--rgba <ruta>` para volcar la imagen RGBA canónica usada por los golden tests. Ver [`tests/fixtures/phase4/README.md`](tests/fixtures/phase4/README.md).
+El ejemplo acepta `[width] [height]` (por defecto 800×600) y `--rgba <ruta>` para volcar la imagen RGBA canónica usada por los golden tests. Ver [`tests/fixtures/phase4/README.md`](tests/fixtures/phase4/README.md). El código de ejemplo, las limitaciones y la decisión sobre el PNG sin compresión están documentados en [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md) §5.
+
+### Rendimiento (benchmarks reproducibles)
+
+```bash
+./tools/bench.sh                    # suite completa en release -> target/bench-latest.txt
+./tools/bench.sh --scale 0.25       # smoke test rápido
+./tools/bench.sh --filter html      # un solo grupo
+```
+
+Metodología, cargas sintéticas, tabla de baseline y límites de medición en [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 
 ### Motor Tipográfico (crate `fonts`)
 
@@ -137,11 +162,13 @@ python3 tools/whatwg_spec.py html "#the-after-after-body-insertion-mode"
 ## 📖 Documentación del Proyecto
 
 - 🏛️ [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): modelo de crates y DAG, arena DOM, política de dependencias externas (§3) y decisión de codificador PNG propio (§3.2).
-- 🗺️ [`docs/ROADMAP.md`](docs/ROADMAP.md): hoja de ruta por fases y micro-paquetes `WP-*`, incluida la **Fase 4 (`WP-4.0`…`WP-4.13`)** con estado y criterios de aceptación.
-- 🧭 [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md): matriz de soporte CSS 2.2 de la Fase 4 (implementado / parcial / pendiente) y decisiones de alcance.
+- 🗺️ [`docs/ROADMAP.md`](docs/ROADMAP.md): hoja de ruta por fases y micro-paquetes `WP-*`, con **Fase 4 (`WP-4.0`…`WP-4.13`)** y el arranque de la **Fase 5**.
+- 🧭 [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md): matriz de soporte CSS 2.2 de la Fase 4 (implementado / parcial / pendiente).
+- 📈 [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md): arnés `crates/bench`, metodología y baseline de rendimiento.
+- 📦 [`docs/HANDOFF.md`](docs/HANDOFF.md): estado de la última ronda, comandos de verificación y deuda técnica priorizada.
+- 🛠️ [`docs/TOOLING.md`](docs/TOOLING.md): scripts CLI, fixtures vendorizadas, validación PNG, benchmarks y skills de agentes.
 - 🤝 [`CONTRIBUTING.md`](CONTRIBUTING.md): filosofía, convenciones de código/commits, CI y flujo de PR.
-- 🛠️ [`docs/TOOLING.md`](docs/TOOLING.md): scripts CLI, fixtures vendorizadas, validación PNG y skills de agentes.
-- 📦 [`docs/HANDOFF.md`](docs/HANDOFF.md): estado de la última iteración, comandos de verificación y deuda técnica priorizada.
+- 📝 [`CHANGELOG.md`](CHANGELOG.md): historial de cambios por ronda/fase.
 
 ---
 
@@ -156,4 +183,4 @@ a tu elección. La fuente de test DejaVu Sans empaquetada en `crates/fonts/tests
 
 ---
 
-> **Estado**: proyecto en desarrollo activo, sin releases publicadas. La Fase 4 no está cerrada; consulta [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md) antes de asumir soporte de una propiedad CSS.
+> **Estado**: proyecto en desarrollo activo, sin releases publicadas. La Fase 4 está casi cerrada y la Fase 5 acaba de arrancar; consulta [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md) antes de asumir soporte de una propiedad CSS o una capacidad de red.

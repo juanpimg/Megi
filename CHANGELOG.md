@@ -65,6 +65,78 @@ does not yet follow strict semantic versioning; the format follows
   progress, Phase 4 roadmap with WP-4.0…WP-4.13, corrected MSRV and phase
   numbering.
 
+
+### Round 3 — Phase 4 conformance and Phase 5 bootstrap (2026-11-10)
+
+#### Added
+
+- `html`: public WHATWG HTML §13.3 serializer — `serialize_html`,
+  `serialize_fragment` (`innerHTML`), `serialize_outer_html` and
+  `*_with_options(HtmlSerializeOptions { scripting_enabled })`; the five
+  upstream `html5lib-tests/serializer` suites now run in the gate
+  (**230/230**; 18 registered XHTML alternatives are not exercised).
+- `crates/net`: Phase 5 bootstrap, std-only and `#![forbid(unsafe_code)]` —
+  WHATWG URL subset (`http`/`https`/`file` + relative `join`), HTTP/1.1 `GET`
+  over `std::net` (timeouts, `Content-Length`, chunked, 301/302/303/307/308
+  redirects with a limit, 16 MiB/64 KiB caps), `file://`, WHATWG MIME sniffing
+  subset and an in-memory `ResourceLoader` cache. 57 offline tests.
+- `crates/paint`: per-side borders (`BorderSide[4]`: width, style and colour;
+  `solid`/`dashed`/`dotted`/`double`/`none`/`hidden`, mitred corners),
+  background painted under the border box, exact fractional-rect AA,
+  rasterizer culling and per-pass caches (shaped runs, faces, glyph masks).
+- `crates/paint`: real shaped text rendering integrated with `crates/fonts`
+  (glyph masks, per-run `font_weight`/`font_italic`, baseline propagated by
+  the IFC).
+- `docs/images/phase4-basic.png`: compressed 800×600 capture of the real
+  HTML→PNG pipeline (typography, propagated canvas background and per-side
+  borders), embedded in the README.
+- `crates/bench` + `tools/bench.sh` + `docs/PERFORMANCE.md`: dependency-free
+  reproducible benchmark suite with a published baseline (already committed
+  in the previous round; baseline refreshed this round).
+
+#### Changed
+
+- CSS: functional Selectors L4 (`:is`/`:where`/`:not`/`:has`) plus structural
+  family (`:nth-of-type`, `:first/last/only-of-type`, `:nth-last-*`), correct
+  specificity, shorthand expansion before the cascade, `font` shorthand and
+  basic `@media` (`all`/`screen`/`print`, min/max width/height px/em,
+  `resolve_document_styles_with_media`).
+- CSS: stylesheet rule index reduces `resolve_document_styles` time on 10k
+  nodes from 63.6 ms to 30.3 ms (**2.1×**).
+- Layout IFC: line breaks only at real opportunities (adjacent inline text
+  nodes are no longer split), soft hyphen is zero-width and only materialises
+  a hyphen when the line breaks, numeric `line-height` is inherited as a
+  factor and recomputed per element, `vertical-align: top/bottom` follows the
+  §10.8.1 aligned-subtree rule with unified line-height math, and
+  `text-align: justify` is implemented for soft-wrapped lines.
+- HTML: tokenizer allowlist is now empty (**7050/7050**); the harness gate
+  gained the serializer suite and the documented strict-mode error diff.
+- Documentation: README/ROADMAP/ARCHITECTURE/HANDOFF/PHASE4-SUPPORT/TOOLING/
+  CONTRIBUTING synchronized with the round-3 reality (301 tests, Phase 4
+  ≈90 %, Phase 5 started); README embeds the Phase 4 capture.
+
+#### Fixed
+
+- Text glyph placement: shaped runs now use the baseline propagated by the
+  IFC instead of assuming the top of the text box; `line-height` factor and
+  `vertical-align` fixes above.
+- Quadratic HTML tree construction: `has_element_in_scope` /
+  active-formatting reconstruction are no longer per-token linear
+  (adversarial inputs 16k/32k `<div>` and attribute storms drop from seconds
+  to tens of milliseconds).
+- Golden render regenerated and verified deterministic after the real-text
+  and border changes (`basic.rgba` md5 `4139fdd8…`; pipeline PNG md5
+  `d97c67dc…`).
+
+#### Performance
+
+- Rasterizer 800×600: **1598.8 ms → 0.9 ms** with culling/caches.
+- Render-to-PNG: **1628 ms → 7.7 ms**; full HTML→PNG pipeline:
+  **1842 ms → 170.7 ms** (**10.8×**). Methodology and full table:
+  `docs/PERFORMANCE.md`.
+- Test suite: **301 tests** (was 165), all green; `fmt`, `clippy -D warnings`,
+  `cargo doc` and the 4-suite conformance gate pass; MSRV 1.88 verified.
+
 ## [0.1.0] — 2026-11-09
 
 ### Added

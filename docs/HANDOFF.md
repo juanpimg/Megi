@@ -1,34 +1,37 @@
-# Handoff de sesión — sprint de robustez y Fase 4
+# Handoff de sesión — ronda 3 (Fase 4 casi completa + Fase 5 arrancada)
 
-**Fecha**: 2026-11-09 (Europe/Madrid)
-**Rama**: `sprint/robustez-fase4` (basada en `main` @ `ac2b79b`)
-**Estado**: trabajo del sprint completo y verificado; la documentación de este handoff ya refleja la realidad.
-**Matriz de soporte de Fase 4**: [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md).
+**Fecha**: 2026-11-10 (Europe/Madrid)
+**Rama**: `sprint/robustez-fase4` — HEAD `14500e6` (+ `532bb6a`, captura de documentación)
+**Estado**: árbol limpio; **301 tests, 0 fallos**; gate de conformidad con 4 suites en PASS; Fase 4 ≈90 % y Fase 5 ≈10 %.
+**Matriz de soporte**: [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md) · **Rendimiento**: [`PERFORMANCE.md`](PERFORMANCE.md) · **Plan**: [`ROADMAP.md`](ROADMAP.md).
 
-## Resumen del sprint (R1–R6)
+## Qué se hizo en la ronda 3 (5 commits)
 
-| Bloque | Qué se hizo | Evidencia |
+| Commit | Bloque | Resultado |
 |---|---|---|
-| **R1 — Conformidad como gate** | El harness suma resultados y aplica una allowlist documentada; `--summary` devuelve exit 0 sólo si no hay regresiones y `--strict` devuelve 1. Las 3 fixtures WPT de CSS Syntax quedan **vendorizadas** en `tests/wpt/css/css-syntax/` (con SHA-256 y README), por lo que `30/30` es **reproducible desde un clon limpio sin red**. `./tools/dev.sh all` ejecuta el gate como paso `[5/5]`. | tokenizer **7047/7050** (allowlist `xmlViolation.test`: 3); árbol **3898/3904** (allowlist 4 suites `scripted_*`: 6 mode-runs); CSS **30/30**; `Conformance gate: PASS`. |
-| **R2 — Robustez anti-DoS** | `ParseOptions` (profundidad 4.096, 1 M nodos, 4.096 atributos/elemento, 16 MiB de input) + `parse_document_with_options`, `LimitViolations`, serializador **iterativo**, DOM con validación de ciclos (`append_child`/`insert_before` → `bool`), `try_node` y `clone_node` de `<template>`; 13 tests de robustez con hilos de pila pequeña. | 100k/200k `<div>` anidados **no abortan** (~70 ms; antes SIGABRT); 40k atributos en un start-tag: de ~1.276 ms a ~10 ms (medido en esta máquina, 2 vCPU). |
-| **R3 — Correcciones CSS** | Bordes por lado/`shorthands`, `border-style: none` ⇒ ancho computado 0, `{1,4}` de `border-width/color/style`, campos `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type` en `ComputedStyle`, y correcciones de selectores (pseudo-clase desconocida invalida, SVG/MathML, comas en atributos). | `cargo test -p css`: **23/23** + 30/30 CSS Syntax. |
-| **R4 — Correcciones layout** | Cajas anónimas *inherit-only* (fin de márgenes/bordes/fondos fantasma y de los huecos por whitespace entre bloques), `<br>` como salto forzado, colapso de márgenes CSS 2.2 §8.3.1, ICB con altura de viewport, `box-sizing`, `min/max`, alturas porcentuales y sobre-restringido. | `cargo test -p layout`: **61** tests (4 unit + 10 adversarial + 18 BFC + 22 IFC adversarial + 7 IFC). |
-| **R5 — Pipeline HTML → PNG** | Driver `html_to_png` (HTML→estilos→layout→display list→`Pixmap`→PNG), codificador **PNG propio sin dependencias** (DEFLATE *stored*), `RenderConfig`, canvas blanco con propagación de fondo raíz/`body` (CSS 2.2 §14.2), extracción de `<style>` (`collect_style_text`/`resolve_embedded_styles`), golden determinista. | `cargo run -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png` → 800×600, 1.920.813 B, 9 colores, **0 %** de píxeles transparentes (antes 88,7 %); `python3 tools/png_check.py /tmp/basic.png` → `OK`; `cargo test -p paint`: **33**. |
-| **R6 — Tipografía, infra y docs** | Nuevo crate `crates/fonts` (Fase 4, fase 1): `fontdb`+`ttf-parser`+`rustybuzz`+`ab_glyph`, métricas, shaping LTR (kern/ligaduras), rasterización de glifos y fallback; fuente DejaVu determinista empaquetada con licencia. CI, licencias MIT/Apache y MSRV real. | `cargo test -p fonts`: **13 + 1 doctest**; `cargo test --workspace`: **165 tests, 0 fallos**; `./tools/dev.sh all` → exit 0. |
+| `4613ff0` `fix(layout)` | Conformidad IFC | Saltos solo en oportunidades reales (nodos inline adyacentes sin espacio ya no se separan), soft hyphen invisible de ancho 0 (el `-` solo se materializa al romper), `line-height` numérico heredado como factor, `vertical-align: top/bottom` con *aligned subtree* §10.8.1 y cálculo de line-height unificado, `text-align: justify` en líneas soft-wrap. `layout`: **80 tests**. |
+| `5c511ee` `feat(paint)` | Rasterizado de calidad + bordes | Rasterizador con **culling** y cachés por pasada (shaped runs, caras, máscaras de glifo), **AA exacta** de rectángulos fraccionarios, alfa straight, **bordes por lado** (color/ancho/estilo `solid`/`dashed`/`dotted`/`double`/`none|hidden`, esquinas a mitre) y fondo bajo el *border box*; golden regenerado determinista. `paint`: **52 tests**. |
+| `dc8aef0` `feat(html)` | Serializador público §13.3 | `html::serialize_html`, `serialize_fragment` (`innerHTML`), `serialize_outer_html` y `*_with_options(HtmlSerializeOptions { scripting_enabled })`; las 5 suites `html5lib-tests/serializer` entran en el gate (**230/230**; 18 alternativas XHTML registradas, no ejercitadas). Tokenizer 7050/7050 con allowlist vacía. `html`: 14 unit + 6 rendimiento + 13 robustez. |
+| `14500e6` `feat(net)` | Fase 5 bootstrap | Crate `net` **std-only** y `#![forbid(unsafe_code)]`: URL WHATWG subset (`http`/`https`/`file` + `join`), HTTP/1.1 `GET` sobre `std::net` (timeouts, `Content-Length`, *chunked*, redirects 301/302/303/307/308 con límite, caps 16 MiB/64 KiB), `file://`, MIME sniffing WHATWG subset y `ResourceLoader` con caché. HTTPS ⇒ `TlsUnsupported` (TLS = siguiente WP). **57 tests offline**. |
+| `532bb6a` `docs` | Captura de Fase 4 | `docs/images/phase4-basic.png` (22,9 KB, 800×600), render comprimido del pipeline con tipografía real, fondo propagado y bordes por lado; usada en el README. |
+
+Las rondas anteriores (robustez anti-DoS, pipeline PNG inicial, fonts, gate reproducible, CSS/layout de Fase 4, benchmarks) siguen vigentes; ver `CHANGELOG.md` §Unreleased.
 
 ## Estado actual por crate
 
 | Crate | Estado | Tests |
 |---|---|---|
 | `dom` | COMPLETO (arena, mutaciones O(1), robustez de API) | 9 |
-| `html` | COMPLETO declarativo + endurecido anti-DoS | 7 unit + 13 robustez |
-| `css` | COMPLETO (Fase 2) + bases de Fase 4 | 23 |
-| `layout` | Fase 3 completa + correcciones de Fase 4; faltan posicionados/floats/tablas/inline-block | 61 |
-| `fonts` | **NUEVO** — Fase 4 fase 1 (motor tipográfico), aún **no integrado** en layout/paint | 13 + 1 doctest |
-| `paint` | Fase 4 en curso (~55 %): pipeline PNG operativo; faltan fuentes reales integradas, bordes por lado en el raster, stacking/opacity, clip y AA | 33 |
-| `test_harness` | COMPLETO: gate de conformidad con allowlist | 5 |
+| `html` | COMPLETO declarativo + serializador §13.3 + anti-DoS | 14 unit + 6 rendimiento + 13 robustez |
+| `css` | COMPLETO (Fase 2) + bases/selectores/`@media`/índice de Fase 4 | 41 |
+| `layout` | BFC/IFC completos; faltan posicionados, floats, tablas e `inline-block` | 80 |
+| `fonts` | COMPLETO (base LTR) e **integrado** en layout/paint | 13 + 1 doctest |
+| `paint` | Fase 4 ≈90 %: pipeline PNG real determinista, AA, bordes por lado; faltan stacking/clip/compresión | 52 |
+| `net` | FASE 5 BOOTSTRAP: URL/HTTP1.1/file/MIME/loader; sin TLS | 57 (56 + 1 doctest) |
+| `bench` | Arnés de benchmarks determinista y baseline publicada | 8 |
+| `test_harness` | Gate de 4 suites + allowlists | 7 |
 
-**Total workspace: 165 tests, 0 fallos.** MSRV declarada y verificada: **Rust 1.88** (`rust-version = "1.88"`; el código usa `let-chains`, estabilizadas en 1.88).
+**Total workspace: 301 tests, 0 fallos.** MSRV declarada y verificada: **Rust 1.88** (`let-chains`).
 
 ## Comandos de verificación exactos
 
@@ -36,45 +39,51 @@
 export CARGO_HOME=/home/jp/Escritorio/Proyectos/.cargo-home   # sólo en el sandbox del equipo
 cd /home/jp/Escritorio/Proyectos/Megi
 
-# Puerta única de calidad: fmt, clippy -D warnings, tests, doc y gate de conformidad
+# Puerta única: fmt, clippy -D warnings, tests, doc y gate de conformidad
 ./tools/dev.sh all
 
 # Equivalente paso a paso
 cargo +1.88 check --workspace --all-targets
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo test --workspace                                   # 301 tests
 cargo doc --workspace --no-deps
-cargo run -p test_harness -- --summary          # gate: PASS, exit 0
-cargo run -p test_harness -- --summary --strict # exit 1: no tolera fallos de la allowlist
+cargo run -p test_harness -- --summary                   # gate 4 suites: PASS, exit 0
+cargo run -p test_harness -- --summary --strict          # exit 1 por fallos conocidos
 
-# Pipeline HTML → PNG y validación
-cargo run -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
+# Pipeline HTML → PNG (release) y validación
+cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
 python3 tools/png_check.py /tmp/basic.png
+cargo test -p paint --test end_to_end_html --test png_format --test raster_quality
 
-# Motor tipográfico
-cargo run -p fonts --example report
+# Rendimiento (release; baseline en docs/PERFORMANCE.md)
+./tools/bench.sh
+./tools/bench.sh --scale 0.25 --filter paint
+
+# Red (offline)
+cargo test -p net
 ```
 
-## Deuda técnica y follow-ups priorizados (Fase 4)
+Evidencia medida en esta ronda: PNG del pipeline 800×600, 1.920.813 B, `md5 d97c67dc107313749a6cd28f161e0f63`; golden `basic.rgba` `md5 4139fdd8fec9364b03139d8d7cf32a8b`; gate PASS exit 0 (`--strict` exit 1); raster 800×600 1598,8 → 0,9 ms, render-to-PNG 1628 → 7,7 ms, pipeline 1842 → 170,7 ms (**10,8×**).
 
-1. **WP-4.4 fase 2 — integrar `crates/fonts` en layout/paint** *(prioridad máxima)*: sustituir `DefaultTextMeasurer` y los glifos 8×8 *stub* por `FontSpec`/`ShapedRun`, `line-height: normal` real, baseline en la line box y máscaras de glifo en el raster. Requiere cambiar la firma de `layout_document`/`build_display_list` (hoy sin contexto tipográfico).
-2. **WP-4.3 — bordes por lado en el raster**: `DisplayItem::Border` con 4 colores/estilos y esquinas a inglete; fondos en *border box* con `background-clip`; `dashed`/`dotted`/`double`/`groove`/`ridge`/`inset`/`outset` (hoy degradan a sólido o no se pintan). El CSS ya entrega los datos.
-3. **WP-4.5 — IFC pendiente**: no romper palabras entre nodos inline adyacentes sin espacio (hallazgo F-09), soft hyphen de ancho cero que sólo se convierte en guion al romper, `vertical-align: top/bottom` conforme al *aligned subtree* de §10.8.1, y `line-height` con semántica de `<number>` recalibrada por elemento (hoy se hereda congelada en px).
-4. **WP-4.6 — posición y stacking**: `position: relative/absolute/fixed`, contenedores de posicionados, `z-index` y `opacity` por grupos offscreen. Hoy `position: absolute` se pinta en el flujo normal; es el mayor bloqueador de fidelidad en páginas reales.
-5. **WP-4.7/4.8/4.9/4.10 — features de layout**: floats/`clear`, tablas CSS 2.1 (`colspan`/`rowspan`, `border-collapse`), `inline-block`/marcadores de lista/`text-decoration` y `overflow`/clip (`PushClip`/`PopClip` ya existen en la display list pero el painter no los emite).
-6. **WP-4.11 — calidad de imagen**: antialiasing/cobertura por píxel (`fill_rect` aún redondea hacia fuera), alfa premultiplicado y **compresión PNG** (hoy ~1,92 MB por 800×600). Cualquier compresión debe respetar `ARCHITECTURE.md` §3.2 (decisión D3).
-7. **WP-4.12 — CPU cuadrática restante (auditoría F2)**: `has_element_in_scope`, `push_active_formatting` y `reconstruct_active_formatting_elements` del tree builder siguen siendo lineales por token. Adicionalmente, límites de profundidad/tiempo en layout y paint (el parseo ya está acotado).
-8. **Margen de auto-colapso pendiente**: bloques de altura cero con márgenes superior e inferior (*self-collapsing margins*, §8.3.1); el colapso general ya está implementado y testeado.
-9. **WP-4.11/4.13 — fixtures**: `real_page.html` y `torture.html` + goldens cuando existan posicionamiento/tablas/fuentes reales; hoy sólo hay golden de `basic.html`.
-10. **Cobertura WPT An+B**: el gate usa 8 casos curados de 67 aserciones upstream; ampliar error cases y roundtrip de `selectorText`.
-11. **API de layout**: `layout_document` devuelve `Option`; migrar a errores explícitos (`Result`) para no ocultar subárboles sin estilo.
+## Deuda técnica priorizada (siguiente ronda)
+
+1. **WP-4.6 — `position`/`z-index`/stacking/`opacity`** *(máxima prioridad de fidelidad)*: hoy un `position: absolute` se pinta en el flujo normal; requiere contenedores de posicionados, posición estática y árbol de stacking con las fases del Apéndice E; `opacity` necesita grupos offscreen.
+2. **WP-4.8 — tablas CSS 2.1**: `display: table*` se apila como bloques; faltan columnas/filas automáticas, `colspan`/`rowspan`, `border-collapse` y pintado de tablas; añadir pruebas de fecha/tablas al corpus.
+3. **WP-4.10 — clipping desde `overflow`**: el rasterizador ya tiene `ClipStack`/`PushClip`/`PopClip`, pero el painter no genera clips; falta propagar `overflow` en layout y emitir clips balanceados.
+4. **WP-4.7 / WP-4.9 — floats/`clear` e `inline-block`/listas/decoraciones/reemplazados**: `float`/`clear` se parsean pero no se aplican; `inline-block` sigue siendo inline normal; marcadores y `text-decoration` no se pintan; `<img>` depende de Fase 5.
+5. **Fase 5 — TLS y caché HTTP**: integrar `rustls`+`webpki-roots` (WP-5.3), política de caché HTTP (`Cache-Control`/ETag, WP-5.4) y Fetch/CORS + carga de subrecursos (WP-5.5). `net` es std-only hoy.
+6. **Rendimiento/robustez**: DOM identidad/memoria (auditoría **F8**), recursión de layout/paint en documentos muy profundos (**F6**), presupuestos de tiempo y `Result` en la API de layout; evitar el `Vec<ComputedStyle>` clonado por caja.
+7. **PNG y raster**: compresión PNG dentro del codificador (hoy *stored*, ~1,92 MB a 800×600) o enmienda de política para `flate2`/`png`; evaluar premultiplicado interno; **glyph cache global** (hoy caché por pasada) y atlas de glifos.
+8. **Cobertura**: ampliar fixtures de fecha/tablas, `real_page.html`/`torture.html` + goldens cuando existan posicionamiento/tablas; subir la cobertura An+B del gate (8 casos curados de 67 upstream); pruebas de fecha/zona horaria solo si el motor acaba exponiendo `Date`.
+9. **Documentación**: `docs/images/` versionadas y referenciadas; mantener `PERFORMANCE.md` (otra tarea) y `PHASE4-SUPPORT.md` sincronizados por ronda; matriz de soporte de Fase 5 al cerrar TLS.
+10. **CI**: añadir el job de benchmarks como *smoke* opcional (`--scale 0.1`) para detectar regresiones de complejidad sin alargar el pipeline principal.
 
 ## Reglas del repositorio (recordatorio)
 
-- Sin *forks* de motores ni crates de parsing/layout de terceros. Los crates de núcleo (`dom`, `html`, `css`, `layout`) sólo usan `std`; `crates/fonts` es la excepción autorizada de §3.1 y `test_harness` sólo usa `serde`/`serde_json`.
-- Cero advertencias: `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings`.
-- Todo cambio funcional necesita tests en el mismo commit; los mensajes siguen *Conventional Commits*.
+- Sin *forks* de motores ni crates de parsing/layout de terceros. Núcleo (`dom`, `html`, `css`, `layout`) sólo `std`; `fonts` es la excepción tipográfica autorizada (§3.1) y `net`/`bench` son std-only. `test_harness` sólo usa `serde`/`serde_json`.
+- Cero advertencias: `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings` + `cargo doc`.
+- Todo cambio funcional necesita tests en el mismo commit; *Conventional Commits*.
 - No commitear/pushear desde agentes: el Lead integra y revisa.
-- `tests/html5lib-tests` es upstream versionado; de `tests/wpt/` sólo se versiona `tests/wpt/css/css-syntax/` (fixtures vendorizadas); `.agents/` y `.cache/` están ignorados.
-- Al tocar la matriz de dependencias, actualizar `docs/ARCHITECTURE.md` §3 y justificarlo en el PR.
+- `tests/html5lib-tests` es upstream versionado; de `tests/wpt/` sólo se versiona `tests/wpt/css/css-syntax/`; `.agents/` y `.cache/` están ignorados.
+- Al tocar dependencias, actualizar `ARCHITECTURE.md` §3 y justificarlo; el PNG propio sigue la decisión D3 (§3.2).

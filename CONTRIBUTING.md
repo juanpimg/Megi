@@ -23,9 +23,9 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 ### 1.3 Auto-Testeo Continuo en Bucle Cerrado (Closed-Loop Testing)
 - Ninguna funcionalidad se considera completada sin una prueba de conformidad que la valide.
 - Trabajamos con las suites de prueba de referencia de la industria:
-  - **`html5lib-tests`**: Más de 7.000 pruebas para el tokenizador y más de 1.900 árboles para la construcción del DOM.
-  - **Web Platform Tests (WPT)**: Pruebas oficiales compartidas por todos los motores de navegación modernos.
-- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. Las cifras de referencia son **7.047/7.050** (tokenizador, allowlist `xmlViolation.test`: 3), **3.898/3.904** (construcción de árbol, allowlist 4 suites `scripted_*`: 6 mode-runs) y **30/30** en las fixtures WPT de CSS Syntax **vendorizadas** en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo).
+  - **`html5lib-tests`**: Más de 7.000 pruebas de tokenizador, ~1.900 de construcción del DOM y las suites oficiales de **serialización HTML** (`serializer/*.test`).
+  - **Web Platform Tests (WPT)**: Pruebas oficiales compartidas por todos los motores de navegación modernos (fixtures de CSS Syntax vendorizadas).
+- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), árbol **3.898/3.904** (allowlist 4 suites `scripted_*`: 6 mode-runs), **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El workspace tiene **301 tests**.
 
 ### 1.4 Modelo de Memoria en Arena (Sin `Rc<RefCell<Node>>`)
 - Uno de los mayores cuellos de botella y fuentes de *memory leaks* en motores web en Rust es el uso de `Rc<RefCell<Node>>` o recolectores de basura pesados.
@@ -52,10 +52,12 @@ crates/
 ├── dom/           # Núcleo: Arena DOM, NodeId(NonZeroU32), mutaciones O(1) y robustez de API. [0 dependencias]
 ├── html/          # HTML5: Tokenizador de 84 estados, TreeBuilder de 21 modos, ParseOptions anti-DoS. [Depende solo de dom]
 ├── css/           # CSS: Sintaxis L3, Selectores L4, Cascada L4, ComputedStyle, Hoja UA §15. [Depende solo de dom]
-├── layout/        # Layout: Box Tree, Anonymous Blocks §9.2.1.1, BFC (+ colapso de márgenes) e IFC. [Depende de dom y css]
-├── fonts/         # Tipografía (Fase 4): fontdb + ttf-parser + rustybuzz + ab_glyph. [0 deps internas]
-├── paint/         # Paint (Fase 4): Display Lists, raster 2D, canvas §14.2 y PNG propio. [Depende de dom, css y layout]
-└── test_harness/  # Gate de conformidad: WPT (fixtures vendorizadas) y html5lib-tests.
+├── layout/        # Layout: Box Tree, BFC/IFC (saltos, margins, line-height, vertical-align). [Depende de dom y css]
+├── fonts/         # Tipografía (Fase 4): fontdb + ttf-parser + rustybuzz + ab_glyph, integrado en layout/paint. [0 deps internas]
+├── paint/         # Paint (Fase 4): Display Lists, raster con AA/culling, bordes por lado, canvas §14.2 y PNG propio. [Depende de dom, css, layout y fonts]
+├── net/           # Red (Fase 5): URL, HTTP/1.1, file://, MIME y loader. [std-only, 0 deps]
+├── bench/         # Benchmarks reproducibles (parseo, estilos, layout, paint, PNG). [Solo crates internos]
+└── test_harness/  # Gate de conformidad: tokenizer, árbol, serializer y CSS Syntax.
 ```
 
 ---
@@ -68,26 +70,25 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
 3. El crate y módulo responsable.
 4. El criterio de aceptación verificable por test.
 
-### Áreas activas donde puedes aportar hoy (Fase 4: paint + tipografía):
-- **Tipografía (`crates/fonts`)**:
-  - Integración del motor tipográfico en `layout`/`paint` (WP-4.4 fase 2): `TextMeasurer` real, `ShapedRun`/glyph runs, baseline y `line-height: normal`.
-  - Cobertura de shaping para más scripts, fallback entre familias y métricas de fuentes variables.
+### Áreas activas donde puedes aportar hoy (cierre de Fase 4 y arranque de Fase 5):
+- **Layout (`crates/layout`) — prioridad de cierre de Fase 4**:
+  - **`position`/`z-index`/stacking contexts/`opacity`** (WP-4.6); floats y `clear` (WP-4.7); tablas CSS 2.1 (WP-4.8).
+  - `inline-block`, marcadores de lista y `text-decoration` (WP-4.9); clips desde `overflow` (WP-4.10).
 - **Paint (`crates/paint`)**:
-  - Pintado de bordes por lado/estilo y fondos en *border box* (WP-4.3); `background-clip`.
-  - Contextos de apilamiento, `position`/`z-index`/`opacity` (WP-4.6) y `overflow`/clip (WP-4.10).
-  - Calidad del rasterizador: cobertura por píxel, antialiasing y compresión PNG (WP-4.11).
-- **Layout (`crates/layout`)**:
-  - Posicionamiento absoluto/relativo y floats; tablas CSS 2.1; `inline-block` y marcadores de listas (WP-4.6–4.9).
-  - IFC pendiente: oportunidades de salto UAX #14, soft hyphens y `vertical-align` §10.8.1 (WP-4.5).
-- **CSS (`crates/css`)**:
-  - Propiedades de presentación de Fase 4 y ampliación de Selectors L4 (`:is()`, `:where()`, `:not()`).
+  - Stacking/opacidad por grupos offscreen (WP-4.6) y clips desde `overflow` (WP-4.10).
+  - Compresión PNG dentro del codificador propio (WP-4.11) y caché de glifos global.
+- **Red (`crates/net`) — Fase 5**:
+  - **TLS con `rustls`/`webpki-roots`** (WP-5.3); caché HTTP (`Cache-Control`/ETag, WP-5.4).
+  - Fetch/CORS, referrer y carga de subrecursos del documento (WP-5.5); streaming y compresión (WP-5.7).
+- **Tipografía (`crates/fonts`)**:
+  - Mejoras de shaping para más scripts, fallback entre familias y métricas de fuentes variables.
+- **Rendimiento/robustez (`crates/html`, `crates/dom`, `layout`, `paint`)**:
+  - DOM identidad/memoria (auditoría F8), recursión de layout/paint en documentos profundos (F6), presupuestos de tiempo y API `Result`.
+  - Benchmarks reproducibles (`./tools/bench.sh`) y regresiones de complejidad.
 - **Harness & Tooling (`crates/test_harness`, `tools/`)**:
-  - Más fixtures vendorizadas de WPT y ampliación de la cobertura An+B del gate.
-  - Comparación visual de renderizado y nuevas golden images.
-- **Rendimiento/robustez (`crates/html`, `crates/dom`)**:
-  - Eliminar la CPU cuadrática restante del tree builder (hallazgo F2 de la auditoría) y presupuestos de tiempo.
+  - Más fixtures vendorizadas de WPT, ampliación de An+B y comparación visual/golden images.
 
-La matriz de soporte por propiedad CSS y el estado exacto de cada paquete de Fase 4 están en [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md) (sección «FASE 4»).
+La matriz de soporte por propiedad CSS, el estado de cada paquete de Fase 4 y el plan de Fase 5 están en [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md) (secciones «FASE 4» y «FASE 5»); el rendimiento en [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 
 ---
 
@@ -132,14 +133,20 @@ cargo fmt
 ./tools/dev.sh all
 
 # Comprobaciones individuales útiles
-cargo test --workspace
+cargo test --workspace                         # 301 tests
 cargo +1.88 check --workspace --all-targets
-cargo run -p test_harness -- --summary          # gate: PASS, exit 0
+cargo run -p test_harness -- --summary          # gate 4 suites: PASS, exit 0
 cargo run -p test_harness -- --summary --strict # exit 1 si hay fallos no aceptados
 
 # Pipeline HTML → PNG (Fase 4) y validación de la imagen
-cargo run -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
+cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
 python3 tools/png_check.py /tmp/basic.png
+
+# Rendimiento (release; baseline en docs/PERFORMANCE.md)
+./tools/bench.sh --scale 0.25
+
+# Red (Fase 5; tests offline)
+cargo test -p net
 ```
 
 Si `./tools/dev.sh all` reporta `==> All checks passed!`, tu código está listo para ser revisado. La CI remota (`.github/workflows/ci.yml`) ejecuta los mismos pasos: `quality` (fmt, clippy, tests, doc), `conformance` (gate `--summary`) y `msrv` (`cargo check` con Rust 1.88).
@@ -152,7 +159,8 @@ Si `./tools/dev.sh all` reporta `==> All checks passed!`, tu código está listo
 Utilizamos commits atómicos, descriptivos y en formato semántico:
 
 - `feat(layout): implement inline formatting context line breaking`
-- `feat(css): add support for :is() and :where() pseudo-classes`
+- `feat(css): implement functional Selectors L4 (:is/:where/:not/:has)`
+- `feat(net): bootstrap Phase 5 with URL, HTTP/1.1, file and resource loading`
 - `fix(html): pop implied end tags when encountering hr inside select scope`
 - `test(test_harness): add WPT selector matching suite runner`
 - `docs: update ROADMAP.md with Phase 3 completion`

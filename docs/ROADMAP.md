@@ -14,31 +14,33 @@ Cada paquete de trabajo está vinculado de forma explícita y trazable a:
 
 ```text
 Fase 0: Tooling & Arena DOM         [██████████] 100% (COMPLETADA)
-Fase 1: Tokenizador & Árbol HTML5   [██████████]  99.9% (COMPLETADA - 100% Declarativo)
+Fase 1: Tokenizador & Árbol HTML5   [██████████] 100% (COMPLETADA - 100% Declarativo)
 Fase 2: Motor CSS                    [██████████] 100% (COMPLETADA)
 Fase 3: Motor Layout (BFC & IFC)     [██████████] 100% (COMPLETADA)
-Fase 4: Paint, PNG & Tipografía      [█████░░░░░]  50% (EN CURSO: pipeline HTML→PNG operativo)
-Fase 5: Red & Fetch Pipeline         [░░░░░░░░░░]   0% (PLANIFICADA)
+Fase 4: Paint, PNG & Tipografía      [█████████░]  90% (CASI COMPLETA: render real determinista)
+Fase 5: Red & Fetch Pipeline         [█░░░░░░░░░]  10% (EN CURSO: bootstrap URL/HTTP/loader)
 Fase 6: Integración JS & Bindings    [░░░░░░░░░░]   0% (PLANIFICADA)
 Fase 7: Ventana OS & Shell           [░░░░░░░░░░]   0% (PLANIFICADA)
 
-> El 50% de la Fase 4 corresponde al pipeline `HTML → CSS → layout → display list → PNG`
-> ya operativo (WP-4.1), los cimientos CSS (WP-4.0), las correcciones de BFC/IFC (WP-4.2)
-> y el motor tipográfico `crates/fonts` (WP-4.4 fase 1). El detalle HECHO/PARCIAL/PENDIENTE
-> por paquete está en la sección «FASE 4» al final de este documento y en
-> `docs/PHASE4-SUPPORT.md`.
+> La Fase 4 está casi cerrada: el pipeline `HTML → CSS → layout → display list → PNG`
+> renderiza texto real (fontes integradas), bordes por lado, antialiasing y es determinista
+> byte a byte. Quedan `position`/stacking (`WP-4.6`), floats (`WP-4.7`), tablas (`WP-4.8`)
+> y cerrar `inline-block`/clip/robustez/matriz (`WP-4.9`/4.10/4.12/4.13).
+> La Fase 5 arranca con el crate `net` (URL/HTTP1.1/file/MIME/loader, 57 tests, sin TLS).
+> Detalle HECHO/PARCIAL/PENDIENTE por paquete: secciones «FASE 4» y «FASE 5» de este
+> documento y `docs/PHASE4-SUPPORT.md`; rendimiento en `docs/PERFORMANCE.md`.
 ```
 
 | Fase / Bloque | Barra | Estado | Cobertura Verificada | Hito Clave Alcanzado |
 |---|:---:|:---:|---|---|
 | **Fase 0: Tooling, Arena DOM & Closed-Loop Harness** | `[██████████] 100%` | **COMPLETO** | 9/9 tests unitarios en `crates/dom` | Arena contigua indexada (`NodeId(NonZeroU32)` de 4 bytes) sin `Rc<RefCell<Node>>`, scripts CLI de inspección WHATWG en vivo. |
-| **Fase 1A: Tokenizador HTML5 (84 Estados & 2.231 Entidades)** | `[██████████] 100%` | **COMPLETO** | 7.047 / 7.050 estados superados | 100% verde en las 13 suites estándar de `html5lib-tests/tokenizer`. |
-| **Fase 1B: Construcción del Árbol DOM (21 Modos de Inserción)** | `[██████████] 99.9%` | **COMPLETO (Declarativo)** | 3.898 / 3.904 casos superados | 100% verde en 58 de 62 suites (100% del HTML5 declarativo superado; los 6 casos restantes requieren JavaScript dinámico `document.write`). |
-| **Fase 2: Motor CSS (Sintaxis L3, Selectores L4, Cascada L4, Hoja UA §15)** | `[██████████] 100%` | **COMPLETO** | 23/23 unit tests + 30/30 comprobaciones WPT CSS Syntax vendorizadas | Tokenizador L3, parser AST, especificidad $(A,B,C)$, pseudoclases, cascada por origen e importancia (6 niveles), `ComputedStyle` y hoja User-Agent WHATWG HTML §15; bases de Fase 4: bordes por lado/shorthands, `border-style: none` ⇒ ancho 0, `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type` y correcciones de selectores. |
-| **Fase 3: Motor de Layout (Box Tree, Bloques Anónimos §9.2.1.1, BFC e IFC)** | `[██████████] 100%` | **COMPLETO (núcleo)** | 61 tests en `crates/layout` | Box Tree con supresión de `display: none`, cajas anónimas *inherit-only* (§9.2.1.1), BFC con **colapso de márgenes** (§8.3.1), altura del bloque contenedor inicial, `box-sizing`/`min-max`/porcentajes, sobre-restringido e IFC con `<br>` forzado. El layout de posicionados, floats, tablas e inline-block se planifica en Fase 4. |
-| **Fase 4: Display Lists, Pipeline HTML → PNG & Rasterización 2D** | `[█████░░░░░] 55%` | *EN CURSO* | 33 tests en `crates/paint` | Display list desacoplada, rasterizador software con blending, **pipeline HTML → PNG de extremo a extremo** (codificador PNG propio sin dependencias), canvas blanco con propagación de fondo raíz/`body` (CSS 2.2 §14.2), `RenderConfig`, extracción de `<style>` y golden determinista 800×600. Pendientes: integración de fuentes reales, bordes por lado en el raster, stacking contexts/`opacity`/`position`, clip, antialiasing y compresión PNG. |
-| **Fase 4: Motor tipográfico (`crates/fonts`)** | `[█████░░░░░] 50%` | *EN CURSO (fase 1)* | 13 tests + 1 doctest | `FontDatabase` con `fontdb`, métricas OpenType vía `ttf-parser`, shaping LTR con `rustybuzz` (kern/ligaduras), rasterización de glifos con `ab_glyph` y fallback de familias; fuente DejaVu determinista empaquetada con licencia. Aún no consumido por `layout`/`paint` (WP-4.4 fase 2). |
-| **Fase 5: Red & Fetch Pipeline** | `[░░░░░░░░░░] 0%` | *Planificada* | — | Transporte HTTP/TLS y pipeline de recursos según WHATWG Fetch. |
+| **Fase 1A: Tokenizador HTML5 (84 Estados & 2.231 Entidades)** | `[██████████] 100%` | **COMPLETO** | 7.050 / 7.050 estados en el gate (allowlist vacía) | 13 suites estándar de `html5lib-tests/tokenizer` al 100%; `ParseOptions` anti-DoS y deduplicación de atributos en tiempo lineal. |
+| **Fase 1B: Construcción del Árbol DOM (21 Modos) & Serializador §13.3** | `[██████████] 99.9%` | **COMPLETO (Declarativo)** | 3.898 / 3.904 árbol + **230/230 serializador** | 21 modos de inserción, AAA, *foster parenting*, `innerHTML`; **serializador público WHATWG HTML §13.3** (`serialize_html`/`serialize_fragment`/`serialize_outer_html` + opciones) con las 5 suites `html5lib-tests/serializer` en el gate. |
+| **Fase 2: Motor CSS (Sintaxis L3, Selectores L4, Cascada L4, Hoja UA §15)** | `[██████████] 100%` | **COMPLETO** | 41/41 unit + 30/30 WPT CSS Syntax vendorizado | Selectores L4 funcionales (`:is/:where/:not/:has`) y estructurales, especificidad, expansión de shorthands antes de la cascada, `font` shorthand, `@media` básico y índice de reglas (2,1× en resolve-styles 10k nodos); bases de Fase 4 (bordes por lado, `border-style: none`, `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type`, `line_height_factor`). |
+| **Fase 3: Motor de Layout (BFC e IFC)** | `[██████████] 100%` | **COMPLETO (núcleo)** | 80 tests en `crates/layout` | Box Tree, cajas anónimas *inherit-only*, colapso de márgenes, ICB, `box-sizing`/min-max/%, sobre-restringido; **IFC**: oportunidades de salto reales, soft hyphen de ancho cero, `line-height` como factor, `vertical-align: top/bottom` (§10.8.1) y `text-align: justify`. |
+| **Fase 4: Display Lists, Pipeline HTML → PNG & Rasterización 2D** | `[█████████░] 90%` | *CASI COMPLETA* | 52 tests en `crates/paint` | Pipeline `HTML → CSS → layout → display list → PNG` con texto real (fonts integradas), **bordes por lado** (`solid`/`dashed`/`dotted`/`double`/`none|hidden`, mitre) y fondo bajo el *border box*,  antialiasing exacto, culling + cachés (raster 1598,8→0,9 ms), codificador PNG propio sin dependencias, canvas propagado (§14.2) y golden determinista. Pendientes: `position`/stacking/`opacity`, floats, tablas, `inline-block`, clip y compresión PNG. |
+| **Fase 4: Motor tipográfico (`crates/fonts`)** | `[██████████] 100%` | **COMPLETO (integrado)** | 13 + 1 doctest | `FontDatabase` (fontdb), métricas OpenType (ttf-parser), shaping LTR con `rustybuzz` (kern/ligaduras), rasterización de glifos (`ab_glyph`) y fallback; **integrado en layout y paint** (texto real en el pipeline). Bidi/scripts complejos/fuentes variables quedan fuera de Fase 4. |
+| **Fase 5: Red & Fetch Pipeline** | `[█░░░░░░░░░] 10%` | *EN CURSO* | 57 tests en `crates/net` | Bootstrap std-only: URL WHATWG (subset http/https/file + join), HTTP/1.1 `GET` (timeouts, Content-Length, chunked, redirects 301/302/303/307/308, caps), `file://`, MIME sniffing WHATWG (subset) y `ResourceLoader` con caché; `#![forbid(unsafe_code)]`. Pendiente: TLS (`rustls`), caché HTTP, Fetch/CORS y streaming. |
 | **Fase 6: Integración JS & DOM Bindings** | `[░░░░░░░░░░] 0%` | *Planificada* | — | Enlaces e integración de ejecución de scripts (`document.write`, DOM bindings). |
 | **Fase 7: Ventana OS & Shell** | `[░░░░░░░░░░] 0%` | *Planificada* | — | Creación de ventana de SO, gestión de eventos y bucle principal de renderizado. |
 
@@ -465,177 +467,176 @@ Fase 7: Ventana OS & Shell           [░░░░░░░░░░]   0% (PLAN
 
 ---
 
-## FASE 4: Display Lists, Pipeline HTML → PNG y Tipografía Real (EN CURSO)
+## FASE 4: Display Lists, Pipeline HTML → PNG y Tipografía Real (CASI COMPLETA, ~90%)
 
-**Objetivo de la fase**: renderizar una página HTML real (autocontenida, sin red ni JavaScript) a una imagen PNG, y para ello completar el modelo de pintado CSS 2.2 (§9.9/Apéndice E, §10, §14.2) y la tipografía. Estado global estimado: **~50%**. El pipeline `HTML → CSS → layout → display list → PNG` ya es ejecutable y está cubierto por tests + golden determinista; lo que falta es fidelidad (fuentes reales integradas, bordes por lado en el raster, posicionamiento/stacking, floats, tablas, `inline-block`, overflow y calidad de antialiasing).
+**Objetivo de la fase**: renderizar una página HTML real (autocontenida, sin red ni JavaScript) a una imagen PNG, completando el modelo de pintado CSS 2.2 (§9.9/Apéndice E, §10, §14.2) y la tipografía. **Estado actual**: el pipeline completo funciona con **texto real**, **bordes por lado**, **antialiasing** y determinismo byte a byte; lo que falta son los esquemas de posicionamiento y los formatos de layout restantes (floats, tablas, `inline-block`), el clicado desde `overflow` y cerrar la matriz de soporte.
 
-Matriz detallada de soporte CSS 2.2 y decisiones de alcance: [`docs/PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md).
-
-**Estado de los paquetes**:
+- Resultado visual: [`../docs/images/phase4-basic.png`](../docs/images/phase4-basic.png) / `tests/fixtures/phase4/basic.html`.
+- Matriz detallada por propiedad CSS: [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md).
+- Rendimiento del pipeline y del rasterizador: [`PERFORMANCE.md`](PERFORMANCE.md).
 
 | WP | Objetivo | Crate | Estado |
 |---|---|---|---|
-| `WP-4.0` | Cimientos CSS: bordes por lado, `border-style: none`, `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type`, `line-height` | `css` | **PARCIAL** |
-| `WP-4.1` | Pipeline `HTML→PNG`, codificador PNG sin dependencias, canvas y propagación raíz/`body`, extracción de `<style>` | `paint` | **HECHO** |
-| `WP-4.2` | BFC y modelo de cajas: anónimos *inherit-only*, colapso de márgenes, ICB, `box-sizing`/min-max/%, sobre-restringido, `<br>` | `layout` | **PARCIAL** |
-| `WP-4.3` | Pintado de caja: fondos en *border box* y bordes por lado/estilo/color en la display list | `paint` | **PARCIAL** |
-| `WP-4.4` | Tipografía real: `crates/fonts` + integración en layout (métricas/shaping/glyph runs) | `fonts`, `layout`, `paint` | **PARCIAL** (fase 1 hecha) |
-| `WP-4.5` | IFC conforme: oportunidades de salto UAX#14, soft hyphen, `vertical-align` §10.8.1 | `layout` | **PARCIAL** |
+| `WP-4.0` | Cimientos CSS (bordes, props. de Fase 4, selectores, `@media`, `line-height` factor) | `css` | **HECHO** |
+| `WP-4.1` | Pipeline `HTML→PNG`, codificador PNG sin dependencias, canvas §14.2, `<style>` | `paint` | **HECHO** |
+| `WP-4.2` | BFC y modelo de cajas (anónimos, collapso, ICB, box-sizing/min-max/%/sobre-restringido, `<br>`) | `layout` | **HECHO** |
+| `WP-4.3` | Pintado de caja: fondos en *border box*, bordes por lado con 4 colores/estilos y esquinas mitre | `paint` | **HECHO** |
+| `WP-4.4` | Tipografía real integrada: métricas/shaping/glyph runs/baseline en layout y paint | `fonts`, `layout`, `paint` | **HECHO** |
+| `WP-4.5` | IFC conforme: saltos UAX#14, soft hyphen, `line-height` factor, `vertical-align` §10.8.1, justify | `layout` | **HECHO** |
 | `WP-4.6` | `position: relative/absolute/fixed`, `z-index`, stacking contexts y `opacity` por grupos | `layout`, `paint` | **PENDIENTE** |
-| `WP-4.7` | Floats y `clear` (CSS 2.2 §9.5) y su paso de pintado | `layout`, `paint` | **PENDIENTE** |
+| `WP-4.7` | Floats y `clear` (§9.5) y su paso de pintado | `layout`, `paint` | **PENDIENTE** |
 | `WP-4.8` | Tablas CSS 2.1 (layout automático, `colspan`/`rowspan`, `border-collapse`) | `layout`, `paint` | **PENDIENTE** |
-| `WP-4.9` | `inline-block`, marcadores `list-item`, `hr`, `text-decoration` y placeholders de reemplazados | `css`, `layout`, `paint` | **PENDIENTE** |
-| `WP-4.10` | `overflow` y clipping de descendientes (`PushClip`/`PopClip`) | `css`, `layout`, `paint` | **PENDIENTE** |
-| `WP-4.11` | Calidad de raster: cobertura por píxel/antialiasing, alfa premultiplicado, compresión PNG | `paint` | **PARCIAL** |
-| `WP-4.12` | Robustez/rendimiento: límites anti-DoS, API con errores explícitos, CPU cuadrática hallada en auditoría | `html`, `dom`, `layout`, `paint` | **PARCIAL** |
-| `WP-4.13` | Golden images, fixtures `real_page`/`torture`, matriz de soporte y documentación en verdad | `paint`, `docs` | **PARCIAL** |
+| `WP-4.9` | `inline-block`, marcadores `list-item`, `hr`, `text-decoration` y placeholders de reemplazados | `css`, `layout`, `paint` | **PARCIAL** |
+| `WP-4.10` | `overflow` y clipping de descendientes (`PushClip`/`PopClip` desde el painter) | `css`, `layout`, `paint` | **PARCIAL** |
+| `WP-4.11` | Calidad de raster: AA exacto, cachés/culling, (premultiplicado/compresión PNG pendientes) | `paint` | **HECHO** (AA/perf) |
+| `WP-4.12` | Robustez/presupuestos: límites anti-DoS, API con errores explícitos, profundidad layout/paint | `html`, `dom`, `layout`, `paint` | **PARCIAL** |
+| `WP-4.13` | Golden images/fixtures, matriz de soporte y documentación en verdad | `paint`, `docs` | **PARCIAL** |
 
-### `WP-4.0` — Cimientos CSS de Fase 4 (estado: **PARCIAL**)
-- **Duración estimada**: 3 días
-- **Objetivo**: que `ComputedStyle` contenga la información que layout/paint necesitan y que el cálculo de bordes sea normativo.
-- **Sección exacta de la Spec W3C**:
-  - CSS 2.2 §8.5.3 *Border style* (`https://www.w3.org/TR/CSS22/box.html#border-style-properties`, `none` ⇒ ancho computado 0)
-  - CSS 2.2 §8.5.1/§8.5.2/§8.5.4 *Border width/color/shorthand* (`#border-width-properties`, `#border-color-properties`, `#border-shorthand-properties`)
-  - CSS 2.2 §9.5.1/§9.5.2 *float/clear* (`https://www.w3.org/TR/CSS22/visuren.html#floats`), §11.1.1 *overflow* (`#overflow`), §11.2 *visibility* (`#visibility`), §16.3.1 *text-decoration* (`https://www.w3.org/TR/CSS22/text.html#decoration`), CSS Lists 3 §5 *list-style-type*
-- **Crate y módulos**: `crates/css/src/properties.rs`, `crates/css/src/selector.rs`, `crates/css/src/user_agent.rs`
-- **Hecho en este sprint**: bordes por lado y shorthands (`border-top/right/bottom/left`, `*-color`/`*-style`), expansión `{1,4}` de `border-width/color/style`, `border-style: none|hidden` ⇒ ancho computado 0, campos `float`, `clear`, `overflow`, `visibility`, `text-decoration`, `list-style-type` en `ComputedStyle`, y correcciones de selectores (pseudo-clase desconocida invalida, SVG/MathML, comas en atributos).
-- **Pendiente**: semántica de herencia de `line-height` con `<number>`/`normal` (hoy se congela en px; ver hallazgo del informe de auditoría), `vertical-align` porcentual.
-- **Criterio de aceptación**: `cargo test -p css` (23/23) + `cargo run -p test_harness -- --summary` (30/30 CSS Syntax).
+### `WP-4.0` — Cimientos CSS (estado: **HECHO**)
+- **Objetivo**: `ComputedStyle` con toda la información que layout/paint necesitan y semántica normativa de bordes, shorthands y selectores.
+- **Spec**: CSS 2.2 §8.5 (`box.html#border-style-properties`, `#border-width-properties`, `#border-color-properties`, `#border-shorthand-properties`), §9.5/§11.1.1/§11.2/§16.3.1; Selectors L4 (`https://www.w3.org/TR/selectors-4/`); CSS Sizing 3; CSS Lists 3; CSS Conditional 3 `@media`.
+- **Hecho**: bordes por lado/shorthands y `border-style: none|hidden` ⇒ ancho 0; `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type`; selectores L4 funcionales y estructurales, especificidad correcta, expansión de shorthands antes de la cascada, `font` shorthand, `@media` básico (`resolve_document_styles_with_media`) e índice de reglas (resolve-styles 10k nodos 63,6 → 30,3 ms, 2,1×); `line_height_factor` aditivo.
+- **Criterio**: `cargo test -p css` (41/41) + `cargo run -p test_harness -- --summary` (CSS 30/30).
 
 ### `WP-4.1` — Pipeline HTML → PNG (estado: **HECHO**)
-- **Duración estimada**: 3 días
-- **Objetivo**: driver reproducible `HTML → CSS → layout → display list → Pixmap → PNG`, con canvas blanco, propagación de fondo raíz/`body` (CSS 2.2 §14.2) y extracción de `<style>`.
-- **Sección exacta de la Spec**:
-  - CSS 2.2 §14.2 *The background* (`https://www.w3.org/TR/CSS22/colors.html#background`) y CSS Backgrounds 3 §2.11 *root/body backgrounds* (`https://www.w3.org/TR/css-backgrounds-3/#root-background`, `#body-background`)
-  - CSS 2.2 Apéndice E §E.2 paso 1 (fondo del elemento raíz sobre el canvas, `https://www.w3.org/TR/CSS22/zindex.html#painting-order`)
-  - PNG 3 (`https://www.w3.org/TR/png-3/`), zlib RFC 1950, DEFLATE RFC 1951
-- **Crate y módulos**: `crates/paint/src/png.rs` (nuevo), `crates/paint/src/style.rs` (nuevo), `crates/paint/src/painter.rs`, `crates/paint/src/rasterizer.rs` (`RenderConfig`), `crates/paint/examples/html_to_png.rs` (nuevo), `crates/paint/tests/end_to_end_html.rs` y `png_format.rs` (nuevos), `tests/fixtures/phase4/`
-- **Hecho en este sprint**: codificador PNG propio sin dependencias (DEFLATE *stored*, CRC-32/Adler-32, tamaño ~1,92 MB para 800×600), `Pixmap::to_png`, `RenderConfig { background, transparent }`, propagación de fondo raíz/`body` con supresión del pintado duplicado, canvas opaco blanco (0 % de transparencia), extracción de `<style>` (`collect_style_text`/`resolve_embedded_styles`), ejemplo CLI y golden `basic.rgba`; 12 tests end-to-end + 8 de formato PNG.
-- **Criterio de aceptación**:
-  - `cargo run -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png`
-  - `python3 tools/png_check.py /tmp/basic.png` → `OK`
-  - `cargo test -p paint --test end_to_end_html --test png_format`
-- **Limitación conocida**: PNG sin compresión (el tamaño es aceptable para tests pero se optimizará en WP-4.11); glifos 8×8 *stub* hasta integrar `crates/fonts`.
+- **Objetivo**: driver reproducible `HTML → CSS → layout → display list → Pixmap → PNG`, canvas blanco, propagación raíz/`body` (§14.2) y extracción de `<style>`.
+- **Spec**: CSS 2.2 §14.2 (`colors.html#background`), CSS Backgrounds 3 §2.11 (`#root-background`, `#body-background`), CSS 2.2 Apéndice E paso 1; PNG 3, RFC 1950/1951.
+- **Hecho**: codificador PNG propio sin dependencias (DEFLATE *stored*, CRC-32/Adler-32), `RenderConfig { background, transparent }`, canvas opaco (0 % de transparencia), `collect_style_text`/`resolve_embedded_styles`, ejemplo `html_to_png`, golden determinista. **Limitación**: PNG sin compresión (~1,92 MB a 800×600), seguimiento en `WP-4.11`.
+- **Criterio**: `cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png` + `python3 tools/png_check.py /tmp/basic.png` + `cargo test -p paint --test end_to_end_html --test png_format`.
 
-### `WP-4.2` — BFC y modelo de cajas (estado: **PARCIAL**)
-- **Duración estimada**: 5 días
-- **Objetivo**: cajas anónimas correctas, colapso de márgenes, bloque contenedor inicial, `box-sizing`/min-max/alturas porcentuales, sobre-restringido y `<br>`.
-- **Sección exacta de la Spec**:
-  - CSS 2.2 §9.2.1.1 *Anonymous block boxes* (`https://www.w3.org/TR/CSS22/visuren.html#anonymous-block-level`)
-  - CSS 2.2 §8.3.1 *Collapsing margins* (`https://www.w3.org/TR/CSS22/box.html#collapsing-margins`)
-  - CSS 2.2 §10.1 *Containing block*, §10.3.3 *block width* (`#blockwidth`), §10.4/§10.7 *min/max*, §10.6.3/§10.6.7 *auto heights*
-  - CSS Sizing 3 §box-sizing (`https://www.w3.org/TR/css-sizing-3/#box-sizing`)
-- **Crate y módulos**: `crates/layout/src/tree_builder.rs`, `block.rs`, `lib.rs`, `box_tree.rs`; `crates/layout/tests/bfc_conformance.rs` (nuevo); `crates/paint` adaptado a la nueva API
-- **Hecho en este sprint**: estilos anónimos *inherit-only* (fin de márgenes/bordes/fondos fantasma, incluidos los huecos por whitespace entre bloques), `<br>` como salto forzado, colapso de márgenes padre-hijo/hermanos con márgenes negativos, ICB con `viewport.height`, alturas porcentuales, `box-sizing: border-box`, `min/max-width`/`min/max-height` y anchos sobre-restringidos; 18 tests nuevos de conformidad BFC.
-- **Pendiente**: bloques de altura cero con márgenes superior+inferior (*self-collapsing margins*, CSS 2.2 §8.3.1: cuando el margen superior e inferior de una caja se colapsan entre sí), API de layout con errores explícitos (`Result`) en lugar de `Option`.
-- **Criterio de aceptación**: `cargo test -p layout` (61 tests).
+### `WP-4.2` — BFC y modelo de cajas (estado: **HECHO**)
+- **Objetivo**: cajas anónimas correctas, colapso de márgenes, ICB, `box-sizing`/min-max/%, sobre-restringido y `<br>`.
+- **Spec**: CSS 2.2 §9.2.1.1 (`visuren.html#anonymous-block-level`), §8.3.1 (`box.html#collapsing-margins`), §10.1/§10.3.3/§10.4/§10.6.3/§10.6.7/§10.7; CSS Sizing 3.
+- **Hecho**: anónimos *inherit-only* (fin de márgenes/fondos fantasma y huecos por whitespace), `<br>` forzado, colapso de márgenes con negativos, ICB con `viewport.height`, alturas porcentuales, `box-sizing`, min/max y sobre-restringido; `tests/bfc_conformance.rs` (18).
+- **Pendiente menor**: *self-collapsing margins* (bloques de altura cero con márgenes superior+inferior) — documentado en `HANDOFF.md` y `PHASE4-SUPPORT.md`.
+- **Criterio**: `cargo test -p layout` (80).
 
-### `WP-4.3` — Pintado de caja: fondos y bordes (estado: **PARCIAL**)
-- **Duración estimada**: 3 días
-- **Objetivo**: display list y rasterizador capaces de pintar el modelo de caja completo: bordes por lado con estilo/color y fondo en el *border box*.
-- **Sección exacta de la Spec**: CSS 2.2 §8.5 (`https://www.w3.org/TR/CSS22/box.html#border-properties`), CSS 2.2 §14.2 (`https://www.w3.org/TR/CSS22/colors.html#background`), CSS Backgrounds 3 §2.7 `background-clip` (`https://www.w3.org/TR/css-backgrounds-3/#background-clip`), CSS 2.2 Ap. E pasos 2/4 (`https://www.w3.org/TR/CSS22/zindex.html#painting-order`)
-- **Crate y módulos**: `crates/paint/src/display_list.rs`, `painter.rs`, `rasterizer.rs`; `crates/paint/tests/box_model_paint.rs` (pendiente)
-- **hecho en el sprint (parcial)**: el CSS ya entrega `border_color[4]`/`border_style[4]`; el painter pinta fondos en *border box* cuando aplica, omite cajas de formato (`LineBox`/`TextNode`/`AnonymousBlock`) y no pinta `border-style: none`; el avance del texto se toma de la anchura medida por layout.
-- **Pendiente**: `DisplayItem::Border` con **cuatro** colores/estilos y esquinas a inglete, `Dashed/Dotted/Double/Groove/Ridge/Inset/Outset`, fondo con `background-clip` configurable; tests de píxeles por lado.
-- **Criterio de aceptación**: `cargo test -p paint` + golden de una caja con cuatro bordes de colores distintos.
+### `WP-4.3` — Pintado de caja: fondos y bordes por lado (estado: **HECHO**)
+- **Objetivo**: `DisplayItem::Border` con cuatro lados independientes (ancho/estilo/color), esquinas a inglete y fondo bajo el *border box*.
+- **Spec**: CSS 2.2 §8.5, §14.2; CSS Backgrounds 3 §2.7 (`#background-clip`); CSS 2.2 Ap. E pasos 2/4.
+- **Hecho**: `Border { rect, sides: [BorderSide; 4] }` con estilos `solid`/`dashed`/`dotted`/`double`/`none|hidden` (groove/ridge/inset/outset degradan a sólido), partición de esquinas por diagonal, fondo bajo el borde; verificable en la captura del README y en el golden.
+- **Criterio**: `cargo test -p paint --test end_to_end_html --test raster_quality`.
 
-### `WP-4.4` — Tipografía real e integración (estado: **PARCIAL**, fase 1 hecha)
-- **Duración estimada**: 7 días (3 de crate + 4 de integración)
-- **Objetivo**: sustituir la métrica falsa (`DefaultTextMeasurer`) y los glifos 8×8 por fuentes reales, métricas OpenType, shaping y rasterización de glifos con la misma verdad en layout y paint.
-- **Sección exacta de la Spec**: CSS Fonts 4 §5 *font matching* (`https://www.w3.org/TR/css-fonts-4/#font-matching-algorithm`), CSS 2.2 §15.3 (`https://www.w3.org/TR/CSS22/fonts.html#font-family-prop`) y §10.8.1 (`https://www.w3.org/TR/CSS22/visudet.html#leading`), OpenType `OS/2`/`hhea`; HTML §15.3 (fuentes UA)
-- **Crate y módulos**: `crates/fonts/` (**nuevo crate**), `crates/layout/src/inline.rs`, `lib.rs`, `box_tree.rs`, `crates/paint/src/{display_list,painter,rasterizer}.rs`
-- **Hecho en este sprint (fase 1)**: crate `fonts` con `FontDatabase` (`fontdb`, carga determinista de bytes), `FontMetrics` (`ttf-parser`), `measure_text`, `shape` con `rustybuzz` (LTR, kern/ligaduras, fallback por glifo) y `rasterize_glyph` con `ab_glyph`; fuente DejaVu Sans/Bold empaquetada con licencia; 13 tests + 1 doctest + ejemplo `report`.
-- **Pendiente (fase 2)**: `TextMeasurer`/`FontSpec` con peso/estilo en layout, `ShapedRun`/glyph runs en `LayoutBox`, `line-height: normal` desde métricas reales, baseline almacenado en la line box, rasterizado de máscaras de glifo en paint y goldens con fuente real.
-- **Criterio de aceptación**: `cargo test -p fonts` (13+1) + tests de integración layout↔paint con fuente determinista.
+### `WP-4.4` — Tipografía real integrada (estado: **HECHO**)
+- **Objetivo**: métricas OpenType, shaping, baseline y máscaras de glifo con una única fuente de verdad entre layout y paint.
+- **Spec**: CSS Fonts 4 §5 (`#font-matching-algorithm`), CSS 2.2 §15.3 y §10.8.1 (`visudet.html#leading`), OpenType `OS/2`/`hhea`; WHATWG HTML §15.3.
+- **Hecho**: `crates/fonts` (`fontdb`+`ttf-parser`+`rustybuzz`+`ab_glyph`) integrado en `layout` (métricas/shaping/líneas) y `paint` (máscaras con antialiasing); `Text` en la display list lleva `font_weight`, `font_italic` y `baseline`; fuentes DejaVu deterministas.
+- **Criterio**: `cargo test -p fonts -p layout -p paint` + render real en el PNG del fixture.
 
-### `WP-4.5` — IFC conforme (estado: **PARCIAL**)
-- **Duración estimada**: 3 días
-- **Objetivo**: saltos de línea correctos según oportunidades UAX #14, soft hyphens invisibles, `<br>` en todos los `white-space`, y `vertical-align` §10.8.1 (incluido *aligned subtree* `top`/`bottom`).
-- **Sección exacta de la Spec**: CSS 2.2 §9.4.2 *Inline formatting contexts* (`https://www.w3.org/TR/CSS22/visuren.html#inline-formatting`), §10.8/§10.8.1 (`https://www.w3.org/TR/CSS22/visudet.html#line-height`, `#leading`), CSS Text 3 §line breaking/white-space/hyphenation (`https://www.w3.org/TR/css-text-3/#line-breaking`, `#white-space-property`, `#hyphenation`), UAX #14 (`https://www.unicode.org/reports/tr14/`)
-- **Crate y módulos**: `crates/layout/src/inline.rs`, `tree_builder.rs`; `crates/layout/tests/ifc_conformance.rs` (pendiente)
-- **Hecho en este sprint**: `<br>` como `ForcedBreak` (también dentro de inline elements) y `&nbsp;` no colapsable.
-- **Pendiente**: no romper palabras entre nodos inline adyacentes sin espacio (hallazgo F-09 del informe de auditoría), soft hyphen de ancho cero que solo se convierte en guion al romper, `vertical-align: top/bottom` conforme al *aligned subtree* y unificación de las dos pasadas de métricas, `line-height` con semántica de número por elemento, `text-align: justify`.
-- **Criterio de aceptación**: `cargo test -p layout` con los tests de `ifc_conformance` + golden de párrafo con estilos inline.
+### `WP-4.5` — IFC conforme (estado: **HECHO**)
+- **Objetivo**: saltos de línea correctos (UAX #14), soft hyphen invisible, `line-height` numérico, `vertical-align` §10.8.1 y `justify`.
+- **Spec**: CSS 2.2 §9.4.2, §10.8/§10.8.1; CSS Text 3 (`#line-breaking`, `#white-space-property`, `#hyphenation`); UAX #14.
+- **Hecho**: los breaks solo ocurren en oportunidades reales (nodos inline adyacentes sin espacio ya no se separan), soft hyphen de ancho cero que solo materializa `-` al romper, `line-height` numérico heredado como factor, `vertical-align: top/bottom` con *aligned subtree* y cálculo unificado, `text-align: justify` en líneas soft-wrap; `tests/ifc_conformance2.rs` (14) y `fonts_integration.rs` (4).
+- **Criterio**: `cargo test -p layout` (80).
 
 ### `WP-4.6` — Posicionamiento y contextos de apilamiento (estado: **PENDIENTE**)
-- **Duración estimada**: 6 días
 - **Objetivo**: `position: relative/absolute/fixed`, contenedores de posicionados, posición estática, `z-index`, árbol de *stacking contexts* y `opacity` como grupo compuesto.
-- **Sección exacta de la Spec**: CSS 2.2 §9.3/§9.4.3/§9.6 *position schemes* (`https://www.w3.org/TR/CSS22/visuren.html#positioning-scheme`, `#relative-positioning`, `#absolute-positioning`), §9.9/§9.9.1 `z-index` (`#z-index`, `#layers`), §10.1 *containing block* (`https://www.w3.org/TR/CSS22/visudet.html#containing-block-details`), §10.3.7/§10.6.4 (tamaños de posicionados), Apéndice E (`https://www.w3.org/TR/CSS22/zindex.html#painting-order`), CSS Color 3 §transparency (`https://www.w3.org/TR/css-color-3/#transparency`) y Compositing 1 §groups (`https://www.w3.org/TR/compositing-1/#groups`)
-- **Crate y módulos**: `crates/layout/src/positioned.rs` (nuevo), `block.rs`, `box_tree.rs`, `lib.rs`; `crates/paint/src/stacking.rs` (nuevo), `painter.rs`, `display_list.rs`, `rasterizer.rs`; tests `layout/tests/positioning.rs` y `paint/tests/stacking_order.rs`
-- **Estado**: propiedades calculadas en CSS pero **no leídas** por layout/paint; hoy un `position: absolute` se pinta en el flujo normal. Es el bloqueador principal de fidelidad en páginas reales.
-- **Criterio de aceptación**: `cargo test -p layout -p paint` con `test_absolute_removed_from_normal_flow`, `test_z_index_ordering` y `test_opacity_group_composited_once`; PNG de fixture con badge absoluto.
+- **Spec**: CSS 2.2 §9.3/§9.4.3/§9.6 (`visuren.html#positioning-scheme`, `#relative-positioning`, `#absolute-positioning`), §9.9/§9.9.1 (`#z-index`, `#layers`), §10.1, §10.3.7, §10.6.4 y Apéndice E; CSS Color 3 §transparency; Compositing 1 §groups.
+- **Estado**: propiedades calculadas en CSS pero **no leídas** por layout/paint; un `position: absolute` se pinta hoy en el flujo normal. Bloqueador principal de fidelidad de páginas reales.
+- **Criterio**: `cargo test -p layout -p paint` con `test_absolute_removed_from_normal_flow`, `test_z_index_ordering`, `test_opacity_group_composited_once`.
 
 ### `WP-4.7` — Floats y `clear` (estado: **PENDIENTE**)
-- **Duración estimada**: 3 días
-- **Objetivo**: colocación de flotantes (§9.5.1), acortado de line boxes alrededor de floats (§9.4.2), `clear` (§9.5.2), altura de BFC con flotantes (§10.6.7) y paso de pintado 5 del Apéndice E.
-- **Sección exacta de la Spec**: CSS 2.2 §9.5 *Floats* (`https://www.w3.org/TR/CSS22/visuren.html#floats`, `#float-rules`, `#flow-control`)
-- **Crate y módulos**: `crates/layout/src/float.rs` (nuevo), `block.rs`, `inline.rs`; `crates/paint/src/painter.rs` (orden de pintado)
-- **Estado**: `float`/`clear` ya se parsean a `ComputedStyle` (WP-4.0), pero layout y paint no los aplican.
-- **Criterio de aceptación**: `cargo test -p layout -p paint` con `test_line_box_shortened_beside_float`, `test_clear_below_float`, `test_float_painted_after_block_backgrounds_before_inline_text`.
+- **Spec**: CSS 2.2 §9.5 (`visuren.html#floats`, `#float-rules`, `#flow-control`).
+- **Estado**: `float`/`clear` se parsean, pero layout y paint no los aplican (ni el acortado de line boxes ni el paso 5 del Apéndice E).
+- **Criterio**: `cargo test -p layout -p paint` con `test_line_box_shortened_beside_float`, `test_clear_below_float`.
 
 ### `WP-4.8` — Tablas CSS 2.1 (estado: **PENDIENTE**)
-- **Duración estimada**: 5 días
-- **Objetivo**: estructura de cajas de tabla, layout automático de columnas/filas, `colspan`/`rowspan`, `border-collapse` y pintado de tablas según el Apéndice E.
-- **Sección exacta de la Spec**: CSS 2.2 §17 *Tables* (`https://www.w3.org/TR/CSS22/tables.html`), CSS Tables 3 §table-layout (`https://www.w3.org/TR/css-tables-3/#table-layout-algorithm`)
-- **Crate y módulos**: `crates/layout/src/table.rs` (nuevo), `tree_builder.rs`, `box_tree.rs`; `crates/paint/src/painter.rs`; `crates/layout/tests/table_layout.rs`
-- **Estado**: `display: table/table-row/table-cell` se mapea hoy a bloques apilados; no hay algoritmo de tablas.
-- **Criterio de aceptación**: `cargo test -p layout -p paint` con tabla de 3×3 con bordes y celdas de distinto contenido; golden de fixture `real_page.html` cuando exista.
+- **Spec**: CSS 2.2 §17 (`tables.html`), CSS Tables 3 (`#table-layout-algorithm`).
+- **Estado**: `display: table/table-row/table-cell` se apila como bloques; no hay algoritmo de columnas/filas, `colspan`/`rowspan` ni `border-collapse`.
+- **Criterio**: `cargo test -p layout -p paint` con tabla 3×3 con bordes y celdas heterogéneas.
 
-### `WP-4.9` — `inline-block`, listas, decoraciones y reemplazados (estado: **PENDIENTE**)
-- **Duración estimada**: 4 días
-- **Objetivo**: `display: inline-block` con *shrink-to-fit* y baseline propia; marcadores `list-item`; `hr` con estilo UA; `text-decoration`; placeholders de elementos reemplazados (`<img>` con tamaño intrínseco de atributos).
-- **Sección exacta de la Spec**: CSS 2.2 §10.3.9 (`https://www.w3.org/TR/CSS22/visudet.html#inlineblock-width`), §10.8.1 *baseline de inline-block*, §10.3.2 *inline replaced width*, §12.5 *lists* (`https://www.w3.org/TR/CSS22/generate.html`), CSS Text Decoration 3 (`https://www.w3.org/TR/css-text-decor-3/#line-decoration`), CSS Lists 3, HTML §15.3 (UA)
-- **Crate y módulos**: `crates/css/src/user_agent.rs`, `crates/layout/src/{inline,block,tree_builder,box_tree}.rs`, `crates/paint/src/{display_list,rasterizer,painter}.rs`
-- **Estado**: `list-style-type`/`text-decoration` se parsean (WP-4.0) pero no se pintan; `inline-block` se mapea a inline normal; `<img>` genera una caja vacía invisible (las imágenes reales dependen de `crates/net`, Fase 5).
-- **Criterio de aceptación**: `cargo test -p layout -p paint` con `test_inline_block_shrink_to_fit_width`, `test_list_item_disc_marker_outside`, `test_anchor_underline_rendered`.
+### `WP-4.9` — `inline-block`, listas, decoraciones y reemplazados (estado: **PARCIAL**)
+- **Spec**: CSS 2.2 §10.3.9 (`#inlineblock-width`), §10.8.1, §10.3.2, §12.5; CSS Text Decoration 3 (`#line-decoration`); CSS Lists 3; WHATWG HTML §15.3.
+- **Estado**: `inline-block` sigue mapeado a inline normal (sin shrink-to-fit ni baseline propia); los marcadores de lista y `text-decoration` se parsean pero no se pintan; `<img>` genera caja vacía hasta que la Fase 5 aporte red/decodificación (placeholder planificado).
+- **Criterio**: `cargo test -p layout -p paint` con `test_inline_block_shrink_to_fit_width`, `test_list_item_disc_marker_outside`, `test_anchor_underline_rendered`.
 
-### `WP-4.10` — Overflow y clipping (estado: **PENDIENTE**)
-- **Duración estimada**: 2 días
-- **Objetivo**: `overflow: visible|hidden|clip|scroll|auto` y clip de descendientes al *padding box*, emitiendo `PushClip`/`PopClip` correctamente (sin clipear fondo/borde propios).
-- **Sección exacta de la Spec**: CSS 2.2 §11.1 *Overflow and clipping* (`https://www.w3.org/TR/CSS22/visufx.html#overflow`, `#overflow-clipping`), CSS Overflow 3
-- **Crate y módulos**: `crates/paint/src/{painter,display_list,rasterizer}.rs`, `crates/layout/src/box_tree.rs`; `crates/paint/tests/clipping.rs`
-- **Estado**: `overflow` ya se parsea (WP-4.0); la infraestructura de clip existe en el rasterizador pero el painter no emite clips.
-- **Criterio de aceptación**: `cargo test -p paint` con `test_overflow_hidden_clips_descendant`, `test_overflow_hidden_does_not_clip_own_background`.
+### `WP-4.10` — Overflow y clipping (estado: **PARCIAL**)
+- **Spec**: CSS 2.2 §11.1 (`visufx.html#overflow`, `#overflow-clipping`), CSS Overflow 3.
+- **Estado**: el rasterizador ya soporta clips (`ClipStack`/`PushClip`/`PopClip` y respecta el clip en `fill_rect`/bordes/texto), pero el painter todavía no genera clips desde `overflow`; `overflow` se parsea.
+- **Criterio**: `cargo test -p paint` con `test_overflow_hidden_clips_descendant`, `test_overflow_hidden_does_not_clip_own_background`.
 
-### `WP-4.11` — Calidad de raster y alfa (estado: **PARCIAL**)
-- **Duración estimada**: 3 días
-- **Objetivo**: cobertura por píxel/antialiasing de rectángulos y glifos, representación premultiplicada, sin sobreárea por redondeo y compresión PNG.
-- **Sección exacta de la Spec**: Compositing 1 §simple alpha compositing y §groups (`https://www.w3.org/TR/compositing-1/#simplealphacompositing`, `#groupcompositing`); la política de muestreo/AA es decisión del UA (documentada en `docs/PHASE4-SUPPORT.md`)
-- **Crate y módulos**: `crates/paint/src/rasterizer.rs`, `display_list.rs`; `crates/paint/tests/rasterizer_quality.rs`
-- **Estado**: el codificador PNG (WP-4.1) y el blending correcto ya existen; `fill_rect` sigue redondeando hacia fuera (sin AA) y el PNG no comprime.
-- **Criterio de aceptación**: `cargo test -p paint` con `test_fractional_rect_area_matches_coverage`, `test_half_pixel_edge_antialiased`, `test_premultiplied_roundtrip`; PNG comprimido (o decisión documentada).
+### `WP-4.11` — Calidad de raster y rendimiento (estado: **HECHO** en AA/perf; PNG comprimido pendiente)
+- **Spec**: Compositing 1 §simple alpha compositing (`#simplealphacompositing`); el muestreo/AA es decisión del UA.
+- **Hecho**: antialiasing exacto por cobertura para rectángulos fraccionarios, bordes y glifos; alfa straight justificado; **culling** de items fuera del canvas y cachés por pasada (shaped runs, caras, máscaras de glifo). Baseline: raster 800×600 1598,8 → 0,9 ms; render-to-PNG 1628 → 7,7 ms; pipeline 1842 → 170,7 ms (10,8×).
+- **Pendiente**: compresión PNG (o enmienda de política) y, opcionalmente, representación premultiplicada interna.
+- **Criterio**: `cargo test -p paint --test raster_quality` + `./tools/bench.sh` comparado con [`PERFORMANCE.md`](PERFORMANCE.md).
 
 ### `WP-4.12` — Robustez y rendimiento (estado: **PARCIAL**)
-- **Duración estimada**: 2 días
-- **Objetivo**: que HTML no confiable no aborte el proceso ni consuma CPU desmedida; errores diagnosticables.
-- **Sección exacta de la Spec**: no normativa (endurecimiento); referencia de límites de implementación de WHATWG HTML
-- **Crate y módulos**: `crates/html/src/tree_builder.rs`, `crates/html/src/serializer.rs`, `crates/dom/src/lib.rs`, `crates/layout/src/*`, `crates/paint/src/*`
-- **Hecho en este sprint**: parsear 100k/200k `<div>` anidados ya no aborta (límite de profundidad 4.096 reportado en `LimitViolations`; ~70 ms), 40k atributos bajan de ~1.276 ms a ~10 ms, serializador iterativo y DOM con `try_node`/`clone_node` de `<template>`; tests de robustez en `crates/html/tests/robustness.rs`.
-- **Pendiente**: **CPU cuadrática del tree builder** (`has_element_in_scope`, `push_active_formatting`, `reconstruct_active_formatting_elements`) con entradas adversariales, presupuesto de tiempo de parseo/layout/paint y límite de profundidad en layout/paint.
-- **Criterio de aceptación**: `cargo test -p html -p dom -p layout -p paint` con los tests de robustez y un presupuesto de tiempo documentado.
+- **Hecho**: límites anti-DoS `ParseOptions` (profundidad 4.096, 1 M nodos, 4.096 atributos, 16 MiB), `LimitViolations`, serializador iterativo, DOM con `try_node` y validación de ciclos; tree builder ya **lineal** (eliminada la CPU cuadrática; 40k atributos ~10 ms) y presupuestos medidos con `bench`.
+- **Pendiente**: recursión de layout/paint en documentos muy profundos, API de layout con errores explícitos (`Result`), presupuestos de tiempo en layout/paint.
+- **Criterio**: `cargo test -p html -p dom -p layout -p paint` + benchmarks estables.
 
-### `WP-4.13` — Golden images y documentación en verdad (estado: **PARCIAL**)
-- **Duración estimada**: 2 días
-- **Objetivo**: red de seguridad visual (golden deterministas) y documentación que refleje el estado real.
-- **Sección exacta de la Spec**: no normativa; validación PNG según PNG 3 (`https://www.w3.org/TR/png-3/`)
-- **Crate y ficheros**: `tests/fixtures/phase4/` (`basic.html`, `basic.rgba`, `README.md`), `crates/paint/tests/end_to_end_html.rs`, `tools/png_check.py`, `docs/PHASE4-SUPPORT.md`, `README.md`, `docs/*.md`
-- **Hecho en este sprint**: golden determinista de `basic.html` comparado byte a byte, validador `tools/png_check.py`, README/ROADMAP/ARCHITECTURE/HANDOFF/CONTRIBUTING/TOOLING sincronizados y matriz de soporte de Fase 4 creada.
-- **Pendiente**: fixtures `real_page.html` y `torture.html`, goldens cuando existan posicionamiento/tablas/fuentes reales, y comparación con tolerancia para antialiasing.
-- **Criterio de aceptación**: `cargo test -p paint --test end_to_end_html` + `python3 tools/png_check.py`.
+### `WP-4.13` — Golden images, fixtures y documentación (estado: **PARCIAL**)
+- **Hecho**: golden determinista de `basic.html` regenerado (`basic.rgba` `md5 4139fdd8…`, PNG del pipeline `md5 d97c67dc…`), fixture enriquecido con bordes por lado y texto real, validador `tools/png_check.py` y matriz de soporte/documentación sincronizadas (esta ronda).
+- **Pendiente**: fixtures `real_page.html`/`torture.html`, goldens cuando existan posicionamiento/tablas, y comparación con tolerancia si se añade más AA.
+- **Criterio**: `cargo test -p paint --test end_to_end_html` + `python3 tools/png_check.py`.
 
-### Orden de ejecución y camino crítico de Fase 4
+### Camino crítico restante de Fase 4
 
 ```text
-WP-4.1 (PNG, HECHO) ─┐
-WP-4.0 (cimientos CSS) ─────┼─► WP-4.2 (HECHO mayormente) ─► WP-4.4 fase 2 (PENDIENTE)
-                     │                                  │
-                     └─► WP-4.3 (PARCIAL) ──────────────┼─► WP-4.5 ─► WP-4.6 ─► WP-4.10 ─► WP-4.11 ─► WP-4.13
-                                                        └─► WP-4.7 / WP-4.8 / WP-4.9 (paralelizables)
-WP-4.12 (robustez) ∥ en cualquier momento
+WP-4.6 (position/stacking/opacity) ─► WP-4.7 (floats) ─┐
+WP-4.8 (tablas) ───────────────────────────────────────┼─► WP-4.9 (inline-block/listas/decoraciones)
+WP-4.10 (clips desde overflow) ────────────────────────┘        │
+WP-4.12 (robustez/presupuestos) ∥                              ▼
+                                                      WP-4.13 (fixtures real_page/torture + goldens)
 ```
 
-Prioridad recomendada para la próxima iteración: **integrar `crates/fonts` en layout/paint (WP-4.4 fase 2)** → **pintado de bordes por lado/fondos (WP-4.3)** → **IFC pendiente (WP-4.5)** → **posición/stacking (WP-4.6)**. El resto (floats, tablas, inline-block, overflow, AA) puede abordarse en paralelo según la matriz de soporte.
+Prioridad recomendada: **WP-4.6** (mayor impacto de fidelidad), seguido de **WP-4.8** (tablas) y **WP-4.10**, con **WP-4.7** y **WP-4.9** en paralelo; **WP-4.12/4.13** cierran la fase.
 
 ### Fuera del alcance de Fase 4
 
-Red/`<img>` real, JavaScript, formularios interactivos, `flex`/`grid`, `@media`, `@font-face`, bidi y scripts complejos, scroll/hit-testing/eventos, animaciones, `border-radius`/`box-shadow`/`background-image`/gradientes y medios paginados. Ver la lista completa y su justificación en [`docs/PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md).
+Red y `<img>` reales (Fase 5), JavaScript (Fase 6), formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, scroll/hit-testing/eventos (Fase 7), animaciones, `border-radius`, `box-shadow`, `background-image`/gradientes y medios paginados. Ver [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md).
+
+---
+
+## FASE 5: Red & Fetch Pipeline (EN CURSO, ~10%)
+
+**Objetivo de la fase**: implementar el pipeline de carga de recursos de WHATWG Fetch (URL, HTTP/TLS, caché, CORS/referrer, carga de subrecursos del documento) para que Megi pueda dejar de depender de HTML autocontenido y renderizar páginas reales con hojas de estilo y, más adelante, imágenes.
+
+**Estado actual**: **bootstrap completado** con el crate `crates/net`, **std-only** (`#![forbid(unsafe_code)]`, 0 dependencias externas) y **57 tests offline** (cada test HTTP arranca su propio `TcpListener` en `127.0.0.1:0`; `file://` usa ficheros temporales).
+
+### `WP-5.0` — URL WHATWG (subset) y `join` relativo (**HECHO**)
+- **Spec**: WHATWG URL Standard (`https://url.spec.whatwg.org/`).
+- **Hecho**: esquemas `http`, `https` y `file`; userinfo, hosts dominio/IPv4/IPv6 entre corchetes, puertos por defecto, normalización de path (`.`/`..`), query y fragment, percent-encoding de los *encode sets* de la spec y resolución relativa (`Url::join`).
+- **Limitaciones**: subset (sin IDNA/hosts no ASCII, sin `data:`/`ftp:`/`blob:`, sin percent-encoded hosts).
+- **Criterio**: `cargo test -p net --test url_tests` (12).
+
+### `WP-5.1` — Cliente HTTP/1.1 `GET` sobre `std::net` (**HECHO**)
+- **Spec**: RFC 9110/9112 (HTTP Semantics/1.1), lectura de `Content-Length` y `Transfer-Encoding: chunked`.
+- **Hecho**: `TcpStream` bloqueante, timeouts de conexión/lectura, cuerpos `Content-Length` y *chunked*, redirecciones 301/302/303/307/308 con límite, caps de respuesta (16 MiB) y cabeceras (64 KiB).
+- **Limitaciones**: sin TLS (https ⇒ `FetchError::TlsUnsupported`), sin HTTP/2, sin cookies, sin `Accept-Encoding`/descompresión.
+- **Criterio**: `cargo test -p net --test http_tests` (15).
+
+### `WP-5.2` — `file://`, MIME sniffing y `ResourceLoader` con caché (**HECHO**)
+- **Spec**: WHATWG MIME Sniffing (`https://mimesniff.spec.whatwg.org/`, subset §5); WHATWG Fetch (modelo de `Response`/recursos).
+- **Hecho**: `file://` con path percent-decoded, sniffing HTML/imágenes/SVG-XML/CSS/JSON y fallback binario/texto, `ResourceLoader` con caché en memoria por URL (`Resource { url, bytes, content_type }`), errores tipados (`FetchError`/`LoadError`/`UrlError`).
+- **Criterio**: `cargo test -p net` (57 tests) + `cargo run -p test_harness -- --summary` (sin cambios, 4 suites PASS).
+
+### `WP-5.3` — TLS con `rustls` (siguiente)
+- **Objetivo**: handshake TLS 1.2/1.3, validación de certificados con raíces `webpki-roots`, `https://` funcional y límites de tiempo/tamaño.
+- **Spec**: WHATWG Fetch §HTTP-network-or-cache fetch; RFC 8446 (TLS 1.3).
+- **Crate**: `crates/net`; dependencias autorizadas por `ARCHITECTURE.md` §3.1 (`rustls`, `webpki-roots`).
+- **Criterio**: tests offline con servidor TLS local o fixtures de handshake + `cargo test -p net`.
+
+### `WP-5.4` — Política de caché HTTP y redirecciones/referrer (pendiente)
+- **Objetivo**: caché HTTP (`Cache-Control`, `ETag`, `Last-Modified`), política de redirecciones con contador y `Referer`/`Origin`.
+- **Spec**: WHATWG Fetch §HTTP fetch y RFC 9111 (HTTP Caching).
+- **Criterio**: `cargo test -p net` con servidores de prueba que devuelvan 304/ETag y cadenas de redirects.
+
+### `WP-5.5` — Fetch/CORS y carga de subrecursos del documento (pendiente)
+- **Objetivo**: modelo de `Request`/`Response`/`fetch` con modos CORS (simple/preflight), `Referrer-Policy`, y extracción de subrecursos del DOM (`<link rel=stylesheet>`, `<style>` externos, `@import`).
+- **Spec**: WHATWG Fetch (`https://fetch.spec.whatwg.org/`), WHATWG HTML §4.2.4 / §15 (recursos), CSSOM.
+- **Criterio**: tests de integración dominio cruzado simulado con `TcpListener` y tests de carga de hojas de estilo externas en el pipeline de render.
+
+### `WP-5.6` — Integración en el pipeline de render (pendiente)
+- **Objetivo**: que `paint`/un futuro crate de orquestación cargue hojas externas y, más adelante, imágenes; `background-image`/`<img>` con decodificación de imágenes.
+- **Spec**: WHATWG HTML §15 + CSS Images 3 + Fetch.
+- **Criterio**: fixture HTML con `<link rel=stylesheet>` externo servido por HTTP local → PNG con estilos aplicados.
+
+### `WP-5.7` — Streaming y compresión (pendiente, no bloqueante)
+- **Objetivo**: streaming de cuerpos para respuestas grandes, `Content-Encoding` (gzip/br), HTTP/2 (evaluar `h2`/`hyper` bajo §3.1) y límites de memoria.
+- **Criterio**: benchmarks de carga y tests de cuerpos grandes/chunked con compresión.
+
+### Fuera del alcance de Fase 5 (inicial)
+
+Cookies y almacenamiento, HTTP/2/3 obligatorio, proxies, WebSockets, IDNA completa, `data:`/`blob:`/`ftp:`, autenticación HTTP, descarga de fuentes web (`@font-face`) y streaming de vídeo. Se reevaluarán en fases posteriores según las necesidades del renderizador (imágenes) y del motor JS.

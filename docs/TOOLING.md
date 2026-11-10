@@ -1,6 +1,6 @@
 # Documentación de Tooling, Skills y Automatización (FASES 2–4)
 
-Este documento registra la investigación, evaluación, instalación y configuración de herramientas CLI, scripts de extracción de especificaciones y skills locales realizadas durante las **FASES 2–4** para optimizar el desarrollo autónomo guiado por especificaciones (WHATWG / W3C), el auto-testeo continuo (`html5lib-tests` y Web Platform Tests) y el pipeline de renderizado a PNG en **Megi**.
+Este documento registra la investigación, evaluación, instalación y configuración de herramientas CLI, scripts de extracción de especificaciones y skills locales realizadas durante las **FASES 2–5** para optimizar el desarrollo autónomo guiado por especificaciones (WHATWG / W3C), el auto-testeo continuo (`html5lib-tests` y Web Platform Tests), el pipeline de renderizado a PNG y el arranque de la red (Fase 5) en **Megi**.
 
 ---
 
@@ -14,7 +14,7 @@ Antes de instalar o construir herramientas, se auditó el entorno de ejecución 
 | **Inspección de Código / LSP** | `rust-analyzer`, `ripgrep 13.0.0` (`rg`), `fdfind` | Preinstalado | Utilizado para diagnóstico estático, verificación de tipos y búsqueda rápida en el monorepo. |
 | **Test Runners Externos** | `cargo-nextest`, `cargo-insta` | No preinstalado | Se descartó compilar `cargo-nextest` desde código fuente (alto coste de CPU en máquina de 2 vCPUs) a favor de `cargo test --workspace` nativo combinando un binario y librería interna `test_harness` con reportes detallados. |
 | **Extracción de Specs (WHATWG/W3C)** | Servidores MCP externos vs. `python3 3.11.2` + `lxml 4.9.2` | `python3` + `lxml` preinstalados | En lugar de depender de scraping manual o lectura web no estructurada, se construyó `tools/whatwg_spec.py` sobre `lxml.html` con caché local en `.cache/specs/` para extraer pasos normativos exactos (`<ol>`, `<dl class="switch">`, códigos de error y `entities.json`) en milisegundos. |
-| **Integración de Suites Oficiales** | `wptrunner` completo vs. fixtures vendorizadas + `tools/test_inspector.py` | `git` + `python3` | `wptrunner` completo está diseñado para navegadores con WebDriver/automatización de ventana completa. `html5lib-tests` está versionado íntegro en `tests/html5lib-tests/`; de WPT sólo se **vendorizan** las 3 fixtures de CSS Syntax en `tests/wpt/css/css-syntax/` (con SHA-256 en su README), de modo que el gate de conformidad es reproducible sin red desde un clon limpio (30/30 comprobaciones de CSS Syntax). `tools/test_inspector.py` queda como herramienta de inspección de casos `.test`/`.dat`. |
+| **Integración de Suites Oficiales** | `wptrunner` completo vs. fixtures vendorizadas + `tools/test_inspector.py` | `git` + `python3` | `wptrunner` completo está diseñado para navegadores con WebDriver/automatización de ventana completa. `html5lib-tests` está versionado íntegro en `tests/html5lib-tests/`; de WPT sólo se **vendorizan** las 3 fixtures de CSS Syntax en `tests/wpt/css/css-syntax/` (con SHA-256 en su README), de modo que el gate de conformidad es reproducible sin red desde un clon limpio. El gate cubre **4 suites**: tokenizer (7.050/7.050), árbol (3.898/3.904), **serializador HTML** (230/230, `html5lib-tests/serializer/*.test`) y CSS Syntax (30/30). `tools/test_inspector.py` queda como herramienta de inspección de casos `.test`/`.dat`. |
 
 ---
 
@@ -110,8 +110,10 @@ python3 tools/png_check.py /tmp/basic.png
 #   IHDR: 800x600, bit_depth=8, color_type=6 (RGBA)
 #   chunks: IHDR IDAT IEND
 #   IDAT: zlib ok, ... -> ... raw bytes
-#   pixels: 480000, distinct_colors=9, transparent=0 (0.00%), white=40617 (8.46%)
+#   pixels: 480000, distinct_colors=997, transparent=0 (0.00%), white=42032 (8.76%)
 ```
+
+(El número de colores distintos subió al integrar tipografía real y bordes por lado con antialiasing; sigue siendo determinista.)
 
 Exit status: 0 si todos los ficheros son válidos, 1 si alguno falla. Se ejecuta manualmente y en la documentación de aceptación del pipeline; los tests de `crates/paint/tests/png_format.rs` cubren la misma estructura desde Rust.
 
@@ -130,7 +132,7 @@ python3 tools/png_check.py /tmp/basic.png
 cargo test -p paint --test end_to_end_html
 ```
 
-El golden sólo debe regenerarse ante un cambio intencionado de renderizado y revisarse en el mismo commit (ver `tests/fixtures/phase4/README.md`).
+El golden sólo debe regenerarse ante un cambio intencionado de renderizado y revisarse en el mismo commit (ver `tests/fixtures/phase4/README.md`). Las capturas para documentación (versión comprimida del render) se guardan en `docs/images/` — p. ej. `docs/images/phase4-basic.png`, usada en el README.
 
 ### 2.6 `crates/fonts/examples/report.rs` — Inspección del motor tipográfico
 
@@ -143,10 +145,43 @@ cargo test -p fonts
 
 ---
 
-### 2.7 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
+### 2.7 `tools/bench.sh` + `crates/bench` + `docs/PERFORMANCE.md` — Rendimiento reproducible
+
+Arnés de benchmarks **sin dependencias** (`criterion`/`hyperfine` descartados) para detectar regresiones de complejidad con números medibles:
+
+- `crates/bench`: cargas sintéticas deterministas generadas en memoria (sin reloj/red/`rand`), grupos de parseo HTML, resolución de estilos, layout, rasterizado, render-to-PNG y pipeline completo; `--scale`, `--filter`, `--iterations`, `--warmup` y salida JSON. 8 tests.
+- `tools/bench.sh`: compila en release (`cargo build --release -p bench`), ejecuta el binario y guarda `target/bench-latest.txt` + metadatos (`target/bench-latest-meta.txt`: fecha, commit, rustc, args). Argumentos reenviados al binario.
+- `docs/PERFORMANCE.md`: metodología, cargas, máquina, baseline medida y limitaciones; **otro agente lo actualiza** con la baseline de esta ronda (no editar desde tareas de documentación general).
+
+```bash
+./tools/bench.sh                    # suite completa -> target/bench-latest.txt
+./tools/bench.sh --scale 0.25       # smoke test (~10 s)
+./tools/bench.sh --filter paint     # un grupo
+BENCH_FEATURES=fonts ./tools/bench.sh   # benchmarks de fuentes (opt-in)
+```
+
+Baseline de referencia (release, i7-12700H): raster 800×600 **1598,8 → 0,9 ms** (culling), render-to-PNG **1628 → 7,7 ms**, pipeline HTML→PNG **1842 → 170,7 ms** (**10,8×**). Detalle en `docs/PERFORMANCE.md`.
+
+### 2.8 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
 
 Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-spec-driven-dev/SKILL.md` (directorio ignorado en `.gitignore` para mantener limpio el árbol Git de metadatos de agentes, mientras su documentación permanente reside en este archivo `docs/TOOLING.md`). Esta skill estandariza el protocolo operativo para cualquier agente que trabaje en la Fase 1 y posteriores:
 1. Consultar primero la sección normativa con `./tools/whatwg_spec.py section <id>`.
 2. Inspeccionar los casos de prueba objetivo con `./tools/test_inspector.py show <file> <idx>`.
 3. Implementar la transición de estado o regla del árbol DOM en `crates/html` o `crates/dom`.
 4. Verificar en bucle cerrado con `cargo test -p test_harness`.
+
+---
+
+## 3. Verificación rápida de la documentación y del estado
+
+```bash
+./tools/dev.sh all                     # fmt, clippy, 301 tests, doc y gate de conformidad
+cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0
+cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
+
+cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
+python3 tools/png_check.py /tmp/basic.png
+./tools/bench.sh --scale 0.1
+```
+
+Cifras de referencia de esta ronda: **301 tests** (css 41, dom 9, fonts 13+1, html 33, layout 80, net 57, paint 52, bench 8, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; MSRV Rust 1.88.
