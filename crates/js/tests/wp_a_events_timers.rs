@@ -268,7 +268,10 @@ fn clear_timeout_prevents_the_callback() {
 #[test]
 fn timers_run_in_due_then_insertion_order() {
     let mut runtime = runtime();
-    let _ = runtime.advance(Duration::ZERO).expect("pin clock");
+    // Pin the virtual clock and use the returned base: the real elapsed time at pinning
+    // may be a few milliseconds, so absolute deadlines must be relative to it (this used
+    // to be flaky under load when the base was > 0).
+    let base = runtime.advance(Duration::ZERO).expect("pin clock");
     runtime
         .eval(
             "var order = [];
@@ -278,7 +281,7 @@ fn timers_run_in_due_then_insertion_order() {
             "order.js",
         )
         .expect("schedule");
-    runtime.run_until(10).expect("run until 10ms");
+    runtime.run_until(base + 10).expect("run until base + 10ms");
     assert_eq!(
         runtime.eval("order.join(',')", "order.js").expect("order"),
         "early-a,early-b,late"

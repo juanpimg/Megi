@@ -233,3 +233,12 @@ find-in-page) adds **no new fuzzing targets**: the 7-target matrix, seed corpora
 and PR build-only job from round 18 remain current. Gradient/grid parsing is
 exercised through the existing `css_parse`/`render_pipeline`/`svg_parse` targets and
 their conformance suites.
+
+### Round 20 status
+
+Round 20 (custom-property performance fix, conic gradients/color hints/spaces,
+mixed `calc()`, typography/sticky, shell tabs and bench E2E rows) adds **no new
+fuzzing targets**: the 7-target matrix, seed corpora and PR build-only job from
+round 18 remain current. The new conic/color-space and mixed-calc parsers are
+exercised by the existing `css_parse`/`render_pipeline`/`svg_parse` targets and
+their conformance suites; `layout/sticky-text-1mb` stays a visible bench SKIP.

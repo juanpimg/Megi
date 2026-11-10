@@ -6,6 +6,68 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 20 — custom-property performance fix, conic gradients, mixed calc, typography/sticky, shell tabs and E2E benchmarks (2026-11-10)
+
+#### Added
+
+- **Conic gradients, color hints and interpolation spaces** (commit `a7e32d5`,
+  css 142→**175**, paint 162→**175** tests): `conic-gradient`/`repeating-conic`
+  with `from <angle>`, `at <position>`, angular stops, hard stops, alpha and
+  wrap; **color hints** in linear/radial/conic; and **interpolation spaces**
+  `in srgb | srgb-linear | oklab` (default sRGB is byte-identical to the
+  previous output) with deterministic AA raster that honours
+  size/position/repeat(space/round)/origin/clip/radius/clip:text. Caps remain
+  **64 stops / 256 gradients per computed style**; no `display-p3`/advanced
+  spaces, `image-set()` or `border-image`. Fixtures `conic_gradients`
+  (`md5 fff4b8df…`) and `conic_repeating` (`547c9958…`).
+- **Mixed `calc()`** (commit `feade5c`, layout 173→**196** tests): a
+  `CalcLengths` side table next to the untouched `Length` resolves
+  percentage+length expressions per axis for width/height/min/max,
+  margins/paddings (shorthands), insets, gaps, background-position/size and
+  border-radius; undefined base ⇒ percentage component 0; nested em/rem/vh/vw
+  supported; `font-size` only absolute (documented). Fixtures
+  `calc_width`/`calc_margin`/`calc_gap` (verified md5s `8c1351e3…`,
+  `e02a96d8…`, `58a9c51a…`).
+- **Typography and sticky** (commit `feade5c`): `text-transform`
+  uppercase/lowercase/capitalize during shaping without mutating the DOM,
+  inherited `word-spacing`/`letter-spacing`, `white-space:
+  pre-wrap/pre-line`, and a headless `position: sticky` model (flow slot +
+  offsets, top>bottom/left>right, siblings unaffected, documented scroll hook).
+  Fixtures `sticky_offsets` (`08d9a63b…`), `text_transform` (`5935cf43…`),
+  `word_spacing` (`a9fcad22…`) and `white_space` (`c4134d67…`).
+- **Shell tabs** (commit `43d62e3`, shell 125→**140** tests): pure `tabs.rs`
+  (`Tab` with navigation/title/url/scroll/zoom/find; `TabsState` with
+  new/from_urls/open_tab/activate/next/previous/close, MAX 32, closing the last
+  tab opens a blank New Tab), `Ctrl+T/W/Tab/Shift+Tab`, `Alt+1..9`, `[N/M]`
+  window title, repeatable `--tabs URL` and per-generation frames that never
+  mix tabs. Limits: no visual tab bar/reorder/session/reopen/isolation.
+- **Bench E2E rows** (commit `c6b66b1`): `pipeline/gradients-800x600`,
+  `pipeline/grid-800x600`, `css/vars-calc-10k`, `paint/clipping-800x600` and
+  `layout/sticky-text-1mb` registered as a visible SKIP (engine now implements
+  sticky/text-transform, so the row can be enabled); documented in the bench
+  rustdoc and `tools/bench.sh`. Initial loaded-machine medians: 54.1/7.2/107.5/
+  53.1 ms.
+
+#### Changed
+
+- **Blocking custom-property performance fix** (commit `a7e32d5`):
+  `ComputedStyle.custom_properties` is now `Option<Arc<HashMap>>` with lazy
+  copy-on-write inheritance and `custom::needs_resolution` fast path
+  (allocation-free `var(`/`--` byte scan; no per-element eager map, no
+  per-declaration lowercasing, no resolver on the common path). Interleaved A/B
+  removed the R18 regression: css resolve-10k 46.8→39.8 ms (**−14.9 %**, −9.4 %
+  under load) and pipeline **−3.4 %/−6.1 %**; a UA-collection cache was tried
+  and reverted (+16 %). Budgets were not raised; absolute pipeline remains
+  environment-dependent and a clean re-baseline is owned by the performance
+  lane. Public field type changed with no consumers outside `css` and is
+  documented.
+- **1,344 tests, 0 failures** (css 175, layout 196, paint 175, render 136,
+  shell 140, net 207, svg 73, html 60, js 71, dom 28, image 45+1 doctest,
+  fonts 17+1 doctest, bench 8, test_harness 11); gate PASS with tokenizer
+  7,050/7,050, tree 3,904/3,904, serializer 230/230, CSS 30/30 and empty
+  tokenizer/tree allowlists. Goldens remain byte-identical. Phases: F4
+  essentially complete, F5 ≈97 %, F6 ≈90 %, **F7 ≈80 %**.
+
 ### Round 19 — CSS gradients, advanced grid, renderer referrer/state and shell find-in-page (2026-11-10)
 
 #### Added
