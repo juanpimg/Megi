@@ -76,7 +76,43 @@ pub(crate) struct TimerEntry {
     pub id: u64,
     pub due_ms: u64,
     pub interval_ms: Option<u64>,
+    /// `requestAnimationFrame` callback: invoked with the current virtual timestamp and
+    /// never rescheduled (`pending_animation_frames` counts them).
+    pub animation: bool,
 }
+
+/// Viewport/scroll state exposed to scripts (`window.innerWidth`, page offsets, ...).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ViewportInfo {
+    /// Viewport width in CSS pixels (`window.innerWidth`).
+    pub width: u32,
+    /// Viewport height in CSS pixels (`window.innerHeight`).
+    pub height: u32,
+    /// Device pixel ratio (`window.devicePixelRatio`).
+    pub device_pixel_ratio: f64,
+    /// Horizontal scroll offset (`window.pageXOffset`).
+    pub scroll_x: f64,
+    /// Vertical scroll offset (`window.pageYOffset`).
+    pub scroll_y: f64,
+}
+
+impl Default for ViewportInfo {
+    fn default() -> Self {
+        Self {
+            width: 1280,
+            height: 720,
+            device_pixel_ratio: 1.0,
+            scroll_x: 0.0,
+            scroll_y: 0.0,
+        }
+    }
+}
+
+/// `matchMedia` provider injected by the host (evaluates a CSS media query string).
+pub type MediaProvider = Box<dyn Fn(&str) -> bool + Send + Sync>;
+
+/// Viewport provider injected by the host (inner dimensions / DPR / scroll base).
+pub type ViewportProvider = Box<dyn Fn() -> ViewportInfo + Send + Sync>;
 
 /// Computed-style provider injected by the host (`window.getComputedStyle`).
 pub type ComputedStyleProvider =
@@ -114,6 +150,15 @@ pub(crate) struct Host {
     pub computed_style_provider: Option<ComputedStyleProvider>,
     /// Inline `on<event>` handlers (callbacks live in the JS-side rooted table).
     pub inline_handlers: Vec<InlineHandler>,
+    /// Injected `matchMedia` provider.
+    pub media_provider: Option<MediaProvider>,
+    /// Injected viewport provider.
+    pub viewport_provider: Option<ViewportProvider>,
+    /// Current `document.readyState` (`loading` until the host sets it).
+    pub ready_state: String,
+    /// Scroll offsets changed by `window.scrollTo`/`scrollBy`.
+    pub scroll_x: f64,
+    pub scroll_y: f64,
     /// Last non-fatal exception thrown by an event listener (dispatch continues).
     pub last_event_error: Option<String>,
 }
@@ -137,6 +182,11 @@ impl Host {
             dispatch: None,
             computed_style_provider: None,
             inline_handlers: Vec::new(),
+            media_provider: None,
+            viewport_provider: None,
+            ready_state: "loading".to_string(),
+            scroll_x: 0.0,
+            scroll_y: 0.0,
             last_event_error: None,
         }
     }

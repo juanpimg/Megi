@@ -157,15 +157,49 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
             .register_global_builtin_callable(js_string!(name), length, native(function))
             .map_err(|error| CrateJsError::Internal(error.to_string()))?;
     }
+    for (name, length, function) in [
+        (
+            "requestAnimationFrame",
+            1usize,
+            request_animation_frame as NativeFn,
+        ),
+        ("cancelAnimationFrame", 1, cancel_animation_frame),
+    ] {
+        context
+            .register_global_builtin_callable(js_string!(name), length, native(function))
+            .map_err(|error| CrateJsError::Internal(error.to_string()))?;
+    }
+    // Viewport/scroll read-only accessors on the `window` global.
+    for (name, get) in [
+        ("innerWidth", window_inner_width as NativeFn),
+        ("innerHeight", window_inner_height),
+        ("devicePixelRatio", window_device_pixel_ratio),
+        ("pageXOffset", window_page_x),
+        ("pageYOffset", window_page_y),
+    ] {
+        let getter = accessor_fn(context, get);
+        let descriptor = PropertyDescriptor::builder()
+            .get(JsValue::from(getter))
+            .enumerable(true)
+            .configurable(true)
+            .build();
+        context
+            .global_object()
+            .define_property_or_throw(js_string!(name), descriptor, context)
+            .map_err(|error| CrateJsError::Internal(error.to_string()))?;
+    }
     Ok(())
 }
 
-pub(crate) fn window_methods() -> [(&'static str, usize, NativeFn); 4] {
+pub(crate) fn window_methods() -> [(&'static str, usize, NativeFn); 7] {
     [
         ("addEventListener", 2, add_listener),
         ("removeEventListener", 2, remove_listener),
         ("dispatchEvent", 1, dispatch_event),
         ("getComputedStyle", 1, get_computed_style),
+        ("matchMedia", 1, match_media),
+        ("scrollTo", 2, scroll_to),
+        ("scrollBy", 2, scroll_by),
     ]
 }
 
@@ -874,6 +908,174 @@ pub(crate) fn dispatch_rust_event(
 }
 
 // ---------------------------------------------------------------------------
+// matchMedia / viewport / scroll
+// ---------------------------------------------------------------------------
+
+fn viewport_info() -> crate::host::ViewportInfo {
+    with_host(|host| {
+        let mut info = host
+            .viewport_provider
+            .as_ref()
+            .map(|provider| provider())
+            .unwrap_or_default();
+        info.scroll_x = host.scroll_x;
+        info.scroll_y = host.scroll_y;
+        info
+    })
+    .unwrap_or_default()
+}
+
+fn window_inner_width(
+    _this: &JsValue,
+    _args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<JsValue> {
+    Ok(JsValue::from(f64::from(viewport_info().width)))
+}
+
+fn window_inner_height(
+    _this: &JsValue,
+    _args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<JsValue> {
+    Ok(JsValue::from(f64::from(viewport_info().height)))
+}
+
+fn window_device_pixel_ratio(
+    _this: &JsValue,
+    _args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<JsValue> {
+    Ok(JsValue::from(viewport_info().device_pixel_ratio))
+}
+
+fn window_page_x(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(viewport_info().scroll_x))
+}
+
+fn window_page_y(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(viewport_info().scroll_y))
+}
+
+fn match_media(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let query = arg_string(args, 0, context)?;
+    let matches = with_host(|host| {
+        host.media_provider
+            .as_ref()
+            .map(|provider| provider(&query))
+            .unwrap_or(false)
+    })
+    .unwrap_or(false);
+    let add_listener = accessor_fn(context, noop_listener);
+    let remove_listener = accessor_fn(context, noop_listener);
+    let mut init = ObjectInitializer::new(context);
+    init.property(js_string!("__megi_media_query"), true, Attribute::all())
+        .property(
+            js_string!("media"),
+            js_string!(query.clone()),
+            Attribute::all(),
+        )
+        .property(js_string!("matches"), matches, Attribute::all())
+        .property(js_string!("onchange"), JsValue::null(), Attribute::all())
+        .function(native(noop_listener), js_string!("addListener"), 1)
+        .function(native(noop_listener), js_string!("removeListener"), 1)
+        .function(native(noop_listener), js_string!("addEventListener"), 2)
+        .function(native(noop_listener), js_string!("removeEventListener"), 2);
+    let _ = (add_listener, remove_listener);
+    Ok(JsValue::from(init.build()))
+}
+
+/// `MediaQueryList` listener registration is accepted but does not fire `change` events
+/// until the host re-evaluates the page (documented limitation, like a one-shot render).
+fn noop_listener(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::undefined())
+}
+
+fn scroll_coordinates(args: &[JsValue], context: &mut Context) -> JsResult<Option<(f64, f64)>> {
+    if let Some(options) = args.first().and_then(|value| value.as_object()) {
+        let left = prop(&options, "left", context)
+            .ok()
+            .and_then(|value| value.as_number())
+            .unwrap_or(0.0);
+        let top = prop(&options, "top", context)
+            .ok()
+            .and_then(|value| value.as_number())
+            .unwrap_or(0.0);
+        return Ok(Some((left, top)));
+    }
+    let x = args.first().and_then(JsValue::as_number);
+    let y = args.get(1).and_then(JsValue::as_number);
+    match (x, y) {
+        (Some(x), Some(y)) => Ok(Some((x, y))),
+        (Some(x), None) => Ok(Some((x, 0.0))),
+        _ => Ok(None),
+    }
+}
+
+fn scroll_to(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    if let Some((x, y)) = scroll_coordinates(args, context)? {
+        let _ = with_host(|host| {
+            host.scroll_x = x.max(0.0);
+            host.scroll_y = y.max(0.0);
+        });
+    }
+    Ok(JsValue::undefined())
+}
+
+fn scroll_by(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    if let Some((x, y)) = scroll_coordinates(args, context)? {
+        let _ = with_host(|host| {
+            host.scroll_x = (host.scroll_x + x).max(0.0);
+            host.scroll_y = (host.scroll_y + y).max(0.0);
+        });
+    }
+    Ok(JsValue::undefined())
+}
+
+/// Reports an uncaught script exception: invokes `window.onerror`/`document.onerror`
+/// (when installed) with `(message, source, lineno, colno, error)` and records the error
+/// in the console capture buffer.
+pub(crate) fn report_uncaught(
+    context: &mut Context,
+    message: &str,
+    source: &str,
+) -> Result<(), CrateJsError> {
+    let window = JsValue::from(context.global_object());
+    let document = global_get(context, "document")
+        .map_err(|error| CrateJsError::Internal(error.to_string()))?;
+    for (target, this) in [(TargetKey::Window, window), (TargetKey::Document, document)] {
+        let slot = with_host(|host| {
+            host.inline_handlers
+                .iter()
+                .find(|handler| handler.target == target && handler.event_type == "error")
+                .map(|handler| handler.slot)
+        })
+        .flatten();
+        if let Some(slot) = slot {
+            let callback = array_get(context, "__megi_inline_handlers", u64::from(slot))
+                .map_err(|error| CrateJsError::Runtime(error.to_string()))?;
+            if let Some(callback) = callback.as_object() {
+                let args = [
+                    JsValue::from(js_string!(message)),
+                    JsValue::from(js_string!(source)),
+                    JsValue::from(0.0),
+                    JsValue::from(0.0),
+                    JsValue::from(js_string!(message)),
+                ];
+                let _ = callback.call(&this, &args, context);
+            }
+        }
+    }
+    let _ = with_host(|host| {
+        host.console.push(crate::host::ConsoleEntry {
+            level: "error".to_string(),
+            message: format!("Uncaught {message}"),
+        });
+    });
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // getComputedStyle
 // ---------------------------------------------------------------------------
 
@@ -1023,17 +1225,27 @@ pub(crate) fn timer_globals() -> [(&'static str, usize, NativeFn); 4] {
     ]
 }
 
-fn schedule_timer(args: &[JsValue], context: &mut Context, repeat: bool) -> JsResult<JsValue> {
+fn schedule_timer(
+    args: &[JsValue],
+    context: &mut Context,
+    repeat: bool,
+    animation: bool,
+) -> JsResult<JsValue> {
     let callback = args
         .first()
         .cloned()
         .filter(|value| value.as_object().is_some())
         .ok_or_else(|| js_error("timer callback must be a function"))?;
-    let delay = args
-        .get(1)
-        .and_then(JsValue::as_number)
-        .unwrap_or(0.0)
-        .max(0.0) as u64;
+    let delay = if animation {
+        // `requestAnimationFrame` is queued on the host scheduler with a fixed 16 ms
+        // frame budget so render's deterministic event loop can pump it.
+        16
+    } else {
+        args.get(1)
+            .and_then(JsValue::as_number)
+            .unwrap_or(0.0)
+            .max(0.0) as u64
+    };
     let id = with_host(|host| {
         let id = host.next_timer_id;
         host.next_timer_id += 1;
@@ -1042,6 +1254,7 @@ fn schedule_timer(args: &[JsValue], context: &mut Context, repeat: bool) -> JsRe
             id,
             due_ms: now + delay,
             interval_ms: repeat.then_some(delay.max(1)),
+            animation,
         });
         id
     })
@@ -1056,11 +1269,33 @@ fn schedule_timer(args: &[JsValue], context: &mut Context, repeat: bool) -> JsRe
 }
 
 fn set_timeout(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    schedule_timer(args, context, false)
+    schedule_timer(args, context, false, false)
 }
 
 fn set_interval(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    schedule_timer(args, context, true)
+    schedule_timer(args, context, true, false)
+}
+
+/// `requestAnimationFrame(callback)` — scheduled 16 ms ahead on the injected clock.
+fn request_animation_frame(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    schedule_timer(args, context, false, true)
+}
+
+/// `cancelAnimationFrame(id)`.
+fn cancel_animation_frame(
+    _this: &JsValue,
+    args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<JsValue> {
+    if let Some(id) = args.first().and_then(JsValue::as_number) {
+        let id = id.max(0.0) as u64;
+        let _ = with_host(|host| host.timers.retain(|timer| timer.id != id));
+    }
+    Ok(JsValue::undefined())
 }
 
 fn clear_timer(_this: &JsValue, args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
@@ -1086,10 +1321,18 @@ pub(crate) fn run_due_timers(
                 .enumerate()
                 .filter(|(_, timer)| timer.due_ms <= effective)
                 .min_by_key(|(_, timer)| (timer.due_ms, timer.id))
-                .map(|(index, timer)| (index, timer.id, timer.interval_ms, timer.due_ms))
+                .map(|(index, timer)| {
+                    (
+                        index,
+                        timer.id,
+                        timer.interval_ms,
+                        timer.due_ms,
+                        timer.animation,
+                    )
+                })
         })
         .flatten();
-        let Some((index, id, interval, due_ms)) = next else {
+        let Some((index, id, interval, due_ms, animation)) = next else {
             break;
         };
         let _ = with_host(|host| {
@@ -1104,20 +1347,28 @@ pub(crate) fn run_due_timers(
         let callback = array_get(context, "__megi_timer_callbacks", id)
             .map_err(|error| CrateJsError::Runtime(error.to_string()))?;
         if let Some(callback) = callback.as_object() {
-            let arguments = array_get(context, "__megi_timer_args", id)
-                .map_err(|error| CrateJsError::Runtime(error.to_string()))?
-                .as_object()
-                .map(|array| {
-                    let length = array
-                        .get(js_string!("length"), context)
-                        .ok()
-                        .and_then(|value| value.as_number())
-                        .unwrap_or(0.0) as u64;
-                    (0..length)
-                        .filter_map(|index| array.get(js_string!(index.to_string()), context).ok())
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
+            let timestamp = with_host(|host| host.now_ms()).unwrap_or(0);
+            let arguments = if animation {
+                // rAF callbacks receive the virtual timestamp in milliseconds.
+                vec![JsValue::from(timestamp as f64)]
+            } else {
+                array_get(context, "__megi_timer_args", id)
+                    .map_err(|error| CrateJsError::Runtime(error.to_string()))?
+                    .as_object()
+                    .map(|array| {
+                        let length = array
+                            .get(js_string!("length"), context)
+                            .ok()
+                            .and_then(|value| value.as_number())
+                            .unwrap_or(0.0) as u64;
+                        (0..length)
+                            .filter_map(|index| {
+                                array.get(js_string!(index.to_string()), context).ok()
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default()
+            };
             callback
                 .call(&JsValue::undefined(), &arguments, context)
                 .map_err(|error| CrateJsError::Runtime(error.to_string()))?;

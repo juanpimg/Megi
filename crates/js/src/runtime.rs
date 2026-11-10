@@ -189,12 +189,14 @@ impl JsRuntime {
                     |_| "<unprintable>".to_string(),
                     |value| value.to_std_string_escaped(),
                 );
-                let _ = name;
                 Ok(text)
             }
             Err(error) => {
                 let message = error.to_string();
                 let typed = classify_error(&message);
+                let _scope = HostScope::enter(&self.host);
+                let _ = crate::events::report_uncaught(&mut self.context, &message, &name);
+                drop(_scope);
                 self.last_error = Some(message);
                 Err(typed)
             }
@@ -206,6 +208,10 @@ impl JsRuntime {
         let _scope = HostScope::enter(&self.host);
         let deadline = crate::events::now_ms();
         let result = crate::events::run_due_timers(&mut self.context, deadline, max_steps);
+        if let Err(error) = &result {
+            let message = error.to_string();
+            let _ = crate::events::report_uncaught(&mut self.context, &message, "<timer>");
+        }
         drop(_scope);
         result
     }
@@ -217,6 +223,55 @@ impl JsRuntime {
     /// `getComputedStyle` falls back to the element's inline declarations (read-only).
     pub fn set_computed_style_provider(&mut self, provider: crate::host::ComputedStyleProvider) {
         self.host.borrow_mut().computed_style_provider = Some(provider);
+    }
+
+    /// Installs the provider used by `window.matchMedia(query).matches`.
+    ///
+    /// The provider receives the raw media-query string and returns whether it currently
+    /// matches the host viewport. Without a provider every query reports `matches: false`.
+    /// `change` events are not fired automatically (the host re-evaluates and can re-run
+    /// scripts); `addListener`/`addEventListener` are accepted as no-ops.
+    pub fn set_media_provider(&mut self, provider: crate::host::MediaProvider) {
+        self.host.borrow_mut().media_provider = Some(provider);
+    }
+
+    /// Installs the provider used by `window.innerWidth/innerHeight/devicePixelRatio`
+    /// (and the base for `pageXOffset/pageYOffset`). Without a provider the documented
+    /// default is 1280×720 at DPR 1.0.
+    pub fn set_viewport_provider(&mut self, provider: crate::host::ViewportProvider) {
+        // The provider's scroll offsets are the initial scroll position; `scrollTo`/
+        // `scrollBy` then move the host-controlled offsets (exposed as pageX/YOffset).
+        let initial = provider();
+        let mut host = self.host.borrow_mut();
+        host.scroll_x = initial.scroll_x;
+        host.scroll_y = initial.scroll_y;
+        host.viewport_provider = Some(provider);
+    }
+
+    /// Current `document.readyState` (`loading` until the host changes it).
+    pub fn ready_state(&self) -> String {
+        self.host.borrow().ready_state.clone()
+    }
+
+    /// Sets `document.readyState` (`loading`, `interactive` or `complete`).
+    pub fn set_ready_state(&mut self, state: impl Into<String>) {
+        self.host.borrow_mut().ready_state = state.into();
+    }
+
+    /// Scroll offsets written by `window.scrollTo`/`scrollBy` (CSS pixels).
+    pub fn scroll_position(&self) -> (f64, f64) {
+        let host = self.host.borrow();
+        (host.scroll_x, host.scroll_y)
+    }
+
+    /// Number of pending `requestAnimationFrame` callbacks.
+    pub fn pending_animation_frames(&self) -> usize {
+        self.host
+            .borrow()
+            .timers
+            .iter()
+            .filter(|timer| timer.animation)
+            .count()
     }
 
     /// Takes the runtime's document out (the host keeps an empty one afterwards).
@@ -284,15 +339,28 @@ impl JsRuntime {
 
     /// Runs pending promise/microtask jobs (Boa's job queue).
     pub fn run_microtasks(&mut self) -> Result<(), JsError> {
-        self.context
-            .run_jobs()
-            .map_err(|error| classify_error(&error.to_string()))
+        match self.context.run_jobs() {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                let message = error.to_string();
+                let _scope = HostScope::enter(&self.host);
+                let _ = crate::events::report_uncaught(&mut self.context, &message, "<microtask>");
+                drop(_scope);
+                let typed = classify_error(&message);
+                self.last_error = Some(message);
+                Err(typed)
+            }
+        }
     }
 
     /// Advances the injectable virtual clock by `delta` and runs the timers now due.
     pub fn advance(&mut self, delta: std::time::Duration) -> Result<u64, JsError> {
         let _scope = HostScope::enter(&self.host);
         let result = crate::events::advance_clock(&mut self.context, delta);
+        if let Err(error) = &result {
+            let message = error.to_string();
+            let _ = crate::events::report_uncaught(&mut self.context, &message, "<timer>");
+        }
         drop(_scope);
         result
     }
@@ -301,6 +369,10 @@ impl JsRuntime {
     pub fn run_until(&mut self, deadline_ms: u64) -> Result<usize, JsError> {
         let _scope = HostScope::enter(&self.host);
         let result = crate::events::run_until(&mut self.context, deadline_ms);
+        if let Err(error) = &result {
+            let message = error.to_string();
+            let _ = crate::events::report_uncaught(&mut self.context, &message, "<timer>");
+        }
         drop(_scope);
         result
     }
@@ -411,11 +483,15 @@ fn install_globals(context: &mut Context, host: &Rc<RefCell<Host>>) -> Result<()
 
 fn build_console(context: &mut Context) -> JsObject {
     let mut init = ObjectInitializer::new(context);
-    let methods: [(&str, NativeFn); 4] = [
+    let methods: [(&str, NativeFn); 8] = [
         ("log", console_log),
         ("info", console_info),
         ("warn", console_warn),
         ("error", console_error),
+        ("debug", console_debug),
+        ("assert", console_assert),
+        ("table", console_table),
+        ("dir", console_debug),
     ];
     for (name, function) in methods {
         init.function(native(function), js_string!(name), 0);
@@ -434,6 +510,39 @@ fn console_warn(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
 }
 fn console_error(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     record_console(this, args, context, "error")
+}
+fn console_debug(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    record_console(this, args, context, "debug")
+}
+fn console_table(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    record_console(this, args, context, "table")
+}
+
+/// `console.assert(condition, ...)` — logs only when the condition is falsy.
+fn console_assert(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let truthy = args
+        .first()
+        .map(|value| value.to_boolean())
+        .unwrap_or(false);
+    if truthy {
+        return Ok(JsValue::undefined());
+    }
+    let rest = args.get(1..).unwrap_or_default();
+    let mut parts = vec!["Assertion failed".to_string()];
+    for argument in rest {
+        parts.push(match argument.to_string(context) {
+            Ok(text) => text.to_std_string_escaped(),
+            Err(_) => "<unprintable>".to_string(),
+        });
+    }
+    let message = parts.join(" ");
+    let _ = with_host(|host| {
+        host.console.push(ConsoleEntry {
+            level: "assert".to_string(),
+            message,
+        })
+    });
+    Ok(JsValue::undefined())
 }
 
 /// `console.*` — space-joined argument stringification into the capture buffer.
@@ -468,6 +577,7 @@ fn build_document_object(context: &mut Context) -> JsObject {
     let title_get = pick(context, document_title_get);
     let title_set = pick(context, document_title_set);
     let url = pick(context, document_url);
+    let ready_state = pick(context, document_ready_state);
     let inline_accessors: Vec<(
         &'static str,
         boa_engine::object::builtins::JsFunction,
@@ -525,6 +635,12 @@ fn build_document_object(context: &mut Context) -> JsObject {
         Attribute::all(),
     );
     init.accessor(js_string!("URL"), Some(url), None, Attribute::all());
+    init.accessor(
+        js_string!("readyState"),
+        Some(ready_state),
+        None,
+        Attribute::all(),
+    );
     init.property(js_string!("__megi_document"), true, Attribute::all());
     for (name, length, function) in crate::events::node_methods() {
         init.function(native(function), js_string!(name), length);
@@ -1152,6 +1268,17 @@ fn node_replace_child(
 // ---------------------------------------------------------------------------
 // document methods/accessors
 // ---------------------------------------------------------------------------
+
+/// `document.readyState` — `loading` during evaluation; the host updates it with
+/// [`JsRuntime::set_ready_state`].
+fn document_ready_state(
+    _this: &JsValue,
+    _args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<JsValue> {
+    let state = with_host(|host| host.ready_state.clone()).unwrap_or_else(|| "loading".to_string());
+    Ok(JsValue::from(js_string!(state)))
+}
 
 /// `document.close()` — no-op kept for script compatibility (parsing is host-driven).
 fn document_close(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {

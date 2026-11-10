@@ -69,6 +69,30 @@
 //! the injected provider (no style resolution inside `js`), and computed declarations are
 //! read-only (`setProperty` throws a `TypeError`).
 //!
+//! ## Browser APIs (R95)
+//!
+//! - `window.matchMedia(query)` returns a `MediaQueryList` (`media`, `matches`) evaluated
+//!   through [`JsRuntime::set_media_provider`] (`Box<dyn Fn(&str) -> bool + Send + Sync>`);
+//!   `addListener`/`addEventListener` are accepted no-ops (no automatic `change` events).
+//! - `window.innerWidth/innerHeight/devicePixelRatio` come from
+//!   [`JsRuntime::set_viewport_provider`] (`Box<dyn Fn() -> ViewportInfo + Send + Sync>`,
+//!   default 1280×720 @ DPR 1). `scrollTo`/`scrollBy` update host scroll offsets exposed
+//!   as `pageXOffset/pageYOffset`; Rust reads them with [`JsRuntime::scroll_position`].
+//! - `requestAnimationFrame(cb)`/`cancelAnimationFrame(id)` queue callbacks on the host
+//!   scheduler 16 ms ahead of the **injected clock**; callbacks receive the virtual
+//!   timestamp and [`JsRuntime::pending_animation_frames`] reports the queue.
+//! - `document.onerror`/`window.onerror` run for uncaught exceptions in `eval`, timer
+//!   callbacks and microtasks with `(message, source, lineno, colno, error)` and the error
+//!   is also recorded in the console capture (`source` is `<timer>`/`<microtask>` for host
+//!   callbacks). Other uncaught errors keep returning [`JsError`] from the host call.
+//! - `document.readyState` starts at `loading`; the host sets it with
+//!   [`JsRuntime::set_ready_state`]. `console.assert/debug/table` (and `dir`) map to the
+//!   console capture levels.
+//! - `window.getComputedStyle` provider format: `Vec<(String, String)>` with kebab-case CSS
+//!   property names; it should cover color, background-color, font-size/family/weight/
+//!   style, width/height, margin*/padding*, display, position, text-align, line-height,
+//!   border-*-width/color/style and opacity (see the crate tests).
+//!
 //! ## Advanced events (R77)
 //!
 //! - `event.currentTarget` is the wrapper of the node/document/window currently visited in
@@ -116,6 +140,8 @@ pub use error::JsError;
 pub use events::JsEventTarget;
 #[cfg(feature = "js")]
 pub use host::ConsoleEntry;
+#[cfg(feature = "js")]
+pub use host::{MediaProvider, ViewportInfo, ViewportProvider};
 #[cfg(feature = "js")]
 pub use runtime::{Budget, JsRuntime};
 
