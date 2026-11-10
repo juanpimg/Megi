@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `fd2c471` (2026-11-10) · overall **95%** · **1,345** tests · conformance **PASS** · **14** crates · **108,972** lines of Rust
+**Snapshot** — commit `88d4372` (2026-11-11) · overall **95%** · **1,345** tests · conformance **PASS** · **14** crates · **108,972** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -121,7 +121,7 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `fd2c471` (2026-11-10) |
+| Commit | `88d4372` (2026-11-11) |
 | Crates in the workspace | 14 |
 | Lines of Rust (tracked `.rs`) | 108972 |
 | Tests (`cargo test --workspace -- --list`) | 1345 |
@@ -141,12 +141,12 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 
 ## Recent rounds
 
+- **Round 21** — performance-budget recovery without raising budgets
 - **Round 20** — custom-property performance fix, conic gradients, mixed calc, typography/sticky, shell tabs and E2E benchmarks
 - **Round 19** — CSS gradients, advanced grid, renderer referrer/state and shell find-in-page
 - **Round 18** — expanded fuzzing, real clipping, Grid MVP, modern CSS and advanced networking
 - **Round 17** — flexbox MVP, rounded corners/shadows, editable forms and SVG pattern/text
 - **Round 16** — real SVG CSS/gradients, multi-layer backgrounds and browser APIs wired into render
-- **Round 15** — inline SVG, background geometry, IFC −28 % and a deterministic event loop
 
 ## Next up
 
