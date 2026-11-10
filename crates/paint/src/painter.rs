@@ -27,7 +27,7 @@ use css::{BorderStyle, Color};
 use dom::NodeId;
 use layout::{BoxType, LayoutBox, Rect};
 
-use crate::display_list::{DisplayItem, DisplayList};
+use crate::display_list::{BorderSide, DisplayItem, DisplayList};
 
 /// Background color propagated from the root element or `body` to the canvas.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -55,8 +55,8 @@ struct PaintSkip {
 /// it is used for the propagated root/`body` canvas background.
 ///
 /// Painting order per box (CSS 2.2 Appendix E, common in-flow case):
-/// 1. Background color fill over the padding box.
-/// 2. Border outlines around the border box.
+/// 1. Background color fill over the border box (CSS 2.2 §8.5.2).
+/// 2. Border outlines around the border box, one paint per side.
 /// 3. Text runs for inline text fragments.
 /// 4. Children traversed recursively in tree order.
 ///
@@ -132,37 +132,41 @@ fn canvas_background(root: &LayoutBox) -> CanvasBackground {
     }
 }
 
-/// Returns the first opaque border color among the four sides, if the box has
-/// a visible border (non-zero width, a `border-style` other than
-/// `none`/`hidden`, and an opaque color on at least one side).
-fn visible_border_color(style: &css::ComputedStyle, border: layout::EdgeSizes) -> Option<Color> {
-    let has_width =
-        border.top > 0.0 || border.right > 0.0 || border.bottom > 0.0 || border.left > 0.0;
-    if !has_width {
-        return None;
-    }
-
-    let sides = [
+/// Builds the four computed border sides of a box (CSS order: top, right,
+/// bottom, left).
+///
+/// CSS 2.2 §8.5.3: when `border-style` is `none` or `hidden` the computed
+/// border width is `0`, so a `border-width: 5px` without a style paints
+/// nothing. The CSS crate already computes that for `border-style`, but paint
+/// enforces it here as well so a malformed style map can never paint a phantom
+/// frame around every element (audit finding F-07).
+fn border_sides(style: &css::ComputedStyle, border: layout::EdgeSizes) -> [BorderSide; 4] {
+    let widths = [border.top, border.right, border.bottom, border.left];
+    let styles = [
         style.border_style.top,
         style.border_style.right,
         style.border_style.bottom,
         style.border_style.left,
     ];
-    if sides
-        .iter()
-        .all(|style| matches!(style, BorderStyle::None | BorderStyle::Hidden))
-    {
-        return None;
-    }
-
-    [
+    let colors = [
         style.border_color.top,
         style.border_color.right,
         style.border_color.bottom,
         style.border_color.left,
-    ]
-    .into_iter()
-    .find(|color| color.a > 0)
+    ];
+
+    let mut sides = [BorderSide::NONE; 4];
+    for (index, side) in sides.iter_mut().enumerate() {
+        let width = if matches!(styles[index], BorderStyle::None | BorderStyle::Hidden) {
+            0.0
+        } else if widths[index].is_finite() {
+            widths[index].max(0.0)
+        } else {
+            0.0
+        };
+        *side = BorderSide::new(width, styles[index], colors[index]);
+    }
+    sides
 }
 
 /// Recursively emits the painting instructions for `layout_box`.
@@ -178,22 +182,24 @@ fn paint_box(layout_box: &LayoutBox, list: &mut DisplayList, skip: PaintSkip, is
         && let Some(style) = style
         && style.background_color.a > 0
     {
+        // CSS 2.2 §8.5.2 / css-backgrounds-3 §2.7: the background painting area
+        // of a box extends under its border (border box), not just the padding
+        // box (audit finding F-08).
         list.push(DisplayItem::SolidColor {
-            rect: layout_box.dimensions.padding_box(),
+            rect: layout_box.dimensions.border_box(),
             color: style.background_color,
         });
     }
 
-    // 2. Borders (CSS 2.2 §8.5.3: `border-style: none` computes a zero width).
-    if is_element
-        && let Some(style) = style
-        && let Some(color) = visible_border_color(style, layout_box.dimensions.border)
-    {
-        list.push(DisplayItem::Border {
-            rect: layout_box.dimensions.border_box(),
-            border_width: layout_box.dimensions.border,
-            color,
-        });
+    // 2. Borders, with per-side widths, styles and colors (CSS 2.2 §8.5).
+    if is_element && let Some(style) = style {
+        let sides = border_sides(style, layout_box.dimensions.border);
+        if sides.iter().any(BorderSide::is_visible) {
+            list.push(DisplayItem::Border {
+                rect: layout_box.dimensions.border_box(),
+                sides,
+            });
+        }
     }
 
     // 3. Text content of inline-level text fragments.

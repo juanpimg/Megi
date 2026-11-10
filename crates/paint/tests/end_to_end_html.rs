@@ -215,6 +215,27 @@ fn test_body_background_not_painted_twice_when_propagated() {
 }
 
 #[test]
+fn test_background_paints_under_border_box() {
+    // CSS 2.2 §8.5.2 / css-backgrounds-3 §2.7: the background painting area
+    // extends under the border (border box), not only the padding box.
+    let source = "<!doctype html><html><body style=\"margin:0\">\
+        <div style=\"width:100px;height:100px;background-color:#ff0000;\
+        border:10px solid transparent\"></div></body></html>";
+    let (pixmap, _) = render(source, 200, 200);
+    assert_eq!(
+        pixmap.pixel(5, 5),
+        Color::new(255, 0, 0, 255),
+        "background must paint under the (transparent) border area"
+    );
+    assert_eq!(pixmap.pixel(119, 119), Color::new(255, 0, 0, 255));
+    assert_eq!(
+        pixmap.pixel(121, 121),
+        Color::WHITE,
+        "outside the border box"
+    );
+}
+
+#[test]
 fn test_style_element_is_applied() {
     let source = fixture("basic.html");
     let (_, display_list) = render(&source, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);

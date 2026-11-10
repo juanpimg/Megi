@@ -2,21 +2,73 @@
 //!
 //! A [`DisplayList`] represents a flat vector of deterministic drawing commands
 //! extracted from the CSS layout tree according to CSS 2.1 Appendix E painting order.
+//!
+//! Coordinates are CSS px in device space (y-down). The rasterizer is free to
+//! antialias any edge whose coordinate is fractional: the display list only
+//! carries geometry, never pixel-rounded decisions.
 
-use css::Color;
-use layout::{EdgeSizes, Rect};
+use css::{BorderStyle, Color};
+use layout::Rect;
+
+/// One painted side of a CSS border box.
+///
+/// Widths are the computed `border-*-width` values in px; a side whose style is
+/// `none` or `hidden` must have width `0` (CSS 2.2 §8.5.3: "the computed value
+/// of the border width is `0` when the border style is `none` or `hidden`").
+/// Painting treats a zero-width side as absent.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BorderSide {
+    /// Computed border width in CSS px.
+    pub width: f32,
+    /// Computed border style (`solid`, `dashed`, `dotted`, `double`, ...).
+    pub style: BorderStyle,
+    /// Computed border color for this side.
+    pub color: Color,
+}
+
+impl BorderSide {
+    /// A side that paints nothing.
+    pub const NONE: Self = Self {
+        width: 0.0,
+        style: BorderStyle::None,
+        color: Color::TRANSPARENT,
+    };
+
+    /// Creates an explicitly painted side.
+    pub const fn new(width: f32, style: BorderStyle, color: Color) -> Self {
+        Self {
+            width,
+            style,
+            color,
+        }
+    }
+
+    /// True when this side contributes pixels: non-zero width, non-zero alpha
+    /// and a style that actually paints.
+    pub fn is_visible(&self) -> bool {
+        self.width > 0.0
+            && self.width.is_finite()
+            && self.color.a > 0
+            && !matches!(self.style, BorderStyle::None | BorderStyle::Hidden)
+    }
+}
 
 /// A single atomic painting instruction.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DisplayItem {
     /// Fills a solid rectangle with a specified RGBA color.
+    ///
+    /// Edges are antialiased when the coordinates are fractional.
     SolidColor { rect: Rect, color: Color },
     /// Draws a rectangular border around the outer edges of `rect`.
-    Border {
-        rect: Rect,
-        border_width: EdgeSizes,
-        color: Color,
-    },
+    ///
+    /// `rect` is the border box. `sides` holds the four computed border sides in
+    /// CSS order: **top, right, bottom, left**. Each side carries its own width,
+    /// style and color; corners are joined with a mitre (the two adjacent sides
+    /// partition the corner square along the outer→inner diagonal). Styles
+    /// `solid`, `dashed`, `dotted`, `double` and `none`/`hidden` are painted;
+    /// `groove`/`ridge`/`inset`/`outset` fall back to `solid` for now.
+    Border { rect: Rect, sides: [BorderSide; 4] },
     /// Renders a text run within a bounding box using the real font engine.
     ///
     /// `baseline` is the distance from `rect.y` (top of the text fragment) down
@@ -40,6 +92,22 @@ pub enum DisplayItem {
     PushClip { rect: Rect },
     /// Pops the top clipping boundary from the clip stack.
     PopClip,
+}
+
+impl DisplayItem {
+    /// Conservative bounds of the item, used for culling.
+    ///
+    /// Border sides that overflow the border box (they cannot in CSS) and glyph
+    /// overflow (italic/overhang) are handled by the rasterizer's own clipping;
+    /// these bounds only avoid touching pixels for fully off-screen items.
+    pub fn bounds(&self) -> Option<Rect> {
+        match self {
+            Self::SolidColor { rect, .. } | Self::Border { rect, .. } => Some(*rect),
+            Self::Text { rect, .. } => Some(*rect),
+            Self::PushClip { rect } => Some(*rect),
+            Self::PopClip => None,
+        }
+    }
 }
 
 /// A sequential list of [`DisplayItem`]s ready for 2D software or hardware rasterization.

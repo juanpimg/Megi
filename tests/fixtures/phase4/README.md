@@ -10,6 +10,23 @@ used by the WP-4.1 HTML → PNG pipeline tests and golden images.
 | `basic.html` | 800×600 document exercising `h1`, `p`, `br`, colored/bold `span`, `ul/li`, a `div` with padding + border + background, `hr` and `a`. |
 | `basic.rgba` | Golden image: raw row-major RGBA bytes (800×600, 4 bytes/pixel, 1 920 000 bytes) of the deterministic render of `basic.html`. Compared byte-for-byte by `crates/paint/tests/end_to_end_html.rs`. |
 
+Golden checksums (md5):
+
+| Artifact | md5 |
+|---|---|
+| `basic.rgba` | `4139fdd8fec9364b03139d8d7cf32a8b` |
+| `basic.png` (rendered from the fixture) | `d97c67dc107313749a6cd28f161e0f63` |
+
+The fixture exercises, besides the WP-4.1 pipeline features:
+
+- per-side borders with distinct colors, widths and styles
+  (`#card`: solid blue top, solid teal right, dashed orange bottom, double
+  purple left) — painted by the WP-4.3 per-side border model with mitred
+  corners;
+- antialiased rectangle edges (fractional layout coordinates produce partial
+  coverage pixels instead of round-out over-paint, WP-4.11);
+- real DejaVu Sans text with per-fragment baselines (WP-4.4).
+
 ## Regenerating the golden image
 
 The golden must only be regenerated when an intentional rendering change is
@@ -30,8 +47,12 @@ cargo test -p paint --test end_to_end_html
 
 The pipeline is deterministic: parsing, style resolution, layout, display list,
 rasterization and the dependency-free PNG encoder contain no time, randomness or
-map-iteration-order dependencies. Rendering the same input twice must produce
-byte-identical output; the golden test relies on this.
+map-iteration-order dependencies (the font database is the bundled DejaVu Sans
+and the text caches are lookup-only). Rendering the same input twice must
+produce byte-identical output; the golden test relies on this. After WP-4.11
+the rasterizer keeps per-pass caches of shaped runs, faces and glyph masks
+(see `paint::RasterStats`), so the same bytes are produced with cache misses or
+hits.
 
 ## Notes
 

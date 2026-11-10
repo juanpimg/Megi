@@ -25,12 +25,13 @@ pub mod rasterizer;
 pub mod style;
 
 pub use css::Color;
-pub use display_list::{DisplayItem, DisplayList};
+pub use display_list::{BorderSide, DisplayItem, DisplayList};
 pub use painter::build_display_list;
 pub use png::encode_rgba;
 pub use rasterizer::{
-    Pixmap, RenderConfig, rasterize_display_list, rasterize_display_list_with_config,
-    rasterize_display_list_with_font_database,
+    MAX_PIXMAP_PIXELS, Pixmap, RasterStats, RenderConfig, bundled_font_database,
+    rasterize_display_list, rasterize_display_list_with_config,
+    rasterize_display_list_with_font_database, rasterize_display_list_with_font_database_and_stats,
 };
 pub use style::{collect_style_text, resolve_embedded_styles};
 
@@ -132,7 +133,9 @@ mod tests {
                 DisplayItem::SolidColor { color, .. } if *color == Color::RED => {
                     has_red_bg = true;
                 }
-                DisplayItem::Border { color, .. } if *color == Color::BLUE => {
+                DisplayItem::Border { sides, .. }
+                    if sides.iter().any(|side| side.color == Color::BLUE) =>
+                {
                     has_blue_border = true;
                 }
                 DisplayItem::Text { text, color, .. }
