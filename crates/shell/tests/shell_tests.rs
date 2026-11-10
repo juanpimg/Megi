@@ -221,6 +221,9 @@ fn worker_channel_applies_only_the_latest_generation() {
                 pixels: vec![0x00FF_FFFF],
                 content_height: 1,
                 capped: false,
+                links: Vec::new(),
+                title: None,
+                document_url: "data:,x".to_string(),
             })
         },
         || {},
@@ -242,6 +245,9 @@ fn worker_channel_applies_only_the_latest_generation() {
         pixels: vec![0],
         content_height: 1,
         capped: false,
+        links: Vec::new(),
+        title: None,
+        document_url: "data:,x".to_string(),
     });
     assert!(!store.accept(stale), "stale generation must be dropped");
     let message = receiver
@@ -280,4 +286,85 @@ fn worker_renderer_produces_a_full_page_frame_without_a_display() {
     );
     assert!(frame.content_height >= 1);
     assert!(frame.content_height <= MAX_CONTENT_HEIGHT);
+}
+
+#[test]
+fn worker_render_document_exposes_links_title_and_final_url() {
+    let request = RenderRequest {
+        generation: 11,
+        input: "data:text/html,<html><head><title>Links Page</title></head>\
+             <body><a href=\"next.html\">next page</a></body></html>"
+            .to_string(),
+        css_width: 320,
+        css_height: 120,
+    };
+    let frame = shell::worker::render_document(&request).expect("render");
+    assert_eq!(frame.title.as_deref(), Some("Links Page"));
+    assert!(
+        frame.document_url.starts_with("data:"),
+        "{}",
+        frame.document_url
+    );
+    assert_eq!(frame.links.len(), 1, "links: {:?}", frame.links);
+    assert_eq!(frame.links[0].href, "next.html");
+    assert!(frame.links[0].rect.width > 0.0);
+    // The stored hit map answers the same question the window asks on click.
+    let page = net::Url::parse("https://example.com/docs/page.html").expect("page URL");
+    let center_x = frame.links[0].rect.x + frame.links[0].rect.width / 2.0;
+    let center_y = frame.links[0].rect.y + frame.links[0].rect.height / 2.0;
+    let url = shell::link_url_at(Some(&page), &frame.links, center_x, center_y)
+        .expect("resolution")
+        .expect("navigable link");
+    assert_eq!(url.as_str(), "https://example.com/docs/next.html");
+}
+
+#[test]
+fn click_navigation_sequence_pushes_and_back_returns() {
+    // Pure end-to-end of the click path: resolve href -> navigate -> back.
+    let page = net::Url::parse("https://example.com/docs/page.html").expect("page URL");
+    let regions = vec![shell::LinkRegion {
+        rect: shell::CssRect::new(10.0, 10.0, 100.0, 20.0),
+        href: "other.html".to_string(),
+    }];
+    let clicked = shell::link_url_at(Some(&page), &regions, 50.0, 15.0)
+        .expect("resolution")
+        .expect("navigable");
+    let mut state = shell::NavigationState::new();
+    state.navigate_to(page.clone());
+    assert_eq!(state.navigate_to(clicked), shell::NavigationOutcome::Pushed);
+    assert_eq!(
+        state.current_url().as_deref(),
+        Some("https://example.com/docs/other.html")
+    );
+    assert_eq!(
+        state.back().map(net::Url::as_str).as_deref(),
+        Some("https://example.com/docs/page.html")
+    );
+    assert_eq!(
+        state.reload_target().map(net::Url::as_str).as_deref(),
+        Some("https://example.com/docs/page.html")
+    );
+}
+
+#[test]
+fn title_and_history_compose_from_a_rendered_page() {
+    let output = shell::render_target(
+        "data:text/html,<html><head><title>Composed</title></head><body><p>x</p></body></html>",
+        240,
+        120,
+    )
+    .expect("render");
+    let document_title = shell::document_title(&output.document);
+    assert_eq!(document_title.as_deref(), Some("Composed"));
+    let page_url = net::Url::parse("https://example.com/a#section").expect("URL");
+    let page = shell::page_title(document_title.as_deref(), &page_url);
+    assert_eq!(page, "Composed — https://example.com/a");
+    assert_eq!(
+        shell::window_title(&page, 25, None, false),
+        "Composed — https://example.com/a — 25%"
+    );
+    assert_eq!(
+        shell::window_title(&page, 0, Some("connection refused"), false),
+        "Megi — error: connection refused"
+    );
 }

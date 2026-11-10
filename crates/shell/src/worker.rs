@@ -29,7 +29,9 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::convert::pixmap_to_0rgb;
+use crate::links::{LinkRegion, collect_link_regions};
 use crate::scroll;
+use crate::title::document_title;
 
 /// Coalescing window for resize/scale-triggered renders.
 pub const RENDER_DEBOUNCE: Duration = Duration::from_millis(120);
@@ -48,7 +50,7 @@ pub struct RenderRequest {
 }
 
 /// A finished page frame in CSS resolution (`0RGB`, row-major).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RenderFrame {
     /// Generation of the request that produced this frame.
     pub generation: u64,
@@ -62,10 +64,17 @@ pub struct RenderFrame {
     pub content_height: u32,
     /// Whether the page was taller than [`scroll::MAX_CONTENT_HEIGHT`] and got clipped.
     pub capped: bool,
+    /// Clickable `<a href>` regions in page CSS coordinates, extracted from the same
+    /// render pass as the pixels (so the hit map always matches the frame).
+    pub links: Vec<LinkRegion>,
+    /// Document `<title>` text, if the page declared one.
+    pub title: Option<String>,
+    /// Final document URL after HTTP redirects (the history entry is replaced with it).
+    pub document_url: String,
 }
 
 /// Message sent from the worker back to the event loop.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum WorkerMessage {
     /// A frame was rendered successfully.
     Frame(RenderFrame),
@@ -284,6 +293,9 @@ pub fn render_document(request: &RenderRequest) -> Result<RenderFrame, String> {
         probe
     };
     let pixels = pixmap_to_0rgb(&output.pixmap);
+    let links = collect_link_regions(&output);
+    let title = document_title(&output.document);
+    let document_url = output.document_url.as_str();
     Ok(RenderFrame {
         generation: request.generation,
         width: output.pixmap.width,
@@ -291,6 +303,9 @@ pub fn render_document(request: &RenderRequest) -> Result<RenderFrame, String> {
         pixels,
         content_height: target_height,
         capped,
+        links,
+        title,
+        document_url,
     })
 }
 
@@ -325,6 +340,9 @@ mod unit_tests {
             pixels: vec![0; 4],
             content_height: 2,
             capped: false,
+            links: Vec::new(),
+            title: None,
+            document_url: "https://example.com/".to_string(),
         }
     }
 

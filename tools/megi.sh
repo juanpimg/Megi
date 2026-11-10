@@ -5,9 +5,12 @@
 #   tools/megi.sh <url|file> [--width W] [--height H] [--screenshot PATH] [--title T]
 #
 # Window mode (needs an X11/Wayland session):
+#   - left click on a link: navigate (resolved against the page URL, history push)
+#   - Alt+Left / Backspace / b: back; Alt+Right / n: forward; r: reload
 #   - mouse wheel / touchpad: vertical scroll
 #   - arrows: one line; PageUp/PageDown: one page; Home/End: top/bottom
-#   - r: re-render; q or Esc: quit; left click: print the current URL
+#   - q or Esc: quit; right/middle click: ignored
+#   - window title: document <title> + short URL + scroll percentage
 #   - HiDPI: the CSS viewport is physical/scale and the frame is upscaled
 #   - renders run on a worker thread with generation-based cancellation
 #

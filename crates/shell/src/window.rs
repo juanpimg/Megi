@@ -13,8 +13,15 @@
 //! - resize and HiDPI scale changes are debounced (~120 ms) before requesting a
 //!   new render; results of obsolete requests are discarded by generation;
 //! - vertical scrolling presents the visible region (mouse wheel and
-//!   arrows/PageUp/PageDown/Home/End); `q`/`Esc` quit, `r` forces a re-render,
-//!   left click prints the current URL to stdout;
+//!   arrows/PageUp/PageDown/Home/End);
+//! - **link navigation**: left click on a rendered `<a href>` navigates to the resolved
+//!   URL through the history state ([`crate::navigation`]) and a fresh worker render; the
+//!   hit regions come from the same render pass as the pixels ([`crate::links`]);
+//! - **history**: `Alt+←`/`Backspace`/`b` go back, `Alt+→`/`n` go forward (bounded by
+//!   [`crate::MAX_HISTORY`]), `r` reloads the current page; failed navigations show an
+//!   error frame and keep the history entry;
+//! - **dynamic title**: the window title shows the document `<title>` plus the short URL
+//!   and scroll percentage ([`crate::title`]);
 //! - errors produce a white frame plus stderr/title feedback; the window stays
 //!   usable.
 //!
@@ -22,13 +29,19 @@
 //!
 //! | Input | Action |
 //! |---|---|
+//! | Left click on a link | Navigate to its resolved URL (history push) |
+//! | `Alt+←`, `Backspace`, `b` | Back |
+//! | `Alt+→`, `n` | Forward |
+//! | `r` | Reload the current page |
 //! | Wheel / touchpad | Scroll vertically |
 //! | `↑` / `↓` | Scroll one line |
 //! | `PageUp` / `PageDown` | Scroll one page |
 //! | `Home` / `End` | Top / bottom |
-//! | `r` | Re-render the page |
 //! | `q`, `Esc`, close button | Quit |
-//! | Left click | Print the current URL to stdout |
+//!
+//! Right/middle clicks are ignored. Fragment links are treated as a normal navigation in
+//! this round (no in-page scrolling), and non-navigable schemes (`javascript:`, `mailto:`,
+//! ...) are no-ops.
 
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -40,14 +53,17 @@ use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
-use winit::keyboard::{Key, NamedKey};
+use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
 
 use crate::convert::{WHITE_0RGB, expected_buffer_len};
 use crate::error::ShellError;
+use crate::links::{LinkRegion, link_url_at, physical_to_page};
+use crate::navigation::{NavigationOutcome, NavigationState};
 use crate::present;
 use crate::scale::{WindowMetrics, window_metrics};
 use crate::scroll::{self, ScrollState};
+use crate::title;
 use crate::worker::{
     Debounce, FrameStore, RENDER_DEBOUNCE, RenderRequest, WorkerMessage, spawn_worker,
 };
@@ -102,6 +118,16 @@ struct WindowApp {
     pending_metrics: Option<WindowMetrics>,
     error: Option<String>,
     content_capped: bool,
+    /// Session history for this window (click/back/forward/reload).
+    nav: NavigationState,
+    /// Clickable link regions of the currently displayed frame (page CSS coordinates).
+    links: Vec<LinkRegion>,
+    /// `<title>` of the currently displayed document.
+    doc_title: Option<String>,
+    /// Latest physical cursor position over the window.
+    cursor: Option<(f64, f64)>,
+    /// Current keyboard modifiers (for Alt+←/→).
+    modifiers: ModifiersState,
 }
 
 impl WindowApp {
@@ -112,6 +138,10 @@ impl WindowApp {
         height: u32,
         proxy: EventLoopProxy<UserEvent>,
     ) -> Self {
+        let mut nav = NavigationState::new();
+        if let Ok(url) = net::Url::parse(&input) {
+            nav.navigate_to(url);
+        }
         Self {
             input,
             title,
@@ -132,6 +162,11 @@ impl WindowApp {
             pending_metrics: None,
             error: None,
             content_capped: false,
+            nav,
+            links: Vec::new(),
+            doc_title: None,
+            cursor: None,
+            modifiers: ModifiersState::default(),
         }
     }
 
@@ -190,6 +225,70 @@ impl WindowApp {
         }
     }
 
+    /// Starts rendering `url` and resets per-page state (scroll, stale links/title).
+    fn start_navigation(&mut self, url: &net::Url) {
+        self.input = url.as_str();
+        self.error = None;
+        self.content_capped = false;
+        self.links.clear();
+        self.doc_title = None;
+        self.scroll = ScrollState::new(1, self.metrics.css_height);
+        self.update_title();
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+        self.request_render();
+    }
+
+    /// Commits a navigation (link click): pushes a history entry unless it is the same URL.
+    fn navigate_to(&mut self, url: net::Url) {
+        if self.nav.navigate_to(url) == NavigationOutcome::Pushed
+            && let Some(current) = self.nav.current().cloned()
+        {
+            self.start_navigation(&current);
+        }
+    }
+
+    /// Goes back one history entry (no-op at the beginning of the history).
+    fn go_back(&mut self) {
+        if let Some(url) = self.nav.back().cloned() {
+            self.start_navigation(&url);
+        }
+    }
+
+    /// Goes forward one history entry (no-op at the end of the history).
+    fn go_forward(&mut self) {
+        if let Some(url) = self.nav.forward().cloned() {
+            self.start_navigation(&url);
+        }
+    }
+
+    /// Reloads the current page (keeps scroll position and history).
+    fn reload(&mut self) {
+        if self.nav.reload_target().is_some() {
+            self.request_render();
+        }
+    }
+
+    /// Handles a left click: resolves the link under the cursor and navigates to it.
+    fn click_at_cursor(&mut self) {
+        let Some((physical_x, physical_y)) = self.cursor else {
+            return;
+        };
+        let (x, y) = physical_to_page(
+            physical_x,
+            physical_y,
+            self.scale_factor,
+            self.scroll.offset(),
+        );
+        let current = self.nav.current().cloned();
+        match link_url_at(current.as_ref(), &self.links, x, y) {
+            Ok(Some(url)) => self.navigate_to(url),
+            Ok(None) => {}
+            Err(error) => eprintln!("megi: link resolution failed: {error}"),
+        }
+    }
+
     /// Debounced resize/scale change: schedule a render after the quiet period.
     fn schedule_resize(&mut self, event_loop: &ActiveEventLoop, metrics: WindowMetrics) {
         self.pending_metrics = Some(metrics);
@@ -215,7 +314,16 @@ impl WindowApp {
                 Some(frame) => {
                     self.error = None;
                     self.content_capped = frame.capped;
+                    self.links = frame.links.clone();
+                    self.doc_title = frame.title.clone();
                     self.scroll.set_content_height(frame.content_height);
+                    // Server redirects: the final URL replaces the requested history entry.
+                    if let Ok(final_url) = net::Url::parse(&frame.document_url)
+                        && self.nav.current() != Some(&final_url)
+                        && self.nav.replace_current(final_url.clone())
+                    {
+                        self.input = final_url.as_str();
+                    }
                 }
                 None => {
                     self.error = self.store.take_error();
@@ -253,26 +361,25 @@ impl WindowApp {
         }
     }
 
-    /// Updates the window title with the scroll percentage / error / cap warning.
+    /// Updates the window title: document `<title>` + short URL, scroll percentage, error
+    /// text (errors take precedence) and the clipping marker.
     fn update_title(&mut self) {
         let Some(window) = &self.window else {
             return;
         };
-        let title = if let Some(error) = &self.error {
-            format!("Megi — error: {error}")
-        } else {
-            let mut title = format!(
-                "{} — {}% ({}/{})",
-                self.title,
-                self.scroll.percent(),
-                self.scroll.offset(),
-                self.scroll.max_offset()
-            );
-            if self.content_capped {
-                title.push_str(" [recortado]");
-            }
-            title
+        let page = match self.nav.current() {
+            Some(url) => title::page_title(self.doc_title.as_deref(), url),
+            None => match net::Url::parse(&self.input) {
+                Ok(url) => title::page_title(self.doc_title.as_deref(), &url),
+                Err(_) => title::FALLBACK_NAME.to_owned(),
+            },
         };
+        let title = title::window_title(
+            &page,
+            self.scroll.percent(),
+            self.error.as_deref(),
+            self.content_capped,
+        );
         window.set_title(&title);
     }
 
@@ -378,15 +485,23 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                     self.scroll_by(scroll::wheel_pixel_delta(position.y));
                 }
             },
+            WindowEvent::CursorMoved { position, .. } => {
+                self.cursor = Some((position.x, position.y));
+            }
+            WindowEvent::ModifiersChanged(modifiers) => {
+                self.modifiers = modifiers.state();
+            }
             WindowEvent::MouseInput {
                 state: ElementState::Pressed,
                 button: MouseButton::Left,
                 ..
             } => {
-                // No DOM hit-testing yet: clicking copies the current URL to stdout.
-                println!("{}", self.input);
+                self.click_at_cursor();
             }
+            // Right/middle clicks are deliberately ignored (no context menu yet).
+            WindowEvent::MouseInput { .. } => {}
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
+                let alt_pressed = self.modifiers.alt_key();
                 match event.logical_key.as_ref() {
                     Key::Named(NamedKey::Escape) => event_loop.exit(),
                     Key::Named(NamedKey::ArrowUp) => self.scroll_lines(-1),
@@ -423,11 +538,16 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                             }
                         }
                     }
+                    Key::Named(NamedKey::Backspace) => self.go_back(),
+                    Key::Named(NamedKey::ArrowLeft) if alt_pressed => self.go_back(),
+                    Key::Named(NamedKey::ArrowRight) if alt_pressed => self.go_forward(),
                     Key::Character(text) if text.eq_ignore_ascii_case("q") => {
                         event_loop.exit();
                     }
-                    Key::Character(text) if text.eq_ignore_ascii_case("r") => {
-                        self.request_render();
+                    Key::Character(text) if text.eq_ignore_ascii_case("r") => self.reload(),
+                    Key::Character(text) if text.eq_ignore_ascii_case("b") => self.go_back(),
+                    Key::Character(text) if text.eq_ignore_ascii_case("n") => {
+                        self.go_forward();
                     }
                     _ => {}
                 }

@@ -9,6 +9,8 @@ repository.workspace = true
 description = "Megi Engine — Phase 7 desktop shell: winit window + softbuffer presentation and headless screenshots"
 
 [dependencies]
+dom.workspace = true
+layout.workspace = true
 render.workspace = true
 paint.workspace = true
 net.workspace = true
