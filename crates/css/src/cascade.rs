@@ -17,6 +17,34 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
+/// Fast non-cryptographic hasher for short CSS property names in the per-element cascade map.
+#[derive(Default)]
+struct FastHasher(u64);
+
+impl std::hash::Hasher for FastHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        let mut hash = self.0;
+        for &byte in bytes {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x100_0000_01b3);
+        }
+        self.0 = hash;
+    }
+}
+
+#[derive(Default, Clone, Copy)]
+struct FastBuildHasher;
+
+impl std::hash::BuildHasher for FastBuildHasher {
+    type Hasher = FastHasher;
+    fn build_hasher(&self) -> FastHasher {
+        FastHasher(0xcbf2_9ce4_8422_2325)
+    }
+}
+
 use crate::rule::{Declaration, Rule, Stylesheet, serialize_component_values};
 use crate::selector::{ComplexSelector, SelectorList, Specificity, parse_selectors};
 use crate::shorthand::expand_declarations;
@@ -408,7 +436,8 @@ fn resolve_cascaded_properties_from_candidates<'a>(
     inline_declarations: Option<&'a [Declaration]>,
     candidates: &[Candidate],
 ) -> HashMap<String, &'a Declaration> {
-    let mut best_candidates: HashMap<String, MatchedDeclaration<'a>> = HashMap::new();
+    let mut best_candidates: HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher> =
+        HashMap::with_hasher(FastBuildHasher);
 
     // 1. Match stylesheet rules (indexed candidates only; the index guarantees a superset).
     //    A rule with several matching selectors contributes each of them; the cascade compares
@@ -429,14 +458,14 @@ fn resolve_cascaded_properties_from_candidates<'a>(
                     declaration_order: declaration_order as u32,
                 };
 
-                match best_candidates.get_mut(&decl.name) {
-                    Some(existing) => {
-                        if candidate > *existing {
-                            *existing = candidate;
+                match best_candidates.entry(decl.name.as_str()) {
+                    std::collections::hash_map::Entry::Occupied(mut occupied) => {
+                        if candidate > *occupied.get() {
+                            occupied.insert(candidate);
                         }
                     }
-                    None => {
-                        best_candidates.insert(decl.name.clone(), candidate);
+                    std::collections::hash_map::Entry::Vacant(vacant) => {
+                        vacant.insert(candidate);
                     }
                 }
             }
@@ -457,14 +486,14 @@ fn resolve_cascaded_properties_from_candidates<'a>(
                 declaration_order: declaration_order as u32,
             };
 
-            match best_candidates.get_mut(&decl.name) {
-                Some(existing) => {
-                    if candidate > *existing {
-                        *existing = candidate;
+            match best_candidates.entry(decl.name.as_str()) {
+                std::collections::hash_map::Entry::Occupied(mut occupied) => {
+                    if candidate > *occupied.get() {
+                        occupied.insert(candidate);
                     }
                 }
-                None => {
-                    best_candidates.insert(decl.name.clone(), candidate);
+                std::collections::hash_map::Entry::Vacant(vacant) => {
+                    vacant.insert(candidate);
                 }
             }
         }
@@ -472,7 +501,7 @@ fn resolve_cascaded_properties_from_candidates<'a>(
 
     best_candidates
         .into_iter()
-        .map(|(k, v)| (k, v.declaration))
+        .map(|(name, matched)| (name.to_string(), matched.declaration))
         .collect()
 }
 
@@ -514,6 +543,40 @@ pub fn resolve_document_styles_with_viewport(
     resolve_document_styles_with_media(doc, author_css, MediaContext::with_viewport(width, height))
 }
 
+/// Hashes an element's winning declarations (and its parent identity) into a 128-bit
+/// style-cache key.
+///
+/// Winning declarations live in the immutable `StyleCollection` (or in the element's local
+/// inline-declaration buffer), so their addresses identify the values cheaply: hashing
+/// pointers avoids re-hashing every property name/value string per element. Map iteration
+/// order is unspecified, so per-declaration hashes are XOR-ed together. Two independent
+/// 64-bit mixes (different constants/rotations) make accidental collisions negligible.
+fn style_cache_key(parent: Option<NodeId>, cascaded: &HashMap<String, &Declaration>) -> u128 {
+    let mut low = if let Some(parent) = parent {
+        let mut hash = 0xcbf2_9ce4_8422_2325u64;
+        for &byte in parent.get().to_le_bytes().iter() {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x100_0000_01b3);
+        }
+        hash
+    } else {
+        0x9e37_79b9_7f4a_7c15
+    };
+    let mut high = low ^ 0xa5a5_5a5a_0123_4567;
+    for declaration in cascaded.values() {
+        let pointer = std::ptr::from_ref(*declaration) as usize as u64;
+        low ^= pointer
+            .wrapping_add(0x9e37_79b9_7f4a_7c15)
+            .rotate_left(17)
+            .wrapping_mul(0x100_0000_01b3);
+        high ^= pointer
+            .wrapping_add(0xd6e8_feb8_6659_fd93)
+            .rotate_left(29)
+            .wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    }
+    u128::from(low) << 64 | u128::from(high)
+}
+
 /// Resolves computed styles with a fully specified [`MediaContext`] for `@media` evaluation.
 pub fn resolve_document_styles_with_media(
     doc: &Document,
@@ -527,6 +590,9 @@ pub fn resolve_document_styles_with_media(
     }
 
     let mut styles: HashMap<NodeId, crate::properties::ComputedStyle> = HashMap::new();
+    let mut style_cache: HashMap<u128, crate::properties::ComputedStyle, FastBuildHasher> =
+        HashMap::with_hasher(FastBuildHasher);
+    let mut style_seen: HashMap<u128, u8, FastBuildHasher> = HashMap::with_hasher(FastBuildHasher);
     let mut candidates: Vec<Candidate> = Vec::new();
     let root = doc.root();
 
@@ -556,10 +622,28 @@ pub fn resolve_document_styles_with_media(
 
             let parent_style = doc.node(node_id).parent.and_then(|p| styles.get(&p));
             let root_style = styles.get(&root);
-
-            let computed =
-                crate::properties::ComputedStyle::compute(&cascaded, parent_style, root_style);
-            styles.insert(node_id, computed);
+            // Inline `style="..."` declarations live in a per-element buffer whose memory
+            // could be reused by the next element, so they are excluded from the
+            // pointer-keyed cache (they are also rare); everything else lives in the
+            // immutable StyleCollection, where declaration addresses are stable.
+            let cacheable = inline_decls.is_none();
+            let cache_key = style_cache_key(doc.node(node_id).parent, &cascaded);
+            if cacheable && let Some(cached) = style_cache.get(&cache_key) {
+                styles.insert(node_id, cached.clone());
+            } else {
+                let computed =
+                    crate::properties::ComputedStyle::compute(&cascaded, parent_style, root_style);
+                styles.insert(node_id, computed.clone());
+                if cacheable {
+                    // Only repeated declaration sets are cached: unique elements pay a
+                    // cheap hash/counter instead of a full ComputedStyle clone.
+                    let seen = style_seen.entry(cache_key).or_insert(0);
+                    *seen = seen.saturating_add(1);
+                    if *seen >= 2 && style_cache.len() < 1024 {
+                        style_cache.insert(cache_key, computed);
+                    }
+                }
+            }
         }
 
         // Push children in reverse order (last child first) so the first child is popped
