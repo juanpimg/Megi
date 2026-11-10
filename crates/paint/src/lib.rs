@@ -35,7 +35,7 @@ pub use css::Color;
 pub use deflate::zlib_compress;
 pub use display_list::{
     BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MAX_DISPLAY_LIST_ITEMS,
-    MarkerKind,
+    MAX_TEXT_MASK_RUNS, MarkerKind, TextMaskRun,
 };
 pub use hit_test::{HitKind, HitLink, HitRegion, find_link_at, hit_test, hit_test_all};
 pub use inflate::inflate_zlib;

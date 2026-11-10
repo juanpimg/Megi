@@ -48,7 +48,8 @@ use fonts::{Font, FontDatabase, FontStyle as FontsFontStyle, GlyphMask, ShapedRu
 use layout::Rect;
 
 use crate::display_list::{
-    BorderSide, DisplayItem, DisplayList, MAX_ROUNDED_GROUP_PIXELS, MAX_SHADOW_BLUR, MarkerKind,
+    BorderSide, DisplayItem, DisplayList, MAX_ROUNDED_GROUP_PIXELS, MAX_SHADOW_BLUR,
+    MAX_TEXT_MASK_RUNS, MarkerKind, TextMaskRun,
 };
 use crate::png;
 
@@ -1506,6 +1507,40 @@ fn paint_items(
                 index += 1;
                 continue;
             }
+            DisplayItem::PushTextMaskGroup { rect, runs } => {
+                let mut depth = 1usize;
+                let mut end = index + 1;
+                while end < items.len() {
+                    match &items[end] {
+                        DisplayItem::PushTextMaskGroup { .. } => depth += 1,
+                        DisplayItem::PopTextMaskGroup => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    end += 1;
+                }
+                paint_text_mask_group(
+                    pixmap,
+                    shift(*rect, dx, dy),
+                    runs,
+                    &items[index + 1..end],
+                    cache,
+                    font_database,
+                    dx,
+                    dy,
+                );
+                index = end + 1;
+                continue;
+            }
+            DisplayItem::PopTextMaskGroup => {
+                // Unbalanced pop: ignore defensively instead of panicking.
+                index += 1;
+                continue;
+            }
             _ => {}
         }
 
@@ -1629,7 +1664,9 @@ fn paint_items(
             DisplayItem::PushClip { .. }
             | DisplayItem::PopClip
             | DisplayItem::PushRoundedGroup { .. }
-            | DisplayItem::PopRoundedGroup => unreachable!("handled above"),
+            | DisplayItem::PopRoundedGroup
+            | DisplayItem::PushTextMaskGroup { .. }
+            | DisplayItem::PopTextMaskGroup => unreachable!("handled above"),
         }
         index += 1;
     }
@@ -2393,6 +2430,99 @@ fn paint_text_shadow(
             if alpha > 0.0 {
                 pixmap.blend_coverage(x0 + x as i64, y0 + y as i64, color, alpha);
             }
+        }
+    }
+}
+
+/// Paints a `background-clip: text` group: the nested background items are
+/// rendered offscreen and composited through the glyph coverage of `runs`.
+#[allow(clippy::too_many_arguments)]
+fn paint_text_mask_group(
+    pixmap: &mut Pixmap,
+    rect: Rect,
+    runs: &[TextMaskRun],
+    items: &[DisplayItem],
+    cache: &mut TextCache,
+    font_database: &FontDatabase,
+    dx: f32,
+    dy: f32,
+) {
+    let Some(clip) = pixmap.clip_rect() else {
+        return;
+    };
+    let x0 = rect.x.max(clip.x).floor().max(0.0) as i64;
+    let y0 = rect.y.max(clip.y).floor().max(0.0) as i64;
+    let x1 = ((rect.x + rect.width).min(clip.x + clip.width))
+        .ceil()
+        .min(pixmap.width as f32) as i64;
+    let y1 = ((rect.y + rect.height).min(clip.y + clip.height))
+        .ceil()
+        .min(pixmap.height as f32) as i64;
+    if x0 >= x1 || y0 >= y1 {
+        return;
+    }
+    let width = (x1 - x0) as u32;
+    let height = (y1 - y0) as u32;
+    if (width as usize).saturating_mul(height as usize) > MAX_ROUNDED_GROUP_PIXELS {
+        // Defensive cap: paint the background without the glyph mask (documented).
+        paint_items(pixmap, items, cache, font_database, dx, dy);
+        return;
+    }
+    let mut buffer = Pixmap::new(width, height);
+    buffer.push_clip(Rect::new(0.0, 0.0, width as f32, height as f32));
+    paint_items(
+        &mut buffer,
+        items,
+        cache,
+        font_database,
+        dx - x0 as f32,
+        dy - y0 as f32,
+    );
+    // Build the glyph coverage mask.
+    let mut mask = Pixmap::new(width, height);
+    mask.push_clip(Rect::new(0.0, 0.0, width as f32, height as f32));
+    let opaque = Color::new(255, 255, 255, 255);
+    for run in runs.iter().take(MAX_TEXT_MASK_RUNS) {
+        let text_rect = Rect::new(
+            run.rect.x + dx - x0 as f32,
+            run.rect.y + dy - y0 as f32,
+            run.rect.width,
+            run.rect.height,
+        );
+        let rendered = draw_text_cached(
+            &mut mask,
+            cache,
+            font_database,
+            &run.text,
+            text_rect,
+            opaque,
+            run.font_size,
+            &run.font_family,
+            run.font_weight,
+            run.font_italic,
+            run.baseline,
+        );
+        if !rendered {
+            mask.draw_text_run_fallback(&run.text, text_rect, opaque, run.font_size, run.advance);
+        }
+    }
+    // Composite the background through the mask.
+    for y in 0..height {
+        for x in 0..width {
+            let coverage = mask.pixels[(y * width + x) as usize].a;
+            if coverage == 0 {
+                continue;
+            }
+            let src = buffer.pixels[(y * width + x) as usize];
+            if src.a == 0 {
+                continue;
+            }
+            pixmap.blend_coverage(
+                x0 + i64::from(x),
+                y0 + i64::from(y),
+                src,
+                f32::from(coverage) / 255.0,
+            );
         }
     }
 }

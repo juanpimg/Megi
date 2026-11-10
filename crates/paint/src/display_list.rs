@@ -85,6 +85,31 @@ pub enum MarkerKind {
     Square,
 }
 
+/// One shaped text run participating in a `background-clip: text` glyph mask.
+///
+/// Mirrors the font/geometry information of [`DisplayItem::Text`] without the
+/// paint color: the painter collects these runs from the clipping box's
+/// descendants and the rasterizer renders them as a monochrome coverage mask.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextMaskRun {
+    /// Text to shape for the mask.
+    pub text: String,
+    /// Text fragment rectangle (CSS px, top-left).
+    pub rect: Rect,
+    /// Font size in CSS px.
+    pub font_size: f32,
+    /// Font family list.
+    pub font_family: String,
+    /// Font weight.
+    pub font_weight: u16,
+    /// Italic/oblique flag.
+    pub font_italic: bool,
+    /// Reserved per-character advance (bitmap fallback only).
+    pub advance: f32,
+    /// Distance from `rect.y` to the glyph baseline.
+    pub baseline: f32,
+}
+
 /// A single atomic painting instruction.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DisplayItem {
@@ -207,6 +232,17 @@ pub enum DisplayItem {
         offset_y: f32,
         blur: f32,
     },
+    /// Opens a group masked by the glyph coverage of `runs` (CSS
+    /// `background-clip: text` / `-webkit-background-clip: text`).
+    ///
+    /// The nested items (the element's background color and image layers) are
+    /// rendered into a transparent buffer and composited through the glyph mask,
+    /// so the background shows only inside the text ink. The glyphs themselves
+    /// are still painted later by their [`Text`](Self::Text) items (typically with
+    /// `color: transparent`, the common "gradient text" pattern).
+    PushTextMaskGroup { rect: Rect, runs: Vec<TextMaskRun> },
+    /// Closes and composites the topmost text-mask group.
+    PopTextMaskGroup,
     /// Pushes a rectangular clipping boundary onto the clip stack.
     PushClip { rect: Rect },
     /// Pops the top clipping boundary from the clip stack.
@@ -226,6 +262,7 @@ impl DisplayItem {
             | Self::RoundedRect { rect, .. }
             | Self::RoundedBorder { rect, .. }
             | Self::PushRoundedGroup { rect, .. }
+            | Self::PushTextMaskGroup { rect, .. }
             | Self::Text { rect, .. }
             | Self::TextDecoration { rect, .. }
             | Self::Marker { rect, .. }
@@ -256,7 +293,7 @@ impl DisplayItem {
                 ))
             }
             Self::PushClip { rect } => Some(*rect),
-            Self::PopClip | Self::PopRoundedGroup => None,
+            Self::PopClip | Self::PopRoundedGroup | Self::PopTextMaskGroup => None,
         }
     }
 }
@@ -280,6 +317,9 @@ pub const MAX_SHADOW_BLUR: f32 = 64.0;
 /// The CSS parser already truncates lists to 32; the painter applies the same
 /// cap defensively for hand-built display lists.
 pub const MAX_SHADOWS: usize = 32;
+
+/// Hard cap on the number of text runs used to build a `background-clip: text` mask.
+pub const MAX_TEXT_MASK_RUNS: usize = 4096;
 
 /// Hard cap on the pixel area of an offscreen rounded-clip group.
 ///

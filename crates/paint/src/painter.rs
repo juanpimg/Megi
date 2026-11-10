@@ -41,6 +41,29 @@
 //! `PushClip`/`PopClip` around each clipped subtree (a clipping box's own
 //! background/border are not clipped, per CSS 2.2 §11.1.1).
 //!
+//! When a box combines `overflow: hidden`/`clip` with `border-radius`, the
+//! painter wraps its descendant content (block backgrounds, inline content and
+//! floats painted from this context, plus nested stacking contexts) in a
+//! [`DisplayItem::PushRoundedGroup`]/[`DisplayItem::PopRoundedGroup`] pair. The
+//! clipping edge is the padding box and the corner radii are shrunk by the
+//! border widths (CSS Overflow 3 §3), so text, images and children are clipped
+//! by the inner rounded curve with antialiasing. The box's own background and
+//! border were already rounded when painted and are not re-clipped. Floating
+//! boxes whose clipping ancestor lies outside the current context are a
+//! documented approximation (normal-flow content is clipped).
+//!
+//! ## `background-clip: text`
+//!
+//! When a background layer uses `background-clip: text` (or the
+//! `-webkit-background-clip` alias), the painter collects the glyph runs of the
+//! box's text descendants and wraps the background color/image items in
+//! [`DisplayItem::PushTextMaskGroup`]/[`DisplayItem::PopTextMaskGroup`]. The
+//! rasterizer renders that background offscreen and composites it through the
+//! shaped glyph coverage, producing the usual "gradient text" effect when the
+//! text color is transparent. At most [`crate::MAX_TEXT_MASK_RUNS`] runs are
+//! collected and the offscreen area is capped (documented limits: no SVG text,
+//! no `-webkit-text-stroke`).
+//!
 //! ## Text decorations and list markers (WP-4.9)
 //!
 //! `text-decoration` lines are painted from the computed style using the font
@@ -64,7 +87,8 @@ use layout::{BoxType, LayoutBox, Rect};
 use std::cell::RefCell;
 
 use crate::display_list::{
-    BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MAX_SHADOWS, MarkerKind,
+    BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MAX_SHADOWS,
+    MAX_TEXT_MASK_RUNS, MarkerKind, TextMaskRun,
 };
 use crate::hit_test::{HitKind, HitRegion, RegionCollector};
 
@@ -410,6 +434,113 @@ fn is_hidden(layout_box: &LayoutBox) -> bool {
         .is_some_and(|style| matches!(style.visibility, Visibility::Hidden | Visibility::Collapse))
 }
 
+/// Rounded clip applied to a box's descendants when `overflow: hidden`/`clip`
+/// and `border-radius` are authored.
+///
+/// The clipping edge is the padding box and the corner radii are shrunk by the
+/// border widths (CSS Overflow 3 §3 / CSS Backgrounds 3 §5.5), so content is
+/// clipped by the inner curve, not by the outer border box.
+fn overflow_rounded_clip(layout_box: &LayoutBox) -> Option<(Rect, css::BorderRadii)> {
+    let style = layout_box.style.as_ref()?;
+    if !matches!(style.overflow, css::Overflow::Hidden | css::Overflow::Clip)
+        || style.border_radius.is_zero()
+    {
+        return None;
+    }
+    let padding_box = layout_box.dimensions.padding_box();
+    if padding_box.width <= 0.0 || padding_box.height <= 0.0 {
+        return None;
+    }
+    let border = layout_box.dimensions.border;
+    let shrink = |length: css::Length, width: f32| -> css::Length {
+        match length {
+            css::Length::Px(px) => css::Length::Px((px - width).max(0.0)),
+            other => other,
+        }
+    };
+    let radii = css::BorderRadii {
+        top_left: css::Radius {
+            x: shrink(style.border_radius.top_left.x, border.left),
+            y: shrink(style.border_radius.top_left.y, border.top),
+        },
+        top_right: css::Radius {
+            x: shrink(style.border_radius.top_right.x, border.right),
+            y: shrink(style.border_radius.top_right.y, border.top),
+        },
+        bottom_right: css::Radius {
+            x: shrink(style.border_radius.bottom_right.x, border.right),
+            y: shrink(style.border_radius.bottom_right.y, border.bottom),
+        },
+        bottom_left: css::Radius {
+            x: shrink(style.border_radius.bottom_left.x, border.left),
+            y: shrink(style.border_radius.bottom_left.y, border.bottom),
+        },
+    };
+    Some((padding_box, radii))
+}
+
+/// True when a background layer asks to be clipped to the element's glyphs.
+fn background_clips_to_text(style: &css::ComputedStyle) -> bool {
+    style
+        .background_layers
+        .iter()
+        .any(|layer| layer.clip == css::BackgroundClip::Text)
+}
+
+/// Collects the glyph runs of a box's subtree for a `background-clip: text` mask.
+///
+/// Visibility-hidden boxes and empty text nodes are skipped, matching the text
+/// items actually painted. Runs are capped at [`MAX_TEXT_MASK_RUNS`]; beyond the
+/// cap the remaining text simply does not contribute to the mask (documented).
+fn collect_text_mask_runs(layout_box: &LayoutBox) -> Vec<TextMaskRun> {
+    let mut runs = Vec::new();
+    let mut stack: Vec<(&LayoutBox, bool)> = Vec::new();
+    for child in layout_box.children.iter().rev() {
+        stack.push((child, is_hidden(child)));
+    }
+    while let Some((child, hidden)) = stack.pop() {
+        if hidden {
+            continue;
+        }
+        if let BoxType::TextNode(text) = &child.box_type
+            && !text.trim().is_empty()
+        {
+            let font_size = child.style.as_ref().map_or(16.0, |style| style.font_size);
+            let char_count = text.chars().count();
+            let advance = if char_count > 0 && child.dimensions.content.width > 0.0 {
+                child.dimensions.content.width / char_count as f32
+            } else {
+                0.6 * font_size
+            };
+            runs.push(TextMaskRun {
+                text: text.clone(),
+                rect: child.dimensions.content,
+                font_size,
+                font_family: child.style.as_ref().map_or_else(
+                    || "sans-serif".to_string(),
+                    |style| style.font_family.clone(),
+                ),
+                font_weight: child.style.as_ref().map_or(400, |style| style.font_weight),
+                font_italic: child.style.as_ref().is_some_and(|style| {
+                    matches!(
+                        style.font_style,
+                        css::FontStyle::Italic | css::FontStyle::Oblique
+                    )
+                }),
+                advance,
+                baseline: child.baseline,
+            });
+            if runs.len() >= MAX_TEXT_MASK_RUNS {
+                return runs;
+            }
+        }
+        for grandchild in child.children.iter().rev() {
+            stack.push((grandchild, hidden || is_hidden(grandchild)));
+        }
+    }
+    runs
+}
+
 /// Paints the appendix E phases of one stacking context.
 fn paint_stacking_context(
     layout_box: &LayoutBox,
@@ -427,6 +558,17 @@ fn paint_stacking_context(
     // Step 2: background and borders of the element establishing the context.
     if !hidden {
         paint_background_border(layout_box, list, skip, resources, is_root, 1.0);
+    }
+
+    // `overflow: hidden`/`clip` + radius clips the descendant subtree of this
+    // stacking context (all phases, including nested contexts and z-index).
+    let overflow_clip = if hidden {
+        None
+    } else {
+        overflow_rounded_clip(layout_box)
+    };
+    if let Some((rect, radii)) = overflow_clip {
+        list.push(DisplayItem::PushRoundedGroup { rect, radii });
     }
 
     let clip = layout_box.clip;
@@ -450,6 +592,9 @@ fn paint_stacking_context(
         );
         if clip.is_some() {
             pop_clip_item(list, resources);
+        }
+        if overflow_clip.is_some() {
+            list.push(DisplayItem::PopRoundedGroup);
         }
         return;
     }
@@ -492,6 +637,9 @@ fn paint_stacking_context(
 
     if clip.is_some() {
         pop_clip_item(list, resources);
+    }
+    if overflow_clip.is_some() {
+        list.push(DisplayItem::PopRoundedGroup);
     }
 
     // Opacity group: the whole subtree is composited once with `opacity`.
@@ -542,6 +690,7 @@ enum BlockTask<'a> {
         alpha_scale: f32,
     },
     PopClip,
+    PopRoundedGroup,
 }
 
 /// Paints background and borders of in-flow block-level descendants (step 4).
@@ -561,6 +710,7 @@ fn paint_block_backgrounds(
     while let Some(task) = stack.pop() {
         match task {
             BlockTask::PopClip => pop_clip_item(list, resources),
+            BlockTask::PopRoundedGroup => list.push(DisplayItem::PopRoundedGroup),
             BlockTask::Visit {
                 layout_box: child,
                 inherited_hidden,
@@ -574,6 +724,11 @@ fn paint_block_backgrounds(
                 }
                 if child.is_block() && !hidden {
                     paint_background_border(child, list, skip, resources, false, alpha);
+                }
+                // `overflow: hidden` + radius clips the descendant subtree.
+                if !hidden && let Some((rect, radii)) = overflow_rounded_clip(child) {
+                    list.push(DisplayItem::PushRoundedGroup { rect, radii });
+                    stack.push(BlockTask::PopRoundedGroup);
                 }
                 push_block_children(child, hidden, alpha, &mut stack);
             }
@@ -656,6 +811,14 @@ fn paint_float(
     if !hidden {
         paint_background_border(layout_box, list, skip, resources, false, alpha);
     }
+    let overflow_clip = if hidden {
+        None
+    } else {
+        overflow_rounded_clip(layout_box)
+    };
+    if let Some((rect, radii)) = overflow_clip {
+        list.push(DisplayItem::PushRoundedGroup { rect, radii });
+    }
     paint_block_backgrounds(layout_box, list, skip, resources, hidden, alpha);
     if depth < MAX_FLOAT_DEPTH {
         paint_floats(layout_box, list, skip, resources, hidden, alpha, depth + 1);
@@ -669,6 +832,9 @@ fn paint_float(
         TextDecoration::NONE,
         alpha,
     );
+    if overflow_clip.is_some() {
+        list.push(DisplayItem::PopRoundedGroup);
+    }
     if clipped.is_some() {
         pop_clip_item(list, resources);
     }
@@ -686,6 +852,7 @@ enum InlineTask<'a> {
         owner: Option<dom::NodeId>,
     },
     PopClip,
+    PopRoundedGroup,
 }
 
 /// Paints in-flow inline content (step 6): inline boxes, text runs with their
@@ -714,6 +881,7 @@ fn paint_inline_content(
     while let Some(task) = stack.pop() {
         match task {
             InlineTask::PopClip => pop_clip_item(list, resources),
+            InlineTask::PopRoundedGroup => list.push(DisplayItem::PopRoundedGroup),
             InlineTask::Visit {
                 layout_box: child,
                 inherited_hidden,
@@ -756,12 +924,32 @@ fn paint_inline_content(
                     BoxType::Replaced(node_id) => {
                         if !hidden {
                             paint_background_border(child, list, skip, resources, false, alpha);
-                            paint_replaced_element(child, *node_id, list, resources, alpha);
+                            let replaced_radius = child
+                                .style
+                                .as_ref()
+                                .map(|style| style.border_radius)
+                                .filter(|radii| !radii.is_zero());
+                            if let Some(radii) = replaced_radius {
+                                // Replaced content is clipped by `border-radius`
+                                // (CSS Backgrounds 3 §5.5).
+                                list.push(DisplayItem::PushRoundedGroup {
+                                    rect: child.dimensions.content,
+                                    radii,
+                                });
+                                paint_replaced_element(child, *node_id, list, resources, alpha);
+                                list.push(DisplayItem::PopRoundedGroup);
+                            } else {
+                                paint_replaced_element(child, *node_id, list, resources, alpha);
+                            }
                         }
                     }
                     BoxType::InlineNode(_) => {
                         if !hidden {
                             paint_background_border(child, list, skip, resources, false, alpha);
+                        }
+                        if !hidden && let Some((rect, radii)) = overflow_rounded_clip(child) {
+                            list.push(DisplayItem::PushRoundedGroup { rect, radii });
+                            stack.push(InlineTask::PopRoundedGroup);
                         }
                         push_inline_children(
                             child,
@@ -775,6 +963,10 @@ fn paint_inline_content(
                     BoxType::BlockNode(_) | BoxType::AnonymousBlock | BoxType::LineBox => {
                         if is_list_item(child) && !hidden {
                             paint_marker(child, ordinal, list, resources, alpha);
+                        }
+                        if !hidden && let Some((rect, radii)) = overflow_rounded_clip(child) {
+                            list.push(DisplayItem::PushRoundedGroup { rect, radii });
+                            stack.push(InlineTask::PopRoundedGroup);
                         }
                         push_inline_children(
                             child,
@@ -799,6 +991,10 @@ fn paint_inline_content(
                     | BoxType::TableColumn(_)
                     | BoxType::AnonymousTableRow
                     | BoxType::AnonymousTableCell => {
+                        if !hidden && let Some((rect, radii)) = overflow_rounded_clip(child) {
+                            list.push(DisplayItem::PushRoundedGroup { rect, radii });
+                            stack.push(InlineTask::PopRoundedGroup);
+                        }
                         push_inline_children(
                             child,
                             hidden,
@@ -944,6 +1140,19 @@ fn paint_background_border(
     let radii = style.border_radius;
     let has_radius = !radii.is_zero();
     let rounded_group = !background_is_propagated && has_radius;
+    // `background-clip: text`: the background color/images are composited through
+    // the glyph mask of the box's text descendants.
+    let text_mask_runs = if !background_is_propagated && background_clips_to_text(style) {
+        Some(collect_text_mask_runs(layout_box))
+    } else {
+        None
+    };
+    if let Some(runs) = &text_mask_runs {
+        list.push(DisplayItem::PushTextMaskGroup {
+            rect: border_box,
+            runs: runs.clone(),
+        });
+    }
 
     // Outer `box-shadow` layers are painted behind the background, last shadow
     // first so the first authored shadow ends up on top (CSS Backgrounds 3 §6).
@@ -1073,6 +1282,9 @@ fn paint_background_border(
 
     if rounded_group {
         list.push(DisplayItem::PopRoundedGroup);
+    }
+    if text_mask_runs.is_some() {
+        list.push(DisplayItem::PopTextMaskGroup);
     }
 
     // Inset shadows are painted above the background but below the border and content.
