@@ -18,7 +18,8 @@
 //! modelled; system fonts (`font: menu`, ...) are rejected.
 
 use crate::properties::{
-    BorderStyle, Color, Length, ListStyleType, parse_border_width, split_components,
+    BorderStyle, Color, Length, ListStyleType, parse_background_shorthand_tokens,
+    parse_border_width, split_components,
 };
 use crate::rule::Declaration;
 
@@ -299,42 +300,38 @@ fn is_image_component(component: &str) -> bool {
         || lower.starts_with("cross-fade(")
 }
 
-/// Expands `background` to the modelled longhands `background-color` and `background-image`.
+/// Expands `background` to the modelled longhands (`background-color`,
+/// `background-image`, `background-repeat`, `background-size` and
+/// `background-position`).
 ///
-/// The `<color>` and the `<image>` may appear in any position (`background: #eee`,
-/// `background: red none`, `background: url(bg.png) no-repeat #0f0`); omitted components reset
-/// to their initial values (`transparent` / `none`, CSS Backgrounds Level 3 §3). Gradients are
-/// kept as the raw image value; the computed style maps them to `None` (documented).
+/// The `<color>`, `<image>`, repeat keywords, position and optional
+/// `<position> / <size>` may appear in any order (`background: #eee`,
+/// `background: url(bg.png) no-repeat center / cover`). Omitted components reset
+/// to their initial values (`transparent`, `none`, `repeat`, `auto`, `0% 0%`;
+/// CSS Backgrounds Level 3 §3). Only the first background layer is modelled;
+/// extra comma-separated layers are ignored (documented limitation).
 fn expand_background(value: &str) -> Option<Vec<(String, String)>> {
-    let components = split_components(value);
-    if components.is_empty() {
-        return None;
-    }
-    let mut color = None;
-    let mut image = None;
-    for component in &components {
-        if is_css_wide_keyword(component) {
-            return Some(Vec::new());
-        }
-        if color.is_none()
-            && (Color::parse(component).is_some()
-                || component.trim().eq_ignore_ascii_case("currentcolor"))
-        {
-            color = Some(component.clone());
-            continue;
-        }
-        if image.is_none() && is_image_component(component) {
-            image = Some(component.clone());
-        }
-    }
+    let tokens = parse_background_shorthand_tokens(value)?;
     Some(vec![
         (
             "background-color".to_string(),
-            color.unwrap_or_else(|| "transparent".to_string()),
+            tokens.color.unwrap_or_else(|| "transparent".to_string()),
         ),
         (
             "background-image".to_string(),
-            image.unwrap_or_else(|| "none".to_string()),
+            tokens.image.unwrap_or_else(|| "none".to_string()),
+        ),
+        (
+            "background-repeat".to_string(),
+            tokens.repeat.unwrap_or_else(|| "repeat".to_string()),
+        ),
+        (
+            "background-size".to_string(),
+            tokens.size.unwrap_or_else(|| "auto".to_string()),
+        ),
+        (
+            "background-position".to_string(),
+            tokens.position.unwrap_or_else(|| "0% 0%".to_string()),
         ),
     ])
 }

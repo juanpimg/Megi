@@ -35,9 +35,10 @@ pub use media::{
 };
 pub use parser::{TokenStream, consume_declaration, parse_list_of_declarations, parse_stylesheet};
 pub use properties::{
-    BorderCollapse, BorderStyle, BoxSizing, CaptionSide, Clear, Color, ComputedStyle, Display,
-    EmptyCells, Float, FontStyle, Length, ListStyleType, Overflow, Position, RectEdges,
-    TableLayout, TextAlign, TextDecoration, VerticalAlign, Visibility, WhiteSpace,
+    BackgroundPosition, BackgroundRepeat, BackgroundRepeatAxis, BackgroundSize, BorderCollapse,
+    BorderStyle, BoxSizing, CaptionSide, Clear, Color, ComputedStyle, Display, EmptyCells, Float,
+    FontStyle, Length, ListStyleType, Overflow, Position, RectEdges, TableLayout, TextAlign,
+    TextDecoration, VerticalAlign, Visibility, WhiteSpace,
 };
 pub use query::{
     SelectorParseError, matches, query_selector, query_selector_all, try_matches,
@@ -1594,5 +1595,143 @@ mod tests {
         let initial = ComputedStyle::initial();
         assert_eq!(initial.background_image, None);
         assert_eq!(initial.list_style_image, None);
+    }
+}
+
+#[cfg(test)]
+mod background_geometry_tests {
+    //! `background-repeat`/`-size`/`-position` + `background` shorthand (R89).
+
+    use super::*;
+    use dom::{Attribute, Document, Namespace};
+
+    fn style_with_inline(inline: &str) -> ComputedStyle {
+        let mut doc = Document::new();
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        let element = doc.create_element(
+            Namespace::Html,
+            "div",
+            vec![Attribute::new("style", inline)],
+        );
+        doc.append_child(doc.root(), body);
+        doc.append_child(body, element);
+        let styles = resolve_document_styles(&doc, None);
+        styles.get(&element).cloned().expect("computed style")
+    }
+
+    #[test]
+    fn test_background_geometry_initial_values() {
+        let style = ComputedStyle::initial();
+        assert_eq!(style.background_repeat, BackgroundRepeat::REPEAT);
+        assert_eq!(style.background_size, BackgroundSize::Auto);
+        assert_eq!(style.background_position, BackgroundPosition::ZERO);
+        assert!(!style.background_geometry_explicit);
+    }
+
+    #[test]
+    fn test_background_image_only_keeps_legacy_compatibility_flag() {
+        let style = style_with_inline("background-image: url(bg.png);");
+        assert_eq!(style.background_image, Some("bg.png".to_string()));
+        assert!(
+            !style.background_geometry_explicit,
+            "image-only declarations keep the legacy paint behaviour"
+        );
+    }
+
+    #[test]
+    fn test_background_repeat_parsing() {
+        let repeat_x = style_with_inline("background-repeat: repeat-x;");
+        assert_eq!(repeat_x.background_repeat.x, BackgroundRepeatAxis::Repeat);
+        assert_eq!(repeat_x.background_repeat.y, BackgroundRepeatAxis::NoRepeat);
+        let repeat_y = style_with_inline("background-repeat: repeat-y;");
+        assert_eq!(repeat_y.background_repeat.x, BackgroundRepeatAxis::NoRepeat);
+        assert_eq!(repeat_y.background_repeat.y, BackgroundRepeatAxis::Repeat);
+        let no_repeat = style_with_inline("background-repeat: no-repeat;");
+        assert_eq!(no_repeat.background_repeat, BackgroundRepeat::NO_REPEAT);
+        let pair = style_with_inline("background-repeat: space round;");
+        assert_eq!(pair.background_repeat.x, BackgroundRepeatAxis::Space);
+        assert_eq!(pair.background_repeat.y, BackgroundRepeatAxis::Round);
+        assert!(pair.background_geometry_explicit);
+        let invalid = style_with_inline("background-repeat: banana;");
+        assert_eq!(invalid.background_repeat, BackgroundRepeat::REPEAT);
+    }
+
+    #[test]
+    fn test_background_size_parsing() {
+        assert_eq!(
+            style_with_inline("background-size: cover;").background_size,
+            BackgroundSize::Cover
+        );
+        assert_eq!(
+            style_with_inline("background-size: contain;").background_size,
+            BackgroundSize::Contain
+        );
+        assert_eq!(
+            style_with_inline("background-size: 100px 50%;").background_size,
+            BackgroundSize::Explicit(Length::Px(100.0), Length::Percent(50.0))
+        );
+        assert_eq!(
+            style_with_inline("background-size: 50% auto;").background_size,
+            BackgroundSize::Explicit(Length::Percent(50.0), Length::Auto)
+        );
+        let shorthand_width = style_with_inline("background-size: 40px;");
+        assert_eq!(
+            shorthand_width.background_size,
+            BackgroundSize::Explicit(Length::Px(40.0), Length::Px(40.0))
+        );
+    }
+
+    #[test]
+    fn test_background_position_parsing() {
+        let center = style_with_inline("background-position: center;");
+        assert_eq!(center.background_position.x, Length::Percent(50.0));
+        assert_eq!(center.background_position.y, Length::Percent(50.0));
+        let right_bottom = style_with_inline("background-position: right bottom;");
+        assert_eq!(right_bottom.background_position.x, Length::Percent(100.0));
+        assert_eq!(right_bottom.background_position.y, Length::Percent(100.0));
+        let top_left = style_with_inline("background-position: top left;");
+        assert_eq!(top_left.background_position.x, Length::Percent(0.0));
+        assert_eq!(top_left.background_position.y, Length::Percent(0.0));
+        let mixed = style_with_inline("background-position: 10px 75%;");
+        assert_eq!(mixed.background_position.x, Length::Px(10.0));
+        assert_eq!(mixed.background_position.y, Length::Percent(75.0));
+        let one_value = style_with_inline("background-position: 25px;");
+        assert_eq!(one_value.background_position.x, Length::Px(25.0));
+        assert_eq!(one_value.background_position.y, Length::Percent(50.0));
+    }
+
+    #[test]
+    fn test_background_shorthand_with_geometry() {
+        let style = style_with_inline("background: red url(bg.png) no-repeat center / cover;");
+        assert_eq!(style.background_color, Color::RED);
+        assert_eq!(style.background_image, Some("bg.png".to_string()));
+        assert_eq!(style.background_repeat, BackgroundRepeat::NO_REPEAT);
+        assert_eq!(style.background_size, BackgroundSize::Cover);
+        assert_eq!(style.background_position.x, Length::Percent(50.0));
+        assert_eq!(style.background_position.y, Length::Percent(50.0));
+        assert!(style.background_geometry_explicit);
+    }
+
+    #[test]
+    fn test_background_shorthand_resets_omitted_components() {
+        let style = style_with_inline("background: url(bg.png);");
+        assert_eq!(style.background_image, Some("bg.png".to_string()));
+        assert_eq!(style.background_repeat, BackgroundRepeat::REPEAT);
+        assert_eq!(style.background_size, BackgroundSize::Auto);
+        assert_eq!(style.background_position, BackgroundPosition::ZERO);
+        assert!(style.background_geometry_explicit);
+    }
+
+    #[test]
+    fn test_background_longhand_overrides_shorthand() {
+        let style = style_with_inline(
+            "background: url(bg.png) no-repeat center / cover; \
+             background-repeat: repeat-y; background-position: 5px 6px;",
+        );
+        assert_eq!(style.background_repeat.x, BackgroundRepeatAxis::NoRepeat);
+        assert_eq!(style.background_repeat.y, BackgroundRepeatAxis::Repeat);
+        assert_eq!(style.background_position.x, Length::Px(5.0));
+        assert_eq!(style.background_position.y, Length::Px(6.0));
+        assert_eq!(style.background_size, BackgroundSize::Cover);
     }
 }

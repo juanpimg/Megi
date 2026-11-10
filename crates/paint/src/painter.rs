@@ -944,17 +944,44 @@ fn paint_background_border(
         });
     }
 
-    // `background-image`: stretched over the padding box, on top of the color.
-    // Missing URL => paint nothing (documented; no placeholder for backgrounds).
+    // `background-image`, on top of the color. Missing URL => paint nothing
+    // (documented; no placeholder for backgrounds).
     if !background_is_propagated
         && let Some(url) = style.background_image.as_deref()
         && let Some(image) = resources.backgrounds.get(url)
         && !image.is_empty()
     {
-        list.push(DisplayItem::Image {
-            rect: layout_box.dimensions.padding_box(),
-            image: std::sync::Arc::clone(image),
-        });
+        let padding_box = layout_box.dimensions.padding_box();
+        if style.background_geometry_explicit {
+            // Full CSS Backgrounds 3 geometry: size, position and repeat, clipped
+            // to the padding box (the default `background-origin`).
+            let tiles = crate::background::background_tiles(
+                padding_box,
+                image.dimensions(),
+                style.background_repeat,
+                style.background_size,
+                style.background_position,
+            );
+            if !tiles.is_empty() {
+                push_clip_item(list, resources, padding_box);
+                for tile in tiles {
+                    list.push(DisplayItem::Image {
+                        rect: tile,
+                        image: std::sync::Arc::clone(image),
+                    });
+                }
+                pop_clip_item(list, resources);
+            }
+        } else {
+            // Legacy compatibility: documents that only set `background-image`
+            // (all Phase 4/5/6 golden fixtures) keep the historical behaviour of
+            // stretching the bitmap over the whole padding box. Authored
+            // `background-repeat`/`-size`/`-position` opt into CSS geometry above.
+            list.push(DisplayItem::Image {
+                rect: padding_box,
+                image: std::sync::Arc::clone(image),
+            });
+        }
     }
 
     let sides = border_sides(style, layout_box.dimensions.border);

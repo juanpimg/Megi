@@ -20,6 +20,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod background;
 pub mod deflate;
 pub mod display_list;
 pub mod hit_test;
@@ -29,6 +30,7 @@ pub mod png;
 pub mod rasterizer;
 pub mod style;
 
+pub use background::{MAX_BACKGROUND_TILES, background_tile_size, background_tiles};
 pub use css::Color;
 pub use deflate::zlib_compress;
 pub use display_list::{

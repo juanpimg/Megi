@@ -857,6 +857,216 @@ impl<T: Copy> RectEdges<T> {
     }
 }
 
+/// Per-axis CSS `background-repeat` style (CSS Backgrounds 3 §2.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum BackgroundRepeatAxis {
+    /// Tile repeatedly on this axis (initial value).
+    #[default]
+    Repeat,
+    /// Do not tile on this axis.
+    NoRepeat,
+    /// Distribute tiles with equal gaps (parsed; paint currently treats it as
+    /// [`Repeat`](Self::Repeat), documented limitation).
+    Space,
+    /// Scale the tile so a whole number of tiles fits (parsed; paint currently
+    /// treats it as [`Repeat`](Self::Repeat), documented limitation).
+    Round,
+}
+
+impl BackgroundRepeatAxis {
+    /// Parses one axis keyword (`repeat`, `no-repeat`, `space`, `round`).
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "repeat" => Some(Self::Repeat),
+            "no-repeat" => Some(Self::NoRepeat),
+            "space" => Some(Self::Space),
+            "round" => Some(Self::Round),
+            _ => None,
+        }
+    }
+}
+
+/// Computed `background-repeat` (CSS Backgrounds 3 §2.3): one style per axis.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BackgroundRepeat {
+    /// Repetition on the horizontal axis.
+    pub x: BackgroundRepeatAxis,
+    /// Repetition on the vertical axis.
+    pub y: BackgroundRepeatAxis,
+}
+
+impl BackgroundRepeat {
+    /// `repeat` on both axes (the CSS initial value).
+    pub const REPEAT: Self = Self {
+        x: BackgroundRepeatAxis::Repeat,
+        y: BackgroundRepeatAxis::Repeat,
+    };
+    /// `no-repeat` on both axes.
+    pub const NO_REPEAT: Self = Self {
+        x: BackgroundRepeatAxis::NoRepeat,
+        y: BackgroundRepeatAxis::NoRepeat,
+    };
+
+    /// Parses `repeat`, `repeat-x`, `repeat-y`, `no-repeat`, `space`, `round`
+    /// or the two-value form `[repeat|no-repeat|space|round]{1,2}`.
+    pub fn parse(value: &str) -> Option<Self> {
+        let components = split_components(value);
+        match components.as_slice() {
+            [single] => match single.trim().to_ascii_lowercase().as_str() {
+                "repeat-x" => Some(Self {
+                    x: BackgroundRepeatAxis::Repeat,
+                    y: BackgroundRepeatAxis::NoRepeat,
+                }),
+                "repeat-y" => Some(Self {
+                    x: BackgroundRepeatAxis::NoRepeat,
+                    y: BackgroundRepeatAxis::Repeat,
+                }),
+                other => {
+                    let axis = BackgroundRepeatAxis::parse(other)?;
+                    Some(Self { x: axis, y: axis })
+                }
+            },
+            [x, y] => Some(Self {
+                x: BackgroundRepeatAxis::parse(x)?,
+                y: BackgroundRepeatAxis::parse(y)?,
+            }),
+            _ => None,
+        }
+    }
+}
+
+impl Default for BackgroundRepeat {
+    fn default() -> Self {
+        Self::REPEAT
+    }
+}
+
+/// Computed `background-size` (CSS Backgrounds 3 §2.4).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum BackgroundSize {
+    /// Both axes use the image's intrinsic size (CSS initial value `auto`).
+    #[default]
+    Auto,
+    /// Scale to cover the positioning area, preserving the aspect ratio.
+    Cover,
+    /// Scale to fit inside the positioning area, preserving the aspect ratio.
+    Contain,
+    /// Explicit `(width, height)`; `Length::Auto` keeps that axis proportional.
+    Explicit(Length, Length),
+}
+
+impl BackgroundSize {
+    /// Parses `auto`, `cover`, `contain`, one length/percentage (both axes) or
+    /// two length/percentage/auto values.
+    pub fn parse(value: &str, font_size: f32, root_font_size: f32) -> Option<Self> {
+        let components = split_components(value);
+        match components.as_slice() {
+            [single] => {
+                let lower = single.trim().to_ascii_lowercase();
+                match lower.as_str() {
+                    "auto" => Some(Self::Auto),
+                    "cover" => Some(Self::Cover),
+                    "contain" => Some(Self::Contain),
+                    _ => {
+                        let length = Length::parse(single, font_size, root_font_size)?;
+                        Some(Self::Explicit(length, length))
+                    }
+                }
+            }
+            [first, second] => {
+                let parse_component = |component: &str| -> Option<Length> {
+                    let lower = component.trim().to_ascii_lowercase();
+                    match lower.as_str() {
+                        "auto" => Some(Length::Auto),
+                        "cover" | "contain" => None,
+                        _ => Length::parse(component, font_size, root_font_size).filter(|length| {
+                            !matches!(length, Length::Percent(pct) if *pct < 0.0)
+                                && !matches!(length, Length::Px(px) if *px < 0.0)
+                        }),
+                    }
+                };
+                Some(Self::Explicit(
+                    parse_component(first)?,
+                    parse_component(second)?,
+                ))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Computed `background-position` per axis (CSS Backgrounds 3 §2.5).
+///
+/// Stored as a [`Length`] per axis: keywords become percentages
+/// (`left`/`top` = `0%`, `center` = `50%`, `right`/`bottom` = `100%`) and
+/// explicit lengths/percentages are kept as authored.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BackgroundPosition {
+    /// Horizontal position within the positioning area.
+    pub x: Length,
+    /// Vertical position within the positioning area.
+    pub y: Length,
+}
+
+impl Default for BackgroundPosition {
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
+
+impl BackgroundPosition {
+    /// `0% 0%` (the CSS initial value).
+    pub const ZERO: Self = Self {
+        x: Length::Percent(0.0),
+        y: Length::Percent(0.0),
+    };
+
+    /// Parses one or two `<position>` components.
+    ///
+    /// Keywords `left`/`center`/`right`/`top`/`bottom` are accepted in either
+    /// order; lengths and percentages are also supported. Invalid combinations
+    /// (two horizontal or two vertical keywords) are rejected.
+    pub fn parse(value: &str, font_size: f32, root_font_size: f32) -> Option<Self> {
+        let components = split_components(value);
+        let mut x = None;
+        let mut y = None;
+        for component in components.iter().take(2) {
+            match component.trim().to_ascii_lowercase().as_str() {
+                "left" => x = Some(Length::Percent(0.0)),
+                "right" => x = Some(Length::Percent(100.0)),
+                "top" => y = Some(Length::Percent(0.0)),
+                "bottom" => y = Some(Length::Percent(100.0)),
+                "center" => {
+                    x.get_or_insert(Length::Percent(50.0));
+                    y.get_or_insert(Length::Percent(50.0));
+                }
+                other => {
+                    let length = Length::parse(other, font_size, root_font_size)?;
+                    if matches!(length, Length::Auto) {
+                        return None;
+                    }
+                    // Lengths/percentages fill the first free axis (x first),
+                    // matching the CSS two-value resolution in the common case.
+                    if x.is_none() {
+                        x = Some(length);
+                    } else if y.is_none() {
+                        y = Some(length);
+                    } else {
+                        return None;
+                    }
+                }
+            }
+        }
+        if components.is_empty() || components.len() > 2 {
+            return None;
+        }
+        Some(Self {
+            x: x.unwrap_or(Length::Percent(50.0)),
+            y: y.unwrap_or(Length::Percent(50.0)),
+        })
+    }
+}
+
 /// Complete computed style for an element in the DOM tree.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComputedStyle {
@@ -907,6 +1117,20 @@ pub struct ComputedStyle {
     /// (`background: <color> url(...)`) populates both color and image. `background-repeat`,
     /// `-size`, `-position`, `-clip` and multiple layers are out of scope.
     pub background_image: Option<String>,
+    /// `background-repeat` (initial `repeat`; CSS Backgrounds 3 §2.3).
+    pub background_repeat: BackgroundRepeat,
+    /// `background-size` (initial `auto`; CSS Backgrounds 3 §2.4).
+    pub background_size: BackgroundSize,
+    /// `background-position` (initial `0% 0%`; CSS Backgrounds 3 §2.5).
+    pub background_position: BackgroundPosition,
+    /// `true` when `background-repeat`, `background-size` or `background-position`
+    /// (or the `background` shorthand) were declared for this element.
+    ///
+    /// `paint` uses this to keep the legacy "stretch the bitmap to the padding
+    /// box" behaviour for documents that only set `background-image` (all Phase
+    /// 4/5/6 golden fixtures), while applying full CSS tiling as soon as the new
+    /// background properties are authored. See [`crate::ComputedStyle::background_image`].
+    pub background_geometry_explicit: bool,
 
     // Typography
     pub font_size: f32,
@@ -993,6 +1217,10 @@ impl ComputedStyle {
             color: Color::BLACK,
             background_color: Color::TRANSPARENT,
             background_image: None,
+            background_repeat: BackgroundRepeat::REPEAT,
+            background_size: BackgroundSize::Auto,
+            background_position: BackgroundPosition::ZERO,
+            background_geometry_explicit: false,
 
             font_size: 16.0,
             font_weight: 400,
@@ -1155,6 +1383,8 @@ impl ComputedStyle {
         // Images are not inherited; `none`, gradients and invalid values compute to `None`.
         let background_image = find_declaration(&entries, "background-image")
             .and_then(|d| parse_image_value(&d.raw_value));
+        let (background_repeat, background_size, background_position, background_geometry_explicit) =
+            Self::compute_background_geometry(&entries, font_size, root_font_size);
         let list_style_image = find_declaration(&entries, "list-style-image")
             .and_then(|d| parse_image_value(&d.raw_value));
 
@@ -1255,6 +1485,10 @@ impl ComputedStyle {
             color,
             background_color,
             background_image,
+            background_repeat,
+            background_size,
+            background_position,
+            background_geometry_explicit,
             font_size,
             font_weight,
             font_style,
@@ -1430,6 +1664,60 @@ impl ComputedStyle {
         }
     }
 
+    /// Computes `background-repeat`, `background-size` and `background-position`
+    /// (CSS Backgrounds 3 §2.3–2.5) and whether they were explicitly authored.
+    ///
+    /// Background geometry is never inherited. Longhands take precedence over the
+    /// `background` shorthand; missing or invalid components use their initial
+    /// values (`repeat`, `auto`, `0% 0%`). The `background` shorthand is expanded
+    /// before the cascade by [`crate::shorthand`]; the fallback below keeps direct
+    /// [`ComputedStyle::compute`] callers working.
+    fn compute_background_geometry(
+        entries: &[(&str, &Declaration)],
+        font_size: f32,
+        root_font_size: f32,
+    ) -> (BackgroundRepeat, BackgroundSize, BackgroundPosition, bool) {
+        let repeat_decl = find_declaration(entries, "background-repeat");
+        let size_decl = find_declaration(entries, "background-size");
+        let position_decl = find_declaration(entries, "background-position");
+        let shorthand = find_declaration(entries, "background");
+        let explicit = repeat_decl.is_some()
+            || size_decl.is_some()
+            || position_decl.is_some()
+            || shorthand.is_some();
+
+        let tokens = shorthand.and_then(|decl| parse_background_shorthand_tokens(&decl.raw_value));
+
+        let repeat = repeat_decl
+            .and_then(|decl| BackgroundRepeat::parse(&decl.raw_value))
+            .or_else(|| {
+                tokens
+                    .as_ref()
+                    .and_then(|tokens| tokens.repeat.as_deref())
+                    .and_then(BackgroundRepeat::parse)
+            })
+            .unwrap_or_default();
+        let size = size_decl
+            .and_then(|decl| BackgroundSize::parse(&decl.raw_value, font_size, root_font_size))
+            .or_else(|| {
+                tokens
+                    .as_ref()
+                    .and_then(|tokens| tokens.size.as_deref())
+                    .and_then(|value| BackgroundSize::parse(value, font_size, root_font_size))
+            })
+            .unwrap_or_default();
+        let position = position_decl
+            .and_then(|decl| BackgroundPosition::parse(&decl.raw_value, font_size, root_font_size))
+            .or_else(|| {
+                tokens
+                    .as_ref()
+                    .and_then(|tokens| tokens.position.as_deref())
+                    .and_then(|value| BackgroundPosition::parse(value, font_size, root_font_size))
+            })
+            .unwrap_or(BackgroundPosition::ZERO);
+        (repeat, size, position, explicit)
+    }
+
     /// Extracts the background color from `background-color` or the `background` shorthand.
     ///
     /// The `background` shorthand accepts a `<color>` in any position (CSS Backgrounds 3 §3:
@@ -1578,6 +1866,231 @@ impl ComputedStyle {
             },
         )
     }
+}
+
+/// Tokenised components of one `background` shorthand layer.
+///
+/// Values are kept as raw CSS text: shorthand expansion runs *before* the cascade,
+/// where the element font-size is not known yet, and [`ComputedStyle::compute`]
+/// resolves lengths/percentages later.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct BackgroundShorthandTokens {
+    pub color: Option<String>,
+    pub image: Option<String>,
+    pub repeat: Option<String>,
+    pub size: Option<String>,
+    pub position: Option<String>,
+}
+
+/// Splits `value` at the first top-level `,` (only the first background layer is
+/// modelled) and returns the part before it.
+fn first_background_layer(value: &str) -> &str {
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    for (index, ch) in value.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if let Some(q) = quote {
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == q {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '"' | '\'' => quote = Some(ch),
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => return &value[..index],
+            _ => {}
+        }
+    }
+    value
+}
+
+/// Splits a background layer at the top-level `/` separator (`<position> / <size>`).
+fn split_background_layer_at_slash(value: &str) -> (&str, Option<&str>) {
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    for (index, ch) in value.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if let Some(q) = quote {
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == q {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '"' | '\'' => quote = Some(ch),
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            '/' if depth == 0 => return (&value[..index], Some(&value[index + 1..])),
+            _ => {}
+        }
+    }
+    (value, None)
+}
+
+/// Classification helpers shared by the `background` shorthand parser.
+fn is_background_repeat_keyword(token: &str) -> bool {
+    matches!(
+        token.trim().to_ascii_lowercase().as_str(),
+        "repeat" | "repeat-x" | "repeat-y" | "no-repeat" | "space" | "round"
+    )
+}
+
+fn is_background_attachment_keyword(token: &str) -> bool {
+    matches!(
+        token.trim().to_ascii_lowercase().as_str(),
+        "scroll" | "fixed" | "local"
+    )
+}
+
+fn is_background_box_keyword(token: &str) -> bool {
+    matches!(
+        token.trim().to_ascii_lowercase().as_str(),
+        "border-box" | "padding-box" | "content-box"
+    )
+}
+
+fn is_background_position_keyword(token: &str) -> bool {
+    matches!(
+        token.trim().to_ascii_lowercase().as_str(),
+        "left" | "center" | "right" | "top" | "bottom"
+    )
+}
+
+/// Heuristic `<length-percentage>` test used only for shorthand token classification.
+fn looks_like_length(token: &str) -> bool {
+    let token = token.trim().to_ascii_lowercase();
+    if token.is_empty() {
+        return false;
+    }
+    if let Some(value) = token.strip_suffix('%') {
+        return value.trim().parse::<f32>().is_ok();
+    }
+    const UNITS: [&str; 10] = ["px", "em", "rem", "pt", "pc", "in", "cm", "mm", "vw", "vh"];
+    if let Some(unit) = UNITS.iter().find(|unit| token.ends_with(**unit)) {
+        return token[..token.len() - unit.len()]
+            .trim()
+            .parse::<f32>()
+            .is_ok();
+    }
+    token.parse::<f32>().is_ok()
+}
+
+fn is_background_image_token(token: &str) -> bool {
+    let lower = token.trim().to_ascii_lowercase();
+    lower.starts_with("url(")
+        || lower.starts_with("none")
+        || lower.contains("gradient(")
+        || lower.starts_with("image-set(")
+        || lower.starts_with("cross-fade(")
+}
+
+/// Parses the components of a `background` shorthand (first layer only).
+///
+/// Returns `None` for CSS-wide keywords (the shorthand is dropped) or when the
+/// value is empty. Unknown components are ignored tolerantly, as before.
+pub(crate) fn parse_background_shorthand_tokens(value: &str) -> Option<BackgroundShorthandTokens> {
+    let layer = first_background_layer(value);
+    let (before_slash, after_slash) = split_background_layer_at_slash(layer);
+    let components = split_components(before_slash);
+    if components.is_empty() {
+        return None;
+    }
+    if components.iter().any(|component| {
+        matches!(
+            component.trim().to_ascii_lowercase().as_str(),
+            "inherit" | "initial" | "unset" | "revert" | "revert-layer"
+        )
+    }) {
+        return None;
+    }
+
+    let mut tokens = BackgroundShorthandTokens::default();
+    let mut position_components: Vec<String> = Vec::new();
+    let mut index = 0usize;
+    while index < components.len() {
+        let component = components[index].as_str();
+        if tokens.color.is_none()
+            && (Color::parse(component).is_some()
+                || component.trim().eq_ignore_ascii_case("currentcolor"))
+        {
+            tokens.color = Some(component.to_string());
+            index += 1;
+            continue;
+        }
+        if tokens.image.is_none() && is_background_image_token(component) {
+            tokens.image = Some(component.to_string());
+            index += 1;
+            continue;
+        }
+        if tokens.repeat.is_none() && is_background_repeat_keyword(component) {
+            let mut repeat = component.to_string();
+            if let Some(next) = components.get(index + 1)
+                && !matches!(
+                    next.trim().to_ascii_lowercase().as_str(),
+                    "repeat-x" | "repeat-y"
+                )
+                && matches!(
+                    BackgroundRepeatAxis::parse(next),
+                    Some(BackgroundRepeatAxis::Repeat)
+                        | Some(BackgroundRepeatAxis::NoRepeat)
+                        | Some(BackgroundRepeatAxis::Space)
+                        | Some(BackgroundRepeatAxis::Round)
+                )
+            {
+                repeat.push(' ');
+                repeat.push_str(next);
+                index += 1;
+            }
+            tokens.repeat = Some(repeat);
+            index += 1;
+            continue;
+        }
+        if is_background_attachment_keyword(component) || is_background_box_keyword(component) {
+            index += 1;
+            continue;
+        }
+        if position_components.len() < 2
+            && (is_background_position_keyword(component) || looks_like_length(component))
+        {
+            position_components.push(component.to_string());
+            index += 1;
+            continue;
+        }
+        index += 1;
+    }
+    if !position_components.is_empty() {
+        tokens.position = Some(position_components.join(" "));
+    }
+
+    if let Some(size_part) = after_slash {
+        let size_components: Vec<String> = split_components(size_part)
+            .into_iter()
+            .filter(|component| {
+                let lower = component.trim().to_ascii_lowercase();
+                matches!(lower.as_str(), "auto" | "cover" | "contain")
+                    || looks_like_length(component)
+            })
+            .take(2)
+            .collect();
+        if !size_components.is_empty() {
+            tokens.size = Some(size_components.join(" "));
+        }
+    }
+    Some(tokens)
 }
 
 /// Splits a CSS value into top-level whitespace-separated components.
