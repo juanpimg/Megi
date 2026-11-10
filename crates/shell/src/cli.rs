@@ -35,7 +35,8 @@ options:
   --title T           window title (default \"Megi\")
   -h, --help          print this help
 
-keys (window mode): q / Esc quit, r re-render";
+window keys: q / Esc quit, r re-render, arrows/PageUp/PageDown/Home/End scroll
+             (mouse wheel/touchpad scrolls; left click prints the current URL)";
 
 /// What the CLI should do after parsing.
 #[derive(Clone, Debug, PartialEq, Eq)]

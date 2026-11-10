@@ -8,9 +8,11 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use paint::Color;
+use shell::worker::{Debounce, FrameStore, RenderRequest, spawn_worker};
 use shell::{
-    LaunchMode, PIXEL_FORMAT, ShellError, expected_buffer_len, parse_args, parse_cli,
-    pixmap_to_0rgb, render_target, screenshot,
+    LaunchMode, MAX_CONTENT_HEIGHT, PIXEL_FORMAT, ScrollState, ShellError, WorkerMessage,
+    expected_buffer_len, logical_to_physical, parse_args, parse_cli, physical_to_logical,
+    pixmap_to_0rgb, present_region, render_target, screenshot, viewport_slice, window_metrics,
 };
 
 fn fixture_url() -> String {
@@ -167,4 +169,115 @@ fn cli_help_exits_successfully() {
         .expect("run megi --help");
     assert!(output.status.success());
     assert!(String::from_utf8_lossy(&output.stdout).contains("usage: megi"));
+}
+
+#[test]
+fn scroll_state_is_clamped_and_usable() {
+    let mut state = ScrollState::new(1200, 400);
+    assert_eq!(state.max_offset(), 800);
+    assert!(state.page_down());
+    assert_eq!(state.offset(), 360);
+    assert!(state.end());
+    assert_eq!((state.offset(), state.percent()), (800, 100));
+    assert!(state.home());
+    assert_eq!(state.offset(), 0);
+    assert!(!state.scroll_by(-100), "already at the top");
+    assert_eq!(MAX_CONTENT_HEIGHT, 8192);
+}
+
+#[test]
+fn viewport_presentation_selects_the_visible_region() {
+    const RED: u32 = 0x00FF_0000;
+    const GREEN: u32 = 0x0000_FF00;
+    const BLUE: u32 = 0x0000_00FF;
+    let frame = vec![RED, RED, GREEN, GREEN, BLUE, BLUE];
+    assert_eq!(
+        viewport_slice(&frame, 2, 3, 1, 2, 2),
+        vec![GREEN, GREEN, BLUE, BLUE]
+    );
+    let mut dest = vec![0u32; 4];
+    assert!(present_region(Some((&frame, 2, 3)), 1, 2, &mut dest, 2, 2));
+    assert_eq!(dest, vec![GREEN, GREEN, BLUE, BLUE]);
+}
+
+#[test]
+fn hidpi_metrics_convert_between_physical_and_css_pixels() {
+    let metrics = window_metrics(1600, 1200, 2.0);
+    assert_eq!((metrics.css_width, metrics.css_height), (800, 600));
+    assert_eq!(logical_to_physical(800, 2.0), 1600);
+    assert_eq!(physical_to_logical(1600, 2.0), 800);
+    // Invalid scale factors fall back to 1.0 instead of panicking.
+    assert_eq!(window_metrics(320, 200, f64::NAN).css_width, 320);
+}
+
+#[test]
+fn worker_channel_applies_only_the_latest_generation() {
+    let (sender, receiver, handle) = spawn_worker(
+        |request: &RenderRequest| {
+            Ok(shell::RenderFrame {
+                generation: request.generation,
+                width: 1,
+                height: 1,
+                pixels: vec![0x00FF_FFFF],
+                content_height: 1,
+                capped: false,
+            })
+        },
+        || {},
+    );
+    let mut store = FrameStore::new();
+    let first = store.begin_request("data:,x", 10, 10);
+    sender.send(first).expect("send first");
+    let message = receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("first message");
+    assert!(store.accept(message));
+
+    let second = store.begin_request("data:,y", 20, 20);
+    sender.send(second).expect("send second");
+    let stale = WorkerMessage::Frame(shell::RenderFrame {
+        generation: 1,
+        width: 1,
+        height: 1,
+        pixels: vec![0],
+        content_height: 1,
+        capped: false,
+    });
+    assert!(!store.accept(stale), "stale generation must be dropped");
+    let message = receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("second message");
+    assert!(store.accept(message));
+    assert_eq!(store.frame().map(|frame| frame.generation), Some(2));
+
+    let mut debounce = Debounce::new(std::time::Duration::from_millis(100));
+    let deadline = debounce.schedule(std::time::Instant::now());
+    assert!(debounce.take_due(deadline));
+
+    drop(sender);
+    handle.join().expect("worker join");
+}
+
+#[test]
+fn worker_renderer_produces_a_full_page_frame_without_a_display() {
+    let request = RenderRequest {
+        generation: 7,
+        input: fixture_url(),
+        css_width: 320,
+        css_height: 180,
+    };
+    let frame = shell::worker::render_document(&request).expect("full-page render");
+    assert_eq!(frame.generation, 7);
+    assert_eq!(frame.width, 320);
+    assert!(
+        frame.height >= 180,
+        "frame should cover at least the viewport (got {})",
+        frame.height
+    );
+    assert_eq!(
+        frame.pixels.len(),
+        frame.width as usize * frame.height as usize
+    );
+    assert!(frame.content_height >= 1);
+    assert!(frame.content_height <= MAX_CONTENT_HEIGHT);
 }
