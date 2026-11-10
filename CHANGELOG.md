@@ -6,6 +6,57 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 12 — layout −14.6 %, byte-identical PNG encoder −30.5 %, advanced JS events and a green CI (2026-11-10)
+
+#### Added
+
+- **Advanced DOM events** (`crates/js`): real `currentTarget` and `eventPhase`
+  1/2/3 (including the capture phase at the target), `once`/`passive`
+  listeners, identity-based `removeEventListener`, inline `onclick`/`onload`/
+  `onerror` handlers on elements/`document`/`window`, `document.close()` no-op,
+  approximate `estimated_heap_bytes()`, `TypeError` when dispatching a non-`Event`,
+  and listener exceptions captured into `last_event_error()` **without aborting
+  the remaining dispatch**. 46→**58 js tests**.
+- **CI runner system dependencies**: `.github/workflows/ci.yml` now installs the
+  Wayland/X11/xcb development packages `winit`/`softbuffer` need (`pkg-config`,
+  `libwayland-dev`, `libxkbcommon-dev`, `libxkbcommon-x11-dev`, `libx11-dev`,
+  `libx11-xcb-dev`, `libxcursor-dev`, `libxi-dev`, `libxrandr-dev`,
+  `libxcb1-dev`, `libxcb-render0-dev`, `libxcb-shape0-dev`,
+  `libxcb-xfixes0-dev`, `libxcb-shm0-dev`, `libxcb-randr0-dev`). The
+  **quality, conformance and MSRV jobs are green**, and `main` /
+  `sprint/robustez-fase4` are synced on GitHub.
+
+#### Changed
+
+- **`LayoutBox.style` is an `Option<Arc<ComputedStyle>>`** (`crates/layout`):
+  `style()` and `with_shared_style` added (`LayoutBox::new` keeps accepting
+  `Option<ComputedStyle>` for compatibility), the anonymous style is derived
+  once per parent and shared by its text/anonymous boxes, and `Space` tokens
+  store a `char` instead of a `String` (~150k allocations removed on the 1 MiB
+  benchmark). `LayoutBox` shrinks **496 → 176 bytes (−65 %)**.
+- **PNG encoder rewrite** (`crates/paint`): filters, LZ77 (precomputed hashes,
+  8-byte match candidate) and Adler-32 computed in fused passes,
+  `png::encode_pixels` avoids the intermediate RGBA buffer and Adler-32 is
+  vectorizable — **−30.5 %** encoding time with a **byte-for-byte identical
+  bitstream** (goldens were not regenerated; dynamic Huffman remains a
+  ratio-focused follow-up).
+- Test suite: **877 tests, 0 failures** (was 862): bench 8, css 57, dom 28,
+  fonts 13+1 doctest, html 60, image 45+1, **js 58**, **layout 135**, net 180,
+  **paint 109**, render 88, shell 83, test_harness 11. fmt, clippy
+  `-D warnings`, `cargo doc`, gate PASS and MSRV 1.88 verified.
+- Phase status: Phase 4 functionally complete, Phase 5 ≈95 %, **Phase 6 ≈80 %**
+  (advanced events done), **Phase 7 ≈65-70 %**.
+
+#### Performance
+
+- `layout/realistic-1mb`: **60.4-62.2 → 51.3-53.5 ms (−14.6 %)**;
+  `pipeline/html-to-png-800x600`: **141-147 → 134-137 ms (−6.3 %)** of a
+  160 ms budget; `render-to-png` **13.30 → 9.24 ms** and showcase wall
+  **34.1 → 29.5 ms** (PNG **−30.5 %**); `html/tag-40k-attrs` stays at ~12.4 ms.
+- Goldens unchanged byte-for-byte: showcase 80,220 B `md5 c95c7eff…`, render
+  basic 15,498 B `md5 7324e851…`, Phase-4 `basic.rgba` `md5 60f8984e…`, PNG
+  fixture 42,853 B `md5 9e957177…`.
+
 ### Round 11 — HTML5 conformance milestone (3,904/3,904 tree), parser-inserted scripts, WP-B and a budgeted event loop (2026-11-10)
 
 #### Added

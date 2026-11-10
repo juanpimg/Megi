@@ -258,12 +258,12 @@ El golden del showcase compara byte a byte (1024×768, **80.220 B**, `md5 c95c7e
 
 `crates/js` embebe **Boa 0.21.1** detrás de la feature `js`, **ON por defecto**; con `--no-default-features` queda un stub std-only (sin Boa) para CI y auditoría. Expone `JsRuntime::eval` sobre un realm persistente, `console.*` capturado, bindings DOM (`document.write`, `getElementById`, `querySelector(All)`, `innerHTML`, `style`, `classList`, árbol/atributos) y un scheduler base (`setTimeout`/microtasks). Anti-DoS: `Budget` mapeado a Boa `RuntimeLimits` (5.000.000 iteraciones de bucle, recursión 512, pila VM 20.480; `Budget::SMALL` para páginas/tests) y side-table `NodeId↔handle` capada a 1.000.000; sin APIs de red/FS. Aún **no integrado en `render`**.
 
-**WP-B (ronda 11)**: `CSSStyleDeclaration` completa, `getComputedStyle` con provider inyectable, `NodeList`, `matches`/`closest`, `insertAdjacentHTML/Text`, identidad de wrappers y `document` como `EventTarget`. **WP-A (ronda 10)**: `EventTarget` con captura+burbuja (`Event`/`CustomEvent`) y **timers con reloj inyectable** (`setTimeout`/`setInterval`/clear, `advance`/`run_until`/`now_ms`/`pending_timers`; `run_tasks` solo vencidos por reloj real).
+**Eventos avanzados (ronda 12)**: `currentTarget`/`eventPhase` (1/2/3) reales, `once`/`passive`, `removeEventListener` por identidad, handlers inline `onclick`/`onload`/`onerror`, `document.close()`, `estimated_heap_bytes()` y excepciones de listeners capturadas. **WP-B (ronda 11)**: `CSSStyleDeclaration` completa, `getComputedStyle` con provider inyectable, `NodeList`, `matches`/`closest`, `insertAdjacentHTML/Text`, identidad de wrappers y `document` como `EventTarget`. **WP-A (ronda 10)**: `EventTarget` con captura+burbuja (`Event`/`CustomEvent`) y **timers con reloj inyectable** (`setTimeout`/`setInterval`/clear, `advance`/`run_until`/`now_ms`/`pending_timers`; `run_tasks` solo vencidos por reloj real).
 
 `render` integra el runtime (WP-6.2 host): descubre los `<script>` clásicos (inline/`src`, en orden; módulos avisados y saltados), los ejecuta con `JsRuntime::with_document` bajo `ScriptingLimits`/`ScriptBudget` (budget por script + total), drena microtasks y hasta 10.000 timers, captura `console` (`scripts_executed/failed/bytes/console`, `timings.scripting`) y **re-renderiza estilos→layout→paint sobre el DOM mutado** (mutaciones visibles en el PNG). Caps: 8 MiB/script, 32 MiB total, 64 scripts; `--no-scripting` desactiva todo y `--no-network` bloquea `src` externos.
 
 ```bash
-cargo test -p js                        # 46 tests (feature js por defecto; WP-A/WP-B/identidad)
+cargo test -p js                        # 58 tests (feature js por defecto; eventos avanzados)
 cargo test -p js --no-default-features  # stub mínimo sin Boa (CI)
 
 # JS del documento ejecutado de extremo a extremo (7 fixtures js_*)
@@ -300,6 +300,17 @@ python3 tools/png_check.py /tmp/backgrounds.png
 cargo test -p render --test backgrounds_tests
 ```
 
+### 2.16d Rendimiento ronda 12: `Arc<ComputedStyle>` en layout y encoder PNG invariante
+
+`LayoutBox.style` es `Option<Arc<ComputedStyle>>` (`style()`, `with_shared_style`, estilo anónimo compartido por padre, tokens `Space` con `char`): `layout/realistic-1mb` **60,4-62,2 → 51,3-53,5 ms (−14,6 %)** y LayoutBox **496→176 B**. El encoder PNG (−30,5 %) fusiona filtros/LZ77/Adler en una pasada y evita el buffer RGBA intermedio, con **bitstream byte a byte idéntico** (goldens sin regenerar).
+
+```bash
+cargo run --release -p bench -- --filter layout    # ~51-53 ms
+cargo run --release -p bench -- --filter paint     # render-to-png 13,30→9,24 ms
+cargo run --release -p bench -- --filter pipeline  # ~134-137 ms
+python3 tools/png_check.py docs/images/showcase.png  # md5 c95c7eff… sin cambios
+```
+
 ### 2.16c Event loop presupuestado y fixtures `js_event_*` (ronda 11)
 
 `crates/render` drena la cola de microtasks/timers con **reloj virtual** (`max_tasks` 10.000, `max_virtual_time` 1000 ms), despacha `DOMContentLoaded` y `load` por el `EventTarget` del documento y hace **un solo re-render** tras el loop; stats `script_*`/`timings.event_loop`. Fixtures: `js_event_timeout.html`, `js_event_timeout_zero.html`, `js_event_interval.html`, `js_event_load.html`, `js_event_domcontentloaded.html`, `js_event_loop.html`.
@@ -332,7 +343,7 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 862 tests, doc y gate de conformidad
+./tools/dev.sh all                     # fmt, clippy, 877 tests, doc y gate de conformidad
 cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0 (árbol 3904/3904, 100 %)
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 
@@ -350,4 +361,4 @@ cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.pn
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Cifras de referencia de esta ronda: **862 tests** (bench 8, css 57, dom 28, fonts 13+1 doctest, html 60, image 45+1 doctest, js 46, layout 133, net 180, paint 108, render 88, shell 83, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists de tokenizer y tree vacías; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+Cifras de referencia de esta ronda: **877 tests** (bench 8, css 57, dom 28, fonts 13+1 doctest, html 60, image 45+1 doctest, js 58, layout 135, net 180, paint 109, render 88, shell 83, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: layout ~51-53 ms, pipeline ~134-137 ms, encoder PNG −30,5 % invariante; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.

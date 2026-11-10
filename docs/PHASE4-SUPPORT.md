@@ -1,8 +1,8 @@
 # Matriz de Soporte de la Fase 4 (`docs/PHASE4-SUPPORT.md`)
 
-**Objetivo de la Fase 4**: renderizar una página HTML real a una imagen **PNG**, completando el modelo de pintado CSS 2.2 y la tipografía. **Estado global**: Fase 4 funcionalmente cerrada y **HITO ronda 11**: árbol HTML5 **3.904/3.904 (100 %)** con gate sin allowlist de tree, además de `render` con event loop presupuestado, `paint`/`render` con hit regions y el pipeline en ~155 ms intercalado.
+**Objetivo de la Fase 4**: renderizar una página HTML real a una imagen **PNG**, completando el modelo de pintado CSS 2.2 y la tipografía. **Estado global**: Fase 4 funcionalmente cerrada, **HITO ronda 11** (árbol HTML5 **3.904/3.904, 100 %**, gate sin allowlist de tree) y **ronda 12 de rendimiento**: layout **−14,6 %** (`LayoutBox.style: Arc<ComputedStyle>`, LayoutBox 496→176 B) y encoder **PNG −30,5 % con bitstream byte a byte idéntico**; pipeline **134-137 ms** (presupuesto 160).
 
-El pipeline `HTML → CSS → layout → display list → PNG` renderiza texto real, tablas (incluido el texto de sus celdas), `inline-block`, cajas reemplazadas, posicionamiento, floats, `overflow` con clip, stacking/`z-index`/`opacity`, decoraciones/marcadores, **imágenes `<img>` con muestreo bilineal**, **`background-image`/`list-style-image`** (bitmap estirado al *padding box*; sin `repeat`/`size`/`position`) y comprime PNG con un DEFLATE propio. Quedan `background-repeat`/`size`/`position`, colores en conflictos de `border-collapse` y block-in-inline. Desde la ronda 9 el pipeline **ejecuta los `<script>` del documento** (`render`, WP-6.2 host); la ronda 10 añade **eventos/timers JS (WP-A)**, hit regions y red avanzada E2E; la ronda 11 añade **WP-B** (CSSOM/`getComputedStyle`/`NodeList`/`matches`/`closest`/identidad), **WP-6.4** (scripts parser-inserted + `document.write` re-tokenizado ⇒ árbol 3.904/3.904) y **event loop presupuestado** en `render` (reloj virtual, lifecycle, timers, re-render único).
+El pipeline `HTML → CSS → layout → display list → PNG` renderiza texto real, tablas (incluido el texto de sus celdas), `inline-block`, cajas reemplazadas, posicionamiento, floats, `overflow` con clip, stacking/`z-index`/`opacity`, decoraciones/marcadores, **imágenes `<img>` con muestreo bilineal**, **`background-image`/`list-style-image`** (bitmap estirado al *padding box*; sin `repeat`/`size`/`position`) y comprime PNG con un DEFLATE propio. Quedan `background-repeat`/`size`/`position`, colores en conflictos de `border-collapse` y block-in-inline. Desde la ronda 9 el pipeline **ejecuta los `<script>` del documento** (`render`, WP-6.2 host); la ronda 10 añade **eventos/timers JS (WP-A)**, hit regions y red avanzada E2E; la ronda 11 añade **WP-B** (CSSOM/`getComputedStyle`/`NodeList`/`matches`/`closest`/identidad), **WP-6.4** (scripts parser-inserted + `document.write` re-tokenizado ⇒ árbol 3.904/3.904) y **event loop presupuestado** en `render` (reloj virtual, lifecycle, timers, re-render único); la **ronda 12** optimiza layout (`Arc<ComputedStyle>` compartido, `Space` sin `String`) y el encoder PNG (filtros fusionados/LZ77 con hashes/`encode_pixels` sin buffer RGBA), con eventos JS avanzados (`currentTarget`/`eventPhase`, `once`/`passive`, `onclick`/`onload`/`onerror`).
 
 - Resultados visuales: [`images/phase4-basic.png`](images/phase4-basic.png) · [`images/render-fixture.png`](images/render-fixture.png).
 - Plan: [`ROADMAP.md`](ROADMAP.md) §«FASE 4»/«FASE 5» · Estado y deuda: [`HANDOFF.md`](HANDOFF.md) · Rendimiento: [`PERFORMANCE.md`](PERFORMANCE.md).
@@ -12,7 +12,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 ---
 
-## 1. Modelo de caja y layout (`crates/layout`, 133 tests)
+## 1. Modelo de caja y layout (`crates/layout`, 135 tests)
 
 | Capacidad CSS 2.2 | Estado | Notas |
 |---|:---:|---|
@@ -43,7 +43,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | `@import` (`Stylesheet.imports`) y **Media Queries completas** (parser/evaluador) | **HECHO** | Integrado en `render` con recursión/dedup/ciclos/media real (WP-5.8) |
 | Query API (`css::query::{query_selector, query_selector_all, matches}` + `try_*`) y `background-image`/`list-style-image` en `ComputedStyle` | **HECHO** | Pintado en paint+render (ronda 8), sin repeat/size/position |
 
-## 3. Pintado (`crates/paint`, 108 tests)
+## 3. Pintado (`crates/paint`, 109 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -55,6 +55,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **Fix de underflow de cobertura parcial** en `fill_rect` (rects <1 px/x fraccional) | **HECHO** | 4 tests de regresión; golden intacto |
 | **`background-image`/`list-style-image`** (`BackgroundImages`, `build_display_list_with_images_and_backgrounds`): bitmap estirado al *padding box* (sustituto de `background-size: auto`) y marcador de lista con imagen | **HECHO** | 9 tests; los caps (32 imágenes/8 MiB/16 MiB) los aplica `render` |
 | **Texto de celdas de tabla** en el pase de contenido inline | **HECHO** | Fix ronda 8: el arm de tablas no descendía a line/text; golden del showcase regenerado |
+| **Encoder PNG −30,5 % (ronda 12)**: filtros fusionados en una pasada, LZ77 con hashes precalculados y match a 8 B, `encode_pixels` sin buffer RGBA intermedio, Adler-32 vectorizable; **bitstream byte a byte idéntico** (PNG 42.853 B `md5 9e957177…`, showcase `md5 c95c7eff…`) | **HECHO** | render-to-PNG 13,30→9,24 ms; goldens sin regenerar; Huffman dinámico queda como follow-up de ratio |
 | **Hit-testing aditivo** (ronda 9): `hit_test`/`hit_test_all` (topmost gana), `HitRegion { rect, node_id, kind }` en orden de pintado con clip, `HitLink`/`find_link_at` (sube a `<a href>`) y builders `build_display_list_with_hit_regions`/`build_display_list_and_hit_regions` | **HECHO** | 11 tests nuevos; APIs clásicas y golden **byte-idénticos**; ronda 10: `render` los construye en `RenderOutput.hit_regions` (+0,6 µs, 121 regiones/80 items) y el shell usa `find_link_at`; granularidad caja/run, sin `pointer-events`/transforms |
 | **Compresión PNG propia** (DEFLATE LZ77+Huffman fijo, zlib/Adler, filtros adaptativos) | **HECHO** | **1.920.813 → 15.498 B (123,9×)**, `md5 7324e851…`, `basic.rgba` idéntico |
 | Painter iterativo con caps (stacking 256, floats 64, items 5M) | **HECHO** | Probado a 20.000 niveles |
@@ -98,7 +99,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, eventos DOM/foco y formularios del host (Fase 7), animaciones, `border-radius`, `box-shadow`, gradientes y medios paginados. JavaScript está en Fase 6 (ver §8); hit-testing y navegación ya existen (rondas 9–10).
 
-## 8. Fase 6: JavaScript (`crates/js`, 46 tests + scripting E2E en `render`/parser)
+## 8. Fase 6: JavaScript (`crates/js`, 58 tests + scripting E2E en `render`/parser)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -107,9 +108,10 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 | **WP-A: eventos y timers (ronda 10)**: `EventTarget` (`addEventListener`/`removeEventListener`/`dispatchEvent`) con captura window→document→ancestros→target y burbuja; `Event`/`CustomEvent` (`bubbles`/`cancelable`/`detail`/`defaultPrevented`, prevent/stop/stopImmediate); timers con **reloj inyectable** (`setTimeout`/`setInterval`/clear, orden `(due, id)`, `advance`/`run_until`/`now_ms`/`pending_timers`; `run_tasks` ejecuta vencidos por reloj real) | **HECHO** | 14 tests nuevos (26 js); límites: sin `onclick`/`once`/`passive`, `currentTarget` null en listener, `removeEventListener` sin identidad |
 | Anti-DoS: `Budget` → Boa `RuntimeLimits` (bucle 5.000.000, recursión 512, pila VM 20.480; `Budget::SMALL` en páginas/tests), sin APIs de red/FS, side-table cap 1.000.000; scheduler base `setTimeout`/microtasks | **HECHO** | Violaciones → `JsError::Budget`; sin event loop completo |
 | **Integración en `render` (WP-6.2 host)**: `ScriptingMode`/`--no-scripting`, `ScriptingLimits`/`ScriptBudget`, descubrimiento y ejecución de scripts post-parseo, caps 8/32 MiB y 64 scripts, microtasks/timers, console/stats y re-render del DOM mutado | **HECHO** | 7 fixtures `js_*`; `js_text.html` 15.876 B `md5 e1da51d4…` vs 15.499 B `md5 53f67e77…` |
-| **WP-B (ronda 11)**: `CSSStyleDeclaration` completa (`cssText`/`length`/`item`/`getPropertyValue`/`setProperty`/`removeProperty`), `getComputedStyle` con provider inyectable, `NodeList` snapshot, `matches`/`closest`, `insertAdjacentHTML`/`Text` e identidad de wrappers; `document` como `EventTarget`; APIs Rust `eval_on_document`/`dispatch_simple_event`/`take_document` | **HECHO** | 46 tests js; Fase 6 ≈75-80 % |
+| **Eventos avanzados (ronda 12)**: `currentTarget` real y `eventPhase` 1/2/3 (capture en el target), `once`/`passive`, `removeEventListener` por identidad, handlers inline `onclick`/`onload`/`onerror`, `document.close()` no-op, `estimated_heap_bytes()` aproximado, dispatch no-`Event` ⇒ `TypeError` y excepciones de listeners capturadas (`last_event_error()`) | **HECHO** | 58 tests js; Fase 6 ≈80 % |
+| **WP-B (ronda 11)**: `CSSStyleDeclaration` completa (`cssText`/`length`/`item`/`getPropertyValue`/`setProperty`/`removeProperty`), `getComputedStyle` con provider inyectable, `NodeList` snapshot, `matches`/`closest`, `insertAdjacentHTML`/`Text` e identidad de wrappers; `document` como `EventTarget`; APIs Rust `eval_on_document`/`dispatch_simple_event`/`take_document` | **HECHO** | Fase 6 ≈80 % |
 | **WP-6.4 (ronda 11)**: hook `html::scripting::{ScriptExecutor, ScriptExecution}`; scripts parser-inserted al `</script>`/EOF y `document.write` **re-tokenizado en la posición actual** (scripts anidados incluidos); externos `src` los ejecuta el host; errores no fatales; camino sin scripting zero-cost | **HECHO** | **árbol 3.904/3.904 (100 %), allowlist de tree vacía** |
-| Pendientes F6: `onclick`/`once`/`passive`, módulos ES/`async`/`defer`, memoria y aislamiento, provider de `getComputedStyle` cableado al pipeline y event loop vivo en el shell | **PENDIENTE** | Fase 6 ≈75-80 % |
+| Pendientes F6: `document.onerror` para errores de scripts, módulos ES/`async`/`defer`, memoria real y aislamiento, provider de `getComputedStyle` cableado al pipeline y event loop vivo en el shell | **PENDIENTE** | Fase 6 ≈80 % |
 
 ## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 83 tests)
 
@@ -128,7 +130,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 ## 10. Verificación de la matriz
 
 ```bash
-./tools/dev.sh all                             # fmt, clippy, 862 tests, doc y gate PASS
+./tools/dev.sh all                             # fmt, clippy, 877 tests, doc y gate PASS
 cargo test -p css -p layout -p paint -p fonts -p dom -p html
 cargo test -p net -p render -p image -p shell
 cargo test -p js
@@ -140,6 +142,8 @@ cargo test -p paint --test hit_testing
 cargo run -p test_harness -- --summary          # gate: árbol 3904/3904 (100 %), 230/230 serializer, 30/30 CSS; exit 0
 cargo test -p render --test event_loop_tests   # event loop presupuestado (6 fixtures js_event_*)
 cargo test -p html --lib scripting             # hook WP-6.4 (scripts parser-inserted)
+cargo run --release -p bench -- --filter layout   # ronda 12: ~51-53 ms, LayoutBox 176 B
+cargo run --release -p bench -- --filter paint    # ronda 12: encoder PNG −30,5 % invariante
 cargo run -p render -- https://example.com/ /tmp/page.png --cookies --origin https://example.com --json   # red avanzada E2E
 cargo run -p shell -- tests/fixtures/render/showcase/index.html              # navegación (clic, Alt+←/→, b/n, r, q)
 cargo run -p render -- tests/fixtures/render/images.html docs/images/images-e2e.png --width 640 --height 400
