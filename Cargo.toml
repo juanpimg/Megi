@@ -7,6 +7,7 @@ members = [
     "crates/layout",
     "crates/fonts",
     "crates/paint",
+    "crates/net",
     "crates/test_harness",
     "crates/bench",
 ]
@@ -26,6 +27,7 @@ css = { path = "crates/css" }
 layout = { path = "crates/layout" }
 fonts = { path = "crates/fonts" }
 paint = { path = "crates/paint" }
+net = { path = "crates/net" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 

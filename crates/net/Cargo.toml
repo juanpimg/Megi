@@ -1,0 +1,11 @@
+[package]
+name = "net"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Megi Engine — Phase 5 network bootstrap: WHATWG URL subset, HTTP/1.1 client, file:// loader, MIME sniffing and an in-memory resource loader (no TLS yet)"
+
+[dependencies]
