@@ -8,8 +8,9 @@
 //!
 //! - Missing/blocked/failed subresources are **non-fatal**: the render yields a
 //!   gray placeholder box (painted by `paint::IMAGE_PLACEHOLDER`) and a warning.
-//! - Only PNG is decoded today (`image::decode`); detected GIF/JPEG/WebP files
-//!   produce a warning and a placeholder, never an error.
+//! - PNG, baseline JPEG and GIF (first frame) are decoded with the in-tree `image`
+//!   crate; detected WebP (and unsupported JPEG variants) produce a warning and a
+//!   placeholder, never an error.
 //! - Defensive caps, configurable through [`crate::RenderOptions`]:
 //!   [`DEFAULT_MAX_IMAGES`] images, [`DEFAULT_MAX_IMAGE_BYTES`] per image and
 //!   [`DEFAULT_MAX_TOTAL_IMAGE_BYTES`] of downloaded image bytes per page.
@@ -172,7 +173,10 @@ pub fn load_images(
             ));
             break;
         }
-        if image::detect_format(&resource.bytes) == image::ImageFormat::Png {
+        if matches!(
+            image::detect_format(&resource.bytes),
+            image::ImageFormat::Png | image::ImageFormat::Jpeg | image::ImageFormat::Gif
+        ) {
             match image::decode(&resource.bytes) {
                 Ok(decoded) => {
                     result.downloaded_bytes += resource.bytes.len();
@@ -208,7 +212,7 @@ pub fn load_images(
             let format = image::detect_format(&resource.bytes);
             result.failed += 1;
             result.warnings.push(format!(
-                "skipping image {url}: unsupported format {format:?} (only PNG and SVG are decoded)"
+                "skipping image {url}: unsupported format {format:?} (only PNG, JPEG, GIF and SVG are decoded)"
             ));
         }
     }

@@ -134,6 +134,18 @@ pub fn adler32(data: &[u8]) -> u32 {
 ///
 /// Any malformed header, DEFLATE error, output-limit hit or Adler-32 mismatch.
 pub fn inflate_zlib(input: &[u8], limits: InflateLimits) -> Result<Vec<u8>, InflateError> {
+    inflate_zlib_with_capacity(input, limits, 0)
+}
+
+/// Like [`inflate_zlib`] but pre-reserves `capacity_hint` output bytes.
+///
+/// PNG knows the exact decompressed size from `IHDR`, so reserving it avoids the
+/// logarithmic `Vec` regrowth (and the multi-megabyte copies it causes for large images).
+pub(crate) fn inflate_zlib_with_capacity(
+    input: &[u8],
+    limits: InflateLimits,
+    capacity_hint: usize,
+) -> Result<Vec<u8>, InflateError> {
     if input.is_empty() {
         return Err(InflateError::EmptyInput);
     }
@@ -155,7 +167,7 @@ pub fn inflate_zlib(input: &[u8], limits: InflateLimits) -> Result<Vec<u8>, Infl
         return Err(InflateError::UnsupportedPresetDictionary);
     }
 
-    let (output, consumed) = inflate_inner(&input[2..], limits)?;
+    let (output, consumed) = inflate_inner(&input[2..], limits, capacity_hint)?;
     let trailer = &input[2 + consumed..];
     if trailer.len() < 4 {
         return Err(InflateError::TruncatedInput);
@@ -173,15 +185,19 @@ pub fn inflate_zlib(input: &[u8], limits: InflateLimits) -> Result<Vec<u8>, Infl
 
 /// Decompresses a raw DEFLATE stream (RFC 1951, no zlib wrapper/checksum).
 pub fn inflate_deflate(input: &[u8], limits: InflateLimits) -> Result<Vec<u8>, InflateError> {
-    let (output, _consumed) = inflate_inner(input, limits)?;
+    let (output, _consumed) = inflate_inner(input, limits, 0)?;
     Ok(output)
 }
 
 /// Decompresses DEFLATE blocks until the final block, returning the output and
 /// the aligned byte offset consumed from `input`.
-fn inflate_inner(input: &[u8], limits: InflateLimits) -> Result<(Vec<u8>, usize), InflateError> {
+fn inflate_inner(
+    input: &[u8],
+    limits: InflateLimits,
+    capacity_hint: usize,
+) -> Result<(Vec<u8>, usize), InflateError> {
     let mut reader = BitReader::new(input);
-    let mut output: Vec<u8> = Vec::new();
+    let mut output: Vec<u8> = Vec::with_capacity(capacity_hint.min(limits.max_output));
 
     loop {
         let final_block = reader.read_bit()? != 0;

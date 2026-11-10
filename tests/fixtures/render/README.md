@@ -37,6 +37,8 @@ network, no JavaScript.
 | `text_transform.html` | R121: `text-transform: uppercase/lowercase/capitalize` applied while shaping (colored paragraphs). |
 | `word_spacing.html` | R121: `word-spacing`/`letter-spacing` on inline text (`one two three`, `spaced letters`, combined). |
 | `white_space.html` | R121: `white-space: normal` vs `pre-wrap` vs `pre-line` with spaces/newlines (colored bands). |
+| `jpeg_gif.html` | R133: `<img>` baseline JPEG (4-quadrant photo), palette GIF and a truncated JPEG (warning + placeholder) plus a JPEG `background-image`. Pixel-tested in `jpeg_gif_tests.rs`. |
+| `assets/photo.jpg` / `assets/blocks.gif` / `assets/bg_photo.jpg` | Synthetic PIL-generated fixtures: phone-style 4:2:0 JPEG photo (64×64), 4-colour GIF (32×32) and a solid JPEG background tile. `assets/corrupt.jpg` is a truncated JPEG for the non-fatal-warning test. |
 | `css_state.html` | R112 dynamic CSS state: seven inputs showing `:checked` (green), `:disabled` (red), `:not(:checked):not(:disabled)` (blue), `:placeholder-shown` (magenta), `data-megi-focused` ⇒ `:focus` (yellow) and default black. Pixel-tested in `css_state_tests.rs`. |
 | `js_text.html` | WP-6.2/6.3: inline classic script changes `textContent` and `style.color` of a paragraph (large red text) after parsing. |
 | `js_create.html` | Inline script calls `createElement` + `appendChild` with a green `style.backgroundColor` box that layout/paint must render. |

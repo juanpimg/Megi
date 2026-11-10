@@ -188,22 +188,29 @@ fn decodes_the_real_pipeline_png_and_matches_the_golden_rgba() {
 }
 
 #[test]
-fn rejects_bad_signature_and_unsupported_formats() {
+fn rejects_bad_signature_and_malformed_headers() {
     assert_eq!(
         decode(b"\x89PNG").unwrap_err(),
         ImageError::InvalidSignature
     );
     assert_eq!(decode(b"").unwrap_err(), ImageError::InvalidSignature);
+    // GIF/JPEG are decodable formats now: truncated headers are typed data errors.
     assert!(matches!(
         decode(b"GIF89a-not-really").unwrap_err(),
-        ImageError::UnsupportedFormat {
-            format: ImageFormat::Gif
-        }
+        ImageError::Truncated { .. }
+            | ImageError::InvalidData { .. }
+            | ImageError::LimitExceeded { .. }
+            | ImageError::InvalidDimensions { .. }
     ));
     assert!(matches!(
         decode(&[0xFF, 0xD8, 0xFF, 0xE0]).unwrap_err(),
+        ImageError::Truncated { .. } | ImageError::InvalidData { .. }
+    ));
+    // WebP is still detected but not decoded.
+    assert!(matches!(
+        decode(b"RIFF\0\0\0\0WEBPVP8 ").unwrap_err(),
         ImageError::UnsupportedFormat {
-            format: ImageFormat::Jpeg
+            format: ImageFormat::WebP
         }
     ));
 }

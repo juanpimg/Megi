@@ -329,7 +329,8 @@ fn non_png_background_is_skipped_with_a_warning() {
     routes.insert("/page.html", RouteResponse::html(page));
     routes.insert(
         "/bad.gif",
-        RouteResponse::ok("image/png", b"GIF89a....not-a-png".to_vec()),
+        // WebP is detected but still unsupported (PNG/JPEG/GIF decode now).
+        RouteResponse::ok("image/webp", b"RIFF\0\0\0\0WEBPVP8 ".to_vec()),
     );
     let server = TestServer::spawn(routes, 2);
     let output = render_url(&server.url("/page.html"), &options()).expect("render page");

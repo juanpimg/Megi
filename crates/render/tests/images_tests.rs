@@ -243,27 +243,28 @@ fn test_missing_http_image_warns_and_uses_placeholder() {
 }
 
 #[test]
-fn test_non_png_image_is_a_warning_not_an_error() {
-    // JPEG signature: detected but unsupported by the in-tree decoder.
-    let jpeg = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, b'J', b'F', b'I', b'F'];
+fn test_unsupported_webp_image_is_a_warning_not_an_error() {
+    // WebP is detected by the decoder but is still unsupported (JPEG/GIF now decode).
+    let webp = b"RIFF\0\0\0\0WEBPVP8 ".to_vec();
     let page = "<!doctype html><html><body style=\"margin:0\">\
-                <img src=\"/photo.jpg\" style=\"width:20px;height:20px\"></body></html>";
+                <img src=\"/photo.webp\" style=\"width:20px;height:20px\"></body></html>";
     let mut routes = HashMap::new();
     routes.insert(
         "/page.html".to_string(),
         Response::ok("text/html", page.as_bytes().to_vec()),
     );
-    routes.insert("/photo.jpg".to_string(), Response::ok("image/jpeg", jpeg));
+    routes.insert("/photo.webp".to_string(), Response::ok("image/webp", webp));
     let server = TestServer::spawn(routes, 2);
 
-    let output = render_url(&server.url("/page.html"), &options()).expect("non-PNG is not fatal");
+    let output =
+        render_url(&server.url("/page.html"), &options()).expect("unsupported is not fatal");
     assert_eq!(output.stats.images_failed, 1);
     assert!(
         output
             .stats
             .warnings
             .iter()
-            .any(|warning| warning.contains("skipping image")),
+            .any(|warning| warning.contains("unsupported format") && warning.contains("WebP")),
         "{:?}",
         output.stats.warnings
     );

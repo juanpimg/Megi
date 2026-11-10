@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>JPEG/GIF fixture</title>
+<style>
+html, body { margin: 0; padding: 0; background-color: #ffffff; }
+img { display: block; }
+.photo { width: 64px; height: 64px; }
+.blocks { width: 32px; height: 32px; }
+.corrupt { width: 32px; height: 32px; }
+.bg { width: 100px; height: 50px; background-color: #000000;
+      background-image: url("assets/bg_photo.jpg"); }
+.ok { width: 20px; height: 20px; background-color: #ff00ff; }
+</style></head>
+<body>
+<img class="photo" src="assets/photo.jpg" alt="jpeg photo">
+<img class="blocks" src="assets/blocks.gif" alt="gif blocks">
+<img class="corrupt" src="assets/corrupt.jpg" alt="corrupt jpeg">
+<div class="bg"></div>
+<div class="ok"></div>
+</body></html>

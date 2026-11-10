@@ -21,7 +21,7 @@
 //! reach the configured [`PngLimits`].
 
 use crate::crc32::crc32_update;
-use crate::inflate::{InflateLimits, inflate_zlib};
+use crate::inflate::{InflateLimits, inflate_zlib_with_capacity};
 use crate::rgba_len;
 use crate::{ImageError, PNG_SIGNATURE, RgbaImage};
 
@@ -252,7 +252,11 @@ pub fn decode_png(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageEr
     }
 
     let expected = filtered_len(header)?;
-    let inflated = inflate_zlib(&idat, InflateLimits::new(expected.saturating_add(64)))?;
+    let inflated = inflate_zlib_with_capacity(
+        &idat,
+        InflateLimits::new(expected.saturating_add(64)),
+        expected,
+    )?;
     if inflated.len() != expected {
         return Err(ImageError::InvalidData {
             reason: "decompressed size does not match the scanline layout",
