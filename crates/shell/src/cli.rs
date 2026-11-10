@@ -45,6 +45,9 @@ options:
 
 window keys:
   left click on a link       navigate (history push)
+  left click on a form control: focus; type to edit text (Backspace deletes)
+  Tab                        next form control; Enter never submits; Esc blurs
+  Enter                      ignored (no backend: forms never submit); Esc blurs
   Alt+Left / Backspace / b   back;  Alt+Right / n   forward
   Ctrl+= / Ctrl++ / = / +    zoom in;  Ctrl+- / -   zoom out;  Ctrl+0 / 0   reset zoom
   Ctrl+L                     print the current URL

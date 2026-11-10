@@ -28,6 +28,8 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use std::sync::Arc;
+
 use crate::convert::pixmap_to_0rgb;
 use crate::links::{LinkRegion, collect_link_regions};
 use crate::scroll;
@@ -47,10 +49,15 @@ pub struct RenderRequest {
     pub css_width: u32,
     /// CSS viewport height (`physical / scale`, clamped to the render cap).
     pub css_height: u32,
+    /// When set, relative resources resolve against this URL (used when `input` is a
+    /// patched-DOM `data:` snapshot rendered for form editing).
+    pub base_override: Option<String>,
+    /// Whether page scripts run for this request (disabled for patched-DOM snapshots).
+    pub scripting: bool,
 }
 
 /// A finished page frame in CSS resolution (`0RGB`, row-major).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct RenderFrame {
     /// Generation of the request that produced this frame.
     pub generation: u64,
@@ -80,10 +87,14 @@ pub struct RenderFrame {
     pub warnings: usize,
     /// Script errors (exceptions/budget exhaustions) reported by the renderer.
     pub script_errors: usize,
+    /// Rendered form controls (page CSS coordinates) for the shell editor.
+    pub forms: Vec<crate::forms::FormControl>,
+    /// DOM snapshot of this frame (patched and re-rendered by the form editor).
+    pub document: Arc<dom::Document>,
 }
 
 /// Message sent from the worker back to the event loop.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum WorkerMessage {
     /// A frame was rendered successfully.
     Frame(RenderFrame),
@@ -163,6 +174,30 @@ impl FrameStore {
             input: input.to_owned(),
             css_width,
             css_height,
+            base_override: None,
+            scripting: true,
+        }
+    }
+
+    /// Starts a render for a **patched-DOM data: snapshot** (form editing): scripts are
+    /// disabled (the snapshot already contains their effects) and relative resources are
+    /// resolved against `base_override` (the real page URL).
+    pub fn begin_patched_request(
+        &mut self,
+        input: &str,
+        css_width: u32,
+        css_height: u32,
+        base_override: Option<&str>,
+    ) -> RenderRequest {
+        self.generation = self.generation.saturating_add(1);
+        self.pending = true;
+        RenderRequest {
+            generation: self.generation,
+            input: input.to_owned(),
+            css_width,
+            css_height,
+            base_override: base_override.map(str::to_owned),
+            scripting: false,
         }
     }
 
@@ -314,6 +349,9 @@ pub fn render_document_with_options(
     let links = collect_link_regions(&output);
     let title = document_title(&output.document);
     let document_url = output.document_url.as_str();
+    let mut document = output.document;
+    crate::forms::assign_form_ids(&mut document);
+    let forms = crate::forms::collect_controls(&document, &output.layout);
     let scripts_executed = output.stats.scripts_executed;
     let script_timers_pending = output.stats.script_timers_pending;
     let warnings = output.stats.warnings.len();
@@ -338,6 +376,8 @@ pub fn render_document_with_options(
         script_timers_pending,
         warnings,
         script_errors,
+        forms,
+        document: Arc::new(document),
     })
 }
 
@@ -355,6 +395,12 @@ fn render_view(
     })?;
     let mut options = base_options.clone();
     options.viewport = viewport;
+    if let Some(base) = &request.base_override {
+        options.base_override = Some(base.clone());
+    }
+    if !request.scripting {
+        options.scripting = render::ScriptingMode::Disabled;
+    }
     render::render_url(&request.input, &options).map_err(|error| error.to_string())
 }
 
@@ -378,6 +424,8 @@ mod unit_tests {
             script_timers_pending: 0,
             warnings: 0,
             script_errors: 0,
+            forms: Vec::new(),
+            document: Arc::new(dom::Document::new()),
         }
     }
 
@@ -469,13 +517,10 @@ mod unit_tests {
         let message = receiver
             .recv_timeout(Duration::from_secs(5))
             .expect("message");
-        assert_eq!(
-            message,
-            WorkerMessage::Failed {
-                generation: 1,
-                message: "fail 1".to_string()
-            }
-        );
+        assert!(matches!(
+            &message,
+            WorkerMessage::Failed { generation: 1, message } if message == "fail 1"
+        ));
         assert!(store.accept(message));
         assert_eq!(store.error(), Some("fail 1"));
         drop(sender);

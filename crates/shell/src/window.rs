@@ -70,6 +70,7 @@ use winit::window::{Window, WindowId};
 
 use crate::convert::{WHITE_0RGB, expected_buffer_len};
 use crate::error::ShellError;
+use crate::forms::{self, FocusState, FormControl, TextEdit};
 use crate::links::{LinkRegion, link_url_at, physical_to_page};
 use crate::navigation::{NavigationOutcome, NavigationState};
 use crate::present;
@@ -219,6 +220,16 @@ struct WindowApp {
     frame_warnings: usize,
     /// Script errors of the frame on screen.
     frame_script_errors: usize,
+    /// Form controls of the frame on screen (page CSS coordinates).
+    forms: Vec<FormControl>,
+    /// Focus model over `forms`.
+    focus: FocusState,
+    /// Text editor for the focused text control (`None` for buttons/checkboxes).
+    editor: Option<TextEdit>,
+    /// DOM snapshot of the frame on screen (source for editing re-renders).
+    document: Option<Arc<dom::Document>>,
+    /// Pending button id whose pressed state must be released after the next frame.
+    release_button: Option<u32>,
 }
 
 impl WindowApp {
@@ -268,6 +279,11 @@ impl WindowApp {
             frame_timers_pending: 0,
             frame_warnings: 0,
             frame_script_errors: 0,
+            forms: Vec::new(),
+            focus: FocusState::new(),
+            editor: None,
+            document: None,
+            release_button: None,
         }
     }
 
@@ -343,6 +359,10 @@ impl WindowApp {
         self.frame_timers_pending = 0;
         self.frame_warnings = 0;
         self.frame_script_errors = 0;
+        self.forms.clear();
+        self.focus.blur();
+        self.editor = None;
+        self.document = None;
         self.doc_title = None;
         self.scroll = ScrollState::new(1, self.metrics.css_height);
         self.update_title();
@@ -393,6 +413,10 @@ impl WindowApp {
             self.scale_factor,
             self.scroll.offset(),
         );
+        if let Some(index) = crate::forms::control_at(&self.forms, x, y) {
+            self.form_click(index);
+            return;
+        }
         let current = self.nav.current().cloned();
         match link_url_at(current.as_ref(), &self.links, x, y) {
             Ok(Some(url)) => self.navigate_to(url),
@@ -432,6 +456,18 @@ impl WindowApp {
                     self.frame_timers_pending = frame.script_timers_pending;
                     self.frame_warnings = frame.warnings;
                     self.frame_script_errors = frame.script_errors;
+                    self.forms = frame.forms.clone();
+                    self.document = Some(Arc::clone(&frame.document));
+                    // A patched-DOM render has a data: document URL: keep the real page URL
+                    // in history/`input` (only store redirects for normal renders).
+                    let patched_render = frame.document_url.starts_with("data:");
+                    if patched_render {
+                        // Focus was re-created from the fresh control list; nothing to sync.
+                    } else {
+                        self.focus = FocusState::new();
+                        self.editor = None;
+                        self.release_button = None;
+                    }
                     self.scroll.set_content_height(frame.content_height);
                     // Auto-refresh only when the page ran scripts and left timers pending;
                     // one-shot: the next frame re-arms it or clears it (no loops otherwise).
@@ -444,7 +480,8 @@ impl WindowApp {
                         self.refresh.clear();
                     }
                     // Server redirects: the final URL replaces the requested history entry.
-                    if let Ok(final_url) = net::Url::parse(&frame.document_url)
+                    if !patched_render
+                        && let Ok(final_url) = net::Url::parse(&frame.document_url)
                         && self.nav.current() != Some(&final_url)
                         && self.nav.replace_current(final_url.clone())
                     {
@@ -465,6 +502,10 @@ impl WindowApp {
             self.update_title();
             if let Some(window) = &self.window {
                 window.request_redraw();
+            }
+            // Release a pressed button visual state once its frame is on screen.
+            if let Some(form_id) = self.release_button.take() {
+                self.apply_form_patch(Some(form_id), None, None, false);
             }
         }
         applied
@@ -546,6 +587,134 @@ impl WindowApp {
             println!("{url}");
         } else {
             println!("{}", self.input);
+        }
+    }
+
+    /// Focuses/clicks a form control: text fields open the editor, checkboxes/radios toggle
+    /// `checked`, buttons flash their pressed state. Disabled controls are ignored.
+    fn form_click(&mut self, index: usize) {
+        let Some(control) = self.forms.get(index).cloned() else {
+            return;
+        };
+        if control.disabled || !self.focus.focus(index, self.forms.len()) {
+            return;
+        }
+        if control.kind.is_text_editable() {
+            self.editor = Some(TextEdit::new(&control.value));
+            self.apply_form_patch(Some(control.form_id), None, None, false);
+        } else if control.kind.is_checkable() {
+            self.editor = None;
+            self.apply_form_patch(Some(control.form_id), None, Some(!control.checked), false);
+        } else if control.kind.is_button() {
+            self.editor = None;
+            self.apply_form_patch(Some(control.form_id), None, None, true);
+            self.release_button = Some(control.form_id);
+        } else {
+            self.editor = None;
+            self.apply_form_patch(Some(control.form_id), None, None, false);
+        }
+    }
+
+    /// Patches the current DOM snapshot (value/checked/focus/active) and re-renders it as an
+    /// inline `data:` document with the original page URL as resource base and scripts
+    /// disabled (the snapshot already contains their effects).
+    fn apply_form_patch(
+        &mut self,
+        form_id: Option<u32>,
+        value: Option<&str>,
+        checked: Option<bool>,
+        active: bool,
+    ) {
+        let Some(document) = self.document.clone() else {
+            return;
+        };
+        let Some(sender) = self.request_sender.as_ref() else {
+            return;
+        };
+        let focused = self.focus.focused().is_some();
+        let target = form_id.or_else(|| {
+            self.focus
+                .focused()
+                .and_then(|index| self.forms.get(index))
+                .map(|control| control.form_id)
+        });
+        let Some(target) = target else {
+            return;
+        };
+        let mut patched = (*document).clone();
+        forms::patch_control(&mut patched, target, value, checked, focused, active);
+        let snapshot = forms::snapshot_data_url(&patched);
+        let base = self.nav.current_url();
+        let request = self.store.begin_patched_request(
+            &snapshot,
+            self.metrics.css_width,
+            self.metrics.css_height,
+            base.as_deref(),
+        );
+        let _ = sender.send(request);
+        self.document = Some(Arc::new(patched));
+        self.update_title();
+    }
+
+    /// Handles typing/Tab/Escape while a form control is focused; returns `true` when the key
+    /// was consumed.
+    fn handle_form_key(&mut self, key: &Key, ctrl_pressed: bool, alt_pressed: bool) -> bool {
+        if matches!(key, Key::Named(NamedKey::Tab)) && !self.forms.is_empty() {
+            self.focus.next(self.forms.len());
+            self.editor = self
+                .focus
+                .focused()
+                .and_then(|index| self.forms.get(index))
+                .filter(|control| control.kind.is_text_editable())
+                .map(|control| TextEdit::new(&control.value));
+            if let Some(index) = self.focus.focused()
+                && let Some(control) = self.forms.get(index).cloned()
+            {
+                self.apply_form_patch(Some(control.form_id), None, None, false);
+            }
+            return true;
+        }
+        if matches!(key, Key::Named(NamedKey::Escape)) && self.focus.focused().is_some() {
+            self.focus.blur();
+            self.editor = None;
+            // Clearing focus from every control: reuse the previously focused id.
+            if let Some(control) = self.forms.first().cloned() {
+                self.apply_form_patch(Some(control.form_id), None, None, false);
+            }
+            return true;
+        }
+        if ctrl_pressed || alt_pressed {
+            return false;
+        }
+        let Some(editor) = self.editor.as_mut() else {
+            return false;
+        };
+        match key {
+            Key::Character(text) => {
+                if !editor.insert(text) {
+                    return true;
+                }
+                let value = editor.value().to_owned();
+                self.apply_form_patch(None, Some(&value), None, false);
+                true
+            }
+            Key::Named(NamedKey::Backspace) => {
+                if editor.backspace() {
+                    let value = editor.value().to_owned();
+                    self.apply_form_patch(None, Some(&value), None, false);
+                }
+                true
+            }
+            Key::Named(NamedKey::Enter) => true, // no backend: Enter never submits
+            Key::Named(NamedKey::ArrowLeft) => {
+                editor.move_caret(false);
+                true
+            }
+            Key::Named(NamedKey::ArrowRight) => {
+                editor.move_caret(true);
+                true
+            }
+            _ => false,
         }
     }
 
@@ -701,7 +870,12 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                     self.print_current_url();
                     return;
                 }
-                if self.handle_zoom_key(&event.logical_key) {
+                if (ctrl_pressed || self.editor.is_none())
+                    && self.handle_zoom_key(&event.logical_key)
+                {
+                    return;
+                }
+                if self.handle_form_key(&event.logical_key, ctrl_pressed, alt_pressed) {
                     return;
                 }
                 match event.logical_key.as_ref() {

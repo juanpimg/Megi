@@ -66,6 +66,12 @@
 //!   ([`refresh`]).
 //! - **Status feedback**: the title shows `page — zoom% — scroll%` plus warning/script-error
 //!   counters; `Ctrl+L` prints the current URL to stdout (there is no address bar yet).
+//! - **Forms (WP-7.7)**: UA-styled inputs/textarea/select/button/checkbox/radio render as
+//!   CSS boxes ([`forms`]); clicking focuses a control, typing edits its value, Backspace
+//!   deletes, Tab cycles focus, checkboxes/radios toggle their `checked` attribute, buttons
+//!   flash a pressed state, and `Enter` never submits (no backend). Edits patch the DOM
+//!   snapshot and re-render it as an inline `data:` document with the original page as
+//!   resource base (scripts disabled while editing — see [`forms`] limits).
 //! - **Input**: mouse wheel/touchpad scroll, `↑`/`↓`, `PageUp`/`PageDown`, `Home`/`End`,
 //!   `q`/`Esc`/close quit; right/middle click ignored.
 //! - **Errors** produce a white frame, a `Megi — error` title and stderr text; failed
@@ -73,7 +79,9 @@
 //!
 //! ## What it does not do yet
 //!
-//! - No tabs, downloads, forms or address bar; `Ctrl+L` only prints the URL. JS runs in
+//! - No tabs, downloads or address bar; `Ctrl+L` only prints the URL. Forms have no
+//!   validation/backend/JS handlers, no caret blink or selection ranges, and `<select>` has
+//!   no dropdown (its first option is painted). JS runs in
 //!   `render` (page scripts, virtual-time event loop) but the shell does not expose a JS
 //!   console or bookmarking; link clicks are the only navigation trigger and
 //!   `javascript:`/`mailto:` hrefs are no-ops.
@@ -107,6 +115,7 @@
 pub mod cli;
 pub mod convert;
 pub mod error;
+pub mod forms;
 pub mod headless;
 pub mod links;
 pub mod navigation;
@@ -122,6 +131,10 @@ pub mod zoom;
 pub use cli::{CliArgs, LaunchMode, finish_args, parse_args, parse_cli};
 pub use convert::{PIXEL_FORMAT, expected_buffer_len, pixmap_to_0rgb};
 pub use error::ShellError;
+pub use forms::{
+    ACTIVE_ATTR, FOCUS_ATTR, FORM_ID_ATTR, FocusState, FormControl, FormControlKind, TextEdit,
+    assign_form_ids, collect_controls, control_at, patch_control, snapshot_data_url,
+};
 pub use headless::{
     ScreenshotInfo, render_target, render_target_with_options, save_screenshot, screenshot,
     screenshot_with_options,

@@ -10,6 +10,7 @@ description = "Megi Engine — Phase 7 desktop shell: winit window + softbuffer 
 
 [dependencies]
 dom.workspace = true
+html.workspace = true
 layout.workspace = true
 render.workspace = true
 paint.workspace = true

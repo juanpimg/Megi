@@ -228,6 +228,8 @@ fn worker_channel_applies_only_the_latest_generation() {
                 script_timers_pending: 0,
                 warnings: 0,
                 script_errors: 0,
+                forms: Vec::new(),
+                document: std::sync::Arc::new(dom::Document::new()),
             })
         },
         || {},
@@ -256,6 +258,8 @@ fn worker_channel_applies_only_the_latest_generation() {
         script_timers_pending: 0,
         warnings: 0,
         script_errors: 0,
+        forms: Vec::new(),
+        document: std::sync::Arc::new(dom::Document::new()),
     });
     assert!(!store.accept(stale), "stale generation must be dropped");
     let message = receiver
@@ -279,6 +283,8 @@ fn worker_renderer_produces_a_full_page_frame_without_a_display() {
         input: fixture_url(),
         css_width: 320,
         css_height: 180,
+        base_override: None,
+        scripting: true,
     };
     let frame = shell::worker::render_document(&request).expect("full-page render");
     assert_eq!(frame.generation, 7);
@@ -305,6 +311,8 @@ fn worker_render_document_exposes_links_title_and_final_url() {
             .to_string(),
         css_width: 320,
         css_height: 120,
+        base_override: None,
+        scripting: true,
     };
     let frame = shell::worker::render_document(&request).expect("render");
     assert_eq!(frame.title.as_deref(), Some("Links Page"));
@@ -388,6 +396,8 @@ fn file_fixture_links_are_hittable_and_navigable() {
         input: input.clone(),
         css_width: 480,
         css_height: 320,
+        base_override: None,
+        scripting: true,
     };
     let frame = shell::worker::render_document(&request).expect("render fixture");
     assert_eq!(frame.title.as_deref(), Some("Links Fixture"));
@@ -538,6 +548,8 @@ fn pending_timers_enable_auto_refresh_and_renders_are_deterministic() {
         input,
         css_width: 200,
         css_height: 100,
+        base_override: None,
+        scripting: true,
     };
     let first = shell::worker::render_document(&request).expect("first render");
     let mut second_request = request.clone();
@@ -566,4 +578,130 @@ fn pending_timers_enable_auto_refresh_and_renders_are_deterministic() {
         !refresh.should_refresh(0, first.script_timers_pending),
         "pages without executed scripts must not refresh"
     );
+}
+
+fn forms_fixture_url() -> String {
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/forms.html");
+    shell::cli::normalize_input(&path.display().to_string()).expect("forms fixture URL")
+}
+
+#[test]
+fn forms_fixture_renders_visible_control_borders() {
+    let output = shell::render_target(&forms_fixture_url(), 640, 480).expect("forms render");
+    assert!(matches!(output.dimensions(), (640, 480)));
+    // The UA stylesheet draws 1px #767676 borders and #efefef buttons. 1px edges are
+    // antialiased, so count the grayscale bands around those colors instead of exact RGB.
+    let mut border_pixels = 0usize;
+    let mut button_pixels = 0usize;
+    for pixel in &output.pixmap.pixels {
+        let (r, g, b) = (pixel.r, pixel.g, pixel.b);
+        let gray = r == g && g == b;
+        if gray && (0x50..=0xA0).contains(&r) {
+            border_pixels += 1;
+        }
+        if gray && (0xD0..=0xF5).contains(&r) {
+            button_pixels += 1;
+        }
+    }
+    assert!(
+        border_pixels > 300,
+        "expected input/fieldset borders, got {border_pixels}"
+    );
+    assert!(
+        button_pixels > 500,
+        "expected button backgrounds, got {button_pixels}"
+    );
+
+    let request = RenderRequest {
+        generation: 1,
+        input: forms_fixture_url(),
+        css_width: 640,
+        css_height: 480,
+        base_override: None,
+        scripting: true,
+    };
+    let frame = shell::worker::render_document(&request).expect("worker forms render");
+    assert!(!frame.forms.is_empty(), "frame must expose form controls");
+    assert!(
+        frame
+            .forms
+            .iter()
+            .any(|control| control.kind == shell::FormControlKind::Textarea)
+    );
+    assert!(frame.forms.iter().any(|control| control.kind.is_button()));
+}
+
+#[test]
+fn patched_dom_snapshot_re_renders_edited_values() {
+    let request = RenderRequest {
+        generation: 1,
+        input: forms_fixture_url(),
+        css_width: 320,
+        css_height: 240,
+        base_override: None,
+        scripting: true,
+    };
+    let frame = shell::worker::render_document(&request).expect("initial render");
+    let text = frame
+        .forms
+        .iter()
+        .find(|control| control.kind == shell::FormControlKind::TextInput)
+        .cloned()
+        .expect("text input");
+    let mut document = (*frame.document).clone();
+    shell::forms::assign_form_ids(&mut document);
+    assert!(shell::forms::patch_control(
+        &mut document,
+        text.form_id,
+        Some("Edited"),
+        None,
+        true,
+        false
+    ));
+    let snapshot = shell::forms::snapshot_data_url(&document);
+    let patched_request = RenderRequest {
+        generation: 2,
+        input: snapshot,
+        css_width: 320,
+        css_height: 240,
+        base_override: Some(forms_fixture_url()),
+        scripting: false,
+    };
+    let patched = shell::worker::render_document(&patched_request).expect("patched render");
+    let edited = patched
+        .forms
+        .iter()
+        .find(|control| control.form_id == text.form_id)
+        .expect("same stable form id after re-render");
+    assert_eq!(edited.value, "Edited");
+    assert!(
+        patched
+            .document
+            .get_elements_by_tag_name("input")
+            .iter()
+            .any(|id| patched
+                .document
+                .node(*id)
+                .as_element()
+                .is_some_and(|element| element.get_attribute(shell::FOCUS_ATTR).is_some()))
+    );
+    // The focus ring is a UA-style border (`[data-megi-focused]`, asserted by the css tests);
+    // the widget-less rasterizer paints no form text, so the visible state of the frame is
+    // the control box plus its focus border. The DOM-level assertions above are the contract.
+    let _ = frame;
+}
+
+#[test]
+fn form_editor_state_and_cli_help_are_documented() {
+    let mut focus = shell::FocusState::new();
+    assert!(focus.next(3));
+    assert_eq!(focus.focused(), Some(0));
+    let mut edit = shell::TextEdit::new("ab");
+    assert!(edit.insert("c"));
+    assert_eq!(edit.value(), "abc");
+    assert!(edit.backspace());
+    assert_eq!(edit.value(), "ab");
+    assert!(shell::cli::USAGE.contains("Tab"));
+    assert!(shell::cli::USAGE.contains("form control")); // documented control
 }
