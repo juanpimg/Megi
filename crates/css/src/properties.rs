@@ -189,6 +189,9 @@ impl Length {
 
     pub fn parse(s: &str, font_size: f32, root_font_size: f32) -> Option<Self> {
         let s = s.trim().to_ascii_lowercase();
+        if s.starts_with("calc(") {
+            return crate::calc::evaluate_length(s.as_str(), font_size, root_font_size);
+        }
         if s == "auto" {
             return Some(Self::Auto);
         }
@@ -1410,11 +1413,27 @@ pub struct ComputedStyle {
     /// the box as an inline-level flex container when this flag is set.
     pub is_inline_flex: bool,
 
+    // CSS Grid MVP (none of these properties are inherited).
+    /// `grid-template-columns` tracks (empty = `none`).
+    pub grid_template_columns: crate::grid::GridTemplate,
+    /// `grid-template-rows` tracks (empty = `none`).
+    pub grid_template_rows: crate::grid::GridTemplate,
+    /// `grid-auto-rows` tracks for implicit rows (empty = `auto`).
+    pub grid_auto_rows: crate::grid::GridTemplate,
+    /// `justify-items` (initial `stretch`).
+    pub justify_items: crate::flex::AlignItems,
+    /// `justify-self` (initial `auto`).
+    pub justify_self: crate::flex::AlignSelf,
+    /// `true` when authored as `display: inline-grid`.
+    pub is_inline_grid: bool,
+
     // Typography
     pub font_size: f32,
     pub font_weight: u16,
     pub font_style: FontStyle,
     pub font_family: String,
+    /// Custom properties (`--x`) computed/inherited for this element, as raw token values.
+    pub custom_properties: std::collections::HashMap<String, String>,
     pub line_height: Option<f32>,
     /// Unitless `<number>` factor when `line-height` was declared as a number (`1.5`).
     ///
@@ -1516,10 +1535,18 @@ impl ComputedStyle {
             flex_basis: Length::Auto,
             is_inline_flex: false,
 
+            grid_template_columns: crate::grid::GridTemplate::default(),
+            grid_template_rows: crate::grid::GridTemplate::default(),
+            grid_auto_rows: crate::grid::GridTemplate::default(),
+            justify_items: crate::flex::AlignItems::Stretch,
+            justify_self: crate::flex::AlignSelf::Auto,
+            is_inline_grid: false,
+
             font_size: 16.0,
             font_weight: 400,
             font_style: FontStyle::Normal,
             font_family: "sans-serif".to_string(),
+            custom_properties: std::collections::HashMap::new(),
             line_height: None,
             line_height_factor: None,
             text_align: TextAlign::Left,
@@ -1540,9 +1567,15 @@ impl ComputedStyle {
         parent: Option<&ComputedStyle>,
         root_style: Option<&ComputedStyle>,
     ) -> Self {
-        let entries: Vec<(&str, &Declaration)> = cascaded
+        // Custom properties + var() substitution happen before longhand computation; the
+        // returned map is deterministic (BTreeMap) so resolution is reproducible.
+        let (resolved_declarations, custom_properties) = crate::custom::resolve_declarations(
+            cascaded,
+            parent.map(|style| &style.custom_properties),
+        );
+        let entries: Vec<(&str, &Declaration)> = resolved_declarations
             .iter()
-            .map(|(name, declaration)| (name.as_str(), *declaration))
+            .map(|(name, declaration)| (name.as_str(), declaration))
             .collect();
         let root_font_size = root_style.map_or(16.0, |r| r.font_size);
         let parent_font_size = parent.map_or(16.0, |p| p.font_size);
@@ -1679,6 +1712,15 @@ impl ComputedStyle {
                 .trim()
                 .eq_ignore_ascii_case("inline-flex")
         });
+        let computed_grid = crate::grid::compute_grid(&entries, font_size, root_font_size);
+        // `inline-grid` has no dedicated `Display` variant (keeps exhaustive matches
+        // in other crates stable): it computes as an inline block plus a flag, like
+        // `inline-flex`. The layout crate dispatches the grid algorithm from the flag.
+        let display = if computed_grid.is_inline_grid {
+            Display::InlineBlock
+        } else {
+            display
+        };
 
         let background_color = Self::compute_background_color(&entries, color);
         // Images are not inherited; `none`, gradients and invalid values compute to `None`.
@@ -1820,10 +1862,18 @@ impl ComputedStyle {
             flex_shrink: computed_flex.flex_shrink,
             flex_basis: computed_flex.flex_basis,
             is_inline_flex,
+
+            grid_template_columns: computed_grid.template_columns,
+            grid_template_rows: computed_grid.template_rows,
+            grid_auto_rows: computed_grid.auto_rows,
+            justify_items: computed_grid.justify_items,
+            justify_self: computed_grid.justify_self,
+            is_inline_grid: computed_grid.is_inline_grid,
             font_size,
             font_weight,
             font_style,
             font_family,
+            custom_properties,
             line_height,
             line_height_factor,
             text_align,
@@ -2063,7 +2113,8 @@ impl ComputedStyle {
         let size_decl = find_declaration(entries, "background-size");
         let position_decl = find_declaration(entries, "background-position");
         let origin_decl = find_declaration(entries, "background-origin");
-        let clip_decl = find_declaration(entries, "background-clip");
+        let clip_decl = find_declaration(entries, "background-clip")
+            .or_else(|| find_declaration(entries, "-webkit-background-clip"));
         let attachment_decl = find_declaration(entries, "background-attachment");
         let shorthand = find_declaration(entries, "background");
 
@@ -2086,6 +2137,7 @@ impl ComputedStyle {
             || position_decl.is_some()
             || origin_decl.is_some()
             || clip_decl.is_some()
+            || find_declaration(entries, "-webkit-background-clip").is_some()
             || attachment_decl.is_some()
             || shorthand.is_some()
             || layers_count > 1;

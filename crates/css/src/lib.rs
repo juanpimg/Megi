@@ -10,9 +10,12 @@
 
 #![forbid(unsafe_code)]
 
+pub mod calc;
 pub mod cascade;
 pub mod component_value;
+pub mod custom;
 mod flex;
+mod grid;
 pub mod media;
 pub mod parser;
 pub mod properties;
@@ -20,17 +23,22 @@ pub mod query;
 pub mod rule;
 pub mod selector;
 pub mod shorthand;
+pub mod state;
 pub mod token;
 pub mod tokenizer;
 pub mod user_agent;
 
+pub use calc::{
+    CalcContext, CalcValue, evaluate as evaluate_calc, with_viewport as with_calc_viewport,
+};
 pub use cascade::{
     CascadeOriginImportance, CompiledRule, MatchedDeclaration, Origin, StyleCollection,
     resolve_cascaded_properties, resolve_document_styles, resolve_document_styles_with_media,
-    resolve_document_styles_with_viewport,
+    resolve_document_styles_with_media_and_state, resolve_document_styles_with_viewport,
 };
 pub use component_value::{ComponentValue, FunctionCall, SimpleBlock};
 pub use flex::{AlignItems, AlignSelf, FlexDirection, FlexWrap, JustifyContent};
+pub use grid::{GridTemplate, TrackSize};
 pub use media::{
     MediaCondition, MediaContext, MediaFeature, MediaQualifier, MediaQuery, MediaQueryList,
     MediaType, Orientation, evaluate as evaluate_media, parse_media_query_list,
@@ -44,8 +52,8 @@ pub use properties::{
     TableLayout, TextAlign, TextDecoration, TextShadow, VerticalAlign, Visibility, WhiteSpace,
 };
 pub use query::{
-    SelectorParseError, matches, query_selector, query_selector_all, try_matches,
-    try_query_selector, try_query_selector_all,
+    SelectorParseError, matches, matches_with_state, query_selector, query_selector_all,
+    try_matches, try_matches_with_state, try_query_selector, try_query_selector_all,
 };
 pub use rule::{AtRule, Declaration, FontFaceRule, ImportRule, Rule, StyleRule, Stylesheet};
 pub use selector::{
@@ -53,6 +61,7 @@ pub use selector::{
     PseudoClass, RelativeSelector, SelectorList, Specificity, parse_selectors,
 };
 pub use shorthand::expand_declarations;
+pub use state::{StateContext, StateGuard, current as current_state, with_state};
 pub use token::{CssToken, HashType, NumberType};
 pub use tokenizer::{CssTokenizer, preprocess_css_codepoints, preprocess_css_input, tokenize};
 pub use user_agent::{

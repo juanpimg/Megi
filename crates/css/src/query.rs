@@ -98,6 +98,31 @@ pub fn try_query_selector_all(
         .collect())
 }
 
+/// Returns whether `node` matches `selector_list` under an explicit interaction state.
+///
+/// Dynamic pseudo-classes (`:focus`, `:hover`, `:checked`, ...) are evaluated against the
+/// supplied [`crate::StateContext`] plus the `data-megi-*`/form attributes; see
+/// [`crate::state`] for the mapping.
+pub fn matches_with_state(
+    doc: &Document,
+    node: NodeId,
+    selector_list: &str,
+    state: &crate::StateContext,
+) -> bool {
+    try_matches_with_state(doc, node, selector_list, state).unwrap_or(false)
+}
+
+/// Fallible [`matches_with_state()`]: returns `Err` when the selector list is invalid.
+pub fn try_matches_with_state(
+    doc: &Document,
+    node: NodeId,
+    selector_list: &str,
+    state: &crate::StateContext,
+) -> Result<bool, SelectorParseError> {
+    let selectors = parse_selector_list(selector_list)?;
+    Ok(is_element(doc, node) && crate::state::with_state(*state, || selectors.matches(doc, node)))
+}
+
 /// Fallible [`matches()`]: returns `Err` when the selector list is invalid.
 pub fn try_matches(
     doc: &Document,

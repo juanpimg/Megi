@@ -203,6 +203,28 @@ pub enum PseudoClass {
     Not(SelectorList),
     /// `:has(<relative-selector-list>)`; basic descendant/child/sibling support.
     Has(Vec<RelativeSelector>),
+    /// `:focus` — host state or `data-megi-focused`.
+    Focus,
+    /// `:focus-visible` — focus-visible state or `data-megi-focus-visible`, falling back to `:focus`.
+    FocusVisible,
+    /// `:hover` — host state or `data-megi-hover` (no pointer in headless rendering).
+    Hover,
+    /// `:active` — host state or `data-megi-active` (no pointer in headless rendering).
+    Active,
+    /// `:checked` — `checked` attribute on form controls or `data-megi-checked`.
+    Checked,
+    /// `:disabled` — disabled form control (`disabled`/`data-megi-disabled`).
+    Disabled,
+    /// `:enabled` — form control that is not disabled.
+    Enabled,
+    /// `:read-only` — non-editable element or read-only form control.
+    ReadOnly,
+    /// `:read-write` — editable, non-read-only form control.
+    ReadWrite,
+    /// `:required` — form control with a `required` attribute.
+    Required,
+    /// `:placeholder-shown` — editable control with a placeholder and an empty value.
+    PlaceholderShown,
     /// Known pseudo-class/pseudo-element whose state this engine cannot observe.
     Never,
 }
@@ -229,6 +251,17 @@ impl PseudoClass {
         match self {
             // In HTML, the document element is the root node's child.
             Self::Root => doc.node(node_id).parent == Some(doc.root()),
+            Self::Focus => crate::state::is_focused(doc, node_id),
+            Self::FocusVisible => crate::state::is_focus_visible(doc, node_id),
+            Self::Hover => crate::state::is_hovered(doc, node_id),
+            Self::Active => crate::state::is_active(doc, node_id),
+            Self::Checked => crate::state::is_checked(doc, node_id),
+            Self::Disabled => crate::state::is_disabled(doc, node_id),
+            Self::Enabled => crate::state::is_enabled(doc, node_id),
+            Self::ReadOnly => crate::state::is_read_only(doc, node_id),
+            Self::ReadWrite => crate::state::is_read_write(doc, node_id),
+            Self::Required => crate::state::is_required(doc, node_id),
+            Self::PlaceholderShown => crate::state::is_placeholder_shown(doc, node_id),
             Self::Never => false,
             Self::Is(selectors) | Self::Where(selectors) => selectors.matches(doc, node_id),
             Self::Not(selectors) => !selectors.matches(doc, node_id),
@@ -1090,6 +1123,17 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
                     "where" => PseudoClass::Where(parse_selector_argument(&argument)?),
                     "not" => PseudoClass::Not(parse_selector_argument(&argument)?),
                     "has" => PseudoClass::Has(parse_relative_selector_list(argument.as_deref()?)?),
+                    "focus" if argument.is_none() => PseudoClass::Focus,
+                    "focus-visible" if argument.is_none() => PseudoClass::FocusVisible,
+                    "hover" if argument.is_none() => PseudoClass::Hover,
+                    "active" if argument.is_none() => PseudoClass::Active,
+                    "checked" if argument.is_none() => PseudoClass::Checked,
+                    "disabled" if argument.is_none() => PseudoClass::Disabled,
+                    "enabled" if argument.is_none() => PseudoClass::Enabled,
+                    "read-only" if argument.is_none() => PseudoClass::ReadOnly,
+                    "read-write" if argument.is_none() => PseudoClass::ReadWrite,
+                    "required" if argument.is_none() => PseudoClass::Required,
+                    "placeholder-shown" if argument.is_none() => PseudoClass::PlaceholderShown,
                     // Legacy single-colon pseudo-element syntax (`:before`, `:first-line`, ...).
                     "before" | "after" | "first-line" | "first-letter" if argument.is_none() => {
                         PseudoClass::Never

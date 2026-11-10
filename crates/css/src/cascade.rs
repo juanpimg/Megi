@@ -476,6 +476,21 @@ fn resolve_cascaded_properties_from_candidates<'a>(
         .collect()
 }
 
+/// Resolves computed styles with an explicit interaction [`crate::StateContext`] for dynamic
+/// pseudo-classes (`:focus`, `:hover`, `:checked`, ...). `render`/shell should call this so a
+/// focused/edited form re-resolves with the host state; static documents keep using
+/// [`resolve_document_styles_with_media`].
+pub fn resolve_document_styles_with_media_and_state(
+    doc: &Document,
+    author_css: Option<&str>,
+    media: MediaContext,
+    state: &crate::StateContext,
+) -> HashMap<NodeId, crate::properties::ComputedStyle> {
+    crate::state::with_state(*state, || {
+        resolve_document_styles_with_media(doc, author_css, media)
+    })
+}
+
 /// Resolves computed styles for all elements in the DOM document.
 ///
 /// Pre-loads the default WHATWG HTML User-Agent stylesheet, then compiles and cascades

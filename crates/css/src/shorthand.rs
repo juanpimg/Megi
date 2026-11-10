@@ -78,6 +78,11 @@ fn expand_properties(declaration: &Declaration) -> Option<Vec<(String, String)>>
     if value.is_empty() {
         return None;
     }
+    // `var()` substitution happens at computed-value time (see `crate::custom`): keep the
+    // declaration unexpanded here so it survives the cascade, then expand after substitution.
+    if value.to_ascii_lowercase().contains("var(") {
+        return None;
+    }
     match declaration.name.as_str() {
         "border" => Some(expand_border(value, None).unwrap_or_default()),
         "border-top" => Some(expand_border(value, Some("top")).unwrap_or_default()),
