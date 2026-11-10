@@ -469,9 +469,13 @@ fn fetch_once(
         .set_write_timeout(Some(options.read_timeout))
         .map_err(FetchError::Io)?;
 
-    let mut stream = match url.scheme() {
-        Scheme::Http => Transport::Plain(tcp_stream),
-        Scheme::Https => connect_tls(host, tcp_stream, options)?,
+    let (mut stream, h2_negotiated) = match url.scheme() {
+        Scheme::Http => (Transport::Plain(tcp_stream), false),
+        Scheme::Https => {
+            let (transport, negotiated_h2) =
+                connect_tls(host, tcp_stream, options, method == "GET")?;
+            (transport, negotiated_h2)
+        }
         Scheme::File | Scheme::Data => {
             return Err(FetchError::UnsupportedScheme(
                 url.scheme().as_str().to_owned(),
@@ -483,20 +487,19 @@ fn fetch_once(
         Some(port) => format!("{}:{port}", url.host()),
         None => url.host().to_owned(),
     };
-    let mut request = format!(
-        "{method} {} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\n",
-        url.request_target(),
-        options.user_agent,
-    );
+    // Request headers shared by HTTP/1.1 and HTTP/2. Connection-specific headers
+    // (`Host`, `Connection`) are added only on the HTTP/1.1 path; the HTTP/2 client
+    // derives the `:authority` pseudo-header from `host_header` and drops
+    // connection-specific names (RFC 9113 §8.2.2).
+    let mut request_headers: Vec<(String, String)> = vec![
+        ("User-Agent".to_owned(), options.user_agent.clone()),
+        ("Accept".to_owned(), "*/*".to_owned()),
+    ];
     if let Some(value) = options.accept_encoding.header_value() {
-        request.push_str("Accept-Encoding: ");
-        request.push_str(value);
-        request.push_str("\r\n");
+        request_headers.push(("Accept-Encoding".to_owned(), value.to_owned()));
     }
     if let Some(origin) = options.origin.as_deref() {
-        request.push_str("Origin: ");
-        request.push_str(origin);
-        request.push_str("\r\n");
+        request_headers.push(("Origin".to_owned(), origin.to_owned()));
     }
     // Cookie `SameSite` context: an explicit non-default `request_site` wins; otherwise a
     // configured referrer source lets us classify subresource requests automatically.
@@ -511,30 +514,56 @@ fn fetch_once(
         && let Some(jar) = &options.cookie_jar
         && let Some(cookie_header) = lock_jar(jar).header_for_url_with_site(url, request_site)
     {
-        request.push_str("Cookie: ");
-        request.push_str(&cookie_header);
-        request.push_str("\r\n");
+        request_headers.push(("Cookie".to_owned(), cookie_header));
     }
     if let Some(range) = &options.range {
-        request.push_str("Range: ");
-        request.push_str(&range.header_value());
-        request.push_str("\r\n");
+        request_headers.push(("Range".to_owned(), range.header_value()));
     }
     if let Some(referrer) = &options.referrer
         && let Some(referer) = referrer.referer_for(url)
     {
-        request.push_str("Referer: ");
-        request.push_str(&referer);
-        request.push_str("\r\n");
+        request_headers.push(("Referer".to_owned(), referer));
     }
-    request.push_str("Connection: close\r\n");
     for (name, value) in extra_headers {
+        request_headers.push((name.to_string(), value.to_string()));
+    }
+
+    if h2_negotiated {
+        // TLS ALPN selected `h2`; use the HTTP/2 client and keep the same
+        // RawResponse surface so redirects/cache/cookies/CORS/compression above
+        // this function are unchanged.
+        let limits = crate::h2::client::Limits {
+            max_frame_size: crate::h2::MAX_FRAME_SIZE,
+            max_header_block: options.max_header_bytes,
+            max_body: options.max_response_bytes,
+        };
+        let response = crate::h2::client::get(
+            &mut stream,
+            "https",
+            &host_header,
+            &url.request_target(),
+            &request_headers,
+            &limits,
+        )?;
+        return Ok(RawResponse {
+            status: response.status,
+            reason: response.reason,
+            headers: response.headers,
+            body: response.body,
+        });
+    }
+
+    let mut request = format!(
+        "{method} {} HTTP/1.1\r\nHost: {host_header}\r\n",
+        url.request_target(),
+    );
+    for (name, value) in &request_headers {
         request.push_str(name);
         request.push_str(": ");
         request.push_str(value);
         request.push_str("\r\n");
     }
-    request.push_str("\r\n");
+    request.push_str("Connection: close\r\n\r\n");
     stream.write_all(request.as_bytes()).map_err(map_io_error)?;
     stream.flush().map_err(map_io_error)?;
 
@@ -551,23 +580,43 @@ fn fetch_once(
 }
 
 /// Establishes the TLS layer over an already-connected TCP stream.
+///
+/// Advertises ALPN `h2` (then `http/1.1`) when `advertise_h2` is set (plain `GET`
+/// requests), drives the handshake to completion and reports whether the server
+/// negotiated HTTP/2. The HTTP/1.1 path is unchanged when `h2` is not selected.
 #[cfg(feature = "tls")]
 fn connect_tls(
     host: &str,
-    tcp_stream: TcpStream,
+    mut tcp_stream: TcpStream,
     options: &FetchOptions,
-) -> Result<Transport, FetchError> {
+    advertise_h2: bool,
+) -> Result<(Transport, bool), FetchError> {
     let config = match &options.tls_config {
-        Some(config) => Arc::clone(config),
-        None => default_tls_config()?,
+        Some(config) => (**config).clone(),
+        None => (*default_tls_config()?).clone(),
+    };
+    let mut config = config;
+    config.alpn_protocols = if advertise_h2 {
+        vec![b"h2".to_vec(), b"http/1.1".to_vec()]
+    } else {
+        vec![b"http/1.1".to_vec()]
     };
     let server_name = rustls::pki_types::ServerName::try_from(host.to_owned())
         .map_err(|error| FetchError::Tls(format!("invalid TLS server name `{host}`: {error}")))?;
-    let connection = rustls::ClientConnection::new(config, server_name)
+    let mut connection = rustls::ClientConnection::new(Arc::new(config), server_name)
         .map_err(|error| FetchError::Tls(format!("cannot create TLS client: {error}")))?;
-    Ok(Transport::Tls(Box::new(rustls::StreamOwned::new(
-        connection, tcp_stream,
-    ))))
+    // Complete the handshake eagerly so ALPN (`h2` vs `http/1.1`) is known before
+    // choosing the request protocol; the socket read/write timeouts are already set.
+    while connection.is_handshaking() {
+        connection
+            .complete_io(&mut tcp_stream)
+            .map_err(map_io_error)?;
+    }
+    let negotiate_h2 = connection.alpn_protocol() == Some(b"h2".as_slice());
+    Ok((
+        Transport::Tls(Box::new(rustls::StreamOwned::new(connection, tcp_stream))),
+        negotiate_h2,
+    ))
 }
 
 /// Without the `tls` feature, `https:` URLs fail with a typed, actionable error.
@@ -576,7 +625,8 @@ fn connect_tls(
     _host: &str,
     _tcp_stream: TcpStream,
     _options: &FetchOptions,
-) -> Result<Transport, FetchError> {
+    _advertise_h2: bool,
+) -> Result<(Transport, bool), FetchError> {
     Err(FetchError::TlsUnsupported)
 }
 

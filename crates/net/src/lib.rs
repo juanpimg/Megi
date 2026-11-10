@@ -23,6 +23,12 @@
 //! - **[`mime`]**: WHATWG MIME Sniffing §5 subset (HTML sniffing, common image/document
 //!   signatures, SVG/XML/CSS/JSON heuristics, binary-vs-text fallback) and
 //!   [`mime::resolve_content_type`].
+//! - **[`h2`]**: **HTTP/2 MVP client** (feature `tls`): ALPN `h2` negotiation on
+//!   the existing `rustls` transport, HPACK (static/dynamic tables, Huffman),
+//!   framing (HEADERS/CONTINUATION, DATA, SETTINGS, WINDOW_UPDATE, PING,
+//!   RST_STREAM, GOAWAY), one GET at a time, with a transparent fallback to the
+//!   HTTP/1.1 client when the server negotiates `http/1.1` (or for non-GET
+//!   methods). Limits: no multiplexing, no server push, no full flow control.
 //! - **[`loader`]**: [`ResourceLoader`] with the HTTP cache (freshness, conditional
 //!   revalidation, `Vary`) that dispatches to `http`/`https`/`file`/`data`, returning
 //!   [`loader::Resource`] values (URL + bytes + resolved content type).
@@ -51,7 +57,10 @@
 //!
 //! ## Deliberate limitations / next steps (Phase 5 continuation)
 //!
-//! - No HTTP/2, no `Referer` policy, no cookie `SameSite`/Public-Suffix-List handling,
+//! - HTTP/2 is an MVP (`h2`): one request at a time, no server push, no
+//!   prioritization and only the initial/stream window updates needed for
+//!   responses up to the response-size cap. No `Referer` policy, no cookie
+//!   `SameSite`/Public-Suffix-List handling,
 //!   and only the CORS subset described in [`cors`] (no preflight caching, no
 //!   `Access-Control-Expose-Headers`).
 //! - Compression covers only single `gzip`/`deflate` codings (no `br`/`zstd`, no stacked
@@ -107,6 +116,7 @@ pub mod cors;
 pub mod data;
 pub mod error;
 pub mod file;
+pub mod h2;
 pub mod http;
 pub mod loader;
 pub mod mime;

@@ -71,6 +71,10 @@ pub enum FetchError {
     Timeout,
     /// The HTTP response is malformed (status line, header syntax, chunk framing, ...).
     InvalidResponse(String),
+    /// An HTTP/2 protocol error: bad frame, invalid HPACK block, unexpected stream
+    /// state, GOAWAY/RST_STREAM with an error code, or a connection that ended
+    /// before the response was complete.
+    Http2(String),
     /// The response headers exceeded [`crate::http::FetchOptions::max_header_bytes`].
     HeadersTooLarge,
     /// The response body exceeded [`crate::http::FetchOptions::max_response_bytes`].
@@ -135,6 +139,7 @@ impl fmt::Display for FetchError {
             Self::Io(err) => write!(f, "HTTP I/O error: {err}"),
             Self::Timeout => write!(f, "network operation timed out"),
             Self::InvalidResponse(reason) => write!(f, "malformed HTTP response: {reason}"),
+            Self::Http2(reason) => write!(f, "HTTP/2 error: {reason}"),
             Self::HeadersTooLarge => write!(f, "HTTP response headers are too large"),
             Self::ResponseTooLarge => write!(f, "HTTP response body is too large"),
             Self::BodyIncomplete => write!(f, "HTTP response body ended prematurely"),
