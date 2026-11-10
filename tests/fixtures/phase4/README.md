@@ -25,7 +25,13 @@ The fixture exercises, besides the WP-4.1 pipeline features:
   corners;
 - antialiased rectangle edges (fractional layout coordinates produce partial
   coverage pixels instead of round-out over-paint, WP-4.11);
-- real DejaVu Sans text with per-fragment baselines (WP-4.4).
+- real DejaVu Sans text with per-fragment baselines (WP-4.4);
+- list markers (`ul`/`li` discs, WP-4.9) and a `text-decoration: underline`
+  link (WP-4.9);
+- a `position: relative` stage with two `position: absolute` children
+  (`#under` with `z-index: 1`, `#badge` with `z-index: 3` and
+  `opacity: 0.7`): the badge must paint over the in-flow/under content and
+  blend with it as a single offscreen opacity group (WP-4.6).
 
 ## Regenerating the golden image
 

@@ -18,6 +18,8 @@
 //!
 //! See `crates/paint/examples/html_to_png.rs` for the end-to-end driver.
 
+#![forbid(unsafe_code)]
+
 pub mod display_list;
 pub mod painter;
 pub mod png;
@@ -25,7 +27,7 @@ pub mod rasterizer;
 pub mod style;
 
 pub use css::Color;
-pub use display_list::{BorderSide, DisplayItem, DisplayList};
+pub use display_list::{BorderSide, DisplayItem, DisplayList, MarkerKind};
 pub use painter::build_display_list;
 pub use png::encode_rgba;
 pub use rasterizer::{

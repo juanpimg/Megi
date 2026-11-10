@@ -47,7 +47,7 @@ use css::Color;
 use fonts::{Font, FontDatabase, FontStyle as FontsFontStyle, GlyphMask, ShapedRun};
 use layout::Rect;
 
-use crate::display_list::{BorderSide, DisplayItem, DisplayList};
+use crate::display_list::{BorderSide, DisplayItem, DisplayList, MarkerKind};
 use crate::png;
 
 /// Upper bound on the number of pixels a [`Pixmap`] may allocate (67.1 M
@@ -270,6 +270,59 @@ impl Pixmap {
                             blend_over(self.pixels[row + x as usize], src);
                     }
                 }
+            }
+        }
+    }
+
+    /// Paints a CSS list marker (`disc`, `circle` or `square`) with analytic
+    /// 4×4 supersampled coverage, clipped and antialiased.
+    fn draw_marker(&mut self, rect: Rect, color: Color, kind: MarkerKind) {
+        if color.a == 0 || rect.width <= 0.0 || rect.height <= 0.0 {
+            return;
+        }
+        let Some(clip) = self.clip_rect() else {
+            return;
+        };
+        let x0 = rect.x.max(clip.x).max(0.0).floor() as i64;
+        let y0 = rect.y.max(clip.y).max(0.0).floor() as i64;
+        let x1 = ((rect.x + rect.width)
+            .min(clip.x + clip.width)
+            .min(self.width as f32))
+        .ceil() as i64;
+        let y1 = ((rect.y + rect.height)
+            .min(clip.y + clip.height)
+            .min(self.height as f32))
+        .ceil() as i64;
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
+        let stride = self.width as usize;
+        // 4x4 point sampling per pixel: deterministic and exact for the small
+        // bullet geometry (markers are only a few px across).
+        const SAMPLES: u32 = 4;
+        let sample_offset = |index: u32| (index as f32 + 0.5) / SAMPLES as f32;
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let mut hits = 0u32;
+                for sy in 0..SAMPLES {
+                    let py = y as f32 + sample_offset(sy);
+                    for sx in 0..SAMPLES {
+                        let px = x as f32 + sample_offset(sx);
+                        if marker_sample_inside(rect, px, py, kind) {
+                            hits += 1;
+                        }
+                    }
+                }
+                if hits == 0 {
+                    continue;
+                }
+                let coverage = (hits * 256) / (SAMPLES * SAMPLES);
+                let alpha = (u32::from(color.a) * u32::from(coverage as u16) + 127) / 255;
+                if alpha == 0 {
+                    continue;
+                }
+                let idx = y as usize * stride + x as usize;
+                self.pixels[idx] = blend_over(self.pixels[idx], with_alpha(color, alpha));
             }
         }
     }
@@ -1295,13 +1348,30 @@ pub fn rasterize_display_list_with_font_database_and_stats(
         Pixmap::new_with_background(width, height, config.background)
     };
     let mut cache = TextCache::default();
+    paint_items(&mut pixmap, &dl.items, &mut cache, font_database, 0.0, 0.0);
+    (pixmap, cache.stats)
+}
 
-    for item in dl {
+/// Paints `items` into `pixmap`, translating every rectangle by `(dx, dy)`.
+///
+/// The translation exists for [`DisplayItem::OpacityGroup`]: the group's items
+/// are rasterized into a transparent offscreen buffer whose origin is the
+/// group's top-left corner. Clips and nested groups are relative to the same
+/// translated coordinate space, so the function recurses naturally.
+fn paint_items(
+    pixmap: &mut Pixmap,
+    items: &[DisplayItem],
+    cache: &mut TextCache,
+    font_database: &FontDatabase,
+    dx: f32,
+    dy: f32,
+) {
+    for item in items {
         match item {
             // Clip bookkeeping must always run, even when the clip rectangle is
             // currently off-screen, so the PushClip/PopClip pairs stay balanced.
             DisplayItem::PushClip { rect } => {
-                pixmap.push_clip(*rect);
+                pixmap.push_clip(shift(*rect, dx, dy));
                 continue;
             }
             DisplayItem::PopClip => {
@@ -1313,22 +1383,30 @@ pub fn rasterize_display_list_with_font_database_and_stats(
 
         // Cull items that cannot contribute pixels (fully outside the current
         // clip/viewport); clipping is otherwise handled per primitive.
-        if let Some(bounds) = item.bounds()
-            && let Some(clip) = pixmap.clip_rect()
-            && (bounds.x >= clip.x + clip.width
-                || bounds.y >= clip.y + clip.height
-                || bounds.x + bounds.width <= clip.x
-                || bounds.y + bounds.height <= clip.y)
-        {
-            continue;
+        if let Some(bounds) = item.bounds() {
+            let bounds = shift(bounds, dx, dy);
+            if let Some(clip) = pixmap.clip_rect()
+                && (bounds.x >= clip.x + clip.width
+                    || bounds.y >= clip.y + clip.height
+                    || bounds.x + bounds.width <= clip.x
+                    || bounds.y + bounds.height <= clip.y)
+            {
+                continue;
+            }
         }
 
         match item {
             DisplayItem::SolidColor { rect, color } => {
-                pixmap.fill_rect(*rect, *color);
+                pixmap.fill_rect(shift(*rect, dx, dy), *color);
             }
             DisplayItem::Border { rect, sides } => {
-                pixmap.draw_border(*rect, *sides);
+                pixmap.draw_border(shift(*rect, dx, dy), *sides);
+            }
+            DisplayItem::TextDecoration { rect, color } => {
+                pixmap.fill_rect(shift(*rect, dx, dy), *color);
+            }
+            DisplayItem::Marker { rect, color, kind } => {
+                pixmap.draw_marker(shift(*rect, dx, dy), *color, *kind);
             }
             DisplayItem::Text {
                 text,
@@ -1342,11 +1420,11 @@ pub fn rasterize_display_list_with_font_database_and_stats(
                 baseline,
             } => {
                 let rendered = draw_text_cached(
-                    &mut pixmap,
-                    &mut cache,
+                    pixmap,
+                    cache,
                     font_database,
                     text,
-                    *rect,
+                    shift(*rect, dx, dy),
                     *color,
                     *font_size,
                     font_family,
@@ -1355,14 +1433,122 @@ pub fn rasterize_display_list_with_font_database_and_stats(
                     *baseline,
                 );
                 if !rendered {
-                    pixmap.draw_text_run_fallback(text, *rect, *color, *font_size, *advance);
+                    pixmap.draw_text_run_fallback(
+                        text,
+                        shift(*rect, dx, dy),
+                        *color,
+                        *font_size,
+                        *advance,
+                    );
                 }
+            }
+            DisplayItem::OpacityGroup {
+                rect,
+                opacity,
+                items,
+            } => {
+                paint_opacity_group(pixmap, *rect, *opacity, items, cache, font_database, dx, dy);
             }
             DisplayItem::PushClip { .. } | DisplayItem::PopClip => unreachable!("handled above"),
         }
     }
+}
 
-    (pixmap, cache.stats)
+/// Returns `rect` translated by `(dx, dy)`.
+fn shift(rect: Rect, dx: f32, dy: f32) -> Rect {
+    Rect::new(rect.x + dx, rect.y + dy, rect.width, rect.height)
+}
+
+/// Rasterizes an opacity group offscreen and composites it over `pixmap`.
+#[allow(clippy::too_many_arguments)]
+fn paint_opacity_group(
+    pixmap: &mut Pixmap,
+    rect: Rect,
+    opacity: f32,
+    items: &[DisplayItem],
+    cache: &mut TextCache,
+    font_database: &FontDatabase,
+    dx: f32,
+    dy: f32,
+) {
+    let opacity = opacity.clamp(0.0, 1.0);
+    if opacity <= 0.0 || items.is_empty() {
+        return;
+    }
+    let rect = shift(rect, dx, dy);
+    let Some(clip) = pixmap.clip_rect() else {
+        return;
+    };
+    let x0 = rect.x.max(clip.x).max(0.0).floor() as i64;
+    let y0 = rect.y.max(clip.y).max(0.0).floor() as i64;
+    let x1 = ((rect.x + rect.width)
+        .min(clip.x + clip.width)
+        .min(pixmap.width as f32))
+    .ceil() as i64;
+    let y1 = ((rect.y + rect.height)
+        .min(clip.y + clip.height)
+        .min(pixmap.height as f32))
+    .ceil() as i64;
+    if x0 >= x1 || y0 >= y1 {
+        return;
+    }
+    let (bx0, by0) = (x0 as i32, y0 as i32);
+    let (width, height) = ((x1 - x0) as u32, (y1 - y0) as u32);
+
+    // Transparent offscreen buffer; the group contents are translated so that
+    // (bx0, by0) becomes (0, 0). The group's own clip is not inherited: the
+    // composite step below clips to the destination clip intersection.
+    let mut offscreen = Pixmap::new(width, height);
+    paint_items(
+        &mut offscreen,
+        items,
+        cache,
+        font_database,
+        dx - bx0 as f32,
+        dy - by0 as f32,
+    );
+
+    // Composite the layer with the extra opacity factor.
+    let stride = pixmap.width as usize;
+    let off_stride = offscreen.width as usize;
+    for y in 0..height {
+        let dst_row = (by0 as usize + y as usize) * stride + bx0 as usize;
+        let src_row = y as usize * off_stride;
+        for x in 0..width {
+            let src = offscreen.pixels[src_row + x as usize];
+            if src.a == 0 {
+                continue;
+            }
+            let alpha = (f32::from(src.a) * opacity).round().clamp(0.0, 255.0) as u8;
+            if alpha == 0 {
+                continue;
+            }
+            let dst = pixmap.pixels[dst_row + x as usize];
+            pixmap.pixels[dst_row + x as usize] =
+                blend_over(dst, with_alpha(src, u32::from(alpha)));
+        }
+    }
+}
+
+/// Point-in-marker test for the 4×4 supersampled marker rasterizer.
+fn marker_sample_inside(rect: Rect, px: f32, py: f32, kind: MarkerKind) -> bool {
+    let cx = rect.x + rect.width / 2.0;
+    let cy = rect.y + rect.height / 2.0;
+    let rx = rect.width / 2.0;
+    let ry = rect.height / 2.0;
+    if rx <= 0.0 || ry <= 0.0 {
+        return false;
+    }
+    let nx = (px - cx) / rx;
+    let ny = (py - cy) / ry;
+    let distance_squared = nx * nx + ny * ny;
+    match kind {
+        MarkerKind::Square => {
+            px >= rect.x && px <= rect.x + rect.width && py >= rect.y && py <= rect.y + rect.height
+        }
+        MarkerKind::Disc => distance_squared <= 1.0,
+        MarkerKind::Circle => (0.55 * 0.55..=1.0).contains(&distance_squared),
+    }
 }
 
 /// Returns the process-wide bundled [`FontDatabase`] (DejaVu Sans regular and

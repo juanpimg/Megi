@@ -53,6 +53,17 @@ impl BorderSide {
     }
 }
 
+/// Shape of a CSS list marker (CSS 2.2 §12.5, audit WP-4.9).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MarkerKind {
+    /// Filled circle/ellipse (`list-style-type: disc`).
+    Disc,
+    /// Hollow circle (`list-style-type: circle`).
+    Circle,
+    /// Filled square (`list-style-type: square`).
+    Square,
+}
+
 /// A single atomic painting instruction.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DisplayItem {
@@ -88,6 +99,27 @@ pub enum DisplayItem {
         /// Distance from `rect.y` to the glyph baseline, in px.
         baseline: f32,
     },
+    /// A thin solid rectangle for a text decoration line (underline,
+    /// overline or line-through), painted with antialiased edges.
+    TextDecoration { rect: Rect, color: Color },
+    /// A CSS list marker (bullet/box glyph) painted with analytic coverage.
+    Marker {
+        rect: Rect,
+        color: Color,
+        kind: MarkerKind,
+    },
+    /// An offscreen compositing group.
+    ///
+    /// The nested `items` are rasterized into a transparent buffer covering
+    /// `rect` and then composited over the destination with the extra `opacity`
+    /// factor (CSS 2.1 §12.5 / css-color-3 §3.2: `opacity < 1` creates a
+    /// stacking context). Grouping matters: overlapping children contribute
+    /// once to the final alpha instead of compositing individually.
+    OpacityGroup {
+        rect: Rect,
+        opacity: f32,
+        items: Vec<DisplayItem>,
+    },
     /// Pushes a rectangular clipping boundary onto the clip stack.
     PushClip { rect: Rect },
     /// Pops the top clipping boundary from the clip stack.
@@ -102,8 +134,12 @@ impl DisplayItem {
     /// these bounds only avoid touching pixels for fully off-screen items.
     pub fn bounds(&self) -> Option<Rect> {
         match self {
-            Self::SolidColor { rect, .. } | Self::Border { rect, .. } => Some(*rect),
-            Self::Text { rect, .. } => Some(*rect),
+            Self::SolidColor { rect, .. }
+            | Self::Border { rect, .. }
+            | Self::Text { rect, .. }
+            | Self::TextDecoration { rect, .. }
+            | Self::Marker { rect, .. }
+            | Self::OpacityGroup { rect, .. } => Some(*rect),
             Self::PushClip { rect } => Some(*rect),
             Self::PopClip => None,
         }
