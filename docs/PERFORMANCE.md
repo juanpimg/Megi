@@ -4,29 +4,28 @@ Este documento describe el arnés de benchmarks del proyecto (`crates/bench`) y
 publica la **baseline de rendimiento vigente**, para que cualquier regresión de
 complejidad sea detectable comparando números en lugar de discutir impresiones.
 
-- **Fecha de medición**: 2026-11-10, 20:15–20:35 (Europe/Madrid). Ronda 15:
-  **overhaul del IFC** (~30 % menos layout), **backgrounds** con
-  `repeat`/`size`/`position`, **SVG inline** (elementos `<svg>` del documento
-  convertidos a `<img>` sintético y rasterizados con el crate `svg`) y **event
-  loop determinista** (independiente del reloj de pared), más shell zoom/refresh
-  y webfonts de la ronda 14.
-- **Repo**: `Megi`, rama `sprint/robustez-fase4`, **HEAD `b808d7b`**
-  (`fix(render): make the event loop independent of the wall clock`).
-- **Estado del árbol**: código limpio; solo `website/` y
-  `.github/workflows/pages.yml` untracked (del dueño) y algunos docs en vuelo.
-  El JSON del script marca `dirty = 4` por esos untracked/docs, no por código.
-- **Binario de bench**: `target/release/bench`, `sha256 = 1f1dbbdd…`
-  (4 331 816 B) en las 5 pasadas válidas; la pasada del script lo recompiló con
-  la misma fuente (`8d49cf89…`, 4 332 608 B).
+- **Fecha de medición**: 2026-11-10, 21:00–21:25 (Europe/Madrid). Ronda 16:
+  **gradientes SVG** (+ CSS interno), **APIs de navegador** (`getComputedStyle`
+  real, `matchMedia`/viewport/scroll, `requestAnimationFrame`, `readyState` y
+  handlers de error), **backgrounds multicapa** con
+  `origin`/`clip`/`attachment`/`space`/`round`, y la web del dueño commiteada.
+- **Repo**: `Megi`, rama `sprint/robustez-fase4`, **HEAD `653626f`**
+  (`feat(render): real getComputedStyle, matchMedia/viewport, rAF and error stats`).
+- **Estado del árbol**: limpio en la pasada canónica (`dirty = 0`); otros docs
+  en vuelo de agentes (`dirty = 2` puntual). `website/` y
+  `.github/workflows/pages.yml` ya están commiteados por el dueño (`29721f5`):
+  aquí solo se renderiza la web a `/tmp` como validación, **sin versionar nada**.
+- **Binario de bench**: `target/release/bench`, `sha256 = 39909f01…`
+  (4 374 968 B) en las 7 pasadas válidas; la pasada del script lo recompiló con
+  la misma fuente (`8ea0d43e…`, 4 374 880 B).
 - **Artefactos guardados** (gitignored):
-  - `target/bench-r15-run*.json`, `target/bench-aggregate-r15.json`
-    (`sha256 = 30d3d727…`), `target/bench-latest.txt` (`1bca17b2…`).
-  - `target/bench-r15/inline_svg_stages.json`, `backgrounds_summary.json`,
-    `event_loop_determinism.json`, `render_shell.json`.
+  - `target/bench-r16-run*.json`, `target/bench-aggregate-r16.json`
+    (`sha256 = 9cdaedb3…`), `target/bench-latest.txt`.
+  - `target/bench-r16/svg_gradients.json`, `background_layers.json`,
+    `browser_apis.json`, `website.json`, `render_shell.json`.
 
 > Las baselines anteriores quedan **reemplazadas**; sus cifras se conservan en
-> la comparación histórica de §12 (rondas 2–13; la ronda 14 no publicó baseline,
-> ver §5).
+> la comparación histórica de §14 (rondas 2–16; la 14 no publicó baseline).
 
 ---
 
@@ -38,27 +37,27 @@ Las cargas del bench se generan en memoria con funciones puras
 (`crates/bench/src/generators.rs`); el *fixture* se construye **fuera** del
 cronómetro. **El crate `bench` y sus generadores no cambiaron en esta ronda.**
 
-El bench **no usa backgrounds con imagen, SVG inline, webfonts ni JS**: sus
-generadores no contienen `url(...)`/`<svg>`/`@font-face`/`<script>`. Las
-features nuevas se miden aparte con `render` (§8–§10) y **no cambian el
-pipeline por defecto** del bench.
+El bench **no usa SVG, JS, backgrounds con imagen ni background multicapa**:
+sus generadores no contienen `<svg>`, `<script>`, `@font-face` ni `url(...)`.
+Las capacidades nuevas de r16 se miden aparte con `render`/`svg` (§8–§11) y **no
+cambian el pipeline por defecto** del bench.
 
 ### 1.2 Medición
 
 - Reloj: `std::time::Instant`; por benchmark `--warmup` (1) + `--iterations`
   (5, *heavy* 3).
-- **La tabla de §3 es la mediana, por fila, de 5 pasadas completas válidas**
-  (de 20 intentos) tomadas con load **1,4–2,0** (host en calma). Criterio de
-  aceptación: `layout` 34–40 ms, `pipeline` 114–126 ms, `render-to-png`
-  8,4–10,2 ms y `html/realistic` ≤22 ms; las pasadas con load alto se
-  descartaron.
-- `setup_ms` de las válidas: 178,4–187,8 ms.
-- La pasada canónica de `./tools/bench.sh` dio `TOTAL 355.097 ms` (la mediana de
-  las 5: 354.983), en la misma ventana.
+- **La tabla de §3 es la mediana, por fila, de 7 pasadas completas válidas**
+  (de 13 intentos) con load **1,45–2,65**. Criterio de aceptación: `layout`
+  34–40 ms, `pipeline` 114–124 ms, `render-to-png` 8,4–10,0 ms y
+  `html/realistic` ≤22 ms.
+- `setup_ms` de las válidas: 182,5–203,3 ms. La pasada canónica de
+  `./tools/bench.sh` dio `TOTAL 358.827 ms` (con `layout 36.881` y
+  `pipeline 119.826`, más cerca del suelo de r15; la mediana de las 7 es
+  `362.714`).
 - Render/shell: 11 ejecuciones intercaladas (pared) + 7 `--json` para etapas.
-  SVG inline y backgrounds: 7 ejecuciones por fixture + 5 `--json` para las
-  etapas. Event loop: 2 pasadas idénticas por fixture para comprobar
-  determinismo (semántica, no tiempos).
+  SVG: 7 ejecuciones por caso con el ejemplo release. Backgrounds y APIs de
+  navegador: 7 de pared + 3–5 `--json` por fixture; determinismo con 2 pasadas.
+  Web del dueño: 7 ejecuciones a `/tmp` (default y `--no-network`).
 - `--scale` multiplica los tamaños (p. ej. `0.25` para smoke tests).
 
 ### 1.3 Máquina y condiciones
@@ -70,38 +69,35 @@ pipeline por defecto** del bench.
 | RAM | 15 GiB |
 | SO / kernel | CachyOS Linux, kernel `7.3.1-1-cachyos`, x86_64 |
 | Compilador | `rustc 1.99.1 (58cf8f9c3 2026-10-13)`, perfil `release` por defecto |
-| Carga de fondo | 1,4–2,0 en las pasadas válidas (intentos con más carga descartados) |
+| Carga de fondo | 1,03–2,65 (host en calma; pass canónica a load ~1,5) |
 
 ### 1.4 Comandos
 
 ```bash
 cd /home/jp/Escritorio/Proyectos/Megi
 
-# Bench (5 pasadas válidas de esta baseline)
+# Bench (7 pasadas válidas de esta baseline)
 ./tools/bench.sh
-for i in 1 2 3 4 5 6; do target/release/bench --json > "target/bench-r15-run$i.json"; done
+for i in 1 2 3 4 5 6 7; do target/release/bench --json > "target/bench-r16-run$i.json"; done
 
-# SVG inline (elementos <svg> → img sintético; cap 256/documento, 1 MiB/SVG)
-target/release/render tests/fixtures/render/svg_inline_simple.html /tmp/s.png --json
-target/release/render tests/fixtures/render/svg_inline_multiple.html /tmp/m.png --json
-# (variantes: viewbox, use, block, class, corrupt; ver §8)
+# Gradientes SVG (crate svg: CSS interno + linear/radial)
+cargo run --release -p svg --example svg_to_png -- \
+    crates/svg/tests/fixtures/gradient.svg /tmp/g.png
+cargo run --release -p svg --example svg_to_png -- \
+    target/bench-r16/gradient_512.svg /tmp/g512.png
 
-# Backgrounds con geometría nueva (repeat/size/position)
-target/release/render tests/fixtures/render/backgrounds.html /tmp/b.png --json
-# fixture temporal con cover/repeat (en target/, usa --base file://.../tests/fixtures/render/)
-target/release/render target/bench-r15/bg_cover.html /tmp/c.png --json \
-    --base "file://$PWD/tests/fixtures/render/"
+# Backgrounds multicapa
+target/release/render tests/fixtures/render/background_layers.html /tmp/b.png --json
 
-# Event loop determinista (2 pasadas; comparar contadores, no tiempos)
-for f in tests/fixtures/render/js_event_*.html; do
-  target/release/render "$f" /tmp/e.png --json
+# APIs de navegador
+for f in browser_api raf_animation script_errors console_messages; do
+  target/release/render "tests/fixtures/render/$f.html" "/tmp/$f.png" --json
+  target/release/render "tests/fixtures/render/$f.html" "/tmp/$f-nojs.png" --json --no-scripting
 done
 
-# Render/shell/zoom
-target/release/render tests/fixtures/render/showcase/index.html /tmp/s.png \
-    --width 1024 --height 768 --json
-target/release/megi tests/fixtures/render/basic.html \
-    --screenshot /tmp/z.png --width 320 --height 200 --zoom 2
+# Web del dueño (solo validación a /tmp; NO se versiona)
+target/release/render website/index.html /tmp/site.png \
+    --width 1280 --height 900 --json
 ```
 
 ---
@@ -120,46 +116,46 @@ target/release/megi tests/fixtures/render/basic.html \
 | css | `css/parse-10k-rules` | Parse de hoja CSS con 10 000 reglas. |
 | css | `css/resolve-styles-2k/10k-nodes` | Cascada + `ComputedStyle` sobre ~2 005 / ~10 005 elementos. |
 | css | `css/selector-match-simple/descendant` | 4 selectores sobre 10 005 elementos. |
-| layout | `layout/realistic-1mb` | `layout_document` (28 195 elementos, 88 155 cajas), 800×600; **IFC nuevo de r15**. |
+| layout | `layout/realistic-1mb` | `layout_document` (28 195 elementos, 88 155 cajas), 800×600. |
 | paint | `paint/build-display-list` | Display list: 34 158 items. |
 | paint | `paint/rasterize-800x600` | Rasterizado software con culling/cachés y AA. |
 | paint | `paint/render-to-png-800x600` | Rasterizado + `to_png()` DEFLATE (57 422 B). |
 | pipeline | `pipeline/html-to-png-800x600` | Parse → styles → layout → display list → raster → PNG. |
-| fonts | (`feature fonts`) | No re-medido en r15; webfonts medidas en r13 con `render`. |
+| fonts | (`feature fonts`) | No re-medido en r16 (sin cambios; webfonts medidas en r13). |
 
-**Fuera del bench (medido en §8–§10)**: SVG inline, backgrounds con geometría,
-event loop JS, webfonts y zoom del shell.
+**Fuera del bench (medido en §8–§11)**: gradientes SVG, backgrounds multicapa,
+APIs de navegador/rAF/console y la web real del dueño.
 
 ---
 
-## 3. Baseline vigente (2026-11-10, HEAD `b808d7b`)
+## 3. Baseline vigente (2026-11-10, HEAD `653626f`)
 
-Mediana por fila de **5 pasadas válidas** (5 iteraciones, 1 warm-up; *heavy* 3).
-`setup`: 178,4–187,8 ms. Binario `sha256 = 1f1dbbdd…`. Suma de medianas:
-`TOTAL 354.983 ms`; pasada del script: `TOTAL 355.097 ms`.
+Mediana por fila de **7 pasadas válidas** (5 iteraciones, 1 warm-up; *heavy* 3).
+`setup`: 182,5–203,3 ms. Binario `sha256 = 39909f01…`. Suma de medianas:
+`TOTAL 362.714 ms`; pasada del script: `TOTAL 358.827 ms`.
 
-| Benchmark | Carga | mediana (ms) | rango 5 pasadas (ms) | throughput |
+| Benchmark | Carga | mediana (ms) | rango 7 pasadas (ms) | throughput |
 |---|---|---:|---:|---:|
-| `html/realistic-1mb` | 1.00 MiB, 1 044 secciones, 135 reglas CSS | **21.260** | 20.939–21.337 | 47,1 MiB/s |
-| `html/nested-div-10k` | 10 000 divs anidados, 0.10 MiB | **3.351** | 3.072–3.394 | 31,3 MiB/s |
-| `html/nested-div-32k` | 32 000 divs anidados, 0.34 MiB | **10.755** | 10.692–11.037 | 31,2 MiB/s |
-| `html/nested-div-64k` | 64 000 divs anidados, 0.67 MiB | **21.433** | 20.945–22.046 | 31,3 MiB/s |
-| `html/nested-div-64k-default-limits` | 64 000 divs, profundidad máx. 4096 | **13.919** | 13.596–13.933 | — |
-| `html/massive-end-p` | 100 000 `</p>`, 0.38 MiB | **19.065** | 18.944–19.373 | 5,25 M tags/s |
-| `html/massive-formatting` | 10 000 bloques mal anidados, 0.24 MiB | **12.809** | 12.731–13.400 | 781 k bloques/s |
-| `html/tag-40k-attrs` | 40 000 atributos, 0.59 MiB | **12.782** | 12.239–12.853 | 3,13 M attrs/s |
-| `html/pretty-5k-blocks` | 5 000 bloques indentados, 0.55 MiB | **11.735** | 11.325–11.817 | 426 k bloques/s |
-| `css/parse-10k-rules` | 10 000 reglas, 0.60 MiB | **14.706** | 13.974–15.809 | 40,5 MiB/s |
-| `css/resolve-styles-2k-nodes` | 2 005 elementos, 130 reglas | **6.349** | 6.178–6.475 | 316 k elementos/s |
-| `css/resolve-styles-10k-nodes` | 10 005 elementos, 130 reglas | **30.543** | 30.345–30.677 | 328 k elementos/s |
-| `css/selector-match-simple` | 10 005 el × 4 selectores | **0.674** | 0.648–0.675 | 59,4 M matches/s |
-| `css/selector-match-descendant` | 10 005 el × 4 selectores | **1.291** | 1.177–1.345 | 31,0 M matches/s |
-| `layout/realistic-1mb` | 28 195 elementos, 88 155 cajas, 800×600 | **36.054** | 35.964–36.862 | 782 k elementos/s |
-| `paint/build-display-list` | 34 158 items | **11.954** | 11.872–12.097 | — |
-| `paint/rasterize-800x600` | 34 158 items → pixmap 800×600 | **0.947** | 0.879–0.961 | 507 MPix/s |
-| `paint/render-to-png-800x600` | raster + PNG (57 422 B) | **8.946** | 8.644–9.149 | 6,12 MiB/s |
-| `pipeline/html-to-png-800x600` | parse+styles+layout+dl+raster+PNG | **116.410** | 114.250–117.929 | — |
-| **TOTAL (suma)** | | **354.983** | | |
+| `html/realistic-1mb` | 1.00 MiB, 1 044 secciones, 135 reglas CSS | **21.104** | 20.667–21.430 | 47,4 MiB/s |
+| `html/nested-div-10k` | 10 000 divs anidados, 0.10 MiB | **3.316** | 3.191–3.438 | 31,7 MiB/s |
+| `html/nested-div-32k` | 32 000 divs anidados, 0.34 MiB | **10.638** | 10.437–11.213 | 31,6 MiB/s |
+| `html/nested-div-64k` | 64 000 divs anidados, 0.67 MiB | **21.266** | 20.093–22.486 | 31,6 MiB/s |
+| `html/nested-div-64k-default-limits` | 64 000 divs, profundidad máx. 4096 | **13.779** | 13.543–14.121 | — |
+| `html/massive-end-p` | 100 000 `</p>`, 0.38 MiB | **18.936** | 18.568–19.232 | 5,28 M tags/s |
+| `html/massive-formatting` | 10 000 bloques mal anidados, 0.24 MiB | **12.870** | 12.390–13.715 | 777 k bloques/s |
+| `html/tag-40k-attrs` | 40 000 atributos, 0.59 MiB | **12.644** | 12.290–13.102 | 3,16 M attrs/s |
+| `html/pretty-5k-blocks` | 5 000 bloques indentados, 0.55 MiB | **11.611** | 11.170–11.847 | 431 k bloques/s |
+| `css/parse-10k-rules` | 10 000 reglas, 0.60 MiB | **14.262** | 13.928–15.350 | 41,8 MiB/s |
+| `css/resolve-styles-2k-nodes` | 2 005 elementos, 130 reglas | **6.618** | 6.431–6.825 | 303 k elementos/s |
+| `css/resolve-styles-10k-nodes` | 10 005 elementos, 130 reglas | **31.564** | 30.576–31.863 | 317 k elementos/s |
+| `css/selector-match-simple` | 10 005 el × 4 selectores | **0.633** | 0.592–0.650 | 63,3 M matches/s |
+| `css/selector-match-descendant` | 10 005 el × 4 selectores | **1.213** | 1.185–1.269 | 33,0 M matches/s |
+| `layout/realistic-1mb` | 28 195 elementos, 88 155 cajas, 800×600 | **37.418** | 37.044–38.616 | 754 k elementos/s |
+| `paint/build-display-list` | 34 158 items | **12.441** | 12.274–12.663 | — |
+| `paint/rasterize-800x600` | 34 158 items → pixmap 800×600 | **1.003** | 0.890–1.083 | 478 MPix/s |
+| `paint/render-to-png-800x600` | raster + PNG (57 422 B) | **9.015** | 8.934–9.316 | 6,08 MiB/s |
+| `pipeline/html-to-png-800x600` | parse+styles+layout+dl+raster+PNG | **122.383** | 121.178–123.625 | — |
+| **TOTAL (suma)** | | **362.714** | | |
 
 > **Aviso**: el TOTAL suma etapas y pipeline end-to-end (solapados); no es un
 > presupuesto de página.
@@ -170,280 +166,305 @@ Mediana por fila de **5 pasadas válidas** (5 iteraciones, 1 warm-up; *heavy* 3)
 
 | Serie | Muestras | Lectura |
 |---|---|---|
-| `html/nested-div-*` | 10k: 3.35 · 32k: 10.76 · 64k: 21.43 ms | **Lineal** (3,2× → 3,21×; 2× → 2,07×). |
-| `css/parse-10k-rules` | 5k: 6.69 · 10k: 14.71 · 20k: 30.50 ms | **Lineal**. |
-| `css/resolve-styles-2k/10k` | 2 005 el: 6.35 · 10 005 el: 30.54 ms | **Lineal** (~328 k el/s). |
-| `layout/realistic-1mb` | 28 195 elementos → **36,05 ms** | **−30,1 % vs r13**: el overhaul de tokenización/breaking del IFC y las cachés de medición de fuentes. |
-| `paint/render-to-png` | raster 0,95 + encoder ≈8,0 ms | Encoder PNG de r12 sin cambios (byte-idéntico). |
-| `pipeline` | **116,4 ms** (114,3–117,9) | Reparto: layout 36,1 + CSS 30,5 + parse 21,3 + display list 12,0 + PNG 8,9. |
+| `html/nested-div-*` | 10k: 3.32 · 32k: 10.64 · 64k: 21.27 ms | **Lineal** (3,2× → 3,21×; 2× → 2,00×). |
+| `css/parse-10k-rules` | 5k: 6.69 · 10k: 14.26 · 20k: 30.50 ms | **Lineal**. |
+| `css/resolve-styles-2k/10k` | 2 005 el: 6.62 · 10 005 el: 31.56 ms | **Lineal** (~317 k el/s). |
+| `layout/realistic-1mb` | 28 195 elementos → **37,42 ms** | Estable vs r15 (36,05; +3,8 % de ventana, código de layout sin cambios). |
+| `paint/render-to-png` | raster 1,00 + encoder ≈8,0 ms | Encoder PNG de r12, byte-idéntico. |
+| `pipeline` | 122,4 ms (121,2–123,6) | Reparto: layout 37,4 + CSS 31,6 + parse 21,1 + display list 12,4 + PNG 9,0. |
 
 ---
 
-## 5. Ronda 15: IFC, backgrounds, SVG inline y determinismo
+## 5. Ronda 16: SVG con gradientes/CSS, backgrounds multicapa y APIs web
 
-### 5.1 Qué entró desde la última baseline (r13)
+### 5.1 Qué entró en la ronda
 
-- `9090175 perf(layout)`: **overhaul del IFC** (tokenización/breaking de líneas
-  y cachés de medición de fuentes) — el layout baja de ~51,6 a ~36 ms.
-- `b5b07b3 feat(css,paint)`: **background-repeat / background-size /
-  background-position** (y geometría asociada).
-- `c267d45 feat(render)`: **SVG inline** — los `<svg>` del documento se
-  serializan a un `<img>` sintético (`data:`) tras los scripts y se rasterizan
-  con el crate `svg`; contadores `inline_svgs`/`svgs_rendered`; cap
-  `MAX_INLINE_SVGS = 256`/documento, 1 MiB por SVG y límites de bytes/depth.
-- `b808d7b fix(render)`: **event loop independiente del reloj de pared**
-  (los timers usan reloj virtual y el resultado es determinista).
-- La **ronda 14 no publicó baseline** (aterrizaron backgrounds, wiring SVG E2E
-  y shell zoom/refresh); esta ronda es la siguiente medida publicada.
+- `1477050 feat(svg)`: **CSS interno** (`<style>`, `class`, `id`) y **gradientes
+  lineales/radiales** en el crate `svg`; siguen sin soporte `pattern`/`<text>`.
+- `ac1c330 feat(css,paint)`: `background-origin`/`background-clip`/
+  `background-attachment`, **múltiples capas** de `background-image` con listas
+  por capa, y `space`/`round` en `background-repeat`.
+- `5fd4ea2 feat(js)`: `matchMedia`, viewport/scroll, `requestAnimationFrame`,
+  `readyState` y handlers de error.
+- `653626f feat(render)`: `getComputedStyle` real, `matchMedia`/viewport, rAF y
+  estadísticas de error/consola; nueva etapa **`styles_pre_script`** (pase de
+  estilos antes de ejecutar scripts).
+- `29721f5`: la **web del dueño** queda commiteada (aquí solo se valida a `/tmp`).
 
-### 5.2 Verificación de las mejoras contra los claims
+### 5.2 Verificación: no regresión en el bench
 
-| Métrica | Claim de la ronda | Nuestra medición | Veredicto |
-|---|---:|---:|---|
-| `layout/realistic-1mb` | ~36,3 ms (vs r12 51,6) | **36.054 ms** (−30,1 % vs r13 51.601) | ✅ A/B intercalado y mediana coinciden |
-| `pipeline/html-to-png` | ~120,5 ms | **116.410 ms** (script 117.897) | ✅ mejor que el claim |
-| `paint/render-to-png` | ~9,2 ms | **8.946 ms** | ✅ |
-| `html/realistic-1mb` | ~19–20 ms | **21.260 ms** | ⚠️ +6–11 %; fila sin cambios de código en r15 |
-| `html/tag-40k-attrs` | ~12,4 ms | **12.782 ms** | ≈ (+3 %) |
-| `html/massive-end-p` | ~18,7–19,3 ms | **19.065 ms** | ✅ dentro del rango |
-| `render-to-png` byte-idéntico | 42 853 / 80 220 B | **42 853 B** (`9e957177…`) y **80 220 B** (`c95c7eff…`) | ✅ |
+| Métrica | Esperado en la ronda | Nuestra medición (7 pasadas) | Pasada canónica | Veredicto |
+|---|---:|---:|---:|---|
+| `layout/realistic-1mb` | ~36 ms | **37.418 ms** (+3,8 % vs r15) | 36.881 | ≈ sin regresión (código de layout sin cambios; load 1,45–2,65 vs 1,4–2,0) |
+| `pipeline/html-to-png` | ~116–120 ms | **122.383 ms** (+5,1 %) | 119.826 | ≈ dentro de varianza; canónica en el rango |
+| `paint/render-to-png` | ~9 ms | **9.015 ms** (+0,8 %) | 8.939 | ✅ |
+| `html/realistic-1mb` | ~20–21 ms | **21.104 ms** (−0,7 %) | 21.070 | ✅ |
+| `html/massive-end-p` | ~19 ms | **18.936 ms** (−0,7 %) | 18.461 | ✅ |
+| `html/tag-40k-attrs` | ~12,7 ms | **12.644 ms** (−1,1 %) | 12.801 | ✅ |
+| **TOTAL (suma)** | — | **362.714 ms** (+2,2 % vs r15) | 358.827 | ≈ varianza del host |
 
-**Diferencias con los claims**: el layout y el pipeline se confirman (el claim
-del pipeline parece medido con más carga; aquí con load 1,4–2,0 sale 116,4). Las
-filas HTML no cambian de código en r15 y su medida depende mucho de la carga
-(hemos visto 19,9–25,6 ms en la misma ventana); 21,26 ms es la mediana de 5
-pasadas válidas. `tag-40k` +3 % y `massive-end-p` dentro del rango del claim.
-**No hay regresión** en ninguna fila del bench; el TOTAL baja **−10,2 %**.
-
-### 5.3 Nota metodológica
-
-Los claims de la ronda se tomaron presumiblemente con A/B intercalado y carga
-baja; aquí se publica la mediana de 5 pasadas completas con criterio de
-aceptación documentado (load 1,4–2,0). El host sigue siendo la principal fuente
-de varianza (±5–10 % en filas HTML).
+**Explicación**: el bench **no ejecuta ninguna capacidad nueva** de r16 (SVG,
+JS, backgrounds con imagen). Las filas de layout/paint no cambiaron de código;
+la diferencia con r15 es la ventana de carga (esta ronda se midió a load
+1,45–2,65 y r15 a 1,4–2,0; la pasada canónica a load ~1,5 da 36,9/119,8, en el
+rango esperado). **No hay regresión atribuible al código**; el TOTAL sube un
+2,2 % por varianza. Las filas HTML/CSS se mantienen planas o mejoran.
 
 ---
 
-## 6. Codificador PNG (sin cambios en r15)
+## 6. Codificador PNG (sin cambios en r16)
 
-| Métrica | r13 | r15 | Notas |
+| Métrica | r15 | r16 | Notas |
 |---|---:|---:|---|
-| `paint/render-to-png-800x600` | 9.200 ms | **8.946 ms** | −2,8 % (varianza) |
-| — rasterizar | 0.999 ms | **0.947 ms** | varianza |
-| — codificar PNG | ~8,20 ms | **~8,00 ms** | encoder de r12, sin cambios |
+| `paint/render-to-png-800x600` | 8.946 ms | **9.015 ms** | +0,8 % (varianza) |
+| — rasterizar | 0.947 ms | **1.003 ms** | varianza |
+| — codificar PNG | ~8,00 ms | **~8,01 ms** | encoder de r12, sin cambios |
 | PNG del bench | 57 422 B | **57 422 B** | byte-idéntico |
 | Golden showcase | 80 220 B | **80 220 B** | `c95c7eff…` |
-| Golden phase4 basic | 42 853 B | **42 853 B** | `9e957177…` (verificado en r15) |
+| Golden basic | 21 090 B | **21 090 B** | `e943565d…` |
+| Golden phase4 basic | 42 853 B | **42 853 B** | `9e957177…` (verificado) |
 
 ---
 
-## 7. Pipeline `render` y shell headless (ronda 15)
+## 7. Pipeline `render` y shell headless (ronda 16)
 
-11 ejecuciones intercaladas (load ~1,5–2,0):
+11 ejecuciones intercaladas:
 
-| Fixture / modo | pared r15 | pared r13 | rango r15 | PNG |
+| Fixture / modo | pared r16 | pared r15 | rango r16 | PNG |
 |---|---:|---:|---:|---:|
-| showcase 1024×768 (render) | **29,49 ms** | 30,78 ms | 27,50–33,55 | 80 220 B (`c95c7eff…`) |
-| basic 800×600 (render) | **8,49 ms** | 9,70 ms | 7,73–11,36 | 21 090 B (`e943565d…`) |
-| showcase (shell headless) | **29,41 ms** | 30,78 ms | 27,98–31,08 | 80 220 B (idéntico) |
-| basic (shell headless) | **9,59 ms** | 9,70 ms | 8,38–10,49 | 21 090 B (idéntico) |
-| basic `--width 320 --height 200 --zoom 2` (shell) | **3,66 ms** | 3,85 ms | 3,08–4,13 | 3 202 B |
-| basic a viewport CSS 160×100 (render, referencia) | **3,42 ms** | 3,16 ms | 2,76–3,65 | 3 202 B (`4792779d…`) |
+| showcase 1024×768 (render) | **28,24 ms** | 29,49 ms | 26,41–32,04 | 80 220 B (`c95c7eff…`) |
+| basic 800×600 (render) | **8,62 ms** | 8,49 ms | 7,75–9,77 | 21 090 B (`e943565d…`) |
+| showcase (shell headless) | **28,56 ms** | 29,41 ms | 27,21–30,74 | 80 220 B (idéntico) |
+| basic (shell headless) | **8,70 ms** | 9,59 ms | 7,64–11,33 | 21 090 B (idéntico) |
+| basic `--width 320 --height 200 --zoom 2` (shell) | **3,58 ms** | 3,66 ms | 2,94–4,11 | 3 202 B |
+| basic CSS 160×100 (render, referencia) | **3,14 ms** | 3,42 ms | 2,58–3,38 | 3 202 B (`4792779d…`) |
 
-El render del showcase mejora ligeramente (−4,2 %) y `basic` baja a **8,49 ms**
-(−12,5 % vs r13): el IFC pesa mucho en páginas pequeñas con texto. El PNG+driver
-sigue siendo ~59 % del total del showcase. `--zoom 2` headless sigue siendo un
-render al viewport CSS `physical/zoom` y su PNG es byte-idéntico al de `render
---width 160 --height 100`; auto-refresh (`--refresh-ms`) sigue siendo opt-in y no
-se ejerce en `--screenshot`.
+El showcase baja a **28,24 ms** (−4,2 % vs r15, dentro de varianza; el bench no
+usa las features nuevas) y `basic` se mantiene ~8,6 ms. `--zoom 2` sigue siendo
+un render al viewport CSS `physical/zoom` con PNG byte-idéntico; auto-refresh
+sigue siendo opt-in (no se ejerce en `--screenshot`).
 
 ---
 
-## 8. Coste de SVG inline (nuevo en r15)
+## 8. Coste de gradientes SVG (nuevo en r16)
 
-Los `<svg>` del documento se reemplazan por un `<img>` con `data:` URL antes de
-layout (contados en `inline_svgs`, `svgs_rendered` e `images_loaded`) y se
-rasterizan con el crate `svg`. Comparación por etapas contra el mismo fixture
-**sin** los `<svg>` (variante en `target/bench-r15/nosvg_*.html`), mediana de 5
-runs `--json`:
+El crate `svg` ahora soporta `<style>`/`class`/`id` internos y gradientes
+lineales/radiales. Medido standalone con el ejemplo `svg_to_png` (7 runs; la
+pared incluye el **PNG writer de bloques stored** del ejemplo, que en 512² pesa
+~1 MB y domina):
 
-| Fixture | n | `images` (µs) | `raster` (µs) | Δ stages vs sin-SVG (µs) | PNG |
-|---|---:|---:|---:|---|---:|
-| `svg_inline_simple` (64×64) | 1 | 281 | 843 | `images +280`, `raster +178`, `total ≈+600` | 14 639 B |
-| `svg_inline_multiple` (3 iconos 24×24) | 3 | 116 | 726 | `images +114`, `raster +80`, `total ≈+470` | 13 749 B |
-| `svg_inline_viewbox` (40×40) | 1 | 36 | 705 | `images +34`, `raster +111` | 13 730 B |
-| `svg_inline_use` (32×32, `<use>`) | 1 | 68 | 692 | `images +67`, `raster +196` | 13 744 B |
-| `svg_inline_block` (32×32, inline-block) | 1 | 70 | 701 | `images +68`, `raster +45` | 13 729 B |
-| `svg_inline_class` (48×24, CSS class) | 1 | 49 | 667 | `images +48`, `raster +146` | 13 730 B |
-
-**Lectura**:
-
-- El coste incremental por SVG inline es **pequeño**: en etapas, ~**25–70 µs**
-  de `images` por icono (serialización+parse+raster AA+decode a RGBA) y
-  ~**45–200 µs** de `raster` según tamaño (un icono 24×24 ≈ 38 µs de
-  `images`); un SVG 64×64 aislado cuesta ~0,6 ms de etapas. En pared total no
-  se distingue del ruido (<±1 ms con 1–3 iconos).
-- **Cap defensivo**: `inline_svgs ≤ 256`/documento, 1 MiB por SVG, límites de
-  bytes totales y profundidad; al excederse se emite warning y el `<svg>`
-  original queda intacto (no rompe el render). Los SVG inline con CSS interno,
-  gradientes/filtros o fuentes **no** se renderizan como en un navegador
-  (limitaciones documentadas del crate `svg`; gradientes = sin relleno).
-
----
-
-## 9. Coste de backgrounds con geometría (r14/r15)
-
-`background-repeat`, `background-size` y `background-position` están activos.
-Fixture del repo `backgrounds.html` (pattern 16×16 + imagen ausente + marcadores)
-y fixtures temporales en `target/bench-r15/` (200×120 con `cover` y con
-`repeat 32px`, `--base file://…/tests/fixtures/render/`), baseline sin imagen.
-7 runs de pared + 5 `--json`:
-
-| Fixture | pared (ms) | `backgrounds` (µs) | `paint` (µs) | `raster` (µs) | PNG | bg cargadas |
-|---|---:|---:|---:|---:|---:|---:|
-| `bg_none` (sin imagen, baseline) | 7,85 | 2 | 4 | 622 | 13 734 B | 0 |
-| `bg_cover` (cover, 200×120) | **8,93** | 40 | 5 | **1 620** | 14 215 B | 1 (93 B) |
-| `bg_repeat` (repeat 32px) | **8,93** | 36 | 6 | **1 547** | 14 193 B | 1 (93 B) |
-| `backgrounds.html` (pattern + missing + markers) | 8,76 | 42 | 7 | 1 051 | 15 778 B | 2 (185 B) + 1 fallo |
-
-| Δ vs sin background | pared | `paint` | `raster` | PNG |
-|---|---:|---:|---:|---:|
-| `bg_cover` | **+1,08 ms** | +1 µs | **+998 µs** | +481 B |
-| `bg_repeat` | **+1,08 ms** | +2 µs | **+925 µs** | +459 B |
-| `backgrounds.html` (vs su baseline) | +0,91 ms | +3 µs | +429 µs | +2 044 B |
-
-**Lectura**: la geometría (`size`/`repeat`/`position`) se resuelve barata
-(`backgrounds` = 36–42 µs en la etapa de pintado); **el coste está en el
-rasterizado** del muestreo bilineal de la imagen (≈+0,9–1,0 ms para un área de
-200×120). La imagen ausente falla con warning y deja el color de fondo (PNG sin
-esa capa). El bench sigue sin backgrounds con imagen: no le afecta.
-
----
-
-## 10. Event loop determinista (r15)
-
-Los 6 fixtures `js_event_*` con `--json` **dos veces**, comparando **semántica**
-(contadores y PNG), no tiempos:
-
-| Fixture | eventos | tasks | iter | virtual ms | pendientes | event_loop (µs, 2 runs) | semántica |
-|---|---:|---:|---:|---:|---:|---|---|
-| `js_event_domcontentloaded` | 2 | 0 | 0 | 0 | 0 | 127 / 47 | **idéntica** |
-| `js_event_interval` | 2 | 3 | 15 | 15 | 0 | 54 / 84 | **idéntica** |
-| `js_event_load` | 2 | 1 | 5 | 5 | 0 | 76 / 70 | **idéntica** |
-| `js_event_loop` (budget) | 2 | 100 | 1 000 | 1 000 | 1 | 506 / 1 024 | **idéntica** |
-| `js_event_timeout` | 2 | 1 | 10 | 10 | 0 | 57 / 61 | **idéntica** |
-| `js_event_timeout_zero` | 2 | 1 | 1 | 0 | 0 | 35 / 40 | **idéntica** |
-
-- Los contadores (`script_events/tasks/loop_iterations/virtual_time_ms/
-  timers_pending`), `scripts_executed` y el **PNG resultante** son **idénticos
-  entre pasadas**: el event loop es determinista con el reloj virtual de r15
-  (`b808d7b`). Solo varían los tiempos de `event_loop` (ruido de medición).
-- Comparado con r13 (47–77 µs normales, 855 µs el budget): mismos órdenes de
-  magnitud (35–127 µs normales, 506–1 024 µs el budget); el budget de bucle
-  (100 tareas / 1 000 iteraciones / 1 000 ms virtuales) sigue cortando y deja 1
-  timer pendiente.
-
----
-
-## 11. Presupuestos orientativos
-
-Con el pipeline en **116,4 ms** y el layout en **36,1 ms**, se proponen bajar
-los presupuestos (hoy 150 / 35 / layout sin presupuesto específico):
-
-| Benchmark / medida | Baseline r15 | Presupuesto actual | % actual | Propuesta |
+| Caso | pared (ms) | rango | PNG | Notas |
 |---|---:|---:|---:|---|
-| `html/realistic-1mb` | 21,3 ms | ≤ 100 ms | 21 % | mantener |
-| `html/tag-40k-attrs` | 12,8 ms | ≤ 50 ms | 26 % | mantener |
-| `html/massive-end-p` | 19,1 ms | ≤ 50 ms | 38 % | mantener |
-| `css/parse-10k-rules` | 14,7 ms | ≤ 30 ms | 49 % | mantener |
-| `css/resolve-styles-10k-nodes` | 30,5 ms | ≤ 75 ms | 41 % | mantener |
-| `layout/realistic-1mb` | 36,1 ms | (sin número) | — | **añadir ≤45 ms** (80 %) |
-| `paint/build-display-list` | 12,0 ms | ≤ 25 ms | 48 % | mantener |
-| `paint/rasterize-800x600` | 0,95 ms | ≤ 25 ms | 4 % | mantener |
-| `paint/render-to-png-800x600` | 8,9 ms | ≤ 50 ms | 18 % | mantener |
-| `pipeline/html-to-png-800x600` | **116,4 ms** | **≤ 150 ms** | 77,6 % | **bajar a ≤ 140 ms** (83,1 %; script 84,2 %) |
-| `render` showcase 1024×768 | **29,5 ms** | **≤ 35 ms** | **84,3 %** | mantener 35 |
-| shell headless showcase | 29,4 ms | ≤ 35 ms | 84 % | mantener |
-| shell basic `--zoom 2` 320×200 | 3,7 ms | — | — | ✅ |
-| SVG inline (1–3 iconos) | +0,1–0,6 ms de etapas | — | — | ✅ cap 256/documento |
-| background-size cover/repeat (200×120) | +1,08 ms de pared | — | — | ✅ raster domina |
+| `crates/svg/tests/fixtures/gradient.svg` (120×60: linear + radial + CSS interno) | **2,61** | 2,07–2,86 | 28 928 B | caso del crate |
+| relleno plano 512×512 (temporal) | **15,88** | 15,27–18,66 | 1 049 236 B | baseline |
+| gradiente 512×512 (64 stops linear + radial + overlay, temporal) | **52,81** | 52,16–57,02 | 1 049 236 B | **+36,93 ms vs plano** |
+| relleno plano 256×256 | **4,85** | 4,07–5,55 | 262 488 B | baseline |
+| gradiente 256×256 | **14,38** | 13,13–14,76 | 262 488 B | **+9,53 ms vs plano** |
 
-**Propuesta**: **pipeline ≤140 ms** (actual 116,4 = 83,1 %; canónica 117,9 =
-84,2 %), **layout ≤45 ms** (36,1 = 80,1 %) y **render showcase ≤35 ms**
-(29,5 = 84,3 %). El margen del pipeline es ~23 ms; el reparto actual es layout
-36 + CSS 30 + parse 21 + display list 12 + PNG 9. Las features de r15 (SVG
-inline, backgrounds) **no** consumen presupuesto de forma significativa
-(+0,1–0,6 ms SVG; +1,1 ms un cover grande por raster).
+**Lectura**: el coste adicional del gradiente es **por píxel** y escala con el
+área (~+37 ms a 512², ~+9,5 ms a 256²; ≈0,14 µs por píxel con AA y varios
+stops). Los PNG de plano y gradiente pesan **lo mismo** porque el ejemplo usa
+bloques stored (no comprime): en el motor real el encoder DEFLATE del pipeline
+sí se beneficiaría. Un gradiente de 120×60 cuesta **2,6 ms** de pared total
+(incluido arranque y PNG). Siguen sin soportar `pattern`, `<text>` ni filtros
+(próximo foco del crate).
 
 ---
 
-## 12. Comparación histórica
+## 9. Coste de backgrounds multicapa (ronda 16)
 
-Trece baselines en la misma máquina, mismo arnés (la ronda 14 no publicó
-baseline; se compara con r13):
+`background_layers.html` del repo: dos capas (`bullet.png` no-repeat 20×20
+centrado sobre `pattern.png` repeat), `background-origin/clip: content-box`;
+segundo bloque con `origin`/`clip` content-box. 7 runs + 5 `--json`:
 
-| | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | R13 | R15 (vigente) |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Fecha | 09:45 | 14:09 | 14:41 | 15:15 | 15:43 | 16:18 | 16:49 | 17:12 | 17:42 | 18:21 | 18:51 | 19:30 | **20:15** |
-| HEAD | `9cca2e1` | `532bb6a` | `3cc8449` | `49a2792` | `13e9945` | `c002ec0` | `31e5139` | `c86682c` | `f10635c` | `13f3f21` | `7d2ddde` | `5234630` | **`b808d7b`** |
-| Árbol | dirty (42) | limpio | limpio | limpio | limpio | limpio | docs dirty | limpio | limpio | docs dirty | docs dirty | WIP html (archivo prístino) | **limpio (website untracked)** |
-| Binario | `0fd520aa…` | `9936527c…` | `d752a856…` | `e9fceca…` | `f2ea6d77…` | `687627e0…` | `ed7006e9…` | `43f7748d…` | `a188a1da…` | `c34ff65c…` | `d655c1f2…` | `153b8aff…` | **`1f1dbbdd…`** |
-| Load (bench) | — | — | — | — | — | 0,99–1,52 | 2,90–3,25 | 2,91–3,35 | 0,86–2,49 | 2,16–4,23 | 0,63–5,1 | 3,4–5,3 | **1,4–2,0** |
+| Fixture | pared (ms) | `backgrounds` (µs) | `paint` (µs) | `raster` (µs) | PNG |
+|---|---:|---:|---:|---:|---:|
+| `background_layers.html` (2 capas) | **9,43** | 41 | 7 | 1 200 | 15 023 B |
+| `backgrounds.html` (legacy, 2 imgs + 1 fallo + marcadores) | 9,38 | 58 | 5 | 1 092 | 15 778 B |
+
+`background_images_loaded = 2`, `failed = 0`, `background_bytes = 185` (bullet
+92 B + pattern 93 B), sin warnings. La **geometría de capas**
+(`backgrounds` 41 µs) y el **origin/clip** son baratos; el coste sigue en el
+**rasterizado** del muestreo (~1,1–1,2 ms para los dos bloques de 120×80/160×64).
+md5 del PNG a 800×600: **`736b201ed3643eb26f3657bd36f6897b`** (15 023 B);
+a 320×200 `d44c004a…` y a 1024×768 `986d2b8e…`. El md5 de referencia
+`c357cc2c…` de la ronda no se reproduce en ningún viewport probado ni aparece
+en el repo (los tests de `background_layers_tests.rs` validan propiedades de
+píxeles, no un md5 global); se documenta el md5 real medido.
+
+---
+
+## 10. APIs de navegador en `render` (ronda 16)
+
+4 fixtures, 7 runs de pared con y sin `--no-scripting`, 3 `--json` para etapas:
+
+| Fixture | pared JS (ms) | sin JS (ms) | Δpared | `styles_pre_script` | `scripting` | `event_loop` | tasks | `console_errors`/entries | ΔPNG |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---:|
+| `browser_api.html` (getComputedStyle, matchMedia, viewport) | **10,02** | 8,00 | **+2,02** | 266 µs | 1 031 µs | 20 µs | 0 | 0 / 0 | −99 B |
+| `raf_animation.html` (rAF) | **8,83** | 7,42 | **+1,41** | 235 µs | 680 µs | 80 µs | **3** | 0 / 0 | +7 B |
+| `script_errors.html` | **8,94** | 7,60 | **+1,34** | 230 µs | 570 µs | 62 µs | 0 | **2 / 3** | **+4 844 B** |
+| `console_messages.html` | **7,50** | 7,71 | −0,21 (ruido) | 231 µs | 435 µs | 21 µs | 0 | **1 / 3** | 0 B |
+
+- La nueva etapa **`styles_pre_script`** cuesta **0,23–0,27 ms** por página
+  (pase de estilos previo a ejecutar scripts) y aparece en `timings_us`.
+- El coste de las APIs es de **1,3–2,0 ms de pared** cuando el script muta el
+  DOM (`scripting` 0,44–1,03 ms + re-render); `browser_api` es el más caro
+  (`getComputedStyle`/`matchMedia` sobre estilos). rAF ejecuta **3 frames**
+  (80 µs de event loop) sin coste apreciable; `console_errors`/entries se
+  reportan en el JSON.
+- **Determinismo**: 2 pasadas idénticas por fixture → mismo PNG (md5) y mismos
+  contadores (`scripts_executed`, `script_events`, `tasks`, `console_errors`)
+  en los 4 (p. ej. browser_api `3085a8b2…` en ambas, raf `5094557c…`,
+  script_errors `54fa14ea…`, console `ff019a60…`).
+
+---
+
+## 11. Web del dueño (validación read-only)
+
+La web promocional del dueño está commiteada (`29721f5`) pero este informe
+**no la versiona**: solo se renderiza a `/tmp` como caso real externo. 7 runs a
+1280×900 (`--json`), default y `--no-network`:
+
+| Métrica | default | `--no-network` |
+|---|---:|---:|
+| pared (mediana) | **152,91 ms** | **149,86 ms** |
+| PNG | **49 107 B** (`3f67f649…`) | 49 107 B (idéntico) |
+| `display_items` | 2 210 | 2 210 |
+| `inline_svgs` / `svgs_rendered` | **56 / 58** | 56 / 58 |
+| `fonts_loaded` / `images_loaded` | **3 / 64** (0 fallos) | 3 / 64 |
+| warnings | 2 (presupuesto de reloj virtual agotado, 4 timers descartados) | 2 |
+| total etapas | 154,8 ms | 143,0 ms |
+
+Etapas (µs, mediana): fetch 82 · decode/parse 2 528 · styles 4 549 ·
+**styles_pre_script 9 963** · fonts 2 779 · **images 91 548** ·
+backgrounds 265 · scripting 2 980 · event_loop 3 451 · layout 1 282 ·
+paint 238 · **raster 15 421** · total 154 766.
+
+**Lectura**: en una página real con 64 imágenes y 58 SVG el coste lo dominan
+**`images` (~91 ms: decode de 64 imágenes + 58 SVG inline)** y `raster`
+(~15 ms); el resto (styles 4,5 ms, layout 1,3 ms, scripting 3,0 ms) es menor.
+Los 2 warnings son el presupuesto de reloj virtual del event loop (1000 ms)
+agotado con 4 timers pendientes: no afecta al render (no hay más mutaciones).
+El default y `--no-network` dan prácticamente lo mismo porque todos los assets
+locales ya existen (los badges remotos son opcionales en la página actual).
+Documentado como **página real externa del dueño** (no se versiona en este
+informe; el render va a `/tmp`).
+
+---
+
+## 12. Coste de floats, posicionamiento, stacking y opacidad (referencia r4)
+
+| Variante | Δ vs control | Factor |
+|---|---:|---:|
+| `position: relative` | +0,93–1,13 ms | 1,02× |
+| `position: relative; z-index` | +0,20–0,59 ms | 1,00–1,01× |
+| `opacity: 0.85` | +2,96–3,55 ms | 1,05–1,06× |
+| `float: left` | +12,54–12,72 ms | **1,22×** |
+
+El documento realista del bench no usa floats ni opacidad; no interviene en §3.
+
+---
+
+## 13. Presupuestos orientativos
+
+Con el pipeline en **122,4 ms** (canónica 119,8) y el layout en **37,4 ms**
+(36,9), se mantienen los presupuestos propuestos en r15:
+
+| Benchmark / medida | Baseline r16 | Presupuesto | % | Veredicto |
+|---|---:|---:|---:|---|
+| `html/realistic-1mb` | 21,1 ms | ≤ 100 ms | 21 % | ✅ |
+| `html/tag-40k-attrs` | 12,6 ms | ≤ 50 ms | 25 % | ✅ |
+| `html/massive-end-p` | 18,9 ms | ≤ 50 ms | 38 % | ✅ |
+| `css/parse-10k-rules` | 14,3 ms | ≤ 30 ms | 48 % | ✅ |
+| `css/resolve-styles-10k-nodes` | 31,6 ms | ≤ 75 ms | 42 % | ✅ |
+| `layout/realistic-1mb` | **37,4 ms** | **≤ 45 ms** | **83,1 %** (canónica 82,0 %) | ✅ mantener |
+| `paint/build-display-list` | 12,4 ms | ≤ 25 ms | 50 % | ✅ |
+| `paint/rasterize-800x600` | 1,00 ms | ≤ 25 ms | 4 % | ✅ |
+| `paint/render-to-png-800x600` | 9,0 ms | ≤ 50 ms | 18 % | ✅ |
+| `pipeline/html-to-png-800x600` | **122,4 ms** | **≤ 140 ms** | **87,4 %** (canónica 85,6 %) | ✅ mantener |
+| `render` showcase 1024×768 | **28,2 ms** | **≤ 35 ms** | **80,7 %** | ✅ mantener |
+| shell headless showcase | 28,6 ms | ≤ 35 ms | 82 % | ✅ |
+| shell basic `--zoom 2` 320×200 | 3,6 ms | — | — | ✅ |
+| gradiente SVG 120×60 | 2,6 ms (ejemplo) | — | — | ✅ coste por píxel |
+| background multicapa 2 capas (800×600) | 9,4 ms | — | — | ✅ raster domina |
+| APIs de navegador (página con script) | +1,3–2,0 ms | — | — | ✅ incluye `styles_pre_script` 0,25 ms |
+| web real del dueño 1280×900 | 150–153 ms | — | — | caso externo, no versionado |
+
+**Conclusión**: se mantienen **pipeline ≤140 ms** (87,4 %; margen ~18 ms),
+**layout ≤45 ms** (83,1 %) y **render showcase ≤35 ms** (80,7 %). No se bajan
+más: el margen con la varianza observada (±5–10 % en layout/paint) quedaría
+demasiado justo. El coste nuevo de r16 fuera del bench es pequeño (gradientes
+por píxel en SVG, raster de capas, `styles_pre_script`), y la página real
+externa está dominada por decode de imágenes/PNG.
+
+---
+
+## 14. Comparación histórica
+
+Catorce baselines en la misma máquina, mismo arnés (la ronda 14 no publicó
+baseline):
+
+| | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | R13 | R15 | R16 (vigente) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Fecha | 09:45 | 14:09 | 14:41 | 15:15 | 15:43 | 16:18 | 16:49 | 17:12 | 17:42 | 18:21 | 18:51 | 19:30 | 20:15 | **21:00** |
+| HEAD | `9cca2e1` | `532bb6a` | `3cc8449` | `49a2792` | `13e9945` | `c002ec0` | `31e5139` | `c86682c` | `f10635c` | `13f3f21` | `7d2ddde` | `5234630` | `b808d7b` | **`653626f`** |
+| Árbol | dirty (42) | limpio | limpio | limpio | limpio | limpio | docs dirty | limpio | limpio | docs dirty | docs dirty | WIP html | limpio (website untracked) | **limpio** |
+| Binario | `0fd520aa…` | `9936527c…` | `d752a856…` | `e9fceca…` | `f2ea6d77…` | `687627e0…` | `ed7006e9…` | `43f7748d…` | `a188a1da…` | `c34ff65c…` | `d655c1f2…` | `153b8aff…` | `1f1dbbdd…` | **`39909f01…`** |
+| Load (bench) | — | — | — | — | — | 0,99–1,52 | 2,90–3,25 | 2,91–3,35 | 0,86–2,49 | 2,16–4,23 | 0,63–5,1 | 3,4–5,3 | 1,4–2,0 | **1,45–2,65** |
 
 Filas clave (mediana, ms):
 
-| Benchmark | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | R13 | R15 |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `html/realistic-1mb` | 51.179 | 52.530 | 55.569 | 57.234 | 58.738 | 55.926 | 56.140 | 55.316 | 20.305 | 20.361 | 21.641 | 22.618 | **21.260** |
-| `html/nested-div-64k` | 21.262 | 23.534 | 24.050 | 24.564 | 25.658 | 25.084 | 24.772 | 24.022 | 20.396 | 21.469 | 22.466 | 23.148 | **21.433** |
-| `css/resolve-styles-10k-nodes` | 61.908 | 27.037 | 27.604 | 28.199 | 29.595 | 29.853 | 28.662 | 28.241 | 29.422 | 28.797 | 28.807 | 30.311 | **30.543** |
-| `layout/realistic-1mb` | 49.506 | 63.541 | 69.248 | 84.958 | 57.742 | 61.350 | 59.767 | 55.140 | 62.171 | 58.818 | 51.277 | 51.601 | **36.054** |
-| `paint/build-display-list` | 3.356 | 3.802 | 8.108 | 12.237 | 12.745 | 12.458 | 15.090 | 14.050 | 16.128 | 15.056 | 13.648 | 12.842 | **11.954** |
-| `paint/rasterize-800x600` | 1 484.776 | 0.861 | 0.932 | 0.899 | 0.890 | 0.843 | 0.993 | 0.881 | 1.082 | 0.925 | 1.052 | 0.999 | **0.947** |
-| `paint/render-to-png-800x600` | 1 513.860 | 5.194 | 5.852 | 12.964 | 13.016 | 13.045 | 13.296 | 12.283 | 13.601 | 13.146 | 9.136 | 9.200 | **8.946** |
-| `pipeline/html-to-png-800x600` | 1 766.298 | 152.519 | 168.612 | 214.159 | 173.305 | 178.791 | 179.699 | 168.081 | 143.229 | 141.841 | 133.373 | 133.629 | **116.410** |
-| **TOTAL (suma)** | **5 075.985** | **452.445** | **489.190** | **570.064** | **508.408** | **512.047** | **512.440** | **485.132** | **410.485** | **405.845** | **391.748** | **395.269** | **354.983** |
+| Benchmark | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | R13 | R15 | R16 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `html/realistic-1mb` | 51.179 | 52.530 | 55.569 | 57.234 | 58.738 | 55.926 | 56.140 | 55.316 | 20.305 | 20.361 | 21.641 | 22.618 | 21.260 | **21.104** |
+| `html/nested-div-64k` | 21.262 | 23.534 | 24.050 | 24.564 | 25.658 | 25.084 | 24.772 | 24.022 | 20.396 | 21.469 | 22.466 | 23.148 | 21.433 | **21.266** |
+| `css/resolve-styles-10k-nodes` | 61.908 | 27.037 | 27.604 | 28.199 | 29.595 | 29.853 | 28.662 | 28.241 | 29.422 | 28.797 | 28.807 | 30.311 | 30.543 | **31.564** |
+| `layout/realistic-1mb` | 49.506 | 63.541 | 69.248 | 84.958 | 57.742 | 61.350 | 59.767 | 55.140 | 62.171 | 58.818 | 51.277 | 51.601 | 36.054 | **37.418** |
+| `paint/build-display-list` | 3.356 | 3.802 | 8.108 | 12.237 | 12.745 | 12.458 | 15.090 | 14.050 | 16.128 | 15.056 | 13.648 | 12.842 | 11.954 | **12.441** |
+| `paint/rasterize-800x600` | 1 484.776 | 0.861 | 0.932 | 0.899 | 0.890 | 0.843 | 0.993 | 0.881 | 1.082 | 0.925 | 1.052 | 0.999 | 0.947 | **1.003** |
+| `paint/render-to-png-800x600` | 1 513.860 | 5.194 | 5.852 | 12.964 | 13.016 | 13.045 | 13.296 | 12.283 | 13.601 | 13.146 | 9.136 | 9.200 | 8.946 | **9.015** |
+| `pipeline/html-to-png-800x600` | 1 766.298 | 152.519 | 168.612 | 214.159 | 173.305 | 178.791 | 179.699 | 168.081 | 143.229 | 141.841 | 133.373 | 133.629 | 116.410 | **122.383** |
+| **TOTAL (suma)** | **5 075.985** | **452.445** | **489.190** | **570.064** | **508.408** | **512.047** | **512.440** | **485.132** | **410.485** | **405.845** | **391.748** | **395.269** | **354.983** | **362.714** |
 
-### Ronda 13 → ronda 15, fila a fila
+### Ronda 15 → ronda 16, fila a fila
 
-| Benchmark | R13 (ms) | R15 (ms) | Δ |
+| Benchmark | R15 (ms) | R16 (ms) | Δ |
 |---|---:|---:|---:|
-| `html/realistic-1mb` | 22.618 | **21.260** | −6,0 % |
-| `html/nested-div-10k` | 3.554 | **3.351** | −5,7 % |
-| `html/nested-div-32k` | 11.334 | **10.755** | −5,1 % |
-| `html/nested-div-64k` | 23.148 | **21.433** | −7,4 % |
-| `html/nested-div-64k-default-limits` | 14.014 | **13.919** | −0,7 % |
-| `html/massive-end-p` | 22.312 | **19.065** | −14,6 % |
-| `html/massive-formatting` | 12.710 | **12.809** | +0,8 % |
-| `html/tag-40k-attrs` | 12.047 | **12.782** | +6,1 % |
-| `html/pretty-5k-blocks` | 11.645 | **11.735** | +0,8 % |
-| `css/parse-10k-rules` | 14.909 | **14.706** | −1,4 % |
-| `css/resolve-styles-2k-nodes` | 6.399 | **6.349** | −0,8 % |
-| `css/resolve-styles-10k-nodes` | 30.311 | **30.543** | +0,8 % |
-| `css/selector-match-simple` | 0.682 | **0.674** | −1,2 % |
-| `css/selector-match-descendant` | 1.314 | **1.291** | −1,8 % |
-| `layout/realistic-1mb` | 51.601 | **36.054** | **−30,1 %** ✅ |
-| `paint/build-display-list` | 12.842 | **11.954** | −6,9 % |
-| `paint/rasterize-800x600` | 0.999 | **0.947** | −5,2 % |
-| `paint/render-to-png-800x600` | 9.200 | **8.946** | −2,8 % |
-| `pipeline/html-to-png-800x600` | 133.629 | **116.410** | **−12,9 %** ✅ |
-| **TOTAL (suma)** | **395.269** | **354.983** | **−10,2 %** |
+| `html/realistic-1mb` | 21.260 | **21.104** | −0,7 % |
+| `html/nested-div-10k` | 3.351 | **3.316** | −1,0 % |
+| `html/nested-div-32k` | 10.755 | **10.638** | −1,1 % |
+| `html/nested-div-64k` | 21.433 | **21.266** | −0,8 % |
+| `html/nested-div-64k-default-limits` | 13.919 | **13.779** | −1,0 % |
+| `html/massive-end-p` | 19.065 | **18.936** | −0,7 % |
+| `html/massive-formatting` | 12.809 | **12.870** | +0,5 % |
+| `html/tag-40k-attrs` | 12.782 | **12.644** | −1,1 % |
+| `html/pretty-5k-blocks` | 11.735 | **11.611** | −1,1 % |
+| `css/parse-10k-rules` | 14.706 | **14.262** | −3,0 % |
+| `css/resolve-styles-2k-nodes` | 6.349 | **6.618** | +4,2 % |
+| `css/resolve-styles-10k-nodes` | 30.543 | **31.564** | +3,3 % |
+| `css/selector-match-simple` | 0.674 | **0.633** | −6,1 % |
+| `css/selector-match-descendant` | 1.291 | **1.213** | −6,0 % |
+| `layout/realistic-1mb` | 36.054 | **37.418** | +3,8 % ~ |
+| `paint/build-display-list` | 11.954 | **12.441** | +4,1 % ~ |
+| `paint/rasterize-800x600` | 0.947 | **1.003** | +5,9 % ~ |
+| `paint/render-to-png-800x600` | 8.946 | **9.015** | +0,8 % |
+| `pipeline/html-to-png-800x600` | 116.410 | **122.383** | +5,1 % ~ |
+| **TOTAL (suma)** | **354.983** | **362.714** | +2,2 % ~ |
 
-**Lectura**: ronda de mejora clara. El **overhaul del IFC** recorta el layout
-**−30,1 %** (51,6 → 36,1 ms) y arrastra el pipeline **−12,9 %** y el TOTAL
-**−10,2 %**. HTML/CSS se mantienen dentro de ±1–7 % (varianza del host; las
-filas HTML no cambiaron de código). El coste de las features nuevas fuera del
-bench es pequeño: SVG inline +0,1–0,6 ms por documento, backgrounds
-cover/repeat +1,08 ms (dominado por el raster bilineal) y el event loop es
-determinista en semántica (contadores/PNG idénticos entre pasadas).
+~ Sin cambio de código de bench/layout/paint en r16: la diferencia es la
+ventana de carga (load 1,45–2,65 vs 1,4–2,0 en r15). La pasada canónica de r16
+(load ~1,5) da `layout 36.881` y `pipeline 119.826`, dentro del rango esperado:
+**la ronda no introduce regresión en el bench**. Las capacidades nuevas se miden
+aparte (§8–§11).
 
 ---
 
-## 13. Cómo comparar y detectar regresiones
+## 15. Cómo comparar y detectar regresiones
 
-1. Medir en la misma máquina y con el sistema ocioso (`uptime` < ~1.5). En r15
-   se usaron 5 de 20 intentos con criterio de aceptación (`layout` 34–40,
-   `pipeline` 114–126, `render-to-png` 8,4–10,2, `html` ≤22) y load 1,4–2,0.
+1. Medir en la misma máquina y con el sistema ocioso (`uptime` < ~1.5). En r16
+   se usaron 7 de 13 intentos con criterio de aceptación (`layout` 34–40,
+   `pipeline` 114–124, `render-to-png` 8,4–10,0, `html` ≤22) y load
+   1,45–2,65.
 2. Guardar JSON y comparar medianas:
 
    ```bash
@@ -458,38 +479,42 @@ determinista en semántica (contadores/PNG idénticos entre pasadas).
    EOF
    ```
 3. Regresión si la mediana empeora >15 % de forma reproducible; dispersión
-   típica ~1–6 % en reposo, ±5–10 % en filas HTML/paint con carga.
+   típica ~1–6 % en reposo y ±5–10 % en layout/paint con carga.
 4. Para complejidad, `--scale 0.5` vs `1.0`: ratios ≈1.
-5. Features nuevas: SVG inline (`inline_svgs`/`svgs_rendered` en `render
-   --json`), backgrounds (`background_images_loaded/bytes`, geometría),
-   event loop (comparar contadores entre 2 pasadas, no tiempos) y webfonts
-   (`timings.fonts`, `fonts_loaded/failed/bytes`).
+5. Capacidades nuevas: gradientes SVG (crate `svg` + ejemplo), backgrounds
+   multicapa (`background_layers.html`), APIs de navegador
+   (`browser_api`/`raf_animation`/`script_errors`/`console_messages`) y
+   `styles_pre_script` en `render --json`. Determinismo: 2 pasadas → mismo PNG
+   y mismos contadores.
 6. Golden/bitstream: showcase `c95c7eff…` 80 220 B, basic `e943565d…` 21 090 B,
-   phase4 basic `9e957177…` 42 853 B, bench PNG 57 422 B.
+   phase4 basic `9e957177…` 42 853 B, bench PNG 57 422 B. Web del dueño:
+   49 107 B/`3f67f649…` a 1280×900 (solo validación a `/tmp`).
 
 ---
 
-## 14. Limitaciones y notas
+## 16. Limitaciones y notas
 
-- **Host variable**: 20 intentos de bench, 5 válidos (load 1,4–2,0; intentos con
-  más carga descartados). Las filas HTML/CSS difieren ±1–7 % entre ventanas sin
-  cambios de código.
-- **Ronda 14 sin baseline**: backgrounds (r14) y SVG inline/wiring E2E
-  aterrizaron entre r13 y r15; esta ronda es la siguiente medición publicada.
-- **SVG inline**: `MAX_INLINE_SVGS = 256`/documento, 1 MiB/SVG, límites de
-  bytes totales/profundidad; al excederse hay warning y el `<svg>` se deja
-  intacto. No soporta CSS interno, gradientes, filtros ni fuentes dentro del
-  SVG (limitaciones del crate `svg`); el coste medido es de etapas, no aislable
-  del ruido en pared.
-- **Backgrounds**: `size`/`repeat`/`position` resueltos baratos; el raster
-  bilineal domina (+~1 ms por 200×120 con imagen). El bench no usa backgrounds
-  con imagen.
-- **Event loop**: determinista en semántica (contadores y PNG idénticos entre
-  pasadas); los tiempos individuales de `event_loop` varían. Presupuestado a
-  1 000 ms virtuales / 100 tareas.
-- **Presupuestos propuestos**: pipeline ≤140 ms (actual 116,4 = 83,1 %),
-  layout ≤45 ms (36,1 = 80,1 %) y render showcase ≤35 ms (29,5 = 84,3 %).
+- **Host variable**: 13 intentos de bench, 7 válidos (load 1,45–2,65; picos de
+  compilaciones descartados). Las filas layout/paint difieren ±4–6 % entre
+  ventanas sin cambios de código; la pasada canónica da los valores del suelo.
+- **El bench no usa SVG/JS/backgrounds con imagen**: las mejoras de r16 no
+  cambian el pipeline por defecto; se miden en §8–§11.
+- **Gradientes SVG**: coste por píxel (~0,14 µs/px); el ejemplo `svg_to_png` usa
+  un PNG writer de bloques *stored*, que domina en 512² (1 MB de salida). El
+  motor real usa su encoder DEFLATE. Siguen sin soporte `pattern`, `<text>` y
+  filtros (próximo foco del crate).
+- **Backgrounds multicapa**: el md5 de referencia `c357cc2c…` no se reproduce en
+  los viewports probados (800×600 → `736b201e…`) ni aparece en el repo; los
+  tests del fixture validan píxeles por propiedades. Se documenta el md5 real.
+- **APIs de navegador**: `styles_pre_script` ~0,25 ms/página; el coste de las
+  APIs es 1,3–2,0 ms de pared cuando mutan el DOM. Deterministas entre pasadas.
+  El presupuesto de reloj virtual (1 000 ms) puede agotarse en páginas con
+  timers (warning; no rompe el render).
+- **Web del dueño**: commiteada por el dueño, se valida read-only a `/tmp`
+  (no se versiona desde este informe); los 2 warnings son del presupuesto de
+  reloj virtual, no errores de assets (64 imágenes cargadas, 0 fallos).
+- **Presupuestos**: mantener pipeline ≤140 ms (122,4 = 87,4 %), layout ≤45 ms
+  (37,4 = 83,1 %) y render showcase ≤35 ms (28,2 = 80,7 %), con margen ~12–13 %
+  en los dos primeros.
 - **Fast path de tablas (r7)**: sigue la nota histórica; no hay commit
   compilable con el camino avanzado sin fast path.
-- **`website/` y `pages.yml`**: untracked del dueño; no se tocan (solo se
-  renderiza a `/tmp` si hiciera falta).

@@ -6,6 +6,63 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 16 — real SVG CSS/gradients, multi-layer backgrounds and browser APIs wired into render (2026-11-10)
+
+#### Added
+
+- **SVG internal CSS and gradients** (`crates/svg`, commit `1477050`):
+  `<style>` blocks (including CDATA) with type/class/id compound selectors,
+  descendant combinators, selector lists, a simple specificity cascade
+  (inline style > id > class > type > presentation attribute) and inheritance;
+  `linearGradient`/`radialGradient` with stops (`offset`, `stop-color`,
+  `stop-opacity`), `gradientUnits` `objectBoundingBox`/`userSpaceOnUse`,
+  `spreadMethod` `pad`/`reflect`/`repeat`, `gradientTransform`, geometry and
+  `href`/`xlink:href` inheritance, usable from `fill`/`stroke` with
+  deterministic per-pixel evaluation; cyclic/broken references paint nothing
+  (no panic). Limits: 1 MiB stylesheet, 4,096 rules, 64 selectors/rule,
+  16 descendant compounds, 256 stops and 32 href hops. `<pattern>` remains
+  documented as unsupported. svg 41→**60 tests**; gradient fixture/example
+  (120×60, md5 `ff59b80a48d2e22c16e6d48555db0b4c`).
+- **Multi-layer backgrounds with origin/clip/attachment** (`crates/css` +
+  `crates/paint`, commit `ac1c330`): `background-origin`
+  (border/padding/content), `background-clip` (parsed; paints border-box),
+  `background-attachment` (scroll/fixed), `ComputedStyle::background_layers`
+  top-first (cyclic lists, multi-layer shorthand, colour only on the last
+  layer, legacy mirror for render/goldens) and real `space`/`round`.
+  `background_geometry_explicit` keeps the goldens byte-identical. css
+  69→**76**, paint 122→**130** tests. Out of scope: `background-clip: text`
+  and local attachment.
+- **Browser APIs** (`crates/js`, commit `5fd4ea2`): `matchMedia` with a
+  `set_media_provider`, `set_viewport_provider`/`ViewportInfo`
+  (innerWidth/Height/DPR/scroll, scrollTo/scrollBy),
+  `requestAnimationFrame`/`cancelAnimationFrame` on 16 ms virtual steps with
+  `pending_animation_frames`, `document.onerror`/`window.onerror` and richer
+  console (`debug`/`assert`/`table`/`dir`), `document.readyState` with
+  `set_ready_state`, and the `getComputedStyle` provider verified for 24
+  properties. js 58→**71 tests**.
+- **Real wiring in the pipeline** (`crates/render`, commit `653626f`): a
+  pre-script style pass with the real `getComputedStyle` provider (24 CSS
+  properties, inline fallback; snapshot documented, `RenderTimings::styles_pre_script`),
+  `matchMedia`/viewport/DPR from the real `MediaContext`, `readyState`
+  loading→interactive→complete, **rAF driven by the virtual event loop with a
+  fixed virtual epoch (exactly 48 ms; fixes the 49-vs-48 CI flake, identical
+  PNG)**, `document.onerror`/`console.warn|error`/`last_event_error` downgraded
+  to non-fatal warnings plus `RenderStats::console_errors`,
+  `collect_background_references` walking `background_layers` (layers 2..N E2E)
+  and hermetic cap tests. render 114→**123 tests**; multi-layer E2E
+  `background_layers.html` at 240×260 `md5 c357cc2c43039ce03545be3b4221a814`.
+
+#### Changed
+
+- Test suite: **1046 tests, 0 failures** (was 990): bench 8, **css 76**, dom 28,
+  **fonts 17+1 doctest**, html 60, image 45+1, **js 71**, layout 135, net 180,
+  **paint 130**, **render 123**, shell 100, **svg 60**, test_harness 11.
+- Phase status: Phase 4 practically complete, Phase 5 ≈95 %, **Phase 6 ≈90 %**
+  (browser APIs wired), Phase 7 ≈70 %.
+- Suite remains deterministic and reproducible (virtual clock, fixed rAF epoch,
+  errors as warnings); showcase `c95c7eff…`, `basic.rgba` `60f8984e…` and the
+  Phase-4 PNG `9e957177…` stay byte-identical.
+
 ### Round 15 — inline SVG, background geometry, IFC −28 % and a deterministic event loop (2026-11-10)
 
 #### Added

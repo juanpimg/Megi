@@ -383,6 +383,19 @@ cargo run --release -p bench -- --filter layout --iterations 5     # ~36 ms
 cargo run --release -p bench -- --filter pipeline --iterations 3   # ~120 ms
 ```
 
+### 2.16j Ronda 16: SVG real, backgrounds multicapa y APIs de navegador
+
+- **SVG**: `<style>`/class/id/descendientes con cascada (CDATA incluido) y gradientes `linearGradient`/`radialGradient` (stops/offset/opacity, units, spread, gradientTransform, href); `fill`/`stroke`; `<pattern>` pendiente; 60 tests.
+- **Backgrounds**: `background-origin`/`clip`/`attachment` + **multi-capa** (`background_layers` top-first), `space`/`round` reales; goldens intactos via `background_geometry_explicit`; css 76/paint 130 tests.
+- **APIs de navegador**: `matchMedia`, viewport/DPR/scroll, rAF 16 ms, `onerror`, `readyState`, consola ampliada; cableadas en `render` (getComputedStyle pre-script, MediaContext real, rAF epoch fijo 48 ms, onerror/console ⇒ warnings `console_errors`); js 71/render 123 tests.
+
+```bash
+cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/gradient.svg /tmp/gradient.png
+cargo run -p render -- tests/fixtures/render/background_layers.html /tmp/layers.png --width 240 --height 260  # c357cc2c…
+cargo run -p render -- tests/fixtures/render/browser_api.html /tmp/api.png --json
+cargo run -p render -- tests/fixtures/render/raf_animation.html /tmp/raf.png --json  # script_virtual_time_ms=48
+```
+
 ### 2.17 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
 
 Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-spec-driven-dev/SKILL.md` (directorio ignorado en `.gitignore` para mantener limpio el árbol Git de metadatos de agentes, mientras su documentación permanente reside en este archivo `docs/TOOLING.md`). Esta skill estandariza el protocolo operativo para cualquier agente que trabaje en la Fase 1 y posteriores:
@@ -396,7 +409,7 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 990 tests, doc y gate de conformidad
+./tools/dev.sh all                     # fmt, clippy, 1046 tests, doc y gate de conformidad
 cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0 (árbol 3904/3904, 100 %)
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 
@@ -414,4 +427,4 @@ cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.pn
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Cifras de referencia en la ronda 15: **990 tests** (bench 8, css 69, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 58, layout 135, net 180, paint 122, **render 114**, shell 100, svg 41, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; backgrounds geometry con legacy flag, SVG E2E+inline (`svgs_rendered`/`inline_svgs`), webfonts y event loop determinista (reloj virtual); todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+Cifras de referencia en la ronda 16: **1046 tests** (bench 8, css 76, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 71, layout 135, net 180, paint 130, **render 123**, shell 100, svg 60, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; backgrounds multicapa con legacy flag, SVG con CSS/gradientes, APIs de navegador cableadas y suite determinista (rAF epoch fijo); todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
