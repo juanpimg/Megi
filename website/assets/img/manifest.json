@@ -1,0 +1,137 @@
+{
+  "generated_by": "asset-smith (task-2)",
+  "generated_at": "2026-11-10T18:58:07+01:00",
+  "notes": "Real captures produced by the Megi engine. WebP files are lossless (pixel-identical to the source PNG); PNG files are lossless re-encodings (pixel-identical, alpha channel dropped because the captures are fully opaque), except phase4-basic.png which is a byte-for-byte copy of the documented capture because re-encoding grew the file. No content was altered: no crops, no retouching, native aspect ratio preserved. WebP quality is lossless (better than the required quality >= 82).",
+  "provenance": {
+    "render_binary": "Megi/target/release/render",
+    "paint_example": "Megi/target/release/examples/html_to_png",
+    "reproduction_checks": [
+      {
+        "capture": "showcase",
+        "command": "target/release/render tests/fixtures/render/showcase/index.html /tmp/showcase.png --width 1024 --height 768",
+        "result": "md5 c95c7eff83e7bd08f815631aa42afdb0 == Megi/docs/images/showcase.png (byte-identical)"
+      },
+      {
+        "capture": "images-e2e",
+        "command": "target/release/render tests/fixtures/render/images.html /tmp/images-e2e.png --width 800 --height 600",
+        "result": "md5 1de316995f56f7c72eefeb7e38a4e184 == Megi/docs/images/images-e2e.png (byte-identical)"
+      },
+      {
+        "capture": "render-fixture",
+        "command": "target/release/render tests/fixtures/render/basic.html /tmp/render-fixture.png --width 640 --height 400",
+        "result": "md5 7324e8512e831de132b1172965332a73 == Megi/docs/images/render-fixture.png (byte-identical)"
+      },
+      {
+        "capture": "phase4-basic",
+        "command": "target/release/examples/html_to_png tests/fixtures/phase4/basic.html /tmp/phase4.png",
+        "result": "md5 9e95717795744335bc0dfc7cade782ee (42,853 B); ImageMagick AE=0 (pixels) against Megi/docs/images/phase4-basic.png, i.e. same render, different PNG encoding"
+      }
+    ]
+  },
+  "images": [
+    {
+      "file": "showcase.webp",
+      "capture": "showcase",
+      "format": "webp",
+      "source": "Megi/docs/images/showcase.png",
+      "source_md5": "c95c7eff83e7bd08f815631aa42afdb0",
+      "width": 1024,
+      "height": 768,
+      "bytes": 36154,
+      "md5": "e37c55c55d0199e232e0f4a26efb3362",
+      "description_en": "Full-page engine render of the JavaScript-free showcase fixture: external stylesheet plus recursive @import, media queries, two PNG images decoded by Megi itself, a CSS table, a positioned stage and styled lists. 1024×768, 80 display items, deterministic (golden md5 c95c7eff…).",
+      "description_es": "Render completo del fixture showcase sin JavaScript: hoja externa más @import recursivo, media queries, dos imágenes PNG decodificadas por el propio motor, tabla CSS, stage posicionado y listas con estilo. 1024×768, 80 display items, determinista (golden md5 c95c7eff…)."
+    },
+    {
+      "file": "showcase.png",
+      "capture": "showcase",
+      "format": "png",
+      "source": "Megi/docs/images/showcase.png",
+      "source_md5": "c95c7eff83e7bd08f815631aa42afdb0",
+      "width": 1024,
+      "height": 768,
+      "bytes": 60189,
+      "md5": "724f8d582c9ef9d511706ee5e68f7881",
+      "description_en": "Full-page engine render of the JavaScript-free showcase fixture: external stylesheet plus recursive @import, media queries, two PNG images decoded by Megi itself, a CSS table, a positioned stage and styled lists. 1024×768, 80 display items, deterministic (golden md5 c95c7eff…).",
+      "description_es": "Render completo del fixture showcase sin JavaScript: hoja externa más @import recursivo, media queries, dos imágenes PNG decodificadas por el propio motor, tabla CSS, stage posicionado y listas con estilo. 1024×768, 80 display items, determinista (golden md5 c95c7eff…)."
+    },
+    {
+      "file": "phase4-basic.webp",
+      "capture": "phase4-basic",
+      "format": "webp",
+      "source": "Megi/docs/images/phase4-basic.png",
+      "source_md5": "02da1d7911485011a54be1ee94229cd4",
+      "width": 800,
+      "height": 600,
+      "bytes": 12448,
+      "md5": "7d6e4939a891b1eb51e83f7201af0c60",
+      "description_en": "Phase 4 paint capture: real DejaVu typography, propagated canvas background (CSS 2.2 §14.2), per-side borders (solid and dashed), list bullets, underlined link, and a position:relative/absolute stage with z-index ordering and a translucent opacity badge. 800×600.",
+      "description_es": "Captura de pintado de la Fase 4: tipografía real DejaVu, fondo de canvas propagado (CSS 2.2 §14.2), bordes por lado (sólido y discontinuo), viñetas, enlace subrayado y un stage position:relative/absolute con orden z-index y badge translúcida (opacity). 800×600."
+    },
+    {
+      "file": "phase4-basic.png",
+      "capture": "phase4-basic",
+      "format": "png",
+      "source": "Megi/docs/images/phase4-basic.png",
+      "source_md5": "02da1d7911485011a54be1ee94229cd4",
+      "width": 800,
+      "height": 600,
+      "bytes": 26224,
+      "md5": "02da1d7911485011a54be1ee94229cd4",
+      "description_en": "Phase 4 paint capture: real DejaVu typography, propagated canvas background (CSS 2.2 §14.2), per-side borders (solid and dashed), list bullets, underlined link, and a position:relative/absolute stage with z-index ordering and a translucent opacity badge. 800×600.",
+      "description_es": "Captura de pintado de la Fase 4: tipografía real DejaVu, fondo de canvas propagado (CSS 2.2 §14.2), bordes por lado (sólido y discontinuo), viñetas, enlace subrayado y un stage position:relative/absolute con orden z-index y badge translúcida (opacity). 800×600."
+    },
+    {
+      "file": "images-e2e.webp",
+      "capture": "images-e2e",
+      "format": "webp",
+      "source": "Megi/docs/images/images-e2e.png",
+      "source_md5": "1de316995f56f7c72eefeb7e38a4e184",
+      "width": 800,
+      "height": 600,
+      "bytes": 1410,
+      "md5": "12d8df8875611bfcf2b69005dfaf78b6",
+      "description_en": "Image pipeline proof: a 4×4 PNG scaled to 40×40 with bilinear clamp-to-edge sampling, next to the gray placeholder Megi paints for a missing image (non-fatal load warning). 800×600.",
+      "description_es": "Prueba de la tubería de imágenes: un PNG de 4×4 escalado a 40×40 con muestreo bilineal clamp-to-edge, junto al placeholder gris que Megi pinta para una imagen ausente (warning de carga no fatal). 800×600."
+    },
+    {
+      "file": "images-e2e.png",
+      "capture": "images-e2e",
+      "format": "png",
+      "source": "Megi/docs/images/images-e2e.png",
+      "source_md5": "1de316995f56f7c72eefeb7e38a4e184",
+      "width": 800,
+      "height": 600,
+      "bytes": 4236,
+      "md5": "ccf5acf8fda1871a3c1c53b9c462c5a8",
+      "description_en": "Image pipeline proof: a 4×4 PNG scaled to 40×40 with bilinear clamp-to-edge sampling, next to the gray placeholder Megi paints for a missing image (non-fatal load warning). 800×600.",
+      "description_es": "Prueba de la tubería de imágenes: un PNG de 4×4 escalado a 40×40 con muestreo bilineal clamp-to-edge, junto al placeholder gris que Megi pinta para una imagen ausente (warning de carga no fatal). 800×600."
+    },
+    {
+      "file": "render-fixture.webp",
+      "capture": "render-fixture",
+      "format": "webp",
+      "source": "Megi/docs/images/render-fixture.png",
+      "source_md5": "7324e8512e831de132b1172965332a73",
+      "width": 640,
+      "height": 400,
+      "bytes": 3318,
+      "md5": "c83682f7e63442e0772f5f4f3cf7f51c",
+      "description_en": "CSS cascade proof: the external sheet is resolved through <base href=\"sub/\">, the inline <style> is applied and the media=\"print\" sheet is skipped on screen; hence the green canvas. 640×400, 4 display items.",
+      "description_es": "Prueba de cascada CSS: la hoja externa se resuelve mediante <base href=\"sub/\">, se aplica el <style> inline y la hoja media=\"print\" se omite en pantalla; de ahí el canvas verde. 640×400, 4 display items."
+    },
+    {
+      "file": "render-fixture.png",
+      "capture": "render-fixture",
+      "format": "png",
+      "source": "Megi/docs/images/render-fixture.png",
+      "source_md5": "7324e8512e831de132b1172965332a73",
+      "width": 640,
+      "height": 400,
+      "bytes": 4839,
+      "md5": "20cdca2a975a0708f16c1abc918893ff",
+      "description_en": "CSS cascade proof: the external sheet is resolved through <base href=\"sub/\">, the inline <style> is applied and the media=\"print\" sheet is skipped on screen; hence the green canvas. 640×400, 4 display items.",
+      "description_es": "Prueba de cascada CSS: la hoja externa se resuelve mediante <base href=\"sub/\">, se aplica el <style> inline y la hoja media=\"print\" se omite en pantalla; de ahí el canvas verde. 640×400, 4 display items."
+    }
+  ]
+}

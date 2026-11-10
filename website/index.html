@@ -1,0 +1,935 @@
+<!doctype html>
+<html lang="es" data-lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Megi — Un navegador web independiente, escrito desde cero en Rust</title>
+  <meta name="description" content="Megi es un navegador independiente escrito desde cero en Rust. Open source, verificado contra los estándares de la web y en desarrollo activo. Descubre el proyecto, su estado y cómo ayudar.">
+  <meta name="author" content="Megi Engine Contributors">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#070a12" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://juanpimg.github.io/Megi/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Megi Web Engine">
+  <meta property="og:url" content="https://juanpimg.github.io/Megi/">
+  <meta property="og:title" content="Megi — Un navegador web independiente, escrito desde cero en Rust">
+  <meta property="og:description" content="Un navegador independiente escrito desde cero en Rust. Open source, verificado contra los estándares de la web y en desarrollo activo.">
+  <meta property="og:image" content="https://juanpimg.github.io/Megi/assets/brand/og.png">
+  <meta property="og:image:alt" content="Megi: logotipo del proyecto con una captura real del motor y el lema «Un navegador web desde cero en Rust».">
+  <meta property="og:locale" content="es_ES">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Megi — Un navegador web independiente, escrito desde cero en Rust">
+  <meta name="twitter:description" content="Un navegador independiente escrito desde cero en Rust. Open source, verificado y en desarrollo activo.">
+  <meta name="twitter:image" content="https://juanpimg.github.io/Megi/assets/brand/og.png">
+  <meta name="twitter:image:alt" content="Megi: logotipo del proyecto con una captura real del motor.">
+
+  <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/brand/icon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+
+  <link rel="preload" href="assets/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/css/fonts.css">
+  <link rel="stylesheet" href="assets/css/site.css">
+
+  <noscript>
+    <style>
+      /* No-JS fallback: keep navigation usable on small screens. */
+      @media (max-width: 1120px) {
+        .nav-toggle { display: none !important; }
+        .nav-menu {
+          position: static !important;
+          display: flex !important;
+          flex-direction: column;
+          background: transparent;
+          border: 0;
+          padding: 0;
+          gap: 0.75rem;
+          margin-left: auto;
+        }
+        .nav-links { flex-direction: row !important; flex-wrap: wrap; gap: 0.75rem 1rem; border: 0; padding: 0; }
+        .nav-links a { display: inline !important; font-size: 0.85rem; }
+        .nav-actions { margin: 0; }
+      }
+    </style>
+  </noscript>
+
+  <script>
+    /* Bootstrap theme + language before first paint to avoid any flash. */
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      try {
+        var theme = localStorage.getItem("megi-theme");
+        if (theme !== "light" && theme !== "dark") {
+          theme = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        d.setAttribute("data-theme", theme);
+        var lang = localStorage.getItem("megi-lang");
+        if (lang === "es" || lang === "en") {
+          d.setAttribute("data-lang", lang);
+          d.setAttribute("lang", lang);
+        }
+        /* Deep links: ?theme=dark&lang=en override storage for this view. */
+        var params = new URLSearchParams(location.search);
+        var pTheme = params.get("theme");
+        if (pTheme === "light" || pTheme === "dark") d.setAttribute("data-theme", pTheme);
+        var pLang = params.get("lang");
+        if (pLang === "es" || pLang === "en") {
+          d.setAttribute("data-lang", pLang);
+          d.setAttribute("lang", pLang);
+        }
+      } catch (e) {
+        d.setAttribute("data-theme", "light");
+      }
+    })();
+  </script>
+</head>
+<body>
+<a class="skip-link" href="#main"><span lang="es">Saltar al contenido</span><span lang="en">Skip to content</span></a>
+<div class="scroll-progress" aria-hidden="true"><span id="scroll-progress-bar"></span></div>
+
+<svg class="icon-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.02c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.25 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 .5Z"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 2.6 2.9 5.9 6.5.95-4.7 4.58 1.1 6.47L12 17.45l-5.8 3.05 1.1-6.47L2.6 9.45l6.5-.95L12 2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 12h15M13 5.5l6.5 6.5-6.5 6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-arrow-up-right" viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8.5 8.5M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 1.8v2.4M12 19.8v2.4M4.4 4.4l1.7 1.7M17.9 17.9l1.7 1.7M1.8 12h2.4M19.8 12h2.4M4.4 19.6l1.7-1.7M17.9 6.1l1.7-1.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.5 14.3A8.7 8.7 0 0 1 9.7 3.5a8.7 8.7 0 1 0 10.8 10.8Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3.5 7h17M3.5 12h17M3.5 17h17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="m5 5 14 14M19 5 5 19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12.5 5 5L20 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5.5 15H4.8A1.8 1.8 0 0 1 3 13.2V4.8A1.8 1.8 0 0 1 4.8 3h8.4A1.8 1.8 0 0 1 15 4.8v.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M4 5.5h16a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 17V7A1.5 1.5 0 0 1 4 5.5Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m6.5 10 2.6 2.4-2.6 2.4M11.5 15h5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m8.5 7.5-5 4.5 5 4.5M15.5 7.5l5 4.5-5 4.5M13.4 4.5l-2.8 15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 4.5h6.2A1.8 1.8 0 0 1 12 6.3V20a2.6 2.6 0 0 0-2.6-2.6H4V4.5ZM20 4.5h-6.2A1.8 1.8 0 0 0 12 6.3V20a2.6 2.6 0 0 1 2.6-2.6H20V4.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 4.8-9 4.8-9-4.8L12 3Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="m3 12.2 9 4.8 9-4.8M3 16.6l9 4.8 9-4.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><path d="M12 1.8v3M12 19.2v3M1.8 12h3M19.2 12h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 10h4v4h-4z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M9 2.8v3.7M15 2.8v3.7M9 17.5v3.7M15 17.5v3.7M2.8 9h3.7M2.8 15h3.7M17.5 9h3.7M17.5 15h3.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2.5 20 5.5v6c0 4.4-3.3 8.3-8 10-4.7-1.7-8-5.6-8-10v-6l8-3Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="m8.6 11.8 2.4 2.4 4.4-4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-flow" viewBox="0 0 24 24"><circle cx="6" cy="5.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="18" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="6" cy="18.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 8v8M8.5 5.5h2A3 3 0 0 1 13.5 8.5v4.5a3 3 0 0 0 3 3h.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.4 9.5h17.2M3.4 14.5h17.2M12 3a17 17 0 0 1 0 18M12 3a17 17 0 0 0 0 18" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M3.6 17.4a9 9 0 1 1 16.8 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="m12 13.2 2.8-4.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="14.5" r="1.5" fill="currentColor"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9.5 3h5M10.5 3v5.2L5 17.8A2 2 0 0 0 6.8 21h10.4a2 2 0 0 0 1.8-3.2L13.5 8.2V3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.7 15h8.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.2 22 20.3H2L12 3.2Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 9v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.1" fill="currentColor"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9.5 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3.5v17M7 20.5h10M4 8.5h16M6 8.5 3.2 15a3 3 0 0 0 5.6 0L6 8.5ZM18 8.5 15.2 15a3 3 0 0 0 5.6 0L18 8.5Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4.5 7.5h3l1.5-2h6l1.5 2h3A1.5 1.5 0 0 1 21 9v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18V9a1.5 1.5 0 0 1 1.5-1.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2.5 14 9l6.5 2L14 13l-2 6.5L10 13 3.5 11 10 9l2-6.5Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M19 2.2v3M17.5 3.7h3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-pack" viewBox="0 0 24 24"><path d="m12 2.8 8 4v10.4l-8 4-8-4V6.8l8-4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M4.3 7.1 12 11l7.7-3.9M12 11v9.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+</svg>
+
+<header class="site-header" id="top">
+  <nav class="nav container" aria-label="Aplicación Megi" data-aria-es="Aplicación Megi" data-aria-en="Megi application">
+    <a class="brand" href="#top">
+      <img class="brand-mark" src="assets/brand/mark.svg" alt="" width="34" height="34" decoding="async">
+      <span class="brand-name">Megi</span>
+      <span class="brand-tag">engine</span>
+    </a>
+
+    <button class="nav-toggle" id="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-menu" aria-label="Abrir menú">
+      <svg class="icon icon-menu"><use href="#i-menu"></use></svg>
+      <svg class="icon icon-close"><use href="#i-x"></use></svg>
+    </button>
+
+    <div class="nav-menu" id="nav-menu">
+      <ul class="nav-links">
+        <li><a href="#proyecto"><span lang="es">Proyecto</span><span lang="en">Project</span></a></li>
+        <li><a href="#estado"><span lang="es">Estado</span><span lang="en">Status</span></a></li>
+        <li><a href="#capturas"><span lang="es">Capturas</span><span lang="en">Screenshots</span></a></li>
+        <li><a href="#roadmap"><span lang="es">Roadmap</span><span lang="en">Roadmap</span></a></li>
+        <li><a href="#probar"><span lang="es">Pruébalo</span><span lang="en">Try it</span></a></li>
+        <li><a href="#contribuir"><span lang="es">Contribuir</span><span lang="en">Contribute</span></a></li>
+      </ul>
+      <div class="nav-actions">
+        <div class="lang-switch" role="group" aria-label="Idioma / Language">
+          <button type="button" data-set-lang="es" aria-pressed="true" aria-label="ES — Español">ES</button>
+          <button type="button" data-set-lang="en" aria-pressed="false" aria-label="EN — English">EN</button>
+        </div>
+        <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false" aria-label="Cambiar a tema oscuro">
+          <svg class="icon icon-sun"><use href="#i-sun"></use></svg>
+          <svg class="icon icon-moon"><use href="#i-moon"></use></svg>
+        </button>
+        <a class="btn btn-quiet btn-github" href="https://github.com/juanpimg/Megi" target="_blank" rel="noopener">
+          <svg class="icon"><use href="#i-github"></use></svg>
+          <span>GitHub</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+</header>
+
+<main id="main">
+  <!-- ============================ HERO ============================ -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-bg" aria-hidden="true">
+      <div class="orb orb-orange"></div>
+      <div class="orb orb-blue"></div>
+      <div class="orb orb-pink"></div>
+      <div class="hero-grid"></div>
+    </div>
+
+    <div class="container hero-inner">
+      <div class="hero-copy">
+        <p class="eyebrow">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span lang="es">Open source · Rust · MIT / Apache-2.0</span>
+          <span lang="en">Open source · Rust · MIT / Apache-2.0</span>
+        </p>
+
+        <h1 id="hero-title">
+          <span lang="es">Un navegador web <em>desde cero</em>. Especificación a especificación.</span>
+          <span lang="en">A web browser <em>built from scratch</em>. Spec by spec.</span>
+        </h1>
+
+        <p class="lede">
+          <span lang="es">Un navegador web <strong>independiente</strong>, escrito desde cero en <strong>Rust</strong>. Sin copiar Chrome, Firefox ni Safari: su propio motor avanza paso a paso y comprueba cada logro contra los estándares oficiales de la web.</span>
+          <span lang="en">An <strong>independent</strong> web browser, written from scratch in <strong>Rust</strong>. No copying Chrome, Firefox or Safari: its own engine moves forward step by step and checks every milestone against the web's official standards.</span>
+        </p>
+
+        <div class="hero-ctas">
+          <a class="btn btn-primary" href="https://github.com/juanpimg/Megi" target="_blank" rel="noopener">
+            <svg class="icon"><use href="#i-github"></use></svg>
+            <span lang="es">Ver el código</span><span lang="en">View the code</span>
+            <svg class="icon icon-arrow"><use href="#i-arrow-right"></use></svg>
+          </a>
+          <a class="btn btn-secondary" href="#estado">
+            <svg class="icon"><use href="#i-gauge"></use></svg>
+            <span lang="es">Explorar el estado</span><span lang="en">Explore the status</span>
+          </a>
+          <a class="btn btn-ghost" href="#probar">
+            <span lang="es">Probar el motor</span><span lang="en">Try the engine</span>
+            <svg class="icon icon-arrow"><use href="#i-arrow-up-right"></use></svg>
+          </a>
+        </div>
+        <p class="hero-cta-note">
+          <svg class="icon"><use href="#i-alert"></use></svg>
+          <span lang="es">Pre-alpha: sin releases publicadas ni binarios oficiales; se compila desde el código fuente.</span>
+          <span lang="en">Pre-alpha: no published releases or official binaries; build it from source.</span>
+        </p>
+
+        <dl class="hero-stats">
+          <div class="hero-stat">
+            <dt><span lang="es">Tests</span><span lang="en">Tests</span></dt>
+            <dd><span class="num" data-count="990">990</span></dd>
+          </div>
+          <div class="hero-stat">
+            <dt><span lang="es">Módulos</span><span lang="en">Modules</span></dt>
+            <dd><span class="num" data-count="14">14</span></dd>
+          </div>
+          <div class="hero-stat">
+            <dt><span lang="es">Parser HTML5</span><span lang="en">HTML5 parser</span></dt>
+            <dd><span class="num" data-count="100" data-suffix="%">100 %</span></dd>
+          </div>
+          <div class="hero-stat">
+            <dt><span lang="es">Unsafe</span><span lang="en">Unsafe</span></dt>
+            <dd><span class="num" data-count="0">0</span></dd>
+          </div>
+        </dl>
+        <p class="hero-footnote">
+          <span lang="es">Proyecto <strong>pre-alpha</strong>: aún no hay releases ni instalador. Datos de la última ronda, verificados en el repositorio.</span>
+          <span lang="en">A <strong>pre-alpha</strong> project: no releases or installer yet. Figures from the latest round, verified in the repository.</span>
+        </p>
+      </div>
+
+      <figure class="hero-visual">
+        <div class="browser-frame">
+          <div class="browser-bar">
+            <span class="browser-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="browser-url">megi://showcase — 1024 × 768</span>
+            <span class="browser-badge" lang="es">render real</span>
+            <span class="browser-badge" lang="en">real render</span>
+          </div>
+          <picture>
+            <source srcset="assets/img/showcase.webp" type="image/webp">
+            <img src="assets/img/showcase.png" alt="Captura real generada por el motor Megi: página de showcase 1024x768 con hoja de estilos externa, @import, media queries, tabla CSS, imágenes PNG decodificadas por el propio motor y elementos posicionados." data-alt-es="Página de showcase generada por Megi a 1024x768: cabecera, tarjetas, tabla y lista de imágenes." data-alt-en="Showcase page rendered by Megi at 1024x768: header, cards, table and image list." width="1024" height="768" fetchpriority="high" decoding="async">
+          </picture>
+        </div>
+        <figcaption>
+          <span lang="es">Una página real, convertida en imagen por Megi. Sin capturas de otros navegadores y sin retoques.</span>
+          <span lang="en">A real page, turned into an image by Megi. No other browser involved, no retouching.</span>
+        </figcaption>
+        <div class="hero-chips" aria-hidden="false">
+          <span class="chip chip-mono"><span lang="es">HTML → PNG</span><span lang="en">HTML → PNG</span></span>
+          <span class="chip chip-mono"><span lang="es">sin otro navegador detrás</span><span lang="en">no other browser inside</span></span>
+          <span class="chip chip-mono"><span lang="es">resultado determinista</span><span lang="en">deterministic output</span></span>
+        </div>
+      </figure>
+    </div>
+
+    <div class="spec-strip" aria-label="Estándares y tecnologías" data-aria-es="Estándares y tecnologías" data-aria-en="Standards and technologies">
+      <div class="container spec-strip-inner">
+        <span class="spec-label"><span lang="es">Construido sobre</span><span lang="en">Built on</span></span>
+        <ul>
+          <li>WHATWG HTML</li>
+          <li>W3C CSS</li>
+          <li>Web Platform Tests</li>
+          <li>html5lib-tests</li>
+          <li>Rust</li>
+          <li>Boa</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ PROYECTO ============================ -->
+  <section class="section" id="proyecto" aria-labelledby="proyecto-title">
+    <div class="container">
+      <header class="section-head reveal">
+        <p class="eyebrow"><svg class="icon"><use href="#i-spark"></use></svg><span lang="es">El proyecto</span><span lang="en">The project</span></p>
+        <h2 id="proyecto-title"><span lang="es">Un navegador hecho a mano</span><span lang="en">A browser built by hand</span></h2>
+        <p class="section-lede">
+          <span lang="es">Megi construye su propio motor web desde cero: descarga las páginas, lee el HTML y el CSS, coloca cada caja y dibuja el resultado. El objetivo es un navegador <strong>independiente, abierto y verificable</strong>, sin atajos.</span>
+          <span lang="en">Megi builds its own web engine from the ground up: it downloads pages, parses HTML and CSS, lays out every box and draws the result. The goal is an <strong>independent, open and verifiable</strong> browser, with no shortcuts.</span>
+        </p>
+      </header>
+
+      <div class="principles">
+        <article class="principle reveal">
+          <div class="principle-icon icon-blue"><svg class="icon"><use href="#i-layers"></use></svg></div>
+          <h3><span lang="es">Independiente de verdad</span><span lang="en">Truly independent</span></h3>
+          <p>
+            <span lang="es">No es una copia de Chrome, Firefox ni Safari. El motor se escribe desde cero en Rust, sin reutilizar el código de otro navegador.</span>
+            <span lang="en">It is not a copy of Chrome, Firefox or Safari. The engine is written from scratch in Rust, without reusing another browser's code.</span>
+          </p>
+        </article>
+
+        <article class="principle reveal">
+          <div class="principle-icon icon-orange"><svg class="icon"><use href="#i-book"></use></svg></div>
+          <h3><span lang="es">Fiel a los estándares</span><span lang="en">True to the standards</span></h3>
+          <p>
+            <span lang="es">Cada comportamiento sigue las especificaciones oficiales de la web y se comprueba con sus pruebas públicas. El parser HTML5 ya pasa el 100 % de las pruebas de referencia.</span>
+            <span lang="en">Every behaviour follows the web's official specifications and is checked with their public tests. The HTML5 parser already passes 100% of the reference tests.</span>
+          </p>
+        </article>
+
+        <article class="principle reveal">
+          <div class="principle-icon icon-green"><svg class="icon"><use href="#i-shield"></use></svg></div>
+          <h3><span lang="es">Pensado para durar</span><span lang="en">Built to last</span></h3>
+          <p>
+            <span lang="es">Rust aporta seguridad de memoria sin recolector de basura. El proyecto prohíbe el código <code>unsafe</code> y somete el motor a pruebas automáticas de robustez frente a entradas hostiles.</span>
+            <span lang="en">Rust brings memory safety without a garbage collector. The project forbids <code>unsafe</code> code and continuously stress-tests the engine against hostile input.</span>
+          </p>
+        </article>
+
+        <article class="principle reveal">
+          <div class="principle-icon icon-pink"><svg class="icon"><use href="#i-spark"></use></svg></div>
+          <h3><span lang="es">Abierto para sumar</span><span lang="en">Open to everyone</span></h3>
+          <p>
+            <span lang="es">Licencia MIT/Apache, hoja de ruta pública y tareas de uno o dos días. Hay sitio para código, pruebas, documentación y diseño.</span>
+            <span lang="en">MIT/Apache licence, a public roadmap and one-to-two-day tasks. There is room for code, tests, documentation and design.</span>
+          </p>
+        </article>
+      </div>
+
+      <div class="how reveal">
+        <h3 class="how-title"><span lang="es">De un enlace a una imagen, sin atajos</span><span lang="en">From a link to an image, no shortcuts</span></h3>
+        <p class="how-lede">
+          <span lang="es">Megi recorre el camino completo de la web: descarga, lee, maqueta y dibuja. No delega en otro navegador para fingir que sabe hacerlo.</span>
+          <span lang="en">Megi walks the entire web path: fetch, parse, lay out and paint. It does not delegate to another browser to pretend it knows how.</span>
+        </p>
+        <div class="pipeline">
+          <div class="pipeline-flow">
+            <div class="pipe-node"><span class="pipe-kicker">01</span><span class="pipe-name"><span lang="es">Enlace</span><span lang="en">Link</span></span><span class="pipe-sub"><span lang="es">dirección web</span><span lang="en">web address</span></span></div>
+            <span class="pipe-arrow" aria-hidden="true">→</span>
+            <div class="pipe-node"><span class="pipe-kicker">02</span><span class="pipe-name"><span lang="es">Descarga</span><span lang="en">Fetch</span></span><span class="pipe-sub">HTTP · TLS</span></div>
+            <span class="pipe-arrow" aria-hidden="true">→</span>
+            <div class="pipe-node"><span class="pipe-kicker">03</span><span class="pipe-name">HTML · CSS</span><span class="pipe-sub"><span lang="es">lectura y estilos</span><span lang="en">parse and styles</span></span></div>
+            <span class="pipe-arrow" aria-hidden="true">→</span>
+            <div class="pipe-node"><span class="pipe-kicker">04</span><span class="pipe-name"><span lang="es">Maquetación</span><span lang="en">Layout</span></span><span class="pipe-sub"><span lang="es">cajas y texto</span><span lang="en">boxes and text</span></span></div>
+            <span class="pipe-arrow" aria-hidden="true">→</span>
+            <div class="pipe-node pipe-output"><span class="pipe-kicker">05</span><span class="pipe-name"><span lang="es">Imagen</span><span lang="en">Image</span></span><span class="pipe-sub">PNG</span></div>
+          </div>
+          <p class="pipeline-note">
+            <span lang="es">La ventana del navegador usa exactamente este mismo camino. La imagen que ves en la galería es lo que produce.</span>
+            <span lang="en">The browser window uses this exact same path. The image you see in the gallery is what it produces.</span>
+          </p>
+        </div>
+      </div>
+
+      <aside class="quote-panel reveal">
+        <div class="quote-mark" aria-hidden="true">“</div>
+        <p>
+          <span lang="es">La web funciona porque muchas implementaciones respetan las mismas reglas. Megi quiere ser una de ellas: independiente, abierta y verificable por cualquiera.</span>
+          <span lang="en">The web works because many implementations respect the same rules. Megi wants to be one of them: independent, open and verifiable by anyone.</span>
+        </p>
+        <footer>
+          <span lang="es">Filosofía del proyecto · <a href="https://github.com/juanpimg/Megi/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a></span>
+          <span lang="en">Project philosophy · <a href="https://github.com/juanpimg/Megi/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a></span>
+        </footer>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================ ESTADO ============================ -->
+  <section class="section section-alt" id="estado" aria-labelledby="estado-title">
+    <div class="container">
+      <header class="section-head reveal">
+        <p class="eyebrow"><svg class="icon"><use href="#i-gauge"></use></svg><span lang="es">Estado actual</span><span lang="en">Current status</span></p>
+        <h2 id="estado-title"><span lang="es">Dónde estamos, sin adornos</span><span lang="en">Where we are, plainly</span></h2>
+        <p class="section-lede">
+          <span lang="es">Megi está en <strong>pre-alpha</strong>: ya convierte páginas reales en imágenes y ejecuta su JavaScript, pero todavía no es un navegador para el día a día. Esto es lo que hay hoy, sin promesas de calendario.</span>
+          <span lang="en">Megi is in <strong>pre-alpha</strong>: it already turns real pages into images and runs their JavaScript, but it is not an everyday browser yet. This is what exists today, with no calendar promises.</span>
+        </p>
+      </header>
+
+      <div class="status-banner reveal" role="note">
+        <svg class="icon"><use href="#i-alert"></use></svg>
+        <p>
+          <span lang="es"><strong>Sin releases todavía:</strong> no hay instalador ni binarios oficiales; el motor se compila desde el código fuente. La ventana nativa ya compila y el modo sin pantalla está probado, pero aún no se ha verificado visualmente en un escritorio real.</span>
+          <span lang="en"><strong>No releases yet:</strong> there is no installer or official binary; the engine is built from source. The native window compiles and headless mode is tested, but it has not been visually verified on a real desktop yet.</span>
+        </p>
+      </div>
+
+      <div class="perf-strip reveal">
+        <div class="perf-head">
+          <h3 class="panel-title"><span lang="es">Los números</span><span lang="en">The numbers</span></h3>
+          <a class="text-link perf-link" href="https://github.com/juanpimg/Megi#readme" target="_blank" rel="noopener">
+            <span lang="es">Detalle en el README</span><span lang="en">Details in the README</span>
+            <svg class="icon"><use href="#i-arrow-up-right"></use></svg>
+          </a>
+        </div>
+        <ul class="perf-list">
+          <li>
+            <span class="perf-value">100 %</span>
+            <span class="perf-label" lang="es">del corpus del parser HTML5<small>3.904/3.904 casos oficiales</small></span>
+            <span class="perf-label" lang="en">of the HTML5 parser corpus<small>3,904/3,904 official cases</small></span>
+          </li>
+          <li>
+            <span class="perf-value">990</span>
+            <span class="perf-label" lang="es">tests en verde<small>0 fallos · <code>cargo test --workspace</code></small></span>
+            <span class="perf-label" lang="en">passing tests<small>0 failures · <code>cargo test --workspace</code></small></span>
+          </li>
+          <li>
+            <span class="perf-value">14</span>
+            <span class="perf-label" lang="es">módulos independientes<small>sin dependencias circulares</small></span>
+            <span class="perf-label" lang="en">independent modules<small>no circular dependencies</small></span>
+          </li>
+          <li>
+            <span class="perf-value">0</span>
+            <span class="perf-label" lang="es">código <code>unsafe</code><small>0 bloques unsafe en todo el motor</small></span>
+            <span class="perf-label" lang="en"><code>unsafe</code> code<small>0 unsafe blocks across the engine</small></span>
+          </li>
+        </ul>
+        <p class="perf-note">
+          <span lang="es">Además en verde: tokenizador 7.050/7.050, serializador 230/230 y sintaxis CSS 30/30. Todos los datos son de la última ronda y se pueden reproducir desde el repositorio.</span>
+          <span lang="en">Also green: tokenizer 7,050/7,050, serializer 230/230 and CSS syntax 30/30. All figures are from the latest round and reproducible from the repository.</span>
+        </p>
+      </div>
+
+      <div class="phase-panel status-simple reveal">
+        <h3 class="panel-title"><span lang="es">Por fases</span><span lang="en">By phase</span></h3>
+        <ul class="phase-list">
+          <li class="phase-item">
+            <div class="phase-head">
+              <span class="phase-name"><span lang="es">Fundamentos y parser HTML5</span><span lang="en">Foundations and HTML5 parser</span></span>
+              <span class="phase-value"><span lang="es">Listo</span><span lang="en">Done</span> · 100 %</span>
+            </div>
+            <div class="progress" role="img" aria-label="100 %"><span class="progress-fill progress-done" style="--value:100%"></span></div>
+          </li>
+          <li class="phase-item">
+            <div class="phase-head">
+              <span class="phase-name"><span lang="es">CSS, maquetado y pintado</span><span lang="en">CSS, layout and painting</span></span>
+              <span class="phase-value"><span lang="es">Listo</span><span lang="en">Done</span> · 100 %</span>
+            </div>
+            <div class="progress" role="img" aria-label="100 %"><span class="progress-fill progress-done" style="--value:100%"></span></div>
+          </li>
+          <li class="phase-item">
+            <div class="phase-head">
+              <span class="phase-name"><span lang="es">Red y descargas</span><span lang="en">Network and fetching</span></span>
+              <span class="phase-value"><span lang="es">En marcha</span><span lang="en">In progress</span> · ≈95 %</span>
+            </div>
+            <div class="progress" role="img" aria-label="95 %"><span class="progress-fill progress-live" style="--value:95%"></span></div>
+          </li>
+          <li class="phase-item">
+            <div class="phase-head">
+              <span class="phase-name"><span lang="es">JavaScript</span><span lang="en">JavaScript</span></span>
+              <span class="phase-value"><span lang="es">En marcha</span><span lang="en">In progress</span> · ≈80–85 %</span>
+            </div>
+            <div class="progress" role="img" aria-label="80-85 %"><span class="progress-fill progress-live" style="--value:82%"></span></div>
+          </li>
+          <li class="phase-item">
+            <div class="phase-head">
+              <span class="phase-name"><span lang="es">Ventana de escritorio</span><span lang="en">Desktop window</span></span>
+              <span class="phase-value"><span lang="es">En marcha</span><span lang="en">In progress</span> · ≈70 %</span>
+            </div>
+            <div class="progress" role="img" aria-label="70 %"><span class="progress-fill progress-live" style="--value:70%"></span></div>
+          </li>
+        </ul>
+        <p class="panel-note">
+          <span lang="es">Lo que falta está claro y ordenado. Si quieres ver el detalle —o ayudar con una pieza—, la hoja de ruta es pública: <a class="text-link" href="https://github.com/juanpimg/Megi/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener">ver la hoja de ruta<svg class="icon"><use href="#i-arrow-up-right"></use></svg></a></span>
+          <span lang="en">What is missing is clearly listed. If you want the details —or want to help with one piece— the roadmap is public: <a class="text-link" href="https://github.com/juanpimg/Megi/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener">see the roadmap<svg class="icon"><use href="#i-arrow-up-right"></use></svg></a></span>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ CAPTURAS ============================ -->
+  <section class="section" id="capturas" aria-labelledby="capturas-title">
+    <div class="container">
+      <header class="section-head reveal">
+        <p class="eyebrow"><svg class="icon"><use href="#i-camera"></use></svg><span lang="es">Prueba visual</span><span lang="en">Visual proof</span></p>
+        <h2 id="capturas-title"><span lang="es">Así se ve el motor</span><span lang="en">This is what the engine renders</span></h2>
+        <p class="section-lede">
+          <span lang="es">Todas las imágenes de esta página las ha generado Megi, de principio a fin. Sin capturas de otros navegadores y sin retoques: son la prueba de lo que el motor ya sabe hacer.</span>
+          <span lang="en">Every image on this page was produced by Megi end to end. No other browser screenshots and no retouching: they are the proof of what the engine can already do.</span>
+        </p>
+      </header>
+
+      <div class="gallery">
+        <figure class="shot reveal">
+          <button class="shot-btn" type="button" aria-label="Ampliar captura del showcase 1024×768" data-lightbox="assets/img/showcase.png" data-caption-es="Una página real con hojas de estilo externas, media queries, imágenes, tabla y elementos posicionados, convertida en imagen por Megi." data-caption-en="A real page with external stylesheets, media queries, images, a table and positioned elements, turned into an image by Megi." data-aria-es="Ampliar captura del showcase 1024×768" data-aria-en="Enlarge showcase screenshot 1024×768">
+            <picture>
+              <source srcset="assets/img/showcase.webp" type="image/webp">
+              <img src="assets/img/showcase.png" alt="Página de showcase generada por Megi a 1024x768, con cabecera, tarjetas, tabla y lista de imágenes." data-alt-es="Página de showcase generada por Megi a 1024x768, con cabecera, tarjetas, tabla y lista de imágenes." data-alt-en="Showcase page rendered by Megi at 1024x768, with a header, cards, a table and an image list." width="1024" height="768" loading="lazy" decoding="async">
+            </picture>
+            <span class="shot-zoom"><svg class="icon"><use href="#i-arrow-up-right"></use></svg></span>
+          </button>
+          <figcaption>
+            <span class="shot-tag">showcase · 1024×768</span>
+            <span lang="es">Una página real con estilos, imágenes y tablas, renderizada por Megi.</span>
+            <span lang="en">A real page with styles, images and tables, rendered by Megi.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="shot reveal">
+          <button class="shot-btn" type="button" aria-label="Ampliar captura del fixture de render" data-lightbox="assets/img/render-fixture.png" data-caption-es="El mismo camino que usa la ventana del navegador, en pequeño: estilos externos y reglas de pantalla aplicadas." data-caption-en="The same path the browser window uses, in miniature: external styles and screen rules applied." data-aria-es="Ampliar captura del fixture de render" data-aria-en="Enlarge render fixture screenshot">
+            <picture>
+              <source srcset="assets/img/render-fixture.webp" type="image/webp">
+              <img src="assets/img/render-fixture.png" alt="Página de prueba renderizada por Megi con fondo verde y estilos externos." data-alt-es="Página de prueba renderizada por Megi con fondo verde y estilos externos." data-alt-en="Test page rendered by Megi with a green background and external styles." width="640" height="400" loading="lazy" decoding="async">
+            </picture>
+            <span class="shot-zoom"><svg class="icon"><use href="#i-arrow-up-right"></use></svg></span>
+          </button>
+          <figcaption>
+            <span class="shot-tag">render · 640×400</span>
+            <span lang="es">El mismo motor que abre la ventana, aplicando estilos externos.</span>
+            <span lang="en">The same engine that opens the window, applying external styles.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="shot reveal">
+          <button class="shot-btn" type="button" aria-label="Ampliar captura de imágenes E2E" data-lightbox="assets/img/images-e2e.png" data-caption-es="Imágenes cargadas, decodificadas y escaladas por el propio motor, con un marcador gris cuando un recurso falta." data-caption-en="Images fetched, decoded and scaled by the engine itself, with a grey placeholder when a resource is missing." data-aria-es="Ampliar captura de imágenes E2E" data-aria-en="Enlarge end-to-end images screenshot">
+            <picture>
+              <source srcset="assets/img/images-e2e.webp" type="image/webp">
+              <img src="assets/img/images-e2e.png" alt="Página de prueba con un patrón de tablero escalado y un marcador gris para una imagen ausente." data-alt-es="Página de prueba con un patrón de tablero escalado y un marcador gris para una imagen ausente." data-alt-en="Test page with a scaled checkerboard pattern and a grey placeholder for a missing image." width="800" height="600" loading="lazy" decoding="async">
+            </picture>
+            <span class="shot-zoom"><svg class="icon"><use href="#i-arrow-up-right"></use></svg></span>
+          </button>
+          <figcaption>
+            <span class="shot-tag">images · 800×600</span>
+            <span lang="es">Imágenes cargadas, decodificadas y escaladas por el propio motor.</span>
+            <span lang="en">Images fetched, decoded and scaled by the engine itself.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="shot reveal">
+          <button class="shot-btn" type="button" aria-label="Ampliar captura de la Fase 4" data-lightbox="assets/img/phase4-basic.png" data-caption-es="Tipografía real, bordes, listas y capas con transparencia: el modelo de cajas de la web, pintado por Megi." data-caption-en="Real typography, borders, lists and transparent layers: the web's box model, painted by Megi." data-aria-es="Ampliar captura de la Fase 4" data-aria-en="Enlarge Phase 4 screenshot">
+            <picture>
+              <source srcset="assets/img/phase4-basic.webp" type="image/webp">
+              <img src="assets/img/phase4-basic.png" alt="Página de prueba con tipografía real, tarjeta con borde discontinuo, cajas superpuestas y enlace subrayado." data-alt-es="Página de prueba con tipografía real, tarjeta con borde discontinuo, cajas superpuestas y enlace subrayado." data-alt-en="Test page with real typography, a dashed-border card, overlapping boxes and an underlined link." width="800" height="600" loading="lazy" decoding="async">
+            </picture>
+            <span class="shot-zoom"><svg class="icon"><use href="#i-arrow-up-right"></use></svg></span>
+          </button>
+          <figcaption>
+            <span class="shot-tag">typography · 800×600</span>
+            <span lang="es">Tipografía real, bordes y capas con transparencia.</span>
+            <span lang="en">Real typography, borders and transparent layers.</span>
+          </figcaption>
+        </figure>
+      </div>
+
+      <p class="gallery-note reveal">
+        <svg class="icon"><use href="#i-check"></use></svg>
+        <span lang="es">Sin trucos: cada imagen es el resultado exacto del motor y se comprueba contra un resultado de referencia. Si un cambio altera un píxel, un test lo detecta.</span>
+        <span lang="en">No tricks: every image is the engine's exact output and is checked against a reference. If a change alters one pixel, a test catches it.</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================ ROADMAP ============================ -->
+  <section class="section section-alt" id="roadmap" aria-labelledby="roadmap-title">
+    <div class="container">
+      <header class="section-head reveal">
+        <p class="eyebrow"><svg class="icon"><use href="#i-target"></use></svg><span lang="es">Hoja de ruta</span><span lang="en">Roadmap</span></p>
+        <h2 id="roadmap-title"><span lang="es">Qué viene después</span><span lang="en">What comes next</span></h2>
+        <p class="section-lede">
+          <span lang="es">Sin fechas prometidas. Esto es lo que ya funciona, lo que está en el taller y lo que viene; la hoja de ruta completa está en el repositorio, con tareas de uno o dos días para quien quiera ayudar.</span>
+          <span lang="en">No promised dates. Here is what already works, what is in the workshop and what comes next; the full roadmap lives in the repository, with one-to-two-day tasks for anyone who wants to help.</span>
+        </p>
+      </header>
+
+      <div class="roadmap-cards">
+        <article class="roadmap-card roadmap-card-done reveal">
+          <span class="timeline-status status-done"><span lang="es">Ya funciona</span><span lang="en">Already works</span></span>
+          <h3><span lang="es">El motor hace su trabajo</span><span lang="en">The engine does its job</span></h3>
+          <ul>
+            <li><span lang="es">Convierte HTML, CSS y JavaScript reales en imágenes PNG.</span><span lang="en">Turns real HTML, CSS and JavaScript into PNG images.</span></li>
+            <li><span lang="es">Abre páginas locales en una ventana con scroll, enlaces e historial.</span><span lang="en">Opens local pages in a window with scroll, links and history.</span></li>
+            <li><span lang="es">Carga hojas de estilo, imágenes y fuentes desde la red.</span><span lang="en">Fetches stylesheets, images and fonts from the network.</span></li>
+            <li><span lang="es">Todo verificado con 990 tests y las suites oficiales.</span><span lang="en">All of it verified with 990 tests and the official suites.</span></li>
+          </ul>
+        </article>
+
+        <article class="roadmap-card roadmap-card-live reveal">
+          <span class="timeline-status status-live"><span lang="es">En marcha</span><span lang="en">In progress</span></span>
+          <h3><span lang="es">El taller abierto</span><span lang="en">The open workshop</span></h3>
+          <ul>
+            <li><span lang="es">Red más completa: HTTP/2, streaming y cookies modernas.</span><span lang="en">A more complete network: HTTP/2, streaming and modern cookies.</span></li>
+            <li><span lang="es">JavaScript más cercano al de la web: módulos, memoria y ciclo de eventos en la ventana.</span><span lang="en">JavaScript closer to the real web: modules, memory and a live event loop in the window.</span></li>
+            <li><span lang="es">Ventana con formularios, pestañas y zoom.</span><span lang="en">A window with forms, tabs and zoom.</span></li>
+          </ul>
+        </article>
+
+        <article class="roadmap-card roadmap-card-next reveal">
+          <span class="timeline-status status-next"><span lang="es">Lo siguiente</span><span lang="en">Up next</span></span>
+          <h3><span lang="es">De «renderiza» a «navega»</span><span lang="en">From “renders” to “browses”</span></h3>
+          <ul>
+            <li><span lang="es">Verificar la ventana nativa en un escritorio de verdad.</span><span lang="en">Verify the native window on a real desktop.</span></li>
+            <li><span lang="es">El CSS que aún falta: flex, grid, esquinas redondeadas, sombras…</span><span lang="en">The CSS still missing: flex, grid, rounded corners, shadows…</span></li>
+            <li><span lang="es">Accesibilidad, rendimiento y más pruebas.</span><span lang="en">Accessibility, performance and more tests.</span></li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="roadmap-cta reveal">
+        <a class="btn btn-secondary" href="https://github.com/juanpimg/Megi/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener">
+          <svg class="icon"><use href="#i-book"></use></svg>
+          <span lang="es">Ver la hoja de ruta completa</span><span lang="en">See the full roadmap</span>
+          <svg class="icon icon-arrow"><use href="#i-external"></use></svg>
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/juanpimg/Megi/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">
+          <span lang="es">Cómo se trabaja aquí</span><span lang="en">How we work here</span>
+          <svg class="icon icon-arrow"><use href="#i-arrow-right"></use></svg>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ PROBAR ============================ -->
+  <section class="section" id="probar" aria-labelledby="probar-title">
+    <div class="container">
+      <header class="section-head reveal">
+        <p class="eyebrow"><svg class="icon"><use href="#i-terminal"></use></svg><span lang="es">Pruébalo</span><span lang="en">Try it</span></p>
+        <h2 id="probar-title"><span lang="es">Pruébalo en tu máquina</span><span lang="en">Try it on your machine</span></h2>
+        <p class="section-lede">
+          <span lang="es">Todavía no hay instalador: el motor se compila desde el código fuente. Si sabes usar una terminal, en un par de minutos tienes tu primera imagen generada por Megi.</span>
+          <span lang="en">There is no installer yet: the engine is built from source. If you can use a terminal, you will have your first Megi-made image in a couple of minutes.</span>
+        </p>
+      </header>
+
+      <div class="try-panel reveal">
+        <div class="try-main">
+          <h3><span lang="es">Tu primera imagen</span><span lang="en">Your first image</span></h3>
+          <p class="try-note">
+            <span lang="es">Necesitas <strong>Rust 1.88+</strong> y Git. Clona el repositorio y renderiza la página de ejemplo:</span>
+            <span lang="en">You need <strong>Rust 1.88+</strong> and Git. Clone the repository and render the sample page:</span>
+          </p>
+          <div class="code-block" data-lang="bash">
+            <div class="code-head"><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-lang">bash</span><button class="copy-btn" type="button" data-copy aria-label="Copiar comando"><svg class="icon icon-copy"><use href="#i-copy"></use></svg><svg class="icon icon-check"><use href="#i-check"></use></svg></button></div>
+            <pre><code>git clone https://github.com/juanpimg/Megi.git
+cd Megi
+cargo run -p render -- tests/fixtures/render/showcase/index.html \
+  /tmp/megi.png --width 1024 --height 768</code></pre>
+          </div>
+          <p class="try-note">
+            <span lang="es">Obtendrás un PNG de 1024×768: el mismo que ves en la galería. La primera compilación tarda un poco.</span>
+            <span lang="en">You will get a 1024×768 PNG: the same one you see in the gallery. The first build takes a while.</span>
+          </p>
+          <p class="try-note">
+            <span lang="es">¿Y la ventana? En Linux con X11/Wayland, <code>tools/megi.sh</code> abre cualquier página. El modo sin pantalla también genera imágenes, sin abrir ventana.</span>
+            <span lang="en">And the window? On Linux with X11/Wayland, <code>tools/megi.sh</code> opens any page. Headless mode also produces images, without opening a window.</span>
+          </p>
+          <a class="text-link" href="https://github.com/juanpimg/Megi#-inicio-rápido-y-flujo-de-trabajo" target="_blank" rel="noopener">
+            <span lang="es">Ver todos los comandos en el README</span><span lang="en">See all commands in the README</span>
+            <svg class="icon"><use href="#i-arrow-up-right"></use></svg>
+          </a>
+        </div>
+
+        <div class="try-lists">
+          <div class="try-card try-card-yes">
+            <h3><svg class="icon"><use href="#i-check"></use></svg><span lang="es">Lo que ya funciona</span><span lang="en">What already works</span></h3>
+            <ul>
+              <li><span lang="es">Convierte páginas reales en imágenes PNG.</span><span lang="en">Turns real pages into PNG images.</span></li>
+              <li><span lang="es">Navega páginas locales en una ventana, con enlaces e historial.</span><span lang="en">Browses local pages in a window, with links and history.</span></li>
+              <li><span lang="es">Ejecuta el JavaScript de la página y muestra el resultado.</span><span lang="en">Runs the page's JavaScript and shows the result.</span></li>
+              <li><span lang="es">Carga CSS, imágenes y fuentes desde la red.</span><span lang="en">Fetches CSS, images and fonts from the network.</span></li>
+            </ul>
+          </div>
+          <div class="try-card try-card-no">
+            <h3><svg class="icon"><use href="#i-alert"></use></svg><span lang="es">Lo que aún falta</span><span lang="en">What is still missing</span></h3>
+            <ul>
+              <li><span lang="es">No es un navegador para el día a día.</span><span lang="en">Not an everyday browser yet.</span></li>
+              <li><span lang="es">Faltan formularios, pestañas y zoom.</span><span lang="en">Forms, tabs and zoom are missing.</span></li>
+              <li><span lang="es">CSS incompleto: flex, grid, esquinas redondeadas…</span><span lang="en">Incomplete CSS: flex, grid, rounded corners…</span></li>
+              <li><span lang="es">Sin instalador ni releases: hay que compilar.</span><span lang="en">No installer or releases: you must build it.</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ CONTRIBUIR ============================ -->
+  <section class="section section-alt" id="contribuir" aria-labelledby="contribuir-title">
+    <div class="container">
+      <header class="section-head reveal">
+        <p class="eyebrow"><svg class="icon"><use href="#i-code"></use></svg><span lang="es">Comunidad</span><span lang="en">Community</span></p>
+        <h2 id="contribuir-title"><span lang="es">Súmate al proyecto</span><span lang="en">Join the project</span></h2>
+        <p class="section-lede">
+          <span lang="es">No hace falta ser experto en navegadores. Cada tarea viene con lo que hay que conseguir y cómo comprobarlo, y hay hueco para código, pruebas, documentación y diseño.</span>
+          <span lang="en">You do not need to be a browser expert. Every task comes with what to achieve and how to check it, and there is room for code, tests, documentation and design.</span>
+        </p>
+      </header>
+
+      <div class="contribute-grid">
+        <ol class="contrib-steps">
+          <li class="contrib-step reveal">
+            <span class="contrib-num">1</span>
+            <div>
+              <h3><span lang="es">Lee cómo trabajamos</span><span lang="en">Read how we work</span></h3>
+              <p><span lang="es">Cinco minutos en <a href="https://github.com/juanpimg/Megi/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener"><code>CONTRIBUTING.md</code></a> y ya sabes la filosofía, el flujo y las reglas: especificación, pruebas y cero atajos.</span><span lang="en">Five minutes with <a href="https://github.com/juanpimg/Megi/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener"><code>CONTRIBUTING.md</code></a> and you know the philosophy, the flow and the rules: specifications, tests and no shortcuts.</span></p>
+            </div>
+          </li>
+          <li class="contrib-step reveal">
+            <span class="contrib-num">2</span>
+            <div>
+              <h3><span lang="es">Elige una tarea</span><span lang="en">Pick a task</span></h3>
+              <p><span lang="es">La <a href="https://github.com/juanpimg/Megi/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener">hoja de ruta</a> tiene paquetes de uno o dos días, cada uno con su prueba. ¿Tienes otra idea? Abre un issue y lo hablamos.</span><span lang="en">The <a href="https://github.com/juanpimg/Megi/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener">roadmap</a> has one-to-two-day packages, each with its test. Have another idea? Open an issue and let's talk.</span></p>
+            </div>
+          </li>
+          <li class="contrib-step reveal">
+            <span class="contrib-num">3</span>
+            <div>
+              <h3><span lang="es">Comprueba y abre el PR</span><span lang="en">Check and open the PR</span></h3>
+              <p><span lang="es">Pasa la puerta de calidad completa y abre un <em>pull request</em> con Conventional Commits. La CI tiene que quedar en verde.</span><span lang="en">Run the full quality gate and open a pull request with Conventional Commits. CI must stay green.</span></p>
+              <div class="code-block code-sm" data-lang="bash">
+                <div class="code-head"><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-lang">bash</span><button class="copy-btn" type="button" data-copy aria-label="Copiar comando"><svg class="icon icon-copy"><use href="#i-copy"></use></svg><svg class="icon icon-check"><use href="#i-check"></use></svg></button></div>
+                <pre><code>./tools/dev.sh all</code></pre>
+              </div>
+            </div>
+          </li>
+        </ol>
+
+        <aside class="contrib-aside">
+          <div class="rules-card reveal">
+            <h3><svg class="icon"><use href="#i-scale"></use></svg><span lang="es">Reglas de la casa</span><span lang="en">House rules</span></h3>
+            <ul>
+              <li><span lang="es"><strong>La especificación manda:</strong> cada función cita la sección que implementa.</span><span lang="en"><strong>The specification rules:</strong> every function cites the section it implements.</span></li>
+              <li><span lang="es"><strong>Núcleo sin dependencias externas:</strong> solo la biblioteca estándar de Rust.</span><span lang="en"><strong>No external dependencies in the core:</strong> only the Rust standard library.</span></li>
+              <li><span lang="es"><strong>Cero <code>unsafe</code> y cero warnings</strong> en todos los módulos.</span><span lang="en"><strong>Zero <code>unsafe</code> and zero warnings</strong> in every module.</span></li>
+              <li><span lang="es"><strong>Sin prueba de conformidad</strong> una tarea no está terminada.</span><span lang="en"><strong>With no conformance test</strong>, a task is not finished.</span></li>
+            </ul>
+          </div>
+
+          <div class="license-card reveal">
+            <h3><svg class="icon"><use href="#i-pack"></use></svg><span lang="es">Licencia</span><span lang="en">License</span></h3>
+            <p><span lang="es">Megi se distribuye bajo <strong>MIT OR Apache-2.0</strong>. Las contribuciones se aceptan bajo los mismos términos.</span><span lang="en">Megi is distributed under <strong>MIT OR Apache-2.0</strong>. Contributions are accepted under the same terms.</span></p>
+            <div class="license-links">
+              <a class="text-link" href="https://github.com/juanpimg/Megi/blob/main/LICENSE-MIT" target="_blank" rel="noopener">MIT<svg class="icon"><use href="#i-external"></use></svg></a>
+              <a class="text-link" href="https://github.com/juanpimg/Megi/blob/main/LICENSE-APACHE" target="_blank" rel="noopener">Apache-2.0<svg class="icon"><use href="#i-external"></use></svg></a>
+              <a class="text-link" href="https://github.com/juanpimg/Megi/blob/main/SECURITY.md" target="_blank" rel="noopener"><span lang="es">Seguridad</span><span lang="en">Security</span><svg class="icon"><use href="#i-external"></use></svg></a>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="areas-block reveal">
+        <h3 class="panel-title"><span lang="es">Dónde hace falta ayuda ahora</span><span lang="en">Where help is needed now</span></h3>
+        <ul class="area-tags">
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener"><span lang="es">Maquetación</span><span lang="en">Layout</span></a></li>
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener"><span lang="es">Pintado y CSS</span><span lang="en">Painting and CSS</span></a></li>
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener"><span lang="es">Red y descargas</span><span lang="en">Network</span></a></li>
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/docs/JAVASCRIPT-STRATEGY.md" target="_blank" rel="noopener">JavaScript</a></li>
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener"><span lang="es">Ventana y navegación</span><span lang="en">Window and navigation</span></a></li>
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/docs/FUZZING.md" target="_blank" rel="noopener"><span lang="es">Robustez</span><span lang="en">Robustness</span></a></li>
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/docs/PERFORMANCE.md" target="_blank" rel="noopener"><span lang="es">Rendimiento</span><span lang="en">Performance</span></a></li>
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener"><span lang="es">Documentación y diseño</span><span lang="en">Docs and design</span></a></li>
+        </ul>
+        <p class="areas-note">
+          <span lang="es">Si es tu primera contribución, abre un issue contando lo que te gustaría hacer: te orientamos antes de que escribas código.</span>
+          <span lang="en">If this is your first contribution, open an issue describing what you would like to do: we will point you in the right direction before you write code.</span>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ FAQ ============================ -->
+  <section class="section" id="faq" aria-labelledby="faq-title">
+    <div class="container container-narrow">
+      <header class="section-head reveal">
+        <p class="eyebrow"><svg class="icon"><use href="#i-alert"></use></svg><span lang="es">Preguntas frecuentes</span><span lang="en">FAQ</span></p>
+        <h2 id="faq-title"><span lang="es">Lo que la gente pregunta</span><span lang="en">What people ask</span></h2>
+      </header>
+
+      <div class="faq-list">
+        <details class="faq reveal" open>
+          <summary><span lang="es">¿Puedo usar Megi como mi navegador ya?</span><span lang="en">Can I use Megi as my browser yet?</span><svg class="icon"><use href="#i-chevron"></use></svg></summary>
+          <div class="faq-answer">
+            <span lang="es">Todavía no. Es un proyecto en pre-alpha, sin releases ni instalador: ya convierte páginas reales en imágenes y abre páginas locales en una ventana, pero le faltan formularios, pestañas, zoom y partes de CSS. La ventana nativa aún no se ha verificado visualmente. Hoy sirve para ver cómo avanza un motor desde dentro y para contribuir.</span>
+            <span lang="en">Not yet. It is a pre-alpha project with no releases or installer: it already turns real pages into images and opens local pages in a window, but forms, tabs, zoom and parts of CSS are still missing. The native window has not been visually verified yet. Today it is for watching an engine grow from the inside and for contributing.</span>
+          </div>
+        </details>
+
+        <details class="faq reveal">
+          <summary><span lang="es">¿Es un fork de Chrome, Firefox o Safari?</span><span lang="en">Is it a fork of Chrome, Firefox or Safari?</span><svg class="icon"><use href="#i-chevron"></use></svg></summary>
+          <div class="faq-answer">
+            <span lang="es">No. El motor se escribe desde cero en Rust y no reutiliza el código de otro navegador. El núcleo usa solo la biblioteca estándar de Rust; JavaScript corre sobre Boa, un motor de lenguaje independiente. Las pocas dependencias externas están documentadas y aprobadas una a una.</span>
+            <span lang="en">No. The engine is written from scratch in Rust and does not reuse another browser's code. The core uses only the Rust standard library; JavaScript runs on Boa, an independent language engine. The few external dependencies are documented and approved one by one.</span>
+          </div>
+        </details>
+
+        <details class="faq reveal">
+          <summary><span lang="es">¿Qué significa el «100 %» del parser?</span><span lang="en">What does the parser's “100%” mean?</span><svg class="icon"><use href="#i-chevron"></use></svg></summary>
+          <div class="faq-answer">
+            <span lang="es">Que Megi pasa el corpus público de pruebas del parser HTML5 (3.904 de 3.904 casos), además del tokenizador (7.050/7.050), el serializador (230/230) y la sintaxis CSS (30/30). Es conformidad de parser y estilos, no de toda la web: cosas como flex, grid o formularios aún están en la lista.</span>
+            <span lang="en">That Megi passes the public HTML5 parser test corpus (3,904 out of 3,904 cases), plus the tokenizer (7,050/7,050), the serializer (230/230) and CSS syntax (30/30). That is parser and style conformance, not the whole web: things like flex, grid or forms are still on the list.</span>
+          </div>
+        </details>
+
+        <details class="faq reveal">
+          <summary><span lang="es">¿Cómo lo pruebo?</span><span lang="en">How do I try it?</span><svg class="icon"><use href="#i-chevron"></use></svg></summary>
+          <div class="faq-answer">
+            <span lang="es">Necesitas Rust 1.88+ y Git. Clona el repositorio y usa <code>cargo run -p render</code> para convertir una página en PNG, o <code>tools/megi.sh</code> para abrir la ventana en Linux. Los comandos exactos están en la sección «Pruébalo» y en el README.</span>
+            <span lang="en">You need Rust 1.88+ and Git. Clone the repository and use <code>cargo run -p render</code> to turn a page into a PNG, or <code>tools/megi.sh</code> to open the window on Linux. The exact commands are in the “Try it” section and in the README.</span>
+          </div>
+        </details>
+
+        <details class="faq reveal">
+          <summary><span lang="es">¿Puedo ayudar si nunca he escrito un motor?</span><span lang="en">Can I help if I have never written an engine?</span><svg class="icon"><use href="#i-chevron"></use></svg></summary>
+          <div class="faq-answer">
+            <span lang="es">Sí. Las tareas están pensadas para uno o dos días y explican qué hay que conseguir y cómo comprobarlo. Hay trabajo de código, pruebas, documentación, diseño, rendimiento y fuzzing. Lo más fácil es leer <code>CONTRIBUTING.md</code>, elegir una tarea y abrir un issue para coordinarnos.</span>
+            <span lang="en">Yes. Tasks are designed for one or two days and explain what to achieve and how to check it. There is work in code, tests, documentation, design, performance and fuzzing. The easiest path is to read <code>CONTRIBUTING.md</code>, pick a task and open an issue to coordinate.</span>
+          </div>
+        </details>
+
+        <details class="faq reveal">
+          <summary><span lang="es">¿Qué licencia tiene y qué pasa con la seguridad?</span><span lang="en">What licence does it use, and what about security?</span><svg class="icon"><use href="#i-chevron"></use></svg></summary>
+          <div class="faq-answer">
+            <span lang="es">Doble licencia <strong>MIT OR Apache-2.0</strong>, a tu elección; las contribuciones se aceptan con los mismos términos. Los problemas de seguridad se reportan en privado mediante un GitHub Security Advisory, nunca en un issue público. El proyecto es pre-1.0 y solo la rama <code>main</code> recibe correcciones.</span>
+            <span lang="en">Dual-licensed <strong>MIT OR Apache-2.0</strong>, at your option; contributions are accepted under the same terms. Security issues must be reported privately through a GitHub Security Advisory, never in a public issue. The project is pre-1.0 and only <code>main</code> receives fixes.</span>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ CTA FINAL ============================ -->
+  <section class="cta-final" aria-labelledby="cta-title">
+    <div class="container">
+      <div class="cta-card">
+        <div class="cta-glow" aria-hidden="true"></div>
+        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span><span lang="es">El motor ya funciona</span><span lang="en">The engine already works</span></p>
+        <h2 id="cta-title"><span lang="es">Ayúdanos a navegarla</span><span lang="en">Help us navigate it</span></h2>
+        <p>
+          <span lang="es">Estrella el repositorio, abre un issue con tu idea o elige tu primera tarea. Cada prueba que pasa acerca a Megi a ser un navegador real, libre y escrito desde cero.</span>
+          <span lang="en">Star the repository, open an issue with your idea or pick your first task. Every passing test brings Megi closer to being a real, free browser written from scratch.</span>
+        </p>
+        <div class="cta-buttons">
+          <a class="btn btn-primary" href="https://github.com/juanpimg/Megi" target="_blank" rel="noopener">
+            <svg class="icon"><use href="#i-star"></use></svg>
+            <span lang="es">Marcar con estrella</span><span lang="en">Star the repo</span>
+          </a>
+          <a class="btn btn-secondary" href="https://github.com/juanpimg/Megi/issues" target="_blank" rel="noopener">
+            <svg class="icon"><use href="#i-code"></use></svg>
+            <span lang="es">Abrir un issue</span><span lang="en">Open an issue</span>
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/juanpimg/Megi/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">
+            <span lang="es">Leer la guía de contribución</span><span lang="en">Read the contributing guide</span>
+            <svg class="icon icon-arrow"><use href="#i-arrow-right"></use></svg>
+          </a>
+        </div>
+        <ul class="cta-badges">
+          <li><span class="badge-dot"></span><span lang="es">990 tests · 0 fallos</span><span lang="en">990 tests · 0 failures</span></li>
+          <li><span class="badge-dot"></span><span lang="es">Parser HTML5 100 %</span><span lang="en">HTML5 parser 100 %</span></li>
+          <li><span class="badge-dot"></span><span lang="es">0 <code>unsafe</code></span><span lang="en">0 <code>unsafe</code></span></li>
+          <li><span class="badge-dot"></span><span>MIT / Apache-2.0</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="#top">
+          <img class="brand-mark" src="assets/brand/mark.svg" alt="" width="34" height="34" loading="lazy" decoding="async">
+          <span class="brand-name">Megi</span>
+          <span class="brand-tag">engine</span>
+        </a>
+        <p>
+          <span lang="es">Navegador web independiente escrito desde cero en Rust. Especificación a especificación.</span>
+          <span lang="en">An independent web browser written from scratch in Rust. Spec by spec.</span>
+        </p>
+        <p class="footer-prealpha">
+          <span lang="es">Proyecto <strong>pre-alpha sin releases</strong>: este sitio documenta el estado real del motor, no un producto terminado.</span>
+          <span lang="en">A <strong>pre-alpha project with no releases</strong>: this site documents the engine's real state, not a finished product.</span>
+        </p>
+        <p class="footer-lang-note">
+          <span lang="es">Sitio en español e inglés. Cambia de idioma con los botones <strong>ES / EN</strong> de la cabecera.</span>
+          <span lang="en">Site in Spanish and English. Switch languages with the <strong>ES / EN</strong> buttons in the header.</span>
+        </p>
+        <ul class="footer-badges" aria-label="Estado del proyecto" data-aria-es="Estado del proyecto" data-aria-en="Project status">
+          <li><a class="fbadge fbadge-ci" href="https://github.com/juanpimg/Megi/actions/workflows/ci.yml" target="_blank" rel="noopener"><span class="fbadge-dot" aria-hidden="true"></span>CI passing</a></li>
+          <li><a class="fbadge fbadge-blue" href="https://github.com/juanpimg/Megi/blob/main/LICENSE" target="_blank" rel="noopener">MIT OR Apache-2.0</a></li>
+          <li><span class="fbadge fbadge-ok">990 tests</span></li>
+          <li><span class="fbadge">Rust 1.88+</span></li>
+        </ul>
+      </div>
+
+      <nav class="footer-col" aria-labelledby="footer-project">
+        <h3 id="footer-project"><span lang="es">Proyecto</span><span lang="en">Project</span></h3>
+        <ul>
+          <li><a href="#proyecto"><span lang="es">Qué es Megi</span><span lang="en">What Megi is</span></a></li>
+          <li><a href="#estado"><span lang="es">Estado actual</span><span lang="en">Current status</span></a></li>
+          <li><a href="#roadmap"><span lang="es">Hoja de ruta</span><span lang="en">Roadmap</span></a></li>
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/SECURITY.md" target="_blank" rel="noopener"><span lang="es">Seguridad</span><span lang="en">Security</span></a></li>
+        </ul>
+      </nav>
+
+      <nav class="footer-col" aria-labelledby="footer-docs">
+        <h3 id="footer-docs"><span lang="es">Documentación</span><span lang="en">Documentation</span></h3>
+        <ul>
+          <li><a href="https://github.com/juanpimg/Megi#readme" target="_blank" rel="noopener">README</a></li>
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">CONTRIBUTING.md</a></li>
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener">ROADMAP.md</a></li>
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener">ARCHITECTURE.md</a></li>
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/docs/PERFORMANCE.md" target="_blank" rel="noopener">PERFORMANCE.md</a></li>
+        </ul>
+      </nav>
+
+      <nav class="footer-col" aria-labelledby="footer-community">
+        <h3 id="footer-community"><span lang="es">Comunidad</span><span lang="en">Community</span></h3>
+        <ul>
+          <li><a href="https://github.com/juanpimg/Megi" target="_blank" rel="noopener"><span lang="es">Repositorio</span><span lang="en">Repository</span></a></li>
+          <li><a href="https://github.com/juanpimg/Megi/issues" target="_blank" rel="noopener"><span lang="es">Issues</span><span lang="en">Issues</span></a></li>
+          <li><a href="https://github.com/juanpimg/Megi/pulls" target="_blank" rel="noopener"><span lang="es">Pull requests</span><span lang="en">Pull requests</span></a></li>
+          <li><a href="https://github.com/juanpimg/Megi/actions" target="_blank" rel="noopener">CI · GitHub Actions</a></li>
+          <li><a href="https://github.com/juanpimg/Megi/blob/main/LICENSE" target="_blank" rel="noopener"><span lang="es">Licencia</span><span lang="en">License</span></a></li>
+        </ul>
+      </nav>
+    </div>
+
+    <div class="footer-bottom">
+      <p>© <span id="year">2026</span> Megi Engine Contributors · <span lang="es">hecho con Rust y demasiadas especificaciones</span><span lang="en">made with Rust and too many specifications</span></p>
+      <p class="footer-mono">MIT OR Apache-2.0 · <a href="#top"><span lang="es">Volver arriba</span><span lang="en">Back to top</span> ↑</a></p>
+    </div>
+  </div>
+</footer>
+
+<dialog class="lightbox" id="lightbox" aria-labelledby="lightbox-caption">
+  <button class="lightbox-close" type="button" data-close-lightbox aria-label="Cerrar imagen ampliada"><svg class="icon"><use href="#i-x"></use></svg></button>
+  <div class="lightbox-frame"><img id="lightbox-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" alt=""></div>
+  <p id="lightbox-caption"></p>
+</dialog>
+
+<script src="assets/js/site.js" defer></script>
+</body>
+</html>

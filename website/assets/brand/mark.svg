@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Megi mark">
+  <title>Megi</title>
+  <defs>
+    <linearGradient id="megi-mark" x1="88" y1="96" x2="424" y2="440" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff7a2f"/>
+      <stop offset="0.46" stop-color="#ff3d81"/>
+      <stop offset="1" stop-color="#4f7cff"/>
+    </linearGradient>
+  </defs>
+  <!-- Stylized M built as a web/document node graph: five nodes joined by four edges. -->
+  <path d="M112 424 L112 112 L256 300 L400 112 L400 424"
+        fill="none" stroke="url(#megi-mark)" stroke-width="80"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="112" cy="112" r="56" fill="url(#megi-mark)"/>
+  <circle cx="400" cy="112" r="56" fill="url(#megi-mark)"/>
+  <circle cx="256" cy="300" r="58" fill="url(#megi-mark)"/>
+  <circle cx="112" cy="424" r="44" fill="url(#megi-mark)"/>
+  <circle cx="400" cy="424" r="44" fill="url(#megi-mark)"/>
+</svg>
