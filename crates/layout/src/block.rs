@@ -198,6 +198,17 @@ pub(crate) fn layout_box_contents(
         crate::flex::layout_flex_children(layout_box, definite_height, is_root, measurer);
         return;
     }
+    // Grid containers arrange their children with the grid algorithm (CSS Grid 1);
+    // documents without `display:grid` never reach this branch.
+    if layout_box
+        .style
+        .as_ref()
+        .is_some_and(|style| style.display == Display::Grid || style.is_inline_grid)
+    {
+        let definite_height = definite_content_height(layout_box, cb_height);
+        crate::grid::layout_grid_children(layout_box, definite_height, is_root, measurer);
+        return;
+    }
     let definite_height = definite_content_height(layout_box, cb_height);
     let children_layout =
         layout_block_children(layout_box, definite_height, is_root, measurer, pos);
@@ -990,9 +1001,10 @@ fn last_block_child(layout_box: &LayoutBox) -> Option<&LayoutBox> {
 fn establishes_independent_formatting_context(layout_box: &LayoutBox) -> bool {
     layout_box.style.as_ref().is_some_and(|style| {
         (style.display == Display::Flex || style.is_inline_flex)
+            || (style.display == Display::Grid || style.is_inline_grid)
             || matches!(
                 style.display,
-                Display::Grid | Display::Table | Display::TableRow | Display::TableCell
+                Display::Table | Display::TableRow | Display::TableCell
             )
             // CSS 2.2 §9.4.1: floats, absolutely positioned boxes, and boxes with
             // `overflow` other than `visible` establish a new block formatting context.
