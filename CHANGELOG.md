@@ -6,6 +6,68 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 11 — HTML5 conformance milestone (3,904/3,904 tree), parser-inserted scripts, WP-B and a budgeted event loop (2026-11-10)
+
+#### Added
+
+- **HTML5 conformance milestone — tree 3,904/3,904 (100 %)**: the 62
+  `html5lib-tests/tree-construction` suites now pass completely, including the
+  four `#script-on` `scripted_*` suites (adoption01 1/1, ark 1/1, foster01 2/2,
+  webkit01 2/2). The tree allowlist is **empty**
+  (`KNOWN_TREE_FAILURES = []`, `TREE_EXPECTED_PASSED = 3904`) and the gate runs
+  PASS with tokenizer 7,050/7,050, tree 3,904/3,904, serializer 230/230 and CSS
+  Syntax 30/30.
+- **WP-6.4 — parser-inserted scripts** (`crates/html`): `html::scripting::{ScriptExecutor,
+  ScriptExecution}`, `TreeBuilder::with_script_executor` and
+  `parse_document_with_options_and_executor`/`parse_document_with_script_executor`.
+  Inline parser-inserted `<script>` elements execute in the "text" insertion mode
+  at `</script>` (or EOF) with the partially-built DOM visible;
+  `document.write`/`writeln` output is **re-tokenized in place** through
+  `Tokenizer::insert_input` (code-point splice, reconsume-aware, shifted line
+  starts/UTF-16 columns, nested written scripts included). External `src`
+  scripts are left to the host, executor errors are non-fatal
+  (`ParseOutcome::script_errors`) and the no-scripting path is **zero-cost**.
+- **Conformance harness with JavaScript** (`crates/test_harness`):
+  `js_executor::JsScriptExecutor` built on `JsRuntime::eval_on_document`, with a
+  JS prelude that captures `document.write` and polyfills
+  `documentElement.remove()`/`document.appendChild()` and an epilogue whose marker
+  node Rust extracts and removes. The four `scripted_*` suites run through it in
+  `script-on` mode; 3 unit tests + a dedicated `closed_loop` gate test
+  (**11 test_harness tests**). The harness now depends on `js` (Boa) — follow-up:
+  feature-gate so `--no-default-features` stays Boa-free.
+- **WP-B DOM surface** (`crates/js`): complete `CSSStyleDeclaration`
+  (`cssText`/`length`/`item`/`getPropertyValue`/`setProperty`/`removeProperty`),
+  `getComputedStyle` with an injectable Rust provider, `NodeList` snapshots,
+  `matches`/`closest`, `insertAdjacentHTML`/`insertAdjacentText`, wrapper↔node
+  **identity caching**, and `document` as an `EventTarget`. Rust-facing APIs:
+  `eval_on_document`, `dispatch_simple_event`, `take_document`. **46 js tests**.
+- **Budgeted event loop in `render`**: virtual clock, `DOMContentLoaded`/`load`
+  dispatched through the document `EventTarget`, delayed timers
+  (`max_tasks` 10,000, `max_virtual_time` 1000 ms), a **single re-render** after
+  draining the queue and `RenderStats::timings.event_loop`/`script_*` stats.
+  6 `js_event_*` fixtures and 11 tests → **88 render tests** (plus the
+  `13f3f21` follow-up for `DOMContentLoaded` through the document target).
+
+#### Changed
+
+- Test suite: **862 tests, 0 failures** (was 820): bench 8, css 57, dom 28,
+  fonts 13+1 doctest, **html 60**, image 45+1, **js 46**, layout 133, net 180,
+  paint 108, **render 88**, shell 83, **test_harness 11**. fmt, clippy
+  `-D warnings` (workspace), `cargo doc`, gate PASS and MSRV 1.88 verified.
+- Phase status: Phase 4 functionally complete, Phase 5 ≈95 %, **Phase 6
+  ≈75-80 %** (WP-6.1/6.2/6.4 + WP-A/WP-B done), **Phase 7 ≈65-70 %**.
+- Goldens unchanged: showcase 80,220 B `md5 c95c7eff…`, render basic 15,498 B
+  `md5 7324e851…`, Phase-4 `basic.rgba` byte-identical (`md5 60f8984e…`).
+
+#### Fixed
+
+- **Parser performance regression** (`html/tag-40k-attrs`, +28 % in round 10):
+  attribute dedupe is back on `std::HashSet`, `FastHasher` is used word-at-a-time
+  only for bookkeeping and the character-batching fast path now checks
+  `state == Data` first. The benchmark is back to **~12.4 ms**, A/B always below
+  the pre-round-10 baseline, while keeping round 10's gains (interleaved pipeline
+  ~154-158 ms).
+
 ### Round 10 — JS events/timers, a 131 ms pipeline, hit regions in render and advanced networking (2026-11-10)
 
 #### Added

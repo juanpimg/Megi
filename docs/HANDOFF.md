@@ -1,66 +1,67 @@
-# Handoff de sesión — ronda 10 (JS con eventos/timers, pipeline 131 ms, hit regions y red avanzada E2E)
+# Handoff de sesión — ronda 11 (HITO: árbol HTML5 3.904/3.904, WP-6.4, WP-B y event loop)
 
 **Fecha**: 2026-11-10 (Europe/Madrid)
-**Rama**: `sprint/robustez-fase4` — HEAD `f10635c` (árbol limpio)
-**Estado**: **820 tests, 0 fallos**; gate de 4 suites PASS; Fase 4 funcionalmente completa, **Fase 5 ≈95 %** (red avanzada E2E), **Fase 6 ≈40 % (WP-6.1 + WP-6.2 host + WP-A HECHOS)**, **Fase 7 ≈65 %** (navegación + hit regions).
+**Rama**: `sprint/robustez-fase4` — HEAD `13f3f21` (árbol limpio)
+**Estado**: **862 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %) y sin allowlist de tree**; Fase 4 funcionalmente completa, **Fase 5 ≈95 %**, **Fase 6 ≈75-80 % (WP-6.1/6.2/6.4 + WP-A/WP-B HECHOS)**, **Fase 7 ≈65-70 %**.
 **Docs**: [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md) · [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md) · [`PERFORMANCE.md`](PERFORMANCE.md) · [`FUZZING.md`](FUZZING.md) · [`ROADMAP.md`](ROADMAP.md).
 
-## Qué se hizo en la ronda 10 (3 commits)
+## Qué se hizo en la ronda 11 (5 commits)
 
 | Commit | Bloque | Resultado |
 |---|---|---|
-| `7faa431` `feat(js)` | **Fase 6 WP-A — eventos y timers** | `EventTarget` (`addEventListener`/`removeEventListener`/`dispatchEvent`) en nodos/document/window con **captura window→document→ancestros→target y burbuja de vuelta**; `Event`/`CustomEvent` (`bubbles`/`cancelable`/`detail`/`defaultPrevented`, `preventDefault`/`stopPropagation`/`stopImmediatePropagation`, `dispatchEvent` devuelve false si `preventDefault`); **timers** en scheduler Rust con **reloj inyectable**: `setTimeout(args)`/`setInterval`/`clear`, orden `(due, id)`, `advance(Duration)`, `run_until(deadline_ms)`, `now_ms()`, `pending_timers()`; `run_tasks` ahora ejecuta solo los vencidos por reloj real (cambio de semántica documentado). 14 tests nuevos → **26 js**. Límites: sin `onclick`/`once`/`passive`, `currentTarget` null en listener, `removeEventListener` sin comparar identidad. |
-| `6a41551` `perf(html,layout)` | **Rendimiento parse+layout** | Pipeline 800×600 **167,6 → 131,2 ms (−21,7 %)**; `html/realistic-1mb` **55,0 → 19,2 ms (−65 %)**; layout 56,1→54,5 ms (−2,8 %). Causas: batching de caracteres in-body (una inserción por run con `append_text(&str)`), `consume_data_run` en el tokenizer, preprocesado en una pasada, hasher interno, caché de `allow_cdata`, contador foreign y buffer de tokens reutilizado; en layout, menos clones de `ComputedStyle` en rutas calientes e iteración directa de tablas. **Gate intacto** (tokenizer 7.050/7.050, árbol 3.898/3.904) y **golden byte-idéntico**. El pipeline consume ahora el 65,6 % del presupuesto de 200 ms. |
-| `f10635c` `feat(render,shell)` | **hit regions en el pipeline + red avanzada** | `RenderOutput.hit_regions` (+ `RenderStats.hit_regions`) construido con `paint::build_display_list_with_hit_regions`: **píxeles sin cambios** (`basic` `7324e851…`, showcase `c95c7eff…`) y coste **+0,6 µs** en paint (80 items/121 regiones). El **shell usa `output.hit_regions` + `paint::find_link_at`** (fallback layout+DOM documentado) con fixture `file://` de enlaces relativos/absolutos; un anchor sin `href` no genera región. **Red avanzada**: `RenderOptions.cookies` (jar por render) o `cookie_jar` compartido de sesión propagando `Set-Cookie` entre documento/redirects/subrecursos y renders posteriores; `RenderOptions.origin`/`--origin` (o Origin derivado del document URL) con validación **CORS/credentials** cuando hay jar; denegaciones CORS ⇒ warning **no fatal**; gzip/deflate verificados E2E en loopback (HTML y CSS gzip aplican estilos). `RenderStats` gana `hit_regions`/`cookies_stored`/`content_encoding`; CLI render/shell `--cookies`/`--origin`. **render 77 tests (+10), shell 83 (+3)**. |
+| `3a8c0ac` `feat(js)` | **WP-B + APIs Rust** | `CSSStyleDeclaration` completa (`cssText`/`length`/`item`/`getPropertyValue`/`setProperty`/`removeProperty`), `getComputedStyle` con **provider inyectable**, `NodeList` snapshot, `matches`/`closest`, `insertAdjacentHTML`/`Text` e **identidad de wrappers** (cache wrapper↔nodo). APIs Rust para hosts: **`eval_on_document`**, **`dispatch_simple_event`**, **`take_document`**. **43→46 tests js** (incluye `document` como `EventTarget` en el follow-up). |
+| `3e20b94` `feat(html)` | **WP-6.4 + fix de rendimiento** | `html::scripting::{ScriptExecutor, ScriptExecution}`; `TreeBuilder::with_script_executor` y `parse_document_with_options_and_executor`. Los scripts **parser-inserted** se ejecutan en el "text insertion mode" al `</script>` (o EOF) con el DOM parcial visible; `document.write` se **re-tokeniza en la posición actual** con `Tokenizer::insert_input` (splice de code points, reconsume-aware, `line_starts`/UTF-16 ajustados, scripts anidados incluidos). Externos `src` los ejecuta el host; errores no fatales (`ParseOutcome::script_errors`); camino sin scripting **zero-cost**. Incluye el **fix de la regresión `tag-40k-attrs`** (~12,4 ms; dedupe con `std::HashSet`, `FastHasher` word-at-a-time solo en bookkeeping, guard `state == Data` en el batching). **60 tests html**. |
+| `32b421d` `test(conformance)` | **Harness con JS** | `js_executor::JsScriptExecutor` sobre `JsRuntime::eval_on_document`: preludio JS que intercepta `document.write`/`writeln` y polyfillea `documentElement.remove()`/`document.appendChild()` (sin tocar `crates/js`), epílogo con marcador extraído y eliminado con `remove_subtree`. `tree_harness` lo activa solo en modo `script-on`. **Gate: árbol 3.904/3.904, las 4 suites `scripted_*` verdes, `KNOWN_TREE_FAILURES=[]`, `TREE_EXPECTED_PASSED=3904`**; test explícito en `closed_loop`. **11 tests test_harness**. |
+| `786fbcc` `feat(render)` | **Event loop presupuestado** | Reloj virtual, `DOMContentLoaded`/`load`, timers con delay (`max_tasks` 10.000, `max_virtual_time` 1000 ms), **un solo re-render** tras drenar la cola, stats `script_*`/`timings.event_loop`; **6 fixtures `js_event_*` y 11 tests** → **88 tests render**. |
+| `13f3f21` `test(render)` | Follow-up | `DOMContentLoaded` despachado a través del nuevo `EventTarget` del documento (`js` 46 tests). |
 
 ## Evidencia verificada
 
-- `cargo test --workspace` → **820 tests, 0 fallos** (css 57, dom 28, fonts 13+1 doctest, html 53, image 45+1, **js 26**, layout 133, net 180, paint 108, **render 77**, **shell 83**, bench 8, test_harness 7); fmt, clippy `-D warnings`, `cargo doc` y MSRV 1.88 OK.
-- Gate de conformidad: tokenizer **7.050/7.050**, árbol **3.898/3.904** (allowlist `scripted_*` hasta WP-6.4), serializador **230/230**, CSS Syntax **30/30**; `--summary` exit 0.
-- **Rendimiento (release, mediana)**: `pipeline/html-to-png-800x600` 167,6 → **131,2 ms**; `html/realistic-1mb` 55,0 → **19,2 ms**; `layout/realistic-1mb` 56,1 → **54,5 ms**.
-- **Píxeles sin cambios**: showcase 1024×768 **80.220 B `md5 c95c7eff83e7bd08f815631aa42afdb0`**; render basic 15.498 B **`md5 7324e8512e831de132b1172965332a73`**; Phase-4 `basic.rgba` byte-idéntico (`md5 60f8984e…`).
-- **JS**: `js_text.html` con scripting 15.876 B `md5 e1da51d4…` vs `--no-scripting` 15.499 B `md5 53f67e77…`; 26 tests js (14 nuevos de eventos/timers).
-- **hit regions**: 121 regiones/80 items en el showcase; shell resuelve enlaces vía `find_link_at` con fallback documentado.
+- Gate (`cargo run -p test_harness -- --summary`, exit 0): tokenizer **7.050/7.050**, **árbol 3.904/3.904 (100 %)**, serializer **230/230**, CSS Syntax **30/30**; allowlists de tokenizer y de árbol **vacías**. `--strict` exit 1 solo por las diferencias de parse-error documentadas (37 order-only + 1 `xmlViolation`).
+- `cargo test --workspace` → **862 tests, 0 fallos**: bench 8, css 57, dom 28, fonts 13+1, html 60, image 45+1, **js 46**, layout 133, net 180, paint 108, **render 88**, shell 83, test_harness 11. fmt, clippy `-D warnings` (workspace), `cargo doc` y MSRV 1.88 OK.
+- **Píxeles sin cambios**: showcase 1024×768 **80.220 B `md5 c95c7eff83e7bd08f815631aa42afdb0`**; render basic 15.498 B **`md5 7324e851…`**; Phase-4 `basic.rgba` byte-idéntico (`md5 60f8984e…`).
+- **Rendimiento**: `html/tag-40k-attrs` **~12,4 ms** (A/B siempre por debajo del baseline pre-r10) manteniendo las ganancias de la ronda 10 (`html/realistic-1mb` ~19-22 ms según carga); pipeline intercalado **~154-158 ms** (medido 155,19 ms mediana / 148,80 min con load 5-8).
+- JS: `js_text.html` 15.876 B `md5 e1da51d4…` con scripting vs 15.499 B `md5 53f67e77…` con `--no-scripting`.
 
 ## Estado actual por crate
 
 | Crate | Estado | Tests |
 |---|---|---|
 | `dom` | COMPLETO: arena generacional, API de navegador | 28 |
-| `html` | COMPLETO: parser, serializador §13.3, `innerHTML`/`document.write`; **perf ronda 10** | 53 |
+| `html` | **COMPLETO**: parser 3.904/3.904, serializador §13.3, hook `ScriptExecutor` (WP-6.4) | 60 |
 | `css` | COMPLETO: selectores/cascada/@media/query API, background-image parsing | 57 |
-| `layout` | COMPLETO Fase 4: tablas §17, árbol de celdas fijado; perf ronda 10 | 133 |
+| `layout` | COMPLETO Fase 4: tablas §17, árbol de celdas fijado | 133 |
 | `fonts` | COMPLETO (base LTR) | 13 + 1 doctest |
 | `paint` | COMPLETO Fase 4 + backgrounds + hit-testing | 108 |
 | `net` | Fase 5: TLS/caché/data:/cookies/CORS/gzip | 180 |
 | `image` | Decoder PNG + inflate propios | 45 + 1 doctest |
-| `js` | **Fase 6 WP-6.1 + WP-A**: Boa 0.21.1, bindings DOM, eventos y timers con reloj inyectable | 26 |
-| `render` | Pipeline URL→PNG + imágenes/backgrounds + scripts + **hit_regions** + red avanzada E2E | 77 |
-| `shell` | Fase 7 usable: scroll/entrada/HiDPI/worker + navegación/historial/título + **find_link_at** | 83 |
+| `js` | **Fase 6 WP-A/B + APIs host**: Boa 0.21.1, eventos/timers, CSSOM/DOM WP-B, `document` EventTarget | 46 |
+| `render` | Pipeline URL→PNG + imágenes/backgrounds + scripts + **event loop presupuestado** | 88 |
+| `shell` | Fase 7 usable: scroll/entrada/HiDPI/worker + navegación/historial/título + `find_link_at` | 83 |
 | `bench` | Benchmarks reproducibles (parseo/estilos/layout/paint/PNG) | 8 |
-| `test_harness` | Gate de conformidad 4 suites + allowlist | 7 |
+| `test_harness` | Gate 4 suites (árbol 3.904/3.904 **sin allowlist**) + `JsScriptExecutor` (WP-6.4) | 11 |
 
 ## Comandos de verificación
 
 ```bash
-./tools/dev.sh all                                  # fmt, clippy, 820 tests, doc y gate
-cargo test --workspace                              # 820 tests (con JS por defecto)
-cargo test --workspace --no-default-features        # stub sin Boa (build mínimo)
-cargo test -p js -p render -p shell -p paint
+./tools/dev.sh all                                  # fmt, clippy, 862 tests, doc y gate
+cargo test --workspace                              # 862 tests (con JS por defecto)
+cargo run -p test_harness -- --summary              # gate: 3904/3904 árbol, PASS, exit 0
+cargo run -p test_harness -- --strict               # exit 1 solo por diffs de parse-error documentadas
+cargo test -p html -p test_harness -p js -p render
 
-# JS del documento + eventos/timers (WP-A)
-cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_on.png
-cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
-cargo test -p js                                    # 26 tests (eventos/timers/reloj)
+# WP-6.4: scripts parser-inserted + document.write re-tokenizado (gate)
+cargo test -p html --lib scripting                 # 7 tests del hook
+cargo test -p test_harness --test closed_loop      # incluye el test de las 4 suites scripted_*
 
-# hit regions + red avanzada (cookies/CORS/gzip)
-cargo run -p render -- https://example.com/ /tmp/page.png --cookies --origin https://example.com --json
-cargo run -p shell -- tests/fixtures/render/showcase/index.html --cookies --origin https://localhost
+# Event loop presupuestado + fixtures js_event_*
+cargo run -p render -- tests/fixtures/render/js_event_timeout.html /tmp/timer.png --json
+cargo run -p render -- tests/fixtures/render/js_event_domcontentloaded.html /tmp/dcl.png
+cargo test -p render --test event_loop_tests
 
-# Rendimiento (release; baseline en docs/PERFORMANCE.md)
-./tools/bench.sh --filter pipeline
-./tools/bench.sh --filter html
-./tools/bench.sh --filter layout
+# Rendimiento del parser (A/B) y pipeline
+cargo run --release -p bench -- --filter html
+cargo run --release -p bench -- --filter pipeline
 
 # Showcase / fase 4
 cargo run -p render -- tests/fixtures/render/showcase/index.html docs/images/showcase.png --width 1024 --height 768
@@ -70,18 +71,18 @@ python3 tools/png_check.py /tmp/phase4.png
 
 ## Deuda priorizada
 
-1. **WP-B (js)**: `CSSStyleDeclaration` completa + `getComputedStyle` provider, `NodeList`, `matches`/`closest`, `insertAdjacent*` y caché de identidad wrapper↔nodo; completar `onclick`/`once`/`passive` y `removeEventListener` con identidad.
-2. **WP-6.4 (render+js)**: ejecución **durante el parsing** (`parser-inserted` + `document.write` con re-tokenización) para sacar los `scripted_*` de la allowlist → árbol **3.904/3.904**; después `async`/`defer` y módulos ES.
-3. **Integrar eventos/timers en el host** (shell): `run_until` + re-render periódico, hoy el bucle del host no ejecuta JS.
-4. **Rendimiento**: techo de layout → pasar `LayoutBox.style` a `Arc<ComputedStyle>` (toca paint); bench E2E con JS y presupuesto global del pipeline.
-5. **Fase 5**: HTTP/2 y streaming, SameSite/PSL; `br`.
-6. **Fase 7**: formularios, pestañas, zoom, eventos DOM/foco y tests de ventana con Xvfb.
-7. **Fase 4**: `background-repeat/size/position`, colores de conflictos `border-collapse`, block-in-inline.
-8. **Fuzzing**: targets `render`/`js` además de los 4 actuales (`html_parse`, `css_parse`, `selectors`, `net_url`).
+1. **`js`**: `onclick`/`once`/`passive`, `currentTarget`/identidad en `removeEventListener`; módulos ES y `async`/`defer` externos; presupuesto de memoria y aislamiento de realms; `MutationObserver`.
+2. **`render`**: cablear el **provider de `getComputedStyle`** al pipeline (cascada real) y usar el event loop en páginas reales con `requestAnimationFrame`; optimizar el **PNG encoder** (~59 % del tiempo de render).
+3. **Rendimiento**: techo de layout → `LayoutBox.style` como `Arc<ComputedStyle>` (toca layout+paint); bench E2E con JS.
+4. **Harness**: feature-gate para que el `--no-default-features` no arrastre Boa vía `test_harness`; mantener 3.904/3.904 como invariante de CI.
+5. **Fase 5**: HTTP/2 y streaming, SameSite/PSL, `br`.
+6. **Fase 7**: formularios, pestañas, zoom, event loop vivo en el shell y pruebas de ventana con Xvfb.
+7. **Fase 4**: `background-repeat/size/position`, colores de `border-collapse`, block-in-inline.
+8. **Fuzzing**: targets `render`/`js` además de los 4 actuales.
 
 ## Reglas del repositorio (recordatorio)
 
-- Sin *forks* de motores ni crates de parsing/layout/imagen de terceros. Núcleo (`dom`, `html`, `css`, `layout`) sólo `std`; `fonts` es la excepción tipográfica autorizada (§3.1); `net` usa `rustls`/`webpki-roots` (producción) y `rcgen` (tests); `image` std puro; `js` usa **Boa 0.21.1** (MIT, feature `js` default ON, stub sin feature); `render` no añade deps externas; `shell` usa `winit`/`softbuffer`.
+- Sin *forks* de motores ni crates de parsing/layout/imagen de terceros. Núcleo (`dom`, `html`, `css`, `layout`) sólo `std`; `fonts` es la excepción tipográfica autorizada (§3.1); `net` usa `rustls`/`webpki-roots` (producción) y `rcgen` (tests); `image` std puro; `js` usa **Boa 0.21.1** (MIT, feature `js` default ON, stub sin feature); `render` no añade deps externas; `shell` usa `winit`/`softbuffer`; `test_harness` usa `js` para ejecutar los scripts del corpus (follow-up de feature-gate).
 - `#![forbid(unsafe_code)]` en todos los crates; `fuzz/` workspace aparte.
 - Cero advertencias: `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings` + `cargo doc`.
 - Tests en el mismo commit; *Conventional Commits*; no commit/push desde agentes.

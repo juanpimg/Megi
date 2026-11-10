@@ -1,8 +1,8 @@
 # Matriz de Soporte de la Fase 4 (`docs/PHASE4-SUPPORT.md`)
 
-**Objetivo de la Fase 4**: renderizar una página HTML real a una imagen **PNG**, completando el modelo de pintado CSS 2.2 y la tipografía. **Estado global**: Fase 4 funcionalmente cerrada (rondas 9–10: `render` ejecuta JavaScript con eventos/timers, `paint`/`render` exponen hit regions y el pipeline bajó a 131 ms en 800×600).
+**Objetivo de la Fase 4**: renderizar una página HTML real a una imagen **PNG**, completando el modelo de pintado CSS 2.2 y la tipografía. **Estado global**: Fase 4 funcionalmente cerrada y **HITO ronda 11**: árbol HTML5 **3.904/3.904 (100 %)** con gate sin allowlist de tree, además de `render` con event loop presupuestado, `paint`/`render` con hit regions y el pipeline en ~155 ms intercalado.
 
-El pipeline `HTML → CSS → layout → display list → PNG` renderiza texto real, tablas (incluido el texto de sus celdas), `inline-block`, cajas reemplazadas, posicionamiento, floats, `overflow` con clip, stacking/`z-index`/`opacity`, decoraciones/marcadores, **imágenes `<img>` con muestreo bilineal**, **`background-image`/`list-style-image`** (bitmap estirado al *padding box*; sin `repeat`/`size`/`position`) y comprime PNG con un DEFLATE propio. Quedan `background-repeat`/`size`/`position`, colores en conflictos de `border-collapse` y block-in-inline. Desde la ronda 9 el pipeline **ejecuta los `<script>` del documento** (`render`, WP-6.2 host); la ronda 10 añade **eventos/timers JS (WP-A)**, **hit regions** en `RenderOutput` (+0,6 µs, píxeles sin cambios) y **red avanzada E2E** (cookies/CORS/gzip).
+El pipeline `HTML → CSS → layout → display list → PNG` renderiza texto real, tablas (incluido el texto de sus celdas), `inline-block`, cajas reemplazadas, posicionamiento, floats, `overflow` con clip, stacking/`z-index`/`opacity`, decoraciones/marcadores, **imágenes `<img>` con muestreo bilineal**, **`background-image`/`list-style-image`** (bitmap estirado al *padding box*; sin `repeat`/`size`/`position`) y comprime PNG con un DEFLATE propio. Quedan `background-repeat`/`size`/`position`, colores en conflictos de `border-collapse` y block-in-inline. Desde la ronda 9 el pipeline **ejecuta los `<script>` del documento** (`render`, WP-6.2 host); la ronda 10 añade **eventos/timers JS (WP-A)**, hit regions y red avanzada E2E; la ronda 11 añade **WP-B** (CSSOM/`getComputedStyle`/`NodeList`/`matches`/`closest`/identidad), **WP-6.4** (scripts parser-inserted + `document.write` re-tokenizado ⇒ árbol 3.904/3.904) y **event loop presupuestado** en `render` (reloj virtual, lifecycle, timers, re-render único).
 
 - Resultados visuales: [`images/phase4-basic.png`](images/phase4-basic.png) · [`images/render-fixture.png`](images/render-fixture.png).
 - Plan: [`ROADMAP.md`](ROADMAP.md) §«FASE 4»/«FASE 5» · Estado y deuda: [`HANDOFF.md`](HANDOFF.md) · Rendimiento: [`PERFORMANCE.md`](PERFORMANCE.md).
@@ -77,8 +77,8 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | URL WHATWG subset, HTTP/1.1, **TLS 1.2/1.3** (`rustls`+`webpki-roots`), caché HTTP RFC 9111 subset, `data:`, `file://`, MIME, `ResourceLoader` | **HECHO** | `crates/net`, 180 tests offline; cookies/CORS/gzip aplicados E2E en el pipeline (ronda 10) |
 | **Cookies RFC 6265** (`CookieJar`, cap 4.096, `FetchOptions.cookie_jar`), **CORS básico** (Origin/ACAO/credentials/validación) y **gzip/deflate** (`Accept-Encoding: gzip` por defecto, CRC32/ISIZE, `CompressionLimits`: 64 MiB + ratio 1000:1) | **HECHO** | Ronda 8; SameSite/PSL, CORS completo y HTTP/2 pendientes |
 | **Decoder PNG propio + inflate zlib/DEFLATE** (color types 0/2/3/4/6, bit depth 1–16, filtros 0–4, Adam7, CRC, `PngLimits`) | **HECHO** | `crates/image`, 45 tests + 1 doctest; GIF/JPEG/WebP solo detectados |
-| **Pipeline de navegador** `URL → PNG` con CSS externo: charset UTF-8/Windows-1252, `<base>`, `<style>`+`<link rel=stylesheet>` (dedup/media/caps), cascada UA+autor, layout con fuentes y backgrounds, PNG; **`RenderOutput.hit_regions`** y **red avanzada E2E** (cookies por render/sesión, CORS/credentials con denegación no fatal, gzip/deflate en HTML/CSS, `--cookies`/`--origin`) | **HECHO** | `crates/render`, 77 tests; fixture 640×400 → 15.498 B `md5 7324e851…`; showcase 1024×768 → 80.220 B `md5 c95c7eff…` (ronda 8, con texto de tablas y backgrounds) |
-| **Ejecución de JavaScript en `render`** (Fase 6 WP-6.2 host): `ScriptingMode`/`RenderOptions.scripting` (default Enabled con feature `js`, `--no-scripting`), scripts clásicos inline/`src` en orden (módulos avisados/saltados, `nomodule` ignorado), caps 8 MiB/script + 32 MiB total + 64 scripts, `JsRuntime::with_document` con budget por script+total, microtasks/hasta 10.000 timers, console y stats, y **re-render estilos→layout→paint del DOM mutado** | **HECHO** | 7 fixtures `js_*` y 12 tests; `js_text.html` con scripting 15.876 B `md5 e1da51d4…` vs `--no-scripting` 15.499 B `md5 53f67e77…`; límite: sólo post-parseo (WP-6.4 para `scripted_*`) |
+| **Pipeline de navegador** `URL → PNG` con CSS externo: charset UTF-8/Windows-1252, `<base>`, `<style>`+`<link rel=stylesheet>` (dedup/media/caps), cascada UA+autor, layout con fuentes y backgrounds, PNG; **`RenderOutput.hit_regions`**, **red avanzada E2E** (cookies por render/sesión, CORS/credentials con denegación no fatal, gzip/deflate, `--cookies`/`--origin`) y **event loop presupuestado** (reloj virtual, `DOMContentLoaded`/`load`, timers, re-render único) | **HECHO** | `crates/render`, 88 tests; fixture 640×400 → 15.498 B `md5 7324e851…`; showcase 1024×768 → 80.220 B `md5 c95c7eff…` (ronda 8, con texto de tablas y backgrounds) |
+| **Ejecución de JavaScript en `render`** (Fase 6 WP-6.2 host): `ScriptingMode`/`RenderOptions.scripting` (default Enabled con feature `js`, `--no-scripting`), scripts clásicos inline/`src` en orden (módulos avisados/saltados, `nomodule` ignorado), caps 8 MiB/script + 32 MiB total + 64 scripts, budget por script+total, console/stats y **re-render estilos→layout→paint del DOM mutado**; **event loop** (`DOMContentLoaded`/`load`, timers con reloj virtual, `max_tasks` 10.000 y `max_virtual_time` 1000, stats `timings.event_loop`) | **HECHO** | 7 fixtures `js_*` + 6 `js_event_*` y 11 tests de event loop; `js_text.html` 15.876 B `md5 e1da51d4…` vs 15.499 B `md5 53f67e77…`; el parser ejecuta además los scripts parser-inserted (WP-6.4, gate 3.904/3.904) |
 | `<img>` de extremo a extremo (fetch + decodificación + pintado + placeholder) | **HECHO** | WP-5.7; fixture `images.html` 800×600 → 15.625 B `md5 1de31699…` |
 | `background-image` de extremo a extremo | **HECHO** | WP-5.9: fetch+decode+pintado offline/HTTP, caps 32 imágenes / 8 MiB / 16 MiB y stats/warnings; `repeat`/`size`/`position` pendientes |
 | `@import` recursivo + media real en `render` | **HECHO** | WP-5.8: dedup/ciclos/profundidad 8/media screen; faltan `layer()`/`supports()`/`@font-face` |
@@ -98,17 +98,18 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, eventos DOM/foco y formularios del host (Fase 7), animaciones, `border-radius`, `box-shadow`, gradientes y medios paginados. JavaScript está en Fase 6 (ver §8); hit-testing y navegación ya existen (rondas 9–10).
 
-## 8. Fase 6: JavaScript (`crates/js`, 26 tests + scripting E2E en `render`)
+## 8. Fase 6: JavaScript (`crates/js`, 46 tests + scripting E2E en `render`/parser)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
 | Runtime **Boa 0.21.1** con feature `js` ON por defecto (stub `--no-default-features`), realm persistente, `eval`, `console.*`, `window`/`document` | **HECHO** | WP-6.1; `#![forbid(unsafe_code)]` |
-| Bindings DOM (`document.write`, `getElementById`, `querySelector(All)`, `innerHTML`, `style`, `classList`, árbol, atributos) sobre side-table `NodeId↔handle` generacional | **HECHO** | sin caché de identidad de wrappers |
+| Bindings DOM (`document.write`, `getElementById`, `querySelector(All)`, `innerHTML`, `style`, `classList`, árbol, atributos) sobre side-table `NodeId↔handle` generacional | **HECHO** | identidad de wrappers cacheada (WP-B) |
 | **WP-A: eventos y timers (ronda 10)**: `EventTarget` (`addEventListener`/`removeEventListener`/`dispatchEvent`) con captura window→document→ancestros→target y burbuja; `Event`/`CustomEvent` (`bubbles`/`cancelable`/`detail`/`defaultPrevented`, prevent/stop/stopImmediate); timers con **reloj inyectable** (`setTimeout`/`setInterval`/clear, orden `(due, id)`, `advance`/`run_until`/`now_ms`/`pending_timers`; `run_tasks` ejecuta vencidos por reloj real) | **HECHO** | 14 tests nuevos (26 js); límites: sin `onclick`/`once`/`passive`, `currentTarget` null en listener, `removeEventListener` sin identidad |
 | Anti-DoS: `Budget` → Boa `RuntimeLimits` (bucle 5.000.000, recursión 512, pila VM 20.480; `Budget::SMALL` en páginas/tests), sin APIs de red/FS, side-table cap 1.000.000; scheduler base `setTimeout`/microtasks | **HECHO** | Violaciones → `JsError::Budget`; sin event loop completo |
 | **Integración en `render` (WP-6.2 host)**: `ScriptingMode`/`--no-scripting`, `ScriptingLimits`/`ScriptBudget`, descubrimiento y ejecución de scripts post-parseo, caps 8/32 MiB y 64 scripts, microtasks/timers, console/stats y re-render del DOM mutado | **HECHO** | 7 fixtures `js_*`; `js_text.html` 15.876 B `md5 e1da51d4…` vs 15.499 B `md5 53f67e77…` |
-| WP-B: CSSOM (`CSSStyleDeclaration` completa/`getComputedStyle`), `NodeList`, `matches`/`closest`, `insertAdjacent*`, identidad de wrappers | **PENDIENTE** | Fase 6 ≈40 % |
-| WP-6.4: ejecución **durante el parsing** (`parser-inserted`/`document.write` con re-tokenización) para `scripted_*`; `async`/`defer`; módulos ES; integrar eventos/timers en el host | **PENDIENTE** | Criterio árbol 3.904/3.904 |
+| **WP-B (ronda 11)**: `CSSStyleDeclaration` completa (`cssText`/`length`/`item`/`getPropertyValue`/`setProperty`/`removeProperty`), `getComputedStyle` con provider inyectable, `NodeList` snapshot, `matches`/`closest`, `insertAdjacentHTML`/`Text` e identidad de wrappers; `document` como `EventTarget`; APIs Rust `eval_on_document`/`dispatch_simple_event`/`take_document` | **HECHO** | 46 tests js; Fase 6 ≈75-80 % |
+| **WP-6.4 (ronda 11)**: hook `html::scripting::{ScriptExecutor, ScriptExecution}`; scripts parser-inserted al `</script>`/EOF y `document.write` **re-tokenizado en la posición actual** (scripts anidados incluidos); externos `src` los ejecuta el host; errores no fatales; camino sin scripting zero-cost | **HECHO** | **árbol 3.904/3.904 (100 %), allowlist de tree vacía** |
+| Pendientes F6: `onclick`/`once`/`passive`, módulos ES/`async`/`defer`, memoria y aislamiento, provider de `getComputedStyle` cableado al pipeline y event loop vivo en el shell | **PENDIENTE** | Fase 6 ≈75-80 % |
 
 ## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 83 tests)
 
@@ -127,7 +128,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 ## 10. Verificación de la matriz
 
 ```bash
-./tools/dev.sh all                             # fmt, clippy, 820 tests, doc y gate PASS
+./tools/dev.sh all                             # fmt, clippy, 862 tests, doc y gate PASS
 cargo test -p css -p layout -p paint -p fonts -p dom -p html
 cargo test -p net -p render -p image -p shell
 cargo test -p js
@@ -136,6 +137,9 @@ cargo run -p render -- tests/fixtures/render/showcase/index.html docs/images/sho
 cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_on.png    # JS ejecutado (mutaciones en el PNG)
 cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
 cargo test -p paint --test hit_testing
+cargo run -p test_harness -- --summary          # gate: árbol 3904/3904 (100 %), 230/230 serializer, 30/30 CSS; exit 0
+cargo test -p render --test event_loop_tests   # event loop presupuestado (6 fixtures js_event_*)
+cargo test -p html --lib scripting             # hook WP-6.4 (scripts parser-inserted)
 cargo run -p render -- https://example.com/ /tmp/page.png --cookies --origin https://example.com --json   # red avanzada E2E
 cargo run -p shell -- tests/fixtures/render/showcase/index.html              # navegación (clic, Alt+←/→, b/n, r, q)
 cargo run -p render -- tests/fixtures/render/images.html docs/images/images-e2e.png --width 640 --height 400

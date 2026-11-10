@@ -97,13 +97,16 @@ after a fix is available.
   is shared as an explicit session jar by the shell), propagating `Set-Cookie`
   across document/redirects/subresources; `--origin` enables CORS/credentials
   validation, and a CORS denial is a **non-fatal warning** in `RenderOutput::stats`
-  (never a crash).
+  (never a crash). The **event loop is budgeted**: at most 10,000 timer/microtask
+  tasks and 1,000 ms of virtual time per render, then a single re-render; exceeding
+  a budget is reported in `RenderStats::timings.event_loop` and never hangs the
+  process.
 - **Image decoding limits** (`crates/image`): the PNG decoder enforces
   `PngLimits` (16384 px per side, 16 Mpx total, 64 MiB per chunk, 256 MiB of
   IDAT) before/while inflating, verifies chunk CRCs and never panics on
   malformed input; the inflate implementation is the crate's own and is
   fuzzed alongside the parsers.
-- **JavaScript (Phase 6, ADR-001 accepted; WP-6.1 + WP-6.2 host done)**: the chosen engine is Boa 0.21.x (pure Rust, `Unlicense OR MIT`) with feature `js` **enabled by default**; the dependency is isolated in `crates/js`, which itself keeps `#![forbid(unsafe_code)]`, and every script must run under instruction/time/stack budgets with no network/filesystem capabilities. `crates/render` now executes the document's classic `<script>` elements **after parsing** under per-script and total `ScriptingLimits` (caps above), drains a bounded microtask/timer queue and re-renders the mutated DOM; ES modules are warned and skipped, and `async`/`defer` semantics are pending. The CI keeps a `--no-default-features` build so the minimal std-only engine can be audited and shipped without the JS dependency.
+- **JavaScript (Phase 6, ADR-001 accepted; WP-6.1/6.2/6.4 + WP-A/WP-B done)**: the chosen engine is Boa 0.21.x (pure Rust, `Unlicense OR MIT`) with feature `js` **enabled by default**; the dependency is isolated in `crates/js`, which itself keeps `#![forbid(unsafe_code)]`, and every script must run under instruction/time/stack budgets with no network/filesystem capabilities. `crates/render` executes the document's classic `<script>` elements **after parsing** under per-script and total `ScriptingLimits` (caps above), drains the **budgeted event loop** (see above) and re-renders the mutated DOM; ES modules are warned and skipped, and `async`/`defer` semantics are pending. **Parser-inserted scripts (WP-6.4)**: the parser exposes a `ScriptExecutor` hook; hosts that install one execute inline scripts at the `</script>` under the same budgets and re-tokenize `document.write` output in place. The conformance harness (`crates/test_harness`, **development-only, not shipped**) installs a Boa-backed executor with the same sandbox to run the `scripted_*` corpus; the parser itself stays engine-free and the no-scripting path is zero-cost. The CI keeps a `--no-default-features` build so the minimal std-only engine can be audited and shipped without the JS dependency (follow-up: feature-gate the harness's Boa dependency).
 - **Image pipeline limits** (`crates/render`): at most 64 `<img>` resources per
   document, 8 MiB per image and 32 MiB of image bytes total; downloads honor the
   `net` caps and `--no-network`; undecodable or missing images downgrade to a
@@ -131,8 +134,13 @@ after a fix is available.
   clock is **only injectable from the Rust host** (`advance`/`run_until`); the
   listener/timer state is rooted in the bounded per-realm host side table and
   dispatch/timer queues are driven by the host, so scripts cannot reach network,
-  filesystem, real wall clock or another realm. CSSOM/`getComputedStyle` (WP-B)
-  and parser-inserted execution (WP-6.4) remain pending.
+  filesystem, real wall clock or another realm. **WP-B** adds a full
+  `CSSStyleDeclaration` and a `getComputedStyle` provider (a Rust callback: JS gets
+  computed values, not extra capabilities) plus `NodeList` snapshots, `matches`/
+  `closest`, `insertAdjacentHTML`/`Text` and wrapper-identity caching. **WP-6.4**
+  executes parser-inserted scripts through the host-installed `ScriptExecutor` (the
+  harness uses the same budgets). Pending: `onclick`/`once`/`passive`, ES modules and
+  memory accounting.
 
 ## Out of scope
 

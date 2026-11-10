@@ -14,7 +14,7 @@ Antes de instalar o construir herramientas, se auditó el entorno de ejecución 
 | **Inspección de Código / LSP** | `rust-analyzer`, `ripgrep 13.0.0` (`rg`), `fdfind` | Preinstalado | Utilizado para diagnóstico estático, verificación de tipos y búsqueda rápida en el monorepo. |
 | **Test Runners Externos** | `cargo-nextest`, `cargo-insta` | No preinstalado | Se descartó compilar `cargo-nextest` desde código fuente (alto coste de CPU en máquina de 2 vCPUs) a favor de `cargo test --workspace` nativo combinando un binario y librería interna `test_harness` con reportes detallados. |
 | **Extracción de Specs (WHATWG/W3C)** | Servidores MCP externos vs. `python3 3.11.2` + `lxml 4.9.2` | `python3` + `lxml` preinstalados | En lugar de depender de scraping manual o lectura web no estructurada, se construyó `tools/whatwg_spec.py` sobre `lxml.html` con caché local en `.cache/specs/` para extraer pasos normativos exactos (`<ol>`, `<dl class="switch">`, códigos de error y `entities.json`) en milisegundos. |
-| **Integración de Suites Oficiales** | `wptrunner` completo vs. fixtures vendorizadas + `tools/test_inspector.py` | `git` + `python3` | `wptrunner` completo está diseñado para navegadores con WebDriver/automatización de ventana completa. `html5lib-tests` está versionado íntegro en `tests/html5lib-tests/`; de WPT sólo se **vendorizan** las 3 fixtures de CSS Syntax en `tests/wpt/css/css-syntax/` (con SHA-256 en su README), de modo que el gate de conformidad es reproducible sin red desde un clon limpio. El gate cubre **4 suites**: tokenizer (7.050/7.050), árbol (3.898/3.904), **serializador HTML** (230/230, `html5lib-tests/serializer/*.test`) y CSS Syntax (30/30). `tools/test_inspector.py` queda como herramienta de inspección de casos `.test`/`.dat`. |
+| **Integración de Suites Oficiales** | `wptrunner` completo vs. fixtures vendorizadas + `tools/test_inspector.py` | `git` + `python3` | `wptrunner` completo está diseñado para navegadores con WebDriver/automatización de ventana completa. `html5lib-tests` está versionado íntegro en `tests/html5lib-tests/`; de WPT sólo se **vendorizan** las 3 fixtures de CSS Syntax en `tests/wpt/css/css-syntax/` (con SHA-256 en su README), de modo que el gate de conformidad es reproducible sin red desde un clon limpio. El gate cubre **4 suites**: tokenizer (7.050/7.050), **árbol (3.904/3.904, 100 %, sin allowlist; WP-6.4 ejecuta los `scripted_*`)**, **serializador HTML** (230/230, `html5lib-tests/serializer/*.test`) y CSS Syntax (30/30). `tools/test_inspector.py` queda como herramienta de inspección de casos `.test`/`.dat`. |
 
 ---
 
@@ -258,12 +258,12 @@ El golden del showcase compara byte a byte (1024×768, **80.220 B**, `md5 c95c7e
 
 `crates/js` embebe **Boa 0.21.1** detrás de la feature `js`, **ON por defecto**; con `--no-default-features` queda un stub std-only (sin Boa) para CI y auditoría. Expone `JsRuntime::eval` sobre un realm persistente, `console.*` capturado, bindings DOM (`document.write`, `getElementById`, `querySelector(All)`, `innerHTML`, `style`, `classList`, árbol/atributos) y un scheduler base (`setTimeout`/microtasks). Anti-DoS: `Budget` mapeado a Boa `RuntimeLimits` (5.000.000 iteraciones de bucle, recursión 512, pila VM 20.480; `Budget::SMALL` para páginas/tests) y side-table `NodeId↔handle` capada a 1.000.000; sin APIs de red/FS. Aún **no integrado en `render`**.
 
-**WP-A (ronda 10)**: `EventTarget` con captura+burbuja (`Event`/`CustomEvent`) y **timers con reloj inyectable** (`setTimeout`/`setInterval`/clear, `advance`/`run_until`/`now_ms`/`pending_timers`; `run_tasks` solo vencidos por reloj real).
+**WP-B (ronda 11)**: `CSSStyleDeclaration` completa, `getComputedStyle` con provider inyectable, `NodeList`, `matches`/`closest`, `insertAdjacentHTML/Text`, identidad de wrappers y `document` como `EventTarget`. **WP-A (ronda 10)**: `EventTarget` con captura+burbuja (`Event`/`CustomEvent`) y **timers con reloj inyectable** (`setTimeout`/`setInterval`/clear, `advance`/`run_until`/`now_ms`/`pending_timers`; `run_tasks` solo vencidos por reloj real).
 
 `render` integra el runtime (WP-6.2 host): descubre los `<script>` clásicos (inline/`src`, en orden; módulos avisados y saltados), los ejecuta con `JsRuntime::with_document` bajo `ScriptingLimits`/`ScriptBudget` (budget por script + total), drena microtasks y hasta 10.000 timers, captura `console` (`scripts_executed/failed/bytes/console`, `timings.scripting`) y **re-renderiza estilos→layout→paint sobre el DOM mutado** (mutaciones visibles en el PNG). Caps: 8 MiB/script, 32 MiB total, 64 scripts; `--no-scripting` desactiva todo y `--no-network` bloquea `src` externos.
 
 ```bash
-cargo test -p js                        # 26 tests (feature js por defecto; incluye WP-A)
+cargo test -p js                        # 46 tests (feature js por defecto; WP-A/WP-B/identidad)
 cargo test -p js --no-default-features  # stub mínimo sin Boa (CI)
 
 # JS del documento ejecutado de extremo a extremo (7 fixtures js_*)
@@ -271,6 +271,11 @@ cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_on.png
 cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
 md5sum /tmp/js_on.png /tmp/js_off.png   # e1da51d4… (15.876 B) vs 53f67e77… (15.499 B)
 cargo test -p render --test scripting_tests
+
+# Event loop presupuestado (ronda 11): reloj virtual, DOMContentLoaded/load, timers, re-render único
+cargo run -p render -- tests/fixtures/render/js_event_timeout.html /tmp/timer.png --json
+cargo run -p render -- tests/fixtures/render/js_event_domcontentloaded.html /tmp/dcl.png
+cargo test -p render --test event_loop_tests        # 6 fixtures js_event_*, 11 tests
 
 # Red avanzada en el pipeline (rondas 10): cookies + CORS/credentials, gzip E2E
 cargo run -p render -- https://example.com/ /tmp/page.png --cookies --origin https://example.com --json
@@ -293,6 +298,15 @@ cargo test -p net        # 180 tests offline (listeners en 127.0.0.1)
 cargo run -p render -- tests/fixtures/render/backgrounds.html /tmp/backgrounds.png
 python3 tools/png_check.py /tmp/backgrounds.png
 cargo test -p render --test backgrounds_tests
+```
+
+### 2.16c Event loop presupuestado y fixtures `js_event_*` (ronda 11)
+
+`crates/render` drena la cola de microtasks/timers con **reloj virtual** (`max_tasks` 10.000, `max_virtual_time` 1000 ms), despacha `DOMContentLoaded` y `load` por el `EventTarget` del documento y hace **un solo re-render** tras el loop; stats `script_*`/`timings.event_loop`. Fixtures: `js_event_timeout.html`, `js_event_timeout_zero.html`, `js_event_interval.html`, `js_event_load.html`, `js_event_domcontentloaded.html`, `js_event_loop.html`.
+
+```bash
+cargo run -p render -- tests/fixtures/render/js_event_timeout.html /tmp/timer.png --json
+cargo test -p render --test event_loop_tests
 ```
 
 ### 2.16b `paint::hit_test` — hit-testing aditivo (ronda 9)
@@ -318,8 +332,8 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 820 tests, doc y gate de conformidad
-cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0
+./tools/dev.sh all                     # fmt, clippy, 862 tests, doc y gate de conformidad
+cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0 (árbol 3904/3904, 100 %)
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 
 cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
@@ -329,9 +343,11 @@ bash tools/render_fixture.sh
 cargo test -p net -p render -p image -p shell
 cargo test -p js && cargo test -p js --no-default-features
 cargo test -p paint --test hit_testing
+cargo test -p html --lib scripting      # WP-6.4: hook de scripts parser-inserted
+cargo test -p render --test event_loop_tests
 cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png
 ./tools/bench.sh --scale 0.1
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Cifras de referencia de esta ronda: **820 tests** (bench 8, css 57, dom 28, fonts 13+1 doctest, html 53, image 45+1 doctest, js 26, layout 133, net 180, paint 108, render 77, shell 83, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+Cifras de referencia de esta ronda: **862 tests** (bench 8, css 57, dom 28, fonts 13+1 doctest, html 60, image 45+1 doctest, js 46, layout 133, net 180, paint 108, render 88, shell 83, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists de tokenizer y tree vacías; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
