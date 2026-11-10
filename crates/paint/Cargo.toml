@@ -13,6 +13,7 @@ dom = { workspace = true }
 css = { workspace = true }
 layout = { workspace = true }
 fonts = { workspace = true }
+image = { workspace = true }
 
 [dev-dependencies]
 html = { workspace = true }

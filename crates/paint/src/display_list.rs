@@ -7,8 +7,18 @@
 //! antialias any edge whose coordinate is fractional: the display list only
 //! carries geometry, never pixel-rounded decisions.
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use css::{BorderStyle, Color};
+use dom::NodeId;
 use layout::Rect;
+
+/// Decoded replaced-element images keyed by the DOM node that references them.
+///
+/// Built by the integration crate (`render`: `net` fetch + `image::decode`) and
+/// consumed by painting. A decoded image is straight-alpha RGBA8.
+pub type ImageStore = HashMap<NodeId, Arc<image::RgbaImage>>;
 
 /// One painted side of a CSS border box.
 ///
@@ -120,6 +130,16 @@ pub enum DisplayItem {
         opacity: f32,
         items: Vec<DisplayItem>,
     },
+    /// Draws a decoded replaced element (`<img>`) scaled into `rect`.
+    ///
+    /// The image is stretched to fill `rect` (`object-fit: fill`, the CSS 2.2
+    /// initial behaviour); `contain`/`cover`/`none` are out of scope for Phase 4.
+    /// Scaling uses bilinear filtering with clamped edge sampling and composites
+    /// with straight-alpha source-over, clipped by the active clip stack.
+    Image {
+        rect: Rect,
+        image: Arc<image::RgbaImage>,
+    },
     /// Pushes a rectangular clipping boundary onto the clip stack.
     PushClip { rect: Rect },
     /// Pops the top clipping boundary from the clip stack.
@@ -139,6 +159,7 @@ impl DisplayItem {
             | Self::Text { rect, .. }
             | Self::TextDecoration { rect, .. }
             | Self::Marker { rect, .. }
+            | Self::Image { rect, .. }
             | Self::OpacityGroup { rect, .. } => Some(*rect),
             Self::PushClip { rect } => Some(*rect),
             Self::PopClip => None,

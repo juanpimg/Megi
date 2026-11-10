@@ -16,6 +16,7 @@ layout.workspace = true
 fonts.workspace = true
 paint.workspace = true
 net.workspace = true
+image.workspace = true
 
 [[bin]]
 name = "render"

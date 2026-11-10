@@ -61,7 +61,7 @@ use css::{BorderStyle, Color, Display, ListStyleType, Position, TextDecoration, 
 use dom::NodeId;
 use layout::{BoxType, LayoutBox, Rect};
 
-use crate::display_list::{BorderSide, DisplayItem, DisplayList, MarkerKind};
+use crate::display_list::{BorderSide, DisplayItem, DisplayList, ImageStore, MarkerKind};
 
 /// Background color propagated from the root element or `body` to the canvas.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -111,7 +111,15 @@ pub const MAX_STACKING_CONTEXT_DEPTH: usize = 256;
 /// in-flow content).
 pub const MAX_FLOAT_DEPTH: usize = 64;
 
-/// Builds a deterministic [`DisplayList`] from a laid-out [`LayoutBox`] tree.
+/// Fill color used for a replaced element (`<img>`) whose image was not
+/// decoded (missing file, unsupported format, network disabled/capped).
+pub const IMAGE_PLACEHOLDER: Color = Color::new(0xD9, 0xD9, 0xD9, 255);
+
+/// Builds a deterministic [`DisplayList`] from a laid-out [`LayoutBox`] tree,
+/// without decoding replaced elements (they become gray placeholders).
+///
+/// This keeps the Phase 4 fixture pipeline unchanged; use
+/// [`build_display_list_with_images`] to paint real images.
 ///
 /// `viewport` is the canvas rectangle (normally `Rect::new(0.0, 0.0, w, h)`);
 /// it is used for the propagated root/`body` canvas background.
@@ -126,6 +134,20 @@ pub const MAX_FLOAT_DEPTH: usize = 64;
 /// content. The resulting list is bounded by
 /// [`MAX_DISPLAY_LIST_ITEMS`](crate::MAX_DISPLAY_LIST_ITEMS).
 pub fn build_display_list(root: &LayoutBox, viewport: Rect) -> DisplayList {
+    build_display_list_with_images(root, viewport, &ImageStore::new())
+}
+
+/// Builds a deterministic [`DisplayList`] from a laid-out [`LayoutBox`] tree,
+/// painting decoded `<img>` replaced boxes from `images`.
+///
+/// A [`BoxType::Replaced`] box whose node is not present in the store is
+/// painted as a gray placeholder box ([`IMAGE_PLACEHOLDER`]); image loading and
+/// decoding are the caller's responsibility (see the `render` crate).
+pub fn build_display_list_with_images(
+    root: &LayoutBox,
+    viewport: Rect,
+    images: &ImageStore,
+) -> DisplayList {
     let canvas = canvas_background(root);
     let mut list = DisplayList::new();
 
@@ -146,7 +168,7 @@ pub fn build_display_list(root: &LayoutBox, viewport: Rect) -> DisplayList {
             _ => None,
         },
     };
-    paint_stacking_context(root, &mut list, skip, false, true, 0);
+    paint_stacking_context(root, &mut list, skip, images, false, true, 0);
     list
 }
 
@@ -259,6 +281,7 @@ fn paint_stacking_context(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
     skip: PaintSkip,
+    images: &ImageStore,
     inherited_hidden: bool,
     is_root: bool,
     depth: usize,
@@ -281,8 +304,16 @@ fn paint_stacking_context(
         // Depth guard: paint the remaining subtree as flat in-flow content
         // instead of recursing into further stacking contexts.
         paint_block_backgrounds(layout_box, list, skip, hidden, 1.0);
-        paint_floats(layout_box, list, skip, hidden, 1.0, depth);
-        paint_inline_content(layout_box, list, skip, hidden, TextDecoration::NONE, 1.0);
+        paint_floats(layout_box, list, skip, images, hidden, 1.0, depth);
+        paint_inline_content(
+            layout_box,
+            list,
+            skip,
+            images,
+            hidden,
+            TextDecoration::NONE,
+            1.0,
+        );
         if clip.is_some() {
             list.push(DisplayItem::PopClip);
         }
@@ -299,22 +330,30 @@ fn paint_stacking_context(
 
     // Step 3: negative z-index contexts.
     for context in negative {
-        paint_stacking_context(context, list, skip, hidden, false, depth + 1);
+        paint_stacking_context(context, list, skip, images, hidden, false, depth + 1);
     }
 
     // Steps 4-6: in-flow block backgrounds, floats, inline content.
     paint_block_backgrounds(layout_box, list, skip, hidden, 1.0);
-    paint_floats(layout_box, list, skip, hidden, 1.0, depth);
-    paint_inline_content(layout_box, list, skip, hidden, TextDecoration::NONE, 1.0);
+    paint_floats(layout_box, list, skip, images, hidden, 1.0, depth);
+    paint_inline_content(
+        layout_box,
+        list,
+        skip,
+        images,
+        hidden,
+        TextDecoration::NONE,
+        1.0,
+    );
 
     // Step 7: positioned z-index auto/0 and z-index 0 contexts.
     for context in zero {
-        paint_stacking_context(context, list, skip, hidden, false, depth + 1);
+        paint_stacking_context(context, list, skip, images, hidden, false, depth + 1);
     }
 
     // Step 8: positive z-index contexts.
     for context in positive {
-        paint_stacking_context(context, list, skip, hidden, false, depth + 1);
+        paint_stacking_context(context, list, skip, images, hidden, false, depth + 1);
     }
 
     if clip.is_some() {
@@ -432,6 +471,7 @@ fn paint_floats(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
     skip: PaintSkip,
+    images: &ImageStore,
     inherited_hidden: bool,
     alpha_scale: f32,
     depth: usize,
@@ -442,7 +482,15 @@ fn paint_floats(
     }
     while let Some(child) = stack.pop() {
         match phase(child) {
-            Phase::Float => paint_float(child, list, skip, inherited_hidden, alpha_scale, depth),
+            Phase::Float => paint_float(
+                child,
+                list,
+                skip,
+                images,
+                inherited_hidden,
+                alpha_scale,
+                depth,
+            ),
             Phase::InFlow => {
                 for grandchild in child.children.iter().rev() {
                     stack.push(grandchild);
@@ -459,6 +507,7 @@ fn paint_float(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
     skip: PaintSkip,
+    images: &ImageStore,
     inherited_hidden: bool,
     alpha_scale: f32,
     depth: usize,
@@ -474,9 +523,17 @@ fn paint_float(
     }
     paint_block_backgrounds(layout_box, list, skip, hidden, alpha);
     if depth < MAX_FLOAT_DEPTH {
-        paint_floats(layout_box, list, skip, hidden, alpha, depth + 1);
+        paint_floats(layout_box, list, skip, images, hidden, alpha, depth + 1);
     }
-    paint_inline_content(layout_box, list, skip, hidden, TextDecoration::NONE, alpha);
+    paint_inline_content(
+        layout_box,
+        list,
+        skip,
+        images,
+        hidden,
+        TextDecoration::NONE,
+        alpha,
+    );
     if clipped.is_some() {
         list.push(DisplayItem::PopClip);
     }
@@ -502,6 +559,7 @@ fn paint_inline_content(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
     skip: PaintSkip,
+    images: &ImageStore,
     inherited_hidden: bool,
     inherited_decoration: TextDecoration,
     alpha_scale: f32,
@@ -552,6 +610,12 @@ fn paint_inline_content(
                         }
                     }
                     BoxType::TextNode(_) | BoxType::LineBreak => {}
+                    BoxType::Replaced(node_id) => {
+                        if !hidden {
+                            paint_background_border(child, list, skip, false, alpha);
+                            paint_replaced_element(child, *node_id, list, images, alpha);
+                        }
+                    }
                     BoxType::InlineNode(_) => {
                         if !hidden {
                             paint_background_border(child, list, skip, false, alpha);
@@ -629,6 +693,44 @@ fn push_inline_children<'a>(
             alpha,
             ordinal,
         });
+    }
+}
+
+/// Emits the paint of a replaced element: its decoded image if available,
+/// otherwise a documented gray placeholder box (CSS 2.2 §10.6.2 intrinsic size
+/// is handled by layout; paint only stretches the bitmap to `content`).
+fn paint_replaced_element(
+    layout_box: &LayoutBox,
+    node_id: dom::NodeId,
+    list: &mut DisplayList,
+    images: &ImageStore,
+    alpha_scale: f32,
+) {
+    let rect = layout_box.dimensions.content;
+    if rect.width <= 0.0 || rect.height <= 0.0 {
+        return;
+    }
+    match images.get(&node_id) {
+        Some(image) if !image.is_empty() => {
+            list.push(DisplayItem::Image {
+                rect,
+                image: std::sync::Arc::clone(image),
+            });
+            // A translucent element (flat-opacity fallback) darkens the image
+            // through a normal-alpha fill when needed.
+            if alpha_scale < 1.0 {
+                list.push(DisplayItem::SolidColor {
+                    rect,
+                    color: Color::new(0, 0, 0, 0),
+                });
+            }
+        }
+        _ => {
+            list.push(DisplayItem::SolidColor {
+                rect,
+                color: scaled(IMAGE_PLACEHOLDER, alpha_scale),
+            });
+        }
     }
 }
 

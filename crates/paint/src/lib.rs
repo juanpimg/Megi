@@ -30,9 +30,14 @@ pub mod style;
 
 pub use css::Color;
 pub use deflate::zlib_compress;
-pub use display_list::{BorderSide, DisplayItem, DisplayList, MAX_DISPLAY_LIST_ITEMS, MarkerKind};
+pub use display_list::{
+    BorderSide, DisplayItem, DisplayList, ImageStore, MAX_DISPLAY_LIST_ITEMS, MarkerKind,
+};
 pub use inflate::inflate_zlib;
-pub use painter::{MAX_FLOAT_DEPTH, MAX_STACKING_CONTEXT_DEPTH, build_display_list};
+pub use painter::{
+    IMAGE_PLACEHOLDER, MAX_FLOAT_DEPTH, MAX_STACKING_CONTEXT_DEPTH, build_display_list,
+    build_display_list_with_images,
+};
 pub use png::encode_rgba;
 pub use rasterizer::{
     MAX_PIXMAP_PIXELS, Pixmap, RasterStats, RenderConfig, bundled_font_database,

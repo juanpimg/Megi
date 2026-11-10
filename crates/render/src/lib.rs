@@ -27,8 +27,13 @@
 //! ## Deliberate limitations (this WP)
 //!
 //! - **No JavaScript** (scripts are parsed but never executed).
-//! - **No images**: `<img>`, CSS `background-image`/`url(...)`, SVG images are not
-//!   fetched or painted (next WP, with the planned `image` crate).
+//! - **Images**: `<img src>` is fetched (HTTP cache/redirects/TLS from `net`,
+//!   honoring `--no-network` and the [`RenderOptions`] image caps) and decoded
+//!   with the in-tree PNG decoder; it is laid out with its intrinsic size and
+//!   painted stretched into its content box (`object-fit: fill`). Missing /
+//!   too-large / non-PNG images become gray placeholders plus warnings. CSS
+//!   `background-image`/`url(...)`, SVG images, `srcset` and `object-fit`
+//!   modes other than `fill` remain out of scope.
 //! - **No `@import`**: only direct `<style>` and `<link rel="stylesheet">` sheets are
 //!   loaded; the `media` attribute is only screened for `screen`/`all`, not evaluated.
 //! - No forms, no iframes, no web fonts, no `srcset`, no CORS/cookies policies.
@@ -40,6 +45,7 @@
 
 pub mod charset;
 pub mod error;
+pub mod images;
 pub mod stylesheets;
 
 use std::collections::HashMap;
@@ -48,6 +54,10 @@ use std::time::{Duration, Instant};
 use css::ComputedStyle;
 use dom::{Document, NodeId};
 use net::{FetchOptions, ResourceLoader, Scheme, Url};
+
+use images::{
+    DEFAULT_MAX_IMAGE_BYTES, DEFAULT_MAX_IMAGES, DEFAULT_MAX_TOTAL_IMAGE_BYTES, ImageLimits,
+};
 
 pub use error::RenderError;
 
@@ -111,6 +121,12 @@ pub struct RenderOptions {
     pub max_css_bytes_per_sheet: usize,
     /// Maximum concatenated author CSS size (inline + external).
     pub max_total_css_bytes: usize,
+    /// Maximum number of `<img>` elements fetched and decoded.
+    pub max_images: usize,
+    /// Maximum downloaded size of a single image (bytes).
+    pub max_image_bytes: usize,
+    /// Maximum total downloaded image bytes for the page.
+    pub max_total_image_bytes: usize,
     /// HTML parser anti-DoS limits (depth/nodes/attributes/input size).
     pub parse_options: html::ParseOptions,
     /// Networking options (timeouts, caps, TLS configuration, user agent).
@@ -127,6 +143,9 @@ impl Default for RenderOptions {
             max_stylesheets: DEFAULT_MAX_STYLESHEETS,
             max_css_bytes_per_sheet: DEFAULT_MAX_CSS_BYTES_PER_SHEET,
             max_total_css_bytes: DEFAULT_MAX_TOTAL_CSS_BYTES,
+            max_images: DEFAULT_MAX_IMAGES,
+            max_image_bytes: DEFAULT_MAX_IMAGE_BYTES,
+            max_total_image_bytes: DEFAULT_MAX_TOTAL_IMAGE_BYTES,
             parse_options: html::ParseOptions::DEFAULT,
             fetch_options: FetchOptions::default(),
         }
@@ -144,6 +163,8 @@ pub struct RenderTimings {
     pub styles: Duration,
     /// Layout (box tree + BFC/IFC with real metrics).
     pub layout: Duration,
+    /// Image discovery, fetching and decoding (`<img>`).
+    pub images: Duration,
     /// Display-list construction.
     pub paint: Duration,
     /// Rasterization (and PNG encoding happens after this measurement).
@@ -167,6 +188,12 @@ pub struct RenderStats {
     pub inline_stylesheets: usize,
     /// Total author CSS bytes (inline + external).
     pub css_bytes: usize,
+    /// Number of `<img>` images successfully loaded and decoded.
+    pub images_loaded: usize,
+    /// Number of `<img>` images that failed (missing, too large, bad format, ...).
+    pub images_failed: usize,
+    /// Downloaded (encoded) image bytes accepted by the caps.
+    pub image_bytes: usize,
     /// Number of display-list items painted.
     pub display_items: usize,
     /// HTML parser anti-DoS limits that fired (should be empty for normal pages).
@@ -285,6 +312,21 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     };
     let styles_time = styles_start.elapsed();
 
+    let images_start = Instant::now();
+    let loaded_images = images::load_images(
+        &document,
+        &base_url,
+        &mut loader,
+        options.no_network,
+        ImageLimits {
+            max_images: options.max_images,
+            max_image_bytes: options.max_image_bytes,
+            max_total_bytes: options.max_total_image_bytes,
+        },
+        &mut warnings,
+    );
+    let images_time = images_start.elapsed();
+
     let layout_start = Instant::now();
     let measurer = layout::FontTextMeasurer::bundled()
         .map_err(|error| RenderError::FontEngine(error.to_string()))?;
@@ -294,13 +336,19 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         options.viewport.width as f32,
         options.viewport.height as f32,
     );
-    let layout_root =
-        layout::layout_document_with_measurer(&document, &styles, viewport, &measurer)
-            .ok_or(RenderError::LayoutFailed)?;
+    let layout_root = layout::layout_document_with_measurer_and_replaced_sizes(
+        &document,
+        &styles,
+        viewport,
+        &measurer,
+        Some(&loaded_images.sizes),
+    )
+    .ok_or(RenderError::LayoutFailed)?;
     let layout_time = layout_start.elapsed();
 
     let paint_start = Instant::now();
-    let display_list = paint::build_display_list(&layout_root, viewport);
+    let display_list =
+        paint::build_display_list_with_images(&layout_root, viewport, &loaded_images.store);
     let display_items = display_list.items.len();
     let paint_time = paint_start.elapsed();
 
@@ -332,12 +380,16 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             external_stylesheets,
             inline_stylesheets,
             css_bytes,
+            images_loaded: loaded_images.loaded,
+            images_failed: loaded_images.failed,
+            image_bytes: loaded_images.downloaded_bytes,
             display_items,
             limit_violations: parse.limit_violations,
             timings: RenderTimings {
                 fetch: fetch_time,
                 decode_parse: decode_parse_time,
                 styles: styles_time,
+                images: images_time,
                 layout: layout_time,
                 paint: paint_time,
                 raster: raster_time,

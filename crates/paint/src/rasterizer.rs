@@ -274,6 +274,82 @@ impl Pixmap {
         }
     }
 
+    /// Draws a decoded RGBA image stretched into `rect` (`object-fit: fill`).
+    ///
+    /// Sampling is bilinear with clamp-to-edge, so solid regions stay solid and
+    /// scaled edges do not pull in transparent pixels. Each sample is multiplied
+    /// by the destination pixel's fractional coverage at the rect edges
+    /// (antialiased scaling) and composited with straight-alpha source-over,
+    /// respecting the active clip stack. The operation is deterministic: only
+    /// IEEE `f32` arithmetic over the input bytes is used.
+    pub fn draw_image(&mut self, rect: Rect, image: &image::RgbaImage) {
+        if image.is_empty() || rect.width <= 0.0 || rect.height <= 0.0 {
+            return;
+        }
+        if !rect.x.is_finite() || !rect.y.is_finite() {
+            return;
+        }
+        let Some(clip) = self.clip_rect() else {
+            return;
+        };
+        let x0f = rect.x.max(clip.x).max(0.0);
+        let y0f = rect.y.max(clip.y).max(0.0);
+        let x1f = (rect.x + rect.width)
+            .min(clip.x + clip.width)
+            .min(self.width as f32);
+        let y1f = (rect.y + rect.height)
+            .min(clip.y + clip.height)
+            .min(self.height as f32);
+        if x0f >= x1f || y0f >= y1f {
+            return;
+        }
+        let ix0 = x0f.floor() as u32;
+        let iy0 = y0f.floor() as u32;
+        let ix1 = (x1f.ceil() as i64).clamp(0, i64::from(self.width)) as u32;
+        let iy1 = (y1f.ceil() as i64).clamp(0, i64::from(self.height)) as u32;
+        if ix0 >= ix1 || iy0 >= iy1 {
+            return;
+        }
+
+        let image_width = image.width as f32;
+        let image_height = image.height as f32;
+        let stride = self.width as usize;
+        for y in iy0..iy1 {
+            let py = y as f32;
+            let coverage_y = overlap_coverage(y0f.max(py), y1f.min(py + 1.0));
+            if coverage_y == 0 {
+                continue;
+            }
+            // Sample position in image space (pixel centres).
+            let v = ((py + 0.5 - rect.y) / rect.height) * image_height - 0.5;
+            let v = v.clamp(0.0, image_height - 1.0);
+            let row = y as usize * stride;
+            for x in ix0..ix1 {
+                let px = x as f32;
+                let coverage_x = overlap_coverage(x0f.max(px), x1f.min(px + 1.0));
+                if coverage_x == 0 {
+                    continue;
+                }
+                let u = ((px + 0.5 - rect.x) / rect.width) * image_width - 0.5;
+                let u = u.clamp(0.0, image_width - 1.0);
+                let Some(sample) = bilinear_sample(image, u, v) else {
+                    continue;
+                };
+                if sample[3] == 0 {
+                    continue;
+                }
+                let alpha = (u32::from(sample[3]) * u32::from(coverage_x) * u32::from(coverage_y)
+                    + 32_768)
+                    >> 16;
+                if alpha == 0 {
+                    continue;
+                }
+                let src = Color::new(sample[0], sample[1], sample[2], alpha.min(255) as u8);
+                self.pixels[row + x as usize] = blend_over(self.pixels[row + x as usize], src);
+            }
+        }
+    }
+
     /// Paints a CSS list marker (`disc`, `circle` or `square`) with analytic
     /// 4×4 supersampled coverage, clipped and antialiased.
     fn draw_marker(&mut self, rect: Rect, color: Color, kind: MarkerKind) {
@@ -1405,6 +1481,9 @@ fn paint_items(
             DisplayItem::TextDecoration { rect, color } => {
                 pixmap.fill_rect(shift(*rect, dx, dy), *color);
             }
+            DisplayItem::Image { rect, image } => {
+                pixmap.draw_image(shift(*rect, dx, dy), image);
+            }
             DisplayItem::Marker { rect, color, kind } => {
                 pixmap.draw_marker(shift(*rect, dx, dy), *color, *kind);
             }
@@ -1528,6 +1607,38 @@ fn paint_opacity_group(
                 blend_over(dst, with_alpha(src, u32::from(alpha)));
         }
     }
+}
+
+/// Bilinear RGB(A) sample of `image` at image-space position `(u, v)`.
+///
+/// Positions are clamped to the image bounds before sampling (clamp-to-edge),
+/// which keeps the outermost pixels intact when scaling up.
+fn bilinear_sample(image: &image::RgbaImage, u: f32, v: f32) -> Option<[u8; 4]> {
+    if image.is_empty() {
+        return None;
+    }
+    let max_x = (image.width - 1) as f32;
+    let max_y = (image.height - 1) as f32;
+    let u = u.clamp(0.0, max_x);
+    let v = v.clamp(0.0, max_y);
+    let x0 = u.floor() as u32;
+    let y0 = v.floor() as u32;
+    let x1 = (x0 + 1).min(image.width - 1);
+    let y1 = (y0 + 1).min(image.height - 1);
+    let fx = u - x0 as f32;
+    let fy = v - y0 as f32;
+    let p00 = image.pixel(x0, y0)?;
+    let p10 = image.pixel(x1, y0)?;
+    let p01 = image.pixel(x0, y1)?;
+    let p11 = image.pixel(x1, y1)?;
+    let mut out = [0u8; 4];
+    for channel in 0..4 {
+        let top = f32::from(p00[channel]) * (1.0 - fx) + f32::from(p10[channel]) * fx;
+        let bottom = f32::from(p01[channel]) * (1.0 - fx) + f32::from(p11[channel]) * fx;
+        let value = top * (1.0 - fy) + bottom * fy;
+        out[channel] = value.round().clamp(0.0, 255.0) as u8;
+    }
+    Some(out)
 }
 
 /// Point-in-marker test for the 4×4 supersampled marker rasterizer.
