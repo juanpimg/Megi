@@ -26,6 +26,8 @@ use std::sync::Arc;
 use dom::{Document, NodeId};
 use net::{ResourceLoader, Scheme, Url};
 
+use crate::svg_assets;
+
 /// Default maximum number of `<img>` elements loaded per page.
 pub const DEFAULT_MAX_IMAGES: usize = 64;
 /// Default maximum downloaded size of one image (8 MiB).
@@ -66,6 +68,8 @@ pub struct LoadedImages {
     pub failed: usize,
     /// Downloaded (compressed) image bytes actually accepted.
     pub downloaded_bytes: usize,
+    /// `<img>` images that were SVGs rasterized through the `svg` crate.
+    pub svgs_rendered: usize,
     /// Non-fatal warnings produced by this stage.
     pub warnings: Vec<String>,
 }
@@ -111,6 +115,7 @@ pub fn load_images(
         loaded: 0,
         failed: 0,
         downloaded_bytes: 0,
+        svgs_rendered: 0,
         warnings: Vec::new(),
     };
     let sources = collect_image_sources(document);
@@ -167,20 +172,44 @@ pub fn load_images(
             ));
             break;
         }
-        match image::decode(&resource.bytes) {
-            Ok(decoded) => {
-                result.downloaded_bytes += resource.bytes.len();
-                let (width, height) = decoded.dimensions();
-                result.sizes.insert(node_id, (width as f32, height as f32));
-                result.store.insert(node_id, Arc::new(decoded));
-                result.loaded += 1;
+        if image::detect_format(&resource.bytes) == image::ImageFormat::Png {
+            match image::decode(&resource.bytes) {
+                Ok(decoded) => {
+                    result.downloaded_bytes += resource.bytes.len();
+                    let (width, height) = decoded.dimensions();
+                    result.sizes.insert(node_id, (width as f32, height as f32));
+                    result.store.insert(node_id, Arc::new(decoded));
+                    result.loaded += 1;
+                }
+                Err(error) => {
+                    result.failed += 1;
+                    result
+                        .warnings
+                        .push(format!("skipping image {url}: {error}"));
+                }
             }
-            Err(error) => {
-                result.failed += 1;
-                result
-                    .warnings
-                    .push(format!("skipping image {url}: {error}"));
+        } else if svg_assets::looks_like_svg(&resource.content_type, &resource.bytes) {
+            match svg_assets::render(&resource.bytes) {
+                Ok(rendered) => {
+                    result.downloaded_bytes += resource.bytes.len();
+                    result.sizes.insert(node_id, rendered.intrinsic);
+                    result.store.insert(node_id, Arc::new(rendered.raster));
+                    result.loaded += 1;
+                    result.svgs_rendered += 1;
+                }
+                Err(error) => {
+                    result.failed += 1;
+                    result
+                        .warnings
+                        .push(format!("skipping image {url}: SVG render failed ({error})"));
+                }
             }
+        } else {
+            let format = image::detect_format(&resource.bytes);
+            result.failed += 1;
+            result.warnings.push(format!(
+                "skipping image {url}: unsupported format {format:?} (only PNG and SVG are decoded)"
+            ));
         }
     }
 

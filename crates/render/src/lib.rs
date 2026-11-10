@@ -82,9 +82,14 @@
 //! - **No JavaScript** (scripts are parsed but never executed).
 //! - **Images**: `<img src>` is fetched (HTTP cache/redirects/TLS from `net`,
 //!   honoring `--no-network` and the [`RenderOptions`] image caps) and decoded
-//!   with the in-tree PNG decoder; it is laid out with its intrinsic size and
-//!   painted stretched into its content box (`object-fit: fill`). Missing /
-//!   too-large / non-PNG images become gray placeholders plus warnings.
+//!   with the in-tree PNG decoder or the dependency-free `svg` crate. SVGs are
+//!   detected by `Content-Type: image/svg+xml` or sniffed (`<svg`/`<?xml…<svg`),
+//!   laid out with their intrinsic size (`width`/`height`/`viewBox`, default
+//!   300×150 CSS px) and rasterized at `ceil(intrinsic)` pixels (documented <1 px
+//!   rounding, capped at 16 Mpx); CSS `width`/`height` still stretch the bitmap
+//!   into the content box (`object-fit: fill`). Missing / too-large / corrupt /
+//!   unsupported images become gray placeholders plus warnings. SVG `text`, CSS,
+//!   gradients, filters and animation are not rendered (svg crate limitations).
 //! - **CSS backgrounds (WP-5.9)**: `background-image` and `list-style-image` URLs are
 //!   collected from the computed styles, resolved against the **document** base URL,
 //!   deduplicated, fetched with the shared loader (honoring `--no-network`) and decoded
@@ -138,6 +143,7 @@ pub mod error;
 pub mod images;
 pub mod scripts;
 pub mod stylesheets;
+mod svg_assets;
 pub mod webfonts;
 
 use std::collections::HashMap;
@@ -380,6 +386,8 @@ pub struct RenderStats {
     pub background_images_failed: usize,
     /// Downloaded (encoded) background-image bytes accepted by the caps.
     pub background_bytes: usize,
+    /// SVG images (from `<img>` or CSS backgrounds) rasterized through the `svg` crate.
+    pub svgs_rendered: usize,
     /// Web fonts successfully fetched, decoded and registered.
     pub fonts_loaded: usize,
     /// Web fonts skipped or failed (network, caps, decode, registration).
@@ -506,6 +514,12 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             bytes: loaded.bytes.len(),
             max: options.max_document_bytes,
         });
+    }
+    // Direct navigation to an SVG document: wrap it in a synthetic `<img>` page so the
+    // regular pipeline renders it (intrinsic size, top-left on white), instead of failing
+    // with "not HTML". Documented as a simplification (no viewport scaling/centering).
+    if svg_assets::looks_like_svg(&loaded.content_type, &loaded.bytes) {
+        return render_svg_document(&loaded, options, fetch_time, total_start);
     }
 
     let decode_start = Instant::now();
@@ -733,6 +747,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             background_images_loaded: loaded_backgrounds.loaded,
             background_images_failed: loaded_backgrounds.failed,
             background_bytes: loaded_backgrounds.downloaded_bytes,
+            svgs_rendered: loaded_images.svgs_rendered + loaded_backgrounds.svgs_rendered,
             fonts_loaded: loaded_webfonts.loaded,
             fonts_failed: loaded_webfonts.failed,
             font_bytes: loaded_webfonts.bytes,
@@ -769,6 +784,39 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             warnings,
         },
     })
+}
+
+/// Renders a directly-navigated SVG document through a synthetic one-image HTML page.
+///
+/// The SVG bytes are embedded as a `data:` URL (no second network fetch) and rendered by the
+/// normal pipeline, so the result is the SVG at its intrinsic size in the top-left corner of
+/// a white viewport (documented simplification: no viewport-filling root-SVG sizing,
+/// centering or scrollbars yet). Corrupt SVG payloads become the regular image placeholder
+/// plus a warning instead of a hard error.
+fn render_svg_document(
+    loaded: &LoadedDocument,
+    options: &RenderOptions,
+    fetch_time: Duration,
+    total_start: Instant,
+) -> Result<RenderOutput, RenderError> {
+    let svg_data_url = format!(
+        "data:image/svg+xml;base64,{}",
+        net::base64_encode(&loaded.bytes)
+    );
+    let page = format!(
+        "<!doctype html><html><head><style>html,body{{margin:0;padding:0;background-color:#ffffff}}img{{display:block}}</style></head><body><img src=\"{svg_data_url}\" alt=\"\"></body></html>"
+    );
+    let wrapper_url = format!(
+        "data:text/html;base64,{}",
+        net::base64_encode(page.as_bytes())
+    );
+    let mut output = render_url(&wrapper_url, options)?;
+    output.document_url = loaded.url.clone();
+    output.stats.document_bytes = loaded.bytes.len();
+    output.stats.status = loaded.status;
+    output.stats.timings.fetch = fetch_time;
+    output.stats.timings.total = total_start.elapsed();
+    Ok(output)
 }
 
 /// Main document loaded by [`render_url`], before decoding.

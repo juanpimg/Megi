@@ -97,7 +97,7 @@ fn run() -> Result<(), CliError> {
     } else {
         let stats = &output.stats;
         println!(
-            "rendered {input} -> {} ({}x{}, {} bytes, {} display items, {} hit regions, {} images, {} background images, {} scripts + {} timer tasks / {} events, {} external stylesheets, {} ms)",
+            "rendered {input} -> {} ({}x{}, {} bytes, {} display items, {} hit regions, {} images, {} background images, {} SVGs, {} scripts + {} timer tasks / {} events, {} external stylesheets, {} ms)",
             args.output.display(),
             output.pixmap.width,
             output.pixmap.height,
@@ -106,6 +106,7 @@ fn run() -> Result<(), CliError> {
             stats.hit_regions,
             stats.images_loaded,
             stats.background_images_loaded,
+            stats.svgs_rendered,
             stats.scripts_executed,
             stats.script_tasks,
             stats.script_events,
@@ -223,7 +224,7 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
             "\"document_url\":{},\"status\":{},\"charset\":{},",
             "\"document_bytes\":{},\"png_bytes\":{},\"display_items\":{},\"hit_regions\":{},",
             "\"cookies_stored\":{},\"content_encoding\":{},",
-            "\"images_loaded\":{},\"images_failed\":{},\"image_bytes\":{},",
+            "\"images_loaded\":{},\"images_failed\":{},\"image_bytes\":{},\"svgs_rendered\":{},",
             "\"background_images_loaded\":{},\"background_images_failed\":{},\"background_bytes\":{},",
             "\"fonts_loaded\":{},\"fonts_failed\":{},\"font_bytes\":{},",
             "\"scripts_executed\":{},\"scripts_failed\":{},\"script_bytes\":{},\"console_entries\":{},",
@@ -256,6 +257,7 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
         stats.images_loaded,
         stats.images_failed,
         stats.image_bytes,
+        stats.svgs_rendered,
         stats.background_images_loaded,
         stats.background_images_failed,
         stats.background_bytes,

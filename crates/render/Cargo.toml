@@ -24,6 +24,7 @@ paint.workspace = true
 net.workspace = true
 image.workspace = true
 js = { workspace = true, optional = true }
+svg.workspace = true
 
 [[bin]]
 name = "render"

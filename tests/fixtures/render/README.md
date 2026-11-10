@@ -13,6 +13,12 @@ network, no JavaScript.
 | `assets/px.png` | Tiny deterministic PNG asset (82 bytes, generated with Python's stdlib `zlib`) used by `images.html` and served by the loopback HTTP tests. |
 | `assets/pattern.png` | 16×16 orange/blue checker used as `background-image` (93 bytes, deterministic RGBA PNG). |
 | `assets/bullet.png` | 8×8 magenta diamond used as `list-style-image` (92 bytes, deterministic RGBA PNG). |
+| `svg_img.html` | WP-5.10: `<img>` pointing at a 64×64 SVG (white background + red circle) rendered through the `svg` crate. |
+| `svg_viewbox.html` | 10×10 `viewBox` SVG displayed in a 40×40 CSS box (viewBox scaling). |
+| `svg_intrinsic.html` | SVG with no `width`/`height`/`viewBox`: intrinsic size falls back to the documented 300×150 default. |
+| `svg_corrupt.html` | Malformed SVG: non-fatal warning + placeholder, while the rest of the page paints. |
+| `svg_background.html` | `background-image: url(assets/svg_bg.svg)` on a 160×80 box (SVG stretched like a PNG). |
+| `assets/svg_*.svg` | Deterministic SVG fixtures: red circle, viewBox square, default-size rectangle, corrupt payload, background tile and an oversized (20000×20000) document for the render cap. |
 | `js_text.html` | WP-6.2/6.3: inline classic script changes `textContent` and `style.color` of a paragraph (large red text) after parsing. |
 | `js_create.html` | Inline script calls `createElement` + `appendChild` with a green `style.backgroundColor` box that layout/paint must render. |
 | `js_external.html` + `assets/js_mutation.js` | External classic script (`src`) over `file:` that mutates text/colour; the same script is served over loopback HTTP by the tests. |
@@ -36,7 +42,10 @@ placeholders. Regenerate `assets/px.png` only alongside the documented quadrants
 magenta list markers, the green fallback for the missing image, the color-only box,
 `--no-network`, the background caps (32/8 MiB/16 MiB) and non-PNG rejection.
 
-`crates/render/tests/scripting_tests.rs` renders these fixtures with the embedded Boa
+`crates/render/tests/svg_tests.rs` renders the `svg_*.html` fixtures offline and checks the
+painted pixels (`<img>` shape/colour, viewBox scaling, 300×150 default, background SVG,
+corrupt/oversized warnings, Content-Type + sniffing over loopback HTTP, direct SVG
+navigation and determinism). `crates/render/tests/scripting_tests.rs` renders these fixtures with the embedded Boa
 runtime (`render::ScriptingMode::Enabled`, default with the `js` feature) and checks the
 mutated pixels, external `src` loading (`file:` and loopback HTTP), `document.write`,
 `--no-network`, console capture, exception/budget warnings and determinism. Scripts execute

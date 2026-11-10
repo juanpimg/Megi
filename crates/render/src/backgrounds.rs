@@ -44,6 +44,8 @@ use css::ComputedStyle;
 use dom::{Document, NodeId};
 use net::{ResourceLoader, Scheme, Url};
 
+use crate::svg_assets;
+
 /// Default maximum number of distinct background/list-style images per page.
 pub const DEFAULT_MAX_BACKGROUNDS: usize = 32;
 /// Default maximum downloaded size of one background image (8 MiB).
@@ -102,6 +104,8 @@ pub struct LoadedBackgrounds {
     pub loaded: usize,
     /// Distinct URLs that failed (invalid, blocked, too large, unsupported format, ...).
     pub failed: usize,
+    /// Background images that were SVGs rasterized through the `svg` crate.
+    pub svgs_rendered: usize,
     /// Downloaded (encoded) bytes accepted by the caps.
     pub downloaded_bytes: usize,
     /// Non-fatal warnings produced by this stage.
@@ -165,6 +169,7 @@ pub fn load_backgrounds(
         references: 0,
         loaded: 0,
         failed: 0,
+        svgs_rendered: 0,
         downloaded_bytes: 0,
         warnings: Vec::new(),
     };
@@ -252,25 +257,38 @@ pub fn load_backgrounds(
             ));
             continue;
         }
-        match image::detect_format(&resource.bytes) {
-            image::ImageFormat::Png => {}
-            other => {
-                result.failed += 1;
-                result.warnings.push(format!(
-                    "skipping background image {url}: unsupported format {other:?} (only PNG is decoded)"
-                ));
-                continue;
+        let bitmap = if image::detect_format(&resource.bytes) == image::ImageFormat::Png {
+            match image::decode(&resource.bytes) {
+                Ok(bitmap) => bitmap,
+                Err(error) => {
+                    result.failed += 1;
+                    result.warnings.push(format!(
+                        "skipping background image {url}: PNG decode failed ({error})"
+                    ));
+                    continue;
+                }
             }
-        }
-        let bitmap = match image::decode(&resource.bytes) {
-            Ok(bitmap) => bitmap,
-            Err(error) => {
-                result.failed += 1;
-                result.warnings.push(format!(
-                    "skipping background image {url}: PNG decode failed ({error})"
-                ));
-                continue;
+        } else if svg_assets::looks_like_svg(&resource.content_type, &resource.bytes) {
+            match svg_assets::render(&resource.bytes) {
+                Ok(rendered) => {
+                    result.svgs_rendered += 1;
+                    rendered.raster
+                }
+                Err(error) => {
+                    result.failed += 1;
+                    result.warnings.push(format!(
+                        "skipping background image {url}: SVG render failed ({error})"
+                    ));
+                    continue;
+                }
             }
+        } else {
+            let format = image::detect_format(&resource.bytes);
+            result.failed += 1;
+            result.warnings.push(format!(
+                "skipping background image {url}: unsupported format {format:?} (only PNG and SVG are decoded)"
+            ));
+            continue;
         };
         result.downloaded_bytes += resource.bytes.len();
         result.loaded += 1;
