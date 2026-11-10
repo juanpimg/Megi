@@ -1,6 +1,7 @@
 //! # Megi DOM (`dom`)
 //!
-//! Document-Owned Contiguous Arena DOM with Intrusive Doubly-Linked Indices.
+//! Document-Owned Contiguous Arena DOM with Intrusive Doubly-Linked Indices, generation-
+//! checked handles, slot reuse and iteratively-safe traversals.
 //!
 //! Instead of `Rc<RefCell<Node>>` (which suffers from heap fragmentation, dynamic
 //! `BorrowMutError` panics during the HTML5 Adoption Agency Algorithm and foster
@@ -12,39 +13,148 @@
 //! `prev_sibling`, `next_sibling`) occupying 20 bytes total per node via Rust's niche
 //! optimization. All tree mutations (`append_child`, `insert_before`, `detach`,
 //! `reparent_children`, `append_text`) execute in strict `O(1)` time.
+//!
+//! ## Arena identity, generations and removal
+//!
+//! A [`NodeId`] packs a 20-bit slot index plus a 12-bit generation into 4 bytes, so
+//! `Option<NodeId>` stays 4 bytes too. Generations are seeded per arena, which gives three
+//! guarantees:
+//!
+//! - **stale handles are rejected**: [`Document::remove_node`] / [`Document::remove_subtree`]
+//!   bump the slot generation and push the slot onto a free list; the old handle then makes
+//!   [`Document::node`] panic and [`Document::try_node`] return `None`;
+//! - **foreign handles are rejected** (best effort; see [`Document::owns`]): the per-arena
+//!   seed is mixed into the generation bits, so a handle from another document generally
+//!   mismatches. The 12-bit generation space is the documented limit of this check;
+//! - **memory is released**: removed payloads (`String`s, attributes) are dropped
+//!   immediately and slots are reused by [`Document::create_node`] instead of growing the
+//!   arena. The HTML parser never removes nodes, so parsed documents keep their historical
+//!   `len() == allocated()` behaviour.
+//!
+//! ## Traversals and validation
+//!
+//! [`Document::descendants`] is an iterative pre-order walk (explicit heap stack + visited
+//! set), [`Document::ancestors`] is bounded by the live-node count, and both terminate on
+//! corrupted cyclic links instead of hanging. [`Document::validate_invariants`] is an
+//! `O(live nodes)` debugging tool that checks arena bookkeeping, handle generation, tree
+//! link symmetry, template-contents linkage and parent-chain acyclicity (detached subtrees
+//! are allowed: the parser creates nodes before inserting them).
+//!
+//! [`Document::estimate_bytes`] provides a rough memory estimate for anti-DoS budgets.
 
 #![forbid(unsafe_code)]
 
+use std::collections::HashSet;
+use std::fmt;
 use std::num::NonZeroU32;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Number of low bits of a [`NodeId`] reserved for the arena slot index.
+///
+/// The remaining 12 bits store the slot's generation, so a handle is
+/// `(slot | generation)` packed into one non-zero `u32` (4 bytes, with a niche so
+/// `Option<NodeId>` is also 4 bytes). This caps a document at 1,048,575 arena slots
+/// (far above the HTML parser's 1,000,000-node default `ParseOptions::max_nodes`) while
+/// making stale handles detectable.
+const SLOT_BITS: u32 = 20;
+const SLOT_MASK: u32 = (1 << SLOT_BITS) - 1;
+const GENERATION_MASK: u32 = (1 << (32 - SLOT_BITS)) - 1;
+/// Maximum number of arena slots (index space) in one [`Document`].
+pub const MAX_SLOTS: usize = SLOT_MASK as usize;
 
 /// Compact 32-bit handle into a [`Document`]'s contiguous node arena.
 ///
-/// Backed by [`NonZeroU32`] (1-based index into `Document::nodes`) so that
-/// `std::mem::size_of::<Option<NodeId>>() == 4`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// # Layout and semantics
+///
+/// A handle packs a 20-bit slot index and the slot's 12-bit **generation** into a single
+/// [`NonZeroU32`], so `size_of::<NodeId>() == size_of::<Option<NodeId>>() == 4`.
+///
+/// - The slot is the node's position in the arena; it can be **reused** after the node is
+///   removed ([`Document::remove_node`] / [`Document::remove_subtree`]).
+/// - The generation changes whenever a slot is freed, so a handle obtained before the
+///   removal is **stale** afterwards: [`Document::try_node`] returns `None` for it and
+///   [`Document::node`] panics with a clear diagnostic.
+/// - Generations are additionally seeded per arena, so a handle from a *different*
+///   [`Document`] is (with overwhelming probability, see [`Document::owns`]) rejected
+///   instead of silently aliasing another node.
+///
+/// Handles are only valid for the [`Document`] that created them and only while the node
+/// is alive; they are not globally unique identifiers across documents.
+///
+/// # Documented limits (12 generation bits)
+///
+/// - **ABA after wrap**: a slot's generation is incremented on every free, so it wraps
+///   every 4,095 free/reuse cycles of the *same* slot; only then could a very old handle
+///   alias the new occupant. This is the reason generations are checked, not
+///   authoritative identity.
+/// - **Foreign handles are detected best-effort**: the per-arena seed is derived from a
+///   process-unique id modulo 4,095, so two arenas whose ids are congruent modulo 4,095
+///   share a seed; handles from such a document can alias a same-slot node. Use
+///   [`Document::owns`] / [`Document::try_node`] and treat handles as arena-local.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeId(NonZeroU32);
 
 impl NodeId {
-    /// Creates a `NodeId` from a 0-based arena index.
+    /// Packs a slot index and an already arena-seeded generation into a handle.
     #[inline]
-    pub const fn from_index(idx: usize) -> Self {
-        let one_based = (idx as u32).checked_add(1).expect("NodeId arena overflow");
-        match NonZeroU32::new(one_based) {
-            Some(nz) => Self(nz),
+    const fn pack(slot: usize, generation: u32) -> Self {
+        let raw = ((slot as u32 + 1) & SLOT_MASK) | ((generation & GENERATION_MASK) << SLOT_BITS);
+        match NonZeroU32::new(raw) {
+            Some(value) => Self(value),
             None => panic!("NodeId cannot be zero"),
         }
     }
 
-    /// Returns the 0-based arena index corresponding to this `NodeId`.
+    /// Creates a generation-0 `NodeId` from a 0-based arena slot index.
+    ///
+    /// This is a low-level escape hatch: documents seed their handle generations with a
+    /// process-unique arena id (modulo the 12-bit generation space), so generation-0
+    /// handles only resolve in the rare arena whose id is a multiple of 4,095. Prefer the
+    /// handles returned by [`Document`] methods.
     #[inline]
-    pub const fn index(self) -> usize {
-        (self.0.get() - 1) as usize
+    pub const fn from_index(idx: usize) -> Self {
+        Self::pack(idx, 0)
     }
 
-    /// Returns the raw 1-based `u32` value.
+    /// Returns the 0-based arena slot index addressed by this handle.
+    #[inline]
+    pub const fn index(self) -> usize {
+        ((self.0.get() & SLOT_MASK) - 1) as usize
+    }
+
+    /// Alias for [`NodeId::index`]: the arena slot addressed by this handle.
+    #[inline]
+    pub const fn slot(self) -> usize {
+        self.index()
+    }
+
+    /// Returns the arena-seeded generation stored in this handle.
+    ///
+    /// Compare it against the live generation with [`Document::generation`] or
+    /// [`Document::owns`]; a mismatch means the handle is stale or foreign.
+    #[inline]
+    pub const fn generation(self) -> u32 {
+        self.0.get() >> SLOT_BITS
+    }
+
+    /// Returns the raw packed `u32` value.
+    ///
+    /// The encoding is an implementation detail: do not compare it against `index() + 1`
+    /// (that was true only before generations were introduced).
     #[inline]
     pub const fn get(self) -> u32 {
         self.0.get()
+    }
+}
+
+impl fmt::Debug for NodeId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "NodeId(slot={}, generation={})",
+            self.index(),
+            self.generation()
+        )
     }
 }
 
@@ -194,10 +304,15 @@ pub enum NodeKind {
 ///
 /// The 5 tree links (`parent`, `first_child`, `last_child`, `prev_sibling`, `next_sibling`)
 /// occupy exactly 20 bytes (`5 * 4` bytes) and allow `O(1)` splices without borrowing
-/// conflicts.
+/// conflicts. Each node also carries its 4-byte arena slot generation, used to reject
+/// stale [`NodeId`] handles after a slot is freed and reused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Node {
+    /// Handle of this node, including the arena-seeded generation of its slot.
     pub id: NodeId,
+    /// Per-slot local generation (without the arena seed). Incremented when the slot is
+    /// freed so stale handles can be rejected; see [`NodeId`].
+    pub generation: u32,
     pub parent: Option<NodeId>,
     pub first_child: Option<NodeId>,
     pub last_child: Option<NodeId>,
@@ -235,12 +350,78 @@ impl Node {
     }
 }
 
+/// Builds the placeholder stored in a freed slot: no tree links, no heap payload, and the
+/// slot's new generation. Only [`Document`] internals ever observe this node.
+fn tombstone_node(slot: usize, local_generation: u32) -> Node {
+    Node {
+        id: NodeId::pack(slot, 0),
+        generation: local_generation,
+        parent: None,
+        first_child: None,
+        last_child: None,
+        prev_sibling: None,
+        next_sibling: None,
+        kind: NodeKind::Text(String::new()),
+    }
+}
+
+/// Estimated heap payload of a live node (see [`Document::estimate_bytes`]).
+fn node_payload_bytes(node: &Node) -> usize {
+    match &node.kind {
+        NodeKind::Text(text) | NodeKind::Comment(text) => text.len(),
+        NodeKind::Doctype {
+            name,
+            public_id,
+            system_id,
+        } => name.len() + public_id.len() + system_id.len(),
+        NodeKind::ProcessingInstruction { target, data } => target.len() + data.len(),
+        NodeKind::Element(element) => {
+            let mut bytes = element.local_name.len()
+                + element.prefix.as_ref().map_or(0, String::len)
+                + element.attributes.len() * std::mem::size_of::<Attribute>();
+            for attribute in &element.attributes {
+                bytes += attribute.local_name.len()
+                    + attribute.value.len()
+                    + attribute.prefix.as_ref().map_or(0, String::len);
+            }
+            bytes
+        }
+        NodeKind::Document | NodeKind::DocumentFragment => 0,
+    }
+}
+
 /// Document-Owned Contiguous Arena holding all nodes in a DOM tree.
+///
+/// The arena stores live nodes contiguously in `nodes` plus per-slot bookkeeping:
+///
+/// - `generations`: local generation of each slot (bumped on free, used to reject stale
+///   handles);
+/// - `occupied`: whether a slot currently holds a live node;
+/// - `free_list`: LIFO list of reusable slots, so `create_node` after `remove_node` /
+///   `remove_subtree` does not grow the arena;
+/// - `arena_id` / `generation_seed`: process-unique arena identity, mixed into the
+///   generation bits of [`NodeId`] so handles from other documents are rejected.
+///
+/// Cloning a `Document` copies the arena bit for bit (same identity seed): the handles stay
+/// valid in both copies, but each copy owns independent nodes from then on.
 #[derive(Clone, Debug)]
 pub struct Document {
     nodes: Vec<Node>,
+    generations: Vec<u32>,
+    occupied: Vec<bool>,
+    free_list: Vec<u32>,
+    live: usize,
     root: NodeId,
+    arena_id: u64,
+    generation_seed: u32,
     pub quirks_mode: QuirksMode,
+}
+
+/// Process-wide source of unique arena identifiers (also seeds handle generations).
+static NEXT_ARENA_ID: AtomicU64 = AtomicU64::new(1);
+
+fn next_arena_id() -> u64 {
+    NEXT_ARENA_ID.fetch_add(1, Ordering::Relaxed)
 }
 
 impl Default for Document {
@@ -250,11 +431,14 @@ impl Default for Document {
 }
 
 impl Document {
-    /// Creates a new `Document` with its root `NodeKind::Document` node at `NodeId(1)`.
+    /// Creates a new `Document` with its root `NodeKind::Document` node at arena slot 0.
     pub fn new() -> Self {
-        let root_id = NodeId::from_index(0);
+        let arena_id = next_arena_id();
+        let generation_seed = (arena_id % (GENERATION_MASK as u64)) as u32;
+        let root_id = NodeId::pack(0, generation_seed);
         let root_node = Node {
             id: root_id,
+            generation: 0,
             parent: None,
             first_child: None,
             last_child: None,
@@ -264,7 +448,13 @@ impl Document {
         };
         Self {
             nodes: vec![root_node],
+            generations: vec![0],
+            occupied: vec![true],
+            free_list: Vec::new(),
+            live: 1,
             root: root_id,
+            arena_id,
+            generation_seed,
             quirks_mode: QuirksMode::NoQuirks,
         }
     }
@@ -275,31 +465,165 @@ impl Document {
         self.root
     }
 
-    /// Returns the total number of nodes allocated in the arena.
+    /// Returns the number of **live** nodes in the arena (including the root node).
+    ///
+    /// After removals this can be smaller than [`Document::allocated`]; the difference is
+    /// the number of reusable slots ([`Document::free_slots`]). The HTML parser never
+    /// removes nodes, so for parsed documents `len() == allocated()`.
     #[inline]
     pub fn len(&self) -> usize {
+        self.live
+    }
+
+    /// Returns `true` if the arena has no live nodes (never true for a valid `Document`,
+    /// whose root node is always live).
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.live == 0
+    }
+
+    /// Returns the number of arena slots ever allocated (live + reusable free slots).
+    ///
+    /// This is the capacity high-water mark of the arena, not the live node count.
+    #[inline]
+    pub fn allocated(&self) -> usize {
         self.nodes.len()
     }
 
-    /// Returns `true` if the arena is empty (never true for a valid `Document`).
+    /// Returns the number of freed slots currently available for reuse.
     #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
+    pub fn free_slots(&self) -> usize {
+        self.free_list.len()
     }
 
-    /// Allocates a new detached node in the arena and returns its [`NodeId`].
-    pub fn create_node(&mut self, kind: NodeKind) -> NodeId {
-        let id = NodeId::from_index(self.nodes.len());
-        self.nodes.push(Node {
+    /// Returns a rough estimate of the memory owned by this document, in bytes.
+    ///
+    /// It sums the arena arrays (at their capacity) plus heap payloads (`String`s and
+    /// attribute storage) of live nodes. The estimate is intentionally approximate: it is
+    /// meant for anti-DoS budgets and diagnostics, not allocator accounting.
+    pub fn estimate_bytes(&self) -> usize {
+        let mut total = std::mem::size_of::<Self>()
+            + self.nodes.capacity() * std::mem::size_of::<Node>()
+            + self.generations.capacity() * std::mem::size_of::<u32>()
+            + self.occupied.capacity() * std::mem::size_of::<bool>()
+            + self.free_list.capacity() * std::mem::size_of::<u32>();
+        for (slot, node) in self.nodes.iter().enumerate() {
+            if self.occupied[slot] {
+                total += node_payload_bytes(node);
+            }
+        }
+        total
+    }
+
+    /// Returns the process-unique identity of this document's arena.
+    ///
+    /// Handles are only meaningful for the arena that created them; this id can be logged
+    /// to debug cross-document handle mix-ups.
+    pub const fn arena_id(&self) -> u64 {
+        self.arena_id
+    }
+
+    /// Returns `true` when `id` addresses a **live** node of this document.
+    ///
+    /// This is the non-panicking identity check: it is `false` for out-of-range handles,
+    /// for stale handles whose slot was freed (or freed and reused), and for handles from
+    /// another [`Document`] (detected through the per-arena generation seed; exact except
+    /// for arenas whose ids are congruent modulo 4,095 — see [`NodeId`]'s documented
+    /// limits).
+    #[inline]
+    pub fn owns(&self, id: NodeId) -> bool {
+        self.slot_of(id).is_some()
+    }
+
+    /// Returns the live generation of `id`'s slot when the handle belongs to this
+    /// document, or `None` when it is out of range, stale or foreign.
+    ///
+    /// This is the per-slot *local* generation (the arena seed is not included); it is
+    /// bumped every time the slot is freed.
+    #[inline]
+    pub fn generation(&self, id: NodeId) -> Option<u32> {
+        self.slot_of(id).map(|slot| self.nodes[slot].generation)
+    }
+
+    /// Resolves a handle to its arena slot, validating slot range, occupancy and the
+    /// generation encoded in the handle.
+    #[inline]
+    fn slot_of(&self, id: NodeId) -> Option<usize> {
+        let slot = id.index();
+        if slot >= self.nodes.len() || !self.occupied[slot] {
+            return None;
+        }
+        if self.nodes[slot].id != id {
+            return None;
+        }
+        Some(slot)
+    }
+
+    /// Encodes a local generation into the on-handle (arena-seeded) representation.
+    #[inline]
+    const fn encode_generation(&self, local_generation: u32) -> u32 {
+        (local_generation + self.generation_seed) & GENERATION_MASK
+    }
+
+    /// Allocates a node from the free list (or grows the arena) and writes `kind` into it.
+    fn alloc_slot(&mut self, kind: NodeKind) -> NodeId {
+        let (slot, local_generation) = match self.free_list.pop() {
+            Some(raw_slot) => {
+                let slot = raw_slot as usize;
+                debug_assert!(!self.occupied[slot], "free list contains an occupied slot");
+                (slot, self.generations[slot])
+            }
+            None => {
+                if self.nodes.len() >= MAX_SLOTS {
+                    panic!(
+                        "Document arena exhausted: at most {MAX_SLOTS} node slots are supported"
+                    );
+                }
+                let slot = self.nodes.len();
+                self.nodes.push(tombstone_node(slot, 0));
+                self.generations.push(0);
+                self.occupied.push(false);
+                (slot, 0)
+            }
+        };
+        let id = NodeId::pack(slot, self.encode_generation(local_generation));
+        self.nodes[slot] = Node {
             id,
+            generation: local_generation,
             parent: None,
             first_child: None,
             last_child: None,
             prev_sibling: None,
             next_sibling: None,
             kind,
-        });
+        };
+        self.occupied[slot] = true;
+        self.live += 1;
         id
+    }
+
+    /// Frees `slot`, dropping its payload and making the slot available for reuse.
+    fn free_slot(&mut self, slot: usize) {
+        if slot >= self.nodes.len() || !self.occupied[slot] {
+            debug_assert!(false, "attempted to free a slot that is not live");
+            return;
+        }
+        self.occupied[slot] = false;
+        self.live -= 1;
+        self.generations[slot] = (self.generations[slot] + 1) & GENERATION_MASK;
+        let tombstone = tombstone_node(slot, self.generations[slot]);
+        let removed = std::mem::replace(&mut self.nodes[slot], tombstone);
+        // Drop the payload now (Strings, attribute vectors, element data), not when the
+        // document is dropped: that is what releases the memory of a removed subtree.
+        drop(removed);
+        self.free_list.push(slot as u32);
+    }
+
+    /// Allocates a new detached node in the arena and returns its [`NodeId`].
+    ///
+    /// Reuses a free slot when available (see [`Document::free_slots`]).
+    pub fn create_node(&mut self, kind: NodeKind) -> NodeId {
+        self.alloc_slot(kind)
     }
 
     /// Convenience helper to allocate an HTML/SVG/MathML element.
@@ -330,40 +654,74 @@ impl Document {
     ///
     /// # Panics
     ///
-    /// Panics if `id` does not belong to this document (or is otherwise out of range).
-    /// Use [`Document::try_node`] for a non-panicking lookup.
+    /// Panics with a diagnostic (including the arena id and the reason) when `id` is out of
+    /// range, was freed (stale handle) or belongs to another [`Document`]. Use
+    /// [`Document::owns`] / [`Document::try_node`] for non-panicking checks.
     #[inline]
     pub fn node(&self, id: NodeId) -> &Node {
-        &self.nodes[id.index()]
+        match self.slot_of(id) {
+            Some(slot) => &self.nodes[slot],
+            None => self.panic_invalid_handle(id),
+        }
     }
 
     /// Mutably borrows a node by its [`NodeId`].
     ///
     /// # Panics
     ///
-    /// Panics if `id` does not belong to this document (or is otherwise out of range).
-    /// Use [`Document::try_node_mut`] for a non-panicking lookup.
+    /// Panics with the same diagnostics as [`Document::node`] when the handle is invalid.
     #[inline]
     pub fn node_mut(&mut self, id: NodeId) -> &mut Node {
-        &mut self.nodes[id.index()]
+        match self.slot_of(id) {
+            Some(slot) => &mut self.nodes[slot],
+            None => self.panic_invalid_handle(id),
+        }
     }
 
-    /// Non-panicking fallible lookup: returns `None` when `id` does not name a node
-    /// allocated in this document's arena.
-    ///
-    /// [`NodeId`] values are only meaningful for the [`Document`] that allocated them;
-    /// passing an id from another document either yields `None` or (if the numeric index
-    /// happens to be in range) aliases an unrelated node. Callers that mix documents
-    /// must keep track of arena identity themselves.
+    /// Non-panicking fallible lookup: returns `None` when `id` is out of range, stale or
+    /// belongs to a different document. See [`Document::owns`].
     #[inline]
     pub fn try_node(&self, id: NodeId) -> Option<&Node> {
-        self.nodes.get(id.index())
+        self.slot_of(id).map(|slot| &self.nodes[slot])
     }
 
     /// Non-panicking mutable fallible lookup; see [`Document::try_node`].
     #[inline]
     pub fn try_node_mut(&mut self, id: NodeId) -> Option<&mut Node> {
-        self.nodes.get_mut(id.index())
+        self.slot_of(id).map(|slot| &mut self.nodes[slot])
+    }
+
+    /// Panics with a human-readable reason for an invalid handle.
+    #[cold]
+    #[inline(never)]
+    fn panic_invalid_handle(&self, id: NodeId) -> ! {
+        panic!(
+            "NodeId does not belong to this Document (arena #{}): {}",
+            self.arena_id,
+            self.explain_invalid_handle(id)
+        )
+    }
+
+    fn explain_invalid_handle(&self, id: NodeId) -> String {
+        let slot = id.index();
+        if slot >= self.nodes.len() {
+            return format!(
+                "slot {slot} is out of range (arena has {} slots)",
+                self.nodes.len()
+            );
+        }
+        if !self.occupied[slot] {
+            return format!(
+                "slot {slot} was freed (generation {}); the handle is stale",
+                id.generation()
+            );
+        }
+        format!(
+            "slot {slot} has generation {}, not {} (stale or foreign handle; this arena seed is {})",
+            self.nodes[slot].id.generation(),
+            id.generation(),
+            self.generation_seed
+        )
     }
 
     /// Returns `true` when `ancestor` is `node` itself or one of its ancestors.
@@ -614,19 +972,388 @@ impl Document {
         Some((source_contents, clone_contents))
     }
 
-    /// Returns an iterator over the direct children of `parent_id`.
+    /// Removes a single node from the tree and frees its arena slot.
+    ///
+    /// Semantics (documented, DOM-flavoured):
+    /// - the node's children are re-attached *in order* where the node was (to its parent,
+    ///   or left detached when the removed node itself had no parent);
+    /// - an HTML `<template>`'s inert contents fragment and its descendants are freed too
+    ///   (they are not part of the normal child chain);
+    /// - the slot goes to the free list and its generation is bumped, so every existing
+    ///   handle to the removed node becomes stale;
+    /// - the document root cannot be removed (returns `false`).
+    ///
+    /// Cost: `O(children)` for the re-attachment plus `O(template contents)`; `O(1)`
+    /// otherwise. Returns `false` for invalid/stale/foreign handles.
+    ///
+    /// Generations are 12 bits wide: a fixed slot can be freed/reused 4,095 times before
+    /// an extremely old handle could alias its new occupant (documented ABA limit).
+    pub fn remove_node(&mut self, node_id: NodeId) -> bool {
+        let Some(slot) = self.slot_of(node_id) else {
+            return false;
+        };
+        if slot == self.root.index() {
+            return false;
+        }
+        let (parent, next_sibling) = {
+            let node = &self.nodes[slot];
+            (node.parent, node.next_sibling)
+        };
+        // Free a <template>'s inert contents (not reachable through the child chain).
+        if let Some(fragment) = self
+            .nodes
+            .get(slot)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.template_contents)
+        {
+            self.remove_subtree(fragment);
+        }
+        // Re-attach the children at the removed node's position.
+        let mut child = self.nodes[slot].first_child;
+        while let Some(child_id) = child {
+            let next = self.try_node(child_id).and_then(|node| node.next_sibling);
+            match parent {
+                Some(parent_id) => match next_sibling {
+                    Some(anchor) if self.owns(anchor) => {
+                        self.insert_before(anchor, child_id);
+                    }
+                    _ => {
+                        self.append_child(parent_id, child_id);
+                    }
+                },
+                None => {
+                    self.detach(child_id);
+                }
+            }
+            child = next;
+        }
+        self.detach(node_id);
+        let slot = self.slot_of(node_id).expect("validated handle");
+        self.nodes[slot].first_child = None;
+        self.nodes[slot].last_child = None;
+        self.free_slot(slot);
+        true
+    }
+
+    /// Removes `node_id` **and its whole subtree**, freeing every slot in it.
+    ///
+    /// Handles to any removed node become stale. Returns the number of freed slots
+    /// (0 when the handle is invalid/stale/foreign or is the document root). The traversal
+    /// is iterative and includes HTML `<template>` inert contents.
+    ///
+    /// Cost: `O(subtree size)` time and a temporary `O(subtree size)` id list.
+    pub fn remove_subtree(&mut self, node_id: NodeId) -> usize {
+        let Some(slot) = self.slot_of(node_id) else {
+            return 0;
+        };
+        if slot == self.root.index() {
+            return 0;
+        }
+        self.detach(node_id);
+
+        // Collect the subtree iteratively (no recursion: supports arbitrarily deep DOMs).
+        let mut pending = vec![node_id];
+        let mut to_free: Vec<NodeId> = Vec::new();
+        while let Some(current) = pending.pop() {
+            let Some(current_slot) = self.slot_of(current) else {
+                continue;
+            };
+            to_free.push(current);
+            let mut child = self.nodes[current_slot].first_child;
+            while let Some(child_id) = child {
+                let next = self.try_node(child_id).and_then(|node| node.next_sibling);
+                pending.push(child_id);
+                child = next;
+            }
+            if let Some(fragment) = self
+                .nodes
+                .get(current_slot)
+                .and_then(|node| node.as_element())
+                .and_then(|element| element.template_contents)
+            {
+                pending.push(fragment);
+            }
+            if to_free.len() > self.nodes.len() {
+                debug_assert!(false, "child chain cycle while removing subtree");
+                break;
+            }
+        }
+        let mut freed = 0usize;
+        for node in to_free {
+            let Some(slot) = self.slot_of(node) else {
+                continue;
+            };
+            self.free_slot(slot);
+            freed += 1;
+        }
+        freed
+    }
+
+    /// Validates the arena and tree invariants; intended for tests and debugging.
+    ///
+    /// Checks: arena bookkeeping (`live`/`occupied`/free list consistency), handle
+    /// encoding and generations, root sanity, parent/child/sibling symmetry,
+    /// first/last-child coherence, template-contents linkage and absence of cycles in the
+    /// sibling/child/parent links (detached subtrees are valid and allowed). Never panics
+    /// on a corrupted document: returns a human-readable description of the first violation
+    /// found.
+    ///
+    /// Cost: `O(live nodes * depth)` worst case. Call it from tests after mass removals,
+    /// not from hot paths.
+    pub fn validate_invariants(&self) -> Result<(), String> {
+        if self.nodes.len() != self.generations.len() {
+            return Err(format!(
+                "generations table length {} != slot count {}",
+                self.generations.len(),
+                self.nodes.len()
+            ));
+        }
+        if self.nodes.len() != self.occupied.len() {
+            return Err(format!(
+                "occupancy table length {} != slot count {}",
+                self.occupied.len(),
+                self.nodes.len()
+            ));
+        }
+        if self.nodes.is_empty() {
+            return Err("arena has no root slot".to_owned());
+        }
+        let live = self.occupied.iter().filter(|occupied| **occupied).count();
+        if live != self.live {
+            return Err(format!(
+                "live counter {} != occupied slots {live}",
+                self.live
+            ));
+        }
+        if self.free_list.len() != self.nodes.len() - live {
+            return Err(format!(
+                "free list length {} != free slots {}",
+                self.free_list.len(),
+                self.nodes.len() - live
+            ));
+        }
+        let mut seen_free = HashSet::new();
+        for &raw_slot in &self.free_list {
+            let slot = raw_slot as usize;
+            if slot >= self.nodes.len() {
+                return Err(format!("free list slot {slot} is out of range"));
+            }
+            if self.occupied[slot] {
+                return Err(format!("free list slot {slot} is marked occupied"));
+            }
+            if !seen_free.insert(slot) {
+                return Err(format!("free list slot {slot} appears twice"));
+            }
+        }
+
+        if self.root.index() != 0 {
+            return Err("document root must live in arena slot 0".to_owned());
+        }
+        let root = self
+            .try_node(self.root)
+            .ok_or_else(|| "document root handle is not live".to_owned())?;
+        if root.parent.is_some() {
+            return Err("document root must not have a parent".to_owned());
+        }
+        if !matches!(root.kind, NodeKind::Document) {
+            return Err("document root must be a Document node".to_owned());
+        }
+
+        for (slot, node) in self.nodes.iter().enumerate() {
+            if !self.occupied[slot] {
+                continue;
+            }
+            if node.id.index() != slot {
+                return Err(format!(
+                    "slot {slot} holds a handle for slot {}",
+                    node.id.index()
+                ));
+            }
+            let expected_generation = self.encode_generation(self.generations[slot]);
+            if node.id.generation() != expected_generation
+                || node.generation != self.generations[slot]
+            {
+                return Err(format!(
+                    "slot {slot} generation mismatch (handle {}, table {}, node {})",
+                    node.id.generation(),
+                    expected_generation,
+                    node.generation
+                ));
+            }
+            for (label, link) in [
+                ("parent", node.parent),
+                ("first_child", node.first_child),
+                ("last_child", node.last_child),
+                ("prev_sibling", node.prev_sibling),
+                ("next_sibling", node.next_sibling),
+            ] {
+                if let Some(linked) = link
+                    && !self.owns(linked)
+                {
+                    return Err(format!("slot {slot}: {label} links to a non-live handle"));
+                }
+            }
+            if node.first_child.is_none() != node.last_child.is_none() {
+                return Err(format!(
+                    "slot {slot}: only one of first_child/last_child is set"
+                ));
+            }
+            if let Some(prev) = node.prev_sibling {
+                let prev_node = self
+                    .try_node(prev)
+                    .ok_or_else(|| format!("slot {slot}: prev_sibling not live"))?;
+                if prev_node.next_sibling != Some(node.id) {
+                    return Err(format!("slot {slot}: prev_sibling asymmetry"));
+                }
+            }
+            if let Some(next) = node.next_sibling {
+                let next_node = self
+                    .try_node(next)
+                    .ok_or_else(|| format!("slot {slot}: next_sibling not live"))?;
+                if next_node.prev_sibling != Some(node.id) {
+                    return Err(format!("slot {slot}: next_sibling asymmetry"));
+                }
+            }
+            // First/last-child chain coherence and parent back-pointers.
+            let mut child = node.first_child;
+            let mut last_child = None;
+            let mut child_count = 0usize;
+            while let Some(child_id) = child {
+                child_count += 1;
+                if child_count > live {
+                    return Err(format!("slot {slot}: cycle in child sibling chain"));
+                }
+                let child_node = self
+                    .try_node(child_id)
+                    .ok_or_else(|| format!("slot {slot}: child handle not live"))?;
+                if child_node.parent != Some(node.id) {
+                    return Err(format!(
+                        "slot {slot}: child {} does not point back to its parent",
+                        child_id.index()
+                    ));
+                }
+                last_child = Some(child_id);
+                child = child_node.next_sibling;
+            }
+            if last_child != node.last_child {
+                return Err(format!("slot {slot}: last_child does not match the chain"));
+            }
+            if let Some(first) = node.first_child
+                && self
+                    .try_node(first)
+                    .is_some_and(|first| first.prev_sibling.is_some())
+            {
+                return Err(format!("slot {slot}: first_child has a prev_sibling"));
+            }
+            if let Some(last) = node.last_child
+                && self
+                    .try_node(last)
+                    .is_some_and(|last| last.next_sibling.is_some())
+            {
+                return Err(format!("slot {slot}: last_child has a next_sibling"));
+            }
+            // HTML <template> contents must be a detached DocumentFragment in this arena.
+            if let Some(element) = node.as_element()
+                && let Some(fragment) = element.template_contents
+            {
+                let fragment_node = self.try_node(fragment).ok_or_else(|| {
+                    format!("slot {slot}: template_contents is not a live handle")
+                })?;
+                if !matches!(fragment_node.kind, NodeKind::DocumentFragment) {
+                    return Err(format!(
+                        "slot {slot}: template_contents is not a DocumentFragment"
+                    ));
+                }
+                if fragment_node.parent.is_some() {
+                    return Err(format!("slot {slot}: template contents must be detached"));
+                }
+            }
+        }
+
+        // Parent-chain cycle check in amortized O(live): walk from every live node up to
+        // the root or to a detached subtree root (`parent == None`, which is a valid state
+        // while the parser builds a node before inserting it). Nodes already proven
+        // acyclic are memoized, so each node is visited once overall.
+        let mut resolved: HashSet<NodeId> = HashSet::new();
+        let mut path: HashSet<NodeId> = HashSet::new();
+        for (slot, node) in self.nodes.iter().enumerate() {
+            if !self.occupied[slot] {
+                continue;
+            }
+            path.clear();
+            let mut current = Some(node.id);
+            while let Some(id) = current {
+                if resolved.contains(&id) {
+                    break;
+                }
+                if !path.insert(id) {
+                    return Err(format!("slot {slot}: cycle in parent chain"));
+                }
+                current = self.try_node(id).and_then(|live| live.parent);
+            }
+            resolved.extend(path.iter().copied());
+        }
+        Ok(())
+    }
+
+    /// Returns an iterator over the direct children of `parent_id` in document order.
+    ///
+    /// Iteration is safe against corrupted arenas: it stops (rather than panicking) if a
+    /// sibling link stops resolving to a live handle.
     pub fn children(&self, parent_id: NodeId) -> ChildrenIter<'_> {
         ChildrenIter {
             doc: self,
-            next: self.node(parent_id).first_child,
+            next: self.try_node(parent_id).and_then(|node| node.first_child),
         }
     }
 
+    /// Returns an iterative pre-order iterator over the descendants of `node_id`
+    /// (document order: children, then their children, ...; `node_id` itself is not
+    /// included — use [`Document::descendants_inclusive`] to include it).
+    ///
+    /// The iterator uses an explicit heap stack (never recursion, so 100k-level DOMs are
+    /// safe) and a visited set, so a corrupted cyclic child/sibling chain terminates
+    /// instead of hanging.
+    pub fn descendants(&self, node_id: NodeId) -> DescendantsIter<'_> {
+        let mut visited = HashSet::new();
+        visited.insert(node_id);
+        let mut order = Vec::new();
+        if let Some(node) = self.try_node(node_id) {
+            let mut child = node.first_child;
+            let mut steps = 0usize;
+            while let Some(child_id) = child {
+                steps += 1;
+                if steps > self.len() {
+                    break; // corrupted sibling chain
+                }
+                if visited.insert(child_id) {
+                    order.push(child_id);
+                }
+                child = self.try_node(child_id).and_then(|node| node.next_sibling);
+            }
+        }
+        order.reverse(); // stack pops children in document order
+        DescendantsIter {
+            doc: self,
+            stack: order,
+            visited,
+        }
+    }
+
+    /// Like [`Document::descendants`], but yields `node_id` itself first.
+    pub fn descendants_inclusive(&self, node_id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
+        std::iter::once(node_id).chain(self.descendants(node_id))
+    }
+
     /// Returns an iterator over the ancestors of `node_id` (starting with `node.parent`).
+    ///
+    /// The walk is bounded by the live-node count, so a corrupted cyclic parent chain
+    /// terminates instead of hanging.
     pub fn ancestors(&self, node_id: NodeId) -> AncestorsIter<'_> {
         AncestorsIter {
             doc: self,
-            next: self.node(node_id).parent,
+            next: self.try_node(node_id).and_then(|node| node.parent),
+            remaining: self.len() + 1,
         }
     }
 }
@@ -637,28 +1364,74 @@ pub struct ChildrenIter<'a> {
     next: Option<NodeId>,
 }
 
-impl<'a> Iterator for ChildrenIter<'a> {
+impl Iterator for ChildrenIter<'_> {
     type Item = NodeId;
 
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.next?;
-        self.next = self.doc.node(current).next_sibling;
+        let node = self.doc.try_node(current)?;
+        self.next = node.next_sibling;
         Some(current)
     }
 }
 
-/// Iterator over ancestor [`NodeId`]s of a node.
+/// Iterator over ancestor [`NodeId`]s of a node (cycle-bounded).
 pub struct AncestorsIter<'a> {
     doc: &'a Document,
     next: Option<NodeId>,
+    remaining: usize,
 }
 
-impl<'a> Iterator for AncestorsIter<'a> {
+impl Iterator for AncestorsIter<'_> {
     type Item = NodeId;
 
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.next?;
-        self.next = self.doc.node(current).parent;
+        if self.remaining == 0 {
+            self.next = None;
+            return None;
+        }
+        self.remaining -= 1;
+        self.next = self.doc.try_node(current).and_then(|node| node.parent);
+        Some(current)
+    }
+}
+
+/// Iterative pre-order descendant iterator (see [`Document::descendants`]).
+///
+/// Uses an explicit heap stack plus a visited set, so deep trees cannot overflow the call
+/// stack and corrupted cyclic links terminate.
+pub struct DescendantsIter<'a> {
+    doc: &'a Document,
+    stack: Vec<NodeId>,
+    visited: HashSet<NodeId>,
+}
+
+impl Iterator for DescendantsIter<'_> {
+    type Item = NodeId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let current = self.stack.pop()?;
+        let node = self.doc.try_node(current)?;
+        let mut children = Vec::new();
+        let mut child = node.first_child;
+        let mut steps = 0usize;
+        while let Some(child_id) = child {
+            steps += 1;
+            if steps > self.doc.len() {
+                break; // corrupted sibling chain
+            }
+            if self.visited.insert(child_id) {
+                children.push(child_id);
+            }
+            child = self
+                .doc
+                .try_node(child_id)
+                .and_then(|node| node.next_sibling);
+        }
+        for child_id in children.into_iter().rev() {
+            self.stack.push(child_id);
+        }
         Some(current)
     }
 }
@@ -863,5 +1636,278 @@ mod tests {
         assert!(doc.try_node(out_of_range).is_none());
         assert!(doc.try_node_mut(out_of_range).is_none());
         assert!(doc.try_node(doc.root()).is_some());
+    }
+    #[test]
+    fn test_cross_document_handle_is_rejected() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        let mut doc_a = Document::new();
+        let mut doc_b = Document::new();
+        assert_ne!(doc_a.arena_id(), doc_b.arena_id());
+        let a = doc_a.create_element(Namespace::Html, "div", vec![]);
+        let b = doc_b.create_element(Namespace::Html, "div", vec![]);
+        assert!(doc_a.owns(a));
+        assert!(!doc_a.owns(b), "foreign handle must not be owned");
+        assert!(doc_a.try_node(b).is_none());
+        let payload = catch_unwind(AssertUnwindSafe(|| {
+            let _ = doc_a.node(b);
+        }))
+        .expect_err("reading a foreign NodeId must panic");
+        let message = payload
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| payload.downcast_ref::<&str>().map(|text| text.to_string()))
+            .unwrap_or_default();
+        assert!(
+            message.contains("does not belong to this Document"),
+            "unexpected panic message: {message}"
+        );
+        // Same-document lookups keep working.
+        assert_eq!(doc_a.node(a).id, a);
+    }
+
+    #[test]
+    fn test_slot_reuse_invalidates_stale_handles() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let first = doc.create_node(NodeKind::Text("old".to_owned()));
+        doc.append_child(root, first);
+        assert_eq!(doc.generation(first), Some(0));
+        assert!(doc.remove_node(first));
+
+        assert!(
+            doc.try_node(first).is_none(),
+            "stale handle must not resolve"
+        );
+        assert!(!doc.owns(first));
+        let reused = doc.create_node(NodeKind::Text("new".to_owned()));
+        assert_eq!(reused.index(), first.index(), "free slot must be reused");
+        assert_ne!(reused, first, "reused slot gets a new generation");
+        assert_eq!(doc.generation(reused), Some(1));
+        assert!(
+            doc.try_node(first).is_none(),
+            "stale handle must stay stale after reuse"
+        );
+        assert_eq!(doc.try_node(reused).and_then(Node::as_text), Some("new"));
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn test_remove_node_reattaches_children_in_place() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let wrapper = doc.create_element(Namespace::Html, "div", vec![]);
+        let a = doc.create_element(Namespace::Html, "span", vec![]);
+        let b = doc.create_element(Namespace::Html, "span", vec![]);
+        let sibling = doc.create_element(Namespace::Html, "p", vec![]);
+        doc.append_child(root, wrapper);
+        doc.append_child(wrapper, a);
+        doc.append_child(wrapper, b);
+        doc.append_child(root, sibling);
+
+        assert!(doc.remove_node(wrapper));
+        assert!(doc.try_node(wrapper).is_none());
+        assert_eq!(doc.children(root).collect::<Vec<_>>(), vec![a, b, sibling]);
+        assert_eq!(doc.node(a).parent, Some(root));
+        assert_eq!(doc.node(b).parent, Some(root));
+        assert_eq!(doc.len(), 4);
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn test_remove_subtree_frees_all_descendants_and_reuses_slots() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let mut chain = Vec::new();
+        let mut parent = root;
+        for _ in 0..1_000 {
+            let element = doc.create_element(Namespace::Html, "div", vec![]);
+            doc.append_child(parent, element);
+            chain.push(element);
+            parent = element;
+        }
+        let allocated_before = doc.allocated();
+        assert_eq!(doc.len(), 1_001);
+
+        assert_eq!(doc.remove_subtree(chain[0]), 1_000);
+        assert_eq!(doc.len(), 1);
+        assert_eq!(doc.free_slots(), 1_000);
+        assert_eq!(doc.allocated(), allocated_before);
+        assert!(chain.iter().all(|id| doc.try_node(*id).is_none()));
+        assert!(doc.validate_invariants().is_ok());
+
+        // Free slots are reused instead of growing the arena again.
+        for _ in 0..1_000 {
+            let element = doc.create_element(Namespace::Html, "div", vec![]);
+            doc.append_child(root, element);
+        }
+        assert_eq!(doc.len(), 1_001);
+        assert_eq!(doc.allocated(), allocated_before);
+        assert_eq!(doc.free_slots(), 0);
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn test_remove_template_frees_inert_contents() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let template = doc.create_element(Namespace::Html, "template", vec![]);
+        let fragment = doc
+            .node(template)
+            .as_element()
+            .and_then(|element| element.template_contents)
+            .expect("template has contents");
+        let inner = doc.create_element(Namespace::Html, "span", vec![]);
+        doc.append_child(fragment, inner);
+        doc.append_child(root, template);
+
+        assert!(doc.remove_node(template));
+        assert!(doc.try_node(template).is_none());
+        assert!(doc.try_node(fragment).is_none(), "contents fragment freed");
+        assert!(doc.try_node(inner).is_none(), "contents descendants freed");
+        assert_eq!(doc.len(), 1);
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn test_remove_root_is_rejected() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        assert!(!doc.remove_node(root));
+        assert_eq!(doc.remove_subtree(root), 0);
+        assert!(doc.owns(root));
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn test_deep_iterators_are_iterative_and_sized() {
+        let mut doc = Document::new();
+        let mut parent = doc.root();
+        let mut ids = Vec::with_capacity(100_000);
+        for _ in 0..100_000 {
+            let element = doc.create_element(Namespace::Html, "div", vec![]);
+            doc.append_child(parent, element);
+            ids.push(element);
+            parent = element;
+        }
+        assert_eq!(doc.descendants(doc.root()).count(), 100_000);
+        assert_eq!(doc.descendants_inclusive(doc.root()).count(), 100_001);
+        assert_eq!(doc.ancestors(ids[99_999]).count(), 100_000);
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn test_iterators_terminate_on_corrupted_cycles() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let a = doc.create_element(Namespace::Html, "div", vec![]);
+        let b = doc.create_element(Namespace::Html, "span", vec![]);
+        doc.append_child(root, a);
+        doc.append_child(a, b);
+        // Corrupt the parent chain into a cycle b -> a -> b.
+        doc.nodes[a.index()].parent = Some(b);
+        assert!(doc.validate_invariants().is_err());
+        assert!(doc.ancestors(b).count() <= doc.len() + 1);
+        assert!(doc.ancestors(a).count() <= doc.len() + 1);
+    }
+
+    #[test]
+    fn test_validate_invariants_detects_corruption() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let a = doc.create_element(Namespace::Html, "div", vec![]);
+        let b = doc.create_element(Namespace::Html, "span", vec![]);
+        doc.append_child(root, a);
+        doc.append_child(a, b);
+        assert!(doc.validate_invariants().is_ok());
+
+        // Sibling asymmetry + broken last_child chain.
+        doc.nodes[a.index()].next_sibling = Some(b);
+        assert!(doc.validate_invariants().is_err());
+        doc.nodes[a.index()].next_sibling = None;
+        assert!(doc.validate_invariants().is_ok());
+
+        // Child does not point back to its parent.
+        doc.nodes[b.index()].parent = Some(root);
+        assert!(doc.validate_invariants().is_err());
+        doc.nodes[b.index()].parent = Some(a);
+        assert!(doc.validate_invariants().is_ok());
+
+        // A detached node (parent == None) is a valid intermediate state for the parser.
+        let detached = doc.create_element(Namespace::Html, "p", vec![]);
+        assert!(doc.validate_invariants().is_ok());
+        doc.append_child(root, detached);
+        assert!(doc.validate_invariants().is_ok());
+
+        // Broken free-list bookkeeping: a freed slot marked occupied again.
+        let victim = doc.create_element(Namespace::Html, "em", vec![]);
+        doc.append_child(root, victim);
+        assert!(doc.remove_node(victim));
+        let victim_slot = victim.index();
+        doc.occupied[victim_slot] = true;
+        assert!(doc.validate_invariants().is_err());
+        doc.occupied[victim_slot] = false;
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn test_stats_and_estimate_bytes() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        assert_eq!(doc.len(), 1);
+        assert_eq!(doc.allocated(), 1);
+        assert_eq!(doc.free_slots(), 0);
+        let empty_estimate = doc.estimate_bytes();
+        assert!(empty_estimate >= std::mem::size_of::<Document>());
+
+        let mut ids = Vec::new();
+        for index in 0..32 {
+            let element = doc.create_element(
+                Namespace::Html,
+                "div",
+                vec![Attribute::new("id", format!("n{index}"))],
+            );
+            doc.append_child(root, element);
+            ids.push(element);
+        }
+        assert_eq!(doc.len(), 33);
+        assert_eq!(doc.allocated(), 33);
+        assert_eq!(doc.free_slots(), 0);
+        let populated_estimate = doc.estimate_bytes();
+        assert!(populated_estimate > empty_estimate);
+
+        for id in ids.iter().take(10) {
+            assert!(doc.remove_node(*id));
+        }
+        assert_eq!(doc.len(), 23);
+        assert_eq!(doc.free_slots(), 10);
+        assert_eq!(doc.allocated(), 33);
+        assert!(
+            doc.estimate_bytes() < populated_estimate,
+            "removing payloads must lower the estimate"
+        );
+
+        for _ in 0..10 {
+            let element = doc.create_element(Namespace::Html, "div", vec![]);
+            doc.append_child(root, element);
+        }
+        assert_eq!(doc.len(), 33);
+        assert_eq!(doc.allocated(), 33, "reused slots, no arena growth");
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn test_many_create_remove_cycles_keep_invariants() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        for round in 0..2_000 {
+            let element = doc.create_element(Namespace::Html, "div", vec![]);
+            doc.append_child(root, element);
+            if round % 2 == 0 {
+                assert!(doc.remove_node(element));
+            }
+        }
+        assert!(doc.validate_invariants().is_ok());
+        assert!(doc.allocated() <= 2_002);
     }
 }
