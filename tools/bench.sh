@@ -8,6 +8,7 @@
 #   ./tools/bench.sh --scale 0.25          # smaller smoke run
 #   ./tools/bench.sh --json                # machine-readable output
 #   ./tools/bench.sh --filter html         # one group
+#   ./tools/bench.sh --filter pipeline     # E2E rows (incl. gradients/grid/clipping)
 #   BENCH_FEATURES=fonts ./tools/bench.sh  # optional font benchmarks
 #
 # All arguments are forwarded verbatim to the `bench` binary.

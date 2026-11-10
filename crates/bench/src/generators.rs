@@ -239,6 +239,158 @@ pub fn element_author_css() -> String {
     css
 }
 
+/// Deterministic HTML page with `boxes` boxes painted with CSS gradients.
+///
+/// Alternates `linear-gradient()` (angles, multi-stop, alpha) and
+/// `radial-gradient()` (circles/ellipses at deterministic positions) so the
+/// style parser, display-list painter and raster tiler exercise the CSS
+/// gradient code paths end to end. No network, no timers, no randomness.
+pub fn gradients_page(boxes: usize) -> String {
+    let mut html = String::with_capacity(boxes.saturating_mul(260).saturating_add(512));
+    html.push_str(
+        "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>Gradients</title>\n<style>\n\
+         html,body{margin:0;padding:0;background:#ffffff}\n\
+         .wrap{display:flex;flex-wrap:wrap;width:800px}\n",
+    );
+    for i in 0..boxes {
+        let a = (i * 37) % 360;
+        let x = 10 + (i * 13) % 80;
+        let y = 10 + (i * 29) % 80;
+        let r = (i * 17) % 256;
+        let g = (i * 43) % 256;
+        let b = (i * 71) % 256;
+        let a2 = (i * 91) % 256;
+        let _ = writeln!(
+            html,
+            ".g{i}{{width:110px;height:70px;margin:4px;background-image:",
+        );
+        if i % 2 == 0 {
+            let _ = writeln!(
+                html,
+                "linear-gradient({a}deg,#{r:02x}{g:02x}{b:02x} 0%,#{b:02x}{r:02x}{a2:02x} 40%,#{g:02x}{a2:02x}{r:02x} 100%);}}",
+            );
+        } else {
+            let _ = writeln!(
+                html,
+                "radial-gradient(circle at {x}% {y}%,#{r:02x}{g:02x}{b:02x} 0%,#{b:02x}{a2:02x}{g:02x} 55%,#{a2:02x}{r:02x}{b:02x} 100%);}}",
+            );
+        }
+    }
+    html.push_str("</style></head><body><div class=\"wrap\">");
+    for i in 0..boxes {
+        let _ = write!(html, "<div class=\"g{i}\"></div>");
+    }
+    html.push_str("</div></body></html>\n");
+    html
+}
+
+/// Number of text cells rendered by [`grid_page`] (3×3 + auto-fill + spans).
+pub const GRID_CELLS: usize = 9 + 12 + 8;
+
+/// Deterministic HTML page with three grids: fixed `1fr` columns, `auto-fill`
+/// with `minmax()` tracks, and explicit row/column spans. Cells carry text so
+/// layout has real content to measure.
+pub fn grid_page() -> String {
+    let mut html = String::with_capacity(8192);
+    html.push_str(
+        "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>Grids</title>\n<style>\n\
+         html,body{margin:0;padding:0;background:#ffffff;font-size:14px}\n\
+         .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;width:600px;margin:8px}\n\
+         .fill{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;width:600px;margin:8px}\n\
+         .spans{display:grid;grid-template-columns:100px 100px 100px;grid-auto-rows:30px;gap:6px;width:600px;margin:8px}\n\
+         .cell{background:#dde6f2;color:#101820;padding:4px;min-height:18px}\n\
+         .wide{grid-column:span 2}\n\
+         .tall{grid-row:span 2}\n",
+    );
+    html.push_str("</style></head><body>");
+    html.push_str("<div class=\"grid3\">");
+    for i in 0..9 {
+        let _ = write!(html, "<div class=\"cell\">cell {i}</div>");
+    }
+    html.push_str("</div>");
+    html.push_str("<div class=\"fill\">");
+    for i in 0..12 {
+        let _ = write!(html, "<div class=\"cell\">auto {i}</div>");
+    }
+    html.push_str("</div>");
+    html.push_str("<div class=\"spans\">");
+    for i in 0..8 {
+        let class = if i == 0 {
+            "cell wide"
+        } else if i == 2 {
+            "cell tall"
+        } else {
+            "cell"
+        };
+        let _ = write!(html, "<div class=\"{class}\">span {i}</div>");
+    }
+    html.push_str("</div></body></html>\n");
+    html
+}
+
+/// Author stylesheet for the `css/vars-calc-10k` row: `:root` custom
+/// properties, `var()` uses in colors/sizes/margins and simple `calc()`
+/// expressions in lengths. Deterministic and self-contained.
+pub fn vars_calc_css() -> String {
+    let mut css = String::with_capacity(8192);
+    css.push_str(
+        ":root{--ink:#1d3557;--accent:#e63946;--pad:6px;--gap:4px;--width:140px}\n\
+         body{font-size:16px;color:var(--ink)}\n\
+         #app{padding:calc(4px + 2px)}\n\
+         .item{color:var(--ink);padding:var(--pad);width:calc(140px + 10px);\
+         margin:calc(3px + 1px);background:#f1faee}\n\
+         .item span.label{color:var(--accent);font-size:calc(10px + 2px);\
+         padding:var(--gap)}\n",
+    );
+    for i in 0..64usize {
+        let _ = writeln!(
+            css,
+            ".c{i}{{padding:calc({}px + 2px);color:var(--ink)}}",
+            i % 9
+        );
+    }
+    for i in 0..16usize {
+        let _ = writeln!(
+            css,
+            "span.s{i}{{margin:calc({}px + 1px);font-size:calc(9px + 3px)}}",
+            i % 5
+        );
+    }
+    css
+}
+
+/// Deterministic HTML page with `boxes` rounded, clipped boxes and gradient
+/// `background-clip:text` headings: the paint paths for `border-radius` +
+/// `overflow:hidden` and text clipping, at 800×600.
+pub fn clipping_page(boxes: usize) -> String {
+    let mut html = String::with_capacity(boxes.saturating_mul(220).saturating_add(1024));
+    html.push_str(
+        "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>Clipping</title>\n<style>\n\
+         html,body{margin:0;padding:0;background:#ffffff}\n\
+         .wrap{display:flex;flex-wrap:wrap;width:800px}\n\
+         .clip{width:150px;height:110px;margin:6px;border-radius:28px;overflow:hidden;\
+         background:#ddeeff}\n\
+         .clip .inner{width:240px;height:180px;background:#ff8800;color:#101820;\
+         font-size:18px;padding:6px}\n\
+         .grad{font-size:38px;margin:8px;color:transparent;\
+         background-image:linear-gradient(90deg,#ff0000,#0000ff);\
+         background-clip:text}\n",
+    );
+    html.push_str("</style></head><body><div class=\"wrap\">");
+    for i in 0..boxes {
+        let _ = write!(
+            html,
+            "<div class=\"clip\"><div class=\"inner\">clipped content {i} that overflows the rounded box</div></div>",
+        );
+    }
+    html.push_str("</div>");
+    for i in 0..6 {
+        let _ = write!(html, "<div class=\"grad\">gradient text {i}</div>");
+    }
+    html.push_str("</body></html>\n");
+    html
+}
+
 /// Deterministic list of `count` words for text measurement / shaping.
 #[cfg(feature = "fonts")]
 pub fn words(count: usize) -> Vec<String> {
@@ -269,6 +421,12 @@ pub const CSS_RULES: usize = 10_000;
 pub const STYLE_NODES: [usize; 2] = [2_000, 10_000];
 /// Element count used by the selector-matching benchmarks.
 pub const SELECTOR_NODES: usize = 10_000;
+/// Number of gradient boxes used by the E2E gradients pipeline row.
+pub const GRADIENT_BOXES: usize = 60;
+/// Element count used by the E2E custom-properties/`calc()` row.
+pub const VARS_CALC_NODES: usize = 10_000;
+/// Number of rounded/clipped boxes used by the E2E clipping paint row.
+pub const CLIPPING_BOXES: usize = 48;
 /// Word count used by the optional font benchmarks.
 #[cfg(feature = "fonts")]
 pub const FONT_WORDS: usize = 1_000;
@@ -294,6 +452,10 @@ mod tests {
         assert_eq!(pretty_printed(4), pretty_printed(4));
         assert_eq!(stylesheet_rules(8), stylesheet_rules(8));
         assert_eq!(element_document(8), element_document(8));
+        assert_eq!(gradients_page(8), gradients_page(8));
+        assert_eq!(grid_page(), grid_page());
+        assert_eq!(vars_calc_css(), vars_calc_css());
+        assert_eq!(clipping_page(8), clipping_page(8));
     }
 
     #[test]
@@ -314,6 +476,28 @@ mod tests {
 
         let rules = stylesheet_rules(11);
         assert_eq!(rules.matches(".rule-").count(), 11);
+
+        let gradients = gradients_page(9);
+        assert_eq!(gradients.matches("background-image").count(), 9);
+        assert!(gradients.contains("linear-gradient("));
+        assert!(gradients.contains("radial-gradient("));
+
+        let grids = grid_page();
+        assert_eq!(grids.matches("display:grid").count(), 3);
+        assert!(grids.contains("repeat(auto-fill"));
+        assert!(grids.contains("grid-column:span 2"));
+        assert_eq!(grids.matches("class=\"cell").count(), GRID_CELLS);
+
+        let vars = vars_calc_css();
+        assert!(vars.contains(":root{"));
+        assert!(vars.contains("var(--ink)"));
+        assert!(vars.contains("calc("));
+
+        let clip = clipping_page(6);
+        assert_eq!(clip.matches("class=\"clip\"").count(), 6);
+        assert!(clip.contains("border-radius:28px"));
+        assert!(clip.contains("overflow:hidden"));
+        assert!(clip.contains("background-clip:text"));
     }
 
     #[test]

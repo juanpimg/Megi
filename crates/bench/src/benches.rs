@@ -38,6 +38,7 @@ pub fn register(suite: &mut Suite, opts: &Options) {
     register_html(suite, opts.scale);
     register_css(suite, opts.scale);
     register_layout_and_paint(suite, opts.scale);
+    register_feature_e2e(suite, opts.scale);
     #[cfg(feature = "fonts")]
     register_fonts(suite, opts.scale);
 }
@@ -419,6 +420,150 @@ fn register_layout_and_paint(suite: &mut Suite, scale: f64) {
         )
         .heavy(),
     );
+}
+
+/// End-to-end rows for the features added in rounds 18–19 (gradients, grid,
+/// custom properties/`calc()`, clipping) plus the pending sticky/text row.
+///
+/// These rows complement the legacy matrix: `docs/PERFORMANCE.md` keeps its
+/// budgets, while these fixtures make a future feature regression visible in
+/// the standard suite. Reference medians (r20, 800×600, release build, 5
+/// iterations / heavy cap 3; see the round report for the exact host load):
+/// treat a reproducible >15 % increase over that reference as a regression and
+/// re-measure on an idle host before filing it.
+///
+/// - `pipeline/gradients-800x600`: ~60 boxes with linear/radial gradients
+///   (stops, angles, alpha) through parse → styles → layout → display list →
+///   raster → PNG.
+/// - `pipeline/grid-800x600`: three grids (3×3 `1fr`, `repeat(auto-fill,
+///   minmax())`, explicit spans) with text cells.
+/// - `css/vars-calc-10k`: ~10k elements resolved with `:root` custom
+///   properties, `var()` in colors/sizes/margins and simple `calc()` lengths.
+/// - `paint/clipping-800x600`: 48 rounded `overflow:hidden` boxes and gradient
+///   `background-clip:text` headings through display list + raster + PNG.
+/// - `layout/sticky-text-1mb`: **pending** (registered as SKIP): `position:
+///   sticky` parses but layout treats it like `relative` (no scrolling yet) and
+///   `text-transform` parses but layout/paint do not apply it. Enable the row
+///   once both land.
+fn register_feature_e2e(suite: &mut Suite, scale: f64) {
+    let viewport = Rect::new(0.0, 0.0, VIEWPORT_WIDTH as f32, VIEWPORT_HEIGHT as f32);
+
+    // Gradients pipeline.
+    let gradient_boxes = generators::scale(generators::GRADIENT_BOXES, scale);
+    let gradients_html = generators::gradients_page(gradient_boxes);
+    add_feature_pipeline(
+        suite,
+        "pipeline/gradients-800x600",
+        format!("{gradient_boxes} cajas con linear/radial gradients"),
+        gradients_html,
+        viewport,
+    );
+
+    // Grid pipeline.
+    let grid_html = generators::grid_page();
+    add_feature_pipeline(
+        suite,
+        "pipeline/grid-800x600",
+        format!(
+            "3 grids (3x3 fr, auto-fill minmax, spans), {} celdas con texto",
+            generators::GRID_CELLS
+        ),
+        grid_html,
+        viewport,
+    );
+
+    // Custom properties + calc in the cascade.
+    {
+        let nodes = generators::scale(generators::VARS_CALC_NODES, scale);
+        let markup = generators::element_document(nodes);
+        let document = html::parse_document(&markup, false);
+        let elements = count_elements(&document);
+        let author_css = generators::vars_calc_css();
+        let vars = author_css.matches("var(--").count();
+        let calcs = author_css.matches("calc(").count();
+        suite.add(
+            BenchEntry::new(
+                "css/vars-calc-10k",
+                "css",
+                format!("{elements} elementos, {vars} var(), {calcs} calc()"),
+                move || {
+                    black_box(css::resolve_document_styles(&document, Some(&author_css)));
+                },
+            )
+            .with_units(elements as f64, "elements"),
+        );
+    }
+
+    // Clipping paint tail (display list + raster + PNG).
+    let clip_boxes = generators::scale(generators::CLIPPING_BOXES, scale);
+    let clipping_html = generators::clipping_page(clip_boxes);
+    let clip_detail = format!("{clip_boxes} cajas radius+overflow, clip:text");
+    add_feature_pipeline(
+        suite,
+        "paint/clipping-800x600",
+        clip_detail,
+        clipping_html,
+        viewport,
+    );
+
+    // Sticky + text-transform are parsed but not applied yet; keep the gap visible.
+    suite.skip(
+        "layout/sticky-text-1mb",
+        "pending: `position: sticky` parses but layout treats it like `relative`          (no scrolling) and `text-transform` parses but layout/paint do not apply it",
+    );
+}
+
+/// Owns a generated HTML page and registers a heavy `pipeline/...` row that
+/// parses, styles, lays out, builds the display list, rasterizes and encodes
+/// PNG (the same end-to-end tail as `pipeline/html-to-png-800x600`). Fixture
+/// construction and the one-shot probe for the row detail happen before the
+/// timed loop.
+fn add_feature_pipeline(
+    suite: &mut Suite,
+    name: &'static str,
+    what: String,
+    html_source: String,
+    viewport: Rect,
+) {
+    match probe_pipeline(&html_source, viewport) {
+        Some((items, png_bytes)) => {
+            suite.add(
+                BenchEntry::new(
+                    name,
+                    "pipeline",
+                    format!(
+                        "{what}: {items} items de display list, PNG {png_bytes} B,                          parse+styles+layout+dl+raster+PNG"
+                    ),
+                    move || {
+                        let document = html::parse_document(&html_source, false);
+                        let styles = paint::resolve_embedded_styles(&document);
+                        if let Some(root) = layout::layout_document(&document, &styles, viewport) {
+                            let display_list = paint::build_display_list(&root, viewport);
+                            let pixmap = paint::rasterize_display_list(
+                                &display_list,
+                                VIEWPORT_WIDTH,
+                                VIEWPORT_HEIGHT,
+                            );
+                            black_box(pixmap.to_png());
+                        }
+                    },
+                )
+                .heavy(),
+            );
+        }
+        None => suite.skip(name, "layout_document devolvió None"),
+    }
+}
+
+/// Runs the pipeline once outside the timed loop to validate the fixture and
+/// report its display-list/PNG sizes. Returns `(items, png_bytes)`.
+fn probe_pipeline(html_source: &str, viewport: Rect) -> Option<(usize, usize)> {
+    let document = html::parse_document(html_source, false);
+    let styles = paint::resolve_embedded_styles(&document);
+    let root = layout::layout_document(&document, &styles, viewport)?;
+    let display_list = paint::build_display_list(&root, viewport);
+    let pixmap = paint::rasterize_display_list(&display_list, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    Some((display_list.items.len(), pixmap.to_png().len()))
 }
 
 /// Counts element nodes in `document` (top-down pre-order).
