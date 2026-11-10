@@ -283,12 +283,21 @@ where
 /// and only re-renders at full content height when the page is taller than the
 /// window (typical pages: one render).
 pub fn render_document(request: &RenderRequest) -> Result<RenderFrame, String> {
-    let probe = render_view(request, request.css_height)?;
+    render_document_with_options(request, &render::RenderOptions::default())
+}
+
+/// [`render_document`] with base [`render::RenderOptions`] (cookie jar, CORS origin,
+/// scripting toggles, network caps) applied to every render of the window.
+pub fn render_document_with_options(
+    request: &RenderRequest,
+    base_options: &render::RenderOptions,
+) -> Result<RenderFrame, String> {
+    let probe = render_view(request, request.css_height, base_options)?;
     let (content_height, capped) =
         scroll::content_height(probe.layout.dimensions.margin_box().height);
     let target_height = content_height.clamp(1, scroll::MAX_CONTENT_HEIGHT);
     let output = if target_height > probe.pixmap.height {
-        render_view(request, target_height)?
+        render_view(request, target_height, base_options)?
     } else {
         probe
     };
@@ -309,22 +318,21 @@ pub fn render_document(request: &RenderRequest) -> Result<RenderFrame, String> {
     })
 }
 
-/// Runs one `render` pass at `css_width x height`.
-fn render_view(request: &RenderRequest, height: u32) -> Result<render::RenderOutput, String> {
+/// Runs one `render` pass at `css_width x height`, applying `base_options`.
+fn render_view(
+    request: &RenderRequest,
+    height: u32,
+    base_options: &render::RenderOptions,
+) -> Result<render::RenderOutput, String> {
     let viewport = render::Viewport::new(request.css_width, height).map_err(|error| {
         format!(
             "invalid render viewport {}x{height}: {error}",
             request.css_width
         )
     })?;
-    render::render_url(
-        &request.input,
-        &render::RenderOptions {
-            viewport,
-            ..render::RenderOptions::default()
-        },
-    )
-    .map_err(|error| error.to_string())
+    let mut options = base_options.clone();
+    options.viewport = viewport;
+    render::render_url(&request.input, &options).map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

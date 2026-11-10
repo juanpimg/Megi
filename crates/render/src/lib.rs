@@ -21,9 +21,30 @@
 //!
 //! [`RenderOutput::stats`] exposes per-stage timings (fetch, decode, styles, layout,
 //! paint, raster), the resolved charset, HTTP status (for `http(s)` documents), author
-//! CSS volume, external stylesheet count, display-item count, `<img>` and background-image
-//! load counts/bytes, HTML parser anti-DoS limit violations and non-fatal warnings
-//! (e.g. a 404 stylesheet or a missing background image).
+//! CSS volume, external stylesheet count, display-item **and hit-region** counts,
+//! `<img>`/background-image load counts/bytes, cookies currently stored in the render jar,
+//! the main document's `Content-Encoding` (evidence that `gzip`/`deflate` was decoded),
+//! HTML parser anti-DoS limit violations and non-fatal warnings (e.g. a 404 stylesheet, a
+//! missing background image or a denied cross-origin resource).
+//!
+//! ## Hit-testing (WP-7.5b)
+//!
+//! [`RenderOutput::hit_regions`] carries `paint`'s additive [`paint::HitRegion`] list
+//! produced by the same paint pass as [`RenderOutput::display_list`]: element
+//! backgrounds/borders, text runs (inheriting their owner element's DOM node), decorations,
+//! replaced images and list markers in painting order, clipped at emission time. The PNG
+//! bytes are **identical** with or without regions (verified by the golden tests); hosts
+//! resolve links with `paint::find_link_at(&output.document, &output.hit_regions, x, y)`.
+//!
+//! ## Cookies, CORS and compression (Phase 5 advanced networking)
+//!
+//! A **cookie jar** (per render via [`RenderOptions::cookies`], or caller-provided in
+//! [`RenderOptions::cookie_jar`]) is shared by the document fetch, every subresource and
+//! redirect hop: `Set-Cookie` from the document is sent to its stylesheets/images/scripts
+//! and later navigations. Subresource fetches send the document's origin as `Origin`
+//! (overridable with [`RenderOptions::origin`]); a jar switches CORS to credentialed mode
+//! and **CORS denials never abort the render** — the resource is skipped with a warning.
+//! `net` decodes `gzip`/`deflate` responses transparently (anti-bomb caps included).
 //!
 //! ## JavaScript (Phase 6, WP-6.2/6.3 host side)
 //!
@@ -77,7 +98,14 @@
 //! - **Media queries**: `<link media>`/`<style media>` and `@import ... <media>` are
 //!   evaluated against the real viewport (`screen` + width/height/orientation). Features
 //!   the CSS engine does not model (`resolution`, `prefers-*`, `hover`, ...) never match.
-//! - No forms, no iframes, no web fonts, no `srcset`, no CORS/cookies policies.
+//! - No forms, no iframes, no web fonts, no `srcset`.
+//! - Cookies: one jar per render (or one shared jar per shell session), no cross-process
+//!   persistence, `SameSite` ignored and no Public Suffix List (`net::cookies` subset).
+//!   CORS is the `net` subset (no preflight cache/`Expose-Headers`); subresource denials are
+//!   warnings, and the top-level navigation never sends `Origin` (no navigation CORS).
+//! - Compression is transparent: the decoded body is used, the `Content-Encoding` header is
+//!   not exposed on `RenderOutput` beyond [`RenderStats::content_encoding`] (main document),
+//!   and subresource decoding counts are not observable through `net::Resource` yet.
 //! - Encodings: UTF-8 (with BOM) and Windows-1252/Latin-1 only; other declared encodings
 //!   fail with a typed error (see [`charset`]).
 //! - HTTP cache is the shared `net` loader cache (freshness/revalidation apply per
@@ -92,6 +120,7 @@ pub mod scripts;
 pub mod stylesheets;
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use css::ComputedStyle;
@@ -220,6 +249,19 @@ pub struct RenderOptions {
     pub parse_options: html::ParseOptions,
     /// Networking options (timeouts, caps, TLS configuration, user agent).
     pub fetch_options: FetchOptions,
+    /// Enable a **per-render cookie jar** (`--cookies`): the document's `Set-Cookie`
+    /// headers are stored and sent to its subresources/redirects for this render only.
+    /// Ignored when [`Self::cookie_jar`] is set.
+    pub cookies: bool,
+    /// Optional caller-owned cookie jar shared across renders (desktop shell session).
+    /// Implies cookies are enabled; the jar also switches CORS to credentialed mode.
+    pub cookie_jar: Option<Arc<Mutex<net::CookieJar>>>,
+    /// Optional explicit CORS `Origin` override for subresource fetches (`--origin`).
+    ///
+    /// When `None`, an `http(s)` document's own origin is used automatically; `file:`/
+    /// `data:` documents send no `Origin`. Cross-origin subresource CORS failures are
+    /// non-fatal warnings (the resource is skipped, the page still renders).
+    pub origin: Option<String>,
 }
 
 impl Default for RenderOptions {
@@ -243,6 +285,9 @@ impl Default for RenderOptions {
             scripting_limits: ScriptingLimits::default(),
             parse_options: html::ParseOptions::DEFAULT,
             fetch_options: FetchOptions::default(),
+            cookies: false,
+            cookie_jar: None,
+            origin: None,
         }
     }
 }
@@ -318,6 +363,14 @@ pub struct RenderStats {
     pub console: Vec<ConsoleMessage>,
     /// Number of display-list items painted.
     pub display_items: usize,
+    /// Additive hit-testing regions recorded while painting (same display list: the PNG is
+    /// unchanged; regions feed link hit-testing in the shell).
+    pub hit_regions: usize,
+    /// Cookies currently stored in the render's jar (`0` when cookies are disabled).
+    pub cookies_stored: usize,
+    /// `Content-Encoding` of the main document response after transparent decoding
+    /// (`Some("gzip")`/`Some("deflate")` prove the body was compressed on the wire).
+    pub content_encoding: Option<String>,
     /// HTML parser anti-DoS limits that fired (should be empty for normal pages).
     pub limit_violations: html::LimitViolations,
     /// Per-stage timings.
@@ -340,6 +393,9 @@ pub struct RenderOutput {
     pub layout: layout::LayoutBox,
     /// Flat display list consumed by the rasterizer.
     pub display_list: paint::DisplayList,
+    /// Additive hit-testing regions (paint order) produced by the same paint pass as
+    /// [`Self::display_list`]; the PNG is byte-identical with or without them.
+    pub hit_regions: Vec<paint::HitRegion>,
     /// Final document URL (after HTTP redirects).
     pub document_url: Url,
     /// Pipeline observability data.
@@ -361,6 +417,7 @@ impl std::fmt::Debug for RenderOutput {
             .field("png_bytes", &self.png.len())
             .field("document_url", &self.document_url.as_str())
             .field("display_items", &self.display_list.items.len())
+            .field("hit_regions", &self.hit_regions.len())
             .field("stats", &self.stats)
             .finish()
     }
@@ -376,8 +433,30 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     }
 
     let fetch_start = Instant::now();
-    let mut loader = ResourceLoader::with_options(options.fetch_options.clone());
-    let loaded = load_document(&url, &mut loader, options)?;
+    // One cookie jar per render (or a caller-owned shared one): the document, its
+    // subresources and redirect hops all use it. A jar also enables CORS credentials.
+    let cookie_jar = options.cookie_jar.clone().or_else(|| {
+        options
+            .cookies
+            .then(|| Arc::new(Mutex::new(net::CookieJar::new())))
+    });
+    let mut document_fetch_options = options.fetch_options.clone();
+    document_fetch_options.cookie_jar = cookie_jar.clone();
+    // The top-level navigation request carries no `Origin` header.
+    document_fetch_options.origin = None;
+    let mut loader = ResourceLoader::with_options(document_fetch_options.clone());
+    let loaded = load_document(&url, &mut loader, &document_fetch_options)?;
+    // Subresource fetches send the document's origin (CORS) and its cookies.
+    let subresource_origin = options
+        .origin
+        .clone()
+        .or_else(|| match loaded.url.scheme() {
+            Scheme::Http | Scheme::Https => net::Origin::from_url(&loaded.url).map(|o| o.as_str()),
+            Scheme::File | Scheme::Data => None,
+        });
+    let mut subresource_fetch_options = document_fetch_options.clone();
+    subresource_fetch_options.origin = subresource_origin;
+    let mut loader = ResourceLoader::with_options(subresource_fetch_options);
     let fetch_time = fetch_start.elapsed();
     if loaded.bytes.len() > options.max_document_bytes {
         return Err(RenderError::DocumentTooLarge {
@@ -525,7 +604,9 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     let layout_time = layout_start.elapsed();
 
     let paint_start = Instant::now();
-    let display_list = paint::build_display_list_with_images_and_backgrounds(
+    // Additive hit-testing: the painter records `HitRegion`s while emitting the same
+    // display-list items, so the rasterized pixels/PNG are byte-identical.
+    let (display_list, hit_regions) = paint::build_display_list_with_hit_regions(
         &layout_root,
         viewport,
         &loaded_images.store,
@@ -546,6 +627,16 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         return Err(RenderError::LayoutFailed);
     }
 
+    let hit_region_count = hit_regions.len();
+    let cookies_stored = cookie_jar
+        .as_ref()
+        .map(|jar| {
+            jar.lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .len()
+        })
+        .unwrap_or(0);
+    let content_encoding = loaded.content_encoding.clone();
     let total = total_start.elapsed();
     Ok(RenderOutput {
         png,
@@ -554,6 +645,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         styles,
         layout: layout_root,
         display_list,
+        hit_regions,
         document_url,
         stats: RenderStats {
             document_bytes: loaded.bytes.len(),
@@ -577,6 +669,9 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             script_bytes,
             console,
             display_items,
+            hit_regions: hit_region_count,
+            cookies_stored,
+            content_encoding,
             limit_violations: parse.limit_violations,
             timings: RenderTimings {
                 fetch: fetch_time,
@@ -601,6 +696,8 @@ struct LoadedDocument {
     url: Url,
     content_type: String,
     status: Option<u16>,
+    /// Main-document `Content-Encoding`, if any (body already decoded by `net`).
+    content_encoding: Option<String>,
 }
 
 /// Loads the main document, using `net::fetch` for `http(s)` (to observe the HTTP status)
@@ -608,11 +705,11 @@ struct LoadedDocument {
 fn load_document(
     url: &Url,
     loader: &mut ResourceLoader,
-    options: &RenderOptions,
+    fetch_options: &FetchOptions,
 ) -> Result<LoadedDocument, RenderError> {
     match url.scheme() {
         Scheme::Http | Scheme::Https => {
-            let response = net::fetch(url, &options.fetch_options)?;
+            let response = net::fetch(url, fetch_options)?;
             if response.status >= 400 {
                 return Err(RenderError::HttpStatus {
                     url: response.final_url.as_str(),
@@ -620,11 +717,13 @@ fn load_document(
                 });
             }
             let content_type = net::resolve_content_type(&response.headers, &response.body);
+            let content_encoding = response.header("content-encoding").map(str::to_owned);
             Ok(LoadedDocument {
                 bytes: response.body,
                 url: response.final_url,
                 content_type,
                 status: Some(response.status),
+                content_encoding,
             })
         }
         Scheme::File | Scheme::Data => {
@@ -634,6 +733,7 @@ fn load_document(
                 url: resource.url.clone(),
                 content_type: resource.content_type.clone(),
                 status: None,
+                content_encoding: None,
             })
         }
     }

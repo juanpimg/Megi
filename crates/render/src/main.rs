@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! render <url|file> <out.png> [--width W] [--height H] [--base URL]
-//!        [--no-network] [--no-scripting] [--json]
+//!        [--no-network] [--no-scripting] [--cookies] [--origin ORIGIN] [--json]
 //! ```
 //!
 //! Exit codes: `0` success, `1` render error (typed message on stderr), `2` usage error.
@@ -27,6 +27,10 @@ options:
   --base URL     override the base URL used to resolve relative resources
   --no-network   refuse http(s) resources (only file:// and data: are loaded)
   --no-scripting ignore <script> elements (no JS execution, no re-render)
+  --cookies      enable a per-render cookie jar (Set-Cookie stored and sent to
+                 subresources/redirects; also enables credentialed CORS)
+  --origin URL   CORS Origin override for subresource fetches (default: the
+                 document origin; cross-origin CORS failures are non-fatal)
   --json         print machine-readable metadata to stdout
   -h, --help     print this help";
 
@@ -38,6 +42,8 @@ struct Args {
     base: Option<String>,
     no_network: bool,
     no_scripting: bool,
+    cookies: bool,
+    origin: Option<String>,
     json: bool,
 }
 
@@ -73,6 +79,8 @@ fn run() -> Result<(), CliError> {
         } else {
             ScriptingMode::default()
         },
+        cookies: args.cookies,
+        origin: args.origin.clone(),
         ..RenderOptions::default()
     };
 
@@ -133,6 +141,8 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
     let mut base = None;
     let mut no_network = false;
     let mut no_scripting = false;
+    let mut cookies = false;
+    let mut origin = None;
     let mut json = false;
     let mut args = args;
     while let Some(argument) = args.next() {
@@ -143,6 +153,13 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
             }
             "--no-network" => no_network = true,
             "--no-scripting" => no_scripting = true,
+            "--cookies" => cookies = true,
+            "--origin" => {
+                origin = Some(
+                    args.next()
+                        .ok_or_else(|| CliError::Usage("--origin requires a URL".to_string()))?,
+                );
+            }
             "--json" => json = true,
             "--width" => {
                 width = parse_dimension(&mut args, "--width")?;
@@ -177,6 +194,8 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
         base,
         no_network,
         no_scripting,
+        cookies,
+        origin,
         json,
     })
 }
@@ -199,7 +218,8 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
         concat!(
             "{{\"input\":{},\"output\":{},\"width\":{},\"height\":{},",
             "\"document_url\":{},\"status\":{},\"charset\":{},",
-            "\"document_bytes\":{},\"png_bytes\":{},\"display_items\":{},",
+            "\"document_bytes\":{},\"png_bytes\":{},\"display_items\":{},\"hit_regions\":{},",
+            "\"cookies_stored\":{},\"content_encoding\":{},",
             "\"images_loaded\":{},\"images_failed\":{},\"image_bytes\":{},",
             "\"background_images_loaded\":{},\"background_images_failed\":{},\"background_bytes\":{},",
             "\"scripts_executed\":{},\"scripts_failed\":{},\"script_bytes\":{},\"console_entries\":{},",
@@ -221,6 +241,12 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
         stats.document_bytes,
         output.png.len(),
         stats.display_items,
+        stats.hit_regions,
+        stats.cookies_stored,
+        stats
+            .content_encoding
+            .as_deref()
+            .map_or_else(|| "null".to_string(), json_string),
         stats.images_loaded,
         stats.images_failed,
         stats.image_bytes,

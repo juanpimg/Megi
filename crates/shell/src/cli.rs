@@ -32,7 +32,11 @@ options:
   --width W           window/screenshot width in CSS pixels (default 800, max 8192)
   --height H          window/screenshot height in CSS pixels (default 600, max 8192)
   --screenshot PATH   headless mode: render once and write a PNG (no window/display)
-  --title T           window title (default \"Megi\")
+  --title T           initial window title (default \"Megi\"; replaced by page title)
+  --cookies           enable the session cookie jar (Set-Cookie shared between the
+                      document, subresources, redirects and navigations)
+  --origin URL        CORS Origin override for subresource fetches (default: the
+                      document origin; cross-origin CORS failures are non-fatal)
   -h, --help          print this help
 
 window keys:
@@ -64,6 +68,10 @@ pub struct CliArgs {
     pub height: u32,
     /// Window or headless screenshot mode.
     pub mode: LaunchMode,
+    /// Enable the session cookie jar (`--cookies`).
+    pub cookies: bool,
+    /// Explicit CORS `Origin` override for subresource fetches (`--origin`).
+    pub origin: Option<String>,
 }
 
 /// Raw flags before validation/normalization (exposed for tests).
@@ -79,6 +87,10 @@ pub struct RawArgs {
     pub screenshot: Option<PathBuf>,
     /// `--title` value, if provided.
     pub title: Option<String>,
+    /// `--cookies` was passed.
+    pub cookies: bool,
+    /// `--origin` value, if provided.
+    pub origin: Option<String>,
     /// `-h`/`--help` was passed.
     pub help: bool,
 }
@@ -103,6 +115,13 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
                     .next()
                     .ok_or_else(|| ShellError::Usage("--title requires a value".to_string()))?;
                 raw.title = Some(value);
+            }
+            "--cookies" => raw.cookies = true,
+            "--origin" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| ShellError::Usage("--origin requires a URL".to_string()))?;
+                raw.origin = Some(value);
             }
             other if other.starts_with('-') => {
                 return Err(ShellError::Usage(format!("unknown option `{other}`")));
@@ -158,6 +177,8 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
         width,
         height,
         mode,
+        cookies: raw.cookies,
+        origin: raw.origin,
     })
 }
 
@@ -232,6 +253,23 @@ mod unit_tests {
             LaunchMode::Screenshot(PathBuf::from("/tmp/out.png"))
         );
         assert_eq!(cli.input, "https://example.test/");
+    }
+
+    #[test]
+    fn parses_cookies_and_origin_flags() {
+        let cli = parse_cli(args(&[
+            "https://example.test/",
+            "--cookies",
+            "--origin",
+            "https://app.example",
+        ]))
+        .expect("parse");
+        assert!(cli.cookies);
+        assert_eq!(cli.origin.as_deref(), Some("https://app.example"));
+        let plain = parse_cli(args(&["data:,x"])).expect("parse");
+        assert!(!plain.cookies);
+        assert!(plain.origin.is_none());
+        assert!(parse_cli(args(&["data:,x", "--origin"])).is_err());
     }
 
     #[test]

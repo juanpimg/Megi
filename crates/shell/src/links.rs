@@ -1,12 +1,14 @@
 //! Link hit-testing and URL resolution (pure, display-free).
 //!
 //! The render worker extracts, from a finished [`render::RenderOutput`], one
-//! [`LinkRegion`] per rendered `<a href>` element: its page rectangle in CSS pixels
-//! (origin = top-left of the full document, no scroll) and the raw `href` attribute.
-//! Extraction walks the layout tree: every [`layout::LayoutBox`] whose `BoxType` carries a
-//! DOM [`dom::NodeId`] is matched against the parsed DOM, and the anchor's border box is
-//! recorded. This needs no paint-side hit-testing API and no extra dependencies beyond the
-//! layout/DOM trees already present in the render output.
+//! [`LinkRegion`] per painted primitive that resolves to an `<a href>`: its page
+//! rectangle in CSS pixels (origin = top-left of the full document, no scroll) and the raw
+//! `href` attribute. The primary source is the additive hit-testing layer of `paint`
+//! (`RenderOutput::hit_regions` produced by the same paint pass as the pixels): for every
+//! [`paint::HitRegion`] the nearest HTML `<a href>` ancestor is resolved with
+//! [`paint::find_link_at`]. When the render output carries no hit regions (e.g. a
+//! hand-built `RenderOutput` in a test, or a page with no painted content) a documented
+//! fallback walks the layout tree (`LayoutBox::node_id()` → DOM `<a href>`) instead.
 //!
 //! The window converts a physical cursor position into page CSS coordinates with
 //! [`physical_to_page`] (divide by the HiDPI scale factor, add the scroll offset) and asks
@@ -189,13 +191,57 @@ pub fn link_url_at(
     Ok(is_navigable(&url).then_some(url))
 }
 
-/// Extracts one [`LinkRegion`] per rendered `<a href>` element from a finished render.
+/// Extracts one [`LinkRegion`] per painted primitive that resolves to an `<a href>`.
 ///
-/// The layout tree is walked iteratively (deep documents cannot overflow the stack);
-/// element boxes expose their DOM [`dom::NodeId`] through [`LayoutBox::node_id`], which is
-/// matched against the parsed document. Anchors with an empty/absent `href` or a zero-area
-/// border box do not produce a region.
+/// Primary path: uses the additive `paint` hit regions from the render output
+/// ([`render::RenderOutput::hit_regions`]) and resolves the nearest HTML `<a href>`
+/// ancestor with [`paint::find_link_at`] for each region. This reuses the exact painted
+/// geometry of the frame (clipped regions, text runs inheriting the anchor's DOM node,
+/// images and decorations inside links).
+///
+/// Fallback (documented): when the render output has no hit regions, the layout tree is
+/// walked iteratively and element boxes are matched against the parsed DOM through
+/// [`LayoutBox::node_id`]. Anchors with an empty/absent `href` or a zero-area border box do
+/// not produce a region.
 pub fn collect_link_regions(output: &render::RenderOutput) -> Vec<LinkRegion> {
+    if output.hit_regions.is_empty() {
+        return collect_link_regions_from_layout(output);
+    }
+    let mut regions = Vec::new();
+    for hit_region in &output.hit_regions {
+        let rect = hit_region.rect;
+        let center_x = rect.x + rect.width / 2.0;
+        let center_y = rect.y + rect.height / 2.0;
+        if let Some(link) = paint::find_link_at(
+            &output.document,
+            std::slice::from_ref(hit_region),
+            center_x,
+            center_y,
+        ) && rect.width > 0.0
+            && rect.height > 0.0
+        {
+            let region = LinkRegion {
+                rect: CssRect::new(rect.x, rect.y, rect.width, rect.height),
+                href: link.href,
+            };
+            // Several painted primitives can cover the same anchor rectangle (e.g. a text
+            // run plus its underline); keep one region per exact (href, rect) pair.
+            if !regions.contains(&region) {
+                regions.push(region);
+            }
+        }
+    }
+    if regions.is_empty() {
+        // No painted primitive resolved to an anchor: fall back to the layout tree rather
+        // than silently reporting an unclickable page.
+        return collect_link_regions_from_layout(output);
+    }
+    regions
+}
+
+/// Documented fallback for [`collect_link_regions`]: walks the layout tree and matches
+/// element boxes to DOM `<a href>` nodes (`LayoutBox::node_id`).
+fn collect_link_regions_from_layout(output: &render::RenderOutput) -> Vec<LinkRegion> {
     let mut regions = Vec::new();
     let mut stack: Vec<&LayoutBox> = vec![&output.layout];
     while let Some(layout_box) = stack.pop() {

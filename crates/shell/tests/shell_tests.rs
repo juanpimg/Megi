@@ -368,3 +368,112 @@ fn title_and_history_compose_from_a_rendered_page() {
         "Megi — error: connection refused"
     );
 }
+
+/// Real `file://` fixture rendered headlessly: the frame carries paint-derived link
+/// regions, hrefs resolve against the file URL and the navigation history walks them.
+#[test]
+fn file_fixture_links_are_hittable_and_navigable() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/links.html");
+    let input = shell::cli::normalize_input(&path.display().to_string()).expect("file URL");
+    let request = RenderRequest {
+        generation: 1,
+        input: input.clone(),
+        css_width: 480,
+        css_height: 320,
+    };
+    let frame = shell::worker::render_document(&request).expect("render fixture");
+    assert_eq!(frame.title.as_deref(), Some("Links Fixture"));
+    assert!(
+        frame.document_url.starts_with("file://"),
+        "{}",
+        frame.document_url
+    );
+    assert!(
+        frame.links.len() >= 2,
+        "expected two href links: {:?}",
+        frame.links
+    );
+    assert!(
+        frame.links.iter().any(|link| link.href == "next.html"),
+        "relative href missing: {:?}",
+        frame.links
+    );
+    assert!(
+        frame
+            .links
+            .iter()
+            .any(|link| link.href == "https://example.com/absolute"),
+        "absolute href missing: {:?}",
+        frame.links
+    );
+    assert!(
+        frame.links.iter().all(|link| !link.href.is_empty()),
+        "href-less anchors must not become link regions"
+    );
+
+    // Simulate a click on the middle of the first link region.
+    let page_url = net::Url::parse(&frame.document_url).expect("frame URL");
+    let region = frame
+        .links
+        .iter()
+        .find(|link| link.href == "next.html")
+        .expect("relative link region");
+    let center_x = region.rect.x + region.rect.width / 2.0;
+    let center_y = region.rect.y + region.rect.height / 2.0;
+    let target = shell::link_url_at(Some(&page_url), &frame.links, center_x, center_y)
+        .expect("resolution")
+        .expect("navigable link");
+    assert!(
+        target.as_str().ends_with("/next.html"),
+        "{}",
+        target.as_str()
+    );
+
+    let mut history = shell::NavigationState::new();
+    history.navigate_to(page_url);
+    assert_eq!(
+        history.navigate_to(target.clone()),
+        shell::NavigationOutcome::Pushed
+    );
+    assert_eq!(history.current(), Some(&target));
+    assert!(history.can_go_back());
+    assert_eq!(
+        history.back().map(net::Url::as_str),
+        Some(input.as_str().to_owned())
+    );
+}
+
+/// The shell network flags reach `RenderOptions` (session cookie jar + CORS origin).
+#[test]
+fn headless_render_with_options_accepts_cookies_and_origin() {
+    let args = parse_cli(
+        [
+            "data:text/html,<body><a href=next.html>x</a></body>",
+            "--cookies",
+            "--origin",
+            "https://app.example",
+        ]
+        .into_iter()
+        .map(str::to_string),
+    )
+    .expect("CLI parse");
+    assert!(args.cookies);
+    assert_eq!(args.origin.as_deref(), Some("https://app.example"));
+
+    let options = render::RenderOptions {
+        cookie_jar: Some(std::sync::Arc::new(std::sync::Mutex::new(
+            net::CookieJar::new(),
+        ))),
+        origin: args.origin.clone(),
+        ..render::RenderOptions::default()
+    };
+    let output = shell::render_target_with_options(
+        "data:text/html,<body><a href=next.html>x</a></body>",
+        200,
+        100,
+        &options,
+    )
+    .expect("render");
+    assert!(!output.hit_regions.is_empty());
+    assert_eq!(output.stats.cookies_stored, 0);
+}

@@ -31,12 +31,23 @@ pub fn render_target(
     width: u32,
     height: u32,
 ) -> Result<render::RenderOutput, ShellError> {
+    render_target_with_options(input, width, height, &render::RenderOptions::default())
+}
+
+/// [`render_target`] with explicit render options (cookies, CORS origin, scripting, ...).
+///
+/// The viewport is validated from `width`/`height`; every other option is taken from
+/// `options` (e.g. a shared [`net::CookieJar`] or a CORS `origin`).
+pub fn render_target_with_options(
+    input: &str,
+    width: u32,
+    height: u32,
+    options: &render::RenderOptions,
+) -> Result<render::RenderOutput, ShellError> {
     let viewport = render::Viewport::new(width, height)?;
-    let options = render::RenderOptions {
-        viewport,
-        ..render::RenderOptions::default()
-    };
-    Ok(render::render_url(input, &options)?)
+    let mut effective = options.clone();
+    effective.viewport = viewport;
+    Ok(render::render_url(input, &effective)?)
 }
 
 /// Writes the PNG of a finished render to `path` and returns its metadata.
@@ -64,7 +75,24 @@ pub fn screenshot(
     height: u32,
     path: impl AsRef<Path>,
 ) -> Result<ScreenshotInfo, ShellError> {
-    let output = render_target(input, width, height)?;
+    screenshot_with_options(
+        input,
+        width,
+        height,
+        path,
+        &render::RenderOptions::default(),
+    )
+}
+
+/// [`screenshot`] with explicit render options (see [`render_target_with_options`]).
+pub fn screenshot_with_options(
+    input: &str,
+    width: u32,
+    height: u32,
+    path: impl AsRef<Path>,
+    options: &render::RenderOptions,
+) -> Result<ScreenshotInfo, ShellError> {
+    let output = render_target_with_options(input, width, height, options)?;
     save_screenshot(&output, path)
 }
 

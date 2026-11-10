@@ -84,6 +84,24 @@ enum UserEvent {
 /// `$DISPLAY` / `$WAYLAND_DISPLAY`) or when winit/softbuffer initialization
 /// fails.
 pub fn run_window(input: String, title: String, width: u32, height: u32) -> Result<(), ShellError> {
+    run_window_with_options(
+        input,
+        title,
+        width,
+        height,
+        render::RenderOptions::default(),
+    )
+}
+
+/// [`run_window`] with explicit base [`render::RenderOptions`] (cookie jar, CORS origin,
+/// scripting toggles) applied to every render of the session.
+pub fn run_window_with_options(
+    input: String,
+    title: String,
+    width: u32,
+    height: u32,
+    render_options: render::RenderOptions,
+) -> Result<(), ShellError> {
     let event_loop = EventLoop::<UserEvent>::with_user_event()
         .build()
         .map_err(|error| {
@@ -92,7 +110,7 @@ pub fn run_window(input: String, title: String, width: u32, height: u32) -> Resu
             ))
         })?;
     let proxy = event_loop.create_proxy();
-    let mut app = WindowApp::new(input, title, width, height, proxy);
+    let mut app = WindowApp::new(input, title, width, height, proxy, render_options);
     event_loop
         .run_app(&mut app)
         .map_err(|error| ShellError::Window(format!("event loop failed: {error}")))
@@ -107,6 +125,8 @@ struct WindowApp {
     context: Option<ShellContext>,
     surface: Option<ShellSurface>,
     proxy: EventLoopProxy<UserEvent>,
+    /// Base render options for this session (cookie jar, CORS origin, scripting, ...).
+    render_options: render::RenderOptions,
     metrics: WindowMetrics,
     scale_factor: f64,
     scroll: ScrollState,
@@ -137,6 +157,7 @@ impl WindowApp {
         width: u32,
         height: u32,
         proxy: EventLoopProxy<UserEvent>,
+        render_options: render::RenderOptions,
     ) -> Self {
         let mut nav = NavigationState::new();
         if let Ok(url) = net::Url::parse(&input) {
@@ -151,6 +172,7 @@ impl WindowApp {
             context: None,
             surface: None,
             proxy,
+            render_options,
             metrics: window_metrics(width, height, 1.0),
             scale_factor: 1.0,
             scroll: ScrollState::default(),
@@ -199,10 +221,16 @@ impl WindowApp {
         self.surface = Some(surface);
 
         let proxy = self.proxy.clone();
-        let (sender, receiver, handle) = spawn_worker(crate::worker::render_document, move || {
-            // Wake the event loop; ignore a closed loop (window closing).
-            let _ = proxy.send_event(UserEvent::WorkerReady);
-        });
+        let render_options = self.render_options.clone();
+        let (sender, receiver, handle) = spawn_worker(
+            move |request: &RenderRequest| {
+                crate::worker::render_document_with_options(request, &render_options)
+            },
+            move || {
+                // Wake the event loop; ignore a closed loop (window closing).
+                let _ = proxy.send_event(UserEvent::WorkerReady);
+            },
+        );
         self.request_sender = Some(sender);
         self.message_receiver = Some(receiver);
         self.worker = Some(handle);

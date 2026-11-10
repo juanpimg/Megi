@@ -42,8 +42,16 @@
 //!   link against the page URL ([`links`]), pushes a [`navigation::NavigationState`] entry
 //!   and renders the new URL on the worker (generation-based cancellation). `Alt+←` /
 //!   `Backspace` / `b` go back, `Alt+→` / `n` go forward (`r` reloads); history is bounded
-//!   by [`MAX_HISTORY`] and navigating from the past truncates forward entries. Hit regions
-//!   are extracted from the same render pass as the pixels and stored next to the frame.
+//!   by [`MAX_HISTORY`] and navigating from the past truncates forward entries. Link
+//!   clickability comes from `render::RenderOutput::hit_regions` (the additive paint
+//!   hit-testing layer of the same render pass as the pixels) resolved through
+//!   `paint::find_link_at`; a documented layout-tree fallback covers outputs without
+//!   regions.
+//! - **Browser networking**: `--cookies` enables a session [`net::CookieJar`] shared by
+//!   the document, its subresources, redirects and later navigations; `--origin` overrides
+//!   the CORS `Origin` used for subresource fetches. `render` derives it from the document
+//!   URL by default; CORS denials are non-fatal warnings. `gzip`/`deflate` responses are
+//!   decoded transparently by `net`.
 //! - **Dynamic title**: the window title is the document `<title>` plus the short URL and
 //!   scroll percentage ([`title`]); server redirects replace the current history entry.
 //! - **Input**: mouse wheel/touchpad scroll, `↑`/`↓`, `PageUp`/`PageDown`, `Home`/`End`,
@@ -59,11 +67,13 @@
 //!   document with a new history entry) instead of in-page scrolling/scrolling-into-view.
 //! - The scroll is a simple vertical offset of the rendered page (no incremental tiled
 //!   rendering): pages taller than 8192 CSS px are clipped.
-//! - Hit regions come from the layout/DOM trees of the render output (`<a href>` border
-//!   boxes): `<area>`, CSS `pointer-events`, transforms and hover states are out of scope.
-//!   The paint crate now ships an additive hit-testing API (`paint::find_link_at` over
-//!   `paint::HitRegion`); switching to it requires `render::RenderOutput` to expose the
-//!   per-paint regions (follow-up, coordinated with the paint lane).
+//! - Hit regions are the painted primitives of `render` (text runs/backgrounds/borders/
+//!   images inside `<a href>`): `<area>`, CSS `pointer-events`, transforms and hover
+//!   states remain out of scope.
+//! - Cookies: one session jar per process (`--cookies`), no persistence across processes,
+//!   `SameSite` ignored and no Public Suffix List (documented in `net::cookies`). CORS is
+//!   the `net` subset (no preflight cache/Expose-Headers); `Origin` only affects
+//!   subresource fetches, never the top-level navigation.
 //! - Window-mode code is not exercised by tests (no display server in CI); all navigation,
 //!   hit-testing and title logic is pure and tested headlessly.
 //!
@@ -92,7 +102,10 @@ pub mod worker;
 pub use cli::{CliArgs, LaunchMode, finish_args, parse_args, parse_cli};
 pub use convert::{PIXEL_FORMAT, expected_buffer_len, pixmap_to_0rgb};
 pub use error::ShellError;
-pub use headless::{ScreenshotInfo, render_target, save_screenshot, screenshot};
+pub use headless::{
+    ScreenshotInfo, render_target, render_target_with_options, save_screenshot, screenshot,
+    screenshot_with_options,
+};
 pub use links::{
     CssRect, LinkError, LinkRegion, collect_link_regions, find_link_at, is_navigable, link_url_at,
     physical_to_page, resolve_href,
@@ -105,5 +118,5 @@ pub use title::{
     CAPPED_MARKER, FALLBACK_NAME, MAX_SHORT_URL_CHARS, MAX_TITLE_CHARS, document_title, page_title,
     short_url, window_title,
 };
-pub use window::run_window;
+pub use window::{run_window, run_window_with_options};
 pub use worker::{FrameStore, RenderFrame, RenderRequest, WorkerMessage, spawn_worker};
