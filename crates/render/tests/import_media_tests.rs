@@ -438,6 +438,24 @@ fn showcase_routes() -> HashMap<String, RouteResponse> {
     add("css/theme.css", "css/theme.css", "text/css");
     add("assets/logo.png", "assets/logo.png", "image/png");
     add("assets/tile.png", "assets/tile.png", "image/png");
+    // WP-5.9 CSS backgrounds: the stylesheet declares `../assets/pattern.png` and
+    // `../assets/bullet.png`, which resolve against the document base
+    // (`/showcase/index.html`) to `/assets/...`.
+    let shared_assets = fixture_dir().join("assets");
+    routes.insert(
+        "/assets/pattern.png".to_string(),
+        RouteResponse::new(
+            "image/png",
+            std::fs::read(shared_assets.join("pattern.png")).expect("pattern asset"),
+        ),
+    );
+    routes.insert(
+        "/assets/bullet.png".to_string(),
+        RouteResponse::new(
+            "image/png",
+            std::fs::read(shared_assets.join("bullet.png")).expect("bullet asset"),
+        ),
+    );
     routes
 }
 
@@ -454,6 +472,10 @@ fn showcase_renders_file_url_to_the_golden_png() {
     assert_eq!(output.stats.external_stylesheets, 1, "site.css");
     assert!(output.stats.media_skipped >= 1, "print sheet is skipped");
     assert_eq!(output.stats.images_loaded, 2, "logo + tile");
+    assert_eq!(
+        output.stats.background_images_loaded, 2,
+        "pattern + list-style-image bullet"
+    );
     assert_eq!(output.stats.limit_violations, Default::default());
     let golden = golden_png();
     assert_eq!(
@@ -466,11 +488,12 @@ fn showcase_renders_file_url_to_the_golden_png() {
 
 #[test]
 fn showcase_renders_from_http_to_the_same_golden_png() {
-    let server = TestServer::spawn(showcase_routes(), 5);
+    let server = TestServer::spawn(showcase_routes(), 7);
     let output = render_url(&server.url("/showcase/index.html"), &options(1024, 768))
         .expect("http showcase render");
     assert_eq!(output.stats.imports_loaded, 1);
     assert_eq!(output.stats.images_loaded, 2);
+    assert_eq!(output.stats.background_images_loaded, 2);
     assert_eq!(
         output.png,
         golden_png(),

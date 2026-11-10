@@ -10,7 +10,9 @@ decoded PNG image assets, a table, positioned elements and lists.
 | `css/site.css` | Main screen stylesheet: `@import url("theme.css")`, wide (`min-width: 900px`) and narrow (`max-width: 700px`) media queries. |
 | `css/theme.css` | Recursively imported stylesheet (depth 1) with its own `@media` rules (`min-width: 1000px`, `max-width: 640px`). |
 | `css/print-sheet.css` | `media="print"` sheet: must never be fetched or applied on screen. |
-| `assets/logo.png`, `assets/tile.png` | PNG assets fetched, decoded and painted by the pipeline. |
+| `assets/logo.png`, `assets/tile.png` | PNG `<img>` assets fetched, decoded and painted by the pipeline. |
+| `../assets/pattern.png` | 16×16 checker used as `background-image` on `.hero` and `.stage` (WP-5.9; stretched to the padding box, no repeat/size/position). |
+| `../assets/bullet.png` | 8×8 magenta diamond used as `list-style-image` on `.feature-list li`. |
 | `golden.png` | Golden render at **1024×768**; compared byte-for-byte by `crates/render/tests/import_media_tests.rs`. |
 
 ## Regenerating the golden
@@ -28,10 +30,12 @@ python3 tools/png_check.py tests/fixtures/render/showcase/golden.png
 
 Expected metadata of the current golden:
 
-- size: **1024 × 768**, PNG color type 6 (RGBA), opaque canvas.
+- size: **1024 × 768**, PNG color type 6 (RGBA), opaque canvas, **80.220 bytes**.
 - `@import`ed stylesheets: **1** (`theme.css`, depth 1); external stylesheets: 1
-  (`site.css`); media-skipped sheets: 1 (`print-sheet.css`); images loaded: 2.
-- md5: **570aa554c88c2fdf75481e8cd076bf61**.
+  (`site.css`); media-skipped sheets: 1 (`print-sheet.css`); `<img>` images loaded: 2;
+  background images loaded: **2** (185 bytes); display items: **80**.
+- md5: **c95c7eff83e7bd08f815631aa42afdb0** (previous golden
+  `570aa554c88c2fdf75481e8cd076bf61`, 65.151 bytes, before table text + backgrounds).
 
 ## Known layout limitations reflected in the golden
 
@@ -42,5 +46,10 @@ so the golden will evolve when they land):
 - `display: inline-block` boxes and floated/absolutely-positioned **replaced** elements
   (images) are not painted by the in-flight layout lane, so the logo is inline in the
   `h1` and the tile is a normal-flow block image.
-- Text inside `<td>`/`<th>` is not laid out yet; the table renders as a styled grid
-  (borders/row backgrounds) and will gain text once table layout lands.
+- Table cell text (`<td>`/`<th>`) is painted since task-53; the golden now shows the
+  Feature/Value rows and bold headers.
+- CSS `background-image` is stretched into the padding box (no `background-repeat`,
+  `background-size` or `background-position` yet); `list-style-image` replaces the disc
+  marker when the image URL is present and `list-style-image` is declared on the item
+  itself (this engine does not inherit that property). Canvas propagation propagates only
+  the background *color*.

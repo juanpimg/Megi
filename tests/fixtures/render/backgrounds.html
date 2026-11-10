@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Megi background images fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #ffffff; }
+  /* background-color behind a stretched 16x16 checker (orange #f2aa4c / blue #336699). */
+  .pattern {
+    width: 160px;
+    height: 64px;
+    background-color: #000000;
+    background-image: url("assets/pattern.png");
+  }
+  /* Missing background image: must paint the background color and warn (non-fatal). */
+  .missing {
+    width: 160px;
+    height: 32px;
+    background-color: #00ff00;
+    background-image: url("assets/does-not-exist.png");
+  }
+  .color-only {
+    width: 160px;
+    height: 16px;
+    background-color: #ff0000;
+  }
+  /* list-style-image: 8x8 magenta diamond replaces the disc marker. */
+  ul.markers {
+    margin: 8px 0 0 0;
+    padding-left: 24px;
+    list-style-type: disc;
+  }
+  /* The engine does not inherit list-style-image (documented), so set it on the items. */
+  ul.markers li {
+    list-style-image: url("assets/bullet.png");
+  }
+</style>
+</head>
+<body>
+  <div class="pattern"></div>
+  <div class="missing"></div>
+  <div class="color-only"></div>
+  <ul class="markers"><li>one</li><li>two</li></ul>
+</body>
+</html>

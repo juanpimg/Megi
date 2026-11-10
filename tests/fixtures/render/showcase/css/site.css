@@ -22,6 +22,8 @@ body {
   height: 72px;
   padding: 14px 16px;
   background-color: #101820;
+  /* WP-5.9: stretched background bitmap (no repeat/size/position yet). */
+  background-image: url("../assets/pattern.png");
   border-bottom: 4px solid #f2aa4c;
 }
 
@@ -123,6 +125,8 @@ table.specs tbody tr:nth-child(even) td {
   margin-top: 12px;
   height: 86px;
   background-color: #dde6f2;
+  /* WP-5.9: second background bitmap (checked pattern) on the stage box. */
+  background-image: url("../assets/pattern.png");
   border: 1px solid #9fb0c8;
 }
 
@@ -144,6 +148,19 @@ table.specs tbody tr:nth-child(even) td {
   padding: 6px;
   background-color: #f2aa4c;
   color: #101820;
+}
+
+/* WP-5.9: list-style-image replaces the default disc marker.
+ * The engine does not inherit list-style-image (only the declaration's own element),
+ * so it is set on the items. */
+.feature-list {
+  margin: 8px 0 0;
+  padding-left: 24px;
+  list-style-type: disc;
+}
+
+.feature-list li {
+  list-style-image: url("../assets/bullet.png");
 }
 
 .chips {

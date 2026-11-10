@@ -82,13 +82,14 @@ fn run() -> Result<(), CliError> {
     } else {
         let stats = &output.stats;
         println!(
-            "rendered {input} -> {} ({}x{}, {} bytes, {} display items, {} images, {} external stylesheets, {} ms)",
+            "rendered {input} -> {} ({}x{}, {} bytes, {} display items, {} images, {} background images, {} external stylesheets, {} ms)",
             args.output.display(),
             output.pixmap.width,
             output.pixmap.height,
             output.png.len(),
             stats.display_items,
             stats.images_loaded,
+            stats.background_images_loaded,
             stats.external_stylesheets,
             stats.timings.total.as_millis()
         );
@@ -189,8 +190,10 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
             "\"document_url\":{},\"status\":{},\"charset\":{},",
             "\"document_bytes\":{},\"png_bytes\":{},\"display_items\":{},",
             "\"images_loaded\":{},\"images_failed\":{},\"image_bytes\":{},",
+            "\"background_images_loaded\":{},\"background_images_failed\":{},\"background_bytes\":{},",
             "\"external_stylesheets\":{},\"inline_stylesheets\":{},\"css_bytes\":{},",
-            "\"timings_us\":{{\"fetch\":{},\"decode_parse\":{},\"styles\":{},\"images\":{},\"layout\":{},",
+            "\"timings_us\":{{\"fetch\":{},\"decode_parse\":{},\"styles\":{},\"images\":{},",
+            "\"backgrounds\":{},\"layout\":{},",
             "\"paint\":{},\"raster\":{},\"total\":{}}},",
             "\"warnings\":[{}]}}"
         ),
@@ -209,6 +212,9 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
         stats.images_loaded,
         stats.images_failed,
         stats.image_bytes,
+        stats.background_images_loaded,
+        stats.background_images_failed,
+        stats.background_bytes,
         stats.external_stylesheets,
         stats.inline_stylesheets,
         stats.css_bytes,
@@ -216,6 +222,7 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
         timings.decode_parse.as_micros(),
         timings.styles.as_micros(),
         timings.images.as_micros(),
+        timings.backgrounds.as_micros(),
         timings.layout.as_micros(),
         timings.paint.as_micros(),
         timings.raster.as_micros(),

@@ -21,8 +21,9 @@
 //!
 //! [`RenderOutput::stats`] exposes per-stage timings (fetch, decode, styles, layout,
 //! paint, raster), the resolved charset, HTTP status (for `http(s)` documents), author
-//! CSS volume, external stylesheet count, display-item count, HTML parser anti-DoS limit
-//! violations and non-fatal warnings (e.g. a 404 stylesheet).
+//! CSS volume, external stylesheet count, display-item count, `<img>` and background-image
+//! load counts/bytes, HTML parser anti-DoS limit violations and non-fatal warnings
+//! (e.g. a 404 stylesheet or a missing background image).
 //!
 //! ## Deliberate limitations (this WP)
 //!
@@ -31,9 +32,20 @@
 //!   honoring `--no-network` and the [`RenderOptions`] image caps) and decoded
 //!   with the in-tree PNG decoder; it is laid out with its intrinsic size and
 //!   painted stretched into its content box (`object-fit: fill`). Missing /
-//!   too-large / non-PNG images become gray placeholders plus warnings. CSS
-//!   `background-image`/`url(...)`, SVG images, `srcset` and `object-fit`
-//!   modes other than `fill` remain out of scope.
+//!   too-large / non-PNG images become gray placeholders plus warnings.
+//! - **CSS backgrounds (WP-5.9)**: `background-image` and `list-style-image` URLs are
+//!   collected from the computed styles, resolved against the **document** base URL,
+//!   deduplicated, fetched with the shared loader (honoring `--no-network`) and decoded
+//!   with the in-tree PNG decoder. They are handed to `paint` as
+//!   [`paint::BackgroundImages`] (keyed by the raw CSS URL string): a background bitmap is
+//!   stretched into the element's padding box (no `background-repeat`/`size`/`position`
+//!   yet), a `list-style-image` replaces the default marker, and the background color
+//!   paints behind the bitmap. Caps: [`DEFAULT_MAX_BACKGROUNDS`] distinct images,
+//!   [`DEFAULT_MAX_BACKGROUND_BYTES`] each and
+//!   [`DEFAULT_MAX_TOTAL_BACKGROUND_BYTES`] per page. External stylesheets resolve their
+//!   relative URLs against the document base URL (not the sheet's own URL); `@import` does
+//!   not propagate a base. SVG images, `srcset` and `object-fit` modes other than `fill`
+//!   remain out of scope.
 //! - **`@import` support (WP-5.8)**: imported stylesheets are fetched recursively with the
 //!   shared resource loader, resolved against the importing sheet's URL, deduplicated by
 //!   URL, cycle-safe, depth-limited (`RenderOptions::max_import_depth`, default 8) and
@@ -52,6 +64,7 @@
 //!   resource); redirects are followed by `net`.
 //! - Canvas is opaque white, the PNG encoder is the deterministic paint writer.
 
+pub mod backgrounds;
 pub mod charset;
 pub mod error;
 pub mod images;
@@ -82,6 +95,13 @@ pub const DEFAULT_MAX_CSS_BYTES_PER_SHEET: usize = 1024 * 1024;
 pub const DEFAULT_MAX_TOTAL_CSS_BYTES: usize = 4 * 1024 * 1024;
 /// Default maximum `@import` nesting depth.
 pub const DEFAULT_MAX_IMPORT_DEPTH: usize = 8;
+/// Default maximum number of distinct background images loaded per page.
+pub const DEFAULT_MAX_BACKGROUNDS: usize = backgrounds::DEFAULT_MAX_BACKGROUNDS;
+/// Default maximum size of one background image (8 MiB).
+pub const DEFAULT_MAX_BACKGROUND_BYTES: usize = backgrounds::DEFAULT_MAX_BACKGROUND_BYTES;
+/// Default total background-image byte budget per page (16 MiB).
+pub const DEFAULT_MAX_TOTAL_BACKGROUND_BYTES: usize =
+    backgrounds::DEFAULT_MAX_TOTAL_BACKGROUND_BYTES;
 
 /// Output viewport in CSS pixels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -140,6 +160,12 @@ pub struct RenderOptions {
     pub max_image_bytes: usize,
     /// Maximum total downloaded image bytes for the page.
     pub max_total_image_bytes: usize,
+    /// Maximum number of distinct `background-image`/`list-style-image` URLs loaded.
+    pub max_backgrounds: usize,
+    /// Maximum downloaded size of a single background image (bytes).
+    pub max_background_bytes: usize,
+    /// Maximum total downloaded background-image bytes for the page.
+    pub max_total_background_bytes: usize,
     /// HTML parser anti-DoS limits (depth/nodes/attributes/input size).
     pub parse_options: html::ParseOptions,
     /// Networking options (timeouts, caps, TLS configuration, user agent).
@@ -160,6 +186,9 @@ impl Default for RenderOptions {
             max_images: DEFAULT_MAX_IMAGES,
             max_image_bytes: DEFAULT_MAX_IMAGE_BYTES,
             max_total_image_bytes: DEFAULT_MAX_TOTAL_IMAGE_BYTES,
+            max_backgrounds: DEFAULT_MAX_BACKGROUNDS,
+            max_background_bytes: DEFAULT_MAX_BACKGROUND_BYTES,
+            max_total_background_bytes: DEFAULT_MAX_TOTAL_BACKGROUND_BYTES,
             parse_options: html::ParseOptions::DEFAULT,
             fetch_options: FetchOptions::default(),
         }
@@ -179,6 +208,8 @@ pub struct RenderTimings {
     pub layout: Duration,
     /// Image discovery, fetching and decoding (`<img>`).
     pub images: Duration,
+    /// Background-image/`list-style-image` discovery, fetching and decoding (WP-5.9).
+    pub backgrounds: Duration,
     /// Display-list construction.
     pub paint: Duration,
     /// Rasterization (and PNG encoding happens after this measurement).
@@ -217,6 +248,12 @@ pub struct RenderStats {
     pub images_failed: usize,
     /// Downloaded (encoded) image bytes accepted by the caps.
     pub image_bytes: usize,
+    /// Distinct `background-image`/`list-style-image` URLs loaded and decoded.
+    pub background_images_loaded: usize,
+    /// Distinct background URLs that failed (missing, blocked, too large, non-PNG, ...).
+    pub background_images_failed: usize,
+    /// Downloaded (encoded) background-image bytes accepted by the caps.
+    pub background_bytes: usize,
     /// Number of display-list items painted.
     pub display_items: usize,
     /// HTML parser anti-DoS limits that fired (should be empty for normal pages).
@@ -346,6 +383,22 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     );
     let images_time = images_start.elapsed();
 
+    let backgrounds_start = Instant::now();
+    let loaded_backgrounds = backgrounds::load_backgrounds(
+        &document,
+        &styles,
+        &base_url,
+        &mut loader,
+        options.no_network,
+        backgrounds::BackgroundLimits {
+            max_backgrounds: options.max_backgrounds,
+            max_background_bytes: options.max_background_bytes,
+            max_total_bytes: options.max_total_background_bytes,
+        },
+        &mut warnings,
+    );
+    let backgrounds_time = backgrounds_start.elapsed();
+
     let layout_start = Instant::now();
     let measurer = layout::FontTextMeasurer::bundled()
         .map_err(|error| RenderError::FontEngine(error.to_string()))?;
@@ -366,8 +419,12 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     let layout_time = layout_start.elapsed();
 
     let paint_start = Instant::now();
-    let display_list =
-        paint::build_display_list_with_images(&layout_root, viewport, &loaded_images.store);
+    let display_list = paint::build_display_list_with_images_and_backgrounds(
+        &layout_root,
+        viewport,
+        &loaded_images.store,
+        &loaded_backgrounds.images,
+    );
     let display_items = display_list.items.len();
     let paint_time = paint_start.elapsed();
 
@@ -406,6 +463,9 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             images_loaded: loaded_images.loaded,
             images_failed: loaded_images.failed,
             image_bytes: loaded_images.downloaded_bytes,
+            background_images_loaded: loaded_backgrounds.loaded,
+            background_images_failed: loaded_backgrounds.failed,
+            background_bytes: loaded_backgrounds.downloaded_bytes,
             display_items,
             limit_violations: parse.limit_violations,
             timings: RenderTimings {
@@ -413,6 +473,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
                 decode_parse: decode_parse_time,
                 styles: styles_time,
                 images: images_time,
+                backgrounds: backgrounds_time,
                 layout: layout_time,
                 paint: paint_time,
                 raster: raster_time,
