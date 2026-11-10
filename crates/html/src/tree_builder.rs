@@ -6,6 +6,8 @@
 //! Parenting (§13.2.6.1), the Adoption Agency Algorithm (§13.2.6.4.7), `<template>`
 //! contents insertion, and Foreign Content (SVG/MathML) attribute/tag adjustments (§13.2.6.5).
 
+use std::collections::{HashMap, HashSet};
+
 use dom::{Attribute, Document, Namespace, NodeId, NodeKind, QuirksMode};
 
 use crate::tokenizer::{Token, Tokenizer, TokenizerConfig, TokenizerState};
@@ -669,6 +671,13 @@ pub struct TreeBuilder {
     /// `<selectedcontent>` fixup (which walks the whole tree) be skipped entirely for
     /// the overwhelmingly common documents without a `<select>`.
     has_select_element: bool,
+    /// Anti-quadratic fast path for §13.2.4.2 scope checks: number of currently-open
+    /// HTML-namespace elements per local name (audit finding F2). "The tag is not open at
+    /// all" answers `has_element_in_*_scope` in O(1) instead of scanning the whole stack.
+    open_html_counts: HashMap<String, u32>,
+    /// O(1) membership test for the stack of open elements (used by the active-formatting
+    /// reconstruction, which previously scanned the stack once per character token).
+    open_ids: HashSet<NodeId>,
 }
 
 impl TreeBuilder {
@@ -697,6 +706,98 @@ impl TreeBuilder {
             parse_options,
             limit_violations: LimitViolations::default(),
             has_select_element: false,
+            open_html_counts: HashMap::new(),
+            open_ids: HashSet::new(),
+        }
+    }
+
+    /// Pushes `node_id` onto the stack of open elements, keeping the O(1) scope-check
+    /// bookkeeping (`open_html_counts`, `open_ids`) in sync.
+    fn push_open_element(&mut self, node_id: NodeId) {
+        self.open_elements.push(node_id);
+        self.open_ids.insert(node_id);
+        self.adjust_open_html_count(node_id, 1);
+    }
+
+    /// Pops the topmost open element, keeping the O(1) bookkeeping in sync.
+    fn pop_open_element(&mut self) -> Option<NodeId> {
+        let node_id = self.open_elements.pop()?;
+        self.open_ids.remove(&node_id);
+        self.adjust_open_html_count(node_id, -1);
+        Some(node_id)
+    }
+
+    /// Removes an open element at an arbitrary stack position (adoption agency), keeping
+    /// the O(1) bookkeeping in sync.
+    fn remove_open_element(&mut self, pos: usize) -> NodeId {
+        let node_id = self.open_elements.remove(pos);
+        self.open_ids.remove(&node_id);
+        self.adjust_open_html_count(node_id, -1);
+        node_id
+    }
+
+    /// Inserts an open element at an arbitrary stack position (adoption agency), keeping
+    /// the O(1) bookkeeping in sync.
+    fn insert_open_element(&mut self, pos: usize, node_id: NodeId) {
+        self.open_elements.insert(pos, node_id);
+        self.open_ids.insert(node_id);
+        self.adjust_open_html_count(node_id, 1);
+    }
+
+    /// Replaces the open element at `pos` with `new_node_id` (adoption agency), keeping
+    /// the O(1) bookkeeping in sync. Returns the node that was replaced.
+    fn replace_open_element(&mut self, pos: usize, new_node_id: NodeId) -> NodeId {
+        let old_node_id = std::mem::replace(&mut self.open_elements[pos], new_node_id);
+        self.open_ids.remove(&old_node_id);
+        self.open_ids.insert(new_node_id);
+        self.adjust_open_html_count(old_node_id, -1);
+        self.adjust_open_html_count(new_node_id, 1);
+        old_node_id
+    }
+
+    /// Returns the number of currently-open HTML-namespace elements with local name `name`.
+    fn open_html_count(&self, name: &str) -> u32 {
+        self.open_html_counts.get(name).copied().unwrap_or(0)
+    }
+
+    /// Returns `true` when an HTML-namespace element with local name `name` is open.
+    fn has_open_html_element(&self, name: &str) -> bool {
+        self.open_html_count(name) > 0
+    }
+
+    /// Returns `true` when `node_id` is currently on the stack of open elements.
+    fn is_open_element(&self, node_id: NodeId) -> bool {
+        self.open_ids.contains(&node_id)
+    }
+
+    /// Increments/decrements the per-tag counter for open HTML-namespace elements.
+    ///
+    /// Non-element nodes and foreign (SVG/MathML) elements are not counted: the scope
+    /// checks only ever match HTML-namespace elements by local name, so the counter is a
+    /// faithful mirror of the only thing they test.
+    fn adjust_open_html_count(&mut self, node_id: NodeId, delta: i32) {
+        let Some(el) = self.doc.node(node_id).as_element() else {
+            return;
+        };
+        if el.namespace != Namespace::Html {
+            return;
+        }
+        if delta > 0 {
+            if let Some(count) = self.open_html_counts.get_mut(el.local_name.as_str()) {
+                *count += 1;
+            } else {
+                self.open_html_counts.insert(el.local_name.clone(), 1);
+            }
+        } else {
+            let name = el.local_name.as_str();
+            let mut remove = false;
+            if let Some(count) = self.open_html_counts.get_mut(name) {
+                *count -= 1;
+                remove = *count == 0;
+            }
+            if remove {
+                self.open_html_counts.remove(name);
+            }
         }
     }
 
@@ -835,6 +936,13 @@ impl TreeBuilder {
         scope_list: &[(&str, Namespace)],
         extra_html_tags: &[&str],
     ) -> bool {
+        // Anti-quadratic fast path (audit finding F2): if no element with this tag name is
+        // open at all, no scan can find one. This is the common case for `close_p_element`
+        // checks, `</p>`, `</div>`-style end tags, etc.; it keeps per-token cost O(1)
+        // instead of O(stack depth).
+        if self.open_html_count(target_name) == 0 {
+            return false;
+        }
         for &node_id in self.open_elements.iter().rev() {
             let Some(el) = self.doc.node(node_id).as_element() else {
                 continue;
@@ -861,6 +969,10 @@ impl TreeBuilder {
     }
 
     pub fn has_node_in_scope(&self, target_node: NodeId) -> bool {
+        // Fast path: a node that is not on the stack cannot be in scope.
+        if !self.open_ids.contains(&target_node) {
+            return false;
+        }
         for &node_id in self.open_elements.iter().rev() {
             if node_id == target_node {
                 return true;
@@ -907,7 +1019,7 @@ impl TreeBuilder {
                     && Some(el.local_name.as_str()) != except
             });
             if should_pop {
-                self.open_elements.pop();
+                self.pop_open_element();
             } else {
                 break;
             }
@@ -916,7 +1028,7 @@ impl TreeBuilder {
 
     pub fn close_p_element(&mut self) {
         self.generate_implied_end_tags(Some("p"));
-        while let Some(node_id) = self.open_elements.pop() {
+        while let Some(node_id) = self.pop_open_element() {
             if self.node_in_html(node_id, "p") {
                 break;
             }
@@ -1056,7 +1168,7 @@ impl TreeBuilder {
         let attrs = self.build_attributes(raw_attrs);
         let el_id = self.doc.create_element(namespace, name, attrs);
         self.insert_node_at_adjusted_location(el_id);
-        self.open_elements.push(el_id);
+        self.push_open_element(el_id);
         el_id
     }
 
@@ -1128,7 +1240,7 @@ impl TreeBuilder {
     ) -> NodeId {
         let el_id = self.create_foreign_element(ns, name, raw_attrs);
         self.insert_node_at_adjusted_location(el_id);
-        self.open_elements.push(el_id);
+        self.push_open_element(el_id);
         el_id
     }
 
@@ -1173,7 +1285,7 @@ impl TreeBuilder {
         match self.active_formatting.last() {
             None | Some(FormattingEntry::Marker) => return,
             Some(FormattingEntry::Element { node_id, .. }) => {
-                if self.open_elements.contains(node_id) {
+                if self.is_open_element(*node_id) {
                     return;
                 }
             }
@@ -1188,7 +1300,7 @@ impl TreeBuilder {
                     break;
                 }
                 FormattingEntry::Element { node_id, .. } => {
-                    if self.open_elements.contains(node_id) {
+                    if self.is_open_element(*node_id) {
                         i += 1;
                         break;
                     }
@@ -1215,26 +1327,42 @@ impl TreeBuilder {
     }
 
     fn push_active_formatting(&mut self, node_id: NodeId, name: &str, attrs: &[(String, String)]) {
-        // Noah's Ark clause: max 3 identical elements after the last marker
-        let mut matching_indices = Vec::new();
-        for (idx, entry) in self.active_formatting.iter().enumerate().rev() {
-            match entry {
-                FormattingEntry::Marker => break,
-                FormattingEntry::Element {
+        // Noah's Ark clause: at most 3 identical elements after the last marker. Only the
+        // earliest of the matches is removed when a fourth appears, so a forward scan that
+        // keeps the first match and stops at the third is equivalent to the old reverse
+        // scan that collected every match (audit finding F2: that scan was O(active list)
+        // per formatting element). The common cases (fewer than three entries after the
+        // last marker, or no identical triple) no longer allocate or scan at all.
+        let region_start = self
+            .active_formatting
+            .iter()
+            .rposition(|entry| matches!(entry, FormattingEntry::Marker))
+            .map_or(0, |marker_idx| marker_idx + 1);
+        let region_len = self.active_formatting.len() - region_start;
+        if region_len >= 3 {
+            let mut first_match_idx = None;
+            let mut matches = 0usize;
+            for (idx, entry) in self.active_formatting.iter().enumerate().skip(region_start) {
+                if let FormattingEntry::Element {
                     tag_name,
                     attributes,
                     ..
-                } => {
-                    if tag_name == name && attributes == attrs {
-                        matching_indices.push(idx);
+                } = entry
+                    && tag_name == name
+                    && attributes == attrs
+                {
+                    matches += 1;
+                    if first_match_idx.is_none() {
+                        first_match_idx = Some(idx);
+                    }
+                    if matches == 3 {
+                        if let Some(earliest_idx) = first_match_idx {
+                            self.active_formatting.remove(earliest_idx);
+                        }
+                        break;
                     }
                 }
             }
-        }
-        if matching_indices.len() >= 3
-            && let Some(&earliest_idx) = matching_indices.last()
-        {
-            self.active_formatting.remove(earliest_idx);
         }
         self.active_formatting.push(FormattingEntry::Element {
             node_id,
@@ -1252,12 +1380,17 @@ impl TreeBuilder {
     }
 
     fn process_any_other_end_tag(&mut self, name: &str) {
+        // Fast path (anti-quadratic F2): when no matching element is open, the walk below
+        // always falls through without acting; skip the O(stack) scan entirely.
+        if self.open_html_count(name) == 0 {
+            return;
+        }
         for idx in (0..self.open_elements.len()).rev() {
             let node_id = self.open_elements[idx];
             if self.node_in_html(node_id, name) {
                 self.generate_implied_end_tags(Some(name));
                 while self.open_elements.len() > idx {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                 }
                 break;
             }
@@ -1276,7 +1409,7 @@ impl TreeBuilder {
                 .iter()
                 .any(|e| matches!(e, FormattingEntry::Element { node_id, .. } if *node_id == curr));
             if !in_active {
-                self.open_elements.pop();
+                self.pop_open_element();
                 return;
             }
         }
@@ -1331,7 +1464,7 @@ impl TreeBuilder {
                 .map(|p| fmt_stack_pos + 1 + p);
 
             let Some(furthest_block_pos) = furthest_block_idx else {
-                while let Some(popped) = self.open_elements.pop() {
+                while let Some(popped) = self.pop_open_element() {
                     if popped == fmt_node_id {
                         break;
                     }
@@ -1345,7 +1478,16 @@ impl TreeBuilder {
             };
 
             let furthest_block_id = self.open_elements[furthest_block_pos];
-            let common_ancestor_id = self.open_elements[fmt_stack_pos - 1];
+            // `fmt_stack_pos == 0` cannot happen for trees built by the parser (the
+            // formatted element is never the bottom-most open element), but a manually
+            // built `TreeBuilder`/corrupted stack would underflow here (the old
+            // `fmt_stack_pos - 1` panicked or wrapped in release). Bail out cleanly.
+            let Some(common_ancestor_id) = fmt_stack_pos
+                .checked_sub(1)
+                .and_then(|pos| self.open_elements.get(pos).copied())
+            else {
+                return;
+            };
             let mut bookmark = fmt_idx;
             let mut node = furthest_block_id;
             let mut last_node = furthest_block_id;
@@ -1394,7 +1536,7 @@ impl TreeBuilder {
                         } else {
                             None
                         };
-                        self.open_elements.remove(pos);
+                        self.remove_open_element(pos);
                     }
                     continue;
                 };
@@ -1418,7 +1560,7 @@ impl TreeBuilder {
                     .iter()
                     .rposition(|&id| id == node)
                     .unwrap();
-                self.open_elements[stack_pos] = new_node;
+                self.replace_open_element(stack_pos, new_node);
                 node = new_node;
 
                 if !bookmark_moved {
@@ -1464,14 +1606,14 @@ impl TreeBuilder {
             if let Some(old_stack_pos) =
                 self.open_elements.iter().rposition(|&id| id == fmt_node_id)
             {
-                self.open_elements.remove(old_stack_pos);
+                self.remove_open_element(old_stack_pos);
             }
             let fb_stack_pos = self
                 .open_elements
                 .iter()
                 .rposition(|&id| id == furthest_block_id)
                 .expect("furthest_block must be in open_elements");
-            self.open_elements.insert(fb_stack_pos + 1, new_element);
+            self.insert_open_element(fb_stack_pos + 1, new_element);
         }
     }
 
@@ -1483,7 +1625,7 @@ impl TreeBuilder {
             {
                 break;
             }
-            self.open_elements.pop();
+            self.pop_open_element();
         }
     }
 
@@ -1497,7 +1639,7 @@ impl TreeBuilder {
             {
                 break;
             }
-            self.open_elements.pop();
+            self.pop_open_element();
         }
     }
 
@@ -1509,7 +1651,7 @@ impl TreeBuilder {
             {
                 break;
             }
-            self.open_elements.pop();
+            self.pop_open_element();
         }
     }
 
@@ -1641,7 +1783,7 @@ impl TreeBuilder {
                     if self.is_integration_point_or_html(curr) {
                         break;
                     }
-                    self.open_elements.pop();
+                    self.pop_open_element();
                 }
                 self.process_token_html(token)
             }
@@ -1650,7 +1792,7 @@ impl TreeBuilder {
                     if self.is_integration_point_or_html(curr) {
                         break;
                     }
-                    self.open_elements.pop();
+                    self.pop_open_element();
                 }
                 self.process_token_html(token)
             }
@@ -1661,7 +1803,7 @@ impl TreeBuilder {
             } => {
                 self.insert_foreign_element(adjusted_ns, name, &attributes);
                 if self_closing {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                 }
                 None
             }
@@ -1671,7 +1813,7 @@ impl TreeBuilder {
                         .current_node()
                         .is_some_and(|id| self.node_is(id, Namespace::Svg, "script")) =>
             {
-                self.open_elements.pop();
+                self.pop_open_element();
                 None
             }
             Token::EndTag { ref name, .. } => {
@@ -1685,7 +1827,7 @@ impl TreeBuilder {
                     let el = self.doc.node(node_id).as_element()?;
                     if el.local_name.eq_ignore_ascii_case(&name_lower) {
                         while self.open_elements.len() > current_idx {
-                            self.open_elements.pop();
+                            self.pop_open_element();
                         }
                         return None;
                     }
@@ -1871,7 +2013,7 @@ impl TreeBuilder {
                 Token::Doctype { .. } => None,
                 Token::StartTag { ref name, .. } if name == "html" => self.process_in_body(token),
                 Token::EndTag { ref name, .. } if name == "noscript" => {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     self.mode = InsertionMode::InHead;
                     None
                 }
@@ -1888,7 +2030,7 @@ impl TreeBuilder {
                     self.process_in_head(token)
                 }
                 Token::EndTag { ref name, .. } if name == "br" => {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     self.mode = InsertionMode::InHead;
                     self.process_token(token)
                 }
@@ -1899,7 +2041,7 @@ impl TreeBuilder {
                 }
                 Token::EndTag { .. } => None,
                 other => {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     self.mode = InsertionMode::InHead;
                     self.process_token(other)
                 }
@@ -1955,11 +2097,11 @@ impl TreeBuilder {
                     ) =>
                 {
                     if let Some(head_id) = self.head_element {
-                        self.open_elements.push(head_id);
+                        self.push_open_element(head_id);
                         let res = self.process_in_head(token);
                         if let Some(pos) = self.open_elements.iter().rposition(|&id| id == head_id)
                         {
-                            self.open_elements.remove(pos);
+                            self.remove_open_element(pos);
                         }
                         res
                     } else {
@@ -1988,12 +2130,12 @@ impl TreeBuilder {
                     None
                 }
                 Token::Eof => {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     self.mode = self.original_mode;
                     self.process_token(Token::Eof)
                 }
                 Token::EndTag { .. } => {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     self.mode = self.original_mode;
                     None
                 }
@@ -2067,14 +2209,10 @@ impl TreeBuilder {
                 }
                 Token::EndTag { .. } => None,
                 Token::Eof => {
-                    if !self
-                        .open_elements
-                        .iter()
-                        .any(|&id| self.node_in_html(id, "template"))
-                    {
+                    if !self.has_open_html_element("template") {
                         return None;
                     }
-                    while let Some(id) = self.open_elements.pop() {
+                    while let Some(id) = self.pop_open_element() {
                         if self.node_in_html(id, "template") {
                             break;
                         }
@@ -2145,7 +2283,7 @@ impl TreeBuilder {
                     if self.open_elements.len() <= 1 {
                         return None;
                     }
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     if self.fragment_context.is_none()
                         && !self
                             .current_node()
@@ -2161,7 +2299,7 @@ impl TreeBuilder {
                     ..
                 } if name == "frame" => {
                     self.insert_html_element("frame", attributes);
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     None
                 }
                 Token::StartTag { ref name, .. } if name == "noframes" => {
@@ -2287,7 +2425,7 @@ impl TreeBuilder {
             ) =>
             {
                 self.insert_html_element(name, attributes);
-                self.open_elements.pop();
+                self.pop_open_element();
                 None
             }
             Token::StartTag {
@@ -2332,12 +2470,12 @@ impl TreeBuilder {
                 Some(TokenizerState::ScriptData)
             }
             Token::EndTag { ref name, .. } if name == "head" => {
-                self.open_elements.pop();
+                self.pop_open_element();
                 self.mode = InsertionMode::AfterHead;
                 None
             }
             Token::EndTag { ref name, .. } if matches!(name.as_str(), "body" | "html" | "br") => {
-                self.open_elements.pop();
+                self.pop_open_element();
                 self.mode = InsertionMode::AfterHead;
                 self.process_token(token)
             }
@@ -2353,15 +2491,11 @@ impl TreeBuilder {
                 None
             }
             Token::EndTag { ref name, .. } if name == "template" => {
-                if !self
-                    .open_elements
-                    .iter()
-                    .any(|&id| self.node_in_html(id, "template"))
-                {
+                if !self.has_open_html_element("template") {
                     return None;
                 }
                 self.generate_implied_end_tags(None);
-                while let Some(id) = self.open_elements.pop() {
+                while let Some(id) = self.pop_open_element() {
                     if self.node_in_html(id, "template") {
                         break;
                     }
@@ -2378,7 +2512,7 @@ impl TreeBuilder {
             Token::StartTag { ref name, .. } if name == "head" => None,
             Token::EndTag { .. } => None,
             other => {
-                self.open_elements.pop();
+                self.pop_open_element();
                 self.mode = InsertionMode::AfterHead;
                 self.process_token(other)
             }
@@ -2415,10 +2549,7 @@ impl TreeBuilder {
                 ref attributes,
                 ..
             } if name == "html" => {
-                if !self
-                    .open_elements
-                    .iter()
-                    .any(|&id| self.node_in_html(id, "template"))
+                if !self.has_open_html_element("template")
                     && let Some(&html_id) = self.open_elements.first()
                     && let Some(el) = self.doc.node_mut(html_id).as_element_mut()
                 {
@@ -2454,12 +2585,7 @@ impl TreeBuilder {
                 ref attributes,
                 ..
             } if name == "body" => {
-                if self.open_elements.len() >= 2
-                    && !self
-                        .open_elements
-                        .iter()
-                        .any(|&id| self.node_in_html(id, "template"))
-                {
+                if self.open_elements.len() >= 2 && !self.has_open_html_element("template") {
                     let body_id = self.open_elements[1];
                     if self.node_in_html(body_id, "body")
                         && let Some(el) = self.doc.node_mut(body_id).as_element_mut()
@@ -2502,7 +2628,7 @@ impl TreeBuilder {
                             )
                     })
                 {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                 }
                 self.insert_html_element(name, attributes);
                 None
@@ -2516,7 +2642,7 @@ impl TreeBuilder {
                 for &node_id in self.open_elements.clone().iter().rev() {
                     if self.node_in_html(node_id, "li") {
                         self.generate_implied_end_tags(Some("li"));
-                        while let Some(popped) = self.open_elements.pop() {
+                        while let Some(popped) = self.pop_open_element() {
                             if popped == node_id {
                                 break;
                             }
@@ -2553,7 +2679,7 @@ impl TreeBuilder {
                     if is_dd || is_dt {
                         let except = if is_dd { "dd" } else { "dt" };
                         self.generate_implied_end_tags(Some(except));
-                        while let Some(popped) = self.open_elements.pop() {
+                        while let Some(popped) = self.pop_open_element() {
                             if popped == node_id {
                                 break;
                             }
@@ -2618,7 +2744,7 @@ impl TreeBuilder {
                 let body_id = self.open_elements[1];
                 self.doc.detach(body_id);
                 while self.open_elements.len() > 1 {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                 }
                 self.insert_html_element("frameset", attributes);
                 self.mode = InsertionMode::InFrameset;
@@ -2654,7 +2780,7 @@ impl TreeBuilder {
                     return None;
                 }
                 if self.has_element_in_scope("select") {
-                    while let Some(popped) = self.open_elements.pop() {
+                    while let Some(popped) = self.pop_open_element() {
                         if self.node_in_html(popped, "select") {
                             break;
                         }
@@ -2662,7 +2788,7 @@ impl TreeBuilder {
                 }
                 self.reconstruct_active_formatting_elements();
                 self.insert_html_element("input", attributes);
-                self.open_elements.pop();
+                self.pop_open_element();
                 let is_hidden = attributes.iter().any(|(k, v)| {
                     k.eq_ignore_ascii_case("type") && v.eq_ignore_ascii_case("hidden")
                 });
@@ -2687,7 +2813,7 @@ impl TreeBuilder {
                     self.reconstruct_active_formatting_elements();
                 }
                 self.insert_html_element(name, attributes);
-                self.open_elements.pop();
+                self.pop_open_element();
                 if !matches!(name.as_str(), "param" | "source" | "track") {
                     self.frameset_ok = false;
                 }
@@ -2731,11 +2857,8 @@ impl TreeBuilder {
                 ref attributes,
                 ..
             } if name == "form" => {
-                let parsing_template = !self.template_modes.is_empty()
-                    || self
-                        .open_elements
-                        .iter()
-                        .any(|&id| self.node_in_html(id, "template"));
+                let parsing_template =
+                    !self.template_modes.is_empty() || self.has_open_html_element("template");
                 if self.form_element.is_some() && !parsing_template {
                     return None;
                 }
@@ -2755,7 +2878,7 @@ impl TreeBuilder {
             } if name == "button" => {
                 if self.has_element_in_scope("button") {
                     self.generate_implied_end_tags(None);
-                    while let Some(popped) = self.open_elements.pop() {
+                    while let Some(popped) = self.pop_open_element() {
                         if self.node_in_html(popped, "button") {
                             break;
                         }
@@ -2803,7 +2926,7 @@ impl TreeBuilder {
                         self.active_formatting.remove(pos);
                     }
                     if let Some(pos) = self.open_elements.iter().rposition(|&id| id == a_id) {
-                        self.open_elements.remove(pos);
+                        self.remove_open_element(pos);
                     }
                 }
                 self.reconstruct_active_formatting_elements();
@@ -2848,7 +2971,7 @@ impl TreeBuilder {
                 self.reconstruct_active_formatting_elements();
                 self.insert_foreign_element(ns, name.clone(), attributes);
                 if self_closing {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                 }
                 None
             }
@@ -2930,7 +3053,7 @@ impl TreeBuilder {
                     return None;
                 }
                 if self.has_element_in_scope("select") {
-                    while let Some(popped) = self.open_elements.pop() {
+                    while let Some(popped) = self.pop_open_element() {
                         if self.node_in_html(popped, "select") {
                             break;
                         }
@@ -2952,7 +3075,7 @@ impl TreeBuilder {
                 } else if let Some(curr) = self.current_node()
                     && self.node_in_html(curr, "option")
                 {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                 }
                 self.reconstruct_active_formatting_elements();
                 self.insert_html_element("optgroup", attributes);
@@ -2968,7 +3091,7 @@ impl TreeBuilder {
                 } else if let Some(curr) = self.current_node()
                     && self.node_in_html(curr, "option")
                 {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                 }
                 self.reconstruct_active_formatting_elements();
                 self.insert_html_element("option", attributes);
@@ -3006,7 +3129,7 @@ impl TreeBuilder {
             Token::EndTag { ref name, .. } if name == "li" => {
                 if self.has_element_in_list_item_scope("li") {
                     self.generate_implied_end_tags(Some("li"));
-                    while let Some(popped) = self.open_elements.pop() {
+                    while let Some(popped) = self.pop_open_element() {
                         if self.node_in_html(popped, "li") {
                             break;
                         }
@@ -3017,7 +3140,7 @@ impl TreeBuilder {
             Token::EndTag { ref name, .. } if matches!(name.as_str(), "dd" | "dt") => {
                 if self.has_element_in_scope(name) {
                     self.generate_implied_end_tags(Some(name));
-                    while let Some(popped) = self.open_elements.pop() {
+                    while let Some(popped) = self.pop_open_element() {
                         if self.node_in_html(popped, name) {
                             break;
                         }
@@ -3033,7 +3156,7 @@ impl TreeBuilder {
                     .any(|&h| self.has_element_in_scope(h));
                 if any_heading_in_scope {
                     self.generate_implied_end_tags(None);
-                    while let Some(popped) = self.open_elements.pop() {
+                    while let Some(popped) = self.pop_open_element() {
                         if self.doc.node(popped).as_element().is_some_and(|el| {
                             el.namespace == Namespace::Html
                                 && matches!(
@@ -3048,11 +3171,8 @@ impl TreeBuilder {
                 None
             }
             Token::EndTag { ref name, .. } if name == "form" => {
-                let parsing_template = !self.template_modes.is_empty()
-                    || self
-                        .open_elements
-                        .iter()
-                        .any(|&id| self.node_in_html(id, "template"));
+                let parsing_template =
+                    !self.template_modes.is_empty() || self.has_open_html_element("template");
                 if !parsing_template {
                     let node = self.form_element.take();
                     let node_id = node?;
@@ -3061,14 +3181,14 @@ impl TreeBuilder {
                     }
                     self.generate_implied_end_tags(None);
                     if let Some(pos) = self.open_elements.iter().rposition(|&id| id == node_id) {
-                        self.open_elements.remove(pos);
+                        self.remove_open_element(pos);
                     }
                 } else {
                     if !self.has_element_in_scope("form") {
                         return None;
                     }
                     self.generate_implied_end_tags(None);
-                    while let Some(popped) = self.open_elements.pop() {
+                    while let Some(popped) = self.pop_open_element() {
                         if self.node_in_html(popped, "form") {
                             break;
                         }
@@ -3081,7 +3201,7 @@ impl TreeBuilder {
                     return None;
                 }
                 self.generate_implied_end_tags(None);
-                while let Some(popped) = self.open_elements.pop() {
+                while let Some(popped) = self.pop_open_element() {
                     if self.node_in_html(popped, name) {
                         break;
                     }
@@ -3095,7 +3215,7 @@ impl TreeBuilder {
                     return None;
                 }
                 self.generate_implied_end_tags(None);
-                while let Some(popped) = self.open_elements.pop() {
+                while let Some(popped) = self.pop_open_element() {
                     if self.node_in_html(popped, name) {
                         break;
                     }
@@ -3106,7 +3226,7 @@ impl TreeBuilder {
             Token::EndTag { ref name, .. } if name == "br" => {
                 self.reconstruct_active_formatting_elements();
                 self.insert_html_element("br", &[]);
-                self.open_elements.pop();
+                self.pop_open_element();
                 self.frameset_ok = false;
                 None
             }
@@ -3229,7 +3349,7 @@ impl TreeBuilder {
             }
             Token::StartTag { ref name, .. } if name == "table" => {
                 if self.has_element_in_table_scope("table") {
-                    while let Some(popped) = self.open_elements.pop() {
+                    while let Some(popped) = self.pop_open_element() {
                         if self.node_in_html(popped, "table") {
                             break;
                         }
@@ -3241,7 +3361,7 @@ impl TreeBuilder {
             }
             Token::EndTag { ref name, .. } if name == "table" => {
                 if self.has_element_in_table_scope("table") {
-                    while let Some(popped) = self.open_elements.pop() {
+                    while let Some(popped) = self.pop_open_element() {
                         if self.node_in_html(popped, "table") {
                             break;
                         }
@@ -3255,10 +3375,7 @@ impl TreeBuilder {
                 ref attributes,
                 ..
             } if name == "form" => {
-                let parsing_template = self
-                    .open_elements
-                    .iter()
-                    .any(|&id| self.node_in_html(id, "template"));
+                let parsing_template = self.has_open_html_element("template");
                 if self.form_element.is_some() && !parsing_template {
                     return None;
                 }
@@ -3266,7 +3383,7 @@ impl TreeBuilder {
                 if !parsing_template {
                     self.form_element = Some(form_id);
                 }
-                self.open_elements.pop();
+                self.pop_open_element();
                 None
             }
             Token::StartTag {
@@ -3279,7 +3396,7 @@ impl TreeBuilder {
                 }) =>
             {
                 self.insert_html_element("input", attributes);
-                self.open_elements.pop();
+                self.pop_open_element();
                 None
             }
             Token::StartTag { ref name, .. }
@@ -3307,7 +3424,7 @@ impl TreeBuilder {
                     return None;
                 }
                 self.generate_implied_end_tags(None);
-                while let Some(popped) = self.open_elements.pop() {
+                while let Some(popped) = self.pop_open_element() {
                     if self.node_in_html(popped, "caption") {
                         break;
                     }
@@ -3334,7 +3451,7 @@ impl TreeBuilder {
                     return None;
                 }
                 self.generate_implied_end_tags(None);
-                while let Some(popped) = self.open_elements.pop() {
+                while let Some(popped) = self.pop_open_element() {
                     if self.node_in_html(popped, "caption") {
                         break;
                     }
@@ -3348,7 +3465,7 @@ impl TreeBuilder {
                     return None;
                 }
                 self.generate_implied_end_tags(None);
-                while let Some(popped) = self.open_elements.pop() {
+                while let Some(popped) = self.pop_open_element() {
                     if self.node_in_html(popped, "caption") {
                         break;
                     }
@@ -3398,7 +3515,7 @@ impl TreeBuilder {
                 ..
             } if name == "col" => {
                 self.insert_html_element("col", attributes);
-                self.open_elements.pop();
+                self.pop_open_element();
                 None
             }
             Token::EndTag { ref name, .. } if name == "colgroup" => {
@@ -3406,7 +3523,7 @@ impl TreeBuilder {
                     .current_node()
                     .is_some_and(|id| self.node_in_html(id, "colgroup"))
                 {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     self.mode = InsertionMode::InTable;
                 }
                 None
@@ -3418,7 +3535,7 @@ impl TreeBuilder {
                     .current_node()
                     .is_some_and(|id| self.node_in_html(id, "colgroup"))
                 {
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     self.mode = InsertionMode::InTable;
                     return self.process_token(other);
                 }
@@ -3450,7 +3567,7 @@ impl TreeBuilder {
             {
                 if self.has_element_in_table_scope(name) {
                     self.clear_stack_back_to_table_body_context();
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     self.mode = InsertionMode::InTable;
                 }
                 None
@@ -3465,7 +3582,7 @@ impl TreeBuilder {
                     return None;
                 }
                 self.clear_stack_back_to_table_body_context();
-                self.open_elements.pop();
+                self.pop_open_element();
                 self.mode = InsertionMode::InTable;
                 self.process_token(token)
             }
@@ -3474,7 +3591,7 @@ impl TreeBuilder {
                     return None;
                 }
                 self.clear_stack_back_to_table_body_context();
-                self.open_elements.pop();
+                self.pop_open_element();
                 self.mode = InsertionMode::InTable;
                 self.process_token(token)
             }
@@ -3498,7 +3615,7 @@ impl TreeBuilder {
             Token::EndTag { ref name, .. } if name == "tr" => {
                 if self.has_element_in_table_scope("tr") {
                     self.clear_stack_back_to_table_row_context();
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     self.mode = InsertionMode::InTableBody;
                 }
                 None
@@ -3511,7 +3628,7 @@ impl TreeBuilder {
             {
                 if self.has_element_in_table_scope("tr") {
                     self.clear_stack_back_to_table_row_context();
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     self.mode = InsertionMode::InTableBody;
                     return self.process_token(token);
                 }
@@ -3522,7 +3639,7 @@ impl TreeBuilder {
             {
                 if self.has_element_in_table_scope(name) && self.has_element_in_table_scope("tr") {
                     self.clear_stack_back_to_table_row_context();
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     self.mode = InsertionMode::InTableBody;
                     return self.process_token(token);
                 }
@@ -3531,7 +3648,7 @@ impl TreeBuilder {
             Token::EndTag { ref name, .. } if name == "table" => {
                 if self.has_element_in_table_scope("tr") {
                     self.clear_stack_back_to_table_row_context();
-                    self.open_elements.pop();
+                    self.pop_open_element();
                     self.mode = InsertionMode::InTableBody;
                     return self.process_token(token);
                 }
@@ -3543,7 +3660,7 @@ impl TreeBuilder {
 
     fn close_cell(&mut self) {
         self.generate_implied_end_tags(None);
-        while let Some(popped) = self.open_elements.pop() {
+        while let Some(popped) = self.pop_open_element() {
             if self.node_in_html(popped, "td") || self.node_in_html(popped, "th") {
                 break;
             }
@@ -3819,7 +3936,7 @@ pub fn parse_fragment_with_options(
 
     let html_root = tb.doc.create_element(Namespace::Html, "html", vec![]);
     tb.doc.append_child(tb.doc.root(), html_root);
-    tb.open_elements.push(html_root);
+    tb.push_open_element(html_root);
 
     if context_namespace == Namespace::Html && context_local_name == "template" {
         tb.template_modes.push(InsertionMode::InTemplate);
@@ -3883,4 +4000,169 @@ fn truncate_input(input: &str, max_bytes: usize) -> (&str, bool) {
         end -= 1;
     }
     (&input[..end], true)
+}
+
+#[cfg(test)]
+mod robustness_regression_tests {
+    use super::*;
+
+    /// Recomputes the incremental bookkeeping from the stack and compares it with the
+    /// maintained counters/sets.
+    fn assert_bookkeeping_consistent(tb: &TreeBuilder) {
+        let mut expected: HashMap<String, u32> = HashMap::new();
+        let mut expected_ids: HashSet<NodeId> = HashSet::new();
+        for &node_id in &tb.open_elements {
+            expected_ids.insert(node_id);
+            if let Some(el) = tb.doc.node(node_id).as_element()
+                && el.namespace == Namespace::Html
+            {
+                *expected.entry(el.local_name.clone()).or_insert(0) += 1;
+            }
+        }
+        assert_eq!(
+            tb.open_ids, expected_ids,
+            "open_ids diverged from the stack"
+        );
+        assert_eq!(
+            tb.open_html_counts, expected,
+            "open_html_counts diverged from the stack"
+        );
+    }
+
+    #[test]
+    fn test_open_element_bookkeeping_stays_consistent() {
+        let mut tb = TreeBuilder::new(false);
+        let div = tb.doc.create_element(Namespace::Html, "div", vec![]);
+        let span = tb.doc.create_element(Namespace::Html, "span", vec![]);
+        let svg = tb.doc.create_element(Namespace::Svg, "circle", vec![]);
+        let tmpl = tb.doc.create_element(Namespace::Html, "template", vec![]);
+
+        tb.push_open_element(div);
+        tb.push_open_element(span);
+        tb.push_open_element(svg); // foreign elements are not counted by tag name
+        assert_bookkeeping_consistent(&tb);
+        assert_eq!(tb.open_html_count("div"), 1);
+        assert_eq!(tb.open_html_count("circle"), 0);
+
+        assert_eq!(tb.pop_open_element(), Some(svg));
+        assert_bookkeeping_consistent(&tb);
+
+        // Arbitrary-position insert/remove used by the adoption agency.
+        tb.insert_open_element(0, svg);
+        tb.insert_open_element(1, tmpl);
+        assert_bookkeeping_consistent(&tb);
+        assert!(tb.has_open_html_element("template"));
+        let removed = tb.remove_open_element(1);
+        assert_eq!(removed, tmpl);
+        assert_bookkeeping_consistent(&tb);
+        assert!(!tb.has_open_html_element("template"));
+
+        // Drain the stack: counters must return to zero (the maps must be empty again).
+        while tb.pop_open_element().is_some() {}
+        assert!(tb.open_elements.is_empty());
+        assert!(tb.open_ids.is_empty());
+        assert!(tb.open_html_counts.is_empty());
+    }
+
+    /// Audit finding F2 mentioned a latent `open_elements[fmt_stack_pos - 1]` underflow in
+    /// the adoption agency: unreachable for parser-built trees (the formatting element is
+    /// never bottom-most), but a manually built/corrupted stack must not panic in release.
+    #[test]
+    fn test_adoption_agency_does_not_underflow_on_bottom_most_formatting_element() {
+        let mut tb = TreeBuilder::new(false);
+        let bold = tb.doc.create_element(Namespace::Html, "b", vec![]);
+        let div = tb.doc.create_element(Namespace::Html, "div", vec![]);
+        // Pathological stack: the formatting element sits at position 0 and a special
+        // element above it forces the "furthest block" branch (`fmt_stack_pos - 1`).
+        tb.push_open_element(bold);
+        tb.push_open_element(div);
+        tb.active_formatting.push(FormattingEntry::Element {
+            node_id: bold,
+            tag_name: "b".to_owned(),
+            attributes: Vec::new(),
+        });
+        tb.run_adoption_agency_algorithm("b");
+        assert_bookkeeping_consistent(&tb);
+    }
+
+    /// The scope fast paths must never disagree with an independent unbounded scan.
+    #[test]
+    fn test_scope_fast_paths_agree_with_full_scan() {
+        let mut tb = TreeBuilder::new(false);
+        let div = tb.doc.create_element(Namespace::Html, "div", vec![]);
+        let button = tb.doc.create_element(Namespace::Html, "button", vec![]);
+        let table = tb.doc.create_element(Namespace::Html, "table", vec![]);
+        let p = tb.doc.create_element(Namespace::Html, "p", vec![]);
+        for id in [div, button, table, p] {
+            tb.push_open_element(id);
+        }
+
+        let default_boundary =
+            |el: &dom::ElementData| scope_boundary(el, DEFAULT_SCOPE_ELEMENTS, &[]);
+        let button_boundary =
+            |el: &dom::ElementData| scope_boundary(el, DEFAULT_SCOPE_ELEMENTS, &["button"]);
+        let list_boundary =
+            |el: &dom::ElementData| scope_boundary(el, DEFAULT_SCOPE_ELEMENTS, &["ol", "ul"]);
+        let table_scope: &[(&str, Namespace)] = &[
+            ("html", Namespace::Html),
+            ("table", Namespace::Html),
+            ("template", Namespace::Html),
+        ];
+        let table_boundary = |el: &dom::ElementData| scope_boundary(el, table_scope, &[]);
+
+        for target in ["p", "div", "table", "li", "select", "html"] {
+            assert_eq!(
+                tb.has_element_in_scope(target),
+                brute_force_scope(&tb, target, default_boundary),
+                "in-scope mismatch for {target}"
+            );
+            assert_eq!(
+                tb.has_element_in_button_scope(target),
+                brute_force_scope(&tb, target, button_boundary),
+                "button-scope mismatch for {target}"
+            );
+            assert_eq!(
+                tb.has_element_in_list_item_scope(target),
+                brute_force_scope(&tb, target, list_boundary),
+                "list-item-scope mismatch for {target}"
+            );
+            assert_eq!(
+                tb.has_element_in_table_scope(target),
+                brute_force_scope(&tb, target, table_boundary),
+                "table-scope mismatch for {target}"
+            );
+        }
+    }
+
+    fn scope_boundary(
+        el: &dom::ElementData,
+        scope_list: &[(&str, Namespace)],
+        extra_html_tags: &[&str],
+    ) -> bool {
+        scope_list
+            .iter()
+            .any(|&(name, ns)| el.namespace == ns && el.local_name == name)
+            || (el.namespace == Namespace::Html
+                && extra_html_tags.contains(&el.local_name.as_str()))
+    }
+
+    /// Independent reference implementation of "has element in scope" (§13.2.4.2).
+    fn brute_force_scope(
+        tb: &TreeBuilder,
+        target_name: &str,
+        is_boundary: impl Fn(&dom::ElementData) -> bool,
+    ) -> bool {
+        for &node_id in tb.open_elements.iter().rev() {
+            let Some(el) = tb.doc.node(node_id).as_element() else {
+                continue;
+            };
+            if el.namespace == Namespace::Html && el.local_name == target_name {
+                return true;
+            }
+            if is_boundary(el) {
+                return false;
+            }
+        }
+        false
+    }
 }
