@@ -1880,6 +1880,7 @@ dependencies = [
  "fonts",
  "html",
  "image",
+ "js",
  "layout",
  "net",
  "paint",
@@ -2085,6 +2086,8 @@ dependencies = [
 name = "shell"
 version = "0.1.0"
 dependencies = [
+ "dom",
+ "layout",
  "net",
  "paint",
  "render",

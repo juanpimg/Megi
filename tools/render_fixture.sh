@@ -22,6 +22,20 @@ cargo run -q -p render -- tests/fixtures/render/backgrounds.html "$outdir/megi-b
 python3 tools/png_check.py "$outdir/megi-backgrounds.png"
 md5sum "$outdir/megi-backgrounds.png"
 
+echo "==> scripting fixture (800x600, inline JS mutates text/colour)"
+cargo run -q -p render -- tests/fixtures/render/js_text.html "$outdir/megi-js-text.png" --json
+python3 tools/png_check.py "$outdir/megi-js-text.png"
+md5sum "$outdir/megi-js-text.png"
+cargo run -q -p render -- tests/fixtures/render/js_text.html \
+    "$outdir/megi-js-text-disabled.png" --no-scripting --json
+md5sum "$outdir/megi-js-text-disabled.png"
+if cmp -s "$outdir/megi-js-text.png" "$outdir/megi-js-text-disabled.png"; then
+    echo "ERROR: scripting did not change the PNG" >&2
+    exit 1
+else
+    echo "expected difference: scripting changes the rendered PNG"
+fi
+
 echo "==> showcase fixture (1024x768, @import + media + images + backgrounds + table)"
 cargo run -q -p render -- tests/fixtures/render/showcase/index.html \
     "$outdir/megi-showcase.png" --width 1024 --height 768 --json

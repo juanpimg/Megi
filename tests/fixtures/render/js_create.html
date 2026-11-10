@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Megi JS createElement fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #ffffff; }
+  #host { display: block; height: 10px; }
+</style>
+</head>
+<body>
+<div id="host"></div>
+<script>
+  var box = document.createElement("div");
+  box.style.width = "160px";
+  box.style.height = "80px";
+  box.style.backgroundColor = "#00ff00";
+  document.getElementById("host").appendChild(box);
+</script>
+</body>
+</html>

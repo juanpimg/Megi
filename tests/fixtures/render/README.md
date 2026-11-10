@@ -13,6 +13,13 @@ network, no JavaScript.
 | `assets/px.png` | Tiny deterministic PNG asset (82 bytes, generated with Python's stdlib `zlib`) used by `images.html` and served by the loopback HTTP tests. |
 | `assets/pattern.png` | 16×16 orange/blue checker used as `background-image` (93 bytes, deterministic RGBA PNG). |
 | `assets/bullet.png` | 8×8 magenta diamond used as `list-style-image` (92 bytes, deterministic RGBA PNG). |
+| `js_text.html` | WP-6.2/6.3: inline classic script changes `textContent` and `style.color` of a paragraph (large red text) after parsing. |
+| `js_create.html` | Inline script calls `createElement` + `appendChild` with a green `style.backgroundColor` box that layout/paint must render. |
+| `js_external.html` + `assets/js_mutation.js` | External classic script (`src`) over `file:` that mutates text/colour; the same script is served over loopback HTTP by the tests. |
+| `js_document_write.html` | `document.write('<p style=...>')` executed after parsing; the written node must appear in the PNG. |
+| `js_throw.html` | Script that throws: must become a warning and the page must still render. |
+| `js_loop.html` | Infinite loop: the per-script/total runtime budget must stop it without hanging. |
+| `js_console.html` | `console.log/warn/error` captured in `RenderStats::console` (warn/error also as warnings). |
 
 The tests assert that the green canvas comes from `sub/theme.css` (resolved through
 `<base>`) and not from the print sheet, which proves both the `<base>` handling and the
@@ -29,6 +36,13 @@ placeholders. Regenerate `assets/px.png` only alongside the documented quadrants
 magenta list markers, the green fallback for the missing image, the color-only box,
 `--no-network`, the background caps (32/8 MiB/16 MiB) and non-PNG rejection.
 
+`crates/render/tests/scripting_tests.rs` renders these fixtures with the embedded Boa
+runtime (`render::ScriptingMode::Enabled`, default with the `js` feature) and checks the
+mutated pixels, external `src` loading (`file:` and loopback HTTP), `document.write`,
+`--no-network`, console capture, exception/budget warnings and determinism. Scripts execute
+**after parsing** (parse-time execution is WP-6.4, needed for the html5lib `scripted_*`
+cases); `async`/`defer` ordering and modules are not supported yet.
+
 Deterministic acceptance commands:
 
 ```bash
@@ -37,6 +51,11 @@ python3 tools/png_check.py /tmp/images.png
 
 cargo run -p render -- tests/fixtures/render/backgrounds.html /tmp/backgrounds.png
 python3 tools/png_check.py /tmp/backgrounds.png
+
+# JavaScript: enabled (default) must paint the script-set red text; --no-scripting must not.
+cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js-text.png
+cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js-text-disabled.png --no-scripting
+md5sum /tmp/js-text.png /tmp/js-text-disabled.png   # different
 ```
 
 ## Showcase fixture (`showcase/`)

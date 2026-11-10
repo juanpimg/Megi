@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Megi JS text/styles fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #ffffff; }
+  /* Large glyphs so the colour change is easy to verify in the pixels. */
+  #target { display: block; margin: 8px; font-size: 48px; color: #000000; }
+</style>
+</head>
+<body>
+<p id="target">plain</p>
+<script>
+  var target = document.getElementById("target");
+  target.textContent = "JS TEXT";
+  target.style.color = "#ff0000";
+</script>
+</body>
+</html>

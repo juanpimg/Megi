@@ -8,6 +8,12 @@ authors.workspace = true
 repository.workspace = true
 description = "Megi Engine — first real browser pipeline: URL → HTML → external CSS → layout → PNG"
 
+[features]
+# JavaScript integration is on by default; `--no-default-features` builds a renderer
+# whose `ScriptingMode` default is `Disabled` and that does not link the `js` crate/engine.
+default = ["js"]
+js = ["dep:js"]
+
 [dependencies]
 dom.workspace = true
 html.workspace = true
@@ -17,6 +23,7 @@ fonts.workspace = true
 paint.workspace = true
 net.workspace = true
 image.workspace = true
+js = { workspace = true, optional = true }
 
 [[bin]]
 name = "render"

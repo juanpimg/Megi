@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! render <url|file> <out.png> [--width W] [--height H] [--base URL]
-//!        [--no-network] [--json]
+//!        [--no-network] [--no-scripting] [--json]
 //! ```
 //!
 //! Exit codes: `0` success, `1` render error (typed message on stderr), `2` usage error.
@@ -10,7 +10,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use render::{RenderOptions, Viewport, render_url};
+use render::{RenderOptions, ScriptingMode, Viewport, render_url};
 
 const DEFAULT_WIDTH: u32 = 800;
 const DEFAULT_HEIGHT: u32 = 600;
@@ -26,6 +26,7 @@ options:
   --height H     viewport height in CSS pixels (default 600, max 8192)
   --base URL     override the base URL used to resolve relative resources
   --no-network   refuse http(s) resources (only file:// and data: are loaded)
+  --no-scripting ignore <script> elements (no JS execution, no re-render)
   --json         print machine-readable metadata to stdout
   -h, --help     print this help";
 
@@ -36,6 +37,7 @@ struct Args {
     height: u32,
     base: Option<String>,
     no_network: bool,
+    no_scripting: bool,
     json: bool,
 }
 
@@ -66,6 +68,11 @@ fn run() -> Result<(), CliError> {
         viewport,
         no_network: args.no_network,
         base_override: args.base.clone(),
+        scripting: if args.no_scripting {
+            ScriptingMode::Disabled
+        } else {
+            ScriptingMode::default()
+        },
         ..RenderOptions::default()
     };
 
@@ -82,7 +89,7 @@ fn run() -> Result<(), CliError> {
     } else {
         let stats = &output.stats;
         println!(
-            "rendered {input} -> {} ({}x{}, {} bytes, {} display items, {} images, {} background images, {} external stylesheets, {} ms)",
+            "rendered {input} -> {} ({}x{}, {} bytes, {} display items, {} images, {} background images, {} scripts, {} external stylesheets, {} ms)",
             args.output.display(),
             output.pixmap.width,
             output.pixmap.height,
@@ -90,6 +97,7 @@ fn run() -> Result<(), CliError> {
             stats.display_items,
             stats.images_loaded,
             stats.background_images_loaded,
+            stats.scripts_executed,
             stats.external_stylesheets,
             stats.timings.total.as_millis()
         );
@@ -124,6 +132,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
     let mut height = DEFAULT_HEIGHT;
     let mut base = None;
     let mut no_network = false;
+    let mut no_scripting = false;
     let mut json = false;
     let mut args = args;
     while let Some(argument) = args.next() {
@@ -133,6 +142,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
                 std::process::exit(0);
             }
             "--no-network" => no_network = true,
+            "--no-scripting" => no_scripting = true,
             "--json" => json = true,
             "--width" => {
                 width = parse_dimension(&mut args, "--width")?;
@@ -166,6 +176,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
         height,
         base,
         no_network,
+        no_scripting,
         json,
     })
 }
@@ -191,9 +202,10 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
             "\"document_bytes\":{},\"png_bytes\":{},\"display_items\":{},",
             "\"images_loaded\":{},\"images_failed\":{},\"image_bytes\":{},",
             "\"background_images_loaded\":{},\"background_images_failed\":{},\"background_bytes\":{},",
+            "\"scripts_executed\":{},\"scripts_failed\":{},\"script_bytes\":{},\"console_entries\":{},",
             "\"external_stylesheets\":{},\"inline_stylesheets\":{},\"css_bytes\":{},",
             "\"timings_us\":{{\"fetch\":{},\"decode_parse\":{},\"styles\":{},\"images\":{},",
-            "\"backgrounds\":{},\"layout\":{},",
+            "\"backgrounds\":{},\"scripting\":{},\"layout\":{},",
             "\"paint\":{},\"raster\":{},\"total\":{}}},",
             "\"warnings\":[{}]}}"
         ),
@@ -215,6 +227,10 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
         stats.background_images_loaded,
         stats.background_images_failed,
         stats.background_bytes,
+        stats.scripts_executed,
+        stats.scripts_failed,
+        stats.script_bytes,
+        stats.console.len(),
         stats.external_stylesheets,
         stats.inline_stylesheets,
         stats.css_bytes,
@@ -223,6 +239,7 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
         timings.styles.as_micros(),
         timings.images.as_micros(),
         timings.backgrounds.as_micros(),
+        timings.scripting.as_micros(),
         timings.layout.as_micros(),
         timings.paint.as_micros(),
         timings.raster.as_micros(),

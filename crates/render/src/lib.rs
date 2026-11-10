@@ -25,6 +25,26 @@
 //! load counts/bytes, HTML parser anti-DoS limit violations and non-fatal warnings
 //! (e.g. a 404 stylesheet or a missing background image).
 //!
+//! ## JavaScript (Phase 6, WP-6.2/6.3 host side)
+//!
+//! When [`RenderOptions::scripting`] is [`ScriptingMode::Enabled`] (the default when the
+//! crate is built with its default `js` feature) the page's classic `<script>` elements
+//! are discovered in document order after parsing, external sources are fetched with the
+//! shared `net` loader (honoring `--no-network`) and executed through `js::JsRuntime` with
+//! per-script and total budgets ([`ScriptingLimits`], defaults aligned with
+//! `js::Budget::SMALL`). After the scripts, promise microtasks and a bounded number of
+//! timer callbacks are pumped, `console.*` output is captured in
+//! [`RenderStats::console`] (warn/error also become warnings) and the **mutated DOM** is
+//! re-processed by the styles → layout → paint stages, so DOM/CSS changes reach the PNG.
+//! Script exceptions and budget exhaustion are non-fatal warnings; the remaining scripts
+//! still run until the total budget is spent. With `--no-default-features` the stage is a
+//! no-op and the default mode is [`ScriptingMode::Disabled`].
+//!
+//! Not yet supported: executing scripts *during* parsing (needed for the html5lib
+//! `scripted_*` cases and script-driven `document.write` re-tokenization — WP-6.4),
+//! `async` ordering, ES modules, event listeners/wall-clock event loops, and
+//! `getComputedStyle`.
+//!
 //! ## Deliberate limitations (this WP)
 //!
 //! - **No JavaScript** (scripts are parsed but never executed).
@@ -68,6 +88,7 @@ pub mod backgrounds;
 pub mod charset;
 pub mod error;
 pub mod images;
+pub mod scripts;
 pub mod stylesheets;
 
 use std::collections::HashMap;
@@ -82,6 +103,7 @@ use images::{
 };
 
 pub use error::RenderError;
+pub use scripts::{ConsoleMessage, ScriptBudget, ScriptingLimits};
 
 /// Largest accepted viewport dimension for a single render.
 pub const MAX_VIEWPORT_DIMENSION: u32 = 8192;
@@ -133,6 +155,30 @@ impl Default for Viewport {
     }
 }
 
+/// Whether the renderer executes the page's classic scripts.
+///
+/// The default is [`ScriptingMode::Enabled`] when the crate is compiled with its `js`
+/// feature (the default features) and [`ScriptingMode::Disabled`] when built with
+/// `--no-default-features`. Disabling scripting leaves the parsed DOM untouched (scripts
+/// are ignored) and is exposed on the CLI as `--no-scripting`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScriptingMode {
+    /// Execute classic `<script>` elements after parsing and re-render the mutated DOM.
+    Enabled,
+    /// Ignore scripts entirely (no fetch, no execution).
+    Disabled,
+}
+
+impl Default for ScriptingMode {
+    fn default() -> Self {
+        if cfg!(feature = "js") {
+            Self::Enabled
+        } else {
+            Self::Disabled
+        }
+    }
+}
+
 /// Configuration for [`render_url`].
 #[derive(Clone, Debug)]
 pub struct RenderOptions {
@@ -166,6 +212,10 @@ pub struct RenderOptions {
     pub max_background_bytes: usize,
     /// Maximum total downloaded background-image bytes for the page.
     pub max_total_background_bytes: usize,
+    /// Whether classic page scripts run and their DOM mutations are rendered.
+    pub scripting: ScriptingMode,
+    /// Script discovery/loading caps and execution budgets.
+    pub scripting_limits: ScriptingLimits,
     /// HTML parser anti-DoS limits (depth/nodes/attributes/input size).
     pub parse_options: html::ParseOptions,
     /// Networking options (timeouts, caps, TLS configuration, user agent).
@@ -189,6 +239,8 @@ impl Default for RenderOptions {
             max_backgrounds: DEFAULT_MAX_BACKGROUNDS,
             max_background_bytes: DEFAULT_MAX_BACKGROUND_BYTES,
             max_total_background_bytes: DEFAULT_MAX_TOTAL_BACKGROUND_BYTES,
+            scripting: ScriptingMode::default(),
+            scripting_limits: ScriptingLimits::default(),
             parse_options: html::ParseOptions::DEFAULT,
             fetch_options: FetchOptions::default(),
         }
@@ -210,6 +262,8 @@ pub struct RenderTimings {
     pub images: Duration,
     /// Background-image/`list-style-image` discovery, fetching and decoding (WP-5.9).
     pub backgrounds: Duration,
+    /// Script discovery, fetching, execution, microtasks and timer pumping (WP-6.2/6.3).
+    pub scripting: Duration,
     /// Display-list construction.
     pub paint: Duration,
     /// Rasterization (and PNG encoding happens after this measurement).
@@ -254,6 +308,14 @@ pub struct RenderStats {
     pub background_images_failed: usize,
     /// Downloaded (encoded) background-image bytes accepted by the caps.
     pub background_bytes: usize,
+    /// Classic scripts evaluated without error.
+    pub scripts_executed: usize,
+    /// Scripts that raised a JavaScript exception or exhausted a budget.
+    pub scripts_failed: usize,
+    /// Accepted script source bytes (inline + external).
+    pub script_bytes: usize,
+    /// Captured `console.*` entries (see also warnings for `warn`/`error` levels).
+    pub console: Vec<ConsoleMessage>,
     /// Number of display-list items painted.
     pub display_items: usize,
     /// HTML parser anti-DoS limits that fired (should be empty for normal pages).
@@ -332,10 +394,10 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         ));
     }
     let parse = html::parse_document_with_options(&decoded.text, false, &options.parse_options);
-    let document = parse.document;
+    let mut document = parse.document;
     let decode_parse_time = decode_start.elapsed();
 
-    let styles_start = Instant::now();
+    // Base URL for every relative subresource (scripts, stylesheets, images, backgrounds).
     let document_url = loaded.url.clone();
     // `<base href>` (or `--base`) sets the URL used for every relative resource.
     let mut warnings = Vec::new();
@@ -350,6 +412,50 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         // `--base` should win over a missing `<base>`; keep the explicit value.
         base_url = override_base.clone().unwrap_or(document_url.clone());
     }
+
+    let scripting_start = Instant::now();
+    let mut script_bytes = 0usize;
+    let mut scripting_execution: Option<scripts::ScriptExecution> = None;
+    if options.scripting == ScriptingMode::Enabled && !cfg!(feature = "js") {
+        warnings.push(
+            "scripting was requested but this build has no `js` feature; scripts are ignored"
+                .to_owned(),
+        );
+    }
+    if options.scripting == ScriptingMode::Enabled && cfg!(feature = "js") {
+        let mut script_warnings = Vec::new();
+        let candidates = scripts::discover_scripts(&document, &mut script_warnings);
+        let load_report = if candidates.is_empty() {
+            scripts::ScriptLoadReport::default()
+        } else {
+            scripts::load_scripts(
+                &candidates,
+                &base_url,
+                &mut loader,
+                options.scripting_limits,
+                options.no_network,
+                &mut script_warnings,
+            )
+        };
+        script_bytes = load_report.script_bytes;
+        let mut execution = scripts::execute_scripts(
+            document,
+            &document_url,
+            load_report.scripts,
+            options.scripting_limits,
+            &mut script_warnings,
+        );
+        document = std::mem::take(&mut execution.document);
+        warnings.extend(script_warnings);
+        scripting_execution = Some(execution);
+    }
+    let scripting_time = scripting_start.elapsed();
+    let (scripts_executed, scripts_failed, console) = match scripting_execution {
+        Some(execution) => (execution.executed, execution.failed, execution.console),
+        None => (0, 0, Vec::new()),
+    };
+
+    let styles_start = Instant::now();
     let media_context = css::MediaContext::with_viewport(
         options.viewport.width as f32,
         options.viewport.height as f32,
@@ -466,6 +572,10 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             background_images_loaded: loaded_backgrounds.loaded,
             background_images_failed: loaded_backgrounds.failed,
             background_bytes: loaded_backgrounds.downloaded_bytes,
+            scripts_executed,
+            scripts_failed,
+            script_bytes,
+            console,
             display_items,
             limit_violations: parse.limit_violations,
             timings: RenderTimings {
@@ -474,6 +584,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
                 styles: styles_time,
                 images: images_time,
                 backgrounds: backgrounds_time,
+                scripting: scripting_time,
                 layout: layout_time,
                 paint: paint_time,
                 raster: raster_time,
