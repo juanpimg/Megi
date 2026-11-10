@@ -49,7 +49,11 @@ fn test_sibling_text_boxes_share_the_parent_anonymous_style_arc() {
     // A styled inline element between the two text runs keeps them as separate
     // fragments (adjacent same-style text would be coalesced into one fragment).
     let span = element(&mut doc, p, "span");
-    styles.insert(span, block(span));
+    // Give the span a distinct inherited style so its generated text run derives a
+    // different anonymous style (equal styles are interned and may share an `Arc`).
+    let mut span_style = block(span);
+    span_style.font_size = 20.0;
+    styles.insert(span, span_style);
     text(&mut doc, span, "x");
     text(&mut doc, p, "mundo");
 
@@ -123,4 +127,41 @@ fn test_anonymous_block_shares_the_inherited_style_arc() {
         ),
         "the anonymous block and its text box share the derived inherited style"
     );
+}
+
+#[test]
+fn test_equal_element_styles_share_the_interned_arc() {
+    let (mut doc, mut styles) = setup();
+    let body = doc.children(doc.root()).next().unwrap();
+    let body = doc.children(body).next().unwrap();
+    // Two sibling blocks with identical computed styles: the tree builder interns
+    // equal styles to avoid one deep `ComputedStyle` clone per element box.
+    let first = element(&mut doc, body, "div");
+    let second = element(&mut doc, body, "div");
+    styles.insert(first, block(first));
+    styles.insert(second, block(second));
+    let tree = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)).unwrap();
+    let first_box = find_box(&tree, first).expect("first div box");
+    let second_box = find_box(&tree, second).expect("second div box");
+    let first_style = first_box.style.as_ref().expect("style");
+    let second_style = second_box.style.as_ref().expect("style");
+    assert!(
+        std::sync::Arc::ptr_eq(first_style, second_style),
+        "equal computed styles must be interned and shared"
+    );
+    assert_eq!(first_style.as_ref(), second_style.as_ref());
+}
+
+/// Finds the layout box for a node id (tree order).
+fn find_box(root: &layout::LayoutBox, id: NodeId) -> Option<&layout::LayoutBox> {
+    if matches!(root.box_type, BoxType::BlockNode(node) | BoxType::InlineBlock(node) if node == id)
+    {
+        return Some(root);
+    }
+    for child in &root.children {
+        if let Some(found) = find_box(child, id) {
+            return Some(found);
+        }
+    }
+    None
 }

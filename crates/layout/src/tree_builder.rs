@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use css::{ComputedStyle, Display, Float, Overflow, Position};
+use css::{ComputedStyle, Display, Float, Length, Overflow, Position};
 use dom::{Document, Namespace, NodeId, NodeKind};
 
 use crate::box_tree::{BoxType, LayoutBox, anonymous_style_from, is_collapsible_whitespace_box};
@@ -36,6 +36,138 @@ pub fn build_layout_tree_with_replaced_sizes(
 ///
 /// The information lets `layout_document` skip the clip-propagation post-pass for
 /// documents without clipping boxes (the common case).
+/// Per-layout-call cache that interns equal `ComputedStyle` values so that the
+/// 28k boxes of a text-heavy document share the (few hundred) distinct styles
+/// instead of deep-cloning one style per element. Equality is always checked on a
+/// fingerprint hit, so a coarse hash cannot change semantics.
+#[derive(Default)]
+struct StyleCache {
+    buckets: HashMap<u64, Vec<Arc<ComputedStyle>>>,
+    anonymous: HashMap<usize, Arc<ComputedStyle>>,
+}
+
+impl StyleCache {
+    fn intern(&mut self, style: &ComputedStyle) -> Arc<ComputedStyle> {
+        let key = style_fingerprint(style);
+        if let Some(bucket) = self.buckets.get(&key) {
+            for candidate in bucket {
+                if candidate.as_ref() == style {
+                    return Arc::clone(candidate);
+                }
+            }
+        }
+        let arc = Arc::new(style.clone());
+        self.buckets.entry(key).or_default().push(Arc::clone(&arc));
+        arc
+    }
+
+    /// Anonymous (generated-box) style derived from a parent style. Parents that
+    /// share an interned style share the derived anonymous style too.
+    fn anonymous_for(&mut self, parent: &Arc<ComputedStyle>) -> Arc<ComputedStyle> {
+        let key = Arc::as_ptr(parent) as usize;
+        if let Some(style) = self.anonymous.get(&key) {
+            return Arc::clone(style);
+        }
+        let style = Arc::new(anonymous_style_from(parent));
+        self.anonymous.insert(key, Arc::clone(&style));
+        style
+    }
+}
+
+fn mix(hash: &mut u64, value: u64) {
+    *hash ^= value;
+    *hash = hash.wrapping_mul(0x1000_0000_01b3);
+}
+
+fn mix_len(hash: &mut u64, length: Length) {
+    match length {
+        Length::Px(px) => {
+            mix(hash, 1);
+            mix(hash, px.to_bits() as u64);
+        }
+        Length::Percent(percent) => {
+            mix(hash, 2);
+            mix(hash, percent.to_bits() as u64);
+        }
+        Length::Auto => mix(hash, 3),
+    }
+}
+
+/// Cheap fingerprint of a computed style. The cache verifies full equality on a
+/// hit, so this only needs to distribute common styles well.
+fn style_fingerprint(style: &ComputedStyle) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    mix(&mut hash, style.display as u64);
+    mix(&mut hash, style.position as u64);
+    mix(&mut hash, style.float as u64);
+    mix(&mut hash, style.clear as u64);
+    mix(&mut hash, style.box_sizing as u64);
+    mix(&mut hash, style.overflow as u64);
+    mix(&mut hash, style.visibility as u64);
+    mix_len(&mut hash, style.width);
+    mix_len(&mut hash, style.height);
+    mix_len(&mut hash, style.min_width);
+    mix_len(&mut hash, style.max_width);
+    mix_len(&mut hash, style.min_height);
+    mix_len(&mut hash, style.max_height);
+    for edge in [
+        style.margin.top,
+        style.margin.right,
+        style.margin.bottom,
+        style.margin.left,
+        style.padding.top,
+        style.padding.right,
+        style.padding.bottom,
+        style.padding.left,
+    ] {
+        mix_len(&mut hash, edge);
+    }
+    for width in [
+        style.border_width.top,
+        style.border_width.right,
+        style.border_width.bottom,
+        style.border_width.left,
+    ] {
+        mix(&mut hash, width.to_bits() as u64);
+    }
+    mix(&mut hash, style.font_size.to_bits() as u64);
+    mix(&mut hash, style.font_weight as u64);
+    mix(&mut hash, style.font_style as u64);
+    mix(&mut hash, style.font_family.len() as u64);
+    mix(
+        &mut hash,
+        style
+            .line_height
+            .map_or(0, |height| height.to_bits() as u64),
+    );
+    mix(&mut hash, style.opacity.to_bits() as u64);
+    mix(
+        &mut hash,
+        style.color.r as u64 | ((style.color.g as u64) << 8),
+    );
+    mix(
+        &mut hash,
+        style.color.b as u64 | ((style.color.a as u64) << 8),
+    );
+    mix(
+        &mut hash,
+        style.background_color.r as u64 | ((style.background_color.g as u64) << 8),
+    );
+    mix(
+        &mut hash,
+        style.background_color.b as u64 | ((style.background_color.a as u64) << 8),
+    );
+    mix(&mut hash, style.text_align as u64);
+    mix(&mut hash, style.white_space as u64);
+    mix(&mut hash, style.text_transform as u64);
+    mix_len(&mut hash, style.letter_spacing);
+    mix_len(&mut hash, style.word_spacing);
+    mix(&mut hash, style.calc_lengths.width.is_some() as u64);
+    mix(&mut hash, style.is_inline_flex as u64);
+    mix(&mut hash, style.is_inline_grid as u64);
+    hash
+}
+
 pub(crate) fn build_layout_tree_internal(
     doc: &Document,
     styles: &HashMap<NodeId, ComputedStyle>,
@@ -54,6 +186,7 @@ pub(crate) fn build_layout_tree_internal(
 
     let root_node_id = root_el_id?;
     let mut has_overflow_clip = false;
+    let mut style_cache = StyleCache::default();
     let root = build_box_for_node(
         doc,
         root_node_id,
@@ -61,6 +194,7 @@ pub(crate) fn build_layout_tree_internal(
         None,
         replaced_sizes,
         &mut has_overflow_clip,
+        &mut style_cache,
     )?;
     Some((root, has_overflow_clip))
 }
@@ -82,6 +216,7 @@ fn build_box_for_node(
     inherited_style: Option<&Arc<ComputedStyle>>,
     replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
     has_overflow_clip: &mut bool,
+    style_cache: &mut StyleCache,
 ) -> Option<LayoutBox> {
     let node = doc.node(node_id);
     match &node.kind {
@@ -178,15 +313,24 @@ fn build_box_for_node(
             // **shared** anonymous style for its generated descendants. The latter is
             // derived once per parent instead of once per text/anonymous box, which is
             // the dominant source of `ComputedStyle` clones on text-heavy pages.
-            let own_style = Arc::new(style.clone());
-            let child_style = node
-                .first_child
-                .is_some()
-                .then(|| Arc::new(anonymous_style_from(style)));
+            let own_style = style_cache.intern(style);
+            // The shared anonymous style for generated descendants is built lazily:
+            // most element boxes have only element children (no generated boxes), so
+            // `ComputedStyle::initial() + inherit_from` is skipped for them.
+            let mut child_style: Option<Arc<ComputedStyle>> = None;
 
             let mut raw_children = Vec::with_capacity(4);
             let mut curr = node.first_child;
             while let Some(child_id) = curr {
+                let child_node = doc.node(child_id);
+                let inherited_needed = match &child_node.kind {
+                    NodeKind::Text(text) => !text.is_empty(),
+                    NodeKind::Element(_) => styles.get(&child_id).is_none(),
+                    _ => false,
+                };
+                if inherited_needed && child_style.is_none() {
+                    child_style = Some(style_cache.anonymous_for(&own_style));
+                }
                 if let Some(child_box) = build_box_for_node(
                     doc,
                     child_id,
@@ -194,12 +338,31 @@ fn build_box_for_node(
                     child_style.as_ref(),
                     replaced_sizes,
                     has_overflow_clip,
+                    style_cache,
                 ) {
                     raw_children.push(child_box);
                 }
                 curr = doc.node(child_id).next_sibling;
             }
 
+            let needs_anonymous_style = match box_type {
+                BoxType::BlockNode(_)
+                | BoxType::InlineBlock(_)
+                | BoxType::TableCell(_)
+                | BoxType::TableCaption(_) => {
+                    raw_children.iter().any(LayoutBox::is_block)
+                        && raw_children.iter().any(LayoutBox::is_inline)
+                }
+                // Table fixups may need anonymous row-group/row/cell wrappers.
+                BoxType::Table(_)
+                | BoxType::InlineTable(_)
+                | BoxType::TableRowGroup(_)
+                | BoxType::TableRow(_) => true,
+                _ => false,
+            };
+            if needs_anonymous_style && child_style.is_none() {
+                child_style = Some(style_cache.anonymous_for(&own_style));
+            }
             let children = match box_type {
                 BoxType::BlockNode(_)
                 | BoxType::InlineBlock(_)

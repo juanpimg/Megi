@@ -372,6 +372,7 @@ fn solve_block_width(
 ///
 /// Percentages on all four sides resolve against the containing block *width*
 /// (CSS 2.2 §8.4), even for `padding-top`/`margin-top`.
+#[inline]
 pub(crate) fn resolve_vertical_edges(layout_box: &mut LayoutBox, cb_width: f32) {
     let Some(style) = layout_box.style.as_ref() else {
         layout_box.dimensions.padding.top = 0.0;
@@ -403,6 +404,7 @@ pub(crate) fn resolve_vertical_edges(layout_box: &mut LayoutBox, cb_width: f32) 
 /// Returns the box's used content height when it is definite, i.e. when `height` is a
 /// length or a percentage of a definite containing block height. Min/max-height are
 /// applied in the box dimension selected by `box-sizing`.
+#[inline]
 pub(crate) fn definite_content_height(
     layout_box: &LayoutBox,
     cb_height: Option<f32>,
@@ -1111,10 +1113,12 @@ fn style_has_bottom_edge(style: &ComputedStyle, cb_width: f32) -> bool {
         ) > 0.0
 }
 
+#[inline]
 fn resolve_length(length: Length, calc: Option<CalcValue>, cb_width: f32) -> f32 {
     crate::calc::length(length, calc, cb_width)
 }
 
+#[inline]
 fn resolve_min_max(length: Length, calc: Option<CalcValue>, cb_width: f32) -> Option<f32> {
     crate::calc::length_optional(length, calc, Some(cb_width))
 }
@@ -1154,6 +1158,7 @@ fn resolve_max_height(
 }
 
 /// Resolves the used `width` (including mixed `calc()`) against the containing block.
+#[inline]
 fn specified_width(style: &ComputedStyle, cb_width: f32) -> Option<f32> {
     if let Some(calc) = style.calc_lengths.width {
         return Some(crate::calc::resolve(calc, Some(cb_width)));
@@ -1166,6 +1171,7 @@ fn specified_width(style: &ComputedStyle, cb_width: f32) -> Option<f32> {
 }
 
 /// Resolves the used `height` (including mixed `calc()`) against the containing block.
+#[inline]
 fn specified_height(style: &ComputedStyle, cb_height: Option<f32>) -> Option<f32> {
     if let Some(calc) = style.calc_lengths.height {
         return Some(crate::calc::resolve(calc, cb_height));
@@ -1230,6 +1236,7 @@ pub(crate) fn translate_box(layout_box: &mut LayoutBox, dx: f32, dy: f32) {
 /// Resolves a positioning offset (`top|right|bottom|left`) into pixels.
 ///
 /// `None` stands for `auto` (and percentages against an indefinite dimension).
+#[inline]
 fn resolve_offset(length: Length, calc: Option<CalcValue>, reference: Option<f32>) -> Option<f32> {
     if let Some(calc) = calc {
         return Some(crate::calc::resolve(calc, reference));

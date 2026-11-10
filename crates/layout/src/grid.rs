@@ -78,8 +78,10 @@ struct Item<'a> {
 /// Per-child data collected before placement (immutable pass).
 struct Spec {
     style: Arc<ComputedStyle>,
-    edges: EdgeSizes,
     order: i32,
+    /// Index in the container's children vector (stable placement mapping; style
+    /// interning means styles are no longer unique per box).
+    doc_index: usize,
 }
 
 fn resolve(value: Length, calc: Option<css::calc::CalcValue>, reference: f32) -> f32 {
@@ -535,7 +537,7 @@ pub(crate) fn layout_grid_children(
     // 1. Collect in-flow children and sort them by `order` (stable: document
     //    order is the tiebreak).
     let mut specs: Vec<Spec> = Vec::with_capacity(layout_box.children.len());
-    for child in &layout_box.children {
+    for (doc_index, child) in layout_box.children.iter().enumerate() {
         let Some(child_style) = child.style.clone() else {
             continue;
         };
@@ -547,29 +549,8 @@ pub(crate) fn layout_grid_children(
             continue;
         }
         specs.push(Spec {
-            edges: EdgeSizes {
-                top: resolve(
-                    child_style.margin.top,
-                    child_style.calc_lengths.margin_top,
-                    container_width,
-                ),
-                right: resolve(
-                    child_style.margin.right,
-                    child_style.calc_lengths.margin_right,
-                    container_width,
-                ),
-                bottom: resolve(
-                    child_style.margin.bottom,
-                    child_style.calc_lengths.margin_bottom,
-                    container_width,
-                ),
-                left: resolve(
-                    child_style.margin.left,
-                    child_style.calc_lengths.margin_left,
-                    container_width,
-                ),
-            },
             order: child_style.order,
+            doc_index,
             style: child_style,
         });
     }
@@ -594,15 +575,14 @@ pub(crate) fn layout_grid_children(
         row_tracks.push(implicit_track.unwrap_or(TrackSize::Auto));
     }
 
-    // 2. Build items in document order, matching each child to its sorted spec
-    //    by the shared style pointer (placement was computed in `order` order).
-    let mut entries: Vec<Option<(Arc<ComputedStyle>, EdgeSizes, Placement)>> = specs
-        .iter()
-        .zip(placements.iter())
-        .map(|(spec, placement)| Some((spec.style.clone(), spec.edges, *placement)))
-        .collect();
+    // 2. Build items in document order, mapping each child to the placement computed
+    //    for its sorted spec through the stable document index.
+    let mut placement_by_doc: Vec<Option<Placement>> = vec![None; layout_box.children.len()];
+    for (spec, placement) in specs.iter().zip(placements.iter()) {
+        placement_by_doc[spec.doc_index] = Some(*placement);
+    }
     let mut items: Vec<Item<'_>> = Vec::with_capacity(specs.len());
-    for child in layout_box.children.iter_mut() {
+    for (doc_index, child) in layout_box.children.iter_mut().enumerate() {
         let Some(child_style) = child.style.clone() else {
             continue;
         };
@@ -613,17 +593,34 @@ pub(crate) fn layout_grid_children(
         {
             continue;
         }
-        let Some(entry) = entries.iter_mut().find(|entry| {
-            entry
-                .as_ref()
-                .is_some_and(|entry| Arc::ptr_eq(&entry.0, &child_style))
-        }) else {
+        let edges = EdgeSizes {
+            top: resolve(
+                child_style.margin.top,
+                child_style.calc_lengths.margin_top,
+                container_width,
+            ),
+            right: resolve(
+                child_style.margin.right,
+                child_style.calc_lengths.margin_right,
+                container_width,
+            ),
+            bottom: resolve(
+                child_style.margin.bottom,
+                child_style.calc_lengths.margin_bottom,
+                container_width,
+            ),
+            left: resolve(
+                child_style.margin.left,
+                child_style.calc_lengths.margin_left,
+                container_width,
+            ),
+        };
+        let Some(placement) = placement_by_doc[doc_index] else {
             continue;
         };
-        let (style, edges, placement) = entry.take().expect("entry exists");
         items.push(Item {
             child,
-            style,
+            style: child_style,
             edges,
             placement,
             content_width: 0.0,

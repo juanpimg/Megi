@@ -15,11 +15,13 @@ use css::Length;
 use css::calc::CalcValue;
 
 /// Resolves a mixed `calc()` side value against `reference` (the percentage basis).
+#[inline]
 pub(crate) fn resolve(value: CalcValue, reference: Option<f32>) -> f32 {
     css::calc::resolve_calc(value, reference)
 }
 
 /// Resolves a plain length: `Px`/`Percent` behave as usual, `Auto` contributes 0.
+#[inline]
 pub(crate) fn length(value: Length, calc: Option<CalcValue>, reference: f32) -> f32 {
     if let Some(calc) = calc {
         return resolve(calc, Some(reference));
@@ -33,6 +35,7 @@ pub(crate) fn length(value: Length, calc: Option<CalcValue>, reference: f32) -> 
 
 /// Resolves a plain length to `Some` unless it is `auto`; mixed `calc()` values are
 /// definite (percentage part resolved against `reference`, or `0` when indefinite).
+#[inline]
 pub(crate) fn length_optional(
     value: Length,
     calc: Option<CalcValue>,

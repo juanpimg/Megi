@@ -121,6 +121,7 @@ fn measure_styled(measurer: &dyn TextMeasurer, text: &str, style: &ComputedStyle
 ///
 /// Percentages resolve against the element `font-size` (a Megi extension: CSS only allows
 /// lengths, but the parser stores a [`Length`]); `auto`/`normal` are zero.
+#[inline]
 fn spacing_px(length: Length, font_size: f32) -> f32 {
     match length {
         Length::Px(px) => px,
@@ -179,6 +180,12 @@ pub(crate) fn transform_text(text: &str, transform: TextTransform) -> Cow<'_, st
 #[inline]
 fn shaped_width(measurer: &dyn TextMeasurer, text: &str, style: &ComputedStyle) -> f32 {
     let base = measure_styled(measurer, text, style);
+    // Fast path: no spacing overrides (the common case) skips the character scan.
+    let letter_spacing = spacing_px(style.letter_spacing, style.font_size);
+    let word_spacing = spacing_px(style.word_spacing, style.font_size);
+    if letter_spacing == 0.0 && word_spacing == 0.0 {
+        return base;
+    }
     let mut characters = 0u32;
     let mut spaces = 0u32;
     for ch in text.chars() {
@@ -186,11 +193,6 @@ fn shaped_width(measurer: &dyn TextMeasurer, text: &str, style: &ComputedStyle) 
         if matches!(ch, ' ' | '\t') {
             spaces += 1;
         }
-    }
-    let letter_spacing = spacing_px(style.letter_spacing, style.font_size);
-    let word_spacing = spacing_px(style.word_spacing, style.font_size);
-    if letter_spacing == 0.0 && word_spacing == 0.0 {
-        return base;
     }
     base + letter_spacing * characters as f32 + word_spacing * spaces as f32
 }
