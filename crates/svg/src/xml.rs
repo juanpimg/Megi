@@ -275,8 +275,16 @@ impl<'a> Parser<'a> {
                 continue;
             }
             if self.starts_with("<![CDATA[") {
+                // CDATA content is kept as text: inline `<style>` blocks frequently use
+                // `<![CDATA[ ... ]]>` and the CSS/selector layer needs that text.
                 self.position += 9;
+                let start = self.position;
                 self.skip_until("]]>")?;
+                let text: String = self.chars[start..self.position - 3].iter().collect();
+                let trimmed = text.trim();
+                if !trimmed.is_empty() {
+                    element.children.push(XmlNode::Text(trimmed.to_owned()));
+                }
                 continue;
             }
             if self.starts_with("<!") {
@@ -441,8 +449,9 @@ mod tests {
 
     #[test]
     fn test_self_closing_and_cdata_are_tolerated() {
-        let input = br##"<svg><rect width="1"/><![CDATA[<svg>]]></svg>"##;
+        let input = br##"<svg><rect width="1"/><![CDATA[.a{fill:red}]]></svg>"##;
         let root = parse_document(input, &Limits::default()).expect("parse");
-        assert_eq!(root.children.len(), 1);
+        assert_eq!(root.children.len(), 2);
+        assert!(matches!(&root.children[1], XmlNode::Text(text) if text == ".a{fill:red}"));
     }
 }

@@ -9,9 +9,11 @@
 use std::collections::HashMap;
 
 use crate::color::{Color, parse_color};
+use crate::css::{StyleRule, matching_declarations, parse_declarations, parse_stylesheet};
+use crate::gradient::GradientSpec;
 use crate::path::{SubPath, parse_path_data};
 use crate::transform::{Transform, parse_number_list};
-use crate::xml::{XmlElement, XmlNode};
+use crate::xml::{XmlElement, XmlNode, local_name};
 use crate::{Limits, SvgError};
 
 /// Fill rule (`fill-rule`).
@@ -53,12 +55,12 @@ pub(crate) enum LineJoin {
 pub(crate) struct Shape {
     /// Flattened sub-paths in root user space.
     pub subpaths: Vec<SubPath>,
-    /// Fill paint (`None` = no fill).
-    pub fill: Option<Color>,
+    /// Fill paint (solid colour, gradient index or none).
+    pub fill: Paint,
     /// Fill opacity (0.0-1.0).
     pub fill_opacity: f32,
-    /// Stroke paint (`None` = no stroke).
-    pub stroke: Option<Color>,
+    /// Stroke paint (solid colour, gradient index or none).
+    pub stroke: Paint,
     /// Stroke opacity (0.0-1.0).
     pub stroke_opacity: f32,
     /// Stroke width in root user units.
@@ -73,6 +75,11 @@ pub(crate) struct Shape {
     pub fill_rule: FillRule,
     /// Group/element opacity (0.0-1.0).
     pub opacity: f32,
+    /// Local-user-space → root-user-space transform applied to `subpaths`.
+    pub transform: Transform,
+    /// Bounding box of the untransformed geometry in local user space
+    /// (`x, y, width, height`), used by `objectBoundingBox` gradients.
+    pub bbox: (f32, f32, f32, f32),
 }
 
 /// Horizontal/vertical alignment of the viewBox inside the viewport.
@@ -120,6 +127,8 @@ pub(crate) struct Document {
     preserve: PreserveAspectRatio,
     /// Painted shapes in document order.
     pub shapes: Vec<Shape>,
+    /// Resolved gradient definitions referenced by `Paint::Gradient`.
+    pub gradients: Vec<GradientSpec>,
 }
 
 impl Document {
@@ -144,21 +153,27 @@ impl Document {
         }
         let preserve = parse_preserve_aspect_ratio(root.attribute("preserveAspectRatio"));
         let defs = collect_defs(root);
+        let rules = parse_stylesheet(&collect_style_text(root));
+        let (gradients, gradient_ids) = build_gradients(&defs);
         let mut builder = Builder {
             defs: &defs,
+            rules: &rules,
+            gradient_ids: &gradient_ids,
             limits,
             shapes: Vec::new(),
             use_stack: Vec::new(),
         };
         let style = Style::default();
         let root_transform = Transform::IDENTITY;
-        builder.visit_children(root, root_transform, &style, 1.0, 0)?;
+        let mut ancestors: Vec<&XmlElement> = vec![root];
+        builder.visit_children(root, &mut ancestors, root_transform, &style, 1.0, 0)?;
         Ok(Self {
             width,
             height,
             view_box,
             preserve,
             shapes: builder.shapes,
+            gradients,
         })
     }
 
@@ -209,17 +224,19 @@ struct Style {
     fill_rule: FillRule,
 }
 
-/// A paint value: a colour, explicit `none`, or an unsupported `url(#…)`.
+/// A paint value: solid colour, gradient reference (index into
+/// [`Document::gradients`]) or explicit `none`.
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Paint {
-    Color(Color),
+pub(crate) enum Paint {
     None,
+    Solid(Color),
+    Gradient(u32),
 }
 
 impl Default for Style {
     fn default() -> Self {
         Self {
-            fill: Paint::Color(Color::BLACK),
+            fill: Paint::Solid(Color::BLACK),
             stroke: Paint::None,
             fill_opacity: 1.0,
             stroke_opacity: 1.0,
@@ -233,84 +250,115 @@ impl Default for Style {
 }
 
 impl Style {
-    /// Applies an element's presentation attributes and basic `style` declarations.
-    fn apply(&mut self, element: &XmlElement) {
-        // `style="fill:...;stroke:..."` takes precedence over presentation attributes.
-        let mut declarations: Vec<(String, String)> = Vec::new();
-        if let Some(style) = element.attribute("style") {
-            for declaration in style.split(';') {
-                if let Some((name, value)) = declaration.split_once(':') {
-                    declarations.push((name.trim().to_ascii_lowercase(), value.trim().to_owned()));
-                }
+    /// Applies, in cascade order, the element's presentation attributes, the
+    /// matching `<style>` rules (specificity then source order) and finally the
+    /// inline `style="..."` attribute (highest priority).
+    fn apply(
+        &mut self,
+        element: &XmlElement,
+        rules: &[StyleRule],
+        ancestors: &[&XmlElement],
+        gradients: &HashMap<String, u32>,
+    ) {
+        for name in PRESENTATION_PROPERTIES {
+            if let Some(value) = element.attribute(name) {
+                self.apply_declaration(name, value, gradients);
             }
         }
-        let get = |name: &str| -> Option<String> {
-            declarations
-                .iter()
-                .rev()
-                .find(|(key, _)| key == name)
-                .map(|(_, value)| value.clone())
-                .or_else(|| element.attribute(name).map(str::to_owned))
-        };
-        if let Some(value) = get("fill") {
-            self.fill = parse_paint(&value);
+        for declaration in matching_declarations(rules, element, ancestors) {
+            self.apply_declaration(&declaration.name, &declaration.value, gradients);
         }
-        if let Some(value) = get("stroke") {
-            self.stroke = parse_paint(&value);
+        if let Some(inline) = element.attribute("style") {
+            for declaration in parse_declarations(inline) {
+                self.apply_declaration(&declaration.name, &declaration.value, gradients);
+            }
         }
-        if let Some(value) = get("fill-opacity").and_then(|v| parse_opacity(&v)) {
-            self.fill_opacity = value;
-        }
-        if let Some(value) = get("stroke-opacity").and_then(|v| parse_opacity(&v)) {
-            self.stroke_opacity = value;
-        }
-        if let Some(value) = parse_length(get("stroke-width").as_deref(), 0.0)
-            && value.is_finite()
-            && value >= 0.0
-        {
-            self.stroke_width = value;
-        }
-        if let Some(value) = get("stroke-linecap") {
-            self.linecap = match value.to_ascii_lowercase().as_str() {
-                "round" => LineCap::Round,
-                "square" => LineCap::Square,
-                _ => LineCap::Butt,
-            };
-        }
-        if let Some(value) = get("stroke-linejoin") {
-            self.linejoin = match value.to_ascii_lowercase().as_str() {
-                "round" => LineJoin::Round,
-                "bevel" => LineJoin::Bevel,
-                _ => LineJoin::Miter,
-            };
-        }
-        if let Some(value) = get("stroke-miterlimit").and_then(|v| v.trim().parse::<f32>().ok())
-            && value.is_finite()
-            && value >= 1.0
-        {
-            self.miter_limit = value;
-        }
-        if let Some(value) = get("fill-rule") {
-            self.fill_rule = if value.eq_ignore_ascii_case("evenodd") {
-                FillRule::EvenOdd
-            } else {
-                FillRule::NonZero
-            };
+    }
+
+    /// Applies one presentation/CSS declaration to this style.
+    fn apply_declaration(&mut self, name: &str, value: &str, gradients: &HashMap<String, u32>) {
+        match name {
+            "fill" => self.fill = parse_paint(value, gradients),
+            "stroke" => self.stroke = parse_paint(value, gradients),
+            "fill-opacity" => {
+                if let Some(opacity) = parse_opacity(value) {
+                    self.fill_opacity = opacity;
+                }
+            }
+            "stroke-opacity" => {
+                if let Some(opacity) = parse_opacity(value) {
+                    self.stroke_opacity = opacity;
+                }
+            }
+            "stroke-width" => {
+                if let Some(width) = parse_length(Some(value), 0.0)
+                    && width.is_finite()
+                    && width >= 0.0
+                {
+                    self.stroke_width = width;
+                }
+            }
+            "stroke-linecap" => {
+                self.linecap = match value.to_ascii_lowercase().as_str() {
+                    "round" => LineCap::Round,
+                    "square" => LineCap::Square,
+                    _ => LineCap::Butt,
+                };
+            }
+            "stroke-linejoin" => {
+                self.linejoin = match value.to_ascii_lowercase().as_str() {
+                    "round" => LineJoin::Round,
+                    "bevel" => LineJoin::Bevel,
+                    _ => LineJoin::Miter,
+                };
+            }
+            "stroke-miterlimit" => {
+                if let Ok(limit) = value.trim().parse::<f32>()
+                    && limit.is_finite()
+                    && limit >= 1.0
+                {
+                    self.miter_limit = limit;
+                }
+            }
+            "fill-rule" => {
+                self.fill_rule = if value.eq_ignore_ascii_case("evenodd") {
+                    FillRule::EvenOdd
+                } else {
+                    FillRule::NonZero
+                };
+            }
+            _ => {}
         }
     }
 }
 
+/// Presentation attributes applied (with specificity 0) before `<style>` rules.
+const PRESENTATION_PROPERTIES: &[&str] = &[
+    "fill",
+    "stroke",
+    "fill-opacity",
+    "stroke-opacity",
+    "stroke-width",
+    "stroke-linecap",
+    "stroke-linejoin",
+    "stroke-miterlimit",
+    "fill-rule",
+];
+
 struct Builder<'a> {
     defs: &'a HashMap<String, &'a XmlElement>,
+    rules: &'a [StyleRule],
+    gradient_ids: &'a HashMap<String, u32>,
     limits: &'a Limits,
     shapes: Vec<Shape>,
     use_stack: Vec<String>,
 }
 
-impl Builder<'_> {
+impl<'a> Builder<'a> {
     fn visit_children(
         &mut self,
-        element: &XmlElement,
+        element: &'a XmlElement,
+        ancestors: &mut Vec<&'a XmlElement>,
         transform: Transform,
         style: &Style,
         opacity: f32,
@@ -318,7 +366,7 @@ impl Builder<'_> {
     ) -> Result<(), SvgError> {
         for child in &element.children {
             if let XmlNode::Element(child) = child {
-                self.visit(child, transform, style, opacity, depth + 1)?;
+                self.visit(child, ancestors, transform, style, opacity, depth + 1)?;
             }
         }
         Ok(())
@@ -326,7 +374,8 @@ impl Builder<'_> {
 
     fn visit(
         &mut self,
-        element: &XmlElement,
+        element: &'a XmlElement,
+        ancestors: &mut Vec<&'a XmlElement>,
         transform: Transform,
         parent_style: &Style,
         group_opacity: f32,
@@ -337,7 +386,7 @@ impl Builder<'_> {
         }
         let name = element.local_name_lower();
         let mut style = parent_style.clone();
-        style.apply(element);
+        style.apply(element, self.rules, ancestors, self.gradient_ids);
         let local_transform = element
             .attribute("transform")
             .and_then(Transform::parse)
@@ -345,33 +394,36 @@ impl Builder<'_> {
             .unwrap_or(Transform::IDENTITY);
         let transform = transform.then(local_transform);
         let opacity = group_opacity * parse_opacity_attribute(element, "opacity").unwrap_or(1.0);
-        match name.as_str() {
+        ancestors.push(element);
+        let result = match name.as_str() {
             "svg" => {
                 let viewport = nested_viewport_transform(element);
                 let transform = transform.then(viewport);
-                self.visit_children(element, transform, &style, opacity, depth)?;
+                self.visit_children(element, ancestors, transform, &style, opacity, depth)
             }
-            "g" => {
-                self.visit_children(element, transform, &style, opacity, depth)?;
-            }
+            "g" => self.visit_children(element, ancestors, transform, &style, opacity, depth),
             "defs" | "title" | "desc" | "metadata" | "style" | "linearGradient"
             | "radialGradient" | "pattern" | "clipPath" | "mask" | "filter" | "symbol"
-            | "marker" | "text" | "tspan" | "image" | "foreignObject" | "script" => {}
+            | "marker" | "text" | "tspan" | "image" | "foreignObject" | "script" | "stop" => Ok(()),
             "use" => {
                 let reference = element
                     .attribute("href")
                     .or_else(|| element.attribute("xlink:href"))
                     .unwrap_or_default();
                 let Some(id) = reference.strip_prefix('#') else {
+                    ancestors.pop();
                     return Ok(());
                 };
                 let Some(target) = self.defs.get(id).copied() else {
+                    ancestors.pop();
                     return Ok(());
                 };
                 if self.use_stack.iter().any(|seen| seen == id) {
+                    ancestors.pop();
                     return Ok(());
                 }
                 if self.use_stack.len() >= self.limits.max_use_depth {
+                    ancestors.pop();
                     return Err(SvgError::Limit(
                         "nested <use> expansion too deep".to_owned(),
                     ));
@@ -380,13 +432,15 @@ impl Builder<'_> {
                 let y = parse_length(element.attribute("y"), 0.0).unwrap_or(0.0);
                 let use_transform = transform.then(Transform::translate(x, y));
                 self.use_stack.push(id.to_owned());
-                let result = self.visit(target, use_transform, &style, opacity, depth + 1);
+                let result =
+                    self.visit(target, ancestors, use_transform, &style, opacity, depth + 1);
                 self.use_stack.pop();
-                result?;
+                result
             }
-            _ => self.push_shape(element, &name, transform, &style, opacity)?,
-        }
-        Ok(())
+            _ => self.push_shape(element, &name, transform, &style, opacity),
+        };
+        ancestors.pop();
+        result
     }
 
     fn push_shape(
@@ -414,6 +468,30 @@ impl Builder<'_> {
         if subpaths.is_empty() {
             return Ok(());
         }
+        // Local (pre-transform) bounding box for `objectBoundingBox` gradients.
+        let (mut min_x, mut min_y) = (f32::INFINITY, f32::INFINITY);
+        let (mut max_x, mut max_y) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
+        for subpath in &subpaths {
+            for point in &subpath.points {
+                if !point.0.is_finite() || !point.1.is_finite() {
+                    continue;
+                }
+                min_x = min_x.min(point.0);
+                min_y = min_y.min(point.1);
+                max_x = max_x.max(point.0);
+                max_y = max_y.max(point.1);
+            }
+        }
+        let bbox = if min_x.is_finite() && min_y.is_finite() {
+            (
+                min_x,
+                min_y,
+                (max_x - min_x).max(0.0),
+                (max_y - min_y).max(0.0),
+            )
+        } else {
+            (0.0, 0.0, 0.0, 0.0)
+        };
         let determinant = transform.a * transform.d - transform.b * transform.c;
         if !determinant.is_finite() {
             return Ok(());
@@ -434,9 +512,9 @@ impl Builder<'_> {
         }
         self.shapes.push(Shape {
             subpaths,
-            fill: paint_color(style.fill),
+            fill: style.fill,
             fill_opacity: style.fill_opacity,
-            stroke: paint_color(style.stroke),
+            stroke: style.stroke,
             stroke_opacity: style.stroke_opacity,
             stroke_width: style.stroke_width * scale,
             linecap: style.linecap,
@@ -444,6 +522,8 @@ impl Builder<'_> {
             miter_limit: style.miter_limit,
             fill_rule: style.fill_rule,
             opacity: opacity.clamp(0.0, 1.0),
+            transform,
+            bbox,
         });
         Ok(())
     }
@@ -636,26 +716,31 @@ fn polyline_subpath(element: &XmlElement, polygon: bool) -> SubPath {
     }
 }
 
-fn paint_color(paint: Paint) -> Option<Color> {
-    match paint {
-        Paint::Color(color) => Some(color),
-        Paint::None => None,
-    }
-}
-
-fn parse_paint(raw: &str) -> Paint {
+fn parse_paint(raw: &str, gradient_ids: &HashMap<String, u32>) -> Paint {
     let value = raw.trim();
     if value.eq_ignore_ascii_case("none") {
         return Paint::None;
     }
-    if value.to_ascii_lowercase().starts_with("url(") {
-        // Gradients/patterns are not supported; documented as no paint.
-        return Paint::None;
+    if let Some(id) = parse_url_reference(value) {
+        return gradient_ids
+            .get(&id)
+            .copied()
+            .map_or(Paint::None, Paint::Gradient);
     }
-    match parse_color(value) {
-        Some(color) => Paint::Color(color),
-        None => Paint::None,
+    parse_color(value).map_or(Paint::None, Paint::Solid)
+}
+
+/// Extracts the `#id` target from `url(#id)` (quotes tolerated).
+fn parse_url_reference(value: &str) -> Option<String> {
+    let value = value.trim();
+    let lower = value.to_ascii_lowercase();
+    if !lower.starts_with("url(") || !lower.ends_with(')') {
+        return None;
     }
+    let inner = value[4..value.len() - 1].trim();
+    let inner = inner.trim_matches(|ch| ch == '\'' || ch == '"');
+    let id = inner.strip_prefix('#')?;
+    (!id.is_empty() && !id.chars().any(char::is_whitespace)).then(|| id.to_owned())
 }
 
 fn parse_opacity(raw: &str) -> Option<f32> {
@@ -808,12 +893,67 @@ fn nested_viewport_transform(element: &XmlElement) -> Transform {
         view_box: Some(view),
         preserve,
         shapes: Vec::new(),
+        gradients: Vec::new(),
     };
     let mapping = nested.viewport_transform(
         viewport_w.max(0.0).round() as u32,
         viewport_h.max(0.0).round() as u32,
     );
     Transform::translate(x, y).then(mapping)
+}
+
+/// Concatenates the text of every `<style>` element (CSS subset supported by
+/// [`crate::css`]); bounded by [`crate::css::MAX_STYLESHEET_BYTES`].
+fn collect_style_text(root: &XmlElement) -> String {
+    let mut text = String::new();
+    let mut stack = vec![root];
+    while let Some(element) = stack.pop() {
+        if local_name(&element.name).eq_ignore_ascii_case("style") {
+            let is_css = element.attribute("type").is_none_or(|kind| {
+                let kind = kind.trim();
+                kind.is_empty() || kind.eq_ignore_ascii_case("text/css")
+            });
+            if is_css {
+                for child in &element.children {
+                    if let XmlNode::Text(block) = child {
+                        if text.len() + block.len() + 1 > crate::css::MAX_STYLESHEET_BYTES {
+                            return text;
+                        }
+                        text.push_str(block);
+                        text.push('\n');
+                    }
+                }
+            }
+        }
+        for child in element.children.iter().rev() {
+            if let XmlNode::Element(child) = child {
+                stack.push(child);
+            }
+        }
+    }
+    text
+}
+
+/// Resolves every gradient definition once, in deterministic id order.
+fn build_gradients(
+    defs: &HashMap<String, &XmlElement>,
+) -> (Vec<GradientSpec>, HashMap<String, u32>) {
+    let mut ids: Vec<&String> = defs.keys().collect();
+    ids.sort();
+    let mut specs = Vec::new();
+    let mut gradient_ids = HashMap::new();
+    for id in ids {
+        let element = defs[id];
+        if !GradientSpec::is_gradient_element(element) {
+            continue;
+        }
+        if let Some(spec) = GradientSpec::resolve(defs, id) {
+            let index = specs.len() as u32;
+            specs.push(spec);
+            gradient_ids.insert(id.clone(), index);
+        }
+    }
+    (specs, gradient_ids)
 }
 
 /// Collects every element that has an `id` for `<use>` resolution.
@@ -860,8 +1000,14 @@ mod tests {
              <rect x='1' y='1' width='4' height='4'/><circle cx='6' cy='6' r='2'/></g></svg>",
         );
         assert_eq!(doc.shapes.len(), 2);
-        assert_eq!(doc.shapes[0].fill, Some(Color::rgba(255, 0, 0, 255)));
-        assert_eq!(doc.shapes[0].stroke, Some(Color::rgba(0, 0, 255, 255)));
+        assert_eq!(
+            doc.shapes[0].fill,
+            Paint::Solid(Color::rgba(255, 0, 0, 255))
+        );
+        assert_eq!(
+            doc.shapes[0].stroke,
+            Paint::Solid(Color::rgba(0, 0, 255, 255))
+        );
         assert_eq!(doc.shapes[0].stroke_width, 2.0);
     }
 

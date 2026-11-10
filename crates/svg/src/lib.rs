@@ -24,25 +24,54 @@
 //!   colours (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`, the
 //!   16 basic named colours plus `transparent`/`currentColor`) and the
 //!   presentation attributes or an inline `style="fill:...;stroke:..."`.
+//! * **CSS inside the SVG**: `<style>` blocks with type/class/id compound
+//!   selectors, descendant combinators and selector lists; cascade by simple
+//!   specificity and source order (inline style beats CSS, which beats
+//!   presentation attributes).
+//! * **Gradients**: `<linearGradient>` and `<radialGradient>` with stops,
+//!   `gradientUnits`, `spreadMethod`, `gradientTransform` and `href`
+//!   inheritance, referenced by `fill`/`stroke` through `url(#id)`.
 //!
 //! ## Not supported (documented limitations)
 //!
-//! CSS `class`/`<style>` sheets, gradients/patterns (`fill="url(#…)"` renders as
-//! no paint), `<text>`, filters, masks, clip paths, markers, `stroke-dasharray`,
-//! `vector-effect`, script, animation and external references (no network/FS).
+//! `<pattern>` (`fill="url(#pattern)"` renders as no paint), `@` rules and
+//! child/sibling/pseudo-class selectors, `<text>`, filters, masks, clip paths,
+//! markers, `stroke-dasharray`, `vector-effect`, script, animation and external
+//! references (no network/FS).
+//!
+//! ## Supported CSS, gradients and limits
+//!
+//! * **CSS inside the SVG**: `<style>` blocks (`type="text/css"`, including
+//!   `<![CDATA[…]]>`) with type/class/id compound selectors, descendant
+//!   combinators and selector lists, applied with simple specificity (inline
+//!   style > id > class > type > presentation attribute) and source order.
+//!   Supported properties: `fill`, `stroke`, `fill-opacity`, `stroke-opacity`,
+//!   `stroke-width`, `stroke-linecap`, `stroke-linejoin`,
+//!   `stroke-miterlimit` and `fill-rule`.
+//! * **Gradients**: `<linearGradient>`/`<radialGradient>` with stops
+//!   (`offset`, `stop-color`, `stop-opacity`), `gradientUnits`
+//!   (`objectBoundingBox`/`userSpaceOnUse`), `spreadMethod`
+//!   (`pad`/`reflect`/`repeat`), `gradientTransform`, geometry attributes and
+//!   `href`/`xlink:href` inheritance, usable from `fill` and `stroke`.
+//!   Cyclic or broken reference chains degrade to **no paint** (no panic).
 //!
 //! ## Safety and limits
 //!
 //! No `unsafe`. All input goes through bounded parsing with explicit anti-DoS
-//! limits ([`Limits`]): input bytes, element depth/count, attribute count, path
-//! segments, image side and pixel count. Arbitrary or hostile input can only
+//! limits ([`Limits`]); the CSS/gradient layers add internal caps too:
+//! **1 MiB of stylesheet, 4,096 rules, 64 selectors per rule, 16 descendant
+//! compounds, 256 stops per gradient and 32 gradient-reference hops**. Input
+//! bytes, element depth/count, attribute count, path segments, image side and
+//! pixel count stay bounded by [`Limits`]. Arbitrary or hostile input can only
 //! produce an [`SvgError`], never a panic, an abort, unbounded recursion or an
 //! allocation bomb.
 
 #![forbid(unsafe_code)]
 
 mod color;
+mod css;
 mod document;
+mod gradient;
 mod path;
 mod raster;
 mod transform;

@@ -13,7 +13,8 @@
 //! threading and no randomness).
 
 use crate::color::Color;
-use crate::document::{Document, FillRule, LineCap, LineJoin};
+use crate::document::{Document, FillRule, LineCap, LineJoin, Paint};
+use crate::gradient::GradientSpec;
 use crate::path::SubPath;
 use crate::{Limits, SvgError, SvgImage};
 
@@ -74,39 +75,50 @@ pub(crate) fn rasterize(
         if device_points.is_empty() {
             continue;
         }
-        if let Some(fill) = shape.fill {
-            let alpha = fill_alpha(fill, shape.fill_opacity, shape.opacity);
-            if alpha > 0.0 {
-                canvas.clear_coverage();
-                fill_scanline(
-                    &device_points,
-                    shape.fill_rule,
-                    canvas.width,
-                    canvas.height,
-                    &mut canvas.coverage,
-                );
-                canvas.composite(fill, alpha);
-            }
+        if let Some(filled) = prepare_paint(
+            shape.fill,
+            &document.gradients,
+            shape.transform,
+            shape.bbox,
+            viewport,
+        ) && shape.fill_opacity > 0.0
+        {
+            canvas.clear_coverage();
+            fill_scanline(
+                &device_points,
+                shape.fill_rule,
+                canvas.width,
+                canvas.height,
+                &mut canvas.coverage,
+            );
+            canvas.composite_paint(&filled, shape.fill_opacity * shape.opacity);
         }
-        if let Some(stroke) = shape.stroke {
-            let width = shape.stroke_width * viewport_scale;
-            let alpha = fill_alpha(stroke, shape.stroke_opacity, shape.opacity);
-            if width > 0.0 && width.is_finite() && alpha > 0.0 {
-                canvas.clear_coverage();
-                stamp_stroke(
-                    &device_points,
-                    StrokeStyle {
-                        width,
-                        cap: shape.linecap,
-                        join: shape.linejoin,
-                        miter_limit: shape.miter_limit,
-                    },
-                    canvas.width,
-                    canvas.height,
-                    &mut canvas.coverage,
-                );
-                canvas.composite(stroke, alpha);
-            }
+        let width = shape.stroke_width * viewport_scale;
+        if width > 0.0
+            && width.is_finite()
+            && shape.stroke_opacity > 0.0
+            && let Some(stroked) = prepare_paint(
+                shape.stroke,
+                &document.gradients,
+                shape.transform,
+                shape.bbox,
+                viewport,
+            )
+        {
+            canvas.clear_coverage();
+            stamp_stroke(
+                &device_points,
+                StrokeStyle {
+                    width,
+                    cap: shape.linecap,
+                    join: shape.linejoin,
+                    miter_limit: shape.miter_limit,
+                },
+                canvas.width,
+                canvas.height,
+                &mut canvas.coverage,
+            );
+            canvas.composite_paint(&stroked, shape.stroke_opacity * shape.opacity);
         }
     }
     Ok(SvgImage {
@@ -116,8 +128,37 @@ pub(crate) fn rasterize(
     })
 }
 
-fn fill_alpha(color: Color, paint_opacity: f32, shape_opacity: f32) -> f32 {
-    (f32::from(color.a) / 255.0) * paint_opacity.clamp(0.0, 1.0) * shape_opacity.clamp(0.0, 1.0)
+/// A paint prepared for compositing: solid colour, or a gradient evaluator
+/// (inverse device → gradient-parameter matrix precomputed once per shape).
+enum PreparedPaint<'a> {
+    Solid(Color),
+    Gradient {
+        spec: &'a GradientSpec,
+        inverse: crate::transform::Transform,
+    },
+}
+
+/// Resolves a paint value against the document gradients for one shape.
+fn prepare_paint<'a>(
+    paint: Paint,
+    gradients: &'a [GradientSpec],
+    shape_transform: crate::transform::Transform,
+    bbox: (f32, f32, f32, f32),
+    viewport: crate::transform::Transform,
+) -> Option<PreparedPaint<'a>> {
+    match paint {
+        Paint::None => None,
+        Paint::Solid(color) => (color.a > 0).then_some(PreparedPaint::Solid(color)),
+        Paint::Gradient(index) => {
+            let spec = gradients.get(index as usize)?;
+            // device = viewport * shape_transform * units_matrix * gradient_transform
+            let matrix = viewport
+                .then(shape_transform)
+                .then(spec.parameter_to_user(bbox));
+            let inverse = matrix.inverse()?;
+            Some(PreparedPaint::Gradient { spec, inverse })
+        }
+    }
 }
 
 /// RGBA canvas with a reusable coverage buffer.
@@ -133,35 +174,79 @@ impl Canvas {
         self.coverage.fill(0.0);
     }
 
+    /// Composites the current coverage buffer with a resolved paint.
+    fn composite_paint(&mut self, paint: &PreparedPaint<'_>, opacity: f32) {
+        match paint {
+            PreparedPaint::Solid(color) => {
+                let alpha = (f32::from(color.a) / 255.0) * opacity.clamp(0.0, 1.0);
+                self.composite(*color, alpha);
+            }
+            PreparedPaint::Gradient { spec, inverse } => {
+                self.composite_gradient(spec, *inverse, opacity.clamp(0.0, 1.0));
+            }
+        }
+    }
+
+    /// Composites a gradient: evaluates the gradient at each covered pixel centre
+    /// (deterministic, no sampling).
+    fn composite_gradient(
+        &mut self,
+        spec: &GradientSpec,
+        inverse: crate::transform::Transform,
+        opacity: f32,
+    ) {
+        let width = self.width;
+        let pixels = &mut self.pixels;
+        for (index, coverage) in self.coverage.iter().enumerate() {
+            let coverage = coverage.clamp(0.0, 1.0);
+            if coverage <= 0.0 {
+                continue;
+            }
+            let x = (index % width) as f32 + 0.5;
+            let y = (index / width) as f32 + 0.5;
+            let (tx, ty) = inverse.apply(x, y);
+            if !tx.is_finite() || !ty.is_finite() {
+                continue;
+            }
+            let color = spec.evaluate(spec.parameter(tx, ty));
+            let src_a = coverage * opacity * (f32::from(color.a) / 255.0);
+            if src_a <= 0.0 {
+                continue;
+            }
+            composite_pixel(pixels, index * 4, color, src_a);
+        }
+    }
+
     /// Composites the current coverage buffer with `color` (source-over, straight alpha).
     fn composite(&mut self, color: Color, alpha: f32) {
-        let src_r = f32::from(color.r);
-        let src_g = f32::from(color.g);
-        let src_b = f32::from(color.b);
         let pixels = &mut self.pixels;
         for (index, coverage) in self.coverage.iter().enumerate() {
             let src_a = coverage.clamp(0.0, 1.0) * alpha;
             if src_a <= 0.0 {
                 continue;
             }
-            let offset = index * 4;
-            let dst_a = f32::from(pixels[offset + 3]) / 255.0;
-            let out_a = src_a + dst_a * (1.0 - src_a);
-            if out_a <= 0.0 {
-                continue;
-            }
-            let blend = |src: f32, dst: u8| -> u8 {
-                let dst = f32::from(dst);
-                (((src * src_a) + (dst * dst_a * (1.0 - src_a))) / out_a)
-                    .clamp(0.0, 255.0)
-                    .round() as u8
-            };
-            pixels[offset] = blend(src_r, pixels[offset]);
-            pixels[offset + 1] = blend(src_g, pixels[offset + 1]);
-            pixels[offset + 2] = blend(src_b, pixels[offset + 2]);
-            pixels[offset + 3] = (out_a * 255.0).clamp(0.0, 255.0).round() as u8;
+            composite_pixel(pixels, index * 4, color, src_a);
         }
     }
+}
+
+/// Source-over compositing of one straight-RGBA colour with source alpha `src_a`.
+fn composite_pixel(pixels: &mut [u8], offset: usize, color: Color, src_a: f32) {
+    let dst_a = f32::from(pixels[offset + 3]) / 255.0;
+    let out_a = src_a + dst_a * (1.0 - src_a);
+    if out_a <= 0.0 {
+        return;
+    }
+    let blend = |src: f32, dst: u8| -> u8 {
+        let dst = f32::from(dst);
+        (((src * src_a) + (dst * dst_a * (1.0 - src_a))) / out_a)
+            .clamp(0.0, 255.0)
+            .round() as u8
+    };
+    pixels[offset] = blend(f32::from(color.r), pixels[offset]);
+    pixels[offset + 1] = blend(f32::from(color.g), pixels[offset + 1]);
+    pixels[offset + 2] = blend(f32::from(color.b), pixels[offset + 2]);
+    pixels[offset + 3] = (out_a * 255.0).clamp(0.0, 255.0).round() as u8;
 }
 
 /// Scanline fill with 4 vertical sub-rows and analytic horizontal coverage.

@@ -101,6 +101,25 @@ impl Transform {
         )
     }
 
+    /// Returns the inverse transform, or `None` when the matrix is degenerate
+    /// (non-invertible or non-finite).
+    pub fn inverse(self) -> Option<Self> {
+        let determinant = self.a * self.d - self.b * self.c;
+        if !determinant.is_finite() || determinant.abs() <= f32::EPSILON {
+            return None;
+        }
+        let inv = 1.0 / determinant;
+        let inverse = Self {
+            a: self.d * inv,
+            b: -self.b * inv,
+            c: -self.c * inv,
+            d: self.a * inv,
+            e: (self.c * self.f - self.d * self.e) * inv,
+            f: (self.b * self.e - self.a * self.f) * inv,
+        };
+        inverse.is_finite().then_some(inverse)
+    }
+
     /// Returns `true` when every component is a finite number.
     pub fn is_finite(self) -> bool {
         self.a.is_finite()
@@ -271,6 +290,19 @@ mod tests {
         assert_eq!(matrix.apply(0.0, 0.0), (5.0, 6.0));
         assert!(Transform::parse("skewX(45)").is_some());
         assert!(Transform::parse("bogus(1)").is_none());
+    }
+
+    #[test]
+    fn test_inverse_roundtrip_and_degenerate() {
+        let transform = Transform::parse("translate(10, 20) scale(2) rotate(30)").expect("parse");
+        let inverse = transform.inverse().expect("invertible");
+        let (x, y) = transform.apply(3.0, 5.0);
+        let (rx, ry) = inverse.apply(x, y);
+        assert!(
+            (rx - 3.0).abs() < 1e-4 && (ry - 5.0).abs() < 1e-4,
+            "{rx} {ry}"
+        );
+        assert!(Transform::scale(0.0, 1.0).inverse().is_none());
     }
 
     #[test]
