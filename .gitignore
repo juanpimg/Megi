@@ -35,3 +35,9 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+
+# Fuzzing harness (fuzz/ is a standalone cargo-fuzz workspace; only the seed corpus is tracked)
+/fuzz/target/
+/fuzz/artifacts/
+/fuzz/coverage/
+/fuzz/Cargo.lock

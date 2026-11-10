@@ -1,0 +1,4 @@
+@charset "utf-8";
+:root { --x: calc(100% - 2 * 1em); }
+@media print { body { display: none } }
+@font-face { font-family: "X"; src: url(x.woff2) format("woff2"); }

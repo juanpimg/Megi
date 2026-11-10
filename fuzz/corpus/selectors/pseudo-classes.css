@@ -1,0 +1,1 @@
+.a.b.c, #id > .child ~ .sibling + p::first-line, [data-x], [data-x="v" i], :where(.a, #b):not(:has(.c)) { margin: 0 }

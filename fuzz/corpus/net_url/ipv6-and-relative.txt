@@ -1,0 +1,2 @@
+http://[::1]:8080/x
+relative/../path?q=1

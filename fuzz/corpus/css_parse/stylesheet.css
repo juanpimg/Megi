@@ -1,0 +1,4 @@
+a { color: red; margin: 0 auto; }
+@media screen and (min-width: 40em) { .x > .y + .z ~ .w { display: flex; } }
+@import url("other.css");
+#id[data-x="v" i]::before { content: "\2014"; }

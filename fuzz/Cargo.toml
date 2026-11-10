@@ -1,0 +1,54 @@
+[package]
+name = "megi-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+rust-version = "1.88"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Standalone workspace on purpose: the fuzzing harness needs its own dependency graph
+# (libfuzzer-sys, nightly/ASan) and must not alter the main workspace's lockfile or CI.
+# The parser crates are plain path dependencies of the root workspace.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+dom = { path = "../crates/dom" }
+html = { path = "../crates/html" }
+css = { path = "../crates/css" }
+net = { path = "../crates/net" }
+
+[[bin]]
+name = "html_parse"
+path = "fuzz_targets/html_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "css_parse"
+path = "fuzz_targets/css_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "selectors"
+path = "fuzz_targets/selectors.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "net_url"
+path = "fuzz_targets/net_url.rs"
+test = false
+doc = false
+bench = false
+
+# Keep symbols + ASan stack traces readable in crash reports (cargo-fuzz enables
+# `-Zsanitizer=address` internally; this only affects the fuzz binaries).
+[profile.release]
+debug = 1

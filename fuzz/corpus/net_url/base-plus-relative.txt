@@ -1,0 +1,2 @@
+https://example.com/a/b/c?q=1#f
+../../d/e?z=2#g

@@ -1,0 +1,76 @@
+name: Fuzz (nightly)
+
+# Nightly libFuzzer smoke runs over every parser that consumes untrusted input.
+# Not a substitute for a long-running fuzzing farm: it is a cheap daily regression gate
+# (5 minutes per target) that keeps the harnesses compiling and catches shallow crashes.
+#
+# Run it on demand from the Actions tab (`workflow_dispatch`) or locally:
+#   cd fuzz && cargo +nightly fuzz build
+#   cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
+# See docs/FUZZING.md for the full local workflow and triage policy.
+
+on:
+  schedule:
+    # Every day at 03:17 UTC (off-peak, away from the top-of-hour Actions spike).
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  fuzz:
+    name: fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - html_parse
+          - css_parse
+          - selectors
+          - net_url
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # The fuzz harness lives in its own workspace (fuzz/), so cache its target dir.
+          workspaces: fuzz -> target
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Build ${{ matrix.target }}
+        working-directory: fuzz
+        run: cargo +nightly fuzz build ${{ matrix.target }}
+
+      # 300 s per target is deliberately short: the goal is a daily smoke run that stays
+      # within a few CI minutes, not a coverage-maximising campaign. Raise it via
+      # workflow_dispatch edits or run the corpus longer locally before a release.
+      - name: Run ${{ matrix.target }}
+        working-directory: fuzz
+        run: >-
+          cargo +nightly fuzz run ${{ matrix.target }} --
+          -max_total_time=300
+          -rss_limit_mb=2048
+          -timeout=25
+          -print_final_stats=1
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: |
+            fuzz/artifacts/
+            fuzz/corpus/${{ matrix.target }}/
+          if-no-files-found: ignore
+          retention-days: 14
