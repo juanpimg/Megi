@@ -225,3 +225,11 @@ their seed corpora: `html_parse`/`css_parse`/`selectors`/`net_url`/`svg_parse` 4
 `js_eval`, which triggers the constant Boa one-time LSan allocation described above; with
 `-detect_leaks=0` it completes 300 runs clean. No panics, ASan memory errors, timeouts or
 stack overflows were found.
+
+### Round 19 status
+
+Round 19 (CSS gradients, advanced grid, renderer referrer/state and shell
+find-in-page) adds **no new fuzzing targets**: the 7-target matrix, seed corpora
+and PR build-only job from round 18 remain current. Gradient/grid parsing is
+exercised through the existing `css_parse`/`render_pipeline`/`svg_parse` targets and
+their conformance suites.

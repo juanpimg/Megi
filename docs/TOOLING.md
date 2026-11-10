@@ -473,8 +473,34 @@ cargo test -p net cookies                             # SameSite/PSL
 cargo test -p net cache                               # no-cache/must-revalidate/s-maxage/Age/304
 ```
 
-Límites documentados de la ronda: `calc()` mixto `% + px` no es representable en `Length` (⇒ invalid/inherit); `var()` cae a fallback/initial en ciclos y a los 32 niveles; el clipping y `background-clip:text` tienen cap 16,7 Mpx/4096 runs; grid no soporta spans/named lines/minmax/auto-fill/subgrid/colocación explícita; el `ReferrerConfig` aún no está instalado en el loader de `render` (integración de 1 línea pendiente).
+Límites documentados de la ronda: `calc()` mixto `% + px` no es representable en `Length` (⇒ invalid/inherit); `var()` cae a fallback/initial en ciclos y a los 32 niveles; el clipping y `background-clip:text` tienen cap 16,7 Mpx/4096 runs; grid no soporta named lines/subgrid/zonas/`dense`/auto-fit real (ronda 19 añade spans, placement, minmax y auto-fill); el `ReferrerConfig` se cablea en `render` en la ronda 19 (ya no pendiente); grid soporta spans/placement/minmax/auto-fill desde la ronda 19.
 
-Cifras de referencia en la ronda 18: **1189 tests** (bench 8, css 128, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 71, layout 158, net 207, paint 150, **render 123**, shell 108, svg 73, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; fuzz 7 targets; suite determinista; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+### 2.16m Ronda 19: gradientes CSS, grid avanzado, render referrer/state y find-in-page
+
+```bash
+# Gradientes CSS E2E (linear/radial/repeating, capas de background y clip:text)
+cargo test -p css --test gradients
+cargo test -p paint --test gradients
+cargo run -p render -- tests/fixtures/render/gradient_linear.html /tmp/grad_linear.png --width 240 --height 220  # md5 6a04fdc6…
+cargo run -p render -- tests/fixtures/render/gradient_radial.html /tmp/grad_radial.png --json
+
+# Grid avanzado: placement con spans/negativas, minmax y auto-fill
+cargo test -p layout --test grid                       # 26 tests
+cargo run -p render -- tests/fixtures/render/grid_span.html /tmp/grid_span.png --json       # md5 0c376406…
+cargo run -p render -- tests/fixtures/render/grid_autofill.html /tmp/grid_auto.png --json   # md5 d2255ca3…
+
+# Render: Referrer-Policy/SameSite en subrecursos y estado CSS real
+cargo test -p render --test referrer_policy_tests
+cargo test -p render --test css_state_tests
+cargo run -p render -- tests/fixtures/render/css_state.html /tmp/css_state.png --json
+
+# Shell find-in-page (headless) y navegación extra
+cargo test -p shell --test shell_tests                 # find-in-page (+17)
+cargo run -p shell -- tests/fixtures/render/find.html --find "link" --screenshot /tmp/find.png --width 640 --height 400
+```
+
+Límites de la ronda: gradientes cap **64 stops / 256 por estilo**, sin `conic-gradient`/color hints/espacios avanzados/`image-set`/`border-image`; grid avanzado cap **1.024 tracks**, sin dense/zonas/auto-fit real/solapes explícitos; find-in-page sólo texto literal case-insensitive (sin regex/imágenes/barra visual). Referrer/SameSite ya cableados en render (snapshot por render; SameSite top-level aproximado).
+
+Cifras de referencia en la ronda 19: **1260 tests** (bench 8, css 142, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 71, layout 173, net 207, paint 162, **render 136**, shell 125, svg 73, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; fuzz 7 targets; suite determinista; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
 
 

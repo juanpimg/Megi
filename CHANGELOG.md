@@ -6,6 +6,63 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 19 — CSS gradients, advanced grid, renderer referrer/state and shell find-in-page (2026-11-10)
+
+#### Added
+
+- **CSS gradients** (commit `3c82cc5`, css 128→**142**, paint 150→**162** tests):
+  `linear-gradient` (angles in `deg`/`grad`/`rad`/`turn` and `to side/corner`
+  forms), `radial-gradient` (circle/ellipse, `closest-*`/`farthest-*`, explicit
+  radii and `at <position>`), and `repeating-*` variants in `background-image`
+  layers mixed with `url()`. Stops support alpha/`currentColor`, 0–2 positions
+  and hard stops, capped at **64 stops / 256 gradients per computed style**;
+  the `background` shorthand carries them. Paint gains `DisplayItem::Gradient`
+  rendered per tile with deterministic AA/sRGB and honours
+  `background-size/position/repeat` (space/round), `origin/clip`,
+  `border-radius`, `background-clip:text` and opacity. Fixtures
+  `gradient_linear` (240×220 `md5 6a04fdc6…`) and `gradient_radial`; goldens
+  unchanged, no conic-gradient/color hints/advanced color spaces/`image-set`/
+  `border-image`.
+- **Advanced grid** (commit `3d052b3`, layout 158→**173** tests): explicit
+  placement through `grid-column`/`grid-row` and longhands with 1-based and
+  negative lines, `span N` and `auto`; the auto-placer skips occupied cells and
+  grows implicit tracks; spans sum tracks+gaps; `minmax(min, max)` (px/%/auto
+  min; px/%/fr/auto max with clamp) and `repeat(auto-fill|auto-fit, track)`
+  (auto-fit documented as auto-fill, cap **1,024**); `order` is stable in both
+  grid and flex. Fixtures `grid_span` (`md5 0c376406…`) and `grid_autofill`
+  (`md5 d2255ca3…`) with verified bboxes; explicit overlaps are unsupported.
+- **Render referrer/SameSite and real CSS state** (commit `aef6df1`, render
+  123→**136** tests): `ReferrerConfig` is installed in the loader before
+  subresources (header > `meta` > default `strict-origin-when-cross-origin`), so
+  subresource `Referer` values and SameSite cookie decisions are correct;
+  `RenderStats.referrer_policy` is exposed in `--json`; six loopback tests. The
+  resolver now runs under `css::state::with_state` both pre- and post-script, so
+  `:checked/:disabled/:enabled/:read-only/:required/:placeholder-shown` derive
+  from the live DOM and `data-megi-*` (`data-megi-focused` from the shell);
+  fixture `css_state.html` and five tests prove visible borders/backgrounds in
+  the PNG. Two extra gradient integration tests (fixtures, no I/O, pixels and
+  clip:text). Limits: per-render snapshot, no hover/active, approximated
+  top-level SameSite model.
+- **Shell find-in-page** (commit `abcd8fa`, shell 108→**125** tests): `Ctrl+F`
+  searches plain text case-insensitively over Text nodes (`find.rs`:
+  `FindMatch`/`search`/`highlight_rects`/`FindState`/`scroll_offset_for`/
+  `overlays`), Enter/Shift+Enter cycle with wrap, Esc closes and the viewport
+  centres the hit. Highlights are painted in the framebuffer (yellow
+  `rgba(255,235,59,0.45)`, current match `0.75`, no re-render when changing
+  hits) and headless through `--find QUERY --screenshot`; navigation adds F5/g
+  reload, Alt+Home and Ctrl+D. `find.html` fixture; basic screenshot
+  `md5 7324e851…` unchanged. Limits: no regex/images/visual search bar/per-frame
+  hits.
+
+#### Changed
+
+- **1,260 tests, 0 failures** (css 142, layout 173, paint 162, render 136,
+  shell 125, net 207, svg 73, html 60, js 71, dom 28, image 45+1 doctest,
+  fonts 17+1 doctest, bench 8, test_harness 11); gate PASS with tokenizer
+  7,050/7,050, tree 3,904/3,904, serializer 230/230, CSS 30/30 and empty
+  tokenizer/tree allowlists. Goldens remain byte-identical. Phases: F4
+  essentially complete, F5 ≈97 %, F6 ≈90 %, **F7 ≈78 %**.
+
 ### Round 18 — expanded fuzzing, real clipping, Grid MVP, modern CSS and advanced networking (2026-11-10)
 
 #### Added

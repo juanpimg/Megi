@@ -1,6 +1,6 @@
 # Matriz de Soporte de la Fase 4 (`docs/PHASE4-SUPPORT.md`)
 
-**Objetivo de la Fase 4**: renderizar una página HTML real a una imagen **PNG**, completando el modelo de pintado CSS 2.2 y la tipografía. **Estado global**: Fase 4 funcionalmente cerrada, **HITO ronda 11** (árbol HTML5 **3.904/3.904, 100 %**, gate sin allowlist de tree), **ronda 12 de rendimiento** (layout −14,6 %, LayoutBox 496→176 B; encoder PNG −30,5 % byte-idéntico) y **ronda 13**: **fuentes web `@font-face`+WOFF2 de punta a punta** y **crate `svg` propio** (parser+rasterizador AA, 41 tests) **cableado E2E en `<img>`/background-image** (cap 16 Mpx/64 MiB RGBA, stat `svgs_rendered`) **ronda 15**: **SVG inline** (pre-proceso a `<img>` sintético; caps 256/1 MiB/8 MiB, `inline_svgs`), **background-* geometry** y **IFC −28 %** (layout 50,5→36,3 ms, pipeline 132,9→120,5 ms con geometría byte-idéntica); **ronda 16**: CSS interno + gradientes en SVG, backgrounds multicapa con origin/clip/attachment y APIs de navegador cableadas en render; **ronda 17**: **Flexbox MVP** (`layout/flex.rs`), **`border-radius`/`box-shadow`/`text-shadow`** con blur determinista, **formularios con UA styles** y **SVG `<pattern>`/`<text>` básico**; **ronda 18**: **Grid MVP**, **`overflow:hidden`+radius**, **`background-clip:text`**, **custom properties/`var()`**, **`calc()`** y **pseudo-clases de estado**.
+**Objetivo de la Fase 4**: renderizar una página HTML real a una imagen **PNG**, completando el modelo de pintado CSS 2.2 y la tipografía. **Estado global**: Fase 4 funcionalmente cerrada, **HITO ronda 11** (árbol HTML5 **3.904/3.904, 100 %**, gate sin allowlist de tree), **ronda 12 de rendimiento** (layout −14,6 %, LayoutBox 496→176 B; encoder PNG −30,5 % byte-idéntico) y **ronda 13**: **fuentes web `@font-face`+WOFF2 de punta a punta** y **crate `svg` propio** (parser+rasterizador AA, 41 tests) **cableado E2E en `<img>`/background-image** (cap 16 Mpx/64 MiB RGBA, stat `svgs_rendered`) **ronda 15**: **SVG inline** (pre-proceso a `<img>` sintético; caps 256/1 MiB/8 MiB, `inline_svgs`), **background-* geometry** y **IFC −28 %** (layout 50,5→36,3 ms, pipeline 132,9→120,5 ms con geometría byte-idéntica); **ronda 16**: CSS interno + gradientes en SVG, backgrounds multicapa con origin/clip/attachment y APIs de navegador cableadas en render; **ronda 17**: **Flexbox MVP** (`layout/flex.rs`), **`border-radius`/`box-shadow`/`text-shadow`** con blur determinista, **formularios con UA styles** y **SVG `<pattern>`/`<text>` básico**; **ronda 18**: **Grid MVP**, **`overflow:hidden`+radius**, **`background-clip:text`**, **custom properties/`var()`**, **`calc()`** y **pseudo-clases de estado**; **ronda 19**: **gradientes CSS** (linear/radial/repeating), **grid avanzado** (spans/placement/`minmax`/`auto-fill`/`order`), **render Referrer-Policy/SameSite + estado CSS real** y **find-in-page** en el shell.
 
 El pipeline `HTML → CSS → layout → display list → PNG` renderiza texto real, tablas (incluido el texto de sus celdas), `inline-block`, cajas reemplazadas, posicionamiento, floats, `overflow` con clip, stacking/`z-index`/`opacity`, decoraciones/marcadores, **imágenes `<img>` con muestreo bilineal**, **`background-image`/`list-style-image`** (con **`repeat`/`size`/`position` desde la ronda 15**: tiling/clip con cap 4096 y legacy flag para goldens) y comprime PNG con un DEFLATE propio. Quedan `order`/`flex-flow`/`align-content`, grid avanzado (spans/minmax/auto-fill), colores en conflictos de `border-collapse` y block-in-inline. Desde la ronda 9 el pipeline **ejecuta los `<script>` del documento** (`render`, WP-6.2 host); la ronda 10 añade **eventos/timers JS (WP-A)**, hit regions y red avanzada E2E; la ronda 11 añade **WP-B** (CSSOM/`getComputedStyle`/`NodeList`/`matches`/`closest`/identidad), **WP-6.4** (scripts parser-inserted + `document.write` re-tokenizado ⇒ árbol 3.904/3.904) y **event loop presupuestado** en `render` (reloj virtual, lifecycle, timers, re-render único); la **ronda 12** optimiza layout (`Arc<ComputedStyle>` compartido, `Space` sin `String`) y el encoder PNG (filtros fusionados/LZ77 con hashes/`encode_pixels` sin buffer RGBA), con eventos JS avanzados; la **ronda 13** añade **fuentes web `@font-face`+WOFF2 E2E** (dep `woff2-patched` 0.4 solo en `fonts`, DB por render en layout+paint, caps y stats) y el **crate `svg`** desde cero (parser XML+modelo+rasterizador AA, límites anti-DoS), ya **cableado E2E en `render`** (`<img>`/background-image, detección Content-Type/sniffing, intrínseco 300×150 por defecto, cap 16 Mpx/64 MiB RGBA, corrupto ⇒ warning no fatal, `svgs_rendered`); el cierre de ronda arregla `html/fast_hash` (`massive-end-p` ~19 ms); la **ronda 15** añade **backgrounds geometry**, **SVG inline** (`<svg>`→`<img>` sintético, `inline_svgs`), **IFC −28 %** (layout ~36,3 ms, pipeline ~120,5 ms) y **event loop determinista** (sólo reloj virtual).
 
@@ -12,7 +12,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 ---
 
-## 1. Modelo de caja y layout (`crates/layout`, 158 tests)
+## 1. Modelo de caja y layout (`crates/layout`, 173 tests)
 
 | Capacidad CSS 2.2 | Estado | Notas |
 |---|:---:|---|
@@ -33,7 +33,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | `display: list-item` y marcadores (§12.5) | **HECHO** | paint pinta `disc`/`circle`/`square`/`decimal` |
 | `visibility: hidden` (§11.2) | **HECHO** | paint no pinta caja ni texto |
 
-## 2. CSS (`crates/css`, 128 tests + 30 WPT)
+## 2. CSS (`crates/css`, 142 tests + 30 WPT)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -48,15 +48,21 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **Radius y sombras (ronda 17)**: DisplayItems `RoundedRect`/`RoundedBorder`/`Push-PopRoundedGroup`/`BoxShadow`/`TextShadow`; blur determinista de 3 pasadas separables (radio=blur/2), caps 64 px blur y 32 sombras; sin radius/sombras el display list es byte-idéntico | **HECHO** | `paint --test effects` 11 tests; goldens intactos |
 | **Clipping real (ronda 18)**: `overflow:hidden`+`border-radius` recorta el subárbol (padding box, radios internos `radius − bordes`, AA 4×4 offscreen, cap 16,7 Mpx); sin clipping el display list es byte-idéntico | **HECHO** | 9 tests `paint --test clipping`; goldens intactos |
 | **`background-clip:text` (ronda 18)**: fondo color+imágenes compuesto por máscara de glifos del texto (multlínea, cap 4096 runs) | **HECHO** | `paint --test clipping`; sin clip:text comportamiento byte-idéntico |
+| **Gradientes (ronda 19)**: `DisplayItem::Gradient` por tile con AA/sRGB determinista, respetando `background-size/position/repeat` (space/round), `origin/clip`, `border-radius`, `background-clip:text` y opacidad | **HECHO** | 12 tests `paint --test gradients`; sin gradientes el display list es byte-idéntico (goldens intactos); caps de CSS (64 stops/256) |
+
 | **Backgrounds multicapa (ronda 16)**: `background-origin` (border/padding/content), `background-clip` (text parseado, pinta border-box), `background-attachment` (scroll/fixed), **`background_layers` top-first** (listas cíclicas, shorthand multicapa, color solo última) y `space`/`round` reales | **HECHO** | Espejo legacy para goldens; paint 130 tests |
 | **`@font-face` (ronda 13)**: `Stylesheet.font_faces` + `FontFaceRule { family, sources, weight, style }` | **HECHO** | Consumido por `fonts`/`render` para fuentes web (ver §4) |
 | **Custom properties/`var()` (ronda 18)**: `--x` en cualquier selector con cascada/herencia/`initial|unset|inherit`, `var(--x[, fallback])` en cualquier valor (incl. shorthands e inline), fallback anidado, ciclos y límite 32 niveles | **HECHO** | `custom.rs`; `ComputedStyle.custom_properties` y `resolve_declarations` |
 | **`calc()` (ronda 18)**: + − * / con paréntesis y anidamiento, px/em/rem/%/vh/vw y números; contexto font-size/root/viewport; integrado en `Length::parse` (margin/padding/width/height/font-size/border-width/background-position) | **HECHO** | `calc.rs` (`CalcContext`/`CalcValue`/`evaluate`, `with_calc_viewport`); mezcla %+px ⇒ invalid documentado |
 | **Pseudo-clases de estado (ronda 18)**: `:focus`, `:focus-visible`, `:hover`, `:active`, `:checked`, `:disabled`, `:enabled`, `:read-only`, `:read-write`, `:required`, `:placeholder-shown` en compuestos/listas/`:not()`, con `StateContext`/`data-megi-*` | **HECHO** | `state.rs`; `matches_with_state`/`with_state`/`resolve_document_styles_with_media_and_state`; hover/active sin ratón documentados |
 | **Grid parsing (ronda 18)**: `display:grid/inline-grid`, `grid-template-columns/rows` (fixed/%/fr/auto/repeat, caps 1024 tracks), gaps y alignment | **HECHO** | Consumido por `layout/grid.rs` (ver §5) |
-| **`-webkit-background-clip` (ronda 18)** como alias de `background-clip` | **HECHO** | 5 tests `background_clip_prefixed` |
+| **Grid avanzado (ronda 19)**: placement explícito `grid-column/row` + longhands con líneas 1-based/negativas, `span N` y `auto`; auto-placer que salta ocupadas y crece tracks implícitos; `minmax()` (px/%/auto min, px/%/fr/auto max) y `repeat(auto-fill|auto-fit)` (auto-fit = auto-fill, documentado) | **HECHO** | Cap 1024; `order` estable en grid/flex; fixtures `grid_span` (`md5 0c376406…`) y `grid_autofill` (`d2255ca3…`); solapes explícitos no soportados |
 
-## 3. Pintado (`crates/paint`, 150 tests)
+| **`-webkit-background-clip` (ronda 18)** como alias de `background-clip` | **HECHO** | 5 tests `background_clip_prefixed` |
+| **Gradientes CSS (ronda 19)**: `linear-gradient` (ángulos deg/grad/rad/turn, `to side/corner`), `radial-gradient` (circle/ellipse, closest/farthest, radios, posición), `repeating-*` en capas de `background-image` mezclables con `url()`, stops alpha/`currentColor`/0-2 posiciones/hard stops | **HECHO** | Caps 64 stops/256 gradientes por estilo; `BackgroundLayer::Gradient` consumido por paint; fixtures `gradient_linear` (240×220 `md5 6a04fdc6…`)/`gradient_radial`; sin `conic-gradient`/color hints/image-set/border-image |
+
+
+## 3. Pintado (`crates/paint`, 162 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -93,15 +99,15 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
-| URL WHATWG subset, HTTP/1.1, **TLS 1.2/1.3** (`rustls`+`webpki-roots`), caché HTTP RFC 9111 subset, `data:`, `file://`, MIME, `ResourceLoader` | **HECHO** | `crates/net`, 180 tests offline; cookies/CORS/gzip aplicados E2E en el pipeline (ronda 10) |
-| **Cookies RFC 6265** (`CookieJar`, cap 4.096, `FetchOptions.cookie_jar`), **CORS básico** (Origin/ACAO/credentials/validación) y **gzip/deflate** (`Accept-Encoding: gzip` por defecto, CRC32/ISIZE, `CompressionLimits`: 64 MiB + ratio 1000:1) | **HECHO** | Ronda 8; SameSite/PSL, CORS completo y HTTP/2 pendientes |
+| URL WHATWG subset, HTTP/1.1, **TLS 1.2/1.3** (`rustls`+`webpki-roots`), caché HTTP RFC 9111 subset, `data:`, `file://`, MIME, `ResourceLoader` | **HECHO** | `crates/net`, **207 tests offline**; cookies/CORS/gzip E2E; **ronda 18**: SameSite+PSL, Referrer-Policy, Range/206 y cache refinada |
+| **Cookies RFC 6265** (`CookieJar`, cap 4.096), **CORS básico**, **gzip/deflate** (caps 64 MiB + ratio 1000:1), **SameSite** (Strict/Lax/None+Secure, top-level aproximado), **PSL reducida** y **Referrer-Policy** (8 políticas, header>meta>default) instalados en el loader | **HECHO** | Ronda 8 + ronda 18; **ronda 19**: `ReferrerConfig` cableado en render antes de subrecursos (%Referer% y SameSite reales) y `RenderStats.referrer_policy`; CORS completo/HTTP2 pendientes |
 | **Decoder PNG propio + inflate zlib/DEFLATE** (color types 0/2/3/4/6, bit depth 1–16, filtros 0–4, Adam7, CRC, `PngLimits`) | **HECHO** | `crates/image`, 45 tests + 1 doctest; GIF/JPEG/WebP solo detectados |
-| **Pipeline de navegador** `URL → PNG` con CSS externo: charset UTF-8/Windows-1252, `<base>`, `<style>`+`<link rel=stylesheet>` (dedup/media/caps), cascada UA+autor, layout con fuentes y backgrounds, PNG; **`RenderOutput.hit_regions`**, **red avanzada E2E** (cookies por render/sesión, CORS/credentials con denegación no fatal, gzip/deflate, `--cookies`/`--origin`) y **event loop presupuestado** (reloj virtual, `DOMContentLoaded`/`load`, timers, re-render único) | **HECHO** | `crates/render`, 123 tests; fixture 640×400 → 15.498 B `md5 7324e851…`; showcase 1024×768 → 80.220 B `md5 c95c7eff…`; **ronda 13**: webfonts E2E; **ronda 15**: SVG inline (`inline_svgs`) y event loop determinista; **ronda 16**: estilos pre-script con `getComputedStyle` real (`styles_pre_script`), matchMedia/viewport, rAF con epoch fijo (48 ms), `readyState`, onerror/console ⇒ warnings (`console_errors`) y multi-capa (`background_layers.html`, md5 `c357cc2c…`) |
+| **Pipeline de navegador** `URL → PNG` con CSS externo: charset UTF-8/Windows-1252, `<base>`, `<style>`+`<link rel=stylesheet>` (dedup/media/caps), cascada UA+autor, layout con fuentes y backgrounds, PNG; **`RenderOutput.hit_regions`**, **red avanzada E2E** (cookies por render/sesión, CORS/credentials con denegación no fatal, gzip/deflate, `--cookies`/`--origin`) y **event loop presupuestado** (reloj virtual, `DOMContentLoaded`/`load`, timers, re-render único) | **HECHO** | `crates/render`, **136 tests**; fixture 640×400 → 15.498 B `md5 7324e851…`; showcase 1024×768 → 80.220 B `md5 c95c7eff…`; **ronda 13**: webfonts E2E; **ronda 15**: SVG inline (`inline_svgs`) y event loop determinista; **ronda 16**: estilos pre-script con `getComputedStyle` real (`styles_pre_script`), matchMedia/viewport, rAF con epoch fijo (48 ms), `readyState`, onerror/console ⇒ warnings (`console_errors`) y multi-capa (`background_layers.html`, md5 `c357cc2c…`); **ronda 18**: clipping+clip:text; **ronda 19**: `ReferrerConfig`/SameSite reales, estado CSS real (`css_state.html`) y 2 tests de integración de gradientes |
 | **Ejecución de JavaScript en `render`** (Fase 6 WP-6.2 host): `ScriptingMode`/`RenderOptions.scripting` (default Enabled con feature `js`, `--no-scripting`), scripts clásicos inline/`src` en orden (módulos avisados/saltados, `nomodule` ignorado), caps 8 MiB/script + 32 MiB total + 64 scripts, budget por script+total, console/stats y **re-render estilos→layout→paint del DOM mutado**; **event loop** (`DOMContentLoaded`/`load`, timers con reloj virtual, `max_tasks` 10.000 y `max_virtual_time` 1000, stats `timings.event_loop`) | **HECHO** | 7 fixtures `js_*` + 6 `js_event_*` y 11 tests de event loop; `js_text.html` 15.876 B `md5 e1da51d4…` vs 15.499 B `md5 53f67e77…`; el parser ejecuta además los scripts parser-inserted (WP-6.4, gate 3.904/3.904). **Ronda 15**: event loop **determinista** (sólo `run_until` con reloj virtual, fixture `js_event_timeout` md5 `07682088…`) |
 | `<img>` de extremo a extremo (fetch + decodificación + pintado + placeholder) | **HECHO** | WP-5.7; fixture `images.html` 800×600 → 15.625 B `md5 1de31699…` |
 | `background-image` de extremo a extremo | **HECHO** | WP-5.9: fetch+decode+pintado offline/HTTP, caps 32 imágenes / 8 MiB / 16 MiB y stats/warnings; **ronda 15**: `repeat`/`size`/`position` reales (legacy flag para goldens) |
 | `@import` recursivo + media real en `render` | **HECHO** | WP-5.8: dedup/ciclos/profundidad 8/media screen; faltan `layer()`/`supports()`/`@font-face` |
-| `Referrer-Policy`, `br`/stacked encodings, HTTP/2 y streaming; SameSite/PSL y CORS completo | **PENDIENTE** | WP-5.9 (cookies/CORS/gzip básicos ya HECHO) |
+| `br`/stacked encodings, HTTP/2 y streaming, CORS completo, PSL completa y multi-range | **PENDIENTE** | WP-5.9; SameSite/PSL reducida/Referrer-Policy/Range ya HECHO (rondas 18-19) |
 | Ventana/eventos/scroll/zoom | **PARCIAL** | Fase 7: ventana+scroll+inputs+HiDPI+worker+navegación+zoom+auto-refresh hechos; formularios/pestañas/event-loop real/eventos DOM pendientes |
 
 ## 6. DOM generacional + API de navegador (`crates/dom`, 28 tests)
@@ -131,7 +137,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 | **WP-6.4 (ronda 11)**: hook `html::scripting::{ScriptExecutor, ScriptExecution}`; scripts parser-inserted al `</script>`/EOF y `document.write` **re-tokenizado en la posición actual** (scripts anidados incluidos); externos `src` los ejecuta el host; errores no fatales; camino sin scripting zero-cost | **HECHO** | **árbol 3.904/3.904 (100 %), allowlist de tree vacía** |
 | Pendientes F6: `document.onerror` para errores de scripts, módulos ES/`async`/`defer`, memoria real y aislamiento, provider de `getComputedStyle` cableado al pipeline y event loop vivo en el shell | **PENDIENTE** | Fase 6 ≈80-85 % |
 
-## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 108 tests)
+## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 125 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -141,7 +147,8 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 | **Render en worker** con generación/cancelación/coalescing/debounce (120 ms) y `EventLoopProxy` | **HECHO** | — |
 | **Navegación real (WP-7.5)**: clic en enlaces (`Url::join`), historial (`NavigationState`: back/forward/replace/reload, cap 256, truncado forward), Alt+←/Backspace/b, Alt+→/n, `r`, título dinámico `<title>`+URL+% scroll+`[recortado]`, errores y redirects replace; **hit regions nativos** y CLI `--cookies`/`--origin` | **HECHO** | 34 tests nuevos; hit regions y título del mismo render |
 | **Zoom / auto-refresh / estado (ronda 13, WP-7.7)**: zoom `Ctrl+=/-/0` y `--zoom` 0.5–3.0 (escalones 50–300 %, viewport CSS = físico/(scale·zoom)), `Ctrl+L` imprime URL, auto-refresh opt-in `--refresh-ms [MS]` (solo con scripts+timers pendientes, worker generacional, scroll conservado, sin bucles) y título con zoom/scroll/warnings/errores | **HECHO** | `--zoom 2` (640×400→320×200) `md5 c11903cfe0c4f7095289052d25750bd3`; basic `7324e851…` intacto |
-| **Formularios editables (ronda 17)**: UA styles, `src/forms.rs` (FocusState, TextEdit UTF-8, snapshot `data:` URL + patch/re-render, clic/teclado/Tab/Esc/checkbox/radio, Enter nunca envía) | **HECHO** | Fixture `forms.html` 640×480 `md5 b8b9a20…`; shell 108 tests |
+| **Formularios editables (ronda 17)**: UA styles, `src/forms.rs` (FocusState, TextEdit UTF-8, snapshot `data:` URL + patch/re-render, clic/teclado/Tab/Esc/checkbox/radio, Enter nunca envía) | **HECHO** | Fixture `forms.html` 640×480 `md5 b8b9a20…` |
+| **Find-in-page (ronda 19)**: `Ctrl+F` case-insensitive sobre nodos Text, Enter/Shift+Enter con wrap, Esc, scroll centrado al hit, overlays amarillos (0.45/0.75) pintados en framebuffer y `--find QUERY --screenshot`; navegación F5/g reload, Alt+Home y Ctrl+D | **HECHO** | `src/find.rs` puro; shell **125** tests (+17); golden basic `7324e851…` intacto |
 | Pestañas, widgets nativos/select dropdown, validación/submit y event loop real | **PENDIENTE** | Fase 7 |
 | **Hit-testing** (`NodeId`/`LayoutBox` ↔ `DisplayItem`) | **HECHO (paint + render)** | API aditiva `HitRegion`/`hit_test`/`find_link_at`; ronda 10: `RenderOutput.hit_regions` y el shell resuelve enlaces con `find_link_at` (fallback layout+DOM), +0,6 µs |
 
@@ -150,7 +157,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 ## 10. Verificación de la matriz
 
 ```bash
-./tools/dev.sh all                             # fmt, clippy, 1189 tests, doc y gate PASS
+./tools/dev.sh all                             # fmt, clippy, 1260 tests, doc y gate PASS
 cargo test -p css -p layout -p paint -p fonts -p dom -p html
 cargo test -p net -p render -p image -p shell
 cargo test -p js

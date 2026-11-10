@@ -1,53 +1,50 @@
-# Handoff de sesión — ronda 18 (fuzz ampliado, clipping/clip:text, grid, CSS moderno y red avanzada)
+# Handoff de sesión — ronda 19 (gradientes CSS, grid avanzado, render referrer/state y find-in-page)
 
 **Fecha**: 2026-11-10 (Europe/Madrid)
-**Rama**: `sprint/robustez-fase4` — HEAD `718d075`
-**Estado**: **1189 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; Fase 4 prácticamente completa (grid, clipping, `background-clip:text`, var/calc/pseudo-clases), **Fase 5 ≈97 %**, **Fase 6 ≈90 %**, **Fase 7 ≈75 %**.
-**CI/Repo**: GitHub Actions en verde (quality, conformance y MSRV) + nuevo job **fuzz PR build-only** (no bloqueante); `main` y `sprint/robustez-fase4` sincronizadas en `718d075`; suite determinista (reloj virtual, sin flake).
-**Docs**: [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md) · [`ROADMAP.md`](ROADMAP.md) · [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`FUZZING.md`](FUZZING.md) · [`TOOLING.md`](TOOLING.md) · [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md) · [`PERFORMANCE.md`](PERFORMANCE.md).
+**Rama**: `sprint/robustez-fase4` — HEAD `d9e07e0`
+**Estado**: **1260 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; Fase 4 prácticamente completa (gradientes, grid avanzado, decoraciones, clipping, clip:text, var/calc/pseudos), **Fase 5 ≈97 %**, **Fase 6 ≈90 %**, **Fase 7 ≈78 %** (find-in-page).
+**CI/Repo**: GitHub Actions en verde; `main` y `sprint/robustez-fase4` sincronizadas en `d9e07e0`; fuzz PR build-only desde la ronda 18; suite determinista.
+**Docs**: [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md) · [`ROADMAP.md`](ROADMAP.md) · [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`TOOLING.md`](TOOLING.md) · [`FUZZING.md`](FUZZING.md) · [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md) · [`PERFORMANCE.md`](PERFORMANCE.md).
 
-## Qué se hizo en la ronda 18 (5 commits)
+## Qué se hizo en la ronda 19 (6 commits)
 
 | Commit | Bloque | Resultado |
 |---|---|---|
-| `b565ee0` `test(fuzz)` | **Fuzz render/JS/SVG + CI** | 3 targets nuevos (`render_pipeline` con data: URL/caps, `js_eval` con `Budget` + DOM APIs + dispatch, `svg_parse` con `Limits` estrictos), seeds 4/6/5, matrix de **7 targets** en `fuzz-nightly.yml` y job PR build-only (`cargo +nightly fuzz build`). Smoke local 7/7 sin panics/ASan/UBSan; Boa 0.21 tiene una allocation one-time constante (~56 B) ⇒ `-detect_leaks=0` sólo en `js_eval`. [`FUZZING.md`](FUZZING.md) actualizado. |
-| `dc0a056` `feat(css)` | **CSS moderno + grid parsing + clip alias** | **Custom properties/`var()`** (`custom.rs`: cascada/herencia/`initial|unset|inherit`, fallback anidado, ciclos, límite 32; shorthands e inline tras sustituir), **`calc()`** (`calc.rs`: + − * /, paréntesis/anidado, px/em/rem/%/vh/vw; mezcla %+px ⇒ invalid documentado), **pseudo-clases de estado** (`state.rs`: `:focus`, `:focus-visible`, `:hover`, `:active`, `:checked`, `:disabled`, `:enabled`, `:read-only`, `:read-write`, `:required`, `:placeholder-shown`) con `StateContext`/`data-megi-*` y `matches_with_state`/`with_state`/`resolve_document_styles_with_media_and_state`, parseo de **grid** (tracks fixed/%/fr/auto/repeat, cap 1024) y alias **`-webkit-background-clip`**. css 94→**128** tests (+26 `state_vars_calc`, +3 grid, +5 clip prefixed). |
-| `01339a3` `feat(paint)` | **Clipping real + `background-clip:text`** | `overflow:hidden`+`border-radius` recorta el subárbol (padding box, radios internos `radius − bordes`, AA 4×4 offscreen, cap **16,7 Mpx**) y `background-clip:text` compone fondo color+imágenes por máscara de glifos (multlínea, cap **4096 runs**); sin clipping/clip:text el display list es byte-idéntico. 9 tests `paint --test clipping` (paint 141→**150**); goldens intactos. |
-| `a872a86` `feat(layout)` | **Grid MVP** | `layout/grid.rs` + `css/grid.rs`: `display:grid/inline-grid` (flag sobre `InlineBlock`), template columns/rows fixed/%/fr/auto/repeat, `row-gap`/`column-gap`, auto-placement row-major, `justify-items/self`, `align-items/self`, `grid-auto-rows` e items BFC/IFC. Fuera de alcance documentado: spans, named lines, `minmax()`, `auto-fill/auto-fit`, subgrid y colocación explícita. Layout 146→**158** tests y 3 fixtures E2E (`grid_columns` `2d6714bc…`, `grid_rows` `c411ff6d…`, `grid_alignment` `93d1126d…`). |
-| `718d075` `feat(net)` | **SameSite/PSL, Referrer-Policy, Range/206, cache** | SameSite Strict/Lax/None+Secure (top-level aproximado, ausente ⇒ Lax), **PSL reducida** (`psl.rs`, ~150 sufijos + fallback, `registrable_domain`/`site`/`same_site`), **Referrer-Policy** (`referrer.rs`, 8 políticas, header/meta, downgrade, per-hop `Referer`), **Range/206** (`range.rs`: `ByteRange`/`ContentRange`/`load_range`/`InvalidRange`; sin multi-range ni If-Range) y cache refinada (`no-cache` vs `must-revalidate`, `s-maxage`, `Age`, `Expires`, `requires_revalidation`; 304 con ETag). Net 180→**207** tests (+27). **Integración pendiente**: instalar `ReferrerConfig` en el loader de `render` antes de subrecursos (1 línea, documentada). |
+| `5c2115d` `docs` | **Docs ronda 18** | Sincronización de la documentación de la ronda 18 (fuzz, clipping, grid MVP, var/calc, red). |
+| `3c82cc5` `feat(css,paint)` | **Gradientes CSS E2E** | `linear-gradient` (ángulos deg/grad/rad/turn, `to side/corner`), `radial-gradient` (circle/ellipse, closest/farthest, radios, `at position`) y `repeating-*` en capas de `background-image` mezclables con `url()`; stops con alpha/`currentColor`/0-2 posiciones/hard stops, caps **64 stops / 256 gradientes** por estilo, shorthand `background`; paint `DisplayItem::Gradient` por tile con AA/sRGB determinista respetando size/position/repeat(space/round)/origin/clip/radius/clip:text/opacidad. css 128→**142**, paint 150→**162**; `gradient_linear` 240×220 `md5 6a04fdc6d2e699d82523ea23a9d7f561`; `gradient_radial`; goldens intactos. |
+| `3d052b3` `feat(layout)` | **Grid avanzado** | Placement explícito `grid-column/row` + longhands con líneas 1-based/negativas, `span N`, `auto`; auto-placer salta ocupadas y crece tracks implícitos; spans = tracks+gaps; `minmax()` (px/%/auto min; px/%/fr/auto max) y `repeat(auto-fill|auto-fit)` (auto-fit = auto-fill documentado, cap **1.024**); `order` estable en grid/flex. layout 158→**173**; `grid_span` `md5 0c3764063f85443939eb3b608a779187` y `grid_autofill` `d2255ca3ad99ad4a244abd4e5ef8727b` con bboxes verificados; solapes explícitos no soportados. |
+| `aef6df1` `feat(render)` | **Referrer-Policy/SameSite + estado CSS real** | `ReferrerConfig` (header > `meta` > default `strict-origin-when-cross-origin`) instalado en el loader **antes de subrecursos** ⇒ `Referer` correcto y SameSite automático en cookies; nueva `RenderStats.referrer_policy` en `--json`; 6 tests loopback. Resolución CSS bajo `css::state::with_state` pre/post-script con `:checked/:disabled/:enabled/:read-only/:required/:placeholder-shown` y `data-megi-*` (`data-megi-focused` desde el shell; render sin foco; hover/active sólo por atributo); fixture `css_state.html` y 5 tests con bordes/fondos visibles en PNG; 2 tests de integración de gradientes. render 123→**136**. |
+| `abcd8fa` `feat(shell)` | **Find-in-page** | `Ctrl+F` case-insensitive sobre nodos Text (`find.rs` puro: `FindMatch`/`search`/`highlight_rects`/`FindState`/`scroll_offset_for`/`overlays`), Enter siguiente/Shift+Enter anterior con wrap, Esc cierra, scroll centra el hit; highlight amarillo `rgba(255,235,59,0.45)` y actual `0.75` pintado en framebuffer **sin re-render** al cambiar de hit y en headless con `--find QUERY --screenshot`; navegación F5/g reload, Alt+Home, Ctrl+D; worker `RenderRequest.find_query`/`find_matches`/`find_rects` generacional. shell 108→**125** (+17); `find.html`; basic golden `7324e851…` intacto. |
+| `d9e07e0` `test(render)` | **Fixture css_state + docs de fixtures** | Añade `tests/fixtures/render/css_state.html` y documenta las fixtures nuevas (gradientes, grid avanzado, estado CSS) en el README de fixtures. |
 
 ## Evidencia verificada
 
-- `cargo test --workspace` → **1189 tests, 0 fallos**: bench 8, **css 128**, dom 28, **fonts 17 + 1 doctest**, html 60, image 45 + 1 doctest, js 71, **layout 158**, **net 207**, **paint 150**, render 123, shell 108, svg 73, test_harness 11.
-- Gate (`cargo run -p test_harness -- --summary`, exit 0): tokenizer **7.050/7.050**, **árbol 3.904/3.904 (100 %)**, serializer **230/230**, CSS Syntax **30/30**; allowlists de tokenizer/tree **vacías**. fmt/clippy `-D warnings`/doc/MSRV 1.88 OK.
-- **Píxeles/evidencias**: goldens intactos — showcase `c95c7eff…` (80.220 B), `basic.rgba` `60f8984e…`, PNG `9e957177…`; grid E2E `2d6714bc…`/`c411ff6d…`/`93d1126d…`; sin clipping/clip:text el display list sigue byte-idéntico.
-- **Fuzz**: `cargo +nightly fuzz build` compila 7/7 targets; smoke local por target (400 runs parser, 40 pipeline, 300 JS) sin panics/ASan/UBSan/timeouts (JS con `-detect_leaks=0` por la allocation constante de Boa).
-- **Rendimiento**: layout ~36,3 ms y pipeline ~120,5 ms (ronda 15, vigente); `html/massive-end-p` ~19 ms y `tag-40k-attrs` ~12,4 ms (ronda 13); encoder PNG −30,5 % invariante. La ronda 18 no toca el pipeline sin grid/clipping.
+- `cargo test --workspace` → **1260 tests, 0 fallos** (salida real: bench 8, **css 142**, dom 28, **fonts 17 + 1 doctest**, html 60, image 45 + 1 doctest, js 71, **layout 173**, **net 207**, **paint 162**, **render 136**, **shell 125**, svg 73, test_harness 11).
+- Gate verificado con `cargo run -p test_harness -- --summary` (exit 0): tokenizer **7.050/7.050**, **árbol 3.904/3.904**, serializer **230/230**, CSS Syntax **30/30**; allowlists tokenizer/tree **(none)**.
+- **Evidencia de píxeles comprobada en esta ronda**: `gradient_linear` 240×220 `md5 6a04fdc6d2e699d82523ea23a9d7f561`; `grid_span` `md5 0c3764063f85443939eb3b608a779187`; `grid_autofill` `md5 d2255ca3ad99ad4a244abd4e5ef8727b`; `css_state` renderizado y PNG válido; find headless `--find "link" --screenshot` renderiza y valida (`png_check` OK). Goldens antiguos (showcase `c95c7eff…`, basic `7324e851…`, phase4 `9e957177…`/`60f8984e…`) intactos según la suite.
+- **Fuzz**: sin cambios en la ronda 19; la matriz de 7 targets, corpus y job PR build-only de la ronda 18 sigue vigente.
+- **Rendimiento**: layout ~36,3 ms y pipeline ~120,5 ms (vigente; la ronda 19 no altera fixtures sin gradientes/grid avanzado).
 
 ## Comandos de verificación
 
 ```bash
-./tools/dev.sh all                                  # fmt, clippy, 1189 tests, doc y gate
-cargo test --workspace                              # 1189 tests (con JS por defecto)
+./tools/dev.sh all                                  # fmt, clippy, 1260 tests, doc y gate
+cargo test --workspace                              # 1260 tests (JS por defecto)
 cargo run -p test_harness -- --summary              # gate: 3904/3904 árbol, PASS, exit 0
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo doc --workspace --no-deps
 cargo +1.88 check --workspace --all-targets         # MSRV
 
-# Ronda 18
-cd fuzz && cargo +nightly fuzz build                # 7 targets
-cargo test -p css --test state_vars_calc            # var()/calc()/pseudo-clases (26)
-cargo test -p css --test background_clip_prefixed   # -webkit-background-clip (5)
-cargo test -p paint --test clipping                 # overflow+radius y clip:text (9)
-cargo test -p layout --test grid                    # grid MVP (12)
-cargo run -p render -- tests/fixtures/render/grid_columns.html /tmp/grid.png --json
-cargo run -p render -- tests/fixtures/render/grid_rows.html /tmp/grid_rows.png --json
-cargo run -p render -- tests/fixtures/render/grid_alignment.html /tmp/grid_align.png --json
-cargo test -p net referrer && cargo test -p net range && cargo test -p net cache
-
-# Goldens / rendimiento
-cargo run -p render -- tests/fixtures/render/showcase/index.html /tmp/showcase.png --width 1024 --height 768  # c95c7eff…
-cargo run --release -p bench -- --filter layout --iterations 5     # ~36 ms
-cargo run --release -p bench -- --filter pipeline --iterations 3   # ~120 ms
+# Ronda 19
+cargo test -p css --test gradients && cargo test -p paint --test gradients
+cargo run -p render -- tests/fixtures/render/gradient_linear.html /tmp/grad_linear.png --width 240 --height 220  # 6a04fdc6…
+cargo run -p render -- tests/fixtures/render/gradient_radial.html /tmp/grad_radial.png --json
+cargo test -p layout --test grid                    # 26 tests (spans/minmax/auto-fill/order)
+cargo run -p render -- tests/fixtures/render/grid_span.html /tmp/grid_span.png --json       # 0c376406…
+cargo run -p render -- tests/fixtures/render/grid_autofill.html /tmp/grid_auto.png --json   # d2255ca3…
+cargo test -p render --test referrer_policy_tests && cargo test -p render --test css_state_tests
+cargo run -p render -- tests/fixtures/render/css_state.html /tmp/css_state.png --json
+cargo test -p shell --test shell_tests              # find-in-page (+17)
+cargo run -p shell -- tests/fixtures/render/find.html --find "link" --screenshot /tmp/find.png --width 640 --height 400
 ```
 
 ## Estado actual por crate
@@ -55,27 +52,27 @@ cargo run --release -p bench -- --filter pipeline --iterations 3   # ~120 ms
 | Crate | Estado | Tests |
 |---|---|---|
 | `dom` / `html` | COMPLETOS (arena + parser 3.904/3.904) | 28 / 60 |
-| `css` | COMPLETO F2 + F4 + **var/calc/pseudo-clases/grid parsing** | **128** |
-| `layout` | F4 completa + Flexbox + **Grid MVP** + IFC optimizado | **158** |
+| `css` | COMPLETO F2+F4 + var/calc/pseudos + **gradientes** | **142** |
+| `layout` | F4 completa + Flexbox + **grid avanzado** + IFC | **173** |
 | `fonts` | COMPLETO LTR + fuentes web | 17 + 1 doctest |
-| `paint` | F4 completa + backgrounds + decoraciones + **clipping/clip:text** | **150** |
-| `net` / `image` | F5 (TLS/caché/**SameSite/PSL/Referrer/Range**) / decoder PNG propio | **207** / 45 + 1 doctest |
+| `paint` | F4 completa + backgrounds + decoraciones + clipping + **gradientes** | **162** |
+| `net` / `image` | F5 (TLS/caché/SameSite/PSL/Referrer/Range) / decoder PNG | **207** / 45 + 1 doctest |
 | `js` | F6: DOM/eventos/timers + APIs de navegador | 71 |
-| `svg` | Parser/modelo/rasterizador AA + CSS/gradientes + pattern/text | 73 |
-| `render` | Pipeline URL→PNG + imágenes/backgrounds/SVG + event loop + webfonts | 123 |
-| `shell` | F7 + zoom/refresh + formularios editables | 108 |
+| `svg` | Parser/modelo/rasterizador + CSS/gradientes/pattern/text | 73 |
+| `render` | Pipeline URL→PNG + imágenes/SVG/webfonts + **referrer/state/event loop** | **136** |
+| `shell` | F7 + zoom/refresh/forms/navegación + **find-in-page** | **125** |
 | `bench` / `test_harness` | Tooling / gate 4 suites | 8 / 11 |
-| `fuzz` (workspace aparte) | **7 targets** + corpus + job PR build-only | build 7/7 |
+| `fuzz` (workspace aparte) | 7 targets + corpus + job PR build-only (sin cambios r19) | build 7/7 |
 
 ## Deuda priorizada
 
-1. **Integración render**: instalar `ReferrerConfig` en el loader (1 línea) y resolver estilos con `StateContext`/`data-megi-*` para `:focus`/`:checked` (la API CSS ya existe).
-2. **CSS**: `calc()` mixto `% + px` (requiere un `Length` con componente porcentual+absoluta); gradientes CSS/conic/`image-set`; `background-clip:text` en más displays.
-3. **Grid/layout**: spans, named lines, `minmax()`, `auto-fill/auto-fit`, subgrid, `order`/`flex-flow`/`align-content`; block-in-inline y colores de `border-collapse`; IFC <35 ms.
-4. **Paint**: `border-image`, filtros, inset shadows exactas, text mask en subárboles anidados.
-5. **Shell**: pestañas, find-in-page, widgets nativos/select dropdown, validación/submit y event loop vivo multi-frame.
-6. **Fase 5**: HTTP/2, streaming, PSL completa, multi-range/If-Range, encodings apilados (`br`).
-7. **Fuzz/bench**: corpus más largo en CI, bench E2E de grid/clipping/SVG y cachear Boa en CI (+25 s).
+1. **CSS/paint**: `conic-gradient`/color hints/espacios de color avanzados, `image-set()`, `border-image`, filtros; `calc()` mixto `%+px`.
+2. **Grid**: `dense`, zonas/`grid-template-areas`, auto-fit real, solapes explícitos; block-in-inline y colores de `border-collapse`.
+3. **Render**: snapshot de estado CSS por render (sin hover/active), SameSite top-level aproximado; PSL completa.
+4. **Shell**: pestañas, barra visual de búsqueda, validación/submit, widgets nativos/select, event loop vivo multi-frame.
+5. **Red**: HTTP/2, streaming, multi-range/If-Range, `br`.
+6. **Fuzz/bench**: campañas más largas en CI, bench E2E de gradientes/grid/find, cache de Boa en CI.
+7. **IFC/PNG**: regiones y más optimización de pipeline (coordinado con el carril de rendimiento).
 
 ## Reglas del repositorio (recordatorio)
 
