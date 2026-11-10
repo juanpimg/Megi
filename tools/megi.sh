@@ -8,6 +8,8 @@
 #   - left click on a link: navigate (resolved against the page URL, history push)
 #   - Alt+Left / Backspace / b: back; Alt+Right / n: forward; r: reload
 #   - Ctrl+= / Ctrl++ (or =/+): zoom in; Ctrl+- (or -): zoom out; Ctrl+0 (or 0): reset
+#   - Ctrl+L: address bar (Enter navigates via Url::join, Esc cancels); tab strip clickable
+#     (activate/close/+), select controls open an option dropdown; --chrome for screenshots
 #   - Ctrl+F: find in page (yellow highlights, Enter next, Shift+Enter previous, Esc close);
 #     --find QUERY does the same for headless --screenshot output
 #   - F5 / g / r reload, Alt+Home first history entry, Ctrl+D prints URL + title

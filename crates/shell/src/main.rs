@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! megi <url|file> [--width W] [--height H] [--screenshot PATH] [--title T]
-//!      [--cookies] [--origin URL] [--zoom FACTOR] [--refresh-ms [MS]] [--find QUERY] [--tabs URL]...
+//!      [--cookies] [--origin URL] [--zoom FACTOR] [--refresh-ms [MS]] [--find QUERY] [--chrome] [--tabs URL]...
 //! ```
 //!
 //! Without `--screenshot` this creates a real winit window (requires an X11/Wayland
@@ -68,7 +68,16 @@ fn run() -> Result<(), ShellError> {
             // writes a PNG half the requested physical size (the window would upscale it).
             let (css_width, css_height) =
                 zoom::zoomed_viewport(args.width, args.height, 1.0, args.zoom);
-            let info = if let Some(query) = &args.find {
+            let info = if args.chrome {
+                shell::headless::screenshot_with_chrome(
+                    &args.input,
+                    css_width,
+                    css_height,
+                    &path,
+                    &options,
+                    args.find.as_deref(),
+                )?
+            } else if let Some(query) = &args.find {
                 shell::headless::screenshot_with_find(
                     &args.input,
                     css_width,

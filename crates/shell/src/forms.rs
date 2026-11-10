@@ -96,6 +96,28 @@ impl FormControlKind {
     }
 }
 
+/// One `<option>` of a rendered `<select>` (label + value + selected state).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectOption {
+    /// Visible text of the option.
+    pub label: String,
+    /// `value` attribute (falls back to the label).
+    pub value: String,
+    /// Whether the option carries the `selected` attribute (or is the first option).
+    pub selected: bool,
+}
+
+impl SelectOption {
+    /// Creates an option descriptor.
+    pub fn new(label: impl Into<String>, value: impl Into<String>, selected: bool) -> Self {
+        Self {
+            label: label.into(),
+            value: value.into(),
+            selected,
+        }
+    }
+}
+
 /// One rendered form control (page CSS coordinates, stable id).
 #[derive(Clone, Debug, PartialEq)]
 pub struct FormControl {
@@ -113,6 +135,8 @@ pub struct FormControl {
     pub checked: bool,
     /// `disabled` attribute state.
     pub disabled: bool,
+    /// Options of a `<select>` (empty for every other control).
+    pub options: Vec<SelectOption>,
 }
 
 /// Assigns a stable `data-megi-form-id` to every form control in document order.
@@ -211,11 +235,22 @@ pub fn collect_controls(document: &Document, layout: &LayoutBox) -> Vec<FormCont
                     .get_attribute(FORM_ID_ATTR)
                     .and_then(|value| value.parse::<u32>().ok())
                     .unwrap_or(u32::MAX);
-                let value = match kind {
-                    FormControlKind::Textarea | FormControlKind::Select => {
-                        text_content(document, node_id)
+                let (value, options) = match kind {
+                    FormControlKind::Textarea => (text_content(document, node_id), Vec::new()),
+                    FormControlKind::Select => {
+                        let options = select_options(document, node_id);
+                        let value = options
+                            .iter()
+                            .find(|option| option.selected)
+                            .or_else(|| options.first())
+                            .map(|option| option.label.clone())
+                            .unwrap_or_default();
+                        (value, options)
                     }
-                    _ => element.get_attribute("value").unwrap_or("").to_owned(),
+                    _ => (
+                        element.get_attribute("value").unwrap_or("").to_owned(),
+                        Vec::new(),
+                    ),
                 };
                 controls.push(FormControl {
                     form_id,
@@ -225,6 +260,7 @@ pub fn collect_controls(document: &Document, layout: &LayoutBox) -> Vec<FormCont
                     value,
                     checked: element.get_attribute("checked").is_some(),
                     disabled: element.get_attribute("disabled").is_some(),
+                    options,
                 });
             }
         }
@@ -240,6 +276,118 @@ pub fn control_at(controls: &[FormControl], x: f32, y: f32) -> Option<usize> {
     controls
         .iter()
         .rposition(|control| control.rect.contains(x, y))
+}
+
+/// Collects the `<option>` descendants of a `<select>` in document order.
+fn select_options(document: &Document, select_id: NodeId) -> Vec<SelectOption> {
+    let mut options = Vec::new();
+    let mut stack: Vec<NodeId> = Vec::new();
+    let mut child = document.node(select_id).last_child;
+    while let Some(id) = child {
+        stack.push(id);
+        child = document.node(id).prev_sibling;
+    }
+    while let Some(node_id) = stack.pop() {
+        let node = document.node(node_id);
+        if let Some(element) = node.as_element()
+            && element.local_name == "option"
+        {
+            let label = text_content(document, node_id);
+            let value = element.get_attribute("value").unwrap_or(&label).to_owned();
+            options.push(SelectOption::new(
+                label,
+                value,
+                element.get_attribute("selected").is_some(),
+            ));
+        }
+        let mut child = node.last_child;
+        while let Some(id) = child {
+            stack.push(id);
+            child = document.node(id).prev_sibling;
+        }
+    }
+    // A `<select>` with no explicit selected option displays (and selects) the first one.
+    let any_selected = options.iter().any(|option| option.selected);
+    if !any_selected && let Some(first) = options.first_mut() {
+        first.selected = true;
+    }
+    options
+}
+
+/// Marks option `option_index` as selected inside the `<select>` with `form_id`.
+///
+/// Clears every previous `selected` attribute on its options and sets it on the chosen one
+/// (the renderer re-lays out the snapshot and the dropdown reads the new state). Returns
+/// whether the document changed.
+pub fn patch_select(document: &mut Document, form_id: u32, option_index: usize) -> bool {
+    let ids = element_ids(document);
+    let target = ids.iter().copied().find(|node_id| {
+        document
+            .node(*node_id)
+            .as_element()
+            .and_then(|element| element.get_attribute(FORM_ID_ATTR))
+            .and_then(|value| value.parse::<u32>().ok())
+            == Some(form_id)
+    });
+    let Some(select_id) = target else {
+        return false;
+    };
+    let options = option_nodes(document, select_id);
+    if option_index >= options.len() {
+        return false;
+    }
+    let mut changed = false;
+    for (index, node_id) in options.into_iter().enumerate() {
+        let element = document
+            .node(node_id)
+            .as_element()
+            .expect("option node")
+            .clone();
+        let has = element.get_attribute("selected").is_some();
+        let wanted = index == option_index;
+        if has != wanted {
+            let mut updated = element;
+            if wanted {
+                updated.set_attribute(Attribute::new("selected", ""), true);
+            } else {
+                updated
+                    .attributes
+                    .retain(|attr| attr.local_name != "selected");
+            }
+            *document
+                .node_mut(node_id)
+                .as_element_mut()
+                .expect("element") = updated;
+            changed = true;
+        }
+    }
+    changed
+}
+
+/// `<option>` element ids under `select_id`, in document order.
+fn option_nodes(document: &Document, select_id: NodeId) -> Vec<NodeId> {
+    let mut out = Vec::new();
+    let mut stack: Vec<NodeId> = Vec::new();
+    let mut child = document.node(select_id).last_child;
+    while let Some(id) = child {
+        stack.push(id);
+        child = document.node(id).prev_sibling;
+    }
+    while let Some(node_id) = stack.pop() {
+        let node = document.node(node_id);
+        if node
+            .as_element()
+            .is_some_and(|element| element.local_name == "option")
+        {
+            out.push(node_id);
+        }
+        let mut child = node.last_child;
+        while let Some(id) = child {
+            stack.push(id);
+            child = document.node(id).prev_sibling;
+        }
+    }
+    out
 }
 
 /// Focus model over the rendered controls (no display needed).
@@ -504,6 +652,7 @@ mod tests {
             value: value.to_owned(),
             checked: false,
             disabled: false,
+            options: Vec::new(),
         }
     }
 
@@ -580,6 +729,40 @@ mod tests {
         assert!(unicode.move_caret(false));
         assert!(unicode.insert("a"));
         assert_eq!(unicode.value(), "añ");
+    }
+
+    #[test]
+    fn select_options_are_extracted_and_patchable() {
+        let output = crate::headless::render_target(
+            "data:text/html,<form><select id=s><option value=a>One</option>             <option value=b selected>Two</option><option>Three</option></select></form>",
+            240,
+            160,
+        )
+        .expect("render");
+        let mut document = output.document.clone();
+        assign_form_ids(&mut document);
+        let controls = collect_controls(&document, &output.layout);
+        let select = controls
+            .iter()
+            .find(|control| control.kind == FormControlKind::Select)
+            .expect("select control");
+        assert_eq!(select.options.len(), 3, "options: {:?}", select.options);
+        assert_eq!(select.options[0].label, "One");
+        assert_eq!(select.options[0].value, "a");
+        assert!(select.options[1].selected);
+        assert_eq!(select.value, "Two");
+        let select_id = select.form_id;
+        assert!(patch_select(&mut document, select_id, 2));
+        let patched = collect_controls(&document, &output.layout);
+        let patched_select = patched
+            .iter()
+            .find(|control| control.kind == FormControlKind::Select)
+            .expect("select");
+        assert!(patched_select.options[2].selected);
+        assert!(!patched_select.options[1].selected);
+        assert_eq!(patched_select.value, "Three");
+        assert!(!patch_select(&mut document, select_id, 9), "out of range");
+        assert!(!patch_select(&mut document, 99, 0), "unknown control");
     }
 
     #[test]

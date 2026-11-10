@@ -925,3 +925,181 @@ fn cli_tabs_flag_builds_multiple_tabs_and_documents_headless_policy() {
     assert_eq!(output.dimensions(), (240, 160));
     assert_eq!(hits, 0);
 }
+
+#[test]
+fn chrome_overlay_paints_tab_strip_and_address_bar() {
+    let plain = shell::render_target("data:text/html,<h1>chrome</h1>", 640, 400).expect("plain");
+    let chromed = shell::headless::render_target_with_chrome(
+        "data:text/html,<h1>chrome</h1>",
+        640,
+        400,
+        &render::RenderOptions::default(),
+        None,
+    )
+    .expect("chrome");
+    assert_eq!(
+        plain.dimensions(),
+        chromed.dimensions(),
+        "chrome is an overlay"
+    );
+    let tab_strip = shell::chrome::COLOR_TAB_STRIP;
+    let address = shell::chrome::COLOR_ADDRESS_BG;
+    let count = |output: &render::RenderOutput, color: paint::Color| {
+        output
+            .pixmap
+            .pixels
+            .iter()
+            .filter(|pixel| pixel.r == color.r && pixel.g == color.g && pixel.b == color.b)
+            .count()
+    };
+    assert_eq!(count(&plain, tab_strip), 0, "plain renders have no chrome");
+    assert!(count(&chromed, tab_strip) > 1000, "tab strip painted");
+    assert!(count(&chromed, address) > 1000, "address bar painted");
+    // The page below the chrome is unchanged (overlay only occludes the top band).
+    let offset = ((shell::chrome::CHROME_HEIGHT as u32 + 10) * 640) as usize;
+    assert_eq!(
+        plain.pixmap.pixels[offset..offset + 100],
+        chromed.pixmap.pixels[offset..offset + 100]
+    );
+}
+
+#[test]
+fn screenshot_with_chrome_writes_a_valid_png() {
+    let plain_path = temp_path("chrome-plain.png");
+    let chrome_path = temp_path("chrome-on.png");
+    let input = "data:text/html,<h1>chrome png</h1>";
+    shell::headless::screenshot_with_options(
+        input,
+        320,
+        220,
+        &plain_path,
+        &render::RenderOptions::default(),
+    )
+    .expect("plain screenshot");
+    shell::headless::screenshot_with_chrome(
+        input,
+        320,
+        220,
+        &chrome_path,
+        &render::RenderOptions::default(),
+        None,
+    )
+    .expect("chrome screenshot");
+    let plain = std::fs::read(&plain_path).expect("plain PNG");
+    let chromed = std::fs::read(&chrome_path).expect("chrome PNG");
+    assert_eq!(png_dimensions(&plain), (320, 220));
+    assert_eq!(png_dimensions(&chromed), (320, 220));
+    assert_ne!(plain, chromed, "chrome changes the screenshot");
+    assert!(chromed.starts_with(&[0x89, b'P', b'N', b'G']));
+    let _ = std::fs::remove_file(&plain_path);
+    let _ = std::fs::remove_file(&chrome_path);
+}
+
+#[test]
+fn cli_chrome_flag_is_accepted_for_screenshots() {
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");
+    let plain = temp_path("cli-plain.png");
+    let chromed = temp_path("cli-chrome.png");
+    let run = |args: &[&str], path: &PathBuf| {
+        std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+            .arg(&fixture)
+            .args(args)
+            .arg("--screenshot")
+            .arg(path)
+            .args(["--width", "320", "--height", "220"])
+            .status()
+            .expect("shell binary runs")
+    };
+    assert!(run(&[], &plain).success());
+    assert!(run(&["--chrome"], &chromed).success());
+    let plain_bytes = std::fs::read(&plain).expect("plain PNG");
+    let chrome_bytes = std::fs::read(&chromed).expect("chrome PNG");
+    assert_eq!(png_dimensions(&plain_bytes), (320, 220));
+    assert_eq!(png_dimensions(&chrome_bytes), (320, 220));
+    assert_ne!(plain_bytes, chrome_bytes);
+    let _ = std::fs::remove_file(&plain);
+    let _ = std::fs::remove_file(&chromed);
+}
+
+#[test]
+fn select_options_survive_a_patched_rerender() {
+    let request = RenderRequest {
+        generation: 1,
+        input: forms_fixture_url(),
+        css_width: 320,
+        css_height: 240,
+        base_override: None,
+        scripting: true,
+        find_query: None,
+    };
+    let frame = shell::worker::render_document(&request).expect("forms render");
+    let select = frame
+        .forms
+        .iter()
+        .find(|control| control.kind == shell::FormControlKind::Select)
+        .cloned()
+        .expect("select control");
+    assert_eq!(select.options.len(), 2, "fixture select has two options");
+    assert_eq!(select.options[0].label, "One");
+    let mut document = (*frame.document).clone();
+    shell::forms::assign_form_ids(&mut document);
+    assert!(shell::forms::patch_select(&mut document, select.form_id, 1));
+    let snapshot = shell::forms::snapshot_data_url(&document);
+    let patched_request = RenderRequest {
+        generation: 2,
+        input: snapshot,
+        css_width: 320,
+        css_height: 240,
+        base_override: Some(request.input.clone()),
+        scripting: false,
+        find_query: None,
+    };
+    let patched = shell::worker::render_document(&patched_request).expect("patched render");
+    let patched_select = patched
+        .forms
+        .iter()
+        .find(|control| control.form_id == select.form_id)
+        .expect("select persisted");
+    assert!(patched_select.options[1].selected, "second option selected");
+    assert_eq!(patched_select.value, "Two");
+}
+
+#[test]
+fn chrome_geometry_scales_with_the_device_scale() {
+    let address = shell::chrome::AddressBar::new();
+    let tabs = vec!["Megi".to_string()];
+    let view = shell::chrome::ChromeView {
+        tabs: &tabs,
+        active_tab: 0,
+        address: &address,
+        fallback_url: "about:blank",
+        dropdown: None,
+        scroll_y: 0,
+        css_viewport_height: 200,
+        css_width: 320.0,
+    };
+    let mut dest = vec![0x00FF_FFFFu32; 640 * 400];
+    let painted = shell::chrome::draw_chrome(&mut dest, 640, 400, 2.0, &view);
+    assert!(painted > 0);
+    // The whole chrome band is 58 CSS px ⇒ 116 physical rows.
+    let band = dest[..(116 * 640) as usize]
+        .iter()
+        .filter(|pixel| **pixel != 0x00FF_FFFF)
+        .count();
+    assert!(band > 1000, "scaled chrome painted: {band}");
+    assert_eq!(
+        dest[(119 * 640) as usize],
+        0x00FF_FFFF,
+        "page below chrome intact"
+    );
+}
+
+#[test]
+fn cli_parses_chrome_flag_and_documents_it() {
+    let cli =
+        shell::parse_cli(["data:,x", "--chrome"].into_iter().map(str::to_string)).expect("parse");
+    assert!(cli.chrome);
+    assert!(shell::cli::USAGE.contains("--chrome"));
+    assert!(shell::cli::USAGE.contains("address bar"));
+}

@@ -54,6 +54,13 @@
 //!   decoded transparently by `net`.
 //! - **Dynamic title**: the window title is the document `<title>` plus the short URL and
 //!   scroll percentage ([`title`]); server redirects replace the current history entry.
+//! - **Browser chrome (R135)**: a shell-drawn overlay ([`chrome`]) with a tab strip
+//!   (click to activate/close, `+` new tab, `+N` overflow) and an address bar (`Ctrl+L`,
+//!   caret editing, `Enter` navigates via `Url::join`, `Esc` cancels), plus the floating
+//!   `<select>` dropdown (options anchored under the control, capped height, hover/active
+//!   rows, click/Enter updates `selected` in the DOM snapshot and re-renders). The page
+//!   viewport is not reduced: the chrome occludes the top `CHROME_HEIGHT` CSS pixels
+//!   (documented overlay trade-off). Headless screenshots include it only with `--chrome`.
 //! - **Tabs (R120)**: `Ctrl+T` opens a blank tab, `Ctrl+W` closes the active one (the last
 //!   tab is reset to New Tab instead of closing the window), `Ctrl+Tab`/`Ctrl+Shift+Tab`
 //!   cycle and `Alt+1..9` activates a tab by position. Each [`Tab`] keeps its own history,
@@ -129,6 +136,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod chrome;
 pub mod cli;
 pub mod convert;
 pub mod error;
@@ -147,6 +155,11 @@ pub mod window;
 pub mod worker;
 pub mod zoom;
 
+pub use chrome::{
+    ADDRESS_BAR_HEIGHT, AddressBar, CHROME_HEIGHT, ChromeView, DropdownList, DropdownState,
+    TAB_STRIP_HEIGHT, TabHit, TabRect, TabStripLayout, address_bar_rect, draw_chrome,
+    dropdown_layout, in_chrome, layout_tabs, resolve_address, tab_strip_hit, truncate_title,
+};
 pub use cli::{CliArgs, LaunchMode, finish_args, parse_args, parse_cli};
 pub use convert::{PIXEL_FORMAT, expected_buffer_len, pixmap_to_0rgb};
 pub use error::ShellError;
@@ -159,8 +172,9 @@ pub use forms::{
     assign_form_ids, collect_controls, control_at, patch_control, snapshot_data_url,
 };
 pub use headless::{
-    ScreenshotInfo, render_target, render_target_with_find, render_target_with_options,
-    save_screenshot, screenshot, screenshot_with_find, screenshot_with_options,
+    ScreenshotInfo, render_target, render_target_with_chrome, render_target_with_find,
+    render_target_with_options, save_screenshot, screenshot, screenshot_with_chrome,
+    screenshot_with_find, screenshot_with_options,
 };
 pub use links::{
     CssRect, LinkError, LinkRegion, collect_link_regions, find_link_at, is_navigable, link_url_at,

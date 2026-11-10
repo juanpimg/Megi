@@ -43,13 +43,17 @@ options:
                       (setInterval); MS defaults to 250, 0/disabling flag = off
   --find QUERY        highlight case-insensitive matches of QUERY in the
                       rendered page (headless screenshots; window: Ctrl+F)
+  --chrome            include the shell chrome (tab strip + address bar) in the
+                      headless --screenshot output (window always shows chrome)
   --tabs URL          open URL as an extra tab (repeatable, max 32); the positional
                       URL is the first/active tab, headless renders the active tab
   -h, --help          print this help
 
 window keys:
   left click on a link       navigate (history push)
-  left click on a form control: focus; type to edit text (Backspace deletes)
+  left click on the tab strip  activate tab; click x to close; click + for a new tab
+  left click on a form control: focus; type to edit text (Backspace deletes); a select
+                             opens its option dropdown (click/Enter chooses)
   Tab                        next form control; Enter never submits; Esc blurs
   Ctrl+F                     find in page: type to search, Enter next, Shift+Enter
                              previous, Esc closes; matches are highlighted in yellow
@@ -58,7 +62,7 @@ window keys:
   Enter                      ignored (no backend: forms never submit); Esc blurs
   Alt+Left / Backspace / b   back;  Alt+Right / n   forward
   Ctrl+= / Ctrl++ / = / +    zoom in;  Ctrl+- / -   zoom out;  Ctrl+0 / 0   reset zoom
-  Ctrl+L                     print the current URL
+  Ctrl+L                     edit the address bar: Enter navigates (Url::join), Esc cancels
   r / g / F5                 reload;  Alt+Home   go to the first (home) history entry
   Ctrl+D                     print the final URL and the page title
   q / Esc                    quit
@@ -97,6 +101,8 @@ pub struct CliArgs {
     pub find: Option<String>,
     /// Initial tabs (first = positional URL, then each `--tabs` in order).
     pub tabs: Vec<String>,
+    /// Include the shell chrome in headless screenshots (`--chrome`).
+    pub chrome: bool,
     /// Auto-refresh interval in milliseconds when `--refresh-ms` was given (`None` = off).
     pub refresh_ms: Option<u64>,
 }
@@ -124,6 +130,8 @@ pub struct RawArgs {
     pub find: Option<String>,
     /// `--tabs` URLs, in order (repeatable).
     pub tabs: Vec<String>,
+    /// `--chrome` was passed.
+    pub chrome: bool,
     /// `--refresh-ms` value (default 250 when passed without a value), if provided.
     pub refresh_ms: Option<u64>,
     /// `-h`/`--help` was passed.
@@ -159,6 +167,7 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
             "--tabs" => {
                 raw.tabs.push(next_value(&arguments, &mut index, "--tabs")?);
             }
+            "--chrome" => raw.chrome = true,
             "--zoom" => {
                 let value = next_value(&arguments, &mut index, "--zoom")?;
                 raw.zoom = Some(value.parse::<f64>().map_err(|_| {
@@ -277,6 +286,7 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
             refresh_ms: None,
             find: raw.find,
             tabs,
+            chrome: raw.chrome,
         });
     }
     Ok(CliArgs {
@@ -291,6 +301,7 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
         refresh_ms: raw.refresh_ms,
         find: raw.find,
         tabs,
+        chrome: raw.chrome,
     })
 }
 
@@ -382,6 +393,14 @@ mod unit_tests {
         assert!(!plain.cookies);
         assert!(plain.origin.is_none());
         assert!(parse_cli(args(&["data:,x", "--origin"])).is_err());
+    }
+
+    #[test]
+    fn parses_chrome_flag() {
+        let cli = parse_cli(args(&["data:,x", "--chrome"])).expect("parse");
+        assert!(cli.chrome);
+        assert!(!parse_cli(args(&["data:,x"])).expect("parse").chrome);
+        assert!(USAGE.contains("--chrome"));
     }
 
     #[test]

@@ -27,9 +27,10 @@
 //!   frame executed scripts and left page timers pending (`setInterval`, long timer chains),
 //!   preserving the scroll offset and using the worker's generation cancellation; pages
 //!   without timers never refresh ([`crate::refresh`]);
+//! - **chrome**: a shell-drawn overlay with a tab strip (activate/close/new + overflow) and
+//!   an address bar ([`crate::chrome`], `Ctrl+L`); plus the `<select>` dropdown;
 //! - **dynamic title/status**: the window title shows the document `<title>` plus the short
-//!   URL, `zoom%`, `scroll%`, warning/script-error counters ([`crate::title`]); `Ctrl+L`
-//!   prints the current URL to stdout (no address bar yet);
+//!   URL, `zoom%`, `scroll%`, warning/script-error counters ([`crate::title`]);
 //! - errors produce a white frame plus stderr/title feedback; the window stays
 //!   usable.
 //!
@@ -44,7 +45,7 @@
 //! | `Ctrl+=` / `Ctrl++` (or `=`/`+`) | Zoom in |
 //! | `Ctrl+-` (or `-`) | Zoom out |
 //! | `Ctrl+0` (or `0`) | Reset zoom to 100 % |
-//! | `Ctrl+L` | Print the current URL to stdout |
+//! | `Ctrl+L` | Edit the address bar (`Enter` navigates, `Esc` cancels) |
 //! | `Ctrl+F` | Find in page (type, `Enter` next, `Shift+Enter` previous, `Esc` close) |
 //! | `Ctrl+D` | Print the final URL and page title |
 //! | `F5`, `g` | Reload |
@@ -75,10 +76,11 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy}
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
 
+use crate::chrome::{self, AddressBar, ChromeView, DropdownState, TabHit};
 use crate::convert::{WHITE_0RGB, expected_buffer_len};
 use crate::error::ShellError;
 use crate::find::{self, FindState};
-use crate::forms::{self, FocusState, FormControl, TextEdit};
+use crate::forms::{self, FocusState, FormControl, FormControlKind, TextEdit};
 use crate::links::{LinkRegion, link_url_at, physical_to_page};
 use crate::navigation::{NavigationOutcome, NavigationState};
 use crate::present;
@@ -260,6 +262,10 @@ struct WindowApp {
     tabs: TabsState,
     /// Highlight rectangles of the last frame (page CSS coordinates).
     find_rects: Vec<crate::links::CssRect>,
+    /// Address bar state (Ctrl+L).
+    address: AddressBar,
+    /// Open `<select>` dropdown, if any.
+    dropdown: Option<DropdownState>,
 }
 
 impl WindowApp {
@@ -320,6 +326,8 @@ impl WindowApp {
             find: FindState::new(),
             find_editing: false,
             find_rects: Vec::new(),
+            address: AddressBar::new(),
+            dropdown: None,
             tabs,
         }
     }
@@ -410,6 +418,8 @@ impl WindowApp {
         self.document = None;
         self.doc_title = None;
         self.close_find();
+        self.dropdown = None;
+        self.address.cancel();
         self.scroll = ScrollState::new(1, self.metrics.css_height);
         self.update_title();
         if let Some(window) = &self.window {
@@ -453,12 +463,39 @@ impl WindowApp {
         let Some((physical_x, physical_y)) = self.cursor else {
             return;
         };
+        let scale = self.metrics.scale;
+        let chrome_x = (physical_x / scale) as f32;
+        let chrome_y = (physical_y / scale) as f32;
+        if chrome::in_chrome(chrome_x, chrome_y, self.metrics.css_width as f32) {
+            self.chrome_click(chrome_x, chrome_y);
+            return;
+        }
         let (x, y) = physical_to_page(
             physical_x,
             physical_y,
             self.scale_factor,
             self.scroll.offset(),
         );
+        if let Some(dropdown) = &self.dropdown {
+            let list = chrome::dropdown_layout(
+                &dropdown.control_rect,
+                dropdown.options.len(),
+                self.metrics.css_height,
+                self.scroll.offset(),
+                dropdown.scroll,
+            );
+            if let Some(option_index) = list.hit(chrome_x, chrome_y) {
+                let form_id = dropdown.form_id;
+                self.select_option(form_id, option_index);
+                return;
+            }
+            if list.contains_point(chrome_x, chrome_y) {
+                return;
+            }
+            self.dropdown = None;
+            self.request_repaint();
+            return;
+        }
         if let Some(index) = crate::forms::control_at(&self.forms, x, y) {
             self.form_click(index);
             return;
@@ -638,13 +675,161 @@ impl WindowApp {
         self.request_render();
     }
 
-    /// Prints the current URL to stdout (`Ctrl+L`; there is no address bar yet).
-    fn print_current_url(&self) {
-        if let Some(url) = self.nav.current_url() {
-            println!("{url}");
-        } else {
-            println!("{}", self.input);
+    /// URL text shown in the address bar (current history entry, else the input).
+    fn current_url_text(&self) -> String {
+        self.nav.current_url().unwrap_or_else(|| self.input.clone())
+    }
+
+    /// Repaints the window without changing the title.
+    fn request_repaint(&self) {
+        if let Some(window) = &self.window {
+            window.request_redraw();
         }
+    }
+
+    /// Opens the address bar for editing (`Ctrl+L`), pre-filled with the current URL.
+    fn open_address_bar(&mut self) {
+        let url = self.current_url_text();
+        self.dropdown = None;
+        self.address.open(&url);
+        self.request_repaint();
+    }
+
+    /// Handles keystrokes while the address bar is edited; returns whether consumed.
+    fn handle_address_key(&mut self, key: &Key, ctrl: bool, alt: bool) -> bool {
+        if !self.address.is_editing() {
+            return false;
+        }
+        match key {
+            Key::Named(NamedKey::Escape) => {
+                self.address.cancel();
+                self.request_repaint();
+                true
+            }
+            Key::Named(NamedKey::Enter) => {
+                let base = self.nav.current().cloned();
+                match chrome::resolve_address(self.address.text(), base.as_ref()) {
+                    Ok(url) => {
+                        self.address.finish();
+                        self.start_navigation(&url);
+                    }
+                    Err(error) => eprintln!("megi: {error}"),
+                }
+                self.request_repaint();
+                true
+            }
+            Key::Named(NamedKey::Backspace) => {
+                self.address.backspace();
+                self.request_repaint();
+                true
+            }
+            Key::Named(NamedKey::ArrowLeft) => {
+                self.address.move_caret(false);
+                self.request_repaint();
+                true
+            }
+            Key::Named(NamedKey::ArrowRight) => {
+                self.address.move_caret(true);
+                self.request_repaint();
+                true
+            }
+            Key::Character(text) if !ctrl && !alt => {
+                self.address.insert(text);
+                self.request_repaint();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Handles keys while the `<select>` dropdown is open; returns whether consumed.
+    fn handle_dropdown_key(&mut self, key: &Key) -> bool {
+        let Some(dropdown) = self.dropdown.as_mut() else {
+            return false;
+        };
+        match key {
+            Key::Named(NamedKey::Escape) => {
+                self.dropdown = None;
+                self.request_repaint();
+                true
+            }
+            Key::Named(NamedKey::ArrowDown) => {
+                dropdown.move_active(true);
+                self.request_repaint();
+                true
+            }
+            Key::Named(NamedKey::ArrowUp) => {
+                dropdown.move_active(false);
+                self.request_repaint();
+                true
+            }
+            Key::Named(NamedKey::Enter) => {
+                let form_id = dropdown.form_id;
+                let active = dropdown.active();
+                self.dropdown = None;
+                if let Some(option_index) = active {
+                    self.select_option(form_id, option_index);
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Applies a `<select>` choice to the DOM snapshot and re-renders it.
+    fn select_option(&mut self, form_id: u32, option_index: usize) {
+        self.dropdown = None;
+        let Some(document) = self.document.clone() else {
+            return;
+        };
+        let Some(sender) = self.request_sender.as_ref() else {
+            return;
+        };
+        let mut patched = (*document).clone();
+        if !forms::patch_select(&mut patched, form_id, option_index) {
+            return;
+        }
+        let snapshot = forms::snapshot_data_url(&patched);
+        let base = self.nav.current_url();
+        let request = self.store.begin_patched_request(
+            &snapshot,
+            self.metrics.css_width,
+            self.metrics.css_height,
+            base.as_deref(),
+        );
+        let _ = sender.send(request);
+        self.document = Some(Arc::new(patched));
+        self.update_title();
+    }
+
+    /// Handles clicks inside the chrome band (tab strip or address bar).
+    fn chrome_click(&mut self, x: f32, y: f32) {
+        if y >= chrome::TAB_STRIP_HEIGHT {
+            self.open_address_bar();
+            return;
+        }
+        let titles: Vec<String> = self
+            .tabs
+            .tabs()
+            .iter()
+            .map(crate::tabs::Tab::display_title)
+            .collect();
+        let layout = chrome::layout_tabs(
+            &titles,
+            self.metrics.css_width as f32,
+            self.tabs.active_index(),
+        );
+        match chrome::tab_strip_hit(&layout, x, y) {
+            Some(TabHit::Activate(index)) => self.activate_tab(index),
+            Some(TabHit::Close(index)) => {
+                self.save_active_tab();
+                let _ = self.tabs.close(index);
+                self.load_active_tab();
+            }
+            Some(TabHit::NewTab) => self.open_new_tab(),
+            Some(TabHit::Overflow) | None => {}
+        }
+        self.request_repaint();
     }
 
     /// Focuses/clicks a form control: text fields open the editor, checkboxes/radios toggle
@@ -654,6 +839,16 @@ impl WindowApp {
             return;
         };
         if control.disabled || !self.focus.focus(index, self.forms.len()) {
+            return;
+        }
+        if control.kind == FormControlKind::Select {
+            self.editor = None;
+            self.dropdown = Some(DropdownState::open(
+                control.form_id,
+                control.rect,
+                control.options.clone(),
+            ));
+            self.request_repaint();
             return;
         }
         if control.kind.is_text_editable() {
@@ -1023,6 +1218,21 @@ impl WindowApp {
         let Some(window) = self.window.clone() else {
             return;
         };
+        // Chrome paint inputs are captured before borrowing the surface mutably.
+        let chrome_titles: Vec<String> = self
+            .tabs
+            .tabs()
+            .iter()
+            .map(crate::tabs::Tab::display_title)
+            .collect();
+        let chrome_fallback = self.current_url_text();
+        let chrome_address = self.address.clone();
+        let chrome_dropdown = self.dropdown.clone();
+        let chrome_active_tab = self.tabs.active_index();
+        let chrome_scroll = self.scroll.offset();
+        let chrome_css_height = self.metrics.css_height;
+        let chrome_css_width = self.metrics.css_width as f32;
+        let chrome_scale = self.metrics.scale as f32;
         let Some(surface) = self.surface.as_mut() else {
             return;
         };
@@ -1074,6 +1284,18 @@ impl WindowApp {
                 self.find.current(),
             );
         }
+        // Browser chrome is an overlay in CSS coordinates over the page frame.
+        let view = ChromeView {
+            tabs: &chrome_titles,
+            active_tab: chrome_active_tab,
+            address: &chrome_address,
+            fallback_url: &chrome_fallback,
+            dropdown: chrome_dropdown.as_ref(),
+            scroll_y: chrome_scroll,
+            css_viewport_height: chrome_css_height,
+            css_width: chrome_css_width,
+        };
+        let _ = chrome::draw_chrome(&mut buffer, width, height, chrome_scale, &view);
         let _ = buffer.present();
     }
 }
@@ -1127,16 +1349,58 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                 let metrics = window_metrics_zoomed(width, height, scale_factor, self.zoom);
                 self.schedule_resize(event_loop, metrics);
             }
-            WindowEvent::MouseWheel { delta, .. } => match delta {
-                MouseScrollDelta::LineDelta(_, lines) => {
-                    self.scroll_by(scroll::wheel_line_delta(f64::from(lines)));
+            WindowEvent::MouseWheel { delta, .. } => {
+                let rows = match delta {
+                    MouseScrollDelta::LineDelta(_, lines) => lines.round() as i32,
+                    MouseScrollDelta::PixelDelta(position) => (position.y / 40.0).round() as i32,
+                };
+                if let Some(dropdown) = self.dropdown.as_mut()
+                    && let Some((physical_x, physical_y)) = self.cursor
+                {
+                    let scale = self.metrics.scale;
+                    let list = chrome::dropdown_layout(
+                        &dropdown.control_rect,
+                        dropdown.options.len(),
+                        self.metrics.css_height,
+                        self.scroll.offset(),
+                        dropdown.scroll,
+                    );
+                    if list.contains_point((physical_x / scale) as f32, (physical_y / scale) as f32)
+                    {
+                        if dropdown.scroll_by(-rows) {
+                            self.request_repaint();
+                        }
+                        return;
+                    }
                 }
-                MouseScrollDelta::PixelDelta(position) => {
-                    self.scroll_by(scroll::wheel_pixel_delta(position.y));
+                match delta {
+                    MouseScrollDelta::LineDelta(_, lines) => {
+                        self.scroll_by(scroll::wheel_line_delta(f64::from(lines)));
+                    }
+                    MouseScrollDelta::PixelDelta(position) => {
+                        self.scroll_by(scroll::wheel_pixel_delta(position.y));
+                    }
                 }
-            },
+            }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = Some((position.x, position.y));
+                if let Some(dropdown) = self.dropdown.as_mut() {
+                    let scale = self.metrics.scale;
+                    let list = chrome::dropdown_layout(
+                        &dropdown.control_rect,
+                        dropdown.options.len(),
+                        self.metrics.css_height,
+                        self.scroll.offset(),
+                        dropdown.scroll,
+                    );
+                    if let Some(index) =
+                        list.hit((position.x / scale) as f32, (position.y / scale) as f32)
+                        && dropdown.active != Some(index)
+                    {
+                        dropdown.active = Some(index);
+                        self.request_repaint();
+                    }
+                }
             }
             WindowEvent::ModifiersChanged(modifiers) => {
                 self.modifiers = modifiers.state();
@@ -1156,7 +1420,7 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                 if ctrl_pressed
                     && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("l"))
                 {
-                    self.print_current_url();
+                    self.open_address_bar();
                     return;
                 }
                 if ctrl_pressed
@@ -1196,6 +1460,12 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                         .filter(|digit| (1..=9).contains(digit))
                 {
                     self.activate_tab(index as usize - 1);
+                    return;
+                }
+                if self.handle_dropdown_key(&event.logical_key) {
+                    return;
+                }
+                if self.handle_address_key(&event.logical_key, ctrl_pressed, alt_pressed) {
                     return;
                 }
                 if self.handle_find_key(

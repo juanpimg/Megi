@@ -50,6 +50,80 @@ pub fn render_target_with_options(
     Ok(render::render_url(input, &effective)?)
 }
 
+/// Renders `input` and paints the shell chrome (tab strip + address bar) over the page.
+///
+/// Headless equivalent of the window overlay: the chrome occupies the top
+/// [`crate::chrome::CHROME_HEIGHT`] CSS pixels and the page keeps its full viewport
+/// (documented overlay trade-off). Used by `--screenshot --chrome` for tests; the PNG
+/// returned by [`render_target`] stays chrome-free so page goldens are unaffected.
+pub fn render_target_with_chrome(
+    input: &str,
+    width: u32,
+    height: u32,
+    options: &render::RenderOptions,
+    find_query: Option<&str>,
+) -> Result<render::RenderOutput, ShellError> {
+    let mut output = render_target_with_options(input, width, height, options)?;
+    if let Some(query) = find_query {
+        let rects = crate::find::highlight_rects(&output.layout, query);
+        crate::find::overlay_highlights_pixmap(&mut output.pixmap, &rects, 0);
+    }
+    let mut dest = crate::convert::pixmap_to_0rgb(&output.pixmap);
+    let title = crate::title::document_title(&output.document).unwrap_or_else(|| input.to_string());
+    let tabs = vec![crate::chrome::truncate_title(&title, 24)];
+    let address = crate::chrome::AddressBar::new();
+    let view = crate::chrome::ChromeView {
+        tabs: &tabs,
+        active_tab: 0,
+        address: &address,
+        fallback_url: input,
+        dropdown: None,
+        scroll_y: 0,
+        css_viewport_height: height,
+        css_width: width as f32,
+    };
+    crate::chrome::draw_chrome(&mut dest, width, height, 1.0, &view);
+    output.pixmap.pixels = dest
+        .iter()
+        .map(|pixel| {
+            paint::Color::new(
+                ((pixel >> 16) & 0xFF) as u8,
+                ((pixel >> 8) & 0xFF) as u8,
+                (pixel & 0xFF) as u8,
+                0xFF,
+            )
+        })
+        .collect();
+    Ok(output)
+}
+
+/// Headless screenshot including the shell chrome (`--screenshot --chrome`).
+pub fn screenshot_with_chrome(
+    input: &str,
+    width: u32,
+    height: u32,
+    path: impl AsRef<Path>,
+    options: &render::RenderOptions,
+    find_query: Option<&str>,
+) -> Result<ScreenshotInfo, ShellError> {
+    let output = render_target_with_chrome(input, width, height, options, find_query)?;
+    let png = output.pixmap.to_png();
+    let path = path.as_ref().to_path_buf();
+    if png.is_empty() {
+        return Err(ShellError::Io {
+            path: path.display().to_string(),
+            reason: "PNG encoding produced no bytes".to_string(),
+        });
+    }
+    write_bytes(&path, &png)?;
+    Ok(ScreenshotInfo {
+        path,
+        width: output.pixmap.width,
+        height: output.pixmap.height,
+        png_bytes: png.len(),
+    })
+}
+
 /// Renders `input` and paints find-in-page highlights for `query` into the pixmap.
 ///
 /// Returns the render output (with the highlight overlay already blended into
