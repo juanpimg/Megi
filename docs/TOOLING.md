@@ -1,6 +1,6 @@
 # Documentación de Tooling, Skills y Automatización (FASES 2–4)
 
-Este documento registra la investigación, evaluación, instalación y configuración de herramientas CLI, scripts de extracción de especificaciones y skills locales realizadas durante las **FASES 2–5** para optimizar el desarrollo autónomo guiado por especificaciones (WHATWG / W3C), el auto-testeo continuo (`html5lib-tests` y Web Platform Tests), el pipeline de renderizado a PNG, el arranque de la red (Fase 5) y el fuzzing continuo en **Megi**.
+Este documento registra la investigación, evaluación, instalación y configuración de herramientas CLI, scripts de extracción de especificaciones y skills locales realizadas durante las **FASES 2–5** para optimizar el desarrollo autónomo guiado por especificaciones (WHATWG / W3C), el auto-testeo continuo (`html5lib-tests` y Web Platform Tests), el pipeline de renderizado a PNG, el navegador real (render + red + imágenes) y el fuzzing continuo en **Megi**.
 
 ---
 
@@ -123,7 +123,7 @@ Directorio versionado con documentos HTML autocontenidos (sin red ni JavaScript)
 
 - `basic.html`: documento 800×600 con `h1`, `p`, `br`, `span` con color/negrita, `ul/li`, `div` con padding + borde + fondo, `hr` y enlace.
 - `basic.rgba`: golden de 800×600 en RGBA crudo (4 bytes/píxel), comparado **byte a byte** por `crates/paint/tests/end_to_end_html.rs` (determinismo total del pipeline).
-- `README.md`: procedimiento de regeneración del golden, validación y limitaciones (PNG sin compresión, fuente DejaVu determinista para `crates/fonts`).
+- `README.md`: procedimiento de regeneración del golden, validación y limitaciones (fuente DejaVu determinista para `crates/fonts`; el PNG se comprime con el DEFLATE propio de `paint`).
 
 ```bash
 # Render + validación + tests
@@ -181,7 +181,38 @@ cargo +nightly fuzz run selectors  -- -max_total_time=30
 cargo +nightly fuzz run net_url    -- -max_total_time=30
 ```
 
-### 2.9 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
+### 2.9 `crates/render` + `tools/render_fixture.sh` — Pipeline de navegador URL → PNG
+
+`crates/render` es el punto de integración del motor (Fase 5): `URL → net → HTML → CSS externo → layout → display list → PNG`.
+
+```bash
+# Fixture offline con CSS externo (resuelto por <base>) + validación + md5
+bash tools/render_fixture.sh /tmp/render-fixture.png
+
+# Equivalente manual, con JSON de stats por etapa
+cargo run -p render -- tests/fixtures/render/basic.html /tmp/render.png --width 640 --height 400 --json
+
+# URL real (requiere red/TLS); --no-network para offline
+cargo run -p render -- https://example.com/ /tmp/example.png
+cargo run -p render -- file:///ruta/pagina.html /tmp/local.png --no-network
+```
+
+`tools/render_fixture.sh` renderiza `tests/fixtures/render/basic.html` (640×400), valida el PNG con `png_check.py` e imprime su md5. El fixture comprueba `<base>`, hoja externa `screen.css` (canvas verde), hoja `media="print"` ignorada y `<style>` inline; resultado de referencia: **15.498 B**, `md5 7324e851…`.
+
+### 2.10 `crates/image` — Decoder PNG y oráculo del codificador
+
+`crates/image` (std puro, sin dependencias) decodifica PNG a RGBA8 straight y expone un inflate zlib/DEFLATE reutilizable:
+
+```bash
+cargo test -p image                 # 46 tests (decode + inflate + PNG del pipeline)
+cargo run -p render -- tests/fixtures/phase4/basic.html /tmp/basic.png 2>/dev/null || true
+# El test de integración decodifica el PNG generado por paint y lo compara con basic.rgba
+cargo test -p paint --test end_to_end_html
+```
+
+En tests actúa como **oráculo** del codificador de `paint` (ida y vuelta PNG → RGBA = golden `basic.rgba`). Límites anti-DoS (`PngLimits`: 16384 px/lado, 16 Mpx, 64 MiB/chunk, 256 MiB IDAT) documentados en el crate.
+
+### 2.11 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
 
 Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-spec-driven-dev/SKILL.md` (directorio ignorado en `.gitignore` para mantener limpio el árbol Git de metadatos de agentes, mientras su documentación permanente reside en este archivo `docs/TOOLING.md`). Esta skill estandariza el protocolo operativo para cualquier agente que trabaje en la Fase 1 y posteriores:
 1. Consultar primero la sección normativa con `./tools/whatwg_spec.py section <id>`.
@@ -194,15 +225,17 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 362 tests, doc y gate de conformidad
+./tools/dev.sh all                     # fmt, clippy, 475 tests, doc y gate de conformidad
 cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 
 cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
 python3 tools/png_check.py /tmp/basic.png
+cargo run -p render -- tests/fixtures/render/basic.html /tmp/render.png --width 640 --height 400 --json
+bash tools/render_fixture.sh
+cargo test -p net -p render -p image
 ./tools/bench.sh --scale 0.1
-cargo test -p net                    # Fase 5, offline
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Cifras de referencia de esta ronda: **362 tests** (bench 8, css 41, dom 9, fonts 13+1 doctest, html 33, layout 102, net 85, paint 63, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+Cifras de referencia de esta ronda: **475 tests** (bench 8, css 44, dom 20, fonts 13+1 doctest, html 33, image 45+1, layout 118, net 85, paint 77, render 21+1, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.

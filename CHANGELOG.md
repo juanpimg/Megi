@@ -6,6 +6,66 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 5 — tables, PNG compression, browser pipeline and generational DOM (2026-11-10)
+
+#### Added
+
+- **`crates/render`** (Phase 5): first real browser pipeline — `URL → net → HTML
+  decode → DOM → author CSS (inline + external `<link>`/`@import`-less) → layout
+  with bundled fonts → display list → deterministic PNG`. Handles charset
+  UTF-8/Windows-1252, `<base>`, stylesheet dedup and caps (16 MiB document,
+  32 sheets, 1 MiB/sheet, 4 MiB total CSS), per-stage stats and CLI
+  (`--width/--height/--base/--no-network/--json`). 22 tests; fixture 640×400 →
+  15,498 B `md5 7324e851…`.
+- **`crates/image`**: dependency-free PNG decoder + full zlib/DEFLATE inflater
+  (stored/fixed/dynamic, 32 KiB window, Adler-32): colour types 0/2/3/4/6,
+  bit depth 1–16, filters 0–4, Adam7, `PLTE`/`tRNS`, CRC verification and
+  `PngLimits` anti-DoS bounds. Used as the round-trip oracle of the paint PNG
+  encoder against `basic.rgba`. 46 tests.
+- **CSS tables**: `Display::{InlineTable, TableRowGroup, TableHeaderGroup,
+  TableFooterGroup, TableColumnGroup, TableColumn, TableCaption}` and
+  `ComputedStyle::{border_spacing, border_collapse, table_layout,
+  caption_side, empty_cells}` plus the WHATWG HTML §15 UA table rules.
+- **Layout tables/inline-block/replaced**: CSS 2.1 §17 auto table layout
+  (min/max-content, `border-spacing`, `colspan`, anonymous table fixups, cell
+  `vertical-align`, caption and row-groups); real `inline-block`
+  (shrink-to-fit, baseline, vertical-align); `BoxType::Replaced` with intrinsic
+  sizes (`img` 300×150, `input` 20×20, `textarea` 160×40) and
+  `layout_document_with_replaced_sizes`. 118 layout tests.
+- **DOM generations**: `NodeId` packs 20-bit slot + 12-bit generation in 4 B,
+  LIFO free list with slot reuse, `remove_node`/`remove_subtree`, stale/foreign
+  handle rejection (`try_node`/`owns`), iterative `descendants`/`ancestors`
+  with cycle guards, `validate_invariants()` and `estimate_bytes()`. 20 tests.
+- **PNG compression in paint**: own DEFLATE (LZ77 32 KiB hash chains + fixed
+  Huffman `BTYPE=01`, zlib/Adler-32) and adaptive PNG filters;
+  `build_display_list` is now fully iterative with documented caps (stacking
+  256, floats 64, items 5 M).
+
+#### Changed
+
+- README/ROADMAP/ARCHITECTURE/HANDOFF/PHASE4-SUPPORT/TOOLING/CONTRIBUTING/
+  SECURITY/CHANGELOG synchronized with round 5 (475 tests, Phase 4 ≈99 %,
+  Phase 5 ≈60 %); new `docs/images/render-fixture.png` capture (15,498 B).
+- Golden PNG regenerated with compression: **1,920,813 B → 42,853 B (44.8×)**
+  while `basic.rgba` stays byte-identical (`md5 60f8984e…`, PNG
+  `md5 9e957177…`); render-to-PNG 8.6 → 14.2 ms due to compression.
+
+#### Fixed
+
+- Deep display-list recursion removed: the painter is iterative (20,000-level
+  trees safe) and nodes beyond the documented caps are painted flat in-flow
+  instead of overflowing the stack.
+- DOM stale/foreign `NodeId` handles no longer corrupt the arena; invalid
+  handles panic with a clear message or return `None` from `try_node`.
+
+#### Performance
+
+- PNG output 44.8× smaller; paint raster/caches unchanged (raster 800×600
+  ~0.9 ms), render-to-PNG now 14.2 ms including DEFLATE.
+- Test suite: **475 tests** (was 362), all green; `fmt`, `clippy -D warnings`,
+  `cargo doc`, 4-suite conformance gate and MSRV 1.88 verified.
+
+
 ### Round 4 — positioning/floats/stacking + TLS/cache + fuzzing (2026-11-10)
 
 #### Added

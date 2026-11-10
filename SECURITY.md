@@ -73,6 +73,20 @@ after a fix is available.
 - Remaining non-linear CPU paths and layout/paint recursion budgets are
   tracked in [`docs/HANDOFF.md`](docs/HANDOFF.md) and measured by the
   benchmark suite; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
+- **Render pipeline limits** (`crates/render`): main document capped at 16 MiB,
+  at most 32 external stylesheets, 1 MiB per stylesheet and 4 MiB of total
+  author CSS, viewport up to 8192×8192; `--no-network` refuses http(s)
+  resources. Non-fatal failures (e.g. a 404 stylesheet) become warnings in
+  `RenderOutput::stats` instead of aborting the render.
+- **Image decoding limits** (`crates/image`): the PNG decoder enforces
+  `PngLimits` (16384 px per side, 16 Mpx total, 64 MiB per chunk, 256 MiB of
+  IDAT) before/while inflating, verifies chunk CRCs and never panics on
+  malformed input; the inflate implementation is the crate's own and is
+  fuzzed alongside the parsers.
+- **DOM identity**: generational `NodeId` handles (20-bit slot + 12-bit
+  generation, free-list reuse) reject stale/foreign handles and give clear
+  panics instead of corrupting the arena; `descendants`/`ancestors` are
+  iterative and terminate on cyclic links.
 - There is no JavaScript engine yet (Phase 6); sandboxing and JIT hardening
   will be designed as part of that phase.
 
