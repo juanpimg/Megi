@@ -38,7 +38,7 @@ pub use cascade::{
 };
 pub use component_value::{ComponentValue, FunctionCall, SimpleBlock};
 pub use flex::{AlignItems, AlignSelf, FlexDirection, FlexWrap, JustifyContent};
-pub use grid::{GridTemplate, TrackSize};
+pub use grid::{AutoRepeat, AutoRepeatKind, GridLine, GridTemplate, TrackMax, TrackMin, TrackSize};
 pub use media::{
     MediaCondition, MediaContext, MediaFeature, MediaQualifier, MediaQuery, MediaQueryList,
     MediaType, Orientation, evaluate as evaluate_media, parse_media_query_list,
@@ -48,8 +48,10 @@ pub use properties::{
     BackgroundAttachment, BackgroundClip, BackgroundLayer, BackgroundOrigin, BackgroundPosition,
     BackgroundRepeat, BackgroundRepeatAxis, BackgroundSize, BorderCollapse, BorderRadii,
     BorderStyle, BoxShadow, BoxSizing, CaptionSide, Clear, Color, ComputedStyle, Display,
-    EmptyCells, Float, FontStyle, Length, ListStyleType, Overflow, Position, Radius, RectEdges,
-    TableLayout, TextAlign, TextDecoration, TextShadow, VerticalAlign, Visibility, WhiteSpace,
+    EmptyCells, Float, FontStyle, Gradient, GradientKind, GradientStop, Length, LinearDirection,
+    LinearGradient, ListStyleType, MAX_GRADIENT_STOPS, MAX_GRADIENTS, Overflow, Position,
+    RadialExtent, RadialGradient, RadialShape, Radius, RectEdges, TableLayout, TextAlign,
+    TextDecoration, TextShadow, VerticalAlign, Visibility, WhiteSpace,
 };
 pub use query::{
     SelectorParseError, matches, matches_with_state, query_selector, query_selector_all,

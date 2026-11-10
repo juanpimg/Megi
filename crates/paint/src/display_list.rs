@@ -166,6 +166,16 @@ pub enum DisplayItem {
         opacity: f32,
         items: Vec<DisplayItem>,
     },
+    /// Paints one CSS gradient tile (`linear-gradient()`/`radial-gradient()` and
+    /// their `repeating-` forms) into `rect`, clipped by the active clip stack.
+    ///
+    /// The painter resolves `background-size`/`position`/`repeat` before emitting
+    /// the item, so the rasterizer only evaluates the gradient function per pixel
+    /// with analytic edge antialiasing (CSS Images 3 §3).
+    Gradient {
+        rect: Rect,
+        gradient: Arc<css::Gradient>,
+    },
     /// Draws a decoded replaced element (`<img>`) scaled into `rect`.
     ///
     /// The image is stretched to fill `rect` (`object-fit: fill`, the CSS 2.2
@@ -266,6 +276,7 @@ impl DisplayItem {
             | Self::Text { rect, .. }
             | Self::TextDecoration { rect, .. }
             | Self::Marker { rect, .. }
+            | Self::Gradient { rect, .. }
             | Self::Image { rect, .. }
             | Self::OpacityGroup { rect, .. } => Some(*rect),
             Self::BoxShadow { rect, shadow, .. } => {

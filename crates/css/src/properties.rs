@@ -1150,6 +1150,107 @@ impl BackgroundAttachment {
     }
 }
 
+/// One color stop of a CSS gradient (CSS Images 3 §3.4).
+#[derive(Clone, Debug, PartialEq)]
+pub struct GradientStop {
+    /// Stop color (`currentColor` already resolved).
+    pub color: Color,
+    /// Explicit position: percentage of the gradient line/size or an absolute length.
+    pub position: Option<Length>,
+}
+
+/// Direction of a `linear-gradient()` (CSS Images 3 §3.1.1).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum LinearDirection {
+    /// Angle in CSS degrees (`0deg` points up, `90deg` points right).
+    Angle(f32),
+    /// `to top`.
+    ToTop,
+    /// `to right`.
+    ToRight,
+    /// `to bottom` (the initial direction).
+    #[default]
+    ToBottom,
+    /// `to left`.
+    ToLeft,
+    /// `to top right`.
+    ToTopRight,
+    /// `to top left`.
+    ToTopLeft,
+    /// `to bottom right`.
+    ToBottomRight,
+    /// `to bottom left`.
+    ToBottomLeft,
+}
+
+/// Computed `linear-gradient()` geometry.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LinearGradient {
+    /// Gradient line direction.
+    pub direction: LinearDirection,
+}
+
+/// Shape of a `radial-gradient()` (CSS Images 3 §3.2.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RadialShape {
+    /// `circle`.
+    Circle,
+    /// `ellipse` (the initial shape).
+    Ellipse,
+}
+
+/// Explicit size of a `radial-gradient()` (CSS Images 3 §3.2.1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum RadialExtent {
+    /// `closest-side`.
+    ClosestSide,
+    /// `closest-corner`.
+    ClosestCorner,
+    /// `farthest-side`.
+    FarthestSide,
+    /// `farthest-corner` (the initial value).
+    FarthestCorner,
+    /// Explicit radii in CSS px: `(rx, ry)`; circles use `rx == ry`.
+    Explicit(f32, f32),
+}
+
+/// Computed `radial-gradient()` geometry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RadialGradient {
+    /// Explicit shape (`None` = infer from the size: a single length means circle).
+    pub shape: Option<RadialShape>,
+    /// Extent/size keywords or explicit radii.
+    pub extent: Option<RadialExtent>,
+    /// Center position (`background-position` syntax; initial `center`).
+    pub position: BackgroundPosition,
+}
+
+/// One parsed CSS gradient (`linear-gradient`, `radial-gradient` or their
+/// `repeating-` variants).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Gradient {
+    /// Gradient geometry.
+    pub kind: GradientKind,
+    /// Whether the stop pattern repeats (`repeating-*` functions).
+    pub repeating: bool,
+    /// Color stops, at most [`MAX_GRADIENT_STOPS`] (CSS Images 3 §3.4).
+    pub stops: Vec<GradientStop>,
+}
+
+/// Geometry of a [`Gradient`].
+#[derive(Clone, Debug, PartialEq)]
+pub enum GradientKind {
+    /// `linear-gradient()`.
+    Linear(LinearGradient),
+    /// `radial-gradient()`.
+    Radial(RadialGradient),
+}
+
+/// Hard cap on the number of stops kept per gradient.
+pub const MAX_GRADIENT_STOPS: usize = 64;
+/// Hard cap on the number of gradient layers kept per computed style.
+pub const MAX_GRADIENTS: usize = 256;
+
 /// One computed `background-image` layer (CSS Backgrounds 3 §3.1).
 ///
 /// Multi-layer backgrounds are stored bottom-to-top in
@@ -1157,8 +1258,12 @@ impl BackgroundAttachment {
 /// the painter iterates the list in reverse order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BackgroundLayer {
-    /// `background-image` URL of this layer (raw, unresolved); `None` for `none`.
+    /// `background-image` URL of this layer (raw, unresolved); `None` for `none`,
+    /// gradients and unsupported image types. The `render` crate loads bitmaps
+    /// from this field only (gradients need no I/O).
     pub image: Option<String>,
+    /// Parsed `linear-gradient()`/`radial-gradient()` for this layer, if any.
+    pub gradient: Option<std::sync::Arc<Gradient>>,
     /// Repetition on each axis.
     pub repeat: BackgroundRepeat,
     /// Tile sizing.
@@ -1177,6 +1282,7 @@ impl Default for BackgroundLayer {
     fn default() -> Self {
         Self {
             image: None,
+            gradient: None,
             repeat: BackgroundRepeat::REPEAT,
             size: BackgroundSize::Auto,
             position: BackgroundPosition::ZERO,
@@ -1427,6 +1533,18 @@ pub struct ComputedStyle {
     /// `true` when authored as `display: inline-grid`.
     pub is_inline_grid: bool,
 
+    // CSS Grid explicit placement and item order.
+    /// `grid-column-start` (`grid-column` shorthand/longhand).
+    pub grid_column_start: crate::grid::GridLine,
+    /// `grid-column-end`.
+    pub grid_column_end: crate::grid::GridLine,
+    /// `grid-row-start` (`grid-row` shorthand/longhand).
+    pub grid_row_start: crate::grid::GridLine,
+    /// `grid-row-end`.
+    pub grid_row_end: crate::grid::GridLine,
+    /// `order` for grid/flex items (initial `0`).
+    pub order: i32,
+
     // Typography
     pub font_size: f32,
     pub font_weight: u16,
@@ -1541,6 +1659,12 @@ impl ComputedStyle {
             justify_items: crate::flex::AlignItems::Stretch,
             justify_self: crate::flex::AlignSelf::Auto,
             is_inline_grid: false,
+
+            grid_column_start: crate::grid::GridLine::Auto,
+            grid_column_end: crate::grid::GridLine::Auto,
+            grid_row_start: crate::grid::GridLine::Auto,
+            grid_row_end: crate::grid::GridLine::Auto,
+            order: 0,
 
             font_size: 16.0,
             font_weight: 400,
@@ -1727,7 +1851,7 @@ impl ComputedStyle {
         // The scalar fields mirror the first (top-most) background layer so the
         // existing single-image render loader keeps working unchanged.
         let (background_layers, background_geometry_explicit) =
-            Self::compute_background_layers(&entries, font_size, root_font_size);
+            Self::compute_background_layers(&entries, font_size, root_font_size, color);
         let inherited_text_shadows = parent
             .map(|style| style.text_shadows.as_slice())
             .unwrap_or_default();
@@ -1869,6 +1993,12 @@ impl ComputedStyle {
             justify_items: computed_grid.justify_items,
             justify_self: computed_grid.justify_self,
             is_inline_grid: computed_grid.is_inline_grid,
+
+            grid_column_start: computed_grid.column_start,
+            grid_column_end: computed_grid.column_end,
+            grid_row_start: computed_grid.row_start,
+            grid_row_end: computed_grid.row_end,
+            order: computed_grid.order,
             font_size,
             font_weight,
             font_style,
@@ -2107,6 +2237,7 @@ impl ComputedStyle {
         entries: &[(&str, &Declaration)],
         font_size: f32,
         root_font_size: f32,
+        current_color: Color,
     ) -> (Vec<BackgroundLayer>, bool) {
         let image_decl = find_declaration(entries, "background-image");
         let repeat_decl = find_declaration(entries, "background-repeat");
@@ -2118,11 +2249,19 @@ impl ComputedStyle {
         let attachment_decl = find_declaration(entries, "background-attachment");
         let shorthand = find_declaration(entries, "background");
 
-        let image_values: Vec<Option<String>> = image_decl
+        // Each comma-separated image may be a plain `url()` or a gradient.
+        let image_values: Vec<(Option<String>, Option<std::sync::Arc<Gradient>>)> = image_decl
             .map(|decl| {
                 split_top_level_commas(&decl.raw_value)
                     .iter()
-                    .map(|component| parse_image_value(component))
+                    .map(|component| {
+                        parse_background_image_component(
+                            component,
+                            font_size,
+                            root_font_size,
+                            current_color,
+                        )
+                    })
                     .collect()
             })
             .unwrap_or_default();
@@ -2140,7 +2279,8 @@ impl ComputedStyle {
             || find_declaration(entries, "-webkit-background-clip").is_some()
             || attachment_decl.is_some()
             || shorthand.is_some()
-            || layers_count > 1;
+            || layers_count > 1
+            || image_values.iter().any(|(_, gradient)| gradient.is_some());
 
         let repeats = cycle_property_list(
             repeat_decl,
@@ -2180,19 +2320,28 @@ impl ComputedStyle {
         );
 
         let mut layers = Vec::with_capacity(layers_count);
+        let mut gradient_count = 0usize;
         for index in 0..layers_count {
-            let image = image_values
+            let (image, mut gradient) = image_values
                 .get(index.min(image_values.len().saturating_sub(1)))
                 .cloned()
-                .flatten()
-                .or_else(|| {
-                    shorthand_tokens
-                        .as_ref()
-                        .and_then(|tokens| tokens.image.clone())
-                        .and_then(|value| parse_image_value(&value))
-                });
+                .unwrap_or((None, None));
+            // Cap the number of gradient layers per computed style.
+            if gradient.is_some() {
+                gradient_count += 1;
+                if gradient_count > MAX_GRADIENTS {
+                    gradient = None;
+                }
+            }
+            let image = image.or_else(|| {
+                shorthand_tokens
+                    .as_ref()
+                    .and_then(|tokens| tokens.image.clone())
+                    .and_then(|value| parse_image_value(&value))
+            });
             layers.push(BackgroundLayer {
                 image,
+                gradient,
                 repeat: repeats[index],
                 size: sizes[index],
                 position: positions[index],
@@ -3020,6 +3169,288 @@ fn parse_border_spacing(value: &str, font_size: f32, root_font_size: f32) -> Opt
 /// `repeating-*`), `image-set(...)` and other unsupported image types evaluate to `None`
 /// (documented limitation: the engine has no gradient rasterizer yet). For a multi-layer value
 /// the first plain URL layer is used.
+/// Parses one `background-image` layer: a plain `url(...)` or a CSS gradient.
+///
+/// Returns `(url, gradient)`; both are `None` for `none` and unsupported image
+/// types. Invalid gradients are dropped (the layer paints nothing) instead of
+/// panicking, matching the tolerant parser contract.
+fn parse_background_image_component(
+    value: &str,
+    font_size: f32,
+    root_font_size: f32,
+    current_color: Color,
+) -> (Option<String>, Option<std::sync::Arc<Gradient>>) {
+    let value = value.trim().trim_matches(',').trim();
+    if value.is_empty() || value.eq_ignore_ascii_case("none") {
+        return (None, None);
+    }
+    if let Some(url) = parse_url_component(value) {
+        return (Some(url), None);
+    }
+    let lower = value.to_ascii_lowercase();
+    if lower.starts_with("linear-gradient(")
+        || lower.starts_with("repeating-linear-gradient(")
+        || lower.starts_with("radial-gradient(")
+        || lower.starts_with("repeating-radial-gradient(")
+    {
+        return (
+            None,
+            parse_gradient_component(value, font_size, root_font_size, current_color)
+                .map(std::sync::Arc::new),
+        );
+    }
+    (None, None)
+}
+
+/// Parses `linear-gradient()`/`radial-gradient()` and their `repeating-` forms.
+///
+/// Grammar implemented (CSS Images 3 §3.1–3.4):
+/// - linear: optional `<angle>` or `to <side|corner>` direction + 2..=64 stops;
+/// - radial: optional `[<shape> || <size>]? [at <position>]?` + 2..=64 stops;
+/// - stops: `<color> [<length-percentage> [<length-percentage>]?]?`.
+///
+/// Not supported (documented): `conic-gradient()`, color hints (a bare stop
+/// position between colors), color interpolation spaces and `image-set()`.
+fn parse_gradient_component(
+    value: &str,
+    font_size: f32,
+    root_font_size: f32,
+    current_color: Color,
+) -> Option<Gradient> {
+    let trimmed = value.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let (prefix_len, repeating, radial) = if lower.starts_with("repeating-linear-gradient(") {
+        ("repeating-linear-gradient(".len(), true, false)
+    } else if lower.starts_with("linear-gradient(") {
+        ("linear-gradient(".len(), false, false)
+    } else if lower.starts_with("repeating-radial-gradient(") {
+        ("repeating-radial-gradient(".len(), true, true)
+    } else if lower.starts_with("radial-gradient(") {
+        ("radial-gradient(".len(), false, true)
+    } else {
+        return None;
+    };
+    if !trimmed[prefix_len - 1..].ends_with(')') {
+        return None;
+    }
+    let inner = trimmed[prefix_len..trimmed.len() - 1].trim();
+    let components = split_top_level_commas(inner);
+    if components.is_empty() {
+        return None;
+    }
+    let mut index = 0usize;
+    let mut stops = Vec::new();
+    let kind = if radial {
+        let mut shape = None;
+        let mut extent = None;
+        let mut position = BackgroundPosition {
+            x: Length::Percent(50.0),
+            y: Length::Percent(50.0),
+        };
+        if !starts_with_color_stop(&components[0], current_color) {
+            let (parsed_shape, parsed_extent, parsed_position) =
+                parse_radial_prefix(&components[0], font_size, root_font_size)?;
+            shape = parsed_shape;
+            extent = parsed_extent;
+            if let Some(parsed_position) = parsed_position {
+                position = parsed_position;
+            }
+            index = 1;
+        }
+        GradientKind::Radial(RadialGradient {
+            shape,
+            extent,
+            position,
+        })
+    } else {
+        let mut direction = LinearDirection::ToBottom;
+        if !starts_with_color_stop(&components[0], current_color) {
+            direction = parse_linear_direction(&components[0])?;
+            index = 1;
+        }
+        GradientKind::Linear(LinearGradient { direction })
+    };
+    for component in &components[index..] {
+        let stop_components = split_components(component);
+        if stop_components.is_empty() {
+            return None;
+        }
+        let color = parse_stop_color(&stop_components[0], current_color)?;
+        let mut positions = Vec::new();
+        for token in &stop_components[1..] {
+            let position = Length::parse(token, font_size, root_font_size)?;
+            if matches!(position, Length::Auto) || positions.len() >= 2 {
+                return None;
+            }
+            positions.push(position);
+        }
+        match positions.as_slice() {
+            [] => stops.push(GradientStop {
+                color,
+                position: None,
+            }),
+            [position] => stops.push(GradientStop {
+                color,
+                position: Some(*position),
+            }),
+            [first, second] => {
+                // Two positions create a hard stop (CSS Images 3 §3.4.1).
+                stops.push(GradientStop {
+                    color,
+                    position: Some(*first),
+                });
+                stops.push(GradientStop {
+                    color,
+                    position: Some(*second),
+                });
+            }
+            _ => return None,
+        }
+        if stops.len() >= MAX_GRADIENT_STOPS {
+            stops.truncate(MAX_GRADIENT_STOPS);
+            break;
+        }
+    }
+    if stops.len() < 2 {
+        return None;
+    }
+    Some(Gradient {
+        kind,
+        repeating,
+        stops,
+    })
+}
+
+fn parse_stop_color(component: &str, current_color: Color) -> Option<Color> {
+    parse_color_component(component.trim(), current_color)
+}
+
+fn starts_with_color_stop(component: &str, current_color: Color) -> bool {
+    split_components(component)
+        .first()
+        .is_some_and(|first| parse_stop_color(first, current_color).is_some())
+}
+
+/// Parses a `linear-gradient()` direction argument.
+fn parse_linear_direction(value: &str) -> Option<LinearDirection> {
+    let lower = value.trim().to_ascii_lowercase();
+    match lower.as_str() {
+        "to top" => Some(LinearDirection::ToTop),
+        "to right" => Some(LinearDirection::ToRight),
+        "to bottom" => Some(LinearDirection::ToBottom),
+        "to left" => Some(LinearDirection::ToLeft),
+        "to top right" | "to right top" => Some(LinearDirection::ToTopRight),
+        "to top left" | "to left top" => Some(LinearDirection::ToTopLeft),
+        "to bottom right" | "to right bottom" => Some(LinearDirection::ToBottomRight),
+        "to bottom left" | "to left bottom" => Some(LinearDirection::ToBottomLeft),
+        other => parse_angle_degrees(other).map(LinearDirection::Angle),
+    }
+}
+
+/// Parses a CSS angle (`deg`, `grad`, `rad`, `turn`) into degrees.
+fn parse_angle_degrees(value: &str) -> Option<f32> {
+    let value = value.trim().to_ascii_lowercase();
+    if let Some(number) = value.strip_suffix("deg") {
+        return number.trim().parse::<f32>().ok();
+    }
+    if let Some(number) = value.strip_suffix("grad") {
+        return number.trim().parse::<f32>().ok().map(|grad| grad * 0.9);
+    }
+    if let Some(number) = value.strip_suffix("rad") {
+        return number
+            .trim()
+            .parse::<f32>()
+            .ok()
+            .map(|rad| rad.to_degrees());
+    }
+    if let Some(number) = value.strip_suffix("turn") {
+        return number.trim().parse::<f32>().ok().map(|turn| turn * 360.0);
+    }
+    None
+}
+
+/// Parses the optional `radial-gradient()` prefix: `[<shape> || <size>]? [at <position>]?`.
+fn parse_radial_prefix(
+    value: &str,
+    font_size: f32,
+    root_font_size: f32,
+) -> Option<(
+    Option<RadialShape>,
+    Option<RadialExtent>,
+    Option<BackgroundPosition>,
+)> {
+    let tokens = split_components(value.trim());
+    let mut shape = None;
+    let mut extent = None;
+    let mut position = None;
+    let mut explicit = Vec::new();
+    let mut index = 0usize;
+    while index < tokens.len() {
+        let token = tokens[index].trim().to_ascii_lowercase();
+        match token.as_str() {
+            "circle" => shape = Some(RadialShape::Circle),
+            "ellipse" => shape = Some(RadialShape::Ellipse),
+            "closest-side" => extent = Some(RadialExtent::ClosestSide),
+            "closest-corner" => extent = Some(RadialExtent::ClosestCorner),
+            "farthest-side" => extent = Some(RadialExtent::FarthestSide),
+            "farthest-corner" => extent = Some(RadialExtent::FarthestCorner),
+            "at" => {
+                let mut position_tokens = Vec::new();
+                while index + 1 < tokens.len() && position_tokens.len() < 2 {
+                    let next = tokens[index + 1].trim();
+                    let next_lower = next.to_ascii_lowercase();
+                    if matches!(
+                        next_lower.as_str(),
+                        "circle"
+                            | "ellipse"
+                            | "closest-side"
+                            | "closest-corner"
+                            | "farthest-side"
+                            | "farthest-corner"
+                    ) {
+                        break;
+                    }
+                    position_tokens.push(next.to_string());
+                    index += 1;
+                }
+                if position_tokens.is_empty() {
+                    return None;
+                }
+                let parsed = BackgroundPosition::parse(
+                    &position_tokens.join(" "),
+                    font_size,
+                    root_font_size,
+                )?;
+                position = Some(parsed);
+            }
+            _ => {
+                let parsed = Length::parse(&token, font_size, root_font_size)?;
+                match parsed {
+                    Length::Px(px) if px >= 0.0 => explicit.push(px),
+                    Length::Auto | Length::Percent(_) | Length::Px(_) => return None,
+                }
+            }
+        }
+        index += 1;
+    }
+    if extent.is_none() && !explicit.is_empty() {
+        match explicit.as_slice() {
+            [radius] => {
+                shape = shape.or(Some(RadialShape::Circle));
+                extent = Some(RadialExtent::Explicit(*radius, *radius));
+            }
+            [rx, ry] => {
+                shape = shape.or(Some(RadialShape::Ellipse));
+                extent = Some(RadialExtent::Explicit(*rx, *ry));
+            }
+            _ => return None,
+        }
+    } else if !explicit.is_empty() {
+        return None;
+    }
+    Some((shape, extent, position))
+}
+
 fn parse_image_value(value: &str) -> Option<String> {
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("none") {

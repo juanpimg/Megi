@@ -1219,13 +1219,7 @@ fn paint_background_border(
                 &style.background_layers
             };
             for layer in layers.iter().rev() {
-                let Some(url) = layer.image.as_deref() else {
-                    continue;
-                };
-                let Some(image) = resources.backgrounds.get(url) else {
-                    continue;
-                };
-                if image.is_empty() {
+                if layer.image.is_none() && layer.gradient.is_none() {
                     continue;
                 }
                 let positioning_area =
@@ -1245,25 +1239,52 @@ fn paint_background_border(
                     padding_box,
                     content_box,
                 );
-                let tiles = crate::background::background_tiles_with_origin(
-                    positioning_area,
-                    clip_rect,
-                    image.dimensions(),
-                    layer.repeat,
-                    layer.size,
-                    layer.position,
-                );
-                if tiles.is_empty() {
-                    continue;
+                if let Some(url) = layer.image.as_deref() {
+                    let Some(image) = resources.backgrounds.get(url) else {
+                        continue;
+                    };
+                    if image.is_empty() {
+                        continue;
+                    }
+                    let tiles = crate::background::background_tiles_with_origin(
+                        positioning_area,
+                        clip_rect,
+                        image.dimensions(),
+                        layer.repeat,
+                        layer.size,
+                        layer.position,
+                    );
+                    if tiles.is_empty() {
+                        continue;
+                    }
+                    push_clip_item(list, resources, clip_rect);
+                    for tile in tiles {
+                        list.push(DisplayItem::Image {
+                            rect: tile,
+                            image: std::sync::Arc::clone(image),
+                        });
+                    }
+                    pop_clip_item(list, resources);
+                } else if let Some(gradient) = layer.gradient.as_ref() {
+                    let tiles = crate::background::background_gradient_tiles(
+                        positioning_area,
+                        clip_rect,
+                        layer.repeat,
+                        layer.size,
+                        layer.position,
+                    );
+                    if tiles.is_empty() {
+                        continue;
+                    }
+                    push_clip_item(list, resources, clip_rect);
+                    for tile in tiles {
+                        list.push(DisplayItem::Gradient {
+                            rect: tile,
+                            gradient: std::sync::Arc::clone(gradient),
+                        });
+                    }
+                    pop_clip_item(list, resources);
                 }
-                push_clip_item(list, resources, clip_rect);
-                for tile in tiles {
-                    list.push(DisplayItem::Image {
-                        rect: tile,
-                        image: std::sync::Arc::clone(image),
-                    });
-                }
-                pop_clip_item(list, resources);
             }
         } else if let Some(url) = style.background_image.as_deref()
             && let Some(image) = resources.backgrounds.get(url)

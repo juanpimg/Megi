@@ -271,6 +271,75 @@ pub fn background_tiles_with_origin(
         return Vec::new();
     }
     let (base_width, base_height) = background_tile_size(positioning_area, image_size, size);
+    tiles_for_resolved_size(
+        positioning_area,
+        clip_area,
+        base_width,
+        base_height,
+        repeat,
+        position,
+    )
+}
+
+/// Computes the tiles of a **gradient** background layer.
+///
+/// CSS gradients have no intrinsic dimensions (CSS Images 3 §3.2.1), so
+/// `background-size: auto`/`cover`/`contain` all resolve to the whole positioning
+/// area; explicit lengths/percentages scale the gradient tile as usual. The
+/// resulting tiles are painted with the same repeat/position machinery as bitmap
+/// layers, so `background-repeat`, `-origin`, `-clip` and `border-radius` all
+/// apply to gradients too.
+pub fn background_gradient_tiles(
+    positioning_area: Rect,
+    clip_area: Rect,
+    repeat: BackgroundRepeat,
+    size: BackgroundSize,
+    position: BackgroundPosition,
+) -> Vec<Rect> {
+    if positioning_area.width <= 0.0
+        || positioning_area.height <= 0.0
+        || clip_area.width <= 0.0
+        || clip_area.height <= 0.0
+    {
+        return Vec::new();
+    }
+    let (base_width, base_height) = match size {
+        BackgroundSize::Auto | BackgroundSize::Cover | BackgroundSize::Contain => {
+            (positioning_area.width, positioning_area.height)
+        }
+        BackgroundSize::Explicit(width, height) => {
+            let resolve = |length: Length, area: f32| -> f32 {
+                match length {
+                    Length::Px(px) => px.max(0.0),
+                    Length::Percent(pct) => (area * pct / 100.0).max(0.0),
+                    Length::Auto => area,
+                }
+            };
+            (
+                resolve(width, positioning_area.width),
+                resolve(height, positioning_area.height),
+            )
+        }
+    };
+    tiles_for_resolved_size(
+        positioning_area,
+        clip_area,
+        base_width,
+        base_height,
+        repeat,
+        position,
+    )
+}
+
+/// Cartesian product of the per-axis tile origins for a resolved tile size.
+fn tiles_for_resolved_size(
+    positioning_area: Rect,
+    clip_area: Rect,
+    base_width: f32,
+    base_height: f32,
+    repeat: BackgroundRepeat,
+    position: BackgroundPosition,
+) -> Vec<Rect> {
     if base_width <= 0.0 || base_height <= 0.0 {
         return Vec::new();
     }

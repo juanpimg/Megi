@@ -1582,6 +1582,9 @@ fn paint_items(
             DisplayItem::TextDecoration { rect, color } => {
                 pixmap.fill_rect(shift(*rect, dx, dy), *color);
             }
+            DisplayItem::Gradient { rect, gradient } => {
+                pixmap.draw_gradient(shift(*rect, dx, dy), gradient);
+            }
             DisplayItem::Image { rect, image } => {
                 pixmap.draw_image(shift(*rect, dx, dy), image);
             }
@@ -2523,6 +2526,325 @@ fn paint_text_mask_group(
                 src,
                 f32::from(coverage) / 255.0,
             );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CSS gradients (R113)
+// ---------------------------------------------------------------------------
+
+/// Hard cap on the stops evaluated by the rasterizer (mirrors the CSS cap).
+const MAX_GRADIENT_STOPS: usize = 64;
+
+fn lerp_color(start: Color, end: Color, factor: f32) -> Color {
+    let channel = |a: u8, b: u8| -> u8 {
+        (f32::from(a) + (f32::from(b) - f32::from(a)) * factor)
+            .round()
+            .clamp(0.0, 255.0) as u8
+    };
+    Color::new(
+        channel(start.r, end.r),
+        channel(start.g, end.g),
+        channel(start.b, end.b),
+        channel(start.a, end.a),
+    )
+}
+
+/// Resolves stop positions to normalized `0..=1` values, filling implicit
+/// positions and clamping to a non-decreasing sequence (CSS Images 3 §3.4.1).
+fn resolve_gradient_stops(stops: &[css::GradientStop], line_length: f32) -> Vec<(f32, Color)> {
+    let mut positions: Vec<Option<f32>> = stops
+        .iter()
+        .map(|stop| {
+            stop.position.map(|length| match length {
+                css::Length::Percent(pct) => pct / 100.0,
+                css::Length::Px(px) => {
+                    if line_length > 0.0 {
+                        px / line_length
+                    } else {
+                        0.0
+                    }
+                }
+                css::Length::Auto => 0.0,
+            })
+        })
+        .collect();
+    if positions.is_empty() {
+        return Vec::new();
+    }
+    let last_index = positions.len() - 1;
+    if positions[0].is_none() {
+        positions[0] = Some(0.0);
+    }
+    if positions[last_index].is_none() {
+        positions[last_index] = Some(1.0);
+    }
+    let mut index = 0usize;
+    while index < positions.len() {
+        if positions[index].is_none() && index > 0 {
+            let mut end = index;
+            while end < positions.len() && positions[end].is_none() {
+                end += 1;
+            }
+            if end >= positions.len() {
+                break;
+            }
+            let previous = positions[index - 1].unwrap_or(0.0);
+            let next = positions[end].unwrap_or(1.0);
+            let count = (end - index + 1) as f32;
+            for offset in 0..(end - index) {
+                positions[index + offset] =
+                    Some(previous + (next - previous) * ((offset + 1) as f32 / count));
+            }
+            index = end;
+        }
+        index += 1;
+    }
+    let mut previous = 0.0f32;
+    let mut resolved = Vec::with_capacity(stops.len());
+    for (position, stop) in positions.into_iter().zip(stops.iter()) {
+        let position = position.unwrap_or(0.0).max(previous);
+        previous = position;
+        resolved.push((position, stop.color));
+    }
+    resolved
+}
+
+/// Samples a resolved gradient at normalized position `t`.
+fn sample_gradient(stops: &[(f32, Color)], repeating: bool, mut t: f32) -> Color {
+    let Some((first, first_color)) = stops.first().copied() else {
+        return Color::TRANSPARENT;
+    };
+    let Some((last, last_color)) = stops.last().copied() else {
+        return Color::TRANSPARENT;
+    };
+    if repeating && stops.len() > 1 {
+        let length = last - first;
+        if length > 1e-6 {
+            if t < first {
+                t = first;
+            } else {
+                t = first + ((t - first) / length).rem_euclid(1.0) * length;
+            }
+        }
+    }
+    if t <= first {
+        return first_color;
+    }
+    if t >= last {
+        return last_color;
+    }
+    for window in stops.windows(2) {
+        let (start, start_color) = window[0];
+        let (end, end_color) = window[1];
+        if t >= start && t <= end {
+            if (end - start).abs() < 1e-6 {
+                return end_color;
+            }
+            let factor = (t - start) / (end - start);
+            return lerp_color(start_color, end_color, factor.clamp(0.0, 1.0));
+        }
+    }
+    last_color
+}
+
+/// Linear gradient geometry: `(center_x, center_y, dir_x, dir_y, line_length)`.
+fn linear_gradient_axis(rect: Rect, direction: css::LinearDirection) -> (f32, f32, f32, f32, f32) {
+    let (mut dx, mut dy) = match direction {
+        css::LinearDirection::Angle(degrees) => {
+            let radians = degrees.to_radians();
+            (radians.sin(), -radians.cos())
+        }
+        css::LinearDirection::ToTop => (0.0, -1.0),
+        css::LinearDirection::ToRight => (1.0, 0.0),
+        css::LinearDirection::ToBottom => (0.0, 1.0),
+        css::LinearDirection::ToLeft => (-1.0, 0.0),
+        css::LinearDirection::ToTopRight => (1.0, -1.0),
+        css::LinearDirection::ToTopLeft => (-1.0, -1.0),
+        css::LinearDirection::ToBottomRight => (1.0, 1.0),
+        css::LinearDirection::ToBottomLeft => (-1.0, 1.0),
+    };
+    let magnitude = (dx * dx + dy * dy).sqrt();
+    if magnitude > 1e-6 {
+        dx /= magnitude;
+        dy /= magnitude;
+    } else {
+        dx = 0.0;
+        dy = 1.0;
+    }
+    let line_length = (rect.width * dx).abs() + (rect.height * dy).abs();
+    (
+        rect.x + rect.width / 2.0,
+        rect.y + rect.height / 2.0,
+        dx,
+        dy,
+        line_length.max(1e-6),
+    )
+}
+
+fn resolve_gradient_position(value: css::Length, origin: f32, area: f32) -> f32 {
+    match value {
+        css::Length::Px(px) => origin + px,
+        css::Length::Percent(pct) => origin + area * pct / 100.0,
+        css::Length::Auto => origin + area / 2.0,
+    }
+}
+
+/// Radial gradient geometry: `(center_x, center_y, radius_x, radius_y)`.
+fn radial_gradient_geometry(
+    rect: Rect,
+    radial: &css::RadialGradient,
+) -> Option<(f32, f32, f32, f32)> {
+    let center_x = resolve_gradient_position(radial.position.x, rect.x, rect.width);
+    let center_y = resolve_gradient_position(radial.position.y, rect.y, rect.height);
+    let left = center_x - rect.x;
+    let right = rect.x + rect.width - center_x;
+    let top = center_y - rect.y;
+    let bottom = rect.y + rect.height - center_y;
+    let corners = [
+        (rect.x, rect.y),
+        (rect.x + rect.width, rect.y),
+        (rect.x, rect.y + rect.height),
+        (rect.x + rect.width, rect.y + rect.height),
+    ];
+    let distance = |(x, y): (f32, f32)| ((x - center_x).powi(2) + (y - center_y).powi(2)).sqrt();
+    let extent = radial.extent.unwrap_or(css::RadialExtent::FarthestCorner);
+    let shape = match radial.shape {
+        Some(shape) => shape,
+        None => match extent {
+            css::RadialExtent::Explicit(rx, ry) if (rx - ry).abs() < 0.01 => {
+                css::RadialShape::Circle
+            }
+            _ => css::RadialShape::Ellipse,
+        },
+    };
+    let (rx, ry) = match shape {
+        css::RadialShape::Circle => {
+            let radius = match extent {
+                css::RadialExtent::ClosestSide => left.min(right).min(top).min(bottom),
+                css::RadialExtent::FarthestSide => left.max(right).max(top).max(bottom),
+                css::RadialExtent::ClosestCorner => corners
+                    .iter()
+                    .map(|corner| distance(*corner))
+                    .fold(f32::INFINITY, f32::min),
+                css::RadialExtent::FarthestCorner => corners
+                    .iter()
+                    .map(|corner| distance(*corner))
+                    .fold(0.0, f32::max),
+                css::RadialExtent::Explicit(rx, _) => rx,
+            };
+            (radius, radius)
+        }
+        css::RadialShape::Ellipse => match extent {
+            css::RadialExtent::ClosestSide => (left.min(right), top.min(bottom)),
+            css::RadialExtent::FarthestSide => (left.max(right), top.max(bottom)),
+            css::RadialExtent::ClosestCorner | css::RadialExtent::FarthestCorner => {
+                let mut chosen = corners[0];
+                let mut best = distance(corners[0]);
+                for corner in corners.iter().skip(1) {
+                    let candidate = distance(*corner);
+                    let better = match extent {
+                        css::RadialExtent::ClosestCorner => candidate < best,
+                        _ => candidate > best,
+                    };
+                    if better {
+                        best = candidate;
+                        chosen = *corner;
+                    }
+                }
+                let dx = (chosen.0 - center_x).abs();
+                let dy = (chosen.1 - center_y).abs();
+                (dx.max(left.min(right)), dy.max(top.min(bottom)))
+            }
+            css::RadialExtent::Explicit(rx, ry) => (rx, ry),
+        },
+    };
+    if !rx.is_finite() || !ry.is_finite() || rx <= 0.0 || ry <= 0.0 {
+        return None;
+    }
+    Some((center_x, center_y, rx, ry))
+}
+
+impl Pixmap {
+    /// Rasterizes one CSS gradient tile with analytic edge antialiasing.
+    ///
+    /// Colors are interpolated in straight sRGB (documented limitation: no
+    /// color-space interpolation), `repeating-*` gradients wrap between their
+    /// first and last resolved stop, and the active clip stack is honoured.
+    pub fn draw_gradient(&mut self, rect: Rect, gradient: &css::Gradient) {
+        if gradient.stops.len() < 2
+            || rect.width <= 0.0
+            || rect.height <= 0.0
+            || !rect.x.is_finite()
+            || !rect.y.is_finite()
+        {
+            return;
+        }
+        let stops = &gradient.stops[..gradient.stops.len().min(MAX_GRADIENT_STOPS)];
+        let (linear_axis, radial) = match &gradient.kind {
+            css::GradientKind::Linear(linear) => {
+                (Some(linear_gradient_axis(rect, linear.direction)), None)
+            }
+            css::GradientKind::Radial(radial) => {
+                (None, Some(radial_gradient_geometry(rect, radial)))
+            }
+        };
+        let Some(clip) = self.clip_rect() else {
+            return;
+        };
+        let line_length = match (&linear_axis, &radial) {
+            (Some(axis), _) => axis.4,
+            (_, Some(Some((_, _, rx, ry)))) => (rx + ry) / 2.0,
+            _ => return,
+        };
+        let resolved = resolve_gradient_stops(stops, line_length);
+        let x0 = rect.x.max(clip.x).floor().max(0.0) as u32;
+        let y0 = rect.y.max(clip.y).floor().max(0.0) as u32;
+        let x1 = ((rect.x + rect.width).min(clip.x + clip.width))
+            .ceil()
+            .clamp(0.0, self.width as f32) as u32;
+        let y1 = ((rect.y + rect.height).min(clip.y + clip.height))
+            .ceil()
+            .clamp(0.0, self.height as f32) as u32;
+        let stride = self.width as usize;
+        for y in y0..y1 {
+            let py = y as f32 + 0.5;
+            let coverage_y = overlap_coverage(
+                rect.y.max(y as f32),
+                (rect.y + rect.height).min(y as f32 + 1.0),
+            );
+            if coverage_y == 0 {
+                continue;
+            }
+            let row = y as usize * stride;
+            for x in x0..x1 {
+                let px = x as f32 + 0.5;
+                let coverage_x = overlap_coverage(
+                    rect.x.max(x as f32),
+                    (rect.x + rect.width).min(x as f32 + 1.0),
+                );
+                if coverage_x == 0 {
+                    continue;
+                }
+                let t = if let Some((center_x, center_y, dx, dy, line)) = linear_axis {
+                    (((px - center_x) * dx + (py - center_y) * dy) / line) + 0.5
+                } else if let Some(Some((center_x, center_y, rx, ry))) = radial {
+                    (((px - center_x) / rx).powi(2) + ((py - center_y) / ry).powi(2)).sqrt()
+                } else {
+                    continue;
+                };
+                let color = sample_gradient(&resolved, gradient.repeating, t);
+                let coverage = (u32::from(coverage_x) * u32::from(coverage_y)) as f32 / 65536.0;
+                if coverage <= 0.0 {
+                    continue;
+                }
+                // `blend_coverage` honours the clip stack and merges edge coverage.
+                self.pixels[row + x as usize] = blend_over(self.pixels[row + x as usize], {
+                    let alpha = (f32::from(color.a) * coverage).round() as u8;
+                    Color::new(color.r, color.g, color.b, alpha)
+                });
+            }
         }
     }
 }
