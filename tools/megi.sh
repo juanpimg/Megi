@@ -8,6 +8,9 @@
 #   - left click on a link: navigate (resolved against the page URL, history push)
 #   - Alt+Left / Backspace / b: back; Alt+Right / n: forward; r: reload
 #   - Ctrl+= / Ctrl++ (or =/+): zoom in; Ctrl+- (or -): zoom out; Ctrl+0 (or 0): reset
+#   - Ctrl+F: find in page (yellow highlights, Enter next, Shift+Enter previous, Esc close);
+#     --find QUERY does the same for headless --screenshot output
+#   - F5 / g / r reload, Alt+Home first history entry, Ctrl+D prints URL + title
 #   - Ctrl+L: print the current URL; title shows page — zoom% — scroll% (+warnings)
 #   - form controls: click an input/textarea to focus and type (Backspace, Tab); click
 #     checkbox/radio to toggle; buttons flash pressed; Enter never submits (no backend)

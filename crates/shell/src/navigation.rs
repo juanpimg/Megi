@@ -141,6 +141,11 @@ impl NavigationState {
         self.current()
     }
 
+    /// First (home) history entry — the destination of `Alt+Home`.
+    pub fn home_target(&self) -> Option<&Url> {
+        self.history.first()
+    }
+
     /// Returns the URL to reload (the current one).
     pub fn reload_target(&self) -> Option<&Url> {
         self.current()
@@ -331,6 +336,22 @@ mod tests {
         state.back();
         assert_eq!(
             state.reload_target().map(Url::as_str).as_deref(),
+            Some("https://example.com/a")
+        );
+    }
+
+    #[test]
+    fn home_target_is_the_first_history_entry() {
+        let mut state = NavigationState::new();
+        assert!(state.home_target().is_none());
+        state.navigate_to(url("file:///home/index.html"));
+        state.navigate_to(url("https://example.com/a"));
+        assert_eq!(
+            state.home_target().map(Url::as_str),
+            Some("file:///home/index.html".to_string())
+        );
+        assert_eq!(
+            state.current_url().as_deref(),
             Some("https://example.com/a")
         );
     }

@@ -54,6 +54,8 @@ pub struct RenderRequest {
     pub base_override: Option<String>,
     /// Whether page scripts run for this request (disabled for patched-DOM snapshots).
     pub scripting: bool,
+    /// Optional find-in-page query: the frame carries its hits/highlight rectangles.
+    pub find_query: Option<String>,
 }
 
 /// A finished page frame in CSS resolution (`0RGB`, row-major).
@@ -91,6 +93,10 @@ pub struct RenderFrame {
     pub forms: Vec<crate::forms::FormControl>,
     /// DOM snapshot of this frame (patched and re-rendered by the form editor).
     pub document: Arc<dom::Document>,
+    /// Find-in-page hits for [`RenderRequest::find_query`] (empty when no query).
+    pub find_matches: Vec<crate::find::FindMatch>,
+    /// Highlight rectangles (page CSS coordinates) for those hits, from the layout tree.
+    pub find_rects: Vec<crate::links::CssRect>,
 }
 
 /// Message sent from the worker back to the event loop.
@@ -176,6 +182,28 @@ impl FrameStore {
             css_height,
             base_override: None,
             scripting: true,
+            find_query: None,
+        }
+    }
+
+    /// Starts a render that also computes find-in-page hits for `query`.
+    pub fn begin_find_request(
+        &mut self,
+        input: &str,
+        css_width: u32,
+        css_height: u32,
+        query: &str,
+    ) -> RenderRequest {
+        self.generation = self.generation.saturating_add(1);
+        self.pending = true;
+        RenderRequest {
+            generation: self.generation,
+            input: input.to_owned(),
+            css_width,
+            css_height,
+            base_override: None,
+            scripting: true,
+            find_query: Some(query.to_owned()),
         }
     }
 
@@ -198,6 +226,7 @@ impl FrameStore {
             css_height,
             base_override: base_override.map(str::to_owned),
             scripting: false,
+            find_query: None,
         }
     }
 
@@ -352,6 +381,15 @@ pub fn render_document_with_options(
     let mut document = output.document;
     crate::forms::assign_form_ids(&mut document);
     let forms = crate::forms::collect_controls(&document, &output.layout);
+    let find_query = request.find_query.as_deref().unwrap_or("");
+    let (find_matches, find_rects) = if find_query.is_empty() {
+        (Vec::new(), Vec::new())
+    } else {
+        (
+            crate::find::search(&document, find_query),
+            crate::find::highlight_rects(&output.layout, find_query),
+        )
+    };
     let scripts_executed = output.stats.scripts_executed;
     let script_timers_pending = output.stats.script_timers_pending;
     let warnings = output.stats.warnings.len();
@@ -378,6 +416,8 @@ pub fn render_document_with_options(
         script_errors,
         forms,
         document: Arc::new(document),
+        find_matches,
+        find_rects,
     })
 }
 
@@ -426,6 +466,8 @@ mod unit_tests {
             script_errors: 0,
             forms: Vec::new(),
             document: Arc::new(dom::Document::new()),
+            find_matches: Vec::new(),
+            find_rects: Vec::new(),
         }
     }
 

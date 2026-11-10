@@ -50,6 +50,57 @@ pub fn render_target_with_options(
     Ok(render::render_url(input, &effective)?)
 }
 
+/// Renders `input` and paints find-in-page highlights for `query` into the pixmap.
+///
+/// Returns the render output (with the highlight overlay already blended into
+/// [`render::RenderOutput::pixmap`]) and the number of hits. The PNG field of the output is
+/// **not** updated: use [`screenshot_with_find`] or [`render::RenderOutput::pixmap`]'s
+/// [`paint::to_png`] for an encoded image with highlights.
+pub fn render_target_with_find(
+    input: &str,
+    width: u32,
+    height: u32,
+    options: &render::RenderOptions,
+    query: &str,
+) -> Result<(render::RenderOutput, usize), ShellError> {
+    let mut output = render_target_with_options(input, width, height, options)?;
+    let hits = crate::find::search(&output.document, query).len();
+    let rects = crate::find::highlight_rects(&output.layout, query);
+    crate::find::overlay_highlights_pixmap(&mut output.pixmap, &rects, 0);
+    Ok((output, hits))
+}
+
+/// Headless screenshot with find-in-page highlights (`--find QUERY`).
+///
+/// The highlights are painted into the CSS-resolution pixmap before encoding, so the PNG
+/// shows yellow rectangles for every hit and a stronger one for the first hit.
+pub fn screenshot_with_find(
+    input: &str,
+    width: u32,
+    height: u32,
+    path: impl AsRef<Path>,
+    options: &render::RenderOptions,
+    query: &str,
+) -> Result<ScreenshotInfo, ShellError> {
+    let (output, hits) = render_target_with_find(input, width, height, options, query)?;
+    let png = output.pixmap.to_png();
+    let path = path.as_ref().to_path_buf();
+    if png.is_empty() {
+        return Err(ShellError::Io {
+            path: path.display().to_string(),
+            reason: "PNG encoding produced no bytes".to_string(),
+        });
+    }
+    write_bytes(&path, &png)?;
+    let _ = hits;
+    Ok(ScreenshotInfo {
+        path,
+        width: output.pixmap.width,
+        height: output.pixmap.height,
+        png_bytes: png.len(),
+    })
+}
+
 /// Writes the PNG of a finished render to `path` and returns its metadata.
 pub fn save_screenshot(
     output: &render::RenderOutput,

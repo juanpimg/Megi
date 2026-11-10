@@ -45,6 +45,10 @@
 //! | `Ctrl+-` (or `-`) | Zoom out |
 //! | `Ctrl+0` (or `0`) | Reset zoom to 100 % |
 //! | `Ctrl+L` | Print the current URL to stdout |
+//! | `Ctrl+F` | Find in page (type, `Enter` next, `Shift+Enter` previous, `Esc` close) |
+//! | `Ctrl+D` | Print the final URL and page title |
+//! | `F5`, `g` | Reload |
+//! | `Alt+Home` | Go to the first (home) history entry |
 //! | Wheel / touchpad | Scroll vertically |
 //! | `↑` / `↓` | Scroll one line |
 //! | `PageUp` / `PageDown` | Scroll one page |
@@ -70,6 +74,7 @@ use winit::window::{Window, WindowId};
 
 use crate::convert::{WHITE_0RGB, expected_buffer_len};
 use crate::error::ShellError;
+use crate::find::{self, FindState};
 use crate::forms::{self, FocusState, FormControl, TextEdit};
 use crate::links::{LinkRegion, link_url_at, physical_to_page};
 use crate::navigation::{NavigationOutcome, NavigationState};
@@ -230,6 +235,12 @@ struct WindowApp {
     document: Option<Arc<dom::Document>>,
     /// Pending button id whose pressed state must be released after the next frame.
     release_button: Option<u32>,
+    /// Find-in-page state (query, hits, current hit).
+    find: FindState,
+    /// Whether the find prompt is open (typing edits the query).
+    find_editing: bool,
+    /// Highlight rectangles of the last frame (page CSS coordinates).
+    find_rects: Vec<crate::links::CssRect>,
 }
 
 impl WindowApp {
@@ -284,6 +295,9 @@ impl WindowApp {
             editor: None,
             document: None,
             release_button: None,
+            find: FindState::new(),
+            find_editing: false,
+            find_rects: Vec::new(),
         }
     }
 
@@ -339,9 +353,17 @@ impl WindowApp {
             self.update_title();
             return;
         };
-        let request =
+        let request = if self.find.query().is_empty() {
             self.store
-                .begin_request(&self.input, self.metrics.css_width, self.metrics.css_height);
+                .begin_request(&self.input, self.metrics.css_width, self.metrics.css_height)
+        } else {
+            self.store.begin_find_request(
+                &self.input,
+                self.metrics.css_width,
+                self.metrics.css_height,
+                self.find.query(),
+            )
+        };
         if sender.send(request).is_err() {
             self.error = Some("render worker stopped unexpectedly".to_string());
             self.update_title();
@@ -364,6 +386,7 @@ impl WindowApp {
         self.editor = None;
         self.document = None;
         self.doc_title = None;
+        self.close_find();
         self.scroll = ScrollState::new(1, self.metrics.css_height);
         self.update_title();
         if let Some(window) = &self.window {
@@ -441,6 +464,7 @@ impl WindowApp {
                 messages.push(message);
             }
         }
+        let mut sync_find = false;
         for message in messages {
             if !self.store.accept(message) {
                 continue; // stale generation
@@ -458,6 +482,11 @@ impl WindowApp {
                     self.frame_script_errors = frame.script_errors;
                     self.forms = frame.forms.clone();
                     self.document = Some(Arc::clone(&frame.document));
+                    self.find_rects = frame.find_rects.clone();
+                    if self.find_editing && !self.find.query().is_empty() {
+                        self.find.set_matches(frame.find_matches.clone());
+                        sync_find = true;
+                    }
                     // A patched-DOM render has a data: document URL: keep the real page URL
                     // in history/`input` (only store redirects for normal renders).
                     let patched_render = frame.document_url.starts_with("data:");
@@ -496,6 +525,10 @@ impl WindowApp {
                         eprintln!("megi: {error}");
                     }
                 }
+            }
+            if sync_find {
+                sync_find = false;
+                self.scroll_to_current_find();
             }
         }
         if applied {
@@ -718,6 +751,133 @@ impl WindowApp {
         }
     }
 
+    /// Opens the find prompt (Ctrl+F): next keystrokes edit the query.
+    fn open_find(&mut self) {
+        self.find_editing = true;
+        self.find.clear();
+        self.find_rects.clear();
+        self.editor = None;
+        self.update_title();
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+
+    /// Closes find-in-page, clearing the query/highlights and re-rendering without hits.
+    fn close_find(&mut self) {
+        if !self.find_editing && self.find.query().is_empty() {
+            return;
+        }
+        self.find_editing = false;
+        self.find.clear();
+        self.find_rects.clear();
+        if self.request_sender.is_some() {
+            self.request_render();
+        }
+        self.update_title();
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+
+    /// Re-renders with the current query so the worker computes hits/highlight rectangles.
+    fn refresh_find_results(&mut self) {
+        if self.find.query().is_empty() {
+            self.find_rects.clear();
+        }
+        self.request_render();
+        self.update_title();
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+
+    /// Scrolls so the current hit is visible (centered when possible).
+    fn scroll_to_current_find(&mut self) {
+        if self.find_rects.is_empty() {
+            return;
+        }
+        let rect = self.find_rects[self.find.current() % self.find_rects.len()];
+        let offset =
+            find::scroll_offset_for(&rect, self.metrics.css_height, self.scroll.max_offset());
+        if self.scroll.scroll_to(offset) {
+            self.update_title();
+        }
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+
+    /// Handles keys while the find prompt is open; returns `true` when consumed.
+    fn handle_find_key(&mut self, key: &Key, shift: bool, ctrl: bool, alt: bool) -> bool {
+        if !self.find_editing {
+            return false;
+        }
+        if matches!(key, Key::Named(NamedKey::Escape)) {
+            self.close_find();
+            return true;
+        }
+        if ctrl || alt {
+            return false;
+        }
+        match key {
+            Key::Named(NamedKey::Enter) => {
+                if shift {
+                    self.find.previous_hit();
+                } else {
+                    self.find.next_hit();
+                }
+                self.scroll_to_current_find();
+                self.refresh_find_results_highlights_only();
+                true
+            }
+            Key::Named(NamedKey::Backspace) => {
+                let mut query = self.find.query().to_owned();
+                query.pop();
+                self.find.set_results(query.clone(), Vec::new());
+                self.refresh_find_results();
+                true
+            }
+            Key::Character(text) => {
+                let mut query = self.find.query().to_owned();
+                query.push_str(text);
+                self.find.set_results(query, Vec::new());
+                self.refresh_find_results();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Redraws the overlay after moving to another hit (no re-render needed: the frame
+    /// already carries the highlight rectangles for the query).
+    fn refresh_find_results_highlights_only(&mut self) {
+        self.update_title();
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+
+    /// Prints the final URL and document title (`Ctrl+D`, no address bar yet).
+    fn print_document_info(&self) {
+        let url = self.nav.current_url().unwrap_or_else(|| self.input.clone());
+        let title = match self.nav.current() {
+            Some(url) => title::page_title(self.doc_title.as_deref(), url),
+            None => title::FALLBACK_NAME.to_owned(),
+        };
+        println!("url: {url}");
+        println!("title: {title}");
+    }
+
+    /// Navigates to the first history entry (home) — `Alt+Home`.
+    fn go_home(&mut self) {
+        if let Some(home) = self.nav.home_target().cloned() {
+            self.navigate_to(home);
+        } else {
+            self.reload();
+        }
+    }
+
     /// Handles the zoom shortcuts; returns `true` when the key was consumed.
     fn handle_zoom_key(&mut self, key: &Key) -> bool {
         let Key::Character(text) = key else {
@@ -784,6 +944,17 @@ impl WindowApp {
         );
         if !presented {
             buffer.fill(WHITE_0RGB);
+        } else if self.find_editing && !self.find_rects.is_empty() {
+            let _ = find::overlay_highlights_dest(
+                &mut buffer,
+                width,
+                height,
+                self.metrics.css_width,
+                self.metrics.css_height,
+                self.scroll.offset(),
+                &self.find_rects,
+                self.find.current(),
+            );
         }
         let _ = buffer.present();
     }
@@ -870,6 +1041,26 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                     self.print_current_url();
                     return;
                 }
+                if ctrl_pressed
+                    && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("f"))
+                {
+                    self.open_find();
+                    return;
+                }
+                if ctrl_pressed
+                    && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("d"))
+                {
+                    self.print_document_info();
+                    return;
+                }
+                if self.handle_find_key(
+                    &event.logical_key,
+                    self.modifiers.shift_key(),
+                    ctrl_pressed,
+                    alt_pressed,
+                ) {
+                    return;
+                }
                 if (ctrl_pressed || self.editor.is_none())
                     && self.handle_zoom_key(&event.logical_key)
                 {
@@ -898,6 +1089,8 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                             }
                         }
                     }
+                    Key::Named(NamedKey::F5) => self.reload(),
+                    Key::Named(NamedKey::Home) if alt_pressed => self.go_home(),
                     Key::Named(NamedKey::Home) => {
                         if self.scroll.home() {
                             self.update_title();
@@ -921,6 +1114,7 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                         event_loop.exit();
                     }
                     Key::Character(text) if text.eq_ignore_ascii_case("r") => self.reload(),
+                    Key::Character(text) if text.eq_ignore_ascii_case("g") => self.reload(),
                     Key::Character(text) if text.eq_ignore_ascii_case("b") => self.go_back(),
                     Key::Character(text) if text.eq_ignore_ascii_case("n") => {
                         self.go_forward();

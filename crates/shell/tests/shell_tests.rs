@@ -230,6 +230,8 @@ fn worker_channel_applies_only_the_latest_generation() {
                 script_errors: 0,
                 forms: Vec::new(),
                 document: std::sync::Arc::new(dom::Document::new()),
+                find_matches: Vec::new(),
+                find_rects: Vec::new(),
             })
         },
         || {},
@@ -260,6 +262,8 @@ fn worker_channel_applies_only_the_latest_generation() {
         script_errors: 0,
         forms: Vec::new(),
         document: std::sync::Arc::new(dom::Document::new()),
+        find_matches: Vec::new(),
+        find_rects: Vec::new(),
     });
     assert!(!store.accept(stale), "stale generation must be dropped");
     let message = receiver
@@ -285,6 +289,7 @@ fn worker_renderer_produces_a_full_page_frame_without_a_display() {
         css_height: 180,
         base_override: None,
         scripting: true,
+        find_query: None,
     };
     let frame = shell::worker::render_document(&request).expect("full-page render");
     assert_eq!(frame.generation, 7);
@@ -313,6 +318,7 @@ fn worker_render_document_exposes_links_title_and_final_url() {
         css_height: 120,
         base_override: None,
         scripting: true,
+        find_query: None,
     };
     let frame = shell::worker::render_document(&request).expect("render");
     assert_eq!(frame.title.as_deref(), Some("Links Page"));
@@ -398,6 +404,7 @@ fn file_fixture_links_are_hittable_and_navigable() {
         css_height: 320,
         base_override: None,
         scripting: true,
+        find_query: None,
     };
     let frame = shell::worker::render_document(&request).expect("render fixture");
     assert_eq!(frame.title.as_deref(), Some("Links Fixture"));
@@ -550,6 +557,7 @@ fn pending_timers_enable_auto_refresh_and_renders_are_deterministic() {
         css_height: 100,
         base_override: None,
         scripting: true,
+        find_query: None,
     };
     let first = shell::worker::render_document(&request).expect("first render");
     let mut second_request = request.clone();
@@ -620,6 +628,7 @@ fn forms_fixture_renders_visible_control_borders() {
         css_height: 480,
         base_override: None,
         scripting: true,
+        find_query: None,
     };
     let frame = shell::worker::render_document(&request).expect("worker forms render");
     assert!(!frame.forms.is_empty(), "frame must expose form controls");
@@ -641,6 +650,7 @@ fn patched_dom_snapshot_re_renders_edited_values() {
         css_height: 240,
         base_override: None,
         scripting: true,
+        find_query: None,
     };
     let frame = shell::worker::render_document(&request).expect("initial render");
     let text = frame
@@ -667,6 +677,7 @@ fn patched_dom_snapshot_re_renders_edited_values() {
         css_height: 240,
         base_override: Some(forms_fixture_url()),
         scripting: false,
+        find_query: None,
     };
     let patched = shell::worker::render_document(&patched_request).expect("patched render");
     let edited = patched
@@ -704,4 +715,136 @@ fn form_editor_state_and_cli_help_are_documented() {
     assert_eq!(edit.value(), "ab");
     assert!(shell::cli::USAGE.contains("Tab"));
     assert!(shell::cli::USAGE.contains("form control")); // documented control
+}
+
+fn find_fixture_url() -> String {
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/find.html");
+    shell::cli::normalize_input(&path.display().to_string()).expect("find fixture URL")
+}
+
+#[test]
+fn find_request_reports_hits_and_highlight_rects() {
+    let request = RenderRequest {
+        generation: 1,
+        input: find_fixture_url(),
+        css_width: 480,
+        css_height: 320,
+        base_override: None,
+        scripting: true,
+        find_query: Some("megi".to_string()),
+    };
+    let frame = shell::worker::render_document(&request).expect("find render");
+    assert!(
+        frame.find_matches.len() >= 4,
+        "hits: {}",
+        frame.find_matches.len()
+    );
+    assert!(!frame.find_rects.is_empty(), "highlight rects from layout");
+    for rect in &frame.find_rects {
+        assert!(rect.width > 0.0 && rect.height > 0.0);
+    }
+}
+
+#[test]
+fn find_is_case_insensitive_and_absent_without_query() {
+    let base = RenderRequest {
+        generation: 1,
+        input: find_fixture_url(),
+        css_width: 320,
+        css_height: 240,
+        base_override: None,
+        scripting: true,
+        find_query: Some("MEGI".to_string()),
+    };
+    let case_upper = shell::worker::render_document(&base).expect("upper render");
+    let mut lower = base.clone();
+    lower.find_query = Some("megi".to_string());
+    let case_lower = shell::worker::render_document(&lower).expect("lower render");
+    assert_eq!(
+        case_upper.find_matches.len(),
+        case_lower.find_matches.len(),
+        "case-insensitive search"
+    );
+    let mut none = base.clone();
+    none.find_query = None;
+    let plain = shell::worker::render_document(&none).expect("plain render");
+    assert!(plain.find_matches.is_empty());
+    assert!(plain.find_rects.is_empty());
+}
+
+#[test]
+fn headless_find_paints_yellow_highlights() {
+    let output = shell::headless::render_target(&find_fixture_url(), 480, 320).expect("render");
+    let (highlighted, hits) = shell::headless::render_target_with_find(
+        &find_fixture_url(),
+        480,
+        320,
+        &render::RenderOptions::default(),
+        "megi",
+    )
+    .expect("highlighted render");
+    assert!(hits >= 4, "hits: {hits}");
+    let count_yellow = |pixels: &[paint::Color]| {
+        pixels
+            .iter()
+            .filter(|pixel| {
+                // Yellow blends toward (255, 235, 59): red/green high, blue clearly lower.
+                pixel.r >= 220 && pixel.g >= 200 && pixel.g.saturating_sub(pixel.b) > 20
+            })
+            .count()
+    };
+    let plain_yellow = count_yellow(&output.pixmap.pixels);
+    let highlighted_yellow = count_yellow(&highlighted.pixmap.pixels);
+    assert!(
+        highlighted_yellow > plain_yellow + 100,
+        "yellow highlight pixels: plain={plain_yellow} highlighted={highlighted_yellow}"
+    );
+    // The highlight overlay only changes the pixmap; dimensions stay the same.
+    assert_eq!(output.dimensions(), highlighted.dimensions());
+}
+
+#[test]
+fn screenshot_with_find_writes_a_png() {
+    let path = temp_path("find-highlight.png");
+    let info = shell::headless::screenshot_with_find(
+        &find_fixture_url(),
+        320,
+        240,
+        &path,
+        &render::RenderOptions::default(),
+        "megi",
+    )
+    .expect("screenshot with find");
+    assert_eq!((info.width, info.height), (320, 240));
+    let png = std::fs::read(&path).expect("PNG written");
+    assert!(png.starts_with(&[0x89, b'P', b'N', b'G']));
+    assert_eq!(png_dimensions(&png), (320, 240));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn find_help_and_navigation_shortcuts_are_documented() {
+    let help = shell::cli::USAGE;
+    assert!(help.contains("--find"));
+    assert!(help.contains("Ctrl+F"));
+    assert!(help.contains("F5"));
+    assert!(help.contains("Alt+Home"));
+    assert!(help.contains("Ctrl+D"));
+    assert!(help.contains("Shift+Enter"));
+}
+
+#[test]
+fn navigation_home_target_is_the_first_entry() {
+    let mut nav = shell::NavigationState::new();
+    nav.navigate_to(net::Url::parse("file:///home/index.html").expect("url"));
+    nav.navigate_to(net::Url::parse("https://example.com/page").expect("url"));
+    assert_eq!(
+        nav.home_target().map(net::Url::as_str),
+        Some("file:///home/index.html".to_string())
+    );
+    assert_eq!(
+        nav.current_url().as_deref(),
+        Some("https://example.com/page")
+    );
 }

@@ -54,6 +54,15 @@
 //!   decoded transparently by `net`.
 //! - **Dynamic title**: the window title is the document `<title>` plus the short URL and
 //!   scroll percentage ([`title`]); server redirects replace the current history entry.
+//! - **Find in page (WP-7.7)**: `Ctrl+F` searches the rendered DOM text case-insensitively
+//!   ([`find`]); typing updates the query, `Enter`/`Shift+Enter` jump to the next/previous
+//!   hit with wrap-around, `Esc` closes and the scroll is adjusted so the current hit is
+//!   visible. All hits are highlighted yellow `rgba(255, 235, 59, 0.45)` and the current one
+//!   more strongly, painted over the frame (window) or into the pixmap before PNG encoding
+//!   (`--screenshot --find QUERY`).
+//! - **Navigation extras (WP-7.7)**: `F5` and `g` reload, `Alt+Home` navigates back to the
+//!   first (home) history entry, `Ctrl+D` prints the final URL and document title; there are
+//!   still no tabs.
 //! - **Zoom (WP-7.6)**: `Ctrl+=`/`Ctrl++` zoom in, `Ctrl+-` zoom out, `Ctrl+0` reset
 //!   (same keys without Ctrl also work) on a fixed 50–300 % ladder ([`zoom`]); the CSS
 //!   viewport becomes `physical / (device_scale * zoom)` and the title shows the zoom
@@ -115,6 +124,7 @@
 pub mod cli;
 pub mod convert;
 pub mod error;
+pub mod find;
 pub mod forms;
 pub mod headless;
 pub mod links;
@@ -131,13 +141,17 @@ pub mod zoom;
 pub use cli::{CliArgs, LaunchMode, finish_args, parse_args, parse_cli};
 pub use convert::{PIXEL_FORMAT, expected_buffer_len, pixmap_to_0rgb};
 pub use error::ShellError;
+pub use find::{
+    FindMatch, FindState, HIGHLIGHT_ALPHA, HIGHLIGHT_CURRENT_ALPHA, HIGHLIGHT_RGB, highlight_rects,
+    overlay_highlights_dest, overlay_highlights_pixmap, scroll_offset_for, search,
+};
 pub use forms::{
     ACTIVE_ATTR, FOCUS_ATTR, FORM_ID_ATTR, FocusState, FormControl, FormControlKind, TextEdit,
     assign_form_ids, collect_controls, control_at, patch_control, snapshot_data_url,
 };
 pub use headless::{
-    ScreenshotInfo, render_target, render_target_with_options, save_screenshot, screenshot,
-    screenshot_with_options,
+    ScreenshotInfo, render_target, render_target_with_find, render_target_with_options,
+    save_screenshot, screenshot, screenshot_with_find, screenshot_with_options,
 };
 pub use links::{
     CssRect, LinkError, LinkRegion, collect_link_regions, find_link_at, is_navigable, link_url_at,

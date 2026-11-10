@@ -41,17 +41,23 @@ options:
                       physical/(device_scale*zoom) and the title shows the percentage
   --refresh-ms [MS]   auto-refresh pages whose scripts leave timers pending
                       (setInterval); MS defaults to 250, 0/disabling flag = off
+  --find QUERY        highlight case-insensitive matches of QUERY in the
+                      rendered page (headless screenshots; window: Ctrl+F)
   -h, --help          print this help
 
 window keys:
   left click on a link       navigate (history push)
   left click on a form control: focus; type to edit text (Backspace deletes)
   Tab                        next form control; Enter never submits; Esc blurs
+  Ctrl+F                     find in page: type to search, Enter next, Shift+Enter
+                             previous, Esc closes; matches are highlighted in yellow
   Enter                      ignored (no backend: forms never submit); Esc blurs
   Alt+Left / Backspace / b   back;  Alt+Right / n   forward
   Ctrl+= / Ctrl++ / = / +    zoom in;  Ctrl+- / -   zoom out;  Ctrl+0 / 0   reset zoom
   Ctrl+L                     print the current URL
-  r                          reload;  q / Esc   quit
+  r / g / F5                 reload;  Alt+Home   go to the first (home) history entry
+  Ctrl+D                     print the final URL and the page title
+  q / Esc                    quit
   wheel / arrows / PageUp / PageDown / Home / End   scroll
   (left click only; right/middle click ignored)";
 
@@ -83,6 +89,8 @@ pub struct CliArgs {
     pub origin: Option<String>,
     /// Initial page zoom factor (50–300 %, `--zoom`).
     pub zoom: f64,
+    /// Optional find-in-page query (`--find`; headless screenshots highlight its hits).
+    pub find: Option<String>,
     /// Auto-refresh interval in milliseconds when `--refresh-ms` was given (`None` = off).
     pub refresh_ms: Option<u64>,
 }
@@ -106,6 +114,8 @@ pub struct RawArgs {
     pub origin: Option<String>,
     /// `--zoom` value, if provided.
     pub zoom: Option<f64>,
+    /// `--find` value, if provided.
+    pub find: Option<String>,
     /// `--refresh-ms` value (default 250 when passed without a value), if provided.
     pub refresh_ms: Option<u64>,
     /// `-h`/`--help` was passed.
@@ -134,6 +144,9 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
             "--cookies" => raw.cookies = true,
             "--origin" => {
                 raw.origin = Some(next_value(&arguments, &mut index, "--origin")?);
+            }
+            "--find" => {
+                raw.find = Some(next_value(&arguments, &mut index, "--find")?);
             }
             "--zoom" => {
                 let value = next_value(&arguments, &mut index, "--zoom")?;
@@ -236,6 +249,7 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
             origin: raw.origin,
             zoom,
             refresh_ms: None,
+            find: raw.find,
         });
     }
     Ok(CliArgs {
@@ -248,6 +262,7 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
         origin: raw.origin,
         zoom,
         refresh_ms: raw.refresh_ms,
+        find: raw.find,
     })
 }
 
@@ -339,6 +354,17 @@ mod unit_tests {
         assert!(!plain.cookies);
         assert!(plain.origin.is_none());
         assert!(parse_cli(args(&["data:,x", "--origin"])).is_err());
+    }
+
+    #[test]
+    fn parses_find_flag_and_documents_controls() {
+        let cli = parse_cli(args(&["data:,x", "--find", "quick"])).expect("parse");
+        assert_eq!(cli.find.as_deref(), Some("quick"));
+        let plain = parse_cli(args(&["data:,x"])).expect("parse");
+        assert!(plain.find.is_none());
+        assert!(parse_cli(args(&["data:,x", "--find"])).is_err());
+        assert!(USAGE.contains("--find"));
+        assert!(USAGE.contains("Ctrl+F"));
     }
 
     #[test]
