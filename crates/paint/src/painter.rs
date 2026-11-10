@@ -213,6 +213,13 @@ fn paint_box(layout_box: &LayoutBox, list: &mut DisplayList, skip: PaintSkip, is
         } else {
             0.6 * font_size
         };
+        let font_weight = style.map_or(400, |style| style.font_weight);
+        let font_italic = style.is_some_and(|style| {
+            matches!(
+                style.font_style,
+                css::FontStyle::Italic | css::FontStyle::Oblique
+            )
+        });
 
         list.push(DisplayItem::Text {
             text: text.clone(),
@@ -220,7 +227,11 @@ fn paint_box(layout_box: &LayoutBox, list: &mut DisplayList, skip: PaintSkip, is
             color,
             font_size,
             font_family,
+            font_weight,
+            font_italic,
             advance,
+            // Baseline propagated by the IFC (`layout::LayoutBox::baseline`).
+            baseline: layout_box.baseline,
         });
     }
 

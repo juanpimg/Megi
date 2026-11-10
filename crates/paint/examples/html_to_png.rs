@@ -35,7 +35,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use layout::{Rect, layout_document};
+use layout::{FontTextMeasurer, Rect, layout_document_with_measurer};
 
 const DEFAULT_WIDTH: u32 = 800;
 const DEFAULT_HEIGHT: u32 = 600;
@@ -77,12 +77,16 @@ fn run() -> Result<(), String> {
     let styles = paint::resolve_embedded_styles(&doc);
 
     let viewport = Rect::new(0.0, 0.0, options.width as f32, options.height as f32);
-    let layout_root = layout_document(&doc, &styles, viewport).ok_or_else(|| {
-        format!(
-            "layout produced no root box for {}",
-            options.input.display()
-        )
-    })?;
+    // Deterministic real typography: bundled DejaVu Sans, no system fonts.
+    let measurer = FontTextMeasurer::bundled()
+        .map_err(|error| format!("cannot load bundled fonts: {error}"))?;
+    let layout_root = layout_document_with_measurer(&doc, &styles, viewport, &measurer)
+        .ok_or_else(|| {
+            format!(
+                "layout produced no root box for {}",
+                options.input.display()
+            )
+        })?;
 
     let display_list = paint::build_display_list(&layout_root, viewport);
     let pixmap = paint::rasterize_display_list(&display_list, options.width, options.height);

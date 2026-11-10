@@ -17,18 +17,24 @@ pub enum DisplayItem {
         border_width: EdgeSizes,
         color: Color,
     },
-    /// Renders a text run within a bounding box.
+    /// Renders a text run within a bounding box using the real font engine.
     ///
-    /// `advance` is the per-character advance in pixels that layout reserved
-    /// for this run (`rect.width / char_count`). The rasterizer must use it
-    /// verbatim so that painted text stays inside the measured text box.
+    /// `baseline` is the distance from `rect.y` (top of the text fragment) down
+    /// to the glyph baseline, propagated by the IFC for every line fragment.
+    /// `advance` is the per-character advance layout reserved for this run
+    /// (`rect.width / char_count`); the real rasterizer uses the shaped glyph
+    /// advances and keeps `advance` for diagnostics/fallback.
     Text {
         text: String,
         rect: Rect,
         color: Color,
         font_size: f32,
         font_family: String,
+        font_weight: u16,
+        font_italic: bool,
         advance: f32,
+        /// Distance from `rect.y` to the glyph baseline, in px.
+        baseline: f32,
     },
     /// Pushes a rectangular clipping boundary onto the clip stack.
     PushClip { rect: Rect },

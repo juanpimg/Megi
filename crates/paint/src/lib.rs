@@ -9,7 +9,8 @@
 //!   flat display list, painting the canvas background following CSS 2.2 §14.2
 //!   (root/`body` background propagation).
 //! - [`rasterize_display_list`] executes the list into a [`Pixmap`] starting
-//!   from an opaque white canvas (configurable through [`RenderConfig`]).
+//!   from an opaque white canvas (configurable through [`RenderConfig`]), using
+//!   the real font engine for text (bundled DejaVu Sans by default).
 //! - [`Pixmap::to_png`] encodes the buffer as a valid PNG with a
 //!   dependency-free, deterministic writer (see [`png`]).
 //! - [`collect_style_text`] / [`resolve_embedded_styles`] extract and resolve
@@ -29,6 +30,7 @@ pub use painter::build_display_list;
 pub use png::encode_rgba;
 pub use rasterizer::{
     Pixmap, RenderConfig, rasterize_display_list, rasterize_display_list_with_config,
+    rasterize_display_list_with_font_database,
 };
 pub use style::{collect_style_text, resolve_embedded_styles};
 
@@ -200,14 +202,17 @@ mod tests {
             rect: Rect::new(10.0, 10.0, 50.0, 50.0),
             color: Color::RED,
         });
-        // Text: 'A' at [20, 20] in blue
+        // Text: 'A' at [20, 20] in blue, real DejaVu Sans, baseline 14px.
         dl.push(DisplayItem::Text {
             text: "A".to_string(),
             rect: Rect::new(20.0, 20.0, 20.0, 20.0),
             color: Color::BLUE,
             font_size: 16.0,
             font_family: "monospace".to_string(),
+            font_weight: 400,
+            font_italic: false,
             advance: 20.0,
+            baseline: 14.0,
         });
 
         let pixmap = rasterize_display_list(&dl, 100, 100);
@@ -216,7 +221,17 @@ mod tests {
         assert_eq!(pixmap.pixel(0, 0), Color::WHITE);
         // Inside box, outside text -> red
         assert_eq!(pixmap.pixel(12, 12), Color::RED);
-        // Inside 'A' glyph (first non-empty glyph cell row) -> blue text pixel
-        assert_eq!(pixmap.pixel(26, 20), Color::BLUE);
+        // Inside the real 'A' glyph (baseline at 20+14=34, cap height ~12px):
+        // at least one blue-ish pixel must be painted inside the text rect.
+        let mut painted_blue = 0;
+        for y in 20..40 {
+            for x in 20..40 {
+                let p = pixmap.pixel(x, y);
+                if p.b > 100 && p.r < 100 {
+                    painted_blue += 1;
+                }
+            }
+        }
+        assert!(painted_blue > 0, "real glyph must paint blue pixels");
     }
 }

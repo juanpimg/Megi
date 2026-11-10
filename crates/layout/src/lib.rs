@@ -7,6 +7,7 @@ pub mod block;
 pub mod box_tree;
 pub mod geometry;
 pub mod inline;
+pub mod text;
 pub mod tree_builder;
 
 use std::collections::HashMap;
@@ -14,12 +15,14 @@ use std::collections::HashMap;
 use css::ComputedStyle;
 use dom::{Document, NodeId};
 
-pub use block::layout_block;
+pub use block::{layout_block, layout_block_with_measurer};
 pub use box_tree::{BoxType, LayoutBox};
 pub use geometry::{Dimensions, EdgeSizes, Rect};
 pub use inline::{
     DefaultTextMeasurer, FontMetrics, TextMeasurer, layout_inline_formatting_context,
+    layout_inline_formatting_context_with_measurer,
 };
+pub use text::FontTextMeasurer;
 pub use tree_builder::build_layout_tree;
 
 /// Completely lays out a DOM document against a viewport rectangle.
@@ -37,6 +40,23 @@ pub fn layout_document(
     styles: &HashMap<NodeId, ComputedStyle>,
     viewport: Rect,
 ) -> Option<LayoutBox> {
+    // Backwards-compatible deterministic measurement (CSS ratio fallback). The
+    // production render pipeline must use `layout_document_with_measurer` with
+    // `FontTextMeasurer` so that real OpenType metrics drive line boxes.
+    layout_document_with_measurer(doc, styles, viewport, &DefaultTextMeasurer)
+}
+
+/// Lays out a document with an explicit [`TextMeasurer`].
+///
+/// This is the entry point used by the Phase 4 `HTML → PNG` pipeline:
+/// `layout_document_with_measurer(doc, styles, viewport, &FontTextMeasurer::bundled()?)`
+/// produces line boxes, baselines and glyph advances from real font metrics.
+pub fn layout_document_with_measurer(
+    doc: &Document,
+    styles: &HashMap<NodeId, ComputedStyle>,
+    viewport: Rect,
+    measurer: &dyn TextMeasurer,
+) -> Option<LayoutBox> {
     let mut root_box = build_layout_tree(doc, styles)?;
 
     let initial_containing_block = Dimensions {
@@ -46,7 +66,7 @@ pub fn layout_document(
         margin: EdgeSizes::ZERO,
     };
 
-    layout_block(&mut root_box, &initial_containing_block);
+    layout_block_with_measurer(&mut root_box, &initial_containing_block, measurer);
     Some(root_box)
 }
 

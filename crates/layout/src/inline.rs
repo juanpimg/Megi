@@ -55,6 +55,61 @@ pub trait TextMeasurer {
         font_size: f32,
         computed_line_height: Option<f32>,
     ) -> FontMetrics;
+
+    /// Weight- and style-aware variant of [`TextMeasurer::measure_text`].
+    ///
+    /// The default implementation ignores the weight/style and forwards to
+    /// [`TextMeasurer::measure_text`], so existing measurers keep compiling and
+    /// behaving exactly as before. The IFC uses this variant internally so that
+    /// real font backends can honour `font-weight`/`font-style`.
+    fn measure_text_styled(
+        &self,
+        text: &str,
+        font_family: &str,
+        font_size: f32,
+        _font_weight: u16,
+        _font_italic: bool,
+    ) -> f32 {
+        self.measure_text(text, font_family, font_size)
+    }
+
+    /// Weight- and style-aware variant of [`TextMeasurer::font_metrics`].
+    ///
+    /// Defaults to [`TextMeasurer::font_metrics`] (weight/style ignored).
+    fn font_metrics_styled(
+        &self,
+        font_family: &str,
+        font_size: f32,
+        computed_line_height: Option<f32>,
+        _font_weight: u16,
+        _font_italic: bool,
+    ) -> FontMetrics {
+        self.font_metrics(font_family, font_size, computed_line_height)
+    }
+}
+
+/// Measures `text` with the run's weight and style from a computed style.
+#[inline]
+fn measure_styled(measurer: &dyn TextMeasurer, text: &str, style: &ComputedStyle) -> f32 {
+    measurer.measure_text_styled(
+        text,
+        &style.font_family,
+        style.font_size,
+        style.font_weight,
+        crate::text::style_is_italic(style),
+    )
+}
+
+/// Resolves real font metrics for a computed style (weight/style aware).
+#[inline]
+fn metrics_styled(measurer: &dyn TextMeasurer, style: &ComputedStyle) -> FontMetrics {
+    measurer.font_metrics_styled(
+        &style.font_family,
+        style.font_size,
+        style.line_height,
+        style.font_weight,
+        crate::text::style_is_italic(style),
+    )
 }
 
 /// Default deterministic text measurer implementing standard CSS typographic ratios.
@@ -168,11 +223,7 @@ pub fn layout_inline_formatting_context_with_measurer(
     }
 
     // 3. Strut metrics for the containing block container per CSS 2.1 §10.8
-    let strut_metrics = measurer.font_metrics(
-        &container_style.font_family,
-        container_style.font_size,
-        container_style.line_height,
-    );
+    let strut_metrics = metrics_styled(measurer, &container_style);
     let strut_leading = strut_metrics.line_height - (strut_metrics.ascent + strut_metrics.descent);
     let strut_ascent = strut_metrics.ascent + strut_leading / 2.0;
     let strut_descent = strut_metrics.descent + strut_leading / 2.0;
@@ -255,8 +306,7 @@ fn tokenize_text(
             for ch in txt.chars() {
                 if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
                     if !word_buf.is_empty() {
-                        let w =
-                            measurer.measure_text(&word_buf, &style.font_family, style.font_size);
+                        let w = measure_styled(measurer, &word_buf, style);
                         tokens.push(InlineToken::Word {
                             text: std::mem::take(&mut word_buf),
                             width: w,
@@ -267,8 +317,7 @@ fn tokenize_text(
                 } else {
                     if saw_space {
                         let space_str = " ".to_string();
-                        let sw =
-                            measurer.measure_text(&space_str, &style.font_family, style.font_size);
+                        let sw = measure_styled(measurer, &space_str, style);
                         tokens.push(InlineToken::Space {
                             text: space_str,
                             width: sw,
@@ -280,8 +329,7 @@ fn tokenize_text(
                     }
                     word_buf.push(ch);
                     if allow_wrap && (ch == '-' || ch == '\u{00AD}') {
-                        let w =
-                            measurer.measure_text(&word_buf, &style.font_family, style.font_size);
+                        let w = measure_styled(measurer, &word_buf, style);
                         tokens.push(InlineToken::Word {
                             text: std::mem::take(&mut word_buf),
                             width: w,
@@ -299,7 +347,7 @@ fn tokenize_text(
             }
 
             if !word_buf.is_empty() {
-                let w = measurer.measure_text(&word_buf, &style.font_family, style.font_size);
+                let w = measure_styled(measurer, &word_buf, style);
                 tokens.push(InlineToken::Word {
                     text: word_buf,
                     width: w,
@@ -308,7 +356,7 @@ fn tokenize_text(
             }
             if saw_space {
                 let space_str = " ".to_string();
-                let sw = measurer.measure_text(&space_str, &style.font_family, style.font_size);
+                let sw = measure_styled(measurer, &space_str, style);
                 tokens.push(InlineToken::Space {
                     text: space_str,
                     width: sw,
@@ -327,7 +375,7 @@ fn tokenize_text(
                     });
                 }
                 if !line.is_empty() {
-                    let w = measurer.measure_text(line, &style.font_family, style.font_size);
+                    let w = measure_styled(measurer, line, style);
                     tokens.push(InlineToken::Word {
                         text: line.to_string(),
                         width: w,
@@ -348,11 +396,7 @@ fn tokenize_text(
                 for ch in line.chars() {
                     if ch == ' ' || ch == '\t' {
                         if !word_buf.is_empty() {
-                            let w = measurer.measure_text(
-                                &word_buf,
-                                &style.font_family,
-                                style.font_size,
-                            );
+                            let w = measure_styled(measurer, &word_buf, style);
                             tokens.push(InlineToken::Word {
                                 text: std::mem::take(&mut word_buf),
                                 width: w,
@@ -360,8 +404,7 @@ fn tokenize_text(
                             });
                         }
                         let space_str = ch.to_string();
-                        let sw =
-                            measurer.measure_text(&space_str, &style.font_family, style.font_size);
+                        let sw = measure_styled(measurer, &space_str, style);
                         tokens.push(InlineToken::Space {
                             text: space_str,
                             width: sw,
@@ -372,11 +415,7 @@ fn tokenize_text(
                     } else {
                         word_buf.push(ch);
                         if ch == '-' || ch == '\u{00AD}' {
-                            let w = measurer.measure_text(
-                                &word_buf,
-                                &style.font_family,
-                                style.font_size,
-                            );
+                            let w = measure_styled(measurer, &word_buf, style);
                             tokens.push(InlineToken::Word {
                                 text: std::mem::take(&mut word_buf),
                                 width: w,
@@ -393,7 +432,7 @@ fn tokenize_text(
                     }
                 }
                 if !word_buf.is_empty() {
-                    let w = measurer.measure_text(&word_buf, &style.font_family, style.font_size);
+                    let w = measure_styled(measurer, &word_buf, style);
                     tokens.push(InlineToken::Word {
                         text: word_buf,
                         width: w,
@@ -415,11 +454,7 @@ fn tokenize_text(
                 for ch in line.chars() {
                     if ch == ' ' || ch == '\t' || ch == '\r' {
                         if !word_buf.is_empty() {
-                            let w = measurer.measure_text(
-                                &word_buf,
-                                &style.font_family,
-                                style.font_size,
-                            );
+                            let w = measure_styled(measurer, &word_buf, style);
                             tokens.push(InlineToken::Word {
                                 text: std::mem::take(&mut word_buf),
                                 width: w,
@@ -430,11 +465,7 @@ fn tokenize_text(
                     } else {
                         if saw_space {
                             let space_str = " ".to_string();
-                            let sw = measurer.measure_text(
-                                &space_str,
-                                &style.font_family,
-                                style.font_size,
-                            );
+                            let sw = measure_styled(measurer, &space_str, style);
                             tokens.push(InlineToken::Space {
                                 text: space_str,
                                 width: sw,
@@ -446,11 +477,7 @@ fn tokenize_text(
                         }
                         word_buf.push(ch);
                         if ch == '-' || ch == '\u{00AD}' {
-                            let w = measurer.measure_text(
-                                &word_buf,
-                                &style.font_family,
-                                style.font_size,
-                            );
+                            let w = measure_styled(measurer, &word_buf, style);
                             tokens.push(InlineToken::Word {
                                 text: std::mem::take(&mut word_buf),
                                 width: w,
@@ -467,7 +494,7 @@ fn tokenize_text(
                     }
                 }
                 if !word_buf.is_empty() {
-                    let w = measurer.measure_text(&word_buf, &style.font_family, style.font_size);
+                    let w = measure_styled(measurer, &word_buf, style);
                     tokens.push(InlineToken::Word {
                         text: word_buf,
                         width: w,
@@ -476,7 +503,7 @@ fn tokenize_text(
                 }
                 if saw_space {
                     let space_str = " ".to_string();
-                    let sw = measurer.measure_text(&space_str, &style.font_family, style.font_size);
+                    let sw = measure_styled(measurer, &space_str, style);
                     tokens.push(InlineToken::Space {
                         text: space_str,
                         width: sw,
@@ -669,7 +696,7 @@ fn format_line(
             _ => continue,
         };
 
-        let metrics = measurer.font_metrics(&style.font_family, style.font_size, style.line_height);
+        let metrics = metrics_styled(measurer, style);
         let leading = metrics.line_height - (metrics.ascent + metrics.descent);
         let half_leading = leading / 2.0;
         let mut a_prime = metrics.ascent + half_leading;
@@ -821,8 +848,7 @@ fn format_line(
             | InlineToken::Space {
                 text, width, style, ..
             } => {
-                let metrics =
-                    measurer.font_metrics(&style.font_family, style.font_size, style.line_height);
+                let metrics = metrics_styled(measurer, &style);
                 let leading = metrics.line_height - (metrics.ascent + metrics.descent);
                 let half_leading = leading / 2.0;
                 let mut a_prime = metrics.ascent + half_leading;
@@ -875,6 +901,7 @@ fn format_line(
                 if let Some(last) = target_list.last_mut()
                     && let BoxType::TextNode(ref mut last_text) = last.box_type
                     && last.style.as_ref() == Some(&style)
+                    && (last.baseline - a_prime).abs() <= 0.01
                 {
                     last_text.push_str(&text);
                     last.dimensions.content.width += width;
@@ -890,6 +917,12 @@ fn format_line(
                 text_box.dimensions.content.y = line_y + y_in_line;
                 text_box.dimensions.content.width = width;
                 text_box.dimensions.content.height = box_h;
+                // Distance from the top of this fragment to the shared line
+                // baseline (see `LayoutBox::baseline`). Paint places glyphs at
+                // `content.y + baseline`, so every fragment on the line — even
+                // if it has different font-size or vertical-align — lands on
+                // the same baseline.
+                text_box.baseline = a_prime;
 
                 curr_x += width;
                 target_list.push(text_box);
@@ -958,6 +991,7 @@ fn format_line(
     // decoration once per line (audit finding F-02).
     let mut line_box = LayoutBox::new(BoxType::LineBox, None);
     line_box.dimensions.content = Rect::new(container_x, line_y, container_width, line_height);
+    line_box.baseline = baseline_y_in_line;
     line_box.children = line_children;
 
     (line_box, outgoing_active)

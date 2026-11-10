@@ -1,13 +1,13 @@
 //! Deterministic integration tests for the Megi font engine.
 //!
-//! The tests load the bundled DejaVu fonts from `tests/fixtures/` (Bitstream Vera
-//! / DejaVu license in `fixtures/LICENSE-DejaVu.txt`), so the asserted metrics are
+//! The tests load the bundled DejaVu fonts from `assets/` (Bitstream Vera
+//! / DejaVu license in `assets/LICENSE-DejaVu.txt`), so the asserted metrics are
 //! reproducible on any machine and do not depend on installed system fonts.
 
 use fonts::{FontDatabase, FontError, FontStyle};
 
-const DEJAVU_SANS: &[u8] = include_bytes!("fixtures/DejaVuSans.ttf");
-const DEJAVU_SANS_BOLD: &[u8] = include_bytes!("fixtures/DejaVuSans-Bold.ttf");
+const DEJAVU_SANS: &[u8] = include_bytes!("../assets/DejaVuSans.ttf");
+const DEJAVU_SANS_BOLD: &[u8] = include_bytes!("../assets/DejaVuSans-Bold.ttf");
 
 fn fixture_db() -> FontDatabase {
     let mut db = FontDatabase::new();

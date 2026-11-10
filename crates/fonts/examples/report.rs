@@ -5,8 +5,8 @@
 
 use fonts::{FontDatabase, FontStyle};
 
-const DEJAVU_SANS: &[u8] = include_bytes!("../tests/fixtures/DejaVuSans.ttf");
-const DEJAVU_SANS_BOLD: &[u8] = include_bytes!("../tests/fixtures/DejaVuSans-Bold.ttf");
+const DEJAVU_SANS: &[u8] = include_bytes!("../assets/DejaVuSans.ttf");
+const DEJAVU_SANS_BOLD: &[u8] = include_bytes!("../assets/DejaVuSans-Bold.ttf");
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut db = FontDatabase::new();

@@ -3,8 +3,14 @@
 //! A pure safe Rust rasterizer that executes [`DisplayList`] commands into an
 //! in-memory 2D pixel buffer ([`Pixmap`]) with Porter-Duff alpha blending and
 //! Netpbm P6 PPM export.
+//!
+//! Text is rendered with the real typography engine in `crates/fonts`
+//! (RustyBuzz shaping + `ab_glyph` antialiased masks) through
+//! [`Pixmap::draw_text_shaped`]; the historical 8×8 bitmap font survives only as
+//! [`Pixmap::draw_text_run_fallback`] for a missing/corrupt font database.
 
 use css::Color;
+use fonts::{FontDatabase, FontStyle as FontsFontStyle};
 use layout::{EdgeSizes, Rect};
 
 use crate::display_list::{DisplayItem, DisplayList};
@@ -202,23 +208,104 @@ impl Pixmap {
         }
     }
 
-    /// Renders text into the pixmap using a built-in bitmap glyph font.
+    /// Renders text into the pixmap using the **real font engine**.
     ///
-    /// This is the standalone entry point with the historical 0.6 em advance.
-    /// Display-list rendering uses [`Pixmap::draw_text_run`] so that the
-    /// painted advance matches the width measured by layout.
-    pub fn draw_text(&mut self, text: &str, rect: Rect, color: Color, font_size: f32) {
-        self.draw_text_run(text, rect, color, font_size, 0.6 * font_size);
+    /// Shapes `text` with `rustybuzz` through `fonts::FontDatabase`, resolves
+    /// each shaped glyph to its face (handles per-glyph fallback), rasterizes the
+    /// antialiased alpha mask with `ab_glyph` and blends it over the canvas using
+    /// the text `color` at the propagated `baseline` (`rect.y + baseline` is the
+    /// glyph baseline in device pixels).
+    ///
+    /// Returns `false` when the font engine cannot shape/render the run (empty
+    /// database, malformed font face); the caller must then fall back to
+    /// [`Pixmap::draw_text_run_fallback`], which keeps the historical 8×8 bitmap
+    /// stub as a documented last resort.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_text_shaped(
+        &mut self,
+        text: &str,
+        rect: Rect,
+        color: Color,
+        font_size: f32,
+        font_family: &str,
+        font_weight: u16,
+        font_italic: bool,
+        baseline: f32,
+        database: &FontDatabase,
+    ) -> bool {
+        if color.a == 0 || text.is_empty() {
+            return true;
+        }
+        let families = fonts::db::parse_font_families(font_family);
+        let family_refs: Vec<&str> = families.iter().map(String::as_str).collect();
+        let font_style = if font_italic {
+            FontsFontStyle::Italic
+        } else {
+            FontsFontStyle::Normal
+        };
+        let run = match database.shape(&family_refs, font_weight, font_style, font_size, text) {
+            Ok(run) => run,
+            Err(_) => return false,
+        };
+
+        let baseline_y = rect.y + baseline;
+        let mut pen_x = rect.x;
+        for glyph in &run.glyphs {
+            let Some(font_info) = run.fonts.get(glyph.font) else {
+                pen_x += glyph.x_advance;
+                continue;
+            };
+            let Ok(font) = database.font_by_ref(font_info) else {
+                pen_x += glyph.x_advance;
+                continue;
+            };
+            let Ok(glyph_id) = u16::try_from(glyph.glyph_id) else {
+                pen_x += glyph.x_advance;
+                continue;
+            };
+            let Ok(mask) = font.rasterize_glyph(font_size, glyph_id) else {
+                pen_x += glyph.x_advance;
+                continue;
+            };
+            let origin_x = pen_x + glyph.x_offset + mask.left;
+            // `y_offset` is positive-up (HarfBuzz); device space is y-down.
+            let origin_y = baseline_y - glyph.y_offset + mask.top;
+            for row in 0..mask.height {
+                for column in 0..mask.width {
+                    let coverage = mask.coverage_at(column, row);
+                    if coverage == 0 {
+                        continue;
+                    }
+                    let alpha = (u32::from(color.a) * u32::from(coverage) + 127) / 255;
+                    if alpha == 0 {
+                        continue;
+                    }
+                    let x = (origin_x + column as f32).round();
+                    let y = (origin_y + row as f32).round();
+                    if x < 0.0 || y < 0.0 || x >= self.width as f32 || y >= self.height as f32 {
+                        continue;
+                    }
+                    let (x, y) = (x as u32, y as u32);
+                    if self.is_clipped(x, y) {
+                        continue;
+                    }
+                    let mut blended = color;
+                    blended.a = alpha as u8;
+                    self.blend_pixel(x, y, blended);
+                }
+            }
+            pen_x += glyph.x_advance;
+        }
+        true
     }
 
-    /// Renders one text run into `rect` using an explicit per-character
-    /// advance in pixels.
+    /// Last-resort fallback used only when the real font engine is unavailable
+    /// (empty/malformed [`FontDatabase`]): renders the historical 8×8 bitmap
+    /// glyphs scaled to `font_size` with a uniform per-character `advance`.
     ///
-    /// The advance comes from the layout [`TextNode`](layout::BoxType::TextNode)
-    /// width (`rect.width / char_count`) so that the rasterized run occupies
-    /// exactly the box the layout engine reserved for it. Glyphs are drawn with
-    /// the built-in 8×8 bitmap font until real font loading lands in WP-4.4.
-    pub fn draw_text_run(
+    /// This path is **not** used by the deterministic pipeline (which bundles
+    /// DejaVu Sans); it exists so paint degrades instead of panicking.
+    pub fn draw_text_run_fallback(
         &mut self,
         text: &str,
         rect: Rect,
@@ -258,6 +345,33 @@ impl Pixmap {
 
             cursor_x += advance;
         }
+    }
+
+    /// Legacy bitmap-font entry point kept for API compatibility; prefer
+    /// [`Pixmap::draw_text_shaped`]. Uses the historical 0.6 em advance.
+    pub fn draw_text(&mut self, text: &str, rect: Rect, color: Color, font_size: f32) {
+        self.draw_text_run_fallback(text, rect, color, font_size, 0.6 * font_size);
+    }
+
+    /// Legacy bitmap-font run entry point kept for API compatibility; prefer
+    /// [`Pixmap::draw_text_shaped`].
+    pub fn draw_text_run(
+        &mut self,
+        text: &str,
+        rect: Rect,
+        color: Color,
+        font_size: f32,
+        advance: f32,
+    ) {
+        self.draw_text_run_fallback(text, rect, color, font_size, advance);
+    }
+
+    /// True when (x, y) falls outside any active clip rectangle.
+    fn is_clipped(&self, x: u32, y: u32) -> bool {
+        let (px, py) = (x as f32 + 0.5, y as f32 + 0.5);
+        self.clip_stack.iter().any(|clip| {
+            px < clip.x || py < clip.y || px >= clip.x + clip.width || py >= clip.y + clip.height
+        })
     }
 
     /// Pushes a clipping boundary onto the stack.
@@ -341,6 +455,24 @@ pub fn rasterize_display_list_with_config(
     height: u32,
     config: RenderConfig,
 ) -> Pixmap {
+    // Deterministic bundled fonts: the Phase 4 pipeline must not depend on the
+    // fonts installed on the host machine.
+    let database = FontDatabase::load_bundled().unwrap_or_default();
+    rasterize_display_list_with_font_database(dl, width, height, config, &database)
+}
+
+/// Executes a display list with an explicit font database.
+///
+/// Use this entry point when the caller already owns a [`FontDatabase`] (e.g.
+/// the same instance used by layout's `FontTextMeasurer`) to avoid re-loading
+/// the bundled faces.
+pub fn rasterize_display_list_with_font_database(
+    dl: &DisplayList,
+    width: u32,
+    height: u32,
+    config: RenderConfig,
+    font_database: &FontDatabase,
+) -> Pixmap {
     let mut pixmap = if config.transparent {
         Pixmap::new(width, height)
     } else {
@@ -364,10 +496,26 @@ pub fn rasterize_display_list_with_config(
                 rect,
                 color,
                 font_size,
+                font_family,
+                font_weight,
+                font_italic,
                 advance,
-                ..
+                baseline,
             } => {
-                pixmap.draw_text_run(text, *rect, *color, *font_size, *advance);
+                let rendered = pixmap.draw_text_shaped(
+                    text,
+                    *rect,
+                    *color,
+                    *font_size,
+                    font_family,
+                    *font_weight,
+                    *font_italic,
+                    *baseline,
+                    font_database,
+                );
+                if !rendered {
+                    pixmap.draw_text_run_fallback(text, *rect, *color, *font_size, *advance);
+                }
             }
             DisplayItem::PushClip { rect } => {
                 pixmap.push_clip(*rect);

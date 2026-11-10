@@ -19,6 +19,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "366ffbaa4442f4684d91e2cd7c5ea7c4ed8add41959a31447066e279e432b618"
 
 [[package]]
+name = "bench"
+version = "0.1.0"
+dependencies = [
+ "css",
+ "dom",
+ "fonts",
+ "html",
+ "layout",
+ "paint",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -102,6 +114,7 @@ version = "0.1.0"
 dependencies = [
  "css",
  "dom",
+ "fonts",
 ]
 
 [[package]]
@@ -152,6 +165,7 @@ version = "0.1.0"
 dependencies = [
  "css",
  "dom",
+ "fonts",
  "html",
  "layout",
 ]

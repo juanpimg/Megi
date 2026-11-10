@@ -36,6 +36,13 @@ pub struct LayoutBox {
     pub box_type: BoxType,
     /// Computed style associated with this box (if generated from an element).
     pub style: Option<ComputedStyle>,
+    /// Baseline offset from the top of this box's content box, in px.
+    ///
+    /// For text fragments (`BoxType::TextNode`) this is the distance from
+    /// `dimensions.content.y` down to the glyph baseline, so paint can place
+    /// glyphs at `content.y + baseline`. Non-text boxes carry `0.0` unless a
+    /// future formatting context defines a meaningful baseline.
+    pub baseline: f32,
     /// Child boxes in layout order.
     pub children: Vec<LayoutBox>,
 }
@@ -47,6 +54,7 @@ impl LayoutBox {
             dimensions: Dimensions::default(),
             box_type,
             style,
+            baseline: 0.0,
             children: Vec::new(),
         }
     }

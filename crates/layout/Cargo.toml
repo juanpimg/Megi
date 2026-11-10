@@ -11,3 +11,4 @@ description = "Megi Engine — CSS Box Tree, Block Formatting Context & Layout E
 [dependencies]
 dom.workspace = true
 css.workspace = true
+fonts.workspace = true

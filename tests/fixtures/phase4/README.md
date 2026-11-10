@@ -35,6 +35,12 @@ byte-identical output; the golden test relies on this.
 
 ## Notes
 
+- **Real text rendering (WP-4.4 phase 2):** glyphs are shaped with RustyBuzz and
+  rasterized from the bundled DejaVu Sans faces in `crates/fonts/assets/`
+  (deterministic, independent of system fonts). Text is antialiased and placed
+  on the baseline propagated by the IFC; the old 8×8 bitmap stub is only a
+  last-resort fallback when no font database is available.
+
 - The PNG writer uses stored DEFLATE blocks (no compression) on purpose, see
   `crates/paint/src/png.rs` and `docs/ARCHITECTURE.md` §3.1 (no external crates
   without an explicit policy amendment).

@@ -94,6 +94,7 @@ fn build_box_for_node(
                 dimensions: Default::default(),
                 box_type,
                 style: Some(style.clone()),
+                baseline: 0.0,
                 children,
             })
         }

@@ -21,6 +21,7 @@ use css::{BoxSizing, ComputedStyle, Display, Length};
 
 use crate::box_tree::LayoutBox;
 use crate::geometry::{Dimensions, EdgeSizes, Rect};
+use crate::inline::{DefaultTextMeasurer, TextMeasurer};
 
 /// Performs block formatting context layout on a layout box within a containing block.
 ///
@@ -28,6 +29,20 @@ use crate::geometry::{Dimensions, EdgeSizes, Rect};
 /// applied against `containing_block`. Per CSS 2.2 §8.3.1 the margins of the root
 /// element's box do not collapse with its descendants' margins.
 pub fn layout_block(layout_box: &mut LayoutBox, containing_block: &Dimensions) {
+    layout_block_with_measurer(layout_box, containing_block, &DefaultTextMeasurer);
+}
+
+/// Performs BFC layout with an explicit [`TextMeasurer`] for inline content.
+///
+/// The phase 4 pipeline passes a
+/// [`FontTextMeasurer`](crate::FontTextMeasurer) so that line boxes and text
+/// advances come from real OpenType metrics instead of the deterministic ratio
+/// fallback.
+pub fn layout_block_with_measurer(
+    layout_box: &mut LayoutBox,
+    containing_block: &Dimensions,
+    measurer: &dyn TextMeasurer,
+) {
     let cb = containing_block.content;
     calculate_block_width(layout_box, cb.width);
     resolve_vertical_edges(layout_box, cb.width);
@@ -39,7 +54,7 @@ pub fn layout_block(layout_box: &mut LayoutBox, containing_block: &Dimensions) {
         + layout_box.dimensions.margin.top
         + layout_box.dimensions.border.top
         + layout_box.dimensions.padding.top;
-    layout_box_contents(layout_box, Some(cb.height), true);
+    layout_box_contents(layout_box, Some(cb.height), true, measurer);
 }
 
 /// Lays out a block-level child inside its parent's content box.
@@ -52,6 +67,7 @@ fn layout_child_box(
     cb: Rect,
     parent_definite_height: Option<f32>,
     border_top_y: f32,
+    measurer: &dyn TextMeasurer,
 ) {
     calculate_block_width(child, cb.width);
     resolve_vertical_edges(child, cb.width);
@@ -61,7 +77,7 @@ fn layout_child_box(
         + child.dimensions.padding.left;
     child.dimensions.content.y =
         border_top_y + child.dimensions.border.top + child.dimensions.padding.top;
-    layout_box_contents(child, parent_definite_height, false);
+    layout_box_contents(child, parent_definite_height, false, measurer);
 }
 
 /// Lays out the contents of a block container and computes its used height.
@@ -69,9 +85,14 @@ fn layout_child_box(
 /// `cb_height` is the definite height of the box's containing block (used by percentage
 /// sizes); `is_root` disables margin collapsing with the box's own children, because the
 /// root element's margins never collapse (CSS 2.2 §8.3.1).
-fn layout_box_contents(layout_box: &mut LayoutBox, cb_height: Option<f32>, is_root: bool) {
+fn layout_box_contents(
+    layout_box: &mut LayoutBox,
+    cb_height: Option<f32>,
+    is_root: bool,
+    measurer: &dyn TextMeasurer,
+) {
     let definite_height = definite_content_height(layout_box, cb_height);
-    layout_block_children(layout_box, definite_height, is_root);
+    layout_block_children(layout_box, definite_height, is_root, measurer);
     calculate_block_height(layout_box, cb_height, definite_height, is_root);
 }
 
@@ -260,7 +281,12 @@ fn definite_content_height(layout_box: &LayoutBox, cb_height: Option<f32>) -> Op
 
 /// Lays out the in-flow children of a block container and stacks them vertically,
 /// collapsing adjoining vertical margins (CSS 2.2 §8.3.1).
-fn layout_block_children(layout_box: &mut LayoutBox, definite_height: Option<f32>, is_root: bool) {
+fn layout_block_children(
+    layout_box: &mut LayoutBox,
+    definite_height: Option<f32>,
+    is_root: bool,
+    measurer: &dyn TextMeasurer,
+) {
     if layout_box.children.is_empty() {
         return;
     }
@@ -268,7 +294,7 @@ fn layout_block_children(layout_box: &mut LayoutBox, definite_height: Option<f32
     // If children are inline-level, establish an Inline Formatting Context
     // (CSS 2.2 §9.4.2).
     if layout_box.children.iter().all(|c| c.is_inline()) {
-        crate::inline::layout_inline_formatting_context(layout_box);
+        crate::inline::layout_inline_formatting_context_with_measurer(layout_box, measurer);
         return;
     }
 
@@ -297,7 +323,7 @@ fn layout_block_children(layout_box: &mut LayoutBox, definite_height: Option<f32
         flow += gap;
 
         let border_top_y = cb.y + flow;
-        layout_child_box(child, cb, definite_height, border_top_y);
+        layout_child_box(child, cb, definite_height, border_top_y, measurer);
         flow += child.dimensions.border_box().height;
         previous_bottom_margin = Some(collapsed_bottom_margin(child, cb.width));
     }

@@ -12,6 +12,7 @@ description = "Megi Engine — Decoupled Display Lists, CSS 2.2 painting order a
 dom = { workspace = true }
 css = { workspace = true }
 layout = { workspace = true }
+fonts = { workspace = true }
 
 [dev-dependencies]
 html = { workspace = true }

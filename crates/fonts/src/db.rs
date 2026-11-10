@@ -100,7 +100,59 @@ impl Default for FontDatabase {
     }
 }
 
+/// Bundled deterministic fonts used for reproducible rendering and tests:
+/// `(file_name, bytes)` for DejaVu Sans regular + bold (Bitstream Vera / DejaVu
+/// license in `assets/LICENSE-DejaVu.txt`).
+pub const BUNDLED_FONTS: &[(&str, &[u8])] = &[
+    ("DejaVuSans.ttf", include_bytes!("../assets/DejaVuSans.ttf")),
+    (
+        "DejaVuSans-Bold.ttf",
+        include_bytes!("../assets/DejaVuSans-Bold.ttf"),
+    ),
+];
+
+/// Parses a CSS `font-family` value into a priority list of family names.
+///
+/// Splits on commas, trims ASCII whitespace and strips single/double quotes
+/// around family names (CSS Fonts 3 §3.1). Returns `["sans-serif"]` when the
+/// value contains no usable family (CSS initial `font-family` is UA-defined).
+pub fn parse_font_families(font_family: &str) -> Vec<String> {
+    let mut families = Vec::new();
+    for part in font_family.split(',') {
+        let trimmed = part.trim().trim_matches(|ch| ch == '\'' || ch == '"');
+        let trimmed = trimmed.trim();
+        if !trimmed.is_empty() {
+            families.push(trimmed.to_string());
+        }
+    }
+    if families.is_empty() {
+        families.push("sans-serif".to_string());
+    }
+    families
+}
+
 impl FontDatabase {
+    /// Loads the deterministic bundled fonts (DejaVu Sans regular + bold) from
+    /// `assets/` via `include_bytes!`.
+    ///
+    /// This is the recommended constructor for **reproducible rendering and
+    /// tests**: results do not depend on which fonts are installed on the host.
+    /// No system font is loaded.
+    pub fn load_bundled() -> Result<Self, FontError> {
+        let mut database = Self::new();
+        for (_name, bytes) in BUNDLED_FONTS {
+            database.load_font_data(bytes.to_vec())?;
+        }
+        Ok(database)
+    }
+
+    /// Infallible variant of [`FontDatabase::load_bundled`]: the bundled bytes are
+    /// validated at compile time, so this degrades to an empty database instead of
+    /// failing if they could ever be corrupt.
+    pub fn new_with_bundled_fonts() -> Self {
+        Self::load_bundled().unwrap_or_else(|_| Self::new())
+    }
+
     /// Creates an empty database (no system fonts, no loaded bytes).
     pub fn new() -> Self {
         Self {
