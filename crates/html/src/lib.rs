@@ -3,6 +3,8 @@
 //! Clean-room Rust implementation of the WHATWG HTML Living Standard (§13.2 Parsing HTML
 //! documents, §13.3 Serializing HTML fragments, and §13.4 Parsing HTML fragments).
 
+#![forbid(unsafe_code)]
+
 pub mod entities;
 pub mod input_stream;
 pub mod serializer;

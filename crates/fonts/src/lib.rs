@@ -56,6 +56,8 @@
 //!   best effort); shaping does not apply kerning/ligatures across fallback
 //!   boundaries.
 
+#![forbid(unsafe_code)]
+
 pub mod db;
 pub mod error;
 pub mod font;

@@ -8,6 +8,8 @@
 //! origin/specificity/source order decide per longhand, the `font` shorthand, and basic
 //! `@media` support ([`MediaContext`], [`resolve_document_styles_with_viewport`]).
 
+#![forbid(unsafe_code)]
+
 pub mod cascade;
 pub mod component_value;
 pub mod parser;

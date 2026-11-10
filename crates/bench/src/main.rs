@@ -8,6 +8,8 @@
 //! crates) and uses `std::time::Instant` so it can run in any CI environment
 //! without `criterion`, `hyperfine` or additional tooling.
 
+#![forbid(unsafe_code)]
+
 mod benches;
 mod cli;
 mod generators;

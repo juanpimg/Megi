@@ -12,6 +12,8 @@
 //! listed here is a regression and must fail both `cargo test -p test_harness` and
 //! `tools/dev.sh all`.
 
+#![forbid(unsafe_code)]
+
 pub mod css_harness;
 pub mod serializer_harness;
 pub mod tokenizer_harness;

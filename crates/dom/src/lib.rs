@@ -13,6 +13,8 @@
 //! optimization. All tree mutations (`append_child`, `insert_before`, `detach`,
 //! `reparent_children`, `append_text`) execute in strict `O(1)` time.
 
+#![forbid(unsafe_code)]
+
 use std::num::NonZeroU32;
 
 /// Compact 32-bit handle into a [`Document`]'s contiguous node arena.
