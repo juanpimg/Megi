@@ -314,6 +314,45 @@ impl JsRuntime {
     pub fn now_ms(&self) -> u64 {
         self.host.borrow().now_ms()
     }
+
+    /// Last non-fatal exception thrown by an event listener, if any.
+    ///
+    /// Listener exceptions are also pushed to the console capture buffer and do not
+    /// interrupt the remaining listeners.
+    pub fn last_event_error(&self) -> Option<String> {
+        self.host.borrow().last_event_error.clone()
+    }
+
+    /// Rough estimate of the Rust-side (and JS host-side) memory used by the runtime.
+    ///
+    /// Boa 0.21 does not expose heap statistics, so this is a documented approximation:
+    /// it accounts for DOM nodes, wrapper side-table entries, listeners, inline handlers,
+    /// timers, console capture and the document title/URL strings. It deliberately
+    /// excludes the JS heap allocated inside Boa itself (documented limitation).
+    pub fn estimated_heap_bytes(&self) -> Option<usize> {
+        let host = self.host.borrow();
+        fn count_nodes(document: &Document, node: NodeId) -> usize {
+            1 + document
+                .children(node)
+                .map(|child| count_nodes(document, child))
+                .sum::<usize>()
+        }
+        let node_count = count_nodes(&host.document, host.document.root());
+        let console_bytes: usize = host
+            .console
+            .iter()
+            .map(|entry| entry.level.len() + entry.message.len())
+            .sum();
+        let estimate = node_count * 192
+            + host.nodes.len() * 16
+            + host.listeners.len() * 96
+            + host.inline_handlers.len() * 64
+            + host.timers.len() * 48
+            + console_bytes
+            + host.title.len()
+            + host.url.len();
+        Some(estimate)
+    }
 }
 
 /// Maps a Boa error message to a typed [`JsError`].
@@ -429,6 +468,14 @@ fn build_document_object(context: &mut Context) -> JsObject {
     let title_get = pick(context, document_title_get);
     let title_set = pick(context, document_title_set);
     let url = pick(context, document_url);
+    let inline_accessors: Vec<(
+        &'static str,
+        boa_engine::object::builtins::JsFunction,
+        boa_engine::object::builtins::JsFunction,
+    )> = crate::events::inline_node_accessors()
+        .into_iter()
+        .map(|(name, get, set)| (name, accessor_fn(context, get), accessor_fn(context, set)))
+        .collect();
     let mut init = ObjectInitializer::new(context);
     // Methods.
     for (name, length, function) in [
@@ -482,6 +529,10 @@ fn build_document_object(context: &mut Context) -> JsObject {
     for (name, length, function) in crate::events::node_methods() {
         init.function(native(function), js_string!(name), length);
     }
+    for (name, get, set) in inline_accessors {
+        init.accessor(js_string!(name), Some(get), Some(set), Attribute::all());
+    }
+    init.function(native(document_close), js_string!("close"), 0);
     init.build()
 }
 
@@ -537,6 +588,14 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
             set.map(|set| accessor_fn(context, set)),
         ));
     }
+    let inline_accessors: Vec<(
+        &'static str,
+        boa_engine::object::builtins::JsFunction,
+        boa_engine::object::builtins::JsFunction,
+    )> = crate::events::inline_node_accessors()
+        .into_iter()
+        .map(|(name, get, set)| (name, accessor_fn(context, get), accessor_fn(context, set)))
+        .collect();
     let mut init = ObjectInitializer::new(context);
     init.property(
         js_string!("__megi_node"),
@@ -545,6 +604,9 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     );
     for (name, get, set) in prepared {
         init.accessor(js_string!(name), Some(get), set, Attribute::all());
+    }
+    for (name, get, set) in inline_accessors {
+        init.accessor(js_string!(name), Some(get), Some(set), Attribute::all());
     }
     // Methods.
     for (name, length, function) in [
@@ -1090,6 +1152,11 @@ fn node_replace_child(
 // ---------------------------------------------------------------------------
 // document methods/accessors
 // ---------------------------------------------------------------------------
+
+/// `document.close()` — no-op kept for script compatibility (parsing is host-driven).
+fn document_close(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::undefined())
+}
 
 fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let text = arg_string(args, 0, context)?;

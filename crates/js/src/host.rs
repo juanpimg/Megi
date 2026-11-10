@@ -47,6 +47,16 @@ pub(crate) struct Listener {
     pub target: TargetKey,
     pub event_type: String,
     pub capture: bool,
+    pub once: bool,
+    pub passive: bool,
+    pub slot: u32,
+}
+
+/// An inline event handler property (`el.onclick = fn`) registered in the host.
+#[derive(Clone, Debug)]
+pub(crate) struct InlineHandler {
+    pub target: TargetKey,
+    pub event_type: String,
     pub slot: u32,
 }
 
@@ -56,6 +66,8 @@ pub(crate) struct DispatchState {
     pub prevent_default: bool,
     pub stop_propagation: bool,
     pub stop_immediate: bool,
+    /// The listener currently running ignores `preventDefault` (`{passive: true}`).
+    pub passive: bool,
 }
 
 /// A scheduled timer.
@@ -100,6 +112,10 @@ pub(crate) struct Host {
     pub dispatch: Option<DispatchState>,
     /// Injected computed-style provider.
     pub computed_style_provider: Option<ComputedStyleProvider>,
+    /// Inline `on<event>` handlers (callbacks live in the JS-side rooted table).
+    pub inline_handlers: Vec<InlineHandler>,
+    /// Last non-fatal exception thrown by an event listener (dispatch continues).
+    pub last_event_error: Option<String>,
 }
 
 impl Host {
@@ -120,6 +136,8 @@ impl Host {
             virtual_now_ms: None,
             dispatch: None,
             computed_style_provider: None,
+            inline_handlers: Vec::new(),
+            last_event_error: None,
         }
     }
 

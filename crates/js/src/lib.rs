@@ -69,6 +69,31 @@
 //! the injected provider (no style resolution inside `js`), and computed declarations are
 //! read-only (`setProperty` throws a `TypeError`).
 //!
+//! ## Advanced events (R77)
+//!
+//! - `event.currentTarget` is the wrapper of the node/document/window currently visited in
+//!   the capture or bubble leg (and `this` inside listeners matches it); `event.eventPhase`
+//!   is 1/2/3 for capture/target/bubble and both reset to `null`/0 after dispatch.
+//!   `event.target` stays the original target.
+//! - `addEventListener(type, fn, { capture, once, passive })`: `once` listeners are removed
+//!   after the first delivery; `passive` listeners cannot cancel the default action
+//!   (`preventDefault` is ignored). `removeEventListener` now matches callback identity
+//!   (and the optional capture flag). `signal`/`AbortSignal` is not supported.
+//! - Inline handler properties `onclick`, `onload` and `onerror` exist on elements,
+//!   `document` and `window`: assigning a function registers it (called with
+//!   `this === element` and the event), assigning `null` removes it; the getter returns the
+//!   current function (or `null`). Returning `false` does not cancel the default action
+//!   (documented limitation; call `event.preventDefault()` instead).
+//! - `document.close()` is a documented no-op (parsing is host-driven).
+//! - `JsRuntime::estimated_heap_bytes()` returns a **rough** estimate of host-side memory
+//!   (DOM nodes, wrapper tables, listeners, timers, console capture, strings); Boa 0.21 does
+//!   not expose JS-heap statistics, which is a documented limitation.
+//! - Dispatch robustness: `dispatchEvent` rejects non-`Event` arguments with a `TypeError`;
+//!   ordinary exceptions thrown by listeners are reported to the console capture
+//!   (`take_console`) and via `JsRuntime::last_event_error()` without interrupting the
+//!   remaining listeners; budget errors (infinite loops) still abort the dispatch with
+//!   [`JsError::Budget`].
+//!
 //! ## Feature layout
 //!
 //! The `js` feature is **enabled by default** and pulls `boa_engine`. With

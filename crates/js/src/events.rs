@@ -14,13 +14,15 @@ use std::time::Duration;
 
 use boa_engine::{
     Context, JsNativeError, JsObject, JsResult, JsValue, NativeFunction, js_string,
-    object::FunctionObjectBuilder, object::ObjectInitializer, object::builtins::JsArray,
-    property::Attribute,
+    object::FunctionObjectBuilder,
+    object::ObjectInitializer,
+    object::builtins::JsArray,
+    property::{Attribute, PropertyDescriptor},
 };
 use dom::NodeId;
 
 use crate::error::JsError as CrateJsError;
-use crate::host::{DispatchState, Listener, TargetKey, TimerEntry, with_host};
+use crate::host::{DispatchState, InlineHandler, Listener, TargetKey, TimerEntry, with_host};
 
 type NativeFn = fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>;
 
@@ -118,6 +120,7 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
         "__megi_timer_callbacks",
         "__megi_timer_args",
         "__megi_wrappers",
+        "__megi_inline_handlers",
     ] {
         let array = JsArray::new(context);
         global_set(context, name, JsValue::from(array));
@@ -125,6 +128,20 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
     for (name, length, function) in window_methods() {
         context
             .register_global_builtin_callable(js_string!(name), length, native(function))
+            .map_err(|error| CrateJsError::Internal(error.to_string()))?;
+    }
+    for (name, get, set) in inline_handler_accessors() {
+        let get = accessor_fn(context, get);
+        let set = accessor_fn(context, set);
+        let descriptor = PropertyDescriptor::builder()
+            .get(JsValue::from(get))
+            .set(JsValue::from(set))
+            .enumerable(true)
+            .configurable(true)
+            .build();
+        context
+            .global_object()
+            .define_property_or_throw(js_string!(name), descriptor, context)
             .map_err(|error| CrateJsError::Internal(error.to_string()))?;
     }
     for (name, length, function) in [
@@ -157,6 +174,87 @@ pub(crate) fn node_methods() -> [(&'static str, usize, NativeFn); 3] {
         ("addEventListener", 2, add_listener),
         ("removeEventListener", 2, remove_listener),
         ("dispatchEvent", 1, dispatch_event),
+    ]
+}
+
+// ---------------------------------------------------------------------------
+// Inline handlers (`onclick`, `onload`, `onerror`)
+// ---------------------------------------------------------------------------
+
+fn inline_get(this: &JsValue, event_type: &str, context: &mut Context) -> JsResult<JsValue> {
+    let target = target_key(this, context)?;
+    let slot = with_host(|host| {
+        host.inline_handlers
+            .iter()
+            .find(|handler| handler.target == target && handler.event_type == event_type)
+            .map(|handler| handler.slot)
+    })
+    .flatten();
+    match slot {
+        Some(slot) => array_get(context, "__megi_inline_handlers", u64::from(slot)),
+        None => Ok(JsValue::null()),
+    }
+}
+
+fn inline_set(
+    this: &JsValue,
+    event_type: &str,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let target = target_key(this, context)?;
+    let value = args.first().cloned().unwrap_or_else(JsValue::undefined);
+    if value.as_object().is_none() {
+        let _ = with_host(|host| {
+            host.inline_handlers
+                .retain(|handler| !(handler.target == target && handler.event_type == event_type));
+        });
+        return Ok(JsValue::undefined());
+    }
+    let slot = array_push(context, "__megi_inline_handlers", value)?;
+    let _ = with_host(|host| {
+        host.inline_handlers
+            .retain(|handler| !(handler.target == target && handler.event_type == event_type));
+        host.inline_handlers.push(InlineHandler {
+            target,
+            event_type: event_type.to_string(),
+            slot,
+        });
+    });
+    Ok(JsValue::undefined())
+}
+
+macro_rules! inline_handler_accessors {
+    ($(($get:ident, $set:ident, $property:literal, $event:literal)),+ $(,)?) => {
+        $(
+            fn $get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+                inline_get(this, $event, context)
+            }
+
+            fn $set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+                inline_set(this, $event, args, context)
+            }
+        )+
+
+        /// Name/getter/setter triples for `window.onclick`, `onload` and `onerror`.
+        pub(crate) fn inline_handler_accessors() -> Vec<(&'static str, NativeFn, NativeFn)> {
+            vec![$(($property, $get as NativeFn, $set as NativeFn)),+]
+        }
+    };
+}
+
+inline_handler_accessors!(
+    (inline_onclick_get, inline_onclick_set, "onclick", "click"),
+    (inline_onload_get, inline_onload_set, "onload", "load"),
+    (inline_onerror_get, inline_onerror_set, "onerror", "error"),
+);
+
+/// Inline handler accessor pairs shared with node/document wrappers.
+pub(crate) fn inline_node_accessors() -> [(&'static str, NativeFn, NativeFn); 3] {
+    [
+        ("onclick", inline_onclick_get, inline_onclick_set),
+        ("onload", inline_onload_get, inline_onload_set),
+        ("onerror", inline_onerror_get, inline_onerror_set),
     ]
 }
 
@@ -316,7 +414,10 @@ fn event_prevent_default(
     check_event(this, context)?;
     let _ = with_host(|host| {
         if let Some(dispatch) = &mut host.dispatch {
-            dispatch.prevent_default = true;
+            // `{ passive: true }` listeners cannot cancel the default action.
+            if !dispatch.passive {
+                dispatch.prevent_default = true;
+            }
         }
     });
     Ok(JsValue::undefined())
@@ -362,30 +463,35 @@ fn add_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
         .cloned()
         .filter(|value| value.as_object().is_some())
         .ok_or_else(|| js_error("listener must be a function"))?;
-    let capture = match args.get(2) {
-        Some(value) => {
-            if let Some(flag) = value.as_boolean() {
-                flag
-            } else {
-                value
-                    .as_object()
-                    .map(|options| {
-                        prop(&options, "capture", context)
-                            .ok()
-                            .and_then(|value| value.as_boolean())
-                            .unwrap_or(false)
-                    })
-                    .unwrap_or(false)
-            }
+    let mut capture = false;
+    let mut once = false;
+    let mut passive = false;
+    if let Some(value) = args.get(2) {
+        if let Some(flag) = value.as_boolean() {
+            capture = flag;
+        } else if let Some(options) = value.as_object() {
+            capture = prop(&options, "capture", context)
+                .ok()
+                .and_then(|value| value.as_boolean())
+                .unwrap_or(false);
+            once = prop(&options, "once", context)
+                .ok()
+                .and_then(|value| value.as_boolean())
+                .unwrap_or(false);
+            passive = prop(&options, "passive", context)
+                .ok()
+                .and_then(|value| value.as_boolean())
+                .unwrap_or(false);
         }
-        None => false,
-    };
+    }
     let slot = array_push(context, "__megi_listeners", callback)?;
     let _ = with_host(|host| {
         host.listeners.push(Listener {
             target,
             event_type,
             capture,
+            once,
+            passive,
             slot,
         });
     });
@@ -395,10 +501,39 @@ fn add_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
 fn remove_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let target = target_key(this, context)?;
     let event_type = arg_string(args, 0, context)?;
-    let _ = with_host(|host| {
+    let Some(callback) = args.get(1).cloned() else {
+        return Ok(JsValue::undefined());
+    };
+    let capture_filter = args.get(2).and_then(|value| value.as_boolean());
+    let candidates: Vec<(usize, u32, bool)> = with_host(|host| {
         host.listeners
-            .retain(|listener| !(listener.target == target && listener.event_type == event_type));
-    });
+            .iter()
+            .enumerate()
+            .filter(|(_, listener)| listener.target == target && listener.event_type == event_type)
+            .map(|(index, listener)| (index, listener.slot, listener.capture))
+            .collect()
+    })
+    .unwrap_or_default();
+    let mut remove_index = None;
+    for (index, slot, capture) in candidates {
+        if let Some(filter) = capture_filter
+            && filter != capture
+        {
+            continue;
+        }
+        let stored = array_get(context, "__megi_listeners", u64::from(slot))?;
+        if stored.strict_equals(&callback) {
+            remove_index = Some(index);
+            break;
+        }
+    }
+    if let Some(index) = remove_index {
+        let _ = with_host(|host| {
+            if index < host.listeners.len() {
+                host.listeners.remove(index);
+            }
+        });
+    }
     Ok(JsValue::undefined())
 }
 
@@ -427,14 +562,14 @@ fn dispatch_event(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
     let _ = event.set(js_string!("target"), this.clone(), false, context);
     let path = propagation_path(target, bubbles);
     let _ = with_host(|host| host.dispatch = Some(DispatchState::default()));
-    for (capture_phase, key) in &path {
+    for (phase, key) in &path {
         let stopped = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_propagation))
             .flatten()
             .unwrap_or(false);
         if stopped {
             break;
         }
-        deliver(context, *key, *capture_phase, &event_type, &event)?;
+        deliver(context, *key, *phase, &event_type, &event)?;
         let immediate = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_immediate))
             .flatten()
             .unwrap_or(false);
@@ -446,6 +581,8 @@ fn dispatch_event(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
         .flatten()
         .unwrap_or(false);
     let _ = with_host(|host| host.dispatch = None);
+    let _ = event.set(js_string!("currentTarget"), JsValue::null(), false, context);
+    let _ = event.set(js_string!("eventPhase"), JsValue::from(0.0), false, context);
     let _ = event.set(
         js_string!("defaultPrevented"),
         JsValue::from(prevented),
@@ -455,23 +592,49 @@ fn dispatch_event(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
     Ok(JsValue::from(!prevented))
 }
 
-fn propagation_path(target: TargetKey, bubbles: bool) -> Vec<(bool, TargetKey)> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PropPhase {
+    Capture,
+    Target,
+    Bubble,
+}
+
+fn phase_number(phase: PropPhase) -> f64 {
+    match phase {
+        PropPhase::Capture => 1.0,
+        PropPhase::Target => 2.0,
+        PropPhase::Bubble => 3.0,
+    }
+}
+
+fn is_budget_message(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    lower.contains("loop iteration limit")
+        || lower.contains("runtime limit")
+        || lower.contains("recursion limit")
+        || lower.contains("stack size")
+}
+
+fn propagation_path(target: TargetKey, bubbles: bool) -> Vec<(PropPhase, TargetKey)> {
     // Dispatch on `window`: document listeners still see the capture phase (the harness
-    // relies on this for DOMContentLoaded), and the window listeners run once.
+    // relies on this for DOMContentLoaded), and window listeners run once as the target.
     if target == TargetKey::Window {
         return vec![
-            (true, TargetKey::Window),
-            (true, TargetKey::Document),
-            (false, TargetKey::Window),
+            (PropPhase::Capture, TargetKey::Window),
+            (PropPhase::Capture, TargetKey::Document),
+            (PropPhase::Target, TargetKey::Window),
         ];
     }
-    // Dispatch on `document`: capture from window, then the target itself once, then a
-    // single bubble leg to window when requested.
+    // Dispatch on `document`: capture from window, target document, then a single bubble
+    // leg to window when requested.
     if target == TargetKey::Document {
-        let mut path = vec![(true, TargetKey::Window), (true, TargetKey::Document)];
-        path.push((false, TargetKey::Document));
+        let mut path = vec![
+            (PropPhase::Capture, TargetKey::Window),
+            (PropPhase::Capture, TargetKey::Document),
+            (PropPhase::Target, TargetKey::Document),
+        ];
         if bubbles {
-            path.push((false, TargetKey::Window));
+            path.push((PropPhase::Bubble, TargetKey::Window));
         }
         return path;
     }
@@ -498,30 +661,98 @@ fn propagation_path(target: TargetKey, bubbles: bool) -> Vec<(bool, TargetKey)> 
         }
     }
     let mut path = Vec::new();
-    path.push((true, TargetKey::Window));
-    path.push((true, TargetKey::Document));
+    path.push((PropPhase::Capture, TargetKey::Window));
+    path.push((PropPhase::Capture, TargetKey::Document));
     for ancestor in ancestors.iter().rev() {
-        path.push((true, *ancestor));
+        path.push((PropPhase::Capture, *ancestor));
     }
-    path.push((false, target));
+    path.push((PropPhase::Capture, target));
+    path.push((PropPhase::Target, target));
     if bubbles {
         for ancestor in &ancestors {
-            path.push((false, *ancestor));
+            path.push((PropPhase::Bubble, *ancestor));
         }
-        path.push((false, TargetKey::Document));
-        path.push((false, TargetKey::Window));
+        path.push((PropPhase::Bubble, TargetKey::Document));
+        path.push((PropPhase::Bubble, TargetKey::Window));
     }
     path
+}
+
+/// JS value used as `event.currentTarget`/`this` while visiting `target`.
+fn target_js_value(context: &mut Context, target: TargetKey) -> JsResult<JsValue> {
+    match target {
+        TargetKey::Window => Ok(JsValue::from(context.global_object())),
+        TargetKey::Document => global_get(context, "document"),
+        TargetKey::Node(handle) => crate::runtime::wrap_handle_public(context, handle)
+            .map_err(|error| js_error(error.to_string())),
+    }
+}
+
+/// Invokes one listener, isolating ordinary exceptions (budget errors still propagate).
+fn call_listener(
+    context: &mut Context,
+    callback: &JsObject,
+    current_target: &JsValue,
+    event: &JsObject,
+    passive: bool,
+    once: bool,
+    slot: u32,
+) -> JsResult<()> {
+    let _ = with_host(|host| {
+        if let Some(dispatch) = &mut host.dispatch {
+            dispatch.passive = passive;
+        }
+    });
+    let result = callback.call(current_target, &[JsValue::from(event.clone())], context);
+    let _ = with_host(|host| {
+        if let Some(dispatch) = &mut host.dispatch {
+            dispatch.passive = false;
+        }
+    });
+    if once {
+        let _ = with_host(|host| host.listeners.retain(|listener| listener.slot != slot));
+    }
+    match result {
+        Ok(_) => Ok(()),
+        Err(error) => {
+            let message = error.to_string();
+            if is_budget_message(&message) {
+                return Err(js_error(message));
+            }
+            let _ = with_host(|host| {
+                host.last_event_error = Some(message.clone());
+                host.console.push(crate::host::ConsoleEntry {
+                    level: "error".to_string(),
+                    message,
+                });
+            });
+            Ok(())
+        }
+    }
 }
 
 fn deliver(
     context: &mut Context,
     target: TargetKey,
-    capture_phase: bool,
+    phase: PropPhase,
     event_type: &str,
     event: &JsObject,
 ) -> JsResult<()> {
-    let slots: Vec<u32> = with_host(|host| {
+    let current_target = target_js_value(context, target)?;
+    let _ = event.set(
+        js_string!("currentTarget"),
+        current_target.clone(),
+        false,
+        context,
+    );
+    let _ = event.set(
+        js_string!("eventPhase"),
+        JsValue::from(phase_number(phase)),
+        false,
+        context,
+    );
+    let capture_phase = phase == PropPhase::Capture;
+    let listeners: Vec<(u32, bool, bool)> = with_host(|host| {
         host.listeners
             .iter()
             .filter(|listener| {
@@ -529,24 +760,55 @@ fn deliver(
                     && listener.event_type == event_type
                     && listener.capture == capture_phase
             })
-            .map(|listener| listener.slot)
+            .map(|listener| (listener.slot, listener.once, listener.passive))
             .collect()
     })
     .unwrap_or_default();
-    if slots.is_empty() {
-        return Ok(());
-    }
-    let _ = event.set(js_string!("currentTarget"), JsValue::null(), false, context);
-    for slot in slots {
+    for (slot, once, passive) in listeners {
+        let immediate = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_immediate))
+            .flatten()
+            .unwrap_or(false);
+        if immediate {
+            return Ok(());
+        }
         let callback = array_get(context, "__megi_listeners", u64::from(slot))?;
         if let Some(callback) = callback.as_object() {
-            callback
-                .call(
-                    &JsValue::undefined(),
-                    &[JsValue::from(event.clone())],
+            call_listener(
+                context,
+                &callback,
+                &current_target,
+                event,
+                passive,
+                once,
+                slot,
+            )?;
+        }
+    }
+    // Inline `on<event>` handlers run at the target (bubble phase), after regular listeners.
+    if phase == PropPhase::Target {
+        let inline_slot = with_host(|host| {
+            host.inline_handlers
+                .iter()
+                .find(|handler| handler.target == target && handler.event_type == event_type)
+                .map(|handler| handler.slot)
+        })
+        .flatten();
+        if let Some(slot) = inline_slot {
+            let callback = array_get(context, "__megi_inline_handlers", u64::from(slot))?;
+            if let Some(callback) = callback.as_object() {
+                call_listener(
                     context,
-                )
-                .map_err(|error| js_error(error.to_string()))?;
+                    &callback,
+                    &current_target,
+                    event,
+                    false,
+                    false,
+                    slot,
+                )?;
+                let returned_false =
+                    with_host(|host| host.dispatch.is_some()).unwrap_or(false) && false;
+                let _ = returned_false;
+            }
         }
     }
     Ok(())
@@ -588,14 +850,14 @@ pub(crate) fn dispatch_rust_event(
     let _ = event_object.set(js_string!("target"), target_js.clone(), false, context);
     let path = propagation_path(target, bubbles);
     let _ = with_host(|host| host.dispatch = Some(DispatchState::default()));
-    for (capture_phase, key) in &path {
+    for (phase, key) in &path {
         let stopped = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_propagation))
             .flatten()
             .unwrap_or(false);
         if stopped {
             break;
         }
-        deliver(context, *key, *capture_phase, event_type, &event_object)
+        deliver(context, *key, *phase, event_type, &event_object)
             .map_err(|error| CrateJsError::Runtime(error.to_string()))?;
         let immediate = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_immediate))
             .flatten()
