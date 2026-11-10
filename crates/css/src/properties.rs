@@ -1224,16 +1224,21 @@ impl ComputedStyle {
     /// 3. `border-{top,right,bottom,left}: <width> || <style> || <color>` (any order).
     /// 4. `border-{side}-width` / `border-{side}-style` / `border-{side}-color` longhands.
     ///
-    /// Finally, CSS 2.2 §8.5.3 requires a computed width of zero when the computed style
-    /// of that side is `none` or `hidden`, which suppresses the phantom borders previously
-    /// painted for default (`border-style: none`) elements.
+    /// Shorthands are normally expanded before the cascade (see [`crate::shorthand`]); the
+    /// shorthand handling here keeps direct [`ComputedStyle::compute`] callers working.
+    ///
+    /// The initial border width is `medium` (3 px); finally, CSS 2.2 §8.5.3 requires a computed
+    /// width of zero when the computed style of that side is `none` or `hidden`, which
+    /// suppresses the phantom borders previously painted for `border-style: none` elements.
     fn compute_borders(
         cascaded: &HashMap<String, &Declaration>,
         font_size: f32,
         root_font_size: f32,
         current_color: Color,
     ) -> (RectEdges<f32>, RectEdges<Color>, RectEdges<BorderStyle>) {
-        let mut widths = RectEdges::all(0.0);
+        /// CSS 2.2 §8.5.1 initial `border-width` value (`medium`).
+        const INITIAL_BORDER_WIDTH: f32 = 3.0;
+        let mut widths = RectEdges::all(INITIAL_BORDER_WIDTH);
         let mut styles = RectEdges::all(BorderStyle::None);
         let mut colors = RectEdges::all(current_color);
 
@@ -1348,7 +1353,7 @@ impl ComputedStyle {
 ///
 /// Whitespace inside `<function>()`/blocks or quoted strings is preserved, so values such as
 /// `rgb(1, 2, 3)` or `url(a b.png)` stay a single component.
-fn split_components(value: &str) -> Vec<String> {
+pub(crate) fn split_components(value: &str) -> Vec<String> {
     let mut components = Vec::new();
     let mut current = String::new();
     let mut depth = 0usize;
@@ -1397,7 +1402,7 @@ fn split_components(value: &str) -> Vec<String> {
 }
 
 /// Parses a `<color>` component, resolving the `currentColor` keyword to the element color.
-fn parse_color_component(component: &str, current_color: Color) -> Option<Color> {
+pub(crate) fn parse_color_component(component: &str, current_color: Color) -> Option<Color> {
     let component = component.trim();
     if component.eq_ignore_ascii_case("currentcolor") {
         return Some(current_color);
@@ -1408,7 +1413,11 @@ fn parse_color_component(component: &str, current_color: Color) -> Option<Color>
 /// Parses a `<line-width>` component (length, `thin`/`medium`/`thick`, or zero).
 ///
 /// Percentages, `auto` and negative values are invalid for border widths (CSS 2.2 §8.5.1).
-fn parse_border_width(component: &str, font_size: f32, root_font_size: f32) -> Option<f32> {
+pub(crate) fn parse_border_width(
+    component: &str,
+    font_size: f32,
+    root_font_size: f32,
+) -> Option<f32> {
     match component.trim().to_ascii_lowercase().as_str() {
         "thin" => Some(1.0),
         "medium" => Some(3.0),

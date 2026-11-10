@@ -9,11 +9,17 @@
 //! combinators, and the structural pseudo-classes `:first-child`, `:last-child`,
 //! `:only-child`, `:empty`, `:root` and `:nth-child(An+B)`.
 //!
-//! Still pending (documented, out of scope for this milestone): `@media` and other at-rules
-//! in the cascade, `:is()`, `:where()`, `:not()`, `:has()`, `:nth-of-type()`/`:nth-last-*`,
-//! `:lang()`, namespace prefixes and pseudo-element boxes. Dynamic pseudo-classes without
-//! tracked interaction state match nothing, and unknown/unsupported pseudo-classes invalidate
-//! the whole selector list instead of silently over-matching (audit findings F13/F14/F15/F16).
+//! Also supported: the functional `:is()`, `:where()`, `:not()` and `:has()` pseudo-classes
+//! (with Selectors Level 4 §16 specificity: the maximum argument for `:is()`/`:not()`/`:has()`
+//! and zero for `:where()`) and the structural `:first/last/only-of-type`,
+//! `:nth-of-type()`, `:nth-last-child()` and `:nth-last-of-type()`. `@media` is handled by the
+//! cascade with a basic [`crate::MediaContext`].
+//!
+//! Still pending (documented, out of scope for this milestone): `:lang()`, `:nth-col()`,
+//! namespace prefixes, pseudo-element boxes and full relative-selector anchoring for `:has()`
+//! (`:scope`). Dynamic pseudo-classes without tracked interaction state match nothing, and
+//! unknown/unsupported pseudo-classes invalidate the whole selector list instead of silently
+//! over-matching (audit findings F13/F14/F15/F16).
 
 use dom::{Document, Namespace, NodeId, NodeKind};
 
@@ -166,15 +172,15 @@ pub fn parse_an_plus_b(s: &str) -> Option<AnPlusB> {
 
 /// Supported pseudo-classes in Selectors Level 4.
 ///
-/// Pseudo-classes that depend on interaction or document state that this engine does not
-/// track yet (`:hover`, `:active`, `:focus`, `:visited`, `:link`, ...) and pseudo-elements
+/// Structural pseudo-classes are evaluated against the DOM tree; the functional
+/// `:is()`, `:where()`, `:not()` and `:has()` pseudo-classes recurse into nested selector
+/// lists. Pseudo-classes that depend on interaction or document state that this engine does
+/// not track yet (`:hover`, `:active`, `:focus`, `:visited`, `:link`, ...) and pseudo-elements
 /// (`::before`, `::after`, ...) are parsed as [`PseudoClass::Never`]: the selector stays
-/// valid but can never match, instead of over-matching every element like the previous
-/// fallback did.
+/// valid but can never match, instead of over-matching every element.
 ///
-/// Not implemented yet (selectors using them are currently rejected as invalid):
-/// `:is()`, `:where()`, `:not()`, `:has()`, `:nth-of-type()`/`:nth-last-*`, `:lang()`,
-/// attribute namespaces and the `s`/`i` case-sensitivity flags of `@namespace`.
+/// Not implemented yet (selectors using them are currently rejected as invalid): `:lang()`,
+/// `:nth-col()`, attribute namespaces and the `s`/`i` case-sensitivity flags of `@namespace`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PseudoClass {
     FirstChild,
@@ -183,80 +189,172 @@ pub enum PseudoClass {
     Empty,
     Root,
     NthChild(AnPlusB),
+    FirstOfType,
+    LastOfType,
+    OnlyOfType,
+    NthOfType(AnPlusB),
+    NthLastChild(AnPlusB),
+    NthLastOfType(AnPlusB),
+    /// `:is(<selector-list>)`.
+    Is(SelectorList),
+    /// `:where(<selector-list>)`; matches like `:is()` but contributes zero specificity.
+    Where(SelectorList),
+    /// `:not(<selector-list>)`.
+    Not(SelectorList),
+    /// `:has(<relative-selector-list>)`; basic descendant/child/sibling support.
+    Has(Vec<RelativeSelector>),
     /// Known pseudo-class/pseudo-element whose state this engine cannot observe.
     Never,
 }
 
 impl PseudoClass {
+    /// Specificity contribution of this pseudo-class (Selectors Level 4 §16).
+    ///
+    /// `:is()`, `:not()` and `:has()` contribute the specificity of their most specific
+    /// argument; `:where()` contributes zero; every other pseudo-class contributes `(0, 1, 0)`.
+    pub fn specificity(&self) -> Specificity {
+        match self {
+            Self::Is(selectors) | Self::Not(selectors) => selectors.max_specificity(),
+            Self::Where(_) => Specificity::ZERO,
+            Self::Has(relatives) => relatives
+                .iter()
+                .map(|relative| relative.selector.specificity())
+                .max()
+                .unwrap_or(Specificity::ZERO),
+            _ => Specificity::new(0, 1, 0),
+        }
+    }
+
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
         match self {
-            Self::Root => {
-                // In HTML, the document element (root <html>)
-                let parent = doc.node(node_id).parent;
-                parent == Some(doc.root())
-            }
+            // In HTML, the document element is the root node's child.
+            Self::Root => doc.node(node_id).parent == Some(doc.root()),
             Self::Never => false,
+            Self::Is(selectors) | Self::Where(selectors) => selectors.matches(doc, node_id),
+            Self::Not(selectors) => !selectors.matches(doc, node_id),
+            Self::Has(relatives) => relatives
+                .iter()
+                .any(|relative| relative.matches(doc, node_id)),
             Self::Empty => {
-                // No element children and no non-empty text children
+                // No element children and no non-empty text children.
                 let mut curr = doc.node(node_id).first_child;
                 while let Some(child_id) = curr {
                     match &doc.node(child_id).kind {
                         NodeKind::Element(_) => return false,
-                        NodeKind::Text(s) if !s.is_empty() => return false,
+                        NodeKind::Text(text) if !text.is_empty() => return false,
                         _ => {}
                     }
                     curr = doc.node(child_id).next_sibling;
                 }
                 true
             }
-            Self::FirstChild => {
-                let Some(parent_id) = doc.node(node_id).parent else {
-                    return false;
-                };
-                let mut curr = doc.node(parent_id).first_child;
-                while let Some(child_id) = curr {
-                    if doc.node(child_id).as_element().is_some() {
-                        return child_id == node_id;
-                    }
-                    curr = doc.node(child_id).next_sibling;
-                }
-                false
-            }
-            Self::LastChild => {
-                let Some(parent_id) = doc.node(node_id).parent else {
-                    return false;
-                };
-                let mut curr = doc.node(parent_id).last_child;
-                while let Some(child_id) = curr {
-                    if doc.node(child_id).as_element().is_some() {
-                        return child_id == node_id;
-                    }
-                    curr = doc.node(child_id).prev_sibling;
-                }
-                false
-            }
+            Self::FirstChild => element_index_from_start(doc, node_id) == Some(1),
+            Self::LastChild => element_index_from_end(doc, node_id) == Some(1),
             Self::OnlyChild => {
-                Self::FirstChild.matches(doc, node_id) && Self::LastChild.matches(doc, node_id)
+                element_index_from_start(doc, node_id) == Some(1)
+                    && element_index_from_end(doc, node_id) == Some(1)
             }
-            Self::NthChild(anb) => {
-                let Some(parent_id) = doc.node(node_id).parent else {
-                    return false;
-                };
-                let mut idx = 0;
-                let mut curr = doc.node(parent_id).first_child;
-                while let Some(child_id) = curr {
-                    if doc.node(child_id).as_element().is_some() {
-                        idx += 1;
-                        if child_id == node_id {
-                            return anb.matches(idx);
-                        }
-                    }
-                    curr = doc.node(child_id).next_sibling;
-                }
-                false
+            Self::NthChild(anb) => element_index_from_start(doc, node_id)
+                .is_some_and(|index| anb.matches(index as i32)),
+            Self::FirstOfType => type_index_from_start(doc, node_id) == Some(1),
+            Self::LastOfType => type_index_from_end(doc, node_id) == Some(1),
+            Self::OnlyOfType => {
+                type_index_from_start(doc, node_id) == Some(1)
+                    && type_index_from_end(doc, node_id) == Some(1)
+            }
+            Self::NthOfType(anb) => {
+                type_index_from_start(doc, node_id).is_some_and(|index| anb.matches(index as i32))
+            }
+            Self::NthLastChild(anb) => {
+                element_index_from_end(doc, node_id).is_some_and(|index| anb.matches(index as i32))
+            }
+            Self::NthLastOfType(anb) => {
+                type_index_from_end(doc, node_id).is_some_and(|index| anb.matches(index as i32))
             }
         }
     }
+}
+
+/// Returns `true` when both nodes are elements of the same type (namespace plus a name that is
+/// case-insensitive for HTML elements and case-sensitive for foreign SVG/MathML elements).
+fn same_element_type(doc: &Document, a: NodeId, b: NodeId) -> bool {
+    let (Some(a), Some(b)) = (doc.node(a).as_element(), doc.node(b).as_element()) else {
+        return false;
+    };
+    a.namespace == b.namespace
+        && if a.namespace == Namespace::Html {
+            a.local_name.eq_ignore_ascii_case(&b.local_name)
+        } else {
+            a.local_name == b.local_name
+        }
+}
+
+/// 1-based index of `node_id` among the element children of its parent, from the start.
+fn element_index_from_start(doc: &Document, node_id: NodeId) -> Option<usize> {
+    let parent_id = doc.node(node_id).parent?;
+    let mut index = 0;
+    let mut curr = doc.node(parent_id).first_child;
+    while let Some(child_id) = curr {
+        if doc.node(child_id).as_element().is_some() {
+            index += 1;
+            if child_id == node_id {
+                return Some(index);
+            }
+        }
+        curr = doc.node(child_id).next_sibling;
+    }
+    None
+}
+
+/// 1-based index of `node_id` among the element children of its parent, from the end.
+fn element_index_from_end(doc: &Document, node_id: NodeId) -> Option<usize> {
+    let parent_id = doc.node(node_id).parent?;
+    let mut index = 0;
+    let mut curr = doc.node(parent_id).last_child;
+    while let Some(child_id) = curr {
+        if doc.node(child_id).as_element().is_some() {
+            index += 1;
+            if child_id == node_id {
+                return Some(index);
+            }
+        }
+        curr = doc.node(child_id).prev_sibling;
+    }
+    None
+}
+
+/// 1-based index of `node_id` among its same-type element siblings, from the start.
+fn type_index_from_start(doc: &Document, node_id: NodeId) -> Option<usize> {
+    let parent_id = doc.node(node_id).parent?;
+    let mut index = 0;
+    let mut curr = doc.node(parent_id).first_child;
+    while let Some(child_id) = curr {
+        if doc.node(child_id).as_element().is_some() && same_element_type(doc, child_id, node_id) {
+            index += 1;
+            if child_id == node_id {
+                return Some(index);
+            }
+        }
+        curr = doc.node(child_id).next_sibling;
+    }
+    None
+}
+
+/// 1-based index of `node_id` among its same-type element siblings, from the end.
+fn type_index_from_end(doc: &Document, node_id: NodeId) -> Option<usize> {
+    let parent_id = doc.node(node_id).parent?;
+    let mut index = 0;
+    let mut curr = doc.node(parent_id).last_child;
+    while let Some(child_id) = curr {
+        if doc.node(child_id).as_element().is_some() && same_element_type(doc, child_id, node_id) {
+            index += 1;
+            if child_id == node_id {
+                return Some(index);
+            }
+        }
+        curr = doc.node(child_id).prev_sibling;
+    }
+    None
 }
 
 /// Specificity of a selector per W3C Selectors Level 4 §16.
@@ -323,13 +421,17 @@ impl CompoundSelector {
     /// Calculates the specificity of this compound selector according to Selectors Level 4 §16.
     pub fn specificity(&self) -> Specificity {
         let a = if self.id.is_some() { 1 } else { 0 };
-        let b = (self.classes.len() + self.attributes.len() + self.pseudo_classes.len()) as u32;
+        let b = (self.classes.len() + self.attributes.len()) as u32;
         let c = if self.tag_name.as_deref().is_some_and(|t| t != "*") {
             1
         } else {
             0
         };
-        Specificity::new(a, b, c)
+        let mut specificity = Specificity::new(a, b, c);
+        for pseudo in &self.pseudo_classes {
+            specificity += pseudo.specificity();
+        }
+        specificity
     }
 
     /// Matches this compound selector against a DOM element.
@@ -499,6 +601,101 @@ impl ComplexSelector {
             }
         }
     }
+}
+
+/// A relative selector as accepted by `:has()`: a combinator from the anchor element followed
+/// by a complex selector (Selectors Level 4 §4.2).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RelativeSelector {
+    /// Combinator between the anchor element and the first compound (`Descendant` by default).
+    pub leading: Combinator,
+    /// Complex selector whose subject must be reachable from the anchor element.
+    pub selector: ComplexSelector,
+}
+
+impl RelativeSelector {
+    /// Returns whether `anchor` has a descendant/child/sibling matching this relative selector.
+    ///
+    /// Limitation: the matcher only supports combinators *after* the first compound when they
+    /// are ordinary descendant/child/sibling combinators; it does not evaluate `:scope` and
+    /// does not implement the full relative-selector anchoring rules with backtracking budgets.
+    pub fn matches(&self, doc: &Document, anchor: NodeId) -> bool {
+        let compounds = &self.selector.compounds;
+        if compounds.is_empty() {
+            return false;
+        }
+        relative_chain_matches(doc, anchor, compounds, 0, self.leading)
+    }
+}
+
+/// Matches `compounds[index]` relative to `current` through `combinator`, recursing forward.
+fn relative_chain_matches(
+    doc: &Document,
+    current: NodeId,
+    compounds: &[(CompoundSelector, Option<Combinator>)],
+    index: usize,
+    combinator: Combinator,
+) -> bool {
+    let mut candidates = Vec::new();
+    match combinator {
+        Combinator::Child => {
+            let mut child = doc.node(current).first_child;
+            while let Some(child_id) = child {
+                candidates.push(child_id);
+                child = doc.node(child_id).next_sibling;
+            }
+        }
+        Combinator::Descendant => {
+            let mut stack = Vec::new();
+            let mut child = doc.node(current).first_child;
+            while let Some(child_id) = child {
+                stack.push(child_id);
+                child = doc.node(child_id).next_sibling;
+            }
+            while let Some(candidate) = stack.pop() {
+                candidates.push(candidate);
+                let mut child = doc.node(candidate).first_child;
+                while let Some(child_id) = child {
+                    stack.push(child_id);
+                    child = doc.node(child_id).next_sibling;
+                }
+            }
+        }
+        Combinator::NextSibling => {
+            let mut sibling = doc.node(current).next_sibling;
+            while let Some(sibling_id) = sibling {
+                if doc.node(sibling_id).as_element().is_some() {
+                    candidates.push(sibling_id);
+                    break;
+                }
+                sibling = doc.node(sibling_id).next_sibling;
+            }
+        }
+        Combinator::SubsequentSibling => {
+            let mut sibling = doc.node(current).next_sibling;
+            while let Some(sibling_id) = sibling {
+                if doc.node(sibling_id).as_element().is_some() {
+                    candidates.push(sibling_id);
+                }
+                sibling = doc.node(sibling_id).next_sibling;
+            }
+        }
+    }
+    for candidate in candidates {
+        let (compound, next) = &compounds[index];
+        if !compound.matches(doc, candidate) {
+            continue;
+        }
+        if index + 1 == compounds.len() {
+            return true;
+        }
+        if let Some(next_combinator) = next
+            && relative_chain_matches(doc, candidate, compounds, index + 1, *next_combinator)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// A comma-separated list of complex selectors (`h1, h2, .title`).
@@ -878,7 +1075,21 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
                     "only-child" if argument.is_none() => PseudoClass::OnlyChild,
                     "empty" if argument.is_none() => PseudoClass::Empty,
                     "root" if argument.is_none() => PseudoClass::Root,
+                    "first-of-type" if argument.is_none() => PseudoClass::FirstOfType,
+                    "last-of-type" if argument.is_none() => PseudoClass::LastOfType,
+                    "only-of-type" if argument.is_none() => PseudoClass::OnlyOfType,
                     "nth-child" => PseudoClass::NthChild(parse_an_plus_b(argument.as_deref()?)?),
+                    "nth-last-child" => {
+                        PseudoClass::NthLastChild(parse_an_plus_b(argument.as_deref()?)?)
+                    }
+                    "nth-of-type" => PseudoClass::NthOfType(parse_an_plus_b(argument.as_deref()?)?),
+                    "nth-last-of-type" => {
+                        PseudoClass::NthLastOfType(parse_an_plus_b(argument.as_deref()?)?)
+                    }
+                    "is" => PseudoClass::Is(parse_selector_argument(&argument)?),
+                    "where" => PseudoClass::Where(parse_selector_argument(&argument)?),
+                    "not" => PseudoClass::Not(parse_selector_argument(&argument)?),
+                    "has" => PseudoClass::Has(parse_relative_selector_list(argument.as_deref()?)?),
                     // Legacy single-colon pseudo-element syntax (`:before`, `:first-line`, ...).
                     "before" | "after" | "first-line" | "first-letter" if argument.is_none() => {
                         PseudoClass::Never
@@ -886,8 +1097,8 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
                     _ if DYNAMIC_PSEUDO_CLASSES.contains(&name.as_str()) && argument.is_none() => {
                         PseudoClass::Never
                     }
-                    // `:is()`/`:where()`/`:not()`/`:has()` and unknown pseudo-classes
-                    // invalidate the selector list instead of over-matching (F13).
+                    // Unknown pseudo-classes invalidate the selector list instead of
+                    // over-matching every element (F13).
                     _ => return None,
                 };
                 compound.pseudo_classes.push(pseudo_class);
@@ -936,6 +1147,49 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
     }
 
     Some(compound)
+}
+
+/// Parses the argument of `:is()`, `:where()` or `:not()` into a selector list.
+fn parse_selector_argument(argument: &Option<String>) -> Option<SelectorList> {
+    let selectors = parse_selectors(argument.as_deref()?);
+    if selectors.selectors.is_empty() {
+        None
+    } else {
+        Some(selectors)
+    }
+}
+
+/// Parses the argument of `:has()`: a comma-separated list of relative selectors.
+///
+/// Each relative selector may start with `>`, `+` or `~` (descendant when omitted), e.g.
+/// `:has(> img)`, `:has(p)`, `:has(+ .note)`. Invalid or unsupported selectors make the whole
+/// `:has()` pseudo-class invalid.
+fn parse_relative_selector_list(input: &str) -> Option<Vec<RelativeSelector>> {
+    let parts = split_top_level_commas(input);
+    if parts.is_empty() {
+        return None;
+    }
+    let mut relatives = Vec::with_capacity(parts.len());
+    for part in parts {
+        let part = part.trim();
+        if part.is_empty() {
+            return None;
+        }
+        let (leading, rest) = match part.chars().next()? {
+            '>' => (Combinator::Child, part[1..].trim()),
+            '+' => (Combinator::NextSibling, part[1..].trim()),
+            '~' => (Combinator::SubsequentSibling, part[1..].trim()),
+            _ => (Combinator::Descendant, part),
+        };
+        if rest.is_empty() {
+            return None;
+        }
+        relatives.push(RelativeSelector {
+            leading,
+            selector: parse_complex_selector(rest)?,
+        });
+    }
+    Some(relatives)
 }
 
 fn parse_attribute_selector(spec: &str) -> Option<AttributeSelector> {
