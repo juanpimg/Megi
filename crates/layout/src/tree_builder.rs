@@ -4,6 +4,7 @@
 //! a conformant CSS Box Tree per CSS 2.2 §9 and CSS Display Module Level 3.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use css::{ComputedStyle, Display, Float, Overflow, Position};
 use dom::{Document, Namespace, NodeId, NodeKind};
@@ -76,7 +77,9 @@ fn build_box_for_node(
     doc: &Document,
     node_id: NodeId,
     styles: &HashMap<NodeId, ComputedStyle>,
-    parent_style: Option<&ComputedStyle>,
+    // Inherited style for generated boxes: the anonymous style derived once from the
+    // parent element (shared `Arc`), used directly by text and anonymous boxes.
+    inherited_style: Option<&Arc<ComputedStyle>>,
     replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
     has_overflow_clip: &mut bool,
 ) -> Option<LayoutBox> {
@@ -171,6 +174,16 @@ fn build_box_for_node(
                 }
             };
 
+            // The element's own style handle (one deep clone per element box) and the
+            // **shared** anonymous style for its generated descendants. The latter is
+            // derived once per parent instead of once per text/anonymous box, which is
+            // the dominant source of `ComputedStyle` clones on text-heavy pages.
+            let own_style = Arc::new(style.clone());
+            let child_style = node
+                .first_child
+                .is_some()
+                .then(|| Arc::new(anonymous_style_from(style)));
+
             let mut raw_children = Vec::with_capacity(4);
             let mut curr = node.first_child;
             while let Some(child_id) = curr {
@@ -178,7 +191,7 @@ fn build_box_for_node(
                     doc,
                     child_id,
                     styles,
-                    Some(style),
+                    child_style.as_ref(),
                     replaced_sizes,
                     has_overflow_clip,
                 ) {
@@ -191,17 +204,21 @@ fn build_box_for_node(
                 BoxType::BlockNode(_)
                 | BoxType::InlineBlock(_)
                 | BoxType::TableCell(_)
-                | BoxType::TableCaption(_) => normalize_block_children(raw_children, Some(style)),
-                BoxType::Table(_) | BoxType::InlineTable(_) => {
-                    table_fixup_children(raw_children, Some(style))
+                | BoxType::TableCaption(_) => {
+                    normalize_block_children(raw_children, child_style.as_ref())
                 }
-                BoxType::TableRowGroup(_) => row_group_fixup_children(raw_children, Some(style)),
-                BoxType::TableRow(_) => row_fixup_children(raw_children, Some(style)),
+                BoxType::Table(_) | BoxType::InlineTable(_) => {
+                    table_fixup_children(raw_children, child_style.as_ref())
+                }
+                BoxType::TableRowGroup(_) => {
+                    row_group_fixup_children(raw_children, child_style.as_ref())
+                }
+                BoxType::TableRow(_) => row_fixup_children(raw_children, child_style.as_ref()),
                 // Inline/atomic/replaced/column boxes keep their children as-is.
                 _ => raw_children,
             };
 
-            let mut layout_box = LayoutBox::new(box_type.clone(), Some(style.clone()));
+            let mut layout_box = LayoutBox::with_shared_style(box_type.clone(), Some(own_style));
             // Data contract consumed by `paint` (stacking/clip metadata).
             layout_box.position = style.position;
             layout_box.z_index = if style.position == Position::Static {
@@ -266,9 +283,12 @@ fn build_box_for_node(
                 return None;
             }
             // Text boxes are formatting artifacts: they must only carry inherited
-            // properties, never the parent's margins/borders/background (F-02).
-            let parent = parent_style.map(anonymous_style_from);
-            Some(LayoutBox::new(BoxType::TextNode(txt.clone()), parent))
+            // properties, never the parent's margins/borders/background (F-02). The
+            // anonymous style is computed once per parent element and shared (`Arc`).
+            Some(LayoutBox::with_shared_style(
+                BoxType::TextNode(txt.clone()),
+                inherited_style.cloned(),
+            ))
         }
         _ => None,
     }
@@ -283,7 +303,7 @@ fn build_box_for_node(
 /// pretty-printed HTML (audit finding F-02).
 fn normalize_block_children(
     children: Vec<LayoutBox>,
-    parent_style: Option<&ComputedStyle>,
+    inherited_style: Option<&Arc<ComputedStyle>>,
 ) -> Vec<LayoutBox> {
     let has_block = children.iter().any(|c| c.is_block());
     let has_inline = children.iter().any(|c| c.is_inline());
@@ -293,7 +313,7 @@ fn normalize_block_children(
         return children;
     }
 
-    let anonymous_style = parent_style.map(anonymous_style_from);
+    let anonymous_style = inherited_style.cloned();
     let mut normalized = Vec::new();
     let mut current_inline_run: Vec<LayoutBox> = Vec::new();
 
@@ -315,14 +335,15 @@ fn normalize_block_children(
 fn flush_inline_run(
     run: &mut Vec<LayoutBox>,
     normalized: &mut Vec<LayoutBox>,
-    anonymous_style: &Option<ComputedStyle>,
+    anonymous_style: &Option<Arc<ComputedStyle>>,
 ) {
     if run.is_empty() {
         return;
     }
     let significant = run.iter().any(|c| !is_collapsible_whitespace_box(c));
     if significant {
-        let mut anon = LayoutBox::new(BoxType::AnonymousBlock, anonymous_style.clone());
+        let mut anon =
+            LayoutBox::with_shared_style(BoxType::AnonymousBlock, anonymous_style.clone());
         anon.children = std::mem::take(run);
         normalized.push(anon);
     } else {
@@ -346,7 +367,7 @@ fn replaced_default_size(tag: &str) -> (f32, f32) {
 /// §17.2.1). Other stray children are wrapped into an anonymous row + cell.
 fn table_fixup_children(
     children: Vec<LayoutBox>,
-    parent_style: Option<&ComputedStyle>,
+    inherited_style: Option<&Arc<ComputedStyle>>,
 ) -> Vec<LayoutBox> {
     let mut out = Vec::new();
     let mut pending_cells: Vec<LayoutBox> = Vec::new();
@@ -354,40 +375,38 @@ fn table_fixup_children(
     for child in children {
         match child.box_type {
             BoxType::TableCell(_) => {
-                flush_other_children(&mut pending_other, &mut out, parent_style);
+                flush_other_children(&mut pending_other, &mut out, inherited_style);
                 pending_cells.push(child);
             }
             BoxType::TableRow(_)
             | BoxType::TableRowGroup(_)
             | BoxType::TableCaption(_)
             | BoxType::TableColumn(_) => {
-                flush_cells(&mut pending_cells, &mut out, parent_style);
-                flush_other_children(&mut pending_other, &mut out, parent_style);
+                flush_cells(&mut pending_cells, &mut out, inherited_style);
+                flush_other_children(&mut pending_other, &mut out, inherited_style);
                 out.push(child);
             }
             _ => {
-                flush_cells(&mut pending_cells, &mut out, parent_style);
+                flush_cells(&mut pending_cells, &mut out, inherited_style);
                 pending_other.push(child);
             }
         }
     }
-    flush_cells(&mut pending_cells, &mut out, parent_style);
-    flush_other_children(&mut pending_other, &mut out, parent_style);
+    flush_cells(&mut pending_cells, &mut out, inherited_style);
+    flush_other_children(&mut pending_other, &mut out, inherited_style);
     out
 }
 
 fn flush_cells(
     cells: &mut Vec<LayoutBox>,
     out: &mut Vec<LayoutBox>,
-    parent_style: Option<&ComputedStyle>,
+    inherited_style: Option<&Arc<ComputedStyle>>,
 ) {
     if cells.is_empty() {
         return;
     }
-    let mut row = LayoutBox::new(
-        BoxType::AnonymousTableRow,
-        parent_style.map(anonymous_style_from),
-    );
+    let mut row =
+        LayoutBox::with_shared_style(BoxType::AnonymousTableRow, inherited_style.cloned());
     row.children = std::mem::take(cells);
     out.push(row);
 }
@@ -395,20 +414,16 @@ fn flush_cells(
 fn flush_other_children(
     children: &mut Vec<LayoutBox>,
     out: &mut Vec<LayoutBox>,
-    parent_style: Option<&ComputedStyle>,
+    inherited_style: Option<&Arc<ComputedStyle>>,
 ) {
     if children.is_empty() {
         return;
     }
-    let mut cell = LayoutBox::new(
-        BoxType::AnonymousTableCell,
-        parent_style.map(anonymous_style_from),
-    );
+    let mut cell =
+        LayoutBox::with_shared_style(BoxType::AnonymousTableCell, inherited_style.cloned());
     cell.children = std::mem::take(children);
-    let mut row = LayoutBox::new(
-        BoxType::AnonymousTableRow,
-        parent_style.map(anonymous_style_from),
-    );
+    let mut row =
+        LayoutBox::with_shared_style(BoxType::AnonymousTableRow, inherited_style.cloned());
     row.children.push(cell);
     out.push(row);
 }
@@ -417,19 +432,19 @@ fn flush_other_children(
 /// anonymous row (CSS 2.1 §17.2.1).
 fn row_group_fixup_children(
     children: Vec<LayoutBox>,
-    parent_style: Option<&ComputedStyle>,
+    inherited_style: Option<&Arc<ComputedStyle>>,
 ) -> Vec<LayoutBox> {
     let mut out = Vec::new();
     let mut pending: Vec<LayoutBox> = Vec::new();
     for child in children {
         if matches!(child.box_type, BoxType::TableRow(_)) {
-            flush_cells(&mut pending, &mut out, parent_style);
+            flush_cells(&mut pending, &mut out, inherited_style);
             out.push(child);
         } else {
             pending.push(child);
         }
     }
-    flush_cells(&mut pending, &mut out, parent_style);
+    flush_cells(&mut pending, &mut out, inherited_style);
     out
 }
 
@@ -437,13 +452,13 @@ fn row_group_fixup_children(
 /// (CSS 2.1 §17.2.1).
 fn row_fixup_children(
     children: Vec<LayoutBox>,
-    parent_style: Option<&ComputedStyle>,
+    inherited_style: Option<&Arc<ComputedStyle>>,
 ) -> Vec<LayoutBox> {
     let mut out = Vec::new();
     let mut pending: Vec<LayoutBox> = Vec::new();
     for child in children {
         if matches!(child.box_type, BoxType::TableCell(_)) {
-            flush_other_children(&mut pending, &mut out, parent_style);
+            flush_other_children(&mut pending, &mut out, inherited_style);
             out.push(child);
         } else {
             pending.push(child);
@@ -452,10 +467,8 @@ fn row_fixup_children(
     // Stray content goes in an anonymous cell appended as a sibling row? CSS wraps it
     // in an anonymous cell inside the same row; flush as an inline cell.
     if !pending.is_empty() {
-        let mut cell = LayoutBox::new(
-            BoxType::AnonymousTableCell,
-            parent_style.map(anonymous_style_from),
-        );
+        let mut cell =
+            LayoutBox::with_shared_style(BoxType::AnonymousTableCell, inherited_style.cloned());
         cell.children = pending;
         out.push(cell);
     }

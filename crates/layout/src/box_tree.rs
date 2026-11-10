@@ -3,6 +3,8 @@
 //! Defines [`LayoutBox`], [`BoxType`], and tree structural invariants according to
 //! CSS 2.2 §9 and CSS Display Module Level 3.
 
+use std::sync::Arc;
+
 use css::{ComputedStyle, Float, Position};
 use dom::NodeId;
 
@@ -59,7 +61,12 @@ pub struct LayoutBox {
     /// Box classification (block, inline, anonymous, text).
     pub box_type: BoxType,
     /// Computed style associated with this box (if generated from an element).
-    pub style: Option<ComputedStyle>,
+    ///
+    /// Shared through an [`Arc`]: element boxes own one shallow handle, and generated
+    /// boxes (text fragments, anonymous blocks, line boxes) re-use their parent's `Arc`
+    /// instead of deep-cloning a whole [`ComputedStyle`] per box. Use
+    /// [`LayoutBox::style`] to borrow the underlying value.
+    pub style: Option<Arc<ComputedStyle>>,
     /// Number of table columns spanned by a cell (`colspan` HTML attribute,
     /// CSS 2.1 §17.5.1). `1` for every other box. `u16` keeps `LayoutBox` compact.
     pub colspan: u16,
@@ -121,8 +128,22 @@ impl Drop for LayoutBox {
 }
 
 impl LayoutBox {
+    /// Borrows the computed style of this box, if any.
+    pub fn style(&self) -> Option<&ComputedStyle> {
+        self.style.as_deref()
+    }
+
     /// Creates a new layout box with zero dimensions and empty children.
+    ///
+    /// The style is wrapped in an [`Arc`] so the box owns a cheap shared handle;
+    /// callers that already hold a shared style (the hot box-tree construction path)
+    /// should use [`LayoutBox::with_shared_style`] to avoid an extra clone.
     pub fn new(box_type: BoxType, style: Option<ComputedStyle>) -> Self {
+        Self::with_shared_style(box_type, style.map(Arc::new))
+    }
+
+    /// Creates a new layout box from an already-shared computed style.
+    pub fn with_shared_style(box_type: BoxType, style: Option<Arc<ComputedStyle>>) -> Self {
         Self {
             dimensions: Dimensions::default(),
             box_type,

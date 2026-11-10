@@ -198,8 +198,12 @@ enum InlineToken {
         style: Arc<ComputedStyle>,
     },
     /// A whitespace run (collapsible or preserved).
+    ///
+    /// Stored as a single `char` (`'\0'` means "no rendered character": the break
+    /// opportunity created after an explicit hyphen) to avoid one `String`
+    /// allocation per space token on text-heavy pages.
     Space {
-        text: String,
+        text: char,
         width: f32,
         style: Arc<ComputedStyle>,
         collapsible: bool,
@@ -263,7 +267,7 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
     let container_style = layout_box
         .style
         .take()
-        .unwrap_or_else(ComputedStyle::initial);
+        .unwrap_or_else(|| Arc::new(ComputedStyle::initial()));
 
     // 1. Flatten children into a sequential stream of inline tokens. Atomic
     // inline-level boxes (inline-block/replaced) are laid out here so the line breaker
@@ -346,7 +350,10 @@ fn collect_inline_tokens(
                 let node_id = *node_id;
                 // The inline box is consumed into tokens; move its style instead of
                 // cloning it (the surviving fragments re-use the same `Arc`).
-                let style = Arc::new(child.style.take().unwrap_or_else(ComputedStyle::initial));
+                let style = child
+                    .style
+                    .take()
+                    .unwrap_or_else(|| Arc::new(ComputedStyle::initial()));
                 tokens.push(InlineToken::BoxStart {
                     node_id,
                     style: style.clone(),
@@ -357,7 +364,10 @@ fn collect_inline_tokens(
             BoxType::TextNode(txt) => {
                 // The text box is a formatting artifact consumed into tokens; moving its
                 // style avoids one `ComputedStyle` clone per text node.
-                let style = Arc::new(child.style.take().unwrap_or_else(ComputedStyle::initial));
+                let style = child
+                    .style
+                    .take()
+                    .unwrap_or_else(|| Arc::new(ComputedStyle::initial()));
                 tokenize_text(txt, &style, measurer, tokens);
             }
             // `<br>` forces a line break (CSS 2.2 §16.6.1). It has no width and no edges.
@@ -416,10 +426,9 @@ fn push_collapsible_space(
     allow_wrap: bool,
     tokens: &mut Vec<InlineToken>,
 ) {
-    let text = " ".to_string();
-    let width = measure_styled(measurer, &text, style.as_ref());
+    let width = measure_styled(measurer, " ", style.as_ref());
     tokens.push(InlineToken::Space {
-        text,
+        text: ' ',
         width,
         style: style.clone(),
         collapsible: true,
@@ -487,10 +496,11 @@ fn tokenize_text(
                 if collapses_spaces {
                     pending_collapsible_space = true;
                 } else {
-                    let text = ch.to_string();
-                    let width = measure_styled(measurer, &text, style.as_ref());
+                    let mut buf = [0u8; 4];
+                    let text: &str = ch.encode_utf8(&mut buf);
+                    let width = measure_styled(measurer, text, style.as_ref());
                     tokens.push(InlineToken::Space {
-                        text,
+                        text: ch,
                         width,
                         style: style.clone(),
                         collapsible: false,
@@ -523,7 +533,7 @@ fn tokenize_text(
                 if ch == '-' && allow_wrap {
                     flush_word(&mut word, style, measurer, tokens);
                     tokens.push(InlineToken::Space {
-                        text: String::new(),
+                        text: '\0',
                         width: 0.0,
                         style: style.clone(),
                         collapsible: false,
@@ -897,7 +907,7 @@ fn format_line(
 
     for (index, token) in tokens.iter().enumerate() {
         line_content_width += token_advance(token, container_width);
-        if justify && matches!(token, InlineToken::Space { text, .. } if !text.is_empty()) {
+        if justify && matches!(token, InlineToken::Space { text, .. } if *text != '\0') {
             justify_space_count += 1;
         }
         match token {
@@ -1114,9 +1124,9 @@ fn format_line(
                         .max(0.0);
                     curr_x += right_edges;
 
-                    let mut inline_box = LayoutBox::new(
+                    let mut inline_box = LayoutBox::with_shared_style(
                         BoxType::InlineNode(frame.node_id),
-                        Some(frame.style.as_ref().clone()),
+                        Some(frame.style.clone()),
                     );
                     inline_box.dimensions.margin.left = left_margin;
                     inline_box.dimensions.margin.right = right_margin;
@@ -1143,7 +1153,7 @@ fn format_line(
             }
             InlineToken::Word { text, width, style } => {
                 push_text_fragment(
-                    text,
+                    &text,
                     width,
                     style,
                     &mut active_stack,
@@ -1158,8 +1168,14 @@ fn format_line(
             InlineToken::Space {
                 text, width, style, ..
             } => {
+                let mut buf = [0u8; 4];
+                let rendered: &str = if text == '\0' {
+                    ""
+                } else {
+                    text.encode_utf8(&mut buf)
+                };
                 push_text_fragment(
-                    text,
+                    rendered,
                     width + justify_extra_per_space,
                     style,
                     &mut active_stack,
@@ -1262,9 +1278,9 @@ fn format_line(
         // Interior split: right edges are 0.0 per CSS 2.2 §9.4.2
         let box_w = (curr_x - (frame.start_x + left_margin + left_border + left_padding)).max(0.0);
 
-        let mut inline_box = LayoutBox::new(
+        let mut inline_box = LayoutBox::with_shared_style(
             BoxType::InlineNode(frame.node_id),
-            Some(frame.style.as_ref().clone()),
+            Some(frame.style.clone()),
         );
         inline_box.dimensions.margin.left = left_margin;
         inline_box.dimensions.margin.right = 0.0;
@@ -1311,7 +1327,7 @@ fn format_line(
 /// the line itself), merging with the previous fragment when possible.
 #[allow(clippy::too_many_arguments)]
 fn push_text_fragment(
-    text: String,
+    text: &str,
     width: f32,
     style: Arc<ComputedStyle>,
     active_stack: &mut [ActiveBoxFrame],
@@ -1367,17 +1383,18 @@ fn push_text_fragment(
 
     if let Some(last) = target_list.last_mut()
         && let BoxType::TextNode(ref mut last_text) = last.box_type
-        && last.style.as_ref() == Some(style.as_ref())
+        && last.style.as_deref() == Some(style.as_ref())
         && (last.baseline - a_prime).abs() <= 0.01
         && (last.dimensions.content.y - y).abs() <= 0.01
     {
-        last_text.push_str(&text);
+        last_text.push_str(text);
         last.dimensions.content.width += width;
         *curr_x += width;
         return;
     }
 
-    let mut text_box = LayoutBox::new(BoxType::TextNode(text), Some(style.as_ref().clone()));
+    let mut text_box =
+        LayoutBox::with_shared_style(BoxType::TextNode(text.to_owned()), Some(style.clone()));
     text_box.dimensions.content.x = *curr_x;
     text_box.dimensions.content.y = y;
     text_box.dimensions.content.width = width;

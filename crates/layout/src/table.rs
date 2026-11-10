@@ -167,7 +167,7 @@ fn layout_table_advanced(
     let style = table
         .style
         .clone()
-        .unwrap_or_else(css::ComputedStyle::initial);
+        .unwrap_or_else(|| std::sync::Arc::new(css::ComputedStyle::initial()));
     let collapse = style.border_collapse == BorderCollapse::Collapse;
     let (spacing_h, spacing_v) = if collapse {
         (0.0, 0.0)
