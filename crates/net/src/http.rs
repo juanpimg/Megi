@@ -8,15 +8,22 @@
 //! Features:
 //!
 //! - request line + `Host`, `User-Agent` (`Megi/0.1`), `Accept: */*`,
-//!   `Connection: close`;
+//!   `Connection: close`, plus `Accept-Encoding: gzip` (unless disabled),
+//!   `Origin` (when [`FetchOptions::origin`] is set) and `Cookie` (when a
+//!   [`FetchOptions::cookie_jar`] matches the URL);
 //! - configurable connect/read timeouts via [`FetchOptions`];
 //! - status line + header parsing (obsolete line folding is rejected);
 //! - `Content-Length` and `Transfer-Encoding: chunked` bodies;
 //! - redirect following (301/302/303/307/308) with a configurable limit, resolving
 //!   relative `Location` headers against the current URL;
-//! - hard caps on header size and response body size to keep hostile servers from
-//!   exhausting memory ([`FetchOptions::max_header_bytes`],
-//!   [`FetchOptions::max_response_bytes`]).
+//! - hard caps on header size, wire body size and decompressed body size to keep hostile
+//!   servers from exhausting memory ([`FetchOptions::max_header_bytes`],
+//!   [`FetchOptions::max_response_bytes`], [`FetchOptions::compression_limits`]);
+//! - cookie storage/injection ([`FetchOptions::cookie_jar`]) and CORS validation
+//!   ([`FetchOptions::origin`]) integrated per request, with the CORS preflight entry
+//!   point [`preflight`];
+//! - `Content-Encoding: gzip`/`deflate` decoding with CRC-32/ISIZE verification and
+//!   anti-bomb caps (see [`crate::compression`]).
 //!
 //! ## TLS (feature `tls`, on by default)
 //!
@@ -30,12 +37,16 @@
 //!
 //! ## Deliberate limitations
 //!
-//! - The client only issues `GET`; cookies, `Referer`, CORS preflight, proxies, HTTP/2,
-//!   connection reuse and redirect method rewriting are out of scope.
-//! - **No compression**: no `Accept-Encoding` request header is sent, so servers must
-//!   send identity bodies; a `Content-Encoding: gzip` response (which a server should
-//!   not send without negotiation) is returned **raw/undecoded** and the header is
-//!   preserved on [`Response::headers`] for callers to interpret.
+//! - [`fetch`] only issues `GET` (and follows redirects with `GET`); other methods and
+//!   custom CORS-preflighted requests need the explicit [`preflight`] entry point. No
+//!   `Referer`, proxies, HTTP/2, connection reuse or redirect method rewriting.
+//! - Compression covers single `gzip`/`deflate` codings; the response body is buffered
+//!   and decoded in memory (with the anti-bomb caps). The decoded body keeps the
+//!   `Content-Encoding` header on [`Response::headers`] (matching the Fetch standard's
+//!   "body is decoded, headers are not rewritten" model).
+//! - Cookies use the RFC 6265 subset documented in [`crate::cookies`] (`SameSite` stored
+//!   as ignored, no Public Suffix List). CORS is the subset documented in [`crate::cors`]
+//!   (no preflight caching, no `Access-Control-Expose-Headers`).
 //! - Read/write timeouts and header/body caps apply to TLS streams exactly as to plain
 //!   TCP, because `rustls::StreamOwned` reads/writes through the same `TcpStream`.
 
@@ -43,9 +54,11 @@ use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
-#[cfg(feature = "tls")]
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
+use crate::compression::{AcceptEncoding, CompressionLimits, ContentEncoding, decode_body};
+use crate::cookies::CookieJar;
+use crate::cors;
 use crate::error::FetchError;
 use crate::url::{Scheme, Url};
 
@@ -81,6 +94,22 @@ pub struct FetchOptions {
     pub max_header_bytes: usize,
     /// `User-Agent` request header value.
     pub user_agent: String,
+    /// Optional cookie jar. When set, `Set-Cookie` response headers are stored for every
+    /// hop and the matching `Cookie` request header is sent. `None` (default) means the
+    /// client is cookie-less; setting a jar also enables credentialed CORS mode.
+    pub cookie_jar: Option<Arc<Mutex<CookieJar>>>,
+    /// Optional CORS `Origin` header value (e.g. `https://app.example`). When set, the
+    /// client sends `Origin` and validates cross-origin responses against
+    /// `Access-Control-Allow-Origin`/`Access-Control-Allow-Credentials`; `None` (default)
+    /// keeps the previous no-policy behaviour.
+    pub origin: Option<String>,
+    /// Response-compression negotiation: [`AcceptEncoding::Gzip`] (default) sends
+    /// `Accept-Encoding: gzip` and decodes `Content-Encoding: gzip`/`deflate` bodies;
+    /// [`AcceptEncoding::Identity`] sends no `Accept-Encoding` and leaves encoded bodies
+    /// raw.
+    pub accept_encoding: AcceptEncoding,
+    /// Anti-bomb caps applied when decompressing a response body.
+    pub compression_limits: CompressionLimits,
     /// Custom TLS client configuration (root store, client auth, protocol versions).
     ///
     /// `None` (the default) uses the built-in webpki-roots (Mozilla) trust anchors and
@@ -99,6 +128,10 @@ impl Default for FetchOptions {
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
             max_header_bytes: DEFAULT_MAX_HEADER_BYTES,
             user_agent: DEFAULT_USER_AGENT.to_owned(),
+            cookie_jar: None,
+            origin: None,
+            accept_encoding: AcceptEncoding::Gzip,
+            compression_limits: CompressionLimits::default(),
             #[cfg(feature = "tls")]
             tls_config: None,
         }
@@ -166,13 +199,29 @@ pub fn fetch_with_headers(
     let mut current = url.clone();
     let mut redirects = 0usize;
     loop {
-        let raw = fetch_once(&current, options, extra_headers)?;
+        let raw = fetch_once(&current, options, "GET", extra_headers, true)?;
+        // Store `Set-Cookie` for every hop (browsers do this before following a
+        // redirect so the next request already sees the new cookies).
+        if let Some(jar) = &options.cookie_jar {
+            lock_jar(jar).store_from_response(&current, &raw.headers);
+        }
         if !is_redirect(raw.status) {
+            // CORS is checked before decoding so unauthorized bodies are never
+            // decompressed (a hostile server cannot spend our CPU/memory first).
+            if let Some(origin) = options.origin.as_deref() {
+                cors::validate_response(
+                    &current,
+                    origin,
+                    &raw.headers,
+                    options.cookie_jar.is_some(),
+                )?;
+            }
+            let body = decode_response_body(&raw.headers, raw.body, options)?;
             return Ok(Response {
                 status: raw.status,
                 reason: raw.reason,
                 headers: raw.headers,
-                body: raw.body,
+                body,
                 final_url: current,
             });
         }
@@ -193,6 +242,120 @@ pub fn fetch_with_headers(
     }
 }
 
+fn lock_jar(jar: &Mutex<CookieJar>) -> std::sync::MutexGuard<'_, CookieJar> {
+    // A poisoned jar lock (panic while holding it) must not cascade: cookie state is a
+    // best-effort cache, so recover the guard and keep serving requests.
+    jar.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Decodes the response body according to `Content-Encoding` when compression is enabled.
+///
+/// `max_response_bytes` applies to the **decompressed** size: the inflater is capped by
+/// the tighter of that limit and [`FetchOptions::compression_limits`]. A body that would
+/// exceed `max_response_bytes` maps to [`FetchError::ResponseTooLarge`]; the anti-bomb
+/// ratio cap maps to [`FetchError::DecompressionLimit`].
+fn decode_response_body(
+    headers: &Headers,
+    body: Vec<u8>,
+    options: &FetchOptions,
+) -> Result<Vec<u8>, FetchError> {
+    if options.accept_encoding == AcceptEncoding::Identity {
+        return Ok(body);
+    }
+    let content_encoding = headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("content-encoding"))
+        .map(|(_, value)| value.as_str());
+    let Some(value) = content_encoding else {
+        return Ok(body);
+    };
+    let encoding = match ContentEncoding::parse(value) {
+        Ok(ContentEncoding::Identity) => return Ok(body),
+        Ok(encoding) => encoding,
+        Err(error) => return Err(error),
+    };
+    let limits = CompressionLimits::new(
+        options.compression_limits.max_output,
+        options.compression_limits.max_ratio,
+    );
+    let decoded = decode_body(encoding, &body, limits)?;
+    // `max_response_bytes` also caps the decompressed representation (not just the wire
+    // bytes); exceeding it is the same typed error as an oversized identity body.
+    if decoded.len() > options.max_response_bytes {
+        return Err(FetchError::ResponseTooLarge);
+    }
+    Ok(decoded)
+}
+
+/// Performs a CORS preflight (`OPTIONS`) for a non-simple request, per the Fetch standard
+/// subset described in [`crate::cors`].
+///
+/// This is the explicit entry point for non-`GET` methods/custom headers: the plain
+/// [`fetch`] only issues `GET` and therefore never preflights. Requirements:
+///
+/// - [`FetchOptions::origin`] must be set (otherwise there is no CORS context and the
+///   function returns [`FetchError::Cors`]).
+/// - The `OPTIONS` response must be `2xx`, allow the origin
+///   (`Access-Control-Allow-Origin`, exact or `*` without credentials), list `method` in
+///   `Access-Control-Allow-Methods`, and list every non-safelisted request header in
+///   `Access-Control-Allow-Headers`.
+/// - Preflights do not send cookies (Fetch: preflight credentials mode); the cookie jar
+///   still controls whether the real request will be credentialed for the ACAO/ACAC check.
+///
+/// Redirects are not followed for preflights in this subset (a non-`2xx` response is a
+/// CORS failure). `Access-Control-Max-Age` caching is not implemented.
+pub fn preflight(
+    url: &Url,
+    options: &FetchOptions,
+    method: &str,
+    request_headers: &[(&str, &str)],
+) -> Result<(), FetchError> {
+    let origin = options.origin.as_deref().ok_or_else(|| {
+        FetchError::Cors("preflight requires FetchOptions::origin to be set".to_owned())
+    })?;
+    let method = method.trim().to_ascii_uppercase();
+    if method.is_empty() || !method.bytes().all(is_token_byte) {
+        return Err(FetchError::Cors(format!(
+            "invalid CORS preflight method `{method}`"
+        )));
+    }
+    if !cors::requires_preflight(&method, request_headers) {
+        return Ok(());
+    }
+    let requested_headers: Vec<String> = request_headers
+        .iter()
+        .filter(|(name, _)| !cors::is_simple_header(name))
+        .map(|(name, _)| name.to_ascii_lowercase())
+        .collect();
+    let mut extra: Vec<(String, String)> =
+        vec![("Access-Control-Request-Method".to_owned(), method.clone())];
+    if !requested_headers.is_empty() {
+        extra.push((
+            "Access-Control-Request-Headers".to_owned(),
+            requested_headers.join(", "),
+        ));
+    }
+    let extra_refs: Vec<(&str, &str)> = extra
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect();
+    let raw = fetch_once(url, options, "OPTIONS", &extra_refs, false)?;
+    if !(200..300).contains(&raw.status) {
+        return Err(FetchError::Cors(format!(
+            "preflight response status {} is not ok",
+            raw.status
+        )));
+    }
+    cors::validate_preflight_response(
+        url,
+        origin,
+        &method,
+        request_headers,
+        &raw.headers,
+        options.cookie_jar.is_some(),
+    )
+}
+
 #[derive(Debug)]
 struct RawResponse {
     status: u16,
@@ -208,7 +371,9 @@ fn is_redirect(status: u16) -> bool {
 fn fetch_once(
     url: &Url,
     options: &FetchOptions,
+    method: &str,
     extra_headers: &[(&str, &str)],
+    include_cookies: bool,
 ) -> Result<RawResponse, FetchError> {
     let host = url.host_for_dns();
     let port = match url.scheme() {
@@ -267,10 +432,29 @@ fn fetch_once(
         None => url.host().to_owned(),
     };
     let mut request = format!(
-        "GET {} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\nConnection: close\r\n",
+        "{method} {} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\n",
         url.request_target(),
         options.user_agent,
     );
+    if let Some(value) = options.accept_encoding.header_value() {
+        request.push_str("Accept-Encoding: ");
+        request.push_str(value);
+        request.push_str("\r\n");
+    }
+    if let Some(origin) = options.origin.as_deref() {
+        request.push_str("Origin: ");
+        request.push_str(origin);
+        request.push_str("\r\n");
+    }
+    if include_cookies
+        && let Some(jar) = &options.cookie_jar
+        && let Some(cookie_header) = lock_jar(jar).header_for_url(url)
+    {
+        request.push_str("Cookie: ");
+        request.push_str(&cookie_header);
+        request.push_str("\r\n");
+    }
+    request.push_str("Connection: close\r\n");
     for (name, value) in extra_headers {
         request.push_str(name);
         request.push_str(": ");

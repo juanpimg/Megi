@@ -26,6 +26,19 @@
 //! - **[`loader`]**: [`ResourceLoader`] with the HTTP cache (freshness, conditional
 //!   revalidation, `Vary`) that dispatches to `http`/`https`/`file`/`data`, returning
 //!   [`loader::Resource`] values (URL + bytes + resolved content type).
+//! - **[`cookies`]**: RFC 6265 subset [`CookieJar`] (domain/path/secure/httpOnly/expiry,
+//!   `Set-Cookie` parsing, `Cookie` request header) integrated optionally through
+//!   [`FetchOptions::cookie_jar`](http::FetchOptions::cookie_jar). `SameSite` and the
+//!   Public Suffix List are not implemented (documented).
+//! - **[`cors`]**: CORS subset: [`Origin`], response validation with
+//!   `Access-Control-Allow-Origin`/`-Credentials`, preflight (`OPTIONS`) validation and
+//!   [`http::preflight`], enabled by [`FetchOptions::origin`](http::FetchOptions::origin).
+//!   Same-origin/absent-origin requests keep the previous no-policy behaviour.
+//! - **[`compression`]**: `Content-Encoding: gzip`/`deflate` decoding (RFC 1952 /
+//!   RFC 1950/1951) on top of the shared, dependency-free inflater from the `image`
+//!   crate, with anti-bomb caps on the decompressed size (64 MiB) and compression ratio
+//!   (1000:1), typed errors, and `Accept-Encoding: gzip` negotiation enabled by default
+//!   (disable with [`AcceptEncoding::Identity`]).
 //!
 //! ## TLS policy (feature `tls`, default on)
 //!
@@ -38,10 +51,13 @@
 //!
 //! ## Deliberate limitations / next steps (Phase 5 continuation)
 //!
-//! - No HTTP/2, no cookies, no `Referer`/CORS policy.
-//! - **No compression**: `Accept-Encoding` is never sent and `Content-Encoding` is not
-//!   decoded (a gzip response is returned raw with its header preserved; see
-//!   [`http`] docs). No IDNA / non-ASCII host names (rejected with
+//! - No HTTP/2, no `Referer` policy, no cookie `SameSite`/Public-Suffix-List handling,
+//!   and only the CORS subset described in [`cors`] (no preflight caching, no
+//!   `Access-Control-Expose-Headers`).
+//! - Compression covers only single `gzip`/`deflate` codings (no `br`/`zstd`, no stacked
+//!   encodings) and buffers the whole body before decoding. The inflater is the `image`
+//!   crate's std-only codec; extracting it into a dedicated crate is a documented
+//!   follow-up. No IDNA / non-ASCII host names (rejected with
 //!   [`UrlError::InvalidHost`]), no `ftp:`/`blob:` schemes, no WebSocket.
 //! - The URL parser is a *subset*: `` and whitespace handling follow the spec, but odd
 //!   legacy forms (e.g. `http:/foo`, Windows `file:` drive letters, octal/hex IPv4) are
@@ -63,6 +79,9 @@
 #![forbid(unsafe_code)]
 
 pub mod cache;
+pub mod compression;
+pub mod cookies;
+pub mod cors;
 pub mod data;
 pub mod error;
 pub mod file;
@@ -72,10 +91,19 @@ pub mod mime;
 pub mod url;
 
 pub use cache::{CachePolicy, parse_cache_policy, parse_http_date};
+pub use compression::{
+    AcceptEncoding, CompressionLimits, ContentEncoding, DEFAULT_MAX_COMPRESSION_RATIO,
+    DEFAULT_MAX_DECOMPRESSED_BYTES, decode_body as decode_content_encoding,
+};
+pub use cookies::{
+    Clock, Cookie, CookieJar, ParsedSetCookie, SetCookieError, default_cookie_path, domain_matches,
+    is_valid_cookie_name, parse_set_cookie, path_matches,
+};
+pub use cors::{Origin, requires_preflight, validate_preflight_response, validate_response};
 pub use data::{DataUrl, base64_decode, base64_encode, decode_data_url};
 pub use error::{FetchError, LoadError, UrlError};
 pub use file::load_file_url;
-pub use http::{FetchOptions, Response, fetch, fetch_with_headers};
+pub use http::{FetchOptions, Response, fetch, fetch_with_headers, preflight};
 pub use loader::{HEURISTIC_FRESHNESS, Resource, ResourceLoader};
 pub use mime::{MimeHint, resolve_content_type, sniff};
 pub use url::{Scheme, Url};

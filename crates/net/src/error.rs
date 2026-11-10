@@ -96,6 +96,25 @@ pub enum FetchError {
     /// A `304 Not Modified` response arrived without a cached representation to
     /// revalidate (e.g. the cache was cleared, or the server misbehaves).
     UnconditionalNotModified,
+    /// A CORS check failed: the response is cross-origin and its
+    /// `Access-Control-Allow-Origin`/`Access-Control-Allow-Credentials` (or a preflight's
+    /// `Access-Control-Allow-Methods`/`Access-Control-Allow-Headers`) does not authorize
+    /// the request. The payload is a human-readable reason.
+    Cors(String),
+    /// The response declared a `Content-Encoding` this crate does not support (e.g. `br`,
+    /// `zstd`) or stacked encodings (`gzip, br`).
+    ContentEncoding(String),
+    /// Decoding a compressed response body failed: malformed gzip/DEFLATE stream,
+    /// CRC-32/ISIZE mismatch or invalid zlib trailer.
+    Decompression(String),
+    /// Decompression exceeded the anti-bomb caps configured in
+    /// [`crate::http::FetchOptions`] (decompressed size and/or compression ratio).
+    DecompressionLimit {
+        /// Configured maximum decompressed size in bytes.
+        max_output: usize,
+        /// Configured maximum compression ratio (`decompressed / compressed`).
+        max_ratio: u64,
+    },
 }
 
 impl fmt::Display for FetchError {
@@ -134,6 +153,16 @@ impl fmt::Display for FetchError {
             Self::UnconditionalNotModified => {
                 write!(f, "received 304 Not Modified without a cached response")
             }
+            Self::Cors(reason) => write!(f, "CORS check failed: {reason}"),
+            Self::ContentEncoding(reason) => write!(f, "unsupported content encoding: {reason}"),
+            Self::Decompression(reason) => write!(f, "decompression failed: {reason}"),
+            Self::DecompressionLimit {
+                max_output,
+                max_ratio,
+            } => write!(
+                f,
+                "decompression exceeded anti-bomb limits (max {max_output} bytes, ratio {max_ratio}:1)"
+            ),
         }
     }
 }
