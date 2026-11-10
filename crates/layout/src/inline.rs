@@ -211,6 +211,18 @@ enum InlineToken {
     HyphenationPoint { style: ComputedStyle },
     /// A forced line break (`\n` in pre/pre-wrap/pre-line or `<br>`).
     ForcedBreak,
+    /// An atomic inline-level box: `display: inline-block` or a replaced element
+    /// (CSS 2.2 §9.2.1.1, §10.3.9). It participates in the line as a single unit.
+    Atomic {
+        layout_box: Box<LayoutBox>,
+        /// Margin box width (line advance).
+        width: f32,
+        /// Margin box height.
+        height: f32,
+        /// Distance from the margin box top to the alignment baseline.
+        baseline: f32,
+        vertical_align: VerticalAlign,
+    },
 }
 
 /// Resolves a CSS [`Length`] into pixels relative to containing block width.
@@ -233,6 +245,18 @@ pub fn layout_inline_formatting_context_with_measurer(
     layout_box: &mut LayoutBox,
     measurer: &dyn TextMeasurer,
 ) {
+    let pos =
+        crate::block::PositioningContext::from_containing_block(layout_box.dimensions.content);
+    layout_inline_formatting_context_with_measurer_and_pos(layout_box, measurer, pos);
+}
+
+/// IFC layout with the inherited positioning context (needed to lay out atomic
+/// inline-level boxes and their absolutely positioned descendants).
+pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
+    layout_box: &mut LayoutBox,
+    measurer: &dyn TextMeasurer,
+    pos: crate::block::PositioningContext,
+) {
     let container_width = layout_box.dimensions.content.width;
     let container_x = layout_box.dimensions.content.x;
     let container_y = layout_box.dimensions.content.y;
@@ -241,9 +265,18 @@ pub fn layout_inline_formatting_context_with_measurer(
         .clone()
         .unwrap_or_else(ComputedStyle::initial);
 
-    // 1. Flatten children into a sequential stream of inline tokens
+    // 1. Flatten children into a sequential stream of inline tokens. Atomic
+    // inline-level boxes (inline-block/replaced) are laid out here so the line breaker
+    // knows their margin box and baseline.
     let mut tokens = Vec::new();
-    collect_inline_tokens(&layout_box.children, measurer, &mut tokens);
+    let mut inline_children = std::mem::take(&mut layout_box.children);
+    collect_inline_tokens(
+        &mut inline_children,
+        measurer,
+        &mut tokens,
+        container_width,
+        pos,
+    );
 
     if tokens.is_empty() {
         layout_box.children.clear();
@@ -293,24 +326,28 @@ pub fn layout_inline_formatting_context_with_measurer(
 }
 
 /// Recursively flattens inline boxes into [`InlineToken`]s.
+///
+/// Atomic inline-level boxes (`inline-block`, replaced elements) are laid out eagerly
+/// at a provisional origin and emitted as [`InlineToken::Atomic`]: the line breaker
+/// treats them as unbreakable units with a known margin box and baseline.
 fn collect_inline_tokens(
-    boxes: &[LayoutBox],
+    boxes: &mut [LayoutBox],
     measurer: &dyn TextMeasurer,
     tokens: &mut Vec<InlineToken>,
+    container_width: f32,
+    pos: crate::block::PositioningContext,
 ) {
-    for child in boxes {
+    for child in boxes.iter_mut() {
         match &child.box_type {
             BoxType::InlineNode(node_id) => {
+                let node_id = *node_id;
                 let style = child.style.clone().unwrap_or_else(ComputedStyle::initial);
                 tokens.push(InlineToken::BoxStart {
-                    node_id: *node_id,
+                    node_id,
                     style: style.clone(),
                 });
-                collect_inline_tokens(&child.children, measurer, tokens);
-                tokens.push(InlineToken::BoxEnd {
-                    node_id: *node_id,
-                    style,
-                });
+                collect_inline_tokens(&mut child.children, measurer, tokens, container_width, pos);
+                tokens.push(InlineToken::BoxEnd { node_id, style });
             }
             BoxType::TextNode(txt) => {
                 let style = child.style.clone().unwrap_or_else(ComputedStyle::initial);
@@ -319,6 +356,27 @@ fn collect_inline_tokens(
             // `<br>` forces a line break (CSS 2.2 §16.6.1). It has no width and no edges.
             BoxType::LineBreak => {
                 tokens.push(InlineToken::ForcedBreak);
+            }
+            BoxType::InlineBlock(_) | BoxType::Replaced(_) => {
+                let atomic = crate::block::layout_atomic_inline(
+                    std::mem::replace(child, LayoutBox::new(BoxType::LineBreak, None)),
+                    container_width,
+                    None,
+                    measurer,
+                    pos,
+                );
+                let vertical_align = atomic
+                    .layout_box
+                    .style
+                    .as_ref()
+                    .map_or(VerticalAlign::Baseline, |style| style.vertical_align);
+                tokens.push(InlineToken::Atomic {
+                    layout_box: Box::new(atomic.layout_box),
+                    width: atomic.width,
+                    height: atomic.height,
+                    baseline: atomic.baseline,
+                    vertical_align,
+                });
             }
             _ => {}
         }
@@ -506,7 +564,9 @@ struct SoftWrapOpportunity {
 /// Advance contributed by a token to the current line width.
 fn token_advance(token: &InlineToken, container_width: f32) -> f32 {
     match token {
-        InlineToken::Word { width, .. } | InlineToken::Space { width, .. } => *width,
+        InlineToken::Word { width, .. }
+        | InlineToken::Space { width, .. }
+        | InlineToken::Atomic { width, .. } => *width,
         InlineToken::BoxStart { style, .. } => {
             resolve_length(style.margin.left, container_width)
                 + style.border_width.left
@@ -564,8 +624,13 @@ fn find_last_soft_wrap(
 }
 
 fn line_has_visible_content(line: &[InlineToken]) -> bool {
-    line.iter()
-        .any(|token| matches!(token, InlineToken::Word { text, .. } if !text.is_empty()))
+    line.iter().any(|token| match token {
+        InlineToken::Word { text, .. } => !text.is_empty(),
+        // Atomic inline-level boxes are visible content: a line may break before them
+        // at a preceding space, but they are never split.
+        InlineToken::Atomic { .. } => true,
+        _ => false,
+    })
 }
 
 fn trim_trailing_collapsible_spaces(line: &mut Vec<InlineToken>, current_width: &mut f32) {
@@ -922,6 +987,37 @@ fn format_line(
                     max_descent = max_descent.max(d);
                 }
             }
+            InlineToken::Atomic {
+                baseline,
+                height,
+                vertical_align,
+                ..
+            } => {
+                let ascent = *baseline;
+                let descent = (*height - *baseline).max(0.0);
+                if !open_anchors.is_empty() {
+                    for anchor in &mut open_anchors {
+                        anchor.2 = anchor.2.max(ascent);
+                        anchor.3 = anchor.3.max(descent);
+                    }
+                } else if matches!(vertical_align, VerticalAlign::Top | VerticalAlign::Bottom) {
+                    anchor_extents.insert(
+                        index,
+                        (*vertical_align == VerticalAlign::Top, ascent, descent),
+                    );
+                } else {
+                    let (a, d) = align_extents(
+                        *vertical_align,
+                        ascent,
+                        descent,
+                        container_style.font_size,
+                        strut_ascent,
+                        strut_descent,
+                    );
+                    max_ascent = max_ascent.max(a);
+                    max_descent = max_descent.max(d);
+                }
+            }
             InlineToken::HyphenationPoint { .. } | InlineToken::ForcedBreak => {}
         }
     }
@@ -1081,6 +1177,68 @@ fn format_line(
                     line_height,
                     baseline_y_in_line,
                 );
+            }
+            InlineToken::Atomic {
+                mut layout_box,
+                width,
+                height,
+                baseline,
+                vertical_align,
+            } => {
+                // Line-level `top`/`bottom` anchor first, then an enclosing inline box
+                // anchor, then the shared line baseline.
+                let line_anchor = anchor_extents.get(&index).map(|(is_top, ascent, descent)| {
+                    let anchor_height = ascent + descent;
+                    let top = if *is_top {
+                        line_y
+                    } else {
+                        line_y + line_height - anchor_height
+                    };
+                    (top, top + ascent, anchor_height)
+                });
+                let anchor_pos = active_stack
+                    .iter()
+                    .rposition(|frame| frame.anchor.is_some());
+                let innermost_align = active_stack
+                    .last()
+                    .map(|frame| frame.style.vertical_align)
+                    .unwrap_or(VerticalAlign::Baseline);
+                let effective_align = match anchor_pos {
+                    Some(position) if position + 1 == active_stack.len() => VerticalAlign::Baseline,
+                    Some(_) => innermost_align,
+                    None => vertical_align,
+                };
+                let (a_prime, _) = align_extents(
+                    effective_align,
+                    baseline,
+                    height - baseline,
+                    container_style.font_size,
+                    strut_ascent,
+                    strut_descent,
+                );
+                let y = if let Some((top, _, _)) = line_anchor {
+                    top
+                } else if let Some(frame_baseline) =
+                    anchor_pos.and_then(|position| active_stack[position].anchor)
+                {
+                    frame_baseline.1 - a_prime
+                } else {
+                    line_y
+                        + (baseline_y_in_line - a_prime).clamp(0.0, (line_height - height).max(0.0))
+                };
+
+                let margin_box = layout_box.dimensions.margin_box();
+                let dx = curr_x - margin_box.x;
+                let dy = y - margin_box.y;
+                crate::block::translate_box(&mut layout_box, dx, dy);
+
+                let target_list = if let Some(active) = active_stack.last_mut() {
+                    &mut active.children
+                } else {
+                    &mut line_children
+                };
+                target_list.push(*layout_box);
+                curr_x += width;
             }
             InlineToken::HyphenationPoint { .. } | InlineToken::ForcedBreak => {}
         }

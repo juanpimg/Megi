@@ -9,6 +9,7 @@ pub mod block;
 pub mod box_tree;
 pub mod geometry;
 pub mod inline;
+pub mod table;
 pub mod text;
 pub mod tree_builder;
 
@@ -26,7 +27,7 @@ pub use inline::{
     layout_inline_formatting_context_with_measurer,
 };
 pub use text::FontTextMeasurer;
-pub use tree_builder::build_layout_tree;
+pub use tree_builder::{build_layout_tree, build_layout_tree_with_replaced_sizes};
 
 /// Completely lays out a DOM document against a viewport rectangle.
 ///
@@ -46,7 +47,34 @@ pub fn layout_document(
     // Backwards-compatible deterministic measurement (CSS ratio fallback). The
     // production render pipeline must use `layout_document_with_measurer` with
     // `FontTextMeasurer` so that real OpenType metrics drive line boxes.
-    layout_document_with_measurer(doc, styles, viewport, &DefaultTextMeasurer)
+    layout_document_with_measurer_and_replaced_sizes(
+        doc,
+        styles,
+        viewport,
+        &DefaultTextMeasurer,
+        None,
+    )
+}
+
+/// Lays out a document with explicit intrinsic sizes for replaced elements
+/// (`<img>`, `<input>`, …), keyed by DOM node, using the deterministic measurer.
+///
+/// This is the additive API used by the render pipeline to inject decoded image
+/// dimensions: `layout_document(doc, styles, viewport)` keeps its signature and falls
+/// back to CSS 2.2/HTML per-kind defaults (e.g. `<img>` 300×150).
+pub fn layout_document_with_replaced_sizes(
+    doc: &Document,
+    styles: &HashMap<NodeId, ComputedStyle>,
+    viewport: Rect,
+    replaced_sizes: &HashMap<NodeId, (f32, f32)>,
+) -> Option<LayoutBox> {
+    layout_document_with_measurer_and_replaced_sizes(
+        doc,
+        styles,
+        viewport,
+        &DefaultTextMeasurer,
+        Some(replaced_sizes),
+    )
 }
 
 /// Lays out a document with an explicit [`TextMeasurer`].
@@ -60,7 +88,18 @@ pub fn layout_document_with_measurer(
     viewport: Rect,
     measurer: &dyn TextMeasurer,
 ) -> Option<LayoutBox> {
-    let mut root_box = build_layout_tree(doc, styles)?;
+    layout_document_with_measurer_and_replaced_sizes(doc, styles, viewport, measurer, None)
+}
+
+/// Full pipeline entry point: explicit measurer plus optional intrinsic replaced sizes.
+pub fn layout_document_with_measurer_and_replaced_sizes(
+    doc: &Document,
+    styles: &HashMap<NodeId, ComputedStyle>,
+    viewport: Rect,
+    measurer: &dyn TextMeasurer,
+    replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
+) -> Option<LayoutBox> {
+    let mut root_box = build_layout_tree_with_replaced_sizes(doc, styles, replaced_sizes)?;
 
     let initial_containing_block = Dimensions {
         content: Rect::new(viewport.x, viewport.y, viewport.width, viewport.height),

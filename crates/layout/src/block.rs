@@ -41,6 +41,18 @@ pub(crate) struct PositioningContext {
     viewport: Rect,
 }
 
+impl PositioningContext {
+    /// Positioning context rooted at a containing block (used when the IFC is invoked
+    /// outside the normal block layout flow, e.g. by tests).
+    pub(crate) fn from_containing_block(content: Rect) -> Self {
+        Self {
+            abs_cb: content,
+            abs_cb_height: Some(content.height),
+            viewport: content,
+        }
+    }
+}
+
 /// Performs block formatting context layout on a layout box within a containing block.
 ///
 /// The box is positioned as the root of its formatting context: its own margins are
@@ -111,6 +123,11 @@ fn layout_child_box(
     measurer: &dyn TextMeasurer,
     pos: PositioningContext,
 ) {
+    if matches!(child.box_type, BoxType::Replaced(_)) {
+        layout_block_replaced(child, cb, parent_definite_height, border_top_y);
+        apply_relative_offset(child, cb.width, parent_definite_height);
+        return;
+    }
     calculate_block_width(child, cb.width);
     resolve_vertical_edges(child, cb.width);
     child.dimensions.content.x = cb.x
@@ -126,7 +143,7 @@ fn layout_child_box(
 
 /// Returns the positioning context inherited by the absolute descendants of `layout_box`:
 /// its own padding box when the box is positioned, or the inherited one otherwise.
-fn self_positioning_context(
+pub(crate) fn self_positioning_context(
     layout_box: &LayoutBox,
     inherited: PositioningContext,
 ) -> PositioningContext {
@@ -152,13 +169,20 @@ fn self_positioning_context(
 /// `cb_height` is the definite height of the box's containing block (used by percentage
 /// sizes); `is_root` disables margin collapsing with the box's own children, because the
 /// root element's margins never collapse (CSS 2.2 §8.3.1).
-fn layout_box_contents(
+pub(crate) fn layout_box_contents(
     layout_box: &mut LayoutBox,
     cb_height: Option<f32>,
     is_root: bool,
     measurer: &dyn TextMeasurer,
     pos: PositioningContext,
 ) {
+    // CSS 2.1 §17: table boxes use the table layout algorithm instead of the block
+    // formatting context.
+    if matches!(layout_box.box_type, BoxType::Table(_)) {
+        let definite_height = definite_content_height(layout_box, cb_height);
+        crate::table::layout_table(layout_box, cb_height, definite_height, measurer, pos);
+        return;
+    }
     let definite_height = definite_content_height(layout_box, cb_height);
     let children_layout =
         layout_block_children(layout_box, definite_height, is_root, measurer, pos);
@@ -312,7 +336,7 @@ fn solve_block_width(
 ///
 /// Percentages on all four sides resolve against the containing block *width*
 /// (CSS 2.2 §8.4), even for `padding-top`/`margin-top`.
-fn resolve_vertical_edges(layout_box: &mut LayoutBox, cb_width: f32) {
+pub(crate) fn resolve_vertical_edges(layout_box: &mut LayoutBox, cb_width: f32) {
     let Some(style) = layout_box.style.as_ref() else {
         layout_box.dimensions.padding.top = 0.0;
         layout_box.dimensions.padding.bottom = 0.0;
@@ -333,7 +357,10 @@ fn resolve_vertical_edges(layout_box: &mut LayoutBox, cb_width: f32) {
 /// Returns the box's used content height when it is definite, i.e. when `height` is a
 /// length or a percentage of a definite containing block height. Min/max-height are
 /// applied in the box dimension selected by `box-sizing`.
-fn definite_content_height(layout_box: &LayoutBox, cb_height: Option<f32>) -> Option<f32> {
+pub(crate) fn definite_content_height(
+    layout_box: &LayoutBox,
+    cb_height: Option<f32>,
+) -> Option<f32> {
     let style = layout_box.style.as_ref()?;
     let specified = match style.height {
         Length::Px(px) => Some(px),
@@ -504,8 +531,10 @@ fn layout_block_children(
 
     // If children are inline-level, establish an Inline Formatting Context
     // (CSS 2.2 §9.4.2).
-    if layout_box.children.iter().all(|c| c.is_inline()) {
-        crate::inline::layout_inline_formatting_context_with_measurer(layout_box, measurer);
+    if layout_box.children.iter().all(is_inline_level) {
+        crate::inline::layout_inline_formatting_context_with_measurer_and_pos(
+            layout_box, measurer, pos,
+        );
         return result;
     }
 
@@ -929,7 +958,7 @@ fn first_block_child(layout_box: &LayoutBox) -> Option<&LayoutBox> {
     layout_box
         .children
         .iter()
-        .find(|child| child.is_block() && is_in_flow(child))
+        .find(|child| (child.is_block() || is_block_level_replaced(child)) && is_in_flow(child))
 }
 
 fn last_block_child(layout_box: &LayoutBox) -> Option<&LayoutBox> {
@@ -937,7 +966,7 @@ fn last_block_child(layout_box: &LayoutBox) -> Option<&LayoutBox> {
         .children
         .iter()
         .rev()
-        .find(|child| child.is_block() && is_in_flow(child))
+        .find(|child| (child.is_block() || is_block_level_replaced(child)) && is_in_flow(child))
 }
 
 /// Boxes that establish an independent formatting context do not collapse margins with
@@ -955,6 +984,21 @@ fn establishes_independent_formatting_context(layout_box: &LayoutBox) -> bool {
             || style.position != Position::Static
             || !matches!(style.overflow, Overflow::Visible)
     })
+}
+
+/// Returns `true` when a child participates in an IFC as inline-level content.
+fn is_inline_level(child: &LayoutBox) -> bool {
+    child.is_inline() && !is_block_level_replaced(child)
+}
+
+/// A replaced element with `display: block` is block-level in the normal flow
+/// (CSS 2.2 §9.2.2).
+fn is_block_level_replaced(child: &LayoutBox) -> bool {
+    matches!(child.box_type, BoxType::Replaced(_))
+        && child
+            .style
+            .as_ref()
+            .is_some_and(|style| style.display == Display::Block)
 }
 
 /// Returns `true` when the child participates in the normal block flow (i.e. it is
@@ -1051,7 +1095,7 @@ fn apply_relative_offset(layout_box: &mut LayoutBox, cb_width: f32, cb_height: O
 }
 
 /// Translates a box and its whole subtree by `(dx, dy)` in absolute coordinates.
-fn translate_box(layout_box: &mut LayoutBox, dx: f32, dy: f32) {
+pub(crate) fn translate_box(layout_box: &mut LayoutBox, dx: f32, dy: f32) {
     layout_box.dimensions.content.x += dx;
     layout_box.dimensions.content.y += dy;
     for child in &mut layout_box.children {
@@ -1137,7 +1181,7 @@ fn shrink_to_fit_content_width(
 /// Text contributes its widest word as the minimum and its whole (space-collapsed)
 /// width as the maximum; inline boxes add their horizontal margins/borders/paddings.
 /// Floats/absolutely positioned descendants are ignored.
-fn intrinsic_content_widths(
+pub(crate) fn intrinsic_content_widths(
     layout_box: &LayoutBox,
     cb_width: f32,
     measurer: &dyn TextMeasurer,
@@ -1199,7 +1243,14 @@ fn collect_intrinsic_widths(
                 }
             }
         }
-        BoxType::BlockNode(_) | BoxType::AnonymousBlock => {
+        BoxType::BlockNode(_)
+        | BoxType::AnonymousBlock
+        | BoxType::InlineBlock(_)
+        | BoxType::TableCell(_)
+        | BoxType::TableCaption(_)
+        | BoxType::Table(_)
+        | BoxType::TableRowGroup(_)
+        | BoxType::TableRow(_) => {
             if let Some(style) = layout_box.style.as_ref() {
                 let edges = resolve_length(style.margin.left, cb_width)
                     + resolve_length(style.margin.right, cb_width)
@@ -1229,6 +1280,219 @@ fn collect_intrinsic_widths(
                 }
             }
         }
-        BoxType::LineBox | BoxType::LineBreak => {}
+        BoxType::Replaced(_) => {
+            let (width, _) = layout_box.intrinsic_size.unwrap_or((300.0, 150.0));
+            let style = layout_box.style.as_ref();
+            let edges = style.map_or(0.0, |style| {
+                resolve_length(style.margin.left, cb_width)
+                    + resolve_length(style.margin.right, cb_width)
+                    + style.border_width.left
+                    + style.border_width.right
+                    + resolve_length(style.padding.left, cb_width)
+                    + resolve_length(style.padding.right, cb_width)
+            });
+            *minimum = minimum.max(width + edges);
+            *maximum = maximum.max(width + edges);
+        }
+        BoxType::LineBox
+        | BoxType::LineBreak
+        | BoxType::TableColumn(_)
+        | BoxType::AnonymousTableRow
+        | BoxType::AnonymousTableCell => {}
     }
+}
+
+/// Lays out a block-level replaced box (CSS 2.2 §10.3.4/§10.6.2): the used size comes
+/// from the CSS `width`/`height`, the intrinsic size (API/default) and the intrinsic
+/// aspect ratio.
+fn layout_block_replaced(
+    child: &mut LayoutBox,
+    cb: Rect,
+    parent_definite_height: Option<f32>,
+    border_top_y: f32,
+) {
+    resolve_vertical_edges(child, cb.width);
+    resolve_horizontal_edges(child, cb.width);
+    let (width, height) = replaced_content_size(child, cb.width, parent_definite_height);
+    child.dimensions.content.width = width;
+    child.dimensions.content.height = height;
+    child.dimensions.content.x = cb.x
+        + child.dimensions.margin.left
+        + child.dimensions.border.left
+        + child.dimensions.padding.left;
+    child.dimensions.content.y =
+        border_top_y + child.dimensions.border.top + child.dimensions.padding.top;
+}
+
+/// Resolves the used horizontal padding/border/margin of a box and stores them in its
+/// dimensions. `margin: auto` resolves to 0 here (used by out-of-flow/atomic boxes;
+/// inline-level auto margins are 0 too).
+pub(crate) fn resolve_horizontal_edges(layout_box: &mut LayoutBox, cb_width: f32) {
+    let Some(style) = layout_box.style.as_ref() else {
+        layout_box.dimensions.padding = EdgeSizes::ZERO;
+        layout_box.dimensions.border = EdgeSizes::ZERO;
+        layout_box.dimensions.margin = EdgeSizes::ZERO;
+        return;
+    };
+    layout_box.dimensions.padding.left = resolve_length(style.padding.left, cb_width);
+    layout_box.dimensions.padding.right = resolve_length(style.padding.right, cb_width);
+    layout_box.dimensions.border.left = style.border_width.left;
+    layout_box.dimensions.border.right = style.border_width.right;
+    layout_box.dimensions.margin.left = resolve_length(style.margin.left, cb_width);
+    layout_box.dimensions.margin.right = resolve_length(style.margin.right, cb_width);
+}
+
+/// Computes the used content size of a replaced element (CSS 2.2 §10.3.2 / §10.6.2):
+/// CSS `width`/`height` first, then the intrinsic size, applying the intrinsic aspect
+/// ratio when only one dimension is specified.
+pub(crate) fn replaced_content_size(
+    layout_box: &LayoutBox,
+    cb_width: f32,
+    cb_height: Option<f32>,
+) -> (f32, f32) {
+    let Some(style) = layout_box.style.as_ref() else {
+        let intrinsic = layout_box.intrinsic_size.unwrap_or((300.0, 150.0));
+        return intrinsic;
+    };
+    let (intrinsic_width, intrinsic_height) = layout_box.intrinsic_size.unwrap_or((300.0, 150.0));
+    let edges_h = layout_box.dimensions.padding.left
+        + layout_box.dimensions.padding.right
+        + layout_box.dimensions.border.left
+        + layout_box.dimensions.border.right;
+    let edges_v = layout_box.dimensions.padding.top
+        + layout_box.dimensions.padding.bottom
+        + layout_box.dimensions.border.top
+        + layout_box.dimensions.border.bottom;
+    let is_border_box = style.box_sizing == BoxSizing::BorderBox;
+    let specified_width = match style.width {
+        Length::Px(px) => Some(if is_border_box {
+            (px - edges_h).max(0.0)
+        } else {
+            px
+        }),
+        Length::Percent(pct) => {
+            let border_box = cb_width * (pct / 100.0);
+            Some(if is_border_box {
+                (border_box - edges_h).max(0.0)
+            } else {
+                border_box
+            })
+        }
+        Length::Auto => None,
+    };
+    let specified_height = match style.height {
+        Length::Px(px) => Some(if is_border_box {
+            (px - edges_v).max(0.0)
+        } else {
+            px
+        }),
+        Length::Percent(pct) => cb_height.map(|height| {
+            let border_box = height * (pct / 100.0);
+            if is_border_box {
+                (border_box - edges_v).max(0.0)
+            } else {
+                border_box
+            }
+        }),
+        Length::Auto => None,
+    };
+
+    match (specified_width, specified_height) {
+        (Some(width), Some(height)) => (width, height),
+        (Some(width), None) => {
+            let height = if intrinsic_width > 0.0 {
+                width * intrinsic_height / intrinsic_width
+            } else {
+                intrinsic_height
+            };
+            (width, height)
+        }
+        (None, Some(height)) => {
+            let width = if intrinsic_height > 0.0 {
+                height * intrinsic_width / intrinsic_height
+            } else {
+                intrinsic_width
+            };
+            (width, height)
+        }
+        (None, None) => (intrinsic_width, intrinsic_height),
+    }
+}
+
+/// A fully laid out atomic inline-level box (inline-block or replaced element).
+pub(crate) struct AtomicInlineLayout {
+    pub layout_box: LayoutBox,
+    /// Margin box width (line advance).
+    pub width: f32,
+    /// Margin box height.
+    pub height: f32,
+    /// Distance from the margin box top to the baseline used for alignment.
+    pub baseline: f32,
+}
+
+/// Lays out an atomic inline-level box at a provisional origin of (0, 0) and reports
+/// its margin box and alignment baseline (CSS 2.2 §9.2.1.1, §10.3.9, §10.8.1).
+pub(crate) fn layout_atomic_inline(
+    mut layout_box: LayoutBox,
+    available_width: f32,
+    cb_height: Option<f32>,
+    measurer: &dyn TextMeasurer,
+    pos: PositioningContext,
+) -> AtomicInlineLayout {
+    if matches!(layout_box.box_type, BoxType::Replaced(_)) {
+        resolve_vertical_edges(&mut layout_box, available_width);
+        resolve_horizontal_edges(&mut layout_box, available_width);
+        let (width, height) = replaced_content_size(&layout_box, available_width, cb_height);
+        layout_box.dimensions.content.width = width;
+        layout_box.dimensions.content.height = height;
+        layout_box.dimensions.content.x = layout_box.dimensions.margin.left
+            + layout_box.dimensions.border.left
+            + layout_box.dimensions.padding.left;
+        layout_box.dimensions.content.y = layout_box.dimensions.margin.top
+            + layout_box.dimensions.border.top
+            + layout_box.dimensions.padding.top;
+    } else {
+        // inline-block: shrink-to-fit width (CSS 2.2 §10.3.9).
+        calculate_shrink_to_fit_width(&mut layout_box, available_width, available_width, measurer);
+        layout_box.dimensions.content.x = layout_box.dimensions.margin.left
+            + layout_box.dimensions.border.left
+            + layout_box.dimensions.padding.left;
+        layout_box.dimensions.content.y = layout_box.dimensions.margin.top
+            + layout_box.dimensions.border.top
+            + layout_box.dimensions.padding.top;
+        let child_pos = self_positioning_context(&layout_box, pos);
+        layout_box_contents(&mut layout_box, cb_height, false, measurer, child_pos);
+    }
+    let margin_box = layout_box.dimensions.margin_box();
+    let baseline = if matches!(layout_box.box_type, BoxType::Replaced(_)) {
+        // CSS 2.2 §10.8.1: a replaced element's baseline is its bottom margin edge.
+        margin_box.height
+    } else {
+        find_last_line_baseline(&layout_box)
+            .map(|absolute_baseline| absolute_baseline - margin_box.y)
+            .unwrap_or(margin_box.height)
+    };
+    AtomicInlineLayout {
+        layout_box,
+        width: margin_box.width,
+        height: margin_box.height,
+        baseline,
+    }
+}
+
+/// Finds the absolute y of the baseline of the last line box in normal flow.
+fn find_last_line_baseline(layout_box: &LayoutBox) -> Option<f32> {
+    if matches!(layout_box.box_type, BoxType::LineBox) {
+        return Some(layout_box.dimensions.content.y + layout_box.baseline);
+    }
+    let mut result = None;
+    for child in &layout_box.children {
+        if !is_in_flow(child) {
+            continue;
+        }
+        if let Some(baseline) = find_last_line_baseline(child) {
+            result = Some(baseline);
+        }
+    }
+    result
 }

@@ -15,6 +15,19 @@ pub fn build_layout_tree(
     doc: &Document,
     styles: &HashMap<NodeId, ComputedStyle>,
 ) -> Option<LayoutBox> {
+    build_layout_tree_with_replaced_sizes(doc, styles, None)
+}
+
+/// Builds the layout box tree with explicit intrinsic sizes for replaced elements
+/// (decoded image dimensions, form-control sizes, …), keyed by DOM node.
+///
+/// Nodes missing from the map fall back to HTML/CSS 2.2 per-kind defaults
+/// (e.g. `<img>` 300×150, `<input>` 20×20).
+pub fn build_layout_tree_with_replaced_sizes(
+    doc: &Document,
+    styles: &HashMap<NodeId, ComputedStyle>,
+    replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
+) -> Option<LayoutBox> {
     // Find the <html> element under the document root
     let mut root_el_id = None;
     let mut curr = doc.node(doc.root()).first_child;
@@ -27,7 +40,7 @@ pub fn build_layout_tree(
     }
 
     let root_node_id = root_el_id?;
-    build_box_for_node(doc, root_node_id, styles, None)
+    build_box_for_node(doc, root_node_id, styles, None, replaced_sizes)
 }
 
 /// Returns `true` if the node is an HTML `<br>` element.
@@ -43,6 +56,7 @@ fn build_box_for_node(
     node_id: NodeId,
     styles: &HashMap<NodeId, ComputedStyle>,
     parent_style: Option<&ComputedStyle>,
+    replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
 ) -> Option<LayoutBox> {
     let node = doc.node(node_id);
     match &node.kind {
@@ -66,36 +80,91 @@ fn build_box_for_node(
             // positioned boxes are out of flow and also blockified.
             let blockified = style.float != Float::None
                 || matches!(style.position, Position::Absolute | Position::Fixed);
-            let box_type = match style.display {
-                Display::Block
-                | Display::Table
-                | Display::TableRow
-                | Display::TableCell
-                | Display::Flex
-                | Display::Grid
-                | Display::ListItem => BoxType::BlockNode(node_id),
-                _ if blockified => BoxType::BlockNode(node_id),
-                _ => BoxType::InlineNode(node_id),
+            let tag = node
+                .as_element()
+                .map(|el| el.local_name.to_ascii_lowercase())
+                .unwrap_or_default();
+
+            // CSS 2.1 §17: table parts. `display` is authoritative; the HTML tag is a
+            // fallback for documents whose UA stylesheet is incomplete (or for styles
+            // built by hand in tests).
+            let display_role = match style.display {
+                Display::Table | Display::InlineTable => Some(BoxType::Table(node_id)),
+                Display::TableRowGroup | Display::TableHeaderGroup | Display::TableFooterGroup => {
+                    Some(BoxType::TableRowGroup(node_id))
+                }
+                Display::TableRow => Some(BoxType::TableRow(node_id)),
+                Display::TableCell => Some(BoxType::TableCell(node_id)),
+                Display::TableCaption => Some(BoxType::TableCaption(node_id)),
+                Display::TableColumn | Display::TableColumnGroup => {
+                    Some(BoxType::TableColumn(node_id))
+                }
+                Display::InlineBlock => Some(BoxType::InlineBlock(node_id)),
+                _ => None,
+            };
+            let tag_role = match tag.as_str() {
+                "table" => Some(BoxType::Table(node_id)),
+                "thead" | "tbody" | "tfoot" => Some(BoxType::TableRowGroup(node_id)),
+                "tr" => Some(BoxType::TableRow(node_id)),
+                "td" | "th" => Some(BoxType::TableCell(node_id)),
+                "caption" => Some(BoxType::TableCaption(node_id)),
+                "col" | "colgroup" => Some(BoxType::TableColumn(node_id)),
+                _ => None,
+            };
+            let is_replaced = matches!(
+                tag.as_str(),
+                "img"
+                    | "input"
+                    | "select"
+                    | "textarea"
+                    | "canvas"
+                    | "video"
+                    | "audio"
+                    | "iframe"
+                    | "embed"
+                    | "object"
+            );
+            let box_type = if let Some(role) = display_role {
+                role
+            } else if is_replaced && !blockified {
+                BoxType::Replaced(node_id)
+            } else if let Some(role) = tag_role {
+                role
+            } else if blockified {
+                BoxType::BlockNode(node_id)
+            } else {
+                match style.display {
+                    Display::Block | Display::Flex | Display::Grid | Display::ListItem => {
+                        BoxType::BlockNode(node_id)
+                    }
+                    _ => BoxType::InlineNode(node_id),
+                }
             };
 
             let mut raw_children = Vec::new();
             let mut curr = node.first_child;
             while let Some(child_id) = curr {
-                if let Some(child_box) = build_box_for_node(doc, child_id, styles, Some(style)) {
+                if let Some(child_box) =
+                    build_box_for_node(doc, child_id, styles, Some(style), replaced_sizes)
+                {
                     raw_children.push(child_box);
                 }
                 curr = doc.node(child_id).next_sibling;
             }
 
             let children = match box_type {
-                BoxType::BlockNode(_) => normalize_block_children(raw_children, Some(style)),
-                // CSS 2.2 §9.2.1.1: block-level children inside an inline box implicitly
-                // break the inline around them. Full normalization is out of scope for
-                // this milestone; the IFC flattens the inline subtree as-is.
+                BoxType::BlockNode(_)
+                | BoxType::InlineBlock(_)
+                | BoxType::TableCell(_)
+                | BoxType::TableCaption(_) => normalize_block_children(raw_children, Some(style)),
+                BoxType::Table(_) => table_fixup_children(raw_children, Some(style)),
+                BoxType::TableRowGroup(_) => row_group_fixup_children(raw_children, Some(style)),
+                BoxType::TableRow(_) => row_fixup_children(raw_children, Some(style)),
+                // Inline/atomic/replaced/column boxes keep their children as-is.
                 _ => raw_children,
             };
 
-            let mut layout_box = LayoutBox::new(box_type, Some(style.clone()));
+            let mut layout_box = LayoutBox::new(box_type.clone(), Some(style.clone()));
             // Data contract consumed by `paint` (stacking/clip metadata).
             layout_box.position = style.position;
             layout_box.z_index = if style.position == Position::Static {
@@ -107,6 +176,33 @@ fn build_box_for_node(
             layout_box.is_float = style.float != Float::None;
             layout_box.float_side = style.float;
             layout_box.children = children;
+            if matches!(box_type, BoxType::TableCell(_)) {
+                layout_box.colspan = node
+                    .as_element()
+                    .and_then(|el| el.get_attribute("colspan"))
+                    .and_then(|value| value.trim().parse::<usize>().ok())
+                    .unwrap_or(1)
+                    .clamp(1, 1000);
+            }
+            if matches!(box_type, BoxType::Replaced(_)) {
+                let from_api = replaced_sizes.and_then(|sizes| sizes.get(&node_id).copied());
+                let element = node.as_element();
+                let attribute_number = |name: &str| -> Option<f32> {
+                    element
+                        .and_then(|el| el.get_attribute(name))
+                        .and_then(|value| value.trim().trim_end_matches("px").parse::<f32>().ok())
+                        .filter(|value| value.is_finite() && *value >= 0.0)
+                };
+                let attribute_width = attribute_number("width");
+                let attribute_height = attribute_number("height");
+                layout_box.intrinsic_size = Some(from_api.unwrap_or_else(|| {
+                    let (default_width, default_height) = replaced_default_size(&tag);
+                    (
+                        attribute_width.unwrap_or(default_width),
+                        attribute_height.unwrap_or(default_height),
+                    )
+                }));
+            }
             Some(layout_box)
         }
         NodeKind::Text(txt) => {
@@ -177,4 +273,136 @@ fn flush_inline_run(
     } else {
         run.clear();
     }
+}
+
+/// Default intrinsic size of a replaced element per HTML/CSS 2.2 conventions.
+fn replaced_default_size(tag: &str) -> (f32, f32) {
+    match tag {
+        // CSS 2.2 §10.3.2: a replaced element with no intrinsic dimensions uses 300x150.
+        "img" | "canvas" | "video" | "object" | "embed" | "iframe" => (300.0, 150.0),
+        "input" | "select" => (20.0, 20.0),
+        "textarea" => (160.0, 40.0),
+        "audio" => (300.0, 30.0),
+        _ => (300.0, 150.0),
+    }
+}
+
+/// Wraps cells found directly inside a table box into an anonymous row (CSS 2.1
+/// §17.2.1). Other stray children are wrapped into an anonymous row + cell.
+fn table_fixup_children(
+    children: Vec<LayoutBox>,
+    parent_style: Option<&ComputedStyle>,
+) -> Vec<LayoutBox> {
+    let mut out = Vec::new();
+    let mut pending_cells: Vec<LayoutBox> = Vec::new();
+    let mut pending_other: Vec<LayoutBox> = Vec::new();
+    for child in children {
+        match child.box_type {
+            BoxType::TableCell(_) => {
+                flush_other_children(&mut pending_other, &mut out, parent_style);
+                pending_cells.push(child);
+            }
+            BoxType::TableRow(_)
+            | BoxType::TableRowGroup(_)
+            | BoxType::TableCaption(_)
+            | BoxType::TableColumn(_) => {
+                flush_cells(&mut pending_cells, &mut out, parent_style);
+                flush_other_children(&mut pending_other, &mut out, parent_style);
+                out.push(child);
+            }
+            _ => {
+                flush_cells(&mut pending_cells, &mut out, parent_style);
+                pending_other.push(child);
+            }
+        }
+    }
+    flush_cells(&mut pending_cells, &mut out, parent_style);
+    flush_other_children(&mut pending_other, &mut out, parent_style);
+    out
+}
+
+fn flush_cells(
+    cells: &mut Vec<LayoutBox>,
+    out: &mut Vec<LayoutBox>,
+    parent_style: Option<&ComputedStyle>,
+) {
+    if cells.is_empty() {
+        return;
+    }
+    let mut row = LayoutBox::new(
+        BoxType::AnonymousTableRow,
+        parent_style.map(anonymous_style_from),
+    );
+    row.children = std::mem::take(cells);
+    out.push(row);
+}
+
+fn flush_other_children(
+    children: &mut Vec<LayoutBox>,
+    out: &mut Vec<LayoutBox>,
+    parent_style: Option<&ComputedStyle>,
+) {
+    if children.is_empty() {
+        return;
+    }
+    let mut cell = LayoutBox::new(
+        BoxType::AnonymousTableCell,
+        parent_style.map(anonymous_style_from),
+    );
+    cell.children = std::mem::take(children);
+    let mut row = LayoutBox::new(
+        BoxType::AnonymousTableRow,
+        parent_style.map(anonymous_style_from),
+    );
+    row.children.push(cell);
+    out.push(row);
+}
+
+/// Children of a row group: rows are kept, stray cells/content are wrapped in an
+/// anonymous row (CSS 2.1 §17.2.1).
+fn row_group_fixup_children(
+    children: Vec<LayoutBox>,
+    parent_style: Option<&ComputedStyle>,
+) -> Vec<LayoutBox> {
+    let mut out = Vec::new();
+    let mut pending: Vec<LayoutBox> = Vec::new();
+    for child in children {
+        if matches!(child.box_type, BoxType::TableRow(_)) {
+            flush_cells(&mut pending, &mut out, parent_style);
+            out.push(child);
+        } else {
+            pending.push(child);
+        }
+    }
+    flush_cells(&mut pending, &mut out, parent_style);
+    out
+}
+
+/// Children of a row: cells are kept, stray content is wrapped in an anonymous cell
+/// (CSS 2.1 §17.2.1).
+fn row_fixup_children(
+    children: Vec<LayoutBox>,
+    parent_style: Option<&ComputedStyle>,
+) -> Vec<LayoutBox> {
+    let mut out = Vec::new();
+    let mut pending: Vec<LayoutBox> = Vec::new();
+    for child in children {
+        if matches!(child.box_type, BoxType::TableCell(_)) {
+            flush_other_children(&mut pending, &mut out, parent_style);
+            out.push(child);
+        } else {
+            pending.push(child);
+        }
+    }
+    // Stray content goes in an anonymous cell appended as a sibling row? CSS wraps it
+    // in an anonymous cell inside the same row; flush as an inline cell.
+    if !pending.is_empty() {
+        let mut cell = LayoutBox::new(
+            BoxType::AnonymousTableCell,
+            parent_style.map(anonymous_style_from),
+        );
+        cell.children = pending;
+        out.push(cell);
+    }
+    out
 }
