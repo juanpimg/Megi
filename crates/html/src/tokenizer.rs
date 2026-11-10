@@ -11,6 +11,10 @@ use crate::input_stream::{
 };
 use std::collections::HashSet;
 
+/// Attribute count at which [`PendingTag`] switches from a linear-scan duplicate check to
+/// a `HashSet` (keeps hostile many-attribute tags amortized O(1)).
+const MANY_ATTRIBUTES: usize = 8;
+
 /// All 52 normative parse error codes defined in WHATWG HTML §13.2.2 (`#parse-errors`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ParseErrorCode {
@@ -492,10 +496,13 @@ struct PendingTag {
     name: String,
     self_closing: bool,
     attributes: Vec<(String, String)>,
-    /// Set of attribute names already present in `attributes`, used to detect
-    /// duplicates in amortized `O(1)` instead of a linear scan (which made a tag with
-    /// many attributes quadratic per tag; see the tokenizer anti-DoS notes).
-    attribute_names: HashSet<String>,
+    /// Lazily-created set of attribute names, only for tags with many attributes.
+    ///
+    /// Real pages have a handful of attributes per tag: a linear scan over the few
+    /// already-seen names is cheaper than allocating/hashing a `HashSet` per tag. Tags
+    /// with at least [`MANY_ATTRIBUTES`] attributes switch to the set so a hostile tag
+    /// with tens of thousands of attributes stays amortized `O(1)` (anti-DoS).
+    attribute_names: Option<HashSet<String>>,
     current_attr_name: String,
     current_attr_value: String,
     has_current_attr: bool,
@@ -512,7 +519,7 @@ impl PendingTag {
             name: String::new(),
             self_closing: false,
             attributes: Vec::new(),
-            attribute_names: HashSet::new(),
+            attribute_names: None,
             current_attr_name: String::new(),
             current_attr_value: String::new(),
             has_current_attr: false,
@@ -527,7 +534,7 @@ impl PendingTag {
             name: String::new(),
             self_closing: false,
             attributes: Vec::new(),
-            attribute_names: HashSet::new(),
+            attribute_names: None,
             current_attr_name: String::new(),
             current_attr_value: String::new(),
             has_current_attr: false,
@@ -553,18 +560,34 @@ impl PendingTag {
         }
         let name = std::mem::take(&mut self.current_attr_name);
         let value = std::mem::take(&mut self.current_attr_value);
-        // First occurrence wins; later duplicates are reported and dropped. The
-        // The set keeps this amortized O(1) per attribute (a quadratic `.any()` scan
-        // here was an algorithmic DoS: a single tag with tens of thousands of
-        // attributes could burn seconds of CPU).
-        if self.attribute_names.insert(name.clone()) {
-            self.attributes.push((name, value));
+        // First occurrence wins; later duplicates are reported and dropped. Small tags
+        // (the common case) use a linear scan; once a tag has `MANY_ATTRIBUTES` names a
+        // `HashSet` takes over so a single tag with tens of thousands of attributes stays
+        // amortized O(1) instead of quadratic (anti-DoS).
+        let duplicate = if let Some(names) = self.attribute_names.as_mut() {
+            !names.insert(name.clone())
+        } else if self.attributes.len() >= MANY_ATTRIBUTES {
+            let mut names: HashSet<String> = self
+                .attributes
+                .iter()
+                .map(|(name, _)| name.clone())
+                .collect();
+            let duplicate = !names.insert(name.clone());
+            self.attribute_names = Some(names);
+            duplicate
         } else {
+            self.attributes
+                .iter()
+                .any(|(existing, _)| *existing == name)
+        };
+        if duplicate {
             errors.push(ParseError {
                 code: ParseErrorCode::DuplicateAttribute,
                 line: self.name_end_line,
                 col: self.name_end_col,
             });
+        } else {
+            self.attributes.push((name, value));
         }
     }
 }
@@ -647,18 +670,23 @@ pub struct Tokenizer {
 impl Tokenizer {
     /// Creates a new `Tokenizer` from raw code points (which are preprocessed via §13.2.3.5).
     pub fn new(raw_code_points: &[u32], config: TokenizerConfig) -> Self {
-        let (input, errors, line_starts) = preprocess_stream(raw_code_points.iter().copied());
-        Self::from_parts(input, errors, line_starts, config)
+        let (input, errors, line_starts, has_wide) =
+            preprocess_stream(raw_code_points.iter().copied());
+        Self::from_parts(input, errors, line_starts, has_wide, config)
     }
 
     /// Builds a tokenizer from already-preprocessed code points and line starts.
+    ///
+    /// `has_wide` comes from preprocessing (whether any code point is outside the BMP), so the
+    /// UTF-16 column prefix scan below is skipped entirely for the common BMP-only input.
     fn from_parts(
         input: Vec<u32>,
         errors: Vec<ParseError>,
         line_starts: Vec<usize>,
+        has_wide: bool,
         config: TokenizerConfig,
     ) -> Self {
-        let wide_prefix = input.iter().any(|cp| *cp > 0xFFFF).then(|| {
+        let wide_prefix = has_wide.then(|| {
             let mut prefix = Vec::with_capacity(input.len() + 1);
             prefix.push(0u32);
             for cp in &input {
@@ -696,8 +724,8 @@ impl Tokenizer {
     /// Creates a `Tokenizer` from a UTF-8 `&str` in a single preprocessing pass (no
     /// intermediate `Vec<u32>` for the raw code points).
     pub fn from_str_input(input: &str, config: TokenizerConfig) -> Self {
-        let (input, errors, line_starts) = preprocess_str_with_line_starts(input);
-        Self::from_parts(input, errors, line_starts, config)
+        let (input, errors, line_starts, has_wide) = preprocess_str_with_line_starts(input);
+        Self::from_parts(input, errors, line_starts, has_wide, config)
     }
 
     /// Enables WHATWG HTML §13.2.9 "Coercing an HTML DOM into an infoset" tweaks on the emitted
@@ -725,7 +753,7 @@ impl Tokenizer {
     /// individual `Token::Character` emissions they would otherwise produce, so the
     /// observable token/tree output is unchanged; only the per-character token plumbing is
     /// skipped for plain text runs.
-    pub(crate) fn consume_data_run(&mut self, out: &mut Vec<u32>) -> usize {
+    pub(crate) fn consume_data_run(&mut self, out: &mut Vec<u8>) -> usize {
         if self.state != TokenizerState::Data || self.reconsume {
             return 0;
         }
@@ -737,7 +765,13 @@ impl Tokenizer {
             }
             self.pos += 1;
             self.current_cp = Some(cp);
-            out.push(cp);
+            if cp < 0x80 {
+                // ASCII fast path: the preprocessed code point is its own UTF-8 byte.
+                out.push(cp as u8);
+            } else if let Some(ch) = char::from_u32(cp) {
+                let mut buffer = [0u8; 4];
+                out.extend_from_slice(ch.encode_utf8(&mut buffer).as_bytes());
+            }
             consumed += 1;
         }
         consumed
@@ -758,7 +792,8 @@ impl Tokenizer {
         if html.is_empty() {
             return;
         }
-        let (inserted, errors, inserted_line_starts) = preprocess_str_with_line_starts(html);
+        let (inserted, errors, inserted_line_starts, inserted_has_wide) =
+            preprocess_str_with_line_starts(html);
         self.errors.extend(errors);
         if inserted.is_empty() {
             return;
@@ -790,7 +825,7 @@ impl Tokenizer {
 
         // UTF-16 column prefix sums (html5lib `(line, UTF-16 column)` positions) only need
         // rebuilding when astral code points are involved.
-        if self.wide_prefix.is_some() || self.input.iter().any(|cp| *cp > 0xFFFF) {
+        if self.wide_prefix.is_some() || inserted_has_wide {
             let mut prefix = Vec::with_capacity(self.input.len() + 1);
             prefix.push(0u32);
             for cp in &self.input {
@@ -1036,7 +1071,226 @@ impl Tokenizer {
     }
 
     /// Executes a single state transition of the 84-state HTML Tokenizer.
+    /// Bulk-consumes the common character runs of tag/attribute tokenization.
+    ///
+    /// The per-code-point state machine is required for correctness on arbitrary input, but
+    /// real documents spend most of their non-text bytes spelling tag and attribute names:
+    /// this function scans those runs in a tight loop and then performs the *same* state
+    /// transition the per-character arm would have taken for the delimiter. Any character
+    /// that needs per-character handling (NUL, character-reference `&`, quotes, `=`...) is
+    /// left to the state machine; the observable tokens, parse errors and positions are
+    /// identical (validated by the html5lib tokenizer/tree-construction gates).
+    fn fast_character_run(&mut self) -> bool {
+        match self.state {
+            TokenizerState::TagName => self.fast_tag_name_run(),
+            TokenizerState::AttributeName => self.fast_attribute_name_run(),
+            TokenizerState::AttributeValueDoubleQuoted => self.fast_attribute_value_run(0x22),
+            TokenizerState::AttributeValueSingleQuoted => self.fast_attribute_value_run(0x27),
+            TokenizerState::TagOpen => self.fast_tag_open_run(false),
+            TokenizerState::EndTagOpen => self.fast_tag_open_run(true),
+            _ => false,
+        }
+    }
+
+    /// Fuses `tag open`/`end tag open` with the following tag-name scan.
+    ///
+    /// The per-character state machine would use 2-3 steps for the `<name` prefix; here the
+    /// first alphabetic character creates the pending tag and the bulk tag-name scan runs
+    /// immediately. Non-alphabetic first characters (comments, `?`, bogus tags) fall back to
+    /// the state machine unchanged.
+    fn fast_tag_open_run(&mut self, end_tag: bool) -> bool {
+        let Some(&cp) = self.input.get(self.pos) else {
+            return false;
+        };
+        if !((cp as u8).is_ascii_alphabetic() && cp <= 0x7F) {
+            return false;
+        }
+        self.pending_tag = Some(if end_tag {
+            PendingTag::new_end()
+        } else {
+            PendingTag::new_start()
+        });
+        self.pos += 1;
+        self.current_cp = Some(cp);
+        if let Some(tag) = self.pending_tag.as_mut() {
+            tag.name.push(if (0x41..=0x5A).contains(&cp) {
+                (cp + 0x20) as u8 as char
+            } else {
+                cp as u8 as char
+            });
+        }
+        self.state = TokenizerState::TagName;
+        let _ = self.fast_tag_name_run();
+        true
+    }
+
+    fn fast_tag_name_run(&mut self) -> bool {
+        let start = self.pos;
+        let mut index = start;
+        while index < self.input.len() {
+            let cp = self.input[index];
+            if is_ascii_whitespace(cp) {
+                self.pos = index + 1;
+                self.current_cp = Some(cp);
+                self.state = TokenizerState::BeforeAttributeName;
+                return true;
+            }
+            match cp {
+                0x2F => {
+                    self.pos = index + 1;
+                    self.current_cp = Some(cp);
+                    self.state = TokenizerState::SelfClosingStartTag;
+                    return true;
+                }
+                0x3E => {
+                    self.pos = index + 1;
+                    self.current_cp = Some(cp);
+                    self.state = TokenizerState::Data;
+                    self.emit_current_tag();
+                    return true;
+                }
+                0x00 => {
+                    self.pos = index + 1;
+                    self.current_cp = Some(cp);
+                    self.record_error(ParseErrorCode::UnexpectedNullCharacter);
+                    if let Some(tag) = self.pending_tag.as_mut() {
+                        tag.name.push('\u{FFFD}');
+                    }
+                    index += 1;
+                }
+                cp if (0x41..=0x5A).contains(&cp) => {
+                    if let Some(tag) = self.pending_tag.as_mut() {
+                        tag.name.push((cp + 0x20) as u8 as char);
+                    }
+                    index += 1;
+                }
+                cp => {
+                    self.pos = index + 1;
+                    self.current_cp = Some(cp);
+                    if let Some(tag) = self.pending_tag.as_mut() {
+                        Self::push_cp_to_string(&mut tag.name, cp);
+                    }
+                    index += 1;
+                }
+            }
+        }
+        self.pos = index;
+        index > start
+    }
+
+    fn fast_attribute_name_run(&mut self) -> bool {
+        let start = self.pos;
+        let mut index = start;
+        while index < self.input.len() {
+            let cp = self.input[index];
+            if is_ascii_whitespace(cp) || matches!(cp, 0x2F | 0x3E) {
+                self.pos = index + 1;
+                self.current_cp = Some(cp);
+                let (line, col) = self.current_position();
+                if let Some(tag) = self.pending_tag.as_mut() {
+                    tag.name_end_line = line;
+                    tag.name_end_col = col;
+                }
+                self.reconsume = true;
+                self.state = TokenizerState::AfterAttributeName;
+                return true;
+            }
+            match cp {
+                0x3D => {
+                    self.pos = index + 1;
+                    self.current_cp = Some(cp);
+                    let (line, col) = self.current_position();
+                    if let Some(tag) = self.pending_tag.as_mut() {
+                        tag.name_end_line = line;
+                        tag.name_end_col = col;
+                    }
+                    self.state = TokenizerState::BeforeAttributeValue;
+                    return true;
+                }
+                0x00 => {
+                    self.pos = index + 1;
+                    self.current_cp = Some(cp);
+                    self.record_error(ParseErrorCode::UnexpectedNullCharacter);
+                    if let Some(tag) = self.pending_tag.as_mut() {
+                        tag.current_attr_name.push('\u{FFFD}');
+                    }
+                    index += 1;
+                }
+                cp if (0x41..=0x5A).contains(&cp) => {
+                    if let Some(tag) = self.pending_tag.as_mut() {
+                        tag.current_attr_name.push((cp + 0x20) as u8 as char);
+                    }
+                    index += 1;
+                }
+                cp @ (0x22 | 0x27 | 0x3C) => {
+                    self.pos = index + 1;
+                    self.current_cp = Some(cp);
+                    self.record_error(ParseErrorCode::UnexpectedCharacterInAttributeName);
+                    if let Some(tag) = self.pending_tag.as_mut() {
+                        Self::push_cp_to_string(&mut tag.current_attr_name, cp);
+                    }
+                    index += 1;
+                }
+                cp => {
+                    self.pos = index + 1;
+                    self.current_cp = Some(cp);
+                    if let Some(tag) = self.pending_tag.as_mut() {
+                        Self::push_cp_to_string(&mut tag.current_attr_name, cp);
+                    }
+                    index += 1;
+                }
+            }
+        }
+        self.pos = index;
+        index > start
+    }
+
+    fn fast_attribute_value_run(&mut self, quote: u32) -> bool {
+        let start = self.pos;
+        let mut index = start;
+        while index < self.input.len() {
+            let cp = self.input[index];
+            if cp == quote {
+                self.pos = index + 1;
+                self.current_cp = Some(cp);
+                self.state = TokenizerState::AfterAttributeValueQuoted;
+                return true;
+            }
+            match cp {
+                0x26 => {
+                    self.pos = index + 1;
+                    self.current_cp = Some(cp);
+                    self.return_state = self.state;
+                    self.state = TokenizerState::CharacterReference;
+                    return true;
+                }
+                0x00 => {
+                    self.pos = index + 1;
+                    self.current_cp = Some(cp);
+                    self.record_error(ParseErrorCode::UnexpectedNullCharacter);
+                    if let Some(tag) = self.pending_tag.as_mut() {
+                        tag.current_attr_value.push('\u{FFFD}');
+                    }
+                    index += 1;
+                }
+                cp => {
+                    self.pos = index + 1;
+                    self.current_cp = Some(cp);
+                    if let Some(tag) = self.pending_tag.as_mut() {
+                        Self::push_cp_to_string(&mut tag.current_attr_value, cp);
+                    }
+                    index += 1;
+                }
+            }
+        }
+        self.pos = index;
+        index > start
+    }
+
     pub fn step(&mut self) {
+        if !self.reconsume && self.fast_character_run() {
+            return;
+        }
         match self.state {
             // 13.2.5.1 Data state
             TokenizerState::Data => match self.consume_next() {

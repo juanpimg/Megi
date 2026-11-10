@@ -39,14 +39,14 @@ pub const fn is_surrogate(cp: u32) -> bool {
 /// Returns the normalized sequence of code points (`\r\n` and `\r` converted to `\n`)
 /// along with any input stream parse errors recorded during preprocessing.
 pub fn preprocess_code_points(raw: &[u32]) -> (Vec<u32>, Vec<ParseError>) {
-    let (out, errors, _line_starts) = preprocess_stream(raw.iter().copied());
+    let (out, errors, _line_starts, _has_wide) = preprocess_stream(raw.iter().copied());
     (out, errors)
 }
 
 /// Preprocesses an iterator of raw code points (WHATWG HTML §13.2.3.5) **in a single
 /// pass**, also returning the 0-based offsets of the line starts (used by the tokenizer for
 /// line/column lookups). This avoids materializing the input twice for `&str` inputs.
-pub(crate) fn preprocess_stream<I>(raw: I) -> (Vec<u32>, Vec<ParseError>, Vec<usize>)
+pub(crate) fn preprocess_stream<I>(raw: I) -> (Vec<u32>, Vec<ParseError>, Vec<usize>, bool)
 where
     I: Iterator<Item = u32>,
 {
@@ -54,6 +54,7 @@ where
     let mut out = Vec::new();
     let mut errors = Vec::new();
     let mut line_starts = vec![0usize];
+    let mut has_wide = false;
     let mut line = 1usize;
     let mut col = 0usize;
 
@@ -93,15 +94,16 @@ where
                 col,
             });
         }
+        has_wide |= cp > 0xFFFF;
         out.push(cp);
     }
 
-    (out, errors, line_starts)
+    (out, errors, line_starts, has_wide)
 }
 
 /// Convenience helper to preprocess a standard UTF-8 `&str` into normalized code points.
 pub fn preprocess_str(input: &str) -> (Vec<u32>, Vec<ParseError>) {
-    let (out, errors, _line_starts) = preprocess_str_with_line_starts(input);
+    let (out, errors, _line_starts, _has_wide) = preprocess_str_with_line_starts(input);
     (out, errors)
 }
 
@@ -109,38 +111,78 @@ pub fn preprocess_str(input: &str) -> (Vec<u32>, Vec<ParseError>) {
 /// used by [`crate::tokenizer::Tokenizer::from_str_input`]).
 pub(crate) fn preprocess_str_with_line_starts(
     input: &str,
-) -> (Vec<u32>, Vec<ParseError>, Vec<usize>) {
+) -> (Vec<u32>, Vec<ParseError>, Vec<usize>, bool) {
     // The `&str` yields consecutive code points without CRLF lookahead needs beyond one
     // character, and the byte length is a good capacity hint for the common ASCII case.
     let mut out = Vec::with_capacity(input.len());
     let mut errors = Vec::new();
     let mut line_starts = vec![0usize];
+    let mut has_wide = false;
     let mut line = 1usize;
     let mut col = 0usize;
-    let mut chars = input.chars().peekable();
-    while let Some(ch) = chars.next() {
-        let mut cp = ch as u32;
-        if cp == 0x0D {
-            if chars.peek() == Some(&'\n') {
-                chars.next();
+    // Byte-oriented scanner: HTML is overwhelmingly ASCII, so the common path avoids the
+    // `chars()` iterator/peekable machinery and the non-ASCII error checks per byte.
+    let bytes = input.as_bytes();
+    let mut index = 0usize;
+    while index < bytes.len() {
+        // Bulk-copy runs of printable ASCII (the overwhelming majority of HTML input):
+        // one branchy iteration per byte in the scalar path adds up to milliseconds per MiB.
+        let run_start = index;
+        while index < bytes.len() {
+            let byte = bytes[index];
+            if (0x20..=0x7E).contains(&byte) || byte == b'\t' || byte == 0x0C {
+                index += 1;
+            } else {
+                break;
             }
-            cp = 0x0A;
         }
-        if cp == 0x0A {
-            out.push(cp);
-            line_starts.push(out.len());
-            line += 1;
-            col = 0;
+        if index > run_start {
+            let run = &bytes[run_start..index];
+            col += run.len();
+            out.extend(run.iter().map(|&byte| u32::from(byte)));
             continue;
         }
+        let byte = bytes[index];
+        if byte < 0x80 {
+            let cp = u32::from(byte);
+            if byte == b'\r' {
+                if bytes.get(index + 1) == Some(&b'\n') {
+                    index += 1;
+                }
+                index += 1;
+                out.push(0x0A);
+                line_starts.push(out.len());
+                line += 1;
+                col = 0;
+                continue;
+            }
+            if byte == b'\n' {
+                index += 1;
+                out.push(0x0A);
+                line_starts.push(out.len());
+                line += 1;
+                col = 0;
+                continue;
+            }
+            index += 1;
+            col += 1;
+            if is_control_character_in_stream(cp) {
+                errors.push(ParseError {
+                    code: ParseErrorCode::ControlCharacterInInputStream,
+                    line,
+                    col,
+                });
+            }
+            out.push(cp);
+            continue;
+        }
+        // Decode one non-ASCII scalar from the UTF-8 input (`&str` guarantees validity).
+        let ch = input[index..].chars().next().expect("valid UTF-8 boundary");
+        index += ch.len_utf8();
+        let cp = ch as u32;
+        has_wide |= cp > 0xFFFF;
         col += 1;
-        if is_surrogate(cp) {
-            errors.push(ParseError {
-                code: ParseErrorCode::SurrogateInInputStream,
-                line,
-                col,
-            });
-        } else if is_noncharacter(cp) {
+        if is_noncharacter(cp) {
             errors.push(ParseError {
                 code: ParseErrorCode::NoncharacterInInputStream,
                 line,
@@ -155,7 +197,7 @@ pub(crate) fn preprocess_str_with_line_starts(
         }
         out.push(cp);
     }
-    (out, errors, line_starts)
+    (out, errors, line_starts, has_wide)
 }
 
 #[cfg(test)]

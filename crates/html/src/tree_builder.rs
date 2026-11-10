@@ -1454,39 +1454,34 @@ impl TreeBuilder {
     /// reconstructs the active formatting elements, sets `frameset_ok` for non-whitespace
     /// and inserts the coalesced text): it just computes the insertion location once for
     /// the whole run and appends a single `&str` instead of one `char` at a time.
-    pub fn process_character_run(&mut self, codepoints: &[u32]) {
-        let mut text = String::with_capacity(codepoints.len());
-        let mut has_non_whitespace = false;
-        let mut skip_first_lf = false;
+    pub fn process_character_run(&mut self, bytes: &[u8]) {
+        // The driver batches consecutive character code points into UTF-8 bytes (the
+        // tokenizer's data-state fast path writes ASCII bytes directly). Validating the
+        // whole run once and classifying whitespace at byte level avoids a
+        // `char::from_u32` + `String::push` per code point for the (dominant) text path.
+        let mut bytes = bytes;
         if self.skip_next_lf {
             // `process_token` clears the flag for the first token; only an immediate LF is
             // swallowed (e.g. the newline right after <pre>/<textarea>).
             self.skip_next_lf = false;
-            skip_first_lf = codepoints.first() == Some(&0x0A);
+            if bytes.first() == Some(&b'\n') {
+                bytes = &bytes[1..];
+            }
         }
-        for (index, &cp) in codepoints.iter().enumerate() {
-            if index == 0 && skip_first_lf {
-                continue;
-            }
-            if cp == 0 {
-                continue;
-            }
-            let Some(ch) = char::from_u32(cp) else {
-                continue;
-            };
-            if !matches!(cp, 0x09 | 0x0A | 0x0C | 0x0D | 0x20) {
-                has_non_whitespace = true;
-            }
-            text.push(ch);
-        }
-        if text.is_empty() {
+        if bytes.is_empty() {
             return;
         }
+        let Ok(text) = std::str::from_utf8(bytes) else {
+            return;
+        };
+        let has_non_whitespace = bytes
+            .iter()
+            .any(|byte| !matches!(byte, b'\t' | b'\n' | 0x0C | b'\r' | b' '));
         self.reconstruct_active_formatting_elements();
         if has_non_whitespace && self.template_modes.is_empty() {
             self.frameset_ok = false;
         }
-        self.insert_text_run(&text);
+        self.insert_text_run(text);
     }
 
     /// Inserts `text` at the appropriate insertion location (the multi-character version
@@ -4319,6 +4314,20 @@ fn run_fragment_parser(
 }
 
 /// Runs the tokenizer → tree-builder loop until EOF.
+/// Appends `cp` to a UTF-8 byte run (NUL/invalid code points are dropped, matching
+/// [`TreeBuilder::process_character_run`]).
+fn push_codepoint_utf8(out: &mut Vec<u8>, cp: u32) {
+    if cp == 0 {
+        return;
+    }
+    if cp < 0x80 {
+        out.push(cp as u8);
+    } else if let Some(ch) = char::from_u32(cp) {
+        let mut buffer = [0u8; 4];
+        out.extend_from_slice(ch.encode_utf8(&mut buffer).as_bytes());
+    }
+}
+
 fn drive_tokenizer(tok: &mut Tokenizer, tb: &mut TreeBuilder) {
     // Reused token batch buffer: the old code allocated a `Vec` for every emitted token.
     let mut emitted: Vec<Token> = Vec::with_capacity(4);
@@ -4327,7 +4336,7 @@ fn drive_tokenizer(tok: &mut Tokenizer, tb: &mut TreeBuilder) {
     // key avoids two arena lookups per input character.
     let mut cdata_key: Option<(usize, Option<NodeId>)> = None;
     // Consecutive character tokens of the "in body" mode are processed as one run.
-    let mut char_run: Vec<u32> = Vec::new();
+    let mut char_run: Vec<u8> = Vec::new();
     let refresh_cdata =
         |tok: &mut Tokenizer, tb: &TreeBuilder, key: &mut Option<(usize, Option<NodeId>)>| {
             let current_key = (tb.open_elements.len(), tb.current_node());
@@ -4362,7 +4371,7 @@ fn drive_tokenizer(tok: &mut Tokenizer, tb: &mut TreeBuilder) {
                         && tb.doc.len() < tb.parse_options.max_nodes
                         && (!char_run.is_empty() || !tb.may_have_foreign_content())
                     {
-                        char_run.push(cp);
+                        push_codepoint_utf8(&mut char_run, cp);
                         continue;
                     }
                     if !char_run.is_empty() {
