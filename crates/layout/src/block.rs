@@ -178,7 +178,10 @@ pub(crate) fn layout_box_contents(
 ) {
     // CSS 2.1 §17: table boxes use the table layout algorithm instead of the block
     // formatting context.
-    if matches!(layout_box.box_type, BoxType::Table(_)) {
+    if matches!(
+        layout_box.box_type,
+        BoxType::Table(_) | BoxType::InlineTable(_)
+    ) {
         let definite_height = definite_content_height(layout_box, cb_height);
         crate::table::layout_table(layout_box, cb_height, definite_height, measurer, pos);
         return;
@@ -1249,6 +1252,7 @@ fn collect_intrinsic_widths(
         | BoxType::TableCell(_)
         | BoxType::TableCaption(_)
         | BoxType::Table(_)
+        | BoxType::InlineTable(_)
         | BoxType::TableRowGroup(_)
         | BoxType::TableRow(_) => {
             if let Some(style) = layout_box.style.as_ref() {
@@ -1451,6 +1455,28 @@ pub(crate) fn layout_atomic_inline(
         layout_box.dimensions.content.y = layout_box.dimensions.margin.top
             + layout_box.dimensions.border.top
             + layout_box.dimensions.padding.top;
+    } else if matches!(
+        layout_box.box_type,
+        BoxType::Table(_) | BoxType::InlineTable(_)
+    ) {
+        // inline-table / inner table box: shrink-to-fit through the table algorithm.
+        resolve_vertical_edges(&mut layout_box, available_width);
+        resolve_horizontal_edges(&mut layout_box, available_width);
+        let edges_h = layout_box.dimensions.padding.left
+            + layout_box.dimensions.padding.right
+            + layout_box.dimensions.border.left
+            + layout_box.dimensions.border.right;
+        let horizontal =
+            layout_box.dimensions.margin.left + layout_box.dimensions.margin.right + edges_h;
+        layout_box.dimensions.content.width = (available_width - horizontal).max(0.0);
+        layout_box.dimensions.content.x = layout_box.dimensions.margin.left
+            + layout_box.dimensions.border.left
+            + layout_box.dimensions.padding.left;
+        layout_box.dimensions.content.y = layout_box.dimensions.margin.top
+            + layout_box.dimensions.border.top
+            + layout_box.dimensions.padding.top;
+        let child_pos = self_positioning_context(&layout_box, pos);
+        layout_box_contents(&mut layout_box, cb_height, false, measurer, child_pos);
     } else {
         // inline-block: shrink-to-fit width (CSS 2.2 §10.3.9).
         calculate_shrink_to_fit_width(&mut layout_box, available_width, available_width, measurer);
@@ -1467,17 +1493,58 @@ pub(crate) fn layout_atomic_inline(
     let baseline = if matches!(layout_box.box_type, BoxType::Replaced(_)) {
         // CSS 2.2 §10.8.1: a replaced element's baseline is its bottom margin edge.
         margin_box.height
+    } else if matches!(layout_box.box_type, BoxType::InlineTable(_)) {
+        // CSS 2.2 §10.8.1: the baseline of an inline-table is the baseline of its
+        // first row box (bottom margin edge when the table has no rows).
+        find_first_row_baseline(&layout_box)
+            .map(|absolute_baseline| absolute_baseline - margin_box.y)
+            .unwrap_or(margin_box.height)
     } else {
         find_last_line_baseline(&layout_box)
             .map(|absolute_baseline| absolute_baseline - margin_box.y)
             .unwrap_or(margin_box.height)
     };
+    let mut layout_box = layout_box;
+    layout_box.baseline = baseline;
     AtomicInlineLayout {
         layout_box,
         width: margin_box.width,
         height: margin_box.height,
         baseline,
     }
+}
+
+/// Finds the absolute y of the baseline of the first table row box.
+fn find_first_row_baseline(table: &LayoutBox) -> Option<f32> {
+    for child in &table.children {
+        match &child.box_type {
+            BoxType::TableRow(_) | BoxType::AnonymousTableRow => {
+                if let Some(baseline) = find_first_cell_baseline(child) {
+                    return Some(baseline);
+                }
+            }
+            BoxType::TableRowGroup(_) => {
+                if let Some(baseline) = find_first_row_baseline(child) {
+                    return Some(baseline);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn find_first_cell_baseline(row: &LayoutBox) -> Option<f32> {
+    for child in &row.children {
+        if matches!(
+            child.box_type,
+            BoxType::TableCell(_) | BoxType::AnonymousTableCell
+        ) && let Some(baseline) = find_last_line_baseline(child)
+        {
+            return Some(baseline);
+        }
+    }
+    None
 }
 
 /// Finds the absolute y of the baseline of the last line box in normal flow.

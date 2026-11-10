@@ -118,7 +118,8 @@ fn build_box_for_node(
             // fallback for documents whose UA stylesheet is incomplete (or for styles
             // built by hand in tests).
             let display_role = match style.display {
-                Display::Table | Display::InlineTable => Some(BoxType::Table(node_id)),
+                Display::Table => Some(BoxType::Table(node_id)),
+                Display::InlineTable => Some(BoxType::InlineTable(node_id)),
                 Display::TableRowGroup | Display::TableHeaderGroup | Display::TableFooterGroup => {
                     Some(BoxType::TableRowGroup(node_id))
                 }
@@ -170,7 +171,7 @@ fn build_box_for_node(
                 }
             };
 
-            let mut raw_children = Vec::new();
+            let mut raw_children = Vec::with_capacity(4);
             let mut curr = node.first_child;
             while let Some(child_id) = curr {
                 if let Some(child_box) = build_box_for_node(
@@ -191,7 +192,9 @@ fn build_box_for_node(
                 | BoxType::InlineBlock(_)
                 | BoxType::TableCell(_)
                 | BoxType::TableCaption(_) => normalize_block_children(raw_children, Some(style)),
-                BoxType::Table(_) => table_fixup_children(raw_children, Some(style)),
+                BoxType::Table(_) | BoxType::InlineTable(_) => {
+                    table_fixup_children(raw_children, Some(style))
+                }
                 BoxType::TableRowGroup(_) => row_group_fixup_children(raw_children, Some(style)),
                 BoxType::TableRow(_) => row_fixup_children(raw_children, Some(style)),
                 // Inline/atomic/replaced/column boxes keep their children as-is.
@@ -219,12 +222,22 @@ fn build_box_for_node(
                 *has_overflow_clip = true;
             }
             if matches!(box_type, BoxType::TableCell(_)) {
-                layout_box.colspan = node
+                // Fast path: most cells have no attributes at all.
+                if let Some(element) = node
                     .as_element()
-                    .and_then(|el| el.get_attribute("colspan"))
-                    .and_then(|value| value.trim().parse::<usize>().ok())
-                    .unwrap_or(1)
-                    .clamp(1, 1000);
+                    .filter(|element| !element.attributes.is_empty())
+                {
+                    layout_box.colspan = element
+                        .get_attribute("colspan")
+                        .and_then(|value| value.trim().parse::<usize>().ok())
+                        .unwrap_or(1)
+                        .clamp(1, 1000) as u16;
+                    // HTML §table.attr.rowspan: 0 is treated as 1; upper bound 65534.
+                    layout_box.rowspan = element
+                        .get_attribute("rowspan")
+                        .and_then(|value| value.trim().parse::<usize>().ok())
+                        .map_or(1, |value| value.clamp(1, 65534) as u16);
+                }
             }
             if matches!(box_type, BoxType::Replaced(_)) {
                 let from_api = replaced_sizes.and_then(|sizes| sizes.get(&node_id).copied());

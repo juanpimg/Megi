@@ -32,6 +32,9 @@ pub enum BoxType {
     Replaced(NodeId),
     /// CSS table box (CSS 2.1 §17.4).
     Table(NodeId),
+    /// CSS inline-table box (CSS 2.1 §17.4): a table that participates in an inline
+    /// formatting context as an atomic inline-level box.
+    InlineTable(NodeId),
     /// CSS table row group box (`<thead>`/`<tbody>`/`<tfoot>`, CSS 2.1 §17.2.1).
     TableRowGroup(NodeId),
     /// CSS table row box (CSS 2.1 §17.2.1).
@@ -58,8 +61,11 @@ pub struct LayoutBox {
     /// Computed style associated with this box (if generated from an element).
     pub style: Option<ComputedStyle>,
     /// Number of table columns spanned by a cell (`colspan` HTML attribute,
-    /// CSS 2.1 §17.5.1). `1` for every other box.
-    pub colspan: usize,
+    /// CSS 2.1 §17.5.1). `1` for every other box. `u16` keeps `LayoutBox` compact.
+    pub colspan: u16,
+    /// Number of table rows spanned by a cell (`rowspan` HTML attribute,
+    /// CSS 2.1 §17.5.1, capped at 65534). `1` for every other box.
+    pub rowspan: u16,
     /// Intrinsic (decoded) size of a replaced element in CSS pixels, when known.
     ///
     /// Filled by `layout_document_with_replaced_sizes` (or per-kind defaults for
@@ -122,6 +128,7 @@ impl LayoutBox {
             box_type,
             style,
             colspan: 1,
+            rowspan: 1,
             intrinsic_size: None,
             baseline: 0.0,
             position: Position::Static,
@@ -164,6 +171,7 @@ impl LayoutBox {
                 | BoxType::LineBreak
                 | BoxType::InlineBlock(_)
                 | BoxType::Replaced(_)
+                | BoxType::InlineTable(_)
         )
     }
 
@@ -173,7 +181,7 @@ impl LayoutBox {
     pub fn is_atomic_inline(&self) -> bool {
         matches!(
             self.box_type,
-            BoxType::InlineBlock(_) | BoxType::Replaced(_)
+            BoxType::InlineBlock(_) | BoxType::Replaced(_) | BoxType::InlineTable(_)
         )
     }
 
@@ -183,6 +191,7 @@ impl LayoutBox {
         matches!(
             self.box_type,
             BoxType::Table(_)
+                | BoxType::InlineTable(_)
                 | BoxType::TableRowGroup(_)
                 | BoxType::TableRow(_)
                 | BoxType::TableCell(_)
@@ -214,6 +223,7 @@ impl LayoutBox {
             | BoxType::InlineBlock(id)
             | BoxType::Replaced(id)
             | BoxType::Table(id)
+            | BoxType::InlineTable(id)
             | BoxType::TableRowGroup(id)
             | BoxType::TableRow(id)
             | BoxType::TableCell(id)
