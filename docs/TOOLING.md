@@ -442,4 +442,39 @@ cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.pn
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Cifras de referencia en la ronda 17: **1107 tests** (bench 8, css 94, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 71, layout 146, net 180, paint 141, **render 123**, shell 108, svg 73, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; flexbox, decoraciones, formularios UA/editables y SVG pattern/text; suite determinista; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+### 2.16l Ronda 18: fuzz, grid, clipping/clip:text, CSS var/calc/pseudo-clases y red avanzada
+
+La ronda 18 cierra la robustez y el CSS moderno de la Fase 4 y la red de la Fase 5:
+
+```bash
+# Fuzz: 7 targets (html_parse, css_parse, selectors, net_url, render_pipeline, js_eval, svg_parse)
+cd fuzz && cargo +nightly fuzz build                  # build de los 7 bins (nightly)
+cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
+cd fuzz && cargo +nightly fuzz run js_eval -- -detect_leaks=0 -runs=300
+
+# Grid MVP (layout + render E2E)
+cargo test -p layout --test grid                      # 12 tests de layout grid
+cargo run -p render -- tests/fixtures/render/grid_columns.html /tmp/grid.png --json
+cargo run -p render -- tests/fixtures/render/grid_rows.html /tmp/grid_rows.png --json
+cargo run -p render -- tests/fixtures/render/grid_alignment.html /tmp/grid_align.png --json
+
+# Clipping + background-clip:text
+cargo test -p paint --test clipping                   # 9 tests (overflow+radius, clip:text)
+cargo test -p css --test background_clip_prefixed     # alias -webkit-background-clip (5 tests)
+
+# CSS moderno: custom properties/var(), calc() y pseudo-clases de estado
+cargo test -p css --test state_vars_calc              # 26 tests (var/calc/pseudos)
+cargo test -p css                                    # 128 tests
+
+# Red avanzada: SameSite/PSL, Referrer-Policy, Range/206 y cache
+cargo test -p net referrer                            # Referrer-Policy
+cargo test -p net range                               # Range/206 y Content-Range
+cargo test -p net cookies                             # SameSite/PSL
+cargo test -p net cache                               # no-cache/must-revalidate/s-maxage/Age/304
+```
+
+Límites documentados de la ronda: `calc()` mixto `% + px` no es representable en `Length` (⇒ invalid/inherit); `var()` cae a fallback/initial en ciclos y a los 32 niveles; el clipping y `background-clip:text` tienen cap 16,7 Mpx/4096 runs; grid no soporta spans/named lines/minmax/auto-fill/subgrid/colocación explícita; el `ReferrerConfig` aún no está instalado en el loader de `render` (integración de 1 línea pendiente).
+
+Cifras de referencia en la ronda 18: **1189 tests** (bench 8, css 128, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 71, layout 158, net 207, paint 150, **render 123**, shell 108, svg 73, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; fuzz 7 targets; suite determinista; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+
+

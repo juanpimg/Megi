@@ -6,6 +6,67 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 18 — expanded fuzzing, real clipping, Grid MVP, modern CSS and advanced networking (2026-11-10)
+
+#### Added
+
+- **Expanded fuzzing** (commit `b565ee0`): three new libFuzzer targets —
+  `render_pipeline` (data: URLs and pipeline caps), `js_eval` (Boa `Budget`,
+  DOM bindings and event dispatch) and `svg_parse` (strict `Limits`) — with
+  versioned seed corpora (4/6/5 seeds). `fuzz-nightly.yml` now runs a **7-target
+  matrix** plus a cheap PR **build-only** job (`cargo +nightly fuzz build`).
+  Local round-18 verification built all 7 targets and ran bounded smoke
+  campaigns with no panics/ASan/UBSan findings; `js_eval` uses
+  `-detect_leaks=0` only because Boa 0.21 performs a constant ~56-byte one-time
+  allocation.
+- **Modern CSS** (commit `dc0a056`, css 94→**128** tests): custom properties
+  `--x` with cascade/inheritance and `var(--x[, fallback])` substitution (nested
+  fallbacks, cycle detection, **32-level** limit; shorthands expand after
+  substitution; inline styles supported), `calc()` with `+ - * /`,
+  parentheses/nesting and `px`/`em`/`rem`/`%`/`vh`/`vw` (mixed `%+px` is not
+  representable and becomes invalid, documented), real state pseudo-classes
+  (`:focus`, `:focus-visible`, `:hover`, `:active`, `:checked`, `:disabled`,
+  `:enabled`, `:read-only`, `:read-write`, `:required`, `:placeholder-shown`)
+  through `StateContext`/`data-megi-*` plus
+  `matches_with_state`/`with_state`/`resolve_document_styles_with_media_and_state`,
+  grid parsing (`grid-template-*` tracks fixed/%/fr/auto/repeat, 1,024 cap),
+  and `-webkit-background-clip` as a `background-clip` alias (5 tests).
+- **Paint clipping and text masks** (commit `01339a3`, paint 141→**150** tests):
+  `overflow:hidden` + `border-radius` now clips real descendants using the
+  padding box with inner radii (`radius − borders`), 4×4 offscreen AA and a
+  **16.7 Mpx** cap; `background-clip:text` composites color/image layers through
+  a glyph mask (multi-line, **4,096 runs** cap). Without those properties the
+  display list stays byte-identical; 9 clipping tests and goldens unchanged.
+- **Grid MVP** (commit `a872a86`, layout 146→**158** tests, css grid parsing):
+  `display:grid/inline-grid` (inline-grid via flag over `InlineBlock`),
+  `grid-template-columns/rows` with fixed/%/fr/auto/repeat tracks, `row-gap`/
+  `column-gap`, row-major auto-placement, `justify-items/self`,
+  `align-items/self`, `grid-auto-rows` and BFC/IFC items. Out of scope and
+  documented: spans, named lines, `minmax()`, `auto-fill`/`auto-fit`, subgrid and
+  explicit placement. Three E2E fixtures with verified md5s
+  (`grid_columns` `2d6714bc…`, `grid_rows` `c411ff6d…`,
+  `grid_alignment` `93d1126d…`).
+- **Advanced networking** (commit `718d075`, net 180→**207** tests): SameSite
+  cookies (`Strict`/`Lax`/`None`+Secure, approximate top-level model, absent
+  attribute ⇒ Lax), a reduced **public suffix list** (~150 suffixes + safe
+  fallback) with `registrable_domain`/`site`/`same_site`, Referrer-Policy
+  (8 policies, header and `meta`, downgrade and per-hop `Referer`), Range/206
+  (`ByteRange`, `ContentRange`, `load_range`, `InvalidRange`; no multi-range or
+  `If-Range`) and cache refinements (`no-cache` vs `must-revalidate`,
+  `s-maxage`, `Age`, `Expires`, `requires_revalidation`, 304 with ETag). The
+  `ReferrerConfig` wiring in `render`'s loader remains a documented one-line
+  pending item.
+
+#### Changed
+
+- **1,189 tests, 0 failures** (css 128, layout 158, paint 150, net 207,
+  render 123, svg 73, shell 108, html 60, js 71, dom 28, image 45+1 doctest,
+  fonts 17+1 doctest, bench 8, test_harness 11); gate PASS with tokenizer
+  7,050/7,050, tree 3,904/3,904, serializer 230/230, CSS 30/30 and empty
+  tokenizer/tree allowlists. Goldens remain byte-identical (showcase
+  `c95c7eff…`, `basic.rgba` `60f8984e…`, PNG `9e957177…`). Phases: F4
+  practically complete, F5 ≈97 %, F6 ≈90 %, F7 ≈75 %.
+
 ### Round 17 — flexbox MVP, rounded corners/shadows, editable forms and SVG pattern/text (2026-11-10)
 
 #### Added

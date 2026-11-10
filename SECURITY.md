@@ -67,14 +67,22 @@ after a fix is available.
 ## Fuzzing and continuous robustness
 
 - The parsers that consume untrusted input are fuzzed with libFuzzer through
-  `cargo-fuzz`: **four targets** (`html_parse`, `css_parse`, `selectors`,
-  `net_url`) with a versioned seed corpus. The harness lives in the standalone
+  `cargo-fuzz`: **seven targets** (`html_parse`, `css_parse`, `selectors`,
+  `net_url`, `render_pipeline`, `js_eval`, `svg_parse`) with a versioned seed
+  corpus; the round-18 additions cover the full render pipeline (data: URL and
+  caps), the JavaScript host (`Budget` + DOM APIs + event dispatch) and the SVG
+  parser (strict `Limits`). The harness lives in the standalone
   `fuzz/` workspace (nightly + ASan) and is **not** a dependency of the engine
   crates.
 - **CI dev environment**: the quality/conformance/MSRV jobs install only the Wayland/X11/xcb **development** packages (`libwayland-dev`, `libxkbcommon*`, `libx11*`, `libxcb*`) that `winit`/`softbuffer` need to compile in the runner; they are build/test dependencies, never shipped or linked into the engine at runtime.
 - **Wired into CI**: [`.github/workflows/fuzz-nightly.yml`](.github/workflows/fuzz-nightly.yml)
-  runs a 5-minute smoke campaign per target daily (03:17 UTC) and on demand,
-  uploading crash artifacts on failure.
+  runs a 5-minute smoke campaign per target daily (03:17 UTC) over the 7-target
+  matrix and on demand, uploading crash artifacts on failure; pull requests touching
+  `fuzz/**` run a cheap build-only job (`cargo +nightly fuzz build`) that never
+  blocks the quality gate. Local round-18 verification built all 7 targets and ran
+  bounded smoke campaigns (400 runs per parser target, 40 for the expensive
+  pipeline, 300 for JS) with no panics/ASan/UBSan findings; `js_eval` runs with
+  `-detect_leaks=0` because Boa 0.21 leaks a constant ~56-byte one-time allocation.
 - **Local campaign on record: ~1.06 M ASan executions, 0 crashes.** Triage
   policy, reproduction, minimisation and regression rules are documented in
   [`docs/FUZZING.md`](docs/FUZZING.md); memory-safety crashes and reachable
@@ -106,6 +114,7 @@ after a fix is available.
   process.
 - **Web font decoding limits** (`crates/fonts`): WOFF2 containers are decoded by the authorized dependency **`woff2-patched` 0.4** (Apache-2.0, `#![forbid(unsafe_code)]`-style pure Rust API, no C/FFI, used only by `crates/fonts`). The decoded sfnt must pass the font database's validation; `crates/render` caps web fonts at **8 fonts / 8 MiB each / 32 MiB total per page**, honors `--no-network`, deduplicates sources and downgrades fetch/decode failures to a **non-fatal warning + fallback** instead of aborting the render. No network or filesystem capabilities are exposed to the font parser.
 - **SVG rendering limits** (`crates/svg`, wired into `render` for `<img>` and `background-image`): the from-scratch XML parser and rasterizer enforce explicit anti-DoS limits — **8 MiB input, depth 256, 100k elements, 1,024 attributes/element, 1M flattened path segments, 16k px per side, 64 Mpx and `<use>` depth 16** — reject malformed/truncated XML and never panic on arbitrary input; no network/filesystem access and no `unsafe`. `crates/svg` also bounds its internal CSS/gradient layers (**1 MiB of stylesheet, 4,096 rules, 64 selectors/rule, 16 descendant compounds, 256 stops per gradient, 32 href hops**) and renders cyclic/broken gradient references as no paint without panicking. `crates/render` additionally caps each SVG at **16 Mpx / 64 MiB RGBA**, downgrades corrupt or oversized images to a **non-fatal warning with no pixels**, never exposes the SVG parser to network/filesystem access, and wraps direct SVG navigation in a synthetic HTML page. **Inline SVG (round 15)**: `<svg>` elements inside the document are replaced before styles/layout by a synthetic `<img>` with a `data:` URL (base64, no network); limits are **256 SVGs per document, 1 MiB per SVG, 8 MiB total, nesting depth 256**, exceeding any of them degrades to a non-fatal warning (the element is left untouched), and only the already-sandboxed `crates/svg` parser/rasterizer is used. **Round 17 SVG**: `<pattern>` tiling is capped at **10,000 tiles** (cyclic pattern references paint nothing, no panic) and basic `<text>` is capped at **1,000 text elements / 10,000 characters**, with glyph shaping delegated to the already-isolated `crates/fonts` bundled fonts (no network/filesystem access). **Event loop (round 15)**: rendering uses a **virtual clock only** (`run_until` in 1 ms steps, no wall-clock `run_tasks`), so timer-driven pages execute deterministically and cannot be perturbed by host load.
+- **Round 18 limits**: **paint clipping** restricts `overflow:hidden` + `border-radius` to an offscreen 4×4-AA mask capped at **16.7 Mpx**, and `background-clip:text` composites through a glyph mask (multi-line text, **4,096 runs** cap); without those properties the display list stays byte-identical (goldens unchanged). **Grid MVP** parses at most **1,024 tracks** per template and only adds layout-time budgets (no new input surface). **CSS custom properties/`var()`** are bounded to **32 substitution levels** with cycle detection (fallback/inherit, never panic) and `calc()` rejects mixed `%`+`px` expressions. **Net (round 18)**: SameSite/PSL/Referrer-Policy/Range parsing only touches already-untrusted header/URL bytes, rejects malformed ranges with a typed `InvalidRange`, enforces the reduced PSL with a safe fallback, defaults cookies to `SameSite=Lax` when absent, and never exposes network/filesystem capabilities to parsers. **Fuzzing**: the three new targets and their corpora are CI-wired; crashes remain report-only outside `fuzz/**` until triaged and minimised.
 - **Image decoding limits** (`crates/image`): the PNG decoder enforces
   `PngLimits` (16384 px per side, 16 Mpx total, 64 MiB per chunk, 256 MiB of
   IDAT) before/while inflating, verifies chunk CRCs and never panics on
