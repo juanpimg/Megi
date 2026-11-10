@@ -97,7 +97,7 @@ fn run() -> Result<(), CliError> {
     } else {
         let stats = &output.stats;
         println!(
-            "rendered {input} -> {} ({}x{}, {} bytes, {} display items, {} hit regions, {} images, {} background images, {} SVGs ({} inline), {} scripts + {} timer tasks / {} events, {} external stylesheets, {} ms)",
+            "rendered {input} -> {} ({}x{}, {} bytes, {} display items, {} hit regions, {} images, {} background images, {} SVGs ({} inline), {} scripts + {} timer tasks / {} events, {} external stylesheets, {} referrer policy, {} ms)",
             args.output.display(),
             output.pixmap.width,
             output.pixmap.height,
@@ -112,6 +112,7 @@ fn run() -> Result<(), CliError> {
             stats.script_tasks,
             stats.script_events,
             stats.external_stylesheets,
+            stats.referrer_policy.as_deref().unwrap_or("-"),
             stats.timings.total.as_millis()
         );
         for warning in &stats.warnings {
@@ -224,7 +225,7 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
             "{{\"input\":{},\"output\":{},\"width\":{},\"height\":{},",
             "\"document_url\":{},\"status\":{},\"charset\":{},",
             "\"document_bytes\":{},\"png_bytes\":{},\"display_items\":{},\"hit_regions\":{},",
-            "\"cookies_stored\":{},\"content_encoding\":{},",
+            "\"cookies_stored\":{},\"content_encoding\":{},\"referrer_policy\":{},",
             "\"images_loaded\":{},\"images_failed\":{},\"image_bytes\":{},\"svgs_rendered\":{},\"inline_svgs\":{},",
             "\"background_images_loaded\":{},\"background_images_failed\":{},\"background_bytes\":{},",
             "\"fonts_loaded\":{},\"fonts_failed\":{},\"font_bytes\":{},",
@@ -253,6 +254,10 @@ fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> Str
         stats.cookies_stored,
         stats
             .content_encoding
+            .as_deref()
+            .map_or_else(|| "null".to_string(), json_string),
+        stats
+            .referrer_policy
             .as_deref()
             .map_or_else(|| "null".to_string(), json_string),
         stats.images_loaded,

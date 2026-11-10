@@ -97,6 +97,27 @@
 //!   pass unless scripts added/removed `<style>`/`<link rel=stylesheet>` elements, so
 //!   script-inserted stylesheets still apply.
 //!
+//! ### Referrer-Policy, SameSite and CSS interaction state (R112)
+//!
+//! - After the main document is loaded (and decoded), render derives its **referrer policy**
+//!   from the response `Referrer-Policy` header, else `<meta name="referrer">`, else the
+//!   browser default `strict-origin-when-cross-origin`, and installs it on the shared
+//!   [`net::ResourceLoader`] before any subresource fetch. Every CSS/script/image/font
+//!   request therefore carries a policy-computed `Referer` (same-origin full URL,
+//!   cross-origin origin, downgrades blocked where the policy requires it), and the same
+//!   source URL lets `net` auto-classify cookie `SameSite` (Strict/Lax are withheld from
+//!   cross-site subresources; None requires `Secure`). Recorded in
+//!   [`RenderStats::referrer_policy`] and the CLI `--json` output. Render loads subresources
+//!   only, so the approximate top-level model never sends Lax cookies on "navigation".
+//! - Styles are resolved with an explicit **empty** [`css::StateContext`]: render owns no
+//!   focus/pointer state. `:checked`/`:disabled`/`:enabled`/`:read-only`/`:required`/
+//!   `:placeholder-shown` are derived from DOM attributes by `css::state` (so `<input
+//!   checked>`/`disabled`/`placeholder` work in static documents), and dynamic states can be
+//!   modelled with the documented `data-megi-*` attributes: the shell injects
+//!   `data-megi-focused` (and optionally hover/active) after an interaction and re-renders.
+//!   Limits: hover/active have no headless meaning, `:focus` is not tracked by render
+//!   itself, and the state is a per-render snapshot (no live restyle/change events).
+//!
 //! Not yet supported: executing scripts *during* parsing (needed for the html5lib
 //! `scripted_*` cases and script-driven `document.write` re-tokenization — WP-6.4),
 //! `async` ordering, ES modules, real-wall-clock/event-driven loops (`change` events on
@@ -461,6 +482,9 @@ pub struct RenderStats {
     /// `Content-Encoding` of the main document response after transparent decoding
     /// (`Some("gzip")`/`Some("deflate")` prove the body was compressed on the wire).
     pub content_encoding: Option<String>,
+    /// Referrer policy applied to subresource fetches (header > `<meta name="referrer">` >
+    /// default `strict-origin-when-cross-origin`), e.g. `Some("origin")`.
+    pub referrer_policy: Option<String>,
     /// HTML parser anti-DoS limits that fired (should be empty for normal pages).
     pub limit_violations: html::LimitViolations,
     /// Per-stage timings.
@@ -568,6 +592,16 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             loaded.content_type.clone(),
         ));
     }
+    // Referrer policy for every subresource: HTTP header > `<meta name="referrer">` >
+    // browser default. Installing it on the shared loader also enables the automatic
+    // cookie `SameSite` classification for subresources (see `net::FetchOptions`).
+    let referrer_policy = net::ReferrerPolicy::from_headers(&loaded.headers)
+        .or_else(|| net::ReferrerPolicy::from_meta_html(&decoded.text))
+        .unwrap_or_default();
+    loader.set_referrer(Some(net::ReferrerConfig::with_policy(
+        loaded.url.clone(),
+        referrer_policy,
+    )));
     let parse = html::parse_document_with_options(&decoded.text, false, &options.parse_options);
     let mut document = parse.document;
     let decode_parse_time = decode_start.elapsed();
@@ -630,9 +664,10 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             &media_context,
             &mut pre_warnings,
         ) {
-            pre_script_styles = Some(Arc::new(resolve_styles_with_collection(
+            pre_script_styles = Some(Arc::new(resolve_styles_with_state(
                 &document,
                 &collection,
+                css::StateContext::new(),
             )));
             reusable_stylesheets = Some((collection, summary, fonts, stylesheet_elements_before));
         }
@@ -730,7 +765,8 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             &mut warnings,
         )?,
     };
-    let styles = resolve_styles_with_collection(&document, &stylesheet_collection);
+    let styles =
+        resolve_styles_with_state(&document, &stylesheet_collection, css::StateContext::new());
     let styles_time = styles_start.elapsed();
 
     let fonts_start = Instant::now();
@@ -823,6 +859,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         })
         .unwrap_or(0);
     let content_encoding = loaded.content_encoding.clone();
+    let referrer_policy_name = Some(referrer_policy.as_str().to_owned());
     let console_errors = console
         .iter()
         .filter(|entry| entry.level == "error")
@@ -873,6 +910,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             hit_regions: hit_region_count,
             cookies_stored,
             content_encoding,
+            referrer_policy: referrer_policy_name,
             limit_violations: parse.limit_violations,
             timings: RenderTimings {
                 fetch: fetch_time,
@@ -924,6 +962,12 @@ fn render_svg_document(
     output.document_url = loaded.url.clone();
     output.stats.document_bytes = loaded.bytes.len();
     output.stats.status = loaded.status;
+    output.stats.referrer_policy = Some(
+        net::ReferrerPolicy::from_headers(&loaded.headers)
+            .unwrap_or_default()
+            .as_str()
+            .to_owned(),
+    );
     output.stats.timings.fetch = fetch_time;
     output.stats.timings.total = total_start.elapsed();
     Ok(output)
@@ -935,6 +979,8 @@ struct LoadedDocument {
     url: Url,
     content_type: String,
     status: Option<u16>,
+    /// Main-document response headers (empty for `file:`/`data:` navigations).
+    headers: Vec<(String, String)>,
     /// Main-document `Content-Encoding`, if any (body already decoded by `net`).
     content_encoding: Option<String>,
 }
@@ -958,6 +1004,7 @@ fn load_document(
             let content_type = net::resolve_content_type(&response.headers, &response.body);
             let content_encoding = response.header("content-encoding").map(str::to_owned);
             Ok(LoadedDocument {
+                headers: response.headers,
                 bytes: response.body,
                 url: response.final_url,
                 content_type,
@@ -972,6 +1019,7 @@ fn load_document(
                 url: resource.url.clone(),
                 content_type: resource.content_type.clone(),
                 status: None,
+                headers: Vec::new(),
                 content_encoding: None,
             })
         }
@@ -1314,6 +1362,21 @@ fn account_css_bytes(
 ///
 /// Mirrors `css::resolve_document_styles_with_media` but accepts a collection that already
 /// contains the author sheets (including recursively imported ones in cascade order).
+/// Resolves the cascade with an explicit interaction state.
+///
+/// Render uses an empty [`css::StateContext`] (no pointer, no focus ownership): dynamic
+/// `:checked`/`:disabled`/`:read-only`/`:required`/`:placeholder-shown` are derived from
+/// the DOM attributes by `css::state`, and `:focus`-style states can be modelled statically
+/// with the documented `data-megi-*` attributes (`data-megi-focused`, ...). The shell can
+/// inject those attributes after a user interaction and re-render.
+fn resolve_styles_with_state(
+    doc: &Document,
+    collection: &css::StyleCollection,
+    state: css::StateContext,
+) -> HashMap<NodeId, ComputedStyle> {
+    css::state::with_state(state, || resolve_styles_with_collection(doc, collection))
+}
+
 fn resolve_styles_with_collection(
     doc: &Document,
     collection: &css::StyleCollection,
