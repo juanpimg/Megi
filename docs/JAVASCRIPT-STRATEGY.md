@@ -39,7 +39,7 @@ Megi ha cerrado funcionalmente la Fase 4 (renderizado) y tiene un pipeline de na
 
 **Estado real verificado en la decisión (ronda 7)**: **602 tests, 0 fallos**; gate de 4 suites PASS (tokenizer 7.050/7.050, árbol 3.898/3.904, serializador 230/230, CSS 30/30); Fase 6 con **decisión ACEPTADA el 2026-11-10**, implementación arrancando por `WP-6.1`.
 
-**Estado a ronda 9 (HEAD `c86682c`)**: **793 tests, 0 fallos**; gate PASS con árbol 3.898/3.904; **WP-6.1 HECHO** (`crates/js`, Boa 0.21.1, 12 tests) y **WP-6.2 lado host HECHO** (`render` ejecuta los `<script>` clásicos inline/`src` **post-parseo** con `ScriptingMode`/`ScriptingLimits`, caps 8/32 MiB y 64 scripts, microtasks/timers, console/stats y **re-render del DOM mutado**; 7 fixtures `js_*` y 12 tests de scripting). Pendientes: parser-inserted/`document.write` durante el parsing (`scripted_*`), eventos/`EventTarget`, timers de reloj y CSSOM (`getComputedStyle`). Todos los crates con `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+**Estado a ronda 10 (HEAD `f10635c`)**: **820 tests, 0 fallos**; gate PASS con árbol 3.898/3.904; **WP-6.1 HECHO** (`crates/js`, Boa 0.21.1; 26 tests con WP-A) y **WP-6.2 lado host HECHO** (`render` ejecuta los `<script>` clásicos inline/`src` **post-parseo** con `ScriptingMode`/`ScriptingLimits`, caps 8/32 MiB y 64 scripts, microtasks/timers, console/stats y **re-render del DOM mutado**; 7 fixtures `js_*` y 12 tests de scripting). **WP-A HECHO** (eventos `EventTarget`/`Event`/`CustomEvent` con captura+burbuja y timers con reloj inyectable `advance`/`run_until`/`now_ms`/`pending_timers`; 26 tests js). Pendientes: WP-B (`CSSStyleDeclaration`/`getComputedStyle`, `NodeList`, `matches`/`closest`, identidad de wrappers), parser-inserted/`document.write` durante el parsing (`scripted_*`) e integrar eventos/timers en el shell. Todos los crates con `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
 
 ---
 
@@ -213,7 +213,7 @@ Estimaciones en días de un agente full-time, con tests y revisión; dependencia
 
 **Total: 25–30 días-persona** (alcance completo aceptado: WP-6.1–6.7). Hito intermedio: `scripted_*` verdes al cerrar WP-6.3 (≈14 días desde el inicio). Boa 0.21.x; no aplica la variante QuickJS, que queda sólo como plan de migración.
 
-**Estado a ronda 9**: `WP-6.1` **HECHO**; `WP-6.2` **HECHO en su parte host** (bindings core en `crates/js` + integración en `render`: scripts clásicos post-parseo con budgets/caps, microtasks/timers, console y re-render del DOM mutado; 7 fixtures `js_*`). Siguientes: `WP-6.3` parser-inserted/`document.write` para `scripted_*` (citado como WP-6.4 en `ROADMAP.md`), `WP-6.4` eventos/timers de reloj, `WP-6.5` CSSOM/`querySelector`, `WP-6.6` fuzz y `WP-6.7` shell.
+**Estado a ronda 10**: `WP-6.1` **HECHO**; `WP-6.2` **HECHO en su parte host** (bindings core en `crates/js` + integración en `render`: scripts clásicos post-parseo con budgets/caps, microtasks/timers, console y re-render del DOM mutado; 7 fixtures `js_*`). Siguientes: `WP-6.3` parser-inserted/`document.write` para `scripted_*` (citado como WP-6.4 en `ROADMAP.md`), `WP-6.4` eventos/timers (WP-A) **HECHO en ronda 10**, `WP-6.5` CSSOM/`querySelector` (WP-B) pendiente, `WP-6.6` fuzz y `WP-6.7` shell.
 
 ### 6.1 Qué NO hacer en Fase 6
 
@@ -248,7 +248,7 @@ Estimaciones en días de un agente full-time, con tests y revisión; dependencia
 2. **Activación**: feature `js` **ENCENDIDA POR DEFECTO** en el workspace y en `render`/`shell`. El build y el CI por defecto compilan con JS; se mantiene un job **`cargo test --workspace --no-default-features`** para el build mínimo std-only, y el job MSRV cubre ambas configuraciones.
 3. **Alcance inicial**: **COMPLETO** — `document.write` + bindings DOM + `EventTarget`/eventos + timers + CSSOM + `querySelector` (WP-6.1–6.7, **≈25–30 días-persona**).
 
-**Estado de implementación (ronda 9)**: **Fase 6 ≈30 %**. `crates/js` existe desde WP-6.1 (Boa 0.21.1, 12 tests) y **`render` ya ejecuta los `<script>`** del documento en WP-6.2 host (post-parseo, con `ScriptingLimits`, caps y re-render del DOM mutado). Hasta que se cierre la ejecución durante el parsing (WP-6.3/6.4: `document.write`/parser-inserted), los 4 suites `scripted_*` (6 mode-runs) permanecen en la allowlist del gate; después quedan eventos/timers de reloj, CSSOM/`getComputedStyle`, fuzz y shell. No se reabre la decisión salvo por los criterios de §8.1.
+**Estado de implementación (ronda 10)**: **Fase 6 ≈40 %**. `crates/js` existe desde WP-6.1 (Boa 0.21.1, **26 tests**) y **`render` ya ejecuta los `<script>`** del documento en WP-6.2 host (post-parseo, con `ScriptingLimits`, caps y re-render del DOM mutado). **WP-A HECHO** (ronda 10): `EventTarget` con captura+burbuja, `Event`/`CustomEvent` y timers con reloj inyectable (`advance`/`run_until`/`now_ms`/`pending_timers`). Hasta que se cierre la ejecución durante el parsing (WP-6.4: `document.write`/parser-inserted), los 4 suites `scripted_*` (6 mode-runs) permanecen en la allowlist del gate; después quedan WP-B (CSSOM/`getComputedStyle`/`NodeList`/identidad de wrappers), integrar eventos/timers en el host, fuzz y shell. No se reabre la decisión salvo por los criterios de §8.1.
 
 ### 8.1 Criterios para revisar la decisión (si cambian las premisas)
 

@@ -6,6 +6,69 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 10 — JS events/timers, a 131 ms pipeline, hit regions in render and advanced networking (2026-11-10)
+
+#### Added
+
+- **Phase 6, WP-A — events and timers** (`crates/js`): `EventTarget` with
+  `addEventListener`/`removeEventListener`/`dispatchEvent` on nodes, `document`
+  and `window`, **capture phase** (window→document→ancestors→target) and
+  **bubbling** back; `Event`/`CustomEvent` (`bubbles`/`cancelable`/`detail`/
+  `defaultPrevented`, `preventDefault`/`stopPropagation`/
+  `stopImmediatePropagation`, `dispatchEvent` returns false after
+  `preventDefault`); timers on the Rust scheduler with an **injectable clock**:
+  `setTimeout(args)`/`setInterval`/`clearTimeout`/`clearInterval`, `(due, id)`
+  ordering, `advance(Duration)`, `run_until(deadline_ms)`, `now_ms()` and
+  `pending_timers()`; `run_tasks` now only runs timers due by the real clock
+  (documented semantic change). 14 new tests → **26 js**. Limits: no
+  `onclick`/`once`/`passive`, `currentTarget` is null inside listeners, and
+  `removeEventListener` does not compare identity.
+- **`RenderOutput.hit_regions`** (render/shell): the pipeline builds
+  `paint::build_display_list_with_hit_regions` output and exposes
+  `RenderOutput.hit_regions` + `RenderStats.hit_regions`; the shell resolves
+  clicks with `render::RenderOutput::hit_regions` and `paint::find_link_at`
+  (documented layout+DOM fallback), using a `file://` fixture with relative and
+  absolute links. An `<a>` without `href` produces no region. Pixels are
+  byte-identical (basic `7324e851…`, showcase `c95c7eff…`) at a **+0.6 µs**
+  paint cost (121 regions over 80 items). shell 83 tests.
+- **Advanced networking end to end** (`render`/`shell`):
+  `RenderOptions.cookies` (per-render jar) or a shared session `cookie_jar`
+  propagating `Set-Cookie` across document/redirects/subresources and later
+  renders; `RenderOptions.origin`/`--origin` (or Origin derived from the
+  document URL) enabling CORS/credentials validation, with CORS denials reported
+  as **non-fatal warnings**; gzip/deflate verified E2E over loopback (gzipped
+  HTML/CSS still apply styles); `RenderStats` gains `hit_regions`,
+  `cookies_stored` and `content_encoding`; CLI `--cookies`/`--origin` in
+  `render` and `shell`. render 77 tests (+10).
+- **Performance work (parse + layout)**: in-body character batching (one
+  insertion per run + `append_text(&str)`), `consume_data_run` in the
+  tokenizer, single-pass preprocessing, an internal hasher, `allow_cdata`
+  caching, a foreign counter and a reused token buffer; layout drops hot
+  `ComputedStyle` clones and iterates tables directly.
+
+#### Changed
+
+- Test suite: **820 tests, 0 failures** (was 793): css 57, dom 28, fonts 13+1
+  doctest, html 53, image 45+1, **js 26**, layout 133, net 180, paint 108,
+  **render 77**, **shell 83**, bench 8, test_harness 7. fmt, clippy
+  `-D warnings`, `cargo doc`, 4-suite gate PASS and MSRV 1.88 verified.
+- Phase status: Phase 4 functionally complete, **Phase 5 ≈95 %** (advanced
+  networking E2E; HTTP/2 and streaming pending), **Phase 6 ≈40 %** (WP-6.1 +
+  WP-6.2 host + WP-A; WP-B and parser-inserted pending), **Phase 7 ≈65 %**
+  (hit regions wired into render/shell).
+- Goldens unchanged: showcase 80,220 B `md5 c95c7eff…`, render basic 15,498 B
+  `md5 7324e851…`, Phase-4 `basic.rgba` byte-identical (`md5 60f8984e…`);
+  scripting evidence `js_text.html` 15,876 B `md5 e1da51d4…` vs 15,499 B
+  `md5 53f67e77…` with `--no-scripting`.
+
+#### Performance
+
+- **Pipeline 800×600: 167.6 → 131.2 ms (−21.7 %)**; `html/realistic-1mb`
+  **55.0 → 19.2 ms (−65 %)**; `layout/realistic-1mb` 56.1 → 54.5 ms (−2.8 %).
+  The pipeline now uses **65.6 % of its 200 ms budget**. The 4-suite gate is
+  untouched (tokenizer 7,050/7,050, tree 3,898/3,904) and the paint golden stays
+  byte-identical.
+
 ### Round 9 — JavaScript executed in render, paint hit-testing and navigable shell (2026-11-10)
 
 #### Added

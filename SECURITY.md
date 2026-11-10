@@ -93,6 +93,11 @@ after a fix is available.
   per script and 32 MiB total**, downloads honor `--no-network`, and each script
   runs under a per-script and cumulative `ScriptingLimits` budget; `--no-scripting`
   disables execution entirely (and `--no-default-features` builds without Boa).
+  With `--cookies`/`RenderOptions.cookies` a cookie jar lives for one render (or
+  is shared as an explicit session jar by the shell), propagating `Set-Cookie`
+  across document/redirects/subresources; `--origin` enables CORS/credentials
+  validation, and a CORS denial is a **non-fatal warning** in `RenderOutput::stats`
+  (never a crash).
 - **Image decoding limits** (`crates/image`): the PNG decoder enforces
   `PngLimits` (16384 px per side, 16 Mpx total, 64 MiB per chunk, 256 MiB of
   IDAT) before/while inflating, verifies chunk CRCs and never panics on
@@ -107,7 +112,7 @@ after a fix is available.
   only windowing dependencies (authorized by ARCHITECTURE §3.1) and their X11 /
   Wayland backends are loaded dynamically (`dlopen`); there is no GPU,
   compositor or external process. `--screenshot` runs fully headless without
-  creating an `EventLoop`. Window mode renders off the event loop in a **worker thread** with generation checks, cancellation and coalescing, supports vertical scroll (pages taller than **8192 CSS px** are clipped with a visible marker), mouse/keyboard input, HiDPI scaling and **link navigation with bounded history** (`NavigationState`: cap 256 entries, forward truncation; only `http`/`https`/`file`/`data` URLs resolved through `crates/net`, HTTP redirects honored). Navigation regions come from the **same render** as the pixels, and paint's hit-testing API is purely geometric (no new input parser). There is still no JS in the host loop, forms, tabs, zoom or window-level DOM events, so the attack surface remains the render pipeline plus the already-bounded network surface.
+  creating an `EventLoop`. Window mode renders off the event loop in a **worker thread** with generation checks, cancellation and coalescing, supports vertical scroll (pages taller than **8192 CSS px** are clipped with a visible marker), mouse/keyboard input, HiDPI scaling and **link navigation with bounded history** (`NavigationState`: cap 256 entries, forward truncation; only `http`/`https`/`file`/`data` URLs resolved through `crates/net`, HTTP redirects honored). Link hit regions come from `RenderOutput::hit_regions` (the same paint pass as the pixels) and are resolved with `paint::find_link_at`; `--cookies` installs an explicit bounded session jar and `--origin` the CORS origin. Navigation regions come from the **same render** as the pixels, and paint's hit-testing API is purely geometric (no new input parser). There is still no JS in the host loop, forms, tabs, zoom or window-level DOM events, so the attack surface remains the render pipeline plus the already-bounded network surface.
 - **DOM identity**: generational `NodeId` handles (20-bit slot + 12-bit
   generation, free-list reuse) reject stale/foreign handles and give clear
   panics instead of corrupting the arena; `descendants`/`ancestors` are
@@ -121,8 +126,13 @@ after a fix is available.
   `NodeId` never leaves Rust and stale/foreign nodes raise a typed `TypeError`.
   No network, filesystem or wall-clock APIs are exposed to scripts. `render`
   wires the runtime into the pipeline with per-script + total budgets and the
-  script caps above; events/`EventTarget`, real-clock timers and CSSOM remain
-  pending (WP-A/WP-B/WP-6.4).
+  script caps above. **WP-A** adds `EventTarget`/`Event`/`CustomEvent` (capture
+  window→document→ancestors→target and bubbling) and a timer scheduler whose
+  clock is **only injectable from the Rust host** (`advance`/`run_until`); the
+  listener/timer state is rooted in the bounded per-realm host side table and
+  dispatch/timer queues are driven by the host, so scripts cannot reach network,
+  filesystem, real wall clock or another realm. CSSOM/`getComputedStyle` (WP-B)
+  and parser-inserted execution (WP-6.4) remain pending.
 
 ## Out of scope
 
