@@ -210,6 +210,78 @@ impl JsRuntime {
         result
     }
 
+    /// Installs the computed-style provider used by `window.getComputedStyle(element)`.
+    ///
+    /// The provider receives the live `Document` and the element `NodeId` and returns
+    /// CSS property/value pairs (e.g. from `css::ComputedStyle`). Without a provider,
+    /// `getComputedStyle` falls back to the element's inline declarations (read-only).
+    pub fn set_computed_style_provider(&mut self, provider: crate::host::ComputedStyleProvider) {
+        self.host.borrow_mut().computed_style_provider = Some(provider);
+    }
+
+    /// Takes the runtime's document out (the host keeps an empty one afterwards).
+    pub fn take_document(&mut self) -> Document {
+        let mut host = self.host.borrow_mut();
+        std::mem::replace(&mut host.document, Document::new())
+    }
+
+    /// Evaluates `script` against a **borrowed** document without taking ownership.
+    ///
+    /// A temporary runtime/realm is created around the document, the script runs with
+    /// `budget`, and the (possibly mutated) document is written back before returning.
+    /// This is the entry point used by the HTML harness to execute `<script>` elements
+    /// found in a parsed document.
+    pub fn eval_on_document(
+        document: &mut Document,
+        script: &str,
+        source_name: &str,
+        budget: &Budget,
+    ) -> Result<(), JsError> {
+        let owned = std::mem::replace(document, Document::new());
+        let mut runtime = Self::with_document(owned, "about:blank".to_string())?;
+        runtime.set_budget(*budget);
+        let result = runtime.eval(script, source_name).map(|_| ());
+        *document = runtime.take_document();
+        result
+    }
+
+    /// Dispatches a synthetic DOM event from Rust to the realm's registered listeners.
+    ///
+    /// `node = Some(id)` targets that node and bubbles through its ancestors;
+    /// `node = None` targets `window` (`DOMContentLoaded`/`load` style notifications).
+    /// Returns whether the event's default was **not** prevented.
+    pub fn dispatch_simple_event(
+        &mut self,
+        node: Option<NodeId>,
+        event_type: &str,
+        bubbles: bool,
+    ) -> Result<bool, JsError> {
+        let target = match node {
+            Some(node) => crate::events::JsEventTarget::Node(node),
+            None => crate::events::JsEventTarget::Window,
+        };
+        self.dispatch_event(target, event_type, bubbles)
+    }
+
+    /// Dispatches a synthetic DOM event to an explicit [`crate::events::JsEventTarget`].
+    ///
+    /// The target can be `Window`, `Document` (full EventTarget, useful for
+    /// `DOMContentLoaded`) or `Node(id)`. With `bubbles`, events dispatched on
+    /// `document` continue to `window`, and node events bubble to document/window.
+    /// Returns `Ok(true)` when the event's default was not prevented.
+    pub fn dispatch_event(
+        &mut self,
+        target: crate::events::JsEventTarget,
+        event_type: &str,
+        bubbles: bool,
+    ) -> Result<bool, JsError> {
+        let _scope = HostScope::enter(&self.host);
+        let result =
+            crate::events::dispatch_rust_event(&mut self.context, target, event_type, bubbles);
+        drop(_scope);
+        result
+    }
+
     /// Runs pending promise/microtask jobs (Boa's job queue).
     pub fn run_microtasks(&mut self) -> Result<(), JsError> {
         self.context
@@ -406,6 +478,7 @@ fn build_document_object(context: &mut Context) -> JsObject {
         Attribute::all(),
     );
     init.accessor(js_string!("URL"), Some(url), None, Attribute::all());
+    init.property(js_string!("__megi_document"), true, Attribute::all());
     for (name, length, function) in crate::events::node_methods() {
         init.function(native(function), js_string!(name), length);
     }
@@ -416,8 +489,24 @@ fn build_document_object(context: &mut Context) -> JsObject {
 // Node wrappers
 // ---------------------------------------------------------------------------
 
-/// Creates a JS wrapper for `node_id` (side-table handle + own accessors/methods).
-fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsValue> {
+/// Creates the JS wrapper for a side-table node handle (shared with events/utilities).
+pub(crate) fn wrap_handle_public(context: &mut Context, handle: u32) -> JsResult<JsValue> {
+    node_wrapper(context, handle)
+}
+
+/// Creates a JS wrapper for `node_id`, reusing the realm's cached object (identity).
+pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsValue> {
+    let cache = context
+        .global_object()
+        .get(js_string!("__megi_wrappers"), context)
+        .ok()
+        .and_then(|value| value.as_object());
+    if let Some(cache) = &cache
+        && let Ok(existing) = cache.get(js_string!(handle.to_string()), context)
+        && existing.is_object()
+    {
+        return Ok(existing);
+    }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
     let accessors: [(&str, AccessorKind); 12] = [
@@ -471,6 +560,10 @@ fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsValue> {
         ("insertBefore", 2, node_insert_before),
         ("removeChild", 1, node_remove_child),
         ("replaceChild", 2, node_replace_child),
+        ("matches", 1, node_matches),
+        ("closest", 1, node_closest),
+        ("insertAdjacentHTML", 2, node_insert_adjacent_html),
+        ("insertAdjacentText", 2, node_insert_adjacent_text),
     ] {
         init.function(native(function), js_string!(name), length);
     }
@@ -478,6 +571,14 @@ fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsValue> {
         init.function(native(function), js_string!(name), length);
     }
     let wrapper = init.build();
+    if let Some(cache) = &cache {
+        let _ = cache.set(
+            js_string!(handle.to_string()),
+            JsValue::from(wrapper.clone()),
+            false,
+            context,
+        );
+    }
     Ok(JsValue::from(wrapper))
 }
 
@@ -743,7 +844,7 @@ fn node_children(this: &JsValue, _args: &[JsValue], context: &mut Context) -> Js
             .collect::<Vec<_>>()
     })
     .unwrap_or_default();
-    wrap_list(context, children)
+    node_list(context, children)
 }
 
 fn node_parent_node(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
@@ -1015,7 +1116,7 @@ fn document_get_elements_by_tag_name(
 ) -> JsResult<JsValue> {
     let name = arg_string(args, 0, context)?;
     let nodes = with_host(|host| host.document.get_elements_by_tag_name(&name)).unwrap_or_default();
-    wrap_list(context, nodes)
+    node_list(context, nodes)
 }
 
 fn document_get_elements_by_class_name(
@@ -1123,6 +1224,184 @@ fn document_url(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> J
 }
 
 // ---------------------------------------------------------------------------
+// DOM utilities: NodeList, matches/closest, insertAdjacent*
+// ---------------------------------------------------------------------------
+
+/// Snapshot `NodeList` object (`length`, numeric indices, `item`, `forEach`).
+fn node_list(context: &mut Context, nodes: Vec<NodeId>) -> JsResult<JsValue> {
+    let mut wrappers = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        wrappers.push(wrap_node(context, node)?);
+    }
+    let item = accessor_fn(context, node_list_item);
+    let for_each = accessor_fn(context, node_list_for_each);
+    let mut init = ObjectInitializer::new(context);
+    init.property(js_string!("__megi_node_list"), true, Attribute::all());
+    for (index, wrapper) in wrappers.iter().enumerate() {
+        init.property(
+            js_string!(index.to_string()),
+            wrapper.clone(),
+            Attribute::all(),
+        );
+    }
+    init.property(
+        js_string!("length"),
+        f64::from(wrappers.len() as u32),
+        Attribute::all(),
+    )
+    .function(native(node_list_item), js_string!("item"), 1)
+    .function(native(node_list_for_each), js_string!("forEach"), 1);
+    let _ = (item, for_each);
+    Ok(JsValue::from(init.build()))
+}
+
+fn node_list_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let index = args
+        .first()
+        .and_then(JsValue::as_number)
+        .unwrap_or(0.0)
+        .max(0.0) as u64;
+    let object = this
+        .as_object()
+        .ok_or_else(|| js_error("invalid NodeList receiver"))?;
+    object
+        .get(js_string!(index.to_string()), context)
+        .map_err(|error| js_error(error.to_string()))
+}
+
+fn node_list_for_each(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let callback = args
+        .first()
+        .and_then(|value| value.as_object())
+        .ok_or_else(|| js_error("forEach expects a function"))?;
+    let object = this
+        .as_object()
+        .ok_or_else(|| js_error("invalid NodeList receiver"))?;
+    let length = object
+        .get(js_string!("length"), context)
+        .map_err(|error| js_error(error.to_string()))?
+        .as_number()
+        .unwrap_or(0.0) as u64;
+    for index in 0..length {
+        let item = object
+            .get(js_string!(index.to_string()), context)
+            .map_err(|error| js_error(error.to_string()))?;
+        callback
+            .call(
+                &JsValue::undefined(),
+                &[item, JsValue::from(index as f64)],
+                context,
+            )
+            .map_err(|error| js_error(error.to_string()))?;
+    }
+    Ok(JsValue::undefined())
+}
+
+fn node_matches(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node = this_node(this, context)?;
+    let selector = arg_string(args, 0, context)?;
+    let matched =
+        with_host(|host| css::query::matches(&host.document, node, &selector)).unwrap_or(false);
+    Ok(JsValue::from(matched))
+}
+
+fn node_closest(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node = this_node(this, context)?;
+    let selector = arg_string(args, 0, context)?;
+    let mut current = Some(node);
+    while let Some(candidate) = current {
+        if with_host(|host| css::query::matches(&host.document, candidate, &selector))
+            .unwrap_or(false)
+        {
+            return wrap_node(context, candidate);
+        }
+        current = with_host(|host| {
+            host.document
+                .try_node(candidate)
+                .and_then(|node| node.parent)
+        })
+        .flatten();
+    }
+    Ok(JsValue::null())
+}
+
+fn insert_relative(host: &mut crate::host::Host, target: NodeId, node: NodeId, position: &str) {
+    match position {
+        "beforebegin" => {
+            let parent = host.document.try_node(target).and_then(|node| node.parent);
+            if let Some(parent) = parent {
+                let _ = host
+                    .document
+                    .insert_before_child(parent, node, Some(target));
+            }
+        }
+        "afterbegin" => {
+            let first = host
+                .document
+                .try_node(target)
+                .and_then(|node| node.first_child);
+            let _ = host.document.insert_before_child(target, node, first);
+        }
+        "beforeend" => {
+            host.document.append_child(target, node);
+        }
+        "afterend" => {
+            let parent = host.document.try_node(target).and_then(|node| node.parent);
+            if let Some(parent) = parent {
+                let next = host
+                    .document
+                    .try_node(target)
+                    .and_then(|node| node.next_sibling);
+                let _ = host.document.insert_before_child(parent, node, next);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn node_insert_adjacent_html(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let target = this_node(this, context)?;
+    let position = arg_string(args, 0, context)?.to_ascii_lowercase();
+    let html_text = arg_string(args, 1, context)?;
+    with_host(|host| {
+        let temp = host
+            .document
+            .create_element(Namespace::Html, "div", Vec::new());
+        if html::set_inner_html(&mut host.document, temp, &html_text).is_err() {
+            return;
+        }
+        let children: Vec<NodeId> = host.document.children(temp).collect();
+        for child in children {
+            insert_relative(host, target, child, &position);
+        }
+    });
+    Ok(JsValue::undefined())
+}
+
+fn node_insert_adjacent_text(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let target = this_node(this, context)?;
+    let position = arg_string(args, 0, context)?.to_ascii_lowercase();
+    let text = arg_string(args, 1, context)?;
+    with_host(|host| {
+        let node = host.document.create_text_node(&text);
+        insert_relative(host, target, node, &position);
+    });
+    Ok(JsValue::undefined())
+}
+
+// ---------------------------------------------------------------------------
 // CSSOM: element.style and element.classList
 // ---------------------------------------------------------------------------
 
@@ -1181,6 +1460,15 @@ fn style_object(context: &mut Context, handle: u32) -> JsValue {
     for (name, get, set) in accessors {
         prepared.push((name, accessor_fn(context, get), accessor_fn(context, set)));
     }
+    let css_text_get = accessor_fn(context, style_css_text_get);
+    let css_text_set = accessor_fn(context, style_css_text_set);
+    let length_get = accessor_fn(context, style_length_get);
+    let methods: [(&str, usize, NativeFn); 4] = [
+        ("getPropertyValue", 1, style_get_property_value),
+        ("setProperty", 1, style_set_property),
+        ("removeProperty", 1, style_remove_property),
+        ("item", 1, style_item),
+    ];
     let mut init = ObjectInitializer::new(context);
     init.property(
         js_string!("__megi_node"),
@@ -1190,7 +1478,169 @@ fn style_object(context: &mut Context, handle: u32) -> JsValue {
     for (name, get, set) in prepared {
         init.accessor(js_string!(name), Some(get), Some(set), Attribute::all());
     }
+    init.accessor(
+        js_string!("cssText"),
+        Some(css_text_get),
+        Some(css_text_set),
+        Attribute::all(),
+    );
+    init.accessor(
+        js_string!("length"),
+        Some(length_get),
+        None,
+        Attribute::all(),
+    );
+    for (name, length, function) in methods {
+        init.function(native(function), js_string!(name), length);
+    }
     JsValue::from(init.build())
+}
+
+/// Resolves the inline-style node from a `style` object receiver.
+fn style_node(this: &JsValue, context: &mut Context) -> JsResult<NodeId> {
+    let object = this
+        .as_object()
+        .ok_or_else(|| js_error("style receiver is not an object"))?;
+    let handle = object
+        .get(js_string!("__megi_node"), context)
+        .map_err(|error| js_error(error.to_string()))?
+        .as_number()
+        .filter(|number| *number >= 0.0)
+        .map(|number| number as u32)
+        .ok_or_else(|| js_error("style receiver is not an element"))?;
+    with_host(|host| host.node_for_handle(handle))
+        .ok_or_else(|| js_error("no active JavaScript host"))?
+        .map_err(js_error)
+}
+
+fn inline_declarations(doc: &Document, node_id: NodeId) -> Vec<css::Declaration> {
+    doc.try_node(node_id)
+        .and_then(|node| node.as_element())
+        .and_then(|element| element.get_attribute("style"))
+        .map(css::parser::parse_list_of_declarations)
+        .unwrap_or_default()
+}
+
+fn write_inline_declarations(
+    doc: &mut Document,
+    node_id: NodeId,
+    declarations: &[css::Declaration],
+) -> Result<(), String> {
+    let text = declarations
+        .iter()
+        .map(|declaration| format!("{}: {};", declaration.name, declaration.raw_value))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let element = doc
+        .try_node_mut(node_id)
+        .and_then(|node| node.as_element_mut())
+        .ok_or_else(|| "node is not an element".to_string())?;
+    element.set_attribute(DomAttribute::new("style", text), true);
+    Ok(())
+}
+
+fn style_css_text_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = style_node(this, context)?;
+    let text = with_host(|host| {
+        inline_declarations(&host.document, node)
+            .iter()
+            .map(|declaration| format!("{}: {};", declaration.name, declaration.raw_value))
+            .collect::<Vec<_>>()
+            .join(" ")
+    })
+    .unwrap_or_default();
+    Ok(JsValue::from(js_string!(text)))
+}
+
+fn style_css_text_set(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = style_node(this, context)?;
+    let text = arg_string(args, 0, context)?;
+    let declarations = css::parser::parse_list_of_declarations(&text);
+    match with_host(|host| write_inline_declarations(&mut host.document, node, &declarations)) {
+        Some(Ok(())) => Ok(JsValue::undefined()),
+        Some(Err(message)) => Err(js_error(message)),
+        None => Err(js_error("no active JavaScript host")),
+    }
+}
+
+fn style_length_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node = style_node(this, context)?;
+    let length = with_host(|host| inline_declarations(&host.document, node).len()).unwrap_or(0);
+    Ok(JsValue::from(length as f64))
+}
+
+fn style_get_property_value(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = style_node(this, context)?;
+    let name = arg_string(args, 0, context)?;
+    let value = with_host(|host| inline_style_value(&host.document, node, &name)).flatten();
+    Ok(JsValue::from(js_string!(value.unwrap_or_default())))
+}
+
+fn style_set_property(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = style_node(this, context)?;
+    let name = arg_string(args, 0, context)?;
+    let value = arg_string(args, 1, context)?;
+    match with_host(|host| set_inline_style(&mut host.document, node, &name, &value)) {
+        Some(Ok(())) => Ok(JsValue::undefined()),
+        Some(Err(message)) => Err(js_error(message)),
+        None => Err(js_error("no active JavaScript host")),
+    }
+}
+
+fn style_remove_property(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = style_node(this, context)?;
+    let name = arg_string(args, 0, context)?;
+    let previous = with_host(|host| {
+        let mut declarations = inline_declarations(&host.document, node);
+        let previous = declarations
+            .iter()
+            .find(|declaration| declaration.name.eq_ignore_ascii_case(&name))
+            .map(|declaration| declaration.raw_value.clone())
+            .unwrap_or_default();
+        declarations.retain(|declaration| !declaration.name.eq_ignore_ascii_case(&name));
+        let _ = write_inline_declarations(&mut host.document, node, &declarations);
+        previous
+    })
+    .unwrap_or_default();
+    Ok(JsValue::from(js_string!(previous)))
+}
+
+fn style_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node = style_node(this, context)?;
+    let index = args
+        .first()
+        .and_then(JsValue::as_number)
+        .unwrap_or(0.0)
+        .max(0.0) as usize;
+    let name = with_host(|host| {
+        inline_declarations(&host.document, node)
+            .into_iter()
+            .nth(index)
+            .map(|declaration| declaration.name)
+    })
+    .flatten()
+    .unwrap_or_default();
+    Ok(JsValue::from(js_string!(name)))
 }
 
 fn inline_style_value(doc: &Document, node_id: NodeId, property: &str) -> Option<String> {

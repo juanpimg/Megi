@@ -31,29 +31,43 @@
 //!   what became due (deterministic tests); [`JsRuntime::pending_timers`] reports the queue.
 //!   [`JsRuntime::run_microtasks`] runs Boa promise jobs.
 //!
-//! ## Pending (WP-B)
+//! ## Rust-facing APIs (block 0, used by the HTML harness)
 //!
-//! Still minimal: `element.style` exposes the common CSS properties only (no full
-//! `CSSStyleDeclaration`/`cssText`), there is no `getComputedStyle` provider, `NodeList`
-//! live objects, `matches`/`closest`, `insertAdjacentHTML/Text` or wrapper identity cache,
-//! and `removeEventListener` may remove more than one matching listener (documented
-//! simplification). Those land in WP-B.
+//! - [`JsRuntime::eval_on_document`] evaluates a script against a **borrowed**
+//!   `&mut dom::Document` (temporary realm, applies [`Budget`], writes the document back
+//!   even when the script fails).
+//! - [`JsRuntime::dispatch_simple_event`] dispatches a synthetic DOM event from Rust
+//!   (`Some(NodeId)` targets a node and bubbles; `None` targets `window`, useful for
+//!   `DOMContentLoaded`/`load`), returning whether the default was not prevented.
+//! - [`JsRuntime::dispatch_event`] takes an explicit [`JsEventTarget`] (`Window`,
+//!   `Document` or `Node(NodeId)`); `document` is a full EventTarget in JS too
+//!   (`document.addEventListener`/`dispatchEvent`).
+//! - [`JsRuntime::take_document`] extracts the runtime's document (e.g. after an
+//!   instance-level [`JsRuntime::eval`]).
 //!
-//! ## Safety model
+//! ## WP-B: CSSOM and DOM utilities
 //!
-//! The bridge lives in [`host`]: JS objects only carry a numeric side-table handle; the
-//! real `NodeId` (generation-checked arena slot) stays in Rust and is revalidated with
-//! `Document::try_node` on every access. A stale or foreign node therefore raises a typed
-//! JS `TypeError` ([`JsError::Dom`] when surfaced from Rust) instead of panicking or
-//! touching freed memory. Native callbacks reach the host through a per-thread scope
-//! installed by `eval`, so parallel test threads never share a realm.
+//! - `element.style` is a `CSSStyleDeclaration`-like object: common camelCase properties
+//!   as accessors, plus `cssText` (get/set), `length`, `item(i)`,
+//!   `getPropertyValue`/`setProperty`/`removeProperty` for **any** CSS property; it writes
+//!   the inline `style` attribute, so it stays coherent with `getAttribute("style")`.
+//!   Arbitrary `style.fooBar = ...` assignments are not intercepted (no Proxy): use
+//!   `setProperty('foo-bar', value)` (documented limitation).
+//! - `window.getComputedStyle(element)` returns a read-only declaration object:
+//!   `getPropertyValue`, `item`, `length`, `cssText` and kebab-case data properties. The
+//!   host injects the values with [`JsRuntime::set_computed_style_provider`]
+//!   (`Box<dyn Fn(&Document, NodeId) -> Vec<(String, String)> + Send + Sync>`); without a
+//!   provider it falls back to the element's inline declarations.
+//! - `children`/`querySelectorAll`/`getElementsByTagName`/`getElementsByClassName` return
+//!   **snapshot** `NodeList` objects (`length`, index access, `item`, `forEach`).
+//! - `matches(selector)`, `closest(selector)`, `insertAdjacentHTML(where, html)` and
+//!   `insertAdjacentText(where, text)` are available on node wrappers.
+//! - **Wrapper identity cache**: one JS object per `(realm, NodeId)`, so
+//!   `el === document.getElementById(id)` and `querySelector(...) === el` hold.
 //!
-//! ## Not included yet
-//!
-//! `<script>` execution during parsing / external scripts / `defer`/`async`, event
-//! listeners and wall-clock timers, `getComputedStyle`, live `NodeList`s,
-//! `MutationObserver`, modules, workers, fetch/XHR, and DOM↔JS wrapper identity caching
-//! (each access returns a fresh wrapper). `render` integration is the next round.
+//! Limits: NodeLists are snapshots (not live), `getComputedStyle` values depend entirely on
+//! the injected provider (no style resolution inside `js`), and computed declarations are
+//! read-only (`setProperty` throws a `TypeError`).
 //!
 //! ## Feature layout
 //!
@@ -73,6 +87,8 @@ pub mod host;
 pub mod runtime;
 
 pub use error::JsError;
+#[cfg(feature = "js")]
+pub use events::JsEventTarget;
 #[cfg(feature = "js")]
 pub use host::ConsoleEntry;
 #[cfg(feature = "js")]

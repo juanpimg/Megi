@@ -66,6 +66,10 @@ pub(crate) struct TimerEntry {
     pub interval_ms: Option<u64>,
 }
 
+/// Computed-style provider injected by the host (`window.getComputedStyle`).
+pub type ComputedStyleProvider =
+    Box<dyn Fn(&Document, NodeId) -> Vec<(String, String)> + Send + Sync>;
+
 /// Shared, mutable host state.
 pub(crate) struct Host {
     /// The document scripts operate on.
@@ -94,6 +98,8 @@ pub(crate) struct Host {
     pub virtual_now_ms: Option<u64>,
     /// Dispatch state of the event currently being delivered.
     pub dispatch: Option<DispatchState>,
+    /// Injected computed-style provider.
+    pub computed_style_provider: Option<ComputedStyleProvider>,
 }
 
 impl Host {
@@ -113,6 +119,7 @@ impl Host {
             started_at: Instant::now(),
             virtual_now_ms: None,
             dispatch: None,
+            computed_style_provider: None,
         }
     }
 

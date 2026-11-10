@@ -24,6 +24,17 @@ use crate::host::{DispatchState, Listener, TargetKey, TimerEntry, with_host};
 
 type NativeFn = fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>;
 
+/// Target of a synthetic event dispatched from Rust.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JsEventTarget {
+    /// The `window` global (bubbles only within window/document capture path).
+    Window,
+    /// The `document` object; with `bubbles` the event continues to `window`.
+    Document,
+    /// A DOM node, bubbling through its ancestors when requested.
+    Node(dom::NodeId),
+}
+
 pub(crate) fn js_error(message: impl Into<String>) -> boa_engine::JsError {
     JsNativeError::typ().with_message(message.into()).into()
 }
@@ -106,6 +117,7 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
         "__megi_listeners",
         "__megi_timer_callbacks",
         "__megi_timer_args",
+        "__megi_wrappers",
     ] {
         let array = JsArray::new(context);
         global_set(context, name, JsValue::from(array));
@@ -131,16 +143,21 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
     Ok(())
 }
 
-pub(crate) fn window_methods() -> [(&'static str, usize, NativeFn); 3] {
+pub(crate) fn window_methods() -> [(&'static str, usize, NativeFn); 4] {
+    [
+        ("addEventListener", 2, add_listener),
+        ("removeEventListener", 2, remove_listener),
+        ("dispatchEvent", 1, dispatch_event),
+        ("getComputedStyle", 1, get_computed_style),
+    ]
+}
+
+pub(crate) fn node_methods() -> [(&'static str, usize, NativeFn); 3] {
     [
         ("addEventListener", 2, add_listener),
         ("removeEventListener", 2, remove_listener),
         ("dispatchEvent", 1, dispatch_event),
     ]
-}
-
-pub(crate) fn node_methods() -> [(&'static str, usize, NativeFn); 3] {
-    window_methods()
 }
 
 fn target_key(this: &JsValue, context: &mut Context) -> JsResult<TargetKey> {
@@ -439,6 +456,25 @@ fn dispatch_event(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
 }
 
 fn propagation_path(target: TargetKey, bubbles: bool) -> Vec<(bool, TargetKey)> {
+    // Dispatch on `window`: document listeners still see the capture phase (the harness
+    // relies on this for DOMContentLoaded), and the window listeners run once.
+    if target == TargetKey::Window {
+        return vec![
+            (true, TargetKey::Window),
+            (true, TargetKey::Document),
+            (false, TargetKey::Window),
+        ];
+    }
+    // Dispatch on `document`: capture from window, then the target itself once, then a
+    // single bubble leg to window when requested.
+    if target == TargetKey::Document {
+        let mut path = vec![(true, TargetKey::Window), (true, TargetKey::Document)];
+        path.push((false, TargetKey::Document));
+        if bubbles {
+            path.push((false, TargetKey::Window));
+        }
+        return path;
+    }
     let mut ancestors: Vec<TargetKey> = Vec::new();
     if let TargetKey::Node(handle) = target
         && let Ok(node) = node_id_of(handle)
@@ -514,6 +550,202 @@ fn deliver(
         }
     }
     Ok(())
+}
+
+/// Dispatches a synthetic event from Rust to the current realm's listeners.
+///
+/// `target` selects `window`, the `document` object or a DOM node (bubbling through its
+/// ancestors). Returns `Ok(false)` when a listener called `preventDefault()`.
+pub(crate) fn dispatch_rust_event(
+    context: &mut Context,
+    target: JsEventTarget,
+    event_type: &str,
+    bubbles: bool,
+) -> Result<bool, CrateJsError> {
+    let target = match target {
+        JsEventTarget::Window => TargetKey::Window,
+        JsEventTarget::Document => TargetKey::Document,
+        JsEventTarget::Node(node) => {
+            let handle = with_host(|host| host.handle_for(node))
+                .ok_or_else(|| CrateJsError::Internal("no active JavaScript host".to_string()))?
+                .map_err(CrateJsError::Dom)?;
+            TargetKey::Node(handle)
+        }
+    };
+    let event = build_event(context, event_type, bubbles, true, JsValue::undefined());
+    let target_js = match target {
+        TargetKey::Window => JsValue::from(context.global_object()),
+        TargetKey::Document => global_get(context, "document")
+            .map_err(|error| CrateJsError::Internal(error.to_string()))?,
+        TargetKey::Node(handle) => crate::runtime::wrap_handle_public(context, handle)
+            .map_err(|error| CrateJsError::Runtime(error.to_string()))?,
+    };
+    let Some(event_object) = event.as_object() else {
+        return Err(CrateJsError::Internal(
+            "event object is not an object".to_string(),
+        ));
+    };
+    let _ = event_object.set(js_string!("target"), target_js.clone(), false, context);
+    let path = propagation_path(target, bubbles);
+    let _ = with_host(|host| host.dispatch = Some(DispatchState::default()));
+    for (capture_phase, key) in &path {
+        let stopped = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_propagation))
+            .flatten()
+            .unwrap_or(false);
+        if stopped {
+            break;
+        }
+        deliver(context, *key, *capture_phase, event_type, &event_object)
+            .map_err(|error| CrateJsError::Runtime(error.to_string()))?;
+        let immediate = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_immediate))
+            .flatten()
+            .unwrap_or(false);
+        if immediate {
+            break;
+        }
+    }
+    let prevented = with_host(|host| host.dispatch.map(|dispatch| dispatch.prevent_default))
+        .flatten()
+        .unwrap_or(false);
+    let _ = with_host(|host| host.dispatch = None);
+    Ok(!prevented)
+}
+
+// ---------------------------------------------------------------------------
+// getComputedStyle
+// ---------------------------------------------------------------------------
+
+fn get_computed_style(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = args
+        .first()
+        .and_then(|value| value.as_object())
+        .and_then(|object| {
+            prop(&object, "__megi_node", context)
+                .ok()
+                .and_then(|value| value.as_number())
+                .map(|value| value as u32)
+        })
+        .ok_or_else(|| js_error("getComputedStyle expects an element"))?;
+    let node_id = node_id_of(node)?;
+    let pairs = with_host(|host| {
+        host.computed_style_provider
+            .as_ref()
+            .map(|provider| provider(&host.document, node_id))
+    })
+    .flatten()
+    .unwrap_or_else(|| {
+        with_host(|host| {
+            host.document
+                .try_node(node_id)
+                .and_then(|node| node.as_element())
+                .and_then(|element| element.get_attribute("style"))
+                .map(|style| {
+                    css::parser::parse_list_of_declarations(style)
+                        .into_iter()
+                        .map(|declaration| (declaration.name, declaration.raw_value))
+                        .collect()
+                })
+        })
+        .flatten()
+        .unwrap_or_default()
+    });
+    let getter = accessor_fn(context, computed_get_property);
+    let setter = accessor_fn(context, computed_set_property);
+    let item = accessor_fn(context, computed_item);
+    let names = JsArray::new(context);
+    for (name, _value) in &pairs {
+        let _ = names.push(js_string!(name.clone()), context);
+    }
+    let mut init = ObjectInitializer::new(context);
+    init.property(js_string!("__megi_computed"), true, Attribute::all())
+        .property(
+            js_string!("__megi_computed_names"),
+            JsValue::from(names),
+            Attribute::all(),
+        );
+    for (name, value) in &pairs {
+        init.property(
+            js_string!(name.clone()),
+            js_string!(value.clone()),
+            Attribute::all(),
+        );
+    }
+    init.property(
+        js_string!("length"),
+        f64::from(pairs.len() as u32),
+        Attribute::all(),
+    )
+    .function(
+        NativeFunction::from_fn_ptr(computed_get_property),
+        js_string!("getPropertyValue"),
+        1,
+    )
+    .function(
+        NativeFunction::from_fn_ptr(computed_set_property),
+        js_string!("setProperty"),
+        2,
+    )
+    .function(
+        NativeFunction::from_fn_ptr(computed_item),
+        js_string!("item"),
+        1,
+    );
+    let css_text = pairs
+        .iter()
+        .map(|(name, value)| format!("{name}: {value};"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    init.property(
+        js_string!("cssText"),
+        js_string!(css_text),
+        Attribute::all(),
+    );
+    let _ = (getter, setter, item);
+    Ok(JsValue::from(init.build()))
+}
+
+fn computed_get_property(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let name = arg_string(args, 0, context)?;
+    let object = this
+        .as_object()
+        .ok_or_else(|| js_error("invalid computed style receiver"))?;
+    let value = prop(&object, &name, context).unwrap_or_else(|_| JsValue::from(js_string!("")));
+    Ok(value)
+}
+
+fn computed_set_property(
+    _this: &JsValue,
+    _args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<JsValue> {
+    Err(js_error("computed styles are read-only"))
+}
+
+fn computed_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let index = args
+        .first()
+        .and_then(JsValue::as_number)
+        .unwrap_or(0.0)
+        .max(0.0) as u64;
+    let object = this
+        .as_object()
+        .ok_or_else(|| js_error("invalid computed style receiver"))?;
+    let names = prop(&object, "__megi_computed_names", context)?;
+    let names = names
+        .as_object()
+        .ok_or_else(|| js_error("computed style names missing"))?;
+    let name = names
+        .get(js_string!(index.to_string()), context)
+        .map_err(|error| js_error(error.to_string()))?;
+    Ok(name)
 }
 
 // ---------------------------------------------------------------------------
