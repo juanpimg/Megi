@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `b5b7e3c` (2026-11-11) · overall **95%** · **1,448** tests · conformance **PASS** · **14** crates · **117,954** lines of Rust
+**Snapshot** — commit `13abb82` (2026-11-11) · overall **97%** · **1,449** tests · conformance **PASS** · **14** crates · **118,020** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -18,10 +18,10 @@
 | **F2** | CSS parsing, cascade & selectors | `████████████████████` | 100% |
 | **F3** | Layout (box tree, BFC, IFC, grid & flex) | `████████████████████` | 100% |
 | **F4** | Paint, raster & SVG | `████████████████████` | 99% |
-| **F5** | Networking & fetch | `███████████████████░` | 97% |
+| **F5** | Networking & fetch | `████████████████████` | 99% |
 | **F6** | JavaScript & DOM APIs | `██████████████████░░` | 90% |
-| **F7** | Desktop shell (browser UI) | `████████████████░░░░` | 80% |
-| | **Overall** | `███████████████████░` | **95%** |
+| **F7** | Desktop shell (browser UI) | `██████████████████░░` | 90% |
+| | **Overall** | `███████████████████░` | **97%** |
 
 ## What is done and what remains
 
@@ -67,26 +67,30 @@
 - Borders by side/styles, border-radius, box/text shadows and layered backgrounds
 - From-scratch PNG encoder (deterministic), gradients and background geometry
 - SVG crate wired into render (shapes/paths/text/patterns), web fonts (WOFF2)
+- SVG clipPath/mask/basic filters; CSS filters, mix-blend-mode and image-set()
 
 **Pending**
 
-- image-set() and broader color()/display-p3/advanced-space coverage
-- SVG filters/masks and SVG animation
+- Broader color()/display-p3/advanced color-space coverage
+- SVG text-on-path, feColorMatrix/feBlend/feMerge and SVG animation
 - Rasterizer/decoder performance budgets (docs/PERFORMANCE.md: IFC/PNG/decoder)
-- Full SVG text-on-path coverage
+- Backdrop-filter and layer-accurate group effects
 
-### F5 — Networking & fetch (97%)
+### F5 — Networking & fetch (99%)
 
 **Done**
 
 - WHATWG URL subset, HTTP/1.1 client, TLS (rustls), redirects and MIME sniffing
 - In-memory cache, cookies (RFC 6265), SameSite + public-suffix list, CORS subset
 - gzip/deflate with anti-bomb caps, Referrer-Policy, Range/206 and HEAD
+- HTTP/2 MVP (HPACK, framing, ALPN h2 with HTTP/1.1 fallback)
+- From-scratch JPEG baseline and GIF87a/89a decoders wired into render by sniffing
 
 **Pending**
 
-- HTTP/2 and streaming bodies (responses are still buffered)
-- Preload hints, connection pooling and full CORS preflight edge cases
+- HTTP/2 multiplexing, full flow control, push/priorities, h2c, trailers and request bodies
+- Streaming bodies (responses are still buffered), complete PSL and multi-range
+- WebP, EXIF orientation and image decode performance budgets
 
 ### F6 — JavaScript & DOM APIs (90%)
 
@@ -102,7 +106,7 @@
 - More browser APIs (fetch/XHR, localStorage, workers) and live NodeList parity
 - JS conformance/differential testing beyond the current smoke suites
 
-### F7 — Desktop shell (browser UI) (80%)
+### F7 — Desktop shell (browser UI) (90%)
 
 **Done**
 
@@ -110,21 +114,22 @@
 - Scroll, HiDPI, history, links, zoom, auto-refresh and status feedback
 - Form controls (UA styles, focus, editing, checkboxes, buttons), find-in-page
 - Tabs with per-tab history/scroll/zoom/find state and keyboard shortcuts
+- Browser chrome: address bar, tab strip with hit-testing/overflow and select dropdown
 
 **Pending**
 
-- Visual tab bar and native menu
-- Downloads, bookmarks, address bar and persistent session
-- Per-tab process isolation and accessibility tree
+- Address autocomplete/history, favicons/icons and overflow menu
+- Multi-select/native widgets, downloads, bookmarks and persistent session
+- Per-tab process isolation, accessibility tree and visual history polish
 
 ## Repository statistics (measured)
 
 | Metric | Value |
 |---|---|
-| Commit | `b5b7e3c` (2026-11-11) |
+| Commit | `13abb82` (2026-11-11) |
 | Crates in the workspace | 14 |
-| Lines of Rust (tracked `.rs`) | 117954 |
-| Tests (`cargo test --workspace -- --list`) | 1448 |
+| Lines of Rust (tracked `.rs`) | 118020 |
+| Tests (`cargo test --workspace -- --list`) | 1449 |
 | Crates with `#![forbid(unsafe_code)]` | 12 / 14 |
 | Conformance gate | **PASS** |
 
@@ -141,21 +146,21 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 
 ## Recent rounds
 
+- **Round 22** — JPEG/GIF, SVG effects, HTTP/2 MVP, shell chrome, full grid and CSS filters
 - **Round 21** — performance-budget recovery without raising budgets
 - **Round 20** — custom-property performance fix, conic gradients, mixed calc, typography/sticky, shell tabs and E2E benchmarks
 - **Round 19** — CSS gradients, advanced grid, renderer referrer/state and shell find-in-page
 - **Round 18** — expanded fuzzing, real clipping, Grid MVP, modern CSS and advanced networking
 - **Round 17** — flexbox MVP, rounded corners/shadows, editable forms and SVG pattern/text
-- **Round 16** — real SVG CSS/gradients, multi-layer backgrounds and browser APIs wired into render
 
 ## Next up
 
-- HTTP/2 + streaming fetch (large pages currently buffered)
+- HTTP/2 multiplexing, full flow control and streaming bodies
+- Broader color()/display-p3 coverage and advanced color spaces
 - ES modules and dynamic import in the JS runtime
-- Grid dense packing/areas and remaining table-layout depth
-- Visual tab bar, address bar and downloads in the shell
-- Rasterizer/IFC/PNG performance budgets from docs/PERFORMANCE.md
-- Longer fuzz campaigns (nightly 5-min smoke only today)
+- SVG text-on-path, feColorMatrix/feBlend/feMerge and SVG animation
+- WebP/EXIF orientation and image decode performance budgets
+- Longer fuzz campaigns incl. JPEG/GIF and HPACK
 
 ## Cross-cutting areas
 
@@ -174,4 +179,4 @@ python3 tools/update_progress.py --write --no-gate  # skip the conformance gate
 python3 tools/update_progress.py --check --no-gate --no-count  # CI freshness
 ```
 
-_Last manifest update by: harness-integrity (round 20). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
+_Last manifest update by: docs (round 22). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
