@@ -1067,6 +1067,123 @@ impl BackgroundPosition {
     }
 }
 
+/// Computed `background-origin` (CSS Backgrounds 3 §2.7): the box whose
+/// rectangle is the positioning area for `background-size`/`-position`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BackgroundOrigin {
+    /// Position relative to the border box.
+    BorderBox,
+    /// Position relative to the padding box (initial value).
+    #[default]
+    PaddingBox,
+    /// Position relative to the content box.
+    ContentBox,
+}
+
+impl BackgroundOrigin {
+    /// Parses `border-box`, `padding-box` or `content-box`.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "border-box" => Some(Self::BorderBox),
+            "padding-box" => Some(Self::PaddingBox),
+            "content-box" => Some(Self::ContentBox),
+            _ => None,
+        }
+    }
+}
+
+/// Computed `background-clip` (CSS Backgrounds 3 §2.7): the box that clips the
+/// painted background layer.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BackgroundClip {
+    /// Clip to the border box (initial value).
+    #[default]
+    BorderBox,
+    /// Clip to the padding box.
+    PaddingBox,
+    /// Clip to the content box.
+    ContentBox,
+    /// Clip to the element's text (`background-clip: text`).
+    ///
+    /// Parsed for forward compatibility but **not implemented** by the Phase 7
+    /// painter, which falls back to the border box and documents the limitation.
+    Text,
+}
+
+impl BackgroundClip {
+    /// Parses `border-box`, `padding-box`, `content-box` or `text`.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "border-box" => Some(Self::BorderBox),
+            "padding-box" => Some(Self::PaddingBox),
+            "content-box" => Some(Self::ContentBox),
+            "text" => Some(Self::Text),
+            _ => None,
+        }
+    }
+}
+
+/// Computed `background-attachment` (CSS Backgrounds 3 §2.6).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BackgroundAttachment {
+    /// The background is fixed to the element's box (initial value).
+    #[default]
+    Scroll,
+    /// The background is fixed to the viewport.
+    ///
+    /// The Phase 7 renderer has no scrolling, so this is equivalent to
+    /// positioning the layer against the render viewport rectangle (documented).
+    Fixed,
+}
+
+impl BackgroundAttachment {
+    /// Parses `scroll` or `fixed`.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "scroll" => Some(Self::Scroll),
+            "fixed" => Some(Self::Fixed),
+            _ => None,
+        }
+    }
+}
+
+/// One computed `background-image` layer (CSS Backgrounds 3 §3.1).
+///
+/// Multi-layer backgrounds are stored bottom-to-top in
+/// [`ComputedStyle::background_layers`]; because CSS lists the top layer first,
+/// the painter iterates the list in reverse order.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BackgroundLayer {
+    /// `background-image` URL of this layer (raw, unresolved); `None` for `none`.
+    pub image: Option<String>,
+    /// Repetition on each axis.
+    pub repeat: BackgroundRepeat,
+    /// Tile sizing.
+    pub size: BackgroundSize,
+    /// Tile position.
+    pub position: BackgroundPosition,
+    /// Positioning-area box.
+    pub origin: BackgroundOrigin,
+    /// Painting clip box.
+    pub clip: BackgroundClip,
+    /// Viewport/element attachment.
+    pub attachment: BackgroundAttachment,
+}
+
+impl Default for BackgroundLayer {
+    fn default() -> Self {
+        Self {
+            image: None,
+            repeat: BackgroundRepeat::REPEAT,
+            size: BackgroundSize::Auto,
+            position: BackgroundPosition::ZERO,
+            origin: BackgroundOrigin::PaddingBox,
+            clip: BackgroundClip::BorderBox,
+            attachment: BackgroundAttachment::Scroll,
+        }
+    }
+}
+
 /// Complete computed style for an element in the DOM tree.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComputedStyle {
@@ -1131,6 +1248,15 @@ pub struct ComputedStyle {
     /// 4/5/6 golden fixtures), while applying full CSS tiling as soon as the new
     /// background properties are authored. See [`crate::ComputedStyle::background_image`].
     pub background_geometry_explicit: bool,
+    /// Computed `background-image` layers (CSS Backgrounds 3 §3.1).
+    ///
+    /// Stored **top layer first**, exactly as authored
+    /// (`background-image: url(top), url(bottom)`), so the painter paints them in
+    /// reverse order (bottom-to-top). Empty when only the legacy scalar fields
+    /// are used; [`ComputedStyle::background_image`] and the scalar
+    /// repeat/size/position fields mirror the first layer for compatibility with
+    /// the `render` image loader and the Phase 4/5/6 golden fixtures.
+    pub background_layers: Vec<BackgroundLayer>,
 
     // Typography
     pub font_size: f32,
@@ -1221,6 +1347,7 @@ impl ComputedStyle {
             background_size: BackgroundSize::Auto,
             background_position: BackgroundPosition::ZERO,
             background_geometry_explicit: false,
+            background_layers: Vec::new(),
 
             font_size: 16.0,
             font_weight: 400,
@@ -1381,10 +1508,14 @@ impl ComputedStyle {
 
         let background_color = Self::compute_background_color(&entries, color);
         // Images are not inherited; `none`, gradients and invalid values compute to `None`.
-        let background_image = find_declaration(&entries, "background-image")
-            .and_then(|d| parse_image_value(&d.raw_value));
-        let (background_repeat, background_size, background_position, background_geometry_explicit) =
-            Self::compute_background_geometry(&entries, font_size, root_font_size);
+        // The scalar fields mirror the first (top-most) background layer so the
+        // existing single-image render loader keeps working unchanged.
+        let (background_layers, background_geometry_explicit) =
+            Self::compute_background_layers(&entries, font_size, root_font_size);
+        let first_layer = background_layers.first().cloned().unwrap_or_default();
+        let background_image = first_layer.image.clone();
+        let (background_repeat, background_size, background_position) =
+            (first_layer.repeat, first_layer.size, first_layer.position);
         let list_style_image = find_declaration(&entries, "list-style-image")
             .and_then(|d| parse_image_value(&d.raw_value));
 
@@ -1489,6 +1620,7 @@ impl ComputedStyle {
             background_size,
             background_position,
             background_geometry_explicit,
+            background_layers,
             font_size,
             font_weight,
             font_style,
@@ -1664,58 +1796,114 @@ impl ComputedStyle {
         }
     }
 
-    /// Computes `background-repeat`, `background-size` and `background-position`
-    /// (CSS Backgrounds 3 §2.3–2.5) and whether they were explicitly authored.
+    /// Computes the `background-image` layers (CSS Backgrounds 3 §3).
     ///
-    /// Background geometry is never inherited. Longhands take precedence over the
-    /// `background` shorthand; missing or invalid components use their initial
-    /// values (`repeat`, `auto`, `0% 0%`). The `background` shorthand is expanded
-    /// before the cascade by [`crate::shorthand`]; the fallback below keeps direct
-    /// [`ComputedStyle::compute`] callers working.
-    fn compute_background_geometry(
+    /// Returns the layers **top-first** and whether any background geometry was
+    /// authored (repeat/size/position/origin/clip/attachment longhands, the
+    /// `background` shorthand, or more than one image layer). Documents that only
+    /// declare a single `background-image` keep
+    /// [`background_geometry_explicit`](Self::background_geometry_explicit) `false`
+    /// so the painter keeps the legacy stretch behaviour of the existing goldens.
+    ///
+    /// The number of layers is determined by the `background-image` list; other
+    /// longhand lists are repeated cyclically (CSS Backgrounds 3 §3.1).
+    fn compute_background_layers(
         entries: &[(&str, &Declaration)],
         font_size: f32,
         root_font_size: f32,
-    ) -> (BackgroundRepeat, BackgroundSize, BackgroundPosition, bool) {
+    ) -> (Vec<BackgroundLayer>, bool) {
+        let image_decl = find_declaration(entries, "background-image");
         let repeat_decl = find_declaration(entries, "background-repeat");
         let size_decl = find_declaration(entries, "background-size");
         let position_decl = find_declaration(entries, "background-position");
+        let origin_decl = find_declaration(entries, "background-origin");
+        let clip_decl = find_declaration(entries, "background-clip");
+        let attachment_decl = find_declaration(entries, "background-attachment");
         let shorthand = find_declaration(entries, "background");
+
+        let image_values: Vec<Option<String>> = image_decl
+            .map(|decl| {
+                split_top_level_commas(&decl.raw_value)
+                    .iter()
+                    .map(|component| parse_image_value(component))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let layers_count = image_values.len().max(1);
+        // The `background` shorthand is expanded before the cascade; this fallback
+        // keeps direct `ComputedStyle::compute` callers working (single layer).
+        let shorthand_tokens =
+            shorthand.and_then(|decl| parse_background_shorthand_tokens(&decl.raw_value));
+
         let explicit = repeat_decl.is_some()
             || size_decl.is_some()
             || position_decl.is_some()
-            || shorthand.is_some();
+            || origin_decl.is_some()
+            || clip_decl.is_some()
+            || attachment_decl.is_some()
+            || shorthand.is_some()
+            || layers_count > 1;
 
-        let tokens = shorthand.and_then(|decl| parse_background_shorthand_tokens(&decl.raw_value));
+        let repeats = cycle_property_list(
+            repeat_decl,
+            BackgroundRepeat::parse,
+            layers_count,
+            BackgroundRepeat::REPEAT,
+        );
+        let sizes = cycle_property_list(
+            size_decl,
+            |value| BackgroundSize::parse(value, font_size, root_font_size),
+            layers_count,
+            BackgroundSize::Auto,
+        );
+        let positions = cycle_property_list(
+            position_decl,
+            |value| BackgroundPosition::parse(value, font_size, root_font_size),
+            layers_count,
+            BackgroundPosition::ZERO,
+        );
+        let origins = cycle_property_list(
+            origin_decl,
+            BackgroundOrigin::parse,
+            layers_count,
+            BackgroundOrigin::PaddingBox,
+        );
+        let clips = cycle_property_list(
+            clip_decl,
+            BackgroundClip::parse,
+            layers_count,
+            BackgroundClip::BorderBox,
+        );
+        let attachments = cycle_property_list(
+            attachment_decl,
+            BackgroundAttachment::parse,
+            layers_count,
+            BackgroundAttachment::Scroll,
+        );
 
-        let repeat = repeat_decl
-            .and_then(|decl| BackgroundRepeat::parse(&decl.raw_value))
-            .or_else(|| {
-                tokens
-                    .as_ref()
-                    .and_then(|tokens| tokens.repeat.as_deref())
-                    .and_then(BackgroundRepeat::parse)
-            })
-            .unwrap_or_default();
-        let size = size_decl
-            .and_then(|decl| BackgroundSize::parse(&decl.raw_value, font_size, root_font_size))
-            .or_else(|| {
-                tokens
-                    .as_ref()
-                    .and_then(|tokens| tokens.size.as_deref())
-                    .and_then(|value| BackgroundSize::parse(value, font_size, root_font_size))
-            })
-            .unwrap_or_default();
-        let position = position_decl
-            .and_then(|decl| BackgroundPosition::parse(&decl.raw_value, font_size, root_font_size))
-            .or_else(|| {
-                tokens
-                    .as_ref()
-                    .and_then(|tokens| tokens.position.as_deref())
-                    .and_then(|value| BackgroundPosition::parse(value, font_size, root_font_size))
-            })
-            .unwrap_or(BackgroundPosition::ZERO);
-        (repeat, size, position, explicit)
+        let mut layers = Vec::with_capacity(layers_count);
+        for index in 0..layers_count {
+            let image = image_values
+                .get(index.min(image_values.len().saturating_sub(1)))
+                .cloned()
+                .flatten()
+                .or_else(|| {
+                    shorthand_tokens
+                        .as_ref()
+                        .and_then(|tokens| tokens.image.clone())
+                        .and_then(|value| parse_image_value(&value))
+                });
+            layers.push(BackgroundLayer {
+                image,
+                repeat: repeats[index],
+                size: sizes[index],
+                position: positions[index],
+                origin: origins[index],
+                clip: clips[index],
+                attachment: attachments[index],
+            });
+        }
+        (layers, explicit)
     }
 
     /// Extracts the background color from `background-color` or the `background` shorthand.
@@ -1868,6 +2056,83 @@ impl ComputedStyle {
     }
 }
 
+/// Splits a comma-separated CSS list at top level (parentheses/quotes aware).
+pub(crate) fn split_top_level_commas(value: &str) -> Vec<String> {
+    let mut components = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    for ch in value.chars() {
+        if escaped {
+            current.push(ch);
+            escaped = false;
+            continue;
+        }
+        if let Some(q) = quote {
+            current.push(ch);
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == q {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '"' | '\'' => {
+                quote = Some(ch);
+                current.push(ch);
+            }
+            '(' | '[' => {
+                depth += 1;
+                current.push(ch);
+            }
+            ')' | ']' => {
+                depth = depth.saturating_sub(1);
+                current.push(ch);
+            }
+            ',' if depth == 0 => {
+                let trimmed = current.trim();
+                if !trimmed.is_empty() {
+                    components.push(trimmed.to_string());
+                }
+                current.clear();
+            }
+            _ => current.push(ch),
+        }
+    }
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        components.push(trimmed.to_string());
+    }
+    components
+}
+
+/// Parses a comma-separated property list and repeats it cyclically to `count`
+/// entries (CSS Backgrounds 3 §3.1), falling back to `default` for the whole list
+/// when the declaration is missing/empty.
+fn cycle_property_list<T: Clone>(
+    declaration: Option<&Declaration>,
+    parse: impl Fn(&str) -> Option<T>,
+    count: usize,
+    default: T,
+) -> Vec<T> {
+    let parsed: Vec<T> = declaration
+        .map(|decl| {
+            split_top_level_commas(&decl.raw_value)
+                .iter()
+                .filter_map(|component| parse(component))
+                .collect()
+        })
+        .unwrap_or_default();
+    if parsed.is_empty() {
+        return vec![default; count];
+    }
+    (0..count)
+        .map(|index| parsed[index % parsed.len()].clone())
+        .collect()
+}
+
 /// Tokenised components of one `background` shorthand layer.
 ///
 /// Values are kept as raw CSS text: shorthand expansion runs *before* the cascade,
@@ -1880,6 +2145,9 @@ pub(crate) struct BackgroundShorthandTokens {
     pub repeat: Option<String>,
     pub size: Option<String>,
     pub position: Option<String>,
+    pub origin: Option<String>,
+    pub clip: Option<String>,
+    pub attachment: Option<String>,
 }
 
 /// Splits `value` at the first top-level `,` (only the first background layer is
@@ -2005,11 +2273,13 @@ fn is_background_image_token(token: &str) -> bool {
 pub(crate) fn parse_background_shorthand_tokens(value: &str) -> Option<BackgroundShorthandTokens> {
     let layer = first_background_layer(value);
     let (before_slash, after_slash) = split_background_layer_at_slash(layer);
-    let components = split_components(before_slash);
-    if components.is_empty() {
+    let before = split_components(before_slash);
+    let after = after_slash.map(split_components).unwrap_or_default();
+    if before.is_empty() && after.is_empty() {
         return None;
     }
-    if components.iter().any(|component| {
+    let all_components: Vec<&String> = before.iter().chain(after.iter()).collect();
+    if all_components.iter().any(|component| {
         matches!(
             component.trim().to_ascii_lowercase().as_str(),
             "inherit" | "initial" | "unset" | "revert" | "revert-layer"
@@ -2020,77 +2290,139 @@ pub(crate) fn parse_background_shorthand_tokens(value: &str) -> Option<Backgroun
 
     let mut tokens = BackgroundShorthandTokens::default();
     let mut position_components: Vec<String> = Vec::new();
-    let mut index = 0usize;
-    while index < components.len() {
-        let component = components[index].as_str();
+    let mut size_components: Vec<String> = Vec::new();
+    let mut box_keywords: Vec<String> = Vec::new();
+    for (index, component) in all_components.iter().enumerate() {
+        let component = component.as_str();
+        let after_slash_position = index >= before.len();
+        if after_slash_position
+            && size_components.len() < 2
+            && (matches!(
+                component.trim().to_ascii_lowercase().as_str(),
+                "auto" | "cover" | "contain"
+            ) || looks_like_length(component))
+            && tokens.size.is_none()
+            && !is_background_position_keyword(component)
+        {
+            size_components.push(component.to_string());
+            continue;
+        }
         if tokens.color.is_none()
             && (Color::parse(component).is_some()
                 || component.trim().eq_ignore_ascii_case("currentcolor"))
         {
             tokens.color = Some(component.to_string());
-            index += 1;
             continue;
         }
         if tokens.image.is_none() && is_background_image_token(component) {
             tokens.image = Some(component.to_string());
-            index += 1;
             continue;
         }
         if tokens.repeat.is_none() && is_background_repeat_keyword(component) {
             let mut repeat = component.to_string();
-            if let Some(next) = components.get(index + 1)
-                && !matches!(
-                    next.trim().to_ascii_lowercase().as_str(),
-                    "repeat-x" | "repeat-y"
-                )
-                && matches!(
+            if let Some(next) = all_components.get(index + 1) {
+                let next = next.as_str();
+                let repeat_pair_like = matches!(
                     BackgroundRepeatAxis::parse(next),
                     Some(BackgroundRepeatAxis::Repeat)
                         | Some(BackgroundRepeatAxis::NoRepeat)
                         | Some(BackgroundRepeatAxis::Space)
                         | Some(BackgroundRepeatAxis::Round)
-                )
-            {
-                repeat.push(' ');
-                repeat.push_str(next);
-                index += 1;
+                ) && !matches!(
+                    next.trim().to_ascii_lowercase().as_str(),
+                    "repeat-x" | "repeat-y"
+                );
+                // Only consume the next token as the second repeat axis value when
+                // it was not already classified as a position/size component.
+                if repeat_pair_like
+                    && !(index + 1 >= before.len()
+                        && matches!(
+                            next.trim().to_ascii_lowercase().as_str(),
+                            "auto" | "cover" | "contain"
+                        ))
+                {
+                    repeat.push(' ');
+                    repeat.push_str(next);
+                }
             }
             tokens.repeat = Some(repeat);
-            index += 1;
             continue;
         }
-        if is_background_attachment_keyword(component) || is_background_box_keyword(component) {
-            index += 1;
+        if is_background_attachment_keyword(component) {
+            tokens
+                .attachment
+                .get_or_insert_with(|| component.to_string());
             continue;
         }
-        if position_components.len() < 2
+        if is_background_box_keyword(component) && box_keywords.len() < 2 {
+            box_keywords.push(component.to_string());
+            continue;
+        }
+        if !after_slash_position
+            && position_components.len() < 2
             && (is_background_position_keyword(component) || looks_like_length(component))
         {
             position_components.push(component.to_string());
-            index += 1;
             continue;
         }
-        index += 1;
     }
     if !position_components.is_empty() {
         tokens.position = Some(position_components.join(" "));
     }
-
-    if let Some(size_part) = after_slash {
-        let size_components: Vec<String> = split_components(size_part)
-            .into_iter()
-            .filter(|component| {
-                let lower = component.trim().to_ascii_lowercase();
-                matches!(lower.as_str(), "auto" | "cover" | "contain")
-                    || looks_like_length(component)
-            })
-            .take(2)
-            .collect();
-        if !size_components.is_empty() {
-            tokens.size = Some(size_components.join(" "));
+    if !size_components.is_empty() {
+        tokens.size = Some(size_components.join(" "));
+    }
+    match box_keywords.len() {
+        1 => {
+            tokens.origin = Some(box_keywords[0].clone());
+            tokens.clip = Some(box_keywords[0].clone());
         }
+        2 => {
+            tokens.origin = Some(box_keywords[0].clone());
+            tokens.clip = Some(box_keywords[1].clone());
+        }
+        _ => {}
     }
     Some(tokens)
+}
+
+/// Parses every `background` shorthand layer (comma-separated).
+///
+/// The returned vector keeps source order (top layer first). The `<color>` is
+/// only valid on the last layer per CSS Backgrounds 3 §3.1; colours found on
+/// other layers are moved to the last one for tolerance.
+pub(crate) fn parse_background_shorthand_layers(
+    value: &str,
+) -> Option<Vec<BackgroundShorthandTokens>> {
+    let components = split_top_level_commas(value);
+    if components.is_empty() {
+        return None;
+    }
+    let mut layers: Vec<BackgroundShorthandTokens> = Vec::with_capacity(components.len());
+    for component in &components {
+        if split_components(component).iter().any(|token| {
+            matches!(
+                token.trim().to_ascii_lowercase().as_str(),
+                "inherit" | "initial" | "unset" | "revert" | "revert-layer"
+            )
+        }) {
+            return None;
+        }
+        layers.push(parse_background_shorthand_tokens(component)?);
+    }
+    let last = layers.len().saturating_sub(1);
+    let mut moved_color = None;
+    for (index, layer) in layers.iter_mut().enumerate() {
+        if index != last
+            && let Some(color) = layer.color.take()
+        {
+            moved_color = Some(color);
+        }
+    }
+    if let Some(color) = moved_color {
+        layers[last].color = Some(color);
+    }
+    Some(layers)
 }
 
 /// Splits a CSS value into top-level whitespace-separated components.

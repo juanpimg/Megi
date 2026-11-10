@@ -35,10 +35,11 @@ pub use media::{
 };
 pub use parser::{TokenStream, consume_declaration, parse_list_of_declarations, parse_stylesheet};
 pub use properties::{
-    BackgroundPosition, BackgroundRepeat, BackgroundRepeatAxis, BackgroundSize, BorderCollapse,
-    BorderStyle, BoxSizing, CaptionSide, Clear, Color, ComputedStyle, Display, EmptyCells, Float,
-    FontStyle, Length, ListStyleType, Overflow, Position, RectEdges, TableLayout, TextAlign,
-    TextDecoration, VerticalAlign, Visibility, WhiteSpace,
+    BackgroundAttachment, BackgroundClip, BackgroundLayer, BackgroundOrigin, BackgroundPosition,
+    BackgroundRepeat, BackgroundRepeatAxis, BackgroundSize, BorderCollapse, BorderStyle, BoxSizing,
+    CaptionSide, Clear, Color, ComputedStyle, Display, EmptyCells, Float, FontStyle, Length,
+    ListStyleType, Overflow, Position, RectEdges, TableLayout, TextAlign, TextDecoration,
+    VerticalAlign, Visibility, WhiteSpace,
 };
 pub use query::{
     SelectorParseError, matches, query_selector, query_selector_all, try_matches,
@@ -1733,5 +1734,156 @@ mod background_geometry_tests {
         assert_eq!(style.background_position.x, Length::Px(5.0));
         assert_eq!(style.background_position.y, Length::Px(6.0));
         assert_eq!(style.background_size, BackgroundSize::Cover);
+    }
+}
+
+#[cfg(test)]
+mod background_layers_tests {
+    //! `background-origin`/`clip`/`attachment`, multi-layer lists and layered
+    //! `background` shorthand (R94).
+
+    use super::*;
+    use dom::{Attribute, Document, Namespace};
+
+    fn style_with_inline(inline: &str) -> ComputedStyle {
+        let mut doc = Document::new();
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        let element = doc.create_element(
+            Namespace::Html,
+            "div",
+            vec![Attribute::new("style", inline)],
+        );
+        doc.append_child(doc.root(), body);
+        doc.append_child(body, element);
+        let styles = resolve_document_styles(&doc, None);
+        styles.get(&element).cloned().expect("computed style")
+    }
+
+    #[test]
+    fn test_origin_clip_attachment_defaults() {
+        let style = ComputedStyle::initial();
+        assert_eq!(style.background_layers.len(), 0);
+        let layer = style.background_layers.first().cloned().unwrap_or_default();
+        assert_eq!(layer.origin, BackgroundOrigin::PaddingBox);
+        assert_eq!(layer.clip, BackgroundClip::BorderBox);
+        assert_eq!(layer.attachment, BackgroundAttachment::Scroll);
+    }
+
+    #[test]
+    fn test_origin_clip_attachment_longhands() {
+        let style = style_with_inline(
+            "background-image: url(a.png); background-origin: content-box; \
+             background-clip: content-box; background-attachment: fixed;",
+        );
+        assert_eq!(style.background_layers.len(), 1);
+        assert_eq!(
+            style.background_layers[0].origin,
+            BackgroundOrigin::ContentBox
+        );
+        assert_eq!(style.background_layers[0].clip, BackgroundClip::ContentBox);
+        assert_eq!(
+            style.background_layers[0].attachment,
+            BackgroundAttachment::Fixed
+        );
+        assert!(style.background_geometry_explicit);
+    }
+
+    #[test]
+    fn test_background_clip_text_is_parsed() {
+        let style = style_with_inline("background-clip: text;");
+        let layer = style.background_layers.first().cloned().unwrap_or_default();
+        assert_eq!(layer.clip, BackgroundClip::Text);
+    }
+
+    #[test]
+    fn test_multiple_layers_parse_lists_cyclically() {
+        let style = style_with_inline(
+            "background-image: url(top.png), url(bottom.png); \
+             background-repeat: no-repeat; \
+             background-size: cover, contain; \
+             background-position: center; \
+             background-origin: content-box;",
+        );
+        assert_eq!(style.background_layers.len(), 2);
+        assert_eq!(
+            style.background_layers[0].image,
+            Some("top.png".to_string())
+        );
+        assert_eq!(
+            style.background_layers[1].image,
+            Some("bottom.png".to_string())
+        );
+        // Single-valued lists repeat to every layer.
+        assert_eq!(
+            style.background_layers[0].repeat,
+            BackgroundRepeat::NO_REPEAT
+        );
+        assert_eq!(
+            style.background_layers[1].repeat,
+            BackgroundRepeat::NO_REPEAT
+        );
+        assert_eq!(
+            style.background_layers[0].origin,
+            BackgroundOrigin::ContentBox
+        );
+        assert_eq!(
+            style.background_layers[1].origin,
+            BackgroundOrigin::ContentBox
+        );
+        // Multi-valued lists are consumed per layer.
+        assert_eq!(style.background_layers[0].size, BackgroundSize::Cover);
+        assert_eq!(style.background_layers[1].size, BackgroundSize::Contain);
+        assert_eq!(style.background_layers[0].position.x, Length::Percent(50.0));
+        assert!(style.background_geometry_explicit);
+        // The legacy scalar view mirrors the first (top) layer.
+        assert_eq!(style.background_image, Some("top.png".to_string()));
+        assert_eq!(style.background_size, BackgroundSize::Cover);
+    }
+
+    #[test]
+    fn test_layered_background_shorthand() {
+        let style = style_with_inline(
+            "background: url(top.png) no-repeat center / cover content-box, \
+             url(bottom.png) repeat-x padding-box;",
+        );
+        assert_eq!(style.background_layers.len(), 2);
+        let top = &style.background_layers[0];
+        assert_eq!(top.image, Some("top.png".to_string()));
+        assert_eq!(top.repeat, BackgroundRepeat::NO_REPEAT);
+        assert_eq!(top.size, BackgroundSize::Cover);
+        assert_eq!(top.origin, BackgroundOrigin::ContentBox);
+        assert_eq!(top.clip, expected_clip_for_origin(top.origin));
+        let bottom = &style.background_layers[1];
+        assert_eq!(bottom.image, Some("bottom.png".to_string()));
+        assert_eq!(bottom.repeat.x, BackgroundRepeatAxis::Repeat);
+        assert_eq!(bottom.repeat.y, BackgroundRepeatAxis::NoRepeat);
+        assert_eq!(bottom.origin, BackgroundOrigin::PaddingBox);
+        assert!(style.background_geometry_explicit);
+    }
+
+    /// The shorthand maps a single box keyword to both origin and clip; both are
+    /// represented by the same keyword string, so the clip enum mirrors it.
+    fn expected_clip_for_origin(origin: BackgroundOrigin) -> BackgroundClip {
+        match origin {
+            BackgroundOrigin::ContentBox => BackgroundClip::ContentBox,
+            BackgroundOrigin::PaddingBox => BackgroundClip::PaddingBox,
+            BackgroundOrigin::BorderBox => BackgroundClip::BorderBox,
+        }
+    }
+
+    #[test]
+    fn test_background_attachment_in_shorthand() {
+        let style = style_with_inline("background: url(a.png) fixed;");
+        assert_eq!(
+            style.background_layers[0].attachment,
+            BackgroundAttachment::Fixed
+        );
+    }
+
+    #[test]
+    fn test_single_background_image_keeps_legacy_flag() {
+        let style = style_with_inline("background-image: url(only.png);");
+        assert_eq!(style.background_layers.len(), 1);
+        assert!(!style.background_geometry_explicit);
     }
 }

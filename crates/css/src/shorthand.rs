@@ -18,7 +18,7 @@
 //! modelled; system fonts (`font: menu`, ...) are rejected.
 
 use crate::properties::{
-    BorderStyle, Color, Length, ListStyleType, parse_background_shorthand_tokens,
+    BorderStyle, Color, Length, ListStyleType, parse_background_shorthand_layers,
     parse_border_width, split_components,
 };
 use crate::rule::Declaration;
@@ -300,39 +300,69 @@ fn is_image_component(component: &str) -> bool {
         || lower.starts_with("cross-fade(")
 }
 
-/// Expands `background` to the modelled longhands (`background-color`,
-/// `background-image`, `background-repeat`, `background-size` and
-/// `background-position`).
+/// Expands `background` to the modelled longhands for **all layers**
+/// (`background-color`, `background-image`, `background-repeat`,
+/// `background-size`, `background-position`, `background-origin`,
+/// `background-clip` and `background-attachment`).
 ///
-/// The `<color>`, `<image>`, repeat keywords, position and optional
-/// `<position> / <size>` may appear in any order (`background: #eee`,
-/// `background: url(bg.png) no-repeat center / cover`). Omitted components reset
-/// to their initial values (`transparent`, `none`, `repeat`, `auto`, `0% 0%`;
-/// CSS Backgrounds Level 3 §3). Only the first background layer is modelled;
-/// extra comma-separated layers are ignored (documented limitation).
+/// Layers are comma-separated and listed top layer first. Per-layer lists for
+/// the longhands are emitted with the same number of values; omitted components
+/// reset to their initial values (`transparent`, `none`, `repeat`, `auto`,
+/// `0% 0%`, `padding-box`, `border-box`, `scroll`). The `<color>` is only valid
+/// on the last layer (CSS Backgrounds 3 §3.1); extra layers without an image are
+/// kept as `none` layers so list lengths stay aligned.
 fn expand_background(value: &str) -> Option<Vec<(String, String)>> {
-    let tokens = parse_background_shorthand_tokens(value)?;
+    let layers = parse_background_shorthand_layers(value)?;
+    let count = layers.len();
+    let mut color = "transparent".to_string();
+    let mut images = Vec::with_capacity(count);
+    let mut repeats = Vec::with_capacity(count);
+    let mut sizes = Vec::with_capacity(count);
+    let mut positions = Vec::with_capacity(count);
+    let mut origins = Vec::with_capacity(count);
+    let mut clips = Vec::with_capacity(count);
+    let mut attachments = Vec::with_capacity(count);
+    for layer in &layers {
+        if let Some(value) = &layer.color {
+            color = value.clone();
+        }
+        images.push(layer.image.clone().unwrap_or_else(|| "none".to_string()));
+        repeats.push(layer.repeat.clone().unwrap_or_else(|| "repeat".to_string()));
+        sizes.push(layer.size.clone().unwrap_or_else(|| "auto".to_string()));
+        positions.push(
+            layer
+                .position
+                .clone()
+                .unwrap_or_else(|| "0% 0%".to_string()),
+        );
+        origins.push(
+            layer
+                .origin
+                .clone()
+                .unwrap_or_else(|| "padding-box".to_string()),
+        );
+        clips.push(
+            layer
+                .clip
+                .clone()
+                .unwrap_or_else(|| "border-box".to_string()),
+        );
+        attachments.push(
+            layer
+                .attachment
+                .clone()
+                .unwrap_or_else(|| "scroll".to_string()),
+        );
+    }
     Some(vec![
-        (
-            "background-color".to_string(),
-            tokens.color.unwrap_or_else(|| "transparent".to_string()),
-        ),
-        (
-            "background-image".to_string(),
-            tokens.image.unwrap_or_else(|| "none".to_string()),
-        ),
-        (
-            "background-repeat".to_string(),
-            tokens.repeat.unwrap_or_else(|| "repeat".to_string()),
-        ),
-        (
-            "background-size".to_string(),
-            tokens.size.unwrap_or_else(|| "auto".to_string()),
-        ),
-        (
-            "background-position".to_string(),
-            tokens.position.unwrap_or_else(|| "0% 0%".to_string()),
-        ),
+        ("background-color".to_string(), color),
+        ("background-image".to_string(), images.join(", ")),
+        ("background-repeat".to_string(), repeats.join(", ")),
+        ("background-size".to_string(), sizes.join(", ")),
+        ("background-position".to_string(), positions.join(", ")),
+        ("background-origin".to_string(), origins.join(", ")),
+        ("background-clip".to_string(), clips.join(", ")),
+        ("background-attachment".to_string(), attachments.join(", ")),
     ])
 }
 

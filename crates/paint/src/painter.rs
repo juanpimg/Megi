@@ -100,6 +100,8 @@ struct PaintResources<'a> {
     /// Optional hit-testing sink; `None` for the classic painting entry points,
     /// which must stay allocation- and output-identical.
     regions: Option<&'a RefCell<RegionCollector>>,
+    /// Render viewport; used by `background-attachment: fixed` layers.
+    viewport: Rect,
 }
 
 impl PaintResources<'_> {
@@ -269,6 +271,7 @@ fn build_display_list_inner(
         images,
         backgrounds,
         regions,
+        viewport,
     };
     let canvas = canvas_background(root);
     let mut list = DisplayList::new();
@@ -944,26 +947,68 @@ fn paint_background_border(
         });
     }
 
-    // `background-image`, on top of the color. Missing URL => paint nothing
-    // (documented; no placeholder for backgrounds).
-    if !background_is_propagated
-        && let Some(url) = style.background_image.as_deref()
-        && let Some(image) = resources.backgrounds.get(url)
-        && !image.is_empty()
-    {
+    // `background-image`, on top of the color; missing URL => nothing painted.
+    if !background_is_propagated {
+        let border_box = layout_box.dimensions.border_box();
         let padding_box = layout_box.dimensions.padding_box();
+        let content_box = layout_box.dimensions.content;
         if style.background_geometry_explicit {
-            // Full CSS Backgrounds 3 geometry: size, position and repeat, clipped
-            // to the padding box (the default `background-origin`).
-            let tiles = crate::background::background_tiles(
-                padding_box,
-                image.dimensions(),
-                style.background_repeat,
-                style.background_size,
-                style.background_position,
-            );
-            if !tiles.is_empty() {
-                push_clip_item(list, resources, padding_box);
+            // Full CSS Backgrounds 3 geometry for every layer, painted
+            // bottom-to-top (CSS lists the top layer first).
+            let fallback_layer;
+            let layers: &[css::BackgroundLayer] = if style.background_layers.is_empty() {
+                // Synthetic styles/tests may only populate the legacy scalar
+                // fields; treat them as a single layer with CSS initial geometry.
+                fallback_layer = vec![css::BackgroundLayer {
+                    image: style.background_image.clone(),
+                    repeat: style.background_repeat,
+                    size: style.background_size,
+                    position: style.background_position,
+                    ..css::BackgroundLayer::default()
+                }];
+                &fallback_layer
+            } else {
+                &style.background_layers
+            };
+            for layer in layers.iter().rev() {
+                let Some(url) = layer.image.as_deref() else {
+                    continue;
+                };
+                let Some(image) = resources.backgrounds.get(url) else {
+                    continue;
+                };
+                if image.is_empty() {
+                    continue;
+                }
+                let positioning_area =
+                    if crate::background::uses_viewport_positioning(layer.attachment) {
+                        resources.viewport
+                    } else {
+                        crate::background::background_origin_rect(
+                            layer.origin,
+                            border_box,
+                            padding_box,
+                            content_box,
+                        )
+                    };
+                let clip_rect = crate::background::background_clip_rect(
+                    layer.clip,
+                    border_box,
+                    padding_box,
+                    content_box,
+                );
+                let tiles = crate::background::background_tiles_with_origin(
+                    positioning_area,
+                    clip_rect,
+                    image.dimensions(),
+                    layer.repeat,
+                    layer.size,
+                    layer.position,
+                );
+                if tiles.is_empty() {
+                    continue;
+                }
+                push_clip_item(list, resources, clip_rect);
                 for tile in tiles {
                     list.push(DisplayItem::Image {
                         rect: tile,
@@ -972,11 +1017,14 @@ fn paint_background_border(
                 }
                 pop_clip_item(list, resources);
             }
-        } else {
+        } else if let Some(url) = style.background_image.as_deref()
+            && let Some(image) = resources.backgrounds.get(url)
+            && !image.is_empty()
+        {
             // Legacy compatibility: documents that only set `background-image`
             // (all Phase 4/5/6 golden fixtures) keep the historical behaviour of
             // stretching the bitmap over the whole padding box. Authored
-            // `background-repeat`/`-size`/`-position` opt into CSS geometry above.
+            // background properties opt into CSS geometry above.
             list.push(DisplayItem::Image {
                 rect: padding_box,
                 image: std::sync::Arc::clone(image),
