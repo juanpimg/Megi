@@ -521,6 +521,35 @@ Cifras de referencia en la ronda 21: **1345 tests** (bench 8, css 175, dom 28, f
 
 **Progress status**: vive en §4; se regenera con `python3 tools/update_progress.py --write` y CI ejecuta `--check --no-gate --no-count` para frescura. No editar a mano `PROGRESS.md` ni `docs/status/`.
 
+### 2.16o Ronda 22: JPEG/GIF, efectos SVG, HTTP/2, chrome, grid completo y filtros CSS
+
+```bash
+# JPEG/GIF desde cero (image + render por sniffing)
+cargo test -p image --test decode                    # PNG/JPEG/GIF (54 tests)
+cargo run -p render -- tests/fixtures/render/jpeg_gif.html /tmp/jpeg_gif.png --json
+
+# Efectos SVG (clipPath/mask/filtros)
+cargo test -p svg --test effects                     # 12 tests + fixtures clip/mask/filter
+
+# HTTP/2 MVP (HPACK/framing/ALPN)
+cargo test -p net --test http2_tests                 # 18 tests
+
+# Chrome del shell (address bar, tab strip, `<select>`) headless
+cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/chrome.png --chrome --width 640 --height 400
+
+# Grid completo y filtros CSS/mix-blend/image-set
+cargo run -p render -- tests/fixtures/render/grid_areas.html /tmp/grid_areas.png --json     # md5 8f9a9eba…
+cargo run -p render -- tests/fixtures/render/grid_dense.html /tmp/grid_dense.png --json     # md5 1789daf8…
+cargo run -p render -- tests/fixtures/render/grid_content.html /tmp/grid_content.png --json # md5 123d1a2b…
+cargo run -p render -- tests/fixtures/render/filter_effects.html /tmp/filter.png --json     # md5 ffe06406…
+cargo run -p render -- tests/fixtures/render/blend_modes.html /tmp/blend.png --json         # md5 32788e6d…
+cargo run -p render -- tests/fixtures/render/image_set.html /tmp/image_set.png --json       # md5 dc638211…
+```
+
+Límites de la ronda: JPEG sin progressive/CMYK/EXIF orientation; GIF animado solo primer frame; WebP sigue aviso no fatal. HTTP/2 sin multiplexado/flow-control/push/prioridades/h2c/trailers/request bodies (caps 16 KiB frame/64 KiB headers/2 streams, headers minúsculas). SVG effects: 4096 shapes/16 primitivas/blur 64/64M muestras, sin textPath/feColorMatrix/feBlend/feMerge. Grid: overlaps en orden de documento, auto-fit solo rango repetido, sin subgrid/masonry. CSS filters/blend: caps área 16,7 Mpx/blur 64/funciones 16, sin backdrop-filter/espacios de color avanzados.
+
+Cifras de referencia en la ronda 22: **1449 tests** (bench 9, css 195, dom 28, fonts 17+1 doctest, html 60, image 54, js 71, layout 206, net 225, paint 190, render 137, shell 160, svg 85, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; decode PNG 800×600 **6,65 ms p50 (~290 MB/s)**; status generado desde `docs/status/progress.toml` (regenerar con `python3 tools/update_progress.py --write`).
+
 ## 4. Progress status generado (`PROGRESS.md`, `docs/status/*.svg`)
 
 El estado de avance del proyecto se genera **desde datos reales del repositorio**, sin

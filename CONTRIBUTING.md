@@ -25,7 +25,7 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 - Trabajamos con las suites de prueba de referencia de la industria:
   - **`html5lib-tests`**: Más de 7.000 pruebas de tokenizador, ~1.900 de construcción del DOM y las suites oficiales de **serialización HTML** (`serializer/*.test`).
   - **Web Platform Tests (WPT)**: Pruebas oficiales compartidas por todos los motores de navegación modernos (fixtures de CSS Syntax vendorizadas).
-- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), **árbol 3.904/3.904 (100 %, sin allowlist; las 4 suites `scripted_*` ejecutan JS real vía WP-6.4)**, **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El workspace tiene **1345 tests**.
+- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), **árbol 3.904/3.904 (100 %, sin allowlist; las 4 suites `scripted_*` ejecutan JS real vía WP-6.4)**, **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El workspace tiene **1449 tests**.
 
 ### 1.4 Modelo de Memoria en Arena (Sin `Rc<RefCell<Node>>`)
 - Uno de los mayores cuellos de botella y fuentes de *memory leaks* en motores web en Rust es el uso de `Rc<RefCell<Node>>` o recolectores de basura pesados.
@@ -62,7 +62,7 @@ crates/
 ├── svg/           # SVG desde cero (Fase 4): parser XML subset + modelo SVG + path/arcos + rasterizador AA, **CSS interno, gradientes, `<pattern>` y `<text>`** (rondas 16-17); `std` + `image` + `fonts`; cableado E2E en render; 73 tests.
 ├── render/        # Pipeline de navegador (Fase 5/6): URL → net → HTML → CSS externo → layout → PNG (+ <img>, backgrounds geometry/SVG inline, scripts, event loop determinista por reloj virtual, hit_regions, cookies/CORS/gzip y webfonts).
 ├── js/            # JS (Fase 6, WP-A/B/6.4 + eventos avanzados): Boa 0.21.1 + bindings DOM + EventTarget/timers con currentTarget/eventPhase/once/passive/onclick + CSSOM/NodeList/identidad; consumido por render y por el harness; 71 tests.
-├── shell/         # Ventana (Fase 7): winit+softbuffer, scroll/entrada/HiDPI, worker, navegación/historial/título con hit_regions/find_link_at, zoom, auto-refresh opt-in, formularios editables, find-in-page y pestañas; screenshot headless. [Depende de render/paint/net]; 140 tests.
+├── shell/         # Ventana (Fase 7): winit+softbuffer, scroll/entrada/HiDPI, worker, navegación/historial/título con hit_regions/find_link_at, zoom, auto-refresh opt-in, formularios editables, find-in-page, pestañas y chrome (address bar/tab strip/select); screenshot headless. [Depende de render/paint/net]; 160 tests.
 ├── bench/         # Benchmarks reproducibles (parseo, estilos, layout, paint, PNG). [Solo crates internos]
 └── test_harness/  # Gate de conformidad: tokenizer, árbol 3.904/3.904 (sin allowlist), serializer y CSS Syntax; ejecuta los scripts del corpus vía js (WP-6.4).
 ```
@@ -93,8 +93,8 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
   - Ya hecho (rondas 9–10): **hit-testing aditivo** (`HitRegion`/`hit_test`/`find_link_at`, 11 tests) y su cableado en `render` (`RenderOutput.hit_regions`, +0,6 µs) sin cambiar golden.
 - **CSS (`crates/css`)**:
   - **Ronda 20 HECHO**: `conic-gradient`/`repeating-conic` + color hints + espacios `srgb|srgb-linear|oklab`, `calc()` mixto (`CalcLengths`), tipografía (`text-transform`/spacing/white-space) y **fix de custom properties** lazy/COW (`Option<Arc<HashMap>>`, fast path `needs_resolution`; A/B −14,9 % css resolve quiet).
-- **Red y render (`crates/net`, `crates/render`, `crates/image`) — Fase 5 (≈97 %)**:
-  - HTTP/2, streaming, PSL completa y multi-range.
+- **Red y render (`crates/net`, `crates/render`, `crates/image`) — Fase 5 (≈99 %)**:
+  - **Ronda 22 HECHO**: **HTTP/2 MVP** (HPACK/framing/ALPN h2 + fallback h1; caps 16 KiB frame/64 KiB headers/2 streams), **JPEG baseline y GIF87a/89a desde cero** y sniffing PNG|JPEG|GIF en render (PNG decode 6,65 ms p50). Pendientes: multiplexado/flow-control/push/prioridades/h2c/trailers, streaming, PSL completa y multi-range.
   - **Ronda 19 HECHO**: `ReferrerConfig` instalado en el loader de render (header>meta>default) con `Referer`/SameSite reales y `RenderStats.referrer_policy`; estado CSS real (`css::state::with_state` pre/post-script) con `css_state.html`; 136 tests render.
   - **Ronda 18 HECHO**: SameSite+PSL reducida, Referrer-Policy, Range/206 y cache refinada (`no-cache`/`must-revalidate`/`s-maxage`/`Age`/`requires_revalidation`); net 207 tests.
   - Endurecer tests HTTP/TLS, ampliar fixtures de backgrounds y cubrir **red avanzada E2E** (cookies por render/sesión, CORS/credentials con denegación no fatal, gzip/deflate en HTML/CSS; `--cookies`/`--origin` ya hechos en la ronda 10).
@@ -104,7 +104,7 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
   - Ya hecho (ronda 13): **`@font-face`+WOFF2 E2E** (dep autorizada `woff2-patched` 0.4, DB por render en layout+paint, caps 8/8 MiB/32 MiB, stats/timing y warnings no fatales).
   - Mejoras de shaping para más scripts, fallback entre familias y métricas de fuentes variables.
 - **SVG (`crates/svg` + `render`, rondas 13-17)**: crate propio completo (parser XML+modelo+rasterizador AA, **73 tests**) con **CSS interno y gradientes lineales/radiales** (ronda 16) y **cableado E2E**: `<img src=*.svg>`, `background-image` **e inline `<svg>`** (caps 256/1 MiB/8 MiB, `svgs_rendered`/`inline_svgs`; 11+10 tests). **Ronda 17**: **`<pattern>`** (cap 10k tiles) y **`<text>` básico** con `crates/fonts` (caps 1.000 texts/10.000 chars). Siguientes: shaping avanzado (kerning/italic/bidi), patterns rotados y cache por URL.
-- **Rendimiento/robustez (`crates/html`, `crates/dom`, `layout`, `paint`) — los presupuestos son gates que NO se suben**: ronda 21 recuperó pipeline ≤140 ms y layout ≤43 ms (html −18/−20 %, css resolve 33,91 ms, layout 36,4 ms, build-display −9,1 %).
+- **Rendimiento y features (`crates/html`, `crates/dom`, `layout`, `paint`, `css`, `svg`, `shell`) — los presupuestos son gates que NO se suben**: ronda 21 recuperó pipeline ≤140 ms y layout ≤43 ms (html −18/−20 %, css resolve 33,91 ms, layout 36,4 ms, build-display −9,1 %).
   - DOM identidad/memoria (auditoría F8), recursión de layout/paint en documentos profundos (F6), presupuestos de tiempo y API `Result`.
   - Benchmarks reproducibles (`./tools/bench.sh`) y regresiones de complejidad.
 - **Fuzzing (`fuzz/`)**:
@@ -160,7 +160,7 @@ cargo fmt
 ./tools/dev.sh all
 
 # Comprobaciones individuales útiles
-cargo test --workspace                         # 1345 tests (con JS por defecto)
+cargo test --workspace                         # 1449 tests (con JS por defecto)
 cargo test --workspace --no-default-features   # build mínimo sin JS (CI)
 cargo +1.88 check --workspace --all-targets
 cargo run -p test_harness -- --summary          # gate 4 suites: PASS, exit 0

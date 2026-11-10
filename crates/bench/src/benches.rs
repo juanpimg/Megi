@@ -33,12 +33,22 @@ const GENEROUS_PARSE: ParseOptions = ParseOptions {
 const VIEWPORT_WIDTH: u32 = 800;
 const VIEWPORT_HEIGHT: u32 = 600;
 
+/// Committed 800×600 PNG fixture from `crates/image` (13 947 B, RGBA8).
+static PNG_800X600: &[u8] = include_bytes!("../../image/tests/fixtures/png/large_800x600.png");
+/// Deterministic baseline JPEG (800×600, quality 85, ~75 KiB). See
+/// `crates/bench/fixtures/README.md` for the exact generation recipe.
+static JPEG_800X600: &[u8] = include_bytes!("../fixtures/jpeg-800x600.jpg");
+/// Deterministic indexed GIF (800×600, single frame, ~82 KiB); the decoder only
+/// materialises the first frame.
+static GIF_800X600: &[u8] = include_bytes!("../fixtures/gif-800x600.gif");
+
 /// Registers every benchmark into `suite`, applying `opts.scale` to the sizes.
 pub fn register(suite: &mut Suite, opts: &Options) {
     register_html(suite, opts.scale);
     register_css(suite, opts.scale);
     register_layout_and_paint(suite, opts.scale);
     register_feature_e2e(suite, opts.scale);
+    register_image(suite);
     #[cfg(feature = "fonts")]
     register_fonts(suite, opts.scale);
 }
@@ -584,6 +594,44 @@ fn probe_pipeline(html_source: &str, viewport: Rect) -> Option<(usize, usize)> {
     Some((display_list.items.len(), pixmap.to_png().len()))
 }
 
+/// Image decoding workloads (round 22): PNG/JPEG/GIF 800×600 → RGBA8.
+///
+/// Real pages spend a meaningful part of their time decoding images, which the
+/// legacy parse/style/layout/paint rows never exercised. These rows use
+/// committed fixtures (PNG from `crates/image/tests/fixtures`, JPEG/GIF from
+/// `crates/bench/fixtures`, see the README there) loaded with `include_bytes!`,
+/// so the measurement is deterministic and offline. Each row decodes the whole
+/// image with the format defaults and drops the resulting RGBA buffer.
+/// Reference medians (release, 5 iterations / heavy cap 3, idle host) are in
+/// `docs/PERFORMANCE.md`; treat a reproducible >15 % regression as a finding.
+fn register_image(suite: &mut Suite) {
+    for (name, bytes, label) in [
+        ("image/decode-png-800x600", PNG_800X600, "PNG"),
+        ("image/decode-jpeg-800x600", JPEG_800X600, "JPEG"),
+        ("image/decode-gif", GIF_800X600, "GIF"),
+    ] {
+        match image::decode(bytes) {
+            Ok(probe) => {
+                let pixels = (probe.width as f64) * (probe.height as f64) / 1_000_000.0;
+                let detail = format!(
+                    "{label} {}x{} ({} B) → RGBA8, decode completo",
+                    probe.width,
+                    probe.height,
+                    bytes.len()
+                );
+                suite.add(
+                    BenchEntry::new(name, "image", detail, move || {
+                        black_box(image::decode(bytes).expect("committed image fixture decodes"));
+                    })
+                    .with_units(pixels, "MPix")
+                    .heavy(),
+                );
+            }
+            Err(error) => suite.skip(name, format!("fixture de imagen inválido: {error}")),
+        }
+    }
+}
+
 /// Counts element nodes in `document` (top-down pre-order).
 fn count_elements(document: &Document) -> usize {
     collect_elements(document).len()
@@ -694,4 +742,22 @@ fn register_fonts(suite: &mut Suite, scale: f64) {
         )
         .with_units(word_count as f64, "words"),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn committed_image_fixtures_decode_to_800x600_rgba() {
+        for (label, bytes) in [
+            ("png", PNG_800X600),
+            ("jpeg", JPEG_800X600),
+            ("gif", GIF_800X600),
+        ] {
+            let decoded = image::decode(bytes).expect("committed fixture decodes");
+            assert_eq!((decoded.width, decoded.height), (800, 600), "{label}");
+            assert_eq!(decoded.data.len(), 800 * 600 * 4, "{label}");
+        }
+    }
 }

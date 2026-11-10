@@ -9,6 +9,7 @@
 #   ./tools/bench.sh --json                # machine-readable output
 #   ./tools/bench.sh --filter html         # one group
 #   ./tools/bench.sh --filter pipeline     # E2E rows (incl. gradients/grid/clipping)
+#   ./tools/bench.sh --filter image        # image decode (PNG/JPEG/GIF 800x600)
 #   BENCH_FEATURES=fonts ./tools/bench.sh  # optional font benchmarks
 #
 # All arguments are forwarded verbatim to the `bench` binary.
@@ -22,7 +23,7 @@ OUTPUT="target/bench-latest.txt"
 METADATA="target/bench-latest-meta.txt"
 
 usage() {
-    sed -n '9,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '9,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 case "${1:-}" in

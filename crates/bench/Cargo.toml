@@ -14,6 +14,7 @@ html.workspace = true
 css.workspace = true
 layout.workspace = true
 paint.workspace = true
+image.workspace = true
 fonts = { workspace = true, optional = true }
 
 [features]

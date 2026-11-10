@@ -124,6 +124,7 @@ dependencies = [
  "dom",
  "fonts",
  "html",
+ "image",
  "layout",
  "paint",
 ]

@@ -6,6 +6,66 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 22 — JPEG/GIF, SVG effects, HTTP/2 MVP, shell chrome, full grid and CSS filters (2026-11-11)
+
+#### Added
+
+- **From-scratch JPEG and GIF decoders** (`77095c7`, image 54 / render 137 tests):
+  baseline JPEG (SOI/DQT/SOF0/DHT/SOS/DRI/RST, separable IDCT, 4:4:4 / 4:2:2 /
+  4:2:0 nearest chroma, grayscale/YCbCr/Adobe RGB, typed errors for
+  progressive/CMYK/truncated, caps before allocation) and GIF87a/89a (12-bit
+  LZW, palettes, transparency, interlace, first frame); `render` sniffs
+  PNG|JPEG|GIF for `<img>` and backgrounds (WebP remains a non-fatal warning).
+  PNG decode 800×600 is now **6.65 ms p50 (~290 MB/s)** via
+  `inflate_zlib_with_capacity`.
+- **SVG effects** (`82101f1`, svg 85 tests): `<clipPath>` (shapes/paths/`use`,
+  `clipPathUnits`, nested clips, AA coverage, cycles dropped), `<mask>`
+  (`maskUnits`/`maskContentUnits`, luminance, region, gradient content) and the
+  filter subset `feGaussianBlur`/`feOffset`/`feFlood`+`feComposite` with
+  `filterUnits`/region. Caps: 4,096 shapes, 16 primitives, blur radius 64 and a
+  64M-sample budget. No `textPath`/`feColorMatrix`/`feBlend`/`feMerge`.
+- **HTTP/2 MVP** (`93f2b40`, net 225 tests): complete HPACK (static/dynamic
+  tables, literals, Huffman Appendix B, minimal encoder), framing for
+  HEADERS/CONTINUATION/DATA/SETTINGS/WINDOW_UPDATE/PING/RST/GOAWAY with state
+  and caps (16 KiB frame / 64 KiB headers / 2 streams), ALPN `h2` over rustls
+  with HTTP/1.1 fallback, GET END_STREAM, ACKs, timeouts/body caps,
+  `FetchError::Http2`; redirects/cache/cookies/CORS/compression preserved.
+  Limits: no multiplexing/full flow control/push/priorities/h2c/trailers/request
+  bodies; lowercase headers.
+- **Shell browser chrome** (`cc567ec`, shell 160 tests): `chrome.rs` with
+  `AddressBar` (Ctrl+L, caret, Enter navigates via `Url::join`, Esc),
+  `TabStripLayout` (titles, active tab, close/+, overflow +N, hit-testing),
+  `DropdownList` for `<select>` (8-row cap, scroll, keyboard, selected patch +
+  re-render), a 58 px device·zoom overlay drawn from a bitmap font and
+  `--screenshot --chrome`; golden basic screenshot without chrome unchanged,
+  chrome PNG `1a29d6b3…`.
+- **Complete grid** (`b5b7e3c`, layout 206 / css 195 tests): `grid-auto-flow
+  row/column+dense`, `grid-template-areas`/`grid-area`, named lines and
+  placement by name, track `justify-content`/`align-content` (including
+  stretch) and `repeat(auto-fit)` collapsing empty tracks. Fixtures
+  `grid_areas` `8f9a9eba…`, `grid_dense` `1789daf8…`, `grid_content` `123d1a2b…`.
+  Limits: overlaps in document order, auto-fit only in the repeated range, no
+  `grid-auto-columns`/subgrid/masonry.
+- **CSS filters, blend modes and image-set** (same commit, css 195 / paint 190
+  tests): `filter` (blur/brightness/contrast/grayscale/invert/opacity/sepia/
+  saturate/hue-rotate/drop-shadow plus `-webkit` alias), `mix-blend-mode`
+  (normal/multiply/screen/overlay/darken/lighten) and `image-set()` 1x; paint
+  gains `DisplayItem::EffectGroup` with an offscreen buffer composited against
+  the backdrop using the CSS formula, capped at 16.7 Mpx / blur 64 / 16
+  functions. Fixtures `filter_effects` `ffe06406…`, `blend_modes` `32788e6d…`,
+  `image_set` `dc638211…`; goldens unchanged.
+- **Generated status manifest update**: `docs/status/progress.toml` refreshes
+  F4/F5/F7 (F5 ≈99 %, F7 ≈90 %) and `next_up`; `PROGRESS.md`/SVG are regenerated
+  with `python3 tools/update_progress.py --write`.
+
+#### Tests
+
+- **1,449 tests, 0 failures** (css 195, layout 206, paint 190, image 54,
+  render 137, net 225, svg 85, shell 160, html 60, js 71, dom 28, fonts 17+1
+  doctest, bench 9, test_harness 11); gate PASS with tokenizer 7,050/7,050,
+  tree 3,904/3,904, serializer 230/230 and CSS 30/30. Goldens and tree
+  allowlists unchanged.
+
 ### Round 21 — performance-budget recovery without raising budgets (2026-11-10)
 
 #### Changed
