@@ -7,6 +7,7 @@
 
 pub mod block;
 pub mod box_tree;
+mod flex;
 pub mod geometry;
 pub mod inline;
 pub mod table;

@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use css::{BorderStyle, Color};
+use css::{BorderRadii, BorderStyle, BoxShadow, Color};
 use dom::NodeId;
 use layout::Rect;
 
@@ -151,6 +151,62 @@ pub enum DisplayItem {
         rect: Rect,
         image: Arc<image::RgbaImage>,
     },
+    /// Fills an antialiased rounded rectangle.
+    ///
+    /// Used for `background-color` when `border-radius` is authored: coverage is
+    /// analytic (signed distance to the rounded box) and clipped by the active
+    /// clip stack.
+    RoundedRect {
+        rect: Rect,
+        radii: BorderRadii,
+        color: Color,
+    },
+    /// Draws an antialiased rounded border ring (solid sides only).
+    ///
+    /// The painter only emits this variant when every visible side has
+    /// `border-style: solid`; other styles fall back to the square `Border`
+    /// inside a rounded clip group (documented limitation).
+    RoundedBorder {
+        rect: Rect,
+        sides: [BorderSide; 4],
+        radii: BorderRadii,
+    },
+    /// Opens an offscreen group masked by an antialiased rounded rectangle.
+    ///
+    /// Nested items are rendered into a transparent buffer and composited through
+    /// the rounded mask, so backgrounds (color + images) are clipped to
+    /// `border-radius` with antialiasing without changing every primitive.
+    PushRoundedGroup { rect: Rect, radii: BorderRadii },
+    /// Closes and composites the topmost rounded group.
+    PopRoundedGroup,
+    /// One `box-shadow` layer painted behind (outer) or above (inset) the box.
+    ///
+    /// Blur is a deterministic three-pass separable box blur (Gaussian
+    /// approximation) with radius `blur/2`, clamped to
+    /// [`MAX_SHADOW_BLUR`]/[`MAX_SHADOWS`].
+    BoxShadow {
+        rect: Rect,
+        radii: BorderRadii,
+        shadow: BoxShadow,
+    },
+    /// One `text-shadow` layer, painted before the corresponding glyphs.
+    ///
+    /// The glyph coverage is rasterized offscreen, blurred with the same
+    /// deterministic box-blur kernel and composited in `color`.
+    TextShadow {
+        text: String,
+        rect: Rect,
+        color: Color,
+        font_size: f32,
+        font_family: String,
+        font_weight: u16,
+        font_italic: bool,
+        advance: f32,
+        baseline: f32,
+        offset_x: f32,
+        offset_y: f32,
+        blur: f32,
+    },
     /// Pushes a rectangular clipping boundary onto the clip stack.
     PushClip { rect: Rect },
     /// Pops the top clipping boundary from the clip stack.
@@ -167,13 +223,40 @@ impl DisplayItem {
         match self {
             Self::SolidColor { rect, .. }
             | Self::Border { rect, .. }
+            | Self::RoundedRect { rect, .. }
+            | Self::RoundedBorder { rect, .. }
+            | Self::PushRoundedGroup { rect, .. }
             | Self::Text { rect, .. }
             | Self::TextDecoration { rect, .. }
             | Self::Marker { rect, .. }
             | Self::Image { rect, .. }
             | Self::OpacityGroup { rect, .. } => Some(*rect),
+            Self::BoxShadow { rect, shadow, .. } => {
+                let blur = shadow.blur.clamp(0.0, MAX_SHADOW_BLUR);
+                Some(Rect::new(
+                    rect.x + shadow.offset_x.min(0.0) - blur,
+                    rect.y + shadow.offset_y.min(0.0) - blur,
+                    rect.width + shadow.offset_x.abs() + 2.0 * blur,
+                    rect.height + shadow.offset_y.abs() + 2.0 * blur,
+                ))
+            }
+            Self::TextShadow {
+                rect,
+                offset_x,
+                offset_y,
+                blur,
+                ..
+            } => {
+                let blur = blur.clamp(0.0, MAX_SHADOW_BLUR);
+                Some(Rect::new(
+                    rect.x + offset_x.min(0.0) - blur,
+                    rect.y + offset_y.min(0.0) - blur,
+                    rect.width + offset_x.abs() + 2.0 * blur,
+                    rect.height + offset_y.abs() + 2.0 * blur,
+                ))
+            }
             Self::PushClip { rect } => Some(*rect),
-            Self::PopClip => None,
+            Self::PopClip | Self::PopRoundedGroup => None,
         }
     }
 }
@@ -185,6 +268,25 @@ impl DisplayItem {
 /// documents (WP-4.12): a real 1 MiB page produces ~25 k items, so 5 M is a
 /// four-orders-of-magnitude safety margin, not a layout/quality limit.
 pub const MAX_DISPLAY_LIST_ITEMS: usize = 5_000_000;
+
+/// Hard cap on the blur radius (CSS px) honoured by the software painter.
+///
+/// Larger `box-shadow`/`text-shadow` blurs are clamped to this value so hostile
+/// pages cannot force unbounded kernels. CSS itself allows any length.
+pub const MAX_SHADOW_BLUR: f32 = 64.0;
+
+/// Hard cap on the number of shadow layers painted per box/text run.
+///
+/// The CSS parser already truncates lists to 32; the painter applies the same
+/// cap defensively for hand-built display lists.
+pub const MAX_SHADOWS: usize = 32;
+
+/// Hard cap on the pixel area of an offscreen rounded-clip group.
+///
+/// A background layer clipped to a huge rounded box is rendered through an
+/// offscreen RGBA buffer; beyond this area the rounded clip is skipped (the
+/// square background is kept) to bound memory (documented limitation).
+pub const MAX_ROUNDED_GROUP_PIXELS: usize = 16_777_216;
 
 /// A sequential list of [`DisplayItem`]s ready for 2D software or hardware rasterization.
 #[derive(Clone, Debug, Default, PartialEq)]

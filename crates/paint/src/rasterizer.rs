@@ -9,7 +9,7 @@
 //! (`FontDatabase::font_by_ref` parses the face), re-rasterized every glyph
 //! outline and re-shaped every text run on every paint. The Phase 4 benchmark
 //! measured 1 485 ms for the 800×600 realistic page, with ~1 M glyphs. This
-//! implementation keeps a per-pass [`TextCache`]:
+//! implementation keeps a per-pass `TextCache`:
 //!
 //! - shaped runs are cached by `(text, family, weight, italic, size)`;
 //! - faces are resolved once per pass (`FaceRefInfo.post_script_name` map);
@@ -43,11 +43,13 @@
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-use css::Color;
+use css::{BorderRadii, BoxShadow, Color};
 use fonts::{Font, FontDatabase, FontStyle as FontsFontStyle, GlyphMask, ShapedRun};
 use layout::Rect;
 
-use crate::display_list::{BorderSide, DisplayItem, DisplayList, MarkerKind};
+use crate::display_list::{
+    BorderSide, DisplayItem, DisplayList, MAX_ROUNDED_GROUP_PIXELS, MAX_SHADOW_BLUR, MarkerKind,
+};
 use crate::png;
 
 /// Upper bound on the number of pixels a [`Pixmap`] may allocate (67.1 M
@@ -716,7 +718,7 @@ impl Pixmap {
     /// the text `color` at the propagated `baseline` (`rect.y + baseline` is the
     /// glyph baseline in device pixels).
     ///
-    /// This entry point builds a throw-away [`TextCache`], so it still deduplicates
+    /// This entry point builds a throw-away `TextCache`, so it still deduplicates
     /// faces/masks *within the call* but not across display-list items. The
     /// display-list rasterizer shares one cache for the whole pass; prefer
     /// [`rasterize_display_list`] for pages.
@@ -1453,16 +1455,55 @@ fn paint_items(
     dx: f32,
     dy: f32,
 ) {
-    for item in items {
+    let mut index = 0usize;
+    while index < items.len() {
+        let item = &items[index];
         match item {
             // Clip bookkeeping must always run, even when the clip rectangle is
             // currently off-screen, so the PushClip/PopClip pairs stay balanced.
             DisplayItem::PushClip { rect } => {
                 pixmap.push_clip(shift(*rect, dx, dy));
+                index += 1;
                 continue;
             }
             DisplayItem::PopClip => {
                 pixmap.pop_clip();
+                index += 1;
+                continue;
+            }
+            DisplayItem::PushRoundedGroup { rect, radii } => {
+                // Find the matching PopRoundedGroup (supports nesting).
+                let mut depth = 1usize;
+                let mut end = index + 1;
+                while end < items.len() {
+                    match &items[end] {
+                        DisplayItem::PushRoundedGroup { .. } => depth += 1,
+                        DisplayItem::PopRoundedGroup => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    end += 1;
+                }
+                paint_rounded_group(
+                    pixmap,
+                    shift(*rect, dx, dy),
+                    *radii,
+                    &items[index + 1..end],
+                    cache,
+                    font_database,
+                    dx,
+                    dy,
+                );
+                index = end + 1;
+                continue;
+            }
+            DisplayItem::PopRoundedGroup => {
+                // Unbalanced pop: ignore defensively instead of panicking.
+                index += 1;
                 continue;
             }
             _ => {}
@@ -1478,6 +1519,7 @@ fn paint_items(
                     || bounds.x + bounds.width <= clip.x
                     || bounds.y + bounds.height <= clip.y)
             {
+                index += 1;
                 continue;
             }
         }
@@ -1488,6 +1530,19 @@ fn paint_items(
             }
             DisplayItem::Border { rect, sides } => {
                 pixmap.draw_border(shift(*rect, dx, dy), *sides);
+            }
+            DisplayItem::RoundedRect { rect, radii, color } => {
+                pixmap.fill_rounded_rect(shift(*rect, dx, dy), *radii, *color);
+            }
+            DisplayItem::RoundedBorder { rect, sides, radii } => {
+                pixmap.draw_rounded_border(shift(*rect, dx, dy), *sides, *radii);
+            }
+            DisplayItem::BoxShadow {
+                rect,
+                radii,
+                shadow,
+            } => {
+                pixmap.draw_box_shadow(shift(*rect, dx, dy), *radii, *shadow);
             }
             DisplayItem::TextDecoration { rect, color } => {
                 pixmap.fill_rect(shift(*rect, dx, dy), *color);
@@ -1532,6 +1587,38 @@ fn paint_items(
                     );
                 }
             }
+            DisplayItem::TextShadow {
+                text,
+                rect,
+                color,
+                font_size,
+                font_family,
+                font_weight,
+                font_italic,
+                advance,
+                baseline,
+                offset_x,
+                offset_y,
+                blur,
+            } => {
+                paint_text_shadow(
+                    pixmap,
+                    cache,
+                    font_database,
+                    text,
+                    shift(*rect, dx, dy),
+                    *color,
+                    *font_size,
+                    font_family,
+                    *font_weight,
+                    *font_italic,
+                    *advance,
+                    *baseline,
+                    *offset_x,
+                    *offset_y,
+                    *blur,
+                );
+            }
             DisplayItem::OpacityGroup {
                 rect,
                 opacity,
@@ -1539,8 +1626,12 @@ fn paint_items(
             } => {
                 paint_opacity_group(pixmap, *rect, *opacity, items, cache, font_database, dx, dy);
             }
-            DisplayItem::PushClip { .. } | DisplayItem::PopClip => unreachable!("handled above"),
+            DisplayItem::PushClip { .. }
+            | DisplayItem::PopClip
+            | DisplayItem::PushRoundedGroup { .. }
+            | DisplayItem::PopRoundedGroup => unreachable!("handled above"),
         }
+        index += 1;
     }
 }
 
@@ -1740,5 +1831,568 @@ fn get_glyph_bitmap(ch: char) -> [u8; 8] {
             0b01111110, 0b01000010, 0b01011010, 0b01011010, 0b01011010, 0b01000010, 0b01111110,
             0b00000000,
         ],
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Rounded corners, box-shadow and text-shadow (R99)
+// ---------------------------------------------------------------------------
+
+/// Resolved per-corner radii in px: `[(x, y); 4]` in top-left, top-right,
+/// bottom-right, bottom-left order.
+fn resolve_corner_radii(rect: Rect, radii: BorderRadii) -> [(f32, f32); 4] {
+    let resolve = |length: css::Length, area: f32| -> f32 {
+        match length {
+            css::Length::Px(px) => px.max(0.0),
+            css::Length::Percent(pct) => (area * pct / 100.0).max(0.0),
+            css::Length::Auto => 0.0,
+        }
+    };
+    let mut corners = [
+        (
+            resolve(radii.top_left.x, rect.width),
+            resolve(radii.top_left.y, rect.height),
+        ),
+        (
+            resolve(radii.top_right.x, rect.width),
+            resolve(radii.top_right.y, rect.height),
+        ),
+        (
+            resolve(radii.bottom_right.x, rect.width),
+            resolve(radii.bottom_right.y, rect.height),
+        ),
+        (
+            resolve(radii.bottom_left.x, rect.width),
+            resolve(radii.bottom_left.y, rect.height),
+        ),
+    ];
+    // CSS scales all radii proportionally when two adjacent radii exceed a side
+    // (CSS Backgrounds 3 §5.4); a simple per-side clamp keeps shapes sane.
+    let half_width = rect.width / 2.0;
+    let half_height = rect.height / 2.0;
+    for corner in &mut corners {
+        corner.0 = corner.0.min(half_width);
+        corner.1 = corner.1.min(half_height);
+    }
+    corners
+}
+
+/// Point-in-rounded-rect test (used by 4×4 supersampled coverage).
+fn point_in_rounded_rect(rect: Rect, corners: &[(f32, f32); 4], px: f32, py: f32) -> bool {
+    if px < rect.x || py < rect.y || px >= rect.x + rect.width || py >= rect.y + rect.height {
+        return false;
+    }
+    let (rx, ry) = if px < rect.x + corners[0].0 && py < rect.y + corners[0].1 {
+        corners[0]
+    } else if px > rect.x + rect.width - corners[1].0 && py < rect.y + corners[1].1 {
+        corners[1]
+    } else if px > rect.x + rect.width - corners[2].0 && py > rect.y + rect.height - corners[2].1 {
+        corners[2]
+    } else if px < rect.x + corners[3].0 && py > rect.y + rect.height - corners[3].1 {
+        corners[3]
+    } else {
+        return true;
+    };
+    if rx <= 0.0 || ry <= 0.0 {
+        return true;
+    }
+    let center_x = if px < rect.x + corners[0].0 {
+        rect.x + corners[0].0
+    } else {
+        rect.x + rect.width - corners[1].0
+    };
+    let center_y = if py < rect.y + corners[0].1 {
+        rect.y + corners[0].1
+    } else {
+        rect.y + rect.height - corners[2].1
+    };
+    let qx = (px - center_x) / rx;
+    let qy = (py - center_y) / ry;
+    qx * qx + qy * qy <= 1.0
+}
+
+/// Antialiased coverage of an axis-aligned rounded rectangle (4×4 supersampling).
+fn rounded_rect_coverage(rect: Rect, radii: BorderRadii, px: f32, py: f32) -> f32 {
+    if rect.width <= 0.0 || rect.height <= 0.0 {
+        return 0.0;
+    }
+    let corners = resolve_corner_radii(rect, radii);
+    let mut inside = 0u32;
+    for sy in 0..4 {
+        for sx in 0..4 {
+            let x = px + (sx as f32 + 0.5) / 4.0 - 0.5;
+            let y = py + (sy as f32 + 0.5) / 4.0 - 0.5;
+            if point_in_rounded_rect(rect, &corners, x, y) {
+                inside += 1;
+            }
+        }
+    }
+    inside as f32 / 16.0
+}
+
+/// One separable box-blur pass over a scalar mask (deterministic f32 arithmetic).
+fn blur_mask_pass(mask: &mut [f32], width: usize, height: usize, horizontal: bool, radius: usize) {
+    if radius == 0 || width == 0 || height == 0 {
+        return;
+    }
+    let window = 2 * radius + 1;
+    let mut output = vec![0.0f32; mask.len()];
+    if horizontal {
+        for y in 0..height {
+            let row = y * width;
+            let mut sum = 0.0f32;
+            for x in 0..width.min(radius) {
+                sum += mask[row + x];
+            }
+            for x in 0..width {
+                let add = x + radius;
+                if add < width {
+                    sum += mask[row + add];
+                }
+                if x > radius {
+                    sum -= mask[row + x - radius - 1];
+                }
+                output[row + x] = sum / window as f32;
+            }
+        }
+    } else {
+        for x in 0..width {
+            let mut sum = 0.0f32;
+            for y in 0..height.min(radius) {
+                sum += mask[y * width + x];
+            }
+            for y in 0..height {
+                let add = y + radius;
+                if add < height {
+                    sum += mask[add * width + x];
+                }
+                if y > radius {
+                    sum -= mask[(y - radius - 1) * width + x];
+                }
+                output[y * width + x] = sum / window as f32;
+            }
+        }
+    }
+    mask.copy_from_slice(&output);
+}
+
+/// Three-pass separable box blur (Gaussian approximation) with radius `r`.
+fn blur_mask(mask: &mut [f32], width: usize, height: usize, blur: f32) {
+    let radius = ((blur * 0.5).round() as usize).min(MAX_SHADOW_BLUR as usize);
+    for _ in 0..3 {
+        blur_mask_pass(mask, width, height, true, radius);
+        blur_mask_pass(mask, width, height, false, radius);
+    }
+}
+
+/// Expands (or shrinks) every corner radius by `spread` for box-shadow silhouettes.
+fn expand_radii(radii: BorderRadii, spread: f32) -> BorderRadii {
+    let expand = |radius: css::Radius| css::Radius {
+        x: match radius.x {
+            css::Length::Px(px) => css::Length::Px((px + spread).max(0.0)),
+            other => other,
+        },
+        y: match radius.y {
+            css::Length::Px(px) => css::Length::Px((px + spread).max(0.0)),
+            other => other,
+        },
+    };
+    BorderRadii {
+        top_left: expand(radii.top_left),
+        top_right: expand(radii.top_right),
+        bottom_right: expand(radii.bottom_right),
+        bottom_left: expand(radii.bottom_left),
+    }
+}
+
+impl Pixmap {
+    /// Blends `color` with `alpha` (0–1) over the pixel, respecting the clip stack.
+    fn blend_coverage(&mut self, x: i64, y: i64, color: Color, alpha: f32) {
+        if x < 0 || y < 0 || x >= i64::from(self.width) || y >= i64::from(self.height) {
+            return;
+        }
+        let (x, y) = (x as u32, y as u32);
+        if self.is_clipped(x, y) || alpha <= 0.0 {
+            return;
+        }
+        let coverage = (alpha.clamp(0.0, 1.0) * 255.0).round() as u32;
+        if coverage == 0 {
+            return;
+        }
+        let alpha = ((u32::from(color.a) * coverage + 127) / 255) as u8;
+        if alpha == 0 {
+            return;
+        }
+        let src = Color::new(color.r, color.g, color.b, alpha);
+        let idx = (y * self.width + x) as usize;
+        self.pixels[idx] = blend_over(self.pixels[idx], src);
+    }
+
+    /// Fills an antialiased rounded rectangle, clipped by the active clip stack.
+    pub fn fill_rounded_rect(&mut self, rect: Rect, radii: BorderRadii, color: Color) {
+        if color.a == 0 || rect.width <= 0.0 || rect.height <= 0.0 {
+            return;
+        }
+        let Some(clip) = self.clip_rect() else {
+            return;
+        };
+        let x0 = rect.x.max(clip.x).floor().max(0.0) as i64;
+        let y0 = rect.y.max(clip.y).floor().max(0.0) as i64;
+        let x1 = ((rect.x + rect.width).min(clip.x + clip.width))
+            .ceil()
+            .min(self.width as f32) as i64;
+        let y1 = ((rect.y + rect.height).min(clip.y + clip.height))
+            .ceil()
+            .min(self.height as f32) as i64;
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let coverage = rounded_rect_coverage(rect, radii, x as f32 + 0.5, y as f32 + 0.5);
+                self.blend_coverage(x, y, color, coverage);
+            }
+        }
+    }
+
+    /// Draws an antialiased rounded border ring for solid sides.
+    pub fn draw_rounded_border(&mut self, rect: Rect, sides: [BorderSide; 4], radii: BorderRadii) {
+        let visible = sides.iter().filter(|side| side.is_visible()).count();
+        if visible == 0 {
+            return;
+        }
+        let [top, right, bottom, left] = sides;
+        let inner = Rect::new(
+            rect.x + left.width,
+            rect.y + top.width,
+            (rect.width - left.width - right.width).max(0.0),
+            (rect.height - top.width - bottom.width).max(0.0),
+        );
+        let inner_radii = BorderRadii {
+            top_left: css::Radius {
+                x: shrink_radius(radii.top_left.x, left.width),
+                y: shrink_radius(radii.top_left.y, top.width),
+            },
+            top_right: css::Radius {
+                x: shrink_radius(radii.top_right.x, right.width),
+                y: shrink_radius(radii.top_right.y, top.width),
+            },
+            bottom_right: css::Radius {
+                x: shrink_radius(radii.bottom_right.x, right.width),
+                y: shrink_radius(radii.bottom_right.y, bottom.width),
+            },
+            bottom_left: css::Radius {
+                x: shrink_radius(radii.bottom_left.x, left.width),
+                y: shrink_radius(radii.bottom_left.y, bottom.width),
+            },
+        };
+        let Some(clip) = self.clip_rect() else {
+            return;
+        };
+        let x0 = rect.x.max(clip.x).floor().max(0.0) as i64;
+        let y0 = rect.y.max(clip.y).floor().max(0.0) as i64;
+        let x1 = ((rect.x + rect.width).min(clip.x + clip.width))
+            .ceil()
+            .min(self.width as f32) as i64;
+        let y1 = ((rect.y + rect.height).min(clip.y + clip.height))
+            .ceil()
+            .min(self.height as f32) as i64;
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let px = x as f32 + 0.5;
+                let py = y as f32 + 0.5;
+                let outer = rounded_rect_coverage(rect, radii, px, py);
+                if outer <= 0.0 {
+                    continue;
+                }
+                let inner_coverage = if inner.width > 0.0 && inner.height > 0.0 {
+                    rounded_rect_coverage(inner, inner_radii, px, py)
+                } else {
+                    0.0
+                };
+                let ring = outer - inner_coverage;
+                if ring <= 0.0 {
+                    continue;
+                }
+                let color = if py < inner.y {
+                    top.color
+                } else if py >= inner.y + inner.height {
+                    bottom.color
+                } else if px < inner.x {
+                    left.color
+                } else {
+                    right.color
+                };
+                self.blend_coverage(x, y, color, ring);
+            }
+        }
+    }
+
+    /// Draws one `box-shadow` layer (outer or inset) with a deterministic blur.
+    pub fn draw_box_shadow(&mut self, rect: Rect, radii: BorderRadii, shadow: BoxShadow) {
+        if shadow.color.a == 0 || rect.width <= 0.0 || rect.height <= 0.0 {
+            return;
+        }
+        let blur = shadow.blur.clamp(0.0, MAX_SHADOW_BLUR);
+        let spread = shadow.spread;
+        let pad = blur.ceil() as i64 + 2;
+        // Silhouette rectangle in device space.
+        let shape = if shadow.inset {
+            rect
+        } else {
+            Rect::new(
+                rect.x + shadow.offset_x - spread,
+                rect.y + shadow.offset_y - spread,
+                (rect.width + 2.0 * spread).max(0.0),
+                (rect.height + 2.0 * spread).max(0.0),
+            )
+        };
+        let shape_radii = if shadow.inset {
+            radii
+        } else {
+            expand_radii(radii, spread)
+        };
+        let region = Rect::new(
+            shape.x - pad as f32,
+            shape.y - pad as f32,
+            shape.width + 2.0 * pad as f32,
+            shape.height + 2.0 * pad as f32,
+        );
+        let Some(clip) = self.clip_rect() else {
+            return;
+        };
+        let x0 = region.x.max(clip.x).floor().max(0.0) as i64;
+        let y0 = region.y.max(clip.y).floor().max(0.0) as i64;
+        let x1 = ((region.x + region.width).min(clip.x + clip.width))
+            .ceil()
+            .min(self.width as f32) as i64;
+        let y1 = ((region.y + region.height).min(clip.y + clip.height))
+            .ceil()
+            .min(self.height as f32) as i64;
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
+        let width = (x1 - x0) as usize;
+        let height = (y1 - y0) as usize;
+        if width.saturating_mul(height) > MAX_ROUNDED_GROUP_PIXELS {
+            // Defensive cap: skip pathological shadow regions (documented).
+            return;
+        }
+        let corners = resolve_corner_radii(shape, shape_radii);
+        let hole = if shadow.inset {
+            Some((
+                Rect::new(
+                    rect.x + shadow.offset_x + spread,
+                    rect.y + shadow.offset_y + spread,
+                    (rect.width - 2.0 * spread).max(0.0),
+                    (rect.height - 2.0 * spread).max(0.0),
+                ),
+                expand_radii(radii, -spread),
+            ))
+        } else {
+            None
+        };
+        let mut mask = vec![0.0f32; width * height];
+        for (local_y, y) in (y0..y1).enumerate() {
+            for (local_x, x) in (x0..x1).enumerate() {
+                let px = x as f32 + 0.5;
+                let py = y as f32 + 0.5;
+                let outer = if point_in_rounded_rect(shape, &corners, px, py) {
+                    1.0
+                } else {
+                    0.0
+                };
+                let value = if let Some((hole_rect, hole_radii)) = &hole {
+                    let hole_corners = resolve_corner_radii(*hole_rect, *hole_radii);
+                    if point_in_rounded_rect(*hole_rect, &hole_corners, px, py) {
+                        0.0
+                    } else {
+                        outer
+                    }
+                } else {
+                    outer
+                };
+                mask[local_y * width + local_x] = value;
+            }
+        }
+        blur_mask(&mut mask, width, height, blur);
+        for (local_y, y) in (y0..y1).enumerate() {
+            for (local_x, x) in (x0..x1).enumerate() {
+                let mut alpha = mask[local_y * width + local_x];
+                if shadow.inset {
+                    // Keep the inset shadow inside the border box shape.
+                    alpha *= rounded_rect_coverage(rect, radii, x as f32 + 0.5, y as f32 + 0.5);
+                }
+                self.blend_coverage(x, y, shadow.color, alpha.min(1.0));
+            }
+        }
+    }
+
+    /// Applies a rounded-clip group: renders `items` offscreen and composites
+    /// them through an antialiased rounded mask.
+    #[allow(clippy::too_many_arguments)]
+    fn composite_rounded_group(
+        &mut self,
+        rect: Rect,
+        radii: BorderRadii,
+        buffer: &Pixmap,
+        origin_x: i64,
+        origin_y: i64,
+    ) {
+        for y in 0..buffer.height {
+            for x in 0..buffer.width {
+                let src = buffer.pixels[(y * buffer.width + x) as usize];
+                if src.a == 0 {
+                    continue;
+                }
+                let coverage = rounded_rect_coverage(
+                    rect,
+                    radii,
+                    (origin_x + x as i64) as f32 + 0.5,
+                    (origin_y + y as i64) as f32 + 0.5,
+                );
+                self.blend_coverage(origin_x + x as i64, origin_y + y as i64, src, coverage);
+            }
+        }
+    }
+}
+
+/// Shrinks a radius length by a border width (inner border curves).
+fn shrink_radius(radius: css::Length, width: f32) -> css::Length {
+    match radius {
+        css::Length::Px(px) => css::Length::Px((px - width).max(0.0)),
+        other => other,
+    }
+}
+
+/// Paints a rounded clip group's nested items through its rounded mask.
+#[allow(clippy::too_many_arguments)]
+fn paint_rounded_group(
+    pixmap: &mut Pixmap,
+    rect: Rect,
+    radii: BorderRadii,
+    items: &[DisplayItem],
+    cache: &mut TextCache,
+    font_database: &FontDatabase,
+    dx: f32,
+    dy: f32,
+) {
+    let Some(clip) = pixmap.clip_rect() else {
+        return;
+    };
+    let x0 = rect.x.max(clip.x).floor().max(0.0) as i64;
+    let y0 = rect.y.max(clip.y).floor().max(0.0) as i64;
+    let x1 = ((rect.x + rect.width).min(clip.x + clip.width))
+        .ceil()
+        .min(pixmap.width as f32) as i64;
+    let y1 = ((rect.y + rect.height).min(clip.y + clip.height))
+        .ceil()
+        .min(pixmap.height as f32) as i64;
+    if x0 >= x1 || y0 >= y1 {
+        return;
+    }
+    let width = (x1 - x0) as u32;
+    let height = (y1 - y0) as u32;
+    if (width as usize).saturating_mul(height as usize) > MAX_ROUNDED_GROUP_PIXELS {
+        // Defensive cap: fall back to unmasked painting (documented).
+        paint_items(pixmap, items, cache, font_database, dx, dy);
+        return;
+    }
+    let mut buffer = Pixmap::new(width, height);
+    buffer.push_clip(Rect::new(0.0, 0.0, width as f32, height as f32));
+    paint_items(
+        &mut buffer,
+        items,
+        cache,
+        font_database,
+        dx - x0 as f32,
+        dy - y0 as f32,
+    );
+    pixmap.composite_rounded_group(rect, radii, &buffer, x0, y0);
+}
+
+/// Paints one `text-shadow` layer: glyph coverage offscreen + deterministic blur.
+#[allow(clippy::too_many_arguments)]
+fn paint_text_shadow(
+    pixmap: &mut Pixmap,
+    cache: &mut TextCache,
+    font_database: &FontDatabase,
+    text: &str,
+    rect: Rect,
+    color: Color,
+    font_size: f32,
+    font_family: &str,
+    font_weight: u16,
+    font_italic: bool,
+    advance: f32,
+    baseline: f32,
+    offset_x: f32,
+    offset_y: f32,
+    blur: f32,
+) {
+    if color.a == 0 || text.is_empty() {
+        return;
+    }
+    let blur = blur.clamp(0.0, MAX_SHADOW_BLUR);
+    let pad = blur.ceil() as i64 + 2;
+    let region = Rect::new(
+        rect.x + offset_x - pad as f32,
+        rect.y + offset_y - pad as f32,
+        rect.width + 2.0 * pad as f32,
+        rect.height + 2.0 * pad as f32,
+    );
+    let Some(clip) = pixmap.clip_rect() else {
+        return;
+    };
+    let x0 = region.x.max(clip.x).floor().max(0.0) as i64;
+    let y0 = region.y.max(clip.y).floor().max(0.0) as i64;
+    let x1 = ((region.x + region.width).min(clip.x + clip.width))
+        .ceil()
+        .min(pixmap.width as f32) as i64;
+    let y1 = ((region.y + region.height).min(clip.y + clip.height))
+        .ceil()
+        .min(pixmap.height as f32) as i64;
+    if x0 >= x1 || y0 >= y1 {
+        return;
+    }
+    let width = (x1 - x0) as u32;
+    let height = (y1 - y0) as u32;
+    if (width as usize).saturating_mul(height as usize) > MAX_ROUNDED_GROUP_PIXELS {
+        return;
+    }
+    let mut buffer = Pixmap::new(width, height);
+    buffer.push_clip(Rect::new(0.0, 0.0, width as f32, height as f32));
+    let text_rect = Rect::new(
+        rect.x + offset_x - x0 as f32,
+        rect.y + offset_y - y0 as f32,
+        rect.width,
+        rect.height,
+    );
+    let opaque = Color::new(255, 255, 255, 255);
+    if !draw_text_cached(
+        &mut buffer,
+        cache,
+        font_database,
+        text,
+        text_rect,
+        opaque,
+        font_size,
+        font_family,
+        font_weight,
+        font_italic,
+        baseline,
+    ) {
+        buffer.draw_text_run_fallback(text, text_rect, opaque, font_size, advance);
+    }
+    let mut mask: Vec<f32> = buffer
+        .pixels
+        .iter()
+        .map(|pixel| f32::from(pixel.a) / 255.0)
+        .collect();
+    blur_mask(&mut mask, width as usize, height as usize, blur);
+    for y in 0..height as usize {
+        for x in 0..width as usize {
+            let alpha = mask[y * width as usize + x];
+            if alpha > 0.0 {
+                pixmap.blend_coverage(x0 + x as i64, y0 + y as i64, color, alpha);
+            }
+        }
     }
 }

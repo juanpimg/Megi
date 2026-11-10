@@ -1184,6 +1184,129 @@ impl Default for BackgroundLayer {
     }
 }
 
+/// One elliptical corner radius (`border-radius`), in CSS px/percentages.
+///
+/// CSS allows `x != y` for elliptical corners; `Length::Percent` values are
+/// resolved against the border box at paint time.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Radius {
+    /// Horizontal radius.
+    pub x: Length,
+    /// Vertical radius.
+    pub y: Length,
+}
+
+impl Radius {
+    /// Zero radius (square corner).
+    pub const ZERO: Self = Self {
+        x: Length::Px(0.0),
+        y: Length::Px(0.0),
+    };
+
+    /// Builds a circular radius from one length.
+    pub fn circular(length: Length) -> Self {
+        Self {
+            x: length,
+            y: length,
+        }
+    }
+
+    /// Whether both components are zero.
+    pub fn is_zero(&self) -> bool {
+        matches!(self.x, Length::Px(0.0)) && matches!(self.y, Length::Px(0.0))
+    }
+
+    /// Parses `[<length-percentage>]` or `[<length-percentage> <length-percentage>]`.
+    pub fn parse(value: &str, font_size: f32, root_font_size: f32) -> Option<Self> {
+        let components = split_components(value);
+        let parse_component = |component: &str| -> Option<Length> {
+            let length = Length::parse(component, font_size, root_font_size)?;
+            match length {
+                Length::Auto => None,
+                Length::Px(px) if px < 0.0 => None,
+                Length::Percent(pct) if pct < 0.0 => None,
+                other => Some(other),
+            }
+        };
+        match components.as_slice() {
+            [single] => Some(Self::circular(parse_component(single)?)),
+            [first, second] => Some(Self {
+                x: parse_component(first)?,
+                y: parse_component(second)?,
+            }),
+            _ => None,
+        }
+    }
+}
+
+/// Computed `border-radius` for all four corners (CSS Backgrounds 3 §5).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BorderRadii {
+    /// Top-left corner.
+    pub top_left: Radius,
+    /// Top-right corner.
+    pub top_right: Radius,
+    /// Bottom-right corner.
+    pub bottom_right: Radius,
+    /// Bottom-left corner.
+    pub bottom_left: Radius,
+}
+
+impl Default for BorderRadii {
+    fn default() -> Self {
+        Self {
+            top_left: Radius::ZERO,
+            top_right: Radius::ZERO,
+            bottom_right: Radius::ZERO,
+            bottom_left: Radius::ZERO,
+        }
+    }
+}
+
+impl BorderRadii {
+    /// Whether every corner is square (the initial value): paint takes the
+    /// byte-identical legacy path when this is `true`.
+    pub fn is_zero(&self) -> bool {
+        self.top_left.is_zero()
+            && self.top_right.is_zero()
+            && self.bottom_right.is_zero()
+            && self.bottom_left.is_zero()
+    }
+}
+
+/// One computed `box-shadow` layer.
+///
+/// Lengths are resolved to CSS px at compute time; `blur`/`spread` are capped by
+/// the painter (`MAX_SHADOW_BLUR` equivalent constants live in `paint`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BoxShadow {
+    /// Horizontal offset.
+    pub offset_x: f32,
+    /// Vertical offset.
+    pub offset_y: f32,
+    /// Blur radius (0 = hard edge).
+    pub blur: f32,
+    /// Spread distance (shrinks/grows the shadow shape).
+    pub spread: f32,
+    /// Shadow color (includes alpha).
+    pub color: Color,
+    /// Whether the shadow is painted inside the border box.
+    pub inset: bool,
+}
+
+/// One computed `text-shadow` layer.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextShadow {
+    /// Horizontal offset.
+    pub offset_x: f32,
+    /// Vertical offset.
+    pub offset_y: f32,
+    /// Blur radius (0 = hard edge).
+    pub blur: f32,
+    /// Shadow color (includes alpha).
+    pub color: Color,
+}
+
 /// Complete computed style for an element in the DOM tree.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComputedStyle {
@@ -1257,6 +1380,35 @@ pub struct ComputedStyle {
     /// repeat/size/position fields mirror the first layer for compatibility with
     /// the `render` image loader and the Phase 4/5/6 golden fixtures.
     pub background_layers: Vec<BackgroundLayer>,
+    /// Computed `border-radius` for all four corners (initial: zero).
+    pub border_radius: BorderRadii,
+    /// Computed `box-shadow` layers, top-first (initial: empty).
+    pub box_shadows: Vec<BoxShadow>,
+    /// Computed `text-shadow` layers, top-first (inherited; initial: empty).
+    pub text_shadows: Vec<TextShadow>,
+
+    // Flexbox (CSS Flexbox 1); none of these properties are inherited.
+    pub flex_direction: crate::flex::FlexDirection,
+    pub flex_wrap: crate::flex::FlexWrap,
+    pub justify_content: crate::flex::JustifyContent,
+    pub align_items: crate::flex::AlignItems,
+    pub align_self: crate::flex::AlignSelf,
+    /// `row-gap` (initial `0`).
+    pub row_gap: Length,
+    /// `column-gap` (initial `0`).
+    pub column_gap: Length,
+    /// `flex-grow` (initial `0`).
+    pub flex_grow: f32,
+    /// `flex-shrink` (initial `1`).
+    pub flex_shrink: f32,
+    /// `flex-basis` (initial `auto`).
+    pub flex_basis: Length,
+    /// `true` when the element was authored as `display: inline-flex`.
+    ///
+    /// The computed `display` stays `InlineBlock` (so the exhaustive `Display`
+    /// match in other crates keeps compiling without a new variant); layout treats
+    /// the box as an inline-level flex container when this flag is set.
+    pub is_inline_flex: bool,
 
     // Typography
     pub font_size: f32,
@@ -1348,6 +1500,21 @@ impl ComputedStyle {
             background_position: BackgroundPosition::ZERO,
             background_geometry_explicit: false,
             background_layers: Vec::new(),
+            border_radius: BorderRadii::default(),
+            box_shadows: Vec::new(),
+            text_shadows: Vec::new(),
+
+            flex_direction: crate::flex::FlexDirection::Row,
+            flex_wrap: crate::flex::FlexWrap::NoWrap,
+            justify_content: crate::flex::JustifyContent::FlexStart,
+            align_items: crate::flex::AlignItems::Stretch,
+            align_self: crate::flex::AlignSelf::Auto,
+            row_gap: Length::ZERO,
+            column_gap: Length::ZERO,
+            flex_grow: 0.0,
+            flex_shrink: 1.0,
+            flex_basis: Length::Auto,
+            is_inline_flex: false,
 
             font_size: 16.0,
             font_weight: 400,
@@ -1505,6 +1672,13 @@ impl ComputedStyle {
         let empty_cells = find_declaration(&entries, "empty-cells")
             .and_then(|d| EmptyCells::parse(&d.raw_value))
             .unwrap_or(EmptyCells::Show);
+        let computed_flex = crate::flex::compute_flex(&entries, font_size, root_font_size);
+        let is_inline_flex = find_declaration(&entries, "display").is_some_and(|declaration| {
+            declaration
+                .raw_value
+                .trim()
+                .eq_ignore_ascii_case("inline-flex")
+        });
 
         let background_color = Self::compute_background_color(&entries, color);
         // Images are not inherited; `none`, gradients and invalid values compute to `None`.
@@ -1512,6 +1686,16 @@ impl ComputedStyle {
         // existing single-image render loader keeps working unchanged.
         let (background_layers, background_geometry_explicit) =
             Self::compute_background_layers(&entries, font_size, root_font_size);
+        let inherited_text_shadows = parent
+            .map(|style| style.text_shadows.as_slice())
+            .unwrap_or_default();
+        let (border_radius, box_shadows, text_shadows) = Self::compute_decorations(
+            &entries,
+            font_size,
+            root_font_size,
+            color,
+            inherited_text_shadows,
+        );
         let first_layer = background_layers.first().cloned().unwrap_or_default();
         let background_image = first_layer.image.clone();
         let (background_repeat, background_size, background_position) =
@@ -1621,6 +1805,21 @@ impl ComputedStyle {
             background_position,
             background_geometry_explicit,
             background_layers,
+            border_radius,
+            box_shadows,
+            text_shadows,
+
+            flex_direction: computed_flex.direction,
+            flex_wrap: computed_flex.wrap,
+            justify_content: computed_flex.justify_content,
+            align_items: computed_flex.align_items,
+            align_self: computed_flex.align_self,
+            row_gap: computed_flex.row_gap,
+            column_gap: computed_flex.column_gap,
+            flex_grow: computed_flex.flex_grow,
+            flex_shrink: computed_flex.flex_shrink,
+            flex_basis: computed_flex.flex_basis,
+            is_inline_flex,
             font_size,
             font_weight,
             font_style,
@@ -1655,6 +1854,9 @@ impl ComputedStyle {
         // propagate visually through descendant inline boxes but do not affect their
         // computed style, and layout/paint can walk the ancestor chain when needed.
         self.text_decoration = TextDecoration::NONE;
+        // `text-shadow` is inherited (CSS Text Decoration 3 §3); `box-shadow` and
+        // `border-radius` are not.
+        self.text_shadows = parent.text_shadows.clone();
     }
 
     fn compute_font_size(val: &str, parent_size: f32, root_size: f32) -> f32 {
@@ -1794,6 +1996,50 @@ impl ComputedStyle {
             bottom: sides[2],
             left: sides[3],
         }
+    }
+
+    /// Computes `border-radius`, `box-shadow` and `text-shadow` (CSS Backgrounds 3
+    /// §5 and CSS Text Decoration 3 §3).
+    ///
+    /// Shorthands are expanded before the cascade; longhands take precedence over
+    /// the `border-radius` shorthand for direct [`ComputedStyle::compute`] callers.
+    /// Invalid components fall back to the initial value (`0`, `none`). The lists
+    /// are capped at [`MAX_BOX_SHADOWS`]/[`MAX_TEXT_SHADOWS`] layers (documented
+    /// paint limits) and blur radii are clamped at paint time.
+    fn compute_decorations(
+        entries: &[(&str, &Declaration)],
+        font_size: f32,
+        root_font_size: f32,
+        current_color: Color,
+        inherited_text_shadows: &[TextShadow],
+    ) -> (BorderRadii, Vec<BoxShadow>, Vec<TextShadow>) {
+        let shorthand_radius = find_declaration(entries, "border-radius").and_then(|decl| {
+            parse_border_radius_shorthand(&decl.raw_value, font_size, root_font_size)
+        });
+        let mut radii = shorthand_radius.unwrap_or_default();
+        for (corner, names) in [
+            (&mut radii.top_left, ["border-top-left-radius"]),
+            (&mut radii.top_right, ["border-top-right-radius"]),
+            (&mut radii.bottom_right, ["border-bottom-right-radius"]),
+            (&mut radii.bottom_left, ["border-bottom-left-radius"]),
+        ] {
+            if let Some(decl) = find_declaration(entries, names[0])
+                && let Some(radius) = Radius::parse(&decl.raw_value, font_size, root_font_size)
+            {
+                *corner = radius;
+            }
+        }
+        let box_shadows = find_declaration(entries, "box-shadow")
+            .map(|decl| {
+                parse_box_shadows(&decl.raw_value, font_size, root_font_size, current_color)
+            })
+            .unwrap_or_default();
+        let text_shadows = find_declaration(entries, "text-shadow")
+            .map(|decl| {
+                parse_text_shadows(&decl.raw_value, font_size, root_font_size, current_color)
+            })
+            .unwrap_or_else(|| inherited_text_shadows.to_vec());
+        (radii, box_shadows, text_shadows)
     }
 
     /// Computes the `background-image` layers (CSS Backgrounds 3 §3).
@@ -2054,6 +2300,216 @@ impl ComputedStyle {
             },
         )
     }
+}
+
+/// Hard cap on the number of `box-shadow` layers kept in a computed style.
+pub const MAX_BOX_SHADOWS: usize = 32;
+/// Hard cap on the number of `text-shadow` layers kept in a computed style.
+pub const MAX_TEXT_SHADOWS: usize = 32;
+
+/// Parses `border-radius`: 1–4 values, optionally followed by `/ 1–4` vertical values.
+fn parse_border_radius_shorthand(
+    value: &str,
+    font_size: f32,
+    root_font_size: f32,
+) -> Option<BorderRadii> {
+    let (horizontal, vertical) = split_border_radius_value(value);
+    let mut horizontal_radii = [Length::Px(0.0); 4];
+    let mut vertical_radii = [Length::Px(0.0); 4];
+    expand_radius_values(
+        &horizontal,
+        font_size,
+        root_font_size,
+        &mut horizontal_radii,
+    )?;
+    if let Some(vertical_values) = vertical.as_deref() {
+        expand_radius_values(
+            vertical_values,
+            font_size,
+            root_font_size,
+            &mut vertical_radii,
+        )?;
+    } else {
+        vertical_radii = horizontal_radii;
+    }
+    Some(BorderRadii {
+        top_left: Radius {
+            x: horizontal_radii[0],
+            y: vertical_radii[0],
+        },
+        top_right: Radius {
+            x: horizontal_radii[1],
+            y: vertical_radii[1],
+        },
+        bottom_right: Radius {
+            x: horizontal_radii[2],
+            y: vertical_radii[2],
+        },
+        bottom_left: Radius {
+            x: horizontal_radii[3],
+            y: vertical_radii[3],
+        },
+    })
+}
+
+/// Splits a `border-radius` value at the top-level `/` separator.
+pub(crate) fn split_border_radius_value(value: &str) -> (String, Option<String>) {
+    let mut depth = 0usize;
+    for (index, ch) in value.char_indices() {
+        match ch {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            '/' if depth == 0 => {
+                return (
+                    value[..index].trim().to_string(),
+                    Some(value[index + 1..].trim().to_string()),
+                );
+            }
+            _ => {}
+        }
+    }
+    (value.trim().to_string(), None)
+}
+
+/// Expands 1–4 radius lengths into the four corners (CSS Backgrounds 3 §5.1).
+fn expand_radius_values(
+    value: &str,
+    font_size: f32,
+    root_font_size: f32,
+    out: &mut [Length; 4],
+) -> Option<()> {
+    let components = split_components(value);
+    if components.is_empty() || components.len() > 4 {
+        return None;
+    }
+    let parsed: Vec<Length> = components
+        .iter()
+        .map(|component| {
+            let length = Length::parse(component, font_size, root_font_size)?;
+            match length {
+                Length::Auto => None,
+                Length::Px(px) if px < 0.0 => None,
+                Length::Percent(pct) if pct < 0.0 => None,
+                other => Some(other),
+            }
+        })
+        .collect::<Option<Vec<_>>>()?;
+    match parsed.as_slice() {
+        [all] => *out = [*all; 4],
+        [first, second] => *out = [*first, *second, *first, *second],
+        [first, second, third] => *out = [*first, *second, *third, *second],
+        [first, second, third, fourth] => *out = [*first, *second, *third, *fourth],
+        _ => return None,
+    }
+    Some(())
+}
+
+/// Parses a shadow `<length>`: only px/em/rem/pt/... units are valid (no `auto`
+/// and no percentages, per CSS Backgrounds 3 §6).
+fn parse_shadow_length(value: &str, font_size: f32, root_font_size: f32) -> Option<f32> {
+    match Length::parse(value, font_size, root_font_size)? {
+        Length::Px(px) => Some(px),
+        _ => None,
+    }
+}
+
+/// Parses `box-shadow` (`none` or a comma-separated list of shadows).
+fn parse_box_shadows(
+    value: &str,
+    font_size: f32,
+    root_font_size: f32,
+    current_color: Color,
+) -> Vec<BoxShadow> {
+    let lower = value.trim().to_ascii_lowercase();
+    if lower == "none" {
+        return Vec::new();
+    }
+    let mut shadows = Vec::new();
+    for layer in split_top_level_commas(value) {
+        let layer_lower = layer.trim().to_ascii_lowercase();
+        if layer_lower == "none" {
+            continue;
+        }
+        let mut inset = false;
+        let mut color = None;
+        let mut lengths = Vec::with_capacity(4);
+        for component in split_components(&layer) {
+            let component_lower = component.trim().to_ascii_lowercase();
+            if component_lower == "inset" {
+                inset = true;
+                continue;
+            }
+            if color.is_none()
+                && (Color::parse(&component).is_some()
+                    || component_lower.eq_ignore_ascii_case("currentcolor"))
+            {
+                color = Color::parse(&component);
+                continue;
+            }
+            if lengths.len() < 4
+                && let Some(length) = parse_shadow_length(&component, font_size, root_font_size)
+            {
+                lengths.push(length);
+            }
+        }
+        if lengths.len() < 2 {
+            continue;
+        }
+        shadows.push(BoxShadow {
+            offset_x: lengths[0],
+            offset_y: lengths[1],
+            blur: lengths.get(2).copied().unwrap_or(0.0).max(0.0),
+            spread: lengths.get(3).copied().unwrap_or(0.0),
+            color: color.unwrap_or(current_color),
+            inset,
+        });
+        if shadows.len() >= MAX_BOX_SHADOWS {
+            break;
+        }
+    }
+    shadows
+}
+
+/// Parses `text-shadow` (`none` or a comma-separated list of shadows).
+fn parse_text_shadows(
+    value: &str,
+    font_size: f32,
+    root_font_size: f32,
+    current_color: Color,
+) -> Vec<TextShadow> {
+    let lower = value.trim().to_ascii_lowercase();
+    if lower == "none" {
+        return Vec::new();
+    }
+    let mut shadows = Vec::new();
+    for layer in split_top_level_commas(value) {
+        let mut color = None;
+        let mut lengths = Vec::with_capacity(3);
+        for component in split_components(&layer) {
+            if color.is_none() && Color::parse(&component).is_some() {
+                color = Color::parse(&component);
+                continue;
+            }
+            if lengths.len() < 3
+                && let Some(length) = parse_shadow_length(&component, font_size, root_font_size)
+            {
+                lengths.push(length);
+            }
+        }
+        if lengths.len() < 2 {
+            continue;
+        }
+        shadows.push(TextShadow {
+            offset_x: lengths[0],
+            offset_y: lengths[1],
+            blur: lengths.get(2).copied().unwrap_or(0.0).max(0.0),
+            color: color.unwrap_or(current_color),
+        });
+        if shadows.len() >= MAX_TEXT_SHADOWS {
+            break;
+        }
+    }
+    shadows
 }
 
 /// Splits a comma-separated CSS list at top level (parentheses/quotes aware).

@@ -186,6 +186,18 @@ pub(crate) fn layout_box_contents(
         crate::table::layout_table(layout_box, cb_height, definite_height, measurer, pos);
         return;
     }
+    // Flex containers arrange their children with the flex algorithm instead of the
+    // block flow (CSS Flexbox 1). Documents without `display:flex` never enter this
+    // branch, so block/IFC geometry is unchanged.
+    if layout_box
+        .style
+        .as_ref()
+        .is_some_and(|style| style.display == Display::Flex || style.is_inline_flex)
+    {
+        let definite_height = definite_content_height(layout_box, cb_height);
+        crate::flex::layout_flex_children(layout_box, definite_height, is_root, measurer);
+        return;
+    }
     let definite_height = definite_content_height(layout_box, cb_height);
     let children_layout =
         layout_block_children(layout_box, definite_height, is_root, measurer, pos);
@@ -811,7 +823,7 @@ fn layout_absolutely_positioned(
 }
 
 /// Computes the used height of a block container per CSS 2.2 §10.6.3 / §10.6.7.
-fn calculate_block_height(
+pub(crate) fn calculate_block_height(
     layout_box: &mut LayoutBox,
     cb_height: Option<f32>,
     definite_height: Option<f32>,
@@ -977,10 +989,11 @@ fn last_block_child(layout_box: &LayoutBox) -> Option<&LayoutBox> {
 /// modelled yet, so only the `display` values known to establish one are listed.
 fn establishes_independent_formatting_context(layout_box: &LayoutBox) -> bool {
     layout_box.style.as_ref().is_some_and(|style| {
-        matches!(
-            style.display,
-            Display::Flex | Display::Grid | Display::Table | Display::TableRow | Display::TableCell
-        )
+        (style.display == Display::Flex || style.is_inline_flex)
+            || matches!(
+                style.display,
+                Display::Grid | Display::Table | Display::TableRow | Display::TableCell
+            )
             // CSS 2.2 §9.4.1: floats, absolutely positioned boxes, and boxes with
             // `overflow` other than `visible` establish a new block formatting context.
             || style.float != Float::None
@@ -1124,7 +1137,7 @@ fn resolve_offset(length: Length, reference: Option<f32>) -> Option<f32> {
 
 /// Sets the used width of a shrink-to-fit box (floats, absolutely positioned boxes):
 /// `min(max(preferred minimum, available), preferred maximum)` (CSS 2.2 §10.3.5).
-fn calculate_shrink_to_fit_width(
+pub(crate) fn calculate_shrink_to_fit_width(
     layout_box: &mut LayoutBox,
     cb_width: f32,
     available: f32,

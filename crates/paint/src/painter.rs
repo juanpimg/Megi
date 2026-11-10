@@ -48,7 +48,7 @@
 //! baseline + 0.12 em, overline at baseline - 0.8 em and line-through at
 //! baseline - 0.3 em, with a `max(1px, font-size / 14)` thickness. `list-item`
 //! boxes get a marker in front of the content box (fixed offset documented in
-//! [`paint_marker`]) with `disc`/`circle`/`square`/`decimal` styles.
+//! `paint_marker`) with `disc`/`circle`/`square`/`decimal` styles.
 //!
 //! ## Canvas and root/`body` background propagation
 //!
@@ -64,7 +64,7 @@ use layout::{BoxType, LayoutBox, Rect};
 use std::cell::RefCell;
 
 use crate::display_list::{
-    BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MarkerKind,
+    BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MAX_SHADOWS, MarkerKind,
 };
 use crate::hit_test::{HitKind, HitRegion, RegionCollector};
 
@@ -940,11 +940,50 @@ fn paint_background_border(
 
     let background_is_propagated = (is_root && skip.root_background)
         || layout_box.node_id().is_some() && layout_box.node_id() == skip.body_node;
-    if !background_is_propagated && style.background_color.a > 0 {
-        list.push(DisplayItem::SolidColor {
-            rect: layout_box.dimensions.border_box(),
-            color: scaled(style.background_color, alpha_scale),
+    let border_box = layout_box.dimensions.border_box();
+    let radii = style.border_radius;
+    let has_radius = !radii.is_zero();
+    let rounded_group = !background_is_propagated && has_radius;
+
+    // Outer `box-shadow` layers are painted behind the background, last shadow
+    // first so the first authored shadow ends up on top (CSS Backgrounds 3 §6).
+    if !background_is_propagated {
+        for shadow in style
+            .box_shadows
+            .iter()
+            .rev()
+            .filter(|shadow| !shadow.inset)
+            .take(MAX_SHADOWS)
+        {
+            list.push(DisplayItem::BoxShadow {
+                rect: border_box,
+                radii,
+                shadow: css::BoxShadow {
+                    color: scaled(shadow.color, alpha_scale),
+                    ..*shadow
+                },
+            });
+        }
+    }
+    if rounded_group {
+        list.push(DisplayItem::PushRoundedGroup {
+            rect: border_box,
+            radii,
         });
+    }
+    if !background_is_propagated && style.background_color.a > 0 {
+        if has_radius {
+            list.push(DisplayItem::RoundedRect {
+                rect: border_box,
+                radii,
+                color: scaled(style.background_color, alpha_scale),
+            });
+        } else {
+            list.push(DisplayItem::SolidColor {
+                rect: border_box,
+                color: scaled(style.background_color, alpha_scale),
+            });
+        }
     }
 
     // `background-image`, on top of the color; missing URL => nothing painted.
@@ -1032,15 +1071,92 @@ fn paint_background_border(
         }
     }
 
+    if rounded_group {
+        list.push(DisplayItem::PopRoundedGroup);
+    }
+
+    // Inset shadows are painted above the background but below the border and content.
+    if !background_is_propagated {
+        for shadow in style
+            .box_shadows
+            .iter()
+            .rev()
+            .filter(|shadow| shadow.inset)
+            .take(MAX_SHADOWS)
+        {
+            list.push(DisplayItem::BoxShadow {
+                rect: border_box,
+                radii,
+                shadow: css::BoxShadow {
+                    color: scaled(shadow.color, alpha_scale),
+                    ..*shadow
+                },
+            });
+        }
+    }
+
     let sides = border_sides(style, layout_box.dimensions.border);
     if sides.iter().any(BorderSide::is_visible) {
-        resources.record(layout_box.dimensions.border_box(), node_id, HitKind::Border);
-        list.push(DisplayItem::Border {
-            rect: layout_box.dimensions.border_box(),
-            sides: sides.map(|side| BorderSide {
-                color: scaled(side.color, alpha_scale),
-                ..side
-            }),
+        resources.record(border_box, node_id, HitKind::Border);
+        let sides = sides.map(|side| BorderSide {
+            color: scaled(side.color, alpha_scale),
+            ..side
+        });
+        let solid = sides
+            .iter()
+            .filter(|side| side.is_visible())
+            .all(|side| matches!(side.style, BorderStyle::Solid));
+        if has_radius && solid {
+            list.push(DisplayItem::RoundedBorder {
+                rect: border_box,
+                sides,
+                radii,
+            });
+        } else {
+            list.push(DisplayItem::Border {
+                rect: border_box,
+                sides,
+            });
+        }
+    }
+}
+
+/// Emits the `text-shadow` layers for one text run (CSS Text Decoration 3 §3).
+///
+/// Shadows are painted last-first so the first authored shadow ends up on top,
+/// immediately before the glyphs. Blur is clamped by the rasterizer and the list
+/// is capped at [`MAX_SHADOWS`].
+#[allow(clippy::too_many_arguments)]
+fn push_text_shadows(
+    style: Option<&css::ComputedStyle>,
+    list: &mut DisplayList,
+    text: &str,
+    rect: Rect,
+    font_size: f32,
+    font_family: &str,
+    font_weight: u16,
+    font_italic: bool,
+    advance: f32,
+    baseline: f32,
+    alpha_scale: f32,
+) {
+    let Some(style) = style else {
+        return;
+    };
+    for shadow in style.text_shadows.iter().rev().take(MAX_SHADOWS) {
+        list.push(DisplayItem::TextShadow {
+            text: text.to_string(),
+            rect,
+            color: scaled(shadow.color, alpha_scale),
+            font_size,
+            font_family: font_family.to_string(),
+            font_weight,
+            font_italic,
+            advance,
+            baseline,
+            offset_x: shadow.offset_x,
+            offset_y: shadow.offset_y,
+            blur: shadow.blur,
         });
     }
 }
@@ -1077,6 +1193,19 @@ fn paint_text_run(
     });
 
     resources.record(layout_box.dimensions.content, owner, HitKind::Text);
+    push_text_shadows(
+        style.map(|style| style.as_ref()),
+        list,
+        text,
+        layout_box.dimensions.content,
+        font_size,
+        &font_family,
+        font_weight,
+        font_italic,
+        advance,
+        layout_box.baseline,
+        alpha_scale,
+    );
     list.push(DisplayItem::Text {
         text: text.to_string(),
         rect: layout_box.dimensions.content,

@@ -19,7 +19,7 @@
 
 use crate::properties::{
     BorderStyle, Color, Length, ListStyleType, parse_background_shorthand_layers,
-    parse_border_width, split_components,
+    parse_border_width, split_border_radius_value, split_components,
 };
 use crate::rule::Declaration;
 
@@ -94,6 +94,7 @@ fn expand_properties(declaration: &Declaration) -> Option<Vec<(String, String)>>
             Some(expand_box_edges(value, declaration.name.as_str()).unwrap_or_default())
         }
         "background" => Some(expand_background(value).unwrap_or_default()),
+        "border-radius" => Some(expand_border_radius(value).unwrap_or_default()),
         "font" => Some(expand_font(value).unwrap_or_default()),
         "list-style" => Some(expand_list_style(value).unwrap_or_default()),
         _ => None,
@@ -298,6 +299,55 @@ fn is_image_component(component: &str) -> bool {
         || lower.contains("gradient(")
         || lower.starts_with("image-set(")
         || lower.starts_with("cross-fade(")
+}
+
+/// Expands `border-radius` into the four corner longhands.
+///
+/// Grammar: `[ <length-percentage>{1,4} [ / <length-percentage>{1,4} ]? ]`
+/// (CSS Backgrounds 3 §5.1). Values are kept as raw CSS text; the cascade computes
+/// them per corner later. Invalid values drop the whole shorthand.
+fn expand_border_radius(value: &str) -> Option<Vec<(String, String)>> {
+    let (horizontal, vertical) = split_border_radius_value(value);
+    let horizontal_parts = split_components(&horizontal);
+    if horizontal_parts.is_empty() || horizontal_parts.len() > 4 {
+        return Some(Vec::new());
+    }
+    let vertical_parts = match vertical.as_deref().map(split_components) {
+        Some(parts) if !parts.is_empty() && parts.len() <= 4 => Some(parts),
+        Some(_) => return Some(Vec::new()),
+        None => None,
+    };
+    // Corner order: top-left, top-right, bottom-right, bottom-left.
+    let corners = |parts: &[String]| -> [String; 4] {
+        match parts {
+            [all] => [all.clone(), all.clone(), all.clone(), all.clone()],
+            [first, second] => [first.clone(), second.clone(), first.clone(), second.clone()],
+            [first, second, third] => {
+                [first.clone(), second.clone(), third.clone(), second.clone()]
+            }
+            [first, second, third, fourth] => {
+                [first.clone(), second.clone(), third.clone(), fourth.clone()]
+            }
+            _ => unreachable!("length checked above"),
+        }
+    };
+    let horizontal_corners = corners(&horizontal_parts);
+    let vertical_corners = vertical_parts.as_ref().map(|parts| corners(parts));
+    const NAMES: [&str; 4] = [
+        "border-top-left-radius",
+        "border-top-right-radius",
+        "border-bottom-right-radius",
+        "border-bottom-left-radius",
+    ];
+    let mut declarations = Vec::with_capacity(4);
+    for (index, name) in NAMES.iter().enumerate() {
+        let value = match &vertical_corners {
+            Some(vertical) => format!("{} {}", horizontal_corners[index], vertical[index]),
+            None => horizontal_corners[index].clone(),
+        };
+        declarations.push((name.to_string(), value));
+    }
+    Some(declarations)
 }
 
 /// Expands `background` to the modelled longhands for **all layers**
