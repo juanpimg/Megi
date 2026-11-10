@@ -4,12 +4,19 @@
 //! - `0`: every failure is in the documented allowlist (see `test_harness::KNOWN_*_FAILURES`).
 //! - `1`: a regression outside the allowlist, missing fixtures, or (with `--strict`) any failure.
 //!
-//! `--strict` treats even the documented known failures (`xmlViolation.test` 1/4 and the four
-//! `scripted_*` tree suites) as gate failures. `--verbose`/`-v` prints failure details. A positional
-//! filter limits the report to suites whose file name contains the given substring.
+//! Tokenizer runs also gate the 2,769 parse-error annotations declared by the fixtures (expanded to
+//! 2,779 `(case, initial state)` checks): every `(code, line, col)` must match, modulo 37 documented
+//! order-only differences and the one documented unannotated `xmlViolation.test` input-stream error.
+//!
+//! `--strict` treats even the documented known failures (the four `scripted_*` tree suites, the
+//! tokenizer error-order differences and the `xmlViolation.test` unannotated error) as gate
+//! failures. `--verbose`/`-v` prints failure details. A positional filter limits the report to
+//! suites whose file name contains the given substring (totals are not gated in that mode).
 
 use test_harness::{
-    CSS_EXPECTED_RESULTS, KNOWN_TOKENIZER_FAILURES, KNOWN_TREE_FAILURES, allowed_failures,
+    CSS_EXPECTED_RESULTS, KNOWN_TOKENIZER_ERROR_ORDER_GAPS, KNOWN_TOKENIZER_FAILURES,
+    KNOWN_TREE_FAILURES, TOKENIZER_ERROR_ANNOTATIONS, XML_VIOLATION_UNANNOTATED_ERRORS,
+    allowed_failures,
     css_harness::{
         run_wpt_anb_parsing, run_wpt_declarations_trim_whitespace, run_wpt_input_preprocessing,
     },
@@ -59,6 +66,11 @@ fn main() {
     println!("--- Tokenizer Suites (tests/html5lib-tests/tokenizer/*.test) ---");
     let mut tok_passed_total = 0usize;
     let mut tok_runs_total = 0usize;
+    let mut tok_error_expected_total = 0usize;
+    let mut tok_error_actual_total = 0usize;
+    let mut tok_error_multiset_mismatches = 0usize;
+    let mut tok_error_order_gaps = 0usize;
+    let mut xml_violation_unannotated_errors = 0usize;
     for path in &tok_entries {
         let fname = path.file_name().unwrap().to_str().unwrap();
         if let Some(f) = filter
@@ -82,6 +94,48 @@ fn main() {
                 "tokenizer {fname}: {failed} failures (allowlisted: {allowed})"
             ));
         }
+
+        // Parse-error annotation gate (html5lib-tests errors: code + 1-based line/col).
+        let mut suite_expected_errors = 0usize;
+        let mut suite_actual_errors = 0usize;
+        let mut suite_multiset_mismatches = 0usize;
+        let mut suite_order_gaps = 0usize;
+        for run in &runs {
+            suite_expected_errors += run.expected_errors.len();
+            suite_actual_errors += run.actual_errors.len();
+            if run.errors_passed {
+                if !run.errors_in_order {
+                    suite_order_gaps += 1;
+                }
+            } else {
+                suite_multiset_mismatches += 1;
+            }
+        }
+        tok_error_expected_total += suite_expected_errors;
+        tok_error_actual_total += suite_actual_errors;
+        tok_error_order_gaps += suite_order_gaps;
+        if fname == "xmlViolation.test" {
+            // This fixture only asserts coerced tokens; its input still legitimately raises
+            // input-stream errors, which are counted and documented instead of compared.
+            xml_violation_unannotated_errors += suite_actual_errors;
+        } else {
+            tok_error_multiset_mismatches += suite_multiset_mismatches;
+            if suite_multiset_mismatches > 0 {
+                gate_failed = true;
+                unknown_failures.push(format!(
+                    "tokenizer {fname}: {suite_multiset_mismatches} run(s) with parse-error annotations \
+                     that differ (code/line/col multiset)"
+                ));
+            }
+            let allowed_order_gaps = allowed_failures(KNOWN_TOKENIZER_ERROR_ORDER_GAPS, fname);
+            if suite_order_gaps != allowed_order_gaps {
+                gate_failed = true;
+                unknown_failures.push(format!(
+                    "tokenizer {fname}: {suite_order_gaps} parse-error order-only difference(s) \
+                     (documented allowlist: {allowed_order_gaps})"
+                ));
+            }
+        }
         println!(
             "  {fname:<34} {passed:5} / {:5} state-runs passed{}",
             runs.len(),
@@ -102,7 +156,27 @@ fn main() {
             }
         }
     }
-    println!("Tokenizer Total: {tok_passed_total} / {tok_runs_total} state-runs passed\n");
+    println!("Tokenizer Total: {tok_passed_total} / {tok_runs_total} state-runs passed");
+    println!(
+        "Tokenizer Parse Errors: {tok_error_expected_total} expected annotation(s), \
+         {tok_error_actual_total} emitted; {tok_error_multiset_mismatches} multiset mismatch(es), \
+         {tok_error_order_gaps} order-only difference(s) (documented) + \
+         {xml_violation_unannotated_errors} unannotated xmlViolation input-stream error(s)\n"
+    );
+    if filter.is_none() && tok_error_expected_total != TOKENIZER_ERROR_ANNOTATIONS {
+        gate_failed = true;
+        unknown_failures.push(format!(
+            "tokenizer parse errors: expected {TOKENIZER_ERROR_ANNOTATIONS} annotations, got \
+             {tok_error_expected_total}"
+        ));
+    }
+    if xml_violation_unannotated_errors != XML_VIOLATION_UNANNOTATED_ERRORS {
+        gate_failed = true;
+        unknown_failures.push(format!(
+            "xmlViolation.test: {xml_violation_unannotated_errors} unannotated error(s), documented \
+             count is {XML_VIOLATION_UNANNOTATED_ERRORS}"
+        ));
+    }
 
     // -------------------------------------------------------- tree construction
     let tree_dir = tree_construction_dat_dir();
@@ -224,14 +298,26 @@ fn main() {
     println!("Known-failure allowlist:");
     println!(
         "  tokenizer: {}",
-        format_allowlist(KNOWN_TOKENIZER_FAILURES)
+        if KNOWN_TOKENIZER_FAILURES.is_empty() {
+            "(none)".to_string()
+        } else {
+            format_allowlist(KNOWN_TOKENIZER_FAILURES)
+        }
+    );
+    println!(
+        "  tokenizer errors: order-only {:?}, xmlViolation unannotated: {XML_VIOLATION_UNANNOTATED_ERRORS}",
+        KNOWN_TOKENIZER_ERROR_ORDER_GAPS
     );
     println!("  tree:      {}", format_allowlist(KNOWN_TREE_FAILURES));
-    if strict && known_failures_total > 0 {
-        gate_failed = true;
-        unknown_failures.push(format!(
-            "strict mode: {known_failures_total} allowlisted failure(s) are not tolerated"
-        ));
+    if strict {
+        let documented_error_diffs = tok_error_order_gaps + xml_violation_unannotated_errors;
+        if known_failures_total > 0 || documented_error_diffs > 0 {
+            gate_failed = true;
+            unknown_failures.push(format!(
+                "strict mode: {known_failures_total} allowlisted token/tree failure(s) and \
+                 {documented_error_diffs} documented parse-error difference(s) are not tolerated"
+            ));
+        }
     }
     if gate_failed {
         eprintln!();

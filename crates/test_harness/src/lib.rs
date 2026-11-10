@@ -22,11 +22,27 @@ use std::path::{Path, PathBuf};
 pub const TOKENIZER_SUITE_COUNT: usize = 14;
 /// Total `(case, initial state)` runs across all 14 tokenizer suites.
 pub const TOKENIZER_EXPECTED_RUNS: usize = 7050;
-/// Passing tokenizer runs: 7046 across the 13 standard suites + 1/4 `xmlViolation.test`.
-pub const TOKENIZER_EXPECTED_PASSED: usize = 7047;
-/// Known tokenizer conformance gap: `xmlViolation.test` exercises the XML-infoset coercion of
-/// HTML §13.2.9, which Megi does not implement yet (3/4 failures: U+FFFF, U+000C, `--`).
-pub const KNOWN_TOKENIZER_FAILURES: &[(&str, usize)] = &[("xmlViolation.test", 3)];
+/// Passing tokenizer runs: all 13 standard suites plus `xmlViolation.test` (the tokenizer applies
+/// the WHATWG HTML §13.2.9 XML-infoset coercion in that fixture's mode).
+pub const TOKENIZER_EXPECTED_PASSED: usize = 7050;
+/// Known tokenizer conformance gaps: none. Every one of the 7,050 `(case, initial state)` runs
+/// passes, `xmlViolation.test` included.
+pub const KNOWN_TOKENIZER_FAILURES: &[(&str, usize)] = &[];
+
+/// Parse-error annotations declared in the tokenizer fixtures (raw case-level count).
+pub const TOKENIZER_FIXTURE_ERROR_ANNOTATIONS: usize = 2769;
+/// Expected annotation count expanded per `initialStates` run (the same case annotations are
+/// checked once per initial state), i.e. what the error gate compares.
+pub const TOKENIZER_ERROR_ANNOTATIONS: usize = 2779;
+/// Suites where html5lib-tests emits otherwise-identical parse errors in a different order than
+/// Megi (input-stream errors interleaved with tokenizer errors). The annotation multisets and the
+/// `(code, line, col)` values still match exactly; only the sequence order differs.
+pub const KNOWN_TOKENIZER_ERROR_ORDER_GAPS: &[(&str, usize)] =
+    &[("test3.test", 34), ("test4.test", 3)];
+/// `xmlViolation.test` declares no parse-error annotations (it only asserts coerced tokens).
+/// Megi still legitimately reports one input-stream error while tokenizing its U+FFFF input
+/// (`noncharacter-in-input-stream`); it is documented and asserted instead of silently ignored.
+pub const XML_VIOLATION_UNANNOTATED_ERRORS: usize = 1;
 
 /// Number of `tree-construction/*.dat` suites.
 pub const TREE_SUITE_COUNT: usize = 62;

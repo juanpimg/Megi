@@ -8,16 +8,21 @@
 //! Covered:
 //! 1. All 14 `tokenizer/*.test` JSON files (6,824 test cases) parse cleanly.
 //! 2. All 62 `tree-construction/*.dat` files are content-identical to their exported `.json`.
-//! 3. All 14 tokenizer suites run: 7,047/7,050 state-runs (3 known failures in `xmlViolation.test`).
-//! 4. All 62 tree-construction suites run: 3,898/3,904 mode-runs (6 known `scripted_*` failures).
-//! 5. The vendored WPT CSS Syntax fixtures run with no skip: 30/30 results.
+//! 3. All 14 tokenizer suites run: 7,050/7,050 state-runs, including `xmlViolation.test` 4/4 with
+//!    the WHATWG HTML §13.2.9 XML-infoset coercion enabled.
+//! 4. All 2,769 fixture parse-error annotations (2,779 run-level checks) match `(code, line, col)`;
+//!    only 37 documented order-only differences remain.
+//! 5. All 62 tree-construction suites run: 3,898/3,904 mode-runs (6 known `scripted_*` failures).
+//! 6. The vendored WPT CSS Syntax fixtures run with no skip: 30/30 results.
 
 use std::path::{Path, PathBuf};
 
 use test_harness::{
-    CSS_EXPECTED_RESULTS, KNOWN_TOKENIZER_FAILURES, KNOWN_TREE_FAILURES, TOKENIZER_EXPECTED_PASSED,
-    TOKENIZER_EXPECTED_RUNS, TOKENIZER_SUITE_COUNT, TREE_EXPECTED_PASSED, TREE_EXPECTED_RUNS,
-    TREE_SUITE_COUNT, allowed_failures, format_allowlist,
+    CSS_EXPECTED_RESULTS, KNOWN_TOKENIZER_ERROR_ORDER_GAPS, KNOWN_TOKENIZER_FAILURES,
+    KNOWN_TREE_FAILURES, TOKENIZER_ERROR_ANNOTATIONS, TOKENIZER_EXPECTED_PASSED,
+    TOKENIZER_EXPECTED_RUNS, TOKENIZER_FIXTURE_ERROR_ANNOTATIONS, TOKENIZER_SUITE_COUNT,
+    TREE_EXPECTED_PASSED, TREE_EXPECTED_RUNS, TREE_SUITE_COUNT, XML_VIOLATION_UNANNOTATED_ERRORS,
+    allowed_failures, format_allowlist,
     tokenizer_harness::{load_tokenizer_test_file, run_tokenizer_suite_file},
     tokenizer_tests_dir, tree_construction_dat_dir, tree_construction_json_dir,
     tree_harness::{load_tree_json_file, parse_dat_str, run_tree_suite_file},
@@ -203,6 +208,120 @@ fn test_closed_loop_tokenizer_all_14_files_exact_gate() {
         (passed_total, runs_total),
         (TOKENIZER_EXPECTED_PASSED, TOKENIZER_EXPECTED_RUNS),
         "Tokenizer totals regressed: expected {TOKENIZER_EXPECTED_PASSED}/{TOKENIZER_EXPECTED_RUNS}"
+    );
+}
+
+/// Gates the html5lib-tests tokenizer parse-error annotations.
+///
+/// Every fixture case declares `errors: [{code, line, col}]` (2,769 annotations, checked once per
+/// initial state => 2,779 run-level expectations). The comparison is:
+/// - exact `(code, line, col)` multisets for every run (position encoding included);
+/// - exact sequence order except for the documented `KNOWN_TOKENIZER_ERROR_ORDER_GAPS` suites,
+///   where html5lib-tests interleaves input-stream and tokenizer errors differently;
+/// - `xmlViolation.test` asserts tokens only, but its U+FFFF input still legitimately raises one
+///   `noncharacter-in-input-stream` error: counted and asserted, never silently dropped.
+#[test]
+fn test_closed_loop_tokenizer_parse_errors_gate() {
+    let files = suite_files(&tokenizer_tests_dir(), "test");
+    assert_eq!(
+        files.len(),
+        TOKENIZER_SUITE_COUNT,
+        "Expected {TOKENIZER_SUITE_COUNT} tokenizer/*.test files, found {}",
+        files.len()
+    );
+
+    let mut fixture_annotations = 0usize;
+    let mut expected_total = 0usize;
+    let mut actual_total = 0usize;
+    let mut multiset_mismatches: Vec<String> = Vec::new();
+    let mut order_gaps_total = 0usize;
+    let mut xml_violation_errors = 0usize;
+
+    for path in &files {
+        let suite_name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .expect("tokenizer fixture must have a UTF-8 name");
+        let (_is_xml, cases) =
+            load_tokenizer_test_file(path).expect("Every tokenizer .test file must parse");
+        fixture_annotations += cases.iter().map(|case| case.errors.len()).sum::<usize>();
+
+        let results = run_tokenizer_suite_file(path)
+            .unwrap_or_else(|e| panic!("tokenizer suite {suite_name} failed to run: {e}"));
+        let is_xml_violation = suite_name == "xmlViolation.test";
+        let mut suite_order_gaps = 0usize;
+        for run in &results {
+            expected_total += run.expected_errors.len();
+            actual_total += run.actual_errors.len();
+            if !run.errors_passed {
+                // xmlViolation.test declares no error annotations; its extra input-stream error is
+                // counted/asserted separately below instead of being compared.
+                if !is_xml_violation {
+                    multiset_mismatches.push(format!(
+                        "{suite_name} #{} [{}]: expected {:?}, actual {:?}",
+                        run.index, run.initial_state, run.expected_errors, run.actual_errors
+                    ));
+                }
+            } else if !run.errors_in_order {
+                suite_order_gaps += 1;
+            }
+        }
+
+        if is_xml_violation {
+            xml_violation_errors += results
+                .iter()
+                .map(|run| run.actual_errors.len())
+                .sum::<usize>();
+            continue;
+        }
+        let allowed_order_gaps = allowed_failures(KNOWN_TOKENIZER_ERROR_ORDER_GAPS, suite_name);
+        assert_eq!(
+            suite_order_gaps, allowed_order_gaps,
+            "Parse-error ORDER differs in {suite_name}: {suite_order_gaps} run(s) emit the same \
+             annotations in a different order, but the documented allowlist for this suite is \
+             {allowed_order_gaps}"
+        );
+        order_gaps_total += suite_order_gaps;
+    }
+
+    assert!(
+        multiset_mismatches.is_empty(),
+        "Tokenizer parse-error annotations differ from the html5lib-tests fixtures in {} run(s) \
+         (showing up to 20):\n{}",
+        multiset_mismatches.len(),
+        multiset_mismatches
+            .iter()
+            .take(20)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    assert_eq!(
+        fixture_annotations, TOKENIZER_FIXTURE_ERROR_ANNOTATIONS,
+        "Tokenizer fixture parse-error annotation count changed"
+    );
+    assert_eq!(
+        expected_total, TOKENIZER_ERROR_ANNOTATIONS,
+        "Run-level tokenizer parse-error expectation count changed (annotations are checked once \
+         per initial state)"
+    );
+    assert_eq!(
+        actual_total,
+        expected_total + XML_VIOLATION_UNANNOTATED_ERRORS,
+        "Tokenizer emitted an unexpected number of parse errors (xmlViolation.test contributes \
+         {XML_VIOLATION_UNANNOTATED_ERRORS} documented unannotated input-stream error(s))"
+    );
+    let documented_order_gaps: usize = KNOWN_TOKENIZER_ERROR_ORDER_GAPS
+        .iter()
+        .map(|(_, count)| *count)
+        .sum();
+    assert_eq!(
+        order_gaps_total, documented_order_gaps,
+        "Total documented parse-error order-only differences changed"
+    );
+    assert_eq!(
+        xml_violation_errors, XML_VIOLATION_UNANNOTATED_ERRORS,
+        "xmlViolation.test unannotated input-stream error count changed"
     );
 }
 

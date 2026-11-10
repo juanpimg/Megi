@@ -167,6 +167,92 @@ pub struct ParseError {
     pub col: usize,
 }
 
+/// Returns `true` if `cp` is a valid XML 1.0 `Char` production
+/// (`#x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]`).
+///
+/// Used by the optional WHATWG HTML §13.2.9 "Coercing an HTML DOM into an infoset" mode.
+pub const fn is_valid_xml_character(cp: u32) -> bool {
+    matches!(cp, 0x9 | 0xA | 0xD)
+        || matches!(cp, 0x20..=0xD7FF | 0xE000..=0xFFFD | 0x10000..=0x10FFFF)
+}
+
+/// Applies the §13.2.9 character tweaks: U+000C FORM FEED becomes U+0020 SPACE and any other
+/// literal non-XML character becomes U+FFFD REPLACEMENT CHARACTER.
+const fn xml_coerce_codepoint(cp: u32) -> u32 {
+    if cp == 0x0C {
+        0x20
+    } else if is_valid_xml_character(cp) {
+        cp
+    } else {
+        0xFFFD
+    }
+}
+
+/// Applies the §13.2.9 character tweaks to a `String` used as character data or an attribute value.
+fn xml_coerce_text(text: &str) -> String {
+    if text.chars().all(|ch| is_valid_xml_character(ch as u32)) {
+        return text.to_owned();
+    }
+    text.chars()
+        .map(|ch| char::from_u32(xml_coerce_codepoint(ch as u32)).unwrap_or('\u{FFFD}'))
+        .collect()
+}
+
+/// Applies the §13.2.9 comment tweaks: non-XML characters/FF are coerced like character data and
+/// a U+0020 SPACE is inserted between two consecutive U+002D HYPHEN-MINUS characters.
+fn xml_coerce_comment(text: &str) -> String {
+    let coerced = xml_coerce_text(text);
+    let mut out = String::with_capacity(coerced.len());
+    let mut previous = None;
+    for ch in coerced.chars() {
+        if previous == Some('-') && ch == '-' {
+            out.push(' ');
+        }
+        out.push(ch);
+        previous = Some(ch);
+    }
+    out
+}
+
+/// How html5lib-tests expects the position of a given parse error to be encoded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ErrorPositionMode {
+    /// Position of the most recently consumed character (Megi's historical behaviour).
+    Current,
+    /// Position of the next input character (EOF / character-reference / lookahead families,
+    /// which html5lib records after advancing past the character that triggered the error).
+    Next,
+}
+
+/// Position convention per parse error code, derived from the html5lib-tests fixtures.
+///
+/// All codes not listed here use [`ErrorPositionMode::Current`]. The residue of codes that still
+/// differ after this split is tracked explicitly by `test_harness::KNOWN_POSITION_GAPS`.
+const fn error_position_mode(code: ParseErrorCode) -> ErrorPositionMode {
+    use ParseErrorCode::*;
+    match code {
+        // End-of-file errors are reported at the position the parser would read next.
+        EofBeforeTagName
+        | EofInCdata
+        | EofInComment
+        | EofInDoctype
+        | EofInProcessingInstruction
+        | EofInScriptHtmlCommentLikeText
+        | EofInTag => ErrorPositionMode::Next,
+        // Character-reference errors raised by the numeric-reference end state are reported after
+        // the reference's terminator was read; the numeric parsing states report at the offending
+        // character and override the mode with `record_error_at_current`.
+        ControlCharacterReference
+        | MissingSemicolonAfterCharacterReference
+        | NoncharacterCharacterReference
+        | NullCharacterReference
+        | SurrogateCharacterReference => ErrorPositionMode::Next,
+        // Raised while leaving the markup-declaration-open state, after the lookahead char.
+        IncorrectlyOpenedComment => ErrorPositionMode::Next,
+        _ => ErrorPositionMode::Current,
+    }
+}
+
 /// All 84 states of the WHATWG HTML Living Standard Tokenizer (§13.2.5.1 – §13.2.5.84).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub enum TokenizerState {
@@ -414,6 +500,10 @@ struct PendingTag {
     current_attr_name: String,
     current_attr_value: String,
     has_current_attr: bool,
+    /// 1-based `(line, col)` where the current attribute name ended (used for the
+    /// `duplicate-attribute` position, matching html5lib-tests expectations).
+    name_end_line: usize,
+    name_end_col: usize,
 }
 
 impl PendingTag {
@@ -427,6 +517,8 @@ impl PendingTag {
             current_attr_name: String::new(),
             current_attr_value: String::new(),
             has_current_attr: false,
+            name_end_line: 1,
+            name_end_col: 1,
         }
     }
 
@@ -440,6 +532,8 @@ impl PendingTag {
             current_attr_name: String::new(),
             current_attr_value: String::new(),
             has_current_attr: false,
+            name_end_line: 1,
+            name_end_col: 1,
         }
     }
 
@@ -469,8 +563,8 @@ impl PendingTag {
         } else {
             errors.push(ParseError {
                 code: ParseErrorCode::DuplicateAttribute,
-                line: 1,
-                col: 1,
+                line: self.name_end_line,
+                col: self.name_end_col,
             });
         }
     }
@@ -536,12 +630,40 @@ pub struct Tokenizer {
     pub allow_cdata: bool,
     pub tokens: Vec<Token>,
     pub errors: Vec<ParseError>,
+    /// 0-based indices of the first code point of each line (used for error positions).
+    line_starts: Vec<usize>,
+    /// Prefix sums of non-BMP code points (UTF-16 surrogate-pair columns in html5lib-tests
+    /// positions). `None` when the input is entirely BMP, keeping the common path allocation-free.
+    wide_prefix: Option<Vec<u32>>,
+    /// Position of the whitespace that ended a processing-instruction target (`None` before it).
+    /// html5lib-tests reports `eof-in-processing-instruction` at that position.
+    pi_data_start: Option<(usize, usize)>,
+    /// Position convention to use for errors raised in the numeric-character-reference end state.
+    numeric_end_mode: ErrorPositionMode,
+    /// When enabled, emitted tokens are coerced per WHATWG HTML §13.2.9 so they match the
+    /// html5lib-tests `xmlViolationTests` expectations (XML infoset compatibility).
+    xml_coercion: bool,
 }
 
 impl Tokenizer {
     /// Creates a new `Tokenizer` from raw code points (which are preprocessed via §13.2.3.5).
     pub fn new(raw_code_points: &[u32], config: TokenizerConfig) -> Self {
         let (input, errors) = preprocess_code_points(raw_code_points);
+        let mut line_starts = vec![0usize];
+        for (index, cp) in input.iter().enumerate() {
+            if *cp == 0x0A {
+                line_starts.push(index + 1);
+            }
+        }
+        let wide_prefix = input.iter().any(|cp| *cp > 0xFFFF).then(|| {
+            let mut prefix = Vec::with_capacity(input.len() + 1);
+            prefix.push(0u32);
+            for cp in &input {
+                let previous = *prefix.last().expect("prefix starts with 0");
+                prefix.push(previous + u32::from(*cp > 0xFFFF));
+            }
+            prefix
+        });
         Self {
             input,
             pos: 0,
@@ -560,6 +682,11 @@ impl Tokenizer {
             allow_cdata: false,
             tokens: Vec::new(),
             errors,
+            line_starts,
+            wide_prefix,
+            pi_data_start: None,
+            numeric_end_mode: ErrorPositionMode::Next,
+            xml_coercion: false,
         }
     }
 
@@ -567,6 +694,18 @@ impl Tokenizer {
     pub fn from_str_input(input: &str, config: TokenizerConfig) -> Self {
         let raw: Vec<u32> = input.chars().map(|c| c as u32).collect();
         Self::new(&raw, config)
+    }
+
+    /// Enables WHATWG HTML §13.2.9 "Coercing an HTML DOM into an infoset" tweaks on the emitted
+    /// tokens: non-XML characters (including U+FFFF) become U+FFFD, U+000C becomes a space, and
+    /// `--` inside comments becomes `- -`. Only the html5lib-tests `xmlViolationTests` need this.
+    pub fn enable_xml_coercion(&mut self) {
+        self.xml_coercion = true;
+    }
+
+    /// Returns whether §13.2.9 token coercion is enabled.
+    pub const fn xml_coercion_enabled(&self) -> bool {
+        self.xml_coercion
     }
 
     /// Runs the tokenizer until `Token::Eof` is emitted.
@@ -614,15 +753,87 @@ impl Tokenizer {
         true
     }
 
+    /// Returns the 1-based `(line, col)` of the code point at 0-based `index`; `input.len()` maps
+    /// to the EOF position (one past the last code point, or the start of the line after a
+    /// trailing newline).
+    fn line_col_at(&self, index: usize) -> (usize, usize) {
+        if self.input.is_empty() {
+            return (1, 1);
+        }
+        if index < self.input.len() {
+            let line = self.line_starts.partition_point(|start| *start <= index);
+            // html5lib-tests columns count UTF-16 code units, so a non-BMP code point occupies two.
+            let line_start = self.line_starts[line - 1];
+            let wide_units = self
+                .wide_prefix
+                .as_ref()
+                .map_or(0, |prefix| prefix[index] - prefix[line_start]);
+            (line, index - line_start + 1 + wide_units as usize)
+        } else if self.input[self.input.len() - 1] == 0x0A {
+            (self.line_starts.len(), 1)
+        } else {
+            let last = self.input[self.input.len() - 1];
+            let (line, col) = self.line_col_at(self.input.len() - 1);
+            (line, col + if last > 0xFFFF { 2 } else { 1 })
+        }
+    }
+
+    /// Position of the most recently consumed code point (1-based).
+    fn current_position(&self) -> (usize, usize) {
+        if self.pos == 0 {
+            (1, 1)
+        } else {
+            self.line_col_at(self.pos - 1)
+        }
+    }
+
+    /// Position of the next code point to consume (1-based), i.e. one past the last consumed one.
+    fn next_position(&self) -> (usize, usize) {
+        self.line_col_at(self.pos)
+    }
+
+    /// Records a parse error at the position of the most recently consumed character, overriding
+    /// the code's default position mode (used by the numeric-character-reference parsing states).
+    fn record_error_at_current(&mut self, code: ParseErrorCode) {
+        let (line, col) = self.current_position();
+        self.errors.push(ParseError { code, line, col });
+    }
+
+    /// Records a parse error at the position of the next input character (EOF position at EOF).
+    fn record_error_at_next(&mut self, code: ParseErrorCode) {
+        let (line, col) = self.next_position();
+        self.errors.push(ParseError { code, line, col });
+    }
+
+    /// Records an error raised in the numeric-character-reference end state, whose html5lib-tests
+    /// position depends on how the state was entered (`;`/EOF vs. a non-`;` terminating character).
+    fn record_error_in_numeric_end(&mut self, code: ParseErrorCode) {
+        let (line, col) = match self.numeric_end_mode {
+            ErrorPositionMode::Current => self.current_position(),
+            ErrorPositionMode::Next => self.next_position(),
+        };
+        self.errors.push(ParseError { code, line, col });
+    }
+
     fn record_error(&mut self, code: ParseErrorCode) {
-        self.errors.push(ParseError {
-            code,
-            line: 1,
-            col: self.pos.max(1),
-        });
+        let (line, col) = if code == ParseErrorCode::EofInProcessingInstruction {
+            // html5lib-tests pins this error to the whitespace that ended the PI target, if any.
+            self.pi_data_start.unwrap_or_else(|| self.next_position())
+        } else {
+            match error_position_mode(code) {
+                ErrorPositionMode::Current => self.current_position(),
+                ErrorPositionMode::Next => self.next_position(),
+            }
+        };
+        self.errors.push(ParseError { code, line, col });
     }
 
     fn emit_char(&mut self, cp: u32) {
+        let cp = if self.xml_coercion {
+            xml_coerce_codepoint(cp)
+        } else {
+            cp
+        };
         self.tokens.push(Token::Character(cp));
     }
 
@@ -651,10 +862,18 @@ impl Tokenizer {
                 });
             } else {
                 self.last_start_tag = Some(tag.name.clone());
+                let attributes = if self.xml_coercion {
+                    tag.attributes
+                        .into_iter()
+                        .map(|(name, value)| (name, xml_coerce_text(&value)))
+                        .collect()
+                } else {
+                    tag.attributes
+                };
                 self.tokens.push(Token::StartTag {
                     name: tag.name,
                     self_closing: tag.self_closing,
-                    attributes: tag.attributes,
+                    attributes,
                 });
             }
         }
@@ -662,6 +881,11 @@ impl Tokenizer {
 
     fn emit_current_comment(&mut self) {
         let data = std::mem::take(&mut self.pending_comment);
+        let data = if self.xml_coercion {
+            xml_coerce_comment(&data)
+        } else {
+            data
+        };
         self.tokens.push(Token::Comment(data));
     }
 
@@ -1367,6 +1591,11 @@ impl Tokenizer {
             // 13.2.5.33 Attribute name state
             TokenizerState::AttributeName => match self.consume_next() {
                 Some(cp) if is_ascii_whitespace(cp) || matches!(cp, 0x2F | 0x3E) => {
+                    let (line, col) = self.current_position();
+                    if let Some(ref mut tag) = self.pending_tag {
+                        tag.name_end_line = line;
+                        tag.name_end_col = col;
+                    }
                     self.reconsume = true;
                     self.state = TokenizerState::AfterAttributeName;
                 }
@@ -1375,6 +1604,11 @@ impl Tokenizer {
                     self.state = TokenizerState::AfterAttributeName;
                 }
                 Some(0x3D) => {
+                    let (line, col) = self.current_position();
+                    if let Some(ref mut tag) = self.pending_tag {
+                        tag.name_end_line = line;
+                        tag.name_end_col = col;
+                    }
                     self.state = TokenizerState::BeforeAttributeValue;
                 }
                 Some(cp) if (0x41..=0x5A).contains(&cp) => {
@@ -2471,6 +2705,7 @@ impl Tokenizer {
                     } else {
                         self.pending_pi_target = target;
                         self.pending_pi_data.clear();
+                        self.pi_data_start = Some(self.current_position());
                         self.reconsume = true;
                         self.state = TokenizerState::AfterProcessingInstructionTarget;
                     }
@@ -2647,8 +2882,18 @@ impl Tokenizer {
                     self.reconsume = true;
                     self.state = TokenizerState::HexadecimalCharacterReference;
                 }
+                None => {
+                    self.record_error_at_next(
+                        ParseErrorCode::AbsenceOfDigitsInNumericCharacterReference,
+                    );
+                    self.flush_code_points_consumed_as_char_ref();
+                    self.reconsume = true;
+                    self.state = self.return_state;
+                }
                 _ => {
-                    self.record_error(ParseErrorCode::AbsenceOfDigitsInNumericCharacterReference);
+                    self.record_error_at_current(
+                        ParseErrorCode::AbsenceOfDigitsInNumericCharacterReference,
+                    );
                     self.flush_code_points_consumed_as_char_ref();
                     self.reconsume = true;
                     self.state = self.return_state;
@@ -2676,10 +2921,22 @@ impl Tokenizer {
                         .saturating_add(cp - 0x57);
                 }
                 Some(0x3B) => {
+                    self.numeric_end_mode = ErrorPositionMode::Next;
+                    self.state = TokenizerState::NumericCharacterReferenceEnd;
+                }
+                None => {
+                    self.numeric_end_mode = ErrorPositionMode::Next;
+                    self.record_error_at_next(
+                        ParseErrorCode::MissingSemicolonAfterCharacterReference,
+                    );
+                    self.reconsume = true;
                     self.state = TokenizerState::NumericCharacterReferenceEnd;
                 }
                 _ => {
-                    self.record_error(ParseErrorCode::MissingSemicolonAfterCharacterReference);
+                    self.numeric_end_mode = ErrorPositionMode::Current;
+                    self.record_error_at_current(
+                        ParseErrorCode::MissingSemicolonAfterCharacterReference,
+                    );
                     self.reconsume = true;
                     self.state = TokenizerState::NumericCharacterReferenceEnd;
                 }
@@ -2694,8 +2951,16 @@ impl Tokenizer {
                             self.temp_buffer.push(cp);
                             self.char_ref_code = cp - 0x30;
                         }
+                        None => {
+                            self.record_error_at_next(
+                                ParseErrorCode::AbsenceOfDigitsInNumericCharacterReference,
+                            );
+                            self.flush_code_points_consumed_as_char_ref();
+                            self.reconsume = true;
+                            self.state = self.return_state;
+                        }
                         _ => {
-                            self.record_error(
+                            self.record_error_at_current(
                                 ParseErrorCode::AbsenceOfDigitsInNumericCharacterReference,
                             );
                             self.flush_code_points_consumed_as_char_ref();
@@ -2714,10 +2979,22 @@ impl Tokenizer {
                             .saturating_add(cp - 0x30);
                     }
                     Some(0x3B) => {
+                        self.numeric_end_mode = ErrorPositionMode::Next;
+                        self.state = TokenizerState::NumericCharacterReferenceEnd;
+                    }
+                    None => {
+                        self.numeric_end_mode = ErrorPositionMode::Next;
+                        self.record_error_at_next(
+                            ParseErrorCode::MissingSemicolonAfterCharacterReference,
+                        );
+                        self.reconsume = true;
                         self.state = TokenizerState::NumericCharacterReferenceEnd;
                     }
                     _ => {
-                        self.record_error(ParseErrorCode::MissingSemicolonAfterCharacterReference);
+                        self.numeric_end_mode = ErrorPositionMode::Current;
+                        self.record_error_at_current(
+                            ParseErrorCode::MissingSemicolonAfterCharacterReference,
+                        );
                         self.reconsume = true;
                         self.state = TokenizerState::NumericCharacterReferenceEnd;
                     }
@@ -2728,18 +3005,22 @@ impl Tokenizer {
             TokenizerState::NumericCharacterReferenceEnd => {
                 let mut code = self.char_ref_code;
                 if code == 0x00 {
-                    self.record_error(ParseErrorCode::NullCharacterReference);
+                    self.record_error_in_numeric_end(ParseErrorCode::NullCharacterReference);
                     code = 0xFFFD;
                 } else if code > 0x10FFFF {
-                    self.record_error(ParseErrorCode::CharacterReferenceOutsideUnicodeRange);
+                    self.record_error_in_numeric_end(
+                        ParseErrorCode::CharacterReferenceOutsideUnicodeRange,
+                    );
                     code = 0xFFFD;
                 } else if is_surrogate(code) {
-                    self.record_error(ParseErrorCode::SurrogateCharacterReference);
+                    self.record_error_in_numeric_end(ParseErrorCode::SurrogateCharacterReference);
                     code = 0xFFFD;
                 } else if is_noncharacter(code) {
-                    self.record_error(ParseErrorCode::NoncharacterCharacterReference);
+                    self.record_error_in_numeric_end(
+                        ParseErrorCode::NoncharacterCharacterReference,
+                    );
                 } else if code == 0x0D || is_control_character_in_stream(code) {
-                    self.record_error(ParseErrorCode::ControlCharacterReference);
+                    self.record_error_in_numeric_end(ParseErrorCode::ControlCharacterReference);
                     if let Some(&(_, mapped)) =
                         NUMERIC_REPLACEMENT_TABLE.iter().find(|&&(k, _)| k == code)
                     {

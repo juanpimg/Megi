@@ -3,12 +3,14 @@
 //! Parses `tests/html5lib-tests/tokenizer/*.test` JSON files, handles `doubleEscaped`
 //! `\uHHHH` hex unescaping (preserving lone UTF-16 surrogates via `Vec<u32>` code-point
 //! buffers), runs [`html::tokenizer::Tokenizer`] across every state in `initialStates`,
-//! coalesces adjacent `Character` tokens, and compares actual vs expected output.
+//! coalesces adjacent `Character` tokens, compares actual vs expected output, and (for the 13
+//! standard suites) compares the 1-based `(code, line, col)` parse-error annotations. The
+//! `xmlViolationTests` fixture additionally runs with the §13.2.9 XML-infoset coercion enabled.
 
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use html::tokenizer::{Token, Tokenizer, TokenizerConfig, TokenizerState};
+use html::tokenizer::{ParseError, Token, Tokenizer, TokenizerConfig, TokenizerState};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -48,6 +50,27 @@ pub struct RawTokenizerError {
     pub col: usize,
 }
 
+/// Normalized html5lib-tests parse error: `(code, line, col)` with 1-based line/col.
+pub type NormalizedParseError = (String, usize, usize);
+
+/// Converts Megi's [`ParseError`]s into html5lib-tests annotation form.
+///
+/// The html5lib code name is exactly [`html::tokenizer::ParseErrorCode::as_str`]: Megi implements
+/// the 52 WHATWG HTML §13.2.2 codes, and every code used by the fixtures matches that table.
+pub fn normalize_parse_errors(errors: &[ParseError]) -> Vec<NormalizedParseError> {
+    errors
+        .iter()
+        .map(|error| (error.code.as_str().to_owned(), error.line, error.col))
+        .collect()
+}
+
+/// Sorts a list of normalized parse errors so annotation multisets can be compared without being
+/// sensitive to emission order (html5lib-tests orders a few stream/tokenizer errors differently).
+pub fn sorted_parse_errors(mut errors: Vec<NormalizedParseError>) -> Vec<NormalizedParseError> {
+    errors.sort();
+    errors
+}
+
 /// Normalized, canonical representation of an `html5lib-tests` output token.
 /// Uses `Vec<u32>` for character/string payloads so lone surrogates in `doubleEscaped`
 /// tests (`unicodeCharsProblematic.test`, `domjs.test`) can be compared accurately.
@@ -85,6 +108,14 @@ pub struct TokenizerRunResult {
     pub passed: bool,
     pub expected: Vec<NormalizedToken>,
     pub actual: Vec<NormalizedToken>,
+    /// Expected parse-error annotations for this `(case, initial state)` run.
+    pub expected_errors: Vec<NormalizedParseError>,
+    /// Actual parse errors emitted by Megi for this run.
+    pub actual_errors: Vec<NormalizedParseError>,
+    /// Whether both error multisets are equal (order-insensitive).
+    pub errors_passed: bool,
+    /// Whether the error sequences are exactly equal (order-sensitive).
+    pub errors_in_order: bool,
 }
 
 /// Unescapes `\uHHHH` sequences when `double_escaped == true`, returning raw Unicode
@@ -366,7 +397,7 @@ pub fn run_tokenizer_suite_file(path: &Path) -> Result<Vec<TokenizerRunResult>, 
         .and_then(|s| s.to_str())
         .unwrap_or("unknown.test")
         .to_owned();
-    let (_is_xml_violation, cases) = load_tokenizer_test_file(path)?;
+    let (is_xml_violation, cases) = load_tokenizer_test_file(path)?;
     let mut results = Vec::new();
 
     for (idx, case) in cases.iter().enumerate() {
@@ -386,6 +417,11 @@ pub fn run_tokenizer_suite_file(path: &Path) -> Result<Vec<TokenizerRunResult>, 
             })
             .collect::<Result<Vec<_>, _>>()?;
         let expected = coalesce_normalized_tokens(expected_raw);
+        let expected_errors: Vec<NormalizedParseError> = case
+            .errors
+            .iter()
+            .map(|error| (error.code.clone(), error.line, error.col))
+            .collect();
 
         for state_name in &case.initial_states {
             let initial_state = TokenizerState::from_test_name(state_name).ok_or_else(|| {
@@ -401,9 +437,18 @@ pub fn run_tokenizer_suite_file(path: &Path) -> Result<Vec<TokenizerRunResult>, 
                     last_start_tag: case.last_start_tag.clone(),
                 },
             );
+            // The `xmlViolationTests` fixture declares that its expected output assumes the
+            // WHATWG HTML §13.2.9 "coercing an HTML DOM into an infoset" tweaks.
+            if is_xml_violation {
+                tok.enable_xml_coercion();
+            }
             tok.run();
             let actual = normalize_engine_tokens(&tok.tokens);
             let passed = actual == expected;
+            let actual_errors = normalize_parse_errors(&tok.errors);
+            let errors_in_order = actual_errors == expected_errors;
+            let errors_passed = sorted_parse_errors(actual_errors.clone())
+                == sorted_parse_errors(expected_errors.clone());
             results.push(TokenizerRunResult {
                 file_name: file_name.clone(),
                 index: idx,
@@ -412,6 +457,10 @@ pub fn run_tokenizer_suite_file(path: &Path) -> Result<Vec<TokenizerRunResult>, 
                 passed,
                 expected: expected.clone(),
                 actual,
+                expected_errors: expected_errors.clone(),
+                actual_errors,
+                errors_passed,
+                errors_in_order,
             });
         }
     }
