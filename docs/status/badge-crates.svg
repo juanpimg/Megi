@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="20" viewBox="0 0 80 20" role="img" aria-label="crates: 14">
+  <title>crates: 14</title>
+  <rect width="50" height="20" fill="#555555"/>
+  <rect x="50" width="30" height="20" fill="#1f6feb"/>
+  <g fill="#ffffff" text-anchor="middle" font-family="DejaVu Sans, Verdana, sans-serif" font-size="11">
+    <text x="25" y="14">crates</text>
+    <text x="65" y="14">14</text>
+  </g>
+</svg>

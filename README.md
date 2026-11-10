@@ -12,6 +12,18 @@
 
 ---
 
+## 📈 Estado general
+
+[![Tests](docs/status/badge-tests.svg)](PROGRESS.md) [![Conformance](docs/status/badge-conformance.svg)](PROGRESS.md) [![Crates](docs/status/badge-crates.svg)](PROGRESS.md) [![unsafe](docs/status/badge-unsafe.svg)](PROGRESS.md)
+
+[![Progress map](docs/status/progress.svg)](PROGRESS.md)
+
+**Overall 95 %** · F1 100 % · F2 100 % · F3 100 % · F4 99 % · F5 97 % · F6 90 % · F7 80 % · **1.344 tests** · conformance **PASS** · **14 crates** · **108.322 líneas** de Rust · **12/14** crates con `#![forbid(unsafe_code)]`.
+
+Este estado está **generado desde el propio repositorio** por [`tools/update_progress.py`](tools/update_progress.py): cuenta los tests, ejecuta el gate de conformidad, mide crates/líneas y lee el manifiesto de fases [`docs/status/progress.toml`](docs/status/progress.toml). El detalle por fase (qué está hecho y qué queda) vive en **[`PROGRESS.md`](PROGRESS.md)**; para refrescarlo: `python3 tools/update_progress.py --write`.
+
+---
+
 ## 📊 Estado del Proyecto y Barra de Progreso por Módulos
 
 🎉 **HITOS ronda 20**: **fix de rendimiento de custom properties** (`Option<Arc<HashMap>>` lazy/COW + fast path `needs_resolution` sin allocar; A/B css resolve 46,8→39,8 ms, **−14,9 %** en calma y −9,4 % bajo carga, pipeline **−3,4 %/−6,1 %**; UA-cache probada y revertida; presupuestos intactos), **`conic-gradient`/`repeating-conic`** (ángulos `from`, `at`, stops angulares, hard stops, alpha y wrap) con **color hints** y **espacios de interpolación `in srgb|srgb-linear|oklab`** (default sRGB byte-idéntico), **`calc()` mixto %+px** (`CalcLengths` en CSS + resolución en layout: width/height/min/max, margins/paddings, insets, gaps, background-position/size, border-radius; base indefinida ⇒ %=0), **tipografía** (`text-transform` durante el shaping sin mutar DOM, `word-spacing`/`letter-spacing` heredados, `white-space: pre-wrap/pre-line`) y **`position: sticky`** (modelo headless), **pestañas en el shell** (`Ctrl+T/W/Tab/Shift+Tab`, `Alt+1..9`, `--tabs URL` repetible, estado por pestaña, MAX 32; shell **140** tests) y **filas E2E del bench** (`pipeline/gradients`, `pipeline/grid`, `css/vars-calc`, `paint/clipping` y `layout/sticky-text` como SKIP visible). La **Fase 4** queda prácticamente completa, **F5 ≈97 %**, **F6 ≈90 %** y **F7 ≈80 %**. **1.344 tests, 0 fallos** y gate **PASS** (tokenizer 7.050/7.050, árbol 3.904/3.904, serializer 230/230, CSS 30/30; allowlists vacías); suite determinista y goldens (`c95c7eff…`, `60f8984e…`, `9e957177…`, basic `7324e851…`) intactos. Detalle en [`docs/PHASE4-SUPPORT.md`](docs/PHASE4-SUPPORT.md), [`docs/ROADMAP.md`](docs/ROADMAP.md), [`docs/HANDOFF.md`](docs/HANDOFF.md) y [`docs/JAVASCRIPT-STRATEGY.md`](docs/JAVASCRIPT-STRATEGY.md).

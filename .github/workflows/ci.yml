@@ -33,6 +33,11 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Workspace tests
         run: cargo test --workspace
+      # Checks that PROGRESS.md and docs/status/*.svg match the committed manifest plus the
+      # real repository stats (git HEAD/date, crates, Rust lines, test count). The
+      # conformance gate already runs in the `conformance` job, so it is not re-run here.
+      - name: Status freshness (PROGRESS.md + docs/status)
+        run: python3 tools/update_progress.py --check --no-gate
       - name: Documentation
         run: cargo doc --workspace --no-deps
 

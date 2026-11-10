@@ -503,4 +503,60 @@ Límites de la ronda: gradientes cap **64 stops / 256 por estilo**, sin `conic-g
 
 Cifras de referencia en la ronda 19: **1260 tests** (bench 8, css 142, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 71, layout 173, net 207, paint 162, **render 136**, shell 125, svg 73, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; fuzz 7 targets; suite determinista; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
 
+## 4. Progress status generado (`PROGRESS.md`, `docs/status/*.svg`)
+
+El estado de avance del proyecto se genera **desde datos reales del repositorio**, sin
+servicios externos ni CI de terceros (inspirado en el *progress map* de AnyPS5). El
+manifiesto editable es `docs/status/progress.toml` (fases F1–F7 con `items`/`pending`,
+`next_up` y áreas transversales); el script `tools/update_progress.py` (Python 3.11+,
+**solo stdlib**, determinista) mide el repo y regenera:
+
+| Fichero generado | Contenido |
+|---|---|
+| `PROGRESS.md` | Página de progreso: badges, mapa de fases con barras, hechos/pendientes, stats, gate de conformidad, rondas recientes y “next up”. |
+| `docs/status/progress.svg` | Mapa visual 900 px: % global, una fila por fase con color (verde ≥95 %, azul ≥85 %, ámbar ≥70 %, rojo <70 %) y pie con commit/tests/gate. |
+| `docs/status/badge-tests.svg` | Badge shields-like con el nº de tests del workspace. |
+| `docs/status/badge-conformance.svg` | Badge del gate de conformidad (PASS/FAIL + 4 suites). |
+| `docs/status/badge-crates.svg` | Badge del nº de crates del workspace. |
+| `docs/status/badge-unsafe.svg` | Badge de crates con `#![forbid(unsafe_code)]`. |
+| `docs/status/progress.toml` | Los bloques `[stats]`/`[gate]` se reescriben con las medidas reales. |
+
+Datos medidos: HEAD corto y fecha del último commit (`git log -1 --format=%cs`, nunca la
+hora actual), nº de crates (`crates/*/Cargo.toml`), líneas Rust (`git ls-files '*.rs'`),
+tests (`cargo test --workspace -- --list`, cacheado por HEAD en `target/progress-stats.json`),
+gate de conformidad (`cargo run -q -p test_harness -- --summary`: tokenizer/árbol/serializer/
+CSS + PASS) y crates con `#![forbid(unsafe_code)]`.
+
+```bash
+# Regenerar todo (cuenta tests y ejecuta el gate de conformidad)
+python3 tools/update_progress.py --write
+
+# Regeneraciones rápidas (reutilizan el último conteo / gate del manifiesto)
+python3 tools/update_progress.py --write --no-gate
+python3 tools/update_progress.py --write --no-count --no-gate
+
+# Verificación de frescura (CI): exit 0 si está al día, 1 si hay que regenerar
+python3 tools/update_progress.py --check --no-gate
+```
+
+**Idempotencia**: dos ejecuciones sobre el mismo árbol escriben bytes idénticos (no hay
+timestamps de reloj; la fecha es la del commit). `--check` regenera en memoria y compara
+bytes, mostrando la primera línea distinta. `--no-count` reutiliza `[stats].tests` del
+manifiesto (útil en local); `--no-gate` reutiliza el último gate verificado. En CI, el job
+`quality` ejecuta `--check --no-gate` tras “Workspace tests” (el gate ya corre en el job
+`conformance`), de modo que un PR que cambie tests/fases sin regenerar falla.
+
+**Auto-referencia del snapshot**: los ficheros generados incluyen el commit/fecha del
+snapshot, pero no pueden contener el hash del commit que los contiene. Por eso `--check`
+**normaliza el bloque de snapshot** (hash y fecha en la cabecera/tabla de `PROGRESS.md`, el
+`<desc>`/pie del SVG y `tests_commit`/`tests_date`/`verified_commit` del manifiesto) a
+placeholders `<commit>`/`<date>` en ambos lados antes de comparar; el resto (fases, items,
+stats, LoC, tests, gate, histórico) se compara byte a byte. Resultado: tras `--write` y
+commitear los ficheros de status, `--check` sigue en verde; un cambio real sin regenerar
+sigue fallando. Probado simulando ficheros estampados con otro commit/fecha (exit 0) y
+cambiando un `percent` del manifiesto (exit 1).
+
+Flujo recomendado al cerrar una ronda: actualizar `docs/status/progress.toml` (percent,
+`items`/`pending`, `next_up`), ejecutar `--write`, y commitear juntos el manifiesto y los
+ficheros generados.
 

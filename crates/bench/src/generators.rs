@@ -359,6 +359,69 @@ pub fn vars_calc_css() -> String {
     css
 }
 
+/// Target size of the sticky/text-transform layout fixture (~1 MiB).
+pub const STICKY_TEXT_TARGET_BYTES: usize = 1_048_576;
+
+/// Deterministic page of at least `target_bytes` with `position: sticky`
+/// headers and `text-transform` paragraphs.
+///
+/// Feeds the `layout/sticky-text-1mb` row: style resolution happens once
+/// outside the timed loop and the benchmark measures `layout_document` only.
+/// No network, no scripts, no randomness.
+pub fn sticky_text_page(target_bytes: usize) -> String {
+    let mut html = String::with_capacity(target_bytes + target_bytes / 2);
+    html.push_str(
+        "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">\
+         <title>Sticky + text-transform</title>\n<style>\n\
+         html,body{margin:0;padding:0;background:#ffffff;font-size:14px}\n\
+         h2.sticky{position:sticky;top:0;margin:0;padding:6px;background:#dde6f2;\
+         border-bottom:1px solid #b8c6d9}\n\
+         p{margin:4px 0;line-height:1.4}\n\
+         .upper{text-transform:uppercase}\n\
+         .lower{text-transform:lowercase}\n\
+         .cap{text-transform:capitalize}\n\
+         .card{padding:6px;margin:4px;border:1px solid #cccccc;background:#f7f9fc}\n\
+         .card.sticky-card{position:sticky;top:28px}\n\
+         ul{margin:4px 0 4px 18px}\n",
+    );
+    html.push_str("</style></head><body>\n");
+    let mut section = 0usize;
+    while html.len() < target_bytes {
+        let _ = writeln!(html, "<section>");
+        let _ = writeln!(
+            html,
+            "<h2 class=\"sticky\">Section {section} sticky header</h2>"
+        );
+        let _ = writeln!(
+            html,
+            "<p class=\"upper\">uppercase text for section {section} with words and numbers {section}</p>"
+        );
+        let _ = writeln!(
+            html,
+            "<p class=\"lower\">LOWERCASE TEXT FOR SECTION {section} WITH CAPITALS AND WORDS</p>"
+        );
+        let _ = writeln!(
+            html,
+            "<p class=\"cap\">capitalize each word in section {section} for typography coverage</p>"
+        );
+        let _ = writeln!(
+            html,
+            "<div class=\"card sticky-card\"><b>sticky card {section}</b> with mixed <i>italic</i> and <u>underline</u> content</div>"
+        );
+        html.push_str("<ul>");
+        for item in 0..4usize {
+            let _ = write!(
+                html,
+                "<li class=\"upper\">item {item} of section {section}</li>"
+            );
+        }
+        html.push_str("</ul>\n</section>\n");
+        section += 1;
+    }
+    html.push_str("</body></html>\n");
+    html
+}
+
 /// Deterministic HTML page with `boxes` rounded, clipped boxes and gradient
 /// `background-clip:text` headings: the paint paths for `border-radius` +
 /// `overflow:hidden` and text clipping, at 800×600.
@@ -456,6 +519,7 @@ mod tests {
         assert_eq!(grid_page(), grid_page());
         assert_eq!(vars_calc_css(), vars_calc_css());
         assert_eq!(clipping_page(8), clipping_page(8));
+        assert_eq!(sticky_text_page(4096), sticky_text_page(4096));
     }
 
     #[test]
@@ -498,6 +562,14 @@ mod tests {
         assert!(clip.contains("border-radius:28px"));
         assert!(clip.contains("overflow:hidden"));
         assert!(clip.contains("background-clip:text"));
+
+        let sticky = sticky_text_page(4096);
+        assert!(sticky.len() >= 4096);
+        assert!(sticky.contains("position:sticky"));
+        assert!(sticky.contains("text-transform:uppercase"));
+        assert!(sticky.contains("text-transform:lowercase"));
+        assert!(sticky.contains("text-transform:capitalize"));
+        assert!(sticky.ends_with("</html>\n"));
     }
 
     #[test]

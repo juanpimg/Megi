@@ -441,10 +441,10 @@ fn register_layout_and_paint(suite: &mut Suite, scale: f64) {
 ///   properties, `var()` in colors/sizes/margins and simple `calc()` lengths.
 /// - `paint/clipping-800x600`: 48 rounded `overflow:hidden` boxes and gradient
 ///   `background-clip:text` headings through display list + raster + PNG.
-/// - `layout/sticky-text-1mb`: **pending** (registered as SKIP): `position:
-///   sticky` parses but layout treats it like `relative` (no scrolling yet) and
-///   `text-transform` parses but layout/paint do not apply it. Enable the row
-///   once both land.
+/// - `layout/sticky-text-1mb`: ~1 MiB document with `position: sticky` headers
+///   and cards plus `text-transform: uppercase/lowercase/capitalize`
+///   paragraphs; measures `layout_document` with styles resolved outside the
+///   loop (round 20 added the sticky model, text-transform and mixed `calc()`).
 fn register_feature_e2e(suite: &mut Suite, scale: f64) {
     let viewport = Rect::new(0.0, 0.0, VIEWPORT_WIDTH as f32, VIEWPORT_HEIGHT as f32);
 
@@ -506,11 +506,29 @@ fn register_feature_e2e(suite: &mut Suite, scale: f64) {
         viewport,
     );
 
-    // Sticky + text-transform are parsed but not applied yet; keep the gap visible.
-    suite.skip(
-        "layout/sticky-text-1mb",
-        "pending: `position: sticky` parses but layout treats it like `relative`          (no scrolling) and `text-transform` parses but layout/paint do not apply it",
-    );
+    // Sticky positioning + text-transform layout (round 20 model).
+    {
+        let target_bytes = generators::scale(generators::STICKY_TEXT_TARGET_BYTES, scale);
+        let markup = generators::sticky_text_page(target_bytes);
+        let document = html::parse_document(&markup, false);
+        let styles = paint::resolve_embedded_styles(&document);
+        let styled_elements = styles.len();
+        let mib = markup.len() as f64 / (1024.0 * 1024.0);
+        suite.add(
+            BenchEntry::new(
+                "layout/sticky-text-1mb",
+                "layout",
+                format!(
+                    "{styled_elements} elementos con estilo, {mib:.2} MiB, sticky headers + \
+                     text-transform, viewport {VIEWPORT_WIDTH}x{VIEWPORT_HEIGHT}"
+                ),
+                move || {
+                    black_box(layout::layout_document(&document, &styles, viewport));
+                },
+            )
+            .with_units(styled_elements as f64, "elements"),
+        );
+    }
 }
 
 /// Owns a generated HTML page and registers a heavy `pipeline/...` row that
