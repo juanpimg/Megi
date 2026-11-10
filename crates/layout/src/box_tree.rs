@@ -99,6 +99,21 @@ pub struct LayoutBox {
     pub children: Vec<LayoutBox>,
 }
 
+impl Drop for LayoutBox {
+    /// Explicitly iterative drop: a deep layout tree (thousands of nested boxes) would
+    /// otherwise overflow the stack while the compiler-generated recursive drop walks
+    /// the `children` vectors.
+    fn drop(&mut self) {
+        if self.children.is_empty() {
+            return;
+        }
+        let mut stack: Vec<LayoutBox> = std::mem::take(&mut self.children);
+        while let Some(mut node) = stack.pop() {
+            stack.append(&mut node.children);
+        }
+    }
+}
+
 impl LayoutBox {
     /// Creates a new layout box with zero dimensions and empty children.
     pub fn new(box_type: BoxType, style: Option<ComputedStyle>) -> Self {

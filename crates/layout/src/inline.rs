@@ -4,7 +4,7 @@
 //! §10.8 (Line height calculations, strut, and vertical-align), and
 //! CSS Text Module Level 3 (§3–§5: white-space processing and line breaking).
 
-use std::collections::HashMap;
+use std::sync::Arc;
 
 use css::{ComputedStyle, Length, TextAlign, VerticalAlign, WhiteSpace};
 use dom::NodeId;
@@ -184,31 +184,31 @@ enum InlineToken {
     /// Start of an inline container element (`<span>`).
     BoxStart {
         node_id: NodeId,
-        style: ComputedStyle,
+        style: Arc<ComputedStyle>,
     },
     /// End of an inline container element.
     BoxEnd {
         node_id: NodeId,
-        style: ComputedStyle,
+        style: Arc<ComputedStyle>,
     },
     /// An unbroken word run.
     Word {
         text: String,
         width: f32,
-        style: ComputedStyle,
+        style: Arc<ComputedStyle>,
     },
     /// A whitespace run (collapsible or preserved).
     Space {
         text: String,
         width: f32,
-        style: ComputedStyle,
+        style: Arc<ComputedStyle>,
         collapsible: bool,
         allow_wrap: bool,
     },
     /// A soft hyphen (U+00AD): zero-width break opportunity. When the line is not
     /// broken here the character is invisible; when the line ends here the layout
     /// appends a rendered `-` to the line (see [`break_into_lines`]).
-    HyphenationPoint { style: ComputedStyle },
+    HyphenationPoint { style: Arc<ComputedStyle> },
     /// A forced line break (`\n` in pre/pre-wrap/pre-line or `<br>`).
     ForcedBreak,
     /// An atomic inline-level box: `display: inline-block` or a replaced element
@@ -262,7 +262,7 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
     let container_y = layout_box.dimensions.content.y;
     let container_style = layout_box
         .style
-        .clone()
+        .take()
         .unwrap_or_else(ComputedStyle::initial);
 
     // 1. Flatten children into a sequential stream of inline tokens. Atomic
@@ -280,6 +280,7 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
 
     if tokens.is_empty() {
         layout_box.children.clear();
+        layout_box.style = Some(container_style);
         return;
     }
 
@@ -288,6 +289,7 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
 
     if lines.is_empty() {
         layout_box.children.clear();
+        layout_box.style = Some(container_style);
         return;
     }
 
@@ -323,6 +325,7 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
     }
 
     layout_box.children = line_boxes;
+    layout_box.style = Some(container_style);
 }
 
 /// Recursively flattens inline boxes into [`InlineToken`]s.
@@ -341,7 +344,9 @@ fn collect_inline_tokens(
         match &child.box_type {
             BoxType::InlineNode(node_id) => {
                 let node_id = *node_id;
-                let style = child.style.clone().unwrap_or_else(ComputedStyle::initial);
+                // The inline box is consumed into tokens; move its style instead of
+                // cloning it (the surviving fragments re-use the same `Arc`).
+                let style = Arc::new(child.style.take().unwrap_or_else(ComputedStyle::initial));
                 tokens.push(InlineToken::BoxStart {
                     node_id,
                     style: style.clone(),
@@ -350,7 +355,9 @@ fn collect_inline_tokens(
                 tokens.push(InlineToken::BoxEnd { node_id, style });
             }
             BoxType::TextNode(txt) => {
-                let style = child.style.clone().unwrap_or_else(ComputedStyle::initial);
+                // The text box is a formatting artifact consumed into tokens; moving its
+                // style avoids one `ComputedStyle` clone per text node.
+                let style = Arc::new(child.style.take().unwrap_or_else(ComputedStyle::initial));
                 tokenize_text(txt, &style, measurer, tokens);
             }
             // `<br>` forces a line break (CSS 2.2 §16.6.1). It has no width and no edges.
@@ -386,7 +393,7 @@ fn collect_inline_tokens(
 /// Flushes the pending word buffer into an [`InlineToken::Word`].
 fn flush_word(
     word: &mut String,
-    style: &ComputedStyle,
+    style: &Arc<ComputedStyle>,
     measurer: &dyn TextMeasurer,
     tokens: &mut Vec<InlineToken>,
 ) {
@@ -394,7 +401,7 @@ fn flush_word(
         return;
     }
     let text = std::mem::take(word);
-    let width = measure_styled(measurer, &text, style);
+    let width = measure_styled(measurer, &text, style.as_ref());
     tokens.push(InlineToken::Word {
         text,
         width,
@@ -404,13 +411,13 @@ fn flush_word(
 
 /// Pushes a collapsible space token (CSS Text 3 §4.1 white-space collapsing).
 fn push_collapsible_space(
-    style: &ComputedStyle,
+    style: &Arc<ComputedStyle>,
     measurer: &dyn TextMeasurer,
     allow_wrap: bool,
     tokens: &mut Vec<InlineToken>,
 ) {
     let text = " ".to_string();
-    let width = measure_styled(measurer, &text, style);
+    let width = measure_styled(measurer, &text, style.as_ref());
     tokens.push(InlineToken::Space {
         text,
         width,
@@ -432,7 +439,7 @@ fn push_collapsible_space(
 /// (see [`break_into_lines`]).
 fn tokenize_text(
     txt: &str,
-    style: &ComputedStyle,
+    style: &Arc<ComputedStyle>,
     measurer: &dyn TextMeasurer,
     tokens: &mut Vec<InlineToken>,
 ) {
@@ -447,7 +454,7 @@ fn tokenize_text(
             }
             let visible: String = line.chars().filter(|ch| *ch != '\u{00AD}').collect();
             if !visible.is_empty() {
-                let width = measure_styled(measurer, &visible, style);
+                let width = measure_styled(measurer, &visible, style.as_ref());
                 tokens.push(InlineToken::Word {
                     text: visible,
                     width,
@@ -481,7 +488,7 @@ fn tokenize_text(
                     pending_collapsible_space = true;
                 } else {
                     let text = ch.to_string();
-                    let width = measure_styled(measurer, &text, style);
+                    let width = measure_styled(measurer, &text, style.as_ref());
                     tokens.push(InlineToken::Space {
                         text,
                         width,
@@ -553,14 +560,6 @@ enum SoftWrapKind {
     AtSoftHyphen,
 }
 
-/// A soft wrap opportunity found while scanning a line.
-#[derive(Clone, Copy, Debug)]
-struct SoftWrapOpportunity {
-    /// Index of the first token of the next line.
-    next_line_start: usize,
-    kind: SoftWrapKind,
-}
-
 /// Advance contributed by a token to the current line width.
 fn token_advance(token: &InlineToken, container_width: f32) -> f32 {
     match token {
@@ -588,41 +587,6 @@ fn advance_of(tokens: &[InlineToken], container_width: f32) -> f32 {
         .sum()
 }
 
-/// Finds the last soft wrap opportunity in `tokens[start..=end]` that leaves visible
-/// content on the line (CSS Text 3 §5, CSS 2.2 §16.6.1).
-///
-/// Only spaces and explicit/soft hyphens provide soft wrap opportunities. Content
-/// coming from adjacent inline boxes without any such opportunity in between belongs
-/// to a single unbreakable run (audit finding F-09).
-fn find_last_soft_wrap(
-    tokens: &[InlineToken],
-    start: usize,
-    end: usize,
-) -> Option<SoftWrapOpportunity> {
-    for index in (start..=end).rev() {
-        match &tokens[index] {
-            InlineToken::HyphenationPoint { .. } => {
-                if line_has_visible_content(&tokens[start..index]) {
-                    return Some(SoftWrapOpportunity {
-                        next_line_start: index + 1,
-                        kind: SoftWrapKind::AtSoftHyphen,
-                    });
-                }
-            }
-            InlineToken::Space {
-                allow_wrap: true, ..
-            } if line_has_visible_content(&tokens[start..=index]) => {
-                return Some(SoftWrapOpportunity {
-                    next_line_start: index + 1,
-                    kind: SoftWrapKind::AtSpace,
-                });
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
 fn line_has_visible_content(line: &[InlineToken]) -> bool {
     line.iter().any(|token| match token {
         InlineToken::Word { text, .. } => !text.is_empty(),
@@ -633,7 +597,9 @@ fn line_has_visible_content(line: &[InlineToken]) -> bool {
     })
 }
 
-fn trim_trailing_collapsible_spaces(line: &mut Vec<InlineToken>, current_width: &mut f32) {
+fn trim_trailing_collapsible_spaces(line: &mut Vec<InlineToken>) {
+    // Box ends and soft-hyphen markers are invisible and stay on the line; only
+    // collapsible spaces are removed.
     let mut i = line.len();
     while i > 0 {
         match &line[i - 1] {
@@ -641,11 +607,8 @@ fn trim_trailing_collapsible_spaces(line: &mut Vec<InlineToken>, current_width: 
                 i -= 1;
             }
             InlineToken::Space {
-                collapsible: true,
-                width,
-                ..
+                collapsible: true, ..
             } => {
-                *current_width -= *width;
                 line.remove(i - 1);
                 i -= 1;
             }
@@ -656,7 +619,7 @@ fn trim_trailing_collapsible_spaces(line: &mut Vec<InlineToken>, current_width: 
 
 /// Trims leading and trailing collapsible spaces from a line before it is committed
 /// (CSS Text 3 §4.1: collapsible spaces at the start/end of a line are removed).
-fn finalize_line(mut line: Vec<InlineToken>, container_width: f32) -> Vec<InlineToken> {
+fn finalize_line(mut line: Vec<InlineToken>) -> Vec<InlineToken> {
     while matches!(
         line.first(),
         Some(
@@ -668,9 +631,29 @@ fn finalize_line(mut line: Vec<InlineToken>, container_width: f32) -> Vec<Inline
     ) {
         line.remove(0);
     }
-    let mut width = advance_of(&line, container_width);
-    trim_trailing_collapsible_spaces(&mut line, &mut width);
+    trim_trailing_collapsible_spaces(&mut line);
     line
+}
+
+/// Finds the last soft wrap opportunity in `current` that leaves visible content on
+/// the line, returning `(token index, kind, style)`.
+fn last_soft_wrap(current: &[InlineToken]) -> Option<(usize, SoftWrapKind)> {
+    for index in (0..current.len()).rev() {
+        match &current[index] {
+            InlineToken::HyphenationPoint { .. } => {
+                if line_has_visible_content(&current[..index]) {
+                    return Some((index, SoftWrapKind::AtSoftHyphen));
+                }
+            }
+            InlineToken::Space {
+                allow_wrap: true, ..
+            } if line_has_visible_content(&current[..index]) => {
+                return Some((index, SoftWrapKind::AtSpace));
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Splits the token stream into lines at soft wrap opportunities (CSS 2.2 §16.6.1).
@@ -684,6 +667,10 @@ fn finalize_line(mut line: Vec<InlineToken>, container_width: f32) -> Vec<Inline
 /// Soft hyphens are invisible until a line actually breaks at them; when that happens
 /// a rendered `-` is appended to the line and the next line continues after the
 /// hyphenation point (audit finding F-15).
+///
+/// The implementation is streaming: tokens are moved into the current line and, when a
+/// break happens, the line prefix is drained (no per-token clones), which keeps line
+/// breaking linear in the number of tokens.
 fn break_into_lines(
     tokens: Vec<InlineToken>,
     container_width: f32,
@@ -694,59 +681,71 @@ fn break_into_lines(
         return lines;
     }
 
-    let mut line_start = 0usize;
-    let mut index = 0usize;
+    let mut current: Vec<InlineToken> = Vec::new();
+    let mut current_width = 0.0_f32;
 
-    while index < tokens.len() {
+    for token in tokens {
         // A forced break always ends the current line, even if it overflows.
-        if matches!(tokens[index], InlineToken::ForcedBreak) {
-            let line_tokens = finalize_line(tokens[line_start..index].to_vec(), container_width);
+        if matches!(token, InlineToken::ForcedBreak) {
+            let line_tokens = finalize_line(std::mem::take(&mut current));
             lines.push(Line {
                 tokens: line_tokens,
                 justified: false,
             });
-            line_start = index + 1;
-            index += 1;
+            current_width = 0.0;
             continue;
         }
 
-        let mut width = advance_of(&tokens[line_start..=index], container_width);
-        while width > container_width {
-            let Some(opportunity) = find_last_soft_wrap(&tokens, line_start, index) else {
+        current_width += token_advance(&token, container_width);
+        current.push(token);
+
+        // Wrap greedily at the last valid soft wrap opportunity when the line overflows.
+        while current_width > container_width {
+            let Some((break_index, kind)) = last_soft_wrap(&current) else {
                 break;
             };
-            let mut line_tokens = tokens[line_start..opportunity.next_line_start].to_vec();
-            if opportunity.kind == SoftWrapKind::AtSoftHyphen {
+            let mut line_tokens: Vec<InlineToken> = current.drain(..break_index).collect();
+            let opportunity = current.remove(0);
+            if kind == SoftWrapKind::AtSoftHyphen {
                 // Materialize the soft hyphen as a rendered '-' at the end of the line.
-                let hyphen_style = match line_tokens.pop() {
-                    Some(InlineToken::HyphenationPoint { style }) => style,
-                    _ => unreachable!("soft wrap opportunity must point at a hyphenation point"),
-                };
-                let width = measure_styled(measurer, "-", &hyphen_style);
-                line_tokens.push(InlineToken::Word {
-                    text: "-".to_string(),
+                if let InlineToken::HyphenationPoint { style } = opportunity {
+                    let width = measure_styled(measurer, "-", style.as_ref());
+                    line_tokens.push(InlineToken::Word {
+                        text: "-".to_string(),
+                        width,
+                        style,
+                    });
+                }
+            } else if let InlineToken::Space {
+                text,
+                width,
+                style,
+                collapsible,
+                allow_wrap,
+            } = opportunity
+            {
+                line_tokens.push(InlineToken::Space {
+                    text,
                     width,
-                    style: hyphen_style,
+                    style,
+                    collapsible,
+                    allow_wrap,
                 });
             }
-            let line_tokens = finalize_line(line_tokens, container_width);
+            let line_tokens = finalize_line(line_tokens);
             lines.push(Line {
                 tokens: line_tokens,
                 justified: true,
             });
-            line_start = opportunity.next_line_start;
-            width = advance_of(&tokens[line_start..=index], container_width);
+            current_width = advance_of(&current, container_width);
         }
-
-        index += 1;
     }
 
     // Final line of the paragraph: never justified (CSS 2.2 §16.2). A final line that
     // collapses to nothing (e.g. a text node made only of spaces) generates no line box
-    // (CSS 2.2 §9.4.2: line boxes that contain no text and preserve no newline do not
-    // exist).
-    if line_start < tokens.len() {
-        let line_tokens = finalize_line(tokens[line_start..].to_vec(), container_width);
+    // (CSS 2.2 §9.4.2).
+    if !current.is_empty() {
+        let line_tokens = finalize_line(current);
         if !line_tokens.is_empty() {
             lines.push(Line {
                 tokens: line_tokens,
@@ -762,7 +761,7 @@ fn break_into_lines(
 #[derive(Clone, Debug)]
 struct ActiveBoxInfo {
     node_id: NodeId,
-    style: ComputedStyle,
+    style: Arc<ComputedStyle>,
     is_first_fragment: bool,
 }
 
@@ -852,7 +851,7 @@ fn anchor_for_style(
 /// An inline box fragment being assembled while formatting a line.
 struct ActiveBoxFrame {
     node_id: NodeId,
-    style: ComputedStyle,
+    style: Arc<ComputedStyle>,
     is_first_fragment: bool,
     start_x: f32,
     children: Vec<LayoutBox>,
@@ -878,38 +877,10 @@ fn format_line(
         justify,
     } = *ctx;
 
-    // 1. Line content width (needed by text-align and justify).
-    let mut line_content_width = 0.0;
-    for token in &tokens {
-        line_content_width += token_advance(token, container_width);
-    }
-
-    // 2. Horizontal text-align offset (CSS 2.2 §16.2).
-    let remaining_width = (container_width - line_content_width).max(0.0);
-    let align_offset = match container_style.text_align {
-        TextAlign::Left | TextAlign::Justify => 0.0,
-        TextAlign::Right => remaining_width,
-        TextAlign::Center => remaining_width / 2.0,
-    };
-
-    // `text-align: justify`: distribute the remaining space between words. Only
-    // soft-wrapped lines are justified; the last line and lines before a forced break
-    // stay left-aligned (CSS 2.2 §16.2).
-    let justify_space_count = if justify {
-        tokens
-            .iter()
-            .filter(|token| matches!(token, InlineToken::Space { text, .. } if !text.is_empty()))
-            .count()
-    } else {
-        0
-    };
-    let justify_extra_per_space = if justify_space_count > 0 {
-        remaining_width / justify_space_count as f32
-    } else {
-        0.0
-    };
-
-    // 3. Baseline and line box height (CSS 2.2 §10.8.1).
+    // 1. Baseline and line box height (CSS 2.2 §10.8.1), while also accumulating the
+    // line content width needed by text-align/justify (single pass over the tokens).
+    let mut line_content_width = 0.0_f32;
+    let mut justify_space_count = 0usize;
     //
     // Baseline-aligned content (baseline/sub/super/length/middle/text-top/text-bottom)
     // determines the line box ascent and descent. `vertical-align: top|bottom` boxes
@@ -922,9 +893,13 @@ fn format_line(
     // Open `top`/`bottom` aligned subtrees: (BoxStart index, is_top, ascent, descent).
     let mut open_anchors: Vec<(usize, bool, f32, f32)> = Vec::new();
     // Aligned-subtree extents keyed by the index of their `BoxStart` token.
-    let mut anchor_extents: HashMap<usize, (bool, f32, f32)> = HashMap::new();
+    let mut anchor_extents: Vec<(usize, bool, f32, f32)> = Vec::new();
 
     for (index, token) in tokens.iter().enumerate() {
+        line_content_width += token_advance(token, container_width);
+        if justify && matches!(token, InlineToken::Space { text, .. } if !text.is_empty()) {
+            justify_space_count += 1;
+        }
         match token {
             InlineToken::BoxStart { style, .. } => {
                 let metrics = metrics_styled(measurer, style);
@@ -958,7 +933,7 @@ fn format_line(
                     && matches!(vertical_align, VerticalAlign::Top | VerticalAlign::Bottom)
                     && let Some((start, is_top, ascent, descent)) = open_anchors.pop()
                 {
-                    anchor_extents.insert(start, (is_top, ascent, descent));
+                    anchor_extents.push((start, is_top, ascent, descent));
                 }
             }
             InlineToken::Word { style, .. } | InlineToken::Space { style, .. } => {
@@ -1001,10 +976,12 @@ fn format_line(
                         anchor.3 = anchor.3.max(descent);
                     }
                 } else if matches!(vertical_align, VerticalAlign::Top | VerticalAlign::Bottom) {
-                    anchor_extents.insert(
+                    anchor_extents.push((
                         index,
-                        (*vertical_align == VerticalAlign::Top, ascent, descent),
-                    );
+                        *vertical_align == VerticalAlign::Top,
+                        ascent,
+                        descent,
+                    ));
                 } else {
                     let (a, d) = align_extents(
                         *vertical_align,
@@ -1024,12 +1001,25 @@ fn format_line(
     // Boxes still open at the end of the line are split across lines; their aligned
     // subtree still contributes to this line box.
     while let Some((start, is_top, ascent, descent)) = open_anchors.pop() {
-        anchor_extents.insert(start, (is_top, ascent, descent));
+        anchor_extents.push((start, is_top, ascent, descent));
     }
+
+    // 2. Horizontal text-align offset and justify distribution (CSS 2.2 §16.2).
+    let remaining_width = (container_width - line_content_width).max(0.0);
+    let align_offset = match container_style.text_align {
+        TextAlign::Left | TextAlign::Justify => 0.0,
+        TextAlign::Right => remaining_width,
+        TextAlign::Center => remaining_width / 2.0,
+    };
+    let justify_extra_per_space = if justify_space_count > 0 {
+        remaining_width / justify_space_count as f32
+    } else {
+        0.0
+    };
 
     let mut max_top_height: f32 = 0.0;
     let mut max_bottom_height: f32 = 0.0;
-    for (is_top, ascent, descent) in anchor_extents.values() {
+    for (_, is_top, ascent, descent) in &anchor_extents {
         let height = ascent + descent;
         if *is_top {
             max_top_height = max_top_height.max(height);
@@ -1070,8 +1060,11 @@ fn format_line(
                 let start_x = curr_x;
                 curr_x += left_edges;
 
-                let anchor = match anchor_extents.get(&index) {
-                    Some((is_top, ascent, descent)) => {
+                let anchor = match anchor_extents
+                    .iter()
+                    .find(|(anchor_index, ..)| *anchor_index == index)
+                {
+                    Some((_, is_top, ascent, descent)) => {
                         let height = ascent + descent;
                         let top = if *is_top {
                             line_y
@@ -1123,7 +1116,7 @@ fn format_line(
 
                     let mut inline_box = LayoutBox::new(
                         BoxType::InlineNode(frame.node_id),
-                        Some(frame.style.clone()),
+                        Some(frame.style.as_ref().clone()),
                     );
                     inline_box.dimensions.margin.left = left_margin;
                     inline_box.dimensions.margin.right = right_margin;
@@ -1187,15 +1180,18 @@ fn format_line(
             } => {
                 // Line-level `top`/`bottom` anchor first, then an enclosing inline box
                 // anchor, then the shared line baseline.
-                let line_anchor = anchor_extents.get(&index).map(|(is_top, ascent, descent)| {
-                    let anchor_height = ascent + descent;
-                    let top = if *is_top {
-                        line_y
-                    } else {
-                        line_y + line_height - anchor_height
-                    };
-                    (top, top + ascent, anchor_height)
-                });
+                let line_anchor = anchor_extents
+                    .iter()
+                    .find(|(anchor_index, ..)| *anchor_index == index)
+                    .map(|(_, is_top, ascent, descent)| {
+                        let anchor_height = ascent + descent;
+                        let top = if *is_top {
+                            line_y
+                        } else {
+                            line_y + line_height - anchor_height
+                        };
+                        (top, top + ascent, anchor_height)
+                    });
                 let anchor_pos = active_stack
                     .iter()
                     .rposition(|frame| frame.anchor.is_some());
@@ -1268,7 +1264,7 @@ fn format_line(
 
         let mut inline_box = LayoutBox::new(
             BoxType::InlineNode(frame.node_id),
-            Some(frame.style.clone()),
+            Some(frame.style.as_ref().clone()),
         );
         inline_box.dimensions.margin.left = left_margin;
         inline_box.dimensions.margin.right = 0.0;
@@ -1317,7 +1313,7 @@ fn format_line(
 fn push_text_fragment(
     text: String,
     width: f32,
-    style: ComputedStyle,
+    style: Arc<ComputedStyle>,
     active_stack: &mut [ActiveBoxFrame],
     line_children: &mut Vec<LayoutBox>,
     curr_x: &mut f32,
@@ -1326,7 +1322,7 @@ fn push_text_fragment(
     line_height: f32,
     baseline_y_in_line: f32,
 ) {
-    let metrics = metrics_styled(measurer, &style);
+    let metrics = metrics_styled(measurer, style.as_ref());
     let (ascent, descent) = line_box_extents(&metrics);
     let box_h = ascent + descent;
 
@@ -1371,7 +1367,7 @@ fn push_text_fragment(
 
     if let Some(last) = target_list.last_mut()
         && let BoxType::TextNode(ref mut last_text) = last.box_type
-        && last.style.as_ref() == Some(&style)
+        && last.style.as_ref() == Some(style.as_ref())
         && (last.baseline - a_prime).abs() <= 0.01
         && (last.dimensions.content.y - y).abs() <= 0.01
     {
@@ -1381,7 +1377,7 @@ fn push_text_fragment(
         return;
     }
 
-    let mut text_box = LayoutBox::new(BoxType::TextNode(text), Some(style));
+    let mut text_box = LayoutBox::new(BoxType::TextNode(text), Some(style.as_ref().clone()));
     text_box.dimensions.content.x = *curr_x;
     text_box.dimensions.content.y = y;
     text_box.dimensions.content.width = width;

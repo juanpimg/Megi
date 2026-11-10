@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Display, Float, Position};
+use css::{ComputedStyle, Display, Float, Overflow, Position};
 use dom::{Document, Namespace, NodeId, NodeKind};
 
 use crate::box_tree::{BoxType, LayoutBox, anonymous_style_from, is_collapsible_whitespace_box};
@@ -28,6 +28,18 @@ pub fn build_layout_tree_with_replaced_sizes(
     styles: &HashMap<NodeId, ComputedStyle>,
     replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
 ) -> Option<LayoutBox> {
+    build_layout_tree_internal(doc, styles, replaced_sizes).map(|(root, _)| root)
+}
+
+/// Builds the layout tree and reports whether any box establishes `overflow` clipping.
+///
+/// The information lets `layout_document` skip the clip-propagation post-pass for
+/// documents without clipping boxes (the common case).
+pub(crate) fn build_layout_tree_internal(
+    doc: &Document,
+    styles: &HashMap<NodeId, ComputedStyle>,
+    replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
+) -> Option<(LayoutBox, bool)> {
     // Find the <html> element under the document root
     let mut root_el_id = None;
     let mut curr = doc.node(doc.root()).first_child;
@@ -40,7 +52,16 @@ pub fn build_layout_tree_with_replaced_sizes(
     }
 
     let root_node_id = root_el_id?;
-    build_box_for_node(doc, root_node_id, styles, None, replaced_sizes)
+    let mut has_overflow_clip = false;
+    let root = build_box_for_node(
+        doc,
+        root_node_id,
+        styles,
+        None,
+        replaced_sizes,
+        &mut has_overflow_clip,
+    )?;
+    Some((root, has_overflow_clip))
 }
 
 /// Returns `true` if the node is an HTML `<br>` element.
@@ -57,6 +78,7 @@ fn build_box_for_node(
     styles: &HashMap<NodeId, ComputedStyle>,
     parent_style: Option<&ComputedStyle>,
     replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
+    has_overflow_clip: &mut bool,
 ) -> Option<LayoutBox> {
     let node = doc.node(node_id);
     match &node.kind {
@@ -82,8 +104,15 @@ fn build_box_for_node(
                 || matches!(style.position, Position::Absolute | Position::Fixed);
             let tag = node
                 .as_element()
-                .map(|el| el.local_name.to_ascii_lowercase())
+                .map(|el| el.local_name.as_str())
                 .unwrap_or_default();
+            // HTML parser lowercases tag names already; only allocate when a hand-built
+            // DOM has uppercase ASCII in the element name.
+            let tag = if tag.bytes().any(|byte| byte.is_ascii_uppercase()) {
+                std::borrow::Cow::Owned(tag.to_ascii_lowercase())
+            } else {
+                std::borrow::Cow::Borrowed(tag)
+            };
 
             // CSS 2.1 §17: table parts. `display` is authoritative; the HTML tag is a
             // fallback for documents whose UA stylesheet is incomplete (or for styles
@@ -102,7 +131,7 @@ fn build_box_for_node(
                 Display::InlineBlock => Some(BoxType::InlineBlock(node_id)),
                 _ => None,
             };
-            let tag_role = match tag.as_str() {
+            let tag_role = match tag.as_ref() {
                 "table" => Some(BoxType::Table(node_id)),
                 "thead" | "tbody" | "tfoot" => Some(BoxType::TableRowGroup(node_id)),
                 "tr" => Some(BoxType::TableRow(node_id)),
@@ -112,7 +141,7 @@ fn build_box_for_node(
                 _ => None,
             };
             let is_replaced = matches!(
-                tag.as_str(),
+                tag.as_ref(),
                 "img"
                     | "input"
                     | "select"
@@ -144,9 +173,14 @@ fn build_box_for_node(
             let mut raw_children = Vec::new();
             let mut curr = node.first_child;
             while let Some(child_id) = curr {
-                if let Some(child_box) =
-                    build_box_for_node(doc, child_id, styles, Some(style), replaced_sizes)
-                {
+                if let Some(child_box) = build_box_for_node(
+                    doc,
+                    child_id,
+                    styles,
+                    Some(style),
+                    replaced_sizes,
+                    has_overflow_clip,
+                ) {
                     raw_children.push(child_box);
                 }
                 curr = doc.node(child_id).next_sibling;
@@ -176,6 +210,14 @@ fn build_box_for_node(
             layout_box.is_float = style.float != Float::None;
             layout_box.float_side = style.float;
             layout_box.children = children;
+            // Stacking-context flag (CSS 2.2 Appendix E), computed once at build time so
+            // the document-wide finalize pass is only needed for `overflow` clipping.
+            layout_box.establishes_stacking_context = style.opacity < 1.0
+                || matches!(style.position, Position::Fixed)
+                || (style.position != Position::Static && style.z_index.is_some());
+            if !matches!(style.overflow, Overflow::Visible) {
+                *has_overflow_clip = true;
+            }
             if matches!(box_type, BoxType::TableCell(_)) {
                 layout_box.colspan = node
                     .as_element()

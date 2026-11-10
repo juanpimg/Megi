@@ -27,6 +27,7 @@ pub use inline::{
     layout_inline_formatting_context_with_measurer,
 };
 pub use text::FontTextMeasurer;
+use tree_builder::build_layout_tree_internal;
 pub use tree_builder::{build_layout_tree, build_layout_tree_with_replaced_sizes};
 
 /// Completely lays out a DOM document against a viewport rectangle.
@@ -99,7 +100,8 @@ pub fn layout_document_with_measurer_and_replaced_sizes(
     measurer: &dyn TextMeasurer,
     replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
 ) -> Option<LayoutBox> {
-    let mut root_box = build_layout_tree_with_replaced_sizes(doc, styles, replaced_sizes)?;
+    let (mut root_box, has_overflow_clip) =
+        build_layout_tree_internal(doc, styles, replaced_sizes)?;
 
     let initial_containing_block = Dimensions {
         content: Rect::new(viewport.x, viewport.y, viewport.width, viewport.height),
@@ -109,7 +111,12 @@ pub fn layout_document_with_measurer_and_replaced_sizes(
     };
 
     layout_block_with_viewport(&mut root_box, &initial_containing_block, measurer, viewport);
-    finalize_layout_metadata(&mut root_box, None, true);
+    if has_overflow_clip {
+        finalize_layout_metadata(&mut root_box, None, true);
+    } else {
+        // No box clips: the only missing metadata is the root stacking context.
+        root_box.establishes_stacking_context = true;
+    }
     Some(root_box)
 }
 
