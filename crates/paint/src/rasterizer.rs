@@ -233,15 +233,16 @@ impl Pixmap {
                 continue;
             }
             let row = y as usize * stride;
-            if coverage_y == 256 {
-                if full_begin < full_end {
-                    if color.a == 255 {
-                        self.pixels[row + full_begin as usize..row + full_end as usize].fill(color);
-                    } else {
-                        for x in full_begin..full_end {
-                            self.pixels[row + x as usize] =
-                                blend_over(self.pixels[row + x as usize], color);
-                        }
+            if coverage_y == 256 && full_begin < full_end {
+                // Fast path: a fully covered row that also contains at least one
+                // fully covered column. Interior spans are written directly and
+                // only the partial left/right edges are blended.
+                if color.a == 255 {
+                    self.pixels[row + full_begin as usize..row + full_end as usize].fill(color);
+                } else {
+                    for x in full_begin..full_end {
+                        self.pixels[row + x as usize] =
+                            blend_over(self.pixels[row + x as usize], color);
                     }
                 }
                 for x in ix0..full_begin {
@@ -261,6 +262,11 @@ impl Pixmap {
                     }
                 }
             } else {
+                // Generic path: partial rows, and full rows whose rectangle is
+                // narrower than one pixel (no fully covered column). Indexing is
+                // always relative to `ix0`, which keeps `x - ix0` valid for every
+                // column in `ix0..ix1` (regression test R46: this used to
+                // underflow and index out of bounds when `full_begin == full_end`).
                 for x in ix0..ix1 {
                     let alpha =
                         combine_coverage(src_alpha, coverage_x[(x - ix0) as usize], coverage_y);
