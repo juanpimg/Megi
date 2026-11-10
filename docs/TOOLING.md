@@ -396,6 +396,21 @@ cargo run -p render -- tests/fixtures/render/browser_api.html /tmp/api.png --jso
 cargo run -p render -- tests/fixtures/render/raf_animation.html /tmp/raf.png --json  # script_virtual_time_ms=48
 ```
 
+### 2.16k Ronda 17: flexbox, decoraciones, formularios y SVG pattern/text
+
+- **Flexbox MVP**: `display:flex/inline-flex`, direction 4, justify 5, align 5, wrap, gap, grow/shrink/basis + shorthand; layout 146 / css 94 tests; fixtures `flex_row`/`flex_column`/`flex_wrap` (md5s `c28ce538…`/`8d06d66c…`/`7fbf998e…`).
+- **Decoraciones**: `border-radius`/`box-shadow`/`text-shadow` con blur determinista de 3 pasadas (caps 64 px/32 sombras), `paint --test effects` (11) y goldens intactos.
+- **Formularios editables**: UA styles + shell `src/forms.rs` (FocusState/TextEdit UTF-8/snapshot `data:` URL y re-render); fixture `forms.html` 640×480 md5 `b8b9a20…`; shell 108 tests.
+- **SVG**: `<pattern>` (cap 10k tiles) y `<text>` básico con `crates/fonts` (caps 1.000 texts/10.000 chars); svg 73 tests.
+
+```bash
+cargo run -p render -- tests/fixtures/render/flex_row.html /tmp/flex_row.png
+cargo run -p shell -- tests/fixtures/render/forms.html --screenshot /tmp/forms.png --width 640 --height 480
+cargo test -p paint --test effects
+cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/pattern.svg /tmp/pattern.png
+cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/text.svg /tmp/text.png
+```
+
 ### 2.17 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
 
 Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-spec-driven-dev/SKILL.md` (directorio ignorado en `.gitignore` para mantener limpio el árbol Git de metadatos de agentes, mientras su documentación permanente reside en este archivo `docs/TOOLING.md`). Esta skill estandariza el protocolo operativo para cualquier agente que trabaje en la Fase 1 y posteriores:
@@ -409,7 +424,7 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 1046 tests, doc y gate de conformidad
+./tools/dev.sh all                     # fmt, clippy, 1107 tests, doc y gate de conformidad
 cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0 (árbol 3904/3904, 100 %)
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 
@@ -427,4 +442,4 @@ cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.pn
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Cifras de referencia en la ronda 16: **1046 tests** (bench 8, css 76, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 71, layout 135, net 180, paint 130, **render 123**, shell 100, svg 60, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; backgrounds multicapa con legacy flag, SVG con CSS/gradientes, APIs de navegador cableadas y suite determinista (rAF epoch fijo); todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+Cifras de referencia en la ronda 17: **1107 tests** (bench 8, css 94, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 71, layout 146, net 180, paint 141, **render 123**, shell 108, svg 73, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; flexbox, decoraciones, formularios UA/editables y SVG pattern/text; suite determinista; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.

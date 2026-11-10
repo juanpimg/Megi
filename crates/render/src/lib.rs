@@ -75,7 +75,7 @@
 //! ### Browser APIs exposed to scripts (R96)
 //!
 //! - Before scripts run, the author+UA cascade is resolved **once** over the parsed DOM into
-//!   a snapshot ([`ScriptingHostContext`]); `window.getComputedStyle(element)` returns the
+//!   a snapshot (`ScriptingHostContext`); `window.getComputedStyle(element)` returns the
 //!   agreed property list (color/background-color, font size/family/weight/style, box
 //!   width/height, margin-*/padding-*, display, position, text-align, line-height,
 //!   border-*-width/color/style and opacity) serialized as CSS values. The snapshot

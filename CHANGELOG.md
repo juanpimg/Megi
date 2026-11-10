@@ -6,6 +6,66 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 17 — flexbox MVP, rounded corners/shadows, editable forms and SVG pattern/text (2026-11-10)
+
+#### Added
+
+- **Flexbox MVP** (`crates/layout/src/flex.rs` + `crates/css/src/flex.rs`,
+  commit `082f52d`): `display: flex`/`inline-flex` (inline-flex computes as
+  `Display::InlineBlock` + `ComputedStyle::is_inline_flex`, so no new `Display`
+  variant), `flex-direction` (4), `justify-content` (5 including `space-evenly`),
+  `align-items`/`align-self` (stretch/flex-start/flex-end/center/baseline),
+  `flex-wrap` (nowrap/wrap), `gap`/`row-gap`/`column-gap`,
+  `flex-grow`/`flex-shrink`/`flex-basis` (auto/0/length/%) and the `flex`
+  shorthand; items keep their normal BFC/IFC content and margins never collapse
+  between items. Documented out of scope: grid, `order`, `flex-flow`,
+  `align-content`, absolute/fixed items and full max-content intrinsic sizing.
+  layout 135→**146** tests, css 76→**94** tests, 3 E2E fixtures with verified
+  pixel bboxes: `flex_row` `md5 c28ce538…`, `flex_column` `md5 8d06d66c…`,
+  `flex_wrap` `7fbf998e…`.
+- **Rounded corners and shadows** (`crates/css` + `crates/paint`, commit
+  `082f52d`): `border-radius` (1-4 values, elliptical `/`, longhands and
+  pre-cascade shorthand), `box-shadow` (none/lists, inset, any colour order,
+  2-4 lengths, cap 32) and `text-shadow` (2-3 lengths, colour, inherited).
+  Paint gains the `RoundedRect`, `RoundedBorder`, `Push/PopRoundedGroup`,
+  `BoxShadow` and `TextShadow` display items, with a **deterministic three-pass
+  separable box blur** (radius = blur/2, blur capped at 64 px, ≤32 shadows, first
+  shadow painted on top); without radius/shadows the display list stays
+  byte-identical. css 76→**94**, paint 130→**141** tests (11 new effects).
+- **UA form styles and editable forms** (commit `082f52d` + `67f7c57`):
+  approximate UA rules for text/search/email/password/number/file/date inputs,
+  submit/button/reset, checkbox/radio (`[checked]`, 13 px), textarea, select,
+  label/fieldset/legend, `[disabled]`/`[readonly]`, `[data-megi-focused]` and
+  `[data-megi-active]`; the shell adds `src/forms.rs` with a stable
+  `data-megi-form-id`, `FocusState`, UTF-8 `TextEdit` with caret, value/checked/
+  focus/active patching, a bounded `data:` snapshot re-render, click-to-focus
+  (taking precedence over links), typing/Backspace/Tab/Esc, checkbox/radio
+  toggles and a button flash; **Enter never submits** and scripts stay disabled
+  while editing. Fixture `forms.html` (8 controls); shell 100→**108** tests;
+  screenshot 640×480 `md5 b8b9a2047ddae43a6f0a329e7c2e396e`, basic golden
+  `7324e851…` intact.
+- **SVG `<pattern>` tiling and basic `<text>`** (commit `8f60cb8`): patterns with
+  `patternUnits`/`patternContentUnits`/`patternTransform`, arbitrary tile content
+  usable from `fill`/`stroke`, cycle-safe reference resolution and a **10,000
+  tile cap**; basic text with `x/y/dx/dy`, `text-anchor`, `font-family`/size/
+  weight via the internal `crates/fonts` (DejaVu bundled, bold; italic proxied to
+  normal), `letter-spacing`, `fill`/`stroke`/opacity and translate/scale
+  transforms (no kerning/ligatures/bidi; **1,000 texts / 10,000 chars** caps).
+  New internal `svg → fonts` dependency. svg 60→**73** tests, fixtures
+  `pattern.svg`/`text.svg`.
+
+#### Changed
+
+- Test suite: **1107 tests, 0 failures** (was 1046): bench 8, **css 94**, dom 28,
+  **fonts 17+1 doctest**, html 60, image 45+1, js 71, **layout 146**, net 180,
+  **paint 141**, render 123, **shell 108**, **svg 73**, test_harness 11.
+- Phase status: Phase 4 practically complete (flex/decorations/forms UA/SVG),
+  Phase 5 ≈95 %, **Phase 6 ≈90 %**, **Phase 7 ≈75 %** (editable forms).
+- Repository synchronized on GitHub (`main` + `sprint/robustez-fase4` at
+  `67f7c57`) with green CI (quality, conformance, MSRV); the Lead fixed five
+  rustdoc link warnings before the commit. Goldens stay byte-identical
+  (showcase `c95c7eff…`, phase4 PNG `9e957177…`).
+
 ### Round 16 — real SVG CSS/gradients, multi-layer backgrounds and browser APIs wired into render (2026-11-10)
 
 #### Added

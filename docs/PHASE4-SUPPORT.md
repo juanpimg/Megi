@@ -1,8 +1,8 @@
 # Matriz de Soporte de la Fase 4 (`docs/PHASE4-SUPPORT.md`)
 
-**Objetivo de la Fase 4**: renderizar una página HTML real a una imagen **PNG**, completando el modelo de pintado CSS 2.2 y la tipografía. **Estado global**: Fase 4 funcionalmente cerrada, **HITO ronda 11** (árbol HTML5 **3.904/3.904, 100 %**, gate sin allowlist de tree), **ronda 12 de rendimiento** (layout −14,6 %, LayoutBox 496→176 B; encoder PNG −30,5 % byte-idéntico) y **ronda 13**: **fuentes web `@font-face`+WOFF2 de punta a punta** y **crate `svg` propio** (parser+rasterizador AA, 41 tests) **cableado E2E en `<img>`/background-image** (cap 16 Mpx/64 MiB RGBA, stat `svgs_rendered`) **ronda 15**: **SVG inline** (pre-proceso a `<img>` sintético; caps 256/1 MiB/8 MiB, `inline_svgs`), **background-* geometry** y **IFC −28 %** (layout 50,5→36,3 ms, pipeline 132,9→120,5 ms con geometría byte-idéntica); **ronda 16**: **CSS interno + gradientes lineales/radiales en SVG** (`<pattern>` pendiente), **backgrounds multicapa con origin/clip/attachment** y **APIs de navegador cableadas en render** (getComputedStyle pre-script, matchMedia/viewport, rAF determinista con epoch fijo 48 ms, onerror/consola ⇒ warnings).
+**Objetivo de la Fase 4**: renderizar una página HTML real a una imagen **PNG**, completando el modelo de pintado CSS 2.2 y la tipografía. **Estado global**: Fase 4 funcionalmente cerrada, **HITO ronda 11** (árbol HTML5 **3.904/3.904, 100 %**, gate sin allowlist de tree), **ronda 12 de rendimiento** (layout −14,6 %, LayoutBox 496→176 B; encoder PNG −30,5 % byte-idéntico) y **ronda 13**: **fuentes web `@font-face`+WOFF2 de punta a punta** y **crate `svg` propio** (parser+rasterizador AA, 41 tests) **cableado E2E en `<img>`/background-image** (cap 16 Mpx/64 MiB RGBA, stat `svgs_rendered`) **ronda 15**: **SVG inline** (pre-proceso a `<img>` sintético; caps 256/1 MiB/8 MiB, `inline_svgs`), **background-* geometry** y **IFC −28 %** (layout 50,5→36,3 ms, pipeline 132,9→120,5 ms con geometría byte-idéntica); **ronda 16**: CSS interno + gradientes en SVG, backgrounds multicapa con origin/clip/attachment y APIs de navegador cableadas en render; **ronda 17**: **Flexbox MVP** (`layout/flex.rs`), **`border-radius`/`box-shadow`/`text-shadow`** con blur determinista, **formularios con UA styles** y **SVG `<pattern>`/`<text>` básico**.
 
-El pipeline `HTML → CSS → layout → display list → PNG` renderiza texto real, tablas (incluido el texto de sus celdas), `inline-block`, cajas reemplazadas, posicionamiento, floats, `overflow` con clip, stacking/`z-index`/`opacity`, decoraciones/marcadores, **imágenes `<img>` con muestreo bilineal**, **`background-image`/`list-style-image`** (con **`repeat`/`size`/`position` desde la ronda 15**: tiling/clip con cap 4096 y legacy flag para goldens) y comprime PNG con un DEFLATE propio. Quedan `background-origin/clip`, múltiples capas, colores en conflictos de `border-collapse` y block-in-inline. Desde la ronda 9 el pipeline **ejecuta los `<script>` del documento** (`render`, WP-6.2 host); la ronda 10 añade **eventos/timers JS (WP-A)**, hit regions y red avanzada E2E; la ronda 11 añade **WP-B** (CSSOM/`getComputedStyle`/`NodeList`/`matches`/`closest`/identidad), **WP-6.4** (scripts parser-inserted + `document.write` re-tokenizado ⇒ árbol 3.904/3.904) y **event loop presupuestado** en `render` (reloj virtual, lifecycle, timers, re-render único); la **ronda 12** optimiza layout (`Arc<ComputedStyle>` compartido, `Space` sin `String`) y el encoder PNG (filtros fusionados/LZ77 con hashes/`encode_pixels` sin buffer RGBA), con eventos JS avanzados; la **ronda 13** añade **fuentes web `@font-face`+WOFF2 E2E** (dep `woff2-patched` 0.4 solo en `fonts`, DB por render en layout+paint, caps y stats) y el **crate `svg`** desde cero (parser XML+modelo+rasterizador AA, límites anti-DoS), ya **cableado E2E en `render`** (`<img>`/background-image, detección Content-Type/sniffing, intrínseco 300×150 por defecto, cap 16 Mpx/64 MiB RGBA, corrupto ⇒ warning no fatal, `svgs_rendered`); el cierre de ronda arregla `html/fast_hash` (`massive-end-p` ~19 ms); la **ronda 15** añade **backgrounds geometry**, **SVG inline** (`<svg>`→`<img>` sintético, `inline_svgs`), **IFC −28 %** (layout ~36,3 ms, pipeline ~120,5 ms) y **event loop determinista** (sólo reloj virtual).
+El pipeline `HTML → CSS → layout → display list → PNG` renderiza texto real, tablas (incluido el texto de sus celdas), `inline-block`, cajas reemplazadas, posicionamiento, floats, `overflow` con clip, stacking/`z-index`/`opacity`, decoraciones/marcadores, **imágenes `<img>` con muestreo bilineal**, **`background-image`/`list-style-image`** (con **`repeat`/`size`/`position` desde la ronda 15**: tiling/clip con cap 4096 y legacy flag para goldens) y comprime PNG con un DEFLATE propio. Quedan grid/`order`, `overflow:hidden`+radius, `background-clip:text`, colores en conflictos de `border-collapse` y block-in-inline. Desde la ronda 9 el pipeline **ejecuta los `<script>` del documento** (`render`, WP-6.2 host); la ronda 10 añade **eventos/timers JS (WP-A)**, hit regions y red avanzada E2E; la ronda 11 añade **WP-B** (CSSOM/`getComputedStyle`/`NodeList`/`matches`/`closest`/identidad), **WP-6.4** (scripts parser-inserted + `document.write` re-tokenizado ⇒ árbol 3.904/3.904) y **event loop presupuestado** en `render` (reloj virtual, lifecycle, timers, re-render único); la **ronda 12** optimiza layout (`Arc<ComputedStyle>` compartido, `Space` sin `String`) y el encoder PNG (filtros fusionados/LZ77 con hashes/`encode_pixels` sin buffer RGBA), con eventos JS avanzados; la **ronda 13** añade **fuentes web `@font-face`+WOFF2 E2E** (dep `woff2-patched` 0.4 solo en `fonts`, DB por render en layout+paint, caps y stats) y el **crate `svg`** desde cero (parser XML+modelo+rasterizador AA, límites anti-DoS), ya **cableado E2E en `render`** (`<img>`/background-image, detección Content-Type/sniffing, intrínseco 300×150 por defecto, cap 16 Mpx/64 MiB RGBA, corrupto ⇒ warning no fatal, `svgs_rendered`); el cierre de ronda arregla `html/fast_hash` (`massive-end-p` ~19 ms); la **ronda 15** añade **backgrounds geometry**, **SVG inline** (`<svg>`→`<img>` sintético, `inline_svgs`), **IFC −28 %** (layout ~36,3 ms, pipeline ~120,5 ms) y **event loop determinista** (sólo reloj virtual).
 
 - Resultados visuales: [`images/phase4-basic.png`](images/phase4-basic.png) · [`images/render-fixture.png`](images/render-fixture.png).
 - Plan: [`ROADMAP.md`](ROADMAP.md) §«FASE 4»/«FASE 5» · Estado y deuda: [`HANDOFF.md`](HANDOFF.md) · Rendimiento: [`PERFORMANCE.md`](PERFORMANCE.md).
@@ -12,7 +12,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 ---
 
-## 1. Modelo de caja y layout (`crates/layout`, 135 tests)
+## 1. Modelo de caja y layout (`crates/layout`, 146 tests)
 
 | Capacidad CSS 2.2 | Estado | Notas |
 |---|:---:|---|
@@ -33,7 +33,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | `display: list-item` y marcadores (§12.5) | **HECHO** | paint pinta `disc`/`circle`/`square`/`decimal` |
 | `visibility: hidden` (§11.2) | **HECHO** | paint no pinta caja ni texto |
 
-## 2. CSS (`crates/css`, 76 tests + 30 WPT)
+## 2. CSS (`crates/css`, 94 tests + 30 WPT)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -43,10 +43,13 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | `@import` (`Stylesheet.imports`) y **Media Queries completas** (parser/evaluador) | **HECHO** | Integrado en `render` con recursión/dedup/ciclos/media real (WP-5.8) |
 | Query API (`css::query::{query_selector, query_selector_all, matches}` + `try_*`) y `background-image`/`list-style-image` en `ComputedStyle` | **HECHO** | Pintado en paint+render (ronda 8) |
 | **Background geometry (ronda 15)**: `background-repeat` (pares, space/round), `background-size`, `background-position` y shorthand | **HECHO** | Consumido por `paint` (tiling/clip, legacy `background_geometry_explicit`) |
+| **Flexbox (ronda 17)**: `display:flex/inline-flex`, `flex-direction/wrap`, `justify-content`, `align-items/self`, `gap`/`row-gap`/`column-gap`, `flex-grow/shrink/basis` y shorthand `flex` | **HECHO** | Consumido por `layout/flex.rs`; grid/`order`/`flex-flow`/`align-content` fuera de alcance |
+| **Decoraciones (ronda 17)**: `border-radius` (1-4, slash, longhands/shorthand), `box-shadow` y `text-shadow` + UA styles de formularios | **HECHO** | Radius/sombras pintados por `paint`; UA forms en `user_agent.rs` |
+| **Radius y sombras (ronda 17)**: DisplayItems `RoundedRect`/`RoundedBorder`/`Push-PopRoundedGroup`/`BoxShadow`/`TextShadow`; blur determinista de 3 pasadas separables (radio=blur/2), caps 64 px blur y 32 sombras; sin radius/sombras el display list es byte-idéntico | **HECHO** | `paint --test effects` 11 tests; goldens intactos |
 | **Backgrounds multicapa (ronda 16)**: `background-origin` (border/padding/content), `background-clip` (text parseado, pinta border-box), `background-attachment` (scroll/fixed), **`background_layers` top-first** (listas cíclicas, shorthand multicapa, color solo última) y `space`/`round` reales | **HECHO** | Espejo legacy para goldens; paint 130 tests |
 | **`@font-face` (ronda 13)**: `Stylesheet.font_faces` + `FontFaceRule { family, sources, weight, style }` | **HECHO** | Consumido por `fonts`/`render` para fuentes web (ver §4) |
 
-## 3. Pintado (`crates/paint`, 130 tests)
+## 3. Pintado (`crates/paint`, 141 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -77,7 +80,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **Fuentes web `@font-face`/WOFF2 (ronda 13)**: `fonts::decode_web_font`/`is_woff2` (WOFF2→sfnt con **`woff2-patched` 0.4**, Apache-2.0, pure Rust sin C/FFI), `FontDatabase::load_font_data_family(alias, sfnt)`; `render` recoge las reglas de todas las hojas (incl. `@import`), deduplica, descarga con `ResourceLoader` (`--no-network`, caps **8 fuentes/8 MiB/32 MiB**) y pasa una **DB por render** a layout+paint, con stats `fonts_loaded/failed/bytes` y `timings.fonts` | **HECHO** | Fixture Open Sans OFL (18.640 B): webfont `md5 f38aed032b8d160075097f1e4ad83b49` vs fallback `e2d76dee98f7c4ef2896c5d003be74f2`; fallos ⇒ warning no fatal |
 | Límites web fonts: sin WOFF1, primer `src` soportado, weight/style no eligen cara, sin unicode-range/font-display (bloqueante), sin subsetting/color fonts, DB no cacheada | **PENDIENTE** | Próximas rondas |
 | Bidi, scripts complejos, fuentes variables | **PENDIENTE** | Fuera de alcance de Fase 4 |
-| **Crate `svg`** (`crates/svg`, **60 tests**, rondas 13/16): **CSS interno** (`<style>`/class/id/descendientes, cascada, CDATA) y **gradientes lineales/radiales** completos; `<pattern>` pendiente; parser XML subset + modelo SVG + rasterizador vectorial AA determinista (shapes, path con arcos, transforms, viewBox, estilos, opacidad; límites anti-DoS; `examples/svg_to_png`). NO soportado: `<text>`, CSS class/style sheets, gradientes/patterns, dasharray, markers, filtros/máscaras/clips, script y refs externas | **HECHO (crate + E2E)** | Cableado en `render` para `<img src=*.svg>` y `background-image`: detección Content-Type/sniffing, tamaño intrínseco (300×150 por defecto), cap 16 Mpx/64 MiB RGBA, corrupto ⇒ warning no fatal, navegación directa en página sintética y stat `svgs_rendered`; 5 fixtures `svg_*` + 11 tests |
+| **Crate `svg`** (`crates/svg`, **73 tests**, rondas 13/16/17): CSS interno, gradientes, **`<pattern>`** (cap 10k tiles) y **`<text>` básico** (fonts bundled, caps 1.000 texts/10.000 chars); parser XML subset + modelo SVG + rasterizador vectorial AA determinista (shapes, path con arcos, transforms, viewBox, estilos, opacidad; límites anti-DoS; `examples/svg_to_png`). NO soportado: `<text>`, CSS class/style sheets, gradientes/patterns, dasharray, markers, filtros/máscaras/clips, script y refs externas | **HECHO (crate + E2E)** | Cableado en `render` para `<img src=*.svg>` y `background-image`: detección Content-Type/sniffing, tamaño intrínseco (300×150 por defecto), cap 16 Mpx/64 MiB RGBA, corrupto ⇒ warning no fatal, navegación directa en página sintética y stat `svgs_rendered`; 5 fixtures `svg_*` + 11 tests |
 
 ## 5. Documento, imagen y red (Fase 5, ~95 %)
 
@@ -121,7 +124,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 | **WP-6.4 (ronda 11)**: hook `html::scripting::{ScriptExecutor, ScriptExecution}`; scripts parser-inserted al `</script>`/EOF y `document.write` **re-tokenizado en la posición actual** (scripts anidados incluidos); externos `src` los ejecuta el host; errores no fatales; camino sin scripting zero-cost | **HECHO** | **árbol 3.904/3.904 (100 %), allowlist de tree vacía** |
 | Pendientes F6: `document.onerror` para errores de scripts, módulos ES/`async`/`defer`, memoria real y aislamiento, provider de `getComputedStyle` cableado al pipeline y event loop vivo en el shell | **PENDIENTE** | Fase 6 ≈80-85 % |
 
-## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 100 tests)
+## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 108 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -131,7 +134,8 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 | **Render en worker** con generación/cancelación/coalescing/debounce (120 ms) y `EventLoopProxy` | **HECHO** | — |
 | **Navegación real (WP-7.5)**: clic en enlaces (`Url::join`), historial (`NavigationState`: back/forward/replace/reload, cap 256, truncado forward), Alt+←/Backspace/b, Alt+→/n, `r`, título dinámico `<title>`+URL+% scroll+`[recortado]`, errores y redirects replace; **hit regions nativos** y CLI `--cookies`/`--origin` | **HECHO** | 34 tests nuevos; hit regions y título del mismo render |
 | **Zoom / auto-refresh / estado (ronda 13, WP-7.7)**: zoom `Ctrl+=/-/0` y `--zoom` 0.5–3.0 (escalones 50–300 %, viewport CSS = físico/(scale·zoom)), `Ctrl+L` imprime URL, auto-refresh opt-in `--refresh-ms [MS]` (solo con scripts+timers pendientes, worker generacional, scroll conservado, sin bucles) y título con zoom/scroll/warnings/errores | **HECHO** | `--zoom 2` (640×400→320×200) `md5 c11903cfe0c4f7095289052d25750bd3`; basic `7324e851…` intacto |
-| Formularios, pestañas, event loop real y foco/eventos DOM | **PENDIENTE** | Fase 7 |
+| **Formularios editables (ronda 17)**: UA styles, `src/forms.rs` (FocusState, TextEdit UTF-8, snapshot `data:` URL + patch/re-render, clic/teclado/Tab/Esc/checkbox/radio, Enter nunca envía) | **HECHO** | Fixture `forms.html` 640×480 `md5 b8b9a20…`; shell 108 tests |
+| Pestañas, widgets nativos/select dropdown, validación/submit y event loop real | **PENDIENTE** | Fase 7 |
 | **Hit-testing** (`NodeId`/`LayoutBox` ↔ `DisplayItem`) | **HECHO (paint + render)** | API aditiva `HitRegion`/`hit_test`/`find_link_at`; ronda 10: `RenderOutput.hit_regions` y el shell resuelve enlaces con `find_link_at` (fallback layout+DOM), +0,6 µs |
 
 | Tests de ventana reales en CI (Xvfb) | **PENDIENTE** | El host de desarrollo no tiene servidor gráfico |
@@ -139,7 +143,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 ## 10. Verificación de la matriz
 
 ```bash
-./tools/dev.sh all                             # fmt, clippy, 1046 tests, doc y gate PASS
+./tools/dev.sh all                             # fmt, clippy, 1107 tests, doc y gate PASS
 cargo test -p css -p layout -p paint -p fonts -p dom -p html
 cargo test -p net -p render -p image -p shell
 cargo test -p js
@@ -149,6 +153,10 @@ cargo run -p render -- tests/fixtures/render/svg_inline_simple.html /tmp/inline.
 cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/gradient.svg /tmp/gradient.png
 cargo run -p render -- tests/fixtures/render/background_layers.html /tmp/layers.png --width 240 --height 260   # c357cc2c…
 cargo run -p render -- tests/fixtures/render/browser_api.html /tmp/api.png --json
+cargo run -p render -- tests/fixtures/render/flex_row.html /tmp/flex_row.png
+cargo run -p shell -- tests/fixtures/render/forms.html --screenshot /tmp/forms.png --width 640 --height 480
+cargo test -p paint --test effects
+cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/pattern.svg /tmp/pattern.png
 cargo run -p render -- tests/fixtures/render/backgrounds.html /tmp/bg.png
 cargo run --release -p bench -- --filter layout --iterations 5     # ~36,3 ms
 cargo run --release -p bench -- --filter pipeline --iterations 3   # ~120,5 ms
