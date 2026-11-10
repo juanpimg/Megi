@@ -32,16 +32,14 @@
 //! - Scripts execute synchronously from [`JsRuntime::eval`]; parser-inserted `<script>` and
 //!   external scripts are not integrated into `render` yet.
 
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::time::Duration;
-
 use boa_engine::{
     Context, JsError as BoaError, JsNativeError, JsObject, JsResult, JsValue, NativeFunction,
     Source, js_string, object::FunctionObjectBuilder, object::ObjectInitializer,
     property::Attribute,
 };
 use dom::{Attribute as DomAttribute, Document, Namespace, NodeId};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::error::JsError;
 use crate::host::{ConsoleEntry, Host, HostScope, with_host};
@@ -203,63 +201,46 @@ impl JsRuntime {
         }
     }
 
-    /// Runs pending timer callbacks (macrotasks) up to `max_steps`; returns how many ran.
-    ///
-    /// Timers are stored in JS-side rooted arrays (`__megi_timers` callbacks and
-    /// `__megi_schedule` entries), so holding them does not require Rust-side GC roots.
-    /// This is the base scheduler (WP-6.2): there is no wall-clock delay ordering yet —
-    /// entries run in registration order when the host pumps the queue.
+    /// Executes timers whose due time has arrived (real clock by default).
     pub fn run_tasks(&mut self, max_steps: usize) -> Result<usize, JsError> {
-        let mut executed = 0usize;
-        for _ in 0..max_steps {
-            let Some(entry) = take_first_schedule(&mut self.context)? else {
-                break;
-            };
-            let callback = self.timer_callback(entry.id)?;
-            if let Some(callback) = callback {
-                let _scope = HostScope::enter(&self.host);
-                let result = callback.call(&JsValue::undefined(), &[], &mut self.context);
-                drop(_scope);
-                if let Err(error) = result {
-                    let message = error.to_string();
-                    self.last_error = Some(message.clone());
-                    return Err(classify_error(&message));
-                }
-            }
-            if entry.repeat {
-                push_schedule_entry(&mut self.context, entry.id, true, entry.delay)?;
-            }
-            executed += 1;
-        }
-        Ok(executed)
+        let _scope = HostScope::enter(&self.host);
+        let deadline = crate::events::now_ms();
+        let result = crate::events::run_due_timers(&mut self.context, deadline, max_steps);
+        drop(_scope);
+        result
     }
 
-    /// Runs pending promise/microtask jobs.
+    /// Runs pending promise/microtask jobs (Boa's job queue).
     pub fn run_microtasks(&mut self) -> Result<(), JsError> {
         self.context
             .run_jobs()
             .map_err(|error| classify_error(&error.to_string()))
     }
 
-    /// Number of pending timers (diagnostics).
-    pub fn pending_timers(&mut self) -> usize {
-        schedule_len(&mut self.context).unwrap_or(0)
+    /// Advances the injectable virtual clock by `delta` and runs the timers now due.
+    pub fn advance(&mut self, delta: std::time::Duration) -> Result<u64, JsError> {
+        let _scope = HostScope::enter(&self.host);
+        let result = crate::events::advance_clock(&mut self.context, delta);
+        drop(_scope);
+        result
     }
 
-    /// Fetches a timer callback from the JS-side timer table.
-    fn timer_callback(&mut self, id: u64) -> Result<Option<JsObject>, JsError> {
-        let timers = self
-            .context
-            .global_object()
-            .get(js_string!("__megi_timers"), &mut self.context)
-            .map_err(|error| JsError::Internal(error.to_string()))?;
-        let Some(timers) = timers.as_object() else {
-            return Ok(None);
-        };
-        let callback = timers
-            .get(js_string!(id.to_string()), &mut self.context)
-            .map_err(|error| JsError::Internal(error.to_string()))?;
-        Ok(callback.as_object())
+    /// Moves the virtual clock to `deadline_ms` and runs every timer due up to then.
+    pub fn run_until(&mut self, deadline_ms: u64) -> Result<usize, JsError> {
+        let _scope = HostScope::enter(&self.host);
+        let result = crate::events::run_until(&mut self.context, deadline_ms);
+        drop(_scope);
+        result
+    }
+
+    /// Number of pending timers.
+    pub fn pending_timers(&self) -> usize {
+        self.host.borrow().timers.len()
+    }
+
+    /// Current scheduler time in milliseconds (virtual clock after `advance`/`run_until`).
+    pub fn now_ms(&self) -> u64 {
+        self.host.borrow().now_ms()
     }
 }
 
@@ -303,8 +284,6 @@ fn install_globals(context: &mut Context, host: &Rc<RefCell<Host>>) -> Result<()
 
     let console = build_console(context);
     let document = build_document_object(context);
-    let timer_table = boa_engine::object::builtins::JsArray::new(context);
-
     let entries: [(&str, JsValue); 3] = [
         ("window", window_value),
         ("console", JsValue::from(console)),
@@ -315,42 +294,7 @@ fn install_globals(context: &mut Context, host: &Rc<RefCell<Host>>) -> Result<()
             .set(js_string!(name), value, false, context)
             .map_err(|error| JsError::Internal(error.to_string()))?;
     }
-    global
-        .set(
-            js_string!("__megi_timers"),
-            JsValue::from(timer_table),
-            false,
-            context,
-        )
-        .map_err(|error| JsError::Internal(error.to_string()))?;
-    let schedule = boa_engine::object::builtins::JsArray::new(context);
-    global
-        .set(
-            js_string!("__megi_schedule"),
-            JsValue::from(schedule),
-            false,
-            context,
-        )
-        .map_err(|error| JsError::Internal(error.to_string()))?;
-    global
-        .set(
-            js_string!("__megi_next_timer"),
-            JsValue::from(1.0_f64),
-            false,
-            context,
-        )
-        .map_err(|error| JsError::Internal(error.to_string()))?;
-
-    for (name, length, function) in [
-        ("setTimeout", 2, set_timeout as NativeFn),
-        ("setInterval", 2, set_interval as NativeFn),
-        ("clearTimeout", 1, clear_timer as NativeFn),
-        ("clearInterval", 1, clear_timer as NativeFn),
-    ] {
-        context
-            .register_global_builtin_callable(js_string!(name), length, native(function))
-            .map_err(|error| JsError::Internal(error.to_string()))?;
-    }
+    crate::events::install(context)?;
     Ok(())
 }
 
@@ -462,6 +406,9 @@ fn build_document_object(context: &mut Context) -> JsObject {
         Attribute::all(),
     );
     init.accessor(js_string!("URL"), Some(url), None, Attribute::all());
+    for (name, length, function) in crate::events::node_methods() {
+        init.function(native(function), js_string!(name), length);
+    }
     init.build()
 }
 
@@ -525,6 +472,9 @@ fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsValue> {
         ("removeChild", 1, node_remove_child),
         ("replaceChild", 2, node_replace_child),
     ] {
+        init.function(native(function), js_string!(name), length);
+    }
+    for (name, length, function) in crate::events::node_methods() {
         init.function(native(function), js_string!(name), length);
     }
     let wrapper = init.build();
@@ -1390,151 +1340,3 @@ fn class_length(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsR
 
 // ---------------------------------------------------------------------------
 // Timers
-// ---------------------------------------------------------------------------
-
-fn set_timeout(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    schedule_timer(args, context, false)
-}
-
-fn set_interval(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    schedule_timer(args, context, true)
-}
-
-fn schedule_timer(args: &[JsValue], context: &mut Context, repeat: bool) -> JsResult<JsValue> {
-    let callback = args.first().cloned().unwrap_or_else(JsValue::undefined);
-    if callback.as_object().is_none() {
-        return Err(js_error("timer callback must be a function"));
-    }
-    let delay = args
-        .get(1)
-        .and_then(JsValue::as_number)
-        .unwrap_or(0.0)
-        .max(0.0);
-    let id = next_timer_id(context)?;
-    let timers = context
-        .global_object()
-        .get(js_string!("__megi_timers"), context)
-        .map_err(|error| js_error(error.to_string()))?;
-    if let Some(timers) = timers.as_object() {
-        timers
-            .set(js_string!(id.to_string()), callback, false, context)
-            .map_err(|error| js_error(error.to_string()))?;
-    }
-    push_schedule_entry(context, id, repeat, Duration::from_millis(delay as u64))?;
-    Ok(JsValue::from(id as f64))
-}
-
-/// Reads and increments the JS-side timer id counter.
-fn next_timer_id(context: &mut Context) -> JsResult<u64> {
-    let global = context.global_object();
-    let current = global
-        .get(js_string!("__megi_next_timer"), context)
-        .map_err(|error| js_error(error.to_string()))?;
-    let id = current.as_number().unwrap_or(1.0) as u64;
-    global
-        .set(
-            js_string!("__megi_next_timer"),
-            JsValue::from((id + 1) as f64),
-            false,
-            context,
-        )
-        .map_err(|error| js_error(error.to_string()))?;
-    Ok(id)
-}
-
-/// Appends `{id, repeat, delay}` to the JS-side schedule array.
-fn push_schedule_entry(
-    context: &mut Context,
-    id: u64,
-    repeat: bool,
-    delay: Duration,
-) -> JsResult<()> {
-    let schedule = context
-        .global_object()
-        .get(js_string!("__megi_schedule"), context)
-        .map_err(|error| js_error(error.to_string()))?;
-    let Some(schedule) = schedule.as_object() else {
-        return Ok(());
-    };
-    let entry = ObjectInitializer::new(context)
-        .property(js_string!("id"), id as f64, Attribute::all())
-        .property(js_string!("repeat"), repeat, Attribute::all())
-        .property(
-            js_string!("delay"),
-            delay.as_millis() as f64,
-            Attribute::all(),
-        )
-        .build();
-    schedule
-        .get(js_string!("push"), context)
-        .map_err(|error| js_error(error.to_string()))?;
-    let push = schedule
-        .get(js_string!("push"), context)
-        .map_err(|error| js_error(error.to_string()))?;
-    let push = push
-        .as_object()
-        .ok_or_else(|| js_error("schedule.push missing"))?;
-    push.call(&JsValue::from(schedule), &[JsValue::from(entry)], context)
-        .map_err(|error| js_error(error.to_string()))?;
-    Ok(())
-}
-
-/// Removes and returns the first pending schedule entry.
-fn take_first_schedule(context: &mut Context) -> JsResult<Option<ScheduleEntry>> {
-    let schedule = context
-        .global_object()
-        .get(js_string!("__megi_schedule"), context)
-        .map_err(|error| js_error(error.to_string()))?;
-    let Some(schedule) = schedule.as_object() else {
-        return Ok(None);
-    };
-    let shift = schedule
-        .get(js_string!("shift"), context)
-        .map_err(|error| js_error(error.to_string()))?;
-    let shift = shift
-        .as_object()
-        .ok_or_else(|| js_error("schedule.shift missing"))?;
-    let entry = shift.call(&JsValue::from(schedule), &[], context)?;
-    let Some(entry) = entry.as_object() else {
-        return Ok(None);
-    };
-    let id = entry
-        .get(js_string!("id"), context)?
-        .as_number()
-        .unwrap_or(0.0) as u64;
-    let repeat = entry
-        .get(js_string!("repeat"), context)?
-        .as_boolean()
-        .unwrap_or(false);
-    let delay = entry
-        .get(js_string!("delay"), context)?
-        .as_number()
-        .unwrap_or(0.0) as u64;
-    Ok(Some(ScheduleEntry {
-        id,
-        repeat,
-        delay: Duration::from_millis(delay),
-    }))
-}
-
-fn schedule_len(context: &mut Context) -> JsResult<usize> {
-    let schedule = context
-        .global_object()
-        .get(js_string!("__megi_schedule"), context)
-        .map_err(|error| js_error(error.to_string()))?;
-    let Some(schedule) = schedule.as_object() else {
-        return Ok(0);
-    };
-    let length = schedule.get(js_string!("length"), context)?;
-    Ok(length.as_number().unwrap_or(0.0) as usize)
-}
-
-struct ScheduleEntry {
-    id: u64,
-    repeat: bool,
-    delay: Duration,
-}
-
-fn clear_timer(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
-    Ok(JsValue::undefined())
-}

@@ -19,10 +19,25 @@
 //! - Budgets: Boa runtime limits (loop iterations, recursion, VM stack) applied per
 //!   `eval`; violations map to [`JsError::Budget`]. No network, filesystem, timers-with-
 //!   wall-clock or event APIs are exposed.
-//! - Base scheduler: `setTimeout`/`setInterval`/`clearTimeout`/`clearInterval` exist and
-//!   enqueue callbacks; [`JsRuntime::run_tasks`] pumps them in registration order and
-//!   [`JsRuntime::run_microtasks`] runs Boa promise jobs (full event-loop integration is
-//!   the next WP).
+//! - **EventTarget (WP-A)**: `addEventListener`/`removeEventListener`/`dispatchEvent` on
+//!   nodes, `document` and `window`; `Event`/`CustomEvent` with `preventDefault`,
+//!   `stopPropagation` and `stopImmediatePropagation`; capture listeners run
+//!   window→document→ancestors→target and bubble listeners target→ancestors→document→
+//!   window. Listeners are stored as rooted `JsValue`s in the realm.
+//! - **Timers with an injectable clock (WP-A)**: `setTimeout(fn, ms, ...args)`,
+//!   `setInterval`, `clearTimeout`/`clearInterval`; the host scheduler orders callbacks by
+//!   `(due, insertion id)`. [`JsRuntime::run_tasks`] executes what the real clock made due,
+//!   while [`JsRuntime::advance`] / [`JsRuntime::run_until`] move the virtual clock and run
+//!   what became due (deterministic tests); [`JsRuntime::pending_timers`] reports the queue.
+//!   [`JsRuntime::run_microtasks`] runs Boa promise jobs.
+//!
+//! ## Pending (WP-B)
+//!
+//! Still minimal: `element.style` exposes the common CSS properties only (no full
+//! `CSSStyleDeclaration`/`cssText`), there is no `getComputedStyle` provider, `NodeList`
+//! live objects, `matches`/`closest`, `insertAdjacentHTML/Text` or wrapper identity cache,
+//! and `removeEventListener` may remove more than one matching listener (documented
+//! simplification). Those land in WP-B.
 //!
 //! ## Safety model
 //!
@@ -50,6 +65,8 @@
 #![forbid(unsafe_code)]
 
 pub mod error;
+#[cfg(feature = "js")]
+pub mod events;
 #[cfg(feature = "js")]
 pub mod host;
 #[cfg(feature = "js")]

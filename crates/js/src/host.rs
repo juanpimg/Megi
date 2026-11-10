@@ -20,6 +20,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use dom::{Document, NodeId};
 
@@ -30,6 +31,39 @@ pub struct ConsoleEntry {
     pub level: String,
     /// Space-joined stringification of the arguments.
     pub message: String,
+}
+
+/// Identity of an event target in the realm.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum TargetKey {
+    Node(u32),
+    Window,
+    Document,
+}
+
+/// A registered event listener (its callback lives in the JS-side rooted table).
+#[derive(Clone, Debug)]
+pub(crate) struct Listener {
+    pub target: TargetKey,
+    pub event_type: String,
+    pub capture: bool,
+    pub slot: u32,
+}
+
+/// Dispatch state for the event currently being delivered.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct DispatchState {
+    pub prevent_default: bool,
+    pub stop_propagation: bool,
+    pub stop_immediate: bool,
+}
+
+/// A scheduled timer.
+#[derive(Clone, Debug)]
+pub(crate) struct TimerEntry {
+    pub id: u64,
+    pub due_ms: u64,
+    pub interval_ms: Option<u64>,
 }
 
 /// Shared, mutable host state.
@@ -48,6 +82,18 @@ pub(crate) struct Host {
     node_index: HashMap<u32, usize>,
     /// Maximum number of side-table entries (anti-DoS for wrapper churn).
     pub max_handles: usize,
+    /// Registered event listeners.
+    pub listeners: Vec<Listener>,
+    /// Scheduled timers.
+    pub timers: Vec<TimerEntry>,
+    /// Next timer id (insertion order for `(due, id)` ordering).
+    pub next_timer_id: u64,
+    /// Real-clock origin.
+    pub started_at: Instant,
+    /// Virtual clock override (`Some(ms)` after `advance`/`run_until`).
+    pub virtual_now_ms: Option<u64>,
+    /// Dispatch state of the event currently being delivered.
+    pub dispatch: Option<DispatchState>,
 }
 
 impl Host {
@@ -61,6 +107,12 @@ impl Host {
             nodes: Vec::new(),
             node_index: HashMap::new(),
             max_handles: 1_000_000,
+            listeners: Vec::new(),
+            timers: Vec::new(),
+            next_timer_id: 1,
+            started_at: Instant::now(),
+            virtual_now_ms: None,
+            dispatch: None,
         }
     }
 
@@ -91,6 +143,28 @@ impl Host {
             ));
         }
         Ok(node_id)
+    }
+
+    /// Current scheduler time in milliseconds (virtual clock or real elapsed).
+    pub fn now_ms(&self) -> u64 {
+        match self.virtual_now_ms {
+            Some(now) => now,
+            None => self.started_at.elapsed().as_millis() as u64,
+        }
+    }
+
+    /// Advances the virtual clock by `delta`; returns the new time.
+    pub fn advance_clock(&mut self, delta: Duration) -> u64 {
+        let now = self.now_ms() + delta.as_millis() as u64;
+        self.virtual_now_ms = Some(now);
+        now
+    }
+
+    /// Sets the virtual clock (never backwards); returns the effective time.
+    pub fn set_clock(&mut self, deadline_ms: u64) -> u64 {
+        let now = self.now_ms().max(deadline_ms);
+        self.virtual_now_ms = Some(now);
+        now
     }
 
     /// Drains captured console entries.
