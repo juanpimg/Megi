@@ -8,6 +8,7 @@ members = [
     "crates/fonts",
     "crates/paint",
     "crates/test_harness",
+    "crates/bench",
 ]
 
 [workspace.package]
