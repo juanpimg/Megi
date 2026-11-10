@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Megi Render Showcase</title>
+<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/print-sheet.css" media="print">
+<style>
+  .inline-badge { display: block; padding: 4px 8px; border: 1px solid #f2aa4c; color: #a15c00; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1><img class="logo" src="assets/logo.png" width="32" height="32" alt="Megi logo"> Megi Showcase</h1>
+  <p class="tagline">URL &rarr; HTML &rarr; CSS (<code>@import</code> + media queries) &rarr; layout &rarr; PNG</p>
+</header>
+
+<nav class="menu">
+  <ul>
+    <li>Docs</li>
+    <li>Specs</li>
+    <li>Golden</li>
+  </ul>
+</nav>
+
+<main>
+  <section class="cards">
+    <div class="card">
+      <h2>External CSS</h2>
+      <p><code>site.css</code> arrives through <code>&lt;link rel="stylesheet"&gt;</code>.</p>
+      <span class="inline-badge">inline style element</span>
+    </div>
+    <div class="card">
+      <h2>@import</h2>
+      <p><code>theme.css</code> is imported recursively at the top of <code>site.css</code>.</p>
+    </div>
+    <div class="card">
+      <h2>Media queries</h2>
+      <p>Wide and narrow rules are evaluated against the 1024&times;768 viewport.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Spec table</h2>
+    <table class="specs">
+      <thead>
+        <tr><th>Feature</th><th>Value</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>viewport</td><td>1024 &times; 768</td></tr>
+        <tr><td>@import depth</td><td>1</td></tr>
+        <tr><td>print sheet</td><td>ignored on screen</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="stage">
+    <p class="stage-label">position: relative / absolute</p>
+    <div class="stage-box">
+      <div class="stage-badge">absolute badge</div>
+    </div>
+  </section>
+
+  <ul class="chips">
+    <li>@import</li>
+    <li>media</li>
+    <li>PNG assets</li>
+    <li>golden image</li>
+  </ul>
+
+  <div class="tile-row">
+    <img class="tile" src="assets/tile.png" width="32" height="32" alt="tile">
+    <span class="tile-caption">decoded PNG image asset</span>
+  </div>
+</main>
+
+<footer>
+  <p>Megi &middot; deterministic golden fixture &middot; no JavaScript</p>
+</footer>
+</body>
+</html>

@@ -5,14 +5,17 @@
 //!
 //! - Only the **first** `<base href>` in document order is honored (WHATWG HTML
 //!   §4.2.3), resolved against the document URL.
-//! - `<style>` text content is concatenated in document order.
+//! - `<style>` text content is collected in document order together with its `media`
+//!   attribute.
 //! - `<link>` is collected only when `rel` contains the `stylesheet` keyword (alternate
-//!   style sheets are ignored) and `media` is absent or a screen/all medium; the `media`
-//!   attribute value is not evaluated as a full media query (documented).
-//! - `@import` inside author CSS is **not** followed (CSS parser drops at-rules whose
-//!   contents are not style rules); this is documented as out of scope.
+//!   style sheets are ignored); `media` is evaluated against the real viewport with
+//!   [`css::parse_media_query_list`] + [`css::evaluate_media`] and non-matching sheets are
+//!   skipped (counted as media-skipped, not as external sheets).
+//! - `@import` inside author CSS is handled by [`crate::lib`]'s style collection (this
+//!   module only returns the top-level sources).
 //! - `style=""` attributes are handled later by the CSS cascade, not here.
 
+use css::{MediaContext, evaluate_media, parse_media_query_list};
 use dom::{Document, Namespace, NodeId, NodeKind};
 use net::Url;
 
@@ -21,10 +24,11 @@ use crate::error::RenderError;
 /// One author stylesheet source in document order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CssSource {
-    /// Inline `<style>` element contents.
-    Inline(String),
-    /// External `<link rel="stylesheet">` URL (already resolved against `<base>`).
-    External(Url),
+    /// Inline `<style>` element contents and its `media` attribute value (empty = all).
+    Inline { text: String, media: String },
+    /// External `<link rel="stylesheet">` URL (resolved against `<base>`) and its `media`
+    /// attribute value (empty = all).
+    External { url: Url, media: String },
 }
 
 /// Stylesheets collected from a document, plus non-fatal warnings.
@@ -34,14 +38,17 @@ pub struct CollectedStyles {
     pub sources: Vec<CssSource>,
     /// Non-fatal problems (invalid `<base>`/`href`, skipped media, ...).
     pub warnings: Vec<String>,
+    /// Number of `<style>`/`<link media>` sources skipped because their media list does
+    /// not match the render viewport.
+    pub media_skipped: usize,
 }
 
 impl CollectedStyles {
-    /// Number of external `<link rel="stylesheet">` sources.
+    /// Number of external `<link rel="stylesheet">` sources (media-matched).
     pub fn external_count(&self) -> usize {
         self.sources
             .iter()
-            .filter(|source| matches!(source, CssSource::External(_)))
+            .filter(|source| matches!(source, CssSource::External { .. }))
             .count()
     }
 }
@@ -145,8 +152,27 @@ pub fn find_base_url(doc: &Document, document_url: &Url) -> (Url, Vec<String>) {
     (document_url.clone(), warnings)
 }
 
-/// Collects inline and external stylesheets in document order.
-pub fn collect_stylesheets(doc: &Document, base_url: &Url) -> CollectedStyles {
+/// Evaluates a `media` attribute against the render viewport.
+///
+/// An absent/empty value matches everything; otherwise the full media query list is
+/// parsed and evaluated (`screen` + viewport width/height/orientation). Features the CSS
+/// engine does not model (`resolution`, `prefers-*`, `hover`, ...) evaluate to `false`
+/// and are documented in [`crate::RenderOptions`].
+pub fn media_matches(media: &str, context: &MediaContext) -> bool {
+    if media.trim().is_empty() {
+        return true;
+    }
+    let query_list = parse_media_query_list(media);
+    evaluate_media(&query_list, context)
+}
+
+/// Collects inline and external stylesheets in document order, evaluating each source's
+/// `media` attribute against `media` (the render viewport).
+pub fn collect_stylesheets(
+    doc: &Document,
+    base_url: &Url,
+    media: &MediaContext,
+) -> CollectedStyles {
     let mut collected = CollectedStyles::default();
     let mut seen_external = std::collections::HashSet::new();
 
@@ -155,17 +181,23 @@ pub fn collect_stylesheets(doc: &Document, base_url: &Url) -> CollectedStyles {
             continue;
         };
         let name = element.local_name.to_ascii_lowercase();
+        let media_attr = attr(element, "media").unwrap_or("").to_string();
+        if !media_matches(&media_attr, media) {
+            collected.media_skipped += 1;
+            collected.warnings.push(format!(
+                "skipping <{name} media=\"{media_attr}\">: media does not match the viewport"
+            ));
+            continue;
+        }
         if name == "style" {
-            collected
-                .sources
-                .push(CssSource::Inline(text_content(doc, node_id)));
+            collected.sources.push(CssSource::Inline {
+                text: text_content(doc, node_id),
+                media: media_attr,
+            });
         } else if name == "link" {
             let rel = attr(element, "rel").unwrap_or("").to_ascii_lowercase();
             let relations: Vec<&str> = rel.split_ascii_whitespace().collect();
             if !relations.contains(&"stylesheet") || relations.contains(&"alternate") {
-                continue;
-            }
-            if !media_matches_screen(attr(element, "media")) {
                 continue;
             }
             let Some(href) = attr(element, "href") else {
@@ -177,7 +209,10 @@ pub fn collect_stylesheets(doc: &Document, base_url: &Url) -> CollectedStyles {
             match base_url.join(href.trim()) {
                 Ok(url) => {
                     if seen_external.insert(url.cache_key()) {
-                        collected.sources.push(CssSource::External(url));
+                        collected.sources.push(CssSource::External {
+                            url,
+                            media: media_attr,
+                        });
                     }
                 }
                 Err(error) => collected.warnings.push(format!(
@@ -187,23 +222,6 @@ pub fn collect_stylesheets(doc: &Document, base_url: &Url) -> CollectedStyles {
         }
     }
     collected
-}
-
-/// `true` when a `media` attribute selects the screen medium (or is absent/empty).
-fn media_matches_screen(media: Option<&str>) -> bool {
-    let Some(media) = media else {
-        return true;
-    };
-    if media.trim().is_empty() {
-        return true;
-    }
-    media.split(',').any(|query| {
-        let query = query.trim().to_ascii_lowercase();
-        query == "all"
-            || query.starts_with("all ")
-            || query == "screen"
-            || query.starts_with("screen ")
-    })
 }
 
 /// Validates that a URL scheme is fetchable by the render pipeline.
@@ -217,15 +235,22 @@ pub fn ensure_supported_scheme(url: &Url) -> Result<(), RenderError> {
 mod unit_tests {
     use super::*;
 
+    fn screen(width: f32, height: f32) -> MediaContext {
+        MediaContext::with_viewport(width, height)
+    }
+
     #[test]
-    fn media_screen_filter() {
-        assert!(media_matches_screen(None));
-        assert!(media_matches_screen(Some("")));
-        assert!(media_matches_screen(Some("screen")));
-        assert!(media_matches_screen(Some("all")));
-        assert!(media_matches_screen(Some("screen and (min-width: 600px)")));
-        assert!(!media_matches_screen(Some("print")));
-        assert!(!media_matches_screen(Some("print, speech")));
+    fn media_screen_filter_uses_real_queries() {
+        let context = screen(800.0, 600.0);
+        assert!(media_matches("", &context));
+        assert!(media_matches("screen", &context));
+        assert!(media_matches("all", &context));
+        assert!(media_matches("screen and (min-width: 600px)", &context));
+        assert!(!media_matches("print", &context));
+        assert!(!media_matches("print, speech", &context));
+        assert!(!media_matches("(min-width: 1200px)", &context));
+        assert!(media_matches("(max-width: 1200px)", &context));
+        assert!(media_matches("not print", &context));
     }
 
     #[test]
@@ -247,26 +272,66 @@ mod unit_tests {
                 dom::Attribute::new("href", "theme.css"),
             ],
         );
+        let print_link = doc.create_element(
+            Namespace::Html,
+            "link",
+            vec![
+                dom::Attribute::new("rel", "stylesheet"),
+                dom::Attribute::new("href", "print.css"),
+                dom::Attribute::new("media", "print"),
+            ],
+        );
         doc.append_child(doc.root(), html);
         doc.append_child(html, head);
         doc.append_child(head, base);
         doc.append_child(head, style);
         doc.append_text(style, "p { color: red }");
         doc.append_child(head, link);
+        doc.append_child(head, print_link);
 
         let document_url = Url::parse("http://example.test/page.html").expect("url");
         let (base_url, warnings) = find_base_url(&doc, &document_url);
         assert!(warnings.is_empty());
         assert_eq!(base_url.as_str(), "http://example.test/assets/");
 
-        let collected = collect_stylesheets(&doc, &base_url);
+        let collected = collect_stylesheets(&doc, &base_url, &screen(800.0, 600.0));
         assert_eq!(collected.sources.len(), 2);
-        assert!(matches!(&collected.sources[0], CssSource::Inline(text) if text.contains("red")));
+        assert_eq!(collected.media_skipped, 1);
+        assert!(matches!(
+            &collected.sources[0],
+            CssSource::Inline { text, .. } if text.contains("red")
+        ));
         match &collected.sources[1] {
-            CssSource::External(url) => {
+            CssSource::External { url, .. } => {
                 assert_eq!(url.as_str(), "http://example.test/assets/theme.css")
             }
             other => panic!("expected external stylesheet, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn narrow_viewport_skips_min_width_link() {
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", vec![]);
+        let head = doc.create_element(Namespace::Html, "head", vec![]);
+        let link = doc.create_element(
+            Namespace::Html,
+            "link",
+            vec![
+                dom::Attribute::new("rel", "stylesheet"),
+                dom::Attribute::new("href", "wide.css"),
+                dom::Attribute::new("media", "(min-width: 900px)"),
+            ],
+        );
+        doc.append_child(doc.root(), html);
+        doc.append_child(html, head);
+        doc.append_child(head, link);
+
+        let document_url = Url::parse("http://example.test/page.html").expect("url");
+        let wide = collect_stylesheets(&doc, &document_url, &screen(1024.0, 768.0));
+        assert_eq!(wide.sources.len(), 1);
+        let narrow = collect_stylesheets(&doc, &document_url, &screen(600.0, 800.0));
+        assert_eq!(narrow.sources.len(), 0);
+        assert_eq!(narrow.media_skipped, 1);
     }
 }

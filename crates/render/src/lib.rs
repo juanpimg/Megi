@@ -34,8 +34,17 @@
 //!   too-large / non-PNG images become gray placeholders plus warnings. CSS
 //!   `background-image`/`url(...)`, SVG images, `srcset` and `object-fit`
 //!   modes other than `fill` remain out of scope.
-//! - **No `@import`**: only direct `<style>` and `<link rel="stylesheet">` sheets are
-//!   loaded; the `media` attribute is only screened for `screen`/`all`, not evaluated.
+//! - **`@import` support (WP-5.8)**: imported stylesheets are fetched recursively with the
+//!   shared resource loader, resolved against the importing sheet's URL, deduplicated by
+//!   URL, cycle-safe, depth-limited (`RenderOptions::max_import_depth`, default 8) and
+//!   counted against `RenderOptions::max_stylesheets` / the CSS byte budget. Cascade order
+//!   follows CSS: an importing sheet behaves like its own position with its imports
+//!   inserted before its rules (`@import` only at the top of a sheet, as parsed by `css`).
+//!   Not supported yet: `@import ... layer(...)`, `supports(...)` and `@import` inside
+//!   `@media` (the parser only accepts top-of-sheet imports).
+//! - **Media queries**: `<link media>`/`<style media>` and `@import ... <media>` are
+//!   evaluated against the real viewport (`screen` + width/height/orientation). Features
+//!   the CSS engine does not model (`resolution`, `prefers-*`, `hover`, ...) never match.
 //! - No forms, no iframes, no web fonts, no `srcset`, no CORS/cookies policies.
 //! - Encodings: UTF-8 (with BOM) and Windows-1252/Latin-1 only; other declared encodings
 //!   fail with a typed error (see [`charset`]).
@@ -69,8 +78,10 @@ pub const DEFAULT_MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 pub const DEFAULT_MAX_STYLESHEETS: usize = 32;
 /// Default maximum size of one external stylesheet (1 MiB).
 pub const DEFAULT_MAX_CSS_BYTES_PER_SHEET: usize = 1024 * 1024;
-/// Default total author-CSS budget (4 MiB, inline + external).
+/// Default total author-CSS budget (4 MiB, inline + external + imports).
 pub const DEFAULT_MAX_TOTAL_CSS_BYTES: usize = 4 * 1024 * 1024;
+/// Default maximum `@import` nesting depth.
+pub const DEFAULT_MAX_IMPORT_DEPTH: usize = 8;
 
 /// Output viewport in CSS pixels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -119,8 +130,10 @@ pub struct RenderOptions {
     pub max_stylesheets: usize,
     /// Maximum size of a single external stylesheet.
     pub max_css_bytes_per_sheet: usize,
-    /// Maximum concatenated author CSS size (inline + external).
+    /// Maximum concatenated author CSS size (inline + external + imports).
     pub max_total_css_bytes: usize,
+    /// Maximum `@import` nesting depth.
+    pub max_import_depth: usize,
     /// Maximum number of `<img>` elements fetched and decoded.
     pub max_images: usize,
     /// Maximum downloaded size of a single image (bytes).
@@ -143,6 +156,7 @@ impl Default for RenderOptions {
             max_stylesheets: DEFAULT_MAX_STYLESHEETS,
             max_css_bytes_per_sheet: DEFAULT_MAX_CSS_BYTES_PER_SHEET,
             max_total_css_bytes: DEFAULT_MAX_TOTAL_CSS_BYTES,
+            max_import_depth: DEFAULT_MAX_IMPORT_DEPTH,
             max_images: DEFAULT_MAX_IMAGES,
             max_image_bytes: DEFAULT_MAX_IMAGE_BYTES,
             max_total_image_bytes: DEFAULT_MAX_TOTAL_IMAGE_BYTES,
@@ -186,8 +200,17 @@ pub struct RenderStats {
     pub external_stylesheets: usize,
     /// Number of `<style>` elements processed.
     pub inline_stylesheets: usize,
-    /// Total author CSS bytes (inline + external).
+    /// Total author CSS bytes (inline + external + imported).
     pub css_bytes: usize,
+    /// Number of `@import`ed stylesheets successfully loaded and applied.
+    pub imports_loaded: usize,
+    /// Number of `@import` directives skipped (media mismatch, cycle/dedup, depth or
+    /// fetch/parse/limit problems).
+    pub imports_skipped: usize,
+    /// Deepest `@import` nesting level reached (`0` = no imports).
+    pub max_import_depth: usize,
+    /// Number of `<style>`/`<link>` sources skipped because their media did not match.
+    pub media_skipped: usize,
     /// Number of `<img>` images successfully loaded and decoded.
     pub images_loaded: usize,
     /// Number of `<img>` images that failed (missing, too large, bad format, ...).
@@ -290,26 +313,22 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         // `--base` should win over a missing `<base>`; keep the explicit value.
         base_url = override_base.clone().unwrap_or(document_url.clone());
     }
-    let collected = stylesheets::collect_stylesheets(&document, &base_url);
+    let media_context = css::MediaContext::with_viewport(
+        options.viewport.width as f32,
+        options.viewport.height as f32,
+    );
+    let collected = stylesheets::collect_stylesheets(&document, &base_url, &media_context);
     warnings.extend(collected.warnings.iter().cloned());
 
-    let (author_css, external_stylesheets, inline_stylesheets, css_bytes) =
-        load_author_css(&collected, &mut loader, options, &mut warnings)?;
-    let styles = if author_css.trim().is_empty() {
-        css::resolve_document_styles_with_viewport(
-            &document,
-            None,
-            options.viewport.width as f32,
-            options.viewport.height as f32,
-        )
-    } else {
-        css::resolve_document_styles_with_viewport(
-            &document,
-            Some(&author_css),
-            options.viewport.width as f32,
-            options.viewport.height as f32,
-        )
-    };
+    let (stylesheet_collection, style_summary) = build_author_stylesheet_collection(
+        &collected,
+        &base_url,
+        &mut loader,
+        options,
+        &media_context,
+        &mut warnings,
+    )?;
+    let styles = resolve_styles_with_collection(&document, &stylesheet_collection);
     let styles_time = styles_start.elapsed();
 
     let images_start = Instant::now();
@@ -377,9 +396,13 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             document_bytes: loaded.bytes.len(),
             charset: decoded.charset,
             status: loaded.status,
-            external_stylesheets,
-            inline_stylesheets,
-            css_bytes,
+            external_stylesheets: style_summary.external_stylesheets,
+            inline_stylesheets: style_summary.inline_stylesheets,
+            css_bytes: style_summary.css_bytes,
+            imports_loaded: style_summary.imports_loaded,
+            imports_skipped: style_summary.imports_skipped,
+            max_import_depth: style_summary.max_import_depth,
+            media_skipped: collected.media_skipped,
             images_loaded: loaded_images.loaded,
             images_failed: loaded_images.failed,
             image_bytes: loaded_images.downloaded_bytes,
@@ -457,67 +480,280 @@ fn content_looks_like_html(content_type: &str, bytes: &[u8]) -> bool {
     net::sniff(bytes) == net::MimeHint::Html
 }
 
-/// Loads external stylesheets and concatenates the author CSS in document order.
-///
-/// Returns `(css, external_count, inline_count, css_bytes)`.
-fn load_author_css(
+/// Author stylesheet summary for [`RenderStats`].
+struct StyleSummary {
+    external_stylesheets: usize,
+    inline_stylesheets: usize,
+    css_bytes: usize,
+    imports_loaded: usize,
+    imports_skipped: usize,
+    max_import_depth: usize,
+}
+
+/// Mutable state shared by the recursive `@import` walk.
+struct ImportWalk<'a> {
+    loader: &'a mut ResourceLoader,
+    options: &'a RenderOptions,
+    media: &'a css::MediaContext,
+    warnings: &'a mut Vec<String>,
+    visited: std::collections::HashSet<String>,
+    loaded: usize,
+    skipped: usize,
+    max_depth: usize,
+    css_bytes: usize,
+}
+
+/// Builds the author [`css::StyleCollection`] in cascade order, resolving `@import`
+/// directives recursively (depth-limited, deduplicated, media-gated, non-fatal errors).
+fn build_author_stylesheet_collection(
     collected: &stylesheets::CollectedStyles,
+    base_url: &Url,
     loader: &mut ResourceLoader,
     options: &RenderOptions,
+    media: &css::MediaContext,
     warnings: &mut Vec<String>,
-) -> Result<(String, usize, usize, usize), RenderError> {
-    let mut css = String::new();
-    let mut external = 0usize;
-    let mut inline = 0usize;
-    let mut css_bytes = 0usize;
+) -> Result<(css::StyleCollection, StyleSummary), RenderError> {
+    let mut collection = css::create_user_agent_style_collection();
+    collection.media = *media;
+    let mut summary = StyleSummary {
+        external_stylesheets: 0,
+        inline_stylesheets: 0,
+        css_bytes: 0,
+        imports_loaded: 0,
+        imports_skipped: 0,
+        max_import_depth: 0,
+    };
+    let mut walk = ImportWalk {
+        loader,
+        options,
+        media,
+        warnings,
+        visited: std::collections::HashSet::new(),
+        loaded: 0,
+        skipped: 0,
+        max_depth: 0,
+        css_bytes: 0,
+    };
+
     for source in &collected.sources {
-        let text = match source {
-            stylesheets::CssSource::Inline(text) => {
-                inline += 1;
-                text.clone()
+        match source {
+            stylesheets::CssSource::Inline { text, .. } => {
+                summary.inline_stylesheets += 1;
+                account_css_bytes(&mut summary.css_bytes, text.len(), options)?;
+                let sheet = css::parse_stylesheet(text);
+                walk_imports(
+                    &mut collection,
+                    &sheet,
+                    base_url,
+                    0,
+                    options.max_stylesheets,
+                    &mut walk,
+                )?;
+                collection.add_stylesheet(&sheet, css::Origin::Author);
             }
-            stylesheets::CssSource::External(url) => {
-                external += 1;
-                if external > options.max_stylesheets {
+            stylesheets::CssSource::External { url, .. } => {
+                summary.external_stylesheets += 1;
+                let total_sheets = summary.external_stylesheets + walk.loaded;
+                if total_sheets > options.max_stylesheets {
                     return Err(RenderError::TooManyStylesheets {
-                        count: external,
+                        count: total_sheets,
                         max: options.max_stylesheets,
                     });
                 }
-                if options.no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
-                    warnings.push(format!(
-                        "skipping external stylesheet {url} (--no-network is set)"
-                    ));
+                let Some(text) =
+                    load_stylesheet_text(url, &mut *walk.loader, options, &mut *walk.warnings)?
+                else {
                     continue;
-                }
-                match loader.load(url) {
-                    Ok(resource) => {
-                        if resource.bytes.len() > options.max_css_bytes_per_sheet {
-                            return Err(RenderError::StylesheetTooLarge {
-                                url: url.as_str(),
-                                bytes: resource.bytes.len(),
-                                max: options.max_css_bytes_per_sheet,
-                            });
-                        }
-                        String::from_utf8_lossy(&resource.bytes).into_owned()
-                    }
-                    Err(error) => {
-                        // Missing/blocked subresources are non-fatal in browsers.
-                        warnings.push(format!("skipping stylesheet {url}: {error}"));
-                        continue;
-                    }
-                }
+                };
+                account_css_bytes(&mut summary.css_bytes, text.len(), options)?;
+                // Register the top-level URL so an import cycle back to it is detected.
+                walk.visited.insert(url.cache_key());
+                let sheet = css::parse_stylesheet(&text);
+                walk_imports(
+                    &mut collection,
+                    &sheet,
+                    url,
+                    0,
+                    options.max_stylesheets,
+                    &mut walk,
+                )?;
+                collection.add_stylesheet(&sheet, css::Origin::Author);
+            }
+        }
+    }
+    summary.css_bytes += walk.css_bytes;
+    summary.imports_loaded = walk.loaded;
+    summary.imports_skipped = walk.skipped;
+    summary.max_import_depth = walk.max_depth;
+    Ok((collection, summary))
+}
+
+/// Recursively loads and adds the `@import`ed sheets of `sheet` **before** its own rules.
+///
+/// Ordering per CSS: for each import in document order, first the imported sheet's own
+/// imports, then the imported sheet's rules (via
+/// [`css::StyleCollection::add_import_stylesheet`], which also re-checks the media gate).
+fn walk_imports(
+    collection: &mut css::StyleCollection,
+    sheet: &css::Stylesheet,
+    sheet_url: &Url,
+    depth: usize,
+    max_total_sheets: usize,
+    walk: &mut ImportWalk<'_>,
+) -> Result<(), RenderError> {
+    for import in &sheet.imports {
+        if depth >= walk.options.max_import_depth {
+            walk.skipped += 1;
+            walk.warnings.push(format!(
+                "skipping @import \"{}\" at depth {depth}: max_import_depth={} exceeded",
+                import.url, walk.options.max_import_depth
+            ));
+            continue;
+        }
+        let url = match sheet_url.join(&import.url) {
+            Ok(url) => url,
+            Err(error) => {
+                walk.skipped += 1;
+                walk.warnings.push(format!(
+                    "skipping invalid @import \"{}\": {error}",
+                    import.url
+                ));
+                continue;
             }
         };
-        css_bytes += text.len();
-        if css_bytes > options.max_total_css_bytes {
-            return Err(RenderError::CssBudgetExceeded {
-                bytes: css_bytes,
-                max: options.max_total_css_bytes,
+        if stylesheets::ensure_supported_scheme(&url).is_err() {
+            walk.skipped += 1;
+            walk.warnings
+                .push(format!("skipping @import {url}: unsupported URL scheme"));
+            continue;
+        }
+        if !css::evaluate_media(&import.media, walk.media) {
+            walk.skipped += 1;
+            continue;
+        }
+        // Deduplicate by final URL (also breaks import cycles).
+        if !walk.visited.insert(url.cache_key()) {
+            walk.skipped += 1;
+            continue;
+        }
+        if walk.loaded + 1 > max_total_sheets {
+            return Err(RenderError::TooManyStylesheets {
+                count: walk.loaded + 1,
+                max: max_total_sheets,
             });
         }
-        css.push_str(&text);
-        css.push('\n');
+        let Some(text) =
+            load_stylesheet_text(&url, &mut *walk.loader, walk.options, &mut *walk.warnings)?
+        else {
+            continue;
+        };
+        account_css_bytes(&mut walk.css_bytes, text.len(), walk.options)?;
+        let imported = css::parse_stylesheet(&text);
+        walk.loaded += 1;
+        walk.max_depth = walk.max_depth.max(depth + 1);
+        // Imported sheet's own imports first, then its rules at this cascade position.
+        walk_imports(
+            collection,
+            &imported,
+            &url,
+            depth + 1,
+            max_total_sheets,
+            walk,
+        )?;
+        collection.add_import_stylesheet(import, &imported, css::Origin::Author);
     }
-    Ok((css, external, inline, css_bytes))
+    Ok(())
+}
+
+/// Loads one stylesheet body honouring `--no-network` and the per-sheet size cap.
+///
+/// Missing/unreachable sheets are non-fatal (browser behaviour) and reported as warnings.
+fn load_stylesheet_text(
+    url: &Url,
+    loader: &mut ResourceLoader,
+    options: &RenderOptions,
+    warnings: &mut Vec<String>,
+) -> Result<Option<String>, RenderError> {
+    if options.no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
+        warnings.push(format!(
+            "skipping external stylesheet {url} (--no-network is set)"
+        ));
+        return Ok(None);
+    }
+    match loader.load(url) {
+        Ok(resource) => {
+            if resource.bytes.len() > options.max_css_bytes_per_sheet {
+                return Err(RenderError::StylesheetTooLarge {
+                    url: url.as_str(),
+                    bytes: resource.bytes.len(),
+                    max: options.max_css_bytes_per_sheet,
+                });
+            }
+            Ok(Some(String::from_utf8_lossy(&resource.bytes).into_owned()))
+        }
+        Err(error) => {
+            warnings.push(format!("skipping stylesheet {url}: {error}"));
+            Ok(None)
+        }
+    }
+}
+
+/// Adds `additional` bytes to the author CSS budget, failing on overflow.
+fn account_css_bytes(
+    total: &mut usize,
+    additional: usize,
+    options: &RenderOptions,
+) -> Result<(), RenderError> {
+    *total += additional;
+    if *total > options.max_total_css_bytes {
+        return Err(RenderError::CssBudgetExceeded {
+            bytes: *total,
+            max: options.max_total_css_bytes,
+        });
+    }
+    Ok(())
+}
+
+/// Resolves computed styles for every element with a prebuilt [`css::StyleCollection`].
+///
+/// Mirrors `css::resolve_document_styles_with_media` but accepts a collection that already
+/// contains the author sheets (including recursively imported ones in cascade order).
+fn resolve_styles_with_collection(
+    doc: &Document,
+    collection: &css::StyleCollection,
+) -> HashMap<NodeId, ComputedStyle> {
+    let mut styles: HashMap<NodeId, ComputedStyle> = HashMap::new();
+    let root = doc.root();
+    let mut stack = Vec::new();
+    let mut child = doc.node(root).first_child;
+    while let Some(child_id) = child {
+        stack.push(child_id);
+        child = doc.node(child_id).next_sibling;
+    }
+    while let Some(node_id) = stack.pop() {
+        if let Some(element) = doc.node(node_id).as_element() {
+            let inline_declarations = element
+                .get_attribute("style")
+                .map(|style| css::expand_declarations(&css::parse_list_of_declarations(style)));
+            let cascaded = css::resolve_cascaded_properties(
+                doc,
+                node_id,
+                collection,
+                inline_declarations.as_deref(),
+            );
+            let parent_style = doc
+                .node(node_id)
+                .parent
+                .and_then(|parent| styles.get(&parent));
+            let root_style = styles.get(&root);
+            let computed = css::ComputedStyle::compute(&cascaded, parent_style, root_style);
+            styles.insert(node_id, computed);
+        }
+        let mut child = doc.node(node_id).last_child;
+        while let Some(child_id) = child {
+            stack.push(child_id);
+            child = doc.node(child_id).prev_sibling;
+        }
+    }
+    styles
 }

@@ -1,0 +1,8 @@
+/* media="print": must be ignored by the screen render. */
+html {
+  background-color: #ff0000;
+}
+
+.hero {
+  background-color: #ff0000;
+}

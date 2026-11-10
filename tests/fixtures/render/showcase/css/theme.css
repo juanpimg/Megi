@@ -1,0 +1,31 @@
+/* Imported by site.css via @import url("theme.css") (depth 1). */
+.hero {
+  background-color: #14213d;
+}
+
+.card {
+  border-top: 4px solid #f2aa4c;
+}
+
+.panel h2 {
+  color: #336699;
+}
+
+.stage-label {
+  margin: 0;
+  padding: 8px;
+  color: #5c6b82;
+}
+
+/* Media query inside an imported sheet, evaluated with the render viewport. */
+@media (min-width: 1000px) {
+  .tagline {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .tile-row {
+    padding: 4px;
+  }
+}

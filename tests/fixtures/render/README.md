@@ -27,3 +27,20 @@ Deterministic acceptance command:
 cargo run -p render -- tests/fixtures/render/images.html /tmp/images.png
 python3 tools/png_check.py /tmp/images.png
 ```
+
+## Showcase fixture (`showcase/`)
+
+`showcase/index.html` is a realistic JavaScript-free page (external CSS + recursive
+`@import` + media queries + decoded PNG images + table + positioned elements + lists)
+rendered at **1024×768** and compared byte-for-byte against
+`showcase/golden.png` by `crates/render/tests/import_media_tests.rs`.
+
+```bash
+cargo run -q -p render -- tests/fixtures/render/showcase/index.html \
+    tests/fixtures/render/showcase/golden.png --width 1024 --height 768
+python3 tools/png_check.py tests/fixtures/render/showcase/golden.png
+```
+
+Golden md5: `570aa554c88c2fdf75481e8cd076bf61` (65.151 bytes). See
+`showcase/README.md` for the imported-sheet/media statistics and the known layout
+limitations reflected in the golden.

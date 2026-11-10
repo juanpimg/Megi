@@ -1,0 +1,208 @@
+/* Showcase main stylesheet: external <link> + recursive @import + media queries.
+ *
+ * Layout note: this fixture deliberately sticks to boxes the current layout engine
+ * paints reliably (block flow, floats, position/absolute and table borders); it avoids
+ * `display:inline-block`, which the layout lane is still finishing.
+ */
+@import url("theme.css");
+
+html {
+  background-color: #eef1f6;
+  color: #101820;
+  font-family: sans-serif;
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+}
+
+.hero {
+  height: 72px;
+  padding: 14px 16px;
+  background-color: #101820;
+  border-bottom: 4px solid #f2aa4c;
+}
+
+.logo {
+  margin-right: 8px;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: 28px;
+  color: #ffffff;
+}
+
+.tagline {
+  margin: 6px 0 0;
+  color: #c9d4e3;
+  font-size: 16px;
+}
+
+.menu {
+  height: 28px;
+  margin-top: 12px;
+}
+
+.menu ul {
+  margin: 0;
+  padding: 0;
+  list-style-type: none;
+}
+
+.menu li {
+  float: left;
+  width: 96px;
+  margin-right: 12px;
+  padding: 2px 8px;
+  border: 1px solid #9fb0c8;
+  background-color: #ffffff;
+}
+
+.cards {
+  margin-top: 12px;
+  height: 128px;
+}
+
+.card {
+  float: left;
+  width: 276px;
+  margin-right: 12px;
+  padding: 10px;
+  border: 1px solid #9fb0c8;
+  background-color: #ffffff;
+  height: 96px;
+}
+
+.card h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  color: #14213d;
+}
+
+.card p {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.panel {
+  margin-top: 10px;
+  padding: 10px;
+  border: 2px solid #336699;
+  background-color: #ffffff;
+}
+
+.panel h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+table.specs {
+  width: 600px;
+  border: 1px solid #9fb0c8;
+}
+
+table.specs th,
+table.specs td {
+  height: 22px;
+  padding: 2px 6px;
+}
+
+table.specs th {
+  background-color: #dde6f2;
+}
+
+table.specs tbody tr:nth-child(even) td {
+  background-color: #f4f7fb;
+}
+
+.stage {
+  position: relative;
+  margin-top: 12px;
+  height: 86px;
+  background-color: #dde6f2;
+  border: 1px solid #9fb0c8;
+}
+
+.stage-label {
+  margin: 0;
+  padding: 8px;
+  color: #5c6b82;
+  font-size: 14px;
+}
+
+.stage-box {
+  height: 40px;
+}
+
+.stage-badge {
+  position: absolute;
+  top: 40px;
+  left: 24px;
+  padding: 6px;
+  background-color: #f2aa4c;
+  color: #101820;
+}
+
+.chips {
+  height: 26px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style-type: none;
+}
+
+.chips li {
+  float: left;
+  margin-right: 8px;
+  padding: 2px 10px;
+  background-color: #101820;
+  color: #f2aa4c;
+}
+
+.tile-row {
+  margin-top: 10px;
+  padding: 8px;
+  background-color: #ffffff;
+  border: 1px solid #9fb0c8;
+  height: 40px;
+}
+
+.tile {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.tile-caption {
+  color: #14213d;
+}
+
+footer {
+  margin-top: 12px;
+  color: #5c6b82;
+  font-size: 12px;
+}
+
+/* Wide viewport: visible adjustments over the base styles. */
+@media (min-width: 900px) {
+  body {
+    padding: 28px;
+  }
+  .hero h1 {
+    font-size: 30px;
+  }
+  .card {
+    height: 96px;
+  }
+}
+
+/* Narrow viewport: never applies at 1024px, kept to exercise the evaluator. */
+@media (max-width: 700px) {
+  body {
+    padding: 8px;
+  }
+  .hero {
+    height: 180px;
+  }
+}
