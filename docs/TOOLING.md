@@ -363,6 +363,26 @@ cargo run -p shell -- tests/fixtures/render/showcase/index.html --zoom 1.5 --ref
 
 Zoom `Ctrl+=/-/0` y `--zoom` 0.5–3.0 (escalones 50–300 %, viewport CSS = físico/(scale·zoom)); `Ctrl+L` imprime la URL; auto-refresh opt-in solo cuando `scripts_executed>0 && script_timers_pending>0` (worker generacional, scroll conservado, sin bucles; repite el primer frame de animaciones con reloj virtual).
 
+### 2.16h Background geometry: repeat/size/position (ronda 15)
+
+CSS parsea `background-repeat`/`size`/`position` y el shorthand; paint calcula `background_tile_size`/`background_tiles` (cover/contain centrado, tiling con clip al padding box, **cap 4096**; space/round como repeat). **`background_geometry_explicit`** mantiene el modo legado para que los goldens (`c95c7eff…`, `60f8984e…`, `9e957177…`) sigan byte-idénticos.
+
+```bash
+cargo test -p css -p paint
+cargo run -p render -- tests/fixtures/render/backgrounds.html /tmp/bg.png
+```
+
+### 2.16i SVG inline, determinismo y rendimiento IFC (ronda 15)
+
+`render` sustituye los `<svg>…</svg>` inline por un `<img>` sintético antes de styles/layout (base64 + `xmlns`; caps **256/1 MiB/8 MiB/profundidad 256**, stat `inline_svgs`, 7 fixtures `svg_inline_*`). El event loop usa **sólo reloj virtual** (`run_until` en pasos de 1 ms; fixture `js_event_timeout` md5 `07682088…`). IFC: pool de texto/ids/breaking incremental/fast path ⇒ **layout 50,5→36,3 ms** y **pipeline 132,9→120,5 ms**.
+
+```bash
+cargo run -p render -- tests/fixtures/render/svg_inline_simple.html /tmp/inline.png --json   # inline_svgs>0
+cargo test -p render --test svg_tests -p render --test event_loop_tests
+cargo run --release -p bench -- --filter layout --iterations 5     # ~36 ms
+cargo run --release -p bench -- --filter pipeline --iterations 3   # ~120 ms
+```
+
 ### 2.17 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
 
 Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-spec-driven-dev/SKILL.md` (directorio ignorado en `.gitignore` para mantener limpio el árbol Git de metadatos de agentes, mientras su documentación permanente reside en este archivo `docs/TOOLING.md`). Esta skill estandariza el protocolo operativo para cualquier agente que trabaje en la Fase 1 y posteriores:
@@ -376,7 +396,7 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 959 tests, doc y gate de conformidad
+./tools/dev.sh all                     # fmt, clippy, 990 tests, doc y gate de conformidad
 cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0 (árbol 3904/3904, 100 %)
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 
@@ -394,4 +414,4 @@ cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.pn
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Cifras de referencia en el cierre de la ronda 13: **959 tests** (bench 8, css 61, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 58, layout 135, net 180, paint 109, **render 104**, shell 100, svg 41, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: layout ~51-53 ms, **pipeline ~127-134 ms** (`html/massive-end-p` ~19 ms tras el fix `fast_hash`), encoder PNG −30,5 % invariante; web fonts E2E (WOFF2, DB por render) y SVG E2E (`svgs_rendered`); todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+Cifras de referencia en la ronda 15: **990 tests** (bench 8, css 69, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 58, layout 135, net 180, paint 122, **render 114**, shell 100, svg 41, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; backgrounds geometry con legacy flag, SVG E2E+inline (`svgs_rendered`/`inline_svgs`), webfonts y event loop determinista (reloj virtual); todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.

@@ -6,6 +6,58 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 15 — inline SVG, background geometry, IFC −28 % and a deterministic event loop (2026-11-10)
+
+#### Added
+
+- **Inline SVG rendering** (`crates/render`, commit `c267d45`): `<svg>…</svg>`
+  elements inside the document are pre-processed after scripts and before
+  styles/layout — serialized with a repaired `xmlns`, converted to a base64
+  `data:` URL and replaced by a synthetic `<img>` that copies
+  `class/id/style/width/height/alt/aria/data-*`. Limits: **256 SVG per document,
+  1 MiB per SVG, 8 MiB total, nesting depth 256** (non-fatal warnings), new
+  `RenderStats::inline_svgs`; 7 fixtures `svg_inline_*` and **10 tests**
+  (render 104→**114**). The doctype sniffing was fixed so direct SVG navigation
+  is not mistaken for HTML. Unsupported (documented): SVG-internal CSS/`<style>`,
+  gradients, filters, `<text>`, animation and external references; CSS selectors
+  targeting the inner `svg` do not reach the synthetic `<img>`.
+- **`background-repeat` / `background-size` / `background-position`**
+  (`crates/css` + `crates/paint`, commit `b5b07b3`): all repeat keywords and
+  pairs, `auto`/`cover`/`contain`/lengths/percentages, keyword/percentage/length
+  positions (1-2 values) and the `background:` shorthand with position/size.
+  Paint builds `background_tile_size`/`background_tiles` (cover/contain centred,
+  tiling clipped to the padding box, **cap 4096**; `space`/`round` render as
+  `repeat`, documented) behind **`background_geometry_explicit`**, a legacy flag
+  that keeps the existing goldens byte-identical. CSS 61→**69**, paint
+  109→**122** tests. Out of scope: `background-origin/clip/attachment`,
+  multiple layers and gradients.
+
+#### Changed
+
+- **IFC performance** (`crates/layout`, commit `9090175`): tokenisation with a
+  per-IFC text pool (words as ranges instead of one `String` each), style-id
+  table (one `Arc` per node), metrics computed once per text node, pre-sized
+  buffers; incremental line breaking (no O(n²) rescans) and a `format_line` fast
+  path for single-text-node lines; `FontTextMeasurer` memoises parsed families,
+  metrics and advances (4 MiB cap, documented per-measurer/database lifetime).
+  Interleaved A/B: **layout/realistic-1mb 50.5 → 36.3 ms (−28 %)** and
+  **pipeline 132.9 → 120.5 ms (−9.3 %)** with byte-identical geometry.
+- Test suite: **990 tests, 0 failures** (was 959): bench 8, **css 69**, dom 28,
+  **fonts 17+1 doctest**, html 60, image 45+1, js 58, layout 135, net 180,
+  **paint 122**, **render 114**, shell 100, svg 41, test_harness 11.
+- Phase status: Phase 4 (layout/paint/typography/images/backgrounds/SVG)
+  practically complete, Phase 5 ≈95 %, **Phase 6 ≈80-85 %**, **Phase 7 ≈70 %**.
+
+#### Fixed
+
+- **Deterministic event loop** (`crates/render`, commit `b808d7b`): CI caught
+  `run_event_loop` using `run_tasks` (wall clock), which executed timers early on
+  slow machines (10 vs 13 tasks). The loop now uses **only `run_until` with the
+  virtual clock** in 1 ms steps and computes `virtual_time_ms` from the step
+  count; fixture `js_event_timeout` is deterministic (tasks=1, iterations=10,
+  virtual=10 ms, `md5 0768208824102e94a6f32574991b7692`). The render suite is
+  reproducible regardless of host load.
+
 ### Round 14 — SVG wired into render and parser fast-hash regression fix (2026-11-10)
 
 #### Added

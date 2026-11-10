@@ -25,7 +25,7 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 - Trabajamos con las suites de prueba de referencia de la industria:
   - **`html5lib-tests`**: Más de 7.000 pruebas de tokenizador, ~1.900 de construcción del DOM y las suites oficiales de **serialización HTML** (`serializer/*.test`).
   - **Web Platform Tests (WPT)**: Pruebas oficiales compartidas por todos los motores de navegación modernos (fixtures de CSS Syntax vendorizadas).
-- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), **árbol 3.904/3.904 (100 %, sin allowlist; las 4 suites `scripted_*` ejecutan JS real vía WP-6.4)**, **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El workspace tiene **959 tests**.
+- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), **árbol 3.904/3.904 (100 %, sin allowlist; las 4 suites `scripted_*` ejecutan JS real vía WP-6.4)**, **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El workspace tiene **990 tests**.
 
 ### 1.4 Modelo de Memoria en Arena (Sin `Rc<RefCell<Node>>`)
 - Uno de los mayores cuellos de botella y fuentes de *memory leaks* en motores web en Rust es el uso de `Rc<RefCell<Node>>` o recolectores de basura pesados.
@@ -58,7 +58,7 @@ crates/
 ├── net/           # Red (Fase 5): URL, HTTP/1.1+TLS (rustls/webpki-roots), caché, data:, file://, MIME y loader.
 ├── image/         # Decoder PNG + inflate zlib/DEFLATE propios (std puro, sin deps).
 ├── svg/           # SVG desde cero (Fase 4): parser XML subset + modelo SVG + path/arcos + rasterizador AA determinista; `std` + `image`; cableado E2E en render (`<img>`/background, cap 16 Mpx, `svgs_rendered`); 41 tests.
-├── render/        # Pipeline de navegador (Fase 5/6): URL → net → HTML → CSS externo → layout → PNG (+ <img>, backgrounds/SVG, scripts, event loop presupuestado, hit_regions, cookies/CORS/gzip y fuentes web @font-face/WOFF2).
+├── render/        # Pipeline de navegador (Fase 5/6): URL → net → HTML → CSS externo → layout → PNG (+ <img>, backgrounds geometry/SVG inline, scripts, event loop determinista por reloj virtual, hit_regions, cookies/CORS/gzip y webfonts).
 ├── js/            # JS (Fase 6, WP-A/B/6.4 + eventos avanzados): Boa 0.21.1 + bindings DOM + EventTarget/timers con currentTarget/eventPhase/once/passive/onclick + CSSOM/NodeList/identidad; consumido por render y por el harness; 58 tests.
 ├── shell/         # Ventana (Fase 7): winit+softbuffer, scroll/entrada/HiDPI, worker, navegación/historial/título con hit_regions/find_link_at, zoom y auto-refresh opt-in, screenshot headless. [Depende de render/paint/net]
 ├── bench/         # Benchmarks reproducibles (parseo, estilos, layout, paint, PNG). [Solo crates internos]
@@ -80,7 +80,8 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
   - Pendiente menor: block-in-inline, colores de conflictos de `border-collapse` y auto-colapso de bloques vacíos.
   - Ya hechos (ronda 8): BFC/IFC, posicionamiento, floats, overflow, tablas §17 (rowspan/fixed/inline-table/collapse + fast path), inline-block, reemplazados, árbol de celdas expuesto y verificado (133 tests).
 - **Paint (`crates/paint`)**:
-  - `background-repeat`/`size`/`position`, `border-image` y pulido de conflictos de `border-collapse` (colores).
+  - `background-origin`/`clip`/`attachment`, múltiples capas, `border-image` y pulido de conflictos de `border-collapse` (colores).
+  - Ya hechos (ronda 15): **`background-repeat`/`size`/`position`** con tiling/clip (cap 4096) y legacy flag para goldens.
   - Glyph cache global, presupuestos de memoria/tiempo y capas de opacidad.
   - Ya hecho (rondas 9–10): **hit-testing aditivo** (`HitRegion`/`hit_test`/`find_link_at`, 11 tests) y su cableado en `render` (`RenderOutput.hit_regions`, +0,6 µs) sin cambiar golden.
 - **Red y render (`crates/net`, `crates/render`, `crates/image`) — Fase 5 (≈95 %)**:
@@ -91,7 +92,7 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
   - Siguientes: weight/style para elegir cara, WOFF1, `unicode-range`/`font-display` (hoy bloqueante), subsetting y DB de fuentes cacheada entre renders.
   - Ya hecho (ronda 13): **`@font-face`+WOFF2 E2E** (dep autorizada `woff2-patched` 0.4, DB por render en layout+paint, caps 8/8 MiB/32 MiB, stats/timing y warnings no fatales).
   - Mejoras de shaping para más scripts, fallback entre familias y métricas de fuentes variables.
-- **SVG (`crates/svg`, ronda 13)**: crate propio completo (parser XML+modelo+rasterizador AA, 41 tests) y **cableado E2E en `render`** (`<img src=*.svg>` y `background-image`; detección Content-Type/sniffing, intrínseco, cap 16 Mpx/64 MiB RGBA, stat `svgs_rendered`; 11 tests). Siguientes: `<text>`/gradientes/`stroke-dasharray` en el crate y cache por URL.
+- **SVG (`crates/svg` + `render`, rondas 13/15)**: crate propio completo (parser XML+modelo+rasterizador AA, 41 tests) y **cableado E2E**: `<img src=*.svg>`, `background-image` **e inline `<svg>`** (pre-proceso a `<img>` sintético con `data:` URL; caps 256/1 MiB/8 MiB, `svgs_rendered`/`inline_svgs`; 11+10 tests). Siguientes: `<text>`/gradientes/`stroke-dasharray` en el crate, CSS interno del SVG y cache por URL.
 - **Rendimiento/robustez (`crates/html`, `crates/dom`, `layout`, `paint`)**:
   - DOM identidad/memoria (auditoría F8), recursión de layout/paint en documentos profundos (F6), presupuestos de tiempo y API `Result`.
   - Benchmarks reproducibles (`./tools/bench.sh`) y regresiones de complejidad.
@@ -99,7 +100,7 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
   - Ampliar corpus y targets; mejorar la señal de la CI nocturna. Ver [`docs/FUZZING.md`](docs/FUZZING.md).
 - **Fase 7 — shell (`crates/shell`, ≈70 %)**: ya hechos ventana/worker/scroll/entrada/HiDPI, **navegación con historial/título** (WP-7.5), **enlaces con hit regions nativos**, **zoom** (`--zoom`/`Ctrl+=/-/0`) y **auto-refresh opt-in** (`--refresh-ms`). Siguientes: formularios, pestañas, **event loop vivo en el host** y pruebas de ventana con Xvfb.
 - **Fase 6 — JS (`crates/js` + `crates/render` + parser, WP-6.1/6.2/6.4 + WP-A/WP-B/eventos avanzados HECHOS, ≈80-85 %)**: Boa 0.21.1 con feature `js` ON por defecto (build mínimo `--no-default-features`), bindings `NodeId↔handle` generacionales, eventos/timers con reloj inyectable, **WP-B** (CSSStyleDeclaration, `getComputedStyle` con provider, NodeList, matches/closest, insertAdjacent, identidad), **event loop presupuestado en `render`** y **WP-6.4** (scripts parser-inserted + `document.write` ⇒ gate 3.904/3.904). **Eventos avanzados (ronda 12)**: `currentTarget`/`eventPhase`, `once`/`passive`, handlers inline `onclick`/`onload`/`onerror`, excepciones capturadas. Siguientes: `document.onerror`, módulos ES, contabilidad de memoria real, cablear el provider al pipeline, event loop vivo en el shell y fuzz JS. Ver [`docs/JAVASCRIPT-STRATEGY.md`](docs/JAVASCRIPT-STRATEGY.md).
-- **Rendimiento (rondas 10-12)**: pipeline 167,6→**134-137 ms**, `html/realistic-1mb` ~19-20 ms, `tag-40k-attr` ~12,4 ms; ronda 12: **layout −14,6 %** (`LayoutBox.style: Arc<ComputedStyle>`, LayoutBox 496→176 B) y **encoder PNG −30,5 % con bitstream byte a byte idéntico**; cierre ronda 13: fix `fast_hash` ⇒ `html/massive-end-p` ~19 ms y **pipeline ~127-134 ms**. Siguiente techo: IFC (~34 ms; owned-styles API + caché de familias), Huffman dinámico para ratio PNG y bench E2E con JS. Medidor: `./tools/bench.sh` (baseline en [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)).
+- **Rendimiento (rondas 10-12)**: pipeline 167,6→**134-137 ms**, `html/realistic-1mb` ~19-20 ms, `tag-40k-attr` ~12,4 ms; ronda 12: **layout −14,6 %**; ronda 15: **IFC −28 %** (layout 50,5→36,3 ms) y **pipeline 132,9→120,5 ms** con goldens byte-idénticos; encoder PNG −30,5 % invariante y `massive-end-p` ~19 ms. Siguiente techo: IFC (~34 ms; owned-styles API + caché de familias), Huffman dinámico para ratio PNG y bench E2E con JS. Medidor: `./tools/bench.sh` (baseline en [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)).
 - **Harness & Tooling (`crates/test_harness`, `tools/`)**:
   - Más fixtures vendorizadas de WPT, ampliación de An+B y comparación visual/golden images.
 
@@ -148,7 +149,7 @@ cargo fmt
 ./tools/dev.sh all
 
 # Comprobaciones individuales útiles
-cargo test --workspace                         # 959 tests (con JS por defecto)
+cargo test --workspace                         # 990 tests (con JS por defecto)
 cargo test --workspace --no-default-features   # build mínimo sin JS (CI)
 cargo +1.88 check --workspace --all-targets
 cargo run -p test_harness -- --summary          # gate 4 suites: PASS, exit 0
@@ -171,6 +172,9 @@ cargo test -p js --no-default-features   # stub mínimo sin Boa
 cargo test -p js                                # 58 tests (eventos avanzados)
 cargo test -p svg                               # crate SVG (41 tests)
 cargo test -p render --test svg_tests            # SVG E2E en render (11 tests)
+cargo run -p render -- tests/fixtures/render/svg_inline_simple.html /tmp/inline.png --json   # inline_svgs>0
+cargo run -p render -- tests/fixtures/render/backgrounds.html /tmp/bg.png
+cargo run --release -p bench -- --filter layout --iterations 5   # ~36 ms
 cargo run -p render -- tests/fixtures/render/svg_img.html /tmp/svg_img.png --json   # svgs_rendered=1
 cargo test -p fonts -p css -p render             # fuentes web @font-face/WOFF2
 cargo run -p render -- tests/fixtures/render/webfont.html /tmp/webfont.png --json   # md5 f38aed03…
