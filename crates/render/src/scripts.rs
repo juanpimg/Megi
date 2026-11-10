@@ -569,7 +569,12 @@ fn run_event_loop(
             }
             return;
         }
-        match runtime.run_tasks(remaining) {
+        // Only run timers that are due on the *virtual* clock. `run_tasks`
+        // follows the wall clock, so on a slow host it can fire a timer before
+        // its delay has elapsed on the virtual timeline, making the number of
+        // executed callbacks depend on machine speed (this was caught by CI:
+        // the same render produced different task counts on different runs).
+        match runtime.run_until(state.virtual_time_ms) {
             Ok(0) => {}
             Ok(ran) => {
                 state.tasks += ran;
@@ -599,7 +604,9 @@ fn run_event_loop(
             Ok(ran) => {
                 state.tasks += ran;
                 state.iterations += 1;
-                state.virtual_time_ms = runtime.now_ms();
+                // The loop advances the virtual clock by exactly one step, so
+                // the timeline does not depend on how long the host took.
+                state.virtual_time_ms = next;
             }
             Err(error) => {
                 warnings.push(format!("timer callback failed: {error}"));
