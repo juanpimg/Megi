@@ -136,6 +136,59 @@ pub fn window_title(page: &str, percent: u32, error: Option<&str>, capped: bool)
     title
 }
 
+/// Window status shown in the title bar: zoom, scroll position and page diagnostics.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct StatusSummary {
+    /// Page zoom factor (`1.0` = 100 %).
+    pub zoom: f64,
+    /// Vertical scroll position as a percentage of the scrollable range.
+    pub scroll_percent: u32,
+    /// Number of non-fatal render warnings.
+    pub warnings: usize,
+    /// Number of script errors reported by the renderer.
+    pub script_errors: usize,
+}
+
+/// Builds the full window title with zoom/scroll/warning feedback (WP-7.6).
+///
+/// Errors still take precedence (`"Megi — error: …"`). The normal format is
+/// `"<page> — <zoom%> — <scroll>%"` plus `" [N warning(s)]"` / `" [N script error(s)]"`
+/// when non-zero and the clipping marker.
+pub fn status_title(
+    page: &str,
+    status: &StatusSummary,
+    error: Option<&str>,
+    capped: bool,
+) -> String {
+    if let Some(error) = error {
+        let error = collapse_whitespace(error);
+        return truncate_chars(&format!("{FALLBACK_NAME} — error: {error}"), 240);
+    }
+    let mut title = format!(
+        "{page} — {} — {}%",
+        crate::zoom::zoom_label(status.zoom),
+        status.scroll_percent
+    );
+    if status.warnings > 0 {
+        title.push_str(&format!(
+            " [{count} warning{plural}]",
+            count = status.warnings,
+            plural = if status.warnings == 1 { "" } else { "s" }
+        ));
+    }
+    if status.script_errors > 0 {
+        title.push_str(&format!(
+            " [{count} script error{plural}]",
+            count = status.script_errors,
+            plural = if status.script_errors == 1 { "" } else { "s" }
+        ));
+    }
+    if capped {
+        title.push_str(CAPPED_MARKER);
+    }
+    title
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -271,5 +324,47 @@ mod tests {
         assert_eq!(truncate_chars("abcdef", 3), "abc…");
         assert_eq!(truncate_chars("añbó", 2), "añ…");
         assert_eq!(truncate_chars("abc", 0), "");
+    }
+
+    #[test]
+    fn status_title_shows_zoom_scroll_and_counters() {
+        let status = StatusSummary {
+            zoom: 1.25,
+            scroll_percent: 40,
+            warnings: 2,
+            script_errors: 1,
+        };
+        assert_eq!(
+            status_title("Page — https://example.com/", &status, None, false),
+            "Page — https://example.com/ — 125% — 40% [2 warnings] [1 script error]"
+        );
+        let clean = StatusSummary {
+            zoom: 2.0,
+            scroll_percent: 0,
+            warnings: 0,
+            script_errors: 0,
+        };
+        assert_eq!(
+            status_title("Page", &clean, None, true),
+            "Page — 200% — 0% [recortado]"
+        );
+        assert_eq!(
+            status_title("Page", &clean, Some("boom"), false),
+            "Megi — error: boom"
+        );
+        assert_eq!(
+            status_title(
+                "Page",
+                &StatusSummary {
+                    zoom: 0.75,
+                    scroll_percent: 10,
+                    warnings: 1,
+                    script_errors: 0
+                },
+                None,
+                false
+            ),
+            "Page — 75% — 10% [1 warning]"
+        );
     }
 }

@@ -71,6 +71,15 @@ pub struct RenderFrame {
     pub title: Option<String>,
     /// Final document URL after HTTP redirects (the history entry is replaced with it).
     pub document_url: String,
+    /// Scripts executed by the page's event loop (0 = no JS activity to refresh for).
+    pub scripts_executed: usize,
+    /// Page timers still pending when the render's event loop stopped (`setInterval`, or a
+    /// timer chain cut by the virtual-time/task budget). Non-zero enables auto-refresh.
+    pub script_timers_pending: usize,
+    /// Non-fatal render warnings (CORS denials, missing resources, ...).
+    pub warnings: usize,
+    /// Script errors (exceptions/budget exhaustions) reported by the renderer.
+    pub script_errors: usize,
 }
 
 /// Message sent from the worker back to the event loop.
@@ -305,6 +314,16 @@ pub fn render_document_with_options(
     let links = collect_link_regions(&output);
     let title = document_title(&output.document);
     let document_url = output.document_url.as_str();
+    let scripts_executed = output.stats.scripts_executed;
+    let script_timers_pending = output.stats.script_timers_pending;
+    let warnings = output.stats.warnings.len();
+    let script_errors = output.stats.scripts_failed
+        + output
+            .stats
+            .console
+            .iter()
+            .filter(|message| message.level == "error")
+            .count();
     Ok(RenderFrame {
         generation: request.generation,
         width: output.pixmap.width,
@@ -315,6 +334,10 @@ pub fn render_document_with_options(
         links,
         title,
         document_url,
+        scripts_executed,
+        script_timers_pending,
+        warnings,
+        script_errors,
     })
 }
 
@@ -351,6 +374,10 @@ mod unit_tests {
             links: Vec::new(),
             title: None,
             document_url: "https://example.com/".to_string(),
+            scripts_executed: 0,
+            script_timers_pending: 0,
+            warnings: 0,
+            script_errors: 0,
         }
     }
 

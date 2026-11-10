@@ -77,6 +77,33 @@ pub fn window_metrics(
     }
 }
 
+/// Computes the metrics of a physical window at `device_scale` **and** page `zoom`.
+///
+/// The CSS viewport is `physical / (device_scale * zoom)`: zooming in shows fewer CSS
+/// pixels (the presentation layer upscales the frame), independently of the HiDPI scale.
+/// The returned [`WindowMetrics::scale`] is the *effective* scale
+/// (`device_scale * zoom`), so the existing present/scroll paths need no change.
+pub fn window_metrics_zoomed(
+    physical_width: u32,
+    physical_height: u32,
+    device_scale: f64,
+    zoom: f64,
+) -> WindowMetrics {
+    let effective_scale = sanitize_scale(device_scale) * crate::zoom::sanitize_zoom(zoom);
+    let physical_width = physical_width.max(1);
+    let physical_height = physical_height.max(1);
+    let css = |physical: u32| -> u32 {
+        ((f64::from(physical) / effective_scale).round() as u32).clamp(1, MAX_VIEWPORT_DIMENSION)
+    };
+    WindowMetrics {
+        physical_width,
+        physical_height,
+        css_width: css(physical_width),
+        css_height: css(physical_height),
+        scale: effective_scale,
+    }
+}
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;
@@ -128,5 +155,19 @@ mod unit_tests {
         let metrics = window_metrics(0, 0, 1.0);
         assert_eq!((metrics.physical_width, metrics.physical_height), (1, 1));
         assert_eq!((metrics.css_width, metrics.css_height), (1, 1));
+    }
+
+    #[test]
+    fn zoomed_metrics_compose_device_scale_and_page_zoom() {
+        let base = window_metrics_zoomed(800, 600, 1.0, 1.0);
+        assert_eq!((base.css_width, base.css_height), (800, 600));
+        let zoomed = window_metrics_zoomed(800, 600, 1.0, 2.0);
+        assert_eq!((zoomed.css_width, zoomed.css_height), (400, 300));
+        assert_eq!((zoomed.physical_width, zoomed.physical_height), (800, 600));
+        let both = window_metrics_zoomed(800, 600, 2.0, 2.0);
+        assert_eq!((both.css_width, both.css_height), (200, 150));
+        assert_eq!(both.scale, 4.0);
+        let clamped = window_metrics_zoomed(800, 600, 1.0, 10.0);
+        assert_eq!((clamped.css_width, clamped.css_height), (267, 200));
     }
 }

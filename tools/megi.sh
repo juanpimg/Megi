@@ -7,6 +7,10 @@
 # Window mode (needs an X11/Wayland session):
 #   - left click on a link: navigate (resolved against the page URL, history push)
 #   - Alt+Left / Backspace / b: back; Alt+Right / n: forward; r: reload
+#   - Ctrl+= / Ctrl++ (or =/+): zoom in; Ctrl+- (or -): zoom out; Ctrl+0 (or 0): reset
+#   - Ctrl+L: print the current URL; title shows page — zoom% — scroll% (+warnings)
+#   - --zoom F (0.5–3.0): initial page zoom; --refresh-ms [MS]: auto-refresh pages whose
+#     scripts leave timers pending (default 250 ms; omitted/0 = disabled)
 #   - mouse wheel / touchpad: vertical scroll
 #   - arrows: one line; PageUp/PageDown: one page; Home/End: top/bottom
 #   - q or Esc: quit; right/middle click: ignored

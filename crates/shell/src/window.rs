@@ -20,8 +20,16 @@
 //! - **history**: `Alt+←`/`Backspace`/`b` go back, `Alt+→`/`n` go forward (bounded by
 //!   [`crate::MAX_HISTORY`]), `r` reloads the current page; failed navigations show an
 //!   error frame and keep the history entry;
-//! - **dynamic title**: the window title shows the document `<title>` plus the short URL
-//!   and scroll percentage ([`crate::title`]);
+//! - **zoom** (WP-7.6): `Ctrl+=`/`Ctrl++`, `Ctrl+-`, `Ctrl+0` (also without Ctrl) walk the
+//!   fixed 50–300 % ladder ([`crate::zoom`]); the CSS viewport becomes
+//!   `physical / (device_scale * zoom)` and the title shows the zoom percentage;
+//! - **auto-refresh** (WP-7.6): with `--refresh-ms` the window re-renders while the last
+//!   frame executed scripts and left page timers pending (`setInterval`, long timer chains),
+//!   preserving the scroll offset and using the worker's generation cancellation; pages
+//!   without timers never refresh ([`crate::refresh`]);
+//! - **dynamic title/status**: the window title shows the document `<title>` plus the short
+//!   URL, `zoom%`, `scroll%`, warning/script-error counters ([`crate::title`]); `Ctrl+L`
+//!   prints the current URL to stdout (no address bar yet);
 //! - errors produce a white frame plus stderr/title feedback; the window stays
 //!   usable.
 //!
@@ -33,6 +41,10 @@
 //! | `Alt+←`, `Backspace`, `b` | Back |
 //! | `Alt+→`, `n` | Forward |
 //! | `r` | Reload the current page |
+//! | `Ctrl+=` / `Ctrl++` (or `=`/`+`) | Zoom in |
+//! | `Ctrl+-` (or `-`) | Zoom out |
+//! | `Ctrl+0` (or `0`) | Reset zoom to 100 % |
+//! | `Ctrl+L` | Print the current URL to stdout |
 //! | Wheel / touchpad | Scroll vertically |
 //! | `↑` / `↓` | Scroll one line |
 //! | `PageUp` / `PageDown` | Scroll one page |
@@ -61,12 +73,14 @@ use crate::error::ShellError;
 use crate::links::{LinkRegion, link_url_at, physical_to_page};
 use crate::navigation::{NavigationOutcome, NavigationState};
 use crate::present;
-use crate::scale::{WindowMetrics, window_metrics};
+use crate::refresh::{RefreshPolicy, RefreshTimer};
+use crate::scale::{WindowMetrics, window_metrics_zoomed};
 use crate::scroll::{self, ScrollState};
-use crate::title;
+use crate::title::{self, StatusSummary};
 use crate::worker::{
     Debounce, FrameStore, RENDER_DEBOUNCE, RenderRequest, WorkerMessage, spawn_worker,
 };
+use crate::zoom;
 
 type ShellContext = softbuffer::Context<Arc<Window>>;
 type ShellSurface = softbuffer::Surface<Arc<Window>, Arc<Window>>;
@@ -78,18 +92,44 @@ enum UserEvent {
     WorkerReady,
 }
 
+/// Shell-specific view settings for one window: page zoom and auto-refresh policy.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindowViewOptions {
+    /// Initial page zoom factor (clamped to 50–300 %).
+    pub zoom: f64,
+    /// Auto-refresh policy for pages with pending timers.
+    pub refresh: RefreshPolicy,
+}
+
+impl Default for WindowViewOptions {
+    fn default() -> Self {
+        Self {
+            zoom: zoom::DEFAULT_ZOOM,
+            refresh: RefreshPolicy::disabled(),
+        }
+    }
+}
+
+impl WindowViewOptions {
+    /// View options with an explicit initial zoom and refresh policy.
+    pub const fn new(zoom: f64, refresh: RefreshPolicy) -> Self {
+        Self { zoom, refresh }
+    }
+}
+
 /// Runs the interactive window loop until the user closes it.
 ///
 /// Returns [`ShellError::Window`] when no display server is available (no
 /// `$DISPLAY` / `$WAYLAND_DISPLAY`) or when winit/softbuffer initialization
 /// fails.
 pub fn run_window(input: String, title: String, width: u32, height: u32) -> Result<(), ShellError> {
-    run_window_with_options(
+    run_window_with_view_options(
         input,
         title,
         width,
         height,
         render::RenderOptions::default(),
+        WindowViewOptions::default(),
     )
 }
 
@@ -102,6 +142,25 @@ pub fn run_window_with_options(
     height: u32,
     render_options: render::RenderOptions,
 ) -> Result<(), ShellError> {
+    run_window_with_view_options(
+        input,
+        title,
+        width,
+        height,
+        render_options,
+        WindowViewOptions::default(),
+    )
+}
+
+/// [`run_window_with_options`] plus zoom/auto-refresh view settings (WP-7.6).
+pub fn run_window_with_view_options(
+    input: String,
+    title: String,
+    width: u32,
+    height: u32,
+    render_options: render::RenderOptions,
+    view: WindowViewOptions,
+) -> Result<(), ShellError> {
     let event_loop = EventLoop::<UserEvent>::with_user_event()
         .build()
         .map_err(|error| {
@@ -110,7 +169,7 @@ pub fn run_window_with_options(
             ))
         })?;
     let proxy = event_loop.create_proxy();
-    let mut app = WindowApp::new(input, title, width, height, proxy, render_options);
+    let mut app = WindowApp::new(input, title, width, height, proxy, render_options, view);
     event_loop
         .run_app(&mut app)
         .map_err(|error| ShellError::Window(format!("event loop failed: {error}")))
@@ -146,8 +205,20 @@ struct WindowApp {
     doc_title: Option<String>,
     /// Latest physical cursor position over the window.
     cursor: Option<(f64, f64)>,
-    /// Current keyboard modifiers (for Alt+←/→).
+    /// Current keyboard modifiers (for Alt+←/→ and Ctrl+zoom/L).
     modifiers: ModifiersState,
+    /// Current page zoom factor (50–300 %).
+    zoom: f64,
+    /// Auto-refresh timer for pages with pending page timers.
+    refresh: RefreshTimer,
+    /// Scripts executed by the frame on screen.
+    frame_scripts_executed: usize,
+    /// Page timers left pending by the frame on screen (auto-refresh trigger).
+    frame_timers_pending: usize,
+    /// Non-fatal render warnings of the frame on screen.
+    frame_warnings: usize,
+    /// Script errors of the frame on screen.
+    frame_script_errors: usize,
 }
 
 impl WindowApp {
@@ -158,7 +229,9 @@ impl WindowApp {
         height: u32,
         proxy: EventLoopProxy<UserEvent>,
         render_options: render::RenderOptions,
+        view: WindowViewOptions,
     ) -> Self {
+        let zoom = zoom::sanitize_zoom(view.zoom);
         let mut nav = NavigationState::new();
         if let Ok(url) = net::Url::parse(&input) {
             nav.navigate_to(url);
@@ -173,7 +246,7 @@ impl WindowApp {
             surface: None,
             proxy,
             render_options,
-            metrics: window_metrics(width, height, 1.0),
+            metrics: window_metrics_zoomed(width, height, 1.0, zoom),
             scale_factor: 1.0,
             scroll: ScrollState::default(),
             store: FrameStore::new(),
@@ -189,6 +262,12 @@ impl WindowApp {
             doc_title: None,
             cursor: None,
             modifiers: ModifiersState::default(),
+            zoom,
+            refresh: RefreshTimer::new(view.refresh),
+            frame_scripts_executed: 0,
+            frame_timers_pending: 0,
+            frame_warnings: 0,
+            frame_script_errors: 0,
         }
     }
 
@@ -214,7 +293,7 @@ impl WindowApp {
 
         self.scale_factor = window.scale_factor();
         let size = window.inner_size();
-        self.metrics = window_metrics(size.width, size.height, self.scale_factor);
+        self.metrics = window_metrics_zoomed(size.width, size.height, self.scale_factor, self.zoom);
         self.scroll = ScrollState::new(1, self.metrics.css_height);
         self.window = Some(window);
         self.context = Some(context);
@@ -259,6 +338,11 @@ impl WindowApp {
         self.error = None;
         self.content_capped = false;
         self.links.clear();
+        self.refresh.clear();
+        self.frame_scripts_executed = 0;
+        self.frame_timers_pending = 0;
+        self.frame_warnings = 0;
+        self.frame_script_errors = 0;
         self.doc_title = None;
         self.scroll = ScrollState::new(1, self.metrics.css_height);
         self.update_title();
@@ -344,7 +428,21 @@ impl WindowApp {
                     self.content_capped = frame.capped;
                     self.links = frame.links.clone();
                     self.doc_title = frame.title.clone();
+                    self.frame_scripts_executed = frame.scripts_executed;
+                    self.frame_timers_pending = frame.script_timers_pending;
+                    self.frame_warnings = frame.warnings;
+                    self.frame_script_errors = frame.script_errors;
                     self.scroll.set_content_height(frame.content_height);
+                    // Auto-refresh only when the page ran scripts and left timers pending;
+                    // one-shot: the next frame re-arms it or clears it (no loops otherwise).
+                    if self
+                        .refresh
+                        .should_refresh(frame.scripts_executed, frame.script_timers_pending)
+                    {
+                        self.refresh.schedule(Instant::now());
+                    } else {
+                        self.refresh.clear();
+                    }
                     // Server redirects: the final URL replaces the requested history entry.
                     if let Ok(final_url) = net::Url::parse(&frame.document_url)
                         && self.nav.current() != Some(&final_url)
@@ -355,6 +453,8 @@ impl WindowApp {
                 }
                 None => {
                     self.error = self.store.take_error();
+                    // A failed render must not keep auto-refreshing (error loop).
+                    self.refresh.clear();
                     if let Some(error) = &self.error {
                         eprintln!("megi: {error}");
                     }
@@ -389,8 +489,9 @@ impl WindowApp {
         }
     }
 
-    /// Updates the window title: document `<title>` + short URL, scroll percentage, error
-    /// text (errors take precedence) and the clipping marker.
+    /// Updates the window title: document `<title>` + short URL, zoom/scroll percentages,
+    /// warning/script-error counters, error text (errors take precedence) and the clipping
+    /// marker.
     fn update_title(&mut self) {
         let Some(window) = &self.window else {
             return;
@@ -402,13 +503,72 @@ impl WindowApp {
                 Err(_) => title::FALLBACK_NAME.to_owned(),
             },
         };
-        let title = title::window_title(
-            &page,
-            self.scroll.percent(),
-            self.error.as_deref(),
-            self.content_capped,
-        );
+        let status = StatusSummary {
+            zoom: self.zoom,
+            scroll_percent: self.scroll.percent(),
+            warnings: self.frame_warnings,
+            script_errors: self.frame_script_errors,
+        };
+        let title = title::status_title(&page, &status, self.error.as_deref(), self.content_capped);
         window.set_title(&title);
+    }
+
+    /// Applies a new zoom factor (clamped), recomputes the CSS viewport and re-renders.
+    ///
+    /// The scroll offset is kept (clamped by the new viewport/content height) so zooming
+    /// in/out does not jump to the top of the page.
+    fn set_zoom(&mut self, factor: f64) {
+        let factor = zoom::sanitize_zoom(factor);
+        if (factor - self.zoom).abs() < f64::EPSILON {
+            return;
+        }
+        self.zoom = factor;
+        let (width, height) = self
+            .window
+            .as_ref()
+            .map(|window| {
+                let size = window.inner_size();
+                (size.width, size.height)
+            })
+            .unwrap_or((self.requested_width, self.requested_height));
+        self.metrics = window_metrics_zoomed(width, height, self.scale_factor, self.zoom);
+        self.scroll.set_viewport_height(self.metrics.css_height);
+        self.update_title();
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+        self.request_render();
+    }
+
+    /// Prints the current URL to stdout (`Ctrl+L`; there is no address bar yet).
+    fn print_current_url(&self) {
+        if let Some(url) = self.nav.current_url() {
+            println!("{url}");
+        } else {
+            println!("{}", self.input);
+        }
+    }
+
+    /// Handles the zoom shortcuts; returns `true` when the key was consumed.
+    fn handle_zoom_key(&mut self, key: &Key) -> bool {
+        let Key::Character(text) = key else {
+            return false;
+        };
+        let text = text.as_str();
+        if text == "=" || text == "+" {
+            let next = zoom::zoom_in(self.zoom);
+            self.set_zoom(next);
+            true
+        } else if text == "-" || text == "_" {
+            let next = zoom::zoom_out(self.zoom);
+            self.set_zoom(next);
+            true
+        } else if text == "0" {
+            self.set_zoom(zoom::zoom_reset());
+            true
+        } else {
+            false
+        }
     }
 
     /// Copies the visible region of the current frame into the surface.
@@ -471,8 +631,11 @@ impl ApplicationHandler<UserEvent> for WindowApp {
         self.request_render();
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, _event: UserEvent) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, _event: UserEvent) {
         self.drain_worker_messages();
+        if let Some(deadline) = self.refresh.deadline() {
+            event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
+        }
     }
 
     fn window_event(
@@ -485,7 +648,8 @@ impl ApplicationHandler<UserEvent> for WindowApp {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => self.present(),
             WindowEvent::Resized(size) => {
-                let metrics = window_metrics(size.width, size.height, self.scale_factor);
+                let metrics =
+                    window_metrics_zoomed(size.width, size.height, self.scale_factor, self.zoom);
                 self.schedule_resize(event_loop, metrics);
                 self.present();
             }
@@ -502,7 +666,7 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                         (size.width, size.height)
                     })
                     .unwrap_or((self.requested_width, self.requested_height));
-                let metrics = window_metrics(width, height, scale_factor);
+                let metrics = window_metrics_zoomed(width, height, scale_factor, self.zoom);
                 self.schedule_resize(event_loop, metrics);
             }
             WindowEvent::MouseWheel { delta, .. } => match delta {
@@ -530,6 +694,16 @@ impl ApplicationHandler<UserEvent> for WindowApp {
             WindowEvent::MouseInput { .. } => {}
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 let alt_pressed = self.modifiers.alt_key();
+                let ctrl_pressed = self.modifiers.control_key();
+                if ctrl_pressed
+                    && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("l"))
+                {
+                    self.print_current_url();
+                    return;
+                }
+                if self.handle_zoom_key(&event.logical_key) {
+                    return;
+                }
                 match event.logical_key.as_ref() {
                     Key::Named(NamedKey::Escape) => event_loop.exit(),
                     Key::Named(NamedKey::ArrowUp) => self.scroll_lines(-1),
@@ -585,14 +759,25 @@ impl ApplicationHandler<UserEvent> for WindowApp {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if self.debounce.take_due(Instant::now())
+        let now = Instant::now();
+        // Auto-refresh: re-render the current URL (same generation-based worker path, scroll
+        // preserved). The new frame re-arms the timer only while timers remain pending.
+        if self.refresh.take_due(now) {
+            self.request_render();
+        }
+        if self.debounce.take_due(now)
             && let Some(metrics) = self.pending_metrics.take()
         {
             self.metrics = metrics;
             self.scroll.set_viewport_height(metrics.css_height);
             self.request_render();
         }
-        match self.debounce.deadline() {
+        let deadline = match (self.debounce.deadline(), self.refresh.deadline()) {
+            (Some(debounce), Some(refresh)) => Some(debounce.min(refresh)),
+            (Some(deadline), None) | (None, Some(deadline)) => Some(deadline),
+            (None, None) => None,
+        };
+        match deadline {
             Some(deadline) => event_loop.set_control_flow(ControlFlow::WaitUntil(deadline)),
             None => event_loop.set_control_flow(ControlFlow::Wait),
         }

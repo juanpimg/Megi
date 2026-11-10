@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! megi <url|file> [--width W] [--height H] [--screenshot PATH] [--title T]
-//!      [--cookies] [--origin URL]
+//!      [--cookies] [--origin URL] [--zoom FACTOR] [--refresh-ms [MS]]
 //! ```
 //!
 //! Without `--screenshot` this creates a real winit window (requires an X11/Wayland
@@ -12,7 +12,10 @@
 use std::process::ExitCode;
 use std::sync::{Arc, Mutex};
 
-use shell::{CliArgs, LaunchMode, ShellError, finish_args, parse_args, screenshot_with_options};
+use shell::{
+    CliArgs, LaunchMode, RefreshPolicy, ShellError, WindowViewOptions, finish_args, parse_args,
+    screenshot_with_options, zoom,
+};
 
 /// Builds the render options for one CLI invocation.
 ///
@@ -53,21 +56,36 @@ fn run() -> Result<(), ShellError> {
     }
     let args = finish_args(raw)?;
     let options = render_options(&args);
+    let view = WindowViewOptions::new(
+        args.zoom,
+        args.refresh_ms
+            .map_or_else(RefreshPolicy::disabled, RefreshPolicy::every_ms),
+    );
     match args.mode {
         LaunchMode::Screenshot(path) => {
+            // Headless screenshots render at the CSS viewport (physical / zoom): `--zoom 2`
+            // writes a PNG half the requested physical size (the window would upscale it).
+            let (css_width, css_height) =
+                zoom::zoomed_viewport(args.width, args.height, 1.0, args.zoom);
             let info =
-                screenshot_with_options(&args.input, args.width, args.height, &path, &options)?;
+                screenshot_with_options(&args.input, css_width, css_height, &path, &options)?;
             println!(
-                "wrote {} ({}x{}, {} bytes)",
+                "wrote {} ({}x{}, {} bytes, zoom {})",
                 info.path.display(),
                 info.width,
                 info.height,
-                info.png_bytes
+                info.png_bytes,
+                zoom::zoom_label(args.zoom)
             );
             Ok(())
         }
-        LaunchMode::Window => {
-            shell::run_window_with_options(args.input, args.title, args.width, args.height, options)
-        }
+        LaunchMode::Window => shell::run_window_with_view_options(
+            args.input,
+            args.title,
+            args.width,
+            args.height,
+            options,
+            view,
+        ),
     }
 }

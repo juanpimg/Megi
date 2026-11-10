@@ -37,11 +37,17 @@ options:
                       document, subresources, redirects and navigations)
   --origin URL        CORS Origin override for subresource fetches (default: the
                       document origin; cross-origin CORS failures are non-fatal)
+  --zoom FACTOR       page zoom, 0.5–3.0 (default 1.0); the CSS viewport is
+                      physical/(device_scale*zoom) and the title shows the percentage
+  --refresh-ms [MS]   auto-refresh pages whose scripts leave timers pending
+                      (setInterval); MS defaults to 250, 0/disabling flag = off
   -h, --help          print this help
 
 window keys:
   left click on a link       navigate (history push)
   Alt+Left / Backspace / b   back;  Alt+Right / n   forward
+  Ctrl+= / Ctrl++ / = / +    zoom in;  Ctrl+- / -   zoom out;  Ctrl+0 / 0   reset zoom
+  Ctrl+L                     print the current URL
   r                          reload;  q / Esc   quit
   wheel / arrows / PageUp / PageDown / Home / End   scroll
   (left click only; right/middle click ignored)";
@@ -56,7 +62,7 @@ pub enum LaunchMode {
 }
 
 /// Fully validated CLI configuration.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CliArgs {
     /// Normalized absolute URL (local paths become `file://` URLs).
     pub input: String,
@@ -72,10 +78,14 @@ pub struct CliArgs {
     pub cookies: bool,
     /// Explicit CORS `Origin` override for subresource fetches (`--origin`).
     pub origin: Option<String>,
+    /// Initial page zoom factor (50–300 %, `--zoom`).
+    pub zoom: f64,
+    /// Auto-refresh interval in milliseconds when `--refresh-ms` was given (`None` = off).
+    pub refresh_ms: Option<u64>,
 }
 
 /// Raw flags before validation/normalization (exposed for tests).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct RawArgs {
     /// Positional input (URL or path), if provided.
     pub input: Option<String>,
@@ -91,37 +101,55 @@ pub struct RawArgs {
     pub cookies: bool,
     /// `--origin` value, if provided.
     pub origin: Option<String>,
+    /// `--zoom` value, if provided.
+    pub zoom: Option<f64>,
+    /// `--refresh-ms` value (default 250 when passed without a value), if provided.
+    pub refresh_ms: Option<u64>,
     /// `-h`/`--help` was passed.
     pub help: bool,
 }
 
 /// Parses raw arguments (no normalization, no defaults applied).
 pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellError> {
+    let arguments: Vec<String> = args.collect();
     let mut raw = RawArgs::default();
-    let mut args = args;
-    while let Some(argument) = args.next() {
+    let mut index = 0usize;
+    while index < arguments.len() {
+        let argument = arguments[index].clone();
+        index += 1;
         match argument.as_str() {
             "-h" | "--help" => raw.help = true,
-            "--width" => raw.width = Some(parse_dimension(&mut args, "--width")?),
-            "--height" => raw.height = Some(parse_dimension(&mut args, "--height")?),
+            "--width" => raw.width = Some(parse_value_u32(&arguments, &mut index, "--width")?),
+            "--height" => raw.height = Some(parse_value_u32(&arguments, &mut index, "--height")?),
             "--screenshot" => {
-                let value = args.next().ok_or_else(|| {
-                    ShellError::Usage("--screenshot requires an output path".to_string())
-                })?;
+                let value = next_value(&arguments, &mut index, "--screenshot")?;
                 raw.screenshot = Some(PathBuf::from(value));
             }
             "--title" => {
-                let value = args
-                    .next()
-                    .ok_or_else(|| ShellError::Usage("--title requires a value".to_string()))?;
-                raw.title = Some(value);
+                raw.title = Some(next_value(&arguments, &mut index, "--title")?);
             }
             "--cookies" => raw.cookies = true,
             "--origin" => {
-                let value = args
-                    .next()
-                    .ok_or_else(|| ShellError::Usage("--origin requires a URL".to_string()))?;
-                raw.origin = Some(value);
+                raw.origin = Some(next_value(&arguments, &mut index, "--origin")?);
+            }
+            "--zoom" => {
+                let value = next_value(&arguments, &mut index, "--zoom")?;
+                raw.zoom = Some(value.parse::<f64>().map_err(|_| {
+                    ShellError::Usage(format!(
+                        "invalid --zoom value `{value}` (expected a number)"
+                    ))
+                })?);
+            }
+            "--refresh-ms" => {
+                // Optional value: use the next argument when it is a bare integer, otherwise
+                // fall back to the default interval without consuming it.
+                let interval = arguments
+                    .get(index)
+                    .and_then(|value| value.parse::<u64>().ok());
+                if interval.is_some() {
+                    index += 1;
+                }
+                raw.refresh_ms = Some(interval.unwrap_or(crate::refresh::DEFAULT_REFRESH_MS));
             }
             other if other.starts_with('-') => {
                 return Err(ShellError::Usage(format!("unknown option `{other}`")));
@@ -139,10 +167,19 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
     Ok(raw)
 }
 
-fn parse_dimension(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<u32, ShellError> {
-    let value = args
-        .next()
-        .ok_or_else(|| ShellError::Usage(format!("{flag} requires a pixel value")))?;
+/// Consumes the value of a CLI flag.
+fn next_value(arguments: &[String], index: &mut usize, flag: &str) -> Result<String, ShellError> {
+    let value = arguments
+        .get(*index)
+        .cloned()
+        .ok_or_else(|| ShellError::Usage(format!("{flag} requires a value")))?;
+    *index += 1;
+    Ok(value)
+}
+
+/// Consumes and parses a `u32` CLI flag value.
+fn parse_value_u32(arguments: &[String], index: &mut usize, flag: &str) -> Result<u32, ShellError> {
+    let value = next_value(arguments, index, flag)?;
     value
         .parse::<u32>()
         .map_err(|_| ShellError::Usage(format!("invalid {flag} value `{value}`")))
@@ -171,6 +208,33 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
         Some(path) => LaunchMode::Screenshot(path),
         None => LaunchMode::Window,
     };
+    let zoom = match raw.zoom {
+        Some(zoom) => {
+            if !crate::zoom::is_valid_cli_zoom(zoom) {
+                return Err(ShellError::Usage(format!(
+                    "invalid --zoom value `{zoom}` (expected {min}..={max})",
+                    min = crate::zoom::MIN_ZOOM,
+                    max = crate::zoom::MAX_ZOOM
+                )));
+            }
+            zoom
+        }
+        None => crate::zoom::DEFAULT_ZOOM,
+    };
+    if let Some(0) = raw.refresh_ms {
+        // `--refresh-ms 0` explicitly disables auto-refresh; normalise to `None`.
+        return Ok(CliArgs {
+            input,
+            title: raw.title.unwrap_or_else(|| DEFAULT_TITLE.to_string()),
+            width,
+            height,
+            mode,
+            cookies: raw.cookies,
+            origin: raw.origin,
+            zoom,
+            refresh_ms: None,
+        });
+    }
     Ok(CliArgs {
         input,
         title: raw.title.unwrap_or_else(|| DEFAULT_TITLE.to_string()),
@@ -179,6 +243,8 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
         mode,
         cookies: raw.cookies,
         origin: raw.origin,
+        zoom,
+        refresh_ms: raw.refresh_ms,
     })
 }
 
@@ -270,6 +336,27 @@ mod unit_tests {
         assert!(!plain.cookies);
         assert!(plain.origin.is_none());
         assert!(parse_cli(args(&["data:,x", "--origin"])).is_err());
+    }
+
+    #[test]
+    fn parses_zoom_and_refresh_flags() {
+        let cli = parse_cli(args(&["data:,x", "--zoom", "1.5"])).expect("parse");
+        assert_eq!(cli.zoom, 1.5);
+        assert_eq!(cli.refresh_ms, None);
+
+        let bare = parse_cli(args(&["data:,x", "--refresh-ms"])).expect("parse");
+        assert_eq!(bare.refresh_ms, Some(crate::refresh::DEFAULT_REFRESH_MS));
+
+        let explicit = parse_cli(args(&["data:,x", "--refresh-ms", "500"])).expect("parse");
+        assert_eq!(explicit.refresh_ms, Some(500));
+
+        let disabled = parse_cli(args(&["data:,x", "--refresh-ms", "0"])).expect("parse");
+        assert_eq!(disabled.refresh_ms, None);
+
+        assert!(parse_cli(args(&["data:,x", "--zoom", "4"])).is_err());
+        assert!(parse_cli(args(&["data:,x", "--zoom", "0.4"])).is_err());
+        assert!(parse_cli(args(&["data:,x", "--zoom", "abc"])).is_err());
+        assert!(parse_cli(args(&["data:,x", "--zoom"])).is_err());
     }
 
     #[test]

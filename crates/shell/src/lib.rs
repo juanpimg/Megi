@@ -54,6 +54,18 @@
 //!   decoded transparently by `net`.
 //! - **Dynamic title**: the window title is the document `<title>` plus the short URL and
 //!   scroll percentage ([`title`]); server redirects replace the current history entry.
+//! - **Zoom (WP-7.6)**: `Ctrl+=`/`Ctrl++` zoom in, `Ctrl+-` zoom out, `Ctrl+0` reset
+//!   (same keys without Ctrl also work) on a fixed 50–300 % ladder ([`zoom`]); the CSS
+//!   viewport becomes `physical / (device_scale * zoom)` and the title shows the zoom
+//!   percentage. `--zoom <0.5..3.0>` sets the initial factor; `--screenshot` renders at
+//!   the zoomed CSS size.
+//! - **Auto-refresh (WP-7.6)**: with `--refresh-ms [MS]` (opt-in; `MS` defaults to 250)
+//!   the window re-renders the page while the last frame left
+//!   `script_timers_pending > 0` (typically `setInterval`), keeping the scroll offset and
+//!   using the worker's generation cancellation; pages without timers never loop
+//!   ([`refresh`]).
+//! - **Status feedback**: the title shows `page — zoom% — scroll%` plus warning/script-error
+//!   counters; `Ctrl+L` prints the current URL to stdout (there is no address bar yet).
 //! - **Input**: mouse wheel/touchpad scroll, `↑`/`↓`, `PageUp`/`PageDown`, `Home`/`End`,
 //!   `q`/`Esc`/close quit; right/middle click ignored.
 //! - **Errors** produce a white frame, a `Megi — error` title and stderr text; failed
@@ -61,8 +73,14 @@
 //!
 //! ## What it does not do yet
 //!
-//! - No tabs, zoom, downloads, forms or JS execution (Phase 6) — link clicks are the only
-//!   navigation trigger; `javascript:`/`mailto:` hrefs are no-ops.
+//! - No tabs, downloads, forms or address bar; `Ctrl+L` only prints the URL. JS runs in
+//!   `render` (page scripts, virtual-time event loop) but the shell does not expose a JS
+//!   console or bookmarking; link clicks are the only navigation trigger and
+//!   `javascript:`/`mailto:` hrefs are no-ops.
+//! - Auto-refresh re-renders with the same deterministic virtual clock: pages whose visual
+//!   state depends on real elapsed time (animations, clocks) repaint the same first frame;
+//!   advancing the virtual clock between refreshes is a follow-up. Refresh is opt-in via
+//!   `--refresh-ms` and only for frames with pending page timers.
 //! - Fragment-only links (`#id`) are treated as a normal navigation (a re-render of the same
 //!   document with a new history entry) instead of in-page scrolling/scrolling-into-view.
 //! - The scroll is a simple vertical offset of the rendered page (no incremental tiled
@@ -93,11 +111,13 @@ pub mod headless;
 pub mod links;
 pub mod navigation;
 pub mod present;
+pub mod refresh;
 pub mod scale;
 pub mod scroll;
 pub mod title;
 pub mod window;
 pub mod worker;
+pub mod zoom;
 
 pub use cli::{CliArgs, LaunchMode, finish_args, parse_args, parse_cli};
 pub use convert::{PIXEL_FORMAT, expected_buffer_len, pixmap_to_0rgb};
@@ -112,11 +132,20 @@ pub use links::{
 };
 pub use navigation::{MAX_HISTORY, NavigationOutcome, NavigationState};
 pub use present::{present_region, viewport_slice};
-pub use scale::{WindowMetrics, logical_to_physical, physical_to_logical, window_metrics};
+pub use refresh::{DEFAULT_REFRESH_MS, MIN_REFRESH_MS, RefreshPolicy, RefreshTimer};
+pub use scale::{
+    WindowMetrics, logical_to_physical, physical_to_logical, window_metrics, window_metrics_zoomed,
+};
 pub use scroll::{MAX_CONTENT_HEIGHT, ScrollState};
 pub use title::{
     CAPPED_MARKER, FALLBACK_NAME, MAX_SHORT_URL_CHARS, MAX_TITLE_CHARS, document_title, page_title,
     short_url, window_title,
 };
-pub use window::{run_window, run_window_with_options};
+pub use window::{
+    WindowViewOptions, run_window, run_window_with_options, run_window_with_view_options,
+};
 pub use worker::{FrameStore, RenderFrame, RenderRequest, WorkerMessage, spawn_worker};
+pub use zoom::{
+    DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, ZOOM_LEVELS, is_valid_cli_zoom, sanitize_zoom, zoom_in,
+    zoom_label, zoom_out, zoom_reset, zoomed_viewport,
+};
