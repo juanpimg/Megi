@@ -37,6 +37,8 @@ pub enum Scheme {
     Https,
     /// `file:` (local filesystem, parsed but not fetched over TCP).
     File,
+    /// `data:` (inline bytes; opaque, no host or port).
+    Data,
 }
 
 impl Scheme {
@@ -46,6 +48,7 @@ impl Scheme {
             Self::Http => "http",
             Self::Https => "https",
             Self::File => "file",
+            Self::Data => "data",
         }
     }
 
@@ -54,7 +57,7 @@ impl Scheme {
         match self {
             Self::Http => Some(80),
             Self::Https => Some(443),
-            Self::File => None,
+            Self::File | Self::Data => None,
         }
     }
 
@@ -66,6 +69,8 @@ impl Scheme {
             Some(Self::Https)
         } else if input.eq_ignore_ascii_case("file") {
             Some(Self::File)
+        } else if input.eq_ignore_ascii_case("data") {
+            Some(Self::Data)
         } else {
             None
         }
@@ -73,6 +78,11 @@ impl Scheme {
 
     /// Whether this is a WHATWG *special* scheme (backslashes behave as slashes).
     pub const fn is_special(self) -> bool {
+        matches!(self, Self::Http | Self::Https | Self::File)
+    }
+
+    /// Whether this scheme has a network/file authority (`data:` has none).
+    pub const fn has_authority(self) -> bool {
         matches!(self, Self::Http | Self::Https | Self::File)
     }
 }
@@ -148,6 +158,10 @@ impl Url {
                 .ok_or_else(|| UrlError::UnsupportedScheme(scheme_str.to_ascii_lowercase()))?;
             return Self::parse_after_scheme(scheme, rest);
         }
+        // `data:` URLs are opaque and cannot act as a base for relative references.
+        if self.scheme == Scheme::Data {
+            return Err(UrlError::UnsupportedScheme("data".to_owned()));
+        }
         // Backslashes are path separators for special schemes.
         let relative = if self.scheme.is_special() {
             cleaned.replace('\\', "/")
@@ -183,6 +197,22 @@ impl Url {
 
     /// Parses the part after `scheme:` (which may start with `//authority`).
     fn parse_after_scheme(scheme: Scheme, rest: &str) -> Result<Self, UrlError> {
+        if scheme == Scheme::Data {
+            // WHATWG URL: `data:` is an opaque path. The payload keeps its raw
+            // bytes (percent-encoded as written) until `crate::data` decodes it;
+            // only the fragment is split off.
+            let (payload, fragment) = split_fragment(rest);
+            return Ok(Self {
+                scheme,
+                username: String::new(),
+                password: String::new(),
+                host: String::new(),
+                port: None,
+                path: payload.to_owned(),
+                query: None,
+                fragment: fragment.map(encode_fragment),
+            });
+        }
         // WHATWG: backslashes are treated as slashes for special schemes.
         let rest = if scheme.is_special() {
             rest.replace('\\', "/")
@@ -299,6 +329,15 @@ impl Url {
                 + self.password.len()
                 + 8,
         );
+        if self.scheme == Scheme::Data {
+            out.push_str("data:");
+            out.push_str(&self.path);
+            if let Some(fragment) = &self.fragment {
+                out.push('#');
+                out.push_str(fragment);
+            }
+            return out;
+        }
         out.push_str(self.scheme.as_str());
         out.push_str("://");
         if !self.username.is_empty() || !self.password.is_empty() {

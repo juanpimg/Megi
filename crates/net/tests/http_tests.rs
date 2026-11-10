@@ -249,6 +249,7 @@ fn http_header_line_folding_is_rejected() {
     assert_eq!(server.join().expect("server thread").len(), 1);
 }
 
+#[cfg(not(feature = "tls"))]
 #[test]
 fn https_urls_report_tls_unsupported_without_connecting() {
     let url = Url::parse("https://example.com/").expect("https URL parses");

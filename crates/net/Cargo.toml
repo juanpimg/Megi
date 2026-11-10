@@ -6,6 +6,18 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Megi Engine — Phase 5 network bootstrap: WHATWG URL subset, HTTP/1.1 client, file:// loader, MIME sniffing and an in-memory resource loader (no TLS yet)"
+description = "Megi Engine — Phase 5 network stack: WHATWG URL subset, HTTP/1.1 client with TLS 1.2/1.3 (rustls), HTTP cache, data: URLs, file:// loader, MIME sniffing and a resource loader"
 
 [dependencies]
+rustls = { workspace = true, optional = true }
+webpki-roots = { workspace = true, optional = true }
+
+[features]
+default = ["tls"]
+# TLS 1.2/1.3 transport for https: (rustls + webpki-roots Mozilla root store).
+tls = ["dep:rustls", "dep:webpki-roots"]
+
+[dev-dependencies]
+rcgen = { workspace = true }
+# TLS tests build client/server configs directly; always available to dev targets.
+rustls = { workspace = true }

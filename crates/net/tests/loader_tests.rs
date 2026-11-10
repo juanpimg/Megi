@@ -121,6 +121,7 @@ fn loader_rejects_remote_file_hosts() {
     );
 }
 
+#[cfg(not(feature = "tls"))]
 #[test]
 fn loader_reports_tls_unsupported_for_https() {
     let url = Url::parse("https://example.com/").expect("https URL parses");

@@ -1,9 +1,9 @@
-//! Minimal blocking HTTP/1.1 client (`GET`) on top of [`std::net::TcpStream`].
+//! Minimal blocking HTTP/1.1 client (`GET`) on top of [`std::net::TcpStream`], with
+//! TLS 1.2/1.3 for `https:` via `rustls` (feature `tls`, enabled by default).
 //!
-//! This is the Phase 5 network bootstrap: no external crates, no TLS, no HTTP/2. It
-//! covers the subset needed to load documents and subresources from plain-HTTP servers
-//! (and is exercised entirely offline by the crate tests, which spin up their own
-//! `127.0.0.1:0` listener).
+//! It covers the subset needed to load documents and subresources from HTTP(S) servers
+//! and is exercised entirely offline by the crate tests, which spin up their own
+//! `127.0.0.1:0` listeners (plain TCP and TLS).
 //!
 //! Features:
 //!
@@ -18,13 +18,33 @@
 //!   exhausting memory ([`FetchOptions::max_header_bytes`],
 //!   [`FetchOptions::max_response_bytes`]).
 //!
-//! Limitations: `https` returns [`FetchError::TlsUnsupported`] until the TLS stack is
-//! integrated; cookies, compression, proxies, HTTP/2 and redirect method rewriting beyond
-//! `GET` (the client only issues `GET`) are out of scope for this bootstrap.
+//! ## TLS (feature `tls`, on by default)
+//!
+//! `https:` performs a `rustls` client handshake over the connected `TcpStream`
+//! (`rustls::StreamOwned`), sending **SNI** for the URL host, validating the server
+//! certificate chain and hostname against the built-in **webpki-roots** (Mozilla) trust
+//! anchors. Failures surface as [`FetchError::Tls`]. A custom root store / client config
+//! can be injected through [`FetchOptions::tls_config`] for tests or enterprise CAs.
+//! With `--no-default-features` the `tls` feature is off and `https:` returns
+//! [`FetchError::TlsUnsupported`].
+//!
+//! ## Deliberate limitations
+//!
+//! - The client only issues `GET`; cookies, `Referer`, CORS preflight, proxies, HTTP/2,
+//!   connection reuse and redirect method rewriting are out of scope.
+//! - **No compression**: no `Accept-Encoding` request header is sent, so servers must
+//!   send identity bodies; a `Content-Encoding: gzip` response (which a server should
+//!   not send without negotiation) is returned **raw/undecoded** and the header is
+//!   preserved on [`Response::headers`] for callers to interpret.
+//! - Read/write timeouts and header/body caps apply to TLS streams exactly as to plain
+//!   TCP, because `rustls::StreamOwned` reads/writes through the same `TcpStream`.
 
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::time::Duration;
+
+#[cfg(feature = "tls")]
+use std::sync::Arc;
 
 use crate::error::FetchError;
 use crate::url::{Scheme, Url};
@@ -61,6 +81,13 @@ pub struct FetchOptions {
     pub max_header_bytes: usize,
     /// `User-Agent` request header value.
     pub user_agent: String,
+    /// Custom TLS client configuration (root store, client auth, protocol versions).
+    ///
+    /// `None` (the default) uses the built-in webpki-roots (Mozilla) trust anchors and
+    /// the `ring` crypto provider. Tests and applications that need a private CA inject
+    /// a `rustls::ClientConfig` here.
+    #[cfg(feature = "tls")]
+    pub tls_config: Option<Arc<rustls::ClientConfig>>,
 }
 
 impl Default for FetchOptions {
@@ -72,6 +99,8 @@ impl Default for FetchOptions {
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
             max_header_bytes: DEFAULT_MAX_HEADER_BYTES,
             user_agent: DEFAULT_USER_AGENT.to_owned(),
+            #[cfg(feature = "tls")]
+            tls_config: None,
         }
     }
 }
@@ -114,15 +143,30 @@ impl Response {
     }
 }
 
-/// Fetches `url` over HTTP/1.1, following redirects.
+/// Fetches `url` over HTTP/1.1 (or HTTPS with the `tls` feature), following redirects.
 ///
-/// Only `http:` is supported here (`https:` needs TLS, `file:` is handled by
-/// [`crate::file::load_file_url`] / [`crate::ResourceLoader`]).
+/// `file:` URLs are handled by [`crate::file::load_file_url`]; `data:` URLs by
+/// [`crate::data::decode_data_url`] (both also exposed through
+/// [`crate::ResourceLoader`]).
 pub fn fetch(url: &Url, options: &FetchOptions) -> Result<Response, FetchError> {
+    fetch_with_headers(url, options, &[])
+}
+
+/// Like [`fetch`], but adds extra request headers to every hop (e.g. conditional
+/// revalidation headers `If-None-Match` / `If-Modified-Since` sent by the HTTP cache).
+///
+/// Caller headers are appended after the mandatory ones; duplicate names are allowed
+/// (the server decides how to interpret them). `Host`, `Connection` and `User-Agent`
+/// are managed by the client and should not be supplied here.
+pub fn fetch_with_headers(
+    url: &Url,
+    options: &FetchOptions,
+    extra_headers: &[(&str, &str)],
+) -> Result<Response, FetchError> {
     let mut current = url.clone();
     let mut redirects = 0usize;
     loop {
-        let raw = fetch_once(&current, options)?;
+        let raw = fetch_once(&current, options, extra_headers)?;
         if !is_redirect(raw.status) {
             return Ok(Response {
                 status: raw.status,
@@ -161,16 +205,19 @@ fn is_redirect(status: u16) -> bool {
     matches!(status, 301 | 302 | 303 | 307 | 308)
 }
 
-fn fetch_once(url: &Url, options: &FetchOptions) -> Result<RawResponse, FetchError> {
-    match url.scheme() {
-        Scheme::Http => {}
-        Scheme::Https => return Err(FetchError::TlsUnsupported),
-        Scheme::File => return Err(FetchError::UnsupportedScheme("file".to_owned())),
-    }
+fn fetch_once(
+    url: &Url,
+    options: &FetchOptions,
+    extra_headers: &[(&str, &str)],
+) -> Result<RawResponse, FetchError> {
     let host = url.host_for_dns();
-    let port = url
-        .port_or_default()
-        .ok_or_else(|| FetchError::UnsupportedScheme(url.scheme().as_str().to_owned()))?;
+    let port = match url.scheme() {
+        Scheme::Http | Scheme::Https => url
+            .port_or_default()
+            .ok_or_else(|| FetchError::UnsupportedScheme(url.scheme().as_str().to_owned()))?,
+        Scheme::File => return Err(FetchError::UnsupportedScheme("file".to_owned())),
+        Scheme::Data => return Err(FetchError::UnsupportedScheme("data".to_owned())),
+    };
     if host.is_empty() {
         return Err(FetchError::Dns(url.host().to_owned()));
     }
@@ -183,42 +230,56 @@ fn fetch_once(url: &Url, options: &FetchOptions) -> Result<RawResponse, FetchErr
     }
 
     let mut last_error: Option<io::Error> = None;
-    let mut stream = None;
+    let mut tcp_stream = None;
     for address in &addresses {
         match TcpStream::connect_timeout(address, options.connect_timeout) {
             Ok(connected) => {
-                stream = Some(connected);
+                tcp_stream = Some(connected);
                 break;
             }
             Err(error) => last_error = Some(error),
         }
     }
-    let stream = stream.ok_or_else(|| {
+    let tcp_stream = tcp_stream.ok_or_else(|| {
         FetchError::Connect(last_error.unwrap_or_else(|| {
             io::Error::new(io::ErrorKind::AddrNotAvailable, "no address to connect to")
         }))
     })?;
-    stream
+    tcp_stream
         .set_read_timeout(Some(options.read_timeout))
         .map_err(FetchError::Io)?;
-    stream
+    tcp_stream
         .set_write_timeout(Some(options.read_timeout))
         .map_err(FetchError::Io)?;
+
+    let mut stream = match url.scheme() {
+        Scheme::Http => Transport::Plain(tcp_stream),
+        Scheme::Https => connect_tls(host, tcp_stream, options)?,
+        Scheme::File | Scheme::Data => {
+            return Err(FetchError::UnsupportedScheme(
+                url.scheme().as_str().to_owned(),
+            ));
+        }
+    };
 
     let host_header = match url.port() {
         Some(port) => format!("{}:{port}", url.host()),
         None => url.host().to_owned(),
     };
-    let request = format!(
-        "GET {} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\nConnection: close\r\n\r\n",
+    let mut request = format!(
+        "GET {} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\nConnection: close\r\n",
         url.request_target(),
         options.user_agent,
     );
-    let mut stream = stream;
-    stream
-        .write_all(request.as_bytes())
-        .map_err(FetchError::Io)?;
-    stream.flush().map_err(FetchError::Io)?;
+    for (name, value) in extra_headers {
+        request.push_str(name);
+        request.push_str(": ");
+        request.push_str(value);
+        request.push_str("\r\n");
+    }
+    request.push_str("\r\n");
+    stream.write_all(request.as_bytes()).map_err(map_io_error)?;
+    stream.flush().map_err(map_io_error)?;
 
     let mut reader = ConnReader::new(stream);
     let head = reader.read_head(options.max_header_bytes)?;
@@ -230,6 +291,98 @@ fn fetch_once(url: &Url, options: &FetchOptions) -> Result<RawResponse, FetchErr
         headers,
         body,
     })
+}
+
+/// Establishes the TLS layer over an already-connected TCP stream.
+#[cfg(feature = "tls")]
+fn connect_tls(
+    host: &str,
+    tcp_stream: TcpStream,
+    options: &FetchOptions,
+) -> Result<Transport, FetchError> {
+    let config = match &options.tls_config {
+        Some(config) => Arc::clone(config),
+        None => default_tls_config()?,
+    };
+    let server_name = rustls::pki_types::ServerName::try_from(host.to_owned())
+        .map_err(|error| FetchError::Tls(format!("invalid TLS server name `{host}`: {error}")))?;
+    let connection = rustls::ClientConnection::new(config, server_name)
+        .map_err(|error| FetchError::Tls(format!("cannot create TLS client: {error}")))?;
+    Ok(Transport::Tls(Box::new(rustls::StreamOwned::new(
+        connection, tcp_stream,
+    ))))
+}
+
+/// Without the `tls` feature, `https:` URLs fail with a typed, actionable error.
+#[cfg(not(feature = "tls"))]
+fn connect_tls(
+    _host: &str,
+    _tcp_stream: TcpStream,
+    _options: &FetchOptions,
+) -> Result<Transport, FetchError> {
+    Err(FetchError::TlsUnsupported)
+}
+
+/// Built-in `rustls` client configuration: webpki-roots (Mozilla) trust anchors and the
+/// `ring` crypto provider with safe default protocol versions (TLS 1.2 + TLS 1.3).
+#[cfg(feature = "tls")]
+fn default_tls_config() -> Result<Arc<rustls::ClientConfig>, FetchError> {
+    static CACHE: std::sync::OnceLock<Option<Arc<rustls::ClientConfig>>> =
+        std::sync::OnceLock::new();
+    CACHE
+        .get_or_init(|| build_default_tls_config().ok())
+        .clone()
+        .ok_or_else(|| {
+            FetchError::Tls("cannot initialize the default rustls client configuration".to_owned())
+        })
+}
+
+#[cfg(feature = "tls")]
+fn build_default_tls_config() -> Result<Arc<rustls::ClientConfig>, rustls::Error> {
+    use rustls::RootCertStore;
+    let mut roots = RootCertStore::empty();
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let config = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()?
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    Ok(Arc::new(config))
+}
+
+/// Byte-stream transport for one HTTP request: plain TCP or a rustls session.
+enum Transport {
+    Plain(TcpStream),
+    #[cfg(feature = "tls")]
+    Tls(Box<rustls::StreamOwned<rustls::ClientConnection, TcpStream>>),
+}
+
+impl Read for Transport {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::Plain(stream) => stream.read(buffer),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.read(buffer),
+        }
+    }
+}
+
+impl Write for Transport {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        match self {
+            Self::Plain(stream) => stream.write(buffer),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.write(buffer),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            Self::Plain(stream) => stream.flush(),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.flush(),
+        }
+    }
 }
 
 /// Reads and parses the status line and header fields.
@@ -349,13 +502,13 @@ fn read_body(
 // ---------------------------------------------------------------------------
 
 struct ConnReader {
-    stream: TcpStream,
+    stream: Transport,
     buffer: Vec<u8>,
     position: usize,
 }
 
 impl ConnReader {
-    fn new(stream: TcpStream) -> Self {
+    fn new(stream: Transport) -> Self {
         Self {
             stream,
             buffer: Vec::new(),
@@ -521,6 +674,17 @@ impl ConnReader {
 fn map_io_error(error: io::Error) -> FetchError {
     match error.kind() {
         io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock => FetchError::Timeout,
-        _ => FetchError::Io(error),
+        _ => {
+            // `rustls::StreamOwned` surfaces handshake/record-layer failures as
+            // `io::Error` wrapping `rustls::Error`: classify those as TLS errors so
+            // callers can distinguish certificate problems from plain socket I/O.
+            #[cfg(feature = "tls")]
+            if let Some(source) = error.get_ref()
+                && source.downcast_ref::<rustls::Error>().is_some()
+            {
+                return FetchError::Tls(error.to_string());
+            }
+            FetchError::Io(error)
+        }
     }
 }

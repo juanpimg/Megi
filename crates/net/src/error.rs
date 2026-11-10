@@ -50,8 +50,17 @@ impl std::error::Error for UrlError {}
 pub enum FetchError {
     /// The URL scheme cannot be fetched by this crate (`ftp:`, `blob:`, ...).
     UnsupportedScheme(String),
-    /// The URL is `https:` but this build has no TLS stack yet (Phase 5 next step).
+    /// The URL is `https:` but this crate was built without the `tls` feature.
+    ///
+    /// The default feature set enables TLS; this variant is only produced by
+    /// `cargo build --no-default-features`.
     TlsUnsupported,
+    /// The TLS handshake failed: certificate validation (unknown issuer, expired,
+    /// hostname mismatch), protocol negotiation or record-layer I/O.
+    ///
+    /// The payload is a human-readable reason produced by `rustls`; it is for
+    /// diagnostics, not for programmatic matching.
+    Tls(String),
     /// DNS resolution of the host failed.
     Dns(String),
     /// The TCP connection could not be established (all resolved addresses failed).
@@ -82,6 +91,11 @@ pub enum FetchError {
     FileIo(io::Error),
     /// A `file:` URL used a non-local host (only `file:///...` is supported).
     UnsupportedFileHost(String),
+    /// A `data:` URL is malformed (bad mediatype, invalid base64, ...).
+    InvalidDataUrl(String),
+    /// A `304 Not Modified` response arrived without a cached representation to
+    /// revalidate (e.g. the cache was cleared, or the server misbehaves).
+    UnconditionalNotModified,
 }
 
 impl fmt::Display for FetchError {
@@ -91,9 +105,10 @@ impl fmt::Display for FetchError {
             Self::TlsUnsupported => {
                 write!(
                     f,
-                    "https is not supported yet (TLS stack lands in the next Phase 5 step)"
+                    "https requires the `tls` feature (build with --features tls)"
                 )
             }
+            Self::Tls(reason) => write!(f, "TLS failure: {reason}"),
             Self::Dns(host) => write!(f, "DNS resolution failed for `{host}`"),
             Self::Connect(err) => write!(f, "TCP connect failed: {err}"),
             Self::Io(err) => write!(f, "HTTP I/O error: {err}"),
@@ -114,6 +129,10 @@ impl fmt::Display for FetchError {
             Self::FileIo(err) => write!(f, "file I/O error: {err}"),
             Self::UnsupportedFileHost(host) => {
                 write!(f, "file: URLs can only name the local host, got `{host}`")
+            }
+            Self::InvalidDataUrl(reason) => write!(f, "invalid data: URL: {reason}"),
+            Self::UnconditionalNotModified => {
+                write!(f, "received 304 Not Modified without a cached response")
             }
         }
     }
