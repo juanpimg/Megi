@@ -16,6 +16,14 @@
 //! * captions (`caption-side: top|bottom`, §17.4);
 //! * `colspan`/`rowspan` HTML attributes (stored on the layout box).
 //!
+//! ## Box tree model exposed to paint
+//!
+//! The processed tree keeps the CSS table structure in `LayoutBox.children`, e.g.
+//! `Table > TableRowGroup > TableRow > TableCell > LineBox > TextNode` (with optional
+//! captions and anonymous rows/cells). Cell inline content is therefore reachable by
+//! any tree walker (paint visits it to draw text runs), and the text/line geometry is
+//! relative to the cell content box (borders and padding already applied).
+//!
 //! ## Border collapse conflict resolution (§17.6.2)
 //!
 //! For every cell side the candidates are the cell's own border, the adjacent cell's
