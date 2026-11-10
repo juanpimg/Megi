@@ -195,6 +195,53 @@ impl Namespace {
     }
 }
 
+/// Error returned by the browser-style DOM mutation helpers
+/// ([`Document::remove_child`], [`Document::insert_before_child`],
+/// [`Document::replace_all_children`], [`Document::set_text_content`], ...).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DomError {
+    /// The handle does not belong to this document (out of range, stale or foreign).
+    UnknownNode(NodeId),
+    /// The handle does not address an [`NodeKind::Element`].
+    NotAnElement(NodeId),
+    /// The node is not a child of the given parent, so DOM-style removal is impossible.
+    NotAChild { parent: NodeId, child: NodeId },
+    /// The mutation would break the tree hierarchy (self-insertion or ancestor cycle).
+    HierarchyRequest { parent: NodeId, child: NodeId },
+    /// The node kind cannot contain children (`Text`, `Comment`, `Doctype`,
+    /// `ProcessingInstruction`).
+    CannotHaveChildren(NodeId),
+    /// The node is detached, so an operation that needs its parent (e.g. `outerHTML`
+    /// replacement) cannot proceed.
+    DetachedNode(NodeId),
+}
+
+impl fmt::Display for DomError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownNode(node) => {
+                write!(f, "node {node:?} does not belong to this document")
+            }
+            Self::NotAnElement(node) => write!(f, "node {node:?} is not an element"),
+            Self::NotAChild { parent, child } => {
+                write!(f, "node {child:?} is not a child of {parent:?}")
+            }
+            Self::HierarchyRequest { parent, child } => write!(
+                f,
+                "cannot move node {child:?} under {parent:?}: hierarchy request error"
+            ),
+            Self::CannotHaveChildren(node) => {
+                write!(f, "node {node:?} cannot have children")
+            }
+            Self::DetachedNode(node) => {
+                write!(f, "node {node:?} is detached and has no parent")
+            }
+        }
+    }
+}
+
+impl std::error::Error for DomError {}
+
 /// An attribute on an [`ElementData`] node.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Attribute {
@@ -252,6 +299,53 @@ impl ElementData {
             attributes: Vec::new(),
             template_contents: None,
         }
+    }
+
+    /// Returns the DOM `tagName`: uppercased local name for HTML elements, unchanged for
+    /// foreign (SVG/MathML) elements, matching WHATWG DOM §4.4 "element tag name".
+    pub fn tag_name(&self) -> String {
+        if self.namespace == Namespace::Html {
+            self.local_name.to_ascii_uppercase()
+        } else {
+            self.local_name.clone()
+        }
+    }
+
+    /// Returns `true` when an attribute with `name` is present.
+    ///
+    /// HTML elements compare names ASCII case-insensitively (DOM behaviour); foreign
+    /// elements compare exactly.
+    pub fn has_attribute(&self, name: &str) -> bool {
+        self.attribute_position(name).is_some()
+    }
+
+    /// Removes the attribute named `name`, returning its previous value (DOM
+    /// `removeAttribute` semantics). HTML elements compare names ASCII
+    /// case-insensitively; foreign elements compare exactly.
+    pub fn remove_attribute(&mut self, name: &str) -> Option<String> {
+        let position = self.attribute_position(name)?;
+        Some(self.attributes.remove(position).value)
+    }
+
+    /// Returns the names of all attributes, in insertion order.
+    pub fn attribute_names(&self) -> Vec<String> {
+        self.attributes
+            .iter()
+            .map(|attribute| attribute.local_name.clone())
+            .collect()
+    }
+
+    /// Finds the position of the attribute called `name` (see [`ElementData::has_attribute`]).
+    fn attribute_position(&self, name: &str) -> Option<usize> {
+        let html = self.namespace == Namespace::Html;
+        self.attributes.iter().position(|attribute| {
+            attribute.namespace == Namespace::None
+                && if html {
+                    attribute.local_name.eq_ignore_ascii_case(name)
+                } else {
+                    attribute.local_name == name
+                }
+        })
     }
 
     /// Looks up an attribute value by local name (in `Namespace::None`).
@@ -1358,6 +1452,462 @@ impl Document {
     }
 }
 
+/// Browser-style DOM API: document/element lookup, factories, attributes and tree helpers.
+///
+/// This is the pragmatic subset needed to drive the engine from tests today and from the
+/// future JavaScript bindings (Phase 6). It is deliberately DOM-flavoured but simplified:
+///
+/// - removals (`remove_child`, `replace_all_children`, `set_text_content`) **detach** nodes
+///   and keep them alive (their handles stay valid, matching DOM semantics where a removed
+///   node is still usable). Only the explicit [`Document::remove_node`] /
+///   [`Document::remove_subtree`] calls return slots to the free list; use them when the
+///   caller knows the subtree is garbage, otherwise the arena grows.
+/// - lookups walk the live tree iteratively (`getElementById`, tag/class queries) and skip
+///   inert `<template>` contents, which are not part of the document tree.
+/// - `textContent` is read/written on the node's child nodes; for `<template>` elements the
+///   child nodes live in the inert contents fragment, so these helpers route there (an
+///   engine convenience, documented deviation from the DOM `textContent == ""` quirk).
+///
+/// Not implemented here (future phases): events/`addEventListener`, CSSOM/`style`,
+/// `querySelector`/`matches` (needs the `css` crate), `Range`, mutation observers and the
+/// JS bindings themselves.
+impl Document {
+    /// Returns the first element child of the document (the `<html>` element for parsed
+    /// documents), or `None` when the document has no element child.
+    pub fn document_element(&self) -> Option<NodeId> {
+        self.children(self.root).find(|&child| {
+            self.try_node(child)
+                .is_some_and(|node| node.as_element().is_some())
+        })
+    }
+
+    /// Returns the document's `<head>` element (HTML namespace), if present.
+    pub fn head(&self) -> Option<NodeId> {
+        self.document_element()
+            .and_then(|html| self.first_html_child(html, "head"))
+    }
+
+    /// Returns the document's `<body>` element (HTML namespace), if present.
+    pub fn body(&self) -> Option<NodeId> {
+        self.document_element()
+            .and_then(|html| self.first_html_child(html, "body"))
+    }
+
+    /// First child of `parent` that is an HTML element with `local_name`.
+    fn first_html_child(&self, parent: NodeId, local_name: &str) -> Option<NodeId> {
+        self.children(parent).find(|&child| {
+            self.try_node(child).is_some_and(|node| {
+                node.as_element().is_some_and(|element| {
+                    element.namespace == Namespace::Html && element.local_name == local_name
+                })
+            })
+        })
+    }
+
+    /// Returns the first element in document order whose `id` attribute equals `id`.
+    ///
+    /// Matching is exact (DOM `getElementById`). Inert `<template>` contents are not
+    /// searched. Cost: `O(live nodes)`.
+    pub fn get_element_by_id(&self, id: &str) -> Option<NodeId> {
+        self.descendants(self.root).find(|&node_id| {
+            self.try_node(node_id).is_some_and(|node| {
+                node.as_element()
+                    .and_then(|element| element.get_attribute("id"))
+                    .is_some_and(|value| value == id)
+            })
+        })
+    }
+
+    /// Returns all elements whose `tagName` matches `tag_name` in document order.
+    ///
+    /// HTML elements match ASCII case-insensitively (DOM behaviour); foreign elements match
+    /// exactly. Cost: `O(live nodes)`.
+    pub fn get_elements_by_tag_name(&self, tag_name: &str) -> Vec<NodeId> {
+        self.descendants(self.root)
+            .filter(|&node_id| {
+                self.try_node(node_id).is_some_and(|node| {
+                    node.as_element().is_some_and(|element| {
+                        if element.namespace == Namespace::Html {
+                            element.local_name.eq_ignore_ascii_case(tag_name)
+                        } else {
+                            element.local_name == tag_name
+                        }
+                    })
+                })
+            })
+            .collect()
+    }
+
+    /// Returns all HTML elements whose `class` attribute contains every whitespace-separated
+    /// class in `class_names`, in document order (DOM `getElementsByClassName`).
+    ///
+    /// An empty query matches nothing. Cost: `O(live nodes * classes)`.
+    pub fn get_elements_by_class_name(&self, class_names: &str) -> Vec<NodeId> {
+        let wanted: Vec<&str> = class_names.split_ascii_whitespace().collect();
+        if wanted.is_empty() {
+            return Vec::new();
+        }
+        self.descendants(self.root)
+            .filter(|&node_id| {
+                self.try_node(node_id).is_some_and(|node| {
+                    node.as_element()
+                        .and_then(|element| element.get_attribute("class"))
+                        .is_some_and(|classes| {
+                            let available: Vec<&str> = classes.split_ascii_whitespace().collect();
+                            wanted.iter().all(|class| available.contains(class))
+                        })
+                })
+            })
+            .collect()
+    }
+
+    /// Creates a detached [`NodeKind::Text`] node (DOM `createTextNode`).
+    pub fn create_text_node(&mut self, data: &str) -> NodeId {
+        self.create_node(NodeKind::Text(data.to_owned()))
+    }
+
+    /// Creates a detached [`NodeKind::Comment`] node (DOM `createComment`).
+    pub fn create_comment(&mut self, data: &str) -> NodeId {
+        self.create_node(NodeKind::Comment(data.to_owned()))
+    }
+
+    /// Creates a detached [`NodeKind::DocumentFragment`] node (DOM `createDocumentFragment`).
+    pub fn create_document_fragment(&mut self) -> NodeId {
+        self.create_node(NodeKind::DocumentFragment)
+    }
+
+    /// Returns an iterator over the direct child [`NodeId`]s of `parent_id` in document
+    /// order (alias of [`Document::children`], named for DOM familiarity).
+    pub fn children_ids(&self, parent_id: NodeId) -> ChildrenIter<'_> {
+        self.children(parent_id)
+    }
+
+    /// Returns the parent of `node_id` only when that parent is an element
+    /// (DOM `parentElement`): `None` for detached nodes and for nodes whose parent is the
+    /// `Document` or a `DocumentFragment`.
+    pub fn parent_element(&self, node_id: NodeId) -> Option<NodeId> {
+        let parent = self.try_node(node_id)?.parent?;
+        self.try_node(parent)
+            .is_some_and(|node| node.as_element().is_some())
+            .then_some(parent)
+    }
+
+    /// Returns the concatenated text of all descendant text nodes (DOM `textContent`).
+    ///
+    /// Comments, processing instructions, doctypes and inert `<template>` contents are
+    /// excluded; a `Text` node returns its own data. Unknown handles return an empty
+    /// string. Cost: `O(subtree)` with an explicit heap stack (safe on deep trees).
+    pub fn text_content(&self, node_id: NodeId) -> String {
+        let Some(node) = self.try_node(node_id) else {
+            return String::new();
+        };
+        if let Some(text) = node.as_text() {
+            return text.to_owned();
+        }
+        if matches!(node.kind, NodeKind::Document) {
+            return String::new();
+        }
+        // For HTML <template> the content lives in the inert contents fragment.
+        let target = self.template_contents_target(node_id);
+        if target != node_id {
+            return self.text_content(target);
+        }
+        let mut text = String::new();
+        let mut pending: Vec<NodeId> = Vec::new();
+        let mut child = node.first_child;
+        while let Some(child_id) = child {
+            pending.push(child_id);
+            child = self
+                .try_node(child_id)
+                .and_then(|child_node| child_node.next_sibling);
+        }
+        // Reverse: repairing order of siblings for the stack below.
+        // (Children were pushed in order; push them reversed instead.)
+        pending.reverse();
+        while let Some(current) = pending.pop() {
+            let Some(current_node) = self.try_node(current) else {
+                continue;
+            };
+            match &current_node.kind {
+                NodeKind::Text(data) => text.push_str(data),
+                NodeKind::Element(_) | NodeKind::DocumentFragment => {
+                    let mut children = Vec::new();
+                    let mut child = current_node.first_child;
+                    while let Some(child_id) = child {
+                        children.push(child_id);
+                        child = self
+                            .try_node(child_id)
+                            .and_then(|child_node| child_node.next_sibling);
+                    }
+                    for child_id in children.into_iter().rev() {
+                        pending.push(child_id);
+                    }
+                }
+                NodeKind::Comment(_)
+                | NodeKind::ProcessingInstruction { .. }
+                | NodeKind::Doctype { .. }
+                | NodeKind::Document => {}
+            }
+        }
+        text
+    }
+
+    /// Replaces the child nodes of `node_id` with a single text node (DOM `textContent`
+    /// setter). The previous children are detached and kept alive (callers can free them
+    /// explicitly with [`Document::remove_subtree`]); `Text`/`Comment` nodes update their
+    /// data in place.
+    ///
+    /// For HTML `<template>` elements the operation applies to the inert contents fragment.
+    pub fn set_text_content(&mut self, node_id: NodeId, text: &str) -> Result<(), DomError> {
+        let Some(node) = self.try_node(node_id) else {
+            return Err(DomError::UnknownNode(node_id));
+        };
+        match &node.kind {
+            NodeKind::Text(_) | NodeKind::Comment(_) => {
+                match &mut self.node_mut(node_id).kind {
+                    NodeKind::Text(data) | NodeKind::Comment(data) => *data = text.to_owned(),
+                    _ => unreachable!("kind checked above"),
+                }
+                Ok(())
+            }
+            NodeKind::Element(_) | NodeKind::DocumentFragment => {
+                let target = self.template_contents_target(node_id);
+                let old_children: Vec<NodeId> = self.children_ids(target).collect();
+                for child in old_children {
+                    self.detach(child);
+                }
+                if !text.is_empty() {
+                    let text_id = self.create_text_node(text);
+                    self.append_child(target, text_id);
+                }
+                Ok(())
+            }
+            NodeKind::Document
+            | NodeKind::Doctype { .. }
+            | NodeKind::ProcessingInstruction { .. } => Err(DomError::CannotHaveChildren(node_id)),
+        }
+    }
+
+    /// Returns the node whose children represent `node_id`'s content: its inert contents
+    /// fragment for HTML `<template>` elements, or the node itself otherwise.
+    fn template_contents_target(&self, node_id: NodeId) -> NodeId {
+        self.try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| {
+                (element.namespace == Namespace::Html
+                    && element.local_name == "template"
+                    && element.template_contents.is_some())
+                .then_some(element.template_contents)
+                .flatten()
+            })
+            .unwrap_or(node_id)
+    }
+
+    /// Removes `child_id` from `parent_id` and returns it (DOM `removeChild`).
+    ///
+    /// The child is **detached, not freed**: its handle stays valid so it can be
+    /// re-inserted elsewhere. Fails with [`DomError::NotAChild`] when `child_id` is not a
+    /// child of `parent_id`.
+    pub fn remove_child(
+        &mut self,
+        parent_id: NodeId,
+        child_id: NodeId,
+    ) -> Result<NodeId, DomError> {
+        if self.slot_of(parent_id).is_none() {
+            return Err(DomError::UnknownNode(parent_id));
+        }
+        if self.slot_of(child_id).is_none() {
+            return Err(DomError::UnknownNode(child_id));
+        }
+        if self.node(child_id).parent != Some(parent_id) {
+            return Err(DomError::NotAChild {
+                parent: parent_id,
+                child: child_id,
+            });
+        }
+        self.detach(child_id);
+        Ok(child_id)
+    }
+
+    /// Inserts `new_child_id` under `parent_id` before `reference` (or appends it when
+    /// `reference` is `None`), moving it from its previous parent if attached
+    /// (DOM `insertBefore` / `appendChild`).
+    ///
+    /// Fails with [`DomError::NotAChild`] when `reference` is not a child of `parent_id`,
+    /// and [`DomError::HierarchyRequest`] for self/ancestor insertions.
+    pub fn insert_before_child(
+        &mut self,
+        parent_id: NodeId,
+        new_child_id: NodeId,
+        reference: Option<NodeId>,
+    ) -> Result<NodeId, DomError> {
+        if self.slot_of(parent_id).is_none() {
+            return Err(DomError::UnknownNode(parent_id));
+        }
+        if self.slot_of(new_child_id).is_none() {
+            return Err(DomError::UnknownNode(new_child_id));
+        }
+        if !self.can_have_children(parent_id) {
+            return Err(DomError::CannotHaveChildren(parent_id));
+        }
+        let inserted = match reference {
+            Some(reference_id) => {
+                if self.slot_of(reference_id).is_none() {
+                    return Err(DomError::UnknownNode(reference_id));
+                }
+                if self.node(reference_id).parent != Some(parent_id) {
+                    return Err(DomError::NotAChild {
+                        parent: parent_id,
+                        child: reference_id,
+                    });
+                }
+                self.insert_before(reference_id, new_child_id)
+            }
+            None => self.append_child(parent_id, new_child_id),
+        };
+        if !inserted {
+            return Err(DomError::HierarchyRequest {
+                parent: parent_id,
+                child: new_child_id,
+            });
+        }
+        Ok(new_child_id)
+    }
+
+    /// Appends a text node to `parent_id`, coalescing with a trailing text node
+    /// (DOM `appendChild(createTextNode(text))` plus the WHATWG HTML text-node coalescing).
+    ///
+    /// Returns the text node handle (existing or newly created).
+    pub fn append_text_node(&mut self, parent_id: NodeId, text: &str) -> Result<NodeId, DomError> {
+        if self.slot_of(parent_id).is_none() {
+            return Err(DomError::UnknownNode(parent_id));
+        }
+        if !self.can_have_children(parent_id) {
+            return Err(DomError::CannotHaveChildren(parent_id));
+        }
+        Ok(self.append_text(parent_id, text))
+    }
+
+    /// Replaces every child of `parent_id` with `new_children`, in order
+    /// (DOM `replaceChildren`).
+    ///
+    /// Previous children are detached and kept alive; the new children are moved from
+    /// wherever they were attached. On a hierarchy error the tree is left in a partially
+    /// updated state (documented simplification; validate with
+    /// [`Document::validate_invariants`] in tests).
+    pub fn replace_all_children(
+        &mut self,
+        parent_id: NodeId,
+        new_children: &[NodeId],
+    ) -> Result<(), DomError> {
+        if self.slot_of(parent_id).is_none() {
+            return Err(DomError::UnknownNode(parent_id));
+        }
+        if !self.can_have_children(parent_id) {
+            return Err(DomError::CannotHaveChildren(parent_id));
+        }
+        let old_children: Vec<NodeId> = self.children_ids(parent_id).collect();
+        for child in old_children {
+            self.detach(child);
+        }
+        for &child in new_children {
+            if self.slot_of(child).is_none() {
+                return Err(DomError::UnknownNode(child));
+            }
+            if !self.append_child(parent_id, child) {
+                return Err(DomError::HierarchyRequest {
+                    parent: parent_id,
+                    child,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Returns `true` when `node_id` is a node kind that can hold children
+    /// (`Element` or `DocumentFragment`).
+    fn can_have_children(&self, node_id: NodeId) -> bool {
+        self.try_node(node_id).is_some_and(|node| {
+            matches!(node.kind, NodeKind::Element(_) | NodeKind::DocumentFragment)
+        })
+    }
+
+    /// Deep-clones `node_id` from `source` into this document and returns the new root
+    /// handle (DOM-adjacent cross-arena import; used by fragment-based APIs).
+    ///
+    /// `<template>` elements always get a fresh contents fragment in this arena (with its
+    /// children cloned deeply, matching DOM cloning steps), even when `deep` is false.
+    /// Cost: `O(imported nodes)` time and one `HashMap` entry per imported node.
+    pub fn clone_node_into(
+        &mut self,
+        source: &Document,
+        node_id: NodeId,
+        deep: bool,
+    ) -> Result<NodeId, DomError> {
+        if source.slot_of(node_id).is_none() {
+            return Err(DomError::UnknownNode(node_id));
+        }
+        let root = self.import_shallow(source, node_id);
+        let mut stack: Vec<(NodeId, NodeId, bool)> = Vec::new();
+        if let Some((src_contents, cloned_contents)) =
+            self.import_template_pair(source, node_id, root)
+        {
+            stack.push((src_contents, cloned_contents, true));
+        }
+        if deep {
+            stack.push((node_id, root, true));
+        }
+        while let Some((source_id, cloned_id, descend)) = stack.pop() {
+            if !descend {
+                continue;
+            }
+            let mut child = source.node(source_id).first_child;
+            while let Some(child_id) = child {
+                let next = source.try_node(child_id).and_then(|node| node.next_sibling);
+                let cloned = self.import_shallow(source, child_id);
+                self.append_child(cloned_id, cloned);
+                if let Some((src_contents, cloned_contents)) =
+                    self.import_template_pair(source, child_id, cloned)
+                {
+                    stack.push((src_contents, cloned_contents, true));
+                }
+                stack.push((child_id, cloned, true));
+                child = next;
+            }
+        }
+        Ok(root)
+    }
+
+    /// Clones the shallow payload of `source_id` into this arena (attributes, kinds and
+    /// new template-contents fragments); children are cloned by the caller.
+    fn import_shallow(&mut self, source: &Document, source_id: NodeId) -> NodeId {
+        let source_node = source.node(source_id);
+        let cloned = self.create_node(source_node.kind.clone());
+        if let Some(element) = self.try_node(cloned).and_then(|node| node.as_element())
+            && element.namespace == Namespace::Html
+            && element.local_name == "template"
+        {
+            let fragment = self.create_document_fragment();
+            if let Some(element) = self.node_mut(cloned).as_element_mut() {
+                element.template_contents = Some(fragment);
+            }
+        }
+        cloned
+    }
+
+    /// Returns the `(source fragment, clone fragment)` pair for a cloned `<template>`.
+    fn import_template_pair(
+        &self,
+        source: &Document,
+        source_id: NodeId,
+        cloned_id: NodeId,
+    ) -> Option<(NodeId, NodeId)> {
+        let source_contents = source.node(source_id).as_element()?.template_contents?;
+        let cloned_contents = self.node(cloned_id).as_element()?.template_contents?;
+        Some((source_contents, cloned_contents))
+    }
+}
+
 /// Iterator over direct children [`NodeId`]s of a node.
 pub struct ChildrenIter<'a> {
     doc: &'a Document,
@@ -1909,5 +2459,295 @@ mod tests {
         }
         assert!(doc.validate_invariants().is_ok());
         assert!(doc.allocated() <= 2_002);
+    }
+    #[test]
+    fn test_document_element_head_body_and_lookups() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let html = doc.create_element(Namespace::Html, "html", vec![]);
+        let head = doc.create_element(Namespace::Html, "head", vec![]);
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        doc.append_child(root, html);
+        doc.append_child(html, head);
+        doc.append_child(html, body);
+        let nav = doc.create_element(
+            Namespace::Html,
+            "nav",
+            vec![
+                Attribute::new("id", "main-nav"),
+                Attribute::new("class", "top primary"),
+            ],
+        );
+        let p = doc.create_element(Namespace::Html, "p", vec![]);
+        let svg = doc.create_element(Namespace::Svg, "circle", vec![]);
+        doc.append_child(body, nav);
+        doc.append_child(body, p);
+        doc.append_child(body, svg);
+
+        assert_eq!(doc.document_element(), Some(html));
+        assert_eq!(doc.head(), Some(head));
+        assert_eq!(doc.body(), Some(body));
+        assert_eq!(doc.get_element_by_id("main-nav"), Some(nav));
+        assert_eq!(doc.get_element_by_id("missing"), None);
+        assert_eq!(
+            doc.get_elements_by_tag_name("P"),
+            vec![p],
+            "HTML tag lookup is case-insensitive"
+        );
+        assert_eq!(doc.get_elements_by_tag_name("nav"), vec![nav]);
+        assert_eq!(
+            doc.get_elements_by_tag_name("circle"),
+            vec![svg],
+            "foreign tags match exactly"
+        );
+        assert_eq!(doc.get_elements_by_class_name("primary"), vec![nav]);
+        assert_eq!(doc.get_elements_by_class_name("top primary"), vec![nav]);
+        assert!(doc.get_elements_by_class_name("top missing").is_empty());
+        assert!(doc.get_elements_by_class_name("  ").is_empty());
+    }
+
+    #[test]
+    fn test_attribute_helpers_and_tag_name() {
+        let mut doc = Document::new();
+        let div = doc.create_element(
+            Namespace::Html,
+            "div",
+            vec![
+                Attribute::new("id", "x"),
+                Attribute::new("Class", "a"),
+                Attribute::new("data-n", "1"),
+            ],
+        );
+        let svg = doc.create_element(Namespace::Svg, "linearGradient", vec![]);
+
+        {
+            let element = doc.node(div).as_element().expect("div element");
+            assert_eq!(element.tag_name(), "DIV");
+            assert!(
+                element.has_attribute("ID"),
+                "HTML attribute names are case-insensitive"
+            );
+            assert!(element.has_attribute("class"));
+            assert!(!element.has_attribute("missing"));
+            assert_eq!(
+                element.attribute_names(),
+                vec!["id".to_string(), "Class".to_string(), "data-n".to_string()]
+            );
+            let foreign = doc.node(svg).as_element().expect("svg element");
+            assert_eq!(foreign.tag_name(), "linearGradient");
+            assert!(!foreign.has_attribute("lineargradient"));
+        }
+        let removed = doc
+            .node_mut(div)
+            .as_element_mut()
+            .expect("div element")
+            .remove_attribute("class");
+        assert_eq!(removed.as_deref(), Some("a"));
+        assert_eq!(
+            doc.node(div)
+                .as_element()
+                .expect("div element")
+                .attribute_names(),
+            vec!["id".to_string(), "data-n".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_text_content_and_set_text_content() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        let div = doc.create_element(Namespace::Html, "div", vec![]);
+        let text = doc.create_text_node("Hello ");
+        let bold = doc.create_element(Namespace::Html, "b", vec![]);
+        let bold_text = doc.create_text_node("world");
+        doc.append_child(root, body);
+        doc.append_child(body, div);
+        doc.append_child(div, text);
+        doc.append_child(div, bold);
+        doc.append_child(bold, bold_text);
+        let comment = doc.create_comment("ignored");
+        doc.append_child(div, comment);
+
+        assert_eq!(doc.text_content(div), "Hello world");
+        assert_eq!(doc.text_content(text), "Hello ");
+        assert_eq!(doc.text_content(doc.root()), "");
+
+        doc.set_text_content(div, "replaced")
+            .expect("set textContent");
+        assert_eq!(doc.text_content(div), "replaced");
+        assert_eq!(doc.children(div).count(), 1);
+        // Removed children stay alive: DOM-style removal is detach-only.
+        assert!(doc.owns(text));
+        assert!(doc.owns(bold));
+        doc.set_text_content(text, "updated")
+            .expect("set text node data");
+        assert_eq!(doc.node(text).as_text(), Some("updated"));
+        assert!(matches!(
+            doc.set_text_content(doc.root(), "x"),
+            Err(DomError::CannotHaveChildren(_))
+        ));
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn test_template_text_content_routes_to_contents_fragment() {
+        let mut doc = Document::new();
+        let template = doc.create_element(Namespace::Html, "template", vec![]);
+        let fragment = doc
+            .node(template)
+            .as_element()
+            .and_then(|element| element.template_contents)
+            .expect("template contents");
+        doc.set_text_content(template, "inert")
+            .expect("set template text");
+        assert_eq!(doc.text_content(template), "inert");
+        assert_eq!(doc.children(fragment).count(), 1);
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn test_remove_insert_and_replace_children() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let div = doc.create_element(Namespace::Html, "div", vec![]);
+        let a = doc.create_element(Namespace::Html, "span", vec![]);
+        let b = doc.create_element(Namespace::Html, "em", vec![]);
+        let c = doc.create_element(Namespace::Html, "i", vec![]);
+        doc.append_child(root, div);
+        doc.append_child(div, a);
+        doc.append_child(div, b);
+
+        // insertBefore with a valid reference.
+        doc.insert_before_child(div, c, Some(b))
+            .expect("insert before b");
+        assert_eq!(doc.children(div).collect::<Vec<_>>(), vec![a, c, b]);
+        // Appending moves the node.
+        doc.insert_before_child(div, a, None).expect("append a");
+        assert_eq!(doc.children(div).collect::<Vec<_>>(), vec![c, b, a]);
+        // Invalid reference is rejected.
+        assert!(matches!(
+            doc.insert_before_child(div, c, Some(div)),
+            Err(DomError::NotAChild { .. })
+        ));
+        // removeChild detaches but keeps the node alive.
+        assert_eq!(doc.remove_child(div, c), Ok(c));
+        assert_eq!(doc.node(c).parent, None);
+        assert!(doc.owns(c));
+        assert!(matches!(
+            doc.remove_child(div, c),
+            Err(DomError::NotAChild { .. })
+        ));
+        // replaceChildren detaches the old children and keeps them alive.
+        let d = doc.create_element(Namespace::Html, "u", vec![]);
+        doc.replace_all_children(div, &[d])
+            .expect("replace children");
+        assert_eq!(doc.children(div).collect::<Vec<_>>(), vec![d]);
+        assert!(doc.owns(a) && doc.owns(b));
+        assert_eq!(doc.node(a).parent, None);
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn test_append_text_node_coalesces() {
+        let mut doc = Document::new();
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        let first = doc.append_text_node(body, "Hello").expect("append text");
+        let second = doc.append_text_node(body, " world").expect("append text");
+        assert_eq!(first, second, "trailing text nodes coalesce");
+        assert_eq!(doc.children(body).count(), 1);
+        assert_eq!(doc.text_content(body), "Hello world");
+    }
+
+    #[test]
+    fn test_clone_node_into_another_document() {
+        let mut source = Document::new();
+        let source_body = source.create_element(Namespace::Html, "body", vec![]);
+        source.append_child(source.root(), source_body);
+        let source_div =
+            source.create_element(Namespace::Html, "div", vec![Attribute::new("id", "cloned")]);
+        let template = source.create_element(Namespace::Html, "template", vec![]);
+        source.append_child(source_body, source_div);
+        source.append_child(source_div, template);
+        source
+            .set_text_content(template, "inert text")
+            .expect("template text");
+
+        let mut target = Document::new();
+        let imported = target
+            .clone_node_into(&source, source_div, true)
+            .expect("import subtree");
+        assert!(target.owns(imported));
+        assert_ne!(imported, source_div);
+        assert_eq!(
+            target
+                .node(imported)
+                .as_element()
+                .unwrap()
+                .get_attribute("id"),
+            Some("cloned")
+        );
+        target.append_child(target.root(), imported);
+        // DOM tree traversal does not descend into inert <template> contents.
+        assert_eq!(target.text_content(imported), "");
+        let imported_template = target
+            .children(imported)
+            .find(|&id| {
+                target
+                    .node(id)
+                    .as_element()
+                    .is_some_and(|el| el.local_name == "template")
+            })
+            .expect("imported template");
+        let imported_contents = target
+            .node(imported_template)
+            .as_element()
+            .and_then(|element| element.template_contents)
+            .expect("fresh contents fragment");
+        assert!(target.owns(imported_contents));
+        assert!(!source.owns(imported_contents));
+        assert_eq!(target.children(imported_contents).count(), 1);
+        assert_eq!(target.text_content(imported_template), "inert text");
+        assert!(target.validate_invariants().is_ok());
+        assert!(source.validate_invariants().is_ok());
+        // The source tree is untouched.
+        assert_eq!(source.text_content(source_div), "");
+        let source_template = source
+            .children(source_div)
+            .find(|&id| {
+                source
+                    .node(id)
+                    .as_element()
+                    .is_some_and(|el| el.local_name == "template")
+            })
+            .expect("source template");
+        assert_eq!(source.text_content(source_template), "inert text");
+    }
+
+    #[test]
+    fn test_browser_api_respects_stale_handles() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let html = doc.create_element(Namespace::Html, "html", vec![]);
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        doc.append_child(root, html);
+        doc.append_child(html, body);
+        let victim = doc.create_element(Namespace::Html, "div", vec![]);
+        doc.append_child(body, victim);
+        let removed = doc.remove_subtree(victim);
+        assert_eq!(removed, 1);
+        assert!(!doc.owns(victim));
+        assert!(matches!(
+            doc.remove_child(body, victim),
+            Err(DomError::UnknownNode(_))
+        ));
+        assert!(matches!(
+            doc.insert_before_child(body, victim, None),
+            Err(DomError::UnknownNode(_))
+        ));
+        // Lookups keep working after removals.
+        assert_eq!(doc.body(), Some(body));
+        assert_eq!(doc.get_elements_by_tag_name("div"), Vec::<NodeId>::new());
+        assert!(doc.validate_invariants().is_ok());
     }
 }

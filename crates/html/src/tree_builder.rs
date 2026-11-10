@@ -687,8 +687,23 @@ impl TreeBuilder {
 
     /// Creates a tree builder with explicit anti-DoS [`ParseOptions`].
     pub fn with_options(scripting_enabled: bool, parse_options: ParseOptions) -> Self {
+        Self::with_document(scripting_enabled, parse_options, Document::new())
+    }
+
+    /// Creates a tree builder that parses into an existing [`Document`].
+    ///
+    /// Used by the in-place fragment API ([`parse_fragment_into`]) so `innerHTML`-style
+    /// operations do not need to allocate a temporary document and copy the resulting
+    /// subtree across arenas. The document's existing tree is preserved; the parser appends
+    /// its synthetic `<html>` root as the last child of `doc.root()` and moves the fragment
+    /// children there at the end.
+    pub fn with_document(
+        scripting_enabled: bool,
+        parse_options: ParseOptions,
+        doc: Document,
+    ) -> Self {
         Self {
-            doc: Document::new(),
+            doc,
             mode: InsertionMode::Initial,
             original_mode: InsertionMode::Initial,
             open_elements: Vec::new(),
@@ -3904,7 +3919,74 @@ pub fn parse_fragment_with_options(
     scripting_enabled: bool,
     options: &ParseOptions,
 ) -> ParseOutcome {
+    let tb = TreeBuilder::with_options(scripting_enabled, *options);
+    let tb = run_fragment_parser(
+        tb,
+        input,
+        context_namespace,
+        context_local_name,
+        scripting_enabled,
+        options,
+    );
+    let TreeBuilder {
+        doc,
+        limit_violations,
+        ..
+    } = tb;
+    ParseOutcome {
+        document: doc,
+        limit_violations,
+    }
+}
+
+/// Parses an HTML fragment **into an existing [`Document`]**, appending the resulting
+/// children to `doc.root()` (WHATWG HTML §13.4 fragment parsing).
+///
+/// This is the in-place building block used by [`crate::set_inner_html`],
+/// [`crate::set_outer_html`] and [`crate::document_write`]: it avoids creating a temporary
+/// document and copying nodes between arenas. Existing document content is left untouched;
+/// the new fragment children are appended as the last children of the document root (the
+/// caller usually moves them under the target element). Returns the
+/// [`LimitViolations`] hit while parsing the fragment.
+pub fn parse_fragment_into(
+    doc: &mut Document,
+    input: &str,
+    context_namespace: Namespace,
+    context_local_name: &str,
+    scripting_enabled: bool,
+    options: &ParseOptions,
+) -> LimitViolations {
+    let existing = std::mem::take(doc);
+    let tb = TreeBuilder::with_document(scripting_enabled, *options, existing);
+    let tb = run_fragment_parser(
+        tb,
+        input,
+        context_namespace,
+        context_local_name,
+        scripting_enabled,
+        options,
+    );
+    let TreeBuilder {
+        doc: parsed,
+        limit_violations,
+        ..
+    } = tb;
+    *doc = parsed;
+    limit_violations
+}
+
+/// Shared fragment parser: tokenizer setup, §13.4 synthetic `<html>` root, token loop and
+/// finalization (move children to the document root, drop the synthetic root/context node).
+fn run_fragment_parser(
+    mut tb: TreeBuilder,
+    input: &str,
+    context_namespace: Namespace,
+    context_local_name: &str,
+    scripting_enabled: bool,
+    options: &ParseOptions,
+) -> TreeBuilder {
     let (input, input_truncated) = truncate_input(input, options.max_input_bytes);
+    tb.limit_violations.input_truncated = input_truncated;
     let initial_tok_state = if context_namespace == Namespace::Html {
         match context_local_name {
             "title" | "textarea" => TokenizerState::Rcdata,
@@ -3926,8 +4008,6 @@ pub fn parse_fragment_with_options(
         },
     );
 
-    let mut tb = TreeBuilder::with_options(scripting_enabled, *options);
-    tb.limit_violations.input_truncated = input_truncated;
     tb.fragment_context = Some((context_namespace, context_local_name.to_owned()));
     let ctx_node = tb
         .doc
@@ -3945,23 +4025,20 @@ pub fn parse_fragment_with_options(
 
     drive_tokenizer(&mut tok, &mut tb);
 
-    // Move children of synthetic `<html>` directly under `doc.root()` for canonical fragment serialization
+    // Move children of the synthetic `<html>` root directly under `doc.root()` so callers
+    // can pick them up as "the new children appended after the previous last child".
     let root = tb.doc.root();
     tb.doc.reparent_children(html_root, root);
     tb.doc.detach(html_root);
-    if let Some(ctx_id) = tb.fragment_context_node {
-        tb.doc.detach(ctx_id);
+    // The synthetic `<html>` root and the fragment context element are parser scaffolding:
+    // free their slots so repeated in-place fragment parses (`innerHTML`) do not leak arena
+    // nodes. Neither is reachable from the returned document tree.
+    tb.doc.remove_subtree(html_root);
+    if let Some(ctx_id) = tb.fragment_context_node.take() {
+        tb.doc.remove_subtree(ctx_id);
     }
     tb.update_selectedcontent_elements();
-    let TreeBuilder {
-        doc,
-        limit_violations,
-        ..
-    } = tb;
-    ParseOutcome {
-        document: doc,
-        limit_violations,
-    }
+    tb
 }
 
 /// Runs the tokenizer → tree-builder loop until EOF.
