@@ -848,3 +848,80 @@ fn navigation_home_target_is_the_first_entry() {
         Some("https://example.com/page")
     );
 }
+
+#[test]
+fn screenshot_with_tabs_renders_the_active_first_tab() {
+    let first = "data:text/html,%3Ch1%3EFirst%20tab%3C%2Fh1%3E";
+    let second = "data:text/html,%3Ch1%3ESecond%20tab%3C%2Fh1%3E";
+    let tabs_png = temp_path("tabs-active.png");
+    let direct_png = temp_path("tabs-direct.png");
+    let tabs_run = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+        .args([
+            first,
+            "--tabs",
+            second,
+            "--screenshot",
+            tabs_png.to_str().expect("path"),
+            "--width",
+            "240",
+            "--height",
+            "160",
+        ])
+        .status()
+        .expect("shell binary runs");
+    assert!(tabs_run.success());
+    let direct_run = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+        .args([
+            first,
+            "--screenshot",
+            direct_png.to_str().expect("path"),
+            "--width",
+            "240",
+            "--height",
+            "160",
+        ])
+        .status()
+        .expect("shell binary runs");
+    assert!(direct_run.success());
+    let tabs_bytes = std::fs::read(&tabs_png).expect("tabs PNG");
+    let direct_bytes = std::fs::read(&direct_png).expect("direct PNG");
+    assert_eq!(
+        tabs_bytes, direct_bytes,
+        "headless renders the active/first tab"
+    );
+    assert_eq!(png_dimensions(&tabs_bytes), (240, 160));
+    let _ = std::fs::remove_file(&tabs_png);
+    let _ = std::fs::remove_file(&direct_png);
+}
+
+#[test]
+fn cli_tabs_flag_builds_multiple_tabs_and_documents_headless_policy() {
+    let cli = shell::parse_cli(
+        [
+            "data:text/html,one",
+            "--tabs",
+            "data:text/html,two",
+            "--tabs",
+            "data:text/html,three",
+        ]
+        .into_iter()
+        .map(str::to_string),
+    )
+    .expect("parse CLI");
+    assert_eq!(cli.tabs.len(), 3);
+    assert_eq!(cli.input, "data:text/html,one");
+    let state = shell::TabsState::from_urls(cli.tabs.clone());
+    assert_eq!(state.len(), 3);
+    assert_eq!(state.active_index(), 0);
+    assert_eq!(state.active().url, "data:text/html,one");
+    let (output, hits) = shell::headless::render_target_with_find(
+        &cli.input,
+        240,
+        160,
+        &render::RenderOptions::default(),
+        "",
+    )
+    .expect("render active tab");
+    assert_eq!(output.dimensions(), (240, 160));
+    assert_eq!(hits, 0);
+}

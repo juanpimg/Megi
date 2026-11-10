@@ -49,6 +49,9 @@
 //! | `Ctrl+D` | Print the final URL and page title |
 //! | `F5`, `g` | Reload |
 //! | `Alt+Home` | Go to the first (home) history entry |
+//! | `Ctrl+T` / `Ctrl+W` | New tab / close tab (last tab resets to New Tab) |
+//! | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
+//! | `Alt+1`..`Alt+9` | Activate a tab by position |
 //! | Wheel / touchpad | Scroll vertically |
 //! | `↑` / `↓` | Scroll one line |
 //! | `PageUp` / `PageDown` | Scroll one page |
@@ -82,6 +85,7 @@ use crate::present;
 use crate::refresh::{RefreshPolicy, RefreshTimer};
 use crate::scale::{WindowMetrics, window_metrics_zoomed};
 use crate::scroll::{self, ScrollState};
+use crate::tabs::{self, CloseOutcome, TabsState};
 use crate::title::{self, StatusSummary};
 use crate::worker::{
     Debounce, FrameStore, RENDER_DEBOUNCE, RenderRequest, WorkerMessage, spawn_worker,
@@ -99,12 +103,14 @@ enum UserEvent {
 }
 
 /// Shell-specific view settings for one window: page zoom and auto-refresh policy.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct WindowViewOptions {
     /// Initial page zoom factor (clamped to 50–300 %).
     pub zoom: f64,
     /// Auto-refresh policy for pages with pending timers.
     pub refresh: RefreshPolicy,
+    /// Initial tabs (empty = the single `input` tab passed to the runner).
+    pub tabs: Vec<String>,
 }
 
 impl Default for WindowViewOptions {
@@ -112,14 +118,25 @@ impl Default for WindowViewOptions {
         Self {
             zoom: zoom::DEFAULT_ZOOM,
             refresh: RefreshPolicy::disabled(),
+            tabs: Vec::new(),
         }
     }
 }
 
 impl WindowViewOptions {
     /// View options with an explicit initial zoom and refresh policy.
-    pub const fn new(zoom: f64, refresh: RefreshPolicy) -> Self {
-        Self { zoom, refresh }
+    pub fn new(zoom: f64, refresh: RefreshPolicy) -> Self {
+        Self {
+            zoom,
+            refresh,
+            tabs: Vec::new(),
+        }
+    }
+
+    /// Adds the initial tab list (`--tabs`, repeatable).
+    pub fn with_tabs(mut self, tabs: Vec<String>) -> Self {
+        self.tabs = tabs;
+        self
     }
 }
 
@@ -239,6 +256,8 @@ struct WindowApp {
     find: FindState,
     /// Whether the find prompt is open (typing edits the query).
     find_editing: bool,
+    /// Open tabs and the active one.
+    tabs: TabsState,
     /// Highlight rectangles of the last frame (page CSS coordinates).
     find_rects: Vec<crate::links::CssRect>,
 }
@@ -254,10 +273,13 @@ impl WindowApp {
         view: WindowViewOptions,
     ) -> Self {
         let zoom = zoom::sanitize_zoom(view.zoom);
-        let mut nav = NavigationState::new();
-        if let Ok(url) = net::Url::parse(&input) {
-            nav.navigate_to(url);
-        }
+        let tabs = if view.tabs.is_empty() {
+            TabsState::new(input.clone())
+        } else {
+            TabsState::from_urls(view.tabs.clone())
+        };
+        let input = tabs.active().url.clone();
+        let nav = tabs.active().navigation.clone();
         Self {
             input,
             title,
@@ -298,6 +320,7 @@ impl WindowApp {
             find: FindState::new(),
             find_editing: false,
             find_rects: Vec::new(),
+            tabs,
         }
     }
 
@@ -584,6 +607,7 @@ impl WindowApp {
             script_errors: self.frame_script_errors,
         };
         let title = title::status_title(&page, &status, self.error.as_deref(), self.content_capped);
+        let title = TabsState::indexed_title(self.tabs.active_index(), self.tabs.len(), &title);
         window.set_title(&title);
     }
 
@@ -748,6 +772,100 @@ impl WindowApp {
                 true
             }
             _ => false,
+        }
+    }
+
+    /// Copies the live window state of the active tab back into its [`Tab`] record.
+    fn save_active_tab(&mut self) {
+        let tab = self.tabs.active_mut();
+        tab.url.clone_from(&self.input);
+        tab.navigation.clone_from(&self.nav);
+        tab.title.clone_from(&self.doc_title);
+        tab.scroll = self.scroll;
+        tab.zoom = self.zoom;
+        tab.find = self.find.clone();
+        tab.find_editing = self.find_editing;
+        tab.error.clone_from(&self.error);
+        tab.content_capped = self.content_capped;
+    }
+
+    /// Loads the active tab into the live window state and requests a fresh render.
+    ///
+    /// The worker's generation counter discards any in-flight frame from the previously
+    /// active tab, so frames never leak between tabs.
+    fn load_active_tab(&mut self) {
+        let tab = self.tabs.active().clone();
+        self.input = tab.url;
+        self.nav = tab.navigation;
+        self.doc_title = tab.title;
+        self.zoom = zoom::sanitize_zoom(tab.zoom);
+        let (width, height) = self
+            .window
+            .as_ref()
+            .map(|window| {
+                let size = window.inner_size();
+                (size.width, size.height)
+            })
+            .unwrap_or((self.requested_width, self.requested_height));
+        self.metrics = window_metrics_zoomed(width, height, self.scale_factor, self.zoom);
+        self.scroll = tab.scroll;
+        self.scroll.set_viewport_height(self.metrics.css_height);
+        self.scroll.clamp();
+        self.find = tab.find;
+        self.find_editing = tab.find_editing;
+        self.find_rects.clear();
+        self.error = tab.error;
+        self.content_capped = tab.content_capped;
+        self.forms.clear();
+        self.document = None;
+        self.links.clear();
+        self.frame_scripts_executed = 0;
+        self.frame_timers_pending = 0;
+        self.frame_warnings = 0;
+        self.frame_script_errors = 0;
+        self.update_title();
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+        self.request_render();
+    }
+
+    /// Opens a blank New Tab (`Ctrl+T`).
+    fn open_new_tab(&mut self) {
+        self.save_active_tab();
+        if self.tabs.open_tab(tabs::BLANK_TAB_URL).is_some() {
+            self.load_active_tab();
+        }
+    }
+
+    /// Closes the active tab (`Ctrl+W`); the last tab is reset to New Tab.
+    fn close_active_tab(&mut self) {
+        self.save_active_tab();
+        match self.tabs.close_active() {
+            CloseOutcome::Closed | CloseOutcome::ResetLast => self.load_active_tab(),
+            CloseOutcome::Invalid => {}
+        }
+    }
+
+    /// Activates the next (`forward`) or previous tab, wrapping around.
+    fn cycle_tab(&mut self, forward: bool) {
+        self.save_active_tab();
+        if forward {
+            self.tabs.next_tab();
+        } else {
+            self.tabs.previous_tab();
+        }
+        self.load_active_tab();
+    }
+
+    /// Activates tab `index` (0-based) if it exists.
+    fn activate_tab(&mut self, index: usize) {
+        if index >= self.tabs.len() || index == self.tabs.active_index() {
+            return;
+        }
+        self.save_active_tab();
+        if self.tabs.activate(index) {
+            self.load_active_tab();
         }
     }
 
@@ -1051,6 +1169,33 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                     && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("d"))
                 {
                     self.print_document_info();
+                    return;
+                }
+                if ctrl_pressed
+                    && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("t"))
+                {
+                    self.open_new_tab();
+                    return;
+                }
+                if ctrl_pressed
+                    && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("w"))
+                {
+                    self.close_active_tab();
+                    return;
+                }
+                if ctrl_pressed && matches!(event.logical_key.as_ref(), Key::Named(NamedKey::Tab)) {
+                    self.cycle_tab(!self.modifiers.shift_key());
+                    return;
+                }
+                if alt_pressed
+                    && let Key::Character(text) = event.logical_key.as_ref()
+                    && let Some(index) = text
+                        .chars()
+                        .next()
+                        .and_then(|digit| digit.to_digit(10))
+                        .filter(|digit| (1..=9).contains(digit))
+                {
+                    self.activate_tab(index as usize - 1);
                     return;
                 }
                 if self.handle_find_key(

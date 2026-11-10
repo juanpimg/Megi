@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! megi <url|file> [--width W] [--height H] [--screenshot PATH] [--title T]
-//!      [--cookies] [--origin URL] [--zoom FACTOR] [--refresh-ms [MS]] [--find QUERY]
+//!      [--cookies] [--origin URL] [--zoom FACTOR] [--refresh-ms [MS]] [--find QUERY] [--tabs URL]...
 //! ```
 //!
 //! Without `--screenshot` this creates a real winit window (requires an X11/Wayland
@@ -60,7 +60,8 @@ fn run() -> Result<(), ShellError> {
         args.zoom,
         args.refresh_ms
             .map_or_else(RefreshPolicy::disabled, RefreshPolicy::every_ms),
-    );
+    )
+    .with_tabs(args.tabs.clone());
     match args.mode {
         LaunchMode::Screenshot(path) => {
             // Headless screenshots render at the CSS viewport (physical / zoom): `--zoom 2`

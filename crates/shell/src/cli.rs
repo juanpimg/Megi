@@ -43,6 +43,8 @@ options:
                       (setInterval); MS defaults to 250, 0/disabling flag = off
   --find QUERY        highlight case-insensitive matches of QUERY in the
                       rendered page (headless screenshots; window: Ctrl+F)
+  --tabs URL          open URL as an extra tab (repeatable, max 32); the positional
+                      URL is the first/active tab, headless renders the active tab
   -h, --help          print this help
 
 window keys:
@@ -51,6 +53,8 @@ window keys:
   Tab                        next form control; Enter never submits; Esc blurs
   Ctrl+F                     find in page: type to search, Enter next, Shift+Enter
                              previous, Esc closes; matches are highlighted in yellow
+  Ctrl+T / Ctrl+W            new tab / close tab (last tab resets to New Tab)
+  Ctrl+Tab / Ctrl+Shift+Tab  next / previous tab;  Alt+1..9   activate tab by index
   Enter                      ignored (no backend: forms never submit); Esc blurs
   Alt+Left / Backspace / b   back;  Alt+Right / n   forward
   Ctrl+= / Ctrl++ / = / +    zoom in;  Ctrl+- / -   zoom out;  Ctrl+0 / 0   reset zoom
@@ -91,6 +95,8 @@ pub struct CliArgs {
     pub zoom: f64,
     /// Optional find-in-page query (`--find`; headless screenshots highlight its hits).
     pub find: Option<String>,
+    /// Initial tabs (first = positional URL, then each `--tabs` in order).
+    pub tabs: Vec<String>,
     /// Auto-refresh interval in milliseconds when `--refresh-ms` was given (`None` = off).
     pub refresh_ms: Option<u64>,
 }
@@ -116,6 +122,8 @@ pub struct RawArgs {
     pub zoom: Option<f64>,
     /// `--find` value, if provided.
     pub find: Option<String>,
+    /// `--tabs` URLs, in order (repeatable).
+    pub tabs: Vec<String>,
     /// `--refresh-ms` value (default 250 when passed without a value), if provided.
     pub refresh_ms: Option<u64>,
     /// `-h`/`--help` was passed.
@@ -147,6 +155,9 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
             }
             "--find" => {
                 raw.find = Some(next_value(&arguments, &mut index, "--find")?);
+            }
+            "--tabs" => {
+                raw.tabs.push(next_value(&arguments, &mut index, "--tabs")?);
             }
             "--zoom" => {
                 let value = next_value(&arguments, &mut index, "--zoom")?;
@@ -213,13 +224,28 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
     if raw.help {
         return Err(ShellError::Usage(USAGE.to_string()));
     }
-    let input = raw
-        .input
-        .ok_or_else(|| ShellError::Usage(format!("missing <url|file>\n{USAGE}")))?;
+    let mut extra_tabs = Vec::with_capacity(raw.tabs.len());
+    for tab in &raw.tabs {
+        extra_tabs.push(normalize_input(tab)?);
+    }
+    let (input, tabs) = match raw.input {
+        Some(input) => {
+            let input = normalize_input(&input)?;
+            let mut tabs = vec![input.clone()];
+            tabs.extend(extra_tabs);
+            (input, tabs)
+        }
+        None if !extra_tabs.is_empty() => {
+            let input = extra_tabs[0].clone();
+            (input, extra_tabs)
+        }
+        None => {
+            return Err(ShellError::Usage(format!("missing <url|file>\n{USAGE}")));
+        }
+    };
     let width = raw.width.unwrap_or(DEFAULT_WIDTH);
     let height = raw.height.unwrap_or(DEFAULT_HEIGHT);
     validate_dimensions(width, height)?;
-    let input = normalize_input(&input)?;
     let mode = match raw.screenshot {
         Some(path) => LaunchMode::Screenshot(path),
         None => LaunchMode::Window,
@@ -250,6 +276,7 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
             zoom,
             refresh_ms: None,
             find: raw.find,
+            tabs,
         });
     }
     Ok(CliArgs {
@@ -263,6 +290,7 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
         zoom,
         refresh_ms: raw.refresh_ms,
         find: raw.find,
+        tabs,
     })
 }
 
@@ -354,6 +382,32 @@ mod unit_tests {
         assert!(!plain.cookies);
         assert!(plain.origin.is_none());
         assert!(parse_cli(args(&["data:,x", "--origin"])).is_err());
+    }
+
+    #[test]
+    fn parses_repeatable_tabs_flag_in_order() {
+        let cli = parse_cli(args(&[
+            "data:text/html,first",
+            "--tabs",
+            "data:text/html,second",
+            "--tabs",
+            "data:text/html,third",
+        ]))
+        .expect("parse");
+        assert_eq!(cli.tabs.len(), 3);
+        assert_eq!(cli.input, "data:text/html,first");
+        assert_eq!(cli.tabs[1], "data:text/html,second");
+        assert_eq!(cli.tabs[2], "data:text/html,third");
+
+        // Without a positional URL the first `--tabs` becomes the active input.
+        let only_tabs = parse_cli(args(&["--tabs", "data:text/html,only"])).expect("parse");
+        assert_eq!(only_tabs.input, "data:text/html,only");
+        assert_eq!(only_tabs.tabs, vec!["data:text/html,only".to_string()]);
+
+        assert!(parse_cli(args(&["--tabs"])).is_err());
+        assert!(USAGE.contains("--tabs"));
+        assert!(USAGE.contains("Ctrl+T"));
+        assert!(USAGE.contains("Alt+1..9"));
     }
 
     #[test]

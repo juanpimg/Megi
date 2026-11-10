@@ -11,6 +11,8 @@
 #   - Ctrl+F: find in page (yellow highlights, Enter next, Shift+Enter previous, Esc close);
 #     --find QUERY does the same for headless --screenshot output
 #   - F5 / g / r reload, Alt+Home first history entry, Ctrl+D prints URL + title
+#   - tabs: Ctrl+T new, Ctrl+W close (last tab -> New Tab), Ctrl+Tab / Ctrl+Shift+Tab
+#     cycle, Alt+1..9 activate; --tabs URL repeatable (headless renders the first/active tab)
 #   - Ctrl+L: print the current URL; title shows page — zoom% — scroll% (+warnings)
 #   - form controls: click an input/textarea to focus and type (Backspace, Tab); click
 #     checkbox/radio to toggle; buttons flash pressed; Enter never submits (no backend)

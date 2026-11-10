@@ -54,6 +54,14 @@
 //!   decoded transparently by `net`.
 //! - **Dynamic title**: the window title is the document `<title>` plus the short URL and
 //!   scroll percentage ([`title`]); server redirects replace the current history entry.
+//! - **Tabs (R120)**: `Ctrl+T` opens a blank tab, `Ctrl+W` closes the active one (the last
+//!   tab is reset to New Tab instead of closing the window), `Ctrl+Tab`/`Ctrl+Shift+Tab`
+//!   cycle and `Alt+1..9` activates a tab by position. Each [`Tab`] keeps its own history,
+//!   title/URL, scroll, zoom and find state ([`tabs`]); switching tabs saves the current
+//!   state, restores the target state and requests a fresh generation-cancelled render, so
+//!   frames never leak between tabs. The title is prefixed with `[N/M]` when several tabs
+//!   are open. `--tabs URL` (repeatable) opens extra tabs; headless `--screenshot` renders
+//!   the **active (first)** tab. There is no visual tab bar yet.
 //! - **Find in page (WP-7.7)**: `Ctrl+F` searches the rendered DOM text case-insensitively
 //!   ([`find`]); typing updates the query, `Enter`/`Shift+Enter` jump to the next/previous
 //!   hit with wrap-around, `Esc` closes and the scroll is adjusted so the current hit is
@@ -133,6 +141,7 @@ pub mod present;
 pub mod refresh;
 pub mod scale;
 pub mod scroll;
+pub mod tabs;
 pub mod title;
 pub mod window;
 pub mod worker;
@@ -164,6 +173,7 @@ pub use scale::{
     WindowMetrics, logical_to_physical, physical_to_logical, window_metrics, window_metrics_zoomed,
 };
 pub use scroll::{MAX_CONTENT_HEIGHT, ScrollState};
+pub use tabs::{BLANK_TAB_TITLE, BLANK_TAB_URL, CloseOutcome, MAX_TABS, Tab, TabsState};
 pub use title::{
     CAPPED_MARKER, FALLBACK_NAME, MAX_SHORT_URL_CHARS, MAX_TITLE_CHARS, document_title, page_title,
     short_url, window_title,
