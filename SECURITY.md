@@ -83,6 +83,7 @@ after a fix is available.
   IDAT) before/while inflating, verifies chunk CRCs and never panics on
   malformed input; the inflate implementation is the crate's own and is
   fuzzed alongside the parsers.
+- **JavaScript (Phase 6, ADR-001 accepted)**: the chosen engine is Boa 0.21.x (pure Rust, `Unlicense OR MIT`) with feature `js` **enabled by default**; the dependency is isolated in `crates/js`, which itself keeps `#![forbid(unsafe_code)]`, and every script must run under instruction/time/memory/stack budgets with no network/filesystem capabilities by default. The CI keeps a `--no-default-features` build so the minimal std-only engine can be audited and shipped without the JS dependency.
 - **Image pipeline limits** (`crates/render`): at most 64 `<img>` resources per
   document, 8 MiB per image and 32 MiB of image bytes total; downloads honor the
   `net` caps and `--no-network`; undecodable or missing images downgrade to a
@@ -91,10 +92,7 @@ after a fix is available.
   only windowing dependencies (authorized by ARCHITECTURE §3.1) and their X11 /
   Wayland backends are loaded dynamically (`dlopen`); there is no GPU,
   compositor or external process. `--screenshot` runs fully headless without
-  creating an `EventLoop`. Window mode renders on the event-loop thread and
-  only consumes local files/URLs; there is no navigation, input handling,
-  hit-testing or JS yet (Phase 6/7), so the attack surface is limited to the
-  render pipeline itself.
+  creating an `EventLoop`. Window mode renders off the event loop in a **worker thread** with generation checks, cancellation and coalescing, supports vertical scroll (pages taller than **8192 CSS px** are clipped with a visible marker), mouse/keyboard input and HiDPI scaling; it only consumes local files/URLs. There is still no navigation, DOM hit-testing, zoom or JS (Phase 6/7), so the attack surface is limited to the render pipeline and the worker boundary.
 - **DOM identity**: generational `NodeId` handles (20-bit slot + 12-bit
   generation, free-list reuse) reject stale/foreign handles and give clear
   panics instead of corrupting the arena; `descendants`/`ancestors` are

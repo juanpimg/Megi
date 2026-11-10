@@ -1,39 +1,39 @@
-# Handoff de sesión — ronda 6 (imágenes E2E, @import/media, DOM de navegador, shell/Fase 7, layout −43 %)
+# Handoff de sesión — ronda 7 (query APIs, shell usable, tablas avanzadas, @import+showcase, ADR JS)
 
 **Fecha**: 2026-11-10 (Europe/Madrid)
-**Rama**: `sprint/robustez-fase4` — HEAD `13e9945` (árbol limpio)
-**Estado**: **546 tests, 0 fallos**; gate de 4 suites PASS; Fase 4 funcionalmente cerrada, Fase 5 ≈70 %, Fase 6 planificada (DOM API lista), Fase 7 ≈20 % (ventana + headless).
-**Matriz**: [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md) · **Rendimiento**: [`PERFORMANCE.md`](PERFORMANCE.md) · **Fuzzing**: [`FUZZING.md`](FUZZING.md) · **Plan**: [`ROADMAP.md`](ROADMAP.md) · **ADR JS (Fase 6)**: [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md).
+**Rama**: `sprint/robustez-fase4` — HEAD `c002ec0` (árbol limpio)
+**Estado**: **602 tests, 0 fallos**; gate de 4 suites PASS; Fase 4 ≈100 % funcional, Fase 5 ≈80 %, **Fase 6 con decisión ACEPTADA (2026-11-10) e implementación en curso (WP-6.1)**, Fase 7 ≈40 %.
+**Docs**: [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md) · [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md) · [`PERFORMANCE.md`](PERFORMANCE.md) · [`FUZZING.md`](FUZZING.md) · [`ROADMAP.md`](ROADMAP.md).
 
-## Qué se hizo en la ronda 6 (5 commits + docs)
+## Qué se hizo en la ronda 7 (6 commits + ADR)
 
 | Commit | Bloque | Resultado |
 |---|---|---|
-| `960d84a` `feat(css)` | `@import` + Media Queries | `Stylesheet.imports: Vec<ImportRule{url,media}>`; `parse_media_query_list` y `media::evaluate` (and/or/not/only, listas, tipos all/screen/print, width/height/min/max en px/em/rem/pt/pc/in/cm/mm, orientation); `StyleCollection::add_import_stylesheet` con gate de media. **51 tests** css. El `render` aún no consume `@import`. |
-| `78aee66` `perf(layout)` | Optimización y drop iterativo | **−43 %** en `layout/realistic-1mb` (100,6→57,2 ms) vía `Arc<ComputedStyle>` en tokens IFC, line breaking en streaming, `format_line` de una pasada, post-pase omitido sin overflow y sin lowercase por elemento; `LayoutBox` con **`Drop` iterativo** (50.000 niveles, pila 256 KiB; la construcción profunda sigue recursiva). **121 tests** layout. |
-| `deb2cdd` `feat(dom,html)` | DOM de navegador | `document_element/head/body`, `get_element_by_id`, `get_elements_by_tag_name/class_name`, factorías, atributos, `children_ids/parent_element/text_content/set_text_content/remove_child/insert_before_child/append_text_node/replace_all_children/clone_node_into`, `DomError`; html `parse_fragment_into`, `TreeBuilder::with_document`, `set_inner_html`/`set_outer_html`/`document_write` (contextos table/select/template/rawtext, límites, sin fugas de slots). **81 tests dom+html**. Sin `querySelector`/eventos/CSSOM/JS. |
-| `c1e5e14` `feat(paint,render)` | Imágenes `<img>` E2E | Paint: `ImageStore = HashMap<NodeId, Arc<image::RgbaImage>>`, `DisplayItem::Image`, `build_display_list_with_images`, placeholder gris y raster **bilineal clamp-to-edge** con AA/alfa/clip. Render: carga `<img src>` por `net` (respeta `--no-network`), decodifica PNG (`crates/image`; otros formatos ⇒ warning + placeholder no fatal), inyecta tamaños intrínsecos y pinta (caps 64 imágenes / 8 MiB / 32 MiB). Fixture `tests/fixtures/render/images.html` + `assets/px.png` (82 B) → 800×600, **15.625 B `md5 1de31699…`**; `basic.rgba` intacto (`60f8984e…`). **+14 tests** (paint 84, render 28). |
-| `13e9945` `feat(shell)` | Fase 7: ventana + headless | Nuevo crate `crates/shell`: `winit` 0.30.13 (X11/Wayland dlopen) + `softbuffer` 0.4.8, binario `megi <entrada> [--width --height --screenshot PATH --title]`; ventana `0RGB`, cierre/q/Esc/r, resize con debounce 150 ms, errores a stderr+frame blanco; **`--screenshot` headless sin EventLoop** (CI) = PNG determinista 640×400 `md5 7324e851…` idéntico al pipeline `render`; `tools/megi.sh`. **20 tests**. Ventana no verificada visualmente en este host (sin servidor gráfico); compila y entra en el event loop. |
-| `fa98f64` `docs(perf)` | Baseline de rendimiento | Refresco de `docs/PERFORMANCE.md` tras la ronda 5 e investigación del coste de layout (la causa era el IFC, no las tablas: **eliminado el WP candidato de "optimización de tablas"**; el trabajo de layout de la ronda 6 lo cubre). |
+| `e5b0b2a` `feat(css)` | Query APIs + background-image | `css::query::{query_selector, query_selector_all, matches}` (+`try_*` con `SelectorParseError`), árbol en preorden, `:scope` no soportado; `ComputedStyle` gana `background_image`/`list_style_image` (`url(...)`, `none`, shorthand color+imagen; gradientes → `None`). **57 tests** css. El pintado de background aún no existe. |
+| `ae95d07` `feat(shell)` | Shell usable | **Scroll vertical** (rueda/touchpad, ↑↓, PageUp/Down, Home/End; clamp y cap 8192 CSS px con marca `[recortado]`), **entrada** (clic imprime URL; r re-render; q/Esc/close salir), **HiDPI** (CSS viewport = physical/scale, nearest-neighbour; re-render al cambiar de monitor) y **render en worker** con generación/cancelación/coalescing (debounce 120 ms, `EventLoopProxy`, sin polling). `--screenshot` headless intacto (640×400 `md5 7324e851…`). **46 tests** shell. |
+| `5978984` `feat(layout)` | Tablas avanzadas | `rowspan` (u16, matriz de ocupación, reparto bottom-up), `table-layout: fixed`, `inline-table` atómico (baseline de la primera fila) y `border-collapse` con resolución de conflictos (`hidden > width > estilo > origen`; colores no resueltos; borde ganador en ambas celdas), más **fast path** para `separate + auto + sin rowspan` (`layout/realistic-1mb` ~59 ms). **129 tests** layout; golden paint byte-idéntico. |
+| `4d64917` `fix(paint)` | Underflow de cobertura | Corrige el underflow de cobertura parcial en `fill_rect` para rects <1 px/coordenadas fraccionales; 4 tests de regresión, golden sin cambios; bench paint 0,88→0,83 ms. **88 tests** paint. |
+| `c002ec0` `feat(render)` | `@import` + media + showcase | `@import` **recursivo** (resolución relativa a la hoja, dedup/ciclos, profundidad 8, caps), **media real** en `<link media>`/`<style media>`/`@import media` (viewport screen) y stats de imports/media. Nuevo **showcase** `tests/fixtures/render/showcase/` (CSS externo + `@import` + media + 2 PNG + tabla + stage absoluto): **1024×768, 65.151 B, `md5 570aa554c88c2fdf75481e8cd076bf61`** determinista (file:// y HTTP). **40 tests** render. Limitación visible: el texto de celdas de tabla aún no se pinta; `background-image` tampoco. |
+| `ada4ffd` `docs` | ADR JavaScript (Fase 6) **ACEPTADO** | [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md) (ADR-001 **ACEPTADO 2026-11-10**): motor **Boa 0.21.x** (pure Rust, MSRV 1.88, Unlicense OR MIT), **feature `js` ON por defecto** (job CI `--no-default-features` para el build mínimo) y **alcance completo** (`document.write`+bindings+eventos+timers+CSSOM+`querySelector`, WP-6.1–6.7, ≈25–30 días). Bindings por tabla lateral `NodeId↔JsValue`/realm. **Fase 6 en implementación (WP-6.1 en curso)**; `crates/js` aún no existe en este HEAD. |
 
 ## Estado actual por crate
 
 | Crate | Estado | Tests |
 |---|---|---|
-| `dom` | COMPLETO + API de navegador (búsquedas, mutaciones, `DomError`) | 28 |
-| `html` | COMPLETO + `innerHTML`/`outerHTML`/`document.write` | 53 |
-| `css` | COMPLETO + `@import`/Media Queries completas | 51 |
-| `layout` | COMPLETO Fase 4; rendimiento −43 %, `Drop` iterativo | 121 |
+| `dom` | COMPLETO: arena generacional, API de navegador | 28 |
+| `html` | COMPLETO: parser, serializador §13.3, `innerHTML`/`document.write` | 53 |
+| `css` | COMPLETO + query API + `@import`/media + `background-image` parsing | 57 |
+| `layout` | COMPLETO Fase 4: tablas avanzadas (rowspan/fixed/inline-table/collapse) + fast path | 129 |
 | `fonts` | COMPLETO (base LTR) | 13 + 1 doctest |
-| `paint` | COMPLETO Fase 4 + imágenes (`ImageStore`/bilineal) | 84 |
+| `paint` | COMPLETO Fase 4 + imágenes; fix underflow | 88 |
 | `net` | Fase 5: URL/HTTP1.1/TLS/caché/`data:`/file/MIME/loader | 85 |
 | `image` | Decoder PNG + inflate propios | 45 + 1 doctest |
-| `render` | Pipeline URL→PNG + CSS externo + **imágenes E2E** | 28 |
-| `shell` | Fase 7: ventana winit+softbuffer + headless screenshot | 20 |
+| `render` | Pipeline URL→PNG + imágenes + `@import`/media + showcase | 40 |
+| `shell` | Fase 7 usable: scroll/entrada/HiDPI/worker + headless | 46 |
 | `bench` | Benchmarks deterministas + baseline | 8 |
 | `test_harness` | Gate de 4 suites + allowlists | 7 |
 
-**Total workspace: 546 tests, 0 fallos.** MSRV Rust 1.88; `#![forbid(unsafe_code)]` en todos los crates; `fuzz/` workspace aparte (4 targets en CI nocturna).
+**Total workspace: 602 tests, 0 fallos.** MSRV Rust 1.88; `#![forbid(unsafe_code)]` en todos los crates; `fuzz/` workspace aparte (4 targets, CI nocturna).
 
 ## Comandos de verificación exactos
 
@@ -41,54 +41,50 @@
 export CARGO_HOME=/home/jp/Escritorio/Proyectos/.cargo-home   # sólo en el sandbox del equipo
 cd /home/jp/Escritorio/Proyectos/Megi
 
-# Puerta única
-./tools/dev.sh all
+./tools/dev.sh all                                  # fmt, clippy, 602 tests, doc y gate
+cargo +1.88 check --workspace --all-targets         # MSRV (incluye shell/winit)
+cargo test --workspace                              # 602 tests (con JS por defecto)
+cargo test --workspace --no-default-features        # build mínimo sin JS (CI)
+cargo run -p test_harness -- --summary              # gate 4 suites: PASS, exit 0
+cargo run -p test_harness -- --summary --strict     # exit 1 por fallos conocidos
 
-# Equivalente paso a paso
-cargo +1.88 check --workspace --all-targets     # incluye shell/winit
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace                          # 546 tests
-cargo doc --workspace --no-deps
-cargo run -p test_harness -- --summary          # gate 4 suites: PASS, exit 0
-cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
+# Showcase de navegador real (1024×768, golden determinista)
+cargo run -p render -- tests/fixtures/render/showcase/index.html docs/images/showcase.png --width 1024 --height 768
+python3 tools/png_check.py docs/images/showcase.png  # 65.151 B; md5 570aa554…
+cargo test -p render
 
-# Imágenes E2E (paint+image+render)
-cargo test -p paint -p image -p render
-cargo run -p render -- tests/fixtures/render/images.html /tmp/images.png
-ls -l /tmp/images.png                         # 15.625 B; md5 1de31699…
-python3 tools/png_check.py /tmp/images.png
-
-# Shell: ventana nativa o screenshot headless
+# Shell: ventana usable o screenshot headless
+tools/megi.sh tests/fixtures/render/showcase/index.html      # ventana (X11/Wayland)
 cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png --width 640 --height 400
-md5sum /tmp/megi-shot.png                     # 7324e851… (idéntico a render)
-tools/megi.sh https://example.com/            # requiere X11/Wayland
+md5sum /tmp/megi-shot.png                                     # 7324e851… (idéntico a render)
 
-# Pipeline de Fase 4 + red + rendimiento + fuzz
+# Pipeline Fase 4/imágenes, red, rendimiento y fuzz
 cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
-cargo test -p net
+cargo test -p net -p image
 ./tools/bench.sh
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
+Evidencia: showcase **65.151 B `md5 570aa554c88c2fdf75481e8cd076bf61`**; basic shell/render **15.498 B `md5 7324e851…`**; Phase-4 golden `basic.rgba` `md5 60f8984e…` (sin cambios); gate PASS.
+
 ## Deuda técnica priorizada (siguiente ronda)
 
-1. **Integrar `@import` (y media completa) en `render`** *(WP-5.8)*: el parser/evaluador CSS ya existe; falta que el pipeline resuelva imports (dedup, ciclos, caps) y evalúe `media` con el viewport real por hoja.
-2. **`background-image` y `border-image`** *(WP-4.9b)*: conectar `crates/image`/`net` a `url(...)` con `background-repeat/position/size` básicos y `border-image` fuera de alcance.
-3. **Tablas avanzadas** *(WP-4.8b)*: conflictos de `border-collapse`, `rowspan`, `table-layout: fixed`, `inline-table` real y optimización del auto layout.
-4. **Fase 7**: scroll, **hit-testing** (`NodeId`/`LayoutBox` ↔ `DisplayItem`), navegación/historial, inputs de ratón/teclado, zoom/HiDPI (device-scale), render en worker con cancelación y pruebas de ventana reales en CI con Xvfb.
-5. **Robustez de layout**: construcción profunda sigue recursiva (solo el `Drop` es iterativo); presupuestos de tiempo y coherencia `ParseOptions::max_nodes` (1M) vs `MAX_SLOTS` (1.048.575).
-6. **Fase 6 (JS) — decisión pendiente del dueño**: el ADR [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md) recomienda **Boa 0.21.x** (pure Rust, MSRV 1.88, Unlicense OR MIT) con feature `js` opcional; alternativas QuickJS/rquickjs (MIT, C/FFI) o diferir. Preguntas abiertas: motor, feature on/off por defecto y alcance inicial (`document.write`+bindings ≈14 días vs ES/DOM más amplio ≈25). No crear `crates/js` ni tocar `Cargo.toml` hasta la decisión; el DOM ya expone `innerHTML`/`document.write` y handles generacionales para los bindings.
-7. **Rendimiento**: coste de compresión PNG en pintados grandes, glyph cache global, presupuesto del pipeline HTML→PNG y benchmarks de tablas/imágenes.
-8. **Fuzzing/seguridad**: añadir targets `image` (PNG/inflate) y `render`; mantener límites de imagen (caps) y de red; revisar `winit`/`softbuffer` como superficie de ventana.
-9. **Fixtures/goldens**: `real_page.html`/`torture.html` con tablas, imágenes y CSS externo; goldens con tolerancia para AA; capturas nuevas en `docs/images/`.
-10. **Documentación**: mantener README/ROADMAP/ARCHITECTURE/HANDOFF/PHASE4-SUPPORT/TOOLING/SECURITY/CONTRIBUTING/CHANGELOG sincronizados por ronda (esta tarea).
+1. **`background-image` de extremo a extremo**: el parseo y `crates/image` ya existen; falta fetch (net, caps), decodificación y pintado con `background-repeat/position/size` básicos.
+2. **Texto de celdas de tabla en paint**: el showcase evidencia que la tabla sale como grid vacío; revisar el recorrido de cajas de tabla en `paint` (no hay celdas con contenido pintadas) y añadir golden que lo cubra.
+3. **Fase 7 restante**: **hit-testing** (`NodeId`/`LayoutBox` ↔ `DisplayItem`), navegación/historial, eventos DOM/foco, zoom y pulido de HiDPI; pruebas de ventana reales en CI con Xvfb.
+4. **Fase 6 (JS) — EN IMPLEMENTACIÓN (decisión ACEPTADA 2026-11-10)**: crear `crates/js` y ejecutar WP-6.1–6.7 con **Boa 0.21.x**, feature `js` **ON por defecto** (mantener job CI `--no-default-features` para el build mínimo) y alcance completo; hito clave WP-6.3: `scripted_*` fuera de la allowlist y árbol 3.904/3.904.
+5. **Red avanzada (Fase 5)**: CORS/`Referrer-Policy`, cookies, `Content-Encoding` gzip/br, HTTP/2, streaming y proxies.
+6. **Rendimiento**: optimizar parseo+layout (presupuesto del pipeline), tablas grandes, compresión PNG en páginas grandes y glyph cache global.
+7. **Fuzz/seguridad**: targets `image` (PNG/inflate) y `render`; mantener caps de imágenes/red; revisar la superficie del shell (winit/softbuffer, worker).
+8. **Fixtures/goldens**: `real_page.html`/`torture.html` con tablas con texto, imágenes y CSS externo; goldens con tolerancia para AA.
+9. **Robustez layout**: construcción profunda sigue recursiva (sólo el `Drop` es iterativo); `ParseOptions::max_nodes` (1M) vs `MAX_SLOTS` (1.048.575).
+10. **Documentación**: mantener README/ROADMAP/ARCHITECTURE/HANDOFF/PHASE4-SUPPORT/TOOLING/SECURITY/CONTRIBUTING/CHANGELOG y el ADR sincronizados por ronda.
 
 ## Reglas del repositorio (recordatorio)
 
-- Sin *forks* de motores ni crates de parsing/layout/imagen de terceros. Núcleo (`dom`, `html`, `css`, `layout`) sólo `std`; `fonts` es la excepción tipográfica autorizada (§3.1); `net` usa `rustls`/`webpki-roots` (producción) y `rcgen` (tests); `image` es std puro; `render` no añade deps externas; `shell` usa `winit`/`softbuffer` autorizados (§3.1) y el resto de crates internos.
+- Sin *forks* de motores ni crates de parsing/layout/imagen de terceros. Núcleo (`dom`, `html`, `css`, `layout`) sólo `std`; `fonts` es la excepción tipográfica autorizada (§3.1); `net` usa `rustls`/`webpki-roots` (producción) y `rcgen` (tests); `image` es std puro; `render` sin deps externas nuevas; `shell` usa `winit`/`softbuffer` autorizados.
 - `#![forbid(unsafe_code)]` en todos los crates; `fuzz/` workspace aparte.
 - Cero advertencias: `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings` + `cargo doc`.
 - Tests en el mismo commit; *Conventional Commits*; no commit/push desde agentes.
 - `tests/html5lib-tests` versionado; de `tests/wpt/` sólo `tests/wpt/css/css-syntax/`; `.agents/` y `.cache/` ignorados.
-- Al tocar dependencias, actualizar `ARCHITECTURE.md` §3; codificador (paint) y decoder (image) PNG propios por decisión D3.
+- Al tocar dependencias, actualizar `ARCHITECTURE.md` §3; el ADR JS sigue pendiente de aprobación del dueño.

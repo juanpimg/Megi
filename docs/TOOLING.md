@@ -236,7 +236,25 @@ cargo run -p render -- tests/fixtures/render/images.html docs/images/images-e2e.
 cargo test -p paint -p image -p render
 ```
 
-### 2.13 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
+### 2.13 Showcase de navegador real y controles del shell (ronda 7)
+
+```bash
+# Showcase 1024×768: CSS externo + @import + media + 2 PNG + tabla + stage posicionado
+cargo run -p render -- tests/fixtures/render/showcase/index.html docs/images/showcase.png --width 1024 --height 768
+python3 tools/png_check.py docs/images/showcase.png     # 65.151 B, md5 570aa554…
+cargo test -p render
+
+# Shell usable: ventana con scroll/entrada/HiDPI y render en worker
+tools/megi.sh tests/fixtures/render/showcase/index.html
+# controles: rueda/touchpad/↑↓/PageUp/PageDown/Home/End = scroll; r = re-render;
+#            q/Esc/cerrar = salir; clic izquierdo = imprime la URL actual.
+# Páginas > 8192 CSS px se recortan (título con "[recortado]").
+cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png --width 640 --height 400
+```
+
+El golden del showcase compara byte a byte (1024×768, `md5 570aa554…`) y los tests de render lo verifican tanto por `file://` como por HTTP local. Limitaciones visibles: texto de celdas de tabla y `background-image` aún no se pintan (documentadas en el README del fixture).
+
+### 2.14 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
 
 Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-spec-driven-dev/SKILL.md` (directorio ignorado en `.gitignore` para mantener limpio el árbol Git de metadatos de agentes, mientras su documentación permanente reside en este archivo `docs/TOOLING.md`). Esta skill estandariza el protocolo operativo para cualquier agente que trabaje en la Fase 1 y posteriores:
 1. Consultar primero la sección normativa con `./tools/whatwg_spec.py section <id>`.
@@ -249,7 +267,7 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 546 tests, doc y gate de conformidad
+./tools/dev.sh all                     # fmt, clippy, 602 tests, doc y gate de conformidad
 cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 
@@ -263,4 +281,4 @@ cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.pn
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Cifras de referencia de esta ronda: **546 tests** (bench 8, css 51, dom 28, fonts 13+1 doctest, html 53, image 45+1, layout 121, net 85, paint 84, render 28, shell 20, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+Cifras de referencia de esta ronda: **602 tests** (bench 8, css 57, dom 28, fonts 13+1 doctest, html 53, image 45+1, layout 129, net 85, paint 88, render 40, shell 46, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.

@@ -1,7 +1,8 @@
 # ADR-001 — Estrategia JavaScript para la Fase 6 (`docs/JAVASCRIPT-STRATEGY.md`)
 
-- **Estado**: **PROPUESTO — decisión pendiente del dueño**
+- **Estado**: **ACEPTADO (ADR-001) — decisión del dueño registrada el 2026-11-10; implementación en curso (`WP-6.1`)**
 - **Fecha**: 2026-11-10 (Europe/Madrid)
+- **Decisor**: dueño del proyecto · **Implementación**: Fase 6, plan WP-6.1–6.7
 - **Rama / HEAD**: `sprint/robustez-fase4` @ `c4cc170`
 - **Ámbito**: motor JavaScript de la Fase 6, bindings DOM↔JS, ejecución de `<script>`/`document.write` y event loop mínimo.
 - **No es**: una implementación; este documento no contiene código ni cambia `Cargo.toml`.
@@ -36,7 +37,7 @@ Megi ha cerrado funcionalmente la Fase 4 (renderizado) y tiene un pipeline de na
 - **Seguridad**: ejecutar JS no confiable es la mayor superficie de ataque del navegador; requiere frontera, presupuestos y fuzzing desde el primer WP.
 - **Compatibilidad**: el objetivo no es pasar Test262 completo, sino renderizar páginas reales y cerrar los tests `scripted_*` del corpus; hay que decidir cuánto ES/DOM se exige.
 
-**Estado real verificado a fecha del ADR**: **546 tests, 0 fallos**; gate de 4 suites PASS (tokenizer 7.050/7.050, árbol 3.898/3.904, serializador 230/230, CSS 30/30); Fase 6 al **0 %** de implementación (no existe `crates/js` todavía); todos los crates del motor con `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+**Estado real verificado en la decisión (ronda 7)**: **602 tests, 0 fallos**; gate de 4 suites PASS (tokenizer 7.050/7.050, árbol 3.898/3.904, serializador 230/230, CSS 30/30); Fase 6 con **decisión ACEPTADA el 2026-11-10** e implementación arrancando por `WP-6.1` (en este HEAD todavía no existe `crates/js` ni tests JS: el resto del workspace suma 602); todos los crates del motor con `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
 
 ---
 
@@ -50,7 +51,7 @@ Megi ha cerrado funcionalmente la Fase 4 (renderizado) y tiene un pipeline de na
 | MSRV 1.88 y CI existente | Medio-alto | No romper el job MSRV; si un motor exige >1.88, hay que subir la MSRV del workspace de forma explícita o fijar una versión anterior. |
 | Cobertura ECMAScript y madurez | Medio | Para páginas reales hace falta ES2015+ básico; para `scripted_*` basta ES5 + `document.write`. |
 | Rendimiento | Medio | El cuello de botella actual es el render; JS debe ser «suficiente» al principio. |
-| Tamaño de build y tiempo de compilación | Medio | El build por defecto no debe crecer si hay feature `js` opcional. |
+| Tamaño de build y tiempo de compilación | Medio | **Decisión**: el build por defecto incluye JS (feature `js` ON); se mantiene un job `--no-default-features` para el build mínimo. |
 | Determinismo/CI offline | Medio | Tests y fuzz sin red; el motor no debe descargar binarios en tiempo de test. |
 
 ---
@@ -115,22 +116,33 @@ Megi ha cerrado funcionalmente la Fase 4 (renderizado) y tiene un pipeline de na
 
 ---
 
-## 4. Recomendación
+## 4. Decisión aceptada por el dueño (2026-11-10)
 
-**Adoptar la Opción B1: Boa (`boa_engine` 0.21.x) como motor JS de la Fase 6, con feature `js` opcional (apagada por defecto), en un crate nuevo `crates/js`, sin delegar el núcleo DOM/CSS/layout/paint.**
+La opción recomendada en este ADR fue **aprobada literalmente** por el dueño. Queda registrado:
 
-Razones:
+1. **Motor = Boa `boa_engine` 0.21.x** (pure Rust, MSRV Rust 1.88, licencia Unlicense OR MIT; sin C/FFI). El crate se integrará en un nuevo `crates/js`.
+2. **Feature `js` ENCENDIDA POR DEFECTO** (el dueño eligió ON, no la recomendación inicial de OFF). Construcción y CI deben compilar **con JS por defecto**, y se mantiene un job `--no-default-features` para el **build mínimo** (std-only, sin Boa).
+3. **Alcance inicial = COMPLETO**: `document.write` + bindings DOM + eventos + timers + CSSOM + `querySelector` (plan WP-6.1–6.7 ya definido, **≈25–30 días-persona**). No se limita al mínimo de `scripted_*`.
 
-1. **Encaje con la filosofía**: Megi sigue implementando desde cero el núcleo del navegador (DOM/HTML/CSS/layout/paint/render/shell). El motor ECMAScript es un **componente de lenguaje**, no el núcleo del navegador; usar un motor existente evita años de trabajo y es coherente con la política §3.1, que ya autoriza componentes de bajo nivel (tipografía, red, ventanas).
-2. **Pure Rust y `#![forbid(unsafe_code)]`**: no añade toolchain C ni FFI a nuestro código; el build por defecto puede seguir siendo std-only si la feature `js` está apagada.
-3. **Licencia**: Unlicense OR MIT, compatible con `MIT OR Apache-2.0` eligiendo MIT; debe declararse en §3.1.
-4. **MSRV**: `boa_engine 0.21.1` declara **Rust 1.88.0**, exactamente el MSRV del workspace; fijar `0.21.x` hasta que se decida subir la MSRV (0.22 exige 1.91).
-5. **Cobertura suficiente para el alcance**: >90 % de la spec actual cubre las páginas reales y los `scripted_*` (que necesitan ES5 + `document.write`); si en el futuro la compatibilidad resulta insuficiente, la arquitectura de bindings permite **migrar a QuickJS/rquickjs** sin reescribir el DOM (ver §9).
+Fundamento (contexto de la recomendación original):
+
+- **Encaje con la filosofía**: Megi sigue implementando desde cero el núcleo del navegador (DOM/HTML/CSS/layout/paint/render/shell). El motor ECMAScript es un **componente de lenguaje**, no el núcleo; usar un motor existente evita años de trabajo y es coherente con §3.1 (componentes de bajo nivel).
+- **Pure Rust y `#![forbid(unsafe_code)]`**: sin toolchain C ni FFI en nuestro código.
+- **Licencia**: Unlicense OR MIT, compatible con `MIT OR Apache-2.0` eligiendo MIT; declarada en §3.1.
+- **MSRV**: `boa_engine 0.21.1` declara **Rust 1.88.0**, exactamente el MSRV del workspace; fijar `0.21.x` hasta que se decida subir la MSRV (0.22 exige 1.91).
+- **Cobertura**: >90 % de la spec actual, suficiente para el alcance completo y las páginas reales; si resultara insuficiente, los bindings permiten migrar a QuickJS (§9).
+
+**Consecuencias inmediatas de la decisión**:
+
+- `Cargo.toml` del workspace/`crates/js`: Boa 0.21.x como dependencia **no opcional por defecto** (feature `js` default); MSRV/CI siguen en 1.88, pero el build por defecto crece y compila Boa.
+- CI: el job `quality` compila/tests **con JS por defecto**; se añade un job **`minimal`** (`cargo test --workspace --no-default-features`) que garantiza el build std-only; el job MSRV cubre ambas configuraciones.
+- `crates/render`/`crates/shell` habilitan la ejecución JS por defecto y deben poder deshabilitarla con `--no-default-features`.
+- Fase 6 pasa a **EN IMPLEMENTACIÓN (WP-6.1 en curso)**; los `scripted_*` siguen en la allowlist hasta que WP-6.3 los cierre.
 
 ### 4.1 Reglas de integración propuestas
 
-- **Crate nuevo `crates/js`** con `#![forbid(unsafe_code)]`, dependencia opcional de `boa_engine`; `render`/`shell` la consumen con feature `js`.
-- **Feature `js` apagada por defecto** en el workspace: `cargo test --workspace` y el gate siguen sin depender de Boa; CI añade un job `--features js` (build+tests) y el job MSRV sólo se ejecuta con la feature encendida si el dueño acepta la dependencia.
+- **Crate nuevo `crates/js`** con `#![forbid(unsafe_code)]` y `boa_engine` 0.21.x como dependencia de la feature `js` (default ON); `render`/`shell` la consumen con la feature y ofrecen build mínimo sin ella.
+- **Feature `js` encendida por defecto** (decisión): `cargo test --workspace` y el gate compilan con Boa; CI añade un job **`--no-default-features`** que verifica el build mínimo std-only. El job MSRV se ejecuta en ambas configuraciones (`default` y `--no-default-features`).
 - **Registrar en `ARCHITECTURE.md` §3.1** una fila nueva: *Motor JS (Fase 6): `boa_engine` (Unlicense OR MIT, pure Rust)*; y actualizar la lista de lo que Megi implementa desde cero (bindings, event loop, política de ejecución y sandbox lógica).
 - **Sin snapshots ni binarios precompilados**; todo compilado desde el registry, reproducible en CI offline tras el primer `cargo fetch`.
 - **Revisión de `unsafe`**: Boa usa `unsafe` internamente; nuestro crate se mantiene libre de `unsafe` y la frontera es la API safe de `boa_engine`. Documentarlo en `SECURITY.md`.
@@ -141,8 +153,8 @@ Razones:
 | Riesgo | Prob. | Mitigación |
 |---|:---:|---|
 | Cobertura ES de Boa insuficiente para páginas reales | Media | Empezar con bindings; medir con un corpus de scripts; plan de migración a QuickJS (§9) |
-| Incremento de tiempo de compilación/binary size con `js` | Alta | Feature opcional; perfil de build separado; medir en CI (target del bench) |
-| Licencia Unlicense no deseada | Baja | Elegir MIT explícitamente; declarar en §3.1 |
+| Incremento de tiempo de compilación/binary size con `js` (ahora default) | Alta | Job CI `--no-default-features` para el build mínimo; medir tiempos en CI/bench; documentar el coste en el README |
+| Licencia Unlicense no deseada | Baja | El dueño aceptó «Unlicense OR MIT»; se elige MIT explícitamente y se declara en §3.1 |
 | MSRV futura de Boa (0.22 = 1.91) | Media | Fijar 0.21.x; subir MSRV sólo con decisión explícita del dueño |
 | DoS por scripts maliciosos (bucles, memoria) | Alta | Interrupt handler con presupuesto de tiempo/instrucciones, límites de memoria y pila, sin red/FS por defecto; fuzzing de la capa de bindings |
 | Incompatibilidad con `#![forbid(unsafe_code)]` del workspace | Baja | `forbid` aplica a nuestros crates; la dependencia externa se documenta y audita |
@@ -183,13 +195,13 @@ Razones:
 
 ---
 
-## 6. Plan propuesto WP-6.x
+## 6. Plan aceptado WP-6.x (alcance completo, ≈25–30 días)
 
-Estimaciones en días de un agente full-time, con tests y revisión; dependencia en cadena salvo lo indicado.
+Estimaciones en días de un agente full-time, con tests y revisión; dependencia en cadena salvo lo indicado. **Alcance completo decidido por el dueño** (no sólo el mínimo `scripted_*`): eventos, timers, CSSOM y `querySelector` incluidos.
 
 | WP | Objetivo | Dep. | Días | Criterio de aceptación |
 |---|---|---|---:|---|
-| **WP-6.1** | Crate `crates/js` + feature `js` opcional; realm Boa (`Context`), `console` mínimo, presupuesto de instrucciones y errores tipados; CI job `--features js` | — | 3 | `cargo test -p js`; `cargo test --workspace` sin feature sigue verde (build std-only); MSRV 1.88 con feature JS |
+| **WP-6.1** | Crate `crates/js` + feature `js` **default ON**; realm Boa (`Context`), `console` mínimo, presupuesto de instrucciones y errores tipados; CI con JS por defecto + job `--no-default-features` | — | 3 | `cargo test -p js`; `cargo test --workspace` (con JS) y `cargo test --workspace --no-default-features` (mínimo) verdes; MSRV 1.88 en ambas configuraciones |
 | **WP-6.2** | Bindings DOM core: tabla lateral por realm, wrappers `Node`/`Document`/`Element`/`Text`, generación/stale, `DomError`→excepción JS | 6.1 | 6 | Micro-tests JS↔DOM (get/set `id`, atributos, `textContent`, hijos); wrappers invalidados tras `remove_node`; sin `unsafe` en `crates/js` |
 | **WP-6.3** | Ejecución de `<script>` parser-inserted + `document.write`/`innerHTML` usando la API existente | 6.2 | 5 | **`cargo run -p test_harness -- --summary`**: suites `scripted_*` dejan de estar en la allowlist; árbol **3.904/3.904**; gate PASS con allowlist sólo de tokenizer |
 | **WP-6.4** | `EventTarget` mínimo + timers/microtareas + integración con el event loop de `render`/`shell` | 6.2, 6.3 | 5 | `setTimeout`/`Promise` ordenados; tests de eventos sintéticos; un script con timer acaba en el pixel esperado |
@@ -197,7 +209,7 @@ Estimaciones en días de un agente full-time, con tests y revisión; dependencia
 | **WP-6.6** | Endurecimiento: presupuestos de tiempo/memoria, fuzz de bindings, aislamiento entre realms | 6.3–6.5 | 3 | Fuzz target de bindings en CI; script malicioso (bucle/alloc) interrumpido sin tumbar el proceso |
 | **WP-6.7** | Integración con `shell` (ventana con JS) y documentación final de Fase 6 | 6.4–6.6 | 3 | `megi` ejecuta una página con JS en ventana y en `--screenshot`; docs + gate verdes |
 
-**Total orientativo: 30–31 días-persona.** Camino mínimo hasta `scripted_*` verdes: **6.1 → 6.2 → 6.3 = ≈14 días-persona** (Boa 0.21.1). Si se elige QuickJS/rquickjs, sumar ~2–3 días por toolchain C y MSRV/CI.
+**Total: 25–30 días-persona** (alcance completo aceptado: WP-6.1–6.7). Hito intermedio: `scripted_*` verdes al cerrar WP-6.3 (≈14 días desde el inicio). Boa 0.21.x; no aplica la variante QuickJS, que queda sólo como plan de migración.
 
 ### 6.1 Qué NO hacer en Fase 6
 
@@ -224,17 +236,17 @@ Estimaciones en días de un agente full-time, con tests y revisión; dependencia
 
 ---
 
-## 8. DECISIÓN PENDIENTE DEL DUEÑO
+## 8. DECISIÓN ACEPTADA (2026-11-10)
 
-**Este ADR no se implementa hasta que el dueño responda:**
+**Registrado literalmente de la decisión del dueño:**
 
-1. **Motor**: ¿**Boa** (recomendado: pure Rust, MSRV 1.88 con 0.21.x, licencia Unlicense OR MIT, sin C) o **QuickJS/rquickjs** (MIT, casi 100 % Test262, pero añade toolchain C + FFI) u otra opción? ¿Se acepta la entrada «Unlicense OR MIT» en la política §3.1?
-2. **Activación**: ¿feature `js` **apagada por defecto** (recomendado: build/gate/CI actuales intactos, job específico `--features js`) o encendida por defecto (más simple para el usuario, más peso de build y MSRV)?
-3. **Alcance inicial**: ¿sólo **`document.write` + bindings DOM básicos** para cerrar los `scripted_*` y demostrar navegador real (**WP-6.1–6.3**, ≈14 días), o incluir desde el inicio eventos/timers/CSSOM/`querySelector` (**WP-6.1–6.5**, ≈25 días)?
+1. **Motor**: **Boa `boa_engine` 0.21.x** (se acepta «Unlicense OR MIT» en la política §3.1; se elige MIT). Descartadas para Fase 6: propio, QuickJS/rquickjs (queda como plan de migración), V8/SpiderMonkey y el stub.
+2. **Activación**: feature `js` **ENCENDIDA POR DEFECTO** en el workspace y en `render`/`shell`. El build y el CI por defecto compilan con JS; se mantiene un job **`cargo test --workspace --no-default-features`** para el build mínimo std-only, y el job MSRV cubre ambas configuraciones.
+3. **Alcance inicial**: **COMPLETO** — `document.write` + bindings DOM + `EventTarget`/eventos + timers + CSSOM + `querySelector` (WP-6.1–6.7, **≈25–30 días-persona**).
 
-**Mientras no haya decisión**: `crates/js` no se crea, la Fase 6 permanece al 0 %, el gate mantiene la allowlist `scripted_*` documentada y este ADR queda enlazado desde ARCHITECTURE/ROADMAP/HANDOFF. Cualquier cambio de decisión debe actualizar este documento y la matriz de §3.1 de [`ARCHITECTURE.md`](ARCHITECTURE.md).
+**Estado de implementación**: **Fase 6 EN IMPLEMENTACIÓN (WP-6.1 en curso, desde 2026-11-10)**. `crates/js` se crea en WP-6.1; hasta que WP-6.3 cierre `document.write`, los 4 suites `scripted_*` (6 mode-runs) permanecen en la allowlist del gate y Fase 6 no aporta tests aún. No se reabre la decisión salvo por los criterios de §8.1.
 
-### 8.1 Criterios para revisar la decisión
+### 8.1 Criterios para revisar la decisión (si cambian las premisas)
 
 - Si Boa no alcanza la compatibilidad necesaria para un corpus realista → reevaluar QuickJS/rquickjs (la capa de bindings es reutilizable).
 - Si el dueño exige Test262 completo o JIT → la opción correcta es V8/SpiderMonkey, con una decisión de producto distinta (navegador de máxima compatibilidad) y no una feature de Fase 6.

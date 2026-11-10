@@ -6,6 +6,65 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 7 — query APIs, shell usable, advanced tables, @import/showcase and JS ADR accepted (2026-11-10)
+
+#### Added
+
+- **CSS query APIs**: `css::query::{query_selector, query_selector_all, matches}`
+  plus fallible `try_*` variants (`SelectorParseError`), document-order traversal
+  and `:scope` documented as unsupported; `ComputedStyle` gains
+  `background_image` / `list_style_image` parsing (`url(...)`, `none`, color+image
+  shorthand; gradients → `None`; painting tracked as follow-up). 57 CSS tests.
+- **Render showcase**: `tests/fixtures/render/showcase/` — realistic JS-free page
+  with external CSS, recursive `@import`, media queries, two decoded PNG assets,
+  a table and a positioned stage. Deterministic 1024×768 golden
+  **65,151 B, `md5 570aa554c88c2fdf75481e8cd076bf61`** (file:// and loopback HTTP),
+  capture documented in `docs/images/showcase.png`.
+- **`@import` recursive + real media evaluation** in `crates/render`: relative
+  resolution against the importing sheet, dedup/cycle/depth-8/caps, screen/print
+  media applied per `<link>`, `<style>` and `@import`, per-stage import/media stats.
+- **Usable shell (Phase 7)**: vertical scroll (wheel/touchpad, arrows, PageUp/Down,
+  Home/End; clamp and 8192 CSS px cap with `[recortado]` marker), mouse/keyboard
+  input (click prints URL, r re-render, q/Esc/close quit), HiDPI (CSS viewport =
+  physical/scale, nearest-neighbour presentation, re-render on scale change) and an
+  off-thread render worker with generation checks, cancellation, coalescing and a
+  120 ms debounce via `EventLoopProxy`. 46 shell tests.
+- **Advanced tables (Phase 4)**: `rowspan` (occupancy matrix, bottom-up row-height
+  distribution), `table-layout: fixed`, atomic `inline-table` (first-row baseline)
+  and `border-collapse` conflict resolution (`hidden > width > style > origin`;
+  unresolved colors; winning border on both cells) plus a fast path for
+  separate/auto/no-rowspan (`layout/realistic-1mb` back to ~59 ms). 129 tests.
+- **ADR-001 JavaScript (Phase 6) — ACCEPTED by the owner on 2026-11-10**:
+  `docs/JAVASCRIPT-STRATEGY.md` records the decisions — **Boa 0.21.x** engine,
+  feature `js` **enabled by default** (CI keeps a `--no-default-features` minimal
+  build), full initial scope (`document.write` + DOM bindings + events + timers +
+  CSSOM + `querySelector`, WP-6.1–6.7, ≈25–30 person-days). Phase 6 is now
+  **in implementation (WP-6.1)**, `crates/js` does not exist yet in this HEAD.
+- `docs/images/showcase.png`: compressed capture of the showcase golden.
+
+#### Changed
+
+- README/ROADMAP/ARCHITECTURE/HANDOFF/PHASE4-SUPPORT/TOOLING/SECURITY/
+  CONTRIBUTING/CHANGELOG synchronized with round 7 (602 tests, Phase 4 ≈100 %
+  functional, Phase 5 ≈80 %, Phase 7 ≈40 %) and with the accepted JS ADR
+  (`ARCHITECTURE.md` §3.1 now lists Boa 0.21.x and the default-on feature).
+
+#### Fixed
+
+- Partial-coverage underflow in `Pixmap::fill_rect` for sub-pixel/fractional
+  rectangles: coverage is now exact (4 regression tests); the paint golden stays
+  byte-identical. Paint bench slightly better (0.88 → 0.83 ms).
+- Shell resize/scale changes now debounce and coalesce through the worker instead
+  of re-rendering synchronously on the event loop.
+
+#### Performance
+
+- Layout realistic 1 MB back to ≈59 ms with the advanced-tables fast path
+  (separate + auto + no rowspan); paint raster unchanged.
+- Test suite: **602 tests** (was 546), all green; fmt, clippy `-D warnings`,
+  `cargo doc`, 4-suite conformance gate and MSRV 1.88 verified.
+
+
 ### Round 6 — images, @import/media, browser DOM, shell and layout −43 % (2026-11-10)
 
 #### Added
