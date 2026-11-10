@@ -6,6 +6,62 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 4 — positioning/floats/stacking + TLS/cache + fuzzing (2026-11-10)
+
+#### Added
+
+- **Layout**: `position: relative/absolute/fixed` with positioned containing
+  blocks, static position, shrink-to-fit and `fixed` against the viewport
+  (`sticky` documented as relative while there is no scrolling); `float:
+  left/right` + `clear` (CSS 2.2 §9.5) with float-aware BFC height (§10.6.7);
+  `overflow` creates a BFC and propagates an inherited clip rectangle.
+  `LayoutBox` gains `position`, `z_index`, `opacity`,
+  `establishes_stacking_context`, `clip`, `is_float` and `float_side`.
+  +22 tests → 102.
+- **Paint**: complete CSS 2.2 Appendix E painting order (stacking contexts and
+  `z-index`, negative/auto/positive), `DisplayItem::OpacityGroup` composited
+  offscreen once, `PushClip`/`PopClip` driven by `overflow`,
+  `text-decoration` (underline/overline/line-through), `visibility: hidden`
+  and list markers (`disc`/`circle`/`square`/`decimal`). +11 tests → 63.
+- **Net (Phase 5)**: TLS 1.2/1.3 with `rustls` 0.23 (ring backend, no aws-lc)
+  + `webpki-roots` trust anchors (feature `tls`, default on; SNI and
+  chain/hostname validation, injectable `ClientConfig` via
+  `FetchOptions::tls_config`); HTTP cache implementing an RFC 9111 subset
+  (`Cache-Control` max-age/no-store/no-cache, `Expires`, `ETag`,
+  `Last-Modified`, `Vary`, `304` revalidation); `data:` URLs (RFC 2397) with
+  the crate's own Base64 codec; `ResourceLoader` dispatch across
+  http/https/file/data. +22 tests → 85.
+- **Fuzzing**: standalone `fuzz/` workspace with `cargo-fuzz`/libFuzzer targets
+  `html_parse`, `css_parse`, `selectors` and `net_url`, versioned seed corpus,
+  `docs/FUZZING.md` and `.github/workflows/fuzz-nightly.yml` (daily 5-minute
+  smoke run + dispatch). Local ASan campaign: ~1.06 M executions, 0 crashes.
+- All engine crates now declare `#![forbid(unsafe_code)]`.
+
+#### Changed
+
+- README/ROADMAP/ARCHITECTURE/HANDOFF/PHASE4-SUPPORT/TOOLING/CONTRIBUTING/
+  SECURITY/CHANGELOG synchronized with round 4 (362 tests, Phase 4 ≈97 %,
+  Phase 5 ≈35 %); README embeds the regenerated Phase 4 capture (26 KB).
+
+#### Fixed
+
+- Golden render regenerated after stacking/opacity/decorations
+  (`basic.rgba` md5 `60f8984e…`, pipeline PNG md5 `34152025…`, 26 display
+  items) and verified deterministic.
+- Text glyph placement uses the IFC-propagated baseline; `line-height`
+  factor, soft-hyphen and `vertical-align` conformance from round 3 preserved.
+- SECURITY.md no longer claims that "fuzzing is not wired into CI": fuzzing is
+  now a nightly workflow with documented triage.
+
+#### Performance
+
+- 800×600 raster 1598.8 ms → 0.9 ms (culling), render-to-PNG 1628 → 7.7 ms,
+  full HTML→PNG pipeline 1842 → 170.7 ms (10.8×); methodology in
+  `docs/PERFORMANCE.md`.
+- Test suite: **362 tests** (was 301), all green; `fmt`, `clippy -D warnings`,
+  `cargo doc` and the 4-suite conformance gate pass; MSRV 1.88 verified.
+
+
 ### Added
 
 - `crates/fonts`: real typography engine built on `fontdb`, `ttf-parser`,

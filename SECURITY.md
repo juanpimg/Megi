@@ -31,11 +31,21 @@ after a fix is available.
 
 ## Security model and guarantees
 
-- **Memory safety**: the engine crates (`dom`, `html`, `css`, `layout`,
-  `paint`, `fonts`) contain no `unsafe` code and are built with
-  `clippy -D warnings`. The dependency policy in
-  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §3 restricts external crates
-  to low-level, audited building blocks.
+- **Memory safety**: **every** engine crate (`dom`, `html`, `css`, `fonts`,
+  `layout`, `paint`, `net`, `test_harness`, `bench`) declares
+  `#![forbid(unsafe_code)]` and is built with `clippy -D warnings`. The
+  dependency policy in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §3
+  restricts external crates to low-level, audited building blocks
+  (`serde`/`serde_json` in the test harness, the typography stack in `fonts`,
+  and `rustls` + `webpki-roots` for TLS transport in `net`).
+- **Network security**: `crates/net` validates `https:` servers against the
+  Mozilla trust store compiled in through `webpki-roots` (no system store, no
+  network at startup), checks the URL hostname/chain with `rustls` 0.23
+  (ring backend) and supports a private CA injected via
+  `FetchOptions::tls_config`. HTTP responses are capped (16 MiB body / 64 KiB
+  headers), redirects are limited, and the HTTP cache follows an RFC 9111
+  subset (`Cache-Control`/`Expires`/`ETag`/`304`/`Vary`). No `unsafe` is used
+  for any of it.
 - **Hostile input**: parsing is bounded by `html::ParseOptions`
   (nesting depth, node count, attribute count and input size). Limits are
   reported through `LimitViolations` instead of aborting or panicking.
@@ -45,12 +55,24 @@ after a fix is available.
   (`append_child` / `insert_before` reject self-insertion and ancestor
   cycles), and detached references never panic.
 
-## Known robustness work in progress
+## Fuzzing and continuous robustness
 
-- Remaining non-linear CPU paths (HTML tree construction, CSS selector
-  matching) are tracked in [`docs/HANDOFF.md`](docs/HANDOFF.md) and measured
-  by the benchmark suite; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
-- Fuzzing targets are not wired into CI yet.
+- The parsers that consume untrusted input are fuzzed with libFuzzer through
+  `cargo-fuzz`: **four targets** (`html_parse`, `css_parse`, `selectors`,
+  `net_url`) with a versioned seed corpus. The harness lives in the standalone
+  `fuzz/` workspace (nightly + ASan) and is **not** a dependency of the engine
+  crates.
+- **Wired into CI**: [`.github/workflows/fuzz-nightly.yml`](.github/workflows/fuzz-nightly.yml)
+  runs a 5-minute smoke campaign per target daily (03:17 UTC) and on demand,
+  uploading crash artifacts on failure.
+- **Local campaign on record: ~1.06 M ASan executions, 0 crashes.** Triage
+  policy, reproduction, minimisation and regression rules are documented in
+  [`docs/FUZZING.md`](docs/FUZZING.md); memory-safety crashes and reachable
+  panics/aborts are security-relevant and must be reported privately (see
+  above).
+- Remaining non-linear CPU paths and layout/paint recursion budgets are
+  tracked in [`docs/HANDOFF.md`](docs/HANDOFF.md) and measured by the
+  benchmark suite; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 - There is no JavaScript engine yet (Phase 6); sandboxing and JIT hardening
   will be designed as part of that phase.
 
@@ -60,4 +82,7 @@ after a fix is available.
   not affect Megi's usage (report those upstream, but let us know).
 - Denial of service that requires attacker control over the host machine or
   the Rust toolchain itself.
+- Findings from `cargo-fuzz` that are already documented as expected behaviour
+  (bounded resource exhaustion under `ParseOptions`/response caps; the 6
+  scripted html5lib tree failures and 3 `xmlViolation` tokenizer gaps).
 - Issues that only affect rendering fidelity without a security impact.

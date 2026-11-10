@@ -1,6 +1,6 @@
 # Documentación de Tooling, Skills y Automatización (FASES 2–4)
 
-Este documento registra la investigación, evaluación, instalación y configuración de herramientas CLI, scripts de extracción de especificaciones y skills locales realizadas durante las **FASES 2–5** para optimizar el desarrollo autónomo guiado por especificaciones (WHATWG / W3C), el auto-testeo continuo (`html5lib-tests` y Web Platform Tests), el pipeline de renderizado a PNG y el arranque de la red (Fase 5) en **Megi**.
+Este documento registra la investigación, evaluación, instalación y configuración de herramientas CLI, scripts de extracción de especificaciones y skills locales realizadas durante las **FASES 2–5** para optimizar el desarrollo autónomo guiado por especificaciones (WHATWG / W3C), el auto-testeo continuo (`html5lib-tests` y Web Platform Tests), el pipeline de renderizado a PNG, el arranque de la red (Fase 5) y el fuzzing continuo en **Megi**.
 
 ---
 
@@ -162,7 +162,26 @@ BENCH_FEATURES=fonts ./tools/bench.sh   # benchmarks de fuentes (opt-in)
 
 Baseline de referencia (release, i7-12700H): raster 800×600 **1598,8 → 0,9 ms** (culling), render-to-PNG **1628 → 7,7 ms**, pipeline HTML→PNG **1842 → 170,7 ms** (**10,8×**). Detalle en `docs/PERFORMANCE.md`.
 
-### 2.8 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
+### 2.8 Fuzzing — `fuzz/`, `docs/FUZZING.md` y CI nocturna
+
+Workspace Cargo **independiente** (`fuzz/`, con `[workspace]` vacío) que alberga los targets de [libFuzzer](https://llvm.org/docs/LibFuzzer.html) vía [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz). No forma parte del workspace del motor ni de su grafo de dependencias: el tooling de fuzzing (`libfuzzer-sys`, nightly + ASan) no contamina el build estable.
+
+- **Targets** (4): `html_parse` (tokenizer + árbol + serializer), `css_parse` (tokenizer/parser de hojas y declaraciones), `selectors` (Selectors L4 + cascade sobre un DOM sintético) y `net_url` (URL WHATWG + `join`, sin abrir sockets).
+- **Corpus semilla versionado** en `fuzz/corpus/<target>/` (17 ficheros); `fuzz/target/`, `fuzz/artifacts/`, `fuzz/coverage/` y `fuzz/Cargo.lock` están ignorados.
+- **CI**: `.github/workflows/fuzz-nightly.yml` (`schedule` diario 03:17 UTC + `workflow_dispatch`), 300 s por target, sube artefactos de crash si falla.
+- **Campaña local documentada**: ~1,06 M de ejecuciones ASan con **0 crashes**; política de triaje (reproducir → minimizar → clasificar → añadir regresión) en [`FUZZING.md`](FUZZING.md).
+
+```bash
+rustup toolchain install nightly --profile minimal
+cargo install cargo-fuzz --locked
+cd fuzz
+cargo +nightly fuzz run html_parse -- -max_total_time=30
+cargo +nightly fuzz run css_parse  -- -max_total_time=30
+cargo +nightly fuzz run selectors  -- -max_total_time=30
+cargo +nightly fuzz run net_url    -- -max_total_time=30
+```
+
+### 2.9 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
 
 Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-spec-driven-dev/SKILL.md` (directorio ignorado en `.gitignore` para mantener limpio el árbol Git de metadatos de agentes, mientras su documentación permanente reside en este archivo `docs/TOOLING.md`). Esta skill estandariza el protocolo operativo para cualquier agente que trabaje en la Fase 1 y posteriores:
 1. Consultar primero la sección normativa con `./tools/whatwg_spec.py section <id>`.
@@ -175,13 +194,15 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 301 tests, doc y gate de conformidad
+./tools/dev.sh all                     # fmt, clippy, 362 tests, doc y gate de conformidad
 cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 
 cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
 python3 tools/png_check.py /tmp/basic.png
 ./tools/bench.sh --scale 0.1
+cargo test -p net                    # Fase 5, offline
+cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Cifras de referencia de esta ronda: **301 tests** (css 41, dom 9, fonts 13+1, html 33, layout 80, net 57, paint 52, bench 8, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; MSRV Rust 1.88.
+Cifras de referencia de esta ronda: **362 tests** (bench 8, css 41, dom 9, fonts 13+1 doctest, html 33, layout 102, net 85, paint 63, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
