@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Megi render fixture: base + external CSS</title>
+<base href="sub/">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="print-only.css" media="print">
+<style>
+  p { margin: 0; padding: 8px; font-family: sans-serif; font-size: 16px; }
+</style>
+</head>
+<body>
+<h1>Base href fixture</h1>
+<p>External theme.css must paint the canvas green; print-only.css must be ignored.</p>
+</body>
+</html>

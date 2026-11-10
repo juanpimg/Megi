@@ -1,0 +1,22 @@
+[package]
+name = "render"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Megi Engine — first real browser pipeline: URL → HTML → external CSS → layout → PNG"
+
+[dependencies]
+dom.workspace = true
+html.workspace = true
+css.workspace = true
+layout.workspace = true
+fonts.workspace = true
+paint.workspace = true
+net.workspace = true
+
+[[bin]]
+name = "render"
+path = "src/main.rs"

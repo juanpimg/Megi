@@ -148,6 +148,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "image"
+version = "0.1.0"
+
+[[package]]
 name = "itoa"
 version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -281,6 +285,19 @@ dependencies = [
  "rustls-pki-types",
  "time",
  "yasna",
+]
+
+[[package]]
+name = "render"
+version = "0.1.0"
+dependencies = [
+ "css",
+ "dom",
+ "fonts",
+ "html",
+ "layout",
+ "net",
+ "paint",
 ]
 
 [[package]]

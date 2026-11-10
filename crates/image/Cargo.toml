@@ -1,0 +1,11 @@
+[package]
+name = "image"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+authors = ["Megi Engine Contributors"]
+repository = "https://github.com/juanpimg/Megi"
+description = "Megi Engine — dependency-free PNG decoder and zlib/DEFLATE inflater (RGBA8)"
+
+[dependencies]

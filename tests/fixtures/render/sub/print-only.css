@@ -1,0 +1,4 @@
+/* media="print": must NOT be applied by the screen render pipeline. */
+html {
+  background-color: rgb(255, 0, 0);
+}
