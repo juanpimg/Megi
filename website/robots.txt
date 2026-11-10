@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://juanpimg.github.io/Megi/sitemap.xml
