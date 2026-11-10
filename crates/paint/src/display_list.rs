@@ -351,6 +351,17 @@ impl DisplayList {
         Self { items: Vec::new() }
     }
 
+    /// Creates a display list with pre-reserved item capacity.
+    ///
+    /// Reserving avoids repeated reallocations of the (relatively large)
+    /// [`DisplayItem`] enum when the painter can estimate the item count; the
+    /// capacity is clamped to [`MAX_DISPLAY_LIST_ITEMS`].
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            items: Vec::with_capacity(capacity.min(MAX_DISPLAY_LIST_ITEMS)),
+        }
+    }
+
     /// Appends a new display item to the list.
     ///
     /// Appends are silently dropped once [`MAX_DISPLAY_LIST_ITEMS`] is reached;

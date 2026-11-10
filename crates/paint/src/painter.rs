@@ -130,6 +130,7 @@ struct PaintResources<'a> {
 
 impl PaintResources<'_> {
     /// Records a painted primitive for hit-testing (no-op when regions are off).
+    #[inline]
     fn record(&self, rect: Rect, node_id: Option<dom::NodeId>, kind: HitKind) {
         if let Some(collector) = self.regions {
             collector.borrow_mut().record(rect, node_id, kind);
@@ -298,7 +299,10 @@ fn build_display_list_inner(
         viewport,
     };
     let canvas = canvas_background(root);
-    let mut list = DisplayList::new();
+    // Reserve a modest starting capacity: the painter emits roughly one item per
+    // text run plus one per painted box, and `DisplayItem` is a large enum, so a
+    // few reallocations are expensive on text-heavy pages (R129).
+    let mut list = DisplayList::with_capacity(16384);
 
     match canvas {
         CanvasBackground::None => {}
@@ -397,6 +401,7 @@ fn border_sides(style: &css::ComputedStyle, border: layout::EdgeSizes) -> [Borde
 }
 
 /// Appendix E phase of `layout_box` inside its nearest stacking context.
+#[inline]
 fn phase(layout_box: &LayoutBox) -> Phase {
     if layout_box.establishes_stacking_context {
         if layout_box.z_index < 0 {
@@ -418,6 +423,7 @@ fn phase(layout_box: &LayoutBox) -> Phase {
 }
 
 /// Applies `alpha_scale` to a color's alpha (flat-opacity fallback).
+#[inline]
 fn scaled(color: Color, alpha_scale: f32) -> Color {
     if alpha_scale >= 1.0 {
         return color;
@@ -427,6 +433,7 @@ fn scaled(color: Color, alpha_scale: f32) -> Color {
 }
 
 /// True when the box's own style is hidden (CSS 2.2 §11.2 `visibility`).
+#[inline]
 fn is_hidden(layout_box: &LayoutBox) -> bool {
     layout_box
         .style
@@ -705,7 +712,8 @@ fn paint_block_backgrounds(
     inherited_hidden: bool,
     alpha_scale: f32,
 ) {
-    let mut stack: Vec<BlockTask<'_>> = Vec::new();
+    let mut stack: Vec<BlockTask<'_>> =
+        Vec::with_capacity(layout_box.children.len().saturating_mul(2).max(8));
     push_block_children(layout_box, inherited_hidden, alpha_scale, &mut stack);
     while let Some(task) = stack.pop() {
         match task {
@@ -766,7 +774,7 @@ fn paint_floats(
     alpha_scale: f32,
     depth: usize,
 ) {
-    let mut stack: Vec<&LayoutBox> = Vec::new();
+    let mut stack: Vec<&LayoutBox> = Vec::with_capacity(layout_box.children.len().max(8));
     for child in layout_box.children.iter().rev() {
         stack.push(child);
     }
@@ -869,7 +877,8 @@ fn paint_inline_content(
     alpha_scale: f32,
 ) {
     let owner = layout_box.node_id();
-    let mut stack: Vec<InlineTask<'_>> = Vec::new();
+    let mut stack: Vec<InlineTask<'_>> =
+        Vec::with_capacity(layout_box.children.len().saturating_mul(2).max(8));
     push_inline_children(
         layout_box,
         inherited_hidden,
@@ -907,17 +916,18 @@ fn paint_inline_content(
                     BoxType::TextNode(text) if !text.trim().is_empty() => {
                         if !hidden {
                             paint_text_run(child, text, list, resources, own_owner, alpha);
-                            paint_text_decorations(
-                                child,
-                                parent_decoration
-                                    | child.style.as_ref().map_or(TextDecoration::NONE, |style| {
-                                        style.text_decoration
-                                    }),
-                                list,
-                                resources,
-                                own_owner,
-                                alpha,
-                            );
+                            // `text-decoration` is empty for the vast majority of
+                            // runs; skip the decoration helper entirely (R129).
+                            let decoration = parent_decoration
+                                | child
+                                    .style
+                                    .as_ref()
+                                    .map_or(TextDecoration::NONE, |style| style.text_decoration);
+                            if !decoration.is_empty() {
+                                paint_text_decorations(
+                                    child, decoration, list, resources, own_owner, alpha,
+                                );
+                            }
                         }
                     }
                     BoxType::TextNode(_) | BoxType::LineBreak => {}
@@ -1128,15 +1138,35 @@ fn paint_background_border(
     };
 
     let node_id = layout_box.node_id();
-    resources.record(
-        layout_box.dimensions.border_box(),
-        node_id,
-        HitKind::Background,
-    );
+    let border_box = layout_box.dimensions.border_box();
+    resources.record(border_box, node_id, HitKind::Background);
 
     let background_is_propagated = (is_root && skip.root_background)
         || layout_box.node_id().is_some() && layout_box.node_id() == skip.body_node;
-    let border_box = layout_box.dimensions.border_box();
+    // Fast path: most boxes in real documents paint no background, border,
+    // shadow or radius. Detect that with cheap flags before any feature
+    // preparation (layers, gradients, masks, shadows, radii) so text-heavy
+    // pages do not pay per-box feature setup (R129).
+    let has_bg_color = style.background_color.a > 0;
+    let has_legacy_image = style.background_image.is_some();
+    let has_explicit_layers = style.background_geometry_explicit;
+    let has_shadows = !style.box_shadows.is_empty();
+    // Avoid building the four border sides when no width can paint.
+    let border = layout_box.dimensions.border;
+    let has_border_width =
+        border.top > 0.0 || border.right > 0.0 || border.bottom > 0.0 || border.left > 0.0;
+    let sides = if has_border_width {
+        border_sides(style, border)
+    } else {
+        [BorderSide::NONE; 4]
+    };
+    let has_border = sides.iter().any(BorderSide::is_visible);
+    let paints_background =
+        !background_is_propagated && (has_bg_color || has_legacy_image || has_explicit_layers);
+    if !paints_background && !has_shadows && !has_border {
+        return;
+    }
+
     let radii = style.border_radius;
     let has_radius = !radii.is_zero();
     let rounded_group = !background_is_propagated && has_radius;
@@ -1328,8 +1358,7 @@ fn paint_background_border(
         }
     }
 
-    let sides = border_sides(style, layout_box.dimensions.border);
-    if sides.iter().any(BorderSide::is_visible) {
+    if has_border {
         resources.record(border_box, node_id, HitKind::Border);
         let sides = sides.map(|side| BorderSide {
             color: scaled(side.color, alpha_scale),
@@ -1506,7 +1535,19 @@ fn is_list_item(layout_box: &LayoutBox) -> bool {
 ///
 /// Iterative pre-order walk (no recursion: deep list-item chains are safe).
 fn first_text_baseline(layout_box: &LayoutBox) -> Option<f32> {
-    let mut stack: Vec<&LayoutBox> = vec![layout_box];
+    // Fast path without allocation: list items usually contain their text
+    // directly (R129).
+    for child in &layout_box.children {
+        if let BoxType::TextNode(text) = &child.box_type
+            && !text.trim().is_empty()
+        {
+            return Some(child.dimensions.content.y + child.baseline);
+        }
+    }
+    let mut stack: Vec<&LayoutBox> = Vec::with_capacity(layout_box.children.len());
+    for child in layout_box.children.iter().rev() {
+        stack.push(child);
+    }
     while let Some(current) = stack.pop() {
         if let BoxType::TextNode(text) = &current.box_type
             && !text.trim().is_empty()
