@@ -6,10 +6,9 @@
 //! Parenting (§13.2.6.1), the Adoption Agency Algorithm (§13.2.6.4.7), `<template>`
 //! contents insertion, and Foreign Content (SVG/MathML) attribute/tag adjustments (§13.2.6.5).
 
-use std::collections::{HashMap, HashSet};
-
 use dom::{Attribute, Document, Namespace, NodeId, NodeKind, QuirksMode};
 
+use crate::fast_hash::{FastMap, FastSet};
 use crate::tokenizer::{Token, Tokenizer, TokenizerConfig, TokenizerState};
 
 /// All 21 insertion modes of the WHATWG HTML Living Standard (§13.2.6.4.1 – §13.2.6.4.21).
@@ -674,10 +673,13 @@ pub struct TreeBuilder {
     /// Anti-quadratic fast path for §13.2.4.2 scope checks: number of currently-open
     /// HTML-namespace elements per local name (audit finding F2). "The tag is not open at
     /// all" answers `has_element_in_*_scope` in O(1) instead of scanning the whole stack.
-    open_html_counts: HashMap<String, u32>,
+    open_html_counts: FastMap<String, u32>,
     /// O(1) membership test for the stack of open elements (used by the active-formatting
     /// reconstruction, which previously scanned the stack once per character token).
-    open_ids: HashSet<NodeId>,
+    open_ids: FastSet<NodeId>,
+    /// Number of currently-open non-HTML (SVG/MathML) elements. Allows the per-token
+    /// foreign-content dispatch to skip all node lookups for HTML-only pages.
+    open_foreign_count: u32,
 }
 
 impl TreeBuilder {
@@ -721,8 +723,9 @@ impl TreeBuilder {
             parse_options,
             limit_violations: LimitViolations::default(),
             has_select_element: false,
-            open_html_counts: HashMap::new(),
-            open_ids: HashSet::new(),
+            open_html_counts: FastMap::default(),
+            open_ids: FastSet::default(),
+            open_foreign_count: 0,
         }
     }
 
@@ -795,6 +798,12 @@ impl TreeBuilder {
             return;
         };
         if el.namespace != Namespace::Html {
+            // Keep the foreign-content fast path in sync (see `should_dispatch_to_foreign`).
+            if delta > 0 {
+                self.open_foreign_count += 1;
+            } else {
+                self.open_foreign_count = self.open_foreign_count.saturating_sub(1);
+            }
             return;
         }
         if delta > 0 {
@@ -850,6 +859,11 @@ impl TreeBuilder {
     }
 
     pub fn is_adjusted_current_node_foreign(&self) -> bool {
+        // Fast path: with no foreign element open (and no fragment context, whose
+        // namespace could be foreign) the adjusted current node is necessarily HTML.
+        if self.open_foreign_count == 0 && self.fragment_context_node.is_none() {
+            return false;
+        }
         if let Some(id) = self.adjusted_current_node()
             && let Some(el) = self.doc.node(id).as_element()
         {
@@ -892,8 +906,19 @@ impl TreeBuilder {
         })
     }
 
+    /// Cheap conservative predicate: `false` guarantees the adjusted current node is HTML,
+    /// so no token can require foreign-content handling.
+    pub fn may_have_foreign_content(&self) -> bool {
+        self.open_foreign_count > 0 || self.fragment_context_node.is_some()
+    }
+
     pub fn should_dispatch_to_foreign(&self, token: &Token) -> bool {
         if self.open_elements.is_empty() {
+            return false;
+        }
+        // Fast path for HTML-only documents (the common case): no foreign element is open,
+        // so the adjusted current node cannot be in the SVG/MathML namespaces.
+        if self.open_foreign_count == 0 && self.fragment_context_node.is_none() {
             return false;
         }
         let Some(adjusted_node) = self.adjusted_current_node() else {
@@ -1282,6 +1307,20 @@ impl TreeBuilder {
         };
         let mut buf = [0u8; 4];
         let s = ch.encode_utf8(&mut buf);
+        // Fast path: outside foster-parenting the appropriate insertion location is simply
+        // the current node, unless it is an HTML `<template>` (whose characters are
+        // redirected into its inert contents fragment). Avoids the full location
+        // computation (several arena lookups) for every text character.
+        if !self.foster_parenting
+            && let Some(current) = self.current_node()
+            && let Some(element) = self.doc.node(current).as_element()
+            && !(element.namespace == Namespace::Html
+                && element.local_name == "template"
+                && element.template_contents.is_some())
+        {
+            self.doc.append_text(current, s);
+            return;
+        }
         let loc = self.appropriate_place_for_inserting_node(None);
         if loc.parent == self.doc.root() {
             return;
@@ -1290,6 +1329,73 @@ impl TreeBuilder {
             self.doc.insert_text_before(sib, s);
         } else {
             self.doc.append_text(loc.parent, s);
+        }
+    }
+
+    /// Processes a run of consecutive character tokens in the "in body" insertion mode.
+    ///
+    /// The caller guarantees that `self.mode == InsertionMode::InBody` and that no other
+    /// token intervenes, so the observable behaviour is identical to calling
+    /// [`TreeBuilder::process_token`] for each code point (filters NUL/invalid code points,
+    /// reconstructs the active formatting elements, sets `frameset_ok` for non-whitespace
+    /// and inserts the coalesced text): it just computes the insertion location once for
+    /// the whole run and appends a single `&str` instead of one `char` at a time.
+    pub fn process_character_run(&mut self, codepoints: &[u32]) {
+        let mut text = String::with_capacity(codepoints.len());
+        let mut has_non_whitespace = false;
+        let mut skip_first_lf = false;
+        if self.skip_next_lf {
+            // `process_token` clears the flag for the first token; only an immediate LF is
+            // swallowed (e.g. the newline right after <pre>/<textarea>).
+            self.skip_next_lf = false;
+            skip_first_lf = codepoints.first() == Some(&0x0A);
+        }
+        for (index, &cp) in codepoints.iter().enumerate() {
+            if index == 0 && skip_first_lf {
+                continue;
+            }
+            if cp == 0 {
+                continue;
+            }
+            let Some(ch) = char::from_u32(cp) else {
+                continue;
+            };
+            if !matches!(cp, 0x09 | 0x0A | 0x0C | 0x0D | 0x20) {
+                has_non_whitespace = true;
+            }
+            text.push(ch);
+        }
+        if text.is_empty() {
+            return;
+        }
+        self.reconstruct_active_formatting_elements();
+        if has_non_whitespace && self.template_modes.is_empty() {
+            self.frameset_ok = false;
+        }
+        self.insert_text_run(&text);
+    }
+
+    /// Inserts `text` at the appropriate insertion location (the multi-character version
+    /// of [`TreeBuilder::insert_character`]).
+    fn insert_text_run(&mut self, text: &str) {
+        if !self.foster_parenting
+            && let Some(current) = self.current_node()
+            && let Some(element) = self.doc.node(current).as_element()
+            && !(element.namespace == Namespace::Html
+                && element.local_name == "template"
+                && element.template_contents.is_some())
+        {
+            self.doc.append_text(current, text);
+            return;
+        }
+        let loc = self.appropriate_place_for_inserting_node(None);
+        if loc.parent == self.doc.root() {
+            return;
+        }
+        if let Some(sib) = loc.insert_before_sibling {
+            self.doc.insert_text_before(sib, text);
+        } else {
+            self.doc.append_text(loc.parent, text);
         }
     }
 
@@ -4043,21 +4149,71 @@ fn run_fragment_parser(
 
 /// Runs the tokenizer → tree-builder loop until EOF.
 fn drive_tokenizer(tok: &mut Tokenizer, tb: &mut TreeBuilder) {
+    // Reused token batch buffer: the old code allocated a `Vec` for every emitted token.
+    let mut emitted: Vec<Token> = Vec::with_capacity(4);
+    // The CDATA allowance only depends on the adjusted current node, which is determined by
+    // `(open_elements.len(), current_node)` (plus the fixed fragment context). Caching the
+    // key avoids two arena lookups per input character.
+    let mut cdata_key: Option<(usize, Option<NodeId>)> = None;
+    // Consecutive character tokens of the "in body" mode are processed as one run.
+    let mut char_run: Vec<u32> = Vec::new();
+    let refresh_cdata =
+        |tok: &mut Tokenizer, tb: &TreeBuilder, key: &mut Option<(usize, Option<NodeId>)>| {
+            let current_key = (tb.open_elements.len(), tb.current_node());
+            if *key != Some(current_key) {
+                tok.allow_cdata = tb.is_adjusted_current_node_foreign();
+                *key = Some(current_key);
+            }
+        };
     loop {
-        tok.allow_cdata = tb.is_adjusted_current_node_foreign();
+        // Fast path: plain text in the "data" state can be consumed straight into the
+        // character run without emitting/handling one `Token::Character` per code point.
+        if tb.mode == InsertionMode::InBody
+            && tb.doc.len() < tb.parse_options.max_nodes
+            && !tb.may_have_foreign_content()
+        {
+            let consumed = tok.consume_data_run(&mut char_run);
+            if consumed > 0 {
+                continue;
+            }
+        }
+        refresh_cdata(tok, tb, &mut cdata_key);
         let prev_len = tok.tokens.len();
         tok.step();
         if tok.tokens.len() > prev_len {
-            let emitted: Vec<Token> = tok.tokens.drain(prev_len..).collect();
+            emitted.clear();
+            emitted.extend(tok.tokens.drain(prev_len..));
             let mut saw_eof = false;
-            for token in emitted {
+            for token in emitted.drain(..) {
+                if let Token::Character(cp) = token {
+                    if tb.mode == InsertionMode::InBody
+                        && tb.doc.len() < tb.parse_options.max_nodes
+                        && (!char_run.is_empty() || !tb.may_have_foreign_content())
+                    {
+                        char_run.push(cp);
+                        continue;
+                    }
+                    if !char_run.is_empty() {
+                        tb.process_character_run(&char_run);
+                        char_run.clear();
+                    }
+                    if let Some(new_state) = tb.process_token(Token::Character(cp)) {
+                        tok.state = new_state;
+                    }
+                    refresh_cdata(tok, tb, &mut cdata_key);
+                    continue;
+                }
+                if !char_run.is_empty() {
+                    tb.process_character_run(&char_run);
+                    char_run.clear();
+                }
                 if token == Token::Eof {
                     saw_eof = true;
                 }
                 if let Some(new_state) = tb.process_token(token) {
                     tok.state = new_state;
                 }
-                tok.allow_cdata = tb.is_adjusted_current_node_foreign();
+                refresh_cdata(tok, tb, &mut cdata_key);
             }
             if saw_eof {
                 break;
@@ -4081,6 +4237,8 @@ fn truncate_input(input: &str, max_bytes: usize) -> (&str, bool) {
 
 #[cfg(test)]
 mod robustness_regression_tests {
+    use std::collections::{HashMap, HashSet};
+
     use super::*;
 
     /// Recomputes the incremental bookkeeping from the stack and compares it with the
@@ -4097,11 +4255,23 @@ mod robustness_regression_tests {
             }
         }
         assert_eq!(
-            tb.open_ids, expected_ids,
+            tb.open_ids.len(),
+            expected_ids.len(),
+            "open_ids diverged from the stack"
+        );
+        assert!(
+            expected_ids.iter().all(|id| tb.open_ids.contains(id)),
             "open_ids diverged from the stack"
         );
         assert_eq!(
-            tb.open_html_counts, expected,
+            tb.open_html_counts.len(),
+            expected.len(),
+            "open_html_counts diverged from the stack"
+        );
+        assert!(
+            expected
+                .iter()
+                .all(|(name, count)| tb.open_html_counts.get(name) == Some(count)),
             "open_html_counts diverged from the stack"
         );
     }

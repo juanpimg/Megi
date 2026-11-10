@@ -268,7 +268,7 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
     // 1. Flatten children into a sequential stream of inline tokens. Atomic
     // inline-level boxes (inline-block/replaced) are laid out here so the line breaker
     // knows their margin box and baseline.
-    let mut tokens = Vec::new();
+    let mut tokens = Vec::with_capacity(layout_box.children.len() * 2);
     let mut inline_children = std::mem::take(&mut layout_box.children);
     collect_inline_tokens(
         &mut inline_children,

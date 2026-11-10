@@ -7,6 +7,7 @@
 
 pub mod browser;
 pub mod entities;
+pub(crate) mod fast_hash;
 pub mod input_stream;
 pub mod serializer;
 pub mod tokenizer;

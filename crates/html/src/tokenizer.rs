@@ -5,11 +5,10 @@
 //! `last_start_tag`, Processing Instruction states (§13.2.5.72–76), numeric/named
 //! character references (§13.2.5.77–84), and all 7 emitted token variants.
 
-use std::collections::HashSet;
-
+use crate::fast_hash::FastSet;
 use crate::input_stream::{
     is_ascii_whitespace, is_control_character_in_stream, is_noncharacter, is_surrogate,
-    preprocess_code_points,
+    preprocess_str_with_line_starts, preprocess_stream,
 };
 
 /// All 52 normative parse error codes defined in WHATWG HTML §13.2.2 (`#parse-errors`).
@@ -496,7 +495,7 @@ struct PendingTag {
     /// Set of attribute names already present in `attributes`, used to detect
     /// duplicates in amortized `O(1)` instead of a linear scan (which made a tag with
     /// many attributes quadratic per tag; see the tokenizer anti-DoS notes).
-    attribute_names: HashSet<String>,
+    attribute_names: FastSet<String>,
     current_attr_name: String,
     current_attr_value: String,
     has_current_attr: bool,
@@ -513,7 +512,7 @@ impl PendingTag {
             name: String::new(),
             self_closing: false,
             attributes: Vec::new(),
-            attribute_names: HashSet::new(),
+            attribute_names: FastSet::default(),
             current_attr_name: String::new(),
             current_attr_value: String::new(),
             has_current_attr: false,
@@ -528,7 +527,7 @@ impl PendingTag {
             name: String::new(),
             self_closing: false,
             attributes: Vec::new(),
-            attribute_names: HashSet::new(),
+            attribute_names: FastSet::default(),
             current_attr_name: String::new(),
             current_attr_value: String::new(),
             has_current_attr: false,
@@ -555,7 +554,7 @@ impl PendingTag {
         let name = std::mem::take(&mut self.current_attr_name);
         let value = std::mem::take(&mut self.current_attr_value);
         // First occurrence wins; later duplicates are reported and dropped. The
-        // `HashSet` keeps this amortized O(1) per attribute (a quadratic `.any()` scan
+        // The set keeps this amortized O(1) per attribute (a quadratic `.any()` scan
         // here was an algorithmic DoS: a single tag with tens of thousands of
         // attributes could burn seconds of CPU).
         if self.attribute_names.insert(name.clone()) {
@@ -648,13 +647,17 @@ pub struct Tokenizer {
 impl Tokenizer {
     /// Creates a new `Tokenizer` from raw code points (which are preprocessed via §13.2.3.5).
     pub fn new(raw_code_points: &[u32], config: TokenizerConfig) -> Self {
-        let (input, errors) = preprocess_code_points(raw_code_points);
-        let mut line_starts = vec![0usize];
-        for (index, cp) in input.iter().enumerate() {
-            if *cp == 0x0A {
-                line_starts.push(index + 1);
-            }
-        }
+        let (input, errors, line_starts) = preprocess_stream(raw_code_points.iter().copied());
+        Self::from_parts(input, errors, line_starts, config)
+    }
+
+    /// Builds a tokenizer from already-preprocessed code points and line starts.
+    fn from_parts(
+        input: Vec<u32>,
+        errors: Vec<ParseError>,
+        line_starts: Vec<usize>,
+        config: TokenizerConfig,
+    ) -> Self {
         let wide_prefix = input.iter().any(|cp| *cp > 0xFFFF).then(|| {
             let mut prefix = Vec::with_capacity(input.len() + 1);
             prefix.push(0u32);
@@ -690,10 +693,11 @@ impl Tokenizer {
         }
     }
 
-    /// Creates a `Tokenizer` from a UTF-8 `&str`.
+    /// Creates a `Tokenizer` from a UTF-8 `&str` in a single preprocessing pass (no
+    /// intermediate `Vec<u32>` for the raw code points).
     pub fn from_str_input(input: &str, config: TokenizerConfig) -> Self {
-        let raw: Vec<u32> = input.chars().map(|c| c as u32).collect();
-        Self::new(&raw, config)
+        let (input, errors, line_starts) = preprocess_str_with_line_starts(input);
+        Self::from_parts(input, errors, line_starts, config)
     }
 
     /// Enables WHATWG HTML §13.2.9 "Coercing an HTML DOM into an infoset" tweaks on the emitted
@@ -713,6 +717,30 @@ impl Tokenizer {
         while !matches!(self.tokens.last(), Some(Token::Eof)) {
             self.step();
         }
+    }
+
+    /// Fast path for the "data" state: consumes consecutive ordinary characters (anything
+    /// but `&`, `<` and NUL) and appends their code points to `out`, returning how many were
+    /// consumed. The caller (the tree builder) batches those characters exactly like the
+    /// individual `Token::Character` emissions they would otherwise produce, so the
+    /// observable token/tree output is unchanged; only the per-character token plumbing is
+    /// skipped for plain text runs.
+    pub(crate) fn consume_data_run(&mut self, out: &mut Vec<u32>) -> usize {
+        if self.state != TokenizerState::Data || self.reconsume {
+            return 0;
+        }
+        let mut consumed = 0usize;
+        while self.pos < self.input.len() {
+            let cp = self.input[self.pos];
+            if matches!(cp, 0x26 | 0x3C | 0x00) {
+                break;
+            }
+            self.pos += 1;
+            self.current_cp = Some(cp);
+            out.push(cp);
+            consumed += 1;
+        }
+        consumed
     }
 
     fn consume_next(&mut self) -> Option<u32> {

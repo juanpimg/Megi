@@ -1096,12 +1096,33 @@ mod legacy {
         measurer: &dyn TextMeasurer,
         pos: PositioningContext,
     ) {
-        let style = table
-            .style
-            .clone()
-            .unwrap_or_else(css::ComputedStyle::initial);
-        let (mut spacing_h, mut spacing_v) = border_spacing(&style);
-        if style.border_collapse == BorderCollapse::Collapse {
+        // Copy the few used style values instead of cloning the whole `ComputedStyle`
+        // (this runs once per table; the bench document has ~1k tables).
+        let (mut spacing_h, mut spacing_v, border_collapse, caption_side, specified_width) =
+            match table.style.as_ref() {
+                Some(style) => {
+                    let (horizontal, vertical) = border_spacing(style);
+                    (
+                        horizontal,
+                        vertical,
+                        style.border_collapse,
+                        style.caption_side,
+                        matches!(style.width, Length::Px(_) | Length::Percent(_)),
+                    )
+                }
+                None => {
+                    let initial = css::ComputedStyle::initial();
+                    let (horizontal, vertical) = border_spacing(&initial);
+                    (
+                        horizontal,
+                        vertical,
+                        initial.border_collapse,
+                        initial.caption_side,
+                        false,
+                    )
+                }
+            };
+        if border_collapse == BorderCollapse::Collapse {
             // Collapsing borders: no spacing between cells (partial: no border conflict
             // resolution, documented).
             spacing_h = 0.0;
@@ -1113,7 +1134,7 @@ mod legacy {
         let available_width = table.dimensions.content.width;
 
         // ---- 1. Caption (above or below the grid) ----------------------------------
-        let caption_first = style.caption_side != CaptionSide::Bottom;
+        let caption_first = caption_side != CaptionSide::Bottom;
         let mut y = table_y;
         if caption_first {
             y += layout_captions(table, table_x, y, available_width, measurer, pos);
@@ -1127,10 +1148,6 @@ mod legacy {
         let sum_max: f32 = columns.iter().map(|column| column.1).sum::<f32>() + outer_spacing;
 
         // ---- 3. Table width and column distribution --------------------------------
-        let specified_width = table
-            .style
-            .as_ref()
-            .is_some_and(|style| matches!(style.width, Length::Px(_) | Length::Percent(_)));
         let table_content_width = if specified_width {
             available_width
         } else {
@@ -1268,29 +1285,61 @@ mod legacy {
     }
 
     /// Computes `(column_count, Vec<(min_width, max_width)>)` for the table grid.
+    fn collect_row_cell_metrics(
+        row: &mut LayoutBox,
+        cells: &mut Vec<CellMetrics>,
+        column_count: &mut usize,
+        available_width: f32,
+        measurer: &dyn TextMeasurer,
+    ) {
+        let mut next_column = 0usize;
+        for cell in row.children.iter_mut() {
+            if !is_cell(cell) {
+                continue;
+            }
+            let colspan = usize::from(cell.colspan.max(1));
+            let (min_width, max_width) = cell_intrinsic_widths(cell, available_width, measurer);
+            cells.push(CellMetrics {
+                column: next_column,
+                colspan,
+                min_width,
+                max_width,
+            });
+            *column_count = (*column_count).max(next_column + colspan);
+            next_column += colspan;
+        }
+    }
+
     fn compute_column_widths(
         table: &mut LayoutBox,
         available_width: f32,
         measurer: &dyn TextMeasurer,
     ) -> (usize, Vec<(f32, f32)>) {
-        let mut cells: Vec<CellMetrics> = Vec::new();
+        let mut cells: Vec<CellMetrics> = Vec::with_capacity(8);
         let mut column_count = 0usize;
-        for row in rows_of_mut(table) {
-            let mut next_column = 0usize;
-            for cell in row.children.iter_mut() {
-                if !is_cell(cell) {
-                    continue;
+        // Direct iteration over rows/row-groups: the old `rows_of_mut` helper allocated a
+        // boxed `dyn Iterator` per table child.
+        for child in table.children.iter_mut() {
+            if is_row(child) {
+                collect_row_cell_metrics(
+                    child,
+                    &mut cells,
+                    &mut column_count,
+                    available_width,
+                    measurer,
+                );
+            } else if matches!(child.box_type, BoxType::TableRowGroup(_)) {
+                for row in child.children.iter_mut() {
+                    if is_row(row) {
+                        collect_row_cell_metrics(
+                            row,
+                            &mut cells,
+                            &mut column_count,
+                            available_width,
+                            measurer,
+                        );
+                    }
                 }
-                let colspan = usize::from(cell.colspan.max(1));
-                let (min_width, max_width) = cell_intrinsic_widths(cell, available_width, measurer);
-                cells.push(CellMetrics {
-                    column: next_column,
-                    colspan,
-                    min_width,
-                    max_width,
-                });
-                column_count = column_count.max(next_column + colspan);
-                next_column += colspan;
             }
         }
         let mut columns: Vec<(f32, f32)> = vec![(0.0, 0.0); column_count.max(1)];
@@ -1504,38 +1553,16 @@ mod legacy {
     }
 
     /// Immutable rows in document order (direct rows and rows inside row groups).
-    fn rows_of(table: &LayoutBox) -> impl Iterator<Item = &LayoutBox> {
-        table
-            .children
-            .iter()
-            .flat_map(|child| -> Box<dyn Iterator<Item = &LayoutBox> + '_> {
-                if is_row(child) {
-                    Box::new(std::iter::once(child))
-                } else if matches!(child.box_type, BoxType::TableRowGroup(_)) {
-                    Box::new(child.children.iter().filter(|row| is_row(row)))
-                } else {
-                    Box::new(std::iter::empty())
-                }
-            })
-    }
-
-    /// Mutable rows in document order (direct rows and rows inside row groups).
-    fn rows_of_mut(table: &mut LayoutBox) -> impl Iterator<Item = &mut LayoutBox> {
-        table.children.iter_mut().flat_map(
-            |child| -> Box<dyn Iterator<Item = &mut LayoutBox> + '_> {
-                if is_row(child) {
-                    Box::new(std::iter::once(child))
-                } else if matches!(child.box_type, BoxType::TableRowGroup(_)) {
-                    Box::new(child.children.iter_mut().filter(|row| is_row(row)))
-                } else {
-                    Box::new(std::iter::empty())
-                }
-            },
-        )
-    }
-
     fn count_rows(table: &LayoutBox) -> usize {
-        rows_of(table).count()
+        let mut count = 0usize;
+        for child in &table.children {
+            if is_row(child) {
+                count += 1;
+            } else if matches!(child.box_type, BoxType::TableRowGroup(_)) {
+                count += child.children.iter().filter(|row| is_row(row)).count();
+            }
+        }
+        count
     }
 
     /// Min/max content widths of a cell, including its own horizontal decoration.

@@ -710,7 +710,7 @@ fn layout_absolutely_positioned(
     let edges_v = border_top + border_bottom + padding_top + padding_bottom;
 
     let (left, right, top, bottom, specified_width, specified_height, is_border_box) =
-        if let Some(style) = child.style.clone() {
+        if let Some(style) = child.style.as_ref() {
             (
                 resolve_offset(style.left, Some(cb.width)),
                 resolve_offset(style.right, Some(cb.width)),
@@ -1072,16 +1072,21 @@ fn resolve_max_height(length: Length, cb_height: Option<f32>) -> Option<f32> {
 /// normal flow of its siblings (CSS 2.2 §9.7). `sticky` is treated like `relative`
 /// (no scrolling support yet).
 fn apply_relative_offset(layout_box: &mut LayoutBox, cb_width: f32, cb_height: Option<f32>) {
-    let Some(style) = layout_box.style.clone() else {
-        return;
+    // Borrow the style instead of cloning it: this runs for every in-flow box.
+    let (left, right, top, bottom) = {
+        let Some(style) = layout_box.style.as_ref() else {
+            return;
+        };
+        if !matches!(style.position, Position::Relative | Position::Sticky) {
+            return;
+        }
+        (
+            resolve_offset(style.left, Some(cb_width)),
+            resolve_offset(style.right, Some(cb_width)),
+            resolve_offset(style.top, cb_height),
+            resolve_offset(style.bottom, cb_height),
+        )
     };
-    if !matches!(style.position, Position::Relative | Position::Sticky) {
-        return;
-    }
-    let left = resolve_offset(style.left, Some(cb_width));
-    let right = resolve_offset(style.right, Some(cb_width));
-    let top = resolve_offset(style.top, cb_height);
-    let bottom = resolve_offset(style.bottom, cb_height);
     let dx = match (left, right) {
         (Some(left), _) => left,
         (None, Some(right)) => -right,
@@ -1125,19 +1130,33 @@ fn calculate_shrink_to_fit_width(
     available: f32,
     measurer: &dyn TextMeasurer,
 ) {
-    let Some(style) = layout_box.style.clone() else {
-        layout_box.dimensions.content.width = available.max(0.0);
-        return;
+    let (
+        padding_left,
+        padding_right,
+        border_left,
+        border_right,
+        margin_left,
+        margin_right,
+        is_border_box,
+        width,
+    ) = {
+        let Some(style) = layout_box.style.as_ref() else {
+            layout_box.dimensions.content.width = available.max(0.0);
+            return;
+        };
+        (
+            resolve_length(style.padding.left, cb_width),
+            resolve_length(style.padding.right, cb_width),
+            style.border_width.left,
+            style.border_width.right,
+            resolve_length(style.margin.left, cb_width),
+            resolve_length(style.margin.right, cb_width),
+            style.box_sizing == BoxSizing::BorderBox,
+            style.width,
+        )
     };
     resolve_vertical_edges(layout_box, cb_width);
-    let padding_left = resolve_length(style.padding.left, cb_width);
-    let padding_right = resolve_length(style.padding.right, cb_width);
-    let border_left = style.border_width.left;
-    let border_right = style.border_width.right;
     let edges_h = padding_left + padding_right + border_left + border_right;
-    let margin_left = resolve_length(style.margin.left, cb_width);
-    let margin_right = resolve_length(style.margin.right, cb_width);
-    let is_border_box = style.box_sizing == BoxSizing::BorderBox;
     let to_content = |border_box: f32| {
         if is_border_box {
             (border_box - edges_h).max(0.0)
@@ -1145,7 +1164,7 @@ fn calculate_shrink_to_fit_width(
             border_box
         }
     };
-    let content_width = match style.width {
+    let content_width = match width {
         Length::Px(px) => to_content(px),
         Length::Percent(pct) => to_content(cb_width * (pct / 100.0)),
         Length::Auto => {
@@ -1204,14 +1223,20 @@ fn collect_intrinsic_widths(
 ) {
     match &layout_box.box_type {
         BoxType::TextNode(text) => {
-            let style = layout_box
-                .style
-                .clone()
-                .unwrap_or_else(ComputedStyle::initial);
-            let max_content = crate::inline::measure_text_width(measurer, text, &style);
+            // Borrow the parent style when present (the common case): cloning a
+            // `ComputedStyle` here costs one heap allocation per measured text node.
+            let initial;
+            let style = match layout_box.style.as_ref() {
+                Some(style) => style,
+                None => {
+                    initial = ComputedStyle::initial();
+                    &initial
+                }
+            };
+            let max_content = crate::inline::measure_text_width(measurer, text, style);
             let min_content = text
                 .split_whitespace()
-                .map(|word| crate::inline::measure_text_width(measurer, word, &style))
+                .map(|word| crate::inline::measure_text_width(measurer, word, style))
                 .fold(0.0_f32, f32::max);
             *minimum = minimum.max(min_content);
             *maximum = maximum.max(max_content);
