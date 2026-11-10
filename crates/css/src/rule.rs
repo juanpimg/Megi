@@ -66,9 +66,30 @@ pub enum Rule {
     At(AtRule),
 }
 
+/// A parsed `@import` rule (CSS Cascading and Inheritance Level 4 §6.4).
+///
+/// The URL is kept exactly as authored (it may be relative to the base URL of the importing
+/// stylesheet). This crate performs **no network or file I/O**: a consumer such as the
+/// `render` crate must resolve the URL, fetch/decode the stylesheet and then insert it before
+/// the importing sheet's own rules, gated by [`ImportRule::media`] evaluated with
+/// [`crate::media::evaluate`] (see [`crate::StyleCollection::add_import_stylesheet`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ImportRule {
+    /// Imported stylesheet URL exactly as authored (may be relative).
+    pub url: String,
+    /// Media query list gating the imported sheet; empty means "all media".
+    pub media: crate::media::MediaQueryList,
+}
+
 /// A parsed CSS stylesheet containing a sequence of rules.
+///
+/// `@import` rules are collected in [`Stylesheet::imports`] (in document order) instead of
+/// appearing in [`Stylesheet::rules`]; imports placed after a non-import rule are ignored, as
+/// required by the spec. Resolving the URLs is the consumer's responsibility (no I/O here).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Stylesheet {
+    /// `@import` rules found at the beginning of the stylesheet, in order.
+    pub imports: Vec<ImportRule>,
     pub rules: Vec<Rule>,
 }
 

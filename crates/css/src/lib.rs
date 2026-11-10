@@ -12,6 +12,7 @@
 
 pub mod cascade;
 pub mod component_value;
+pub mod media;
 pub mod parser;
 pub mod properties;
 pub mod rule;
@@ -22,18 +23,22 @@ pub mod tokenizer;
 pub mod user_agent;
 
 pub use cascade::{
-    CascadeOriginImportance, CompiledRule, MatchedDeclaration, MediaContext, Origin,
-    StyleCollection, resolve_cascaded_properties, resolve_document_styles,
-    resolve_document_styles_with_media, resolve_document_styles_with_viewport,
+    CascadeOriginImportance, CompiledRule, MatchedDeclaration, Origin, StyleCollection,
+    resolve_cascaded_properties, resolve_document_styles, resolve_document_styles_with_media,
+    resolve_document_styles_with_viewport,
 };
 pub use component_value::{ComponentValue, FunctionCall, SimpleBlock};
+pub use media::{
+    MediaCondition, MediaContext, MediaFeature, MediaQualifier, MediaQuery, MediaQueryList,
+    MediaType, Orientation, evaluate as evaluate_media, parse_media_query_list,
+};
 pub use parser::{TokenStream, consume_declaration, parse_list_of_declarations, parse_stylesheet};
 pub use properties::{
     BorderCollapse, BorderStyle, BoxSizing, CaptionSide, Clear, Color, ComputedStyle, Display,
     EmptyCells, Float, FontStyle, Length, ListStyleType, Overflow, Position, RectEdges,
     TableLayout, TextAlign, TextDecoration, VerticalAlign, Visibility, WhiteSpace,
 };
-pub use rule::{AtRule, Declaration, Rule, StyleRule, Stylesheet};
+pub use rule::{AtRule, Declaration, ImportRule, Rule, StyleRule, Stylesheet};
 pub use selector::{
     AnPlusB, AttrOperator, AttributeSelector, Combinator, ComplexSelector, CompoundSelector,
     PseudoClass, RelativeSelector, SelectorList, Specificity, parse_selectors,
@@ -1360,5 +1365,114 @@ mod tests {
         assert_eq!(style(th).font_weight, 700);
         assert_eq!(style(th).text_align, TextAlign::Center);
         assert_eq!(style(td).padding.left, Length::Px(1.0));
+    }
+    // ---------------------------------------------------------------------------------------
+    // Round 6: `@import` parsing and full media query lists.
+    // ---------------------------------------------------------------------------------------
+
+    #[test]
+    fn test_parse_stylesheet_imports() {
+        let sheet = parse_stylesheet(
+            "@import url(\"base.css\");\n@import \"print.css\" print;\nbody { color: red; }",
+        );
+        assert_eq!(sheet.imports.len(), 2);
+        assert_eq!(sheet.imports[0].url, "base.css");
+        assert!(sheet.imports[0].media.is_empty());
+        assert_eq!(sheet.imports[1].url, "print.css");
+        assert_eq!(sheet.rules.len(), 1);
+
+        // The import media list is parsed and can be evaluated by consumers.
+        let screen_context = MediaContext::default();
+        let print_context = MediaContext {
+            viewport: None,
+            screen: false,
+        };
+        assert!(!media::evaluate(&sheet.imports[1].media, &screen_context));
+        assert!(media::evaluate(&sheet.imports[1].media, &print_context));
+
+        // Unquoted url() form plus a media condition.
+        let sheet = parse_stylesheet("@import url(theme.css) screen and (min-width: 600px);");
+        assert_eq!(sheet.imports.len(), 1);
+        assert_eq!(sheet.imports[0].url, "theme.css");
+        assert!(media::evaluate(
+            &sheet.imports[0].media,
+            &MediaContext::with_viewport(800.0, 600.0)
+        ));
+        assert!(!media::evaluate(
+            &sheet.imports[0].media,
+            &MediaContext::with_viewport(400.0, 600.0)
+        ));
+
+        // Imports after other rules are ignored, and unsupported forms are not exposed.
+        let sheet = parse_stylesheet("body { color: red; } @import \"late.css\";");
+        assert!(sheet.imports.is_empty());
+        assert_eq!(sheet.rules.len(), 1);
+        let sheet = parse_stylesheet("@import layer(base.css); p { color: red; }");
+        assert!(sheet.imports.is_empty());
+    }
+
+    #[test]
+    fn test_import_stylesheet_media_gating() {
+        let imported = parse_stylesheet("p { color: red; }");
+        let mut collection = StyleCollection::new();
+        collection.media = MediaContext::with_viewport(800.0, 600.0);
+
+        let screen_import = ImportRule {
+            url: "a.css".to_string(),
+            media: parse_media_query_list("screen and (min-width: 700px)"),
+        };
+        assert!(collection.add_import_stylesheet(&screen_import, &imported, Origin::Author));
+
+        let print_import = ImportRule {
+            url: "b.css".to_string(),
+            media: parse_media_query_list("print"),
+        };
+        assert!(!collection.add_import_stylesheet(&print_import, &imported, Origin::Author));
+        assert_eq!(collection.rules.len(), 1);
+
+        // The added imported sheet participates in the cascade.
+        let mut doc = Document::new();
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        let p = doc.create_element(Namespace::Html, "p", vec![]);
+        doc.append_child(doc.root(), body);
+        doc.append_child(body, p);
+        assert!(
+            collection.rules[0].selectors.matches(&doc, p),
+            "imported rule should be indexed and match"
+        );
+    }
+
+    #[test]
+    fn test_cascade_media_queries_full() {
+        let mut doc = Document::new();
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        let p = doc.create_element(Namespace::Html, "p", vec![]);
+        doc.append_child(doc.root(), body);
+        doc.append_child(body, p);
+
+        // `and` + orientation with a known viewport.
+        let css = "@media (min-width: 600px) and (orientation: landscape) { p { color: red; } }";
+        let wide = resolve_document_styles_with_viewport(&doc, Some(css), 800.0, 600.0);
+        assert_eq!(wide.get(&p).expect("style").color, Color::RED);
+        let portrait = resolve_document_styles_with_viewport(&doc, Some(css), 600.0, 800.0);
+        assert_eq!(portrait.get(&p).expect("style").color, Color::BLACK);
+
+        // `not` condition.
+        let css = "@media not (min-width: 900px) { p { color: red; } }";
+        let styles = resolve_document_styles_with_viewport(&doc, Some(css), 800.0, 600.0);
+        assert_eq!(styles.get(&p).expect("style").color, Color::RED);
+
+        // Query list with `em` and `print`: either query may apply.
+        let css = "@media (max-width: 40em), print { p { color: red; } }";
+        let narrow = resolve_document_styles_with_viewport(&doc, Some(css), 400.0, 800.0);
+        assert_eq!(narrow.get(&p).expect("style").color, Color::RED);
+        let print_context = MediaContext {
+            viewport: None,
+            screen: false,
+        };
+        let print = resolve_document_styles_with_media(&doc, Some(css), print_context);
+        assert_eq!(print.get(&p).expect("style").color, Color::RED);
+        let screen_wide = resolve_document_styles_with_viewport(&doc, Some(css), 1000.0, 600.0);
+        assert_eq!(screen_wide.get(&p).expect("style").color, Color::BLACK);
     }
 }

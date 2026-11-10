@@ -17,7 +17,6 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-use crate::properties::Length;
 use crate::rule::{Declaration, Rule, Stylesheet, serialize_component_values};
 use crate::selector::{ComplexSelector, SelectorList, Specificity, parse_selectors};
 use crate::shorthand::expand_declarations;
@@ -107,40 +106,10 @@ pub struct CompiledRule {
     pub source_order: u32,
 }
 
-/// Environment used to evaluate `@media` queries while stylesheets are compiled.
+/// Media environment used to evaluate `@media` rules and imported stylesheet media lists.
 ///
-/// `viewport` is `None` by default, which makes width/height media features evaluate to
-/// `false` (their value is unknown). `screen` selects the target medium: `false` means the
-/// `print` medium. `@media` support is intentionally basic: media types (`all`, `screen`,
-/// `print`), `min-width`/`max-width`/`width` and `min-height`/`max-height`/`height`, plus `and`
-/// combinations and comma-separated query lists. `not`/`only` negation, `orientation`,
-/// `resolution`, `prefers-*` and other features are not supported and evaluate to `false`.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct MediaContext {
-    /// Viewport size in CSS pixels, if known.
-    pub viewport: Option<(f32, f32)>,
-    /// `true` for the `screen` medium, `false` for `print`.
-    pub screen: bool,
-}
-
-impl Default for MediaContext {
-    fn default() -> Self {
-        Self {
-            viewport: None,
-            screen: true,
-        }
-    }
-}
-
-impl MediaContext {
-    /// Creates a screen medium with a known viewport size.
-    pub fn with_viewport(width: f32, height: f32) -> Self {
-        Self {
-            viewport: Some((width, height)),
-            screen: true,
-        }
-    }
-}
+/// Re-exported from [`crate::media`], which owns the full media query parser/evaluator.
+pub use crate::media::MediaContext;
 
 /// Bucket key derived from the rightmost compound of a complex selector.
 ///
@@ -311,8 +280,9 @@ impl StyleCollection {
             match rule {
                 Rule::Style(style_rule) => self.add_style_rule(style_rule, origin),
                 Rule::At(at_rule) if at_rule.name.eq_ignore_ascii_case("media") => {
-                    let query = serialize_component_values(&at_rule.prelude);
-                    if media_query_matches(&query, &self.media)
+                    let prelude = serialize_component_values(&at_rule.prelude);
+                    let query_list = crate::media::parse_media_query_list(&prelude);
+                    if crate::media::evaluate(&query_list, &self.media)
                         && let Some(block) = &at_rule.block
                     {
                         let nested_text = serialize_component_values(&block.values);
@@ -374,141 +344,27 @@ impl StyleCollection {
         let stylesheet = crate::parser::parse_stylesheet(css_text);
         self.add_stylesheet(&stylesheet, origin);
     }
-}
 
-/// Returns whether a serialized `@media` prelude matches the given media environment.
-///
-/// A comma-separated query list matches when at least one query matches (CSS Media Queries 4).
-fn media_query_matches(query: &str, media: &MediaContext) -> bool {
-    let query = query.trim();
-    if query.is_empty() {
-        return true;
-    }
-    let mut list = Vec::new();
-    let mut current = String::new();
-    let mut depth = 0usize;
-    for ch in query.chars() {
-        match ch {
-            '(' => {
-                depth += 1;
-                current.push(ch);
-            }
-            ')' => {
-                depth = depth.saturating_sub(1);
-                current.push(ch);
-            }
-            ',' if depth == 0 => list.push(std::mem::take(&mut current)),
-            c => current.push(c),
+    /// Adds the stylesheet fetched for an [`crate::rule::ImportRule`] if its media list matches
+    /// the collection's [`StyleCollection::media`] environment.
+    ///
+    /// Contract for consumers (e.g. the `render` crate): resolve [`crate::rule::ImportRule::url`] against
+    /// the base URL, fetch/decode the stylesheet, parse it with
+    /// [`crate::parser::parse_stylesheet`] and call this method for each import **in document
+    /// order before the importing sheet's own rules**, so origin/source order match CSS.
+    /// Recursive imports are the consumer's responsibility (guard cycles). Returns `true`
+    /// when the stylesheet was added (media matched).
+    pub fn add_import_stylesheet(
+        &mut self,
+        import: &crate::rule::ImportRule,
+        stylesheet: &Stylesheet,
+        origin: Origin,
+    ) -> bool {
+        if !crate::media::evaluate(&import.media, &self.media) {
+            return false;
         }
-    }
-    list.push(current);
-    list.iter()
-        .any(|item| media_query_item_matches(item, media))
-}
-
-/// Returns whether a single media query (no top-level commas) matches.
-fn media_query_item_matches(query: &str, media: &MediaContext) -> bool {
-    let lower = query.trim().to_ascii_lowercase();
-    if lower.is_empty() {
-        return true;
-    }
-    // `not` negation is not implemented: never apply those rules (conservative).
-    if lower == "not" || lower.starts_with("not ") || lower.starts_with("not(") {
-        return false;
-    }
-    for part in split_media_and(&lower) {
-        let part = part.trim();
-        if part.is_empty() {
-            continue;
-        }
-        if part.starts_with('(') {
-            if !media_feature_matches(part, media) {
-                return false;
-            }
-            continue;
-        }
-        match part {
-            // `only` only hides the query from legacy user agents; ignore it here.
-            "only" => {}
-            "all" | "screen" => {
-                if !media.screen {
-                    return false;
-                }
-            }
-            "print" => {
-                if media.screen {
-                    return false;
-                }
-            }
-            // Unknown media types never match (`tv`, `speech`, ...).
-            _ => return false,
-        }
-    }
-    true
-}
-
-/// Splits a media query on `and` outside parentheses.
-fn split_media_and(query: &str) -> Vec<String> {
-    let bytes = query.as_bytes();
-    let mut parts = Vec::new();
-    let mut current = String::new();
-    let mut depth = 0usize;
-    let mut index = 0;
-    while index < bytes.len() {
-        let ch = bytes[index];
-        match ch {
-            b'(' => {
-                depth += 1;
-                current.push('(');
-                index += 1;
-            }
-            b')' => {
-                depth = depth.saturating_sub(1);
-                current.push(')');
-                index += 1;
-            }
-            _ if depth == 0
-                && bytes[index..].starts_with(b"and")
-                && (index == 0 || bytes[index - 1] == b' ')
-                && bytes.get(index + 3).is_none_or(|next| *next == b' ') =>
-            {
-                parts.push(std::mem::take(&mut current));
-                index += 3;
-            }
-            _ => {
-                current.push(ch as char);
-                index += 1;
-            }
-        }
-    }
-    parts.push(current);
-    parts
-}
-
-/// Evaluates a parenthesized media feature such as `(min-width: 600px)`.
-fn media_feature_matches(feature: &str, media: &MediaContext) -> bool {
-    let inner = feature.trim().trim_start_matches('(').trim_end_matches(')');
-    let Some((name, value)) = inner.split_once(':') else {
-        // Boolean features (`(color)`, `(hover)`, ...) are not supported.
-        return false;
-    };
-    let name = name.trim();
-    let value = value.trim();
-    let Some((width, height)) = media.viewport else {
-        return false;
-    };
-    let px = match Length::parse(value, 16.0, 16.0) {
-        Some(Length::Px(px)) => px,
-        _ => return false,
-    };
-    match name {
-        "min-width" | "width" => width >= px && (name == "min-width" || (width - px).abs() < 0.5),
-        "max-width" => width <= px,
-        "min-height" | "height" => {
-            height >= px && (name == "min-height" || (height - px).abs() < 0.5)
-        }
-        "max-height" => height <= px,
-        _ => false,
+        self.add_stylesheet(stylesheet, origin);
+        true
     }
 }
 

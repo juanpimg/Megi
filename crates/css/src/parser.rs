@@ -4,7 +4,7 @@
 //! and component values per <https://www.w3.org/TR/css-syntax-3/#parser-entry-points>.
 
 use crate::component_value::{ComponentValue, FunctionCall, SimpleBlock};
-use crate::rule::{AtRule, Declaration, Rule, StyleRule, Stylesheet};
+use crate::rule::{AtRule, Declaration, Rule, StyleRule, Stylesheet, serialize_component_values};
 use crate::token::CssToken;
 use crate::tokenizer::tokenize;
 
@@ -349,10 +349,80 @@ pub fn consume_stylesheet_contents(stream: &mut TokenStream) -> Vec<Rule> {
 }
 
 /// Parses a complete CSS stylesheet from a string (§5.4.3).
+///
+/// `@import` rules at the beginning of the sheet are parsed into [`Stylesheet::imports`]
+/// (URL kept as authored plus a reusable media query list). Imports appearing after any other
+/// rule are ignored, per CSS Cascading and Inheritance Level 4 §6.4.3. No I/O is performed.
 pub fn parse_stylesheet(input: &str) -> Stylesheet {
     let mut stream = TokenStream::from_input(input);
     let rules = consume_stylesheet_contents(&mut stream);
-    Stylesheet { rules }
+    let mut imports: Vec<crate::rule::ImportRule> = Vec::new();
+    let mut kept_rules = Vec::with_capacity(rules.len());
+    let mut seen_non_import = false;
+    for rule in rules {
+        match &rule {
+            Rule::At(at) if at.name.eq_ignore_ascii_case("import") => {
+                // Imports are only valid before any other rule; late, malformed and
+                // unsupported imports are ignored and never reach the cascade.
+                if !seen_non_import && let Some(import) = parse_import_rule(at) {
+                    imports.push(import);
+                }
+            }
+            _ => {
+                seen_non_import = true;
+                kept_rules.push(rule);
+            }
+        }
+    }
+    Stylesheet {
+        imports,
+        rules: kept_rules,
+    }
+}
+
+/// Parses the prelude of an `@import` at-rule into an [`crate::rule::ImportRule`].
+///
+/// Accepted forms: `@import "<url>" [media-list];` and `@import url("<url>") [media-list];`
+/// (also unquoted `url(<url>)`). `layer()`/`supports()` conditions are not supported yet and
+/// make the import invalid.
+fn parse_import_rule(at: &AtRule) -> Option<crate::rule::ImportRule> {
+    let mut url = None;
+    let mut rest_start = at.prelude.len();
+    for (index, component) in at.prelude.iter().enumerate() {
+        if component.is_whitespace() {
+            continue;
+        }
+        url = import_url(component);
+        rest_start = index + 1;
+        break;
+    }
+    let url = url?;
+    let media_text = serialize_component_values(&at.prelude[rest_start..]);
+    let media = crate::media::parse_media_query_list(&media_text);
+    Some(crate::rule::ImportRule { url, media })
+}
+
+/// Extracts the URL of an `@import` prelude component.
+fn import_url(component: &ComponentValue) -> Option<String> {
+    match component {
+        ComponentValue::PreservedToken(CssToken::String(url)) => Some(url.clone()),
+        ComponentValue::PreservedToken(CssToken::Url(url)) => Some(url.clone()),
+        ComponentValue::Function(function) if function.name.eq_ignore_ascii_case("url") => {
+            let inner = serialize_component_values(&function.values);
+            let inner = inner.trim();
+            let quoted = inner.len() >= 2
+                && ((inner.starts_with('"') && inner.ends_with('"'))
+                    || (inner.starts_with('\'') && inner.ends_with('\'')));
+            if quoted {
+                Some(inner[1..inner.len() - 1].to_string())
+            } else if inner.is_empty() {
+                None
+            } else {
+                Some(inner.to_string())
+            }
+        }
+        _ => None,
+    }
 }
 
 /// Parses a list of declarations from a string (e.g. for HTML `style="..."` attributes) (§5.4.5).
