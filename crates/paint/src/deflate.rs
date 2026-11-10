@@ -194,6 +194,16 @@ fn deflate_fixed(data: &[u8]) -> Vec<u8> {
     writer.write_bits(1, 1);
     writer.write_bits(1, 2);
 
+    // Every position that can be inserted/looked up needs its 3-byte hash; the
+    // hash table is computed once instead of once for the lookup and again for
+    // the insertion (the parse — and therefore the output — is unchanged).
+    let mut hashes = vec![0u16; data.len()];
+    let mut position = 0usize;
+    while position + MIN_MATCH <= data.len() {
+        hashes[position] = hash3(data, position) as u16;
+        position += 1;
+    }
+
     let mut head = vec![usize::MAX; HASH_SIZE];
     let mut prev = vec![usize::MAX; WINDOW_SIZE];
 
@@ -201,17 +211,18 @@ fn deflate_fixed(data: &[u8]) -> Vec<u8> {
         if position + MIN_MATCH > data.len() {
             return;
         }
-        let hash = hash3(data, position);
+        let hash = hashes[position] as usize;
         prev[position % WINDOW_SIZE] = head[hash];
         head[hash] = position;
     };
 
     let mut position = 0usize;
     while position < data.len() {
+        let max_length = (data.len() - position).min(MAX_MATCH);
         let mut best_length = 0usize;
         let mut best_distance = 0usize;
-        if position + MIN_MATCH <= data.len() {
-            let hash = hash3(data, position);
+        if max_length >= MIN_MATCH {
+            let hash = hashes[position] as usize;
             let mut candidate = head[hash];
             let mut budget = MAX_CHAIN;
             while candidate != usize::MAX && budget > 0 {
@@ -222,12 +233,22 @@ fn deflate_fixed(data: &[u8]) -> Vec<u8> {
                 if distance > WINDOW_SIZE {
                     break;
                 }
-                // Possible match length up to the end of the input.
-                let max_length = (data.len() - position).min(MAX_MATCH);
-                let mut length = 0usize;
-                while length < max_length && data[candidate + length] == data[position + length] {
-                    length += 1;
+                // Fast rejection: to beat `best_length` the candidate must match
+                // through byte `best_length` as well. This preserves the exact
+                // greedy parse (a shorter match would not change the output).
+                if best_length > 0
+                    && (best_length >= max_length
+                        || data[candidate + best_length] != data[position + best_length])
+                {
+                    let next = prev[candidate % WINDOW_SIZE];
+                    if next == usize::MAX || next >= candidate {
+                        break;
+                    }
+                    candidate = next;
+                    budget -= 1;
+                    continue;
                 }
+                let length = match_length(data, candidate, position, max_length);
                 if length > best_length {
                     best_length = length;
                     best_distance = distance;
@@ -271,6 +292,29 @@ fn deflate_fixed(data: &[u8]) -> Vec<u8> {
     // End-of-block symbol.
     write_fixed_literal(&mut writer, 256);
     writer.finish()
+}
+
+/// Length of the common prefix of `data[candidate..]` and `data[position..]`,
+/// limited to `max_length`; compares 8 bytes at a time and finishes byte-wise.
+#[inline]
+fn match_length(data: &[u8], candidate: usize, position: usize, max_length: usize) -> usize {
+    let mut length = 0usize;
+    while length + 8 <= max_length {
+        let candidate_chunk: [u8; 8] = data[candidate + length..candidate + length + 8]
+            .try_into()
+            .expect("8-byte window");
+        let position_chunk: [u8; 8] = data[position + length..position + length + 8]
+            .try_into()
+            .expect("8-byte window");
+        if candidate_chunk != position_chunk {
+            break;
+        }
+        length += 8;
+    }
+    while length < max_length && data[candidate + length] == data[position + length] {
+        length += 1;
+    }
+    length
 }
 
 /// Compresses `data` into a zlib stream (RFC 1950) with a fixed-Huffman

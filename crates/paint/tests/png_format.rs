@@ -99,6 +99,23 @@ fn test_large_image_roundtrip_with_compression() {
 }
 
 #[test]
+fn test_encode_pixels_matches_encode_rgba_byte_for_byte() {
+    // The direct-pixel path avoids the intermediate raw-RGBA buffer; it must
+    // produce exactly the same PNG stream.
+    let (pixmap, rgba) = patterned_pixmap();
+    let direct = paint::encode_pixels(pixmap.width, pixmap.height, &pixmap.pixels);
+    let via_rgba = paint::encode_rgba(pixmap.width, pixmap.height, &rgba);
+    assert_eq!(direct, via_rgba);
+
+    let mut flat = Pixmap::new(120, 60);
+    flat.fill_rect(Rect::new(0.0, 0.0, 120.0, 60.0), Color::new(9, 8, 7, 255));
+    assert_eq!(
+        paint::encode_pixels(flat.width, flat.height, &flat.pixels),
+        paint::encode_rgba(flat.width, flat.height, &flat.to_rgba_bytes())
+    );
+}
+
+#[test]
 fn test_png_uses_real_deflate_compression() {
     // A flat image must compress to a small fraction of its raw size: this is
     // the regression test for "PNG writer emits stored DEFLATE blocks".

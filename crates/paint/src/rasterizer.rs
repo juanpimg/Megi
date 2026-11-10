@@ -911,7 +911,12 @@ impl Pixmap {
     pub fn to_rgba_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(self.pixels.len() * 4);
         for pixel in &self.pixels {
-            bytes.extend_from_slice(&[pixel.r, pixel.g, pixel.b, pixel.a]);
+            // Capacity is pre-reserved; four pushes avoid the per-pixel slice
+            // bookkeeping of `extend_from_slice`.
+            bytes.push(pixel.r);
+            bytes.push(pixel.g);
+            bytes.push(pixel.b);
+            bytes.push(pixel.a);
         }
         bytes
     }
@@ -921,7 +926,7 @@ impl Pixmap {
     /// See [`crate::png`] for the dependency-free encoding strategy and its
     /// size trade-off. A zero-sized pixmap yields an empty vector.
     pub fn to_png(&self) -> Vec<u8> {
-        png::encode_rgba(self.width, self.height, &self.to_rgba_bytes())
+        png::encode_pixels(self.width, self.height, &self.pixels)
     }
 
     /// Explicit-RGBA variant of [`Pixmap::to_png`], kept as a named API so

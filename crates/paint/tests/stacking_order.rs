@@ -239,7 +239,7 @@ fn test_visibility_hidden_does_not_paint() {
     let mut hidden = empty_box(&document, ids_extra[0], block_style(Color::RED));
     set_rect(&mut hidden, 0.0, 0.0, 50.0, 50.0);
     if let Some(style) = hidden.style.as_mut() {
-        style.visibility = css::Visibility::Hidden;
+        std::sync::Arc::make_mut(style).visibility = css::Visibility::Hidden;
     }
     body.children.push(hidden);
     root.children.push(body);

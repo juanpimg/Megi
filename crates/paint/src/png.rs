@@ -27,6 +27,8 @@
 //! Typical use is through [`Pixmap::to_png`](crate::Pixmap::to_png), which
 //! feeds the raw RGBA bytes to [`encode_rgba`].
 
+use css::Color;
+
 use crate::deflate;
 
 /// The 8-byte PNG magic signature (PNG spec §5.2): `\x89PNG\r\n\x1a\n`.
@@ -77,7 +79,22 @@ pub fn adler32(bytes: &[u8]) -> u32 {
     let mut a = 1u32;
     let mut b = 0u32;
     for chunk in bytes.chunks(CHUNK) {
-        for &byte in chunk {
+        let mut tail = chunk;
+        while tail.len() >= 8 {
+            // b += 8*a + 8*b0 + 7*b1 + ... + 1*b7  (adler recurrence over 8
+            // bytes); computed in u64 then reduced per chunk as before.
+            let block: &[u8; 8] = tail[..8].try_into().expect("slice of 8");
+            let sum: u32 = block.iter().map(|&byte| u32::from(byte)).sum();
+            let weighted: u32 = block
+                .iter()
+                .enumerate()
+                .map(|(index, &byte)| (8 - index as u32) * u32::from(byte))
+                .sum();
+            b += 8 * a + weighted;
+            a += sum;
+            tail = &tail[8..];
+        }
+        for &byte in tail {
             a += u32::from(byte);
             b += a;
         }
@@ -122,40 +139,205 @@ pub fn filter_scanlines(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
     let stride = width as usize * 4;
     let mut filtered = Vec::with_capacity(height as usize * (stride + 1));
     let mut previous = vec![0u8; stride];
-    let mut candidates: [Vec<u8>; 5] = std::array::from_fn(|_| vec![0u8; stride]);
-
     for row_index in 0..height as usize {
         let row = &rgba[row_index * stride..(row_index + 1) * stride];
-        candidates[0].copy_from_slice(row);
-        for x in 0..stride {
-            let left = if x >= 4 { row[x - 4] } else { 0 };
-            let above = previous[x];
-            let upper_left = if x >= 4 { previous[x - 4] } else { 0 };
-            candidates[1][x] = row[x].wrapping_sub(left); // Sub
-            candidates[2][x] = row[x].wrapping_sub(above); // Up
-            let average = ((u16::from(left) + u16::from(above)) / 2) as u8;
-            candidates[3][x] = row[x].wrapping_sub(average); // Average
-            candidates[4][x] = row[x].wrapping_sub(paeth_predictor(left, above, upper_left)); // Paeth
-        }
-
-        // libpng heuristic: minimise the sum of absolute signed deviations.
-        let mut best_filter = 0usize;
-        let mut best_score = u64::MAX;
-        for (filter, candidate) in candidates.iter().enumerate() {
-            let score: u64 = candidate
-                .iter()
-                .map(|&byte| u64::from((byte as i8).unsigned_abs()))
-                .sum();
-            if score < best_score {
-                best_score = score;
-                best_filter = filter;
-            }
-        }
-        filtered.push(best_filter as u8);
-        filtered.extend_from_slice(&candidates[best_filter]);
+        filter_row(row, previous.as_slice(), stride, &mut filtered);
         previous.copy_from_slice(row);
     }
     filtered
+}
+
+/// Encodes a [`Pixmap`](crate::Pixmap)'s pixels directly, avoiding the
+/// intermediate raw-RGBA buffer used by [`encode_rgba`].
+///
+/// The resulting PNG is **byte-identical** to
+/// `encode_rgba(width, height, &pixmap.to_rgba_bytes())`; only the number of
+/// memory passes changes (rows are materialized into a small reusable buffer).
+pub fn encode_pixels(width: u32, height: u32, pixels: &[Color]) -> Vec<u8> {
+    let Some(expected_len) = (width as usize).checked_mul(height as usize) else {
+        return Vec::new();
+    };
+    if width == 0 || height == 0 || pixels.len() != expected_len {
+        return Vec::new();
+    }
+    let stride = width as usize * 4;
+    let mut filtered = Vec::with_capacity(height as usize * (stride + 1));
+    let mut row = vec![0u8; stride];
+    let mut previous = vec![0u8; stride];
+    for chunk in pixels.chunks(width as usize) {
+        for (index, pixel) in chunk.iter().enumerate() {
+            let base = index * 4;
+            row[base] = pixel.r;
+            row[base + 1] = pixel.g;
+            row[base + 2] = pixel.b;
+            row[base + 3] = pixel.a;
+        }
+        filter_row(&row, previous.as_slice(), stride, &mut filtered);
+        previous.copy_from_slice(&row);
+    }
+    finalize_png(width, height, filtered)
+}
+
+/// Filters one scanline and appends its filter byte + bytes to `filtered`.
+fn filter_row(row: &[u8], previous: &[u8], stride: usize, filtered: &mut Vec<u8>) {
+    // Fast path: an identical row makes the `Up` filter all-zero. For a
+    // non-zero row the heuristic then chooses `Up` without computing the
+    // remaining candidates (None/Sub have positive cost), and for an all-zero
+    // row `None` already has cost 0 and wins the index tie-break. Both cases
+    // produce exactly the same filter byte as the general path.
+    if row == previous {
+        if row.iter().all(|&byte| byte == 0) {
+            filtered.push(0);
+        } else {
+            filtered.push(2);
+        }
+        filtered.resize(filtered.len() + stride, 0);
+        return;
+    }
+
+    // General path, pass 1: candidate costs only (no candidate buffers).
+    // Index order preserves the libpng tie-break (`score < best` keeps the
+    // lowest filter index).
+    let mut best_filter = 0usize;
+    let mut best_score = score_bytes(row); // filter 0: None
+    for filter in 1..=4usize {
+        let score = match filter {
+            1 => sub_score(row, stride),
+            2 => up_score(row, previous, stride),
+            3 => average_score(row, previous, stride),
+            _ => paeth_score(row, previous, stride),
+        };
+        if score < best_score {
+            best_score = score;
+            best_filter = filter;
+            if score == 0 {
+                break;
+            }
+        }
+    }
+
+    // Pass 2: write the chosen filter byte + filtered row directly.
+    filtered.push(best_filter as u8);
+    let start = filtered.len();
+    filtered.resize(start + stride, 0);
+    apply_filter(best_filter, row, previous, &mut filtered[start..]);
+}
+
+/// Absolute-deviation cost of the `Sub` filter.
+#[inline]
+fn sub_score(row: &[u8], stride: usize) -> u64 {
+    let mut score = 0u64;
+    for &byte in row.iter().take(4.min(stride)) {
+        score += abs_signed(byte);
+    }
+    for x in 4..stride {
+        score += abs_signed(row[x].wrapping_sub(row[x - 4]));
+    }
+    score
+}
+
+/// Absolute-deviation cost of the `Up` filter.
+#[inline]
+fn up_score(row: &[u8], previous: &[u8], stride: usize) -> u64 {
+    let mut score = 0u64;
+    for x in 0..stride {
+        score += abs_signed(row[x].wrapping_sub(previous[x]));
+    }
+    score
+}
+
+/// Absolute-deviation cost of the `Average` filter.
+#[inline]
+fn average_score(row: &[u8], previous: &[u8], stride: usize) -> u64 {
+    let mut score = 0u64;
+    for (&byte, &above) in row.iter().zip(previous.iter()).take(4.min(stride)) {
+        score += abs_signed(byte.wrapping_sub(above / 2));
+    }
+    for x in 4..stride {
+        let left = row[x - 4];
+        let above = previous[x];
+        let average = ((u16::from(left) + u16::from(above)) / 2) as u8;
+        score += abs_signed(row[x].wrapping_sub(average));
+    }
+    score
+}
+
+/// Absolute-deviation cost of the `Paeth` filter.
+#[inline]
+fn paeth_score(row: &[u8], previous: &[u8], stride: usize) -> u64 {
+    let mut score = 0u64;
+    for x in 0..4.min(stride) {
+        score += abs_signed(row[x].wrapping_sub(previous[x]));
+    }
+    for x in 4..stride {
+        let left = row[x - 4];
+        let above = previous[x];
+        let upper_left = previous[x - 4];
+        score += abs_signed(row[x].wrapping_sub(paeth_predictor(left, above, upper_left)));
+    }
+    score
+}
+
+/// Writes the filtered bytes of `filter` into `output` (same length as `row`).
+#[inline]
+fn apply_filter(filter: usize, row: &[u8], previous: &[u8], output: &mut [u8]) {
+    let stride = row.len();
+    let first = 4.min(stride);
+    match filter {
+        0 => output.copy_from_slice(row),
+        1 => {
+            output[..first].copy_from_slice(&row[..first]);
+            for x in 4..stride {
+                output[x] = row[x].wrapping_sub(row[x - 4]);
+            }
+        }
+        2 => {
+            for (out, (&byte, &above)) in output.iter_mut().zip(row.iter().zip(previous.iter())) {
+                *out = byte.wrapping_sub(above);
+            }
+        }
+        3 => {
+            for (out, (&byte, &above)) in output
+                .iter_mut()
+                .zip(row.iter().zip(previous.iter()))
+                .take(first)
+            {
+                *out = byte.wrapping_sub(above / 2);
+            }
+            for x in 4..stride {
+                let left = row[x - 4];
+                let above = previous[x];
+                output[x] = row[x].wrapping_sub(((u16::from(left) + u16::from(above)) / 2) as u8);
+            }
+        }
+        _ => {
+            for (out, (&byte, &above)) in output
+                .iter_mut()
+                .zip(row.iter().zip(previous.iter()))
+                .take(first)
+            {
+                *out = byte.wrapping_sub(above);
+            }
+            for x in 4..stride {
+                let left = row[x - 4];
+                let above = previous[x];
+                let upper_left = previous[x - 4];
+                output[x] = row[x].wrapping_sub(paeth_predictor(left, above, upper_left));
+            }
+        }
+    }
+}
+
+/// Sum of absolute signed byte deviations (the libpng filter heuristic).
+#[inline]
+fn score_bytes(bytes: &[u8]) -> u64 {
+    bytes.iter().map(|&byte| abs_signed(byte)).sum()
+}
+
+/// `abs(byte as i8)` as a `u64`, branch-free.
+#[inline]
+fn abs_signed(byte: u8) -> u64 {
+    u64::from((byte as i8).unsigned_abs())
 }
 
 /// Encodes raw `rgba` bytes (row-major, 4 bytes per pixel) as a PNG file.
@@ -174,8 +356,14 @@ pub fn encode_rgba(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
         return Vec::new();
     }
 
-    let raw = filter_scanlines(width, height, rgba);
-    let mut out = Vec::with_capacity(raw.len() / 4 + 128);
+    let filtered = filter_scanlines(width, height, rgba);
+    finalize_png(width, height, filtered)
+}
+
+/// Wraps already-filtered image data into a complete PNG stream.
+fn finalize_png(width: u32, height: u32, filtered: Vec<u8>) -> Vec<u8> {
+    let compressed = deflate::zlib_compress(&filtered);
+    let mut out = Vec::with_capacity(compressed.len() + 128);
     out.extend_from_slice(&PNG_SIGNATURE);
 
     // IHDR: width, height, bit depth 8, color type 6 (RGBA), compression 0,
@@ -187,7 +375,7 @@ pub fn encode_rgba(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
     ihdr[9] = 6;
     write_chunk(&mut out, b"IHDR", &ihdr);
 
-    write_chunk(&mut out, b"IDAT", &deflate::zlib_compress(&raw));
+    write_chunk(&mut out, b"IDAT", &compressed);
     write_chunk(&mut out, b"IEND", &[]);
 
     out
