@@ -11,17 +11,44 @@
 //! fall back to the `var()` fallback (or make the property invalid → inherited/initial), never
 //! panic.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use crate::rule::Declaration;
 
 /// Maximum nested `var()` substitutions.
 pub const MAX_SUBSTITUTION_DEPTH: usize = 32;
 
+/// Result of [`resolve_declarations`]: owned declarations + shared custom-property map.
+type ResolvedDeclarations = (
+    Vec<(String, Declaration)>,
+    Option<Arc<HashMap<String, String>>>,
+);
+
 /// Returns whether `value` contains a `var()` function (case-insensitive).
+///
+/// Allocation-free: the hot path (`compute` for documents without custom properties) must
+/// not lowercase the whole value for every declaration of every element.
 pub(crate) fn contains_var(value: &str) -> bool {
-    let lower = value.to_ascii_lowercase();
-    lower.contains("var(")
+    let bytes = value.as_bytes();
+    if bytes.len() < 4 {
+        return false;
+    }
+    bytes
+        .windows(4)
+        .any(|window| window[..3].eq_ignore_ascii_case(b"var") && window[3] == b'(')
+}
+
+/// Returns whether style computation needs the custom-property machinery for this element.
+///
+/// `false` means: no local `--*` declarations and no declaration value references `var()`.
+/// In that case the parent's [`Arc`] custom-property map is reused as-is (cheap clone) and
+/// no declaration is cloned, sorted or scanned for substitution.
+pub(crate) fn needs_resolution(cascaded: &HashMap<String, &Declaration>) -> bool {
+    cascaded.keys().any(|name| name.starts_with("--"))
+        || cascaded
+            .values()
+            .any(|declaration| contains_var(&declaration.raw_value))
 }
 
 /// Expands every `var()` reference in `value` using `custom`.
@@ -159,35 +186,47 @@ fn normalize_custom_value(value: &str) -> Option<String> {
 
 /// Merges inherited/cascaded custom properties and expands `var()` in all declarations.
 ///
-/// Returns the declaration map (deterministic order) used by
-/// [`crate::properties::ComputedStyle::compute`] plus the element's custom property map for
-/// inheritance by descendants.
+/// Returns the owned, name-sorted declarations used by
+/// [`crate::properties::ComputedStyle::compute`] plus the element's custom-property map for
+/// descendants. The map is `None` when the element (and its ancestors) declare no custom
+/// properties; otherwise it is shared through [`Arc`] (copy-on-write only when this element
+/// adds/removes its own `--*` declarations). Callers must use
+/// [`needs_resolution`] first and skip this function entirely for the common case.
 pub(crate) fn resolve_declarations(
     cascaded: &HashMap<String, &Declaration>,
-    inherited: Option<&HashMap<String, String>>,
-) -> (BTreeMap<String, Declaration>, HashMap<String, String>) {
-    let mut custom: HashMap<String, String> = inherited.cloned().unwrap_or_default();
-    // 1. Custom properties: `initial`/`unset` remove the declaration (custom props are
-    //    inherited, so the inherited value wins); `inherit` keeps the inherited value.
-    for (name, declaration) in cascaded {
-        if !name.starts_with("--") {
-            continue;
-        }
-        match normalize_custom_value(&declaration.raw_value) {
-            Some(value) => {
-                custom.insert(name.clone(), value);
+    inherited: Option<&Arc<HashMap<String, String>>>,
+) -> ResolvedDeclarations {
+    let own_custom = cascaded.keys().any(|name| name.starts_with("--"));
+    // Copy-on-write: clone the inherited map only when the element declares custom props.
+    let mut custom_owned: Option<HashMap<String, String>> =
+        own_custom.then(|| inherited.map(|map| (**map).clone()).unwrap_or_default());
+    if let Some(custom) = custom_owned.as_mut() {
+        for (name, declaration) in cascaded {
+            if !name.starts_with("--") {
+                continue;
             }
-            None => {
-                custom.remove(name);
+            match normalize_custom_value(&declaration.raw_value) {
+                Some(value) => {
+                    custom.insert(name.clone(), value);
+                }
+                None => {
+                    custom.remove(name);
+                }
             }
         }
     }
+    let lookup: Option<&HashMap<String, String>> = custom_owned
+        .as_ref()
+        .or_else(|| inherited.map(|map| map.as_ref()));
+    let empty_map = HashMap::new();
+    let lookup_map = lookup.unwrap_or(&empty_map);
+
     // 2. Substitute var() in normal declarations. Keep unexpanded shorthands for a second
     //    pass so a shorthand containing var() expands after substitution.
-    let mut resolved: BTreeMap<String, Declaration> = BTreeMap::new();
-    let mut pending_shorthands: Vec<(String, Declaration)> = Vec::new();
     let mut names: Vec<&String> = cascaded.keys().collect();
     names.sort();
+    let mut resolved: Vec<(String, Declaration)> = Vec::with_capacity(cascaded.len());
+    let mut pending_shorthands: Vec<Declaration> = Vec::new();
     for name in names {
         if name.starts_with("--") {
             continue;
@@ -195,7 +234,7 @@ pub(crate) fn resolve_declarations(
         let declaration = cascaded[name];
         let value = declaration.raw_value.trim();
         if contains_var(value) {
-            let Some(expanded) = expand_variables(value, &custom) else {
+            let Some(expanded) = expand_variables(value, lookup_map) else {
                 continue; // invalid at computed-value time
             };
             let expanded_declaration = Declaration {
@@ -207,20 +246,27 @@ pub(crate) fn resolve_declarations(
             let longhands =
                 crate::shorthand::expand_declarations(std::slice::from_ref(&expanded_declaration));
             if longhands.len() == 1 && longhands[0].name == *name {
-                resolved.insert(name.clone(), expanded_declaration);
+                resolved.push((name.clone(), expanded_declaration));
             } else {
-                pending_shorthands.push((name.clone(), expanded_declaration));
+                pending_shorthands.push(expanded_declaration);
             }
         } else {
-            resolved.insert(name.clone(), (*declaration).clone());
+            resolved.push((name.clone(), (*declaration).clone()));
         }
     }
     // Shorthand expansions apply only where no explicit longhand won the cascade (simplified
     // CSS cascade order; documented limitation).
-    for (_name, declaration) in pending_shorthands {
+    for declaration in pending_shorthands {
         for longhand in crate::shorthand::expand_declarations(std::slice::from_ref(&declaration)) {
-            resolved.entry(longhand.name.clone()).or_insert(longhand);
+            if !resolved.iter().any(|(name, _)| *name == longhand.name) {
+                resolved.push((longhand.name.clone(), longhand));
+            }
         }
     }
-    (resolved, custom)
+    let custom_properties = match custom_owned {
+        Some(map) if map.is_empty() => None,
+        Some(map) => Some(Arc::new(map)),
+        None => inherited.cloned(),
+    };
+    (resolved, custom_properties)
 }

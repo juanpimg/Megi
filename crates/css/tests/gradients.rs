@@ -184,7 +184,7 @@ fn test_invalid_gradients_are_dropped() {
         "linear-gradient(red)",
         "linear-gradient(nope, blue)",
         "linear-gradient(red, notacolor)",
-        "conic-gradient(red, blue)",
+        "conic-gradient(from, red, blue)",
         "radial-gradient(ellipse 10px 20px 30px, red, blue)",
         "linear-gradient(10%, red, blue)",
     ] {
@@ -249,3 +249,213 @@ fn test_gradient_layers_keep_clip_and_background_properties() {
 }
 
 use css::ComputedStyle;
+
+// --- R118: conic gradients, color hints and interpolation spaces ------------
+
+fn conic(style: &ComputedStyle) -> css::ConicGradient {
+    match &gradient_from(style).kind {
+        GradientKind::Conic(conic) => conic.clone(),
+        other => panic!("expected conic gradient, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_conic_gradient_defaults() {
+    let style = computed_style("", "background-image: conic-gradient(red, blue);");
+    let parsed = conic(&style);
+    assert_eq!(parsed.from_angle, 0.0);
+    assert_eq!(parsed.position.x, css::Length::Percent(50.0));
+    assert_eq!(parsed.position.y, css::Length::Percent(50.0));
+    assert_eq!(
+        style.background_layers[0]
+            .gradient
+            .as_ref()
+            .unwrap()
+            .stops
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn test_conic_gradient_from_and_at() {
+    let style = computed_style(
+        "",
+        "background-image: conic-gradient(from 45deg at 10px 20%, red, blue);",
+    );
+    let parsed = conic(&style);
+    assert_eq!(parsed.from_angle, 45.0);
+    assert_eq!(parsed.position.x, css::Length::Px(10.0));
+    assert_eq!(parsed.position.y, css::Length::Percent(20.0));
+    let turn = computed_style(
+        "",
+        "background-image: conic-gradient(from 0.25turn at center, red, blue);",
+    );
+    assert_eq!(conic(&turn).from_angle, 90.0);
+}
+
+#[test]
+fn test_conic_stop_positions_angles_and_percentages() {
+    let style = computed_style(
+        "",
+        "background-image: conic-gradient(red 0deg, blue 0.25turn, green 180deg, yellow 50%);",
+    );
+    let stops = &gradient_from(&style).stops;
+    assert_eq!(stops.len(), 4);
+    assert_eq!(stops[0].position, Some(css::Length::Percent(0.0)));
+    assert_eq!(stops[1].position, Some(css::Length::Percent(25.0)));
+    assert_eq!(stops[2].position, Some(css::Length::Percent(50.0)));
+    assert_eq!(stops[3].position, Some(css::Length::Percent(50.0)));
+}
+
+#[test]
+fn test_repeating_conic_gradient() {
+    let style = computed_style(
+        "",
+        "background-image: repeating-conic-gradient(red 0 30deg, blue 30deg 60deg);",
+    );
+    let gradient = gradient_from(&style);
+    assert!(gradient.repeating);
+    assert!(matches!(gradient.kind, GradientKind::Conic(_)));
+    assert_eq!(gradient.stops.len(), 4);
+}
+
+#[test]
+fn test_conic_alpha_and_hard_stops() {
+    let style = computed_style(
+        "",
+        "background-image: conic-gradient(rgba(255,0,0,0.5) 0 90deg, transparent 90deg 180deg, blue 180deg);",
+    );
+    let gradient = gradient_from(&style);
+    assert_eq!(gradient.stops[0].color.a, 128);
+    assert_eq!(gradient.stops[1].position, Some(css::Length::Percent(25.0)));
+    assert_eq!(gradient.stops[2].position, Some(css::Length::Percent(25.0)));
+}
+
+#[test]
+fn test_conic_invalid_stops_are_dropped() {
+    for invalid in [
+        "conic-gradient(red 10px, blue)", // px positions are invalid for conic
+        "conic-gradient(red, 20%, blue 40%, 50%)", // hint after a hint ends
+        "conic-gradient(from red, blue)",
+    ] {
+        let style = computed_style("", &format!("background-image: {invalid};"));
+        assert!(
+            style
+                .background_layers
+                .first()
+                .is_none_or(|layer| layer.gradient.is_none()),
+            "expected invalid conic gradient to be dropped: {invalid}"
+        );
+    }
+}
+
+#[test]
+fn test_color_hints_are_parsed() {
+    let style = computed_style("", "background-image: linear-gradient(red, 30%, blue);");
+    let gradient = gradient_from(&style);
+    assert_eq!(gradient.stops.len(), 2);
+    assert_eq!(gradient.hints, vec![Some(css::Length::Percent(30.0))]);
+
+    let radial = computed_style(
+        "",
+        "background-image: radial-gradient(circle, red 0%, 20%, blue 100%);",
+    );
+    assert_eq!(
+        gradient_from(&radial).hints,
+        vec![Some(css::Length::Percent(20.0))]
+    );
+
+    let conic = computed_style("", "background-image: conic-gradient(red, 90deg, blue);");
+    assert_eq!(
+        gradient_from(&conic).hints,
+        vec![Some(css::Length::Percent(25.0))]
+    );
+}
+
+#[test]
+fn test_invalid_color_hints_are_dropped() {
+    for invalid in [
+        "linear-gradient(30%, red, blue)", // hint before the first stop
+        "linear-gradient(red, blue, 30%)", // hint after the last stop
+        "linear-gradient(red, 30%, 40%, blue)", // two hints between stops
+    ] {
+        let style = computed_style("", &format!("background-image: {invalid};"));
+        assert!(
+            style
+                .background_layers
+                .first()
+                .is_none_or(|layer| layer.gradient.is_none()),
+            "expected invalid hint gradient to be dropped: {invalid}"
+        );
+    }
+}
+
+#[test]
+fn test_interpolation_spaces_are_parsed() {
+    let srgb = computed_style("", "background-image: linear-gradient(in srgb, red, blue);");
+    assert_eq!(
+        gradient_from(&srgb).interpolation,
+        css::InterpolationSpace::Srgb
+    );
+    let linear_space = computed_style(
+        "",
+        "background-image: linear-gradient(45deg in srgb-linear, red, blue);",
+    );
+    assert_eq!(
+        gradient_from(&linear_space).interpolation,
+        css::InterpolationSpace::SrgbLinear
+    );
+    assert_eq!(
+        linear(&linear_space.clone()).direction,
+        LinearDirection::Angle(45.0)
+    );
+    let oklab = computed_style(
+        "",
+        "background-image: radial-gradient(circle at center in oklab, red, blue);",
+    );
+    assert_eq!(
+        gradient_from(&oklab).interpolation,
+        css::InterpolationSpace::Oklab
+    );
+    let conic = computed_style(
+        "",
+        "background-image: conic-gradient(from 90deg at center in oklab, red, blue);",
+    );
+    assert_eq!(
+        gradient_from(&conic).interpolation,
+        css::InterpolationSpace::Oklab
+    );
+}
+
+#[test]
+fn test_unknown_interpolation_space_drops_gradient() {
+    for invalid in [
+        "linear-gradient(in hsl, red, blue)",
+        "linear-gradient(in, red, blue)",
+        "linear-gradient(in oklab in srgb, red, blue)",
+    ] {
+        let style = computed_style("", &format!("background-image: {invalid};"));
+        assert!(
+            style
+                .background_layers
+                .first()
+                .is_none_or(|layer| layer.gradient.is_none()),
+            "expected invalid interpolation to be dropped: {invalid}"
+        );
+    }
+}
+
+#[test]
+fn test_mixed_layers_with_conic_and_url() {
+    let style = computed_style(
+        "",
+        "background-image: url(a.png), conic-gradient(red, blue);",
+    );
+    assert_eq!(style.background_layers.len(), 2);
+    assert_eq!(style.background_layers[0].image.as_deref(), Some("a.png"));
+    assert!(matches!(
+        style.background_layers[1].gradient.as_ref().unwrap().kind,
+        GradientKind::Conic(_)
+    ));
+}

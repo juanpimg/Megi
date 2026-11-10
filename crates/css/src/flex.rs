@@ -255,12 +255,14 @@ fn parse_flex_basis(value: &str, font_size: f32, root_font_size: f32) -> Option<
 }
 
 fn parse_gap_pair(value: &str, font_size: f32, root_font_size: f32) -> (Length, Length) {
-    let mut parts = value.split_ascii_whitespace();
+    // Balanced components: `calc(1em + 5px)` contains spaces and must stay in one
+    // component (mixed calc side values are resolved by layout from `CalcLengths`).
+    let parts = crate::properties::split_components(value);
     let row = parts
-        .next()
+        .first()
         .and_then(|part| parse_flex_basis(part, font_size, root_font_size));
     let column = parts
-        .next()
+        .get(1)
         .and_then(|part| parse_flex_basis(part, font_size, root_font_size));
     match (row, column) {
         (Some(row), Some(column)) => (row, column),

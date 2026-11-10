@@ -499,7 +499,7 @@ fn calc_vw_vh_use_the_injected_viewport() {
 }
 
 #[test]
-fn calc_mixed_and_invalid_fall_back_to_auto() {
+fn calc_mixed_stores_components_and_invalid_falls_back_to_auto() {
     let (mut doc, body) = document();
     append(&mut doc, body, "div", &[("id", "d")]);
     let styles = computed(
@@ -507,8 +507,15 @@ fn calc_mixed_and_invalid_fall_back_to_auto() {
         "div { width: calc(100% - 20px); height: calc(10px +) }",
     );
     let style = style_of(&styles, &doc, "d");
-    assert_eq!(style.width, css::Length::Auto);
+    // Mixed percentage+length is supported since R119 (task-122): the components are kept
+    // in `calc_lengths` and the `Length` fallback keeps the absolute part for legacy users.
+    let width = style.calc_lengths.width.expect("mixed width components");
+    assert_eq!(width.percent, 100.0);
+    assert_eq!(width.px, -20.0);
+    assert_eq!(style.width, css::Length::Px(-20.0));
+    // Invalid expression → initial `auto` and no calc components.
     assert_eq!(style.height, css::Length::Auto);
+    assert!(style.calc_lengths.height.is_none());
 }
 
 #[test]

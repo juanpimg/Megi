@@ -2537,18 +2537,137 @@ fn paint_text_mask_group(
 /// Hard cap on the stops evaluated by the rasterizer (mirrors the CSS cap).
 const MAX_GRADIENT_STOPS: usize = 64;
 
-fn lerp_color(start: Color, end: Color, factor: f32) -> Color {
-    let channel = |a: u8, b: u8| -> u8 {
-        (f32::from(a) + (f32::from(b) - f32::from(a)) * factor)
-            .round()
-            .clamp(0.0, 255.0) as u8
+fn srgb_to_linear(channel: u8) -> f32 {
+    let value = f32::from(channel) / 255.0;
+    if value <= 0.04045 {
+        value / 12.92
+    } else {
+        ((value + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn linear_to_srgb_channel(value: f32) -> u8 {
+    let value = value.clamp(0.0, 1.0);
+    let encoded = if value <= 0.003_130_8 {
+        value * 12.92
+    } else {
+        1.055 * value.powf(1.0 / 2.4) - 0.055
     };
+    (encoded * 255.0).round().clamp(0.0, 255.0) as u8
+}
+
+/// Basic sRGB → OKLab conversion (Björn Ottosson's matrices, CSS Images 4 §12.1).
+fn srgb_to_oklab(color: Color) -> [f32; 3] {
+    let r = srgb_to_linear(color.r);
+    let g = srgb_to_linear(color.g);
+    let b = srgb_to_linear(color.b);
+    let l = 0.412_221_46 * r + 0.536_332_55 * g + 0.051_445_995 * b;
+    let m = 0.211_903_5 * r + 0.680_699_5 * g + 0.107_396_96 * b;
+    let s = 0.088_302_46 * r + 0.281_718_85 * g + 0.629_978_7 * b;
+    let l_ = l.cbrt();
+    let m_ = m.cbrt();
+    let s_ = s.cbrt();
+    [
+        0.210_454_26 * l_ + 0.793_617_8 * m_ - 0.004_072_047 * s_,
+        1.977_998_5 * l_ - 2.428_592_2 * m_ + 0.450_593_7 * s_,
+        0.025_904_037 * l_ + 0.782_771_77 * m_ - 0.808_675_77 * s_,
+    ]
+}
+
+fn oklab_to_srgb(lab: [f32; 3]) -> Color {
+    let [lightness, a, b] = lab;
+    let l_ = lightness + 0.396_337_78 * a + 0.215_803_76 * b;
+    let m_ = lightness - 0.105_561_346 * a - 0.063_854_17 * b;
+    let s_ = lightness - 0.089_484_18 * a - 1.291_485_5 * b;
+    let l = l_ * l_ * l_;
+    let m = m_ * m_ * m_;
+    let s = s_ * s_ * s_;
+    let r = 4.076_741_7 * l - 3.307_711_6 * m + 0.230_969_94 * s;
+    let g = -1.268_438 * l + 2.609_757_4 * m - 0.341_319_38 * s;
+    let b = -0.004_196_086_3 * l - 0.703_418_6 * m + 1.707_614_7 * s;
     Color::new(
-        channel(start.r, end.r),
-        channel(start.g, end.g),
-        channel(start.b, end.b),
-        channel(start.a, end.a),
+        linear_to_srgb_channel(r),
+        linear_to_srgb_channel(g),
+        linear_to_srgb_channel(b),
+        0,
     )
+}
+
+/// Interpolates two colors in the requested gradient color space.
+///
+/// Alpha is always interpolated linearly (documented approximation: CSS
+/// interpolates premultiplied colors; the default `srgb` path keeps the legacy
+/// non-premultiplied channels byte-for-byte).
+fn interpolate_color(
+    start: Color,
+    end: Color,
+    factor: f32,
+    space: css::InterpolationSpace,
+) -> Color {
+    let factor = factor.clamp(0.0, 1.0);
+    let alpha = (f32::from(start.a) + (f32::from(end.a) - f32::from(start.a)) * factor)
+        .round()
+        .clamp(0.0, 255.0) as u8;
+    match space {
+        css::InterpolationSpace::Srgb => {
+            let channel = |a: u8, b: u8| -> u8 {
+                (f32::from(a) + (f32::from(b) - f32::from(a)) * factor)
+                    .round()
+                    .clamp(0.0, 255.0) as u8
+            };
+            Color::new(
+                channel(start.r, end.r),
+                channel(start.g, end.g),
+                channel(start.b, end.b),
+                alpha,
+            )
+        }
+        css::InterpolationSpace::SrgbLinear => {
+            let channel = |a: u8, b: u8| -> u8 {
+                let start = srgb_to_linear(a);
+                let end = srgb_to_linear(b);
+                linear_to_srgb_channel(start + (end - start) * factor)
+            };
+            Color::new(
+                channel(start.r, end.r),
+                channel(start.g, end.g),
+                channel(start.b, end.b),
+                alpha,
+            )
+        }
+        css::InterpolationSpace::Oklab => {
+            let start_lab = srgb_to_oklab(start);
+            let end_lab = srgb_to_oklab(end);
+            let mixed = [
+                start_lab[0] + (end_lab[0] - start_lab[0]) * factor,
+                start_lab[1] + (end_lab[1] - start_lab[1]) * factor,
+                start_lab[2] + (end_lab[2] - start_lab[2]) * factor,
+            ];
+            let mut color = oklab_to_srgb(mixed);
+            color.a = alpha;
+            color
+        }
+    }
+}
+
+/// Resolves color-hint positions to normalized `0..=1` values.
+fn resolve_gradient_hints(hints: &[Option<css::Length>], line_length: f32) -> Vec<Option<f32>> {
+    hints
+        .iter()
+        .map(|hint| {
+            hint.map(|length| match length {
+                css::Length::Percent(pct) => pct / 100.0,
+                css::Length::Px(px) => {
+                    if line_length > 0.0 {
+                        px / line_length
+                    } else {
+                        0.0
+                    }
+                }
+                css::Length::Auto => 0.0,
+            })
+        })
+        .collect()
 }
 
 /// Resolves stop positions to normalized `0..=1` values, filling implicit
@@ -2611,8 +2730,15 @@ fn resolve_gradient_stops(stops: &[css::GradientStop], line_length: f32) -> Vec<
     resolved
 }
 
-/// Samples a resolved gradient at normalized position `t`.
-fn sample_gradient(stops: &[(f32, Color)], repeating: bool, mut t: f32) -> Color {
+/// Samples a resolved gradient at normalized position `t`, applying color hints
+/// and the requested interpolation space.
+fn sample_gradient(
+    stops: &[(f32, Color)],
+    hints: &[Option<f32>],
+    repeating: bool,
+    mut t: f32,
+    interpolation: css::InterpolationSpace,
+) -> Color {
     let Some((first, first_color)) = stops.first().copied() else {
         return Color::TRANSPARENT;
     };
@@ -2635,15 +2761,32 @@ fn sample_gradient(stops: &[(f32, Color)], repeating: bool, mut t: f32) -> Color
     if t >= last {
         return last_color;
     }
-    for window in stops.windows(2) {
+    for (index, window) in stops.windows(2).enumerate() {
         let (start, start_color) = window[0];
         let (end, end_color) = window[1];
         if t >= start && t <= end {
-            if (end - start).abs() < 1e-6 {
+            let span = end - start;
+            if span.abs() < 1e-6 {
                 return end_color;
             }
-            let factor = (t - start) / (end - start);
-            return lerp_color(start_color, end_color, factor.clamp(0.0, 1.0));
+            let mut factor = ((t - start) / span).clamp(0.0, 1.0);
+            if let Some(Some(hint)) = hints.get(index) {
+                // A color hint sets the 50% color point at its position
+                // (CSS Images 3 §3.4.1).
+                let hint = hint.clamp(start, end);
+                if hint > start && hint < end {
+                    factor = if t < hint {
+                        0.5 * ((t - start) / (hint - start)).clamp(0.0, 1.0)
+                    } else {
+                        0.5 + 0.5 * ((t - hint) / (end - hint)).clamp(0.0, 1.0)
+                    };
+                } else if hint <= start {
+                    factor = 0.0;
+                } else {
+                    factor = 1.0;
+                }
+            }
+            return interpolate_color(start_color, end_color, factor, interpolation);
         }
     }
     last_color
@@ -2782,23 +2925,33 @@ impl Pixmap {
             return;
         }
         let stops = &gradient.stops[..gradient.stops.len().min(MAX_GRADIENT_STOPS)];
-        let (linear_axis, radial) = match &gradient.kind {
-            css::GradientKind::Linear(linear) => {
-                (Some(linear_gradient_axis(rect, linear.direction)), None)
-            }
+        let (linear_axis, radial, conic) = match &gradient.kind {
+            css::GradientKind::Linear(linear) => (
+                Some(linear_gradient_axis(rect, linear.direction)),
+                None,
+                None,
+            ),
             css::GradientKind::Radial(radial) => {
-                (None, Some(radial_gradient_geometry(rect, radial)))
+                (None, Some(radial_gradient_geometry(rect, radial)), None)
+            }
+            css::GradientKind::Conic(conic) => {
+                let center_x = resolve_gradient_position(conic.position.x, rect.x, rect.width);
+                let center_y = resolve_gradient_position(conic.position.y, rect.y, rect.height);
+                (None, None, Some((center_x, center_y, conic.from_angle)))
             }
         };
         let Some(clip) = self.clip_rect() else {
             return;
         };
-        let line_length = match (&linear_axis, &radial) {
-            (Some(axis), _) => axis.4,
-            (_, Some(Some((_, _, rx, ry)))) => (rx + ry) / 2.0,
+        let line_length = match (&linear_axis, &radial, &conic) {
+            (Some(axis), _, _) => axis.4,
+            (_, Some(Some((_, _, rx, ry))), _) => (rx + ry) / 2.0,
+            (_, _, Some(_)) => 1.0,
             _ => return,
         };
         let resolved = resolve_gradient_stops(stops, line_length);
+        let hints_slice = &gradient.hints[..gradient.hints.len().min(MAX_GRADIENT_STOPS - 1)];
+        let hints = resolve_gradient_hints(hints_slice, line_length);
         let x0 = rect.x.max(clip.x).floor().max(0.0) as u32;
         let y0 = rect.y.max(clip.y).floor().max(0.0) as u32;
         let x1 = ((rect.x + rect.width).min(clip.x + clip.width))
@@ -2831,10 +2984,20 @@ impl Pixmap {
                     (((px - center_x) * dx + (py - center_y) * dy) / line) + 0.5
                 } else if let Some(Some((center_x, center_y, rx, ry))) = radial {
                     (((px - center_x) / rx).powi(2) + ((py - center_y) / ry).powi(2)).sqrt()
+                } else if let Some((center_x, center_y, from_angle)) = conic {
+                    // CSS conic angles start at the top and grow clockwise.
+                    let angle = (px - center_x).atan2(-(py - center_y)).to_degrees();
+                    ((angle - from_angle).rem_euclid(360.0)) / 360.0
                 } else {
                     continue;
                 };
-                let color = sample_gradient(&resolved, gradient.repeating, t);
+                let color = sample_gradient(
+                    &resolved,
+                    &hints,
+                    gradient.repeating,
+                    t,
+                    gradient.interpolation,
+                );
                 let coverage = (u32::from(coverage_x) * u32::from(coverage_y)) as f32 / 65536.0;
                 if coverage <= 0.0 {
                     continue;

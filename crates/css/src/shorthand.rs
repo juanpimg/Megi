@@ -245,7 +245,14 @@ fn expand_box_edges(value: &str, name: &str) -> Option<Vec<(String, String)>> {
     }
     let is_padding = name.starts_with("padding");
     for component in &components {
-        let parsed = Length::parse(component, 16.0, 16.0)?;
+        // Mixed `calc()` values are kept as raw text; the computed-style side table
+        // resolves them per side. Pure lengths keep the legacy validation.
+        let Some(parsed) = Length::parse(component, 16.0, 16.0) else {
+            if crate::calc::evaluate_mixed(component, 16.0, 16.0).is_some() {
+                continue;
+            }
+            return None;
+        };
         if is_padding {
             match parsed {
                 Length::Auto => return None,

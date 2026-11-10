@@ -477,6 +477,33 @@ impl TextAlign {
     }
 }
 
+/// CSS `text-transform` property (CSS Text 3 §2.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum TextTransform {
+    /// No transformation (initial).
+    #[default]
+    None,
+    /// `uppercase`.
+    Uppercase,
+    /// `lowercase`.
+    Lowercase,
+    /// `capitalize`: uppercase the first typographic letter of each word.
+    Capitalize,
+}
+
+impl TextTransform {
+    /// Parses a `text-transform` value.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "none" => Some(Self::None),
+            "uppercase" => Some(Self::Uppercase),
+            "lowercase" => Some(Self::Lowercase),
+            "capitalize" => Some(Self::Capitalize),
+            _ => None,
+        }
+    }
+}
+
 /// CSS `white-space` property.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum WhiteSpace {
@@ -1225,8 +1252,30 @@ pub struct RadialGradient {
     pub position: BackgroundPosition,
 }
 
-/// One parsed CSS gradient (`linear-gradient`, `radial-gradient` or their
-/// `repeating-` variants).
+/// Parsed `conic-gradient()` geometry (CSS Images 3 §3.3).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ConicGradient {
+    /// Starting angle in CSS degrees (`from <angle>`; initial `0deg`, pointing up).
+    pub from_angle: f32,
+    /// Center position (`at <position>`; initial `center`).
+    pub position: BackgroundPosition,
+}
+
+/// Color interpolation space used between gradient stops (CSS Images 4 §12).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum InterpolationSpace {
+    /// Non-premultiplied sRGB channel interpolation (the initial value and the
+    /// pre-R118 behaviour; bytes are unchanged when no `in <space>` is authored).
+    #[default]
+    Srgb,
+    /// Linear-light sRGB interpolation (`in srgb-linear`).
+    SrgbLinear,
+    /// OKLab perceptual interpolation (`in oklab`, basic matrices).
+    Oklab,
+}
+
+/// One parsed CSS gradient (`linear-gradient`, `radial-gradient`,
+/// `conic-gradient` or their `repeating-` variants).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Gradient {
     /// Gradient geometry.
@@ -1235,6 +1284,11 @@ pub struct Gradient {
     pub repeating: bool,
     /// Color stops, at most [`MAX_GRADIENT_STOPS`] (CSS Images 3 §3.4).
     pub stops: Vec<GradientStop>,
+    /// Color hints between adjacent stops (`hints[i]` applies between `stops[i]`
+    /// and `stops[i + 1]`; empty when no hint is authored).
+    pub hints: Vec<Option<Length>>,
+    /// Color interpolation space (`in <space>`; default sRGB).
+    pub interpolation: InterpolationSpace,
 }
 
 /// Geometry of a [`Gradient`].
@@ -1244,6 +1298,8 @@ pub enum GradientKind {
     Linear(LinearGradient),
     /// `radial-gradient()`.
     Radial(RadialGradient),
+    /// `conic-gradient()`.
+    Conic(ConicGradient),
 }
 
 /// Hard cap on the number of stops kept per gradient.
@@ -1416,6 +1472,52 @@ pub struct TextShadow {
     pub color: Color,
 }
 
+/// Mixed `calc()` side values (`percentage + absolute length`) for properties that
+/// accept a `<length-percentage>`.
+///
+/// `Length` itself intentionally stays `Px`/`Percent`/`Auto` (paint/render match it
+/// exhaustively); when a declaration computes to a *mixed* `calc()` value the plain
+/// `Length` stores the absolute component as a fallback and the full value is kept
+/// here. Layout resolves `percent * basis / 100 + px` (percentage part is `0` when the
+/// axis basis is indefinite, documented approximation).
+///
+/// Limitations: `font-size` only accepts absolute lengths (mixed `calc()` there stays
+/// invalid); grid track sizes (`grid-template-*`/`minmax()`) still take pure lengths;
+/// `background-position`/`background-size`/`border-radius` are computed here but the
+/// paint crate keeps consuming the plain `Length` fields, so mixed calc there is parsed
+/// and stored but not yet painted (documented, paint out of this task's scope).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct CalcLengths {
+    pub width: Option<crate::calc::CalcValue>,
+    pub height: Option<crate::calc::CalcValue>,
+    pub min_width: Option<crate::calc::CalcValue>,
+    pub max_width: Option<crate::calc::CalcValue>,
+    pub min_height: Option<crate::calc::CalcValue>,
+    pub max_height: Option<crate::calc::CalcValue>,
+    pub margin_top: Option<crate::calc::CalcValue>,
+    pub margin_right: Option<crate::calc::CalcValue>,
+    pub margin_bottom: Option<crate::calc::CalcValue>,
+    pub margin_left: Option<crate::calc::CalcValue>,
+    pub padding_top: Option<crate::calc::CalcValue>,
+    pub padding_right: Option<crate::calc::CalcValue>,
+    pub padding_bottom: Option<crate::calc::CalcValue>,
+    pub padding_left: Option<crate::calc::CalcValue>,
+    pub top: Option<crate::calc::CalcValue>,
+    pub right: Option<crate::calc::CalcValue>,
+    pub bottom: Option<crate::calc::CalcValue>,
+    pub left: Option<crate::calc::CalcValue>,
+    pub row_gap: Option<crate::calc::CalcValue>,
+    pub column_gap: Option<crate::calc::CalcValue>,
+    /// First background layer `background-position` x/y components.
+    pub background_position_x: Option<crate::calc::CalcValue>,
+    pub background_position_y: Option<crate::calc::CalcValue>,
+    /// First background layer `background-size` width/height components.
+    pub background_size_width: Option<crate::calc::CalcValue>,
+    pub background_size_height: Option<crate::calc::CalcValue>,
+    /// `border-radius` corners as `[tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y]`.
+    pub border_radius: Option<[crate::calc::CalcValue; 8]>,
+}
+
 /// Complete computed style for an element in the DOM tree.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComputedStyle {
@@ -1544,6 +1646,8 @@ pub struct ComputedStyle {
     pub grid_row_end: crate::grid::GridLine,
     /// `order` for grid/flex items (initial `0`).
     pub order: i32,
+    /// Mixed `calc()` side values for `<length-percentage>` properties.
+    pub calc_lengths: CalcLengths,
 
     // Typography
     pub font_size: f32,
@@ -1551,7 +1655,12 @@ pub struct ComputedStyle {
     pub font_style: FontStyle,
     pub font_family: String,
     /// Custom properties (`--x`) computed/inherited for this element, as raw token values.
-    pub custom_properties: std::collections::HashMap<String, String>,
+    ///
+    /// Lazy copy-on-write: `None` when neither this element nor its ancestors declare any
+    /// custom property (so style resolution does not allocate a map per element), otherwise
+    /// an [`std::sync::Arc`] shared with descendants and cloned only when this element
+    /// declares its own `--*` declarations. See [`crate::custom`].
+    pub custom_properties: Option<std::sync::Arc<std::collections::HashMap<String, String>>>,
     pub line_height: Option<f32>,
     /// Unitless `<number>` factor when `line-height` was declared as a number (`1.5`).
     ///
@@ -1572,6 +1681,14 @@ pub struct ComputedStyle {
     // Visibility
     pub visibility: Visibility,
     pub opacity: f32,
+
+    // Typography: text transformation and spacing (CSS Text 3). All inherited.
+    /// `text-transform` (initial `none`); applied by layout while shaping text.
+    pub text_transform: TextTransform,
+    /// `word-spacing` (initial `normal` = `0px`), resolved by layout in the IFC.
+    pub word_spacing: Length,
+    /// `letter-spacing` (initial `normal` = `0px`), resolved by layout in the IFC.
+    pub letter_spacing: Length,
 }
 
 impl Default for ComputedStyle {
@@ -1665,12 +1782,13 @@ impl ComputedStyle {
             grid_row_start: crate::grid::GridLine::Auto,
             grid_row_end: crate::grid::GridLine::Auto,
             order: 0,
+            calc_lengths: CalcLengths::default(),
 
             font_size: 16.0,
             font_weight: 400,
             font_style: FontStyle::Normal,
             font_family: "sans-serif".to_string(),
-            custom_properties: std::collections::HashMap::new(),
+            custom_properties: None,
             line_height: None,
             line_height_factor: None,
             text_align: TextAlign::Left,
@@ -1682,6 +1800,10 @@ impl ComputedStyle {
 
             visibility: Visibility::Visible,
             opacity: 1.0,
+
+            text_transform: TextTransform::None,
+            word_spacing: Length::Px(0.0),
+            letter_spacing: Length::Px(0.0),
         }
     }
 
@@ -1691,16 +1813,32 @@ impl ComputedStyle {
         parent: Option<&ComputedStyle>,
         root_style: Option<&ComputedStyle>,
     ) -> Self {
-        // Custom properties + var() substitution happen before longhand computation; the
-        // returned map is deterministic (BTreeMap) so resolution is reproducible.
-        let (resolved_declarations, custom_properties) = crate::custom::resolve_declarations(
-            cascaded,
-            parent.map(|style| &style.custom_properties),
-        );
-        let entries: Vec<(&str, &Declaration)> = resolved_declarations
-            .iter()
-            .map(|(name, declaration)| (name.as_str(), declaration))
-            .collect();
+        // Custom properties are lazy: documents without `--*`/`var()` (the vast
+        // majority) skip the resolver entirely, borrow the cascaded declarations and share
+        // the parent's `Arc<HashMap>` as-is. This keeps style resolution allocation-free in
+        // the common case.
+        let inherited_custom = parent.and_then(|style| style.custom_properties.clone());
+        let needs_resolution = crate::custom::needs_resolution(cascaded);
+        let mut resolved_declarations: Vec<(String, Declaration)> = Vec::new();
+        let custom_properties = if needs_resolution {
+            let (resolved, custom) =
+                crate::custom::resolve_declarations(cascaded, inherited_custom.as_ref());
+            resolved_declarations = resolved;
+            custom
+        } else {
+            inherited_custom
+        };
+        let entries: Vec<(&str, &Declaration)> = if needs_resolution {
+            resolved_declarations
+                .iter()
+                .map(|(name, declaration)| (name.as_str(), declaration))
+                .collect()
+        } else {
+            cascaded
+                .iter()
+                .map(|(name, declaration)| (name.as_str(), *declaration))
+                .collect()
+        };
         let root_font_size = root_style.map_or(16.0, |r| r.font_size);
         let parent_font_size = parent.map_or(16.0, |p| p.font_size);
 
@@ -1766,6 +1904,34 @@ impl ComputedStyle {
         } else {
             parent.map_or(WhiteSpace::Normal, |p| p.white_space)
         };
+
+        let text_transform = if let Some(decl) = find_declaration(&entries, "text-transform") {
+            TextTransform::parse(&decl.raw_value)
+                .unwrap_or_else(|| parent.map_or(TextTransform::None, |p| p.text_transform))
+        } else {
+            parent.map_or(TextTransform::None, |p| p.text_transform)
+        };
+
+        let inherited_spacing = |property: &str, parent_value: Option<Length>| {
+            if let Some(decl) = find_declaration(&entries, property) {
+                let value = decl.raw_value.trim();
+                if value.eq_ignore_ascii_case("normal") {
+                    Length::Px(0.0)
+                } else {
+                    match Length::parse(value, font_size, root_font_size) {
+                        // Computed values of spacing lengths are absolute: resolve a
+                        // percentage against the element font-size (CSS Text 3).
+                        Some(Length::Percent(pct)) => Length::Px(font_size * pct / 100.0),
+                        Some(length) => length,
+                        None => parent_value.unwrap_or(Length::Px(0.0)),
+                    }
+                }
+            } else {
+                parent_value.unwrap_or(Length::Px(0.0))
+            }
+        };
+        let word_spacing = inherited_spacing("word-spacing", parent.map(|p| p.word_spacing));
+        let letter_spacing = inherited_spacing("letter-spacing", parent.map(|p| p.letter_spacing));
 
         let visibility = find_declaration(&entries, "visibility")
             .and_then(|d| Visibility::parse(&d.raw_value))
@@ -1837,6 +2003,7 @@ impl ComputedStyle {
                 .eq_ignore_ascii_case("inline-flex")
         });
         let computed_grid = crate::grid::compute_grid(&entries, font_size, root_font_size);
+        let calc_lengths = Self::compute_calc_lengths(&entries, font_size, root_font_size);
         // `inline-grid` has no dedicated `Display` variant (keeps exhaustive matches
         // in other crates stable): it computes as an inline block plus a flag, like
         // `inline-flex`. The layout crate dispatches the grid algorithm from the flag.
@@ -1870,43 +2037,43 @@ impl ComputedStyle {
             .and_then(|d| parse_image_value(&d.raw_value));
 
         let width = find_declaration(&entries, "width")
-            .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
+            .and_then(|d| mixed_length_fallback(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
         let height = find_declaration(&entries, "height")
-            .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
+            .and_then(|d| mixed_length_fallback(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
         let min_width = find_declaration(&entries, "min-width")
-            .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
+            .and_then(|d| mixed_length_fallback(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
         let max_width = find_declaration(&entries, "max-width")
-            .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
+            .and_then(|d| mixed_length_fallback(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
         let min_height = find_declaration(&entries, "min-height")
-            .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
+            .and_then(|d| mixed_length_fallback(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
         let max_height = find_declaration(&entries, "max-height")
-            .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
+            .and_then(|d| mixed_length_fallback(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
         let top = find_declaration(&entries, "top")
-            .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
+            .and_then(|d| mixed_length_fallback(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
         let right = find_declaration(&entries, "right")
-            .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
+            .and_then(|d| mixed_length_fallback(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
         let bottom = find_declaration(&entries, "bottom")
-            .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
+            .and_then(|d| mixed_length_fallback(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
         let left = find_declaration(&entries, "left")
-            .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
+            .and_then(|d| mixed_length_fallback(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
         let z_index = find_declaration(&entries, "z-index")
@@ -1999,6 +2166,7 @@ impl ComputedStyle {
             grid_row_start: computed_grid.row_start,
             grid_row_end: computed_grid.row_end,
             order: computed_grid.order,
+            calc_lengths,
             font_size,
             font_weight,
             font_style,
@@ -2014,6 +2182,9 @@ impl ComputedStyle {
             list_style_image,
             visibility,
             opacity,
+            text_transform,
+            word_spacing,
+            letter_spacing,
         }
     }
 
@@ -2028,6 +2199,9 @@ impl ComputedStyle {
         self.line_height_factor = parent.line_height_factor;
         self.text_align = parent.text_align;
         self.white_space = parent.white_space;
+        self.text_transform = parent.text_transform;
+        self.word_spacing = parent.word_spacing;
+        self.letter_spacing = parent.letter_spacing;
         self.visibility = parent.visibility;
         self.list_style_type = parent.list_style_type;
         // `text-decoration` is *not* inherited (CSS Text Decoration 3 §2): decorations
@@ -3192,6 +3366,8 @@ fn parse_background_image_component(
         || lower.starts_with("repeating-linear-gradient(")
         || lower.starts_with("radial-gradient(")
         || lower.starts_with("repeating-radial-gradient(")
+        || lower.starts_with("conic-gradient(")
+        || lower.starts_with("repeating-conic-gradient(")
     {
         return (
             None,
@@ -3202,15 +3378,28 @@ fn parse_background_image_component(
     (None, None)
 }
 
-/// Parses `linear-gradient()`/`radial-gradient()` and their `repeating-` forms.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GradientForm {
+    Linear,
+    Radial,
+    Conic,
+}
+
+/// Parses `linear-gradient()`/`radial-gradient()`/`conic-gradient()` and their
+/// `repeating-` forms, including color hints and `in <color-space>`.
 ///
-/// Grammar implemented (CSS Images 3 §3.1–3.4):
-/// - linear: optional `<angle>` or `to <side|corner>` direction + 2..=64 stops;
-/// - radial: optional `[<shape> || <size>]? [at <position>]?` + 2..=64 stops;
-/// - stops: `<color> [<length-percentage> [<length-percentage>]?]?`.
+/// Grammar implemented (CSS Images 3 §3 and CSS Images 4 §12):
+/// - linear: `[<angle> | to <side|corner>]? [in <space>]? <stops>`;
+/// - radial: `[<shape> || <size>]? [at <position>]? [in <space>]? <stops>`;
+/// - conic: `[from <angle>]? [at <position>]? [in <space>]? <stops>`;
+/// - stops: `<color> [<position> [<position>]?]?` with `position` a percentage or
+///   length (linear/radial) or an angle/percentage of the full turn (conic);
+/// - color hints: a bare position between two color stops shifts the interpolation
+///   midpoint (CSS Images 3 §3.4.1).
 ///
-/// Not supported (documented): `conic-gradient()`, color hints (a bare stop
-/// position between colors), color interpolation spaces and `image-set()`.
+/// Interpolation spaces: `srgb` (default, non-premultiplied, identical to the
+/// pre-R118 output), `srgb-linear`, `oklab` (documented limitation: no
+/// `color(display-p3)`/other spaces; alpha is interpolated linearly).
 fn parse_gradient_component(
     value: &str,
     font_size: f32,
@@ -3219,14 +3408,26 @@ fn parse_gradient_component(
 ) -> Option<Gradient> {
     let trimmed = value.trim();
     let lower = trimmed.to_ascii_lowercase();
-    let (prefix_len, repeating, radial) = if lower.starts_with("repeating-linear-gradient(") {
-        ("repeating-linear-gradient(".len(), true, false)
+    let (prefix_len, repeating, form) = if lower.starts_with("repeating-linear-gradient(") {
+        (
+            "repeating-linear-gradient(".len(),
+            true,
+            GradientForm::Linear,
+        )
     } else if lower.starts_with("linear-gradient(") {
-        ("linear-gradient(".len(), false, false)
+        ("linear-gradient(".len(), false, GradientForm::Linear)
     } else if lower.starts_with("repeating-radial-gradient(") {
-        ("repeating-radial-gradient(".len(), true, true)
+        (
+            "repeating-radial-gradient(".len(),
+            true,
+            GradientForm::Radial,
+        )
     } else if lower.starts_with("radial-gradient(") {
-        ("radial-gradient(".len(), false, true)
+        ("radial-gradient(".len(), false, GradientForm::Radial)
+    } else if lower.starts_with("repeating-conic-gradient(") {
+        ("repeating-conic-gradient(".len(), true, GradientForm::Conic)
+    } else if lower.starts_with("conic-gradient(") {
+        ("conic-gradient(".len(), false, GradientForm::Conic)
     } else {
         return None;
     };
@@ -3238,87 +3439,304 @@ fn parse_gradient_component(
     if components.is_empty() {
         return None;
     }
+
     let mut index = 0usize;
-    let mut stops = Vec::new();
-    let kind = if radial {
-        let mut shape = None;
-        let mut extent = None;
-        let mut position = BackgroundPosition {
-            x: Length::Percent(50.0),
-            y: Length::Percent(50.0),
-        };
-        if !starts_with_color_stop(&components[0], current_color) {
-            let (parsed_shape, parsed_extent, parsed_position) =
-                parse_radial_prefix(&components[0], font_size, root_font_size)?;
-            shape = parsed_shape;
-            extent = parsed_extent;
-            if let Some(parsed_position) = parsed_position {
-                position = parsed_position;
-            }
-            index = 1;
-        }
-        GradientKind::Radial(RadialGradient {
-            shape,
-            extent,
-            position,
-        })
-    } else {
-        let mut direction = LinearDirection::ToBottom;
-        if !starts_with_color_stop(&components[0], current_color) {
-            direction = parse_linear_direction(&components[0])?;
-            index = 1;
-        }
-        GradientKind::Linear(LinearGradient { direction })
-    };
-    for component in &components[index..] {
-        let stop_components = split_components(component);
-        if stop_components.is_empty() {
+    let mut interpolation = InterpolationSpace::Srgb;
+    let mut kind: Option<GradientKind> = None;
+    if !starts_with_color_stop(&components[0], current_color) {
+        let mut prefix_tokens = split_components(&components[0]);
+        let Ok(parsed_interpolation) = take_interpolation_space(&mut prefix_tokens) else {
             return None;
-        }
-        let color = parse_stop_color(&stop_components[0], current_color)?;
-        let mut positions = Vec::new();
-        for token in &stop_components[1..] {
-            let position = Length::parse(token, font_size, root_font_size)?;
-            if matches!(position, Length::Auto) || positions.len() >= 2 {
-                return None;
+        };
+        interpolation = parsed_interpolation;
+        let rest = prefix_tokens.join(" ");
+        let rest = rest.trim();
+        kind = Some(match form {
+            GradientForm::Linear => {
+                let direction = if rest.is_empty() {
+                    LinearDirection::default()
+                } else {
+                    parse_linear_direction(rest)?
+                };
+                GradientKind::Linear(LinearGradient { direction })
             }
-            positions.push(position);
-        }
-        match positions.as_slice() {
-            [] => stops.push(GradientStop {
-                color,
-                position: None,
-            }),
-            [position] => stops.push(GradientStop {
-                color,
-                position: Some(*position),
-            }),
-            [first, second] => {
-                // Two positions create a hard stop (CSS Images 3 §3.4.1).
-                stops.push(GradientStop {
-                    color,
-                    position: Some(*first),
-                });
-                stops.push(GradientStop {
-                    color,
-                    position: Some(*second),
-                });
+            GradientForm::Radial => {
+                let (shape, extent, position) = if rest.is_empty() {
+                    (None, None, None)
+                } else {
+                    parse_radial_prefix(rest, font_size, root_font_size)?
+                };
+                GradientKind::Radial(RadialGradient {
+                    shape,
+                    extent,
+                    position: position.unwrap_or(BackgroundPosition {
+                        x: Length::Percent(50.0),
+                        y: Length::Percent(50.0),
+                    }),
+                })
             }
-            _ => return None,
-        }
-        if stops.len() >= MAX_GRADIENT_STOPS {
-            stops.truncate(MAX_GRADIENT_STOPS);
-            break;
-        }
+            GradientForm::Conic => {
+                let (from_angle, position) = if rest.is_empty() {
+                    (0.0, None)
+                } else {
+                    parse_conic_prefix(rest, font_size, root_font_size)?
+                };
+                GradientKind::Conic(ConicGradient {
+                    from_angle,
+                    position: position.unwrap_or(BackgroundPosition {
+                        x: Length::Percent(50.0),
+                        y: Length::Percent(50.0),
+                    }),
+                })
+            }
+        });
+        index = 1;
     }
-    if stops.len() < 2 {
-        return None;
-    }
+    let kind = kind.unwrap_or_else(|| match form {
+        GradientForm::Linear => GradientKind::Linear(LinearGradient::default()),
+        GradientForm::Radial => GradientKind::Radial(RadialGradient {
+            shape: None,
+            extent: None,
+            position: BackgroundPosition {
+                x: Length::Percent(50.0),
+                y: Length::Percent(50.0),
+            },
+        }),
+        GradientForm::Conic => GradientKind::Conic(ConicGradient {
+            from_angle: 0.0,
+            position: BackgroundPosition {
+                x: Length::Percent(50.0),
+                y: Length::Percent(50.0),
+            },
+        }),
+    });
+
+    let (stops, hints) = parse_gradient_stop_list(
+        &components[index..],
+        form,
+        font_size,
+        root_font_size,
+        current_color,
+    )?;
     Some(Gradient {
         kind,
         repeating,
         stops,
+        hints,
+        interpolation,
     })
+}
+
+/// Extracts an optional `in <space>` clause from a gradient prefix, removing the
+/// tokens. Returns `Err(())` for an unknown/malformed interpolation space.
+fn take_interpolation_space(tokens: &mut Vec<String>) -> Result<InterpolationSpace, ()> {
+    let mut space = InterpolationSpace::Srgb;
+    let mut found = false;
+    let mut index = 0usize;
+    while index < tokens.len() {
+        if tokens[index].trim().eq_ignore_ascii_case("in") {
+            if found || index + 1 >= tokens.len() {
+                return Err(());
+            }
+            let name = tokens[index + 1].trim().to_ascii_lowercase();
+            space = match name.as_str() {
+                "srgb" => InterpolationSpace::Srgb,
+                "srgb-linear" => InterpolationSpace::SrgbLinear,
+                "oklab" => InterpolationSpace::Oklab,
+                _ => return Err(()),
+            };
+            found = true;
+            tokens.drain(index..=index + 1);
+            continue;
+        }
+        index += 1;
+    }
+    Ok(space)
+}
+
+/// Parses `conic-gradient()`'s `[from <angle>]? [at <position>]?` prefix.
+fn parse_conic_prefix(
+    value: &str,
+    font_size: f32,
+    root_font_size: f32,
+) -> Option<(f32, Option<BackgroundPosition>)> {
+    let tokens = split_components(value);
+    let mut from_angle = 0.0f32;
+    let mut position = None;
+    let mut index = 0usize;
+    while index < tokens.len() {
+        match tokens[index].trim().to_ascii_lowercase().as_str() {
+            "from" => {
+                let angle = tokens.get(index + 1)?;
+                from_angle = parse_angle_degrees(angle)?;
+                index += 1;
+            }
+            "at" => {
+                let mut position_tokens = Vec::new();
+                while index + 1 < tokens.len() && position_tokens.len() < 2 {
+                    let next = tokens[index + 1].trim();
+                    if next.eq_ignore_ascii_case("from") || next.eq_ignore_ascii_case("in") {
+                        break;
+                    }
+                    position_tokens.push(next.to_string());
+                    index += 1;
+                }
+                if position_tokens.is_empty() {
+                    return None;
+                }
+                position = Some(BackgroundPosition::parse(
+                    &position_tokens.join(" "),
+                    font_size,
+                    root_font_size,
+                )?);
+            }
+            _ => return None,
+        }
+        index += 1;
+    }
+    Some((from_angle, position))
+}
+
+/// Parses the color stops (and color hints) of a gradient.
+fn parse_gradient_stop_list(
+    components: &[String],
+    form: GradientForm,
+    font_size: f32,
+    root_font_size: f32,
+    current_color: Color,
+) -> Option<(Vec<GradientStop>, Vec<Option<Length>>)> {
+    let mut stops: Vec<GradientStop> = Vec::new();
+    let mut hints: Vec<Option<Length>> = Vec::new();
+    let mut pending_hint: Option<Length> = None;
+    for component in components {
+        let tokens = split_components(component);
+        if tokens.is_empty() {
+            return None;
+        }
+        let color = parse_stop_color(&tokens[0], current_color);
+        if let Some(color) = color {
+            let mut positions = Vec::new();
+            for token in &tokens[1..] {
+                positions.push(parse_gradient_stop_position(
+                    token,
+                    form,
+                    font_size,
+                    root_font_size,
+                )?);
+                if positions.len() > 2 {
+                    return None;
+                }
+            }
+            match positions.as_slice() {
+                [] => {
+                    push_gradient_stop(
+                        &mut stops,
+                        &mut hints,
+                        &mut pending_hint,
+                        GradientStop {
+                            color,
+                            position: None,
+                        },
+                    )?;
+                }
+                [position] => {
+                    push_gradient_stop(
+                        &mut stops,
+                        &mut hints,
+                        &mut pending_hint,
+                        GradientStop {
+                            color,
+                            position: Some(*position),
+                        },
+                    )?;
+                }
+                [first, second] => {
+                    push_gradient_stop(
+                        &mut stops,
+                        &mut hints,
+                        &mut pending_hint,
+                        GradientStop {
+                            color,
+                            position: Some(*first),
+                        },
+                    )?;
+                    // Hard stop: no hint belongs between the two copies.
+                    hints.push(None);
+                    stops.push(GradientStop {
+                        color,
+                        position: Some(*second),
+                    });
+                }
+                _ => return None,
+            }
+        } else {
+            // A bare position is a color hint between two stops (CSS Images 3 §3.4.1).
+            if tokens.len() != 1 || stops.is_empty() || pending_hint.is_some() {
+                return None;
+            }
+            pending_hint = Some(parse_gradient_stop_position(
+                &tokens[0],
+                form,
+                font_size,
+                root_font_size,
+            )?);
+        }
+        if stops.len() > MAX_GRADIENT_STOPS {
+            stops.truncate(MAX_GRADIENT_STOPS);
+            break;
+        }
+    }
+    if pending_hint.is_some() || stops.len() < 2 {
+        return None;
+    }
+    hints.truncate(stops.len().saturating_sub(1));
+    while hints.len() < stops.len().saturating_sub(1) {
+        hints.push(None);
+    }
+    Some((stops, hints))
+}
+
+fn push_gradient_stop(
+    stops: &mut Vec<GradientStop>,
+    hints: &mut Vec<Option<Length>>,
+    pending_hint: &mut Option<Length>,
+    stop: GradientStop,
+) -> Option<()> {
+    if stops.is_empty() {
+        if pending_hint.is_some() {
+            return None;
+        }
+    } else {
+        hints.push(pending_hint.take());
+    }
+    stops.push(stop);
+    Some(())
+}
+
+/// Parses one gradient stop position: percentages/lengths for linear/radial
+/// gradients, angles or percentages of the full turn for conic gradients.
+fn parse_gradient_stop_position(
+    token: &str,
+    form: GradientForm,
+    font_size: f32,
+    root_font_size: f32,
+) -> Option<Length> {
+    if form == GradientForm::Conic {
+        let lower = token.trim().to_ascii_lowercase();
+        if let Some(value) = lower.strip_suffix('%') {
+            return value.trim().parse::<f32>().ok().map(Length::Percent);
+        }
+        // A unitless zero is accepted for angles (tolerant parsing).
+        if lower.parse::<f32>().ok() == Some(0.0) {
+            return Some(Length::Percent(0.0));
+        }
+        return parse_angle_degrees(&lower).map(|degrees| Length::Percent(degrees / 3.6));
+    }
+    let length = Length::parse(token, font_size, root_font_size)?;
+    match length {
+        Length::Auto => None,
+        other => Some(other),
+    }
 }
 
 fn parse_stop_color(component: &str, current_color: Color) -> Option<Color> {
@@ -3614,4 +4032,261 @@ fn parse_border_shorthand(
         }
     }
     Some(spec)
+}
+
+// ---------------------------------------------------------------------------
+// Mixed `calc()` length-percentage side values
+// ---------------------------------------------------------------------------
+
+/// Parses a mixed `calc()` declaration (percentage + absolute length) where both
+/// components are non-zero. Purely absolute/percentage results stay in `Length`.
+fn mixed_calc_value(
+    raw: &str,
+    font_size: f32,
+    root_font_size: f32,
+) -> Option<crate::calc::CalcValue> {
+    let value = crate::calc::evaluate_mixed(raw.trim(), font_size, root_font_size)?;
+    (value.percent != 0.0 && value.px != 0.0).then_some(value)
+}
+
+/// Parses a length, keeping the absolute part of a mixed `calc()` in the plain
+/// `Length` fallback for legacy consumers that ignore `CalcLengths`.
+fn mixed_length_fallback(raw: &str, font_size: f32, root_font_size: f32) -> Option<Length> {
+    if let Some(calc) = crate::calc::evaluate_mixed(raw.trim(), font_size, root_font_size)
+        && calc.percent != 0.0
+        && calc.px != 0.0
+    {
+        return Some(Length::Px(calc.px));
+    }
+    Length::parse(raw, font_size, root_font_size)
+}
+
+fn mixed_calc_property(
+    entries: &[(&str, &Declaration)],
+    name: &str,
+    font_size: f32,
+    root_font_size: f32,
+) -> Option<crate::calc::CalcValue> {
+    find_declaration(entries, name)
+        .and_then(|declaration| mixed_calc_value(&declaration.raw_value, font_size, root_font_size))
+}
+
+/// Expands a 1-4 optional component side list to `[top, right, bottom, left]`.
+fn expand_calc_four_opt(
+    values: &[Option<crate::calc::CalcValue>],
+) -> [Option<crate::calc::CalcValue>; 4] {
+    match values {
+        [] => [None, None, None, None],
+        [a] => [*a, *a, *a, *a],
+        [a, b] => [*a, *b, *a, *b],
+        [a, b, c] => [*a, *b, *c, *b],
+        [a, b, c, d, ..] => [*a, *b, *c, *d],
+    }
+}
+
+/// Resolves the four mixed `calc()` sides of a box property (`margin`/`padding`):
+/// the shorthand's balanced components are expanded 1-4 and longhands override.
+fn calc_box_sides(
+    entries: &[(&str, &Declaration)],
+    shorthand: &str,
+    longhands: [&str; 4],
+    font_size: f32,
+    root_font_size: f32,
+) -> [Option<crate::calc::CalcValue>; 4] {
+    let mut sides: [Option<crate::calc::CalcValue>; 4] = [None; 4];
+    if let Some(declaration) = find_declaration(entries, shorthand) {
+        let components = split_components(&declaration.raw_value);
+        let values: Vec<Option<crate::calc::CalcValue>> = components
+            .iter()
+            .map(|component| mixed_calc_value(component, font_size, root_font_size))
+            .collect();
+        sides = expand_calc_four_opt(&values);
+    }
+    for (index, name) in longhands.iter().enumerate() {
+        if let Some(value) = mixed_calc_property(entries, name, font_size, root_font_size) {
+            sides[index] = Some(value);
+        }
+    }
+    sides
+}
+
+/// Expands a 1-4 component side list to `[top, right, bottom, left]`.
+fn expand_calc_four<T: Clone + Copy>(values: &[T]) -> [T; 4] {
+    match values {
+        [] => panic!("empty value list is rejected by the caller"),
+        [a] => [*a, *a, *a, *a],
+        [a, b] => [*a, *b, *a, *b],
+        [a, b, c] => [*a, *b, *c, *b],
+        [a, b, c, d, ..] => [*a, *b, *c, *d],
+    }
+}
+
+impl ComputedStyle {
+    /// Computes the mixed `calc()` side values for supported properties.
+    fn compute_calc_lengths(
+        entries: &[(&str, &Declaration)],
+        font_size: f32,
+        root_font_size: f32,
+    ) -> CalcLengths {
+        let prop = |name: &str| mixed_calc_property(entries, name, font_size, root_font_size);
+        let mut calc = CalcLengths {
+            width: prop("width"),
+            height: prop("height"),
+            min_width: prop("min-width"),
+            max_width: prop("max-width"),
+            min_height: prop("min-height"),
+            max_height: prop("max-height"),
+            margin_top: None,
+            margin_right: None,
+            margin_bottom: None,
+            margin_left: None,
+            padding_top: None,
+            padding_right: None,
+            padding_bottom: None,
+            padding_left: None,
+            top: prop("top"),
+            right: prop("right"),
+            bottom: prop("bottom"),
+            left: prop("left"),
+            row_gap: prop("row-gap"),
+            column_gap: prop("column-gap"),
+            ..CalcLengths::default()
+        };
+        let margins = calc_box_sides(
+            entries,
+            "margin",
+            ["margin-top", "margin-right", "margin-bottom", "margin-left"],
+            font_size,
+            root_font_size,
+        );
+        calc.margin_top = margins[0];
+        calc.margin_right = margins[1];
+        calc.margin_bottom = margins[2];
+        calc.margin_left = margins[3];
+        let paddings = calc_box_sides(
+            entries,
+            "padding",
+            [
+                "padding-top",
+                "padding-right",
+                "padding-bottom",
+                "padding-left",
+            ],
+            font_size,
+            root_font_size,
+        );
+        calc.padding_top = paddings[0];
+        calc.padding_right = paddings[1];
+        calc.padding_bottom = paddings[2];
+        calc.padding_left = paddings[3];
+        // `gap` shorthand fallback when the longhands were not expanded.
+        if (calc.row_gap.is_none() || calc.column_gap.is_none())
+            && let Some(declaration) = find_declaration(entries, "gap")
+        {
+            let components = split_components(&declaration.raw_value);
+            if let Some(first) = components.first() {
+                let first = mixed_calc_value(first, font_size, root_font_size);
+                if calc.row_gap.is_none() {
+                    calc.row_gap = first;
+                }
+                if calc.column_gap.is_none() {
+                    calc.column_gap = components
+                        .get(1)
+                        .and_then(|second| mixed_calc_value(second, font_size, root_font_size))
+                        .or(first);
+                }
+            }
+        }
+        // Background position/size (first layer): best-effort component parsing.
+        let components = |name: &str| -> Vec<String> {
+            find_declaration(entries, name)
+                .map(|declaration| split_components(&declaration.raw_value))
+                .unwrap_or_default()
+        };
+        let position = components("background-position");
+        calc.background_position_x = position
+            .first()
+            .and_then(|component| mixed_calc_value(component, font_size, root_font_size));
+        calc.background_position_y = position
+            .get(1)
+            .and_then(|component| mixed_calc_value(component, font_size, root_font_size));
+        let size = components("background-size");
+        calc.background_size_width = size
+            .first()
+            .and_then(|component| mixed_calc_value(component, font_size, root_font_size));
+        calc.background_size_height = size
+            .get(1)
+            .and_then(|component| mixed_calc_value(component, font_size, root_font_size));
+        // Border radius: longhands (shorthand expansion keeps raw calc text) or the
+        // shorthand itself as fallback.
+        let corner_longhands = [
+            "border-top-left-radius",
+            "border-top-right-radius",
+            "border-bottom-right-radius",
+            "border-bottom-left-radius",
+        ];
+        let mut corners: [Option<crate::calc::CalcValue>; 8] = [None; 8];
+        let mut has_corner_calc = false;
+        for (index, name) in corner_longhands.iter().enumerate() {
+            if let Some(declaration) = find_declaration(entries, name) {
+                let components = split_components(&declaration.raw_value);
+                if let Some(component) = components.first() {
+                    let x = mixed_calc_value(component, font_size, root_font_size);
+                    let y = components
+                        .get(1)
+                        .and_then(|component| {
+                            mixed_calc_value(component, font_size, root_font_size)
+                        })
+                        .or(x);
+                    corners[index * 2] = x;
+                    corners[index * 2 + 1] = y;
+                    has_corner_calc |= x.is_some() || y.is_some();
+                }
+            }
+        }
+        if has_corner_calc {
+            let zero = crate::calc::CalcValue {
+                percent: 0.0,
+                px: 0.0,
+            };
+            calc.border_radius = Some(corners.map(|corner| corner.unwrap_or(zero)));
+        }
+        if let Some(declaration) = find_declaration(entries, "border-radius") {
+            let raw = declaration.raw_value.trim();
+            let (horizontal_raw, vertical_raw) = raw
+                .split_once('/')
+                .map_or((raw, raw), |(horizontal, vertical)| {
+                    (horizontal.trim(), vertical.trim())
+                });
+            let parse_list = |text: &str| -> Vec<crate::calc::CalcValue> {
+                split_components(text)
+                    .iter()
+                    .filter_map(|component| mixed_calc_value(component, font_size, root_font_size))
+                    .collect()
+            };
+            let horizontal = parse_list(horizontal_raw);
+            if !horizontal.is_empty() {
+                let horizontal = expand_calc_four(&horizontal);
+                let vertical = {
+                    let values = parse_list(vertical_raw);
+                    if values.is_empty() {
+                        horizontal
+                    } else {
+                        expand_calc_four(&values)
+                    }
+                };
+                calc.border_radius = Some([
+                    horizontal[0],
+                    vertical[0],
+                    horizontal[1],
+                    vertical[1],
+                    horizontal[2],
+                    vertical[2],
+                    horizontal[3],
+                    vertical[3],
+                ]);
+            }
+        }
+        calc
+    }
 }

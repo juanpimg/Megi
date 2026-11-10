@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Megi conic-gradient fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #ffffff; }
+  .pie {
+    width: 100px; height: 100px; margin: 8px;
+    border-radius: 50%;
+    background-image: conic-gradient(red 0% 25%, blue 25% 50%, green 50% 75%, yellow 75% 100%);
+  }
+  .from {
+    width: 100px; height: 60px; margin: 8px;
+    background-image: conic-gradient(from 90deg at 25% 75%, #101820 0 30%, #f2aa4c 30% 60%, #dde6f2 60% 100%);
+  }
+  .alpha {
+    width: 100px; height: 60px; margin: 8px; background-color: #ffffff;
+    background-image: conic-gradient(rgba(255,0,0,0) 0 25%, rgba(255,0,0,0.8) 25% 50%, #0000ff 50% 100%);
+  }
+  .hint {
+    width: 100px; height: 60px; margin: 8px;
+    background-image: conic-gradient(in oklab, red, 120deg, blue);
+  }
+</style></head>
+<body>
+  <div class="pie"></div>
+  <div class="from"></div>
+  <div class="alpha"></div>
+  <div class="hint"></div>
+</body></html>
