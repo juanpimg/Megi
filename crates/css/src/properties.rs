@@ -237,8 +237,15 @@ pub enum Display {
     Grid,
     ListItem,
     Table,
+    InlineTable,
+    TableRowGroup,
+    TableHeaderGroup,
+    TableFooterGroup,
     TableRow,
+    TableColumnGroup,
+    TableColumn,
     TableCell,
+    TableCaption,
 }
 
 impl Display {
@@ -252,8 +259,15 @@ impl Display {
             "grid" => Some(Self::Grid),
             "list-item" => Some(Self::ListItem),
             "table" => Some(Self::Table),
+            "inline-table" => Some(Self::InlineTable),
+            "table-row-group" => Some(Self::TableRowGroup),
+            "table-header-group" => Some(Self::TableHeaderGroup),
+            "table-footer-group" => Some(Self::TableFooterGroup),
             "table-row" => Some(Self::TableRow),
+            "table-column-group" => Some(Self::TableColumnGroup),
+            "table-column" => Some(Self::TableColumn),
             "table-cell" => Some(Self::TableCell),
+            "table-caption" => Some(Self::TableCaption),
             _ => None,
         }
     }
@@ -345,6 +359,94 @@ impl BoxSizing {
         match s.trim().to_ascii_lowercase().as_str() {
             "content-box" => Some(Self::ContentBox),
             "border-box" => Some(Self::BorderBox),
+            _ => None,
+        }
+    }
+}
+
+/// CSS `border-collapse` property values (CSS 2.1 §17.6).
+///
+/// Not inherited; initial value `separate`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum BorderCollapse {
+    /// `border-collapse: separate` (initial value): each cell keeps its own borders.
+    #[default]
+    Separate,
+    /// `border-collapse: collapse`: adjacent borders are collapsed into one.
+    Collapse,
+}
+
+impl BorderCollapse {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "separate" => Some(Self::Separate),
+            "collapse" => Some(Self::Collapse),
+            _ => None,
+        }
+    }
+}
+
+/// CSS `table-layout` property values (CSS 2.1 §17.5.2).
+///
+/// Not inherited; initial value `auto`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum TableLayout {
+    /// `table-layout: auto` (initial value): column widths depend on content.
+    #[default]
+    Auto,
+    /// `table-layout: fixed`: column widths come from the first row and the table width.
+    Fixed,
+}
+
+impl TableLayout {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Some(Self::Auto),
+            "fixed" => Some(Self::Fixed),
+            _ => None,
+        }
+    }
+}
+
+/// CSS `caption-side` property values (CSS 2.1 §17.4).
+///
+/// Not inherited; initial value `top`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum CaptionSide {
+    /// `caption-side: top` (initial value).
+    #[default]
+    Top,
+    /// `caption-side: bottom`.
+    Bottom,
+}
+
+impl CaptionSide {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "top" => Some(Self::Top),
+            "bottom" => Some(Self::Bottom),
+            _ => None,
+        }
+    }
+}
+
+/// CSS `empty-cells` property values (CSS 2.1 §17.6.1.1).
+///
+/// Not inherited; initial value `show`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum EmptyCells {
+    /// `empty-cells: show` (initial value): borders and background are drawn.
+    #[default]
+    Show,
+    /// `empty-cells: hide`: no borders/background for cells with no content.
+    Hide,
+}
+
+impl EmptyCells {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "show" => Some(Self::Show),
+            "hide" => Some(Self::Hide),
             _ => None,
         }
     }
@@ -786,6 +888,14 @@ pub struct ComputedStyle {
     pub border_color: RectEdges<Color>,
     pub border_style: RectEdges<BorderStyle>,
 
+    // Tables (CSS 2.1 §17); none of these properties are inherited.
+    /// `border-spacing` as `(horizontal, vertical)` CSS pixels; initial `(0.0, 0.0)`.
+    pub border_spacing: (f32, f32),
+    pub border_collapse: BorderCollapse,
+    pub table_layout: TableLayout,
+    pub caption_side: CaptionSide,
+    pub empty_cells: EmptyCells,
+
     // Colors & Background
     pub color: Color,
     pub background_color: Color,
@@ -861,6 +971,12 @@ impl ComputedStyle {
             border_width: RectEdges::all(0.0),
             border_color: RectEdges::all(Color::BLACK),
             border_style: RectEdges::all(BorderStyle::None),
+
+            border_spacing: (0.0, 0.0),
+            border_collapse: BorderCollapse::Separate,
+            table_layout: TableLayout::Auto,
+            caption_side: CaptionSide::Top,
+            empty_cells: EmptyCells::Show,
 
             color: Color::BLACK,
             background_color: Color::TRANSPARENT,
@@ -1004,6 +1120,23 @@ impl ComputedStyle {
             .and_then(|d| BoxSizing::parse(&d.raw_value))
             .unwrap_or(BoxSizing::ContentBox);
 
+        // Tables (CSS 2.1 §17): none of these are inherited.
+        let border_spacing = find_declaration(&entries, "border-spacing")
+            .and_then(|d| parse_border_spacing(&d.raw_value, font_size, root_font_size))
+            .unwrap_or((0.0, 0.0));
+        let border_collapse = find_declaration(&entries, "border-collapse")
+            .and_then(|d| BorderCollapse::parse(&d.raw_value))
+            .unwrap_or(BorderCollapse::Separate);
+        let table_layout = find_declaration(&entries, "table-layout")
+            .and_then(|d| TableLayout::parse(&d.raw_value))
+            .unwrap_or(TableLayout::Auto);
+        let caption_side = find_declaration(&entries, "caption-side")
+            .and_then(|d| CaptionSide::parse(&d.raw_value))
+            .unwrap_or(CaptionSide::Top);
+        let empty_cells = find_declaration(&entries, "empty-cells")
+            .and_then(|d| EmptyCells::parse(&d.raw_value))
+            .unwrap_or(EmptyCells::Show);
+
         let background_color = Self::compute_background_color(&entries, color);
 
         let width = find_declaration(&entries, "width")
@@ -1095,6 +1228,11 @@ impl ComputedStyle {
             border_width,
             border_color,
             border_style,
+            border_spacing,
+            border_collapse,
+            table_layout,
+            caption_side,
+            empty_cells,
             color,
             background_color,
             font_size,
@@ -1471,6 +1609,34 @@ pub(crate) fn split_components(value: &str) -> Vec<String> {
         components.push(current);
     }
     components
+}
+
+/// Parses `border-spacing`: `<length> | <length> <length>` (horizontal, vertical).
+///
+/// Percentages, `auto` and negative lengths are invalid (CSS 2.1 §17.6.1). Both lengths are
+/// resolved to CSS pixels against the element font-size.
+fn parse_border_spacing(value: &str, font_size: f32, root_font_size: f32) -> Option<(f32, f32)> {
+    let components = split_components(value);
+    let mut lengths = [0.0f32; 2];
+    let mut count = 0usize;
+    for component in &components {
+        match Length::parse(component, font_size, root_font_size) {
+            Some(Length::Px(px)) if px >= 0.0 => {}
+            _ => return None,
+        }
+        if let Some(Length::Px(px)) = Length::parse(component, font_size, root_font_size) {
+            lengths[count] = px;
+        }
+        count += 1;
+        if count > 2 {
+            return None;
+        }
+    }
+    match count {
+        0 => None,
+        1 => Some((lengths[0], lengths[0])),
+        _ => Some((lengths[0], lengths[1])),
+    }
 }
 
 /// Parses a `<color>` component, resolving the `currentColor` keyword to the element color.

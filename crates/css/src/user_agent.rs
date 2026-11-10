@@ -107,12 +107,32 @@ hr {
 /* Tables (§15.3.8) */
 table {
     display: table;
+    border-collapse: separate;
+    border-spacing: 2px;
+    border-color: gray;
+    box-sizing: border-box;
 }
 caption {
+    display: table-caption;
     text-align: center;
+}
+thead {
+    display: table-header-group;
+}
+tbody {
+    display: table-row-group;
+}
+tfoot {
+    display: table-footer-group;
 }
 tr {
     display: table-row;
+}
+colgroup {
+    display: table-column-group;
+}
+col {
+    display: table-column;
 }
 td, th {
     display: table-cell;
