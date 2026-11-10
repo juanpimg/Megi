@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>CSS state fixture</title>
+<style>
+html, body { margin: 0; padding: 0; background-color: #ffffff; }
+/* Form controls: painted as replaced boxes (gray content) but their CSS border and
+   computed background still prove which state matched. */
+input { display: block; width: 40px; height: 20px; margin: 0; padding: 0;
+        border: 4px solid #000000; background-color: #000000; appearance: none; }
+input:checked { border-color: #00ff00; background-color: #00ff00; }
+input:disabled { border-color: #ff0000; background-color: #ff0000; }
+input:focus { border-color: #ffff00; background-color: #ffff00; }
+input[type="text"]:placeholder-shown { border-color: #ff00ff; background-color: #ff00ff; }
+/* Non-replaced elements: full background visible in the PNG. */
+.box { display: block; width: 40px; height: 20px; min-width: 0; max-width: none;
+       margin: 0; padding: 0; border: 0; background-color: #000000; }
+div:checked { background-color: #006600; }
+button:not(:disabled):not(:checked) { background-color: #0000ff; }
+button.box:disabled { background-color: #ff0000; }
+div:focus { background-color: #ffff00; }
+div:placeholder-shown { background-color: #ff00ff; }
+</style></head>
+<body>
+<input type="checkbox" checked>
+<input type="checkbox" disabled>
+<input type="checkbox" data-megi-focused>
+<input type="text" placeholder="name">
+<input type="text" placeholder="name" value="filled">
+<div class="box" data-megi-checked></div>
+<button class="box" disabled></button>
+<button class="box"></button>
+<div class="box" data-megi-focused></div>
+<div class="box" data-megi-placeholder-shown></div>
+<div class="box"></div>
+</body></html>
