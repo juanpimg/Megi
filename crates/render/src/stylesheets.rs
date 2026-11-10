@@ -181,6 +181,12 @@ pub fn collect_stylesheets(
             continue;
         };
         let name = element.local_name.to_ascii_lowercase();
+        // Only stylesheet sources carry a meaningful `media` attribute: evaluating
+        // it on every element would wrongly skip (and warn about) unrelated
+        // elements such as `<meta media=...>` or `<source media=...>`.
+        if name != "style" && name != "link" {
+            continue;
+        }
         let media_attr = attr(element, "media").unwrap_or("").to_string();
         if !media_matches(&media_attr, media) {
             collected.media_skipped += 1;

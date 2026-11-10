@@ -511,3 +511,19 @@ fn assert_render_output_consistency(output: &RenderOutput) {
     assert!(output.stats.timings.total >= output.stats.timings.fetch);
     assert_eq!(output.stats.charset, "utf-8");
 }
+
+/// Regression: only `<style>`/`<link>` sources have a meaningful `media`
+/// attribute. Evaluating media on every element wrongly counted and warned
+/// about unrelated elements such as `<meta media=...>`.
+#[test]
+fn non_stylesheet_media_attributes_are_ignored() {
+    let url = "data:text/html,<html><head><meta media=\"(prefers-color-scheme: dark)\">\
+               <style>p{color:red}</style></head><body><p>x</p></body></html>";
+    let output = render_url(url, &options(100, 100)).expect("render");
+    assert_eq!(output.stats.media_skipped, 0);
+    assert!(
+        output.stats.warnings.iter().all(|w| !w.contains("<meta")),
+        "unexpected metadata warning: {:?}",
+        output.stats.warnings
+    );
+}
