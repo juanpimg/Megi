@@ -12,7 +12,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 ---
 
-## 1. Modelo de caja y layout (`crates/layout`, 196 tests)
+## 1. Modelo de caja y layout (`crates/layout`, 197 tests)
 
 | Capacidad CSS 2.2 | Estado | Notas |
 |---|:---:|---|
@@ -50,6 +50,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **`background-clip:text` (ronda 18)**: fondo color+imágenes compuesto por máscara de glifos del texto (multlínea, cap 4096 runs) | **HECHO** | `paint --test clipping`; sin clip:text comportamiento byte-idéntico |
 | **Gradientes (ronda 19)**: `DisplayItem::Gradient` por tile con AA/sRGB determinista, respetando `background-size/position/repeat` (space/round), `origin/clip`, `border-radius`, `background-clip:text` y opacidad | **HECHO** | 12 tests `paint --test gradients`; sin gradientes el display list es byte-idéntico (goldens intactos); caps de CSS (64 stops/256) |
 | **Conic/hints/OKLab (ronda 20)**: rasterizado de `conic-gradient`/`repeating-conic` con AA/sRGB determinista, color hints y espacios sRGB-linear/OKLab; compatibilidad size/position/repeat/origin/clip/radius/clip:text | **HECHO** | `paint --test gradients` (48 tests incl. css+paint); fixtures conic; sin display-p3 |
+| **Fast paths de display list (ronda 21)**: retorno barato por caja en `paint_background_border` (28.191 cajas sin fondo/borde/sombra/radio), `DisplayList::with_capacity(16384)`, skip de text-decoration vacío, `first_text_baseline` sin `Vec` y stacks reservados | **HECHO** | A/B build-display 8,62→**7,84 ms** (−9,1 %); goldens intactos |
 
 | **Backgrounds multicapa (ronda 16)**: `background-origin` (border/padding/content), `background-clip` (text parseado, pinta border-box), `background-attachment` (scroll/fixed), **`background_layers` top-first** (listas cíclicas, shorthand multicapa, color solo última) y `space`/`round` reales | **HECHO** | Espejo legacy para goldens; paint 130 tests |
 | **`@font-face` (ronda 13)**: `Stylesheet.font_faces` + `FontFaceRule { family, sources, weight, style }` | **HECHO** | Consumido por `fonts`/`render` para fuentes web (ver §4) |
@@ -60,10 +61,12 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **Grid avanzado (ronda 19)**: placement explícito `grid-column/row` + longhands con líneas 1-based/negativas, `span N` y `auto`; auto-placer que salta ocupadas y crece tracks implícitos; `minmax()` (px/%/auto min, px/%/fr/auto max) y `repeat(auto-fill|auto-fit)` (auto-fit = auto-fill, documentado) | **HECHO** | Cap 1024; `order` estable en grid/flex; fixtures `grid_span` (`md5 0c376406…`) y `grid_autofill` (`d2255ca3…`); solapes explícitos no soportados |
 | **calc() mixto %+px (ronda 20)**: side table `CalcLengths` junto a `Length` intacto; width/height/min/max, margins/paddings, insets, gaps, background-position/size, border-radius; base indefinida ⇒ %=0; calc anidado em/rem/vh/vw | **HECHO** | Layout 196 tests; fixtures `calc_width`/`calc_margin`/`calc_gap`; `font-size` solo absoluto (documentado) |
 | **Sticky y tipografía (ronda 20)**: `position: sticky` (slot de flujo + offsets, top>bottom/left>right, sin afectar hermanos, hook de scroll documentado); `text-transform` en shaping sin mutar DOM; `word-spacing`/`letter-spacing` heredados; `white-space: pre-wrap/pre-line` | **HECHO** | Fixtures `sticky_offsets` (`md5 08d9a63b…`), `text_transform` (`5935cf43…`), `word_spacing` (`a9fcad22…`), `white_space` (`c4134d67…`) |
+| **Interning de `ComputedStyle` (ronda 21)**: fingerprint barato + `eq` exacta antes de compartir `Arc` en tree_builder, estilos anónimos perezosos/cacheados por padre, fast path de spacing cero en IFC, `#[inline]` en resolvers y grid por índice | **HECHO** | A/B layout 46,6→**36,4 ms** (−21,8 %, ≤43 ✅), sticky 42,8→32,3; tests layout 197 |
 
 | **`-webkit-background-clip` (ronda 18)** como alias de `background-clip` | **HECHO** | 5 tests `background_clip_prefixed` |
 | **Gradientes CSS (ronda 19)**: `linear-gradient` (ángulos deg/grad/rad/turn, `to side/corner`), `radial-gradient` (circle/ellipse, closest/farthest, radios, posición), `repeating-*` en capas de `background-image` mezclables con `url()`, stops alpha/`currentColor`/0-2 posiciones/hard stops | **HECHO** | Caps 64 stops/256 gradientes por estilo; `BackgroundLayer::Gradient` consumido por paint; fixtures `gradient_linear` (240×220 `md5 6a04fdc6…`)/`gradient_radial`; sin `conic-gradient`/color hints/image-set/border-image |
 | **Conic/hints/espacios (ronda 20)**: `conic-gradient`/`repeating-conic` (`from`, `at`, stops angulares, hard stops, alpha, wrap), color hints en linear/radial/conic y `in srgb|srgb-linear|oklab` (default sRGB byte-idéntico) | **HECHO** | Fixtures `conic_gradients` (`md5 fff4b8df…`)/`conic_repeating` (`547c9958…`) y paint `--test gradients`; sin display-p3/espacios avanzados |
+| **Cascada + caché de estilos (ronda 21)**: hasher FNV y claves `&str` prestadas en el mapa de ganadores + caché de `ComputedStyle` keyed por 128 bits (identidad de declaraciones + NodeId del padre; sin inline, umbral 2, cap 1024) | **HECHO** | A/B css resolve 38,84→**33,91 ms** (−12,7 %, ≤35 ✅); tests css 175 y gate intactos |
 
 
 ## 3. Pintado (`crates/paint`, 175 tests)
@@ -162,7 +165,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 ## 10. Verificación de la matriz
 
 ```bash
-./tools/dev.sh all                             # fmt, clippy, 1344 tests, doc y gate PASS
+./tools/dev.sh all                             # fmt, clippy, 1345 tests, doc y gate PASS
 cargo test -p css -p layout -p paint -p fonts -p dom -p html
 cargo test -p net -p render -p image -p shell
 cargo test -p js

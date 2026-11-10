@@ -6,6 +6,58 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 21 — performance-budget recovery without raising budgets (2026-11-10)
+
+#### Changed
+
+- **Performance budgets recovered (not raised)**. The round-20 baseline had left the
+  pipeline at 160.1 ms (budget ≤140) and layout at 47.1 ms (budget ≤43); round 21
+  brings both back inside their gates via four independent lanes:
+  - **HTML** (`26560cc`, html 60 tests): bulk tokenizer fast paths for tag/attribute
+    names and values, byte-oriented UTF-8 text runs with a `has_wide` hint and a
+    hybrid attribute dedupe. A/B `html/realistic-1mb` 20.0→16.4 ms (**−18/−20 %**),
+    `tag-40k` 11.7→9.2, `nested-div` 20.1→17.1, `pretty-5k` 11.0→8.8,
+    `massive-formatting` 12.3→10.9, `massive-end-p` 19.3→18.4.
+  - **CSS** (`0ea54b5`, css 175 tests): cascade winners use a fast FNV hasher with
+    borrowed `&str` keys, plus a 128-bit computed-style cache keyed by winning
+    declaration identity + parent node (no inline style, 2-observation threshold,
+    1,024-entry cap). A/B css resolve 38.84→**33.91 ms** (−12.7 %, ≤35 ✅) and
+    pipeline 154.13→**132.39 ms** (−14.1 %). Discarded after measurement: Vec
+    cascade (+15 %), binary search + sorting (+39 %), cloned UA cache (+16 %),
+    unthresholded pointer cache (+11 %).
+  - **Layout** (`d0249ce`, layout 197 tests): `ComputedStyle` interning in
+    tree_builder (cheap fingerprint + exact `eq` before sharing `Arc`), lazy/cached
+    anonymous styles per parent, zero-spacing IFC fast path, `#[inline]` resolvers
+    and index-based grid lookups instead of `Arc::ptr_eq`. A/B layout
+    46.6→**36.4 ms** (**−21.8 %**, ≤43 ✅), `sticky` 42.8→32.3 and pipeline
+    141→131 ms (−10).
+  - **Paint** (`fd2c471`, paint 175 tests): per-box cheap return in
+    `paint_background_border` (28,191 boxes without background/border/shadow/radius),
+    `DisplayList::with_capacity(16384)` (additive API), empty text-decoration skip
+    and `first_text_baseline` without a `Vec`, plus reserved stacks. A/B
+    build-display 8.62→**7.84 ms** (**−9.1 %**).
+  - Joint A/B: **pipeline 160.1→~130-133 ms (≤140 ✅)**, layout ≤43 ✅; no budget
+    was raised and goldens/gate stay byte-identical.
+
+#### Added
+
+- **Generated progress status** (`dfe8362`, refresh `aa0ae74`): `PROGRESS.md`, the
+  900 px `docs/status/progress.svg` map, four shields-like badges, the editable
+  `docs/status/progress.toml` manifest and `tools/update_progress.py --write/--check`
+  (stdlib-only, deterministic), wired into CI with a **Status freshness** step.
+  Current snapshot: overall **95 %** (F1 100, F2 100, F3 100, F4 99, F5 97, F6 90,
+  F7 80), **1,345 tests**, gate PASS, 14 crates, ~108,972 Rust lines and 12/14
+  crates with `#![forbid(unsafe_code)]`.
+
+#### Tests
+
+- **1,345 tests, 0 failures** (css 175, layout 197, paint 175, render 136,
+  shell 140, net 207, svg 73, html 60, js 71, dom 28, image 45+1 doctest,
+  fonts 17+1 doctest, bench 8, test_harness 11); gate PASS with tokenizer
+  7,050/7,050, tree 3,904/3,904, serializer 230/230, CSS 30/30 and empty
+  tokenizer/tree allowlists. Goldens remain byte-identical. The README keeps the
+  owner's title update (`23deef9`).
+
 ### Round 20 — custom-property performance fix, conic gradients, mixed calc, typography/sticky, shell tabs and E2E benchmarks (2026-11-10)
 
 #### Added

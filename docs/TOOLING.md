@@ -503,6 +503,24 @@ Límites de la ronda: gradientes cap **64 stops / 256 por estilo**, sin `conic-g
 
 Cifras de referencia en la ronda 19: **1260 tests** (bench 8, css 142, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 71, layout 173, net 207, paint 162, **render 136**, shell 125, svg 73, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; fuzz 7 targets; suite determinista; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
 
+### 2.16n Ronda 21: recuperación de rendimiento y progress status
+
+La ronda 21 recupera los presupuestos de rendimiento **sin subirlos** (pipeline ≤140 ms y layout ≤43 ms son gates). A/B con binarios pre/post del mismo árbol, `taskset` y pasadas intercaladas:
+
+```bash
+cargo run --release -p bench -- --filter html/realistic-1mb        # 20,0 → 16,4 ms (−18/−20 %)
+cargo run --release -p bench -- --filter resolve-styles-10k-nodes  # 38,84 → 33,91 ms (−12,7 %; ≤35 ✅)
+cargo run --release -p bench -- --filter layout/realistic-1mb      # 46,6 → 36,4 ms (−21,8 %; ≤43 ✅)
+cargo run --release -p bench -- --filter build-display             # 8,62 → 7,84 ms (−9,1 %)
+cargo run --release -p bench -- --filter pipeline/html-to-png      # 154,13 → 132,39 ms (−14,1 %; ≤140 ✅)
+```
+
+Resumen de técnicas: html fast paths bulk del tokenizer + runs UTF-8 byte a byte + `has_wide` + dedupe híbrido; css hasher FNV/claves prestadas + caché de `ComputedStyle` 128-bit (umbral 2, sin inline, cap 1024); layout interning de `ComputedStyle` (fingerprint + `eq` exacta antes de compartir `Arc`) + estilos anónimos perezosos + spacing cero en IFC; paint fast path por caja + `DisplayList::with_capacity(16384)` + baseline sin `Vec`. Goldens y gate byte-idénticos; **no se subieron presupuestos**.
+
+Cifras de referencia en la ronda 21: **1345 tests** (bench 8, css 175, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 71, layout 197, net 207, paint 175, render 136, shell 140, svg 73, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializer 230/230, CSS 30/30; allowlists vacías; status generado overall 95 %, ~108.972 líneas Rust, 14 crates, 12/14 `#![forbid(unsafe_code)]`.
+
+**Progress status**: vive en §4; se regenera con `python3 tools/update_progress.py --write` y CI ejecuta `--check --no-gate --no-count` para frescura. No editar a mano `PROGRESS.md` ni `docs/status/`.
+
 ## 4. Progress status generado (`PROGRESS.md`, `docs/status/*.svg`)
 
 El estado de avance del proyecto se genera **desde datos reales del repositorio**, sin

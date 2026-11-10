@@ -4,28 +4,27 @@ Este documento describe el arnés de benchmarks del proyecto (`crates/bench`) y
 publica la **baseline de rendimiento vigente**, para que cualquier regresión de
 complejidad sea detectable comparando números en lugar de discutir impresiones.
 
-- **Fecha de medición**: 2026-11-10, 22:52–23:20 (Europe/Madrid). Ronda 20:
-  **fix de rendimiento de custom properties** (lazy/COW + fast path),
-  **conic-gradients**, color hints/spaces, **calc mixto**, **modelo sticky +
-  `text-transform`** y shell con pestañas; además se **activan las filas E2E**
-  añadidas al bench en r20.
-- **Repo**: `Megi`, rama `sprint/robustez-fase4`. Motor medido **`c6b66b1`**
-  (test: filas E2E del bench); a mitad de ventana aterrizó `27b806b` (**solo
-  docs**, no cambia el motor). Binario de bench `ac2740ae…`, 4 705 600 B
-  (incluye la fila `layout/sticky-text-1mb` activada para esta medición,
-  cambio local en `crates/bench`).
-- **Ventana de medición**: **load 0,36–1,8** (host en calma tras esperar ~10 min
-  a que bajaran compilaciones ajenas); governor `powersave`, con frecuencia
-  máxima muestreada durante el bench **mediana 4,1 GHz** (mín. 1,6 / máx. 4,7),
-  package 54 °C. No es el suelo absoluto (frecuencia oscila por `powersave`),
-  pero es una ventana apta y comparable con r15/r17.
-- **Artefactos** (gitignored): `target/bench-r20-run1..5.json`,
-  `target/bench-aggregate-r20.json` (`sha256 = 4e1568a4…`),
-  `target/bench-r20/ab_r19_r20.json`, `target/bench-r20-render-shell.json`,
-  `target/bench-latest.txt`/`-meta.txt` (pasada canónica).
+- **Fecha de medición**: 2026-11-10 23:48 – 2026-11-11 00:05 (Europe/Madrid).
+  Ronda 21: **cuatro optimizaciones de carril** (HTML, CSS, layout, paint) que
+  recuperan el rendimiento perdido en r18–r20.
+- **Repo**: `Megi`, rama `sprint/robustez-fase4`. **Motor medido `a8ce8ba`**
+  (merge de la ronda 21); árbol **limpio** (`dirty = 0` en la pasada canónica).
+- **Binario de bench**: `sha256 = 4c709a94…` (4 756 256 B) en las 5 pasadas
+  válidas; `./tools/bench.sh` lo recompiló con la misma fuente
+  (`77f8ac30…`). Incluye las filas E2E de r20 (`pipeline/gradients`, `grid`,
+  `css/vars-calc`, `paint/clipping`, `layout/sticky-text`).
+- **Ventana de medición**: **load 1,29–1,48**, `powersave` con frecuencia máxima
+  muestreada **3,3–4,7 GHz** durante las pasadas y 0,0 % de otros procesos de
+  build. Esta es una **ventana apta** (no el suelo absoluto de la máquina, pero
+  comparable con r15/r17 y usada para el veredicto de presupuestos).
+- **Artefactos** (gitignored): `target/bench-r21-run1..5.json`,
+  `target/bench-aggregate-r21.json` (`sha256 = 295b2b75…`),
+  `target/bench-r21/ab_r20_r21.json`, `target/bench-r21-render-shell.json`,
+  `target/bench-latest.txt`/`-meta.txt` (pasada canónica,
+  `TOTAL 534.395 ms`).
 
 > Las baselines anteriores quedan **reemplazadas**; sus cifras se conservan en
-> la comparación histórica de §12 (rondas 2–20; la 14 no publicó baseline).
+> la comparación histórica de §12 (rondas 2–21; la 14 no publicó baseline).
 
 ---
 
@@ -35,23 +34,23 @@ complejidad sea detectable comparando números en lugar de discutir impresiones.
 
 Las cargas se generan en memoria con funciones puras
 (`crates/bench/src/generators.rs`); el *fixture* se construye **fuera** del
-cronómetro. La ronda 20 añadió al bench filas E2E para las features de r18/r19
-(§8) con generadores deterministas, sin red ni aleatoriedad.
+cronómetro. La matriz incluye las filas E2E de r20 para las features de r18/r19
+(§8), con generadores deterministas, sin red ni aleatoriedad.
 
 ### 1.2 Medición
 
 - Reloj: `std::time::Instant`; por benchmark `--warmup` (1) + `--iterations`
-  (5, *heavy* 3).
+  (5; *heavy* 3).
 - **La tabla de §3 es la mediana, por fila, de 5 pasadas completas** en la
-  ventana de calma (load 0,36–0,86 en las 5 pasadas; `setup_ms` 455–484 ms por
-  las filas E2E nuevas). La pasada canónica de `./tools/bench.sh`
-  (`TOTAL 662.498 ms`, 27 filas) se tomó con load ~1,8 y sirve de fingerprint.
-- **A/B intercalado prístino** para atribuir el fix: `git archive d9e07e0`
-  (r19, binario en `target/r19-clean-src`) vs binario r20, 5 pares alternando
-  orden (§5.2). El load afecta a ambos; el Δ es fiable.
-- Render/shell: 9 ejecuciones intercaladas (load ~1,3–1,8). `--find`: 7
-  ejecuciones con y sin `--find megi`.
-- `--scale` multiplica los tamaños (por ejemplo `0.25` para smoke tests).
+  ventana de calma (load 1,29–1,35 en las 5 pasadas; `setup_ms` 386–388 ms,
+  mayor que antes por las filas E2E). La pasada canónica de `./tools/bench.sh`
+  (`TOTAL 534.395 ms`, 27 filas) se tomó con load ~1,5.
+- **A/B intercalado prístino** para atribuir las optimizaciones:
+  `git archive c6b66b1` (r20, binario en `target/r20-clean-src2`) vs binario
+  r21, 5 pares alternando orden, mismo load (§5.2).
+- Render/shell: 9 ejecuciones intercaladas (load ~1,3). `--find`: 7 ejecuciones
+  con y sin `--find megi`.
+- `--scale` multiplica los tamaños (p. ej. `0.25` para smoke tests).
 
 ### 1.3 Máquina y condiciones
 
@@ -62,8 +61,8 @@ cronómetro. La ronda 20 añadió al bench filas E2E para las features de r18/r1
 | RAM | 15 GiB |
 | SO / kernel | CachyOS Linux, kernel `7.3.1-1-cachyos`, x86_64 |
 | Compilador | `rustc 1.99.1 (58cf8f9c3 2026-10-13)`, perfil `release` |
-| Governor / térmica | `powersave`; freq mediana 4,1 GHz durante bench; 54 °C |
-| Load | 0,36–1,8 en la ventana; picos ajenos de 7–19 antes/después |
+| Governor / freq / térmica | `powersave`; freq máx. muestreada 3,3–4,7 GHz; paquete ~50–55 °C |
+| Load | **1,29–1,48** en la ventana (picos ajenos de 7–23 antes) |
 
 ### 1.4 Comandos
 
@@ -71,19 +70,19 @@ cronómetro. La ronda 20 añadió al bench filas E2E para las features de r18/r1
 cd /home/jp/Escritorio/Proyectos/Megi
 
 ./tools/bench.sh                                  # pasada canónica
-for i in 1 2 3 4 5; do target/release/bench --json > target/bench-r20-run$i.json; done
+for i in 1 2 3 4 5; do target/release/bench --json > target/bench-r21-run$i.json; done
 
-# A/B prístino r19 vs r20
-git archive d9e07e0 | tar -x -C target/r19-clean-src
-cd target/r19-clean-src && CARGO_TARGET_DIR="$PWD/target" cargo build --release -p bench
+# A/B prístino r20 vs r21
+git archive c6b66b1 | tar -x -C target/r20-clean-src2
+cd target/r20-clean-src2 && CARGO_TARGET_DIR="$PWD/target" cargo build --release -p bench
 
-# Filas E2E nuevas (también con --json)
+# Filas E2E (también con --json)
 target/release/bench --filter pipeline          # gradients + grid + html-to-png
 target/release/bench --filter css/vars-calc
 target/release/bench --filter paint/clipping
 target/release/bench --filter layout/sticky
 
-# Render/shell
+# Render/shell/find
 target/release/render tests/fixtures/render/showcase/index.html /tmp/s.png \
     --width 1024 --height 768 --json
 target/release/megi tests/fixtures/render/find.html --screenshot /tmp/f.png \
@@ -96,61 +95,62 @@ target/release/megi tests/fixtures/render/find.html --screenshot /tmp/f.png \
 
 | Grupo | Benchmark | Qué mide |
 |---|---|---|
-| html | `html/realistic-1mb`, `html/nested-div-*`, `html/massive-*`, `html/tag-40k-attrs`, `html/pretty-5k-blocks` | Parse/tree construction. |
+| html | `html/realistic-1mb`, `nested-div-*`, `massive-*`, `tag-40k-attrs`, `pretty-5k-blocks` | Parse/tree construction. |
 | css | `css/parse-10k-rules` | Parse de 10 000 reglas. |
 | css | `css/resolve-styles-2k/10k-nodes` | Cascada + `ComputedStyle`. |
 | css | `css/selector-match-simple/descendant` | Matching de selectores. |
-| css | **`css/vars-calc-10k`** (r20) | 10 005 elementos, `:root` + 69 `var()` + 100 `calc()`. |
+| css | `css/vars-calc-10k` | 10 005 elementos, `:root` + 69 `var()` + 100 `calc()`. |
 | layout | `layout/realistic-1mb` | Layout del documento realista, 800×600. |
-| layout | **`layout/sticky-text-1mb`** (r20) | 24 156 elementos, 1.00 MiB, sticky headers/cards + `text-transform`. |
-| paint | `paint/build-display-list`, `paint/rasterize-800x600`, `paint/render-to-png-800x600` | Display list, raster, PNG. |
-| paint | **`paint/clipping-800x600`** (r20) | 48 cajas radius+overflow + 6 `background-clip:text`; display list+raster+PNG. |
+| layout | `layout/sticky-text-1mb` | 24 156 elementos, 1.00 MiB, sticky headers/cards + `text-transform`. |
+| paint | `paint/build-display-list`, `rasterize-800x600`, `render-to-png-800x600` | Display list, raster, PNG. |
+| paint | `paint/clipping-800x600` | 48 cajas radius+overflow + `background-clip:text`; display list+raster+PNG. |
 | pipeline | `pipeline/html-to-png-800x600` | Pipeline completo del documento realista. |
-| pipeline | **`pipeline/gradients-800x600`** (r20) | 60 cajas linear/radial gradients; pipeline completo. |
-| pipeline | **`pipeline/grid-800x600`** (r20) | 3 grids (3×3 `1fr`, auto-fill `minmax`, spans), 29 celdas; pipeline completo. |
+| pipeline | `pipeline/gradients-800x600` | 60 cajas linear/radial; pipeline completo. |
+| pipeline | `pipeline/grid-800x600` | 3 grids (3×3 `1fr`, auto-fill `minmax`, spans), 29 celdas; pipeline completo. |
 | fonts | (`feature fonts`) | No re-medido (sin cambios). |
 
 ---
 
-## 3. Baseline vigente (ronda 20, HEAD `c6b66b1`/`27b806b`)
+## 3. Baseline vigente (ronda 21, HEAD `a8ce8ba`)
 
-Mediana de **5 pasadas** en calma (load 0,36–0,86). `setup_ms`: 455–484 ms por
-las filas E2E. **Filas legacy (19)**: `TOTAL 420.474 ms`; **todas (24 filas)**:
-`TOTAL 683.885 ms`; pasada canónica: `TOTAL 662.498 ms`.
+Mediana de **5 pasadas en calma** (load 1,29–1,35). `setup_ms`: 386–388 ms.
+**Filas legacy (19)**: `TOTAL 344.199 ms`; **todas (24)**: `TOTAL 527.712 ms`;
+pasada canónica: `TOTAL 534.395 ms`.
 
 | Benchmark | mediana (ms) | rango 5 pasadas (ms) | throughput |
 |---|---:|---:|---:|
-| `html/realistic-1mb` | **21.078** | 20.496–21.459 | 47,5 MiB/s |
-| `html/nested-div-10k` | **3.268** | 3.217–3.496 | 32,1 MiB/s |
-| `html/nested-div-32k` | **10.360** | 10.012–10.940 | 32,4 MiB/s |
-| `html/nested-div-64k` | **20.771** | 20.026–21.543 | 32,3 MiB/s |
-| `html/nested-div-64k-default-limits` | **13.719** | 13.325–13.961 | — |
-| `html/massive-end-p` | **18.879** | 18.531–19.352 | 5,30 M tags/s |
-| `html/massive-formatting` | **12.113** | 11.753–12.403 | 826 k bloques/s |
-| `html/tag-40k-attrs` | **12.312** | 12.213–12.816 | 3,25 M attrs/s |
-| `html/pretty-5k-blocks` | **11.048** | 10.912–11.275 | 453 k bloques/s |
-| `css/parse-10k-rules` | **14.069** | 13.384–14.785 | 42,4 MiB/s |
-| `css/resolve-styles-2k-nodes` | **8.252** | 7.627–8.463 | 243 k el/s |
-| `css/resolve-styles-10k-nodes` | **39.347** | 38.762–40.233 | 254 k el/s |
-| `css/selector-match-simple` | **0.622** | 0.593–0.636 | 64,3 M matches/s |
-| `css/selector-match-descendant` | **1.223** | 1.192–1.237 | 32,7 M matches/s |
-| `layout/realistic-1mb` | **47.097** | 44.267–50.120 | 599 k el/s |
-| `paint/build-display-list` | **16.355** | 15.242–17.779 | — |
-| `paint/rasterize-800x600` | **0.995** | 0.898–1.179 | 482 MPix/s |
-| `paint/render-to-png-800x600` | **8.831** | 8.590–9.285 | 6,20 MiB/s |
-| `pipeline/html-to-png-800x600` | **160.135** | 157.220–176.483 | — |
-| `layout/sticky-text-1mb` (nueva) | **42.010** | 40.249–44.252 | 575 k el/s |
-| `pipeline/gradients-800x600` (nueva) | **53.199** | 52.176–53.637 | — |
-| `pipeline/grid-800x600` (nueva) | **6.044** | 5.940–7.457 | — |
-| `css/vars-calc-10k` (nueva) | **104.488** | 101.779–105.169 | 96 k el/s |
-| `paint/clipping-800x600` (nueva) | **57.670** | 56.422–59.237 | — |
+| `html/realistic-1mb` | **16.720** | 15.905–17.017 | 59,9 MiB/s |
+| `html/nested-div-10k` | **2.761** | 2.658–2.789 | 38,0 MiB/s |
+| `html/nested-div-32k` | **8.482** | 8.426–8.604 | 39,6 MiB/s |
+| `html/nested-div-64k` | **16.887** | 16.662–17.118 | 39,5 MiB/s |
+| `html/nested-div-64k-default-limits` | **10.147** | 9.962–10.182 | — |
+| `html/massive-end-p` | **17.306** | 17.015–17.343 | 5,78 M tags/s |
+| `html/massive-formatting` | **10.328** | 10.284–10.581 | 968 k bloques/s |
+| `html/tag-40k-attrs` | **9.350** | 9.000–9.541 | 4,28 M attrs/s |
+| `html/pretty-5k-blocks` | **8.704** | 8.548–8.743 | 575 k bloques/s |
+| `css/parse-10k-rules` | **14.133** | 13.404–15.128 | 42,2 MiB/s |
+| `css/resolve-styles-2k-nodes` | **7.152** | 6.969–7.270 | 280 k el/s |
+| `css/resolve-styles-10k-nodes` | **33.937** | 33.314–34.805 | 295 k el/s |
+| `css/selector-match-simple` | **0.655** | 0.640–0.664 | 61,1 M matches/s |
+| `css/selector-match-descendant` | **1.211** | 1.195–1.269 | 33,0 M matches/s |
+| `layout/realistic-1mb` | **35.492** | 34.830–36.883 | 794 k el/s |
+| `paint/build-display-list` | **8.183** | 7.921–8.411 | — |
+| `paint/rasterize-800x600` | **0.933** | 0.901–0.935 | 514 MPix/s |
+| `paint/render-to-png-800x600` | **8.461** | 8.390–8.577 | 6,48 MiB/s |
+| `pipeline/html-to-png-800x600` | **133.357** | 132.980–134.875 | — |
+| `layout/sticky-text-1mb` | **30.811** | 30.282–32.097 | 784 k el/s |
+| `pipeline/gradients-800x600` | **50.749** | 50.049–51.400 | — |
+| `pipeline/grid-800x600` | **5.828** | 5.763–6.000 | — |
+| `css/vars-calc-10k` | **46.332** | 46.096–46.685 | 216 k el/s |
+| `paint/clipping-800x600` | **49.793** | 49.376–49.840 | — |
 
-Pasada canónica (load ~1,8): css resolve-10k 39.221 · layout 44.170 · sticky
-39.232 · render-to-png 8.512 · pipeline **157.589** · gradients 50.995 · grid
-5.767 · vars-calc 101.699 · clipping 55.845 · TOTAL 662.498.
+Pasada canónica (load ~1,5): html 17.041 · massive-end-p 17.774 · tag-40k
+9.594 · css resolve-10k 34.506 · layout 36.436 · display-list 7.523 · raster
+0.988 · render-to-png 8.782 · pipeline **135.285** · gradients 51.927 · grid
+5.808 · vars-calc 46.466 · clipping 50.190 · sticky 31.991 · TOTAL 534.395.
 
 > **Aviso**: el TOTAL (legacy) suma etapas y pipeline end-to-end (solapados); no
-> es un presupuesto de página. **Pipeline y layout superan sus presupuestos**
+> es un presupuesto de página. En r21 **todos los presupuestos se cumplen**
 > (ver §11).
 
 ---
@@ -159,74 +159,87 @@ Pasada canónica (load ~1,8): css resolve-10k 39.221 · layout 44.170 · sticky
 
 | Serie | Muestras | Lectura |
 |---|---|---|
-| `html/nested-div-*` | 10k: 3.27 · 32k: 10.36 · 64k: 20.77 ms | **Lineal** (3,2× → 3,18×; 2× → 2,01×). |
-| `css/parse-10k-rules` | 5k: 6.69 · 10k: 14.07 · 20k: 30.50 ms | **Lineal**. |
-| `css/resolve-styles-2k/10k` | 8.25 / **39.35 ms** | Casi lineal; **+20 % vs r17** pese al fix de customs (ver §5.2). |
-| `layout/realistic-1mb` | 28 195 elementos → **47,10 ms** | +6,1 % vs r19 (sticky/text-transform/typography/calc). |
-| `layout/sticky-text-1mb` | 24 156 elementos → **42,01 ms** | Nuevo fixture sticky+text-transform. |
-| `paint/build-display-list` | 34 158 items → **16,36 ms** | +5,2 % vs r19 (preparación conic/clipping/typography). |
-| `pipeline` | **160,1 ms** (157,2–176,5) | +2,9 % vs r19 medido; +5,2 % en A/B. |
+| `html/nested-div-*` | 10k: 2.76 · 32k: 8.48 · 64k: 16.89 ms | **Lineal** (3,2× → 3,07×; 2× → 1,99×). |
+| `css/parse-10k-rules` | 5k: 6.69 · 10k: 14.13 · 20k: 30.50 ms | **Lineal** (sin cambio; no era el foco). |
+| `css/resolve-styles-2k/10k` | 7.15 / **33.94 ms** | **−13,7 % vs r20**: borrowed-key cascade + interning cache. |
+| `layout/realistic-1mb` | 28 195 elementos → **35,49 ms** | **−24,6 %**: intern de `ComputedStyle` + estilos anónimos perezosos. |
+| `layout/sticky-text-1mb` | 24 156 elementos → **30,81 ms** | **−26,7 %** por las mismas optimizaciones. |
+| `paint/build-display-list` | 34 158 items → **8,18 ms** | **−50,0 %**: fast path de decoraciones + display list reservada. |
+| `pipeline` | **133,36 ms** (132,98–134,88) | **−16,7 %, dentro de ≤140**. |
 
 ---
 
-## 5. Ronda 20: fix de custom properties, features y verificación
+## 5. Ronda 21: optimizaciones y verificación
 
 ### 5.1 Qué entró
 
-- `a7e32d5 feat(css,paint)`: **fix del coste de custom properties** —
-  `ComputedStyle.custom_properties` pasa a
-  `Option<Arc<HashMap<…>>>` con copy-on-write y un fast path
-  (`custom::needs_resolution` sobre bytes) que **salta `resolve_declarations`**
-  cuando el nodo/ancestros no declaran `--*`; además conic-gradients, color
-  hints/spaces, `calc()` y typografía.
-- `feade5c feat(layout)`: **calc mixto**, **modelo sticky**, **`text-transform`**
-  aplicado al shaping y spacing.
-- `43d62e3 feat(shell)`: pestañas con estado, atajos y `--tabs`.
-- `27b806b` (docs): sincronización de documentación r20 (sin cambios de motor).
+- `26560cc perf(html)`: **fast paths de tag/atributo**, runs de texto
+  orientados a bytes y dedupe híbrido → HTML parse −16,6 % (A/B).
+- `0ea54b5 perf(css)`: **mapa de cascada con claves prestadas** + **caché de
+  interning de `ComputedStyle`** → resolve-10k −11,5 % (A/B).
+- `d0249ce perf(layout)`: **interning de instancias `ComputedStyle`** y
+  **estilos anónimos perezosos** → layout −21,6 % (A/B).
+- `fd2c471 perf(paint)`: **fast path de decoraciones por caja** y **display
+  list reservada** → build-display-list −45,8 % (A/B).
+- `a8ce8ba`: merge; `aa0ae74` snapshot de estado (sin cambios de motor).
 
-### 5.2 ¿Vuelve css resolve a ~34 ms y pipeline a ≤140 ms? — **NO**
+### 5.2 A/B por carril (r20 prístino `c6b66b1` vs r21 `a8ce8ba`)
 
-A/B intercalado de archivos prístinos r19 (`d9e07e0`) vs r20 (`c6b66b1`),
-5 pares, load 1,78 (mismo load para ambos binarios):
+5 pares intercalados, load ~1,48:
 
-| Fila | r19 (ms) | r20 (ms) | Δ |
-|---|---:|---:|---:|
-| `css/resolve-styles-2k-nodes` | 8,32 | 8,12 | **−2,4 %** |
-| `css/resolve-styles-10k-nodes` | 40,24 | 39,18 | **−2,6 %** |
-| `css/parse-10k-rules` | 13,67 | 14,26 | +4,3 % |
-| `layout/realistic-1mb` | 40,81 | 44,72 | **+9,6 %** |
-| `paint/build-display-list` | 14,60 | 15,58 | **+6,7 %** |
-| `paint/render-to-png-800x600` | 8,84 | 8,63 | −2,4 % |
-| `pipeline/html-to-png-800x600` | 149,12 | 156,89 | **+5,2 %** |
+| Fila | r20 (ms) | r21 (ms) | Δ | Claim de la ronda |
+|---|---:|---:|---:|---|
+| `html/realistic-1mb` | 20,40 | **17,02** | **−16,6 %** | 20,0→16,4 (−18 %) ✅ aprox. |
+| `html/tag-40k-attrs` | 11,78 | **9,33** | **−20,8 %** | — |
+| `html/massive-end-p` | 18,59 | **17,60** | −5,3 % | — |
+| `css/parse-10k-rules` | 13,54 | **14,47** | +6,9 % | — |
+| `css/resolve-styles-2k-nodes` | 8,05 | **7,20** | −10,6 % | — |
+| `css/resolve-styles-10k-nodes` | 38,89 | **34,42** | **−11,5 %** | 38,84→33,91 (−12,7 %) ✅ aprox. |
+| `layout/realistic-1mb` | 45,80 | **35,90** | **−21,6 %** | 46,6→36,4 (−21,9 %) ✅ |
+| `paint/build-display-list` | 15,25 | **8,27** | **−45,8 %** | 8,62→7,84 (nota: el r20 del carril era otro corte) |
+| `paint/rasterize-800x600` | 0,92 | **0,92** | +0,2 % | — |
+| `paint/render-to-png-800x600` | 8,50 | **8,74** | +2,8 % | — |
+| `pipeline/html-to-png-800x600` | 154,85 | **135,20** | **−12,7 %** | 154,13→132,39 (−14,1 %) ✅ aprox. |
+| suma de filas core | 336,60 | **288,89** | **−14,2 %** | — |
 
-En la ventana de calma la mediana es **css resolve-10k 39,35 ms** y
-**pipeline 160,14 ms**: el fix recupera solo **~2,5 %** de la cascada, no los
-~19 % que había metido r18. Los objetivos de la ronda **no se cumplen**:
-`~34 ms` y `≤140 ms` quedan lejos. El r20 añade además **+9,6 % de layout** y
-**+6,7 % de display-list** (sticky/typography/calc y preparación de
-conic/clipping), de modo que el pipeline empeora en términos netos.
+**Veredicto de presupuestos (definitivo)**:
 
-**Causa residual**: el fast path elimina la asignación/expansión de `--*` en
-nodos sin custom properties, pero el coste por elemento que introdujo r18
-**no era solo** ese: quedan guardas de estado en el matching, reglas UA
-extra y más propiedades computadas/derivadas por nodo. Con `130` reglas de
-autor y `10 005` elementos el coste sigue ~**+20 % vs r17** (32,77 ms).
+| Medida | Valor r21 | Presupuesto | % | Veredicto |
+|---|---:|---:|---:|---|
+| `pipeline/html-to-png-800x600` | **133,36 ms** | **≤ 140 ms** | **95,3 %** | ✅ **CUMPLE** |
+| `layout/realistic-1mb` | **35,49 ms** | **≤ 45 ms** | **78,9 %** | ✅ **CUMPLE** |
+| `css/resolve-styles-10k-nodes` | **33,94 ms** | **≤ 35 ms** (objetivo) | **97,0 %** | ✅ **CUMPLE** |
+| `render` showcase 1024×768 | 27,11 ms | ≤ 35 ms | 77,5 % | ✅ |
+| shell headless showcase | 28,13 ms | ≤ 35 ms | 80,4 % | ✅ |
+| `paint/render-to-png-800x600` | 8,46 ms | ≤ 50 ms | 16,9 % | ✅ |
+| `html/realistic-1mb` | 16,72 ms | ≤ 100 ms | 16,7 % | ✅ |
+| `paint/build-display-list` | 8,18 ms | ≤ 25 ms | 32,7 % | ✅ |
 
-### 5.3 Nota de integridad
+Las tres preguntas de la ronda: **pipeline ≤140 → SÍ** (133,36; canónica 135,29,
+margen 4,7 %); **layout ≤45 → SÍ** (35,49; margen 21 %); **css resolve ≤35 →
+SÍ** (33,94; justo, margen 3 %). Queda poco margen en pipeline (~6,6 ms) y en
+css resolve (~1,1 ms): vigilar cualquier regresión futura.
 
-El motor medido es `c6b66b1`; `27b806b` (docs) llegó a mitad y no cambia
-código. La fila `layout/sticky-text-1mb` se activó para esta medición (antes
-SKIP): el motor ya aplica `text-transform` y tiene modelo sticky; el cambio
-vive solo en `crates/bench` (scope permitido) y el generador es determinista.
+### 5.3 Residuales y siguiente foco
+
+- `css/parse-10k-rules` **+6,9 %** y `css/selector-match-simple` +5,3 % en A/B
+  (dentro de ruido, pero el parse es el único carril sin optimizar).
+- `paint/render-to-png` **+2,8 %** (raster+PNG; el display list ya bajó −46 %).
+- La página real está dominada por **image decode** (~91 ms en la web del
+  dueño, ronda 16) y **PNG** (~15 ms 1280×900), fuera del bench legacy.
+- **Siguiente foco**: perfilar el residual de `pipeline` (133,4 vs ~131 del
+  claim) en parse de CSS y raster/PNG; **imagen decode/PNG por regiones** para
+  la página real; fracaso de páginas con muchas imágenes; mantener los
+  presupuestos (no subirlos) y añadir E2E como gate de features.
 
 ---
 
 ## 6. Codificador PNG (sin cambios)
 
-| Métrica | r19 | r20 | Notas |
+| Métrica | r20 | r21 | Notas |
 |---|---:|---:|---|
-| `paint/render-to-png-800x600` | 8.892 | **8.831** | −0,7 % |
-| — rasterizar | 0.956 | **0.995** | +4,1 % (varianza) |
+| `paint/render-to-png-800x600` | 8.831 | **8.461** | −4,2 % |
+| — rasterizar | 0.995 | **0.933** | −6,2 % |
 | PNG del bench | 57 422 B | **57 422 B** | byte-idéntico |
 | Golden showcase | 80 220 B | **80 220 B** | `c95c7eff…` |
 | Golden basic | 21 090 B | **21 090 B** | `e943565d…` |
@@ -234,73 +247,65 @@ vive solo en `crates/bench` (scope permitido) y el generador es determinista.
 
 ---
 
-## 7. Pipeline `render` y shell headless (r20)
+## 7. Pipeline `render` y shell headless (r21)
 
-9 ejecuciones intercaladas (load ~1,3–1,8; goldens verificados):
+9 ejecuciones intercaladas (load ~1,3; goldens verificados):
 
-| Fixture / modo | pared r20 | pared r19 | PNG |
+| Fixture / modo | pared r21 | pared r20 | PNG |
 |---|---:|---:|---:|
-| showcase 1024×768 (render) | **28,04 ms** | 28,79 | 80 220 B (`c95c7eff…`) |
-| basic 800×600 (render) | **9,08 ms** | 9,68 | 21 090 B (`e943565d…`) |
-| showcase (shell headless) | **28,09 ms** | 29,65 | 80 220 B (idéntico) |
-| basic (shell headless) | **9,51 ms** | 9,14 | 21 090 B (idéntico) |
-| basic `--zoom 2` (320×200) | **3,29 ms** | 3,46 | 3 202 B |
-| `find.html` sin `--find` | **10,12 ms** | — | 30 056 B (`19c35c18…`) |
-| `find.html` con `--find megi` | **16,17 ms** | 16,89 | 29 950 B (`a818f32a…`) |
+| showcase 1024×768 (render) | **27,11 ms** | 28,04 | 80 220 B (`c95c7eff…`) |
+| basic 800×600 (render) | **8,33 ms** | 9,08 | 21 090 B (`e943565d…`) |
+| showcase (shell headless) | **28,13 ms** | 28,09 | 80 220 B (idéntico) |
+| basic (shell headless) | **8,76 ms** | 9,51 | 21 090 B (idéntico) |
+| basic `--zoom 2` (320×200) | **3,87 ms** | 3,29 | 3 202 B |
+| `find.html` sin `--find` | **9,83 ms** | 10,12 | 30 056 B |
+| `find.html` con `--find megi` | **16,98 ms** | 16,17 | 29 950 B (`a818f32a…`) |
 
-El shell con `--find` sigue costando **~+6,0 ms** (índice de texto + overlay;
-3 hits, sin re-render al cambiar de hit). Showcase/basic y goldens sin cambios
-funcionales. Auto-refresh y pestañas del shell no se ejercen en `--screenshot`.
-
----
-
-## 8. Filas E2E del bench (nuevas en r20)
-
-El bench mide ahora las features de r18/r19 junto al resto (generadores
-deterministas; fixture fuera del cronómetro; rustdoc en `crates/bench/src/benches.rs`
-con notas y referencia). Medianas en calma:
-
-| Fila | mediana (ms) | rango | detalle |
-|---|---:|---:|---|
-| `pipeline/gradients-800x600` | **53.199** | 52.18–53.64 | 60 cajas, 182 items, PNG 248 109 B |
-| `pipeline/grid-800x600` | **6.044** | 5.94–7.46 | 3 grids, 29 celdas, PNG 25 280 B |
-| `css/vars-calc-10k` | **104.488** | 101.78–105.17 | 10 005 elementos, 69 `var()`, 100 `calc()` |
-| `paint/clipping-800x600` | **57.670** | 56.42–59.24 | 48 cajas radius+overflow, 1 670 items, PNG 39 412 B |
-| `layout/sticky-text-1mb` | **42.010** | 40.25–44.25 | 24 156 elementos, 1.00 MiB, sticky + text-transform |
-
-Cómo medirlas: `target/release/bench --filter pipeline` (gradients+grid),
-`--filter css/vars-calc`, `--filter paint/clipping`, `--filter layout/sticky`.
-Los presupuestos no se tocan en el bench: el rustdoc documenta que un
-**>15 % reproducible** sobre estas referencias (misma máquina/load) es una
-regresión. Estas filas suben el `setup` (~455–484 ms) y el TOTAL del informe
-porque añaden benchmarks (el TOTAL legacy sigue aparte en §3).
+El shell con `--find` cuesta **~+7,2 ms** (índice de texto + overlay; 3 hits,
+sin re-render al cambiar de hit). Auto-refresh y pestañas no se ejercen en
+`--screenshot`.
 
 ---
 
-## 9. Clipping, `var()`/`calc()`, net, fuzz y features r18/r19 (resumen)
+## 8. Filas E2E del bench (activas)
 
-- **Clipping/`clip:text`**: coste de **raster por área**; `border-radius` +
-  `overflow:hidden` (200×150) ≈ **+11,1 ms de raster**, con `clip:text`
-  ≈+16,7 ms; `background-clip:text` aislado es barato (−5,3 ms de pared).
-  Caps: `MAX_ROUNDED_GROUP_PIXELS = 16 777 216`, `MAX_TEXT_MASK_RUNS = 4096`,
-  `MAX_SHADOWS = 32`, `MAX_SHADOW_BLUR = 64`, `MAX_BACKGROUND_TILES = 4096`,
+Medianas en calma (misma ventana); las features de r18/r19 ya forman parte de la
+suite y se filtran con `--filter`:
+
+| Fila | r21 (ms) | r20 (ms) | Δ | detalle |
+|---|---:|---:|---:|---|
+| `pipeline/gradients-800x600` | **50.749** | 53.199 | −4,6 % | 60 cajas, 182 items, PNG 248 109 B |
+| `pipeline/grid-800x600` | **5.828** | 6.044 | −3,6 % | 3 grids, 29 celdas, PNG 25 280 B |
+| `css/vars-calc-10k` | **46.332** | 104.488 | **−55,7 %** | 10 005 elementos, 69 `var()`, 100 `calc()` |
+| `paint/clipping-800x600` | **49.793** | 57.670 | −13,7 % | 48 cajas radius+overflow, 1 670 items, PNG 39 412 B |
+| `layout/sticky-text-1mb` | **30.811** | 42.010 | −26,7 % | 24 156 elementos, 1.00 MiB, sticky + text-transform |
+
+Cómo medirlas: `--filter pipeline` (gradients+grid), `--filter css/vars-calc`,
+`--filter paint/clipping`, `--filter layout/sticky`. Rustdoc en
+`crates/bench/src/benches.rs`; un **>15 % reproducible** sobre la referencia de
+la misma máquina/load es regresión. Añaden ~388 ms de `setup` y filas extra al
+TOTAL (el legacy se publica aparte en §3).
+
+---
+
+## 9. Clipping, `var()`/`calc()`, net, fuzz (r18–r19, resumen)
+
+- **Clipping/`clip:text`**: coste de raster por área; `border-radius` +
+  `overflow:hidden` (200×150) ≈ +11,1 ms de raster, con `clip:text` ≈+16,7 ms;
+  `background-clip:text` aislado barato. Caps: `MAX_ROUNDED_GROUP_PIXELS =
+  16 777 216`, `MAX_TEXT_MASK_RUNS = 4096`, `MAX_SHADOWS = 32`,
+  `MAX_SHADOW_BLUR = 64`, `MAX_BACKGROUND_TILES = 4096`,
   `MAX_STACKING_CONTEXT_DEPTH = 256`, `MAX_FLOAT_DEPTH = 64`.
-- **`var()`/`calc()`**: etapa `styles` +18 % de la etapa en un fixture pequeño;
-  el coste estructural de la cascada es el descrito en §5.2.
-- **Net**: PSL (355 LOC, ≈150 sufijos), Referrer-Policy (270 LOC, 8 políticas),
-  Range/206 (239 LOC) y SameSite (~1 020 LOC) son módulos **puros sin I/O**;
-  r19 los integra en `render` (referrer/SameSite en subrecursos). Coste en bench
-  ≈0; coste real por petición despreciable.
-- **Fuzz**: no entra en el bench; **7 targets** (`html_parse`, `css_parse`,
-  `selectors`, `net_url`, `render_pipeline`, `js_eval`, `svg_parse`), caché
-  local 1,6 GB; referencia **~15 s incremental / 3–5 min frío**; CI job
-  **build-only en PRs** (nightly + `rust-cache`, timeout 20 min) → minutos de
-  CI, 0 en el bench.
-- **Gradientes CSS** (external, r19): raster +0,8–1,3 ms en fixtures de 6
-  bloques; caps `MAX_GRADIENT_STOPS = 64`, `MAX_GRADIENTS = 256`.
-- **Grid** (external): layout +2–6 µs para 3–6 hijos; ahora medido E2E en §8.
-- **Estado/referrer**: `StateContext` sin coste medible en estilos; Seguridad:
-  referrer recortado y cookies SameSite retenidas cross-site.
+- **`var()`/`calc()`**: el coste estructural de la cascada era el de §5 de r20;
+  en r21 el A/B css resolve −11,5 % y la fila E2E vars-calc −55,7 % confirman
+  que el interning/borrowed-key resuelve el déficit que dejó el fix parcial de
+  r20.
+- **Net**: PSL (355 LOC, ≈150 sufijos), Referrer-Policy (8 políticas), Range/206
+  y SameSite son módulos puros sin I/O; r19 los integra en `render`. Coste en
+  bench ≈0; por petición despreciable.
+- **Fuzz**: no entra en el bench; **7 targets**, caché local 1,6 GB; referencia
+  **~15 s incremental / 3–5 min frío**; CI job **build-only en PRs** (nightly +
+  `rust-cache`, timeout 20 min) → minutos de CI, 0 en el bench.
 
 ---
 
@@ -317,100 +322,91 @@ El documento realista del bench no usa floats ni opacidad.
 
 ---
 
-## 11. Presupuestos: veredicto (sin subirlos)
+## 11. Presupuestos: veredicto definitivo
 
-| Medida r20 | Valor | Presupuesto | % | Veredicto |
+| Medida | Valor r21 | Presupuesto | % | Veredicto |
 |---|---:|---:|---:|---|
-| `pipeline/html-to-png-800x600` | **160,1 ms** | **≤ 140 ms** | **114,4 %** | ❌ **EXCEDIDO** |
-| `layout/realistic-1mb` | **47,1 ms** | **≤ 45 ms** | **104,7 %** | ❌ **EXCEDIDO** |
-| `render` showcase 1024×768 | **28,0 ms** | ≤ 35 ms | 80,1 % | ✅ |
-| shell headless showcase | 28,1 ms | ≤ 35 ms | 80,3 % | ✅ |
-| `paint/render-to-png-800x600` | 8,8 ms | ≤ 50 ms | 17,7 % | ✅ |
-| `css/resolve-styles-10k-nodes` | 39,3 ms | ≤ 75 ms | 52,4 % | ✅ formal (pero +20 % vs r17) |
-| `html/realistic-1mb` | 21,1 ms | ≤ 100 ms | 21,1 % | ✅ |
-| Filas E2E (referencia) | §8 | — | — | sin presupuesto; >15 % = regresión |
+| `pipeline/html-to-png-800x600` | **133,36 ms** | **≤ 140 ms** | **95,3 %** | ✅ **CUMPLE** (canónica 135,29) |
+| `layout/realistic-1mb` | **35,49 ms** | **≤ 45 ms** | **78,9 %** | ✅ **CUMPLE** |
+| `css/resolve-styles-10k-nodes` | **33,94 ms** | **≤ 35 ms** | **97,0 %** | ✅ **CUMPLE** (justo) |
+| `render` showcase 1024×768 | 27,11 ms | ≤ 35 ms | 77,5 % | ✅ |
+| shell headless showcase | 28,13 ms | ≤ 35 ms | 80,4 % | ✅ |
+| `paint/render-to-png-800x600` | 8,46 ms | ≤ 50 ms | 16,9 % | ✅ |
+| `html/realistic-1mb` | 16,72 ms | ≤ 100 ms | 16,7 % | ✅ |
+| `paint/build-display-list` | 8,18 ms | ≤ 25 ms | 32,7 % | ✅ |
+| Filas E2E | §8 | — | — | sin presupuesto; >15 % = regresión |
 
-**No se suben los presupuestos.** El pipeline queda **114 % del presupuesto** y
-el layout **105 %**, así que la ronda 20 **no cumple el gate**. La diferencia
-con la expectativa (~34 ms css resolve, ≤140 pipeline) se explica por:
-1. El fast path de custom properties solo recupera **~2,5 %**; el residuo de la
-   cascada (~+20 % vs r17) está en guardas de estado/reglas UA/propiedades
-   computadas, no en `--*`.
-2. r20 añade **+9,6 % layout** (sticky/typography/calc) y **+6,7 % display
-   list** (conic/clipping/typography), comiéndose el margen.
-3. Fuera del bench: `render`/shell se mantienen (~28/9 ms) y el PNG no cambia;
-   el coste no está en el PNG del bench.
-
-**Siguiente foco (sin tocar presupuestos)**: (a) **base de estilos/cascada** —
-perfilar el residuo por nodo (guardas de estado, UA forms, propiedades
-computadas; evitar trabajo por regla cuando no hay pseudo-clases), (b) **layout**
-— sticky/text-transform/typography/`calc` por caja, (c) **display list** —
-preparación genérica de conic/clipping, (d) **image decode / PNG por regiones**
-para la página real, (e) medir pestañas/auto-refresh del shell en ventana.
+**No se suben los presupuestos**: se cumplen todos. Margen más justo:
+**pipeline 6,6 ms** y **css resolve 1,1 ms**; cualquier regresión futura debe
+tratarse con A/B intercalado antes de tocar el presupuesto. El
+`paint/rasterize` (0,93 ms) y el PNG (8,46) son los siguientes candidatos si se
+quiere más margen en el pipeline; el parse de CSS (+6,9 % en A/B, dentro de
+ruido) es el único carril sin optimizar.
 
 ---
 
 ## 12. Comparación histórica
 
-Dieciocho baselines en la misma máquina, mismo arnés (la ronda 14 no publicó
+Diecinueve baselines en la misma máquina, mismo arnés (la ronda 14 no publicó
 baseline):
 
-| | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | R13 | R15 | R16 | R17 | R18 | R19 | R20 (vigente) |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Fecha | 09:45 | 14:09 | 14:41 | 15:15 | 15:43 | 16:18 | 16:49 | 17:12 | 17:42 | 18:21 | 18:51 | 19:30 | 20:15 | 21:00 | 21:37 | 22:04 | 22:27 | **22:52** |
-| HEAD | `9cca2e1` | `532bb6a` | `3cc8449` | `49a2792` | `13e9945` | `c002ec0` | `31e5139` | `c86682c` | `f10635c` | `13f3f21` | `7d2ddde` | `5234630` | `b808d7b` | `653626f` | `67f7c57` | `718d075` | `d9e07e0` | **`c6b66b1`** |
-| Load | — | — | — | — | — | 0,99–1,52 | 2,90–3,25 | 2,91–3,35 | 0,86–2,49 | 2,16–4,23 | 0,63–5,1 | 3,4–5,3 | 1,4–2,0 | 1,45–2,65 | 0,44–0,69 | 1,4–2,0 | 4,0–5,35 | **0,36–1,8** |
-| Binario | `0fd520aa…` | `9936527c…` | `d752a856…` | `e9fceca…` | `f2ea6d77…` | `687627e0…` | `ed7006e9…` | `43f7748d…` | `a188a1da…` | `c34ff65c…` | `d655c1f2…` | `153b8aff…` | `1f1dbbdd…` | `39909f01…` | `8cfbb715…` | `4185c2de…` | `c315ddf3…` | **`ac2740ae…`** |
+| | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | R13 | R15 | R16 | R17 | R18 | R19 | R20 | R21 (vigente) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Fecha | 09:45 | 14:09 | 14:41 | 15:15 | 15:43 | 16:18 | 16:49 | 17:12 | 17:42 | 18:21 | 18:51 | 19:30 | 20:15 | 21:00 | 21:37 | 22:04 | 22:27 | 22:52 | **23:48** |
+| HEAD | `9cca2e1` | `532bb6a` | `3cc8449` | `49a2792` | `13e9945` | `c002ec0` | `31e5139` | `c86682c` | `f10635c` | `13f3f21` | `7d2ddde` | `5234630` | `b808d7b` | `653626f` | `67f7c57` | `718d075` | `d9e07e0` | `c6b66b1` | **`a8ce8ba`** |
+| Load | — | — | — | — | — | 0,99–1,52 | 2,90–3,25 | 2,91–3,35 | 0,86–2,49 | 2,16–4,23 | 0,63–5,1 | 3,4–5,3 | 1,4–2,0 | 1,45–2,65 | 0,44–0,69 | 1,4–2,0 | 4,0–5,35 | 0,36–1,8 | **1,29–1,48** |
+| Binario | `0fd520aa…` | `9936527c…` | `d752a856…` | `e9fceca…` | `f2ea6d77…` | `687627e0…` | `ed7006e9…` | `43f7748d…` | `a188a1da…` | `c34ff65c…` | `d655c1f2…` | `153b8aff…` | `1f1dbbdd…` | `39909f01…` | `8cfbb715…` | `4185c2de…` | `c315ddf3…` | `ac2740ae…` | **`4c709a94…`** |
 
-Filas clave (mediana, ms; r20 incluye las filas E2E nuevas, que no entran en el
+Filas clave (mediana, ms; r20/r21 incluyen las filas E2E que no entran en el
 TOTAL legacy):
 
-| Benchmark | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | R13 | R15 | R16 | R17 | R18 | R19 | R20 |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `html/realistic-1mb` | 51.179 | 52.530 | 55.569 | 57.234 | 58.738 | 55.926 | 56.140 | 55.316 | 20.305 | 20.361 | 21.641 | 22.618 | 21.260 | 21.104 | 20.581 | 20.440 | 20.910 | **21.078** |
-| `css/resolve-styles-10k-nodes` | 61.908 | 27.037 | 27.604 | 28.199 | 29.595 | 29.853 | 28.662 | 28.241 | 29.422 | 28.797 | 28.807 | 30.311 | 30.543 | 31.564 | 32.774 | 39.300 | 40.876 | **39.347** |
-| `layout/realistic-1mb` | 49.506 | 63.541 | 69.248 | 84.958 | 57.742 | 61.350 | 59.767 | 55.140 | 62.171 | 58.818 | 51.277 | 51.601 | 36.054 | 37.418 | 37.085 | 38.389 | 44.406 | **47.097** |
-| `paint/build-display-list` | 3.356 | 3.802 | 8.108 | 12.237 | 12.745 | 12.458 | 15.090 | 14.050 | 16.128 | 15.056 | 13.648 | 12.842 | 11.954 | 12.441 | 13.101 | 13.848 | 15.546 | **16.355** |
-| `paint/render-to-png-800x600` | 1 513.860 | 5.194 | 5.852 | 12.964 | 13.016 | 13.045 | 13.296 | 12.283 | 13.601 | 13.146 | 9.136 | 9.200 | 8.946 | 9.015 | 8.604 | 8.437 | 8.892 | **8.831** |
-| `pipeline/html-to-png-800x600` | 1 766.298 | 152.519 | 168.612 | 214.159 | 173.305 | 178.791 | 179.699 | 168.081 | 143.229 | 141.841 | 133.373 | 133.629 | 116.410 | 122.383 | 124.575 | 142.178 | 155.633 | **160.135** |
-| **TOTAL legacy (suma)** | **5 075.985** | **452.445** | **489.190** | **570.064** | **508.408** | **512.047** | **512.440** | **485.132** | **410.485** | **405.845** | **391.748** | **395.269** | **354.983** | **362.714** | **360.410** | **387.685** | **417.010** | **420.474** |
+| Benchmark | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 | R11 | R12 | R13 | R15 | R16 | R17 | R18 | R19 | R20 | R21 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `html/realistic-1mb` | 51.179 | 52.530 | 55.569 | 57.234 | 58.738 | 55.926 | 56.140 | 55.316 | 20.305 | 20.361 | 21.641 | 22.618 | 21.260 | 21.104 | 20.581 | 20.440 | 20.910 | 21.078 | **16.720** |
+| `css/resolve-styles-10k-nodes` | 61.908 | 27.037 | 27.604 | 28.199 | 29.595 | 29.853 | 28.662 | 28.241 | 29.422 | 28.797 | 28.807 | 30.311 | 30.543 | 31.564 | 32.774 | 39.300 | 40.876 | 39.347 | **33.937** |
+| `layout/realistic-1mb` | 49.506 | 63.541 | 69.248 | 84.958 | 57.742 | 61.350 | 59.767 | 55.140 | 62.171 | 58.818 | 51.277 | 51.601 | 36.054 | 37.418 | 37.085 | 38.389 | 44.406 | 47.097 | **35.492** |
+| `paint/build-display-list` | 3.356 | 3.802 | 8.108 | 12.237 | 12.745 | 12.458 | 15.090 | 14.050 | 16.128 | 15.056 | 13.648 | 12.842 | 11.954 | 12.441 | 13.101 | 13.848 | 15.546 | 16.355 | **8.183** |
+| `paint/render-to-png-800x600` | 1 513.860 | 5.194 | 5.852 | 12.964 | 13.016 | 13.045 | 13.296 | 12.283 | 13.601 | 13.146 | 9.136 | 9.200 | 8.946 | 9.015 | 8.604 | 8.437 | 8.892 | 8.831 | **8.461** |
+| `pipeline/html-to-png-800x600` | 1 766.298 | 152.519 | 168.612 | 214.159 | 173.305 | 178.791 | 179.699 | 168.081 | 143.229 | 141.841 | 133.373 | 133.629 | 116.410 | 122.383 | 124.575 | 142.178 | 155.633 | 160.135 | **133.357** |
+| **TOTAL legacy (suma)** | **5 075.985** | **452.445** | **489.190** | **570.064** | **508.408** | **512.047** | **512.440** | **485.132** | **410.485** | **405.845** | **391.748** | **395.269** | **354.983** | **362.714** | **360.410** | **387.685** | **417.010** | **420.474** | **344.199** |
 
-### Ronda 19 → ronda 20, fila a fila
+### Ronda 20 → ronda 21, fila a fila
 
-| Benchmark | R19 (ms) | R20 (ms) | Δ |
+| Benchmark | R20 (ms) | R21 (ms) | Δ |
 |---|---:|---:|---:|
-| `html/realistic-1mb` | 20.910 | **21.078** | +0,8 % |
-| `html/nested-div-10k` | 3.311 | **3.268** | −1,3 % |
-| `html/nested-div-32k` | 10.465 | **10.360** | −1,0 % |
-| `html/nested-div-64k` | 21.349 | **20.771** | −2,7 % |
-| `html/nested-div-64k-default-limits` | 13.813 | **13.719** | −0,7 % |
-| `html/massive-end-p` | 19.053 | **18.879** | −0,9 % |
-| `html/massive-formatting` | 12.790 | **12.113** | −5,3 % |
-| `html/tag-40k-attrs` | 12.468 | **12.312** | −1,3 % |
-| `html/pretty-5k-blocks` | 11.560 | **11.048** | −4,4 % |
-| `css/parse-10k-rules` | 14.494 | **14.069** | −2,9 % |
-| `css/resolve-styles-2k-nodes` | 8.617 | **8.252** | −4,2 % |
-| `css/resolve-styles-10k-nodes` | 40.876 | **39.347** | −3,7 % |
-| `css/selector-match-simple` | 0.655 | **0.622** | −5,0 % |
-| `css/selector-match-descendant` | 1.218 | **1.223** | +0,4 % |
-| `layout/realistic-1mb` | 44.406 | **47.097** | **+6,1 %** ⚠️ |
-| `paint/build-display-list` | 15.546 | **16.355** | **+5,2 %** ⚠️ |
-| `paint/rasterize-800x600` | 0.956 | **0.995** | +4,1 % |
-| `paint/render-to-png-800x600` | 8.892 | **8.831** | −0,7 % |
-| `pipeline/html-to-png-800x600` | 155.633 | **160.135** | **+2,9 %** ⚠️ |
-| **TOTAL legacy** | **417.010** | **420.474** | **+0,8 %** |
-
-(Medido con load distinta en r19 —4,0–5,35— y r20 —0,36–1,8—; la atribución
-fiable es el **A/B intercalado de §5.2**: css resolve −2,5 %, layout +9,6 %,
-display-list +6,7 %, pipeline +5,2 %.)
+| `html/realistic-1mb` | 21.078 | **16.720** | **−20,7 %** |
+| `html/nested-div-10k` | 3.268 | **2.761** | −15,5 % |
+| `html/nested-div-32k` | 10.360 | **8.482** | −18,1 % |
+| `html/nested-div-64k` | 20.771 | **16.887** | −18,7 % |
+| `html/nested-div-64k-default-limits` | 13.719 | **10.147** | −26,0 % |
+| `html/massive-end-p` | 18.879 | **17.306** | −8,3 % |
+| `html/massive-formatting` | 12.113 | **10.328** | −14,7 % |
+| `html/tag-40k-attrs` | 12.312 | **9.350** | −24,1 % |
+| `html/pretty-5k-blocks` | 11.048 | **8.704** | −21,2 % |
+| `css/parse-10k-rules` | 14.069 | **14.133** | +0,5 % |
+| `css/resolve-styles-2k-nodes` | 8.252 | **7.152** | −13,3 % |
+| `css/resolve-styles-10k-nodes` | 39.347 | **33.937** | **−13,7 %** |
+| `css/selector-match-simple` | 0.622 | **0.655** | +5,3 % |
+| `css/selector-match-descendant` | 1.223 | **1.211** | −1,0 % |
+| `layout/realistic-1mb` | 47.097 | **35.492** | **−24,6 %** |
+| `paint/build-display-list` | 16.355 | **8.183** | **−50,0 %** |
+| `paint/rasterize-800x600` | 0.995 | **0.933** | −6,2 % |
+| `paint/render-to-png-800x600` | 8.831 | **8.461** | −4,2 % |
+| `pipeline/html-to-png-800x600` | 160.135 | **133.357** | **−16,7 %** |
+| `layout/sticky-text-1mb` | 42.010 | **30.811** | **−26,7 %** |
+| `pipeline/gradients-800x600` | 53.199 | **50.749** | −4,6 % |
+| `pipeline/grid-800x600` | 6.044 | **5.828** | −3,6 % |
+| `css/vars-calc-10k` | 104.488 | **46.332** | **−55,7 %** |
+| `paint/clipping-800x600` | 57.670 | **49.793** | −13,7 % |
+| **TOTAL legacy** | **420.474** | **344.199** | **−18,1 %** |
 
 ---
 
 ## 13. Cómo comparar y detectar regresiones
 
 1. Medir con load < 2 y comprobar frecuencia/térmica (en esta ronda: load
-   0,36–1,8, freq mediana 4,1 GHz, 54 °C). Si no hay ventana, marcarlo y no
-   usar la pasada para presupuesto.
+   1,29–1,48, freq máx. 3,3–4,7 GHz). Si no hay ventana, marcarlo y no usar la
+   pasada para presupuesto.
 2. Si el árbol no compila por WIP ajeno, medir desde `git archive <commit>` en
    `target/`.
 3. Para atribuir un delta a un commit, compilar dos archivos prístinos
@@ -429,11 +425,12 @@ display-list +6,7 %, pipeline +5,2 %.)
        print(f"{name:<38} {a[name]:>10.2f} -> {b[name]:>10.2f} ms ({delta:+.1f}%){flag}")
    EOF
    ```
-5. Regresión si la mediana empeora >15 % de forma reproducible. En r20 el
-   pipeline y el layout **exceden** sus presupuestos (bloqueante).
+5. Regresión si la mediana empeora >15 % de forma reproducible. En r21 **todos
+   los presupuestos se cumplen**, con poco margen en pipeline (6,6 ms) y css
+   resolve (1,1 ms): vigilar sobre todo esos dos.
 6. Filas E2E: `--filter pipeline` (gradients+grid), `--filter css/vars-calc`,
    `--filter paint/clipping`, `--filter layout/sticky`. Referencias en §8;
-   >15 % reproducible sobre ellas = regresión.
+   >15 % reproducible = regresión.
 7. Goldens/bitstream: showcase `c95c7eff…` 80 220 B, basic `e943565d…` 21 090 B,
    bench PNG 57 422 B, zoom `4792779d…` 3 202 B, find `a818f32a…` 29 950 B.
 
@@ -441,19 +438,17 @@ display-list +6,7 %, pipeline +5,2 %.)
 
 ## 14. Limitaciones y notas
 
-- **Ventana no perfecta**: load 0,36–1,8 y governor `powersave` con frecuencia
-  oscilante; se verificó freq mediana 4,1 GHz durante el bench. No es el suelo
-  absoluto de la máquina, pero es comparable con r15/r17. Re-medir en una
-  ventana más estable si se quiere afinar el presupuesto.
-- **Fix de custom properties parcial**: el fast path afecta solo a nodos sin
-  `--*`; el residuo de la cascada (~+20 % vs r17) sigue en guardas de
-  estado/reglas UA/propiedades computadas. No se suben presupuestos.
-- **Filas E2E nuevas**: suben `setup` (~455–484 ms) y el TOTAL del informe; el
-  TOTAL legacy se publica aparte. `layout/sticky-text-1mb` se activó en esta
-  ronda (motor con sticky + `text-transform` ya implementados).
-- **r20 cabe en el histórico con load distinto a r19**: usar el A/B de §5.2 para
-  atribuir; los absolutos de r19 estaban medidos bajo carga 4,0–5,35.
-- **Render/shell**: medidos a load ~1,3–1,8; `--find` cuesta ~+6 ms; pestañas y
+- **Ventana buena pero no perfecta**: load 1,29–1,48 y `powersave` con
+  frecuencia oscilante (freq máx. muestreada 3,3–4,7 GHz). Es comparable con
+  r15/r17 y suficiente para el veredicto, pero no es el suelo absoluto; si se
+  quiere afinar, re-medir en una ventana aún más estable.
+- **A/B por carril**: las cifras de ronda (html 20→16,4; css 38,84→33,91;
+  layout 46,6→36,4; pipeline 154,13→132,39) se confirman en dirección y orden
+  de magnitud; el `paint/build-display-list` del claim (8,62→7,84) se midió en
+  otro corte del carril, aquí el A/B r20→r21 da 15,25→8,27 (−45,8 %).
+- **Filas E2E**: suben `setup` (~388 ms) y el TOTAL del informe; el TOTAL
+  legacy se publica aparte. `layout/sticky-text-1mb` quedó activa en r20.
+- **Render/shell**: medidos a load ~1,3; `--find` cuesta ~+7,2 ms; pestañas y
   auto-refresh no se ejercen en `--screenshot`.
 - **`website/` y `pages.yml`**: del dueño; no se tocan.
 - **Fast path de tablas (r7)**: nota histórica; no hay commit compilable con el

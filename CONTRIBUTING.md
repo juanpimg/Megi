@@ -25,7 +25,7 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 - Trabajamos con las suites de prueba de referencia de la industria:
   - **`html5lib-tests`**: Más de 7.000 pruebas de tokenizador, ~1.900 de construcción del DOM y las suites oficiales de **serialización HTML** (`serializer/*.test`).
   - **Web Platform Tests (WPT)**: Pruebas oficiales compartidas por todos los motores de navegación modernos (fixtures de CSS Syntax vendorizadas).
-- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), **árbol 3.904/3.904 (100 %, sin allowlist; las 4 suites `scripted_*` ejecutan JS real vía WP-6.4)**, **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El workspace tiene **1344 tests**.
+- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), **árbol 3.904/3.904 (100 %, sin allowlist; las 4 suites `scripted_*` ejecutan JS real vía WP-6.4)**, **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El workspace tiene **1345 tests**.
 
 ### 1.4 Modelo de Memoria en Arena (Sin `Rc<RefCell<Node>>`)
 - Uno de los mayores cuellos de botella y fuentes de *memory leaks* en motores web en Rust es el uso de `Rc<RefCell<Node>>` o recolectores de basura pesados.
@@ -40,6 +40,7 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
   - `cargo clippy --workspace --all-targets -- -D warnings`: Cero advertencias de linter permitidas.
   - `cargo +1.88 check --workspace --all-targets`: verificación contra la MSRV declarada (`rust-version = "1.88"`).
   - `./tools/dev.sh all`: script integral (fmt, clippy, tests, doc y **gate de conformidad**) que debe pasar al 100% verde antes de cualquier commit o Pull Request.
+- **Progress status generado**: si tocas docs, tests, fases o `docs/status/progress.toml`, regenera el snapshot antes de commitear con `python3 tools/update_progress.py --write` (CI ejecuta el check de frescura); **no edites a mano** `PROGRESS.md` ni `docs/status/`.
   - `cd fuzz && cargo +nightly fuzz build`: compila los 7 targets de fuzz (nightly; también lo hace un job build-only en PRs que tocan `fuzz/**`).
 
 ---
@@ -103,7 +104,7 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
   - Ya hecho (ronda 13): **`@font-face`+WOFF2 E2E** (dep autorizada `woff2-patched` 0.4, DB por render en layout+paint, caps 8/8 MiB/32 MiB, stats/timing y warnings no fatales).
   - Mejoras de shaping para más scripts, fallback entre familias y métricas de fuentes variables.
 - **SVG (`crates/svg` + `render`, rondas 13-17)**: crate propio completo (parser XML+modelo+rasterizador AA, **73 tests**) con **CSS interno y gradientes lineales/radiales** (ronda 16) y **cableado E2E**: `<img src=*.svg>`, `background-image` **e inline `<svg>`** (caps 256/1 MiB/8 MiB, `svgs_rendered`/`inline_svgs`; 11+10 tests). **Ronda 17**: **`<pattern>`** (cap 10k tiles) y **`<text>` básico** con `crates/fonts` (caps 1.000 texts/10.000 chars). Siguientes: shaping avanzado (kerning/italic/bidi), patterns rotados y cache por URL.
-- **Rendimiento/robustez (`crates/html`, `crates/dom`, `layout`, `paint`)**:
+- **Rendimiento/robustez (`crates/html`, `crates/dom`, `layout`, `paint`) — los presupuestos son gates que NO se suben**: ronda 21 recuperó pipeline ≤140 ms y layout ≤43 ms (html −18/−20 %, css resolve 33,91 ms, layout 36,4 ms, build-display −9,1 %).
   - DOM identidad/memoria (auditoría F8), recursión de layout/paint en documentos profundos (F6), presupuestos de tiempo y API `Result`.
   - Benchmarks reproducibles (`./tools/bench.sh`) y regresiones de complejidad.
 - **Fuzzing (`fuzz/`)**:
@@ -159,7 +160,7 @@ cargo fmt
 ./tools/dev.sh all
 
 # Comprobaciones individuales útiles
-cargo test --workspace                         # 1344 tests (con JS por defecto)
+cargo test --workspace                         # 1345 tests (con JS por defecto)
 cargo test --workspace --no-default-features   # build mínimo sin JS (CI)
 cargo +1.88 check --workspace --all-targets
 cargo run -p test_harness -- --summary          # gate 4 suites: PASS, exit 0
