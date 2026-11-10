@@ -29,24 +29,19 @@ impl Hasher for FastHasher {
         self.0
     }
 
-    #[allow(clippy::chunks_exact_to_as_chunks)] // keep MSRV-compatible slice API
     fn write(&mut self, bytes: &[u8]) {
-        // Word-at-a-time for the common case; the trailing partial word is packed by
-        // hand. `str`/`String` hash as their bytes plus a 0xFF terminator, so this is the
-        // hot path for tag/attribute-name keys.
-        let mut chunks = bytes.chunks_exact(8);
-        for chunk in &mut chunks {
-            let mut word_bytes = [0u8; 8];
-            word_bytes.copy_from_slice(chunk);
-            self.mix(u64::from_ne_bytes(word_bytes));
-        }
-        let remainder = chunks.remainder();
-        if !remainder.is_empty() {
-            // Tags/attribute names are short: pack the up-to-7 trailing bytes with a
-            // single copy instead of a per-byte shift loop.
-            let mut tail = [0u8; 8];
-            tail[..remainder.len()].copy_from_slice(remainder);
-            self.mix(u64::from_ne_bytes(tail));
+        // Deliberately the plain byte-chunk loop: the one/two-byte HTML tag names hashed
+        // by the tree-builder bookkeeping maps (`open_html_counts`/`scope` checks) are
+        // faster here than with a word-at-a-time + `chunks_exact` fast path. The latter
+        // was introduced in r11 and regressed `html/massive-end-p` by ~17 % (18.2→21.4 ms);
+        // attribute-name deduplication no longer uses this hasher (the tokenizer uses
+        // `std::HashSet`), so long keys are not hashed here.
+        for chunk in bytes.chunks(8) {
+            let mut packed = 0u64;
+            for (index, byte) in chunk.iter().enumerate() {
+                packed |= u64::from(*byte) << (index * 8);
+            }
+            self.mix(packed);
         }
     }
 
