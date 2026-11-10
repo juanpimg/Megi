@@ -1,0 +1,19 @@
+[package]
+name = "js"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Megi Engine — embedded JavaScript runtime (Boa) with minimal DOM bindings"
+
+[features]
+default = ["js"]
+js = ["dep:boa_engine"]
+
+[dependencies]
+dom.workspace = true
+html.workspace = true
+css.workspace = true
+boa_engine = { workspace = true, optional = true }
