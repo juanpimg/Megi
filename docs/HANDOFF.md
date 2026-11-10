@@ -3,7 +3,7 @@
 **Fecha**: 2026-11-10 (Europe/Madrid)
 **Rama**: `sprint/robustez-fase4` — HEAD `13e9945` (árbol limpio)
 **Estado**: **546 tests, 0 fallos**; gate de 4 suites PASS; Fase 4 funcionalmente cerrada, Fase 5 ≈70 %, Fase 6 planificada (DOM API lista), Fase 7 ≈20 % (ventana + headless).
-**Matriz**: [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md) · **Rendimiento**: [`PERFORMANCE.md`](PERFORMANCE.md) · **Fuzzing**: [`FUZZING.md`](FUZZING.md) · **Plan**: [`ROADMAP.md`](ROADMAP.md).
+**Matriz**: [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md) · **Rendimiento**: [`PERFORMANCE.md`](PERFORMANCE.md) · **Fuzzing**: [`FUZZING.md`](FUZZING.md) · **Plan**: [`ROADMAP.md`](ROADMAP.md) · **ADR JS (Fase 6)**: [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md).
 
 ## Qué se hizo en la ronda 6 (5 commits + docs)
 
@@ -78,7 +78,7 @@ cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 3. **Tablas avanzadas** *(WP-4.8b)*: conflictos de `border-collapse`, `rowspan`, `table-layout: fixed`, `inline-table` real y optimización del auto layout.
 4. **Fase 7**: scroll, **hit-testing** (`NodeId`/`LayoutBox` ↔ `DisplayItem`), navegación/historial, inputs de ratón/teclado, zoom/HiDPI (device-scale), render en worker con cancelación y pruebas de ventana reales en CI con Xvfb.
 5. **Robustez de layout**: construcción profunda sigue recursiva (solo el `Drop` es iterativo); presupuestos de tiempo y coherencia `ParseOptions::max_nodes` (1M) vs `MAX_SLOTS` (1.048.575).
-6. **Fase 6 (JS)**: decidir política de motor (§3.1 de ARCHITECTURE), bindings `NodeId` generacionales, eventos/CSSOM y `querySelector` (motor de selectores ya disponible); el DOM ya expone `innerHTML`/`document.write`.
+6. **Fase 6 (JS) — decisión pendiente del dueño**: el ADR [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md) recomienda **Boa 0.21.x** (pure Rust, MSRV 1.88, Unlicense OR MIT) con feature `js` opcional; alternativas QuickJS/rquickjs (MIT, C/FFI) o diferir. Preguntas abiertas: motor, feature on/off por defecto y alcance inicial (`document.write`+bindings ≈14 días vs ES/DOM más amplio ≈25). No crear `crates/js` ni tocar `Cargo.toml` hasta la decisión; el DOM ya expone `innerHTML`/`document.write` y handles generacionales para los bindings.
 7. **Rendimiento**: coste de compresión PNG en pintados grandes, glyph cache global, presupuesto del pipeline HTML→PNG y benchmarks de tablas/imágenes.
 8. **Fuzzing/seguridad**: añadir targets `image` (PNG/inflate) y `render`; mantener límites de imagen (caps) y de red; revisar `winit`/`softbuffer` como superficie de ventana.
 9. **Fixtures/goldens**: `real_page.html`/`torture.html` con tablas, imágenes y CSS externo; goldens con tolerancia para AA; capturas nuevas en `docs/images/`.

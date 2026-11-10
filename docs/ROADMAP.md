@@ -504,13 +504,19 @@ Criterio global: `cargo test -p net -p image -p render` + `cargo run -p render -
 
 ---
 
-## FASE 6: Integración JS & DOM Bindings (PLANIFICADA)
+## FASE 6: Integración JS & DOM Bindings (PLANIFICADA — DECISIÓN PENDIENTE DEL DUEÑO)
 
-**Estado**: 0 % de ejecución de JS; el DOM ya expone la API de navegador necesaria (`document_element/head/body`, `get_element_by_id`, `get_elements_by_tag_name/class_name`, `text_content`, `innerHTML`/`outerHTML`, `document_write`, factorías y mutaciones con `DomError`). Decisión pendiente: motor JS embebido (política §3.1) vs implementación propia; `querySelector` requiere conectar `css` al DOM (motor de selectores ya disponible), y faltan eventos/CSSOM.
+**Estado**: **0 % de ejecución de JS**; `crates/js` no existe. El DOM ya expone la API de navegador necesaria (`document_element/head/body`, `get_element_by_id`, `get_elements_by_tag_name/class_name`, `text_content`, `innerHTML`/`outerHTML`, `document_write`, factorías y mutaciones con `DomError`) y la arena tiene handles generacionales con free list, que es la base del diseño de bindings.
 
-**WPs candidatos**: `WP-6.1` motor/objeto global y realm; `WP-6.2` bindings DOM (`NodeId` generacional ↔ wrappers); `WP-6.3` ejecución de `<script>` (sync/async, `document.write`), `WP-6.4` eventos y `CSSOM`; criterio: scripts de fixture mutan el DOM y el PNG cambia; tests A/B contra DOM sin JS.
+**No se implementa nada hasta que el dueño resuelva el ADR**: [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md) (ADR-001). Resumen de la propuesta:
 
----
+- **Motor recomendado**: **Boa** `boa_engine` **0.21.x** (pure Rust, MSRV Rust 1.88, licencia Unlicense OR MIT), en un nuevo `crates/js`, con **feature `js` opcional y apagada por defecto**; alternativa/plan de migración: **QuickJS vía `rquickjs`** (MIT, casi 100 % Test262, pero añade toolchain C y FFI).
+- **Diseño de bindings**: tabla lateral `HashMap<NodeId, JsValue>` por realm/mundo, wrappers con comprobación de generación (handles stale/foráneos rechazados), `EventTarget` mínimo, `document.write`/`innerHTML` reutilizando la API del parser, y presupuesto anti-DoS (instrucciones/tiempo/memoria/pila, sin red/FS por defecto).
+- **Qué NO se hace**: motor JS propio, delegar parseo HTML/CSS/layout/paint a JS, JIT, o exponer `fetch`/filesystem por defecto.
+
+**Preguntas pendientes del dueño** (detalle en el ADR §8): (1) motor Boa vs QuickJS; (2) feature `js` apagada vs encendida por defecto; (3) alcance inicial mínimo (`document.write` + bindings, ≈14 días) vs eventos/timers/CSSOM/`querySelector` (≈25 días).
+
+**Plan propuesto (si se aprueba)**: `WP-6.1` crate/feature/realm (3 d) → `WP-6.2` bindings DOM core (6 d) → `WP-6.3` `<script>` parser-inserted + `document.write` (5 d; criterio: `scripted_*` fuera de la allowlist y árbol **3.904/3.904**) → `WP-6.4` eventos/timers/event loop (5 d) → `WP-6.5` `querySelector`/CSSOM (6 d) → `WP-6.6` endurecimiento/fuzz (3 d) → `WP-6.7` shell/docs (3 d). Total ≈30 días-persona; camino mínimo ≈14 días.
 
 ## FASE 7: Ventana del Sistema & Shell (EN CURSO, ~20%)
 
