@@ -82,6 +82,12 @@ pub(crate) struct Shape {
     /// Bounding box of the untransformed geometry in local user space
     /// (`x, y, width, height`), used by `objectBoundingBox` gradients.
     pub bbox: (f32, f32, f32, f32),
+    /// Active clip paths (outermost first); their intersection clips the shape.
+    pub clip: Vec<EffectRef>,
+    /// Active masks (outermost first); their product masks the shape.
+    pub mask: Vec<EffectRef>,
+    /// Nearest filter (group filters are inherited by descendants).
+    pub filter: Option<EffectRef>,
 }
 
 /// Horizontal/vertical alignment of the viewBox inside the viewport.
@@ -118,6 +124,109 @@ pub(crate) struct ViewBox {
     height: f32,
 }
 
+/// Region length for mask/filter `x`/`y`/`width`/`height`.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum RegionLength {
+    /// Absolute user-space value (or objectBoundingBox fraction).
+    Number(f32),
+    /// Percentage of the reference box (stored as a fraction, e.g. `-10%` → `-0.1`).
+    Percent(f32),
+}
+
+impl RegionLength {
+    fn parse(raw: Option<&str>, default: Self) -> Self {
+        let Some(raw) = raw else {
+            return default;
+        };
+        let value = raw.trim();
+        if let Some(fraction) = value.strip_suffix('%')
+            && let Ok(percent) = fraction.trim().parse::<f32>()
+            && percent.is_finite()
+        {
+            return Self::Percent(percent / 100.0);
+        }
+        match value.parse::<f32>() {
+            Ok(number) if number.is_finite() => Self::Number(number),
+            _ => default,
+        }
+    }
+
+    /// Resolves the value against `base` (the bounding-box dimension for percentages).
+    pub(crate) fn resolve(self, base: f32) -> f32 {
+        match self {
+            Self::Number(value) => value,
+            Self::Percent(fraction) => fraction * base,
+        }
+    }
+}
+
+/// Reference to a resolved `<clipPath>`/`<mask>` definition attached to a shape.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EffectRef {
+    /// Index into [`Document::clip_paths`]/[`Document::masks`] (or filters).
+    pub index: u32,
+    /// `*Units` of the referenced definition.
+    pub units: Units,
+    /// Reference box in the coordinate system described by `transform`.
+    pub bbox: (f32, f32, f32, f32),
+    /// Reference user space → root user space transform (shape transform for shapes,
+    /// group transform for groups; identity for objectBoundingBox group references).
+    pub transform: Transform,
+}
+
+/// A resolved `<clipPath>` definition; child geometry is flattened in clip-path user space.
+#[derive(Clone, Debug)]
+pub(crate) struct ClipPathSpec {
+    pub units: Units,
+    pub shapes: Vec<Shape>,
+}
+
+/// A resolved `<mask>` definition; content is flattened in mask-content user space.
+#[derive(Clone, Debug)]
+pub(crate) struct MaskSpec {
+    pub mask_units: Units,
+    pub content_units: Units,
+    pub x: RegionLength,
+    pub y: RegionLength,
+    pub width: RegionLength,
+    pub height: RegionLength,
+    pub shapes: Vec<Shape>,
+}
+
+/// `feComposite` operator subset.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CompositeOperator {
+    Over,
+    In,
+    Out,
+    Atop,
+}
+
+/// Supported filter primitives (unsupported elements are ignored, documented).
+#[derive(Clone, Debug)]
+pub(crate) enum FilterPrimitive {
+    GaussianBlur { std_deviation: f32 },
+    Offset { dx: f32, dy: f32 },
+    Flood { color: Color, opacity: f32 },
+    Composite { operator: CompositeOperator },
+}
+
+/// A resolved `<filter>` definition.
+#[derive(Clone, Debug)]
+pub(crate) struct FilterSpec {
+    pub filter_units: Units,
+    pub x: RegionLength,
+    pub y: RegionLength,
+    pub width: RegionLength,
+    pub height: RegionLength,
+    pub primitives: Vec<FilterPrimitive>,
+}
+
+/// Anti-DoS caps for masks/filters/clip paths.
+pub(crate) const MAX_EFFECT_SHAPES: usize = 4096;
+pub(crate) const MAX_FILTER_PRIMITIVES: usize = 16;
+pub(crate) const MAX_BLUR_RADIUS: u32 = 64;
+
 /// A parsed SVG document ready for rasterization.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Document {
@@ -135,6 +244,12 @@ pub(crate) struct Document {
     pub patterns: Vec<PatternSpec>,
     /// Parsed `<text>` elements in document order.
     pub texts: Vec<TextSpec>,
+    /// Resolved `<clipPath>` definitions (indexed by [`EffectRef::index`]).
+    pub clip_paths: Vec<ClipPathSpec>,
+    /// Resolved `<mask>` definitions.
+    pub masks: Vec<MaskSpec>,
+    /// Resolved `<filter>` definitions.
+    pub filters: Vec<FilterSpec>,
 }
 
 impl Document {
@@ -166,15 +281,47 @@ impl Document {
         for (index, (id, _)) in pattern_elements.iter().enumerate() {
             pattern_ids.insert(id.clone(), index as u32);
         }
+        let clip_elements = collect_effect_elements(&defs, "clippath");
+        let mask_elements = collect_effect_elements(&defs, "mask");
+        let filter_elements = collect_effect_elements(&defs, "filter");
+        let clip_ids = id_map(&clip_elements);
+        let mask_ids = id_map(&mask_elements);
+        let filter_ids = id_map(&filter_elements);
+        let clip_paths = build_clip_paths(
+            &defs,
+            &rules,
+            &gradient_ids,
+            &pattern_ids,
+            &clip_elements,
+            limits,
+        )?;
+        let masks = build_masks(
+            &defs,
+            &rules,
+            &gradient_ids,
+            &pattern_ids,
+            &mask_elements,
+            limits,
+        )?;
+        let filters = build_filters(&filter_elements);
         let mut builder = Builder {
             defs: &defs,
             rules: &rules,
             gradient_ids: &gradient_ids,
             pattern_ids: &pattern_ids,
+            clip_ids: &clip_ids,
+            mask_ids: &mask_ids,
+            filter_ids: &filter_ids,
+            clip_paths: &clip_paths,
+            masks: &masks,
+            filters: &filters,
             limits,
             shapes: Vec::new(),
             texts: Vec::new(),
             use_stack: Vec::new(),
+            active_clips: Vec::new(),
+            active_masks: Vec::new(),
+            active_filter: None,
         };
         let style = Style::default();
         let root_transform = Transform::IDENTITY;
@@ -190,6 +337,9 @@ impl Document {
             gradients,
             patterns,
             texts: builder.texts,
+            clip_paths,
+            masks,
+            filters,
         })
     }
 
@@ -238,6 +388,9 @@ struct Style {
     linejoin: LineJoin,
     miter_limit: f32,
     fill_rule: FillRule,
+    clip_path: Option<String>,
+    mask: Option<String>,
+    filter: Option<String>,
 }
 
 /// A paint value: solid colour, gradient reference (index into
@@ -262,6 +415,9 @@ impl Default for Style {
             linejoin: LineJoin::Miter,
             miter_limit: 4.0,
             fill_rule: FillRule::NonZero,
+            clip_path: None,
+            mask: None,
+            filter: None,
         }
     }
 }
@@ -351,6 +507,14 @@ impl Style {
                     FillRule::NonZero
                 };
             }
+            "clip-path" | "mask" | "filter" => {
+                let reference = parse_url_reference(value);
+                match name {
+                    "clip-path" => self.clip_path = reference,
+                    "mask" => self.mask = reference,
+                    _ => self.filter = reference,
+                }
+            }
             _ => {}
         }
     }
@@ -367,6 +531,9 @@ const PRESENTATION_PROPERTIES: &[&str] = &[
     "stroke-linejoin",
     "stroke-miterlimit",
     "fill-rule",
+    "clip-path",
+    "mask",
+    "filter",
 ];
 
 struct Builder<'a> {
@@ -374,13 +541,172 @@ struct Builder<'a> {
     rules: &'a [StyleRule],
     gradient_ids: &'a HashMap<String, u32>,
     pattern_ids: &'a HashMap<String, u32>,
+    clip_ids: &'a HashMap<String, u32>,
+    mask_ids: &'a HashMap<String, u32>,
+    filter_ids: &'a HashMap<String, u32>,
+    clip_paths: &'a [ClipPathSpec],
+    masks: &'a [MaskSpec],
+    filters: &'a [FilterSpec],
     limits: &'a Limits,
     shapes: Vec<Shape>,
     texts: Vec<TextSpec>,
     use_stack: Vec<String>,
+    active_clips: Vec<EffectRef>,
+    active_masks: Vec<EffectRef>,
+    active_filter: Option<EffectRef>,
 }
 
 impl<'a> Builder<'a> {
+    /// Resolves the element's own `clip-path`/`mask`/`filter` references into effect refs.
+    ///
+    /// `group` selects group semantics for `objectBoundingBox` units: the reference box is
+    /// the descendants' union (assigned after traversal) and the transform is identity,
+    /// while shapes use their local bbox and own transform.
+    fn own_effects(
+        &self,
+        style: &Style,
+        transform: Transform,
+        bbox: Option<(f32, f32, f32, f32)>,
+        group: bool,
+    ) -> (Vec<EffectRef>, Vec<EffectRef>, Option<EffectRef>) {
+        let reference = |units: Units, transform: Transform| {
+            if group && units == Units::ObjectBoundingBox {
+                (units, Transform::IDENTITY, (0.0, 0.0, 0.0, 0.0))
+            } else {
+                (units, transform, bbox.unwrap_or((0.0, 0.0, 0.0, 0.0)))
+            }
+        };
+        let clip = style
+            .clip_path
+            .as_ref()
+            .and_then(|id| self.clip_ids.get(id))
+            .map(|&index| {
+                let units = self.clip_paths[index as usize].units;
+                let (units, transform, bbox) = reference(units, transform);
+                EffectRef {
+                    index,
+                    units,
+                    bbox,
+                    transform,
+                }
+            });
+        let mask = style
+            .mask
+            .as_ref()
+            .and_then(|id| self.mask_ids.get(id))
+            .map(|&index| {
+                let units = self.masks[index as usize].mask_units;
+                let (units, transform, bbox) = reference(units, transform);
+                EffectRef {
+                    index,
+                    units,
+                    bbox,
+                    transform,
+                }
+            });
+        let filter = style
+            .filter
+            .as_ref()
+            .and_then(|id| self.filter_ids.get(id))
+            .map(|&index| {
+                let units = self.filters[index as usize].filter_units;
+                let (units, transform, bbox) = reference(units, transform);
+                EffectRef {
+                    index,
+                    units,
+                    bbox,
+                    transform,
+                }
+            });
+        (
+            clip.into_iter().collect(),
+            mask.into_iter().collect(),
+            filter,
+        )
+    }
+
+    fn push_effects(
+        &mut self,
+        clips: &[EffectRef],
+        masks: &[EffectRef],
+        filter: Option<&EffectRef>,
+    ) -> (usize, usize, Option<EffectRef>) {
+        let previous = (
+            self.active_clips.len(),
+            self.active_masks.len(),
+            self.active_filter.take(),
+        );
+        self.active_clips.extend_from_slice(clips);
+        self.active_masks.extend_from_slice(masks);
+        if let Some(filter) = filter {
+            self.active_filter = Some(filter.clone());
+        }
+        previous
+    }
+
+    fn pop_effects(&mut self, previous: (usize, usize, Option<EffectRef>)) {
+        self.active_clips.truncate(previous.0);
+        self.active_masks.truncate(previous.1);
+        self.active_filter = previous.2;
+    }
+
+    /// Computes the union bbox (root user space) of shapes emitted since `start` and copies
+    /// it into the group's `objectBoundingBox` effect refs (group effects are inherited by
+    /// all descendants, so every matching ref is updated).
+    fn apply_group_bbox(
+        &mut self,
+        start: usize,
+        clips: &[EffectRef],
+        masks: &[EffectRef],
+        filter: Option<&EffectRef>,
+    ) {
+        let mut min_x = f32::INFINITY;
+        let mut min_y = f32::INFINITY;
+        let mut max_x = f32::NEG_INFINITY;
+        let mut max_y = f32::NEG_INFINITY;
+        for shape in &self.shapes[start..] {
+            for subpath in &shape.subpaths {
+                for point in &subpath.points {
+                    if point.0.is_finite() && point.1.is_finite() {
+                        min_x = min_x.min(point.0);
+                        min_y = min_y.min(point.1);
+                        max_x = max_x.max(point.0);
+                        max_y = max_y.max(point.1);
+                    }
+                }
+            }
+        }
+        if !min_x.is_finite() || !min_y.is_finite() {
+            return;
+        }
+        let bbox = (
+            min_x,
+            min_y,
+            (max_x - min_x).max(0.0),
+            (max_y - min_y).max(0.0),
+        );
+        let matches = |reference: &EffectRef, candidate: &EffectRef| {
+            reference.index == candidate.index && reference.transform == candidate.transform
+        };
+        for shape in &mut self.shapes[start..] {
+            for effect in &mut shape.clip {
+                if clips.iter().any(|reference| matches(reference, effect)) {
+                    effect.bbox = bbox;
+                }
+            }
+            for effect in &mut shape.mask {
+                if masks.iter().any(|reference| matches(reference, effect)) {
+                    effect.bbox = bbox;
+                }
+            }
+            if let (Some(effect), Some(reference)) = (shape.filter.as_mut(), filter)
+                && matches(reference, effect)
+            {
+                effect.bbox = bbox;
+            }
+        }
+    }
+
     fn visit_children(
         &mut self,
         element: &'a XmlElement,
@@ -412,6 +738,11 @@ impl<'a> Builder<'a> {
         }
         let name = element.local_name_lower();
         let mut style = parent_style.clone();
+        // `clip-path`/`mask`/`filter` are not inherited: descendants only see them through
+        // the active-effect stack, so clear any value copied from the parent style.
+        style.clip_path = None;
+        style.mask = None;
+        style.filter = None;
         style.apply(
             element,
             self.rules,
@@ -431,9 +762,25 @@ impl<'a> Builder<'a> {
             "svg" => {
                 let viewport = nested_viewport_transform(element);
                 let transform = transform.then(viewport);
-                self.visit_children(element, ancestors, transform, &style, opacity, depth)
+                let (clips, masks, filter) = self.own_effects(&style, transform, None, true);
+                let start = self.shapes.len();
+                let previous = self.push_effects(&clips, &masks, filter.as_ref());
+                let result =
+                    self.visit_children(element, ancestors, transform, &style, opacity, depth);
+                self.pop_effects(previous);
+                self.apply_group_bbox(start, &clips, &masks, filter.as_ref());
+                result
             }
-            "g" => self.visit_children(element, ancestors, transform, &style, opacity, depth),
+            "g" => {
+                let (clips, masks, filter) = self.own_effects(&style, transform, None, true);
+                let start = self.shapes.len();
+                let previous = self.push_effects(&clips, &masks, filter.as_ref());
+                let result =
+                    self.visit_children(element, ancestors, transform, &style, opacity, depth);
+                self.pop_effects(previous);
+                self.apply_group_bbox(start, &clips, &masks, filter.as_ref());
+                result
+            }
             "defs" | "title" | "desc" | "metadata" | "style" | "linearGradient"
             | "radialGradient" | "pattern" | "clipPath" | "mask" | "filter" | "symbol"
             | "marker" | "tspan" | "image" | "foreignObject" | "script" | "stop" => Ok(()),
@@ -464,10 +811,15 @@ impl<'a> Builder<'a> {
                 let x = parse_length(element.attribute("x"), 0.0).unwrap_or(0.0);
                 let y = parse_length(element.attribute("y"), 0.0).unwrap_or(0.0);
                 let use_transform = transform.then(Transform::translate(x, y));
+                let (clips, masks, filter) = self.own_effects(&style, use_transform, None, true);
+                let start = self.shapes.len();
+                let previous = self.push_effects(&clips, &masks, filter.as_ref());
                 self.use_stack.push(id.to_owned());
                 let result =
                     self.visit(target, ancestors, use_transform, &style, opacity, depth + 1);
                 self.use_stack.pop();
+                self.pop_effects(previous);
+                self.apply_group_bbox(start, &clips, &masks, filter.as_ref());
                 result
             }
             _ => self.push_shape(element, &name, transform, &style, opacity),
@@ -616,6 +968,15 @@ impl<'a> Builder<'a> {
         if subpaths.is_empty() || !scale.is_finite() {
             return Ok(());
         }
+        let (own_clips, own_masks, own_filter) =
+            self.own_effects(style, transform, Some(bbox), false);
+        let mut clips = self.active_clips.clone();
+        clips.extend(own_clips);
+        clips.truncate(MAX_EFFECT_SHAPES);
+        let mut masks = self.active_masks.clone();
+        masks.extend(own_masks);
+        masks.truncate(MAX_EFFECT_SHAPES);
+        let filter = own_filter.or_else(|| self.active_filter.clone());
         self.shapes.push(Shape {
             subpaths,
             fill: style.fill,
@@ -630,6 +991,9 @@ impl<'a> Builder<'a> {
             opacity: opacity.clamp(0.0, 1.0),
             transform,
             bbox,
+            clip: clips,
+            mask: masks,
+            filter,
         });
         Ok(())
     }
@@ -1009,6 +1373,9 @@ fn nested_viewport_transform(element: &XmlElement) -> Transform {
         preserve,
         shapes: Vec::new(),
         gradients: Vec::new(),
+        clip_paths: Vec::new(),
+        masks: Vec::new(),
+        filters: Vec::new(),
     };
     let mapping = nested.viewport_transform(
         viewport_w.max(0.0).round() as u32,
@@ -1049,6 +1416,198 @@ fn collect_style_text(root: &XmlElement) -> String {
     text
 }
 
+/// Collects effect definitions (`clipPath`, `mask`, `filter`) in deterministic id order.
+fn collect_effect_elements<'a>(
+    defs: &'a HashMap<String, &'a XmlElement>,
+    tag: &str,
+) -> Vec<(String, &'a XmlElement)> {
+    let mut ids: Vec<&String> = defs.keys().collect();
+    ids.sort();
+    ids.into_iter()
+        .filter_map(|id| {
+            let element = defs[id];
+            (element.local_name_lower() == tag).then(|| (id.clone(), element))
+        })
+        .collect()
+}
+
+/// Assigns stable indices to effect definitions, in sorted-id order.
+fn id_map(elements: &[(String, &XmlElement)]) -> HashMap<String, u32> {
+    elements
+        .iter()
+        .enumerate()
+        .map(|(index, (id, _))| (id.clone(), index as u32))
+        .collect()
+}
+
+/// Flattens an effect element's children into shapes (clip/mask content).
+fn build_effect_shapes(
+    defs: &HashMap<String, &XmlElement>,
+    rules: &[StyleRule],
+    gradient_ids: &HashMap<String, u32>,
+    pattern_ids: &HashMap<String, u32>,
+    element: &XmlElement,
+    limits: &Limits,
+) -> Result<Vec<Shape>, SvgError> {
+    let no_ids = HashMap::new();
+    let no_clips: [ClipPathSpec; 0] = [];
+    let no_masks: [MaskSpec; 0] = [];
+    let no_filters: [FilterSpec; 0] = [];
+    let mut builder = Builder {
+        defs,
+        rules,
+        gradient_ids,
+        pattern_ids,
+        clip_ids: &no_ids,
+        mask_ids: &no_ids,
+        filter_ids: &no_ids,
+        clip_paths: &no_clips,
+        masks: &no_masks,
+        filters: &no_filters,
+        limits,
+        shapes: Vec::new(),
+        texts: Vec::new(),
+        use_stack: Vec::new(),
+        active_clips: Vec::new(),
+        active_masks: Vec::new(),
+        active_filter: None,
+    };
+    let style = Style {
+        clip_path: None,
+        mask: None,
+        filter: None,
+        ..Style::default()
+    };
+    let mut ancestors: Vec<&XmlElement> = vec![element];
+    builder.visit_children(element, &mut ancestors, Transform::IDENTITY, &style, 1.0, 0)?;
+    Ok(builder.shapes)
+}
+
+/// Builds every `<clipPath>` (child geometry flattened in clip-path user space).
+fn build_clip_paths(
+    defs: &HashMap<String, &XmlElement>,
+    rules: &[StyleRule],
+    gradient_ids: &HashMap<String, u32>,
+    pattern_ids: &HashMap<String, u32>,
+    elements: &[(String, &XmlElement)],
+    limits: &Limits,
+) -> Result<Vec<ClipPathSpec>, SvgError> {
+    let mut specs = Vec::new();
+    for (_id, element) in elements {
+        let shapes = build_effect_shapes(defs, rules, gradient_ids, pattern_ids, element, limits)?;
+        if shapes.len() > MAX_EFFECT_SHAPES {
+            return Err(SvgError::Limit("too many shapes in clipPath".to_owned()));
+        }
+        specs.push(ClipPathSpec {
+            units: Units::parse(element.attribute("clipPathUnits")),
+            shapes,
+        });
+    }
+    Ok(specs)
+}
+
+/// Parses `maskUnits`/`filterUnits` (their initial value is `objectBoundingBox`, unlike
+/// `clipPathUnits`/`maskContentUnits`).
+fn parse_object_box_units(raw: Option<&str>) -> Units {
+    match raw.map(str::trim) {
+        Some(value) if value.eq_ignore_ascii_case("userSpaceOnUse") => Units::UserSpaceOnUse,
+        _ => Units::ObjectBoundingBox,
+    }
+}
+
+/// Builds every `<mask>`.
+fn build_masks(
+    defs: &HashMap<String, &XmlElement>,
+    rules: &[StyleRule],
+    gradient_ids: &HashMap<String, u32>,
+    pattern_ids: &HashMap<String, u32>,
+    elements: &[(String, &XmlElement)],
+    limits: &Limits,
+) -> Result<Vec<MaskSpec>, SvgError> {
+    let mut specs = Vec::new();
+    for (_id, element) in elements {
+        let shapes = build_effect_shapes(defs, rules, gradient_ids, pattern_ids, element, limits)?;
+        if shapes.len() > MAX_EFFECT_SHAPES {
+            return Err(SvgError::Limit("too many shapes in mask".to_owned()));
+        }
+        specs.push(MaskSpec {
+            mask_units: parse_object_box_units(element.attribute("maskUnits")),
+            content_units: Units::parse(element.attribute("maskContentUnits")),
+            x: RegionLength::parse(element.attribute("x"), RegionLength::Percent(-0.1)),
+            y: RegionLength::parse(element.attribute("y"), RegionLength::Percent(-0.1)),
+            width: RegionLength::parse(element.attribute("width"), RegionLength::Percent(1.2)),
+            height: RegionLength::parse(element.attribute("height"), RegionLength::Percent(1.2)),
+            shapes,
+        });
+    }
+    Ok(specs)
+}
+
+/// Builds every `<filter>` (supported primitive subset: blur/offset/flood/composite).
+fn build_filters(elements: &[(String, &XmlElement)]) -> Vec<FilterSpec> {
+    let mut specs = Vec::new();
+    for (_id, element) in elements {
+        let mut primitives = Vec::new();
+        for child in &element.children {
+            let XmlNode::Element(child) = child else {
+                continue;
+            };
+            if primitives.len() >= MAX_FILTER_PRIMITIVES {
+                break;
+            }
+            match child.local_name_lower().as_str() {
+                "fegaussianblur" => {
+                    let std_deviation = first_number(child.attribute("stdDeviation"));
+                    if std_deviation.is_finite() && std_deviation > 0.0 {
+                        primitives.push(FilterPrimitive::GaussianBlur { std_deviation });
+                    }
+                }
+                "feoffset" => {
+                    let dx = first_number(child.attribute("dx"));
+                    let dy = first_number(child.attribute("dy"));
+                    if dx.is_finite() && dy.is_finite() {
+                        primitives.push(FilterPrimitive::Offset { dx, dy });
+                    }
+                }
+                "feflood" => {
+                    let color = child
+                        .attribute("flood-color")
+                        .and_then(parse_color)
+                        .unwrap_or(Color::BLACK);
+                    let opacity = child
+                        .attribute("flood-opacity")
+                        .and_then(parse_opacity)
+                        .unwrap_or(1.0);
+                    primitives.push(FilterPrimitive::Flood { color, opacity });
+                }
+                "fecomposite" => {
+                    let operator = match child
+                        .attribute("operator")
+                        .map(|value| value.trim().to_ascii_lowercase())
+                        .as_deref()
+                    {
+                        Some("in") => CompositeOperator::In,
+                        Some("out") => CompositeOperator::Out,
+                        Some("atop") => CompositeOperator::Atop,
+                        _ => CompositeOperator::Over,
+                    };
+                    primitives.push(FilterPrimitive::Composite { operator });
+                }
+                _ => {}
+            }
+        }
+        specs.push(FilterSpec {
+            filter_units: parse_object_box_units(element.attribute("filterUnits")),
+            x: RegionLength::parse(element.attribute("x"), RegionLength::Percent(-0.1)),
+            y: RegionLength::parse(element.attribute("y"), RegionLength::Percent(-0.1)),
+            width: RegionLength::parse(element.attribute("width"), RegionLength::Percent(1.2)),
+            height: RegionLength::parse(element.attribute("height"), RegionLength::Percent(1.2)),
+            primitives,
+        });
+    }
+    specs
+}
+
 /// Collects `<pattern>` definitions in deterministic id order.
 fn collect_pattern_elements<'a>(
     defs: &'a HashMap<String, &'a XmlElement>,
@@ -1076,15 +1635,28 @@ fn build_patterns(
 ) -> Result<Vec<PatternSpec>, SvgError> {
     let mut specs = Vec::new();
     for (_id, element) in collect_pattern_elements(defs) {
+        let no_ids = HashMap::new();
+        let no_clips: [ClipPathSpec; 0] = [];
+        let no_masks: [MaskSpec; 0] = [];
+        let no_filters: [FilterSpec; 0] = [];
         let mut builder = Builder {
             defs,
             rules,
             gradient_ids,
             pattern_ids,
+            clip_ids: &no_ids,
+            mask_ids: &no_ids,
+            filter_ids: &no_ids,
+            clip_paths: &no_clips,
+            masks: &no_masks,
+            filters: &no_filters,
             limits,
             shapes: Vec::new(),
             texts: Vec::new(),
             use_stack: Vec::new(),
+            active_clips: Vec::new(),
+            active_masks: Vec::new(),
+            active_filter: None,
         };
         let mut style = Style::default();
         let mut ancestors: Vec<&XmlElement> = vec![element];

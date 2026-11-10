@@ -13,9 +13,13 @@
 //! threading and no randomness).
 
 use crate::color::Color;
-use crate::document::{Document, FillRule, LineCap, LineJoin, Paint};
+use crate::document::{
+    ClipPathSpec, CompositeOperator, Document, EffectRef, FillRule, FilterPrimitive, FilterSpec,
+    LineCap, LineJoin, MAX_BLUR_RADIUS, MaskSpec, Paint,
+};
 use crate::gradient::GradientSpec;
 use crate::path::SubPath;
+use crate::pattern::Units;
 use crate::pattern::{MAX_PATTERN_DEPTH, MAX_PATTERN_TILES, MIN_PATTERN_TILE, PatternSpec};
 use crate::text::{self, TextAnchor, TextSpec};
 use crate::transform::Transform;
@@ -63,7 +67,11 @@ pub(crate) fn rasterize(
             viewport,
             depth: 0,
         };
-        draw_shape(&mut canvas, shape, &context)?;
+        if shape.clip.is_empty() && shape.mask.is_empty() && shape.filter.is_none() {
+            draw_shape(&mut canvas, shape, &context)?;
+        } else {
+            draw_shape_with_effects(&mut canvas, shape, &context, document)?;
+        }
     }
     for text in &document.texts {
         draw_text(
@@ -170,6 +178,446 @@ fn draw_shape(
         canvas.composite_paint(&stroked, shape.stroke_opacity * shape.opacity, context)?;
     }
     Ok(())
+}
+
+/// Draws a shape into an offscreen layer, applies inherited clips/masks/filters and
+/// composites the result over the destination canvas.
+fn draw_shape_with_effects(
+    canvas: &mut Canvas,
+    shape: &crate::document::Shape,
+    context: &PaintContext<'_>,
+    document: &Document,
+) -> Result<(), SvgError> {
+    let mut layer = Canvas::new(canvas.width, canvas.height);
+    draw_shape(&mut layer, shape, context)?;
+    for clip in &shape.clip {
+        apply_clip(&mut layer, document, clip, context.viewport)?;
+    }
+    for mask in &shape.mask {
+        apply_mask(&mut layer, document, mask, context)?;
+    }
+    if let Some(filter) = &shape.filter
+        && let Some(spec) = document.filters.get(filter.index as usize)
+    {
+        apply_filter(&mut layer, spec, filter, context.viewport)?;
+    }
+    canvas.composite_layer(&layer);
+    Ok(())
+}
+
+/// Maps a reference definition's local geometry to device pixels.
+fn effect_point(effect: &EffectRef, viewport: Transform, x: f32, y: f32) -> (f32, f32) {
+    let (x, y) = if effect.units == Units::ObjectBoundingBox {
+        (
+            effect.bbox.0 + x * effect.bbox.2,
+            effect.bbox.1 + y * effect.bbox.3,
+        )
+    } else {
+        (x, y)
+    };
+    let (x, y) = effect.transform.apply(x, y);
+    viewport.apply(x, y)
+}
+
+/// Multiplies the layer alpha by the clip coverage of a `<clipPath>` (intersection of all
+/// its child shapes, each with its own fill rule).
+fn apply_clip(
+    layer: &mut Canvas,
+    document: &Document,
+    effect: &EffectRef,
+    viewport: Transform,
+) -> Result<(), SvgError> {
+    let Some(spec): Option<&ClipPathSpec> = document.clip_paths.get(effect.index as usize) else {
+        return Ok(());
+    };
+    let mut coverage = vec![0.0f32; layer.width * layer.height];
+    for shape in &spec.shapes {
+        let mut device = Vec::with_capacity(shape.subpaths.len());
+        for subpath in &shape.subpaths {
+            let points: Vec<(f32, f32)> = subpath
+                .points
+                .iter()
+                .map(|(x, y)| effect_point(effect, viewport, *x, *y))
+                .filter(|(x, y)| x.is_finite() && y.is_finite())
+                .collect();
+            if points.len() >= 2 {
+                device.push(SubPath {
+                    points,
+                    closed: subpath.closed,
+                });
+            }
+        }
+        fill_scanline(
+            &device,
+            shape.fill_rule,
+            layer.width,
+            layer.height,
+            &mut coverage,
+        );
+    }
+    for (index, alpha) in layer.pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        let coverage = coverage[index].clamp(0.0, 1.0);
+        let value = f32::from(alpha[3]) * coverage;
+        alpha[3] = value.clamp(0.0, 255.0).round() as u8;
+    }
+    Ok(())
+}
+
+/// Multiplies the layer alpha by the luminance of a `<mask>` content rendering.
+fn apply_mask(
+    layer: &mut Canvas,
+    document: &Document,
+    effect: &EffectRef,
+    context: &PaintContext<'_>,
+) -> Result<(), SvgError> {
+    let Some(spec): Option<&MaskSpec> = document.masks.get(effect.index as usize) else {
+        return Ok(());
+    };
+    let viewport = context.viewport;
+    let bbox = effect.bbox;
+    let content_transform = match spec.content_units {
+        Units::UserSpaceOnUse => Transform::IDENTITY,
+        Units::ObjectBoundingBox => {
+            let sx = if bbox.2.abs() > f32::EPSILON {
+                bbox.2
+            } else {
+                1.0
+            };
+            let sy = if bbox.3.abs() > f32::EPSILON {
+                bbox.3
+            } else {
+                1.0
+            };
+            Transform::translate(bbox.0, bbox.1).then(Transform::scale(sx, sy))
+        }
+    };
+    let mask_viewport = viewport.then(effect.transform).then(content_transform);
+    let mut content = Canvas::new(layer.width, layer.height);
+    for shape in &spec.shapes {
+        let shape_context = PaintContext {
+            gradients: context.gradients,
+            patterns: context.patterns,
+            shape_transform: shape.transform,
+            bbox: shape.bbox,
+            viewport: mask_viewport,
+            depth: context.depth,
+        };
+        draw_shape(&mut content, shape, &shape_context)?;
+    }
+    // Reference region in the element's user space, then device pixels.
+    let region = mask_region_pixels(
+        layer,
+        effect,
+        viewport,
+        &spec.x,
+        &spec.y,
+        &spec.width,
+        &spec.height,
+    )?;
+    for (index, alpha) in layer.pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        let x = (index % layer.width) as f32 + 0.5;
+        let y = (index / layer.width) as f32 + 0.5;
+        let inside = region.is_some_and(|(x0, y0, x1, y1)| x >= x0 && x < x1 && y >= y0 && y < y1);
+        if !inside {
+            alpha[3] = 0;
+            continue;
+        }
+        let offset = index * 4;
+        let mask_alpha = f32::from(content.pixels[offset + 3]) / 255.0;
+        let luminance = (0.2126 * f32::from(content.pixels[offset])
+            + 0.7152 * f32::from(content.pixels[offset + 1])
+            + 0.0722 * f32::from(content.pixels[offset + 2]))
+            / 255.0;
+        let coverage = (mask_alpha * luminance).clamp(0.0, 1.0);
+        alpha[3] = (f32::from(alpha[3]) * coverage).clamp(0.0, 255.0).round() as u8;
+    }
+    Ok(())
+}
+
+/// Computes the device-space rectangle of a mask/filter region.
+fn mask_region_pixels(
+    layer: &Canvas,
+    effect: &EffectRef,
+    viewport: Transform,
+    x: &crate::document::RegionLength,
+    y: &crate::document::RegionLength,
+    width: &crate::document::RegionLength,
+    height: &crate::document::RegionLength,
+) -> Result<Option<(f32, f32, f32, f32)>, SvgError> {
+    let bbox = effect.bbox;
+    let (x, y, w, h) = if effect.units == Units::ObjectBoundingBox {
+        // In objectBoundingBox units plain numbers are fractions of the reference box.
+        let fraction = |value: &crate::document::RegionLength, base: f32| -> f32 {
+            match value {
+                crate::document::RegionLength::Number(number) => number * base,
+                crate::document::RegionLength::Percent(percent) => percent * base,
+            }
+        };
+        (
+            bbox.0 + fraction(x, bbox.2),
+            bbox.1 + fraction(y, bbox.3),
+            fraction(width, bbox.2),
+            fraction(height, bbox.3),
+        )
+    } else {
+        (
+            x.resolve(bbox.2),
+            y.resolve(bbox.3),
+            width.resolve(bbox.2),
+            height.resolve(bbox.3),
+        )
+    };
+    if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() || w <= 0.0 || h <= 0.0
+    {
+        return Ok(None);
+    }
+    let map = |px: f32, py: f32| {
+        let (rx, ry) = effect.transform.apply(px, py);
+        viewport.apply(rx, ry)
+    };
+    let corners = [map(x, y), map(x + w, y), map(x, y + h), map(x + w, y + h)];
+    let mut min_x = f32::INFINITY;
+    let mut min_y = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+    for (px, py) in corners {
+        if px.is_finite() && py.is_finite() {
+            min_x = min_x.min(px);
+            min_y = min_y.min(py);
+            max_x = max_x.max(px);
+            max_y = max_y.max(py);
+        }
+    }
+    if !min_x.is_finite() || !min_y.is_finite() {
+        return Ok(None);
+    }
+    let _ = layer;
+    Ok(Some((
+        min_x.clamp(0.0, layer.width as f32),
+        min_y.clamp(0.0, layer.height as f32),
+        max_x.clamp(0.0, layer.width as f32),
+        max_y.clamp(0.0, layer.height as f32),
+    )))
+}
+
+/// Applies a supported filter chain to the layer pixels (blur/offset/flood/composite).
+fn apply_filter(
+    layer: &mut Canvas,
+    spec: &FilterSpec,
+    effect: &EffectRef,
+    viewport: Transform,
+) -> Result<(), SvgError> {
+    if spec.primitives.is_empty() {
+        return Ok(());
+    }
+    let region = mask_region_pixels(
+        layer,
+        effect,
+        viewport,
+        &spec.x,
+        &spec.y,
+        &spec.width,
+        &spec.height,
+    )?;
+    let transform = viewport.then(effect.transform);
+    let scale = (transform.a * transform.d - transform.b * transform.c)
+        .abs()
+        .sqrt();
+    if !scale.is_finite() || scale <= 0.0 {
+        return Ok(());
+    }
+    let mut current = layer.pixels.clone();
+    let source = current.clone();
+    let mut flood_color: Option<(u8, u8, u8)> = None;
+    let mut flood_alpha = 0.0f32;
+    for primitive in &spec.primitives {
+        match primitive {
+            FilterPrimitive::GaussianBlur { std_deviation } => {
+                box_blur(
+                    &mut current,
+                    layer.width,
+                    layer.height,
+                    (*std_deviation * scale).max(0.0),
+                );
+            }
+            FilterPrimitive::Offset { dx, dy } => {
+                offset_pixels(
+                    &mut current,
+                    layer.width,
+                    layer.height,
+                    (dx * scale).round() as i32,
+                    (dy * scale).round() as i32,
+                );
+            }
+            FilterPrimitive::Flood { color, opacity } => {
+                flood_color = Some((color.r, color.g, color.b));
+                flood_alpha = (f32::from(color.a) / 255.0 * opacity).clamp(0.0, 1.0);
+            }
+            FilterPrimitive::Composite { operator } => {
+                let (r, g, b) = flood_color.unwrap_or((0, 0, 0));
+                let flood = if flood_color.is_some() {
+                    Some((r, g, b, flood_alpha))
+                } else {
+                    None
+                };
+                current = composite_images(&current, &source, &flood, *operator);
+            }
+        }
+    }
+    if let Some((x0, y0, x1, y1)) = region {
+        for y in 0..layer.height {
+            for x in 0..layer.width {
+                let inside = (x as f32 + 0.5) >= x0
+                    && (x as f32 + 0.5) < x1
+                    && (y as f32 + 0.5) >= y0
+                    && (y as f32 + 0.5) < y1;
+                if !inside {
+                    let offset = (y * layer.width + x) * 4;
+                    current[offset + 3] = 0;
+                }
+            }
+        }
+    }
+    layer.pixels = current;
+    Ok(())
+}
+
+/// Deterministic separable box blur (3 passes ≈ Gaussian) on straight RGBA pixels.
+fn box_blur(pixels: &mut [u8], width: usize, height: usize, sigma: f32) {
+    if width == 0 || height == 0 || !sigma.is_finite() || sigma <= 0.0 {
+        return;
+    }
+    // Three separable box passes (H+V each) approximate a Gaussian; pick the radius whose
+    // accumulated variance (6 * (2r+1)^2-1 / 12) matches sigma².
+    let radius = (((1.0 + 2.0 * sigma * sigma).sqrt() - 1.0) * 0.5).round() as u32;
+    let radius = radius.clamp(1, MAX_BLUR_RADIUS);
+    let area = width.saturating_mul(height);
+    // Anti-DoS: cap the per-pass sample budget by shrinking the radius for large layers.
+    let budget = 64_000_000u64;
+    let per_pass = area as u64 * u64::from(radius) * 2;
+    let radius = if per_pass == 0 {
+        return;
+    } else if per_pass > budget {
+        (budget / (area as u64 * 2)).max(1) as u32
+    } else {
+        radius
+    };
+    for _ in 0..3 {
+        blur_pass(pixels, width, height, radius, true);
+        blur_pass(pixels, width, height, radius, false);
+    }
+}
+
+fn blur_pass(pixels: &mut [u8], width: usize, height: usize, radius: u32, horizontal: bool) {
+    if radius == 0 {
+        return;
+    }
+    let mut temp = pixels.to_vec();
+    let length = if horizontal { width } else { height };
+    let lines = if horizontal { height } else { width };
+    let radius = radius as isize;
+    let window = (2 * radius + 1) as u32;
+    let clamp = |index: isize| -> usize { index.clamp(0, length as isize - 1) as usize };
+    for line in 0..lines {
+        let mut accum = [0u32; 4];
+        // Seed the window for the first pixel (edge-clamped).
+        for offset in -radius..=radius {
+            let index = clamp(offset);
+            let (x, y) = if horizontal {
+                (index, line)
+            } else {
+                (line, index)
+            };
+            let pixel = (y * width + x) * 4;
+            for channel in 0..4 {
+                accum[channel] += u32::from(pixels[pixel + channel]);
+            }
+        }
+        for offset in 0..length {
+            let (x, y) = if horizontal {
+                (offset, line)
+            } else {
+                (line, offset)
+            };
+            let pixel = (y * width + x) * 4;
+            for channel in 0..4 {
+                temp[pixel + channel] = (accum[channel] / window) as u8;
+            }
+            let remove = clamp(offset as isize - radius);
+            let add = clamp(offset as isize + radius + 1);
+            let (rx, ry) = if horizontal {
+                (remove, line)
+            } else {
+                (line, remove)
+            };
+            let (ax, ay) = if horizontal { (add, line) } else { (line, add) };
+            let remove_pixel = (ry * width + rx) * 4;
+            let add_pixel = (ay * width + ax) * 4;
+            for channel in 0..4 {
+                accum[channel] = accum[channel]
+                    .saturating_sub(u32::from(pixels[remove_pixel + channel]))
+                    .saturating_add(u32::from(pixels[add_pixel + channel]));
+            }
+        }
+    }
+    pixels.copy_from_slice(&temp);
+}
+
+fn offset_pixels(pixels: &mut [u8], width: usize, height: usize, dx: i32, dy: i32) {
+    let source = pixels.to_vec();
+    pixels.fill(0);
+    for y in 0..height as i32 {
+        for x in 0..width as i32 {
+            let sx = x - dx;
+            let sy = y - dy;
+            if sx < 0 || sy < 0 || sx >= width as i32 || sy >= height as i32 {
+                continue;
+            }
+            let source_index = (sy as usize * width + sx as usize) * 4;
+            let target_index = (y as usize * width + x as usize) * 4;
+            pixels[target_index..target_index + 4]
+                .copy_from_slice(&source[source_index..source_index + 4]);
+        }
+    }
+}
+
+/// Simplified `feComposite` subset (over/in/out/atop) between the current result, the
+/// source graphic and an optional flood layer.
+fn composite_images(
+    current: &[u8],
+    source: &[u8],
+    flood: &Option<(u8, u8, u8, f32)>,
+    operator: CompositeOperator,
+) -> Vec<u8> {
+    let mut out = vec![0u8; current.len()];
+    for index in 0..current.len() / 4 {
+        let offset = index * 4;
+        let (r, g, b, a) = match flood {
+            Some((fr, fg, fb, fa)) => (*fr, *fg, *fb, *fa),
+            None => (
+                source[offset],
+                source[offset + 1],
+                source[offset + 2],
+                f32::from(source[offset + 3]) / 255.0,
+            ),
+        };
+        let ca = f32::from(current[offset + 3]) / 255.0;
+        let out_alpha = match operator {
+            CompositeOperator::Over => a + ca * (1.0 - a),
+            CompositeOperator::In => ca * a,
+            CompositeOperator::Out => ca * (1.0 - a),
+            CompositeOperator::Atop => a * ca,
+        }
+        .clamp(0.0, 1.0);
+        if out_alpha <= 0.0 {
+            continue;
+        }
+        out[offset] = r;
+        out[offset + 1] = g;
+        out[offset + 2] = b;
+        out[offset + 3] = (out_alpha * 255.0).round() as u8;
+    }
+    out
 }
 
 /// Draws a `<text>` element: per-glyph advance positioning (no shaping/kerning),
@@ -482,6 +930,23 @@ impl Canvas {
             height,
             pixels: vec![0u8; pixel_count * 4],
             coverage: vec![0.0f32; pixel_count],
+        }
+    }
+
+    /// Composites another canvas's straight-RGBA pixels over this one (source-over).
+    fn composite_layer(&mut self, layer: &Canvas) {
+        for (index, pixel) in layer.pixels.as_chunks::<4>().0.iter().enumerate() {
+            let alpha = f32::from(pixel[3]) / 255.0;
+            if alpha <= 0.0 {
+                continue;
+            }
+            let color = Color {
+                r: pixel[0],
+                g: pixel[1],
+                b: pixel[2],
+                a: 255,
+            };
+            composite_pixel(&mut self.pixels, index * 4, color, alpha);
         }
     }
 

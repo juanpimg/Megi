@@ -11,9 +11,10 @@
 //!   elements, quoted attributes, XML entities (named + numeric), namespaces
 //!   (prefixes are ignored and only the local name is used).
 //! * Elements: `svg`, `g`, `defs`, `use`, `rect` (`rx`/`ry`), `circle`,
-//!   `ellipse`, `line`, `polyline`, `polygon`, `path`; `title`/`desc` and other
-//!   unknown elements are ignored. `text` is **not supported** (documented; it
-//!   renders as nothing).
+//!   `ellipse`, `line`, `polyline`, `polygon`, `path`, `text` (per-glyph advance
+//!   positioning; `<textPath>` is not supported), `defs`/`use`, and the effect
+//!   containers `clipPath`, `mask` and `filter`; `title`/`desc` and other unknown
+//!   elements are ignored.
 //! * Path data: `M/m L/l H/h V/v C/c S/s Q/q T/t A/a Z/z`, implicit repeated
 //!   commands, compact numbers, elliptical arcs converted to cubic Béziers.
 //! * Painting: `fill` (non-zero and even-odd), `stroke` with width, line cap
@@ -22,8 +23,10 @@
 //!   `transform` (`matrix`/`translate`/`scale`/`rotate`/`skewX`/`skewY`),
 //!   `viewBox` + `preserveAspectRatio` (`none`/`meet`/`slice` + alignment),
 //!   colours (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`, the
-//!   16 basic named colours plus `transparent`/`currentColor`) and the
-//!   presentation attributes or an inline `style="fill:...;stroke:..."`.
+//!   16 basic named colours plus `transparent`/`currentColor`), the
+//!   presentation attributes or an inline `style="fill:...;stroke:..."`, and
+//!   **effects**: `clip-path="url(#id)"`, `mask="url(#id)"` and
+//!   `filter="url(#id)"` on shapes and groups (inherited by descendants).
 //! * **CSS inside the SVG**: `<style>` blocks with type/class/id compound
 //!   selectors, descendant combinators and selector lists; cascade by simple
 //!   specificity and source order (inline style beats CSS, which beats
@@ -32,12 +35,25 @@
 //!   `gradientUnits`, `spreadMethod`, `gradientTransform` and `href`
 //!   inheritance, referenced by `fill`/`stroke` through `url(#id)`.
 //!
-//! ## Not supported (documented limitations)
+//! ## Effects and documented limitations
 //!
-//! `<pattern>` (`fill="url(#pattern)"` renders as no paint), `@` rules and
-//! child/sibling/pseudo-class selectors, `<text>`, filters, masks, clip paths,
-//! markers, `stroke-dasharray`, `vector-effect`, script, animation and external
-//! references (no network/FS).
+//! * **`clipPath`**: shapes/paths/`use` children, `clipPathUnits`
+//!   (`userSpaceOnUse`/`objectBoundingBox`), applied to shapes and groups
+//!   (nested clips intersect). Clip geometry uses each child's **fill**
+//!   geometry (stroke-only clip children are not included); cyclic references
+//!   are dropped without panic.
+//! * **`mask`**: `maskUnits`/`maskContentUnits`, luminance mask type (alpha
+//!   masks are not selectable), content with solid/gradient paints; the mask
+//!   region is multiplied into the layer alpha. Group masks are applied per
+//!   flattened descendant shape (group compositing approximation).
+//! * **Filters**: `feGaussianBlur` (deterministic separable box blur ×3),
+//!   `feOffset`, and the `feFlood` + `feComposite` subset
+//!   (`over`/`in`/`out`/`atop`); `filterUnits` and the x/y/width/height region
+//!   are honoured. `feColorMatrix`, `feBlend`, `feMerge`, `feTile`, `feImage`
+//!   and other primitives are **ignored** (documented subset).
+//! * Also not supported: `<textPath>`, `@` rules and child/sibling/pseudo-class
+//!   selectors, markers, `stroke-dasharray`, `vector-effect`, script, animation
+//!   and external references (no network/FS).
 //!
 //! ## Supported CSS, gradients and limits
 //!
@@ -60,7 +76,10 @@
 //! No `unsafe`. All input goes through bounded parsing with explicit anti-DoS
 //! limits ([`Limits`]); the CSS/gradient layers add internal caps too:
 //! **1 MiB of stylesheet, 4,096 rules, 64 selectors per rule, 16 descendant
-//! compounds, 256 stops per gradient and 32 gradient-reference hops**. Input
+//! compounds, 256 stops per gradient and 32 gradient-reference hops**, plus
+//! **4,096 shapes per clipPath/mask, 16 filter primitives, blur radius 64 px and
+//! a 64M-sample blur budget (radius shrinks for large layers)**. Clip-path/use
+//! cycles and filter/mask reference cycles are dropped without panicking. Input
 //! bytes, element depth/count, attribute count, path segments, image side and
 //! pixel count stay bounded by [`Limits`]. Arbitrary or hostile input can only
 //! produce an [`SvgError`], never a panic, an abort, unbounded recursion or an

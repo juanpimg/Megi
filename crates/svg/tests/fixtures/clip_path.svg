@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80">
+  <defs>
+    <clipPath id="rounded">
+      <rect x="20" y="10" width="80" height="60" rx="12"/>
+    </clipPath>
+    <clipPath id="unit" clipPathUnits="objectBoundingBox">
+      <circle cx="0.5" cy="0.5" r="0.45"/>
+    </clipPath>
+  </defs>
+  <rect width="120" height="80" fill="#ffffff"/>
+  <g clip-path="url(#rounded)">
+    <rect width="120" height="80" fill="#1e88e5"/>
+    <circle cx="60" cy="40" r="28" fill="#ffb300"/>
+  </g>
+  <rect x="40" y="30" width="40" height="40" fill="#43a047" clip-path="url(#unit)"/>
+</svg>
