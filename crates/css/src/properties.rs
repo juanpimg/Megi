@@ -670,6 +670,71 @@ impl BorderStyle {
     }
 }
 
+/// Static property-name tables for the four-sided `margin`/`padding` properties.
+///
+/// Used by [`ComputedStyle::compute_edges`]; static names avoid one `format!` allocation per
+/// lookup on the style-resolution hot path.
+struct EdgeProperties {
+    shorthand: &'static str,
+    block: &'static str,
+    inline: &'static str,
+    longhands: [&'static str; 4],
+}
+
+const MARGIN_PROPERTIES: EdgeProperties = EdgeProperties {
+    shorthand: "margin",
+    block: "margin-block",
+    inline: "margin-inline",
+    longhands: ["margin-top", "margin-right", "margin-bottom", "margin-left"],
+};
+
+const PADDING_PROPERTIES: EdgeProperties = EdgeProperties {
+    shorthand: "padding",
+    block: "padding-block",
+    inline: "padding-inline",
+    longhands: [
+        "padding-top",
+        "padding-right",
+        "padding-bottom",
+        "padding-left",
+    ],
+};
+
+/// Static property-name table for the per-side border shorthand and longhands.
+struct BorderSideProperties {
+    shorthand: &'static str,
+    width: &'static str,
+    style: &'static str,
+    color: &'static str,
+}
+
+const BORDER_SIDE_PROPERTIES: [BorderSideProperties; 4] = [
+    BorderSideProperties {
+        shorthand: "border-top",
+        width: "border-top-width",
+        style: "border-top-style",
+        color: "border-top-color",
+    },
+    BorderSideProperties {
+        shorthand: "border-right",
+        width: "border-right-width",
+        style: "border-right-style",
+        color: "border-right-color",
+    },
+    BorderSideProperties {
+        shorthand: "border-bottom",
+        width: "border-bottom-width",
+        style: "border-bottom-style",
+        color: "border-bottom-color",
+    },
+    BorderSideProperties {
+        shorthand: "border-left",
+        width: "border-left-width",
+        style: "border-left-style",
+        color: "border-left-color",
+    },
+];
+
 /// 4-sided box dimension (margins, paddings, borders).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RectEdges<T> {
@@ -731,6 +796,12 @@ pub struct ComputedStyle {
     pub font_style: FontStyle,
     pub font_family: String,
     pub line_height: Option<f32>,
+    /// Unitless `<number>` factor when `line-height` was declared as a number (`1.5`).
+    ///
+    /// `line_height` keeps the computed px value for backwards compatibility; layout uses this
+    /// factor to re-resolve the used value as `factor * font-size` for every descendant, as
+    /// required by CSS 2.2 §10.8.1 when a numeric `line-height` is inherited.
+    pub line_height_factor: Option<f32>,
     pub text_align: TextAlign,
     pub white_space: WhiteSpace,
     pub vertical_align: VerticalAlign,
@@ -746,6 +817,20 @@ impl Default for ComputedStyle {
     fn default() -> Self {
         Self::initial()
     }
+}
+
+/// Linear lookup over the cascaded declarations of one element.
+///
+/// The cascaded map is tiny (a handful of longhands per element) but `ComputedStyle::compute`
+/// performs a few dozen lookups; scanning a flat slice of the map entries avoids one SipHash
+/// per lookup on the style-resolution hot path.
+pub(crate) fn find_declaration<'a>(
+    entries: &[(&'a str, &'a Declaration)],
+    name: &str,
+) -> Option<&'a Declaration> {
+    entries
+        .iter()
+        .find_map(|(key, declaration)| (*key == name).then_some(*declaration))
 }
 
 impl ComputedStyle {
@@ -785,6 +870,7 @@ impl ComputedStyle {
             font_style: FontStyle::Normal,
             font_family: "sans-serif".to_string(),
             line_height: None,
+            line_height_factor: None,
             text_align: TextAlign::Left,
             white_space: WhiteSpace::Normal,
             vertical_align: VerticalAlign::Baseline,
@@ -802,72 +888,84 @@ impl ComputedStyle {
         parent: Option<&ComputedStyle>,
         root_style: Option<&ComputedStyle>,
     ) -> Self {
+        let entries: Vec<(&str, &Declaration)> = cascaded
+            .iter()
+            .map(|(name, declaration)| (name.as_str(), *declaration))
+            .collect();
         let root_font_size = root_style.map_or(16.0, |r| r.font_size);
         let parent_font_size = parent.map_or(16.0, |p| p.font_size);
 
         // 1. Compute font-size first because em units depend on it
-        let font_size = if let Some(decl) = cascaded.get("font-size") {
+        let font_size = if let Some(decl) = find_declaration(&entries, "font-size") {
             Self::compute_font_size(&decl.raw_value, parent_font_size, root_font_size)
         } else {
             parent_font_size
         };
 
         // 2. Inherited properties
-        let color = if let Some(decl) = cascaded.get("color") {
+        let color = if let Some(decl) = find_declaration(&entries, "color") {
             Color::parse(&decl.raw_value)
                 .unwrap_or_else(|| parent.map_or(Color::BLACK, |p| p.color))
         } else {
             parent.map_or(Color::BLACK, |p| p.color)
         };
 
-        let font_weight = if let Some(decl) = cascaded.get("font-weight") {
+        let font_weight = if let Some(decl) = find_declaration(&entries, "font-weight") {
             Self::parse_font_weight(&decl.raw_value)
         } else {
             parent.map_or(400, |p| p.font_weight)
         };
 
-        let font_style = if let Some(decl) = cascaded.get("font-style") {
+        let font_style = if let Some(decl) = find_declaration(&entries, "font-style") {
             FontStyle::parse(&decl.raw_value)
                 .unwrap_or_else(|| parent.map_or(FontStyle::Normal, |p| p.font_style))
         } else {
             parent.map_or(FontStyle::Normal, |p| p.font_style)
         };
 
-        let font_family = if let Some(decl) = cascaded.get("font-family") {
+        let font_family = if let Some(decl) = find_declaration(&entries, "font-family") {
             decl.raw_value.clone()
         } else {
             parent.map_or_else(|| "sans-serif".to_string(), |p| p.font_family.clone())
         };
 
-        let text_align = if let Some(decl) = cascaded.get("text-align") {
+        let text_align = if let Some(decl) = find_declaration(&entries, "text-align") {
             TextAlign::parse(&decl.raw_value)
                 .unwrap_or_else(|| parent.map_or(TextAlign::Left, |p| p.text_align))
         } else {
             parent.map_or(TextAlign::Left, |p| p.text_align)
         };
 
-        let line_height = if let Some(decl) = cascaded.get("line-height") {
-            Self::parse_line_height(&decl.raw_value, font_size)
-        } else {
-            parent.and_then(|p| p.line_height)
-        };
+        let (line_height, line_height_factor) =
+            if let Some(decl) = find_declaration(&entries, "line-height") {
+                match Self::parse_line_height_factor(&decl.raw_value) {
+                    Some(factor) => (Some(factor * font_size), Some(factor)),
+                    None => (Self::parse_line_height(&decl.raw_value, font_size), None),
+                }
+            } else {
+                // Inherited: the px value is kept as before and the numeric factor (if any) is
+                // propagated so layout can re-resolve `factor * font-size` per descendant.
+                (
+                    parent.and_then(|p| p.line_height),
+                    parent.and_then(|p| p.line_height_factor),
+                )
+            };
 
-        let white_space = if let Some(decl) = cascaded.get("white-space") {
+        let white_space = if let Some(decl) = find_declaration(&entries, "white-space") {
             WhiteSpace::parse(&decl.raw_value)
                 .unwrap_or_else(|| parent.map_or(WhiteSpace::Normal, |p| p.white_space))
         } else {
             parent.map_or(WhiteSpace::Normal, |p| p.white_space)
         };
 
-        let visibility = cascaded
-            .get("visibility")
+        let visibility = find_declaration(&entries, "visibility")
             .and_then(|d| Visibility::parse(&d.raw_value))
             .unwrap_or_else(|| parent.map_or(Visibility::Visible, |p| p.visibility));
 
-        let list_style_type = if let Some(decl) = cascaded.get("list-style-type") {
+        let list_style_type = if let Some(decl) = find_declaration(&entries, "list-style-type") {
             ListStyleType::parse(&decl.raw_value)
                 .unwrap_or_else(|| parent.map_or(ListStyleType::Disc, |p| p.list_style_type))
-        } else if let Some(decl) = cascaded.get("list-style") {
+        } else if let Some(decl) = find_declaration(&entries, "list-style") {
             split_components(&decl.raw_value)
                 .iter()
                 .find_map(|component| ListStyleType::parse(component))
@@ -877,102 +975,83 @@ impl ComputedStyle {
         };
 
         // 3. Non-inherited properties
-        let vertical_align = cascaded
-            .get("vertical-align")
+        let vertical_align = find_declaration(&entries, "vertical-align")
             .and_then(|d| VerticalAlign::parse(&d.raw_value))
             .unwrap_or(VerticalAlign::Baseline);
 
-        let text_decoration = cascaded
-            .get("text-decoration-line")
-            .or_else(|| cascaded.get("text-decoration"))
+        let text_decoration = find_declaration(&entries, "text-decoration-line")
+            .or_else(|| find_declaration(&entries, "text-decoration"))
             .and_then(|d| TextDecoration::parse(&d.raw_value))
             .unwrap_or(TextDecoration::NONE);
 
-        let display = cascaded
-            .get("display")
+        let display = find_declaration(&entries, "display")
             .and_then(|d| Display::parse(&d.raw_value))
             .unwrap_or(Display::Inline);
 
-        let position = cascaded
-            .get("position")
+        let position = find_declaration(&entries, "position")
             .and_then(|d| Position::parse(&d.raw_value))
             .unwrap_or(Position::Static);
 
-        let float = cascaded
-            .get("float")
+        let float = find_declaration(&entries, "float")
             .and_then(|d| Float::parse(&d.raw_value))
             .unwrap_or(Float::None);
 
-        let clear = cascaded
-            .get("clear")
+        let clear = find_declaration(&entries, "clear")
             .and_then(|d| Clear::parse(&d.raw_value))
             .unwrap_or(Clear::None);
 
-        let box_sizing = cascaded
-            .get("box-sizing")
+        let box_sizing = find_declaration(&entries, "box-sizing")
             .and_then(|d| BoxSizing::parse(&d.raw_value))
             .unwrap_or(BoxSizing::ContentBox);
 
-        let background_color = Self::compute_background_color(cascaded, color);
+        let background_color = Self::compute_background_color(&entries, color);
 
-        let width = cascaded
-            .get("width")
+        let width = find_declaration(&entries, "width")
             .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
-        let height = cascaded
-            .get("height")
+        let height = find_declaration(&entries, "height")
             .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
-        let min_width = cascaded
-            .get("min-width")
+        let min_width = find_declaration(&entries, "min-width")
             .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
-        let max_width = cascaded
-            .get("max-width")
+        let max_width = find_declaration(&entries, "max-width")
             .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
-        let min_height = cascaded
-            .get("min-height")
+        let min_height = find_declaration(&entries, "min-height")
             .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
-        let max_height = cascaded
-            .get("max-height")
+        let max_height = find_declaration(&entries, "max-height")
             .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
-        let top = cascaded
-            .get("top")
+        let top = find_declaration(&entries, "top")
             .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
-        let right = cascaded
-            .get("right")
+        let right = find_declaration(&entries, "right")
             .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
-        let bottom = cascaded
-            .get("bottom")
+        let bottom = find_declaration(&entries, "bottom")
             .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
-        let left = cascaded
-            .get("left")
+        let left = find_declaration(&entries, "left")
             .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
-        let z_index = cascaded
-            .get("z-index")
+        let z_index = find_declaration(&entries, "z-index")
             .and_then(|d| d.raw_value.trim().parse::<i32>().ok());
 
         // `overflow` is a shorthand for `overflow-x`/`overflow-y`; only the block-start
         // (first) value is stored until layout learns to clip on both axes independently.
-        let overflow = cascaded
-            .get("overflow")
+        let overflow = find_declaration(&entries, "overflow")
             .and_then(|d| {
                 split_components(&d.raw_value)
                     .first()
@@ -980,21 +1059,18 @@ impl ComputedStyle {
             })
             .unwrap_or(Overflow::Visible);
 
-        let opacity = cascaded
-            .get("opacity")
+        let opacity = find_declaration(&entries, "opacity")
             .and_then(|d| d.raw_value.trim().parse::<f32>().ok())
             .map(|val| val.clamp(0.0, 1.0))
             .unwrap_or(1.0);
 
         // Margins & Paddings
-        let margin =
-            Self::compute_edges(cascaded, "margin", font_size, root_font_size, Length::ZERO);
-        let padding =
-            Self::compute_edges(cascaded, "padding", font_size, root_font_size, Length::ZERO);
+        let margin = Self::compute_edges(&entries, &MARGIN_PROPERTIES, font_size, root_font_size);
+        let padding = Self::compute_edges(&entries, &PADDING_PROPERTIES, font_size, root_font_size);
 
         // Borders
         let (border_width, border_color, border_style) =
-            Self::compute_borders(cascaded, font_size, root_font_size, color);
+            Self::compute_borders(&entries, font_size, root_font_size, color);
 
         Self {
             display,
@@ -1026,6 +1102,7 @@ impl ComputedStyle {
             font_style,
             font_family,
             line_height,
+            line_height_factor,
             text_align,
             white_space,
             vertical_align,
@@ -1044,6 +1121,7 @@ impl ComputedStyle {
         self.font_style = parent.font_style;
         self.font_family = parent.font_family.clone();
         self.line_height = parent.line_height;
+        self.line_height_factor = parent.line_height_factor;
         self.text_align = parent.text_align;
         self.white_space = parent.white_space;
         self.visibility = parent.visibility;
@@ -1090,6 +1168,15 @@ impl ComputedStyle {
         }
     }
 
+    /// Returns the unitless `<number>` factor of a `line-height` declaration, if any.
+    fn parse_line_height_factor(val: &str) -> Option<f32> {
+        let val = val.trim();
+        if val.eq_ignore_ascii_case("normal") || val.ends_with('%') {
+            return None;
+        }
+        val.parse::<f32>().ok().filter(|factor| *factor >= 0.0)
+    }
+
     fn parse_line_height(val: &str, font_size: f32) -> Option<f32> {
         let val = val.trim().to_ascii_lowercase();
         if val == "normal" {
@@ -1098,30 +1185,37 @@ impl ComputedStyle {
         if let Ok(factor) = val.parse::<f32>() {
             return Some(factor * font_size);
         }
-        if let Some(Length::Px(px)) = Length::parse(&val, font_size, font_size) {
-            return Some(px);
+        match Length::parse(&val, font_size, font_size) {
+            Some(Length::Px(px)) => Some(px),
+            // CSS 2.2 §10.8.1: percentage line-height computes against the element font-size.
+            Some(Length::Percent(pct)) => Some(font_size * pct / 100.0),
+            _ => None,
         }
-        None
     }
 
     fn compute_edges(
-        cascaded: &HashMap<String, &Declaration>,
-        prop: &str,
+        entries: &[(&str, &Declaration)],
+        names: &EdgeProperties,
         font_size: f32,
         root_font_size: f32,
-        default: Length,
     ) -> RectEdges<Length> {
-        let mut edges = RectEdges::all(default);
+        let mut edges = RectEdges::all(Length::ZERO);
 
-        // 1. Shorthand (e.g. `margin: 8px` or `margin: 10px 20px`)
-        if let Some(decl) = cascaded.get(prop) {
-            let parts: Vec<&str> = decl.raw_value.split_ascii_whitespace().collect();
-            let parsed: Vec<Length> = parts
-                .iter()
-                .filter_map(|p| Length::parse(p, font_size, root_font_size))
-                .collect();
-
-            match parsed.len() {
+        // 1. Shorthand (e.g. `margin: 8px` or `margin: 10px 20px`). Shorthands are normally
+        //    expanded before the cascade; this keeps direct `compute` callers working.
+        if let Some(decl) = find_declaration(entries, names.shorthand) {
+            let mut parsed = [Length::ZERO; 4];
+            let mut count = 0usize;
+            for component in decl.raw_value.split_ascii_whitespace() {
+                let Some(length) = Length::parse(component, font_size, root_font_size) else {
+                    break;
+                };
+                if count < parsed.len() {
+                    parsed[count] = length;
+                }
+                count += 1;
+            }
+            match count {
                 1 => edges = RectEdges::all(parsed[0]),
                 2 => {
                     edges.top = parsed[0];
@@ -1145,49 +1239,36 @@ impl ComputedStyle {
             }
         }
 
-        // 2. Logical block/inline properties (e.g. `margin-block: 1em`)
-        let block_prop = format!("{prop}-block");
-        if let Some(decl) = cascaded.get(&block_prop)
-            && let Some(len) = Length::parse(&decl.raw_value, font_size, root_font_size)
+        // 2. Logical block/inline properties (e.g. `margin-block: 1em`).
+        if let Some(decl) = find_declaration(entries, names.block)
+            && let Some(length) = Length::parse(&decl.raw_value, font_size, root_font_size)
         {
-            edges.top = len;
-            edges.bottom = len;
+            edges.top = length;
+            edges.bottom = length;
         }
-        let inline_prop = format!("{prop}-inline");
-        if let Some(decl) = cascaded.get(&inline_prop)
-            && let Some(len) = Length::parse(&decl.raw_value, font_size, root_font_size)
+        if let Some(decl) = find_declaration(entries, names.inline)
+            && let Some(length) = Length::parse(&decl.raw_value, font_size, root_font_size)
         {
-            edges.left = len;
-            edges.right = len;
+            edges.left = length;
+            edges.right = length;
         }
 
-        // 3. Specific longhands (e.g. `margin-top`)
-        let top_prop = format!("{prop}-top");
-        if let Some(decl) = cascaded.get(&top_prop)
-            && let Some(len) = Length::parse(&decl.raw_value, font_size, root_font_size)
-        {
-            edges.top = len;
-        }
-        let right_prop = format!("{prop}-right");
-        if let Some(decl) = cascaded.get(&right_prop)
-            && let Some(len) = Length::parse(&decl.raw_value, font_size, root_font_size)
-        {
-            edges.right = len;
-        }
-        let bottom_prop = format!("{prop}-bottom");
-        if let Some(decl) = cascaded.get(&bottom_prop)
-            && let Some(len) = Length::parse(&decl.raw_value, font_size, root_font_size)
-        {
-            edges.bottom = len;
-        }
-        let left_prop = format!("{prop}-left");
-        if let Some(decl) = cascaded.get(&left_prop)
-            && let Some(len) = Length::parse(&decl.raw_value, font_size, root_font_size)
-        {
-            edges.left = len;
+        // 3. Specific longhands (e.g. `margin-top`), via a static name table.
+        let mut sides = [edges.top, edges.right, edges.bottom, edges.left];
+        for (index, name) in names.longhands.iter().enumerate() {
+            if let Some(decl) = find_declaration(entries, name)
+                && let Some(length) = Length::parse(&decl.raw_value, font_size, root_font_size)
+            {
+                sides[index] = length;
+            }
         }
 
-        edges
+        RectEdges {
+            top: sides[0],
+            right: sides[1],
+            bottom: sides[2],
+            left: sides[3],
+        }
     }
 
     /// Extracts the background color from `background-color` or the `background` shorthand.
@@ -1195,16 +1276,13 @@ impl ComputedStyle {
     /// The `background` shorthand accepts a `<color>` in any position (CSS Backgrounds 3 §3:
     /// e.g. `background: #eee`, `background: url(bg.png) no-repeat red`); a missing or
     /// unsupported color component computes to `transparent`.
-    fn compute_background_color(
-        cascaded: &HashMap<String, &Declaration>,
-        current_color: Color,
-    ) -> Color {
-        if let Some(decl) = cascaded.get("background-color")
+    fn compute_background_color(entries: &[(&str, &Declaration)], current_color: Color) -> Color {
+        if let Some(decl) = find_declaration(entries, "background-color")
             && let Some(color) = parse_color_component(&decl.raw_value, current_color)
         {
             return color;
         }
-        if let Some(decl) = cascaded.get("background")
+        if let Some(decl) = find_declaration(entries, "background")
             && let Some(color) = split_components(&decl.raw_value)
                 .iter()
                 .find_map(|component| parse_color_component(component, current_color))
@@ -1231,70 +1309,54 @@ impl ComputedStyle {
     /// width of zero when the computed style of that side is `none` or `hidden`, which
     /// suppresses the phantom borders previously painted for `border-style: none` elements.
     fn compute_borders(
-        cascaded: &HashMap<String, &Declaration>,
+        entries: &[(&str, &Declaration)],
         font_size: f32,
         root_font_size: f32,
         current_color: Color,
     ) -> (RectEdges<f32>, RectEdges<Color>, RectEdges<BorderStyle>) {
         /// CSS 2.2 §8.5.1 initial `border-width` value (`medium`).
         const INITIAL_BORDER_WIDTH: f32 = 3.0;
-        let mut widths = RectEdges::all(INITIAL_BORDER_WIDTH);
-        let mut styles = RectEdges::all(BorderStyle::None);
-        let mut colors = RectEdges::all(current_color);
+        let mut widths = [INITIAL_BORDER_WIDTH; 4];
+        let mut styles = [BorderStyle::None; 4];
+        let mut colors = [current_color; 4];
 
         // 1. The four-sided `border` shorthand.
-        if let Some(decl) = cascaded.get("border")
+        if let Some(decl) = find_declaration(entries, "border")
             && let Some(spec) =
                 parse_border_shorthand(&decl.raw_value, font_size, root_font_size, current_color)
         {
             if let Some(width) = spec.width {
-                widths = RectEdges::all(width);
+                widths = [width; 4];
             }
             if let Some(style) = spec.style {
-                styles = RectEdges::all(style);
+                styles = [style; 4];
             }
             if let Some(color) = spec.color {
-                colors = RectEdges::all(color);
+                colors = [color; 4];
             }
         }
 
         // 2. One-to-four-value `border-width` / `border-style` / `border-color` shorthands.
-        if let Some(decl) = cascaded.get("border-width")
+        if let Some(decl) = find_declaration(entries, "border-width")
             && let Some(edges) =
                 parse_border_width_edges(&decl.raw_value, font_size, root_font_size)
         {
-            widths = edges;
+            widths = [edges.top, edges.right, edges.bottom, edges.left];
         }
-        if let Some(decl) = cascaded.get("border-style")
+        if let Some(decl) = find_declaration(entries, "border-style")
             && let Some(edges) = parse_border_style_edges(&decl.raw_value)
         {
-            styles = edges;
+            styles = [edges.top, edges.right, edges.bottom, edges.left];
         }
-        if let Some(decl) = cascaded.get("border-color")
+        if let Some(decl) = find_declaration(entries, "border-color")
             && let Some(edges) = parse_border_color_edges(&decl.raw_value, current_color)
         {
-            colors = edges;
+            colors = [edges.top, edges.right, edges.bottom, edges.left];
         }
 
         // 3. Per-side shorthands and longhands (the latter win, as they are more specific).
-        for (side, width, style, color) in [
-            ("top", &mut widths.top, &mut styles.top, &mut colors.top),
-            (
-                "right",
-                &mut widths.right,
-                &mut styles.right,
-                &mut colors.right,
-            ),
-            (
-                "bottom",
-                &mut widths.bottom,
-                &mut styles.bottom,
-                &mut colors.bottom,
-            ),
-            ("left", &mut widths.left, &mut styles.left, &mut colors.left),
-        ] {
-            let shorthand_prop = format!("border-{side}");
-            if let Some(decl) = cascaded.get(&shorthand_prop)
+        for (index, side) in BORDER_SIDE_PROPERTIES.iter().enumerate() {
+            if let Some(decl) = find_declaration(entries, side.shorthand)
                 && let Some(spec) = parse_border_shorthand(
                     &decl.raw_value,
                     font_size,
@@ -1302,34 +1364,30 @@ impl ComputedStyle {
                     current_color,
                 )
             {
-                if let Some(w) = spec.width {
-                    *width = w;
+                if let Some(width) = spec.width {
+                    widths[index] = width;
                 }
-                if let Some(s) = spec.style {
-                    *style = s;
+                if let Some(style) = spec.style {
+                    styles[index] = style;
                 }
-                if let Some(c) = spec.color {
-                    *color = c;
+                if let Some(color) = spec.color {
+                    colors[index] = color;
                 }
             }
-
-            let width_prop = format!("border-{side}-width");
-            if let Some(decl) = cascaded.get(&width_prop)
-                && let Some(w) = parse_border_width(&decl.raw_value, font_size, root_font_size)
+            if let Some(decl) = find_declaration(entries, side.width)
+                && let Some(width) = parse_border_width(&decl.raw_value, font_size, root_font_size)
             {
-                *width = w;
+                widths[index] = width;
             }
-            let style_prop = format!("border-{side}-style");
-            if let Some(decl) = cascaded.get(&style_prop)
-                && let Some(s) = BorderStyle::parse(&decl.raw_value)
+            if let Some(decl) = find_declaration(entries, side.style)
+                && let Some(style) = BorderStyle::parse(&decl.raw_value)
             {
-                *style = s;
+                styles[index] = style;
             }
-            let color_prop = format!("border-{side}-color");
-            if let Some(decl) = cascaded.get(&color_prop)
-                && let Some(c) = parse_color_component(&decl.raw_value, current_color)
+            if let Some(decl) = find_declaration(entries, side.color)
+                && let Some(color) = parse_color_component(&decl.raw_value, current_color)
             {
-                *color = c;
+                colors[index] = color;
             }
         }
 
@@ -1339,13 +1397,27 @@ impl ComputedStyle {
             _ => width,
         };
         let widths = RectEdges {
-            top: width_or_zero(styles.top, widths.top),
-            right: width_or_zero(styles.right, widths.right),
-            bottom: width_or_zero(styles.bottom, widths.bottom),
-            left: width_or_zero(styles.left, widths.left),
+            top: width_or_zero(styles[0], widths[0]),
+            right: width_or_zero(styles[1], widths[1]),
+            bottom: width_or_zero(styles[2], widths[2]),
+            left: width_or_zero(styles[3], widths[3]),
         };
 
-        (widths, colors, styles)
+        (
+            widths,
+            RectEdges {
+                top: colors[0],
+                right: colors[1],
+                bottom: colors[2],
+                left: colors[3],
+            },
+            RectEdges {
+                top: styles[0],
+                right: styles[1],
+                bottom: styles[2],
+                left: styles[3],
+            },
+        )
     }
 }
 

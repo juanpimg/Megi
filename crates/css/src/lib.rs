@@ -1084,4 +1084,114 @@ mod tests {
         let styles = resolve_document_styles(&doc, Some(css));
         assert_eq!(styles.get(&p).unwrap().color, Color::BLACK);
     }
+    #[test]
+    fn test_line_height_number_factor_and_inheritance() {
+        // Parent: font-size 16px, line-height 1.5 (unitless factor, computed px 24).
+        let (parent, child) = style_pair("font-size: 16px; line-height: 1.5;", "font-size: 32px;");
+        assert_eq!(parent.line_height, Some(24.0));
+        assert_eq!(parent.line_height_factor, Some(1.5));
+
+        // The child inherits the *factor*; layout re-resolves 1.5 * 32px = 48px. CSS keeps the
+        // inherited computed px (24) for backwards compatibility.
+        assert_eq!(child.line_height_factor, Some(1.5));
+        assert_eq!(child.line_height, Some(24.0));
+
+        // Absolute lengths and `normal` are not factors.
+        let px = style_with_inline("div", "line-height: 24px;");
+        assert_eq!(px.line_height, Some(24.0));
+        assert_eq!(px.line_height_factor, None);
+
+        let normal = style_with_inline("div", "line-height: normal;");
+        assert_eq!(normal.line_height, Some(16.0 * 1.2));
+        assert_eq!(normal.line_height_factor, None);
+
+        // Percentages now compute against the element font-size (and are not a factor).
+        let pct = style_with_inline("div", "font-size: 20px; line-height: 150%;");
+        assert_eq!(pct.line_height, Some(30.0));
+        assert_eq!(pct.line_height_factor, None);
+
+        // `inherit_from` copies the factor too.
+        let mut inherited = ComputedStyle::initial();
+        inherited.inherit_from(&parent);
+        assert_eq!(inherited.line_height_factor, Some(1.5));
+        assert_eq!(inherited.line_height, Some(24.0));
+    }
+
+    #[test]
+    fn test_cascade_details_inline_important_root_and_attribute_operators() {
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", vec![]);
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        doc.append_child(doc.root(), html);
+        doc.append_child(html, body);
+
+        // Inline `!important` beats an author `!important` declaration (inline specificity).
+        let important = doc.create_element(
+            Namespace::Html,
+            "div",
+            vec![Attribute::new("style", "color: red !important;")],
+        );
+        doc.append_child(body, important);
+        let styles = resolve_document_styles(&doc, Some("div { color: blue !important; }"));
+        assert_eq!(styles.get(&important).expect("style").color, Color::RED);
+
+        // A normal inline declaration loses against an author `!important` declaration.
+        let normal = doc.create_element(
+            Namespace::Html,
+            "div",
+            vec![Attribute::new("style", "color: red;")],
+        );
+        doc.append_child(body, normal);
+        let styles = resolve_document_styles(&doc, Some("div { color: blue !important; }"));
+        assert_eq!(styles.get(&normal).expect("style").color, Color::BLUE);
+
+        // `:root` matches the document element only (the non-inherited property shows it).
+        let styles = resolve_document_styles(&doc, Some(":root { margin-top: 7px; }"));
+        assert_eq!(
+            styles.get(&html).expect("html style").margin.top,
+            Length::Px(7.0)
+        );
+        assert_eq!(
+            styles.get(&body).expect("body style").margin.top,
+            Length::Px(8.0)
+        );
+
+        // Attribute selectors: `~=`, `|=`, `^=`, `$=` and `*=` beyond the `=` already covered.
+        let element = doc.create_element(
+            Namespace::Html,
+            "p",
+            vec![
+                Attribute::new("data-words", "alpha beta"),
+                Attribute::new("lang", "en-US"),
+                Attribute::new("data-prefix", "megi-core"),
+                Attribute::new("data-suffix", "engine.css"),
+                Attribute::new("data-sub", "x-megi-y"),
+            ],
+        );
+        doc.append_child(body, element);
+        for selector in [
+            "[data-words~=\"beta\"]",
+            "[lang|=\"en\"]",
+            "[data-prefix^=\"megi\"]",
+            "[data-suffix$=\".css\"]",
+            "[data-sub*=\"megi\"]",
+        ] {
+            assert!(
+                parse_selectors(selector).matches(&doc, element),
+                "{selector} should match"
+            );
+        }
+        for selector in [
+            "[data-words~=\"gamma\"]",
+            "[lang|=\"fr\"]",
+            "[data-prefix^=\"core\"]",
+            "[data-suffix$=\".png\"]",
+            "[data-sub*=\"nope\"]",
+        ] {
+            assert!(
+                !parse_selectors(selector).matches(&doc, element),
+                "{selector} should not match"
+            );
+        }
+    }
 }
