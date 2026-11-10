@@ -39,12 +39,12 @@
 //!   tasks remain or the `max_tasks`/`max_virtual_time_ms` budgets are exhausted
 //!   (`ScriptExecution::limited` plus a warning). Timer resolution is 1 ms. Promise jobs run
 //!   after each script, after each dispatch and after every timer batch.
-//! - Lifecycle events are dispatched through `js::JsRuntime::dispatch_simple_event(None, …)`
-//!   (the `window` target with bubbling): `DOMContentLoaded` listeners registered on
-//!   `window` fire and `document` **capture-phase** listeners are visited. The `js` crate
-//!   does not expose the `document` object as an EventTarget yet, so
-//!   `document.addEventListener('DOMContentLoaded', …)` is a documented follow-up
-//!   (coordinated with the JS lane); `load` listeners on `window` work as expected.
+//! - Lifecycle events are dispatched from Rust through `js::JsRuntime::dispatch_event` with
+//!   explicit targets: `DOMContentLoaded` at `document` (bubbling to `window`) and `load` at
+//!   `window`, so both `document.addEventListener('DOMContentLoaded', …)` and
+//!   `window.addEventListener('load'/'DOMContentLoaded', …)` work with browser-like capture/
+//!   target/bubble phases. `event.currentTarget` is `null` inside listeners (use
+//!   `event.target`), and inline `onclick`-style attributes are not executed.
 //! - Script types/modules/workers/imports/network APIs are not supported.
 //! - Without the `js` crate feature this module compiles to a no-op: scripts are counted
 //!   as skipped and the DOM is left untouched (documented in [`crate::ScriptingMode`]).
@@ -483,12 +483,11 @@ pub fn execute_scripts(
     let mut loop_state = EventLoopState::default();
     drain_microtasks(&mut runtime, warnings);
 
-    // 1. `DOMContentLoaded` (after scripts, before timers). The event is dispatched at the
-    // `window` target with bubbling: `window.addEventListener('DOMContentLoaded', ...)`
-    // listeners fire and capture-phase `document` listeners are visited. The `js` crate does
-    // not expose the `document` object itself as an EventTarget yet, so `document.addEventListener(
-    // 'DOMContentLoaded', ...)` is a documented follow-up (coordinated with the JS lane).
-    match runtime.dispatch_simple_event(None, "DOMContentLoaded", true) {
+    // 1. `DOMContentLoaded` (after scripts, before timers), dispatched at the real
+    // `document` target with bubbling: `document.addEventListener('DOMContentLoaded', ...)`
+    // listeners fire, then capture/bubble visitors and (with `bubbles: true`) the single
+    // bubble leg to `window`, exactly like a browser.
+    match runtime.dispatch_event(js::JsEventTarget::Document, "DOMContentLoaded", true) {
         Ok(_) => execution.events_dispatched += 1,
         Err(error) => warnings.push(format!("dispatching DOMContentLoaded failed: {error}")),
     }
@@ -497,11 +496,8 @@ pub fn execute_scripts(
     // 2. Timers (delays included) on the virtual clock, bounded by max_tasks/max_virtual_time.
     run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);
 
-    // 3. `load` on `window` through the Rust-side dispatch API, then timers scheduled by
-    // `load` listeners (same budget). (`DOMContentLoaded` targets `document`, which the
-    // current dispatch API cannot address yet — it is dispatched via `dispatchEvent` above;
-    // migrating that one to Rust is a documented follow-up.)
-    match runtime.dispatch_simple_event(None, "load", true) {
+    // 3. `load` on `window`, then timers scheduled by `load` listeners (same budget).
+    match runtime.dispatch_event(js::JsEventTarget::Window, "load", true) {
         Ok(_) => execution.events_dispatched += 1,
         Err(error) => warnings.push(format!("dispatching load failed: {error}")),
     }

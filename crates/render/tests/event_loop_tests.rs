@@ -143,11 +143,19 @@ fn interval_runs_three_ticks_then_clears_itself() {
 }
 
 #[test]
-fn domcontentloaded_listener_mutates_the_dom() {
+fn domcontentloaded_listeners_on_document_and_window_mutate_the_dom() {
     let output = render_fixture("js_event_domcontentloaded.html", &base_options());
-    assert_eq!(element_text(&output.document, "out"), "dcl-fired");
+    // `document.addEventListener` receives the event at the document target...
+    assert_eq!(element_text(&output.document, "out"), "dcl-document");
+    // ...and, because the host dispatches it with bubbling, window listeners get it too.
+    assert_eq!(element_text(&output.document, "win"), "dcl-window");
     assert!(output.stats.script_events >= 2);
     assert_eq!(output.stats.script_tasks, 0);
+    assert!(
+        output.stats.warnings.is_empty(),
+        "{:?}",
+        output.stats.warnings
+    );
 }
 
 #[test]
