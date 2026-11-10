@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120" viewBox="0 0 240 120">
+  <rect width="240" height="120" fill="#ffffff"/>
+  <text x="16" y="40" font-family="DejaVu Sans" font-size="28" fill="#1d3557">Megi SVG</text>
+  <text x="120" y="74" text-anchor="middle" font-size="18" fill="#e63946" letter-spacing="2">centered</text>
+  <text x="224" y="104" text-anchor="end" font-size="16" font-weight="bold"
+        fill="#2a9d8f" transform="translate(0 -2)">right aligned</text>
+</svg>

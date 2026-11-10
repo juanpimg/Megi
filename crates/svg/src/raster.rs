@@ -16,6 +16,9 @@ use crate::color::Color;
 use crate::document::{Document, FillRule, LineCap, LineJoin, Paint};
 use crate::gradient::GradientSpec;
 use crate::path::SubPath;
+use crate::pattern::{MAX_PATTERN_DEPTH, MAX_PATTERN_TILES, MIN_PATTERN_TILE, PatternSpec};
+use crate::text::{self, TextAnchor, TextSpec};
+use crate::transform::Transform;
 use crate::{Limits, SvgError, SvgImage};
 
 /// Vertical sub-rows per output pixel row for fill coverage.
@@ -51,81 +54,215 @@ pub(crate) fn rasterize(
             "non-finite viewport transform".to_owned(),
         ));
     }
-    let viewport_scale = (viewport.a * viewport.d - viewport.b * viewport.c)
-        .abs()
-        .sqrt();
     for shape in &document.shapes {
-        if shape.opacity <= 0.0 {
-            continue;
-        }
-        let device_points: Vec<SubPath> = shape
-            .subpaths
-            .iter()
-            .map(|subpath| SubPath {
-                points: subpath
-                    .points
-                    .iter()
-                    .map(|point| viewport.apply(point.0, point.1))
-                    .filter(|point| point.0.is_finite() && point.1.is_finite())
-                    .collect(),
-                closed: subpath.closed,
-            })
-            .filter(|subpath| subpath.points.len() >= 2)
-            .collect();
-        if device_points.is_empty() {
-            continue;
-        }
-        if let Some(filled) = prepare_paint(
-            shape.fill,
-            &document.gradients,
-            shape.transform,
-            shape.bbox,
+        let context = PaintContext {
+            gradients: &document.gradients,
+            patterns: &document.patterns,
+            shape_transform: shape.transform,
+            bbox: shape.bbox,
             viewport,
-        ) && shape.fill_opacity > 0.0
-        {
-            canvas.clear_coverage();
-            fill_scanline(
-                &device_points,
-                shape.fill_rule,
-                canvas.width,
-                canvas.height,
-                &mut canvas.coverage,
-            );
-            canvas.composite_paint(&filled, shape.fill_opacity * shape.opacity);
-        }
-        let width = shape.stroke_width * viewport_scale;
-        if width > 0.0
-            && width.is_finite()
-            && shape.stroke_opacity > 0.0
-            && let Some(stroked) = prepare_paint(
-                shape.stroke,
-                &document.gradients,
-                shape.transform,
-                shape.bbox,
-                viewport,
-            )
-        {
-            canvas.clear_coverage();
-            stamp_stroke(
-                &device_points,
-                StrokeStyle {
-                    width,
-                    cap: shape.linecap,
-                    join: shape.linejoin,
-                    miter_limit: shape.miter_limit,
-                },
-                canvas.width,
-                canvas.height,
-                &mut canvas.coverage,
-            );
-            canvas.composite_paint(&stroked, shape.stroke_opacity * shape.opacity);
-        }
+            depth: 0,
+        };
+        draw_shape(&mut canvas, shape, &context)?;
+    }
+    for text in &document.texts {
+        draw_text(
+            &mut canvas,
+            text,
+            &document.gradients,
+            &document.patterns,
+            viewport,
+        )?;
     }
     Ok(SvgImage {
         width,
         height,
         data: canvas.pixels,
     })
+}
+
+/// Paint resolution context (shape transform/bbox for `objectBoundingBox` units plus
+/// pattern recursion depth).
+struct PaintContext<'a> {
+    gradients: &'a [GradientSpec],
+    patterns: &'a [PatternSpec],
+    shape_transform: Transform,
+    bbox: (f32, f32, f32, f32),
+    viewport: Transform,
+    depth: usize,
+}
+
+/// Draws one shape (fill + stroke) using the coverage canvas.
+fn draw_shape(
+    canvas: &mut Canvas,
+    shape: &crate::document::Shape,
+    context: &PaintContext<'_>,
+) -> Result<(), SvgError> {
+    if shape.opacity <= 0.0 {
+        return Ok(());
+    }
+    let viewport = context.viewport;
+    let viewport_scale = (viewport.a * viewport.d - viewport.b * viewport.c)
+        .abs()
+        .sqrt();
+    let device_points: Vec<SubPath> = shape
+        .subpaths
+        .iter()
+        .map(|subpath| SubPath {
+            points: subpath
+                .points
+                .iter()
+                .map(|point| viewport.apply(point.0, point.1))
+                .filter(|point| point.0.is_finite() && point.1.is_finite())
+                .collect(),
+            closed: subpath.closed,
+        })
+        .filter(|subpath| subpath.points.len() >= 2)
+        .collect();
+    if device_points.is_empty() {
+        return Ok(());
+    }
+    if let Some(filled) = prepare_paint(
+        shape.fill,
+        context.gradients,
+        context.patterns,
+        shape.transform,
+        shape.bbox,
+        viewport,
+    ) && shape.fill_opacity > 0.0
+    {
+        canvas.clear_coverage();
+        fill_scanline(
+            &device_points,
+            shape.fill_rule,
+            canvas.width,
+            canvas.height,
+            &mut canvas.coverage,
+        );
+        canvas.composite_paint(&filled, shape.fill_opacity * shape.opacity, context)?;
+    }
+    let width = shape.stroke_width * viewport_scale;
+    if width > 0.0
+        && width.is_finite()
+        && shape.stroke_opacity > 0.0
+        && let Some(stroked) = prepare_paint(
+            shape.stroke,
+            context.gradients,
+            context.patterns,
+            shape.transform,
+            shape.bbox,
+            viewport,
+        )
+    {
+        canvas.clear_coverage();
+        stamp_stroke(
+            &device_points,
+            StrokeStyle {
+                width,
+                cap: shape.linecap,
+                join: shape.linejoin,
+                miter_limit: shape.miter_limit,
+            },
+            canvas.width,
+            canvas.height,
+            &mut canvas.coverage,
+        );
+        canvas.composite_paint(&stroked, shape.stroke_opacity * shape.opacity, context)?;
+    }
+    Ok(())
+}
+
+/// Draws a `<text>` element: per-glyph advance positioning (no shaping/kerning),
+/// `text-anchor`, `letter-spacing`, font size/weight/style and fill/stroke.
+fn draw_text(
+    canvas: &mut Canvas,
+    spec: &TextSpec,
+    gradients: &[GradientSpec],
+    patterns: &[PatternSpec],
+    viewport: Transform,
+) -> Result<(), SvgError> {
+    if spec.opacity <= 0.0 || spec.text.is_empty() {
+        return Ok(());
+    }
+    let Some(database) = text::bundled_database() else {
+        return Ok(());
+    };
+    let matrix = viewport.then(spec.transform);
+    let scale = (matrix.a * matrix.d - matrix.b * matrix.c).abs().sqrt();
+    if !scale.is_finite() || scale <= 0.0 {
+        return Ok(());
+    }
+    let size = spec.font_size * scale;
+    if !size.is_finite() || size <= 0.0 || size > 4096.0 {
+        return Ok(());
+    }
+    let families = text::families(&spec.font_family);
+    let family_refs: Vec<&str> = families.iter().map(String::as_str).collect();
+    let style = if spec.italic {
+        fonts::FontStyle::Italic
+    } else {
+        fonts::FontStyle::Normal
+    };
+    let spacing = spec.letter_spacing * scale;
+    let char_count = spec.text.chars().count().max(1) as f32;
+    let measured = database
+        .measure_text(&family_refs, spec.font_weight, style, size, &spec.text)
+        .unwrap_or(0.0);
+    let total = measured + spacing * (char_count - 1.0).max(0.0);
+    let anchor_shift = match spec.anchor {
+        TextAnchor::Start => 0.0,
+        TextAnchor::Middle => total * 0.5,
+        TextAnchor::End => total,
+    };
+    let (start_x, baseline_y) = matrix.apply(spec.x + spec.dx, spec.y + spec.dy);
+    let mut pen_x = start_x - anchor_shift;
+    canvas.clear_coverage();
+    for character in spec.text.chars() {
+        if !pen_x.is_finite() {
+            break;
+        }
+        let Ok(mask) =
+            database.rasterize_char(&family_refs, spec.font_weight, style, size, character)
+        else {
+            continue;
+        };
+        canvas.add_mask(pen_x + mask.left, baseline_y + mask.top, &mask);
+        pen_x += mask.advance + spacing;
+    }
+    let context = PaintContext {
+        gradients,
+        patterns,
+        shape_transform: spec.transform,
+        bbox: spec.bbox,
+        viewport,
+        depth: 0,
+    };
+    if let Some(filled) = prepare_paint(
+        spec.fill,
+        gradients,
+        patterns,
+        spec.transform,
+        spec.bbox,
+        viewport,
+    ) && spec.fill_opacity > 0.0
+    {
+        canvas.composite_paint(&filled, spec.fill_opacity * spec.opacity, &context)?;
+    }
+    if spec.stroke_opacity > 0.0
+        && let Some(stroked) = prepare_paint(
+            spec.stroke,
+            gradients,
+            patterns,
+            spec.transform,
+            spec.bbox,
+            viewport,
+        )
+    {
+        let radius = ((spec.stroke_width * scale) * 0.5).round().clamp(1.0, 8.0) as i32;
+        canvas.dilate_coverage(radius);
+        canvas.composite_paint(&stroked, spec.stroke_opacity * spec.opacity, &context)?;
+    }
+    Ok(())
 }
 
 /// A paint prepared for compositing: solid colour, or a gradient evaluator
@@ -136,12 +273,16 @@ enum PreparedPaint<'a> {
         spec: &'a GradientSpec,
         inverse: crate::transform::Transform,
     },
+    Pattern {
+        spec: &'a PatternSpec,
+    },
 }
 
 /// Resolves a paint value against the document gradients for one shape.
 fn prepare_paint<'a>(
     paint: Paint,
     gradients: &'a [GradientSpec],
+    patterns: &'a [PatternSpec],
     shape_transform: crate::transform::Transform,
     bbox: (f32, f32, f32, f32),
     viewport: crate::transform::Transform,
@@ -149,6 +290,10 @@ fn prepare_paint<'a>(
     match paint {
         Paint::None => None,
         Paint::Solid(color) => (color.a > 0).then_some(PreparedPaint::Solid(color)),
+        Paint::Pattern(index) => patterns
+            .get(index as usize)
+            .filter(|pattern| pattern.usable())
+            .map(|spec| PreparedPaint::Pattern { spec }),
         Paint::Gradient(index) => {
             let spec = gradients.get(index as usize)?;
             // device = viewport * shape_transform * units_matrix * gradient_transform
@@ -175,14 +320,222 @@ impl Canvas {
     }
 
     /// Composites the current coverage buffer with a resolved paint.
-    fn composite_paint(&mut self, paint: &PreparedPaint<'_>, opacity: f32) {
+    fn composite_paint(
+        &mut self,
+        paint: &PreparedPaint<'_>,
+        opacity: f32,
+        context: &PaintContext<'_>,
+    ) -> Result<(), SvgError> {
         match paint {
             PreparedPaint::Solid(color) => {
                 let alpha = (f32::from(color.a) / 255.0) * opacity.clamp(0.0, 1.0);
                 self.composite(*color, alpha);
+                Ok(())
             }
             PreparedPaint::Gradient { spec, inverse } => {
                 self.composite_gradient(spec, *inverse, opacity.clamp(0.0, 1.0));
+                Ok(())
+            }
+            PreparedPaint::Pattern { spec } => self.composite_pattern(spec, opacity, context),
+        }
+    }
+
+    /// Tiles a pattern over the current coverage (clipped by it), rendering the pattern
+    /// content once per tile. Tile count is capped by [`MAX_PATTERN_TILES`].
+    fn composite_pattern(
+        &mut self,
+        spec: &PatternSpec,
+        opacity: f32,
+        context: &PaintContext<'_>,
+    ) -> Result<(), SvgError> {
+        if context.depth >= MAX_PATTERN_DEPTH || !spec.usable() {
+            return Ok(());
+        }
+        let (px, py, width, height) = spec.tile_box(context.bbox);
+        if width.abs() < MIN_PATTERN_TILE || height.abs() < MIN_PATTERN_TILE {
+            return Ok(());
+        }
+        let content = spec.content_transform(context.bbox);
+        // Pattern space → device pixels (patternTransform applies to the whole pattern).
+        let base = context
+            .viewport
+            .then(context.shape_transform)
+            .then(spec.transform);
+        let Some(inverse) = base.inverse() else {
+            return Ok(());
+        };
+        let mut min_x = f32::INFINITY;
+        let mut min_y = f32::INFINITY;
+        let mut max_x = f32::NEG_INFINITY;
+        let mut max_y = f32::NEG_INFINITY;
+        for (x, y) in [
+            (0.0, 0.0),
+            (self.width as f32, 0.0),
+            (0.0, self.height as f32),
+            (self.width as f32, self.height as f32),
+        ] {
+            let (px_space, py_space) = inverse.apply(x, y);
+            if !px_space.is_finite() || !py_space.is_finite() {
+                return Ok(());
+            }
+            min_x = min_x.min(px_space);
+            min_y = min_y.min(py_space);
+            max_x = max_x.max(px_space);
+            max_y = max_y.max(py_space);
+        }
+        let i0 = ((min_x - px) / width).floor() as i64 - 1;
+        let i1 = ((max_x - px) / width).ceil() as i64 + 1;
+        let j0 = ((min_y - py) / height).floor() as i64 - 1;
+        let j1 = ((max_y - py) / height).ceil() as i64 + 1;
+        let columns = (i1 - i0 + 1).max(0) as u64;
+        let rows = (j1 - j0 + 1).max(0) as u64;
+        if columns.saturating_mul(rows) > MAX_PATTERN_TILES {
+            return Err(SvgError::Limit(
+                "pattern tile budget exceeded (too many repetitions)".to_owned(),
+            ));
+        }
+        for column in i0..=i1 {
+            for row in j0..=j1 {
+                let origin =
+                    Transform::translate(px + column as f32 * width, py + row as f32 * height);
+                let content_to_device = base.then(origin).then(content);
+                // Tile quad in device pixels for clipping/canvas sizing.
+                let quad = base.then(origin);
+                let mut tile_min_x = f32::INFINITY;
+                let mut tile_min_y = f32::INFINITY;
+                let mut tile_max_x = f32::NEG_INFINITY;
+                let mut tile_max_y = f32::NEG_INFINITY;
+                for (x, y) in [(0.0, 0.0), (width, 0.0), (0.0, height), (width, height)] {
+                    let (dx, dy) = quad.apply(x, y);
+                    if !dx.is_finite() || !dy.is_finite() {
+                        continue;
+                    }
+                    tile_min_x = tile_min_x.min(dx);
+                    tile_min_y = tile_min_y.min(dy);
+                    tile_max_x = tile_max_x.max(dx);
+                    tile_max_y = tile_max_y.max(dy);
+                }
+                if !tile_min_x.is_finite() || !tile_min_y.is_finite() {
+                    continue;
+                }
+                let x0 = (tile_min_x.floor() as i64).max(0);
+                let y0 = (tile_min_y.floor() as i64).max(0);
+                let x1 = (tile_max_x.ceil() as i64).min(self.width as i64);
+                let y1 = (tile_max_y.ceil() as i64).min(self.height as i64);
+                if x1 <= x0 || y1 <= y0 {
+                    continue;
+                }
+                let tile_width = (x1 - x0) as usize;
+                let tile_height = (y1 - y0) as usize;
+                let mut tile = Canvas::new(tile_width, tile_height);
+                let local =
+                    Transform::translate(-(x0 as f32), -(y0 as f32)).then(content_to_device);
+                for shape in &spec.shapes {
+                    let shape_context = PaintContext {
+                        gradients: context.gradients,
+                        patterns: context.patterns,
+                        shape_transform: shape.transform,
+                        bbox: shape.bbox,
+                        viewport: local,
+                        depth: context.depth + 1,
+                    };
+                    draw_shape(&mut tile, shape, &shape_context)?;
+                }
+                // Composite the tile only where the main shape coverage is positive.
+                for ty in 0..tile_height {
+                    for tx in 0..tile_width {
+                        let main_x = x0 as usize + tx;
+                        let main_y = y0 as usize + ty;
+                        let main_index = main_y * self.width + main_x;
+                        let coverage = self.coverage[main_index].clamp(0.0, 1.0);
+                        if coverage <= 0.0 {
+                            continue;
+                        }
+                        let tile_index = (ty * tile_width + tx) * 4;
+                        let alpha = f32::from(tile.pixels[tile_index + 3]) / 255.0;
+                        if alpha <= 0.0 {
+                            continue;
+                        }
+                        let color = Color {
+                            r: tile.pixels[tile_index],
+                            g: tile.pixels[tile_index + 1],
+                            b: tile.pixels[tile_index + 2],
+                            a: 255,
+                        };
+                        composite_pixel(
+                            &mut self.pixels,
+                            main_index * 4,
+                            color,
+                            alpha * coverage * opacity.clamp(0.0, 1.0),
+                        );
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn new(width: usize, height: usize) -> Self {
+        let pixel_count = width.saturating_mul(height);
+        Self {
+            width,
+            height,
+            pixels: vec![0u8; pixel_count * 4],
+            coverage: vec![0.0f32; pixel_count],
+        }
+    }
+
+    /// Adds a glyph coverage mask at the given device position (max coverage).
+    fn add_mask(&mut self, x: f32, y: f32, mask: &fonts::GlyphMask) {
+        let origin_x = x.round() as i64;
+        let origin_y = y.round() as i64;
+        for row in 0..mask.height {
+            let py = origin_y + i64::from(row);
+            if py < 0 || py >= self.height as i64 {
+                continue;
+            }
+            for column in 0..mask.width {
+                let px = origin_x + i64::from(column);
+                if px < 0 || px >= self.width as i64 {
+                    continue;
+                }
+                let value = mask.data[(row * mask.width + column) as usize];
+                if value == 0 {
+                    continue;
+                }
+                let index = py as usize * self.width + px as usize;
+                let alpha = f32::from(value) / 255.0;
+                if alpha > self.coverage[index] {
+                    self.coverage[index] = alpha;
+                }
+            }
+        }
+    }
+
+    /// Dilates the coverage buffer by `radius` pixels (approximate text stroke).
+    fn dilate_coverage(&mut self, radius: i32) {
+        if radius <= 0 || self.width == 0 || self.height == 0 {
+            return;
+        }
+        let source = self.coverage.clone();
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let index = y * self.width + x;
+                if source[index] >= 1.0 {
+                    continue;
+                }
+                let mut best = source[index];
+                for dy in -radius..=radius {
+                    for dx in -radius..=radius {
+                        let sx = x as i64 + i64::from(dx);
+                        let sy = y as i64 + i64::from(dy);
+                        if sx < 0 || sy < 0 || sx >= self.width as i64 || sy >= self.height as i64 {
+                            continue;
+                        }
+                        best = best.max(source[sy as usize * self.width + sx as usize]);
+                    }
+                }
+                self.coverage[index] = best;
             }
         }
     }

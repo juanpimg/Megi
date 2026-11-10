@@ -12,6 +12,8 @@ use crate::color::{Color, parse_color};
 use crate::css::{StyleRule, matching_declarations, parse_declarations, parse_stylesheet};
 use crate::gradient::GradientSpec;
 use crate::path::{SubPath, parse_path_data};
+use crate::pattern::{PatternSpec, Units};
+use crate::text::{MAX_TEXT_CHARS, MAX_TEXTS, TextAnchor, TextSpec};
 use crate::transform::{Transform, parse_number_list};
 use crate::xml::{XmlElement, XmlNode, local_name};
 use crate::{Limits, SvgError};
@@ -129,6 +131,10 @@ pub(crate) struct Document {
     pub shapes: Vec<Shape>,
     /// Resolved gradient definitions referenced by `Paint::Gradient`.
     pub gradients: Vec<GradientSpec>,
+    /// Resolved `<pattern>` definitions referenced by `Paint::Pattern`.
+    pub patterns: Vec<PatternSpec>,
+    /// Parsed `<text>` elements in document order.
+    pub texts: Vec<TextSpec>,
 }
 
 impl Document {
@@ -155,18 +161,26 @@ impl Document {
         let defs = collect_defs(root);
         let rules = parse_stylesheet(&collect_style_text(root));
         let (gradients, gradient_ids) = build_gradients(&defs);
+        let mut pattern_ids = HashMap::new();
+        let pattern_elements = collect_pattern_elements(&defs);
+        for (index, (id, _)) in pattern_elements.iter().enumerate() {
+            pattern_ids.insert(id.clone(), index as u32);
+        }
         let mut builder = Builder {
             defs: &defs,
             rules: &rules,
             gradient_ids: &gradient_ids,
+            pattern_ids: &pattern_ids,
             limits,
             shapes: Vec::new(),
+            texts: Vec::new(),
             use_stack: Vec::new(),
         };
         let style = Style::default();
         let root_transform = Transform::IDENTITY;
         let mut ancestors: Vec<&XmlElement> = vec![root];
         builder.visit_children(root, &mut ancestors, root_transform, &style, 1.0, 0)?;
+        let patterns = build_patterns(&defs, &rules, &gradient_ids, &pattern_ids, limits)?;
         Ok(Self {
             width,
             height,
@@ -174,6 +188,8 @@ impl Document {
             preserve,
             shapes: builder.shapes,
             gradients,
+            patterns,
+            texts: builder.texts,
         })
     }
 
@@ -231,6 +247,7 @@ pub(crate) enum Paint {
     None,
     Solid(Color),
     Gradient(u32),
+    Pattern(u32),
 }
 
 impl Default for Style {
@@ -259,27 +276,34 @@ impl Style {
         rules: &[StyleRule],
         ancestors: &[&XmlElement],
         gradients: &HashMap<String, u32>,
+        patterns: &HashMap<String, u32>,
     ) {
         for name in PRESENTATION_PROPERTIES {
             if let Some(value) = element.attribute(name) {
-                self.apply_declaration(name, value, gradients);
+                self.apply_declaration(name, value, gradients, patterns);
             }
         }
         for declaration in matching_declarations(rules, element, ancestors) {
-            self.apply_declaration(&declaration.name, &declaration.value, gradients);
+            self.apply_declaration(&declaration.name, &declaration.value, gradients, patterns);
         }
         if let Some(inline) = element.attribute("style") {
             for declaration in parse_declarations(inline) {
-                self.apply_declaration(&declaration.name, &declaration.value, gradients);
+                self.apply_declaration(&declaration.name, &declaration.value, gradients, patterns);
             }
         }
     }
 
     /// Applies one presentation/CSS declaration to this style.
-    fn apply_declaration(&mut self, name: &str, value: &str, gradients: &HashMap<String, u32>) {
+    fn apply_declaration(
+        &mut self,
+        name: &str,
+        value: &str,
+        gradients: &HashMap<String, u32>,
+        patterns: &HashMap<String, u32>,
+    ) {
         match name {
-            "fill" => self.fill = parse_paint(value, gradients),
-            "stroke" => self.stroke = parse_paint(value, gradients),
+            "fill" => self.fill = parse_paint(value, gradients, patterns),
+            "stroke" => self.stroke = parse_paint(value, gradients, patterns),
             "fill-opacity" => {
                 if let Some(opacity) = parse_opacity(value) {
                     self.fill_opacity = opacity;
@@ -349,8 +373,10 @@ struct Builder<'a> {
     defs: &'a HashMap<String, &'a XmlElement>,
     rules: &'a [StyleRule],
     gradient_ids: &'a HashMap<String, u32>,
+    pattern_ids: &'a HashMap<String, u32>,
     limits: &'a Limits,
     shapes: Vec<Shape>,
+    texts: Vec<TextSpec>,
     use_stack: Vec<String>,
 }
 
@@ -386,7 +412,13 @@ impl<'a> Builder<'a> {
         }
         let name = element.local_name_lower();
         let mut style = parent_style.clone();
-        style.apply(element, self.rules, ancestors, self.gradient_ids);
+        style.apply(
+            element,
+            self.rules,
+            ancestors,
+            self.gradient_ids,
+            self.pattern_ids,
+        );
         let local_transform = element
             .attribute("transform")
             .and_then(Transform::parse)
@@ -404,7 +436,8 @@ impl<'a> Builder<'a> {
             "g" => self.visit_children(element, ancestors, transform, &style, opacity, depth),
             "defs" | "title" | "desc" | "metadata" | "style" | "linearGradient"
             | "radialGradient" | "pattern" | "clipPath" | "mask" | "filter" | "symbol"
-            | "marker" | "text" | "tspan" | "image" | "foreignObject" | "script" | "stop" => Ok(()),
+            | "marker" | "tspan" | "image" | "foreignObject" | "script" | "stop" => Ok(()),
+            "text" => self.push_text(element, transform, &style, opacity),
             "use" => {
                 let reference = element
                     .attribute("href")
@@ -441,6 +474,79 @@ impl<'a> Builder<'a> {
         };
         ancestors.pop();
         result
+    }
+
+    /// Parses a `<text>` element: direct text content plus `<tspan>` text (tspan-specific
+    /// positioning is ignored, documented limitation).
+    fn push_text(
+        &mut self,
+        element: &XmlElement,
+        transform: Transform,
+        style: &Style,
+        group_opacity: f32,
+    ) -> Result<(), SvgError> {
+        if self.texts.len() >= MAX_TEXTS {
+            return Err(SvgError::Limit("too many <text> elements".to_owned()));
+        }
+        let mut text = String::new();
+        collect_text(element, &mut text);
+        if text.is_empty() {
+            return Ok(());
+        }
+        if text.chars().count() > MAX_TEXT_CHARS {
+            return Err(SvgError::Limit("SVG text is too long".to_owned()));
+        }
+        let x = first_number(element.attribute("x"));
+        let y = first_number(element.attribute("y"));
+        let dx = first_number(element.attribute("dx"));
+        let dy = first_number(element.attribute("dy"));
+        let anchor = TextAnchor::parse(element.attribute("text-anchor"));
+        let font_family = element
+            .attribute("font-family")
+            .map(str::to_owned)
+            .unwrap_or_else(|| "sans-serif".to_owned());
+        let font_size = parse_length(element.attribute("font-size"), 16.0)
+            .filter(|size| size.is_finite() && *size > 0.0)
+            .unwrap_or(16.0);
+        let font_weight = match element
+            .attribute("font-weight")
+            .map(|value| value.trim().to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("bold") => 700,
+            Some("normal") => 400,
+            Some(value) => value.parse::<u16>().unwrap_or(400),
+            None => 400,
+        };
+        let italic = element.attribute("font-style").is_some_and(|value| {
+            value.eq_ignore_ascii_case("italic") || value.eq_ignore_ascii_case("oblique")
+        });
+        let letter_spacing = parse_length(element.attribute("letter-spacing"), 0.0).unwrap_or(0.0);
+        let opacity = group_opacity * parse_opacity_attribute(element, "opacity").unwrap_or(1.0);
+        let mut spec = TextSpec {
+            text,
+            x,
+            y,
+            dx,
+            dy,
+            anchor,
+            font_family,
+            font_size,
+            font_weight,
+            italic,
+            letter_spacing,
+            fill: style.fill,
+            fill_opacity: style.fill_opacity,
+            stroke: style.stroke,
+            stroke_opacity: style.stroke_opacity,
+            stroke_width: style.stroke_width,
+            opacity: opacity.clamp(0.0, 1.0),
+            transform,
+            bbox: (0.0, 0.0, 0.0, 0.0),
+        };
+        spec.bbox = spec.local_bbox();
+        self.texts.push(spec);
+        Ok(())
     }
 
     fn push_shape(
@@ -716,12 +822,19 @@ fn polyline_subpath(element: &XmlElement, polygon: bool) -> SubPath {
     }
 }
 
-fn parse_paint(raw: &str, gradient_ids: &HashMap<String, u32>) -> Paint {
+fn parse_paint(
+    raw: &str,
+    gradient_ids: &HashMap<String, u32>,
+    pattern_ids: &HashMap<String, u32>,
+) -> Paint {
     let value = raw.trim();
     if value.eq_ignore_ascii_case("none") {
         return Paint::None;
     }
     if let Some(id) = parse_url_reference(value) {
+        if let Some(index) = pattern_ids.get(&id) {
+            return Paint::Pattern(*index);
+        }
         return gradient_ids
             .get(&id)
             .copied()
@@ -888,6 +1001,8 @@ fn nested_viewport_transform(element: &XmlElement) -> Transform {
     };
     let preserve = parse_preserve_aspect_ratio(element.attribute("preserveAspectRatio"));
     let nested = Document {
+        patterns: Vec::new(),
+        texts: Vec::new(),
         width: viewport_w,
         height: viewport_h,
         view_box: Some(view),
@@ -932,6 +1047,90 @@ fn collect_style_text(root: &XmlElement) -> String {
         }
     }
     text
+}
+
+/// Collects `<pattern>` definitions in deterministic id order.
+fn collect_pattern_elements<'a>(
+    defs: &'a HashMap<String, &'a XmlElement>,
+) -> Vec<(String, &'a XmlElement)> {
+    let mut ids: Vec<&String> = defs.keys().collect();
+    ids.sort();
+    ids.into_iter()
+        .filter_map(|id| {
+            let element = defs[id];
+            element
+                .local_name_lower()
+                .eq("pattern")
+                .then(|| (id.clone(), element))
+        })
+        .collect()
+}
+
+/// Builds every `<pattern>`'s child shapes in deterministic id order.
+fn build_patterns(
+    defs: &HashMap<String, &XmlElement>,
+    rules: &[StyleRule],
+    gradient_ids: &HashMap<String, u32>,
+    pattern_ids: &HashMap<String, u32>,
+    limits: &Limits,
+) -> Result<Vec<PatternSpec>, SvgError> {
+    let mut specs = Vec::new();
+    for (_id, element) in collect_pattern_elements(defs) {
+        let mut builder = Builder {
+            defs,
+            rules,
+            gradient_ids,
+            pattern_ids,
+            limits,
+            shapes: Vec::new(),
+            texts: Vec::new(),
+            use_stack: Vec::new(),
+        };
+        let mut style = Style::default();
+        let mut ancestors: Vec<&XmlElement> = vec![element];
+        style.apply(element, rules, &ancestors, gradient_ids, pattern_ids);
+        builder.visit_children(element, &mut ancestors, Transform::IDENTITY, &style, 1.0, 0)?;
+        specs.push(PatternSpec {
+            x: first_number(element.attribute("x")),
+            y: first_number(element.attribute("y")),
+            width: parse_length(element.attribute("width"), 0.0)
+                .filter(|width| width.is_finite() && *width > 0.0)
+                .unwrap_or(0.0),
+            height: parse_length(element.attribute("height"), 0.0)
+                .filter(|height| height.is_finite() && *height > 0.0)
+                .unwrap_or(0.0),
+            pattern_units: Units::parse(element.attribute("patternUnits")),
+            content_units: Units::parse(element.attribute("patternContentUnits")),
+            transform: element
+                .attribute("patternTransform")
+                .and_then(Transform::parse)
+                .filter(|transform| transform.is_finite())
+                .unwrap_or(Transform::IDENTITY),
+            shapes: builder.shapes,
+        });
+    }
+    Ok(specs)
+}
+
+/// First numeric value of an SVG list attribute (e.g. `x="10 20"` → 10).
+fn first_number(raw: Option<&str>) -> f32 {
+    raw.and_then(|value| {
+        value
+            .split([',', ' ', '\t', '\n'])
+            .find_map(|part| part.trim().parse::<f32>().ok())
+    })
+    .filter(|value| value.is_finite())
+    .unwrap_or(0.0)
+}
+
+/// Concatenates the text content of an element (including nested `<tspan>`s).
+fn collect_text(element: &XmlElement, out: &mut String) {
+    for child in &element.children {
+        match child {
+            XmlNode::Text(text) => out.push_str(text),
+            XmlNode::Element(child_element) => collect_text(child_element, out),
+        }
+    }
 }
 
 /// Resolves every gradient definition once, in deterministic id order.

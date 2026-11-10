@@ -66,6 +66,16 @@
 //! produce an [`SvgError`], never a panic, an abort, unbounded recursion or an
 //! allocation bomb.
 
+//! ## Dependencies
+//!
+//! The parser and rasterizer are dependency-free apart from `image` (PNG export helper)
+//! and the workspace `fonts` crate, used **only** for `<text>` glyph rasterization and
+//! metrics (bundled deterministic DejaVu Sans; fonts' own dependencies are ab_glyph,
+//! fontdb, rustybuzz and ttf-parser, all permissively licensed). `<text>` uses per-glyph
+//! advance positioning: no kerning/ligatures/complex shaping, no bidi (documented).
+//! `<pattern>` tiles are rendered per repetition with a 10 000-tile cap and a depth limit
+//! for pattern→pattern references (cycles are dropped, never panic).
+
 #![forbid(unsafe_code)]
 
 mod color;
@@ -73,7 +83,9 @@ mod css;
 mod document;
 mod gradient;
 mod path;
+pub(crate) mod pattern;
 mod raster;
+pub(crate) mod text;
 mod transform;
 mod xml;
 

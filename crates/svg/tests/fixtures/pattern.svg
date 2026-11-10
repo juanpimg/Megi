@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80">
+  <defs>
+    <pattern id="checker" patternUnits="userSpaceOnUse" width="16" height="16">
+      <rect width="8" height="16" fill="#e63946"/>
+      <rect x="8" width="8" height="16" fill="#1d3557"/>
+    </pattern>
+    <pattern id="dots" patternUnits="userSpaceOnUse" width="12" height="12"
+             patternTransform="translate(3 0)">
+      <rect width="12" height="12" fill="#f1faee"/>
+      <circle cx="6" cy="6" r="4" fill="#457b9d"/>
+    </pattern>
+  </defs>
+  <rect x="4" y="4" width="52" height="72" fill="url(#checker)"/>
+  <circle cx="88" cy="40" r="30" fill="url(#dots)" stroke="#1d3557" stroke-width="3"/>
+</svg>

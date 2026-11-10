@@ -10,3 +10,4 @@ description = "Megi Engine — dependency-free SVG parser and antialiased softwa
 
 [dependencies]
 image.workspace = true
+fonts.workspace = true
