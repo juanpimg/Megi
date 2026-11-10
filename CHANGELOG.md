@@ -6,6 +6,71 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 6 — images, @import/media, browser DOM, shell and layout −43 % (2026-11-10)
+
+#### Added
+
+- **`<img>` end to end**: `paint` gains `ImageStore = HashMap<NodeId,
+  Arc<image::RgbaImage>>`, `DisplayItem::Image` and
+  `build_display_list_with_images`, with bilinear clamp-to-edge sampling,
+  antialiasing/alpha/clip and a gray placeholder. `render` loads `<img src>`
+  through `net` (honoring `--no-network`), decodes PNG via `crates/image`
+  (other formats → warning + non-fatal placeholder), injects intrinsic sizes
+  and paints, with caps (64 images / 8 MiB each / 32 MiB total) and stats.
+  Fixture `tests/fixtures/render/images.html` → 800×600, 15,625 B,
+  `md5 1de31699…`; the Phase-4 golden stays byte-identical.
+- **CSS `@import` + full media queries**: `Stylesheet.imports:
+  Vec<ImportRule{url, media}>`, `parse_media_query_list` and `media::evaluate`
+  (`and`/`or`/`not`/`only`, query lists, `all`/`screen`/`print`,
+  width/height/min/max in px/em/rem/pt/pc/in/cm/mm, `orientation`), plus
+  `StyleCollection::add_import_stylesheet` with media gating. (`render` does
+  not consume `@import` yet.)
+- **Browser DOM API**: `document_element/head/body`, `get_element_by_id`,
+  `get_elements_by_tag_name/class_name`, node factories, attribute/child
+  manipulation, `text_content`, `clone_node_into` and `DomError`; HTML gains
+  `parse_fragment_into`, `TreeBuilder::with_document`, `set_inner_html`,
+  `set_outer_html` and `document_write` (table/select/template/rawtext
+  contexts, no slot leaks).
+- **`crates/shell` (Phase 7 start)**: `winit` 0.30.13 + `softbuffer` 0.4.8
+  window (X11/Wayland `dlopen`, `0RGB` presentation, resize debounce, q/Esc/r
+  keys, error frame) and a headless `--screenshot` mode without `EventLoop`;
+  `megi` CLI and `tools/megi.sh`; 20 tests. Screenshot 640×400
+  `md5 7324e851…`, identical to the render pipeline.
+- `docs/images/images-e2e.png`: capture of the image pipeline fixture
+  (15,625 B) added to the documentation.
+
+#### Changed
+
+- Layout cost cut **43 %** on `layout/realistic-1mb` (100.6 → 57.2 ms) via
+  `Arc<ComputedStyle>` in IFC tokens, streaming line breaking, single-pass
+  `format_line`, no overflow post-pass when unneeded and no per-element
+  lowercase; `LayoutBox` now has an **iterative `Drop`** (50,000 levels with a
+  256 KiB stack; construction recursion remains documented).
+- README/ROADMAP/ARCHITECTURE/HANDOFF/PHASE4-SUPPORT/TOOLING/SECURITY/
+  CONTRIBUTING/CHANGELOG synchronized with round 6 (546 tests, Phase 4 closed,
+  Phase 5 ≈70 %, Phase 7 ≈20 %); the candidate "table optimization" work item
+  is removed/marked done because the measured cost was in the IFC.
+- Performance baseline refreshed after round 5 (`docs/PERFORMANCE.md`, other
+  lane) and pipeline HTML→PNG 214.2 → 178.8 ms.
+
+#### Fixed
+
+- Deep `LayoutBox` trees no longer overflow the stack when dropped; the
+  painter and its traversals remain iterative with documented caps.
+- Browser DOM mutations reject invalid operations via `DomError` and
+  `innerHTML`/`document.write` parsing respects parser limits without leaking
+  arena slots.
+
+#### Performance
+
+- Inline layout −43 % (100.6 → 57.2 ms on the realistic 1 MB document);
+  HTML→PNG pipeline 214.2 → 178.8 ms. PNG encoding unchanged (42,853 B for
+  the Phase-4 fixture, 44.8× compression).
+- Test suite: **546 tests** (was 475), all green; fmt, clippy `-D warnings`,
+  `cargo doc`, 4-suite conformance gate and MSRV 1.88 (including `shell`)
+  verified.
+
+
 ### Round 5 — tables, PNG compression, browser pipeline and generational DOM (2026-11-10)
 
 #### Added

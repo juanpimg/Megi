@@ -17,34 +17,36 @@ Fase 0: Tooling & Arena DOM         [██████████] 100% (COMPL
 Fase 1: Tokenizador & Árbol HTML5   [██████████] 100% (COMPLETADA - 100% Declarativo)
 Fase 2: Motor CSS                    [██████████] 100% (COMPLETADA)
 Fase 3: Motor Layout (BFC & IFC)     [██████████] 100% (COMPLETADA)
-Fase 4: Paint, PNG & Tipografía      [██████████]  99% (CASI CERRADA: tablas, PNG comprimido 44,8×, DOM generacional)
-Fase 5: Red & Fetch Pipeline         [██████░░░░]  60% (PIPELINE COMPLETO: render URL→PNG con CSS externo)
-Fase 6: Integración JS & Bindings    [░░░░░░░░░░]   0% (PLANIFICADA)
-Fase 7: Ventana OS & Shell           [░░░░░░░░░░]   0% (PLANIFICADA)
+Fase 4: Paint, PNG & Tipografía      [██████████] 100% (CERRADA salvo background-image/avanzado de tablas)
+Fase 5: Red, Render & Imágenes       [███████░░░]  70% (render URL→PNG + imágenes E2E + TLS/caché/data:)
+Fase 6: Integración JS & Bindings    [░░░░░░░░░░]   0% (PLANIFICADA; DOM API lista)
+Fase 7: Ventana OS & Shell           [██░░░░░░░░]  20% (EN CURSO: ventana winit + headless)
 
-> La Fase 4 está prácticamente cerrada: tablas CSS 2.1, `inline-block`, cajas reemplazadas,
-> PNG comprimido propio (44,8× con DEFLATE), DOM generacional y painter iterativo están
-> implementados y testeados. Solo faltan pintar imágenes (`<img>`/`background-image`),
-> `border-collapse` con conflictos, `rowspan`/`table-layout: fixed` e `inline-table` real.
-> La Fase 5 ya tiene el **pipeline de navegador real** (`crates/render`: URL → net → HTML →
-> CSS externo → layout → PNG) y el decodificador PNG propio (`crates/image`); faltan
-> `@import`/media, `<img>` E2E, CORS/cookies/HTTP2 y compresión de red.
-> **475 tests** y gate de 4 suites PASS; rendimiento en `docs/PERFORMANCE.md`. Detalle en
-> `docs/PHASE4-SUPPORT.md`.
+> La Fase 4 está funcionalmente cerrada para el objetivo «HTML real → PNG»: imágenes `<img>`
+> E2E, tablas/`inline-block`/reemplazados, PNG comprimido, DOM generacional y painter iterativo.
+> Quedan `background-image`, conflictos de `border-collapse`, `rowspan`/`fixed`/`inline-table`
+> y block-in-inline.
+> La Fase 5 está al ~70 %: pipeline de navegador (`render`), imágenes E2E, TLS/caché/`data:` y
+> `@import`/media queries en CSS (el `render` aún no consume `@import`); faltan CORS/cookies/
+> HTTP2/compresión de red.
+> La Fase 6 (JS) no ha empezado, pero el DOM ya expone `innerHTML`/`outerHTML`/`document.write`
+> y búsquedas por id/tag/clase. La Fase 7 arranca con `crates/shell` (ventana winit+softbuffer
+> y screenshots headless). **546 tests** y gate de 4 suites PASS; rendimiento en `docs/PERFORMANCE.md`.
+> Detalle en `docs/PHASE4-SUPPORT.md`.
 ```
 
 | Fase / Bloque | Barra | Estado | Cobertura Verificada | Hito Clave Alcanzado |
 |---|:---:|:---:|---|---|
-| **Fase 0: Tooling, Arena DOM & Closed-Loop Harness** | `[██████████] 100%` | **COMPLETO** | 20 tests en `crates/dom` | Arena contigua indexada (`NodeId(NonZeroU32)` de 4 bytes) sin `Rc<RefCell<Node>>`, scripts CLI de inspección WHATWG en vivo. |
+| **Fase 0: Tooling, Arena DOM & Closed-Loop Harness** | `[██████████] 100%` | **COMPLETO** | 28 tests en `crates/dom` | Arena contigua indexada (`NodeId(NonZeroU32)` de 4 bytes) sin `Rc<RefCell<Node>>`, scripts CLI de inspección WHATWG en vivo. |
 | **Fase 1A: Tokenizador HTML5 (84 Estados & 2.231 Entidades)** | `[██████████] 100%` | **COMPLETO** | 7.050 / 7.050 estados en el gate (allowlist vacía) | 13 suites estándar de `html5lib-tests/tokenizer` al 100%; `ParseOptions` anti-DoS y deduplicación de atributos en tiempo lineal. |
-| **Fase 1B: Construcción del Árbol DOM (21 Modos) & Serializador §13.3** | `[██████████] 99.9%` | **COMPLETO (Declarativo)** | 3.898 / 3.904 árbol + **230/230 serializador** | 21 modos de inserción, AAA, *foster parenting*, `innerHTML`; **serializador público WHATWG HTML §13.3** (`serialize_html`/`serialize_fragment`/`serialize_outer_html` + opciones) con las 5 suites `html5lib-tests/serializer` en el gate. |
-| **Fase 2: Motor CSS (Sintaxis L3, Selectores L4, Cascada L4, Hoja UA §15)** | `[██████████] 100%` | **COMPLETO** | 44/44 unit + 30/30 WPT CSS Syntax vendorizado | Selectores L4 funcionales (`:is/:where/:not/:has`) y estructurales, especificidad, expansión de shorthands antes de la cascada, `font` shorthand, `@media` básico y índice de reglas (2,1× en resolve-styles 10k nodos); bases de Fase 4 (bordes por lado, `border-style: none`, `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type`, `line_height_factor`). |
-| **Fase 3+4: Motor de Layout (BFC/IFC, posicionamiento, floats, tablas)** | `[██████████] 100%` | **COMPLETO** | 118 tests en `crates/layout` | Box Tree, cajas anónimas *inherit-only*, colapso de márgenes, ICB, `box-sizing`/min-max/%, sobre-restringido; **IFC**: oportunidades de salto reales, soft hyphen de ancho cero, `line-height` como factor, `vertical-align: top/bottom` (§10.8.1) y `text-align: justify`. |
-| **Fase 4: Display Lists, Pipeline HTML → PNG & Rasterización 2D** | `[██████████] 99%` | *COMPLETA* | 77 tests en `crates/paint` | Pipeline `HTML → CSS → layout → display list → PNG` con texto real, **orden completo del Apéndice E** (stacking contexts/`z-index`), `OpacityGroup` (grupo offscreen), `PushClip`/`PopClip` desde `overflow`, `text-decoration`, `visibility`, marcadores de lista, bordes por lado, fondo bajo el *border box*, antialiasing exacto y culling/cachés; codificador PNG propio y golden determinista (PNG `md5 34152025…`). PNG comprimido propio (**44,8×**, md5 `9e957177…`), painter iterativo; DOM generacional en `dom`. |
+| **Fase 1B: Árbol DOM, Serializador §13.3 & DOM de navegador** | `[██████████] 100%` | **COMPLETO** | 3.898/3.904 árbol + 230/230 serializer + **53 tests html** | 21 modos de inserción, AAA, *foster parenting*, `innerHTML`; **serializador público WHATWG HTML §13.3** (`serialize_html`/`serialize_fragment`/`serialize_outer_html` + opciones) con las 5 suites `html5lib-tests/serializer` en el gate. |
+| **Fase 2: Motor CSS (Sintaxis L3, Selectores L4, Cascada L4, Hoja UA §15)** | `[██████████] 100%` | **COMPLETO** | 51/51 unit + 30/30 WPT | Selectores L4 funcionales (`:is/:where/:not/:has`) y estructurales, especificidad, expansión de shorthands antes de la cascada, `font` shorthand, `@media` básico y índice de reglas (2,1× en resolve-styles 10k nodos); bases de Fase 4 (bordes por lado, `border-style: none`, `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type`, `line_height_factor`). |
+| **Fase 3+4: Motor de Layout (BFC/IFC, posicionamiento, floats, tablas)** | `[██████████] 100%` | **COMPLETO** | 121 tests | Box Tree, cajas anónimas *inherit-only*, colapso de márgenes, ICB, `box-sizing`/min-max/%, sobre-restringido; **IFC**: oportunidades de salto reales, soft hyphen de ancho cero, `line-height` como factor, `vertical-align: top/bottom` (§10.8.1) y `text-align: justify`. |
+| **Fase 4: Display Lists, Pipeline HTML → PNG & Rasterización 2D** | `[██████████] 100%` | *COMPLETA* | 84 tests en `crates/paint` | Pipeline `HTML → CSS → layout → display list → PNG` con texto real, **orden completo del Apéndice E** (stacking contexts/`z-index`), `OpacityGroup` (grupo offscreen), `PushClip`/`PopClip` desde `overflow`, `text-decoration`, `visibility`, marcadores de lista, bordes por lado, fondo bajo el *border box*, antialiasing exacto y culling/cachés; codificador PNG propio y golden determinista (PNG `md5 34152025…`). PNG comprimido propio (**44,8×**, md5 `9e957177…`), painter iterativo, **imágenes `<img>`** (ImageStore/bilineal) y DOM generacional. |
 | **Fase 4: Motor tipográfico (`crates/fonts`)** | `[██████████] 100%` | **COMPLETO (integrado)** | 13 + 1 doctest | `FontDatabase` (fontdb), métricas OpenType (ttf-parser), shaping LTR con `rustybuzz` (kern/ligaduras), rasterización de glifos (`ab_glyph`) y fallback; **integrado en layout y paint** (texto real en el pipeline). Bidi/scripts complejos/fuentes variables quedan fuera de Fase 4. |
-| **Fase 5: Red, Render Pipeline & Imágenes** | `[██████░░░░] 60%` | *EN CURSO* | 85 (net) + 22 (render) + 46 (image) | URL WHATWG (subset http/https/file + join), HTTP/1.1 `GET`, **TLS 1.2/1.3 con `rustls` 0.23 (ring) + `webpki-roots`** (SNI/validación, feature `tls` por defecto), **caché HTTP RFC 9111 subset** (max-age/Expires/ETag/Last-Modified/304/no-store/Vary), **`data:` URLs** con Base64 propio, `file://`, MIME sniffing y `ResourceLoader` con caché; `#![forbid(unsafe_code)]`. **`crates/render`**: pipeline URL→PNG con CSS externo y CLI; **`crates/image`**: decoder PNG/inflate propio. Pendientes: `<img>` E2E, `@import`/media, CORS/cookies/HTTP2. |
+| **Fase 5: Red, Render Pipeline & Imágenes** | `[███████░░░] 70%` | *EN CURSO* | 85 (net) + 28 (render) + 46 (image) | URL WHATWG (subset http/https/file + join), HTTP/1.1 `GET`, **TLS 1.2/1.3 con `rustls` 0.23 (ring) + `webpki-roots`** (SNI/validación, feature `tls` por defecto), **caché HTTP RFC 9111 subset** (max-age/Expires/ETag/Last-Modified/304/no-store/Vary), **`data:` URLs** con Base64 propio, `file://`, MIME sniffing y `ResourceLoader` con caché; `#![forbid(unsafe_code)]`. **`crates/render`**: pipeline URL→PNG con CSS externo, CLI y **`<img>` E2E**; **`crates/image`**: decoder PNG/inflate propio; CSS con `@import`/media queries. Pendientes: integrar `@import` en render, CORS/cookies/HTTP2/compresión. |
 | **Fase 6: Integración JS & DOM Bindings** | `[░░░░░░░░░░] 0%` | *Planificada* | — | Enlaces e integración de ejecución de scripts (`document.write`, DOM bindings). |
-| **Fase 7: Ventana OS & Shell** | `[░░░░░░░░░░] 0%` | *Planificada* | — | Creación de ventana de SO, gestión de eventos y bucle principal de renderizado. |
+| **Fase 7: Ventana OS & Shell** | `[██░░░░░░░░] 20%` | *EN CURSO* | 20 tests en `crates/shell` | Ventana `winit` 0.30 + `softbuffer` 0.4 (X11/Wayland dlopen, sin GPU), presentación `0RGB`, resize con debounce y **modo headless `--screenshot`** (640×400 `md5 7324e851…`) + `tools/megi.sh`. Pendientes: scroll/hit-testing/navegación/zoom/HiDPI/worker. |
 
 ---
 
@@ -469,58 +471,60 @@ Fase 7: Ventana OS & Shell           [░░░░░░░░░░]   0% (PLAN
 
 ---
 
-## FASE 4: Display Lists, Pipeline HTML → PNG y Tipografía Real (CASI CERRADA, ~99%)
+## FASE 4: Display Lists, Pipeline HTML → PNG y Tipografía (CERRADA funcionalmente)
 
-**Objetivo**: renderizar una página HTML real a PNG completando el modelo de pintado CSS 2.2 y la tipografía. **Estado**: tablas CSS 2.1, `inline-block`, cajas reemplazadas, PNG comprimido propio, DOM generacional y painter iterativo implementados; solo faltan pintar imágenes y casos avanzados de tablas.
+**Estado ~100 %** para el objetivo «HTML real → PNG». Implementados: pipeline, tipografía real, bordes por lado, posicionamiento/floats/overflow, stacking/`opacity`, tablas CSS 2.1, `inline-block`, cajas reemplazadas, **imágenes `<img>` E2E**, PNG comprimido propio, DOM generacional y painter iterativo. Pendientes menores: `background-image`, conflictos de `border-collapse`, `rowspan`/`table-layout: fixed`/`inline-table` y block-in-inline.
 
-- Resultados visuales: [`images/phase4-basic.png`](images/phase4-basic.png) · [`images/render-fixture.png`](images/render-fixture.png).
-- Matriz por propiedad: [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md) · Rendimiento: [`PERFORMANCE.md`](PERFORMANCE.md).
+| WP | Estado |
+|---|---|
+| `WP-4.0`–`WP-4.7` | **HECHO** |
+| `WP-4.8` (tablas) | **HECHO** (avanzado pendiente) |
+| `WP-4.9` (`inline-block`/listas/decoraciones/**imágenes**) | **HECHO** (`background-image` pendiente) |
+| `WP-4.10` (`overflow`/clip) | **HECHO** |
+| `WP-4.11` (AA/culling/compresión PNG) | **HECHO** |
+| `WP-4.12` (robustez/DOM generacional) | **PARCIAL**: falta drop iterativo de `LayoutBox` en construcción profunda, presupuestos de layout y `max_nodes` vs `MAX_SLOTS` |
+| `WP-4.13` (goldens/fixtures/matriz) | **PARCIAL** |
 
-| WP | Objetivo | Crate | Estado |
-|---|---|---|---|
-| `WP-4.0` | Cimientos CSS | `css` | **HECHO** |
-| `WP-4.1` | Pipeline HTML→PNG y canvas | `paint` | **HECHO** |
-| `WP-4.2` | BFC y modelo de cajas | `layout` | **HECHO** |
-| `WP-4.3` | Fondos y bordes por lado | `paint` | **HECHO** |
-| `WP-4.4` | Tipografía real integrada | `fonts`, `layout`, `paint` | **HECHO** |
-| `WP-4.5` | IFC conforme | `layout` | **HECHO** |
-| `WP-4.6` | `position`/stacking/`opacity` | `layout`, `paint` | **HECHO** |
-| `WP-4.7` | Floats/`clear` | `layout`, `paint` | **HECHO** |
-| `WP-4.8` | Tablas CSS 2.1 | `css`, `layout`, `paint` | **HECHO** |
-| `WP-4.9` | `inline-block`/listas/decoraciones/reemplazados | `css`, `layout`, `paint` | **PARCIAL** (falta pintar `<img>`) |
-| `WP-4.10` | `overflow`/clipping | `css`, `layout`, `paint` | **HECHO** |
-| `WP-4.11` | AA/culling + compresión PNG propia | `paint` | **HECHO** |
-| `WP-4.12` | Robustez/presupuestos + DOM generacional | `html`, `dom`, `layout`, `paint` | **PARCIAL** (drop recursivo de `LayoutBox`, presupuestos de layout) |
-| `WP-4.13` | Golden images/fixtures/matriz | `paint`, `docs` | **PARCIAL** |
-
-### Detalle de los WP tocados en la ronda 5
-
-- **WP-4.8 — Tablas CSS 2.1 (HECHO)**: CSS con display `table-*`/`inline-table`/caption y `ComputedStyle::{border_spacing, border_collapse, table_layout, caption_side, empty_cells}` + hoja UA §15; layout con auto table layout (min/max-content, `colspan`, fixups anónimos, `vertical-align` de celdas, caption y row-groups). Limitaciones: `border-collapse` sin resolución de conflictos, `table-layout: fixed` → auto, sin `rowspan` ni %.
-- **WP-4.9 — `inline-block`/reemplazados (PARCIAL)**: `inline-block` con shrink-to-fit, baseline y `vertical-align`; `BoxType::Replaced` con tamaños intrínsecos (`img` 300×150, `input` 20×20, `textarea` 160×40) y API `layout_document_with_replaced_sizes`. **Pendiente**: pintar contenido de `<img>` y `background-image`.
-- **WP-4.11 — Compresión y calidad (HECHO)**: DEFLATE propio (LZ77 hash-chains 32 KiB + Huffman fijo, zlib/Adler) y filtros PNG adaptativos → **1.920.813 → 42.853 B (44,8×)** con `basic.rgba` idéntico (`md5 60f8984e…`, PNG `md5 9e957177…`); `build_display_list` iterativo (20.000 niveles; caps stacking 256, floats 64, items 5M); render-to-PNG 8,6 → 14,2 ms por compresión.
-- **WP-4.12 — Identidad y robustez (PARCIAL)**: DOM generacional (`NodeId` 20 bits slot + 12 generación, free list LIFO, stale/foreign rechazados, `descendants/ancestors` iterativos con guardas de ciclo 100k, `validate_invariants`, `estimate_bytes`). Pendiente: drop recursivo de `LayoutBox` en árboles profundos, presupuestos de tiempo y coherencia `max_nodes` (1M) vs `MAX_SLOTS` (1.048.575).
-
-### Camino crítico restante
-
-```text
-WP-4.9b (pintar <img>/background-image con crates/image) ─┐
-WP-4.8b (border-collapse conflictos, rowspan, fixed) ─────┼─► WP-4.13 (fixtures real_page + goldens)
-WP-4.12b (drop iterativo LayoutBox, presupuestos) ────────┘
-```
-
-### Fuera del alcance de Fase 4
-
-Red de imágenes (Fase 5), JavaScript (Fase 6), formularios, `flex`/`grid`, `@font-face`, bidi, scroll/hit-testing (Fase 7), animaciones, `border-radius`, `box-shadow` y gradientes.
+Resultados visuales: [`images/phase4-basic.png`](images/phase4-basic.png), [`images/render-fixture.png`](images/render-fixture.png), [`images/images-e2e.png`](images/images-e2e.png). Matriz: [`PHASE4-SUPPORT.md`](PHASE4-SUPPORT.md). Rendimiento: [`PERFORMANCE.md`](PERFORMANCE.md) (layout −43 % en la ronda 6).
 
 ---
 
-## FASE 5: Red, Render Pipeline & Imágenes (EN CURSO, ~60%)
+## FASE 5: Red, Render Pipeline & Imágenes (EN CURSO, ~70%)
 
-**Estado**: documento+CSS externo de extremo a extremo en `crates/render`; decodificador PNG propio en `crates/image`; TLS/caché/`data:` en `crates/net`.
+| WP | Objetivo | Estado |
+|---|---|---|
+| `WP-5.0`–`WP-5.4` | URL/HTTP1.1/TLS/caché/`data:`/file/MIME/loader (`net`) | **HECHO** (85 tests) |
+| `WP-5.5` | Decoder PNG + inflate propio (`image`) | **HECHO** (46 tests) |
+| `WP-5.6` | Pipeline de navegador URL→PNG con CSS externo (`render`) | **HECHO** (28 tests) |
+| `WP-5.7` | **Imágenes `<img>` E2E** (fetch/decode/tamaño intrínseco/pintado/caps/placeholder) | **HECHO** (fixture 15.625 B `md5 1de31699…`) |
+| `WP-5.8` | `@import` + media queries en CSS / integración en `render` | **PARCIAL**: parser/evaluador CSS hechos (51 tests); el `render` aún no consume `@import` |
+| `WP-5.9` | CORS/`Referrer-Policy`, cookies, gzip/br, HTTP/2, streaming | **PENDIENTE** |
 
-- **WP-5.0–5.4 (net, HECHO)**: URL WHATWG subset, HTTP/1.1, TLS 1.2/1.3 (`rustls` 0.23 ring + `webpki-roots`), caché RFC 9111 subset, `data:`, `file://`, MIME y loader; 85 tests offline.
-- **WP-5.5 — Decodificador de imágenes (`crates/image`, HECHO)**: PNG 1.2/ISO 15948 + zlib/DEFLATE propios (stored/fixed/dynamic, 32 KiB, Adler), color types 0/2/3/4/6, bit depth 1–16, filtros 0–4, Adam7, CRC, `PngLimits`; GIF/JPEG/WebP detectados; 46 tests. Criterio: `cargo test -p image`.
-- **WP-5.6 — Pipeline de navegador (`crates/render`, HECHO)**: `render_url` (net file/data/http/https, charset UTF-8/Windows-1252, `<base>`, `<style>`+`<link rel=stylesheet>` con dedup/caps 16 MiB/32 hojas/1 MiB/hoja/4 MiB total, cascada UA+autor, layout con fuentes bundled, PNG determinista), stats por etapa y CLI; fixture 640×400 → 15.498 B `md5 7324e851…`; 22 tests. Criterio: `cargo test -p render` + `bash tools/render_fixture.sh`.
-- **WP-5.7 — Imágenes E2E (siguiente)**: `<img>`/`background-image` con fetch+caché, tamaño intrínseco, pintado y `alt` fallback; fixture local+remoto con golden.
-- **WP-5.8 — CSS externo avanzado (pendiente)**: `@import` con dedup/ciclos, media queries completas, `@font-face` si la política lo permite.
-- **WP-5.9 — Red avanzada (pendiente)**: CORS/`Referrer-Policy`, cookies, `Content-Encoding` (gzip/br), HTTP/2, streaming y proxies fuera de alcance.
+Criterio global: `cargo test -p net -p image -p render` + `cargo run -p render -- tests/fixtures/render/images.html /tmp/images.png` + `bash tools/render_fixture.sh`.
+
+---
+
+## FASE 6: Integración JS & DOM Bindings (PLANIFICADA)
+
+**Estado**: 0 % de ejecución de JS; el DOM ya expone la API de navegador necesaria (`document_element/head/body`, `get_element_by_id`, `get_elements_by_tag_name/class_name`, `text_content`, `innerHTML`/`outerHTML`, `document_write`, factorías y mutaciones con `DomError`). Decisión pendiente: motor JS embebido (política §3.1) vs implementación propia; `querySelector` requiere conectar `css` al DOM (motor de selectores ya disponible), y faltan eventos/CSSOM.
+
+**WPs candidatos**: `WP-6.1` motor/objeto global y realm; `WP-6.2` bindings DOM (`NodeId` generacional ↔ wrappers); `WP-6.3` ejecución de `<script>` (sync/async, `document.write`), `WP-6.4` eventos y `CSSOM`; criterio: scripts de fixture mutan el DOM y el PNG cambia; tests A/B contra DOM sin JS.
+
+---
+
+## FASE 7: Ventana del Sistema & Shell (EN CURSO, ~20%)
+
+| WP | Objetivo | Estado |
+|---|---|---|
+| `WP-7.1` | Ventana nativa `winit` 0.30 + presentación `softbuffer` 0.4 (X11/Wayland dlopen, sin GPU) | **HECHO** |
+| `WP-7.2` | Modo headless `--screenshot` (sin `EventLoop`, CI-friendly) + CLI `megi` + `tools/megi.sh` | **HECHO** (640×400 `md5 7324e851…`) |
+| `WP-7.3` | Navegación básica (URL bar/atajos/historial), re-render y manejo de errores en ventana | **PARCIAL**: render/errores/resize hechos; sin navegación/historial |
+| `WP-7.4` | Scroll, inputs de ratón/teclado, foco y **hit-testing** (`NodeId`/`LayoutBox` ↔ `DisplayItem`) | **PENDIENTE** |
+| `WP-7.5` | Render en worker con cancelación, zoom y **HiDPI/device-scale** | **PENDIENTE** |
+| `WP-7.6` | Accesibilidad mínima, menús/atajos y pruebas de ventana reales en CI con Xvfb | **PENDIENTE** |
+
+Limitaciones actuales: sin scroll/hit-testing/navegación/zoom/JS, sin GPU, render en el hilo de eventos, HiDPI scale 1. La ventana no se ha verificado visualmente en el host de desarrollo (sin servidor gráfico), pero compila y el modo headless está testeado.
+
+### Fuera del alcance inicial de Fase 7
+
+GPU/compositor, pestañas, extensiones, descargas, impresión, sandbox de procesos por sitio (se diseñará con la Fase 6) y accesibilidad completa.

@@ -212,7 +212,31 @@ cargo test -p paint --test end_to_end_html
 
 En tests actúa como **oráculo** del codificador de `paint` (ida y vuelta PNG → RGBA = golden `basic.rgba`). Límites anti-DoS (`PngLimits`: 16384 px/lado, 16 Mpx, 64 MiB/chunk, 256 MiB IDAT) documentados en el crate.
 
-### 2.11 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
+### 2.11 `crates/shell` + `tools/megi.sh` — Ventana nativa y screenshots headless (Fase 7)
+
+```bash
+# Ventana nativa (requiere X11/Wayland)
+tools/megi.sh https://example.com/
+cargo run -p shell -- tests/fixtures/render/basic.html
+
+# Screenshot headless (CI-friendly; no crea EventLoop)
+cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png --width 640 --height 400
+tools/megi.sh tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png
+md5sum /tmp/megi-shot.png     # 7324e851… (idéntico al pipeline render)
+```
+
+`megi` presenta el `Pixmap` como framebuffer `0RGB` con `softbuffer` (winit 0.30, backends X11/Wayland por dlopen, sin GPU). `--screenshot` usa el mismo pipeline `render` sin `EventLoop` y se testea en CI. Limitaciones: sin scroll/hit-testing/navegación/zoom/JS, HiDPI scale 1 y render en el hilo de eventos. Ver `crates/shell/src/lib.rs`.
+
+### 2.12 Fixtures de imágenes y captura E2E
+
+`tests/fixtures/render/images.html` + `assets/px.png` (PNG 4×4 de 82 B) ejercitan la carga/decodificación/pintado de `<img>` con una imagen válida escalada bilinealmente y una ausente que debe convertirse en placeholder gris con warning no fatal. Captura de referencia versionada en `docs/images/images-e2e.png` (15.625 B, `md5 1de31699…` a 800×600); el golden `basic.rgba` no cambia.
+
+```bash
+cargo run -p render -- tests/fixtures/render/images.html docs/images/images-e2e.png --width 640 --height 400
+cargo test -p paint -p image -p render
+```
+
+### 2.13 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
 
 Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-spec-driven-dev/SKILL.md` (directorio ignorado en `.gitignore` para mantener limpio el árbol Git de metadatos de agentes, mientras su documentación permanente reside en este archivo `docs/TOOLING.md`). Esta skill estandariza el protocolo operativo para cualquier agente que trabaje en la Fase 1 y posteriores:
 1. Consultar primero la sección normativa con `./tools/whatwg_spec.py section <id>`.
@@ -225,7 +249,7 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 475 tests, doc y gate de conformidad
+./tools/dev.sh all                     # fmt, clippy, 546 tests, doc y gate de conformidad
 cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 
@@ -233,9 +257,10 @@ cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basi
 python3 tools/png_check.py /tmp/basic.png
 cargo run -p render -- tests/fixtures/render/basic.html /tmp/render.png --width 640 --height 400 --json
 bash tools/render_fixture.sh
-cargo test -p net -p render -p image
+cargo test -p net -p render -p image -p shell
+cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png
 ./tools/bench.sh --scale 0.1
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Cifras de referencia de esta ronda: **475 tests** (bench 8, css 44, dom 20, fonts 13+1 doctest, html 33, image 45+1, layout 118, net 85, paint 77, render 21+1, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+Cifras de referencia de esta ronda: **546 tests** (bench 8, css 51, dom 28, fonts 13+1 doctest, html 53, image 45+1, layout 121, net 85, paint 84, render 28, shell 20, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.

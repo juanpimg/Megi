@@ -83,6 +83,18 @@ after a fix is available.
   IDAT) before/while inflating, verifies chunk CRCs and never panics on
   malformed input; the inflate implementation is the crate's own and is
   fuzzed alongside the parsers.
+- **Image pipeline limits** (`crates/render`): at most 64 `<img>` resources per
+  document, 8 MiB per image and 32 MiB of image bytes total; downloads honor the
+  `net` caps and `--no-network`; undecodable or missing images downgrade to a
+  non-fatal warning plus a gray placeholder instead of aborting the render.
+- **Desktop shell** (`crates/shell`): `winit` 0.30 and `softbuffer` 0.4 are the
+  only windowing dependencies (authorized by ARCHITECTURE §3.1) and their X11 /
+  Wayland backends are loaded dynamically (`dlopen`); there is no GPU,
+  compositor or external process. `--screenshot` runs fully headless without
+  creating an `EventLoop`. Window mode renders on the event-loop thread and
+  only consumes local files/URLs; there is no navigation, input handling,
+  hit-testing or JS yet (Phase 6/7), so the attack surface is limited to the
+  render pipeline itself.
 - **DOM identity**: generational `NodeId` handles (20-bit slot + 12-bit
   generation, free-list reuse) reject stale/foreign handles and give clear
   panics instead of corrupting the arena; `descendants`/`ancestors` are

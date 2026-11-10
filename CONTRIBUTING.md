@@ -25,7 +25,7 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 - Trabajamos con las suites de prueba de referencia de la industria:
   - **`html5lib-tests`**: Más de 7.000 pruebas de tokenizador, ~1.900 de construcción del DOM y las suites oficiales de **serialización HTML** (`serializer/*.test`).
   - **Web Platform Tests (WPT)**: Pruebas oficiales compartidas por todos los motores de navegación modernos (fixtures de CSS Syntax vendorizadas).
-- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), árbol **3.898/3.904** (allowlist 4 suites `scripted_*`: 6 mode-runs), **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El workspace tiene **475 tests**.
+- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), árbol **3.898/3.904** (allowlist 4 suites `scripted_*`: 6 mode-runs), **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El workspace tiene **546 tests**.
 
 ### 1.4 Modelo de Memoria en Arena (Sin `Rc<RefCell<Node>>`)
 - Uno de los mayores cuellos de botella y fuentes de *memory leaks* en motores web en Rust es el uso de `Rc<RefCell<Node>>` o recolectores de basura pesados.
@@ -57,7 +57,8 @@ crates/
 ├── paint/         # Paint (Fase 4): Display Lists, raster con AA/culling, bordes por lado, canvas §14.2 y PNG propio. [Depende de dom, css, layout y fonts]
 ├── net/           # Red (Fase 5): URL, HTTP/1.1+TLS (rustls/webpki-roots), caché, data:, file://, MIME y loader.
 ├── image/         # Decoder PNG + inflate zlib/DEFLATE propios (std puro, sin deps).
-├── render/        # Pipeline de navegador (Fase 5): URL → net → HTML → CSS externo → layout → PNG.
+├── render/        # Pipeline de navegador (Fase 5): URL → net → HTML → CSS externo → layout → PNG (+ imágenes <img>).
+├── shell/         # Ventana (Fase 7): winit+softbuffer, presentación 0RGB y screenshot headless. [Depende de render/paint/net]
 ├── bench/         # Benchmarks reproducibles (parseo, estilos, layout, paint, PNG). [Solo crates internos]
 └── test_harness/  # Gate de conformidad: tokenizer, árbol, serializer y CSS Syntax.
 ```
@@ -80,11 +81,11 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
 - **Paint (`crates/paint`)**:
   - Compresión PNG dentro del codificador propio (WP-4.11b) y glyph cache global.
   - Presupuestos de memoria/tiempo y presupuesto de capas de opacidad.
-- **Red y render (`crates/net`, `crates/render`, `crates/image`) — Fase 5 (≈60 %)**:
-  - **Imágenes de extremo a extremo** (`<img>`/`background-image` con `crates/image`; WP-5.7).
-  - `@import`, media queries completas y `@font-face` (WP-5.8).
+- **Red y render (`crates/net`, `crates/render`, `crates/image`) — Fase 5 (≈70 %)**:
+  - Integrar `@import`/media en el pipeline de render (el parser/evaluador CSS ya existe; WP-5.8).
+  - `background-image` con `url(...)` y `crates/image` (WP-4.9b).
   - CORS/`Referrer-Policy`, cookies, gzip/br, HTTP/2 y streaming (WP-5.9).
-  - Ya hechos: TLS, caché HTTP, `data:`, pipeline URL→PNG (`render`) y decoder PNG/inflate (`image`).
+  - Ya hechos: TLS, caché, `data:`, pipeline URL→PNG, **imágenes `<img>` E2E** y decoder PNG/inflate.
 - **Tipografía (`crates/fonts`)**:
   - Mejoras de shaping para más scripts, fallback entre familias y métricas de fuentes variables.
 - **Rendimiento/robustez (`crates/html`, `crates/dom`, `layout`, `paint`)**:
@@ -92,7 +93,8 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
   - Benchmarks reproducibles (`./tools/bench.sh`) y regresiones de complejidad.
 - **Fuzzing (`fuzz/`)**:
   - Ampliar corpus y targets; mejorar la señal de la CI nocturna. Ver [`docs/FUZZING.md`](docs/FUZZING.md).
-- **Fase 7 — shell**: ventana/eventos/scroll/hit-testing sobre el `Pixmap` del pipeline.
+- **Fase 7 — shell (`crates/shell`)**: scroll, **hit-testing** (`NodeId`/`LayoutBox` ↔ `DisplayItem`), navegación/historial, inputs de ratón/teclado, zoom/HiDPI, render en worker y pruebas de ventana con Xvfb.
+- **Fase 6 — JS**: decidir política de motor (§3.1), bindings generacionales, eventos/CSSOM y `querySelector`; el DOM ya expone `innerHTML`/`document.write`.
 - **Harness & Tooling (`crates/test_harness`, `tools/`)**:
   - Más fixtures vendorizadas de WPT, ampliación de An+B y comparación visual/golden images.
 
@@ -141,7 +143,7 @@ cargo fmt
 ./tools/dev.sh all
 
 # Comprobaciones individuales útiles
-cargo test --workspace                         # 475 tests
+cargo test --workspace                         # 546 tests
 cargo +1.88 check --workspace --all-targets
 cargo run -p test_harness -- --summary          # gate 4 suites: PASS, exit 0
 cargo run -p test_harness -- --summary --strict # exit 1 si hay fallos no aceptados
@@ -155,8 +157,10 @@ python3 tools/png_check.py /tmp/basic.png
 
 # Red y render (Fase 5; tests offline)
 cargo test -p net -p render -p image
-cargo run -p render -- tests/fixtures/render/basic.html /tmp/render.png --width 640 --height 400
+cargo run -p render -- tests/fixtures/render/images.html /tmp/images.png
 bash tools/render_fixture.sh
+cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png   # Fase 7 headless
+tools/megi.sh https://example.com/                                                  # ventana (X11/Wayland)
 
 # Fuzzing (workspace aparte; nightly + ASan)
 rustup toolchain install nightly --profile minimal
@@ -177,6 +181,7 @@ Utilizamos commits atómicos, descriptivos y en formato semántico:
 - `feat(css): implement functional Selectors L4 (:is/:where/:not/:has)`
 - `feat(net): bootstrap Phase 5 with URL, HTTP/1.1, file and resource loading`
 - `feat(render,image): browser pipeline and dependency-free PNG decoding`
+- `feat(shell): first browser window with winit, softbuffer and headless screenshots`
 - `feat(paint): DEFLATE PNG compression and fully iterative painter`
 - `fix(html): pop implied end tags when encountering hr inside select scope`
 - `test(test_harness): add WPT selector matching suite runner`
