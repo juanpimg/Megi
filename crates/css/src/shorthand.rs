@@ -289,17 +289,29 @@ fn expand_box_edges(value: &str, name: &str) -> Option<Vec<(String, String)>> {
 // Background shorthand
 // ---------------------------------------------------------------------------
 
-/// Expands `background` to the single modelled longhand `background-color`.
+/// Returns whether a component is an `<image>` candidate for `background`/`list-style`
+/// shorthands (plain URL or a gradient/other image function this engine does not rasterize).
+fn is_image_component(component: &str) -> bool {
+    let lower = component.trim().trim_matches(',').to_ascii_lowercase();
+    lower.starts_with("url(")
+        || lower.contains("gradient(")
+        || lower.starts_with("image-set(")
+        || lower.starts_with("cross-fade(")
+}
+
+/// Expands `background` to the modelled longhands `background-color` and `background-image`.
 ///
-/// The `<color>` may appear in any position (`background: #eee`, `background: red none`,
-/// `background: url(bg.png) no-repeat #0f0`); when omitted the shorthand resets the color to
-/// its initial value `transparent` (CSS Backgrounds Level 3 §3).
+/// The `<color>` and the `<image>` may appear in any position (`background: #eee`,
+/// `background: red none`, `background: url(bg.png) no-repeat #0f0`); omitted components reset
+/// to their initial values (`transparent` / `none`, CSS Backgrounds Level 3 §3). Gradients are
+/// kept as the raw image value; the computed style maps them to `None` (documented).
 fn expand_background(value: &str) -> Option<Vec<(String, String)>> {
     let components = split_components(value);
     if components.is_empty() {
         return None;
     }
     let mut color = None;
+    let mut image = None;
     for component in &components {
         if is_css_wide_keyword(component) {
             return Some(Vec::new());
@@ -309,12 +321,22 @@ fn expand_background(value: &str) -> Option<Vec<(String, String)>> {
                 || component.trim().eq_ignore_ascii_case("currentcolor"))
         {
             color = Some(component.clone());
+            continue;
+        }
+        if image.is_none() && is_image_component(component) {
+            image = Some(component.clone());
         }
     }
-    Some(vec![(
-        "background-color".to_string(),
-        color.unwrap_or_else(|| "transparent".to_string()),
-    )])
+    Some(vec![
+        (
+            "background-color".to_string(),
+            color.unwrap_or_else(|| "transparent".to_string()),
+        ),
+        (
+            "background-image".to_string(),
+            image.unwrap_or_else(|| "none".to_string()),
+        ),
+    ])
 }
 
 // ---------------------------------------------------------------------------
@@ -475,30 +497,46 @@ fn expand_font(value: &str) -> Option<Vec<(String, String)>> {
 // List-style shorthand
 // ---------------------------------------------------------------------------
 
-/// Expands `list-style` to `list-style-type` (the only modelled list longhand).
+/// Expands `list-style` to the modelled `list-style-type` and `list-style-image` longhands.
+///
+/// `none` resets both longhands to `none`; omitted components reset to their initial values
+/// (`disc` / `none`). `list-style-position` is not modelled and is ignored.
 fn expand_list_style(value: &str) -> Option<Vec<(String, String)>> {
     let components = split_components(value);
     if components.is_empty() {
         return None;
     }
     let mut list_type = None;
+    let mut image = None;
     for component in &components {
         let lower = component.trim().to_ascii_lowercase();
         if is_css_wide_keyword(component) {
             return Some(Vec::new());
         }
-        if ListStyleType::parse(component).is_some() {
-            list_type = Some(component.clone());
-        } else if lower.starts_with("url(") || lower == "inside" || lower == "outside" {
-            // `list-style-position` / `list-style-image` are not modelled yet.
+        if is_image_component(component) {
+            if image.replace(component.clone()).is_some() {
+                return Some(Vec::new());
+            }
+        } else if ListStyleType::parse(component).is_some() {
+            if list_type.replace(component.clone()).is_some() {
+                return Some(Vec::new());
+            }
+        } else if lower == "inside" || lower == "outside" {
+            // `list-style-position` is not modelled yet.
         } else {
             return Some(Vec::new());
         }
     }
-    Some(vec![(
-        "list-style-type".to_string(),
-        list_type.unwrap_or_else(|| "disc".to_string()),
-    )])
+    Some(vec![
+        (
+            "list-style-type".to_string(),
+            list_type.unwrap_or_else(|| "disc".to_string()),
+        ),
+        (
+            "list-style-image".to_string(),
+            image.unwrap_or_else(|| "none".to_string()),
+        ),
+    ])
 }
 
 #[cfg(test)]
@@ -589,16 +627,24 @@ mod tests {
     fn test_expand_background_and_list_style() {
         let expanded = expand("background: red none;");
         assert_eq!(get(&expanded, "background-color"), Some("red"));
+        assert_eq!(get(&expanded, "background-image"), Some("none"));
 
         let expanded = expand("background: url(bg.png) no-repeat #0f0;");
         assert_eq!(get(&expanded, "background-color"), Some("#0f0"));
+        assert_eq!(get(&expanded, "background-image"), Some("url(bg.png)"));
 
         let expanded = expand("background: none;");
         assert_eq!(get(&expanded, "background-color"), Some("transparent"));
+        assert_eq!(get(&expanded, "background-image"), Some("none"));
 
         let expanded = expand("list-style: none inside;");
         assert_eq!(get(&expanded, "list-style-type"), Some("none"));
+        assert_eq!(get(&expanded, "list-style-image"), Some("none"));
         let expanded = expand("list-style: square;");
         assert_eq!(get(&expanded, "list-style-type"), Some("square"));
+        assert_eq!(get(&expanded, "list-style-image"), Some("none"));
+        let expanded = expand("list-style: url(bullet.png) square;");
+        assert_eq!(get(&expanded, "list-style-type"), Some("square"));
+        assert_eq!(get(&expanded, "list-style-image"), Some("url(bullet.png)"));
     }
 }

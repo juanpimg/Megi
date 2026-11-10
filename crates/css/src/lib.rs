@@ -15,6 +15,7 @@ pub mod component_value;
 pub mod media;
 pub mod parser;
 pub mod properties;
+pub mod query;
 pub mod rule;
 pub mod selector;
 pub mod shorthand;
@@ -37,6 +38,10 @@ pub use properties::{
     BorderCollapse, BorderStyle, BoxSizing, CaptionSide, Clear, Color, ComputedStyle, Display,
     EmptyCells, Float, FontStyle, Length, ListStyleType, Overflow, Position, RectEdges,
     TableLayout, TextAlign, TextDecoration, VerticalAlign, Visibility, WhiteSpace,
+};
+pub use query::{
+    SelectorParseError, matches, query_selector, query_selector_all, try_matches,
+    try_query_selector, try_query_selector_all,
 };
 pub use rule::{AtRule, Declaration, ImportRule, Rule, StyleRule, Stylesheet};
 pub use selector::{
@@ -1474,5 +1479,120 @@ mod tests {
         assert_eq!(print.get(&p).expect("style").color, Color::RED);
         let screen_wide = resolve_document_styles_with_viewport(&doc, Some(css), 1000.0, 600.0);
         assert_eq!(screen_wide.get(&p).expect("style").color, Color::BLACK);
+    }
+    // ---------------------------------------------------------------------------------------
+    // Round 7: query API is covered in `query::tests`; image parsing below.
+    // ---------------------------------------------------------------------------------------
+
+    #[test]
+    fn test_background_image_and_list_style_image_parsing() {
+        // Plain URLs: quoted, single-quoted and unquoted; outer quotes are removed.
+        for value in [
+            "background-image: url(bg.png);",
+            "background-image: url(\"bg.png\");",
+            "background-image: url('bg.png');",
+        ] {
+            let style = style_with_inline("div", value);
+            assert_eq!(
+                style.background_image,
+                Some("bg.png".to_string()),
+                "{value}"
+            );
+        }
+        // URLs may contain spaces/slashes when quoted.
+        assert_eq!(
+            style_with_inline("div", "background-image: url(\"img/hero 1.png\");").background_image,
+            Some("img/hero 1.png".to_string())
+        );
+
+        // `none` and unsupported image types (gradients) compute to None.
+        assert_eq!(
+            style_with_inline("div", "background-image: none;").background_image,
+            None
+        );
+        for value in [
+            "background-image: linear-gradient(red, blue);",
+            "background-image: radial-gradient(circle, #fff, #000);",
+            "background-image: repeating-linear-gradient(red 0, blue 10px);",
+            "background-image: image-set(url(a.png) 1x);",
+        ] {
+            assert_eq!(
+                style_with_inline("div", value).background_image,
+                None,
+                "{value}"
+            );
+        }
+        // Invalid values fall back to the initial None.
+        assert_eq!(
+            style_with_inline("div", "background-image: 42px;").background_image,
+            None
+        );
+
+        // Multi-layer values use the first plain URL layer.
+        assert_eq!(
+            style_with_inline(
+                "div",
+                "background-image: url(first.png), linear-gradient(red, blue);"
+            )
+            .background_image,
+            Some("first.png".to_string())
+        );
+
+        // The `background` shorthand populates color and image at the same time.
+        let shorthand = style_with_inline("div", "background: #eee url(bg.png) no-repeat center;");
+        assert_eq!(shorthand.background_color, Color::new(238, 238, 238, 255));
+        assert_eq!(shorthand.background_image, Some("bg.png".to_string()));
+
+        let color_only = style_with_inline("div", "background: red;");
+        assert_eq!(color_only.background_color, Color::RED);
+        assert_eq!(color_only.background_image, None);
+
+        let image_only = style_with_inline("div", "background: url(bg.png);");
+        assert_eq!(image_only.background_color, Color::TRANSPARENT);
+        assert_eq!(image_only.background_image, Some("bg.png".to_string()));
+
+        // Gradients in the shorthand are preserved as images but compute to None.
+        assert_eq!(
+            style_with_inline("div", "background: url(a.png) linear-gradient(red, blue);")
+                .background_image,
+            Some("a.png".to_string())
+        );
+        assert_eq!(
+            style_with_inline("div", "background: linear-gradient(red, blue);").background_image,
+            None
+        );
+
+        // `list-style-image` longhand and `list-style` shorthand.
+        assert_eq!(
+            style_with_inline("ul", "list-style-image: url(bullet.png);").list_style_image,
+            Some("bullet.png".to_string())
+        );
+        let list_shorthand = style_with_inline("ul", "list-style: url(bullet.png) square;");
+        assert_eq!(list_shorthand.list_style_type, ListStyleType::Square);
+        assert_eq!(
+            list_shorthand.list_style_image,
+            Some("bullet.png".to_string())
+        );
+        let list_none = style_with_inline("ul", "list-style: none;");
+        assert_eq!(list_none.list_style_type, ListStyleType::None);
+        assert_eq!(list_none.list_style_image, None);
+
+        // Images are not inherited.
+        let (parent, child) = style_pair(
+            "background-image: url(parent.png); list-style-image: url(parent-bullet.png);",
+            "",
+        );
+        assert_eq!(parent.background_image, Some("parent.png".to_string()));
+        assert_eq!(
+            parent.list_style_image,
+            Some("parent-bullet.png".to_string())
+        );
+        assert_eq!(child.background_image, None);
+        assert_eq!(child.list_style_image, None);
+
+        // Initial values.
+        let initial = ComputedStyle::initial();
+        assert_eq!(initial.background_image, None);
+        assert_eq!(initial.list_style_image, None);
     }
 }

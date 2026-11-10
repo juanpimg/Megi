@@ -899,6 +899,14 @@ pub struct ComputedStyle {
     // Colors & Background
     pub color: Color,
     pub background_color: Color,
+    /// `background-image` URL as authored (outer quotes removed) for the first plain
+    /// `url(...)` layer; `None` for `none`, gradients and other unsupported image types.
+    ///
+    /// Contract: `render` resolves this URL against the document base URL and caches the
+    /// decoded bitmap; `paint` stretches it to the element's padding box. The shorthand
+    /// (`background: <color> url(...)`) populates both color and image. `background-repeat`,
+    /// `-size`, `-position`, `-clip` and multiple layers are out of scope.
+    pub background_image: Option<String>,
 
     // Typography
     pub font_size: f32,
@@ -917,6 +925,10 @@ pub struct ComputedStyle {
     pub vertical_align: VerticalAlign,
     pub text_decoration: TextDecoration,
     pub list_style_type: ListStyleType,
+    /// `list-style-image` URL as authored (outer quotes removed) for a plain `url(...)`; `None`
+    /// for `none`/gradients. `render` resolves the URL; `paint` draws it as the list marker.
+    /// Not inherited; populated by the `list-style` shorthand too.
+    pub list_style_image: Option<String>,
 
     // Visibility
     pub visibility: Visibility,
@@ -980,6 +992,7 @@ impl ComputedStyle {
 
             color: Color::BLACK,
             background_color: Color::TRANSPARENT,
+            background_image: None,
 
             font_size: 16.0,
             font_weight: 400,
@@ -992,6 +1005,7 @@ impl ComputedStyle {
             vertical_align: VerticalAlign::Baseline,
             text_decoration: TextDecoration::NONE,
             list_style_type: ListStyleType::Disc,
+            list_style_image: None,
 
             visibility: Visibility::Visible,
             opacity: 1.0,
@@ -1138,6 +1152,11 @@ impl ComputedStyle {
             .unwrap_or(EmptyCells::Show);
 
         let background_color = Self::compute_background_color(&entries, color);
+        // Images are not inherited; `none`, gradients and invalid values compute to `None`.
+        let background_image = find_declaration(&entries, "background-image")
+            .and_then(|d| parse_image_value(&d.raw_value));
+        let list_style_image = find_declaration(&entries, "list-style-image")
+            .and_then(|d| parse_image_value(&d.raw_value));
 
         let width = find_declaration(&entries, "width")
             .and_then(|d| Length::parse(&d.raw_value, font_size, root_font_size))
@@ -1235,6 +1254,7 @@ impl ComputedStyle {
             empty_cells,
             color,
             background_color,
+            background_image,
             font_size,
             font_weight,
             font_style,
@@ -1246,6 +1266,7 @@ impl ComputedStyle {
             vertical_align,
             text_decoration,
             list_style_type,
+            list_style_image,
             visibility,
             opacity,
         }
@@ -1636,6 +1657,52 @@ fn parse_border_spacing(value: &str, font_size: f32, root_font_size: f32) -> Opt
         0 => None,
         1 => Some((lengths[0], lengths[0])),
         _ => Some((lengths[0], lengths[1])),
+    }
+}
+
+/// Extracts the URL of an `<image>` value for `background-image` / `list-style-image`.
+///
+/// Supported: a plain `url("...")` or `url(...)` (outer quotes removed, URL kept as authored).
+/// `none`, gradients (`linear-gradient(...)`, `radial-gradient(...)`, `conic-gradient(...)`,
+/// `repeating-*`), `image-set(...)` and other unsupported image types evaluate to `None`
+/// (documented limitation: the engine has no gradient rasterizer yet). For a multi-layer value
+/// the first plain URL layer is used.
+fn parse_image_value(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty() || value.eq_ignore_ascii_case("none") {
+        return None;
+    }
+    for component in split_components(value) {
+        let component = component.trim().trim_matches(',');
+        if let Some(url) = parse_url_component(component) {
+            return Some(url);
+        }
+    }
+    None
+}
+
+/// Parses a single `url(...)` component into its inner URL (quotes removed).
+fn parse_url_component(component: &str) -> Option<String> {
+    let component = component.trim();
+    if component.len() < 5 || !component.is_char_boundary(4) {
+        return None;
+    }
+    if !component[..4].eq_ignore_ascii_case("url(") || !component.ends_with(')') {
+        return None;
+    }
+    let inner = component[4..component.len() - 1].trim();
+    let inner = if inner.len() >= 2
+        && ((inner.starts_with('"') && inner.ends_with('"'))
+            || (inner.starts_with('\'') && inner.ends_with('\'')))
+    {
+        inner[1..inner.len() - 1].trim()
+    } else {
+        inner
+    };
+    if inner.is_empty() {
+        None
+    } else {
+        Some(inner.to_string())
     }
 }
 
