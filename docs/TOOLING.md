@@ -225,7 +225,7 @@ tools/megi.sh tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png
 md5sum /tmp/megi-shot.png     # 7324e851… (idéntico al pipeline render)
 ```
 
-`megi` presenta el `Pixmap` como framebuffer `0RGB` con `softbuffer` (winit 0.30, backends X11/Wayland por dlopen, sin GPU). `--screenshot` usa el mismo pipeline `render` sin `EventLoop` y se testea en CI. **Navegación (rondas 9–10)**: clic izquierdo en enlaces (`Url::join`), historial `NavigationState` (back/forward/replace/reload, cap 256, truncado forward; fallos conservan la entrada), **Alt+←/Backspace/b** atrás, **Alt+→/n** adelante, **r** recargar, **q/Esc** cerrar, scroll completo, HiDPI y **título dinámico** `<title>`+URL+% scroll+`[recortado]` (errores «Megi — error: …»); hit regions y título del mismo render que los píxeles; desde la ronda 10 los enlaces se resuelven con **`RenderOutput.hit_regions` + `paint::find_link_at`** (fallback layout+DOM) y el shell acepta `--cookies`/`--origin`. 83 tests. Limitaciones: formularios/pestañas/zoom/descargas, fragmentos = nueva navegación, >8192 CSS px recortado, JS/eventos no en el bucle del host y ventana no testeada en CI. Ver `crates/shell/src/lib.rs`.
+`megi` presenta el `Pixmap` como framebuffer `0RGB` con `softbuffer` (winit 0.30, backends X11/Wayland por dlopen, sin GPU). `--screenshot` usa el mismo pipeline `render` sin `EventLoop` y se testea en CI. **Navegación (rondas 9–10)**: clic izquierdo en enlaces (`Url::join`), historial `NavigationState` (back/forward/replace/reload, cap 256, truncado forward; fallos conservan la entrada), **Alt+←/Backspace/b** atrás, **Alt+→/n** adelante, **r** recargar, **q/Esc** cerrar, scroll completo, HiDPI y **título dinámico** `<title>`+URL+% scroll+`[recortado]` (errores «Megi — error: …»); hit regions y título del mismo render que los píxeles; desde la ronda 10 los enlaces se resuelven con **`RenderOutput.hit_regions` + `paint::find_link_at`** (fallback layout+DOM), el shell acepta `--cookies`/`--origin` y la **ronda 13** añade **zoom** (`Ctrl+=/-/0`, `--zoom` 0.5–3.0) y **auto-refresh opt-in** (`--refresh-ms`). 100 tests. Limitaciones: formularios/pestañas/descargas, fragmentos = nueva navegación, >8192 CSS px recortado, JS/eventos no en el bucle del host y ventana no testeada en CI. Ver `crates/shell/src/lib.rs`.
 
 ### 2.12 Fixtures de imágenes y captura E2E
 
@@ -330,6 +330,39 @@ cargo test -p paint --test hit_testing   # 11 tests nuevos (108 paint)
 # ronda 10: render construye RenderOutput.hit_regions (+0,6 µs) y el shell usa find_link_at
 ```
 
+### 2.16e Fuentes web @font-face + WOFF2 (ronda 13)
+
+`crates/css` parsea `@font-face` (`Stylesheet.font_faces`), `crates/fonts` decodifica **WOFF2→sfnt** con la dependencia autorizada **`woff2-patched` 0.4** (Apache-2.0, pure Rust, sin C/FFI; **solo en `fonts`**) y `render` recoge las reglas de todas las hojas (incluido `@import`), deduplica, descarga con `ResourceLoader` (`--no-network`, caps **8 fuentes/8 MiB/32 MiB**), construye una **DB por render** para layout+paint y reporta `fonts_loaded/fonts_failed/font_bytes` + `timings.fonts` (fallos ⇒ warning no fatal). Fixtures OFL Open Sans (18.640 B) en `crates/fonts/tests/fixtures/` y `tests/fixtures/render/`.
+
+```bash
+cargo test -p fonts -p css -p render
+cargo run -p render -- tests/fixtures/render/webfont.html /tmp/webfont.png --json      # md5 f38aed03…; fonts_loaded=1
+cargo run -p render -- tests/fixtures/render/webfont-fallback.html /tmp/fallback.png  # md5 e2d76dee…
+```
+
+Límites: sin WOFF1, primer `src` soportado, weight/style no eligen cara, sin unicode-range/font-display (bloqueante), sin subsetting/color fonts y DB no cacheada. La dep nueva hará rebuild del cache de CI en la próxima ejecución.
+
+### 2.16f Crate `svg` + SVG E2E en render (ronda 13)
+
+`crates/svg` implementa XML subset + modelo SVG + path data con arcos + rasterizador **scanline AA determinista** (4 subfilas + cobertura analítica; strokes 4×4), con límites anti-DoS (8 MiB/256 profundidad/100k elementos/1M segmentos/16k lado/64 Mpx/`<use>` 16) y `#![forbid(unsafe_code)]`. No soporta `<text>`, CSS class/style sheets, gradientes/patterns, dasharray, markers, filtros/máscaras/clips, script ni refs externas. **Cableado E2E HECHO** en `render`: `<img src=*.svg>` y `background-image` (detección por Content-Type/sniffing, tamaño intrínseco width/height/viewBox con 300×150 por defecto, cap **16 Mpx/64 MiB RGBA**, corrupto ⇒ warning no fatal, navegación directa en página sintética) con stat `svgs_rendered`; 5 fixtures `svg_*` + 6 assets y 11 tests.
+
+```bash
+cargo test -p svg
+cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/simple.svg /tmp/simple.png
+python3 tools/png_check.py /tmp/simple.png
+cargo test -p render --test svg_tests     # 11 tests SVG E2E
+cargo run -p render -- tests/fixtures/render/svg_img.html /tmp/svg_img.png --json   # svgs_rendered=1
+```
+
+### 2.16g Shell: zoom y auto-refresh (ronda 13)
+
+```bash
+cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/zoom2.png --width 640 --height 400 --zoom 2  # 320×200, md5 c11903cf…
+cargo run -p shell -- tests/fixtures/render/showcase/index.html --zoom 1.5 --refresh-ms 250
+```
+
+Zoom `Ctrl+=/-/0` y `--zoom` 0.5–3.0 (escalones 50–300 %, viewport CSS = físico/(scale·zoom)); `Ctrl+L` imprime la URL; auto-refresh opt-in solo cuando `scripts_executed>0 && script_timers_pending>0` (worker generacional, scroll conservado, sin bucles; repite el primer frame de animaciones con reloj virtual).
+
 ### 2.17 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
 
 Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-spec-driven-dev/SKILL.md` (directorio ignorado en `.gitignore` para mantener limpio el árbol Git de metadatos de agentes, mientras su documentación permanente reside en este archivo `docs/TOOLING.md`). Esta skill estandariza el protocolo operativo para cualquier agente que trabaje en la Fase 1 y posteriores:
@@ -343,7 +376,7 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 877 tests, doc y gate de conformidad
+./tools/dev.sh all                     # fmt, clippy, 959 tests, doc y gate de conformidad
 cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0 (árbol 3904/3904, 100 %)
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 
@@ -361,4 +394,4 @@ cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.pn
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Cifras de referencia de esta ronda: **877 tests** (bench 8, css 57, dom 28, fonts 13+1 doctest, html 60, image 45+1 doctest, js 58, layout 135, net 180, paint 109, render 88, shell 83, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: layout ~51-53 ms, pipeline ~134-137 ms, encoder PNG −30,5 % invariante; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+Cifras de referencia en el cierre de la ronda 13: **959 tests** (bench 8, css 61, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 58, layout 135, net 180, paint 109, **render 104**, shell 100, svg 41, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: layout ~51-53 ms, **pipeline ~127-134 ms** (`html/massive-end-p` ~19 ms tras el fix `fast_hash`), encoder PNG −30,5 % invariante; web fonts E2E (WOFF2, DB por render) y SVG E2E (`svgs_rendered`); todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.

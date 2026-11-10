@@ -6,6 +6,88 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 14 — SVG wired into render and parser fast-hash regression fix (2026-11-10)
+
+#### Added
+
+- **SVG rendering in the pipeline** (`crates/render`, commit `6971e50`):
+  `<img src=*.svg>` and `background-image` SVGs are decoded and rasterized with
+  the from-scratch `svg` crate — detection by `Content-Type: image/svg+xml` and
+  content sniffing, intrinsic size from `width`/`height`/`viewBox` (300×150
+  default), cap **16 Mpx / 64 MiB RGBA** per image, corrupt or oversized files
+  produce a **non-fatal warning before fallback**, and direct SVG navigation is
+  wrapped in a synthetic HTML page. New `RenderStats::svgs_rendered` (human
+  output and `--json`), 5 fixtures (`svg_img`, `svg_viewbox`, `svg_intrinsic`,
+  `svg_corrupt`, `svg_background`) plus 6 assets and
+  `crates/render/tests/svg_tests.rs` with **11 tests**; render **93→104 tests**
+  and workspace **948→959 tests**.
+
+#### Fixed
+
+- **Parser regression `massive-end-p` restored** (`crates/html/src/fast_hash.rs`,
+  commit `b7ef1c1`): the byte-chunk hashing loop for short keys is back, so
+  `html/massive-end-p` returns to **~19 ms** (18.7-19.3 ms; it was 21.4 ms in
+  round 11, 18.2 ms in round 10) and the **pipeline is ~127-134 ms** again. Only
+  the hasher changed; the HTML5 conformance gate stays at 3,904/3,904.
+
+### Round 13 — web fonts (@font-face/WOFF2), a from-scratch `svg` crate and shell zoom/refresh (2026-11-10)
+
+#### Added
+
+- **Web fonts end to end (`@font-face` + WOFF2)**: `crates/css` parses
+  `@font-face` (`Stylesheet.font_faces`, `FontFaceRule { family, sources,
+  weight, style }`); `crates/fonts` gains `decode_web_font`/`is_woff2`
+  (WOFF2→sfnt) through the authorized dependency **`woff2-patched` 0.4**
+  (Apache-2.0, pure Rust, no C/FFI, only in `crates/fonts`) plus
+  `FontDatabase::load_font_data_family(alias, sfnt)`; `crates/render` collects
+  the rules from every sheet (including `@import`), deduplicates, fetches them
+  through the `ResourceLoader` (`--no-network`, caps **8 fonts / 8 MiB each /
+  32 MiB total**), builds a **per-render font database** shared by layout and
+  paint and reports `fonts_loaded`/`fonts_failed`/`font_bytes` and
+  `timings.fonts` (failures are non-fatal warnings with fallback). Fixtures:
+  OFL Open Sans WOFF2 (18,640 B + license); evidence **webfont
+  `md5 f38aed032b8d160075097f1e4ad83b49`** vs **fallback
+  `e2d76dee98f7c4ef2896c5d003be74f2`**.
+- **New `crates/svg` crate (from scratch)**: own XML-subset parser + SVG model
+  (`svg/g/defs/use/rect` with rx/ry, `circle/ellipse/line/polyline/polygon/path`,
+  nested `svg`, transforms, `viewBox`/`preserveAspectRatio`, inline styles,
+  colours, fill non-zero/even-odd, stroke width/caps/joins/miterlimit,
+  opacity), path data `M/L/H/V/C/S/Q/T/A/Z` with elliptical arcs→cubics and a
+  **deterministic antialiased scanline rasterizer** (4 sub-rows + analytic
+  horizontal coverage; strokes via 4×4 supersampling), straight-alpha RGBA,
+  `#![forbid(unsafe_code)]`, anti-DoS limits (8 MiB input / depth 256 / 100k
+  elements / 1M segments / 16k side / 64 Mpx / `<use>` depth 16), the
+  `render_svg`/`intrinsic_size`/`SvgImage`/`SvgOptions`/`Limits`/`SvgError` API
+  and `examples/svg_to_png` with its own PNG writer. **41 tests.** Unsupported
+  (documented): `<text>`, CSS class/style sheets, gradients/patterns,
+  `stroke-dasharray`, markers, filters/masks/clips, script/animation and
+  external references. **Pipeline wiring (`<img src=*.svg>`) is the next round.**
+- **Shell zoom, auto-refresh and richer status**: zoom (`Ctrl+=/-/0`,
+  `--zoom` 0.5–3.0, 50–300 % steps, CSS viewport = physical/(scale·zoom)),
+  `Ctrl+L` prints the URL, opt-in `--refresh-ms [MS]` (250 ms default; only when
+  `scripts_executed > 0 && script_timers_pending > 0`, generation-checked
+  worker, scroll preserved, no loops) and titles with zoom/scroll/warnings/
+  errors. **83→100 shell tests**; basic screenshot `md5 7324e851…` unchanged and
+  `--zoom 2` (640×400→320×200) `md5 c11903cfe0c4f7095289052d25750bd3`.
+
+#### Changed
+
+- Test suite: **948 tests, 0 failures** (was 877): bench 8, **css 61**, dom 28,
+  **fonts 17+1 doctest**, html 60, image 45+1, js 58, layout 135, net 180,
+  paint 109, **render 93**, **shell 100**, **svg 41**, test_harness 11. fmt,
+  clippy `-D warnings`, `cargo doc`, gate PASS and MSRV 1.88 verified.
+- Phase status: Phase 4 practically complete in the engine (web fonts done,
+  `svg` crate ready; wiring pending), Phase 5 ≈95 %, **Phase 6 ≈80-85 %**,
+  **Phase 7 ≈70 %**.
+- Dependency policy (`ARCHITECTURE.md` §3.1): `woff2-patched` 0.4 authorized as
+  a WOFF2-format component in `crates/fonts` only; the CI cache will rebuild
+  once because of the new dependency.
+- Repo synchronized on GitHub (`main` + `sprint/robustez-fase4` at `5234630`)
+  and CI (quality, conformance, MSRV) green with the Wayland/X11/xcb system
+  packages installed on the runner.
+- Goldens unchanged: showcase 80,220 B `md5 c95c7eff…`, render basic 15,498 B
+  `md5 7324e851…`, Phase-4 `basic.rgba` `md5 60f8984e…`.
+
 ### Round 12 — layout −14.6 %, byte-identical PNG encoder −30.5 %, advanced JS events and a green CI (2026-11-10)
 
 #### Added
