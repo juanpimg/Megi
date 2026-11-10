@@ -19,6 +19,10 @@
 //! * `flex-grow`, `flex-shrink`, `flex-basis` (`auto`/`0`/length/%) and the
 //!   `flex` shorthand, plus `min-width`/`max-width`/`min-height`/`max-height`
 //!   clamping on the main axis.
+//! * Mixed `calc()` (`<percentage> + <length>`) values in item widths/heights,
+//!   margins, paddings, min/max sizes and gaps are resolved against the flex
+//!   container's axes (percentage part `0` on indefinite axes; see
+//!   [`crate::calc`]).
 //!
 //! ## Out of scope (documented)
 //!
@@ -105,27 +109,43 @@ impl Item<'_> {
     }
 }
 
-fn resolve(value: Length, reference: f32) -> f32 {
-    match value {
-        Length::Px(px) => px,
-        Length::Percent(percent) => reference * percent / 100.0,
-        Length::Auto => 0.0,
-    }
+fn resolve(value: Length, calc: Option<css::calc::CalcValue>, reference: f32) -> f32 {
+    crate::calc::length(value, calc, reference)
 }
 
 fn resolve_edges(style: &ComputedStyle, cb_width: f32) -> Edges {
     Edges {
         margin: EdgeSizes {
-            top: resolve(style.margin.top, cb_width),
-            right: resolve(style.margin.right, cb_width),
-            bottom: resolve(style.margin.bottom, cb_width),
-            left: resolve(style.margin.left, cb_width),
+            top: resolve(style.margin.top, style.calc_lengths.margin_top, cb_width),
+            right: resolve(
+                style.margin.right,
+                style.calc_lengths.margin_right,
+                cb_width,
+            ),
+            bottom: resolve(
+                style.margin.bottom,
+                style.calc_lengths.margin_bottom,
+                cb_width,
+            ),
+            left: resolve(style.margin.left, style.calc_lengths.margin_left, cb_width),
         },
         padding: EdgeSizes {
-            top: resolve(style.padding.top, cb_width),
-            right: resolve(style.padding.right, cb_width),
-            bottom: resolve(style.padding.bottom, cb_width),
-            left: resolve(style.padding.left, cb_width),
+            top: resolve(style.padding.top, style.calc_lengths.padding_top, cb_width),
+            right: resolve(
+                style.padding.right,
+                style.calc_lengths.padding_right,
+                cb_width,
+            ),
+            bottom: resolve(
+                style.padding.bottom,
+                style.calc_lengths.padding_bottom,
+                cb_width,
+            ),
+            left: resolve(
+                style.padding.left,
+                style.calc_lengths.padding_left,
+                cb_width,
+            ),
         },
         border: EdgeSizes {
             top: style.border_width.top,
@@ -136,12 +156,12 @@ fn resolve_edges(style: &ComputedStyle, cb_width: f32) -> Edges {
     }
 }
 
-fn definite_length(value: Length, reference: Option<f32>) -> Option<f32> {
-    match value {
-        Length::Px(px) => Some(px),
-        Length::Percent(percent) => reference.map(|reference| reference * percent / 100.0),
-        Length::Auto => None,
-    }
+fn definite_length(
+    value: Length,
+    calc: Option<css::calc::CalcValue>,
+    reference: Option<f32>,
+) -> Option<f32> {
+    crate::calc::length_optional(value, calc, reference)
 }
 
 fn is_row(direction: FlexDirection) -> bool {
@@ -158,17 +178,33 @@ fn is_reverse(direction: FlexDirection) -> bool {
 fn clamp_main(style: &ComputedStyle, value: f32, row: bool, reference: f32) -> f32 {
     let mut size = value.max(0.0);
     if row {
-        if let Some(min) = definite_length(style.min_width, Some(reference)) {
+        if let Some(min) = definite_length(
+            style.min_width,
+            style.calc_lengths.min_width,
+            Some(reference),
+        ) {
             size = size.max(min);
         }
-        if let Some(max) = definite_length(style.max_width, Some(reference)) {
+        if let Some(max) = definite_length(
+            style.max_width,
+            style.calc_lengths.max_width,
+            Some(reference),
+        ) {
             size = size.min(max.max(0.0));
         }
     } else {
-        if let Some(min) = definite_length(style.min_height, Some(reference)) {
+        if let Some(min) = definite_length(
+            style.min_height,
+            style.calc_lengths.min_height,
+            Some(reference),
+        ) {
             size = size.max(min);
         }
-        if let Some(max) = definite_length(style.max_height, Some(reference)) {
+        if let Some(max) = definite_length(
+            style.max_height,
+            style.calc_lengths.max_height,
+            Some(reference),
+        ) {
             size = size.min(max.max(0.0));
         }
     }
@@ -182,13 +218,13 @@ fn flex_base_main(
     container_main: Option<f32>,
     container_width: f32,
 ) -> f32 {
-    if let Some(basis) = definite_length(style.flex_basis, container_main) {
+    if let Some(basis) = definite_length(style.flex_basis, None, container_main) {
         return clamp_main(style, basis, row, container_main.unwrap_or(container_width));
     }
     let definite = if row {
-        definite_length(style.width, Some(container_width))
+        definite_length(style.width, style.calc_lengths.width, Some(container_width))
     } else {
-        definite_length(style.height, container_main)
+        definite_length(style.height, style.calc_lengths.height, container_main)
     };
     clamp_main(
         style,
@@ -208,6 +244,7 @@ fn explicit_cross(
     let value = if row { style.height } else { style.width };
     definite_length(
         value,
+        None,
         if row {
             container_height
         } else {
@@ -335,15 +372,31 @@ pub(crate) fn layout_flex_children(
         definite_height
     };
     let main_gap = if row {
-        resolve(style.column_gap, container_main.unwrap_or(container_width))
+        resolve(
+            style.column_gap,
+            style.calc_lengths.column_gap,
+            container_main.unwrap_or(container_width),
+        )
     } else {
-        resolve(style.row_gap, definite_height.unwrap_or(0.0))
+        resolve(
+            style.row_gap,
+            style.calc_lengths.row_gap,
+            definite_height.unwrap_or(0.0),
+        )
     }
     .max(0.0);
     let line_gap = if row {
-        resolve(style.row_gap, definite_height.unwrap_or(0.0))
+        resolve(
+            style.row_gap,
+            style.calc_lengths.row_gap,
+            definite_height.unwrap_or(0.0),
+        )
     } else {
-        resolve(style.column_gap, container_width)
+        resolve(
+            style.column_gap,
+            style.calc_lengths.column_gap,
+            container_width,
+        )
     }
     .max(0.0);
     let container_align = style.align_items;
@@ -361,9 +414,9 @@ pub(crate) fn layout_flex_children(
         // `flex-basis: auto` with an auto `width` (row axis): approximate the
         // content-based base size with the engine's shrink-to-fit measurement.
         let auto_main = if row {
-            matches!(child_style.width, Length::Auto)
+            matches!(child_style.width, Length::Auto) && child_style.calc_lengths.width.is_none()
         } else {
-            matches!(child_style.height, Length::Auto)
+            matches!(child_style.height, Length::Auto) && child_style.calc_lengths.height.is_none()
         };
         let mut base_main = base_from_style;
         if row && matches!(child_style.flex_basis, Length::Auto) && auto_main {

@@ -9,7 +9,12 @@
 //!   `repeat(auto-fill | auto-fit, <track-list>)` and `minmax(min, max)` with
 //!   `<length>`/`<percentage>`/`auto` minima and `<length>`/`<percentage>`/`fr`/
 //!   `auto` maxima (see approximations below).
-//! * `grid-auto-rows` for implicit rows, `gap`/`row-gap`/`column-gap`.
+//! * `grid-auto-rows` for implicit rows, `gap`/`row-gap`/`column-gap` (mixed
+//!   `calc()` gaps resolved against the container axes, percentage part `0` when
+//!   the axis basis is indefinite).
+//! * Mixed `calc()` item widths/heights, margins and paddings outside the track
+//!   sizing; mixed `calc()` **track sizes** (`grid-template-*`) are not supported
+//!   yet and fall back to the default track (documented).
 //! * Explicit placement with `grid-column`/`grid-row` and their
 //!   `-start`/`-end` longhands: numeric lines (including negative lines, where
 //!   `-1` is the last line), `span <integer>` and `auto`; items may span
@@ -77,37 +82,53 @@ struct Spec {
     order: i32,
 }
 
-fn resolve(value: Length, reference: f32) -> f32 {
-    match value {
-        Length::Px(px) => px,
-        Length::Percent(percent) => reference * percent / 100.0,
-        Length::Auto => 0.0,
-    }
+fn resolve(value: Length, calc: Option<css::calc::CalcValue>, reference: f32) -> f32 {
+    crate::calc::length(value, calc, reference)
 }
 
-fn definite_length(value: Length, reference: Option<f32>) -> Option<f32> {
-    match value {
-        Length::Px(px) => Some(px),
-        Length::Percent(percent) => reference.map(|reference| reference * percent / 100.0),
-        Length::Auto => None,
-    }
+fn definite_length(
+    value: Length,
+    calc: Option<css::calc::CalcValue>,
+    reference: Option<f32>,
+) -> Option<f32> {
+    crate::calc::length_optional(value, calc, reference)
 }
 
 fn resolve_margin(style: &ComputedStyle, cb_width: f32) -> EdgeSizes {
     EdgeSizes {
-        top: resolve(style.margin.top, cb_width),
-        right: resolve(style.margin.right, cb_width),
-        bottom: resolve(style.margin.bottom, cb_width),
-        left: resolve(style.margin.left, cb_width),
+        top: resolve(style.margin.top, style.calc_lengths.margin_top, cb_width),
+        right: resolve(
+            style.margin.right,
+            style.calc_lengths.margin_right,
+            cb_width,
+        ),
+        bottom: resolve(
+            style.margin.bottom,
+            style.calc_lengths.margin_bottom,
+            cb_width,
+        ),
+        left: resolve(style.margin.left, style.calc_lengths.margin_left, cb_width),
     }
 }
 
 fn resolve_padding(style: &ComputedStyle, cb_width: f32) -> EdgeSizes {
     EdgeSizes {
-        top: resolve(style.padding.top, cb_width),
-        right: resolve(style.padding.right, cb_width),
-        bottom: resolve(style.padding.bottom, cb_width),
-        left: resolve(style.padding.left, cb_width),
+        top: resolve(style.padding.top, style.calc_lengths.padding_top, cb_width),
+        right: resolve(
+            style.padding.right,
+            style.calc_lengths.padding_right,
+            cb_width,
+        ),
+        bottom: resolve(
+            style.padding.bottom,
+            style.calc_lengths.padding_bottom,
+            cb_width,
+        ),
+        left: resolve(
+            style.padding.left,
+            style.calc_lengths.padding_left,
+            cb_width,
+        ),
     }
 }
 
@@ -456,9 +477,11 @@ fn auto_repeat_count(tracks: &[TrackSize], available: f32, gap: f32) -> usize {
 
 fn min_track_size(track: &TrackSize, reference: f32) -> f32 {
     match track {
-        TrackSize::Fixed(length) => definite_length(*length, Some(reference)).unwrap_or(0.0),
+        TrackSize::Fixed(length) => definite_length(*length, None, Some(reference)).unwrap_or(0.0),
         TrackSize::MinMax { min, .. } => match min {
-            TrackMin::Fixed(length) => definite_length(*length, Some(reference)).unwrap_or(0.0),
+            TrackMin::Fixed(length) => {
+                definite_length(*length, None, Some(reference)).unwrap_or(0.0)
+            }
             TrackMin::Auto => 0.0,
         },
         TrackSize::Fraction(_) | TrackSize::Auto => 0.0,
@@ -487,8 +510,18 @@ pub(crate) fn layout_grid_children(
     };
     let content = layout_box.dimensions.content;
     let container_width = content.width.max(0.0);
-    let column_gap = resolve(style.column_gap, container_width).max(0.0);
-    let row_gap = resolve(style.row_gap, definite_height.unwrap_or(0.0)).max(0.0);
+    let column_gap = resolve(
+        style.column_gap,
+        style.calc_lengths.column_gap,
+        container_width,
+    )
+    .max(0.0);
+    let row_gap = resolve(
+        style.row_gap,
+        style.calc_lengths.row_gap,
+        definite_height.unwrap_or(0.0),
+    )
+    .max(0.0);
     let mut columns = expand_template(&style.grid_template_columns, container_width, column_gap);
     if columns.is_empty() {
         columns.push(TrackSize::Auto);
@@ -515,10 +548,26 @@ pub(crate) fn layout_grid_children(
         }
         specs.push(Spec {
             edges: EdgeSizes {
-                top: resolve(child_style.margin.top, container_width),
-                right: resolve(child_style.margin.right, container_width),
-                bottom: resolve(child_style.margin.bottom, container_width),
-                left: resolve(child_style.margin.left, container_width),
+                top: resolve(
+                    child_style.margin.top,
+                    child_style.calc_lengths.margin_top,
+                    container_width,
+                ),
+                right: resolve(
+                    child_style.margin.right,
+                    child_style.calc_lengths.margin_right,
+                    container_width,
+                ),
+                bottom: resolve(
+                    child_style.margin.bottom,
+                    child_style.calc_lengths.margin_bottom,
+                    container_width,
+                ),
+                left: resolve(
+                    child_style.margin.left,
+                    child_style.calc_lengths.margin_left,
+                    container_width,
+                ),
             },
             order: child_style.order,
             style: child_style,
@@ -591,7 +640,8 @@ pub(crate) fn layout_grid_children(
     for (index, track) in columns.iter().enumerate() {
         match track {
             TrackSize::Fixed(length) => {
-                widths[index] = definite_length(*length, Some(container_width)).unwrap_or(0.0);
+                widths[index] =
+                    definite_length(*length, None, Some(container_width)).unwrap_or(0.0);
                 fixed_total += widths[index];
             }
             TrackSize::Fraction(fraction) => {
@@ -603,7 +653,7 @@ pub(crate) fn layout_grid_children(
                 let _ = min;
                 match max {
                     TrackMax::Fixed(length) => {
-                        let size = definite_length(*length, Some(container_width))
+                        let size = definite_length(*length, None, Some(container_width))
                             .unwrap_or(0.0)
                             .max(minimum);
                         widths[index] = size;
@@ -671,7 +721,11 @@ pub(crate) fn layout_grid_children(
         let edges = horizontal_edges(&item.style, container_width);
         let available = (cell_width - edges).max(0.0);
         let justify = justify_track(&style, &item.style);
-        let explicit = definite_length(item.style.width, Some(container_width));
+        let explicit = definite_length(
+            item.style.width,
+            item.style.calc_lengths.width,
+            Some(container_width),
+        );
         let width = match justify {
             AlignSelf::Stretch | AlignSelf::Auto | AlignSelf::Baseline => explicit
                 .map(|width| width.min(available))
@@ -697,7 +751,7 @@ pub(crate) fn layout_grid_children(
     for (index, track) in row_tracks.iter().enumerate() {
         match track {
             TrackSize::Fixed(length) => {
-                heights[index] = definite_length(*length, definite_height).unwrap_or(0.0);
+                heights[index] = definite_length(*length, None, definite_height).unwrap_or(0.0);
                 fixed_rows_total += heights[index];
             }
             TrackSize::Fraction(fraction) => fr_rows.push((index, fraction.max(0.0), 0.0)),
@@ -706,7 +760,7 @@ pub(crate) fn layout_grid_children(
                 let minimum = min_track_size(track, definite_height.unwrap_or(container_width));
                 match max {
                     TrackMax::Fixed(length) => {
-                        heights[index] = definite_length(*length, definite_height)
+                        heights[index] = definite_length(*length, None, definite_height)
                             .unwrap_or(0.0)
                             .max(minimum);
                         fixed_rows_total += heights[index];
@@ -772,20 +826,29 @@ pub(crate) fn layout_grid_children(
         let h_edges = horizontal_edges(&item.style, container_width);
         let v_edges = vertical_edges(&item.style, container_width);
         let used_width = match justify {
-            AlignSelf::Stretch | AlignSelf::Auto | AlignSelf::Baseline => {
-                definite_length(item.style.width, Some(container_width))
-                    .map(|width| width.min((cell_width - h_edges).max(0.0)))
-                    .unwrap_or((cell_width - h_edges).max(0.0))
-            }
+            AlignSelf::Stretch | AlignSelf::Auto | AlignSelf::Baseline => definite_length(
+                item.style.width,
+                item.style.calc_lengths.width,
+                Some(container_width),
+            )
+            .map(|width| width.min((cell_width - h_edges).max(0.0)))
+            .unwrap_or((cell_width - h_edges).max(0.0)),
             _ => item.content_width,
         };
         let used_height = match align {
-            AlignSelf::Stretch | AlignSelf::Auto | AlignSelf::Baseline => {
-                definite_length(item.style.height, definite_height)
-                    .map(|height| height.min((cell_height - v_edges).max(0.0)))
-                    .unwrap_or((cell_height - v_edges).max(0.0))
-            }
-            _ => definite_length(item.style.height, definite_height).unwrap_or(item.content_height),
+            AlignSelf::Stretch | AlignSelf::Auto | AlignSelf::Baseline => definite_length(
+                item.style.height,
+                item.style.calc_lengths.height,
+                definite_height,
+            )
+            .map(|height| height.min((cell_height - v_edges).max(0.0)))
+            .unwrap_or((cell_height - v_edges).max(0.0)),
+            _ => definite_length(
+                item.style.height,
+                item.style.calc_lengths.height,
+                definite_height,
+            )
+            .unwrap_or(item.content_height),
         };
         let padding = resolve_padding(&item.style, container_width);
         let x_offset = offset_for(justify, cell_width, used_width + h_edges);

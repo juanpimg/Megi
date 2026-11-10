@@ -85,8 +85,13 @@ pub struct LayoutBox {
     /// glyphs at `content.y + baseline`. Non-text boxes carry `0.0` unless a
     /// future formatting context defines a meaningful baseline.
     pub baseline: f32,
-    /// Used CSS `position` (CSS 2.2 §9.3). `sticky` is preserved for paint but behaves
-    /// like `relative` in this layout engine (no scrolling yet).
+    /// Used CSS `position` (CSS 2.2 §9.3). Headless render has no scroll container, so
+    /// `sticky` boxes stay in their normal-flow slot and are displaced by their
+    /// `top/right/bottom/left` offsets exactly like `position: relative`
+    /// (`apply_relative_offset`), documented model; a future `LayoutOptions`-style scroll
+    /// offset can clamp them against their scroll container without changing the box tree.
+    ///
+    /// Paint consumes the resulting absolute geometry; see `block::apply_relative_offset`.
     pub position: Position,
     /// Used `z-index`; `auto` is normalized to `0`. Only meaningful for positioned boxes
     /// (static boxes always carry `0`).

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>white-space pre-* fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #ffffff; }
+  div { width: 320px; margin: 8px; font: 16px sans-serif; }
+  .normal  { white-space: normal; background-color: #eeeeee; }
+  .prewrap { white-space: pre-wrap; background-color: #ddeeff; }
+  .preline { white-space: pre-line; background-color: #ffeedd; }
+</style></head>
+<body>
+  <div class="normal">a  b
+c</div>
+  <div class="prewrap">a  b
+c  d</div>
+  <div class="preline">a  b
+c  d</div>
+</body></html>

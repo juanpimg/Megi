@@ -4,9 +4,10 @@
 //! §10.8 (Line height calculations, strut, and vertical-align), and
 //! CSS Text Module Level 3 (§3–§5: white-space processing and line breaking).
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
-use css::{ComputedStyle, Length, TextAlign, VerticalAlign, WhiteSpace};
+use css::{ComputedStyle, Length, TextAlign, TextTransform, VerticalAlign, WhiteSpace};
 use dom::NodeId;
 
 use crate::box_tree::{BoxType, LayoutBox};
@@ -100,7 +101,8 @@ pub(crate) fn measure_text_width(
     text: &str,
     style: &ComputedStyle,
 ) -> f32 {
-    measure_styled(measurer, text, style)
+    let transformed = transform_text(text, style.text_transform);
+    shaped_width(measurer, &transformed, style)
 }
 
 /// Measures `text` with the run's weight and style from a computed style.
@@ -113,6 +115,84 @@ fn measure_styled(measurer: &dyn TextMeasurer, text: &str, style: &ComputedStyle
         style.font_weight,
         crate::text::style_is_italic(style),
     )
+}
+
+/// Resolves a `word-spacing`/`letter-spacing` computed length to CSS pixels.
+///
+/// Percentages resolve against the element `font-size` (a Megi extension: CSS only allows
+/// lengths, but the parser stores a [`Length`]); `auto`/`normal` are zero.
+fn spacing_px(length: Length, font_size: f32) -> f32 {
+    match length {
+        Length::Px(px) => px,
+        Length::Percent(pct) => font_size * pct / 100.0,
+        Length::Auto => 0.0,
+    }
+}
+
+/// Applies the computed `text-transform` to a text run (CSS Text 3 §2.1).
+///
+/// Returns a borrowed slice for `none` so the default path does not allocate. `uppercase`/
+/// `lowercase` use the Unicode simple mappings (which can expand, e.g. `ß` -> `SS`);
+/// `capitalize` uppercases the first alphabetic character of each whitespace-delimited word
+/// (browsers also split on hyphens/apostrophes; documented simplification).
+pub(crate) fn transform_text(text: &str, transform: TextTransform) -> Cow<'_, str> {
+    match transform {
+        TextTransform::None => Cow::Borrowed(text),
+        TextTransform::Uppercase => {
+            let mut out = String::with_capacity(text.len());
+            for ch in text.chars() {
+                out.extend(ch.to_uppercase());
+            }
+            Cow::Owned(out)
+        }
+        TextTransform::Lowercase => {
+            let mut out = String::with_capacity(text.len());
+            for ch in text.chars() {
+                out.extend(ch.to_lowercase());
+            }
+            Cow::Owned(out)
+        }
+        TextTransform::Capitalize => {
+            let mut out = String::with_capacity(text.len());
+            let mut at_word_start = true;
+            for ch in text.chars() {
+                if ch.is_whitespace() {
+                    out.push(ch);
+                    at_word_start = true;
+                } else if at_word_start && ch.is_alphabetic() {
+                    out.extend(ch.to_uppercase());
+                    at_word_start = false;
+                } else {
+                    out.push(ch);
+                }
+            }
+            Cow::Owned(out)
+        }
+    }
+}
+
+/// Measures `text` including the computed `letter-spacing`/`word-spacing`.
+///
+/// `letter-spacing` adds one spacing unit per character and `word-spacing` one per space
+/// character (`U+0020`/tab) in the run; this matches how the IFC tokens carry explicit
+/// space tokens.
+#[inline]
+fn shaped_width(measurer: &dyn TextMeasurer, text: &str, style: &ComputedStyle) -> f32 {
+    let base = measure_styled(measurer, text, style);
+    let mut characters = 0u32;
+    let mut spaces = 0u32;
+    for ch in text.chars() {
+        characters += 1;
+        if matches!(ch, ' ' | '\t') {
+            spaces += 1;
+        }
+    }
+    let letter_spacing = spacing_px(style.letter_spacing, style.font_size);
+    let word_spacing = spacing_px(style.word_spacing, style.font_size);
+    if letter_spacing == 0.0 && word_spacing == 0.0 {
+        return base;
+    }
+    base + letter_spacing * characters as f32 + word_spacing * spaces as f32
 }
 
 /// Resolves real font metrics for a computed style (weight/style aware).
@@ -478,7 +558,7 @@ fn flush_word(
     if word_start >= pool.len() {
         return;
     }
-    let width = measure_styled(measurer, &pool[word_start..], style);
+    let width = shaped_width(measurer, &pool[word_start..], style);
     tokens.push(InlineToken::Word {
         start: word_start,
         end: pool.len(),
@@ -528,6 +608,11 @@ fn tokenize_text(
     tokens: &mut Vec<InlineToken>,
 ) {
     let white_space = style.white_space;
+    // CSS `text-transform` is applied to the rendered text while shaping; the DOM tree is
+    // untouched (documented) and all line breaking/measurement below works on the
+    // transformed run stored in the per-IFC pool.
+    let transformed = transform_text(txt, style.text_transform);
+    let txt: &str = &transformed;
     let (line_ascent, line_descent) = line_box_extents(&metrics_styled(measurer, style));
 
     // `pre`: no wrapping, no space collapsing. Each newline-separated run is preserved
@@ -544,7 +629,7 @@ fn tokenize_text(
                 }
             }
             if start < pool.len() {
-                let width = measure_styled(measurer, &pool[start..], style);
+                let width = shaped_width(measurer, &pool[start..], style);
                 tokens.push(InlineToken::Word {
                     start,
                     end: pool.len(),
@@ -601,7 +686,7 @@ fn tokenize_text(
                 } else {
                     let mut buf = [0u8; 4];
                     let text: &str = ch.encode_utf8(&mut buf);
-                    let width = measure_styled(measurer, text, style);
+                    let width = shaped_width(measurer, text, style);
                     tokens.push(InlineToken::Space {
                         text: ch,
                         width,
@@ -629,7 +714,7 @@ fn tokenize_text(
                     word_start = pool.len();
                     if pending_collapsible_space {
                         let width = *collapsible_space_width
-                            .get_or_insert_with(|| measure_styled(measurer, " ", style));
+                            .get_or_insert_with(|| shaped_width(measurer, " ", style));
                         push_collapsible_space(
                             style_id,
                             width,
@@ -646,7 +731,7 @@ fn tokenize_text(
             _ => {
                 if pending_collapsible_space {
                     let width = *collapsible_space_width
-                        .get_or_insert_with(|| measure_styled(measurer, " ", style));
+                        .get_or_insert_with(|| shaped_width(measurer, " ", style));
                     push_collapsible_space(
                         style_id,
                         width,
@@ -696,7 +781,7 @@ fn tokenize_text(
     );
     if pending_collapsible_space {
         let width =
-            *collapsible_space_width.get_or_insert_with(|| measure_styled(measurer, " ", style));
+            *collapsible_space_width.get_or_insert_with(|| shaped_width(measurer, " ", style));
         push_collapsible_space(
             style_id,
             width,
@@ -906,7 +991,7 @@ fn break_into_lines(
                     let start = text_pool.len();
                     text_pool.push('-');
                     let hyphen_style = &styles[style as usize];
-                    let width = measure_styled(measurer, &text_pool[start..], hyphen_style);
+                    let width = shaped_width(measurer, &text_pool[start..], hyphen_style);
                     let (ascent, descent) =
                         line_box_extents(&metrics_styled(measurer, hyphen_style));
                     line_tokens.push(InlineToken::Word {

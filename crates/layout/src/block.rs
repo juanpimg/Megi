@@ -23,6 +23,7 @@
 //! * Percentage `height` resolves against a definite containing block height; against
 //!   an auto-height containing block it behaves as `auto` (CSS 2.2 §10.5).
 
+use css::calc::CalcValue;
 use css::{BoxSizing, Clear, ComputedStyle, Display, Float, Length, Overflow, Position};
 
 use crate::box_tree::{BoxType, LayoutBox};
@@ -239,14 +240,27 @@ fn calculate_block_width(layout_box: &mut LayoutBox, cb_width: f32) {
         return;
     };
 
-    let padding_left = resolve_length(style.padding.left, cb_width);
-    let padding_right = resolve_length(style.padding.right, cb_width);
+    let padding_left = resolve_length(
+        style.padding.left,
+        style.calc_lengths.padding_left,
+        cb_width,
+    );
+    let padding_right = resolve_length(
+        style.padding.right,
+        style.calc_lengths.padding_right,
+        cb_width,
+    );
     let border_left = style.border_width.left;
     let border_right = style.border_width.right;
     let edges_h = padding_left + padding_right + border_left + border_right;
 
-    let margin_left_spec = resolve_length(style.margin.left, cb_width);
-    let margin_right_spec = resolve_length(style.margin.right, cb_width);
+    let margin_left_spec =
+        resolve_length(style.margin.left, style.calc_lengths.margin_left, cb_width);
+    let margin_right_spec = resolve_length(
+        style.margin.right,
+        style.calc_lengths.margin_right,
+        cb_width,
+    );
     let margin_left_auto = matches!(style.margin.left, Length::Auto);
     let margin_right_auto = matches!(style.margin.right, Length::Auto);
 
@@ -266,8 +280,8 @@ fn calculate_block_width(layout_box: &mut LayoutBox, cb_width: f32) {
         }
     };
 
-    let min_width = resolve_min_max(style.min_width, cb_width);
-    let max_width = resolve_min_max(style.max_width, cb_width);
+    let min_width = resolve_min_max(style.min_width, style.calc_lengths.min_width, cb_width);
+    let max_width = resolve_min_max(style.max_width, style.calc_lengths.max_width, cb_width);
     let apply_constraints = |border_box: f32| -> f32 {
         // CSS 2.2 §10.4: max applies first, then min (so min wins when max < min).
         let mut width = border_box;
@@ -281,11 +295,7 @@ fn calculate_block_width(layout_box: &mut LayoutBox, cb_width: f32) {
     };
 
     // Tentative width from the `width` property, expressed in content-box coordinates.
-    let specified_content_width = match style.width {
-        Length::Px(px) => Some(to_content(px)),
-        Length::Percent(pct) => Some(to_content(cb_width * (pct / 100.0))),
-        Length::Auto => None,
-    };
+    let specified_content_width = specified_width(style, cb_width).map(to_content);
 
     // First pass per §10.3.3, then min/max per §10.4, then a second pass with the clamped
     // width so that e.g. `max-width` plus `margin: auto` centers the box.
@@ -372,12 +382,22 @@ pub(crate) fn resolve_vertical_edges(layout_box: &mut LayoutBox, cb_width: f32) 
         layout_box.dimensions.margin.bottom = 0.0;
         return;
     };
-    layout_box.dimensions.padding.top = resolve_length(style.padding.top, cb_width);
-    layout_box.dimensions.padding.bottom = resolve_length(style.padding.bottom, cb_width);
+    layout_box.dimensions.padding.top =
+        resolve_length(style.padding.top, style.calc_lengths.padding_top, cb_width);
+    layout_box.dimensions.padding.bottom = resolve_length(
+        style.padding.bottom,
+        style.calc_lengths.padding_bottom,
+        cb_width,
+    );
     layout_box.dimensions.border.top = style.border_width.top;
     layout_box.dimensions.border.bottom = style.border_width.bottom;
-    layout_box.dimensions.margin.top = resolve_length(style.margin.top, cb_width);
-    layout_box.dimensions.margin.bottom = resolve_length(style.margin.bottom, cb_width);
+    layout_box.dimensions.margin.top =
+        resolve_length(style.margin.top, style.calc_lengths.margin_top, cb_width);
+    layout_box.dimensions.margin.bottom = resolve_length(
+        style.margin.bottom,
+        style.calc_lengths.margin_bottom,
+        cb_width,
+    );
 }
 
 /// Returns the box's used content height when it is definite, i.e. when `height` is a
@@ -388,17 +408,17 @@ pub(crate) fn definite_content_height(
     cb_height: Option<f32>,
 ) -> Option<f32> {
     let style = layout_box.style.as_ref()?;
-    let specified = match style.height {
-        Length::Px(px) => Some(px),
-        Length::Percent(pct) => cb_height.map(|height| height * (pct / 100.0)),
-        Length::Auto => None,
-    }?;
+    let specified = specified_height(style, cb_height)?;
 
     let mut border_box_height = specified;
-    if let Some(max) = resolve_max_height(style.max_height, cb_height) {
+    if let Some(max) =
+        resolve_max_height(style.max_height, style.calc_lengths.max_height, cb_height)
+    {
         border_box_height = border_box_height.min(max);
     }
-    if let Some(min) = resolve_min_height(style.min_height, cb_height) {
+    if let Some(min) =
+        resolve_min_height(style.min_height, style.calc_lengths.min_height, cb_height)
+    {
         border_box_height = border_box_height.max(min);
     }
 
@@ -581,8 +601,8 @@ fn layout_block_children(
         if matches!(position, Position::Absolute | Position::Fixed) {
             let (margin_left, margin_top) = child.style.as_ref().map_or((0.0, 0.0), |style| {
                 (
-                    resolve_length(style.margin.left, cb.width),
-                    resolve_length(style.margin.top, cb.width),
+                    resolve_length(style.margin.left, style.calc_lengths.margin_left, cb.width),
+                    resolve_length(style.margin.top, style.calc_lengths.margin_top, cb.width),
                 )
             });
             result.absolute_static_positions.push((
@@ -714,18 +734,38 @@ fn layout_absolutely_positioned(
         padding_bottom,
     ) = match child.style.as_ref() {
         Some(style) => (
-            resolve_length(style.margin.left, cb.width),
-            resolve_length(style.margin.right, cb.width),
-            resolve_length(style.margin.top, cb.width),
-            resolve_length(style.margin.bottom, cb.width),
+            resolve_length(style.margin.left, style.calc_lengths.margin_left, cb.width),
+            resolve_length(
+                style.margin.right,
+                style.calc_lengths.margin_right,
+                cb.width,
+            ),
+            resolve_length(style.margin.top, style.calc_lengths.margin_top, cb.width),
+            resolve_length(
+                style.margin.bottom,
+                style.calc_lengths.margin_bottom,
+                cb.width,
+            ),
             style.border_width.left,
             style.border_width.right,
             style.border_width.top,
             style.border_width.bottom,
-            resolve_length(style.padding.left, cb.width),
-            resolve_length(style.padding.right, cb.width),
-            resolve_length(style.padding.top, cb.width),
-            resolve_length(style.padding.bottom, cb.width),
+            resolve_length(
+                style.padding.left,
+                style.calc_lengths.padding_left,
+                cb.width,
+            ),
+            resolve_length(
+                style.padding.right,
+                style.calc_lengths.padding_right,
+                cb.width,
+            ),
+            resolve_length(style.padding.top, style.calc_lengths.padding_top, cb.width),
+            resolve_length(
+                style.padding.bottom,
+                style.calc_lengths.padding_bottom,
+                cb.width,
+            ),
         ),
         None => (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
     };
@@ -735,10 +775,10 @@ fn layout_absolutely_positioned(
     let (left, right, top, bottom, specified_width, specified_height, is_border_box) =
         if let Some(style) = child.style.as_ref() {
             (
-                resolve_offset(style.left, Some(cb.width)),
-                resolve_offset(style.right, Some(cb.width)),
-                resolve_offset(style.top, cb_height),
-                resolve_offset(style.bottom, cb_height),
+                resolve_offset(style.left, style.calc_lengths.left, Some(cb.width)),
+                resolve_offset(style.right, style.calc_lengths.right, Some(cb.width)),
+                resolve_offset(style.top, style.calc_lengths.top, cb_height),
+                resolve_offset(style.bottom, style.calc_lengths.bottom, cb_height),
                 match style.width {
                     Length::Px(px) => Some(px),
                     Length::Percent(pct) => Some(cb.width * (pct / 100.0)),
@@ -867,10 +907,14 @@ pub(crate) fn calculate_block_height(
                 border_box
             }
         };
-        if let Some(max) = resolve_max_height(style.max_height, cb_height) {
+        if let Some(max) =
+            resolve_max_height(style.max_height, style.calc_lengths.max_height, cb_height)
+        {
             content_height = content_height.min(to_content(max));
         }
-        if let Some(min) = resolve_min_height(style.min_height, cb_height) {
+        if let Some(min) =
+            resolve_min_height(style.min_height, style.calc_lengths.min_height, cb_height)
+        {
             content_height = content_height.max(to_content(min));
         }
     }
@@ -940,7 +984,7 @@ fn collapsed_top_margin(layout_box: &LayoutBox, cb_width: f32) -> f32 {
     let Some(style) = layout_box.style.as_ref() else {
         return 0.0;
     };
-    let own_margin = resolve_length(style.margin.top, cb_width);
+    let own_margin = resolve_length(style.margin.top, style.calc_lengths.margin_top, cb_width);
     if style_has_top_edge(style, cb_width) || establishes_independent_formatting_context(layout_box)
     {
         return own_margin;
@@ -957,7 +1001,11 @@ fn collapsed_bottom_margin(layout_box: &LayoutBox, cb_width: f32) -> f32 {
     let Some(style) = layout_box.style.as_ref() else {
         return 0.0;
     };
-    let own_margin = resolve_length(style.margin.bottom, cb_width);
+    let own_margin = resolve_length(
+        style.margin.bottom,
+        style.calc_lengths.margin_bottom,
+        cb_width,
+    );
     if style_has_bottom_edge(style, cb_width)
         || establishes_independent_formatting_context(layout_box)
     {
@@ -1050,32 +1098,37 @@ fn min_height_is_zero(style: &ComputedStyle) -> bool {
 }
 
 fn style_has_top_edge(style: &ComputedStyle, cb_width: f32) -> bool {
-    style.border_width.top > 0.0 || resolve_length(style.padding.top, cb_width) > 0.0
+    style.border_width.top > 0.0
+        || resolve_length(style.padding.top, style.calc_lengths.padding_top, cb_width) > 0.0
 }
 
 fn style_has_bottom_edge(style: &ComputedStyle, cb_width: f32) -> bool {
-    style.border_width.bottom > 0.0 || resolve_length(style.padding.bottom, cb_width) > 0.0
+    style.border_width.bottom > 0.0
+        || resolve_length(
+            style.padding.bottom,
+            style.calc_lengths.padding_bottom,
+            cb_width,
+        ) > 0.0
 }
 
-fn resolve_length(length: Length, cb_width: f32) -> f32 {
-    match length {
-        Length::Px(px) => px,
-        Length::Percent(pct) => cb_width * (pct / 100.0),
-        Length::Auto => 0.0,
-    }
+fn resolve_length(length: Length, calc: Option<CalcValue>, cb_width: f32) -> f32 {
+    crate::calc::length(length, calc, cb_width)
 }
 
-fn resolve_min_max(length: Length, cb_width: f32) -> Option<f32> {
-    match length {
-        Length::Px(px) => Some(px),
-        Length::Percent(pct) => Some(cb_width * (pct / 100.0)),
-        Length::Auto => None,
-    }
+fn resolve_min_max(length: Length, calc: Option<CalcValue>, cb_width: f32) -> Option<f32> {
+    crate::calc::length_optional(length, calc, Some(cb_width))
 }
 
 /// Resolves a percentage `min-height` against an indefinite containing block height as 0
 /// (CSS 2.2 §10.7).
-fn resolve_min_height(length: Length, cb_height: Option<f32>) -> Option<f32> {
+fn resolve_min_height(
+    length: Length,
+    calc: Option<CalcValue>,
+    cb_height: Option<f32>,
+) -> Option<f32> {
+    if let Some(calc) = calc {
+        return Some(crate::calc::resolve(calc, Some(cb_height.unwrap_or(0.0))));
+    }
     match length {
         Length::Px(px) => Some(px),
         Length::Percent(pct) => Some(cb_height.unwrap_or(0.0) * (pct / 100.0)),
@@ -1085,7 +1138,14 @@ fn resolve_min_height(length: Length, cb_height: Option<f32>) -> Option<f32> {
 
 /// A percentage `max-height` against an indefinite containing block height is treated as
 /// `none` (CSS 2.2 §10.7).
-fn resolve_max_height(length: Length, cb_height: Option<f32>) -> Option<f32> {
+fn resolve_max_height(
+    length: Length,
+    calc: Option<CalcValue>,
+    cb_height: Option<f32>,
+) -> Option<f32> {
+    if let Some(calc) = calc {
+        return Some(crate::calc::resolve(calc, cb_height));
+    }
     match length {
         Length::Px(px) => Some(px),
         Length::Percent(pct) => cb_height.map(|height| height * (pct / 100.0)),
@@ -1093,9 +1153,40 @@ fn resolve_max_height(length: Length, cb_height: Option<f32>) -> Option<f32> {
     }
 }
 
-/// Applies `position: relative` offsets to a box and its subtree without affecting the
-/// normal flow of its siblings (CSS 2.2 §9.7). `sticky` is treated like `relative`
-/// (no scrolling support yet).
+/// Resolves the used `width` (including mixed `calc()`) against the containing block.
+fn specified_width(style: &ComputedStyle, cb_width: f32) -> Option<f32> {
+    if let Some(calc) = style.calc_lengths.width {
+        return Some(crate::calc::resolve(calc, Some(cb_width)));
+    }
+    match style.width {
+        Length::Px(px) => Some(px),
+        Length::Percent(pct) => Some(cb_width * (pct / 100.0)),
+        Length::Auto => None,
+    }
+}
+
+/// Resolves the used `height` (including mixed `calc()`) against the containing block.
+fn specified_height(style: &ComputedStyle, cb_height: Option<f32>) -> Option<f32> {
+    if let Some(calc) = style.calc_lengths.height {
+        return Some(crate::calc::resolve(calc, cb_height));
+    }
+    match style.height {
+        Length::Px(px) => Some(px),
+        Length::Percent(pct) => cb_height.map(|height| height * (pct / 100.0)),
+        Length::Auto => None,
+    }
+}
+
+/// Applies `position: relative`/`sticky` offsets to a box and its subtree without affecting
+/// the normal flow of its siblings (CSS 2.2 §9.7; CSS Position 3 §3 for sticky).
+///
+/// Headless layout has **no scroll container**, so `sticky` is modelled as "stays in its
+/// normal-flow slot, then displaced by its `top/right/bottom/left` offsets exactly like
+/// `relative`". A `top` (or `bottom`) declaration plus offsets moves the box over the
+/// following flow content without changing the containing block height, matching the
+/// relative resolution rules (`top` wins over `bottom`, `left` over `right`). The shell/scroll
+/// integration can later clamp the same displacement against a scroll offset (a future
+/// `LayoutOptions` hook); without sticky declarations the geometry is unchanged.
 fn apply_relative_offset(layout_box: &mut LayoutBox, cb_width: f32, cb_height: Option<f32>) {
     // Borrow the style instead of cloning it: this runs for every in-flow box.
     let (left, right, top, bottom) = {
@@ -1106,10 +1197,10 @@ fn apply_relative_offset(layout_box: &mut LayoutBox, cb_width: f32, cb_height: O
             return;
         }
         (
-            resolve_offset(style.left, Some(cb_width)),
-            resolve_offset(style.right, Some(cb_width)),
-            resolve_offset(style.top, cb_height),
-            resolve_offset(style.bottom, cb_height),
+            resolve_offset(style.left, style.calc_lengths.left, Some(cb_width)),
+            resolve_offset(style.right, style.calc_lengths.right, Some(cb_width)),
+            resolve_offset(style.top, style.calc_lengths.top, cb_height),
+            resolve_offset(style.bottom, style.calc_lengths.bottom, cb_height),
         )
     };
     let dx = match (left, right) {
@@ -1139,7 +1230,10 @@ pub(crate) fn translate_box(layout_box: &mut LayoutBox, dx: f32, dy: f32) {
 /// Resolves a positioning offset (`top|right|bottom|left`) into pixels.
 ///
 /// `None` stands for `auto` (and percentages against an indefinite dimension).
-fn resolve_offset(length: Length, reference: Option<f32>) -> Option<f32> {
+fn resolve_offset(length: Length, calc: Option<CalcValue>, reference: Option<f32>) -> Option<f32> {
+    if let Some(calc) = calc {
+        return Some(crate::calc::resolve(calc, reference));
+    }
     match length {
         Length::Px(px) => Some(px),
         Length::Percent(pct) => reference.map(|value| value * (pct / 100.0)),
@@ -1170,12 +1264,24 @@ pub(crate) fn calculate_shrink_to_fit_width(
             return;
         };
         (
-            resolve_length(style.padding.left, cb_width),
-            resolve_length(style.padding.right, cb_width),
+            resolve_length(
+                style.padding.left,
+                style.calc_lengths.padding_left,
+                cb_width,
+            ),
+            resolve_length(
+                style.padding.right,
+                style.calc_lengths.padding_right,
+                cb_width,
+            ),
             style.border_width.left,
             style.border_width.right,
-            resolve_length(style.margin.left, cb_width),
-            resolve_length(style.margin.right, cb_width),
+            resolve_length(style.margin.left, style.calc_lengths.margin_left, cb_width),
+            resolve_length(
+                style.margin.right,
+                style.calc_lengths.margin_right,
+                cb_width,
+            ),
             style.box_sizing == BoxSizing::BorderBox,
             style.width,
         )
@@ -1268,12 +1374,25 @@ fn collect_intrinsic_widths(
         }
         BoxType::InlineNode(_) => {
             if let Some(style) = layout_box.style.as_ref() {
-                let edges = resolve_length(style.margin.left, cb_width)
-                    + resolve_length(style.margin.right, cb_width)
-                    + style.border_width.left
-                    + style.border_width.right
-                    + resolve_length(style.padding.left, cb_width)
-                    + resolve_length(style.padding.right, cb_width);
+                let edges =
+                    resolve_length(style.margin.left, style.calc_lengths.margin_left, cb_width)
+                        + resolve_length(
+                            style.margin.right,
+                            style.calc_lengths.margin_right,
+                            cb_width,
+                        )
+                        + style.border_width.left
+                        + style.border_width.right
+                        + resolve_length(
+                            style.padding.left,
+                            style.calc_lengths.padding_left,
+                            cb_width,
+                        )
+                        + resolve_length(
+                            style.padding.right,
+                            style.calc_lengths.padding_right,
+                            cb_width,
+                        );
                 for child in &layout_box.children {
                     // Absolutely positioned descendants do not contribute to intrinsic
                     // widths (CSS 2.2 §10.3.5).
@@ -1306,12 +1425,25 @@ fn collect_intrinsic_widths(
         | BoxType::TableRowGroup(_)
         | BoxType::TableRow(_) => {
             if let Some(style) = layout_box.style.as_ref() {
-                let edges = resolve_length(style.margin.left, cb_width)
-                    + resolve_length(style.margin.right, cb_width)
-                    + style.border_width.left
-                    + style.border_width.right
-                    + resolve_length(style.padding.left, cb_width)
-                    + resolve_length(style.padding.right, cb_width);
+                let edges =
+                    resolve_length(style.margin.left, style.calc_lengths.margin_left, cb_width)
+                        + resolve_length(
+                            style.margin.right,
+                            style.calc_lengths.margin_right,
+                            cb_width,
+                        )
+                        + style.border_width.left
+                        + style.border_width.right
+                        + resolve_length(
+                            style.padding.left,
+                            style.calc_lengths.padding_left,
+                            cb_width,
+                        )
+                        + resolve_length(
+                            style.padding.right,
+                            style.calc_lengths.padding_right,
+                            cb_width,
+                        );
                 for child in &layout_box.children {
                     // Absolutely positioned descendants do not contribute to intrinsic
                     // widths (CSS 2.2 §10.3.5).
@@ -1338,12 +1470,24 @@ fn collect_intrinsic_widths(
             let (width, _) = layout_box.intrinsic_size.unwrap_or((300.0, 150.0));
             let style = layout_box.style.as_ref();
             let edges = style.map_or(0.0, |style| {
-                resolve_length(style.margin.left, cb_width)
-                    + resolve_length(style.margin.right, cb_width)
+                resolve_length(style.margin.left, style.calc_lengths.margin_left, cb_width)
+                    + resolve_length(
+                        style.margin.right,
+                        style.calc_lengths.margin_right,
+                        cb_width,
+                    )
                     + style.border_width.left
                     + style.border_width.right
-                    + resolve_length(style.padding.left, cb_width)
-                    + resolve_length(style.padding.right, cb_width)
+                    + resolve_length(
+                        style.padding.left,
+                        style.calc_lengths.padding_left,
+                        cb_width,
+                    )
+                    + resolve_length(
+                        style.padding.right,
+                        style.calc_lengths.padding_right,
+                        cb_width,
+                    )
             });
             *minimum = minimum.max(width + edges);
             *maximum = maximum.max(width + edges);
@@ -1388,12 +1532,25 @@ pub(crate) fn resolve_horizontal_edges(layout_box: &mut LayoutBox, cb_width: f32
         layout_box.dimensions.margin = EdgeSizes::ZERO;
         return;
     };
-    layout_box.dimensions.padding.left = resolve_length(style.padding.left, cb_width);
-    layout_box.dimensions.padding.right = resolve_length(style.padding.right, cb_width);
+    layout_box.dimensions.padding.left = resolve_length(
+        style.padding.left,
+        style.calc_lengths.padding_left,
+        cb_width,
+    );
+    layout_box.dimensions.padding.right = resolve_length(
+        style.padding.right,
+        style.calc_lengths.padding_right,
+        cb_width,
+    );
     layout_box.dimensions.border.left = style.border_width.left;
     layout_box.dimensions.border.right = style.border_width.right;
-    layout_box.dimensions.margin.left = resolve_length(style.margin.left, cb_width);
-    layout_box.dimensions.margin.right = resolve_length(style.margin.right, cb_width);
+    layout_box.dimensions.margin.left =
+        resolve_length(style.margin.left, style.calc_lengths.margin_left, cb_width);
+    layout_box.dimensions.margin.right = resolve_length(
+        style.margin.right,
+        style.calc_lengths.margin_right,
+        cb_width,
+    );
 }
 
 /// Computes the used content size of a replaced element (CSS 2.2 §10.3.2 / §10.6.2):

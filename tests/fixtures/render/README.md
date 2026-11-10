@@ -33,6 +33,10 @@ network, no JavaScript.
 | `background_layers.html` | R97 multi-layer `background-image`: top-first order (magenta bullet over a checker pattern), per-layer `repeat`/`size`/`position`, `background-origin`/`background-clip: content-box`. Pixel-tested in `background_layers_tests.rs`. |
 | `gradient_linear.html` | R113 (paint/css lane): linear 0/45deg/repeating gradients, `background-size`/`position`, radial+radius, `background-clip: text` glyphs. Integration-tested in `gradient_tests.rs`. |
 | `gradient_radial.html` | R113 (paint/css lane): circle/ellipse/farthest-side/at-position/repeating radial gradients plus alpha overlay. Integration-tested in `gradient_tests.rs`. |
+| `sticky_offsets.html` | R121: `position: sticky` with `top`/`left` offsets — headless model (no scroll): flow slot preserved + relative-like offset (orange box shifted down/right over the flow). Geometry-tested in `crates/layout/tests/typography_sticky.rs`. |
+| `text_transform.html` | R121: `text-transform: uppercase/lowercase/capitalize` applied while shaping (colored paragraphs). |
+| `word_spacing.html` | R121: `word-spacing`/`letter-spacing` on inline text (`one two three`, `spaced letters`, combined). |
+| `white_space.html` | R121: `white-space: normal` vs `pre-wrap` vs `pre-line` with spaces/newlines (colored bands). |
 | `css_state.html` | R112 dynamic CSS state: seven inputs showing `:checked` (green), `:disabled` (red), `:not(:checked):not(:disabled)` (blue), `:placeholder-shown` (magenta), `data-megi-focused` ⇒ `:focus` (yellow) and default black. Pixel-tested in `css_state_tests.rs`. |
 | `js_text.html` | WP-6.2/6.3: inline classic script changes `textContent` and `style.color` of a paragraph (large red text) after parsing. |
 | `js_create.html` | Inline script calls `createElement` + `appendChild` with a green `style.backgroundColor` box that layout/paint must render. |
