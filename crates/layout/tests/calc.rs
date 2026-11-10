@@ -290,6 +290,7 @@ fn grid_column_gap_calc_mixed() {
             css::TrackSize::Fixed(Length::Px(100.0)),
         ],
         auto_repeat: None,
+        line_names: Vec::new(),
     };
     container_style.calc_lengths.column_gap = Some(css::calc::CalcValue {
         percent: 10.0,

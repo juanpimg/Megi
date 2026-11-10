@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Megi CSS filter fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #ffffff; }
+  .row { height: 36px; margin: 6px 8px; }
+  .base { width: 56px; height: 36px; display: inline-block; background-color: #ff0000; margin-right: 6px; }
+  .gray     { filter: grayscale(1); }
+  .bright   { filter: brightness(0.5); }
+  .contrast { filter: contrast(2); }
+  .invert   { filter: invert(1); }
+  .opacity  { filter: opacity(50%); }
+  .sepia    { filter: sepia(1); }
+  .saturate { filter: saturate(0); }
+  .hue      { filter: hue-rotate(120deg); }
+  .blur     { filter: blur(3px); }
+  .shadow   { filter: drop-shadow(6px 4px 2px #101820); }
+  .multi    { filter: grayscale(1) brightness(0.8) contrast(1.2); }
+  .webkit   { -webkit-filter: invert(1); }
+</style></head>
+<body>
+  <div class="row">
+    <div class="base gray"></div><div class="base bright"></div><div class="base contrast"></div>
+    <div class="base invert"></div><div class="base opacity"></div><div class="base sepia"></div>
+  </div>
+  <div class="row">
+    <div class="base saturate"></div><div class="base hue"></div><div class="base blur"></div>
+    <div class="base shadow"></div><div class="base multi"></div><div class="base webkit"></div>
+  </div>
+</body></html>

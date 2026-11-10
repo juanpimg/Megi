@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Megi mix-blend-mode fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #ffffff; }
+  .backdrop { width: 220px; height: 90px; margin: 8px; background-color: #336699; }
+  .tile { position: absolute; width: 40px; height: 60px; top: 14px; background-color: #ff0000; }
+  .multiply { left: 14px;  mix-blend-mode: multiply; }
+  .screen   { left: 58px;  mix-blend-mode: screen; }
+  .overlay  { left: 102px; mix-blend-mode: overlay; }
+  .darken   { left: 146px; mix-blend-mode: darken; }
+  .lighten  { left: 190px; mix-blend-mode: lighten; }
+  .filterblend { position: absolute; left: 14px; top: 84px; width: 180px; height: 26px; background-color: #f2aa4c; filter: grayscale(1); mix-blend-mode: multiply; }
+</style></head>
+<body>
+  <div class="backdrop">
+    <div class="tile multiply"></div>
+    <div class="tile screen"></div>
+    <div class="tile overlay"></div>
+    <div class="tile darken"></div>
+    <div class="tile lighten"></div>
+  </div>
+  <div style="position: relative; width: 220px; height: 60px; margin: 8px; background: #dde6f2;">
+    <div class="filterblend"></div>
+  </div>
+</body></html>

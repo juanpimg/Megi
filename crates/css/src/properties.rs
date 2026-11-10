@@ -1307,6 +1307,76 @@ pub const MAX_GRADIENT_STOPS: usize = 64;
 /// Hard cap on the number of gradient layers kept per computed style.
 pub const MAX_GRADIENTS: usize = 256;
 
+/// One CSS `filter` function (Filter Effects 1 §3).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FilterFunction {
+    /// `blur(<length>)`: Gaussian-like blur (deterministic box-blur approximation).
+    Blur(f32),
+    /// `brightness(<number>|<percentage>)`; 1 = unchanged.
+    Brightness(f32),
+    /// `contrast(<number>|<percentage>)`; 1 = unchanged.
+    Contrast(f32),
+    /// `grayscale(<number>|<percentage>)`; 1 = fully grayscale.
+    Grayscale(f32),
+    /// `invert(<number>|<percentage>)`.
+    Invert(f32),
+    /// `opacity(<number>|<percentage>)`.
+    Opacity(f32),
+    /// `sepia(<number>|<percentage>)`.
+    Sepia(f32),
+    /// `saturate(<number>|<percentage>)`; 1 = unchanged.
+    Saturate(f32),
+    /// `hue-rotate(<angle>)` in CSS degrees.
+    HueRotate(f32),
+    /// `drop-shadow(<offset-x> <offset-y> [<blur>]? <color>?)`.
+    DropShadow {
+        /// Horizontal offset in CSS px.
+        offset_x: f32,
+        /// Vertical offset in CSS px.
+        offset_y: f32,
+        /// Blur radius in CSS px (0 = hard edge).
+        blur: f32,
+        /// Shadow color (defaults to the element color).
+        color: Color,
+    },
+}
+
+/// CSS `mix-blend-mode` (Compositing and Blending 1 §5).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MixBlendMode {
+    /// `normal` (initial value): source-over.
+    #[default]
+    Normal,
+    /// `multiply`.
+    Multiply,
+    /// `screen`.
+    Screen,
+    /// `overlay`.
+    Overlay,
+    /// `darken`.
+    Darken,
+    /// `lighten`.
+    Lighten,
+}
+
+impl MixBlendMode {
+    /// Parses the supported `mix-blend-mode` keywords.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "normal" => Some(Self::Normal),
+            "multiply" => Some(Self::Multiply),
+            "screen" => Some(Self::Screen),
+            "overlay" => Some(Self::Overlay),
+            "darken" => Some(Self::Darken),
+            "lighten" => Some(Self::Lighten),
+            _ => None,
+        }
+    }
+}
+
+/// Hard cap on the number of `filter` functions kept per computed style.
+pub const MAX_FILTER_FUNCTIONS: usize = 16;
+
 /// One computed `background-image` layer (CSS Backgrounds 3 §3.1).
 ///
 /// Multi-layer backgrounds are stored bottom-to-top in
@@ -1597,6 +1667,10 @@ pub struct ComputedStyle {
     pub box_shadows: Vec<BoxShadow>,
     /// Computed `text-shadow` layers, top-first (inherited; initial: empty).
     pub text_shadows: Vec<TextShadow>,
+    /// Computed `filter` function list (initial: empty, i.e. `none`). Not inherited.
+    pub filter: Vec<FilterFunction>,
+    /// Computed `mix-blend-mode` (initial: `normal`). Not inherited.
+    pub mix_blend_mode: MixBlendMode,
 
     // Flexbox (CSS Flexbox 1); none of these properties are inherited.
     pub flex_direction: crate::flex::FlexDirection,
@@ -1646,6 +1720,16 @@ pub struct ComputedStyle {
     pub grid_row_end: crate::grid::GridLine,
     /// `order` for grid/flex items (initial `0`).
     pub order: i32,
+    /// `grid-auto-flow` packing mode (initial `row`).
+    pub grid_auto_flow: crate::grid::GridAutoFlow,
+    /// `grid-template-areas` (names and `.` cells; invalid templates are ignored).
+    pub grid_template_areas: Option<crate::grid::GridTemplateAreas>,
+    /// `grid-area: <name>` area placement (explicit lines override it).
+    pub grid_area: Option<String>,
+    /// `justify-content` for grid track distribution (initial `stretch`).
+    pub grid_justify_content: crate::grid::GridContentDistribution,
+    /// `align-content` for grid track distribution (initial `stretch`).
+    pub grid_align_content: crate::grid::GridContentDistribution,
     /// Mixed `calc()` side values for `<length-percentage>` properties.
     pub calc_lengths: CalcLengths,
 
@@ -1757,6 +1841,8 @@ impl ComputedStyle {
             border_radius: BorderRadii::default(),
             box_shadows: Vec::new(),
             text_shadows: Vec::new(),
+            filter: Vec::new(),
+            mix_blend_mode: MixBlendMode::Normal,
 
             flex_direction: crate::flex::FlexDirection::Row,
             flex_wrap: crate::flex::FlexWrap::NoWrap,
@@ -1782,6 +1868,11 @@ impl ComputedStyle {
             grid_row_start: crate::grid::GridLine::Auto,
             grid_row_end: crate::grid::GridLine::Auto,
             order: 0,
+            grid_auto_flow: crate::grid::GridAutoFlow::Row,
+            grid_template_areas: None,
+            grid_area: None,
+            grid_justify_content: crate::grid::GridContentDistribution::Stretch,
+            grid_align_content: crate::grid::GridContentDistribution::Stretch,
             calc_lengths: CalcLengths::default(),
 
             font_size: 16.0,
@@ -2019,6 +2110,8 @@ impl ComputedStyle {
         // existing single-image render loader keeps working unchanged.
         let (background_layers, background_geometry_explicit) =
             Self::compute_background_layers(&entries, font_size, root_font_size, color);
+        let (filter, mix_blend_mode) =
+            Self::compute_effects(&entries, font_size, root_font_size, color);
         let inherited_text_shadows = parent
             .map(|style| style.text_shadows.as_slice())
             .unwrap_or_default();
@@ -2141,6 +2234,8 @@ impl ComputedStyle {
             border_radius,
             box_shadows,
             text_shadows,
+            filter,
+            mix_blend_mode,
 
             flex_direction: computed_flex.direction,
             flex_wrap: computed_flex.wrap,
@@ -2166,6 +2261,11 @@ impl ComputedStyle {
             grid_row_start: computed_grid.row_start,
             grid_row_end: computed_grid.row_end,
             order: computed_grid.order,
+            grid_auto_flow: computed_grid.auto_flow,
+            grid_template_areas: computed_grid.template_areas,
+            grid_area: computed_grid.grid_area,
+            grid_justify_content: computed_grid.justify_content,
+            grid_align_content: computed_grid.align_content,
             calc_lengths,
             font_size,
             font_weight,
@@ -2350,6 +2450,29 @@ impl ComputedStyle {
             bottom: sides[2],
             left: sides[3],
         }
+    }
+
+    /// Computes `filter` (with the `-webkit-filter` alias) and `mix-blend-mode`.
+    ///
+    /// Neither property is inherited (Filter Effects 1 §2 / Compositing 1 §5).
+    /// Invalid values fall back to the initial values (`none`, `normal`).
+    fn compute_effects(
+        entries: &[(&str, &Declaration)],
+        font_size: f32,
+        root_font_size: f32,
+        current_color: Color,
+    ) -> (Vec<FilterFunction>, MixBlendMode) {
+        let filter_decl = find_declaration(entries, "filter")
+            .or_else(|| find_declaration(entries, "-webkit-filter"));
+        let filter = filter_decl
+            .map(|decl| {
+                parse_filter_list(&decl.raw_value, font_size, root_font_size, current_color)
+            })
+            .unwrap_or_default();
+        let mix_blend_mode = find_declaration(entries, "mix-blend-mode")
+            .and_then(|decl| MixBlendMode::parse(&decl.raw_value))
+            .unwrap_or_default();
+        (filter, mix_blend_mode)
     }
 
     /// Computes `border-radius`, `box-shadow` and `text-shadow` (CSS Backgrounds 3
@@ -3343,11 +3466,193 @@ fn parse_border_spacing(value: &str, font_size: f32, root_font_size: f32) -> Opt
 /// `repeating-*`), `image-set(...)` and other unsupported image types evaluate to `None`
 /// (documented limitation: the engine has no gradient rasterizer yet). For a multi-layer value
 /// the first plain URL layer is used.
+/// Selects the URL of an `image-set()` value.
+///
+/// This engine renders at device-pixel-ratio 1 and has no DPR context, so the
+/// candidate with the smallest resolution (1x preferred) is chosen; ties keep
+/// source order (documented limitation). Gradient candidates are skipped.
+fn parse_image_set_url(value: &str, prefix_len: usize) -> Option<String> {
+    if !value[prefix_len - 1..].ends_with(')') {
+        return None;
+    }
+    let inner = value[prefix_len..value.len() - 1].trim();
+    let mut best: Option<(f32, String)> = None;
+    for candidate in split_top_level_commas(inner) {
+        let mut resolution = 1.0f32;
+        let mut url = None;
+        for component in split_components(&candidate) {
+            let component = component.trim();
+            if let Some(url_value) = parse_url_component(component) {
+                url = Some(url_value);
+                continue;
+            }
+            if let Some(candidate_url) = strip_quoted_string(component) {
+                url = Some(candidate_url);
+                continue;
+            }
+            if let Some(number) = component.to_ascii_lowercase().strip_suffix('x')
+                && let Ok(parsed) = number.trim().parse::<f32>()
+                && parsed > 0.0
+            {
+                resolution = parsed;
+            }
+        }
+        if let Some(url) = url
+            && best
+                .as_ref()
+                .is_none_or(|(best_res, _)| resolution < *best_res)
+        {
+            best = Some((resolution, url));
+        }
+    }
+    best.map(|(_, url)| url)
+}
+
+/// Strips a leading/trailing single or double quote from a string token.
+fn strip_quoted_string(component: &str) -> Option<String> {
+    let bytes = component.as_bytes();
+    if component.len() < 2 {
+        return None;
+    }
+    let quote = bytes[0];
+    if (quote == b'"' || quote == b'\'') && bytes[component.len() - 1] == quote {
+        return Some(component[1..component.len() - 1].to_string());
+    }
+    None
+}
+
+/// Parses a `filter` function list; invalid values produce an empty list (`none`).
+fn parse_filter_list(
+    value: &str,
+    font_size: f32,
+    root_font_size: f32,
+    current_color: Color,
+) -> Vec<FilterFunction> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("none") {
+        return Vec::new();
+    }
+    let mut filters = Vec::new();
+    for component in split_components(trimmed) {
+        let Some((name, args)) = split_function_token(&component) else {
+            return Vec::new();
+        };
+        let Some(filter) =
+            parse_filter_function(&name, &args, font_size, root_font_size, current_color)
+        else {
+            return Vec::new();
+        };
+        filters.push(filter);
+        if filters.len() >= MAX_FILTER_FUNCTIONS {
+            break;
+        }
+    }
+    filters
+}
+
+/// Splits `name(args)` into the lowercase function name and its inner argument text.
+fn split_function_token(token: &str) -> Option<(String, String)> {
+    let token = token.trim();
+    let open = token.find('(')?;
+    if !token.ends_with(')') || open == 0 {
+        return None;
+    }
+    let name = token[..open].trim().to_ascii_lowercase();
+    let args = token[open + 1..token.len() - 1].trim().to_string();
+    Some((name, args))
+}
+
+fn parse_number_or_percent(value: &str) -> Option<f32> {
+    let value = value.trim();
+    if let Some(percentage) = value.strip_suffix('%') {
+        return percentage.trim().parse::<f32>().ok().map(|pct| pct / 100.0);
+    }
+    value.parse::<f32>().ok()
+}
+
+/// Parses a non-negative filter length (`px`/`em`/...; percentages invalid).
+fn parse_filter_length(value: &str, font_size: f32, root_font_size: f32) -> Option<f32> {
+    match Length::parse(value, font_size, root_font_size)? {
+        Length::Px(px) if px >= 0.0 => Some(px),
+        _ => None,
+    }
+}
+
+fn parse_filter_function(
+    name: &str,
+    args: &str,
+    font_size: f32,
+    root_font_size: f32,
+    current_color: Color,
+) -> Option<FilterFunction> {
+    let non_negative = |value: f32| value.max(0.0);
+    match name {
+        "blur" => Some(FilterFunction::Blur(parse_filter_length(
+            args,
+            font_size,
+            root_font_size,
+        )?)),
+        "brightness" => Some(FilterFunction::Brightness(non_negative(
+            parse_number_or_percent(args)?,
+        ))),
+        "contrast" => Some(FilterFunction::Contrast(non_negative(
+            parse_number_or_percent(args)?,
+        ))),
+        "grayscale" => Some(FilterFunction::Grayscale(non_negative(
+            parse_number_or_percent(args)?,
+        ))),
+        "invert" => Some(FilterFunction::Invert(non_negative(
+            parse_number_or_percent(args)?,
+        ))),
+        "opacity" => Some(FilterFunction::Opacity(non_negative(
+            parse_number_or_percent(args)?,
+        ))),
+        "sepia" => Some(FilterFunction::Sepia(non_negative(
+            parse_number_or_percent(args)?,
+        ))),
+        "saturate" => Some(FilterFunction::Saturate(non_negative(
+            parse_number_or_percent(args)?,
+        ))),
+        "hue-rotate" => Some(FilterFunction::HueRotate(parse_angle_degrees(args)?)),
+        "drop-shadow" => {
+            let mut color = None;
+            let mut lengths = Vec::new();
+            for component in split_components(args) {
+                if color.is_none()
+                    && (Color::parse(component.trim()).is_some()
+                        || component.trim().eq_ignore_ascii_case("currentcolor"))
+                {
+                    color = parse_color_component(component.trim(), current_color);
+                    continue;
+                }
+                if lengths.len() < 3
+                    && let Some(length) =
+                        parse_filter_length(component.trim(), font_size, root_font_size)
+                {
+                    lengths.push(length);
+                }
+            }
+            if lengths.len() < 2 {
+                return None;
+            }
+            Some(FilterFunction::DropShadow {
+                offset_x: lengths[0],
+                offset_y: lengths[1],
+                blur: lengths.get(2).copied().unwrap_or(0.0).max(0.0),
+                color: color.unwrap_or(current_color),
+            })
+        }
+        _ => None,
+    }
+}
+
 /// Parses one `background-image` layer: a plain `url(...)` or a CSS gradient.
 ///
 /// Returns `(url, gradient)`; both are `None` for `none` and unsupported image
-/// types. Invalid gradients are dropped (the layer paints nothing) instead of
-/// panicking, matching the tolerant parser contract.
+/// types. `image-set()` selects its 1x (smallest-resolution) URL (DPR 1 is the
+/// only supported device-pixel ratio, documented). Invalid gradients are dropped
+/// (the layer paints nothing) instead of panicking, matching the tolerant parser
+/// contract.
 fn parse_background_image_component(
     value: &str,
     font_size: f32,
@@ -3362,6 +3667,14 @@ fn parse_background_image_component(
         return (Some(url), None);
     }
     let lower = value.to_ascii_lowercase();
+    if lower.starts_with("image-set(") || lower.starts_with("-webkit-image-set(") {
+        let prefix_len = if lower.starts_with("-webkit-") {
+            "-webkit-image-set(".len()
+        } else {
+            "image-set(".len()
+        };
+        return (parse_image_set_url(value, prefix_len), None);
+    }
     if lower.starts_with("linear-gradient(")
         || lower.starts_with("repeating-linear-gradient(")
         || lower.starts_with("radial-gradient(")

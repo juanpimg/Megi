@@ -415,6 +415,17 @@ fn phase(layout_box: &LayoutBox) -> Phase {
         // Positioned with `z-index: auto`: painted in step 8 as if it created a
         // stacking context for ordering purposes (CSS 2.2 Appendix E step 8).
         Phase::Zero
+    } else if has_effects(layout_box) {
+        // `filter`/`mix-blend-mode` create a stacking context (CSS Filter
+        // Effects 1 §2 / Compositing 1 §5): paint it in the zero/negative/
+        // positive phase instead of the in-flow passes (R137).
+        if layout_box.z_index < 0 {
+            Phase::Negative
+        } else if layout_box.z_index > 0 {
+            Phase::Positive
+        } else {
+            Phase::Zero
+        }
     } else if layout_box.is_float {
         Phase::Float
     } else {
@@ -548,6 +559,41 @@ fn collect_text_mask_runs(layout_box: &LayoutBox) -> Vec<TextMaskRun> {
     runs
 }
 
+/// Whether the box needs an offscreen filter / mix-blend group.
+///
+/// Both CSS properties create a stacking context, so the painter routes these
+/// boxes through [`paint_stacking_context`] (R137).
+#[inline]
+fn has_effects(layout_box: &LayoutBox) -> bool {
+    layout_box.style.as_ref().is_some_and(|style| {
+        !style.filter.is_empty() || style.mix_blend_mode != css::MixBlendMode::Normal
+    })
+}
+
+/// Extra pixel margin needed around an effect group so blur/drop-shadow can
+/// paint outside the source bounds (deterministic box-blur spread).
+fn effect_padding(filters: &[css::FilterFunction]) -> f32 {
+    let mut padding = 0.0f32;
+    for filter in filters.iter().take(css::MAX_FILTER_FUNCTIONS) {
+        match *filter {
+            css::FilterFunction::Blur(blur) => {
+                padding = padding.max(blur.clamp(0.0, 64.0) * 2.0 + 2.0);
+            }
+            css::FilterFunction::DropShadow {
+                offset_x,
+                offset_y,
+                blur,
+                ..
+            } => {
+                padding = padding
+                    .max(offset_x.abs().max(offset_y.abs()) + blur.clamp(0.0, 64.0) * 2.0 + 2.0);
+            }
+            _ => {}
+        }
+    }
+    padding
+}
+
 /// Paints the appendix E phases of one stacking context.
 fn paint_stacking_context(
     layout_box: &LayoutBox,
@@ -647,6 +693,33 @@ fn paint_stacking_context(
     }
     if overflow_clip.is_some() {
         list.push(DisplayItem::PopRoundedGroup);
+    }
+
+    // Filter / blend group: the whole subtree is rasterized offscreen, the
+    // filters are applied, and the result is composited against the backdrop.
+    let effect = layout_box
+        .style
+        .as_ref()
+        .map(|style| (style.filter.clone(), style.mix_blend_mode));
+    if let Some((filters, blend)) = effect
+        && (!filters.is_empty() || blend != css::MixBlendMode::Normal)
+        && list.len() > start
+    {
+        let items: Vec<DisplayItem> = list.items.drain(start..).collect();
+        let bounds = items_bounds(&items).unwrap_or_else(|| layout_box.dimensions.border_box());
+        let padding = effect_padding(&filters);
+        let rect = Rect::new(
+            bounds.x - padding,
+            bounds.y - padding,
+            bounds.width + 2.0 * padding,
+            bounds.height + 2.0 * padding,
+        );
+        list.push(DisplayItem::EffectGroup {
+            rect,
+            filters,
+            blend,
+            items,
+        });
     }
 
     // Opacity group: the whole subtree is composited once with `opacity`.

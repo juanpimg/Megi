@@ -38,7 +38,10 @@ pub use cascade::{
 };
 pub use component_value::{ComponentValue, FunctionCall, SimpleBlock};
 pub use flex::{AlignItems, AlignSelf, FlexDirection, FlexWrap, JustifyContent};
-pub use grid::{AutoRepeat, AutoRepeatKind, GridLine, GridTemplate, TrackMax, TrackMin, TrackSize};
+pub use grid::{
+    AutoRepeat, AutoRepeatKind, GridAutoFlow, GridContentDistribution, GridLine, GridTemplate,
+    GridTemplateAreas, TrackMax, TrackMin, TrackSize,
+};
 pub use media::{
     MediaCondition, MediaContext, MediaFeature, MediaQualifier, MediaQuery, MediaQueryList,
     MediaType, Orientation, evaluate as evaluate_media, parse_media_query_list,
@@ -49,11 +52,11 @@ pub use properties::{
     BackgroundAttachment, BackgroundClip, BackgroundLayer, BackgroundOrigin, BackgroundPosition,
     BackgroundRepeat, BackgroundRepeatAxis, BackgroundSize, BorderCollapse, BorderRadii,
     BorderStyle, BoxShadow, BoxSizing, CaptionSide, Clear, Color, ComputedStyle, ConicGradient,
-    Display, EmptyCells, Float, FontStyle, Gradient, GradientKind, GradientStop,
-    InterpolationSpace, Length, LinearDirection, LinearGradient, ListStyleType, MAX_GRADIENT_STOPS,
-    MAX_GRADIENTS, Overflow, Position, RadialExtent, RadialGradient, RadialShape, Radius,
-    RectEdges, TableLayout, TextAlign, TextDecoration, TextShadow, TextTransform, VerticalAlign,
-    Visibility, WhiteSpace,
+    Display, EmptyCells, FilterFunction, Float, FontStyle, Gradient, GradientKind, GradientStop,
+    InterpolationSpace, Length, LinearDirection, LinearGradient, ListStyleType,
+    MAX_FILTER_FUNCTIONS, MAX_GRADIENT_STOPS, MAX_GRADIENTS, MixBlendMode, Overflow, Position,
+    RadialExtent, RadialGradient, RadialShape, Radius, RectEdges, TableLayout, TextAlign,
+    TextDecoration, TextShadow, TextTransform, VerticalAlign, Visibility, WhiteSpace,
 };
 pub use query::{
     SelectorParseError, matches, matches_with_state, query_selector, query_selector_all,
@@ -1531,7 +1534,6 @@ mod tests {
             "background-image: linear-gradient(red, blue);",
             "background-image: radial-gradient(circle, #fff, #000);",
             "background-image: repeating-linear-gradient(red 0, blue 10px);",
-            "background-image: image-set(url(a.png) 1x);",
         ] {
             assert_eq!(
                 style_with_inline("div", value).background_image,
@@ -1539,6 +1541,15 @@ mod tests {
                 "{value}"
             );
         }
+        // `image-set()` selects its 1x URL (DPR 1 is the only supported ratio).
+        assert_eq!(
+            style_with_inline(
+                "div",
+                "background-image: image-set(url(a.png) 1x, url(b.png) 2x);"
+            )
+            .background_image,
+            Some("a.png".to_string())
+        );
         // Invalid values fall back to the initial None.
         assert_eq!(
             style_with_inline("div", "background-image: 42px;").background_image,

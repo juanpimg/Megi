@@ -154,6 +154,19 @@ pub enum DisplayItem {
         color: Color,
         kind: MarkerKind,
     },
+    /// An offscreen filter/blend group (CSS `filter` / `mix-blend-mode`).
+    ///
+    /// The nested items are rasterized into a transparent buffer, the `filters`
+    /// are applied in order to that buffer, and the result is composited over the
+    /// destination with `blend` (CSS Filter Effects 1 §3 / Compositing 1 §5).
+    /// Caps: at most [`css::MAX_FILTER_FUNCTIONS`] functions, blur ≤64 px and a
+    /// group area ≤16.7 Mpx (documented; larger groups paint unfiltered).
+    EffectGroup {
+        rect: Rect,
+        filters: Vec<css::FilterFunction>,
+        blend: css::MixBlendMode,
+        items: Vec<DisplayItem>,
+    },
     /// An offscreen compositing group.
     ///
     /// The nested `items` are rasterized into a transparent buffer covering
@@ -278,7 +291,8 @@ impl DisplayItem {
             | Self::Marker { rect, .. }
             | Self::Gradient { rect, .. }
             | Self::Image { rect, .. }
-            | Self::OpacityGroup { rect, .. } => Some(*rect),
+            | Self::OpacityGroup { rect, .. }
+            | Self::EffectGroup { rect, .. } => Some(*rect),
             Self::BoxShadow { rect, shadow, .. } => {
                 let blur = shadow.blur.clamp(0.0, MAX_SHADOW_BLUR);
                 Some(Rect::new(

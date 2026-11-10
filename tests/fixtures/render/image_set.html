@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Megi image-set fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #ffffff; }
+  .one {
+    width: 120px; height: 60px; margin: 8px;
+    background-image: image-set(url("assets/pattern.png") 1x, url("assets/pattern.png") 2x);
+    background-repeat: repeat;
+  }
+  .prefixed {
+    width: 120px; height: 60px; margin: 8px; background-color: #101820;
+    background-image: -webkit-image-set("assets/bullet.png" 2x, "assets/bullet.png" 1x);
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+</style></head>
+<body>
+  <div class="one"></div>
+  <div class="prefixed"></div>
+</body></html>

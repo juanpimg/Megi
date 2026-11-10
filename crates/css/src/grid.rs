@@ -8,15 +8,21 @@
 //!   `repeat(<integer>, <track-list>)` / `repeat(auto-fill|auto-fit, …)`.
 //! * `grid-auto-rows`: same track syntax for implicit rows.
 //! * `grid-column` / `grid-row` (+ `-start`/`-end` longhands): numeric lines
-//!   (negative counts from the end), `span <integer>` and `auto`.
+//!   (negative counts from the end), named lines idents, `span <integer>` and
+//!   `auto`.
+//! * `grid-auto-flow`: `row`/`column` with optional `dense`.
+//! * `grid-template-areas` (rectangular quoted rows of names/`.`) and
+//!   `grid-area: <name>` (or the four-line shorthand).
+//! * `justify-content`/`align-content` track distribution keywords.
 //! * `order` for grid/flex items (stable reordering).
 //! * `justify-items` / `align-items` (`stretch`/`start`/`end`/`center`,
 //!   `flex-start`/`flex-end` tolerated) and `justify-self`/`align-self`.
 //! * `row-gap`/`column-gap`/`gap` (shared with flexbox).
 //!
-//! Out of scope (documented in `layout/grid.rs`): named lines/areas, `subgrid`,
-//! dense packing, `grid-auto-columns` and masonry; `auto-fit` behaves as
-//! `auto-fill` (no empty-track collapse).
+//! Out of scope (documented in `layout/grid.rs`): `subgrid`, `grid-auto-columns`,
+//! masonry, `repeat()` with named lines inside, and full CSS Grid
+//! placement-conflict resolution; `auto-fit` empty-track collapse is applied by
+//! layout after placement (repeated range only).
 
 use crate::flex::{AlignItems, AlignSelf};
 use crate::properties::{Length, find_declaration};
@@ -71,7 +77,7 @@ pub struct AutoRepeat {
 }
 
 /// A `<grid-line>` value for explicit placement.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum GridLine {
     #[default]
     Auto,
@@ -79,6 +85,40 @@ pub enum GridLine {
     Line(i32),
     /// `span <integer>` (positive span).
     Span(u32),
+    /// Named line (`[name]` in the template) or area-derived name.
+    Name(String),
+}
+
+/// `grid-auto-flow` packing mode.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GridAutoFlow {
+    #[default]
+    Row,
+    Column,
+    RowDense,
+    ColumnDense,
+}
+
+/// `justify-content`/`align-content` distribution for grid tracks.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GridContentDistribution {
+    #[default]
+    Stretch,
+    Start,
+    End,
+    Center,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+}
+
+/// Parsed `grid-template-areas`: row/column count plus row-major optional names.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct GridTemplateAreas {
+    pub rows: usize,
+    pub columns: usize,
+    /// Row-major cells (`None` for `.`).
+    pub cells: Vec<Option<String>>,
 }
 
 /// A parsed grid template (empty = `none`).
@@ -88,6 +128,9 @@ pub struct GridTemplate {
     pub tracks: Vec<TrackSize>,
     /// Optional `repeat(auto-fill|auto-fit, …)` expansion.
     pub auto_repeat: Option<AutoRepeat>,
+    /// Optional names attached to track boundaries (`[name]` before/after tracks).
+    /// `line_names[i]` are the names of boundary `i` (`0..=tracks.len()`).
+    pub line_names: Vec<Vec<String>>,
 }
 
 impl GridTemplate {
@@ -117,6 +160,16 @@ pub struct ComputedGrid {
     pub row_end: GridLine,
     /// `order` for grid/flex items (initial `0`).
     pub order: i32,
+    /// `grid-auto-flow` packing mode.
+    pub auto_flow: GridAutoFlow,
+    /// `grid-template-areas` (invalid/rectangular mismatch ⇒ ignored).
+    pub template_areas: Option<GridTemplateAreas>,
+    /// `grid-area: <name>` (area placement; explicit lines override it).
+    pub grid_area: Option<String>,
+    /// `justify-content` for grid track distribution.
+    pub justify_content: GridContentDistribution,
+    /// `align-content` for grid track distribution.
+    pub align_content: GridContentDistribution,
 }
 
 /// Computes the grid values from the cascaded declarations.
@@ -174,7 +227,149 @@ pub(crate) fn compute_grid(
     grid.order = find_declaration(entries, "order")
         .and_then(|declaration| declaration.raw_value.trim().parse::<i32>().ok())
         .unwrap_or(0);
+    if let Some(value) = find_declaration(entries, "grid-auto-flow") {
+        grid.auto_flow = parse_auto_flow(&value.raw_value);
+    }
+    if let Some(value) = find_declaration(entries, "grid-template-areas") {
+        grid.template_areas = parse_template_areas(&value.raw_value);
+    }
+    if let Some(value) = find_declaration(entries, "grid-area") {
+        parse_grid_area(&value.raw_value, &mut grid);
+    }
+    if let Some(value) = find_declaration(entries, "justify-content") {
+        grid.justify_content = parse_content_distribution(&value.raw_value);
+    }
+    if let Some(value) = find_declaration(entries, "align-content") {
+        grid.align_content = parse_content_distribution(&value.raw_value);
+    }
     grid
+}
+
+/// Parses `grid-auto-flow`: `row|column [dense]` (also bare `dense`).
+fn parse_auto_flow(raw: &str) -> GridAutoFlow {
+    let mut column = false;
+    let mut dense = false;
+    for token in raw.split_whitespace() {
+        match token.to_ascii_lowercase().as_str() {
+            "column" => column = true,
+            "dense" => dense = true,
+            "row" => {}
+            _ => {}
+        }
+    }
+    match (column, dense) {
+        (false, false) => GridAutoFlow::Row,
+        (true, false) => GridAutoFlow::Column,
+        (false, true) => GridAutoFlow::RowDense,
+        (true, true) => GridAutoFlow::ColumnDense,
+    }
+}
+
+/// Parses `justify-content`/`align-content` (grid track distribution).
+pub(crate) fn parse_content_distribution(raw: &str) -> GridContentDistribution {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "start" | "flex-start" | "left" => GridContentDistribution::Start,
+        "end" | "flex-end" | "right" => GridContentDistribution::End,
+        "center" => GridContentDistribution::Center,
+        "space-between" => GridContentDistribution::SpaceBetween,
+        "space-around" => GridContentDistribution::SpaceAround,
+        "space-evenly" => GridContentDistribution::SpaceEvenly,
+        // `normal`/`stretch` and unknown values behave as stretch (initial).
+        _ => GridContentDistribution::Stretch,
+    }
+}
+
+/// Parses `grid-template-areas`: quoted rows of `.`/names; invalid ⇒ `None`.
+fn parse_template_areas(raw: &str) -> Option<GridTemplateAreas> {
+    let mut rows: Vec<Vec<Option<String>>> = Vec::new();
+    let mut chars = raw.chars().peekable();
+    while let Some(&ch) = chars.peek() {
+        if ch == '"' || ch == '\'' {
+            let quote = ch;
+            chars.next();
+            let mut row = String::new();
+            while let Some(ch) = chars.next() {
+                if ch == quote {
+                    break;
+                }
+                if ch == '\\' {
+                    if let Some(escaped) = chars.next() {
+                        row.push(escaped);
+                    }
+                } else {
+                    row.push(ch);
+                }
+            }
+            let cells: Vec<Option<String>> = row
+                .split_whitespace()
+                .map(|cell| {
+                    if cell == "." {
+                        None
+                    } else {
+                        Some(cell.to_owned())
+                    }
+                })
+                .collect();
+            if cells.is_empty() || cells.len() > MAX_TRACKS {
+                return None;
+            }
+            rows.push(cells);
+            if rows.len() > MAX_TRACKS {
+                return None;
+            }
+        } else {
+            chars.next();
+        }
+    }
+    if rows.is_empty() {
+        return None;
+    }
+    let columns = rows[0].len();
+    if rows.iter().any(|row| row.len() != columns) {
+        // Non-rectangular area templates are invalid (CSS Grid 1 §7.3).
+        return None;
+    }
+    let mut cells = Vec::with_capacity(rows.len() * columns);
+    for row in &mut rows {
+        cells.append(row);
+    }
+    Some(GridTemplateAreas {
+        rows: cells.len() / columns,
+        columns,
+        cells,
+    })
+}
+
+/// Parses `grid-area`: `<name>` or `<row-start> / <col-start> / <row-end> / <col-end>`.
+fn parse_grid_area(raw: &str, grid: &mut ComputedGrid) {
+    let components: Vec<&str> = raw
+        .split('/')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect();
+    if components.is_empty() {
+        return;
+    }
+    if components.len() == 1 {
+        let component = components[0];
+        let line = parse_grid_line(component);
+        if matches!(line, GridLine::Name(_)) {
+            if let GridLine::Name(name) = line {
+                grid.grid_area = Some(name);
+            }
+        } else {
+            grid.row_start = line;
+        }
+        return;
+    }
+    grid.row_start = parse_grid_line(components[0]);
+    grid.column_start = parse_grid_line(components[1]);
+    if let Some(component) = components.get(2) {
+        grid.row_end = parse_grid_line(component);
+    }
+    if let Some(component) = components.get(3) {
+        grid.column_end = parse_grid_line(component);
+    }
 }
 
 /// Parses `grid-column`/`grid-row` (`<start> / <end>`, end optional).
@@ -215,12 +410,22 @@ pub(crate) fn parse_grid_line(raw: &str) -> GridLine {
             .map(GridLine::Span)
             .unwrap_or(GridLine::Auto);
     }
-    lower
-        .parse::<i32>()
-        .ok()
-        .filter(|line| *line != 0)
-        .map(GridLine::Line)
-        .unwrap_or(GridLine::Auto)
+    if let Ok(line) = lower.parse::<i32>() {
+        return if line != 0 {
+            GridLine::Line(line)
+        } else {
+            GridLine::Auto
+        };
+    }
+    // `<custom-ident>`: named line or area-derived name.
+    if lower
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+    {
+        GridLine::Name(lower)
+    } else {
+        GridLine::Auto
+    }
 }
 
 fn parse_align_items(value: &str) -> AlignItems {
@@ -252,17 +457,24 @@ pub(crate) fn parse_template(raw: &str, font_size: f32, root_font_size: f32) -> 
     }
     let mut tracks = Vec::new();
     let mut auto_repeat = None;
+    let mut line_names: Vec<Vec<String>> = vec![Vec::new()];
     parse_track_list(
         raw,
         font_size,
         root_font_size,
         &mut tracks,
         &mut auto_repeat,
+        &mut line_names,
     );
     tracks.truncate(MAX_TRACKS);
+    line_names.truncate(tracks.len() + 1);
+    while line_names.len() < tracks.len() + 1 {
+        line_names.push(Vec::new());
+    }
     GridTemplate {
         tracks,
         auto_repeat,
+        line_names,
     }
 }
 
@@ -272,6 +484,7 @@ fn parse_track_list(
     root_font_size: f32,
     tracks: &mut Vec<TrackSize>,
     auto_repeat: &mut Option<AutoRepeat>,
+    line_names: &mut Vec<Vec<String>>,
 ) {
     let mut rest = raw;
     loop {
@@ -284,6 +497,18 @@ fn parse_track_list(
             return;
         }
         rest = &rest[consumed..];
+        if token.starts_with('[') && token.ends_with(']') {
+            // `[name name2]` attaches names to the current boundary.
+            let names = &token[1..token.len() - 1];
+            if let Some(boundary) = line_names.last_mut() {
+                for name in names.split_whitespace() {
+                    if !name.is_empty() && boundary.len() < 8 {
+                        boundary.push(name.to_owned());
+                    }
+                }
+            }
+            continue;
+        }
         if let Some(inner) = token
             .strip_prefix("repeat(")
             .or_else(|| token.strip_prefix("REPEAT("))
@@ -294,7 +519,15 @@ fn parse_track_list(
                 let list = list.trim();
                 let mut single = Vec::new();
                 let mut nested = None;
-                parse_track_list(list, font_size, root_font_size, &mut single, &mut nested);
+                let mut nested_names = vec![Vec::new()];
+                parse_track_list(
+                    list,
+                    font_size,
+                    root_font_size,
+                    &mut single,
+                    &mut nested,
+                    &mut nested_names,
+                );
                 let lowered = count.to_ascii_lowercase();
                 if lowered == "auto-fill" || lowered == "auto-fit" {
                     // Only the first auto repetition is kept (documented MVP limit).
@@ -315,6 +548,9 @@ fn parse_track_list(
                             break;
                         }
                         tracks.extend_from_slice(&single);
+                        for _ in 0..single.len() {
+                            line_names.push(Vec::new());
+                        }
                     }
                 }
             }
@@ -322,6 +558,7 @@ fn parse_track_list(
         }
         if let Some(track) = parse_track(token, font_size, root_font_size) {
             tracks.push(track);
+            line_names.push(Vec::new());
         }
     }
 }
@@ -332,8 +569,8 @@ fn split_token(raw: &str) -> (&str, usize) {
     let mut depth = 0usize;
     for (index, byte) in bytes.iter().enumerate() {
         match byte {
-            b'(' => depth += 1,
-            b')' => depth = depth.saturating_sub(1),
+            b'(' | b'[' => depth += 1,
+            b')' | b']' => depth = depth.saturating_sub(1),
             b',' if depth == 0 => return (raw[..index].trim(), index),
             b' ' | b'\t' | b'\n' if depth == 0 => return (raw[..index].trim(), index),
             _ => {}
@@ -557,5 +794,91 @@ mod round19_tests {
         assert_eq!(longhands.column_end, GridLine::Span(2));
         assert_eq!(longhands.row_start, GridLine::Line(2));
         assert_eq!(longhands.row_end, GridLine::Auto);
+    }
+}
+
+#[cfg(test)]
+mod round22_tests {
+    use super::*;
+    use crate::rule::Declaration;
+
+    fn declaration(name: &str, raw: &str) -> Declaration {
+        Declaration {
+            name: name.to_owned(),
+            value: Vec::new(),
+            important: false,
+            raw_value: raw.to_owned(),
+        }
+    }
+
+    fn compute(pairs: &[(&str, &str)]) -> ComputedGrid {
+        let declarations: Vec<Declaration> = pairs
+            .iter()
+            .map(|(name, value)| declaration(name, value))
+            .collect();
+        let entries: Vec<(&str, &Declaration)> = pairs
+            .iter()
+            .zip(declarations.iter())
+            .map(|((name, _), declaration)| (*name, declaration))
+            .collect();
+        compute_grid(&entries, 16.0, 16.0)
+    }
+
+    #[test]
+    fn test_auto_flow_and_content_distribution() {
+        let grid = compute(&[
+            ("grid-auto-flow", "column dense"),
+            ("justify-content", "space-between"),
+            ("align-content", "center"),
+        ]);
+        assert_eq!(grid.auto_flow, GridAutoFlow::ColumnDense);
+        assert_eq!(grid.justify_content, GridContentDistribution::SpaceBetween);
+        assert_eq!(grid.align_content, GridContentDistribution::Center);
+
+        let row = compute(&[("grid-auto-flow", "dense")]);
+        assert_eq!(row.auto_flow, GridAutoFlow::RowDense);
+    }
+
+    #[test]
+    fn test_template_areas_and_grid_area_name() {
+        let grid = compute(&[
+            ("grid-template-areas", "'header header' 'main side'"),
+            ("grid-area", "header"),
+        ]);
+        let areas = grid.template_areas.expect("areas");
+        assert_eq!((areas.rows, areas.columns), (2, 2));
+        assert_eq!(areas.cells[0], Some("header".to_owned()));
+        assert_eq!(areas.cells[3], Some("side".to_owned()));
+        assert_eq!(grid.grid_area.as_deref(), Some("header"));
+
+        let invalid = compute(&[("grid-template-areas", "'a a' 'b'")]);
+        assert!(invalid.template_areas.is_none());
+    }
+
+    #[test]
+    fn test_named_template_lines_and_named_placement() {
+        let grid = compute(&[
+            ("grid-template-columns", "[left] 100px [mid] 100px [right]"),
+            ("grid-column", "mid / right"),
+        ]);
+        assert_eq!(
+            grid.template_columns.line_names,
+            vec![
+                vec!["left".to_owned()],
+                vec!["mid".to_owned()],
+                vec!["right".to_owned()],
+            ]
+        );
+        assert_eq!(grid.column_start, GridLine::Name("mid".to_owned()));
+        assert_eq!(grid.column_end, GridLine::Name("right".to_owned()));
+    }
+
+    #[test]
+    fn test_grid_area_line_placement_syntax() {
+        let grid = compute(&[("grid-area", "2 / 1 / 4 / 3")]);
+        assert_eq!(grid.row_start, GridLine::Line(2));
+        assert_eq!(grid.column_start, GridLine::Line(1));
+        assert_eq!(grid.row_end, GridLine::Line(4));
+        assert_eq!(grid.column_end, GridLine::Line(3));
     }
 }
