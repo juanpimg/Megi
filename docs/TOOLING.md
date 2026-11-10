@@ -1,6 +1,6 @@
 # Documentación de Tooling, Skills y Automatización (FASES 2–4)
 
-Este documento registra la investigación, evaluación, instalación y configuración de herramientas CLI, scripts de extracción de especificaciones y skills locales realizadas durante las **FASES 2–5** para optimizar el desarrollo autónomo guiado por especificaciones (WHATWG / W3C), el auto-testeo continuo (`html5lib-tests` y Web Platform Tests), el pipeline de renderizado a PNG, el navegador real (render + red + imágenes) y el fuzzing continuo en **Megi**.
+Este documento registra la investigación, evaluación, instalación y configuración de herramientas CLI, scripts de extracción de especificaciones y skills locales realizadas durante las **FASES 2–6** para optimizar el desarrollo autónomo guiado por especificaciones (WHATWG / W3C), el auto-testeo continuo (`html5lib-tests` y Web Platform Tests), el pipeline de renderizado a PNG, el navegador real (render + red + imágenes + JavaScript embebido) y el fuzzing continuo en **Megi**.
 
 ---
 
@@ -204,7 +204,7 @@ cargo run -p render -- file:///ruta/pagina.html /tmp/local.png --no-network
 `crates/image` (std puro, sin dependencias) decodifica PNG a RGBA8 straight y expone un inflate zlib/DEFLATE reutilizable:
 
 ```bash
-cargo test -p image                 # 46 tests (decode + inflate + PNG del pipeline)
+cargo test -p image                 # 45 tests + 1 doctest (decode + inflate + PNG del pipeline)
 cargo run -p render -- tests/fixtures/phase4/basic.html /tmp/basic.png 2>/dev/null || true
 # El test de integración decodifica el PNG generado por paint y lo compara con basic.rgba
 cargo test -p paint --test end_to_end_html
@@ -236,12 +236,12 @@ cargo run -p render -- tests/fixtures/render/images.html docs/images/images-e2e.
 cargo test -p paint -p image -p render
 ```
 
-### 2.13 Showcase de navegador real y controles del shell (ronda 7)
+### 2.13 Showcase de navegador real y controles del shell (rondas 7–8)
 
 ```bash
 # Showcase 1024×768: CSS externo + @import + media + 2 PNG + tabla + stage posicionado
 cargo run -p render -- tests/fixtures/render/showcase/index.html docs/images/showcase.png --width 1024 --height 768
-python3 tools/png_check.py docs/images/showcase.png     # 65.151 B, md5 570aa554…
+python3 tools/png_check.py docs/images/showcase.png     # 80.220 B, md5 c95c7eff…
 cargo test -p render
 
 # Shell usable: ventana con scroll/entrada/HiDPI y render en worker
@@ -252,9 +252,36 @@ tools/megi.sh tests/fixtures/render/showcase/index.html
 cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png --width 640 --height 400
 ```
 
-El golden del showcase compara byte a byte (1024×768, `md5 570aa554…`) y los tests de render lo verifican tanto por `file://` como por HTTP local. Limitaciones visibles: texto de celdas de tabla y `background-image` aún no se pintan (documentadas en el README del fixture).
+El golden del showcase compara byte a byte (1024×768, **80.220 B**, `md5 c95c7eff…`) y los tests de render lo verifican tanto por `file://` como por HTTP local. En la ronda 8 se regeneró tras el **fix del texto de celdas de tabla** (paint) y el soporte de **`background-image`/`list-style-image`** E2E (WP-5.9): ahora se ven el texto y las cabeceras en negrita de la tabla, el patrón de fondo de la cabecera/escenario y los marcadores con imagen. Limitaciones visibles restantes: `background-repeat`/`size`/`position`, colores de `border-collapse` y block-in-inline.
 
-### 2.14 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
+### 2.14 `crates/js` — Runtime JavaScript Boa (Fase 6, WP-6.1)
+
+`crates/js` embebe **Boa 0.21.1** detrás de la feature `js`, **ON por defecto**; con `--no-default-features` queda un stub std-only (sin Boa) para CI y auditoría. Expone `JsRuntime::eval` sobre un realm persistente, `console.*` capturado, bindings DOM (`document.write`, `getElementById`, `querySelector(All)`, `innerHTML`, `style`, `classList`, árbol/atributos) y un scheduler base (`setTimeout`/microtasks). Anti-DoS: `Budget` mapeado a Boa `RuntimeLimits` (5.000.000 iteraciones de bucle, recursión 512, pila VM 20.480; `Budget::SMALL` para páginas/tests) y side-table `NodeId↔handle` capada a 1.000.000; sin APIs de red/FS. Aún **no integrado en `render`**.
+
+```bash
+cargo test -p js                        # 12 tests (feature js por defecto)
+cargo test -p js --no-default-features  # stub mínimo sin Boa (CI)
+```
+
+### 2.15 `crates/net` — cookies, CORS y compresión (Fase 5, WP-5.9)
+
+Además de URL/HTTP/TLS/caché: **cookies RFC 6265** (`CookieJar`, cap 4.096, `FetchOptions.cookie_jar`), **CORS básico** (`Origin`, `validate_response`/`validate_preflight_response`, credentials) y **gzip/deflate** (`Accept-Encoding: gzip` por defecto, CRC32/ISIZE, `CompressionLimits`: 64 MiB descomprimidos y ratio máximo 1000:1). Límites: sin SameSite/PSL, CORS parcial (sin caché de preflight), sin `br`/HTTP2/streaming.
+
+```bash
+cargo test -p net        # 180 tests offline (listeners en 127.0.0.1)
+```
+
+### 2.16 Fixtures de `background-image`/`list-style-image` (E2E, ronda 8)
+
+`tests/fixtures/render/backgrounds.html` + `assets/pattern.png` (16×16 checker) y `assets/bullet.png` (8×8 rombo) ejercitan `background-image` estirada al *padding box* y `list-style-image` como marcador, incluido fallback a color + warning con recurso ausente y caps **32 imágenes / 8 MiB por imagen / 16 MiB totales**.
+
+```bash
+cargo run -p render -- tests/fixtures/render/backgrounds.html /tmp/backgrounds.png
+python3 tools/png_check.py /tmp/backgrounds.png
+cargo test -p render --test backgrounds_tests
+```
+
+### 2.17 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
 
 Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-spec-driven-dev/SKILL.md` (directorio ignorado en `.gitignore` para mantener limpio el árbol Git de metadatos de agentes, mientras su documentación permanente reside en este archivo `docs/TOOLING.md`). Esta skill estandariza el protocolo operativo para cualquier agente que trabaje en la Fase 1 y posteriores:
 1. Consultar primero la sección normativa con `./tools/whatwg_spec.py section <id>`.
@@ -267,7 +294,7 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 602 tests, doc y gate de conformidad
+./tools/dev.sh all                     # fmt, clippy, 734 tests, doc y gate de conformidad
 cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 
@@ -276,9 +303,10 @@ python3 tools/png_check.py /tmp/basic.png
 cargo run -p render -- tests/fixtures/render/basic.html /tmp/render.png --width 640 --height 400 --json
 bash tools/render_fixture.sh
 cargo test -p net -p render -p image -p shell
+cargo test -p js && cargo test -p js --no-default-features
 cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png
 ./tools/bench.sh --scale 0.1
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Cifras de referencia de esta ronda: **602 tests** (bench 8, css 57, dom 28, fonts 13+1 doctest, html 53, image 45+1, layout 129, net 85, paint 88, render 40, shell 46, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+Cifras de referencia de esta ronda: **734 tests** (bench 8, css 57, dom 28, fonts 13+1 doctest, html 53, image 45+1 doctest, js 12, layout 133, net 180, paint 97, render 53, shell 46, harness 7); gate tokenizer 7.050/7.050, árbol 3.898/3.904, serializer 230/230, CSS 30/30; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.

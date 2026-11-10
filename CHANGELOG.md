@@ -6,6 +6,64 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 8 — JavaScript (Boa), cookies/CORS/gzip, CSS backgrounds E2E and table-text fix (2026-11-10)
+
+#### Added
+
+- **Phase 6, WP-6.1 — `crates/js`**: embedded **Boa 0.21.1** runtime behind the
+  `js` feature (**enabled by default**; `--no-default-features` builds a std-only
+  stub). Persistent realm `eval`, captured `console.*`, full DOM bindings
+  (`document.write`, `getElementById`, `querySelector(All)`, `innerHTML`,
+  `outerHTML`, `style`, `classList`, tree/attributes/mutations) over a
+  generation-checked `NodeId ↔ handle` side table, and a base scheduler
+  (`setTimeout`/microtasks). Anti-DoS `Budget` → Boa `RuntimeLimits` (5,000,000
+  loop iterations, recursion 512, VM stack 20,480; `Budget::SMALL` for
+  pages/tests), handle cap 1,000,000, no network/filesystem APIs. 12 tests.
+  Not yet wired into `render` (Phase 6 ≈10 %).
+- **`crates/net` — cookies, CORS and compression**: RFC 6265 `CookieJar`
+  (capped at 4,096, `FetchOptions.cookie_jar`), CORS subset (`Origin`,
+  ACAO/credentials validation, preflight) and `gzip`/`deflate` decoding
+  (`Accept-Encoding: gzip` negotiated by default, CRC32/ISIZE, decompression
+  caps 64 MiB and 1000:1 ratio). 180 tests.
+- **Paint backgrounds**: `BackgroundImages` +
+  `build_display_list_with_images_and_backgrounds` — `background-image` stretched
+  over the padding box (stand-in for `background-size: auto`) and
+  `list-style-image` used as the list marker. 97 paint tests.
+- **Render backgrounds end to end**: CSS background-`url(...)` fetch → image
+  decode → paint, with caps **32 background images / 8 MiB each / 16 MiB per
+  page**, stats and non-fatal warnings; fixture `backgrounds.html` + checker/
+  bullet PNG assets. 53 render tests.
+- **Layout**: table content-tree model documented and pinned with 4 tests
+  (table > row-group/row > `TableCell` > `LineBox` > `TextNode` with content-box
+  geometry). 133 tests.
+
+#### Changed
+
+- Showcase golden regenerated after the table-text fix and CSS backgrounds:
+  **80,220 B, `md5 c95c7eff83e7bd08f815631aa42afdb0`** (previous golden was 65,151 B); cell text/bold headers, checker background and PNG list
+  markers are now visible. The Phase-4 `basic.rgba` golden is **unchanged** and
+  the render basic fixture stays 15,498 B `md5 7324e851…`.
+- Phase status after round 8: Phase 4 ~100 % functional (remaining:
+  `background-repeat/size/position`, `border-collapse` colors, block-in-inline),
+  Phase 5 ≈90 %, Phase 6 ≈10 %, Phase 7 ≈40 %.
+- README/ROADMAP/ARCHITECTURE/HANDOFF/PHASE4-SUPPORT/TOOLING/SECURITY/
+  CONTRIBUTING/CHANGELOG synchronized with round 8 (734 tests).
+
+#### Fixed
+
+- **Table cell text was never painted**: `paint_inline_content` did not descend
+  into table boxes (`Table`/`TableRowGroup`/`TableRow`/`TableCell`), so
+  backgrounds/borders rendered but cell `LineBox`/`TextNode` content was skipped.
+  Table internals now continue the inline traversal; the showcase table shows its
+  text and bold headers.
+
+#### Performance
+
+- Test suite: **734 tests** (was 602), all green; fmt, clippy `-D warnings`,
+  `cargo doc`, 4-suite conformance gate (tokenizer 7,050/7,050, tree 3,898/3,904,
+  serializer 230/230, CSS Syntax 30/30) and MSRV 1.88 verified.
+- `layout/realistic-1mb` stays at ≈59 ms (advanced-tables fast path unaffected).
+
 ### Round 7 — query APIs, shell usable, advanced tables, @import/showcase and JS ADR accepted (2026-11-10)
 
 #### Added
@@ -17,9 +75,10 @@ does not yet follow strict semantic versioning; the format follows
   shorthand; gradients → `None`; painting tracked as follow-up). 57 CSS tests.
 - **Render showcase**: `tests/fixtures/render/showcase/` — realistic JS-free page
   with external CSS, recursive `@import`, media queries, two decoded PNG assets,
-  a table and a positioned stage. Deterministic 1024×768 golden
-  **65,151 B, `md5 570aa554c88c2fdf75481e8cd076bf61`** (file:// and loopback HTTP),
-  capture documented in `docs/images/showcase.png`.
+  a table and a positioned stage. Deterministic 1024×768 golden (regenerated in
+  Round 8 after the table-text fix and CSS backgrounds: **80,220 B**,
+  `md5 c95c7eff…`; file:// and loopback HTTP), capture documented in
+  `docs/images/showcase.png`.
 - **`@import` recursive + real media evaluation** in `crates/render`: relative
   resolution against the importing sheet, dedup/cycle/depth-8/caps, screen/print
   media applied per `<link>`, `<style>` and `@import`, per-stage import/media stats.
@@ -38,8 +97,8 @@ does not yet follow strict semantic versioning; the format follows
   `docs/JAVASCRIPT-STRATEGY.md` records the decisions — **Boa 0.21.x** engine,
   feature `js` **enabled by default** (CI keeps a `--no-default-features` minimal
   build), full initial scope (`document.write` + DOM bindings + events + timers +
-  CSSOM + `querySelector`, WP-6.1–6.7, ≈25–30 person-days). Phase 6 is now
-  **in implementation (WP-6.1)**, `crates/js` does not exist yet in this HEAD.
+  CSSOM + `querySelector`, WP-6.1–6.7, ≈25–30 person-days). Phase 6 entered
+  implementation (WP-6.1); `crates/js` lands in Round 8 (see below).
 - `docs/images/showcase.png`: compressed capture of the showcase golden.
 
 #### Changed

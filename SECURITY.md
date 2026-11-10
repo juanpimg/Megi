@@ -32,8 +32,9 @@ after a fix is available.
 ## Security model and guarantees
 
 - **Memory safety**: **every** engine crate (`dom`, `html`, `css`, `fonts`,
-  `layout`, `paint`, `net`, `test_harness`, `bench`) declares
-  `#![forbid(unsafe_code)]` and is built with `clippy -D warnings`. The
+  `layout`, `paint`, `net`, `image`, `render`, `shell`, `js`, `test_harness`,
+  `bench`) declares `#![forbid(unsafe_code)]` and is built with
+  `clippy -D warnings`. The
   dependency policy in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §3
   restricts external crates to low-level, audited building blocks
   (`serde`/`serde_json` in the test harness, the typography stack in `fonts`,
@@ -46,6 +47,14 @@ after a fix is available.
   headers), redirects are limited, and the HTTP cache follows an RFC 9111
   subset (`Cache-Control`/`Expires`/`ETag`/`304`/`Vary`). No `unsafe` is used
   for any of it.
+- **Cookies, CORS and compression**: `crates/net` implements an RFC 6265 subset
+  (`CookieJar` capped at 4,096 cookies: expired first, then oldest session;
+  `FetchOptions.cookie_jar`) and a documented CORS subset (`Origin`, ACAO/
+  credentials validation, preflight validation; no preflight cache). `gzip`/
+  `deflate` responses are bounded by `CompressionLimits`: **64 MiB decompressed
+  and a 1000:1 maximum ratio**, with CRC32/ISIZE verification, so compression
+  bombs are rejected before unbounded allocation. `Accept-Encoding: gzip` is
+  negotiated by default; `br`, stacked codings and HTTP/2 are not supported.
 - **Hostile input**: parsing is bounded by `html::ParseOptions`
   (nesting depth, node count, attribute count and input size). Limits are
   reported through `LimitViolations` instead of aborting or panicking.
@@ -77,7 +86,10 @@ after a fix is available.
   at most 32 external stylesheets, 1 MiB per stylesheet and 4 MiB of total
   author CSS, viewport up to 8192×8192; `--no-network` refuses http(s)
   resources. Non-fatal failures (e.g. a 404 stylesheet) become warnings in
-  `RenderOutput::stats` instead of aborting the render.
+  `RenderOutput::stats` instead of aborting the render. CSS `background-image`/
+  `list-style-image` reuse the image caps (**32 background images, 8 MiB each,
+  16 MiB total per page**) and downgrade failures to the background color /
+  no marker plus a warning.
 - **Image decoding limits** (`crates/image`): the PNG decoder enforces
   `PngLimits` (16384 px per side, 16 Mpx total, 64 MiB per chunk, 256 MiB of
   IDAT) before/while inflating, verifies chunk CRCs and never panics on
@@ -97,8 +109,16 @@ after a fix is available.
   generation, free-list reuse) reject stale/foreign handles and give clear
   panics instead of corrupting the arena; `descendants`/`ancestors` are
   iterative and terminate on cyclic links.
-- There is no JavaScript engine yet (Phase 6); sandboxing and JIT hardening
-  will be designed as part of that phase.
+- **JavaScript budgets (Phase 6, WP-6.1)**: every `eval` is bounded by
+  `js::Budget` mapped onto Boa `RuntimeLimits` (default **5,000,000 loop
+  iterations, recursion depth 512 and 20,480 VM stack units**; `Budget::SMALL`
+  for pages/tests) and violations surface as `JsError::Budget` instead of
+  hanging or overflowing the native stack. The DOM bridge is a **side table of
+  numeric handles capped at 1,000,000** entries: the generation-checked
+  `NodeId` never leaves Rust and stale/foreign nodes raise a typed `TypeError`.
+  No network, filesystem or wall-clock APIs are exposed. The runtime is **not
+  yet wired into `render`**, so `<script>` execution, events/timers and CSSOM
+  remain pending (WP-6.2–6.7).
 
 ## Out of scope
 
