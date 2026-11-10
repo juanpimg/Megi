@@ -11,7 +11,7 @@
 //!   style sheets are ignored); `media` is evaluated against the real viewport with
 //!   [`css::parse_media_query_list`] + [`css::evaluate_media`] and non-matching sheets are
 //!   skipped (counted as media-skipped, not as external sheets).
-//! - `@import` inside author CSS is handled by [`crate::lib`]'s style collection (this
+//! - `@import` inside author CSS is handled by `crate::lib`'s style collection (this
 //!   module only returns the top-level sources).
 //! - `style=""` attributes are handled later by the CSS cascade, not here.
 

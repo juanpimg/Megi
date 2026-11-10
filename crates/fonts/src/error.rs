@@ -17,6 +17,8 @@ pub enum FontError {
     FontNotFound { families: String },
     /// The font data could not be parsed as a supported OpenType/TrueType font.
     InvalidFont { reason: String },
+    /// A WOFF2 web font could not be decoded into sfnt bytes.
+    InvalidWebFont { reason: String },
     /// Reading a font file failed.
     Io { path: String, reason: String },
     /// The requested `font-size` is not a finite positive number.
@@ -35,6 +37,7 @@ impl fmt::Display for FontError {
                 write!(f, "no font face matched families [{families}]")
             }
             Self::InvalidFont { reason } => write!(f, "invalid font data: {reason}"),
+            Self::InvalidWebFont { reason } => write!(f, "invalid WOFF2 data: {reason}"),
             Self::Io { path, reason } => write!(f, "cannot read font file {path}: {reason}"),
             Self::InvalidSize { size_px } => {
                 write!(f, "font-size must be finite and > 0, got {size_px}")

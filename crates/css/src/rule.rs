@@ -66,6 +66,34 @@ pub enum Rule {
     At(AtRule),
 }
 
+/// A parsed `@font-face` rule (CSS Fonts Level 4 §4.1).
+///
+/// This crate performs no I/O: sources are kept exactly as authored (URLs may be
+/// relative to the stylesheet base URL) and the consumer (render) resolves, fetches and
+/// decodes them gated by `--no-network`/caps.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FontFaceRule {
+    /// CSS family name from `font-family` (quotes removed, trimmed).
+    pub family: String,
+    /// `src` entries in authored order as `(url, format)`; `format` is empty when the
+    /// `format()` function is absent.
+    pub sources: Vec<(String, String)>,
+    /// Normalized `font-weight` ("400" when absent; "normal"→"400", "bold"→"700").
+    pub weight: String,
+    /// Normalized `font-style` ("normal" when absent).
+    pub style: String,
+}
+
+impl FontFaceRule {
+    /// Returns the first `src` URL whose format is `woff2` (case-insensitive).
+    pub fn woff2_source(&self) -> Option<&str> {
+        self.sources
+            .iter()
+            .find(|(_, format)| format.eq_ignore_ascii_case("woff2"))
+            .map(|(url, _)| url.as_str())
+    }
+}
+
 /// A parsed `@import` rule (CSS Cascading and Inheritance Level 4 §6.4).
 ///
 /// The URL is kept exactly as authored (it may be relative to the base URL of the importing
@@ -90,6 +118,8 @@ pub struct ImportRule {
 pub struct Stylesheet {
     /// `@import` rules found at the beginning of the stylesheet, in order.
     pub imports: Vec<ImportRule>,
+    /// `@font-face` rules found in the stylesheet, in document order.
+    pub font_faces: Vec<FontFaceRule>,
     pub rules: Vec<Rule>,
 }
 

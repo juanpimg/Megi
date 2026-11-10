@@ -13,3 +13,5 @@ ab_glyph.workspace = true
 fontdb.workspace = true
 rustybuzz.workspace = true
 ttf-parser.workspace = true
+# Pure-Rust WOFF2 (web font) decompression; Apache-2.0 (see crate rustdoc).
+woff2 = { package = "woff2-patched", version = "0.4" }

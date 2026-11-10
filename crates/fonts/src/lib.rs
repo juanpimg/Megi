@@ -62,8 +62,20 @@ pub mod db;
 pub mod error;
 pub mod font;
 pub mod types;
+pub mod web;
+
+// ## Web fonts (@font-face)
+//
+// WOFF2 decoding lives in [`web`] (pure-Rust `woff2-patched` 0.4, imported as `woff2`,
+// **Apache-2.0**, no C/FFI/system libraries; authorized Phase 6 dependency). Use
+// [`decode_web_font`] to turn WOFF2 bytes into sfnt bytes and
+// [`FontDatabase::load_font_data_family`] to register the result under the CSS
+// `font-family` alias: alias resolution participates in the normal CSS family list,
+// weight/style selection and per-glyph fallback. WOFF1, subsetting and color fonts are
+// not supported (documented limitations in [`web`]).
 
 pub use db::FontDatabase;
 pub use error::FontError;
 pub use font::Font;
 pub use types::{FontMetrics, FontRefInfo, FontStyle, GlyphMask, ShapedGlyph, ShapedRun};
+pub use web::{decode_web_font, is_woff2};

@@ -43,7 +43,7 @@ pub use query::{
     SelectorParseError, matches, query_selector, query_selector_all, try_matches,
     try_query_selector, try_query_selector_all,
 };
-pub use rule::{AtRule, Declaration, ImportRule, Rule, StyleRule, Stylesheet};
+pub use rule::{AtRule, Declaration, FontFaceRule, ImportRule, Rule, StyleRule, Stylesheet};
 pub use selector::{
     AnPlusB, AttrOperator, AttributeSelector, Combinator, ComplexSelector, CompoundSelector,
     PseudoClass, RelativeSelector, SelectorList, Specificity, parse_selectors,

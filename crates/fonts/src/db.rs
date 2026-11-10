@@ -82,6 +82,9 @@ pub struct FontDatabase {
     db: Database,
     cache: Mutex<HashMap<fontdb::ID, Arc<Vec<u8>>>>,
     order: Vec<fontdb::ID>,
+    /// CSS `@font-face` family aliases (lowercased) → faces registered under that name,
+    /// regardless of the families in the font's own `name` table.
+    aliases: HashMap<String, Vec<fontdb::ID>>,
     system_loaded: bool,
 }
 
@@ -159,6 +162,7 @@ impl FontDatabase {
             db: Database::new(),
             cache: Mutex::new(HashMap::new()),
             order: Vec::new(),
+            aliases: HashMap::new(),
             system_loaded: false,
         }
     }
@@ -228,6 +232,47 @@ impl FontDatabase {
         Ok(())
     }
 
+    /// Loads raw sfnt (TTF/OTF) bytes under a CSS family **alias**.
+    ///
+    /// This is the `@font-face` entry point: the CSS `font-family` descriptor is the
+    /// alias (it may differ from the family in the font's `name` table), and
+    /// [`Self::font`]/[`Self::measure_text`]/[`Self::shape`] resolve it in priority
+    /// order with the rest of the CSS family list. WOFF2 bytes must be decoded first
+    /// with [`crate::decode_web_font`].
+    ///
+    /// Malformed data returns [`FontError::InvalidFont`] and leaves the database
+    /// unchanged.
+    pub fn load_font_data_family(
+        &mut self,
+        family_alias: &str,
+        bytes_ttf: Vec<u8>,
+    ) -> Result<(), FontError> {
+        let alias = family_alias.trim();
+        if alias.is_empty() {
+            return Err(FontError::InvalidFont {
+                reason: "empty @font-face family alias".to_string(),
+            });
+        }
+        let first_new = self.order.len();
+        self.load_font_data(bytes_ttf)?;
+        let ids: Vec<fontdb::ID> = self.order[first_new..].to_vec();
+        if ids.is_empty() {
+            return Err(FontError::InvalidFont {
+                reason: "fontdb registered no face for the supplied @font-face data".to_string(),
+            });
+        }
+        self.aliases
+            .entry(alias.to_ascii_lowercase())
+            .or_default()
+            .extend(ids);
+        Ok(())
+    }
+
+    /// True if the family was registered through [`Self::load_font_data_family`].
+    pub fn has_alias(&self, family: &str) -> bool {
+        self.aliases.contains_key(&family.to_ascii_lowercase())
+    }
+
     fn refresh_order(&mut self) {
         self.order = self.db.faces().map(|face| face.id).collect();
     }
@@ -244,17 +289,22 @@ impl FontDatabase {
 
     /// Sorted, deduplicated English family names available in the database.
     pub fn family_names(&self) -> Vec<String> {
-        let names: BTreeSet<String> = self
+        let mut names: BTreeSet<String> = self
             .order
             .iter()
             .filter_map(|id| self.db.face(*id))
             .filter_map(|face| face.families.first().map(|(name, _)| name.clone()))
             .collect();
+        names.extend(self.aliases.keys().cloned());
         names.into_iter().collect()
     }
 
-    /// True if a face with exactly this family name is registered.
+    /// True if a face with exactly this family name (or an `@font-face` alias) is
+    /// registered.
     pub fn has_family(&self, family: &str) -> bool {
+        if self.aliases.contains_key(&family.to_ascii_lowercase()) {
+            return true;
+        }
         self.order
             .iter()
             .filter_map(|id| self.db.face(*id))
@@ -333,7 +383,36 @@ impl FontDatabase {
         expanded
     }
 
+    /// Resolves an `@font-face` alias list to the best matching registered face.
+    fn alias_face(&self, families: &[&str], weight: u16, style: FontStyle) -> Option<fontdb::ID> {
+        let wanted_style = DbStyle::from(style);
+        for family in families {
+            let Some(ids) = self.aliases.get(&family.to_ascii_lowercase()) else {
+                continue;
+            };
+            let mut best: Option<(i32, fontdb::ID)> = None;
+            for id in ids {
+                let Some(face) = self.db.face(*id) else {
+                    continue;
+                };
+                let style_penalty = if face.style == wanted_style { 0 } else { 1000 };
+                let weight_penalty = i32::from(face.weight.0.abs_diff(weight));
+                let score = style_penalty + weight_penalty;
+                if best.is_none_or(|(best_score, _)| score < best_score) {
+                    best = Some((score, *id));
+                }
+            }
+            if let Some((_, id)) = best {
+                return Some(id);
+            }
+        }
+        None
+    }
+
     fn query_face(&self, families: &[&str], weight: u16, style: FontStyle) -> Option<fontdb::ID> {
+        if let Some(id) = self.alias_face(families, weight, style) {
+            return Some(id);
+        }
         let expanded = Self::expand_families(families);
         if expanded.is_empty() {
             return None;

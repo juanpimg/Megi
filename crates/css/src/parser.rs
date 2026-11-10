@@ -357,6 +357,7 @@ pub fn parse_stylesheet(input: &str) -> Stylesheet {
     let mut stream = TokenStream::from_input(input);
     let rules = consume_stylesheet_contents(&mut stream);
     let mut imports: Vec<crate::rule::ImportRule> = Vec::new();
+    let mut font_faces: Vec<crate::rule::FontFaceRule> = Vec::new();
     let mut kept_rules = Vec::with_capacity(rules.len());
     let mut seen_non_import = false;
     for rule in rules {
@@ -368,6 +369,12 @@ pub fn parse_stylesheet(input: &str) -> Stylesheet {
                     imports.push(import);
                 }
             }
+            Rule::At(at) if at.name.eq_ignore_ascii_case("font-face") => {
+                seen_non_import = true;
+                if let Some(rule) = parse_font_face_rule(at) {
+                    font_faces.push(rule);
+                }
+            }
             _ => {
                 seen_non_import = true;
                 kept_rules.push(rule);
@@ -376,8 +383,117 @@ pub fn parse_stylesheet(input: &str) -> Stylesheet {
     }
     Stylesheet {
         imports,
+        font_faces,
         rules: kept_rules,
     }
+}
+
+/// Parses an `@font-face` at-rule (CSS Fonts 4 §4.1). Missing `font-family`/`src` or a
+/// `src` with no usable URL makes the rule invalid (returns `None`), and unknown
+/// descriptors (`font-display`, `unicode-range`, ...) are ignored.
+fn parse_font_face_rule(at: &AtRule) -> Option<crate::rule::FontFaceRule> {
+    let block = at.block.as_ref()?;
+    let text = serialize_component_values(&block.values);
+    let declarations = parse_list_of_declarations(&text);
+    let mut family = None;
+    let mut sources: Vec<(String, String)> = Vec::new();
+    let mut weight = String::from("400");
+    let mut style = String::from("normal");
+    for declaration in declarations {
+        let name = declaration.name.to_ascii_lowercase();
+        match name.as_str() {
+            "font-family" => {
+                let value = strip_quotes(declaration.raw_value.trim());
+                if !value.is_empty() {
+                    family = Some(value);
+                }
+            }
+            "src" => sources = parse_font_sources(&declaration.value),
+            "font-weight" => weight = normalize_font_weight(declaration.raw_value.trim()),
+            "font-style" => style = declaration.raw_value.trim().to_ascii_lowercase(),
+            _ => {}
+        }
+    }
+    let family = family?;
+    if sources.is_empty() {
+        return None;
+    }
+    Some(crate::rule::FontFaceRule {
+        family,
+        sources,
+        weight,
+        style,
+    })
+}
+
+fn strip_quotes(value: &str) -> String {
+    let value = value.trim();
+    if value.len() >= 2 {
+        let bytes = value.as_bytes();
+        let first = bytes[0];
+        let last = bytes[value.len() - 1];
+        if (first == b'"' && last == b'"') || (first == b'\'' && last == b'\'') {
+            return value[1..value.len() - 1].to_string();
+        }
+    }
+    value.to_string()
+}
+
+fn normalize_font_weight(value: &str) -> String {
+    match value.to_ascii_lowercase().as_str() {
+        "normal" | "" => String::from("400"),
+        "bold" => String::from("700"),
+        other => other.to_string(),
+    }
+}
+
+fn function_string_argument(values: &[crate::component_value::ComponentValue]) -> Option<String> {
+    use crate::component_value::ComponentValue;
+    use crate::token::CssToken;
+    for value in values {
+        if let ComponentValue::PreservedToken(token) = value
+            && let CssToken::String(text) | CssToken::Url(text) = token
+        {
+            return Some(text.clone());
+        }
+    }
+    None
+}
+
+/// Parses the `src` descriptor into `(url, format)` entries in authored order.
+fn parse_font_sources(values: &[crate::component_value::ComponentValue]) -> Vec<(String, String)> {
+    use crate::component_value::ComponentValue;
+    use crate::token::CssToken;
+    let mut sources = Vec::new();
+    let mut pending_url: Option<String> = None;
+    for value in values {
+        match value {
+            ComponentValue::Function(function) if function.name.eq_ignore_ascii_case("url") => {
+                if let Some(url) = function_string_argument(&function.values) {
+                    pending_url = Some(url);
+                }
+            }
+            ComponentValue::Function(function) if function.name.eq_ignore_ascii_case("format") => {
+                let format = function_string_argument(&function.values).unwrap_or_default();
+                if let Some(url) = pending_url.take() {
+                    sources.push((url, format));
+                }
+            }
+            ComponentValue::PreservedToken(CssToken::Url(url)) => {
+                pending_url = Some(url.clone());
+            }
+            ComponentValue::PreservedToken(CssToken::Comma) => {
+                if let Some(url) = pending_url.take() {
+                    sources.push((url, String::new()));
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(url) = pending_url {
+        sources.push((url, String::new()));
+    }
+    sources
 }
 
 /// Parses the prelude of an `@import` at-rule into an [`crate::rule::ImportRule`].

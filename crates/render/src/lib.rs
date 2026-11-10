@@ -98,6 +98,15 @@
 //!   relative URLs against the document base URL (not the sheet's own URL); `@import` does
 //!   not propagate a base. SVG images, `srcset` and `object-fit` modes other than `fill`
 //!   remain out of scope.
+//! - **Web fonts (`@font-face`, Phase 6)**: `@font-face` rules from every author sheet
+//!   (including `@import`ed ones) are collected by [`webfonts`], deduplicated by URL,
+//!   fetched with the shared loader (honoring `--no-network`) and decoded from WOFF2 into
+//!   sfnt with pure-Rust `woff2` (Apache-2.0). Faces are registered under their CSS family
+//!   alias in a per-render [`fonts::FontDatabase`] (bundled faces + web faces) that is used
+//!   by **both** layout ([`layout::FontTextMeasurer`]) and paint
+//!   ([`paint::rasterize_display_list_with_font_database`]). Caps: 8 fonts, 8 MiB each,
+//!   32 MiB total; failures are non-fatal warnings and `stats.fonts_loaded/failed/bytes`
+//!   plus `timings.fonts` are reported (`--json` includes them).
 //! - **`@import` support (WP-5.8)**: imported stylesheets are fetched recursively with the
 //!   shared resource loader, resolved against the importing sheet's URL, deduplicated by
 //!   URL, cycle-safe, depth-limited (`RenderOptions::max_import_depth`, default 8) and
@@ -129,6 +138,7 @@ pub mod error;
 pub mod images;
 pub mod scripts;
 pub mod stylesheets;
+pub mod webfonts;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -312,6 +322,8 @@ pub struct RenderTimings {
     pub decode_parse: Duration,
     /// Stylesheet collection, external loading and cascade/UA resolution.
     pub styles: Duration,
+    /// Web-font (`@font-face`) fetching, WOFF2 decoding and registration.
+    pub fonts: Duration,
     /// Layout (box tree + BFC/IFC with real metrics).
     pub layout: Duration,
     /// Image discovery, fetching and decoding (`<img>`).
@@ -368,6 +380,12 @@ pub struct RenderStats {
     pub background_images_failed: usize,
     /// Downloaded (encoded) background-image bytes accepted by the caps.
     pub background_bytes: usize,
+    /// Web fonts successfully fetched, decoded and registered.
+    pub fonts_loaded: usize,
+    /// Web fonts skipped or failed (network, caps, decode, registration).
+    pub fonts_failed: usize,
+    /// Encoded bytes of the loaded web fonts.
+    pub font_bytes: usize,
     /// Classic scripts evaluated without error.
     pub scripts_executed: usize,
     /// Scripts that raised a JavaScript exception or exhausted a budget.
@@ -587,7 +605,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     let collected = stylesheets::collect_stylesheets(&document, &base_url, &media_context);
     warnings.extend(collected.warnings.iter().cloned());
 
-    let (stylesheet_collection, style_summary) = build_author_stylesheet_collection(
+    let (stylesheet_collection, style_summary, font_faces) = build_author_stylesheet_collection(
         &collected,
         &base_url,
         &mut loader,
@@ -597,6 +615,11 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     )?;
     let styles = resolve_styles_with_collection(&document, &stylesheet_collection);
     let styles_time = styles_start.elapsed();
+
+    let fonts_start = Instant::now();
+    let loaded_webfonts =
+        webfonts::load_webfonts(&font_faces, &mut loader, options.no_network, &mut warnings);
+    let fonts_time = fonts_start.elapsed();
 
     let images_start = Instant::now();
     let loaded_images = images::load_images(
@@ -630,8 +653,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     let backgrounds_time = backgrounds_start.elapsed();
 
     let layout_start = Instant::now();
-    let measurer = layout::FontTextMeasurer::bundled()
-        .map_err(|error| RenderError::FontEngine(error.to_string()))?;
+    let measurer = layout::FontTextMeasurer::from_database(loaded_webfonts.database);
     let viewport = layout::Rect::new(
         0.0,
         0.0,
@@ -661,10 +683,12 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     let paint_time = paint_start.elapsed();
 
     let raster_start = Instant::now();
-    let pixmap = paint::rasterize_display_list(
+    let pixmap = paint::rasterize_display_list_with_font_database(
         &display_list,
         options.viewport.width,
         options.viewport.height,
+        paint::RenderConfig::default(),
+        measurer.database(),
     );
     let raster_time = raster_start.elapsed();
     let png = pixmap.to_png();
@@ -709,6 +733,9 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             background_images_loaded: loaded_backgrounds.loaded,
             background_images_failed: loaded_backgrounds.failed,
             background_bytes: loaded_backgrounds.downloaded_bytes,
+            fonts_loaded: loaded_webfonts.loaded,
+            fonts_failed: loaded_webfonts.failed,
+            font_bytes: loaded_webfonts.bytes,
             scripts_executed,
             scripts_failed,
             script_bytes,
@@ -727,6 +754,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
                 fetch: fetch_time,
                 decode_parse: decode_parse_time,
                 styles: styles_time,
+                fonts: fonts_time,
                 images: images_time,
                 backgrounds: backgrounds_time,
                 scripting: scripting_time
@@ -837,9 +865,17 @@ fn build_author_stylesheet_collection(
     options: &RenderOptions,
     media: &css::MediaContext,
     warnings: &mut Vec<String>,
-) -> Result<(css::StyleCollection, StyleSummary), RenderError> {
+) -> Result<
+    (
+        css::StyleCollection,
+        StyleSummary,
+        Vec<webfonts::LocatedFontFace>,
+    ),
+    RenderError,
+> {
     let mut collection = css::create_user_agent_style_collection();
     collection.media = *media;
+    let mut font_faces: Vec<webfonts::LocatedFontFace> = Vec::new();
     let mut summary = StyleSummary {
         external_stylesheets: 0,
         inline_stylesheets: 0,
@@ -866,6 +902,13 @@ fn build_author_stylesheet_collection(
                 summary.inline_stylesheets += 1;
                 account_css_bytes(&mut summary.css_bytes, text.len(), options)?;
                 let sheet = css::parse_stylesheet(text);
+                font_faces.extend(
+                    sheet
+                        .font_faces
+                        .iter()
+                        .cloned()
+                        .map(|face| (base_url.clone(), face)),
+                );
                 walk_imports(
                     &mut collection,
                     &sheet,
@@ -873,6 +916,7 @@ fn build_author_stylesheet_collection(
                     0,
                     options.max_stylesheets,
                     &mut walk,
+                    &mut font_faces,
                 )?;
                 collection.add_stylesheet(&sheet, css::Origin::Author);
             }
@@ -894,6 +938,13 @@ fn build_author_stylesheet_collection(
                 // Register the top-level URL so an import cycle back to it is detected.
                 walk.visited.insert(url.cache_key());
                 let sheet = css::parse_stylesheet(&text);
+                font_faces.extend(
+                    sheet
+                        .font_faces
+                        .iter()
+                        .cloned()
+                        .map(|face| (url.clone(), face)),
+                );
                 walk_imports(
                     &mut collection,
                     &sheet,
@@ -901,6 +952,7 @@ fn build_author_stylesheet_collection(
                     0,
                     options.max_stylesheets,
                     &mut walk,
+                    &mut font_faces,
                 )?;
                 collection.add_stylesheet(&sheet, css::Origin::Author);
             }
@@ -910,7 +962,7 @@ fn build_author_stylesheet_collection(
     summary.imports_loaded = walk.loaded;
     summary.imports_skipped = walk.skipped;
     summary.max_import_depth = walk.max_depth;
-    Ok((collection, summary))
+    Ok((collection, summary, font_faces))
 }
 
 /// Recursively loads and adds the `@import`ed sheets of `sheet` **before** its own rules.
@@ -925,6 +977,7 @@ fn walk_imports(
     depth: usize,
     max_total_sheets: usize,
     walk: &mut ImportWalk<'_>,
+    font_faces: &mut Vec<webfonts::LocatedFontFace>,
 ) -> Result<(), RenderError> {
     for import in &sheet.imports {
         if depth >= walk.options.max_import_depth {
@@ -976,6 +1029,13 @@ fn walk_imports(
         let imported = css::parse_stylesheet(&text);
         walk.loaded += 1;
         walk.max_depth = walk.max_depth.max(depth + 1);
+        font_faces.extend(
+            imported
+                .font_faces
+                .iter()
+                .cloned()
+                .map(|face| (url.clone(), face)),
+        );
         // Imported sheet's own imports first, then its rules at this cascade position.
         walk_imports(
             collection,
@@ -984,6 +1044,7 @@ fn walk_imports(
             depth + 1,
             max_total_sheets,
             walk,
+            font_faces,
         )?;
         collection.add_import_stylesheet(import, &imported, css::Origin::Author);
     }
