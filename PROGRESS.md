@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `76e1678` (2026-11-11) · overall **100%** · **1,929** tests · conformance **PASS** · **14** crates · **152,798** lines of Rust
+**Snapshot** — commit `a1fcaf1` (2026-11-11) · overall **100%** · **1,929** tests · conformance **PASS** · **14** crates · **152,852** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -91,12 +91,13 @@
 - HTTP/2 flow control, stream multiplexing and advanced SETTINGS
 - Real vendored public suffix list and HTTP/2+HTTP/1.1 request trailers
 - HTTP/HTTPS proxies (absolute-form+CONNECT, Basic auth, no_proxy) and fetch() provider
+- Real incremental HTTP/1.1 streaming and server-push prioritization (ServerWeights/Fifo)
 
 **Pending**
 
-- Push prioritization, HTTP/1.0 and streaming responses
-- h1 streaming buffered fallback and h2 cross-load pooling
-- Proxy PAC/SOCKS/pooling and image decode budgets on real pages
+- HTTP/1.0, gzip streaming and full priority tree
+- h2 cross-load pooling and proxy PAC/SOCKS/pooling
+- Image decode budgets on real pages
 
 ### F6 — JavaScript & DOM APIs (100%)
 
@@ -112,12 +113,13 @@
 - Import maps, dynamic import() literals and typed top-level-await gap
 - Deterministic cooperative Web Workers (postMessage/onerror/terminate, render loop)
 - fetch() subset backed by a host provider (Headers/Request/Response, CORS same-origin)
+- Real top-level await and live module bindings via Boa native modules
 
 **Pending**
 
-- Real top-level await, live bindings and fetch streaming/abort/timeout
+- fetch streaming/abort/signal and workers with DOM
 - JS/DOM conformance testing and memory accounting
-- Import-map scopes/integrity, non-literal dynamic import and workers with DOM
+- Import-map scopes/integrity and non-literal dynamic import
 
 ### F7 — Desktop shell (browser UI) (98%)
 
@@ -144,9 +146,9 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `76e1678` (2026-11-11) |
+| Commit | `a1fcaf1` (2026-11-11) |
 | Crates in the workspace | 14 |
-| Lines of Rust (tracked `.rs`) | 152798 |
+| Lines of Rust (tracked `.rs`) | 152852 |
 | Tests (`cargo test --workspace -- --list`) | 1929 |
 | Crates with `#![forbid(unsafe_code)]` | 12 / 14 |
 | Conformance gate | **PASS** |
@@ -164,20 +166,20 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 
 ## Recent rounds
 
+- **Round 32** — CSS/layout/PNG performance, TLA/live bindings, h1 streaming and push prioritization
 - **Round 31** — cascade layers, single-encode PNG overlays, fetch(), HTTP/HTTPS proxies and VP8 performance
 - **Round 30** — full VP8 keyframe decoder, container queries, PSL/trailers, deterministic Web Workers, shell history and chrome fast path
 - **Round 29** — streaming responses/keep-alive, SVG textPath/SMIL, import maps, WebP lossy header, shell pages and fuzz 14
 - **Round 28** — reduced IDCT/EXIF thumbnails, server push, streaming uploads, JS geometry, byte-safe blur/PNG and context menu
 - **Round 27** — PNG regression fix, HTTP/2 push/priorities/h2c, DOM/JS gaps, effects perf and polished chrome
-- **Round 26** — module scripts, scaled decode, HTTP/2 request bodies, DOM/JS bug-bash, SVG filters/SMIL and isolated bench rows
 
 ## Next up
 
-- HTTP/2 push prioritization, HTTP/1.0 and streaming responses
-- Top-level await/live bindings, fetch streaming/abort and JS conformance
+- Own bench row for the render crate (pipeline row bypasses it)
 - Backdrop blur floor, PNG regions and rasterizer performance
+- Fingerprint cache in layout (next css/layout step)
+- HTTP/1.0, gzip streaming and proxy PAC/SOCKS/pooling
 - SVG auto-rotate/side right/textLength and remaining SMIL
-- Proxy follow-ups (PAC/SOCKS/pooling) and image VP8 edge cases
 - Longer image/HTTP2/JS module fuzz campaigns and bench E2E on real pages
 
 ## Cross-cutting areas
@@ -197,4 +199,4 @@ python3 tools/update_progress.py --write --no-gate  # skip the conformance gate
 python3 tools/update_progress.py --check --no-gate --no-count  # CI freshness
 ```
 
-_Last manifest update by: docs (round 31). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
+_Last manifest update by: docs (round 32). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
