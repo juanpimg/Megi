@@ -19,6 +19,7 @@ dom = { path = "../crates/dom" }
 html = { path = "../crates/html" }
 css = { path = "../crates/css" }
 net = { path = "../crates/net" }
+image = { path = "../crates/image" }
 render = { path = "../crates/render" }
 js = { path = "../crates/js" }
 svg = { path = "../crates/svg" }
@@ -69,6 +70,28 @@ bench = false
 [[bin]]
 name = "svg_parse"
 path = "fuzz_targets/svg_parse.rs"
+test = false
+doc = false
+bench = false
+
+# Round 24 (R151): image decoders/EXIF and HTTP/2 HPACK + framing.
+[[bin]]
+name = "image_decode"
+path = "fuzz_targets/image_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exif_parse"
+path = "fuzz_targets/exif_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hpack_decode"
+path = "fuzz_targets/hpack_decode.rs"
 test = false
 doc = false
 bench = false

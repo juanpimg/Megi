@@ -60,6 +60,9 @@ cargo +nightly fuzz build          # builds every [[bin]] target
 | `render_pipeline` | `render::render_url` with an inline `data:text/html;base64,…` document: HTML parse → charset/MIME → author CSS collection/cascade → layout (real fonts) → display list + hit regions → PNG | The integration glue is the surface a real page reaches. `no_network=true`, scripting disabled (the JS engine has its own target), viewport 96×96 and every budget capped (256 KiB document/CSS, 4 stylesheets/imports, 4 images, 128 KiB total image bytes) so one iteration stays cheap and bounded. |
 | `js_eval` | `js::JsRuntime::with_document` + `set_budget` + `eval`, `run_microtasks`, `run_tasks(64)`, `dispatch_event` (`Window`/`Document`/`Node`) | JavaScript source arrives from untrusted pages. Budget is 50k loop iterations / 128 recursion / 4 KiB VM stack, so infinite loops and runaway recursion end in a typed `JsError::Budget` instead of a hang. The fixture document exercises DOM queries, mutations (`textContent`, `innerHTML`, attributes, `style`, `classList`), listeners and timers; no network/FS is reachable. |
 | `svg_parse` | `svg::render_svg_with_limits` (XML parse + values + raster) | Inline/external SVG is untrusted. Strict `svg::Limits` (64 KiB input, depth 32, 512 elements, 4k path segments, 128 px / 16K pixels, `<use>` depth 4) and a 64×64 output bound the work per iteration. |
+| `image_decode` | `image::detect_format`, `image::decode_with_limits`, `image::exif::orientation` | `<img>`/background bytes are untrusted. Input ≤512 KiB and reduced `PngLimits` (1024 px/side, 512 Ki pixels, 128 KiB/chunk, 4 MiB IDAT) bound zlib/JPEG/GIF work per iteration. PNG (all color types/bit depths/Adam7/filters), baseline JPEG, GIF and WebP *sniffing* (WebP is detected-not-decoded → typed `UnsupportedFormat`) plus the APP1 EXIF path. |
+| `exif_parse` | `image::exif::orientation` on arbitrary JPEG-ish bytes | Dedicated campaign for the APP1/TIFF orientation parser (little/big endian IFD0, malformed segments must return `None`). Input ≤64 KiB; seeds are the `exif_o1..o8.jpg` fixtures. |
+| `hpack_decode` | `net::h2::hpack::Decoder::decode`, `net::h2::frame::FrameReader`/`Frame::{parse_settings, window_increment, parse_rst_stream, parse_goaway, data_payload, headers_payload}`, `frame::validate_frame` | HTTP/2 from the network is adversarial: full HPACK block decoding (static/dynamic tables, Huffman, literals, table-size updates), a raw frame stream (length/flag/stream-id validation, SETTINGS/WINDOW_UPDATE/PING/RST_STREAM/GOAWAY, HEADERS payloads decoded through a fresh HPACK table) and an arbitrary 9-byte frame header. Input ≤64 KiB, 16 KiB frame cap, ≤64 frames/iteration. |
 
 All targets run on the **public** API with release-like defaults; they look for panics,
 aborts (stack overflow), ASan/UBSan findings and target timeouts, not for semantic
@@ -78,6 +81,9 @@ cargo +nightly fuzz run net_url         -- -max_total_time=30
 cargo +nightly fuzz run render_pipeline -- -max_total_time=30
 cargo +nightly fuzz run js_eval         -- -max_total_time=30 -detect_leaks=0
 cargo +nightly fuzz run svg_parse       -- -max_total_time=30
+cargo +nightly fuzz run image_decode    -- -max_total_time=30
+cargo +nightly fuzz run exif_parse      -- -max_total_time=30
+cargo +nightly fuzz run hpack_decode    -- -max_total_time=30
 ```
 
 `js_eval` needs `-detect_leaks=0`: Boa 0.21 leaks a **constant** ~56 bytes / 2 allocations
@@ -116,7 +122,14 @@ successful local session grows the tracked seed corpus (curate with `cmin`, belo
   - `render_pipeline`: basic/styled tables+SVG+form documents and malformed markup;
   - `js_eval`: arithmetic, DOM queries/mutations, listeners+timers, infinite loop, syntax
     error;
-  - `svg_parse`: shapes, paths, gradient + `<use>`, nested groups, malformed XML.
+  - `svg_parse`: shapes, paths, gradient + `<use>`, nested groups, malformed XML;
+  - `image_decode`: small PNG seeds (RGBA/palette/interlaced/filters/gray16), GIF
+    (palette/animated), baseline/corrupt/progressive JPEG and a WebP sniffing seed;
+  - `exif_parse`: the crate's `exif_o1..o8.jpg` EXIF fixtures plus a plain JPEG;
+  - `hpack_decode`: RFC 7541 header blocks (indexed/literal/Huffman/table-size
+    update/truncated) and HTTP/2 frame streams (SETTINGS(+ACK/entry), PING,
+    HEADERS(+CONTINUATION/padded), DATA, RST_STREAM, WINDOW_UPDATE, GOAWAY and a
+    malformed frame header).
 - Keep seeds **small** (a few hundred bytes): they are inputs for mutation, not test
   fixtures. The semantic conformance corpus lives in `tests/html5lib-tests` and is not used
   here.
@@ -131,6 +144,9 @@ successful local session grows the tracked seed corpus (curate with `cmin`, belo
   cargo +nightly fuzz cmin render_pipeline
   cargo +nightly fuzz cmin js_eval
   cargo +nightly fuzz cmin svg_parse
+  cargo +nightly fuzz cmin image_decode
+  cargo +nightly fuzz cmin exif_parse
+  cargo +nightly fuzz cmin hpack_decode
   ```
 
 ## Crashes and triage policy
@@ -178,7 +194,8 @@ the 3 `xmlViolation` tokenizer failures are documented conformance gaps, not cra
   when `fuzz/**` or the workflow itself changes);
 - the scheduled/dispatch matrix builds **and runs** every target for 300 s
   (`-rss_limit_mb=2048 -timeout=25`): `html_parse`, `css_parse`, `selectors`, `net_url`,
-  `render_pipeline`, `js_eval`, `svg_parse`;
+  `render_pipeline`, `js_eval`, `svg_parse`, `image_decode`, `exif_parse`,
+  `hpack_decode` (10 targets);
 - pull requests run a cheap **build-only** job (`cargo +nightly fuzz build`, all targets)
   with a 20-minute job timeout. A stable-only build job is **not viable**: `cargo-fuzz`
   passes `-Zsanitizer=…` to rustc, so the build itself needs nightly;
@@ -201,6 +218,13 @@ corpus and parallelism.
   not by this harness.
 - libFuzzer + ASan require Linux/macOS nightly toolchains; the harness is not built on
   stable or Windows CI.
+- `image_decode` cannot reach a WebP *decoder* (the `image` crate detects WebP but
+  deliberately returns `UnsupportedFormat`; that path is still fuzzed), and an
+  individual container format only gets ~1/4 of `image_decode`'s iterations; split it
+  into `jpeg_decode`/`gif_decode`/`webp_decode` targets if a format-specific campaign is
+  needed later.
+- `hpack_decode` fuzzes `FrameReader`/`Frame` helpers but not the full `h2::client`
+  state machine (multiplexing/flow control live in loopback integration tests).
 
 ## Round 18 additions (R105)
 
@@ -245,15 +269,34 @@ their conformance suites; `layout/sticky-text-1mb` stays a visible bench SKIP.
 
 ### Round 22 status
 
-Round 22 adds **no new fuzz targets**: the 7-target matrix/corpus and PR build-only job
-remain current. The new parsers (JPEG/GIF decoders, HPACK/framing) are covered by
-unit/robustness tests but still need dedicated fuzz campaigns (report-only until triaged);
-`svg_parse` covers the new clipPath/mask/filter XML/attribute surface, while `net_url`
-still only fuzzes URL parsing.
+Round 22 adds no new fuzz *targets of its own* (the matrix stayed at 7 until round 24):
+the round-22 JPEG/GIF decoders and HPACK/framing parsers are now covered by the
+`image_decode`/`exif_parse`/`hpack_decode` targets added in round 24; `svg_parse` covers
+the clipPath/mask/filter XML/attribute surface, while `net_url` still only fuzzes URL
+parsing.
+
+### Round 24 additions (R151)
+
+New targets and corpora for the round-22/23 image and HTTP/2 work:
+
+- `image_decode`, `exif_parse` and `hpack_decode` targets (see the table above),
+  with `image` added as a fuzz-workspace dependency and the reduced-limit defaults
+  documented in each target header.
+- Seed corpora under `fuzz/corpus/{image_decode,exif_parse,hpack_decode}/`
+  (small image fixtures from `crates/image/tests/fixtures/`, `exif_o1..o8.jpg` and
+  hand-written RFC 7541/HTTP-2 frame bytes).
+- `fuzz-nightly.yml` matrix extended to **10 targets** (300 s each) and the PR
+  build-only job now compiles the three new harnesses too.
+- Local smoke results (this environment, nightly + cargo-fuzz):
+  `cargo +nightly fuzz build` builds all 10 targets; `image_decode`/`exif_parse`/
+  `hpack_decode` were run for 300 iterations from their seed corpus with
+  `-rss_limit_mb=2048 -timeout=25` (peak RSS 52/48/51 MB, slowest unit 0 s each).
+  No panics, ASan/UBSan findings or timeouts were found; Ok/Err results are
+  discarded on purpose.
 
 ### Round 23 status
 
-Round 23 adds **no new fuzz targets**: the 7-target matrix/corpus and PR build-only job
-remain current. New parsers (progressive JPEG/EXIF, WebP sniffing, HPACK flow-control)
-are covered by unit/loopback tests but need dedicated campaigns; `svg_parse` covers the
-round-22 effect surface and `net_url` still only fuzzes URL parsing.
+Round 23 added no fuzz targets at the time; its progressive-JPEG/EXIF, WebP sniffing and
+HPACK flow-control surfaces are covered from round 24 by `image_decode`/`exif_parse`/
+`hpack_decode` (frame parsing in the last one; the full multiplexing/flow-control client
+state machine remains covered by loopback tests, see Limitations).

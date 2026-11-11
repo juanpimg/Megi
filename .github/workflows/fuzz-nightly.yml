@@ -82,6 +82,13 @@ jobs:
             extra: "-detect_leaks=0"
           - target: svg_parse
             extra: ""
+          # Round 24 (R151): image decoders/EXIF and HTTP/2 HPACK + framing.
+          - target: image_decode
+            extra: ""
+          - target: exif_parse
+            extra: ""
+          - target: hpack_decode
+            extra: ""
     steps:
       - uses: actions/checkout@v4
 
