@@ -1,0 +1,8 @@
+<!doctype html><html><body>
+<div id="out">pending</div>
+<script type="module">
+const response = await fetch('fetch_data.json');
+const data = await response.json();
+document.getElementById('out').textContent = 'tla=' + data.answer;
+</script>
+</body></html>

@@ -1,0 +1,7 @@
+<!doctype html><html><body>
+<div id="out">pending</div>
+<script type="module">
+await new Promise(function (resolve) { setTimeout(resolve, 10); });
+document.getElementById('out').textContent = 'timer-ok';
+</script>
+</body></html>

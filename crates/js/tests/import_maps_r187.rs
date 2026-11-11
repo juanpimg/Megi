@@ -157,7 +157,7 @@ fn dynamic_import_non_literal_is_a_typed_error() {
 }
 
 #[test]
-fn top_level_await_is_a_documented_typed_gap() {
+fn top_level_await_is_supported_by_native_modules() {
     let (mut runtime, _modules) = runtime_with_modules();
     let error = runtime
         .eval_module(
@@ -168,18 +168,15 @@ fn top_level_await_is_a_documented_typed_gap() {
         )
         .expect_err("TLA");
     assert!(matches!(error, JsError::TopLevelAwait(_)), "{error:?}");
-    let async_error = runtime
+    // The native-module entry point supports real top-level await (round 32).
+    runtime
         .eval_module_async(
             "await Promise.resolve(1);",
             "app.js",
             "file:///app.js",
             &Budget::SMALL,
         )
-        .expect_err("TLA async");
-    assert!(
-        matches!(async_error, JsError::TopLevelAwait(_)),
-        "{async_error:?}"
-    );
+        .expect("TLA async");
 }
 
 #[test]

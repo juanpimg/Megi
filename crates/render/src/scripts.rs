@@ -923,9 +923,17 @@ pub fn execute_scripts(
                 .module_url
                 .clone()
                 .unwrap_or_else(|| document_url.as_str());
-            runtime
-                .eval_module(&script.text, &script.source_name, &base, &budget)
-                .map(|_| ())
+            if script.text.contains("await") {
+                // Real top-level await: native Boa modules (live bindings included). The
+                // deterministic host loop drives its microtasks/timers to completion.
+                runtime
+                    .eval_module_async(&script.text, &script.source_name, &base, &budget)
+                    .map(|_| ())
+            } else {
+                runtime
+                    .eval_module(&script.text, &script.source_name, &base, &budget)
+                    .map(|_| ())
+            }
         } else {
             runtime.eval(&script.text, &script.source_name).map(|_| ())
         };

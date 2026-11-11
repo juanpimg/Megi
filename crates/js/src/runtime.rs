@@ -34,7 +34,10 @@
 
 use boa_engine::{
     Context, JsError as BoaError, JsNativeError, JsObject, JsResult, JsValue, NativeFunction,
-    Source, js_string,
+    Source,
+    builtins::promise::PromiseState,
+    js_string,
+    module::{Module, ModuleLoader, Referrer},
     object::FunctionObjectBuilder,
     object::ObjectInitializer,
     object::builtins::JsArray,
@@ -43,6 +46,7 @@ use boa_engine::{
 use dom::{Attribute as DomAttribute, Document, Namespace, NodeId};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
+use std::path::Path;
 use std::rc::Rc;
 
 use crate::error::JsError;
@@ -123,8 +127,18 @@ impl JsRuntime {
 
     /// Creates a runtime around an existing document (single realm).
     pub fn with_document(document: Document, url: String) -> Result<Self, JsError> {
-        let mut context = Context::default();
+        let host_slot: Rc<RefCell<Option<Rc<RefCell<Host>>>>> = Rc::new(RefCell::new(None));
+        let module_loader = Rc::new(MegiModuleLoader {
+            host: Rc::clone(&host_slot),
+            base_url: url.clone(),
+            cache: RefCell::new(HashMap::new()),
+        });
+        let mut context = Context::builder()
+            .module_loader(module_loader)
+            .build()
+            .map_err(|error| JsError::Internal(error.to_string()))?;
         let host = Rc::new(RefCell::new(Host::new(document, url)));
+        *host_slot.borrow_mut() = Some(Rc::clone(&host));
         install_globals(&mut context, &host)?;
         Ok(Self {
             context,
@@ -3689,19 +3703,6 @@ impl JsRuntime {
         Ok(())
     }
 
-    /// Async-flavoured module entry point. This synchronous evaluator **does not support
-    /// top-level await** (documented gap): modules containing it return
-    /// [`JsError::TopLevelAwait`] here and in [`Self::eval_module`].
-    pub fn eval_module_async(
-        &mut self,
-        source: &str,
-        source_name: &str,
-        base_url: &str,
-        budget: &Budget,
-    ) -> Result<ModuleOutcome, JsError> {
-        self.eval_module(source, source_name, base_url, budget)
-    }
-
     /// Evaluates an ES module graph using the injected resolver/loader.
     ///
     /// Supported subset: default/named/namespace/side-effect imports, `export
@@ -5021,4 +5022,163 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
         Attribute::all(),
     );
     Ok(JsValue::from(init.build()))
+}
+
+// ---------------------------------------------------------------------------
+// Native Boa modules for real top-level await + live bindings (round 32)
+// ---------------------------------------------------------------------------
+
+struct MegiModuleLoader {
+    host: Rc<RefCell<Option<Rc<RefCell<Host>>>>>,
+    base_url: String,
+    cache: RefCell<HashMap<(String, String), Module>>,
+}
+
+impl ModuleLoader for MegiModuleLoader {
+    async fn load_imported_module(
+        self: Rc<Self>,
+        referrer: Referrer,
+        specifier: boa_engine::JsString,
+        context: &RefCell<&mut Context>,
+    ) -> JsResult<Module> {
+        let specifier = specifier.to_std_string_escaped();
+        let base = referrer
+            .path()
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_else(|| self.base_url.clone());
+        if let Some(module) = self
+            .cache
+            .borrow()
+            .get(&(base.clone(), specifier.clone()))
+            .cloned()
+        {
+            return Ok(module);
+        }
+        let host = self
+            .host
+            .borrow()
+            .clone()
+            .ok_or_else(|| js_error("no active JavaScript host"))?;
+        let resolved = {
+            let host = host.borrow();
+            match host.module_resolver.as_ref() {
+                Some(resolver) => {
+                    resolver(&specifier, &base).map_err(|error| js_error(error.to_string()))?
+                }
+                None => None,
+            }
+        };
+        let url = resolved
+            .ok_or_else(|| js_error(format!("module not found: {specifier} (base {base})")))?;
+        let source = {
+            let host = host.borrow();
+            match host.module_loader.as_ref() {
+                Some(loader) => loader(&url).map_err(|error| js_error(error.to_string()))?,
+                None => return Err(js_error(format!("module not found: {url}"))),
+            }
+        };
+        let mut context = context.borrow_mut();
+        let module = Module::parse(
+            Source::from_bytes(&source).with_path(Path::new(&url)),
+            None,
+            &mut context,
+        )?;
+        self.cache
+            .borrow_mut()
+            .insert((base, specifier), module.clone());
+        Ok(module)
+    }
+
+    fn init_import_meta(
+        self: Rc<Self>,
+        import_meta: &JsObject,
+        module: &Module,
+        context: &mut Context,
+    ) {
+        if let Some(path) = module.path() {
+            let _ = import_meta.set(
+                js_string!("url"),
+                JsValue::from(js_string!(path.to_string_lossy().to_string())),
+                false,
+                context,
+            );
+        }
+    }
+}
+
+impl JsRuntime {
+    /// Evaluates an ES module with the **native Boa module system**, giving real
+    /// top-level `await` (continuations driven by host microtasks/timers) and real
+    /// **live bindings** (imports observe later `let`/`var` mutations; `const` stays
+    /// immutable). Dependency order follows the module graph; errors reject with typed
+    /// errors. Import maps are not consulted here (use [`Self::eval_module`] for the
+    /// preprocessed subset).
+    pub fn eval_module_async(
+        &mut self,
+        source: &str,
+        _source_name: &str,
+        base_url: &str,
+        budget: &Budget,
+    ) -> Result<ModuleOutcome, JsError> {
+        apply_budget(&mut self.context, budget);
+        let module = Module::parse(
+            Source::from_bytes(source).with_path(Path::new(base_url)),
+            None,
+            &mut self.context,
+        )
+        .map_err(module_error)?;
+        let promise = module.load_link_evaluate(&mut self.context);
+        let _scope = HostScope::enter(&self.host);
+        for _ in 0..10_000 {
+            if self.context.run_jobs().is_err() {
+                break;
+            }
+            if !matches!(promise.state(), PromiseState::Pending) {
+                break;
+            }
+            let _ = crate::events::advance_clock(
+                &mut self.context,
+                std::time::Duration::from_millis(1),
+            );
+            let now = crate::events::now_ms();
+            let _ = crate::events::run_due_timers(&mut self.context, now, 64);
+        }
+        drop(_scope);
+        match promise.state() {
+            PromiseState::Fulfilled(_) => {}
+            PromiseState::Rejected(error) => {
+                return Err(JsError::Runtime(
+                    error.to_string(&mut self.context).map_or_else(
+                        |_| "module evaluation rejected".to_string(),
+                        |value| value.to_std_string_escaped(),
+                    ),
+                ));
+            }
+            PromiseState::Pending => {
+                return Err(JsError::Runtime(
+                    "top-level await did not settle within the deterministic budget".to_string(),
+                ));
+            }
+        }
+        let namespace = module.namespace(&mut self.context);
+        let mut values = Vec::new();
+        for key in namespace
+            .own_property_keys(&mut self.context)
+            .map_err(module_error)?
+        {
+            let key_text = key.to_string();
+            if let Ok(value) = namespace.get(js_string!(key_text.clone()), &mut self.context) {
+                let text = value
+                    .to_string(&mut self.context)
+                    .map(|text| text.to_std_string_escaped())
+                    .unwrap_or_else(|_| "<unprintable>".to_string());
+                values.push((key_text, text));
+            }
+        }
+        values.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(ModuleOutcome {
+            url: base_url.to_string(),
+            exports: values,
+        })
+    }
 }
