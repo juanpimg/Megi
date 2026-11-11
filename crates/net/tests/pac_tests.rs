@@ -9,7 +9,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use net::proxy::ProxyConfig;
-use net::{FetchOptions, Url, fetch};
+use net::{FetchOptions, ResourceLoader, Url, fetch};
 
 fn spawn(handler: impl FnOnce(TcpListener) + Send + 'static) -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -136,4 +136,25 @@ fn pac_result_is_cached_per_host() {
         2,
         "each request goes via proxy"
     );
+}
+
+#[test]
+fn resource_loader_uses_the_pac_proxy() {
+    let pac_hits = Arc::new(AtomicUsize::new(0));
+    let proxy_hits = Arc::new(AtomicUsize::new(0));
+    let (proxy_port, proxy_server) = spawn_proxy(Arc::clone(&proxy_hits));
+    let script = format!(
+        "function FindProxyForURL(url, host) {{ return 'PROXY 127.0.0.1:{proxy_port}; DIRECT'; }}"
+    );
+    let (pac_port, pac_server) = spawn_pac(script, Arc::clone(&pac_hits));
+    let pac_url = Url::parse(&format!("http://127.0.0.1:{pac_port}/proxy.pac")).expect("pac url");
+    let mut loader = ResourceLoader::with_options(options(pac_url));
+    let resource = loader
+        .load(&Url::parse("http://target.test/loader").expect("target"))
+        .expect("loader through PAC");
+    drop(proxy_server);
+    drop(pac_server);
+    assert_eq!(resource.bytes, b"pac");
+    assert_eq!(pac_hits.load(Ordering::SeqCst), 1);
+    assert_eq!(proxy_hits.load(Ordering::SeqCst), 1);
 }
