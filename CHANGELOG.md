@@ -6,6 +6,66 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 33 — style interning, streaming inflate/PNG regions, complete fetch(), SVG textPath and shell reader mode (2026-11-11)
+
+#### Added
+
+- **Streaming inflater and PNG region encoding** (`0be66f5` / `e4dfa07`, image 98 /
+  net 331 / paint 216 tests): `StreamingInflater` (zlib/gzip/raw/auto with incremental
+  feed, CRC-32/ISIZE validation at finish and caps 64 MiB, ratio 1000:1) plus
+  `inflate_zlib_streaming`/`inflate_gzip_streaming`; `net` decodes gzip/deflate while the
+  response body arrives (caps checked per feed, corrupt CRC/ISIZE ⇒ typed
+  `Decompression`) on top of the round-32 HTTP/1.1 streaming path, whose identity/CL/
+  chunked handling is unchanged; `PngRegionEncoder`/`encode_png_regions`
+  re-filter only the dirty rows plus the next one and reuse the cached bytes for the rest
+  (identical output to `to_png()`), with paired `paint/png-encode-regions-*` bench rows.
+- **fetch() complete** (`ecc6295`, js 178 / render 174 tests): `init.signal`
+  (`AbortController`/`AbortSignal`, `aborted`/`reason`/`throwIfAborted`/`abort` listener),
+  GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS, `Response.body` as a deterministic
+  `ReadableStream` (`getReader`/`read`/`cancel`/`locked`/`releaseLock`), `arrayBuffer()`
+  from real bytes, `bodyUsed`, empty HEAD body and `clone()`; typed `AbortError` and
+  `TypeError('fetch failed: …')`; render's `file://` provider accepts HEAD and the render
+  loop reflects abort and stream reads end to end.
+- **SVG textPath and `<use>` inheritance** (`72f8053`, svg 117 / render 174 tests):
+  auto-rotation per segment (tangent angle, flipped when the glyphs would be upside
+  down), `textLength` with `spacing` and `spacingAndGlyphs`, `side="right"` and verified
+  presentation inheritance (`fill`/`stroke`/`opacity`) plus `x`/`y` translation for
+  `<use>`; without those elements the existing fixtures stay byte-identical.
+- **Shell downloads, reader mode and per-site zoom** (`30c27b3`, shell 253 tests):
+  deterministic download progress in the status bar (`guardando… <name>` → final name,
+  last download per tab), `reader.rs` extractor with `about:reader`/`megi://reader`,
+  `Ctrl+Shift+R` and `--reader` (combinable with `--chrome`/`--find`), and per-origin zoom
+  persisted in `session.json` (`siteZooms`, cap 64, tolerant parsing, `--no-session`
+  respected).
+
+#### Changed
+
+- **Style interning and block layout performance** (`2f161c1`, css 260 / layout 224
+  tests): `ComputedStyle` caches the `StyleFingerprint` computed once in `compute()`, so
+  layout's `StyleCache` no longer re-hashes the whole struct per element (~10 ms over
+  28.2k calls); single pass over block/inline children (was two `iter().any`), exact
+  capacity for child `Vec`s and a float-exclusions fast path when there are no floats.
+  Geometry unchanged, goldens byte-identical (`c95c7eff…`, `9e957177…`, `60f8984e…`).
+
+#### Tests
+
+- **1,986 tests, 0 failures** (net 331, css 260, shell 253, layout 224, paint 216,
+  js 178, render 174, svg 117, image 98, html 60, dom 36, fonts 17+1 doctest, bench 10,
+  test_harness 11); gate PASS with tokenizer 7,050/7,050, tree 3,904/3,904, serializer
+  230/230 and CSS 30/30.
+
+#### Limits
+
+- No brotli/zstd and single-member gzip only; HTTP/2 `fetch_streaming` still delivers DATA
+  without decoding compression.
+- fetch() streams are emulated from the provider's full body (no real network streaming),
+  signals are not reusable across requests, and a HEAD response has no body.
+- textPath rotation is approximate (no kerning/bidi), `side="right"` is approximate,
+  `textLength` only affects textPath, `startOffset` in em/ch is not implemented and
+  `<use>` does not resolve `symbol`/`width`/`height`.
+- Downloads are synchronous (no animated bar), reader mode uses a single-container
+  heuristic, and per-site zoom stores the origin without its port.
+
 ### Round 32 — CSS/layout/PNG performance, TLA/live bindings, h1 streaming and push prioritization (2026-11-11)
 
 #### Added
