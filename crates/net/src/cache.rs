@@ -214,6 +214,12 @@ pub fn parse_http_date(value: &str) -> Option<SystemTime> {
         .position(|candidate| candidate.eq_ignore_ascii_case(month_text))? as u32
         + 1;
     let year: i64 = parts.next()?.parse().ok()?;
+    // IMF-fixdate carries a four-digit year (RFC 9110 §5.6.7). Rejecting anything else
+    // keeps the arithmetic below far from i64/u64 overflow: a hostile `Expires` or cookie
+    // date such as `999999999999` used to panic on overflow in debug builds.
+    if !(1000..=9999).contains(&year) {
+        return None;
+    }
     let time = parts.next()?;
     let zone = parts.next()?;
     if !zone.eq_ignore_ascii_case("GMT") {
@@ -233,12 +239,13 @@ pub fn parse_http_date(value: &str) -> Option<SystemTime> {
     }
     let days = days_from_civil(year, month, day);
     if days < 0 {
+        // Dates before the Unix epoch are "already expired"; the cache treats them as no
+        // explicit freshness, which is the behaviour this parser has always had.
         return None;
     }
-    let seconds = (days as u64) * 86_400
-        + u64::from(hour) * 3_600
-        + u64::from(minute) * 60
-        + u64::from(second.min(59));
+    let seconds = u64::try_from(days).ok()?.checked_mul(86_400)?.checked_add(
+        u64::from(hour) * 3_600 + u64::from(minute) * 60 + u64::from(second.min(59)),
+    )?;
     UNIX_EPOCH.checked_add(Duration::from_secs(seconds))
 }
 
@@ -278,6 +285,20 @@ mod unit_tests {
             .iter()
             .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
             .collect()
+    }
+
+    #[test]
+    fn rejects_years_outside_the_four_digit_range() {
+        // A huge year used to overflow the seconds computation (panic in debug, bogus
+        // far-future instant in release); the format only allows four digits.
+        assert!(parse_http_date("Sun, 06 Nov 999999999999 08:49:37 GMT").is_none());
+        assert!(parse_http_date("Sun, 06 Nov 10000 08:49:37 GMT").is_none());
+        assert!(parse_http_date("Sun, 06 Nov 999 08:49:37 GMT").is_none());
+        assert!(parse_http_date("Sun, 06 Nov 0 08:49:37 GMT").is_none());
+        // Pre-epoch dates stay rejected (already expired); in-range years still parse.
+        assert!(parse_http_date("Sun, 06 Nov 1000 08:49:37 GMT").is_none());
+        assert!(parse_http_date("Sun, 06 Nov 1972 08:49:37 GMT").is_some());
+        assert!(parse_http_date("Sun, 06 Nov 9999 08:49:37 GMT").is_some());
     }
 
     #[test]
