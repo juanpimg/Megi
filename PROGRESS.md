@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `1b4cc65` (2026-11-11) · overall **99%** · **2,046** tests · conformance **PASS** · **14** crates · **159,138** lines of Rust
+**Snapshot** — commit `fb146b3` (2026-11-11) · overall **99%** · **2,046** tests · conformance **PASS** · **14** crates · **159,138** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -158,7 +158,7 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `1b4cc65` (2026-11-11) |
+| Commit | `fb146b3` (2026-11-11) |
 | Crates in the workspace | 14 |
 | Lines of Rust (tracked `.rs`) | 159138 |
 | Tests (`cargo test --workspace -- --list`) | 2046 |
@@ -199,8 +199,8 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 | Area | What | Estimate | Notes |
 |---|---|---|---|
 | BENCH | Performance bench & budgets | 90% | crates/bench + docs/PERFORMANCE.md; baselines repeatable, budgets met with margin |
-| FUZZ | Fuzzing | 85% | 14 libFuzzer targets + nightly CI smoke; longer campaigns pending |
-| DOCS | Documentation | 90% | ARCHITECTURE/ROADMAP/HANDOFF/FUZZING/TOOLING + generated progress page |
+| FUZZ | Fuzzing | 90% | 16 libFuzzer targets + nightly CI smoke; longer campaigns pending |
+| DOCS | Documentation | 92% | ARCHITECTURE/ROADMAP/HANDOFF/FUZZING/TOOLING + generated progress page |
 | CI | CI & quality gates | 97% | fmt/clippy/tests/doc/conformance/MSRV/fuzz + status freshness check |
 
 ## Regenerating this page
