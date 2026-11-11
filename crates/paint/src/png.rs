@@ -27,6 +27,8 @@
 //! Typical use is through [`Pixmap::to_png`](crate::Pixmap::to_png), which
 //! feeds the raw RGBA bytes to [`encode_rgba`].
 
+use std::cell::RefCell;
+
 use css::Color;
 use layout::Rect;
 
@@ -162,18 +164,41 @@ pub fn encode_pixels(width: u32, height: u32, pixels: &[Color]) -> Vec<u8> {
         return Vec::new();
     }
     let stride = width as usize * 4;
-    let mut filtered = Vec::with_capacity(height as usize * (stride + 1));
-    let mut row = vec![0u8; stride];
-    let mut previous = vec![0u8; stride];
-    for chunk in pixels.chunks(width as usize) {
-        let (row_pixels, _) = row.as_chunks_mut::<4>();
-        for (destination, pixel) in row_pixels.iter_mut().zip(chunk) {
-            *destination = [pixel.r, pixel.g, pixel.b, pixel.a];
+    ENCODE_SCRATCH.with(|scratch| {
+        let scratch = &mut *scratch.borrow_mut();
+        let EncodeScratch {
+            filtered,
+            row,
+            previous,
+        } = scratch;
+        filtered.clear();
+        filtered.reserve(height as usize * (stride + 1));
+        row.clear();
+        row.resize(stride, 0);
+        previous.clear();
+        previous.resize(stride, 0);
+        for chunk in pixels.chunks(width as usize) {
+            let (row_pixels, _) = row.as_chunks_mut::<4>();
+            for (destination, pixel) in row_pixels.iter_mut().zip(chunk) {
+                *destination = [pixel.r, pixel.g, pixel.b, pixel.a];
+            }
+            filter_row(row, previous.as_slice(), stride, filtered);
+            previous.copy_from_slice(row);
         }
-        filter_row(&row, previous.as_slice(), stride, &mut filtered);
-        previous.copy_from_slice(&row);
-    }
-    finalize_png(width, height, &filtered)
+        finalize_png(width, height, filtered)
+    })
+}
+
+/// Reusable row/filtered buffers for [`encode_pixels`] (R231).
+#[derive(Default)]
+struct EncodeScratch {
+    filtered: Vec<u8>,
+    row: Vec<u8>,
+    previous: Vec<u8>,
+}
+
+thread_local! {
+    static ENCODE_SCRATCH: RefCell<EncodeScratch> = RefCell::new(EncodeScratch::default());
 }
 
 /// Filters one scanline and appends its filter byte + bytes to `filtered`.
