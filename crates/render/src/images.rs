@@ -45,6 +45,8 @@ pub struct ImageLimits {
     pub max_image_bytes: usize,
     /// Maximum total downloaded image bytes for the page.
     pub max_total_bytes: usize,
+    /// Optional decode downscale cap (`RenderOptions::max_image_dim`).
+    pub max_image_dim: Option<u32>,
 }
 
 impl Default for ImageLimits {
@@ -53,6 +55,7 @@ impl Default for ImageLimits {
             max_images: DEFAULT_MAX_IMAGES,
             max_image_bytes: DEFAULT_MAX_IMAGE_BYTES,
             max_total_bytes: DEFAULT_MAX_TOTAL_IMAGE_BYTES,
+            max_image_dim: None,
         }
     }
 }
@@ -180,7 +183,11 @@ pub fn load_images(
                 | image::ImageFormat::Gif
                 | image::ImageFormat::WebP
         ) {
-            match image::decode(&resource.bytes) {
+            let decoded = match limits.max_image_dim {
+                Some(max_dim) => image::decode_scaled(&resource.bytes, max_dim),
+                None => image::decode(&resource.bytes),
+            };
+            match decoded {
                 Ok(decoded) => {
                     result.downloaded_bytes += resource.bytes.len();
                     let (width, height) = decoded.dimensions();

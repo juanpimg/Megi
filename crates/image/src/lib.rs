@@ -37,6 +37,14 @@
 //! [`ImageError::UnsupportedFeature`] with a clear description; unknown signatures are
 //! [`ImageError::UnsupportedFormat`]/[`ImageError::InvalidSignature`].
 //!
+//! ## Scaled decoding
+//!
+//! [`decode_scaled`] / [`decode_scaled_with_limits`] add an additive fast path for
+//! large images displayed much smaller: PNG row/column subsampling happens while
+//! unfiltering scanlines (no full RGBA buffer), while JPEG/GIF/WebP decode with the
+//! existing caps and are row/column subsampled afterwards. Sampling is
+//! nearest-neighbour (documented aliasing limit) and deterministic.
+//!
 //! ## Contract for consumers (`paint`/`render`)
 //!
 //! - [`RgbaImage::data`] is row-major RGBA8, 4 bytes per pixel, straight alpha,
@@ -273,6 +281,89 @@ pub fn exif_orientation(bytes: &[u8]) -> Option<u8> {
 /// (dimensions/pixels/chunk budgets shared by all formats).
 pub fn decode(bytes: &[u8]) -> Result<RgbaImage, ImageError> {
     decode_with_limits(bytes, &PngLimits::default())
+}
+
+/// Decodes an image downscaled so that neither dimension exceeds `max_dim`.
+///
+/// Additive companion to [`decode`] for rendering large photos/backgrounds that are
+/// displayed much smaller than their intrinsic size:
+///
+/// - **PNG**: row/column subsampling is performed while unfiltering scanlines
+///   (including Adam7), so the full-resolution RGBA buffer is never allocated and only
+///   the sampled pixels are converted to RGBA.
+/// - **JPEG / GIF / WebP**: the image is decoded with the existing caps and then
+///   row/column subsampled to the same target size (documented post-downsample; no
+///   reduced IDCT or region decode).
+///
+/// The factor is `ceil(longest_side / max_dim)` and the output dimensions are
+/// `ceil(width / factor) x ceil(height / factor)`, preserving the aspect ratio
+/// approximately. Results are deterministic. `max_dim == 0` is a typed error and a
+/// `max_dim` larger than the image decodes at full size.
+///
+/// Limitations: nearest-neighbour sampling aliases high-frequency detail (no bilinear
+/// filtering), no EXIF thumbnail fast path and no progressive/region decoding; the
+/// render pipeline applies its own bilinear scaling to the final display size.
+pub fn decode_scaled(bytes: &[u8], max_dim: u32) -> Result<RgbaImage, ImageError> {
+    decode_scaled_with_limits(bytes, &PngLimits::default(), max_dim)
+}
+
+/// Like [`decode_scaled`], but with explicit defensive limits.
+pub fn decode_scaled_with_limits(
+    bytes: &[u8],
+    limits: &PngLimits,
+    max_dim: u32,
+) -> Result<RgbaImage, ImageError> {
+    if max_dim == 0 {
+        return Err(ImageError::InvalidData {
+            reason: "max_dim must be greater than zero",
+        });
+    }
+    if detect_format(bytes) == ImageFormat::Png {
+        return png::decode_png_scaled(bytes, limits, max_dim);
+    }
+    let image = decode_with_limits(bytes, limits)?;
+    downsample_nearest(&image, max_dim)
+}
+
+/// Nearest-neighbour row/column subsampling so that `longest_side <= max_dim`.
+///
+/// Used by [`decode_scaled_with_limits`] for formats decoded at full size (JPEG/GIF/
+/// WebP). The PNG path performs the same sampling while unfiltering scanlines. Output
+/// pixel `(ox, oy)` comes from source `(ox * factor, oy * factor)`; this is deterministic
+/// but aliases high-frequency detail (no bilinear filtering, documented limitation).
+pub(crate) fn downsample_nearest(image: &RgbaImage, max_dim: u32) -> Result<RgbaImage, ImageError> {
+    let factor = image
+        .width
+        .max(image.height)
+        .div_ceil(max_dim.max(1))
+        .max(1);
+    if factor <= 1 {
+        return RgbaImage::new(image.width, image.height, image.data.clone());
+    }
+    let out_width = image.width.div_ceil(factor);
+    let out_height = image.height.div_ceil(factor);
+    let out_pixels =
+        (out_width as u64)
+            .checked_mul(out_height as u64)
+            .ok_or(ImageError::InvalidDimensions {
+                width: out_width,
+                height: out_height,
+            })?;
+    let out_pixels = usize::try_from(out_pixels).map_err(|_| ImageError::LimitExceeded {
+        what: "scaled output pixels",
+        limit: usize::MAX as u64,
+        actual: out_pixels,
+    })?;
+    let mut data = Vec::with_capacity(out_pixels * 4);
+    for out_y in 0..out_height {
+        let source_y = (out_y * factor).min(image.height - 1);
+        for out_x in 0..out_width {
+            let source_x = (out_x * factor).min(image.width - 1);
+            let offset = ((source_y as usize) * (image.width as usize) + source_x as usize) * 4;
+            data.extend_from_slice(&image.data[offset..offset + 4]);
+        }
+    }
+    RgbaImage::new(out_width, out_height, data)
 }
 
 /// Like [`decode`], but with explicit defensive limits (shared by PNG/JPEG/GIF).

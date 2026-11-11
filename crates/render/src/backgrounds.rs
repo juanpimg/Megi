@@ -62,6 +62,8 @@ pub struct BackgroundLimits {
     pub max_background_bytes: usize,
     /// Maximum total downloaded background bytes for the page.
     pub max_total_bytes: usize,
+    /// Optional decode downscale cap (`RenderOptions::max_image_dim`).
+    pub max_image_dim: Option<u32>,
 }
 
 impl Default for BackgroundLimits {
@@ -70,6 +72,7 @@ impl Default for BackgroundLimits {
             max_backgrounds: DEFAULT_MAX_BACKGROUNDS,
             max_background_bytes: DEFAULT_MAX_BACKGROUND_BYTES,
             max_total_bytes: DEFAULT_MAX_TOTAL_BACKGROUND_BYTES,
+            max_image_dim: None,
         }
     }
 }
@@ -285,7 +288,11 @@ pub fn load_backgrounds(
                 | image::ImageFormat::Gif
                 | image::ImageFormat::WebP
         ) {
-            match image::decode(&resource.bytes) {
+            let decoded = match limits.max_image_dim {
+                Some(max_dim) => image::decode_scaled(&resource.bytes, max_dim),
+                None => image::decode(&resource.bytes),
+            };
+            match decoded {
                 Ok(bitmap) => bitmap,
                 Err(error) => {
                     result.failed += 1;

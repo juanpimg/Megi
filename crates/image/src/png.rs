@@ -143,6 +143,27 @@ struct Context<'a> {
 /// [`ImageError`] for signature/CRC/truncation/format problems, unsupported
 /// PNG features, inflated-size mismatch or exceeded [`PngLimits`].
 pub fn decode_png(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageError> {
+    decode_png_impl(bytes, limits, None)
+}
+
+/// Decodes a PNG downscaled by an integer box factor so that neither dimension
+/// exceeds `max_dim` (used by the additive `image::decode_scaled` API).
+///
+/// The box average is accumulated while unfiltering scanlines (including Adam7
+/// passes), so the full-resolution RGBA output buffer is never allocated.
+pub(crate) fn decode_png_scaled(
+    bytes: &[u8],
+    limits: &PngLimits,
+    max_dim: u32,
+) -> Result<RgbaImage, ImageError> {
+    decode_png_impl(bytes, limits, Some(max_dim))
+}
+
+fn decode_png_impl(
+    bytes: &[u8],
+    limits: &PngLimits,
+    max_dim: Option<u32>,
+) -> Result<RgbaImage, ImageError> {
     if !bytes.starts_with(&PNG_SIGNATURE) {
         return Err(ImageError::InvalidSignature);
     }
@@ -271,19 +292,88 @@ pub fn decode_png(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageEr
             actual: rgba_size as u64,
         });
     }
-    let mut output = vec![0u8; rgba_size];
     let context = Context {
         header,
         palette: palette.as_deref(),
         transparency: transparency.as_ref(),
     };
 
+    // Integer box-downscale factor for `decode_scaled` (1 = decode at full size).
+    let factor = max_dim.map_or(1, |max_dim| {
+        header
+            .width
+            .max(header.height)
+            .div_ceil(max_dim.max(1))
+            .max(1)
+    });
     let mut offset = 0usize;
+    if factor <= 1 {
+        let mut output = vec![0u8; rgba_size];
+        if header.interlace == 0 {
+            decode_pass(&context, &inflated, &mut offset, [0, 0, 1, 1], &mut output)?;
+        } else {
+            for pass in ADAM7 {
+                decode_pass(&context, &inflated, &mut offset, pass, &mut output)?;
+            }
+        }
+        if offset != inflated.len() {
+            return Err(ImageError::InvalidData {
+                reason: "trailing bytes after the interlaced scanlines",
+            });
+        }
+        return Ok(RgbaImage {
+            width: header.width,
+            height: header.height,
+            data: output,
+        });
+    }
+
+    // Scaled path: accumulate per-output-pixel RGBA sums (4 channels + count).
+    let out_width = header.width.div_ceil(factor);
+    let out_height = header.height.div_ceil(factor);
+    let out_pixels =
+        (out_width as u64)
+            .checked_mul(out_height as u64)
+            .ok_or(ImageError::InvalidDimensions {
+                width: out_width,
+                height: out_height,
+            })?;
+    if out_pixels > limits.max_pixels {
+        return Err(ImageError::LimitExceeded {
+            what: "PNG scaled total pixels",
+            limit: limits.max_pixels,
+            actual: out_pixels,
+        });
+    }
+    let out_pixels = usize::try_from(out_pixels).map_err(|_| ImageError::LimitExceeded {
+        what: "PNG scaled total pixels",
+        limit: usize::MAX as u64,
+        actual: out_pixels,
+    })?;
+    let mut data = vec![0u8; out_pixels * 4];
     if header.interlace == 0 {
-        decode_pass(&context, &inflated, &mut offset, [0, 0, 1, 1], &mut output)?;
+        decode_pass_scaled(
+            &context,
+            &inflated,
+            &mut offset,
+            [0, 0, 1, 1],
+            factor,
+            out_width,
+            out_height,
+            &mut data,
+        )?;
     } else {
         for pass in ADAM7 {
-            decode_pass(&context, &inflated, &mut offset, pass, &mut output)?;
+            decode_pass_scaled(
+                &context,
+                &inflated,
+                &mut offset,
+                pass,
+                factor,
+                out_width,
+                out_height,
+                &mut data,
+            )?;
         }
     }
     if offset != inflated.len() {
@@ -291,12 +381,7 @@ pub fn decode_png(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageEr
             reason: "trailing bytes after the interlaced scanlines",
         });
     }
-
-    Ok(RgbaImage {
-        width: header.width,
-        height: header.height,
-        data: output,
-    })
+    RgbaImage::new(out_width, out_height, data)
 }
 
 /// Parses and validates a 13-byte IHDR payload.
@@ -526,6 +611,72 @@ fn decode_pass(
         unfilter(&mut current, &previous, filter, bpp)?;
         let y = y0 + row_index * dy;
         context.render_row(&current, width, x0, y, dx, image)?;
+        std::mem::swap(&mut previous, &mut current);
+    }
+    Ok(())
+}
+
+/// Scaled variant of [`decode_pass`]: unfilters every scanline (required by the PNG
+/// filters) but only converts the sampled grid (`x % factor == 0 && y % factor == 0`),
+/// writing directly into the reduced RGBA buffer. This is the documented
+/// "row/column subsampling after unfilter" of the scaled-decode API.
+#[allow(clippy::too_many_arguments)]
+fn decode_pass_scaled(
+    context: &Context<'_>,
+    inflated: &[u8],
+    offset: &mut usize,
+    pass: [u32; 4],
+    factor: u32,
+    out_width: u32,
+    out_height: u32,
+    data: &mut [u8],
+) -> Result<(), ImageError> {
+    let [x0, y0, dx, dy] = pass;
+    let width = pass_size(context.header.width, x0, dx);
+    let height = pass_size(context.header.height, y0, dy);
+    if width == 0 || height == 0 {
+        return Ok(());
+    }
+    let row_length = row_bytes(width, context.header.bits_per_pixel())?;
+    let bpp = context.header.filter_bpp();
+    let mut previous = vec![0u8; row_length];
+    let mut current = vec![0u8; row_length];
+
+    for row_index in 0..height {
+        let filter = *inflated.get(*offset).ok_or(ImageError::Truncated {
+            context: "scanline filter byte",
+        })?;
+        *offset += 1;
+        let end = offset
+            .checked_add(row_length)
+            .ok_or(ImageError::Truncated {
+                context: "scanline data",
+            })?;
+        let raw = inflated.get(*offset..end).ok_or(ImageError::Truncated {
+            context: "scanline data",
+        })?;
+        current.copy_from_slice(raw);
+        *offset = end;
+        unfilter(&mut current, &previous, filter, bpp)?;
+        let y = y0 + row_index * dy;
+        if y % factor == 0 {
+            let out_y = (y / factor) as usize;
+            if out_y < out_height as usize {
+                for pixel_index in 0..width {
+                    let x = x0 + pixel_index * dx;
+                    if x % factor != 0 {
+                        continue;
+                    }
+                    let out_x = (x / factor) as usize;
+                    if out_x >= out_width as usize {
+                        continue;
+                    }
+                    let rgba = context.pixel_from_row(&current, pixel_index)?;
+                    let target = (out_y * out_width as usize + out_x) * 4;
+                    data[target..target + 4].copy_from_slice(&rgba);
+                }
+            }
+        }
         std::mem::swap(&mut previous, &mut current);
     }
     Ok(())
