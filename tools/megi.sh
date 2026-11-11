@@ -21,6 +21,9 @@
 #   - session: tabs/history/zoom/scroll persist in $XDG_DATA_HOME/megi/session.json
 #     (--no-session, --session-file PATH); Ctrl+S saves PNG, Ctrl+Shift+S saves serialized
 #     HTML (doctype) to --download-dir or ~/Downloads; headless: --save-png/--save-html PATH
+#   - native widgets/accessibility: checkbox/radio Space toggle, Tab/Shift+Tab focus,
+#     ARIA roles/names exposed (aria-label/labelledby/hidden/disabled), multi-select
+#     (Ctrl/Shift+click) and history button/thumbnails in the window chrome
 #   - downloads: synchronous saves show a deterministic status-bar indicator
 #     ("guardando… <name>", last download remembered per tab; no animated bar)
 #   - reader: Ctrl+Shift+R extracts the main article into about:reader (700 px serif

@@ -20,9 +20,12 @@
 //!
 //! ## Limitations
 //!
-//! No PAC/WPAD/auto-config, no SOCKS, no proxy authentication schemes beyond Basic,
-//! no proxy-side TLS for tunnelled `https:` targets (an `https:` proxy can only
-//! forward `http:` targets, documented below) and no proxy connection pooling.
+//! PAC (`pac_url`, feature `pac`) is evaluated with the JS runtime's
+//! `FindProxyForURL(url, host)` and cached per host (5 min TTL); without the feature PAC
+//! is ignored. SOCKS5 (`socks5://[user:pass@]host:port`) uses CONNECT with optional
+//! username/password. HTTP proxy connections are pooled per proxy origin (cap 4, idle
+//! timeout). Proxy auth beyond Basic and nested TLS for `https:` proxies remain out of
+//! scope.
 
 use std::fmt;
 
@@ -42,6 +45,14 @@ pub struct ProxyConfig {
     pub https: Option<Url>,
     /// Bypass entries for `no_proxy`/`NO_PROXY` (hosts, suffixes, IPs, `host:port`, `*`).
     pub no_proxy: Vec<String>,
+    /// Optional SOCKS5 proxy (`socks5://[user:pass@]host:port`), used for both schemes
+    /// unless `no_proxy` bypasses the target. Takes precedence over `http`/`https`.
+    pub socks: Option<crate::socks::SocksProxy>,
+    /// Optional PAC/WPAD script URL for proxy auto-configuration. Requires the `pac`
+    /// feature (JavaScript runtime); without it PAC is ignored and direct/static proxies
+    /// are used. Evaluated with the PAC `FindProxyForURL(url, host)` contract and cached
+    /// per host with a TTL (see `pac` module docs).
+    pub pac_url: Option<Url>,
 }
 
 impl ProxyConfig {
@@ -64,7 +75,12 @@ impl ProxyConfig {
         let http = read("http_proxy", "HTTP_PROXY");
         let https = read("https_proxy", "HTTPS_PROXY");
         let no_proxy = read("no_proxy", "NO_PROXY");
-        Self::from_vars(http.as_deref(), https.as_deref(), no_proxy.as_deref())
+        let socks = read("socks_proxy", "SOCKS_PROXY")
+            .or_else(|| read("all_proxy", "ALL_PROXY"))
+            .and_then(|value| crate::socks::SocksProxy::parse(&value));
+        let mut config = Self::from_vars(http.as_deref(), https.as_deref(), no_proxy.as_deref());
+        config.socks = socks;
+        config
     }
 
     /// Pure helper behind [`Self::from_env`] (deterministic, used by tests).
@@ -76,6 +92,8 @@ impl ProxyConfig {
         Self {
             http: http_proxy.and_then(parse_proxy_url),
             https: https_proxy.and_then(parse_proxy_url),
+            socks: None,
+            pac_url: None,
             no_proxy: no_proxy
                 .map(|list| {
                     list.split([',', ' ', '\t'])
@@ -100,6 +118,39 @@ impl ProxyConfig {
             None
         } else {
             Some(proxy)
+        }
+    }
+
+    /// Resolves the effective proxy for `url`: PAC (when configured and the `pac` feature
+    /// is enabled) first, then the static `http`/`https` field. `no_proxy` bypasses both.
+    ///
+    /// PAC evaluation errors fall back to the static configuration/direct connection (the
+    /// page must not fail just because the auto-config script is unavailable).
+    pub fn proxy_for_url(&self, url: &Url) -> Option<Url> {
+        if !matches!(url.scheme(), Scheme::Http | Scheme::Https)
+            || self.bypasses(url.host(), url.port_or_default())
+        {
+            return None;
+        }
+        #[cfg(feature = "pac")]
+        if let Some(pac_url) = &self.pac_url
+            && let Ok(Some(proxy)) = crate::pac::resolve(url, pac_url)
+        {
+            return Some(proxy);
+        }
+        self.proxy_for(url).cloned()
+    }
+
+    /// Returns the SOCKS5 proxy to use for `url`, unless `no_proxy` bypasses it.
+    pub fn socks_for(&self, url: &Url) -> Option<&crate::socks::SocksProxy> {
+        let socks = self.socks.as_ref()?;
+        if !matches!(url.scheme(), Scheme::Http | Scheme::Https) {
+            return None;
+        }
+        if self.bypasses(url.host(), url.port_or_default()) {
+            None
+        } else {
+            Some(socks)
         }
     }
 
@@ -182,9 +233,11 @@ impl fmt::Display for ProxyConfig {
         };
         write!(
             f,
-            "ProxyConfig {{ http: {}, https: {}, no_proxy: [{}] }}",
+            "ProxyConfig {{ http: {}, https: {}, socks: {:?}, pac: {:?}, no_proxy: [{}] }}",
             render(&self.http),
             render(&self.https),
+            self.socks,
+            self.pac_url,
             self.no_proxy.join(", ")
         )
     }
@@ -281,6 +334,8 @@ mod tests {
             http: Some(proxy),
             https: None,
             no_proxy: Vec::new(),
+            socks: None,
+            pac_url: None,
         };
         assert!(proxy_authorization_for(&config, &url("http://target/")).is_some());
     }
@@ -291,6 +346,8 @@ mod tests {
             http: Some(url("http://user:secret@proxy.example:8080")),
             https: None,
             no_proxy: vec!["example.com".to_owned()],
+            socks: None,
+            pac_url: None,
         };
         let rendered = config.to_string();
         assert!(!rendered.contains("secret"), "{rendered}");

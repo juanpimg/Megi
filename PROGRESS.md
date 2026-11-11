@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `30ef39d` (2026-11-11) · overall **99%** · **1,992** tests · conformance **PASS** · **14** crates · **156,225** lines of Rust
+**Snapshot** — commit `6e5734c` (2026-11-12) · overall **99%** · **2,049** tests · conformance **PASS** · **14** crates · **159,150** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -20,8 +20,8 @@
 | **F4** | Paint, raster & SVG | `████████████████████` | 100% |
 | **F5** | Networking & fetch | `████████████████████` | 100% |
 | **F6** | JavaScript & DOM APIs | `████████████████████` | 100% |
-| **F7** | Desktop shell (browser UI) | `████████████████████` | 99% |
-| | **Overall** | `████████████████████` | **99%** |
+| **F7** | Desktop shell (browser UI) | `███████████████████░` | 99% |
+| | **Overall** | `███████████████████░` | **99%** |
 
 ## What is done and what remains
 
@@ -158,10 +158,10 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `30ef39d` (2026-11-11) |
+| Commit | `6e5734c` (2026-11-12) |
 | Crates in the workspace | 14 |
-| Lines of Rust (tracked `.rs`) | 156225 |
-| Tests (`cargo test --workspace -- --list`) | 1992 |
+| Lines of Rust (tracked `.rs`) | 159150 |
+| Tests (`cargo test --workspace -- --list`) | 2049 |
 | Crates with `#![forbid(unsafe_code)]` | 14 / 14 |
 | Conformance gate | **PASS** |
 
@@ -199,8 +199,8 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 | Area | What | Estimate | Notes |
 |---|---|---|---|
 | BENCH | Performance bench & budgets | 90% | crates/bench + docs/PERFORMANCE.md; baselines repeatable, budgets met with margin |
-| FUZZ | Fuzzing | 85% | 14 libFuzzer targets + nightly CI smoke; longer campaigns pending |
-| DOCS | Documentation | 90% | ARCHITECTURE/ROADMAP/HANDOFF/FUZZING/TOOLING + generated progress page |
+| FUZZ | Fuzzing | 90% | 16 libFuzzer targets + nightly CI smoke; longer campaigns pending |
+| DOCS | Documentation | 92% | ARCHITECTURE/ROADMAP/HANDOFF/FUZZING/TOOLING + generated progress page |
 | CI | CI & quality gates | 97% | fmt/clippy/tests/doc/conformance/MSRV/fuzz + status freshness check |
 
 ## Regenerating this page
@@ -211,4 +211,4 @@ python3 tools/update_progress.py --write --no-gate  # skip the conformance gate
 python3 tools/update_progress.py --check --no-gate --no-count  # CI freshness
 ```
 
-_Last manifest update by: docs (round 33 + PR merges). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
+_Last manifest update by: docs (round 34 + PR merges). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._

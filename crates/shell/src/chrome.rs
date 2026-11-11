@@ -1347,6 +1347,9 @@ pub struct ChromeView<'a> {
     pub history_menu: Option<&'a crate::history::HistoryMenu>,
     /// Download progress text (takes precedence over the hover URL in the status bar).
     pub download_status: Option<&'a str>,
+    /// Show the visual history button in the address bar (window only; headless off keeps
+    /// the existing chrome goldens byte-identical).
+    pub history_button: bool,
 }
 
 /// Paints the chrome over a physical `0RGB` framebuffer; returns the painted pixel count.
@@ -1378,6 +1381,7 @@ pub fn draw_chrome(
         paint_dropdown(&mut pixmap, scale, view, dropdown);
     }
     paint_navigation_buttons(&mut pixmap, scale, view);
+    paint_history_button(&mut pixmap, scale, view);
     if let Some(menu) = view.history_menu {
         paint_history_menu(&mut pixmap, scale, view, menu);
     }
@@ -1752,6 +1756,39 @@ fn paint_context_menu(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, me
     }
 }
 
+/// History button rectangle (right side of the address bar); only painted when
+/// [`ChromeView::history_button`] is set so headless chrome goldens stay unchanged.
+pub fn history_button_rect(css_width: f32) -> Rect {
+    Rect::new(
+        (css_width - 28.0).max(2.0),
+        TAB_STRIP_HEIGHT + 4.0,
+        22.0,
+        20.0,
+    )
+}
+
+/// Hit-tests the visual history button.
+pub fn history_button_hit(css_width: f32, x: f32, y: f32) -> bool {
+    contains(history_button_rect(css_width), x, y)
+}
+
+fn paint_history_button(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>) {
+    if !view.history_button {
+        return;
+    }
+    let rect = history_button_rect(view.css_width);
+    pixmap.fill_rect(scaled(rect, scale), COLOR_BORDER);
+    draw_text(
+        pixmap,
+        "H",
+        rect.x + 7.0,
+        rect.y + 4.0,
+        scale,
+        11.0,
+        COLOR_ADDRESS_TEXT,
+    );
+}
+
 fn paint_navigation_buttons(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>) {
     let buttons = navigation_buttons(view.css_width);
     let mut draw = |rect: Rect, label: &str, enabled: bool| {
@@ -1814,14 +1851,29 @@ fn paint_history_menu(
         if index == menu.selected {
             pixmap.fill_rect(scaled(*row, scale), COLOR_MENU_SELECTED);
         }
+        let (letter, color) = crate::history::domain_badge(&entry.url);
+        let badge = Rect::new(row.x + 4.0, row.y + 3.0, 14.0, 14.0);
+        pixmap.fill_rect(
+            scaled(badge, scale),
+            Color::new(color[0], color[1], color[2], 0xFF),
+        );
+        draw_text(
+            pixmap,
+            &letter.to_string(),
+            badge.x + 4.0,
+            badge.y + 2.0,
+            scale,
+            10.0,
+            Color::WHITE,
+        );
         let label = truncate_title(
             &format!("{} — {}", entry.title, entry.url),
-            ((row.width - 8.0) / 6.6).max(8.0) as usize,
+            ((row.width - 30.0) / 6.6).max(8.0) as usize,
         );
         draw_text(
             pixmap,
             &label,
-            row.x + 6.0,
+            row.x + 24.0,
             row.y + 5.0,
             scale,
             11.0,
@@ -1893,6 +1945,7 @@ pub fn draw_chrome_over_pixmap(
     paint_tab_strip(&mut band, scale, view, css_width);
     paint_address_bar(&mut band, scale, view, css_width);
     paint_navigation_buttons(&mut band, scale, view);
+    paint_history_button(&mut band, scale, view);
     debug_assert!(view.dropdown.is_none());
     debug_assert!(view.overflow.is_none());
     debug_assert!(view.menu.is_none());
@@ -1954,6 +2007,7 @@ mod tests {
             can_go_forward: false,
             history_menu: None,
             download_status: None,
+            history_button: false,
         }
     }
 
@@ -2613,5 +2667,77 @@ mod tests {
         let mut view = view(address, None, tabs);
         view.download_status = None;
         view
+    }
+
+    #[test]
+    fn history_button_geometry_and_hit_testing() {
+        let rect = history_button_rect(640.0);
+        assert!(rect.x + rect.width <= 640.0);
+        assert!(history_button_hit(640.0, rect.x + 2.0, rect.y + 2.0));
+        assert!(!history_button_hit(640.0, 1.0, 1.0));
+        let address = AddressBar::new();
+        let tabs = vec!["Megi".to_string()];
+        let mut view = view(&address, None, &tabs);
+        view.history_button = true;
+        assert!(view.history_button);
+    }
+
+    #[test]
+    fn history_button_paints_only_when_enabled() {
+        let address = AddressBar::new();
+        let tabs = vec!["Megi".to_string()];
+        let rect = history_button_rect(480.0);
+        let mut without = buffer(480, 200);
+        let mut view = view(&address, None, &tabs);
+        view.css_width = 480.0;
+        draw_chrome(&mut without, 480, 200, 1.0, &view);
+        view.history_button = true;
+        let mut with = buffer(480, 200);
+        draw_chrome(&mut with, 480, 200, 1.0, &view);
+        let mut changed = 0usize;
+        for y in rect.y as u32..(rect.y + rect.height) as u32 {
+            for x in rect.x as u32..(rect.x + rect.width) as u32 {
+                if without[(y * 480 + x) as usize] != with[(y * 480 + x) as usize] {
+                    changed += 1;
+                }
+            }
+        }
+        assert!(changed > 0, "history glyph painted");
+    }
+
+    #[test]
+    fn history_menu_paints_domain_badges() {
+        let entries = vec![
+            crate::history::HistoryEntry {
+                title: "A".to_string(),
+                url: "https://example.com/a".to_string(),
+                logical_time: 1,
+            },
+            crate::history::HistoryEntry {
+                title: "B".to_string(),
+                url: "https://file.example/b".to_string(),
+                logical_time: 2,
+            },
+        ];
+        let menu = crate::history::HistoryMenu::open(entries.clone(), 20.0, 40.0);
+        let address = AddressBar::new();
+        let tabs = vec!["Megi".to_string()];
+        let mut dest = buffer(480, 300);
+        let mut view = view(&address, None, &tabs);
+        view.css_width = 480.0;
+        view.css_viewport_height = 300;
+        view.history_menu = Some(&menu);
+        draw_chrome(&mut dest, 480, 300, 1.0, &view);
+        let layout = history_menu_layout(&menu, 480.0, 300);
+        let row = layout.rows[0];
+        let (_, color) = crate::history::domain_badge(&entries[0].url);
+        let expected =
+            (u32::from(color[0]) << 16) | (u32::from(color[1]) << 8) | u32::from(color[2]);
+        // The badge is drawn a few pixels inside the row; scan for its color.
+        let start = (row.y as u32 + 4) * 480 + row.x as u32 + 4;
+        assert!(
+            dest[start as usize..(start + 30) as usize].contains(&expected),
+            "domain badge color painted"
+        );
     }
 }

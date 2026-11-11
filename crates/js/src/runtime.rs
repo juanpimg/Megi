@@ -915,7 +915,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 25] = [
+    let accessors: [(&str, AccessorKind); 27] = [
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
         ("className", AccessorKind::ClassName),
@@ -925,7 +925,9 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("children", AccessorKind::Children),
         ("parentNode", AccessorKind::ParentNode),
         ("firstChild", AccessorKind::FirstChild),
+        ("lastChild", AccessorKind::LastChild),
         ("nextSibling", AccessorKind::NextSibling),
+        ("previousSibling", AccessorKind::PreviousSibling),
         ("style", AccessorKind::Style),
         ("classList", AccessorKind::ClassList),
         ("childNodes", AccessorKind::ChildNodes),
@@ -1030,7 +1032,9 @@ enum AccessorKind {
     Children,
     ParentNode,
     FirstChild,
+    LastChild,
     NextSibling,
+    PreviousSibling,
     Style,
     ClassList,
     ChildNodes,
@@ -1059,7 +1063,9 @@ fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::Children => (node_children, None),
         AccessorKind::ParentNode => (node_parent_node, None),
         AccessorKind::FirstChild => (node_first_child, None),
+        AccessorKind::LastChild => (node_last_child, None),
         AccessorKind::NextSibling => (node_next_sibling, None),
+        AccessorKind::PreviousSibling => (node_previous_sibling, None),
         AccessorKind::Style => (node_style_get, Some(node_style_set)),
         AccessorKind::ClassList => (node_class_list_get, None),
         AccessorKind::ChildNodes => (node_child_nodes, None),
@@ -1327,6 +1333,30 @@ fn node_first_child(this: &JsValue, _args: &[JsValue], context: &mut Context) ->
             .and_then(|node| node.first_child)
     });
     wrap_optional(context, child.flatten())
+}
+
+fn node_last_child(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let child = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.last_child)
+    });
+    wrap_optional(context, child.flatten())
+}
+
+fn node_previous_sibling(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let sibling = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.prev_sibling)
+    });
+    wrap_optional(context, sibling.flatten())
 }
 
 fn node_next_sibling(
@@ -2440,18 +2470,22 @@ fn write_classes(node_id: NodeId, classes: &[String]) {
 
 fn class_add(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let (node_id, mut classes) = classes_of(this, context)?;
-    let class = arg_string(args, 0, context)?;
-    if !classes.contains(&class) {
-        classes.push(class);
-        write_classes(node_id, &classes);
+    for index in 0..args.len() {
+        let class = arg_string(args, index, context)?;
+        if !class.is_empty() && !classes.contains(&class) {
+            classes.push(class);
+        }
     }
+    write_classes(node_id, &classes);
     Ok(JsValue::undefined())
 }
 
 fn class_remove(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let (node_id, mut classes) = classes_of(this, context)?;
-    let class = arg_string(args, 0, context)?;
-    classes.retain(|existing| *existing != class);
+    for index in 0..args.len() {
+        let class = arg_string(args, index, context)?;
+        classes.retain(|existing| *existing != class);
+    }
     write_classes(node_id, &classes);
     Ok(JsValue::undefined())
 }
@@ -2466,13 +2500,19 @@ fn class_toggle(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     let (node_id, mut classes) = classes_of(this, context)?;
     let class = arg_string(args, 0, context)?;
     let contains = classes.contains(&class);
-    if contains {
-        classes.retain(|existing| *existing != class);
+    let add = match args.get(1) {
+        Some(force) if force.is_boolean() => force.to_boolean(),
+        _ => !contains,
+    };
+    if add {
+        if !contains {
+            classes.push(class);
+        }
     } else {
-        classes.push(class);
+        classes.retain(|existing| *existing != class);
     }
     write_classes(node_id, &classes);
-    Ok(JsValue::from(!contains))
+    Ok(JsValue::from(add))
 }
 
 fn class_to_string(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
