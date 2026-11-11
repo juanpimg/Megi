@@ -245,6 +245,11 @@ pub struct ScriptingHostContext {
     /// Events dispatched on `window` by the host after `load` (e.g. `hashchange`,
     /// `popstate`) so their listeners can mutate the DOM before the final re-render.
     pub host_events: Vec<String>,
+    /// Pre-script layout geometry (`NodeId → viewport rects`) installed into the JS
+    /// runtime so scripts can measure the initial layout (viewport coords, scroll = 0).
+    #[cfg(feature = "js")]
+    pub layout:
+        Option<std::sync::Arc<std::collections::HashMap<dom::NodeId, js::host::LayoutRect>>>,
 }
 
 impl ScriptingHostContext {
@@ -262,6 +267,8 @@ impl ScriptingHostContext {
             fetch_options: net::FetchOptions::default(),
             no_network: false,
             host_events: Vec::new(),
+            #[cfg(feature = "js")]
+            layout: None,
         }
     }
 
@@ -276,6 +283,8 @@ impl ScriptingHostContext {
             fetch_options: net::FetchOptions::default(),
             no_network: false,
             host_events: Vec::new(),
+            #[cfg(feature = "js")]
+            layout: None,
         }
     }
 }
@@ -583,6 +592,10 @@ pub fn execute_scripts(
         scroll_y: 0.0,
     };
     runtime.set_viewport_provider(Box::new(move || viewport_info));
+    #[cfg(feature = "js")]
+    if let Some(layout) = host.layout.clone() {
+        runtime.set_layout_provider(Box::new(move |node_id| layout.get(&node_id).copied()));
+    }
 
     // Browser-facing host providers (R155): History/location actions are queued for the
     // host (the shell decides whether to navigate/reload after the render) and Web Storage

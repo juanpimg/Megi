@@ -118,6 +118,12 @@
 //!   Limits: hover/active have no headless meaning, `:focus` is not tracked by render
 //!   itself, and the state is a per-render snapshot (no live restyle/change events).
 //!
+//! HTTP/2 server push is opt-in via [`RenderOptions::accept_server_push`]: pushes received
+//! while fetching the document are transferred to the subresource loader's per-render
+//! preload cache and consumed by images/stylesheets/scripts (no second request); the
+//! response completes before the cache is used. [`RenderStats::pushed_used`] reports how
+//! many pushed resources the render actually consumed.
+//!
 //! `<script type="module">` runs through the js crate's static ES-module subset (relative
 //! imports resolved against the importing module/baseURI, `file://`/`http(s)` loader with
 //! `--no-network` and script caps); each module script is an independent graph root.
@@ -387,6 +393,11 @@ pub struct RenderOptions {
     /// `data:` documents send no `Origin`. Cross-origin subresource CORS failures are
     /// non-fatal warnings (the resource is skipped, the page still renders).
     pub origin: Option<String>,
+    /// Accept HTTP/2 server pushes and preload images/stylesheets/scripts from the
+    /// same-origin push cache of the document load (R177). Default `false`: the client
+    /// advertises `SETTINGS_ENABLE_PUSH=0`. Pushes completing after the main response are
+    /// cancelled; the cache is per render (see [`crate::RenderStats::pushed_used`]).
+    pub accept_server_push: bool,
     /// Optional shared Web Storage for `localStorage` across renders (R155).
     ///
     /// Pass the same `Arc<Mutex<RenderStorage>>` to two renders to emulate a browser
@@ -425,6 +436,7 @@ impl Default for RenderOptions {
             cookies: false,
             cookie_jar: None,
             origin: None,
+            accept_server_push: false,
             storage: None,
             host_events: Vec::new(),
         }
@@ -539,6 +551,11 @@ pub struct RenderStats {
     /// History API requests captured during scripting (see
     /// [`RenderOutput::history_actions`]).
     pub history_actions: usize,
+    /// HTTP/2 server-pushed resources actually consumed by the render (images,
+    /// stylesheets, scripts) from the per-load preload cache (R177).
+    pub pushed_used: usize,
+    /// Server-pushed resources dropped because a push cap was exceeded.
+    pub pushed_discarded: usize,
     /// Number of display-list items painted.
     pub display_items: usize,
     /// Additive hit-testing regions recorded while painting (same display list: the PNG is
@@ -633,8 +650,9 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     document_fetch_options.cookie_jar = cookie_jar.clone();
     // The top-level navigation request carries no `Origin` header.
     document_fetch_options.origin = None;
-    let mut loader = ResourceLoader::with_options(document_fetch_options.clone());
-    let loaded = load_document(&url, &mut loader, &document_fetch_options)?;
+    document_fetch_options.accept_push |= options.accept_server_push;
+    let mut document_loader = ResourceLoader::with_options(document_fetch_options.clone());
+    let loaded = load_document(&url, &mut document_loader, &document_fetch_options)?;
     // Subresource fetches send the document's origin (CORS) and its cookies.
     let subresource_origin = options
         .origin
@@ -646,6 +664,9 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     let mut subresource_fetch_options = document_fetch_options.clone();
     subresource_fetch_options.origin = subresource_origin;
     let mut loader = ResourceLoader::with_options(subresource_fetch_options);
+    // Push promises received while fetching the document belong to the same load session:
+    // transfer them to the subresource loader that serves images/stylesheets/scripts.
+    loader.absorb_pushes_from(&mut document_loader);
     let fetch_time = fetch_start.elapsed();
     if loaded.bytes.len() > options.max_document_bytes {
         return Err(RenderError::DocumentTooLarge {
@@ -777,6 +798,23 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             media_context,
             (options.viewport.width, options.viewport.height),
         );
+        #[cfg(feature = "js")]
+        {
+            if let Some(styles) = pre_script_styles.as_ref() {
+                let pre_layout_viewport = layout::Rect::new(
+                    0.0,
+                    0.0,
+                    options.viewport.width as f32,
+                    options.viewport.height as f32,
+                );
+                let layout_root = layout::layout_document(&document, styles, pre_layout_viewport);
+                if let Some(layout_root) = layout_root {
+                    let mut rects = std::collections::HashMap::new();
+                    collect_layout_rects(&layout_root, &mut rects);
+                    host_context.layout = Some(std::sync::Arc::new(rects));
+                }
+            }
+        }
         host_context.storage = options.storage.clone();
         host_context.host_events = options.host_events.clone();
         host_context.fetch_options = loader.fetch_options().clone();
@@ -1009,6 +1047,8 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             script_timers_pending,
             location_actions: location_action_count,
             history_actions: history_action_count,
+            pushed_used: loader.pushed_used(),
+            pushed_discarded: loader.pushed_discarded(),
             display_items,
             hit_regions: hit_region_count,
             cookies_stored,
@@ -1097,7 +1137,10 @@ fn load_document(
 ) -> Result<LoadedDocument, RenderError> {
     match url.scheme() {
         Scheme::Http | Scheme::Https => {
-            let response = net::fetch(url, fetch_options)?;
+            let mut response = net::fetch(url, fetch_options)?;
+            // HTTP/2 server pushes received while fetching the document are part of the
+            // same load session: cache them for subresource loads (R177).
+            loader.absorb_pushed(std::mem::take(&mut response.pushed));
             if response.status >= 400 {
                 return Err(RenderError::HttpStatus {
                     url: response.final_url.as_str(),
@@ -1518,4 +1561,23 @@ fn resolve_styles_with_collection(
         }
     }
     styles
+}
+
+/// Collects viewport-space border/content rects for every laid-out DOM node (round 28).
+#[cfg(feature = "js")]
+fn collect_layout_rects(
+    layout_box: &layout::LayoutBox,
+    rects: &mut std::collections::HashMap<NodeId, js::host::LayoutRect>,
+) {
+    if let Some(node_id) = layout_box.node_id() {
+        let border = layout_box.dimensions.border_box();
+        let content = layout_box.dimensions.content;
+        rects.entry(node_id).or_insert(js::host::LayoutRect {
+            border_box: (border.x, border.y, border.width, border.height),
+            content_box: (content.x, content.y, content.width, content.height),
+        });
+    }
+    for child in &layout_box.children {
+        collect_layout_rects(child, rects);
+    }
 }
