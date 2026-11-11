@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Megi aspect-ratio fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #ffffff; }
+  .box { margin: 8px; background-color: #336699; }
+  .w16 { width: 120px; aspect-ratio: 16 / 9; }
+  .h9  { height: 45px; width: auto; aspect-ratio: 16 / 9; }
+  .square { width: 48px; aspect-ratio: 1 / 1; background-color: #f2aa4c; }
+  .auto-ratio { width: 64px; aspect-ratio: auto 2 / 1; background-color: #101820; }
+  .both { width: 80px; height: 20px; aspect-ratio: 4 / 1; background-color: #dde6f2; }
+</style></head>
+<body>
+  <div class="box w16"></div>
+  <div class="box h9"></div>
+  <div class="box square"></div>
+  <div class="box auto-ratio"></div>
+  <div class="box both"></div>
+</body></html>

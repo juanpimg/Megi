@@ -154,6 +154,13 @@ pub enum DisplayItem {
         color: Color,
         kind: MarkerKind,
     },
+    /// Applies a `backdrop-filter` to the already-painted backdrop inside `rect`
+    /// (CSS Filter Effects 2 §3). The rasterizer copies the destination region,
+    /// runs the filters on it and writes it back before the element paints.
+    BackdropFilter {
+        rect: Rect,
+        filters: Vec<css::FilterFunction>,
+    },
     /// An offscreen filter/blend group (CSS `filter` / `mix-blend-mode`).
     ///
     /// The nested items are rasterized into a transparent buffer, the `filters`
@@ -292,7 +299,8 @@ impl DisplayItem {
             | Self::Gradient { rect, .. }
             | Self::Image { rect, .. }
             | Self::OpacityGroup { rect, .. }
-            | Self::EffectGroup { rect, .. } => Some(*rect),
+            | Self::EffectGroup { rect, .. }
+            | Self::BackdropFilter { rect, .. } => Some(*rect),
             Self::BoxShadow { rect, shadow, .. } => {
                 let blur = shadow.blur.clamp(0.0, MAX_SHADOW_BLUR);
                 Some(Rect::new(

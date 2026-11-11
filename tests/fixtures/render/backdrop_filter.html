@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Megi backdrop-filter fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #ffffff; }
+  .backdrop {
+    width: 220px; height: 120px; margin: 8px;
+    background-image: url("assets/pattern.png");
+    background-repeat: repeat;
+    background-color: #dde6f2;
+  }
+  .glass {
+    position: absolute; left: 16px; top: 16px; width: 90px; height: 50px;
+    border: 2px solid #ffffff;
+    backdrop-filter: blur(4px);
+  }
+  .dim {
+    position: absolute; left: 120px; top: 16px; width: 90px; height: 50px;
+    border: 2px solid #ffffff;
+    backdrop-filter: brightness(0.5) grayscale(1);
+  }
+  .plain {
+    position: absolute; left: 16px; top: 76px; width: 90px; height: 40px;
+    background-color: #336699;
+  }
+</style></head>
+<body>
+  <div class="backdrop"></div>
+  <div class="glass"></div>
+  <div class="dim"></div>
+  <div class="plain"></div>
+</body></html>

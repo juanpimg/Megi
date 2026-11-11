@@ -1377,6 +1377,48 @@ impl MixBlendMode {
 /// Hard cap on the number of `filter` functions kept per computed style.
 pub const MAX_FILTER_FUNCTIONS: usize = 16;
 
+/// Computed `aspect-ratio` (CSS Box Sizing 4 §5).
+///
+/// `ratio` is `width / height`; `auto` keeps the replaced element's intrinsic
+/// ratio when one exists (the layout engine consumes this field).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AspectRatio {
+    /// `auto` keyword: prefer the intrinsic ratio of replaced content.
+    pub auto: bool,
+    /// Preferred ratio (`width / height`), always finite and positive.
+    pub ratio: f32,
+}
+
+/// Computed `object-fit` for replaced elements (CSS Images 3 §5.5).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ObjectFit {
+    /// Stretch to the content box (initial value).
+    #[default]
+    Fill,
+    /// Letterbox, preserving the intrinsic aspect ratio.
+    Contain,
+    /// Crop, preserving the intrinsic aspect ratio.
+    Cover,
+    /// Use the intrinsic size, centred/cropped by `object-position`.
+    None,
+    /// `none` or `contain`, whichever draws smaller.
+    ScaleDown,
+}
+
+impl ObjectFit {
+    /// Parses the `object-fit` keywords.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "fill" => Some(Self::Fill),
+            "contain" => Some(Self::Contain),
+            "cover" => Some(Self::Cover),
+            "none" => Some(Self::None),
+            "scale-down" => Some(Self::ScaleDown),
+            _ => None,
+        }
+    }
+}
+
 /// One computed `background-image` layer (CSS Backgrounds 3 §3.1).
 ///
 /// Multi-layer backgrounds are stored bottom-to-top in
@@ -1671,6 +1713,14 @@ pub struct ComputedStyle {
     pub filter: Vec<FilterFunction>,
     /// Computed `mix-blend-mode` (initial: `normal`). Not inherited.
     pub mix_blend_mode: MixBlendMode,
+    /// Computed `backdrop-filter` function list (initial: empty). Not inherited.
+    pub backdrop_filter: Vec<FilterFunction>,
+    /// Computed `aspect-ratio` (`None` = `auto`, the initial value). Not inherited.
+    pub aspect_ratio: Option<AspectRatio>,
+    /// Computed `object-fit` for replaced elements (initial: `fill`). Not inherited.
+    pub object_fit: ObjectFit,
+    /// Computed `object-position` (initial: `50% 50%`). Not inherited.
+    pub object_position: BackgroundPosition,
 
     // Flexbox (CSS Flexbox 1); none of these properties are inherited.
     pub flex_direction: crate::flex::FlexDirection,
@@ -1843,6 +1893,13 @@ impl ComputedStyle {
             text_shadows: Vec::new(),
             filter: Vec::new(),
             mix_blend_mode: MixBlendMode::Normal,
+            backdrop_filter: Vec::new(),
+            aspect_ratio: None,
+            object_fit: ObjectFit::Fill,
+            object_position: BackgroundPosition {
+                x: Length::Percent(50.0),
+                y: Length::Percent(50.0),
+            },
 
             flex_direction: crate::flex::FlexDirection::Row,
             flex_wrap: crate::flex::FlexWrap::NoWrap,
@@ -2110,8 +2167,10 @@ impl ComputedStyle {
         // existing single-image render loader keeps working unchanged.
         let (background_layers, background_geometry_explicit) =
             Self::compute_background_layers(&entries, font_size, root_font_size, color);
-        let (filter, mix_blend_mode) =
+        let (filter, mix_blend_mode, backdrop_filter) =
             Self::compute_effects(&entries, font_size, root_font_size, color);
+        let (aspect_ratio, object_fit, object_position) =
+            Self::compute_replaced_properties(&entries, font_size, root_font_size);
         let inherited_text_shadows = parent
             .map(|style| style.text_shadows.as_slice())
             .unwrap_or_default();
@@ -2236,6 +2295,10 @@ impl ComputedStyle {
             text_shadows,
             filter,
             mix_blend_mode,
+            backdrop_filter,
+            aspect_ratio,
+            object_fit,
+            object_position,
 
             flex_direction: computed_flex.direction,
             flex_wrap: computed_flex.wrap,
@@ -2461,18 +2524,55 @@ impl ComputedStyle {
         font_size: f32,
         root_font_size: f32,
         current_color: Color,
-    ) -> (Vec<FilterFunction>, MixBlendMode) {
-        let filter_decl = find_declaration(entries, "filter")
-            .or_else(|| find_declaration(entries, "-webkit-filter"));
-        let filter = filter_decl
-            .map(|decl| {
-                parse_filter_list(&decl.raw_value, font_size, root_font_size, current_color)
-            })
-            .unwrap_or_default();
+    ) -> (Vec<FilterFunction>, MixBlendMode, Vec<FilterFunction>) {
+        let parse_list = |name: &str| {
+            find_declaration(entries, name)
+                .map(|decl| {
+                    parse_filter_list(&decl.raw_value, font_size, root_font_size, current_color)
+                })
+                .unwrap_or_default()
+        };
+        let filter = {
+            let unprefixed = find_declaration(entries, "filter");
+            let prefixed = find_declaration(entries, "-webkit-filter");
+            match unprefixed.or(prefixed) {
+                Some(decl) => {
+                    parse_filter_list(&decl.raw_value, font_size, root_font_size, current_color)
+                }
+                None => Vec::new(),
+            }
+        };
+        let backdrop_filter = parse_list("backdrop-filter");
+        let backdrop_filter = if backdrop_filter.is_empty() {
+            parse_list("-webkit-backdrop-filter")
+        } else {
+            backdrop_filter
+        };
         let mix_blend_mode = find_declaration(entries, "mix-blend-mode")
             .and_then(|decl| MixBlendMode::parse(&decl.raw_value))
             .unwrap_or_default();
-        (filter, mix_blend_mode)
+        (filter, mix_blend_mode, backdrop_filter)
+    }
+
+    /// Computes `aspect-ratio`, `object-fit` and `object-position` (CSS Box Sizing
+    /// 4 §5 / CSS Images 3 §5.5). None of them is inherited.
+    fn compute_replaced_properties(
+        entries: &[(&str, &Declaration)],
+        font_size: f32,
+        root_font_size: f32,
+    ) -> (Option<AspectRatio>, ObjectFit, BackgroundPosition) {
+        let aspect_ratio = find_declaration(entries, "aspect-ratio")
+            .and_then(|decl| parse_aspect_ratio(&decl.raw_value));
+        let object_fit = find_declaration(entries, "object-fit")
+            .and_then(|decl| ObjectFit::parse(&decl.raw_value))
+            .unwrap_or_default();
+        let object_position = find_declaration(entries, "object-position")
+            .and_then(|decl| BackgroundPosition::parse(&decl.raw_value, font_size, root_font_size))
+            .unwrap_or(BackgroundPosition {
+                x: Length::Percent(50.0),
+                y: Length::Percent(50.0),
+            });
+        (aspect_ratio, object_fit, object_position)
     }
 
     /// Computes `border-radius`, `box-shadow` and `text-shadow` (CSS Backgrounds 3
@@ -3519,6 +3619,47 @@ fn strip_quoted_string(component: &str) -> Option<String> {
         return Some(component[1..component.len() - 1].to_string());
     }
     None
+}
+
+/// Parses `aspect-ratio: auto || <ratio>` (CSS Box Sizing 4 §5).
+fn parse_aspect_ratio(value: &str) -> Option<AspectRatio> {
+    let mut tokens = split_components(value);
+    if tokens.is_empty() {
+        return None;
+    }
+    let mut auto = false;
+    if tokens[0].trim().eq_ignore_ascii_case("auto") {
+        auto = true;
+        tokens.remove(0);
+        if tokens.is_empty() {
+            // `auto` alone means no preferred ratio; the field stays `None`.
+            return None;
+        }
+    }
+    // `<ratio>` = `<number> [ / <number> ]?`; a single number means width/height = n/1.
+    // `split_components` keeps a spaced solidus as its own token ("16 / 9").
+    let ratio_token = match tokens.as_slice() {
+        [single] => single.trim().to_string(),
+        [width, slash, height] if slash.trim() == "/" => {
+            format!("{}/{}", width.trim(), height.trim())
+        }
+        _ => return None,
+    };
+    let (width, height) = if let Some((width_text, height_text)) = ratio_token.split_once('/') {
+        (
+            width_text.trim().parse::<f32>().ok()?,
+            height_text.trim().parse::<f32>().ok()?,
+        )
+    } else {
+        (ratio_token.parse::<f32>().ok()?, 1.0)
+    };
+    if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+    Some(AspectRatio {
+        auto,
+        ratio: width / height,
+    })
 }
 
 /// Parses a `filter` function list; invalid values produce an empty list (`none`).

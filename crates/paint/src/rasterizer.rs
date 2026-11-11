@@ -1657,6 +1657,9 @@ fn paint_items(
                     *blur,
                 );
             }
+            DisplayItem::BackdropFilter { rect, filters } => {
+                paint_backdrop_filter(pixmap, shift(*rect, dx, dy), filters);
+            }
             DisplayItem::EffectGroup {
                 rect,
                 filters,
@@ -3363,4 +3366,65 @@ fn paint_effect_group(
         apply_filter(&mut buffer, filter);
     }
     composite_effect(pixmap, &buffer, x0, y0, blend);
+}
+
+// ---------------------------------------------------------------------------
+// CSS backdrop-filter (R149)
+// ---------------------------------------------------------------------------
+
+/// Applies a `backdrop-filter` to the already-painted destination inside `rect`.
+///
+/// The backdrop pixels are copied to a temporary buffer, filtered with the same
+/// deterministic color/blur operations as `filter`, and written back. Groups
+/// larger than the documented area cap are left untouched (DoS bound).
+fn paint_backdrop_filter(pixmap: &mut Pixmap, rect: Rect, filters: &[css::FilterFunction]) {
+    if filters.is_empty() {
+        return;
+    }
+    let Some(clip) = pixmap.clip_rect() else {
+        return;
+    };
+    let x0 = rect.x.max(clip.x).max(0.0).floor() as u32;
+    let y0 = rect.y.max(clip.y).max(0.0).floor() as u32;
+    let x1 = ((rect.x + rect.width)
+        .min(clip.x + clip.width)
+        .min(pixmap.width as f32))
+    .ceil()
+    .clamp(0.0, pixmap.width as f32) as u32;
+    let y1 = ((rect.y + rect.height)
+        .min(clip.y + clip.height)
+        .min(pixmap.height as f32))
+    .ceil()
+    .clamp(0.0, pixmap.height as f32) as u32;
+    if x0 >= x1 || y0 >= y1 {
+        return;
+    }
+    let width = x1 - x0;
+    let height = y1 - y0;
+    if (width as usize).saturating_mul(height as usize) > MAX_ROUNDED_GROUP_PIXELS {
+        return;
+    }
+    let mut buffer = Pixmap::new(width, height);
+    let stride = pixmap.width as usize;
+    let buffer_stride = buffer.width as usize;
+    for y in 0..height {
+        let src_row = (y0 + y) as usize * stride;
+        let dst_row = y as usize * buffer_stride;
+        for x in 0..width {
+            buffer.pixels[dst_row + x as usize] = pixmap.pixels[src_row + (x0 + x) as usize];
+        }
+    }
+    for filter in filters.iter().take(css::MAX_FILTER_FUNCTIONS) {
+        apply_filter(&mut buffer, filter);
+    }
+    // Write the filtered backdrop back (it replaces the original pixels).
+    for y in 0..height {
+        let dst_row = (y0 + y) as usize * stride;
+        let src_row = y as usize * buffer_stride;
+        for x in 0..width {
+            let filtered = buffer.pixels[src_row + x as usize];
+            let index = dst_row + (x0 + x) as usize;
+            pixmap.pixels[index] = blend_over(pixmap.pixels[index], filtered);
+        }
+    }
 }

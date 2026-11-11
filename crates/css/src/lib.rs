@@ -49,13 +49,13 @@ pub use media::{
 pub use parser::{TokenStream, consume_declaration, parse_list_of_declarations, parse_stylesheet};
 pub use properties::CalcLengths;
 pub use properties::{
-    BackgroundAttachment, BackgroundClip, BackgroundLayer, BackgroundOrigin, BackgroundPosition,
-    BackgroundRepeat, BackgroundRepeatAxis, BackgroundSize, BorderCollapse, BorderRadii,
-    BorderStyle, BoxShadow, BoxSizing, CaptionSide, Clear, Color, ComputedStyle, ConicGradient,
-    Display, EmptyCells, FilterFunction, Float, FontStyle, Gradient, GradientKind, GradientStop,
-    InterpolationSpace, Length, LinearDirection, LinearGradient, ListStyleType,
-    MAX_FILTER_FUNCTIONS, MAX_GRADIENT_STOPS, MAX_GRADIENTS, MixBlendMode, Overflow, Position,
-    RadialExtent, RadialGradient, RadialShape, Radius, RectEdges, TableLayout, TextAlign,
+    AspectRatio, BackgroundAttachment, BackgroundClip, BackgroundLayer, BackgroundOrigin,
+    BackgroundPosition, BackgroundRepeat, BackgroundRepeatAxis, BackgroundSize, BorderCollapse,
+    BorderRadii, BorderStyle, BoxShadow, BoxSizing, CaptionSide, Clear, Color, ComputedStyle,
+    ConicGradient, Display, EmptyCells, FilterFunction, Float, FontStyle, Gradient, GradientKind,
+    GradientStop, InterpolationSpace, Length, LinearDirection, LinearGradient, ListStyleType,
+    MAX_FILTER_FUNCTIONS, MAX_GRADIENT_STOPS, MAX_GRADIENTS, MixBlendMode, ObjectFit, Overflow,
+    Position, RadialExtent, RadialGradient, RadialShape, Radius, RectEdges, TableLayout, TextAlign,
     TextDecoration, TextShadow, TextTransform, VerticalAlign, Visibility, WhiteSpace,
 };
 pub use query::{

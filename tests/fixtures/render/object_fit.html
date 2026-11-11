@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Megi object-fit fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #101820; }
+  .row { margin: 6px 8px; }
+  img { width: 96px; height: 48px; margin-right: 8px; background-color: #dde6f2; }
+  .fill { object-fit: fill; }
+  .contain { object-fit: contain; }
+  .cover { object-fit: cover; }
+  .none { object-fit: none; object-position: center; }
+  .down { object-fit: scale-down; }
+  .pos { object-fit: none; object-position: top left; }
+  .px { object-fit: none; object-position: 20px 10px; }
+</style></head>
+<body>
+  <div class="row">
+    <img class="fill" src="assets/pattern.png" alt="">
+    <img class="contain" src="assets/pattern.png" alt="">
+    <img class="cover" src="assets/pattern.png" alt="">
+  </div>
+  <div class="row">
+    <img class="none" src="assets/pattern.png" alt="">
+    <img class="down" src="assets/pattern.png" alt="">
+    <img class="pos" src="assets/pattern.png" alt="">
+    <img class="px" src="assets/pattern.png" alt="">
+  </div>
+</body></html>

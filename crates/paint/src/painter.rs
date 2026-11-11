@@ -1201,6 +1201,50 @@ fn push_inline_children<'a>(
     }
 }
 
+/// Computes the drawn rect of a replaced element image for `object-fit` /
+/// `object-position` against its content box (CSS Images 3 §5.5).
+///
+/// `fill` returns the content box unchanged, which keeps the historical
+/// stretched-image output byte-identical (goldens).
+fn object_fit_rect(
+    content: Rect,
+    image_width: f32,
+    image_height: f32,
+    fit: css::ObjectFit,
+    position: css::BackgroundPosition,
+) -> Rect {
+    if image_width <= 0.0 || image_height <= 0.0 {
+        return content;
+    }
+    let scale = match fit {
+        css::ObjectFit::Fill => {
+            return content;
+        }
+        css::ObjectFit::None => 1.0,
+        css::ObjectFit::Contain => (content.width / image_width).min(content.height / image_height),
+        css::ObjectFit::Cover => (content.width / image_width).max(content.height / image_height),
+        css::ObjectFit::ScaleDown => {
+            let contain = (content.width / image_width).min(content.height / image_height);
+            contain.min(1.0)
+        }
+    };
+    let drawn_width = image_width * scale;
+    let drawn_height = image_height * scale;
+    let resolve = |value: css::Length, area: f32, drawn: f32| -> f32 {
+        match value {
+            css::Length::Px(px) => px,
+            css::Length::Percent(pct) => (area - drawn) * (pct / 100.0),
+            css::Length::Auto => 0.0,
+        }
+    };
+    Rect::new(
+        content.x + resolve(position.x, content.width, drawn_width),
+        content.y + resolve(position.y, content.height, drawn_height),
+        drawn_width,
+        drawn_height,
+    )
+}
+
 /// Emits the paint of a replaced element: its decoded image if available,
 /// otherwise a documented gray placeholder box (CSS 2.2 §10.6.2 intrinsic size
 /// is handled by layout; paint only stretches the bitmap to `content`).
@@ -1216,12 +1260,36 @@ fn paint_replaced_element(
         return;
     }
     resources.record(rect, Some(node_id), HitKind::Image);
+    let fit = layout_box
+        .style
+        .as_ref()
+        .map_or(css::ObjectFit::Fill, |style| style.object_fit);
+    let position = layout_box.style.as_ref().map_or(
+        css::BackgroundPosition {
+            x: css::Length::Percent(50.0),
+            y: css::Length::Percent(50.0),
+        },
+        |style| style.object_position,
+    );
     match resources.images.get(&node_id) {
         Some(image) if !image.is_empty() => {
-            list.push(DisplayItem::Image {
-                rect,
-                image: std::sync::Arc::clone(image),
-            });
+            let drawn =
+                object_fit_rect(rect, image.width as f32, image.height as f32, fit, position);
+            // `object-fit: fill` is the historical stretched image: emit the item
+            // without a clip so existing goldens stay byte-identical.
+            if fit == css::ObjectFit::Fill {
+                list.push(DisplayItem::Image {
+                    rect,
+                    image: std::sync::Arc::clone(image),
+                });
+            } else {
+                push_clip_item(list, resources, rect);
+                list.push(DisplayItem::Image {
+                    rect: drawn,
+                    image: std::sync::Arc::clone(image),
+                });
+                pop_clip_item(list, resources);
+            }
             // A translucent element (flat-opacity fallback) darkens the image
             // through a normal-alpha fill when needed.
             if alpha_scale < 1.0 {
@@ -1260,6 +1328,14 @@ fn paint_background_border(
     let node_id = layout_box.node_id();
     let border_box = layout_box.dimensions.border_box();
     resources.record(border_box, node_id, HitKind::Background);
+    // `backdrop-filter` filters the already-painted backdrop inside the box
+    // before this element paints its own background/border/content (R149).
+    if !style.backdrop_filter.is_empty() {
+        list.push(DisplayItem::BackdropFilter {
+            rect: border_box,
+            filters: style.backdrop_filter.clone(),
+        });
+    }
 
     let background_is_propagated = (is_root && skip.root_background)
         || layout_box.node_id().is_some() && layout_box.node_id() == skip.body_node;
@@ -1283,7 +1359,7 @@ fn paint_background_border(
     let has_border = sides.iter().any(BorderSide::is_visible);
     let paints_background =
         !background_is_propagated && (has_bg_color || has_legacy_image || has_explicit_layers);
-    if !paints_background && !has_shadows && !has_border {
+    if !paints_background && !has_shadows && !has_border && style.backdrop_filter.is_empty() {
         return;
     }
 
