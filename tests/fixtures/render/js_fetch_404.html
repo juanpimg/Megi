@@ -1,0 +1,8 @@
+<!doctype html><html><body>
+<div id="out">pending</div>
+<script>
+fetch('missing_fetch_data.json').then(function (r) {
+  document.getElementById('out').textContent = 'ok=' + r.ok + ':status=' + r.status;
+}).catch(function (error) { document.getElementById('out').textContent = 'error:' + error; });
+</script>
+</body></html>

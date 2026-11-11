@@ -645,6 +645,82 @@ pub fn execute_scripts(
     };
     runtime.set_viewport_provider(Box::new(move || viewport_info));
     if host.enable_workers {
+        // R203: fetch() provider backed by the render's effective FetchOptions. Scripts run
+        // synchronously; the Promise settles when the host drains microtasks. CORS policy is
+        // same-origin only (cross-origin http(s) fetch rejects, documented); file:// misses
+        // surface as a synthetic 404 so scripts can inspect `response.ok`.
+        {
+            let base = document_url.clone();
+            let options = host.fetch_options.clone();
+            let no_network = host.no_network;
+            runtime.set_fetch_provider(Box::new(move |request| {
+                let url = Url::parse(&request.url)
+                    .map_err(|error| js::JsError::Runtime(format!("fetch URL: {error}")))?;
+                if matches!(url.scheme(), Scheme::Http | Scheme::Https) && no_network {
+                    return Err(js::JsError::Runtime(
+                        "network disabled (--no-network)".to_string(),
+                    ));
+                }
+                let same_origin = match (base.scheme(), url.scheme()) {
+                    (Scheme::Http | Scheme::Https, Scheme::Http | Scheme::Https) => {
+                        base.scheme() == url.scheme()
+                            && base.host() == url.host()
+                            && base.port_or_default() == url.port_or_default()
+                    }
+                    (Scheme::File, Scheme::File) => true,
+                    _ => false,
+                };
+                if !same_origin {
+                    return Err(js::JsError::Runtime(
+                        "CORS: cross-origin fetch denied (same-origin only)".to_string(),
+                    ));
+                }
+                if matches!(url.scheme(), Scheme::Http | Scheme::Https) {
+                    let header_refs: Vec<(&str, &str)> = request
+                        .headers
+                        .iter()
+                        .map(|(name, value)| (name.as_str(), value.as_str()))
+                        .collect();
+                    let response = net::http::fetch_with_method(
+                        &url,
+                        &options,
+                        &request.method,
+                        &header_refs,
+                        request.body.as_deref(),
+                    )
+                    .map_err(|error| js::JsError::Runtime(format!("network: {error}")))?;
+                    return Ok(js::host::FetchResult {
+                        status: response.status,
+                        status_text: response.reason,
+                        url: response.final_url.to_string(),
+                        headers: response.headers,
+                        body: response.body,
+                    });
+                }
+                let mut loader = ResourceLoader::with_options(options.clone());
+                match loader.load_str(&request.url) {
+                    Ok(resource) => {
+                        let mut headers =
+                            vec![("content-type".to_string(), resource.content_type.clone())];
+                        headers.truncate(64);
+                        Ok(js::host::FetchResult {
+                            status: 200,
+                            status_text: "OK".to_string(),
+                            url: resource.url.to_string(),
+                            headers,
+                            body: resource.bytes.clone(),
+                        })
+                    }
+                    Err(_) => Ok(js::host::FetchResult {
+                        status: 404,
+                        status_text: "Not Found".to_string(),
+                        url: request.url,
+                        headers: Vec::new(),
+                        body: Vec::new(),
+                    }),
+                }
+            }));
+        }
         runtime.set_worker_loader(Box::new(|url| {
             let path = url.strip_prefix("file://").ok_or_else(|| {
                 js::JsError::Runtime(format!(

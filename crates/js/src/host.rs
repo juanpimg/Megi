@@ -163,6 +163,29 @@ pub struct LayoutRect {
     pub content_box: (f32, f32, f32, f32),
 }
 
+/// One `fetch()` request normalized by the JS prelude (host executes the I/O).
+#[derive(Clone, Debug)]
+pub struct FetchRequest {
+    pub url: String,
+    pub method: String,
+    pub headers: Vec<(String, String)>,
+    pub body: Option<Vec<u8>>,
+}
+
+/// Host result for one `fetch()` request.
+#[derive(Clone, Debug)]
+pub struct FetchResult {
+    pub status: u16,
+    pub status_text: String,
+    pub url: String,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+}
+
+/// Injectable `fetch()` provider; without one `fetch()` rejects with a typed error.
+pub type FetchProvider =
+    Box<dyn Fn(FetchRequest) -> Result<FetchResult, crate::error::JsError> + Send + Sync>;
+
 /// Loads the source text of a worker script URL (the host owns I/O).
 pub type WorkerLoader = Box<dyn Fn(&str) -> Result<String, crate::error::JsError> + Send + Sync>;
 
@@ -287,6 +310,8 @@ pub(crate) struct Host {
     pub layout_provider: Option<LayoutProvider>,
     /// Worker script loader injected by the host.
     pub worker_loader: Option<WorkerLoader>,
+    /// `fetch()` provider injected by the host.
+    pub fetch_provider: Option<FetchProvider>,
     /// Deterministic cooperative workers (no threads); `None` slots are terminated/dropped.
     pub workers: Vec<Option<crate::runtime::WorkerState>>,
     /// Parent host when this host belongs to a worker realm.
@@ -339,6 +364,7 @@ impl Host {
             active_element: None,
             layout_provider: None,
             worker_loader: None,
+            fetch_provider: None,
             workers: Vec::new(),
             worker_parent: None,
             worker_id: None,

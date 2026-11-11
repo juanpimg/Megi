@@ -1,0 +1,8 @@
+<!doctype html><html><body>
+<div id="out">pending</div>
+<script>
+fetch('http://example.test/data.json').then(function (r) {
+  document.getElementById('out').textContent = 'ok=' + r.ok;
+}).catch(function (error) { document.getElementById('out').textContent = 'rejected:' + error; });
+</script>
+</body></html>

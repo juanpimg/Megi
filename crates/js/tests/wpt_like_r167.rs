@@ -297,11 +297,12 @@ fn documented_unsupported_apis_are_absent() {
         &mut runtime,
         r#"
         var div = document.createElement('div');
-        var gaps = [typeof fetch, typeof crypto, typeof Range];
+        var gaps = [typeof crypto, typeof Range, typeof XMLHttpRequest, typeof AbortController];
         var supported = [
           typeof URLSearchParams, typeof queueMicrotask, typeof MouseEvent,
           typeof structuredClone, typeof atob, typeof btoa,
-          typeof div.getBoundingClientRect
+          typeof div.getBoundingClientRect, typeof fetch,
+          typeof Headers, typeof Request, typeof Response
         ];
         gaps.every(function (value) { return value === 'undefined'; }) &&
           supported.every(function (value) { return value === 'function'; });

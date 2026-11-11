@@ -367,6 +367,7 @@ impl JsRuntime {
 
     /// Runs pending promise/microtask jobs (Boa's job queue).
     pub fn run_microtasks(&mut self) -> Result<(), JsError> {
+        let _scope = HostScope::enter(&self.host);
         let result = match self.context.run_jobs() {
             Ok(()) => Ok(()),
             Err(error) => {
@@ -379,6 +380,7 @@ impl JsRuntime {
                 Err(typed)
             }
         };
+        drop(_scope);
         if result.is_ok() {
             let _scope = HostScope::enter(&self.host);
             let delivered = deliver_mutation_records(&mut self.context);
@@ -4179,8 +4181,87 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
   define("PointerEvent", function (type, init) { makeMouseEvent.call(this, type, init); this.pointerId = (init && init.pointerId) || 0; });
   if (typeof Event === "function" && Event.prototype) { define("PointerEvent", (function (Base) { function PointerEvent(type, init) { Base.call(this, type, init || {}); this.pointerId = (init && init.pointerId) || 0; } PointerEvent.prototype = Object.create(Base.prototype); PointerEvent.prototype.constructor = PointerEvent; return PointerEvent; })(Event)); }
   define("Node", { DOCUMENT_POSITION_DISCONNECTED: 1, DOCUMENT_POSITION_PRECEDING: 2, DOCUMENT_POSITION_FOLLOWING: 4, DOCUMENT_POSITION_CONTAINS: 8, DOCUMENT_POSITION_CONTAINED_BY: 16, DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: 32 });
+  function Headers(init) {
+    this._h = [];
+    if (init) {
+      if (init instanceof Headers) { this._h = init._h.map(function (p) { return [p[0], p[1]]; }); }
+      else if (Array.isArray(init)) { for (var i = 0; i < init.length; i++) { this.append(init[i][0], init[i][1]); } }
+      else { for (var key in init) { if (Object.prototype.hasOwnProperty.call(init, key)) { this.append(key, init[key]); } } }
+    }
+  }
+  Headers.prototype._find = function (name) { var lower = String(name).toLowerCase(); for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { return i; } } return -1; };
+  Headers.prototype.get = function (name) { var i = this._find(name); return i < 0 ? null : this._h[i][1]; };
+  Headers.prototype.has = function (name) { return this._find(name) >= 0; };
+  Headers.prototype.append = function (name, value) { this._h.push([String(name), String(value)]); };
+  Headers.prototype.set = function (name, value) { var i = this._find(name); if (i >= 0) { this._h[i][1] = String(value); } else { this.append(name, value); } };
+  Headers.prototype["delete"] = function (name) { var i = this._find(name); if (i >= 0) { this._h.splice(i, 1); } };
+  Headers.prototype.forEach = function (callback, thisArg) { for (var i = 0; i < this._h.length; i++) { callback.call(thisArg, this._h[i][1], this._h[i][0], this); } };
+  Headers.prototype.entries = function () { return this._h.slice(); };
+  define("Headers", Headers);
+  function Response(data) {
+    this.status = data.status;
+    this.statusText = data.statusText || "";
+    this.ok = data.status >= 200 && data.status < 300;
+    this.url = data.url || "";
+    this.redirected = false;
+    this.headers = new Headers(data.headers || []);
+    this._body = data.bodyText || "";
+    this._bodyLength = data.bodyLength || 0;
+    this._bodyUsed = false;
+  }
+  Response.prototype._consume = function () { if (this._bodyUsed) { return null; } this._bodyUsed = true; return this._body; };
+  Response.prototype.text = function () { var body = this._consume(); return body === null ? Promise.reject(new TypeError("body already used")) : Promise.resolve(body); };
+  Response.prototype.json = function () { var body = this._consume(); if (body === null) { return Promise.reject(new TypeError("body already used")); } try { return Promise.resolve(JSON.parse(body)); } catch (e) { return Promise.reject(e); } };
+  Response.prototype.arrayBuffer = function () {
+    var body = this._consume();
+    if (body === null) { return Promise.reject(new TypeError("body already used")); }
+    var bytes = new Uint8Array(body.length);
+    for (var i = 0; i < body.length; i++) { bytes[i] = body.charCodeAt(i) & 255; }
+    return Promise.resolve(bytes);
+  };
+  Response.prototype.clone = function () { var copy = new Response({ status: this.status, statusText: this.statusText, url: this.url, headers: this.headers.entries(), bodyText: this._body, bodyLength: this._bodyLength }); return copy; };
+  define("Response", Response);
+  function Request(input, init) {
+    init = init || {};
+    if (input && typeof input === "object" && typeof input.url === "string") {
+      this.url = input.url;
+      this.method = String(init.method || input.method || "GET").toUpperCase();
+      this.headers = new Headers(init.headers || input.headers);
+      this.body = init.body !== undefined ? String(init.body) : (input.body || null);
+    } else {
+      this.url = new URL(String(input), location.href).href;
+      this.method = String(init.method || "GET").toUpperCase();
+      this.headers = new Headers(init.headers);
+      this.body = init.body !== undefined && init.body !== null ? String(init.body) : null;
+    }
+  }
+  define("Request", Request);
+  define("fetch", function (input, init) {
+    return new Promise(function (resolve, reject) {
+      try {
+        var request = new Request(input, init);
+        var headerText = "";
+        request.headers.forEach(function (value, name) { headerText += name + ":" + value + "\n"; });
+        var raw = __megi_fetch_native(request.url, request.method, headerText, request.body === null ? "" : request.body);
+        resolve(new Response(raw));
+      } catch (error) { reject(error); }
+    });
+  });
 })();
 "#;
+    let fetch_fn = FunctionObjectBuilder::new(context.realm(), native(fetch_native))
+        .name(js_string!("__megi_fetch_native"))
+        .length(4)
+        .build();
+    context
+        .global_object()
+        .set(
+            js_string!("__megi_fetch_native"),
+            JsValue::from(fetch_fn),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
     context
         .eval(Source::from_bytes(PRELUDE))
         .map(|_| ())
@@ -4330,6 +4411,12 @@ const MAX_WORKERS: usize = 8;
 const MAX_WORKER_MESSAGES: usize = 256;
 
 impl JsRuntime {
+    /// Installs the `fetch()` provider (the host owns all network/filesystem I/O).
+    /// Without a provider `fetch()` rejects with a typed error (documented).
+    pub fn set_fetch_provider(&mut self, provider: crate::host::FetchProvider) {
+        self.host.borrow_mut().fetch_provider = Some(provider);
+    }
+
     /// Installs the worker script loader (`url → source text`; the host owns all I/O).
     pub fn set_worker_loader(&mut self, loader: crate::host::WorkerLoader) {
         self.host.borrow_mut().worker_loader = Some(loader);
@@ -4826,4 +4913,112 @@ fn worker_self_post_message(
         return Err(js_error("worker message queue is full"));
     }
     Ok(JsValue::undefined())
+}
+
+// ---------------------------------------------------------------------------
+// fetch() subset (round 31): host provider, Headers/Request/Response prelude
+// ---------------------------------------------------------------------------
+
+const MAX_FETCH_HEADERS: usize = 64;
+const MAX_FETCH_BODY: usize = 8 * 1024 * 1024;
+
+fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let url = arg_string(args, 0, context)?;
+    let method = arg_string(args, 1, context)?.trim().to_ascii_uppercase();
+    let headers_raw = arg_string(args, 2, context)?;
+    let body_text = arg_string(args, 3, context)?;
+    let mut headers = Vec::new();
+    for line in headers_raw.lines() {
+        if line.is_empty() {
+            continue;
+        }
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        if headers.len() >= MAX_FETCH_HEADERS {
+            return Err(js_error("fetch headers limit exceeded"));
+        }
+        headers.push((name.trim().to_string(), value.trim().to_string()));
+    }
+    if body_text.len() > MAX_FETCH_BODY {
+        return Err(js_error("fetch body limit exceeded"));
+    }
+    if !matches!(method.as_str(), "GET" | "POST") {
+        return Err(js_error("fetch only supports GET and POST"));
+    }
+    let request = crate::host::FetchRequest {
+        url,
+        method,
+        headers,
+        body: (!body_text.is_empty()).then(|| body_text.into_bytes()),
+    };
+    let result = with_host(|host| {
+        host.fetch_provider
+            .as_ref()
+            .ok_or_else(|| js_error("fetch is not available in this host"))
+            .and_then(|provider| provider(request).map_err(|error| js_error(error.to_string())))
+    })
+    .ok_or_else(|| js_error("no active JavaScript host"))??;
+    if result.body.len() > MAX_FETCH_BODY {
+        return Err(js_error("fetch response body limit exceeded"));
+    }
+    let header_array = JsArray::new(context);
+    for (index, (name, value)) in result.headers.iter().enumerate() {
+        let pair = JsArray::new(context);
+        pair.set(
+            js_string!("0"),
+            JsValue::from(js_string!(name.clone())),
+            false,
+            context,
+        )
+        .map_err(|error| js_error(error.to_string()))?;
+        pair.set(
+            js_string!("1"),
+            JsValue::from(js_string!(value.clone())),
+            false,
+            context,
+        )
+        .map_err(|error| js_error(error.to_string()))?;
+        header_array
+            .set(
+                js_string!(index.to_string()),
+                JsValue::from(pair),
+                false,
+                context,
+            )
+            .map_err(|error| js_error(error.to_string()))?;
+    }
+    let body_text = String::from_utf8_lossy(&result.body).to_string();
+    let mut init = ObjectInitializer::new(context);
+    init.property(
+        js_string!("status"),
+        JsValue::from(f64::from(result.status)),
+        Attribute::all(),
+    )
+    .property(
+        js_string!("statusText"),
+        JsValue::from(js_string!(result.status_text)),
+        Attribute::all(),
+    )
+    .property(
+        js_string!("url"),
+        JsValue::from(js_string!(result.url)),
+        Attribute::all(),
+    )
+    .property(
+        js_string!("headers"),
+        JsValue::from(header_array),
+        Attribute::all(),
+    )
+    .property(
+        js_string!("bodyText"),
+        JsValue::from(js_string!(body_text)),
+        Attribute::all(),
+    )
+    .property(
+        js_string!("bodyLength"),
+        JsValue::from(result.body.len() as f64),
+        Attribute::all(),
+    );
+    Ok(JsValue::from(init.build()))
 }
