@@ -286,6 +286,10 @@ struct WindowApp {
     session_dirty: bool,
     /// Transient status notice shown in the window title (downloads/session).
     status: Option<String>,
+    /// Render worker has a request in flight for the active tab (loading indicator).
+    render_pending: bool,
+    /// Open overflow menu for hidden tabs.
+    overflow_menu: Option<crate::chrome::OverflowMenu>,
 }
 
 impl WindowApp {
@@ -368,6 +372,8 @@ impl WindowApp {
             session_debounce: Debounce::new(std::time::Duration::from_millis(600)),
             session_dirty: false,
             status: startup_notice,
+            render_pending: false,
+            overflow_menu: None,
             tabs,
         }
     }
@@ -435,6 +441,7 @@ impl WindowApp {
                 self.find.query(),
             )
         };
+        self.render_pending = true;
         if sender.send(request).is_err() {
             self.error = Some("render worker stopped unexpectedly".to_string());
             self.update_title();
@@ -459,6 +466,7 @@ impl WindowApp {
         self.doc_title = None;
         self.close_find();
         self.dropdown = None;
+        self.overflow_menu = None;
         self.address.cancel();
         self.scroll = ScrollState::new(1, self.metrics.css_height);
         self.update_title();
@@ -516,6 +524,47 @@ impl WindowApp {
             self.scale_factor,
             self.scroll.offset(),
         );
+        if let Some(menu) = &self.overflow_menu {
+            let titles: Vec<String> = self
+                .tabs
+                .tabs()
+                .iter()
+                .map(crate::tabs::Tab::display_title)
+                .collect();
+            let strip = chrome::layout_tabs(
+                &titles,
+                self.metrics.css_width as f32,
+                self.tabs.active_index(),
+            );
+            let layout = chrome::overflow_menu_layout(
+                &strip,
+                &titles,
+                self.metrics.css_width as f32,
+                self.metrics.css_height,
+                menu,
+            );
+            match chrome::overflow_menu_hit(&layout, menu, chrome_x, chrome_y) {
+                Some(chrome::OverflowHit::Activate(index)) => {
+                    self.overflow_menu = None;
+                    self.activate_tab(index);
+                    return;
+                }
+                Some(chrome::OverflowHit::Close(index)) => {
+                    self.overflow_menu = None;
+                    self.save_active_tab();
+                    let _ = self.tabs.close(index);
+                    self.load_active_tab();
+                    return;
+                }
+                None => {
+                    if !chrome::contains_rect(layout.rect, chrome_x, chrome_y) {
+                        self.overflow_menu = None;
+                        self.request_repaint();
+                    }
+                    return;
+                }
+            }
+        }
         if let Some(dropdown) = &self.dropdown {
             let list = chrome::dropdown_layout(
                 &dropdown.control_rect,
@@ -524,7 +573,7 @@ impl WindowApp {
                 self.scroll.offset(),
                 dropdown.scroll,
             );
-            if let Some(option_index) = list.hit(chrome_x, chrome_y) {
+            if let Some(option_index) = list.hit_option(chrome_x, chrome_y) {
                 let form_id = dropdown.form_id;
                 self.select_option(form_id, option_index);
                 return;
@@ -573,6 +622,7 @@ impl WindowApp {
             match self.store.frame() {
                 Some(frame) => {
                     self.error = None;
+                    self.render_pending = false;
                     self.content_capped = frame.capped;
                     self.links = frame.links.clone();
                     self.doc_title = frame.title.clone();
@@ -618,6 +668,7 @@ impl WindowApp {
                     }
                 }
                 None => {
+                    self.render_pending = false;
                     self.error = self.store.take_error();
                     // A failed render must not keep auto-refreshing (error loop).
                     self.refresh.clear();
@@ -789,6 +840,21 @@ impl WindowApp {
         }
     }
 
+    /// Unique URLs from every tab's history, newest first (address-bar autocomplete source).
+    fn address_history(&self) -> Vec<String> {
+        let mut seen = std::collections::BTreeSet::new();
+        let mut urls = Vec::new();
+        for tab in self.tabs.tabs() {
+            for url in tab.navigation.history().iter().rev() {
+                let value = url.as_str();
+                if seen.insert(value.clone()) {
+                    urls.push(value);
+                }
+            }
+        }
+        urls
+    }
+
     /// URL text shown in the address bar (current history entry, else the input).
     fn current_url_text(&self) -> String {
         self.nav.current_url().unwrap_or_else(|| self.input.clone())
@@ -810,7 +876,7 @@ impl WindowApp {
     }
 
     /// Handles keystrokes while the address bar is edited; returns whether consumed.
-    fn handle_address_key(&mut self, key: &Key, ctrl: bool, alt: bool) -> bool {
+    fn handle_address_key(&mut self, key: &Key, ctrl: bool, alt: bool, shift: bool) -> bool {
         if !self.address.is_editing() {
             return false;
         }
@@ -832,22 +898,63 @@ impl WindowApp {
                 self.request_repaint();
                 true
             }
+            Key::Named(NamedKey::Tab) => {
+                let history = self.address_history();
+                self.address.accept_completion(&history);
+                self.request_repaint();
+                true
+            }
+            Key::Named(NamedKey::Backspace) if ctrl => {
+                self.address.delete_word_back();
+                self.request_repaint();
+                true
+            }
             Key::Named(NamedKey::Backspace) => {
                 self.address.backspace();
                 self.request_repaint();
                 true
             }
+            Key::Named(NamedKey::Delete) => {
+                self.address.delete_forward();
+                self.request_repaint();
+                true
+            }
+            Key::Named(NamedKey::Home) => {
+                self.address.move_home(shift);
+                self.request_repaint();
+                true
+            }
+            Key::Named(NamedKey::End) => {
+                self.address.move_end(shift);
+                self.request_repaint();
+                true
+            }
             Key::Named(NamedKey::ArrowLeft) => {
-                self.address.move_caret(false);
+                self.address.move_caret(false, shift);
                 self.request_repaint();
                 true
             }
             Key::Named(NamedKey::ArrowRight) => {
-                self.address.move_caret(true);
+                self.address.move_caret(true, shift);
                 self.request_repaint();
                 true
             }
-            Key::Character(text) if !ctrl && !alt => {
+            Key::Character(text) if ctrl => {
+                if text.eq_ignore_ascii_case("a") {
+                    self.address.select_all();
+                } else if text.eq_ignore_ascii_case("c") {
+                    self.address.copy();
+                } else if text.eq_ignore_ascii_case("x") {
+                    self.address.cut();
+                } else if text.eq_ignore_ascii_case("v") {
+                    self.address.paste();
+                } else {
+                    return false;
+                }
+                self.request_repaint();
+                true
+            }
+            Key::Character(text) if !alt => {
                 self.address.insert(text);
                 self.request_repaint();
                 true
@@ -934,14 +1041,26 @@ impl WindowApp {
             self.tabs.active_index(),
         );
         match chrome::tab_strip_hit(&layout, x, y) {
-            Some(TabHit::Activate(index)) => self.activate_tab(index),
+            Some(TabHit::Activate(index)) => {
+                self.overflow_menu = None;
+                self.activate_tab(index);
+            }
             Some(TabHit::Close(index)) => {
+                self.overflow_menu = None;
                 self.save_active_tab();
                 let _ = self.tabs.close(index);
                 self.load_active_tab();
             }
-            Some(TabHit::NewTab) => self.open_new_tab(),
-            Some(TabHit::Overflow) | None => {}
+            Some(TabHit::NewTab) => {
+                self.overflow_menu = None;
+                self.open_new_tab();
+            }
+            Some(TabHit::Overflow) => {
+                let first_hidden = layout.tabs.len();
+                let hidden: Vec<usize> = (first_hidden..self.tabs.len()).collect();
+                self.overflow_menu = Some(chrome::OverflowMenu::open(hidden));
+            }
+            None => self.overflow_menu = None,
         }
         self.request_repaint();
     }
@@ -1167,6 +1286,19 @@ impl WindowApp {
         self.load_active_tab();
     }
 
+    /// Cycles `delta` tabs forward/backward (mouse wheel over the tab strip).
+    fn cycle_tab_by(&mut self, delta: i32) {
+        if delta == 0 || self.tabs.len() < 2 {
+            return;
+        }
+        self.save_active_tab();
+        let count = self.tabs.len();
+        let current = self.tabs.active_index() as i32;
+        let target = (current + delta).rem_euclid(count as i32) as usize;
+        let _ = self.tabs.activate(target);
+        self.load_active_tab();
+    }
+
     /// Activates tab `index` (0-based) if it exists.
     fn activate_tab(&mut self, index: usize) {
         if index >= self.tabs.len() || index == self.tabs.active_index() {
@@ -1347,6 +1479,8 @@ impl WindowApp {
         let chrome_css_height = self.metrics.css_height;
         let chrome_css_width = self.metrics.css_width as f32;
         let chrome_scale = self.metrics.scale as f32;
+        let chrome_history = self.address_history();
+        let chrome_completion = self.address.autocomplete(&chrome_history);
         let Some(surface) = self.surface.as_mut() else {
             return;
         };
@@ -1408,6 +1542,9 @@ impl WindowApp {
             scroll_y: chrome_scroll,
             css_viewport_height: chrome_css_height,
             css_width: chrome_css_width,
+            completion: chrome_completion.as_deref(),
+            loading: self.render_pending,
+            overflow: self.overflow_menu.as_ref(),
         };
         let _ = chrome::draw_chrome(&mut buffer, width, height, chrome_scale, &view);
         let _ = buffer.present();
@@ -1468,6 +1605,17 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                     MouseScrollDelta::LineDelta(_, lines) => lines.round() as i32,
                     MouseScrollDelta::PixelDelta(position) => (position.y / 40.0).round() as i32,
                 };
+                // Mouse wheel over the tab strip cycles tabs.
+                if let Some((_physical_x, physical_y)) = self.cursor {
+                    let scale = self.metrics.scale;
+                    let y_css = (physical_y / scale) as f32;
+                    if y_css < chrome::TAB_STRIP_HEIGHT {
+                        if rows != 0 {
+                            self.cycle_tab_by(if rows > 0 { 1 } else { -1 });
+                        }
+                        return;
+                    }
+                }
                 if let Some(dropdown) = self.dropdown.as_mut()
                     && let Some((physical_x, physical_y)) = self.cursor
                 {
@@ -1508,7 +1656,7 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                         dropdown.scroll,
                     );
                     if let Some(index) =
-                        list.hit((position.x / scale) as f32, (position.y / scale) as f32)
+                        list.hit_row((position.x / scale) as f32, (position.y / scale) as f32)
                         && dropdown.active != Some(index)
                     {
                         dropdown.active = Some(index);
@@ -1586,10 +1734,22 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                     self.activate_tab(index as usize - 1);
                     return;
                 }
+                if self.overflow_menu.is_some()
+                    && matches!(event.logical_key.as_ref(), Key::Named(NamedKey::Escape))
+                {
+                    self.overflow_menu = None;
+                    self.request_repaint();
+                    return;
+                }
                 if self.handle_dropdown_key(&event.logical_key) {
                     return;
                 }
-                if self.handle_address_key(&event.logical_key, ctrl_pressed, alt_pressed) {
+                if self.handle_address_key(
+                    &event.logical_key,
+                    ctrl_pressed,
+                    alt_pressed,
+                    self.modifiers.shift_key(),
+                ) {
                     return;
                 }
                 if self.handle_find_key(

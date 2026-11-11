@@ -105,6 +105,8 @@ pub struct SelectOption {
     pub value: String,
     /// Whether the option carries the `selected` attribute (or is the first option).
     pub selected: bool,
+    /// Enclosing `<optgroup label>` (dropdown group header); `None` for ungrouped options.
+    pub group: Option<String>,
 }
 
 impl SelectOption {
@@ -114,7 +116,14 @@ impl SelectOption {
             label: label.into(),
             value: value.into(),
             selected,
+            group: None,
         }
+    }
+
+    /// Sets the enclosing `<optgroup>` label (group header in the dropdown).
+    pub fn with_group(mut self, group: Option<String>) -> Self {
+        self.group = group;
+        self
     }
 }
 
@@ -278,6 +287,27 @@ pub fn control_at(controls: &[FormControl], x: f32, y: f32) -> Option<usize> {
         .rposition(|control| control.rect.contains(x, y))
 }
 
+/// Returns the enclosing `<optgroup label>` of an `<option>` (group header label).
+fn option_group_label(document: &Document, option_id: NodeId) -> Option<String> {
+    let mut parent = document.node(option_id).parent;
+    while let Some(node_id) = parent {
+        let node = document.node(node_id);
+        if let Some(element) = node.as_element() {
+            if element.local_name == "optgroup" {
+                return element
+                    .get_attribute("label")
+                    .map(str::to_owned)
+                    .filter(|label| !label.trim().is_empty());
+            }
+            if element.local_name == "select" {
+                return None;
+            }
+        }
+        parent = node.parent;
+    }
+    None
+}
+
 /// Collects the `<option>` descendants of a `<select>` in document order.
 fn select_options(document: &Document, select_id: NodeId) -> Vec<SelectOption> {
     let mut options = Vec::new();
@@ -294,11 +324,11 @@ fn select_options(document: &Document, select_id: NodeId) -> Vec<SelectOption> {
         {
             let label = text_content(document, node_id);
             let value = element.get_attribute("value").unwrap_or(&label).to_owned();
-            options.push(SelectOption::new(
-                label,
-                value,
-                element.get_attribute("selected").is_some(),
-            ));
+            let group = option_group_label(document, node_id);
+            options.push(
+                SelectOption::new(label, value, element.get_attribute("selected").is_some())
+                    .with_group(group),
+            );
         }
         let mut child = node.last_child;
         while let Some(id) = child {
@@ -763,6 +793,27 @@ mod tests {
         assert_eq!(patched_select.value, "Three");
         assert!(!patch_select(&mut document, select_id, 9), "out of range");
         assert!(!patch_select(&mut document, 99, 0), "unknown control");
+    }
+
+    #[test]
+    fn select_optgroup_labels_are_extracted_for_the_dropdown() {
+        let output = crate::headless::render_target(
+            "data:text/html,<form><select><optgroup label=\"Fruits\">             <option>Apple</option><option>Pear</option></optgroup>             <optgroup label=\"Veg\"><option>Leek</option></optgroup></select></form>",
+            240,
+            160,
+        )
+        .expect("render");
+        let mut document = output.document.clone();
+        assign_form_ids(&mut document);
+        let controls = collect_controls(&document, &output.layout);
+        let select = controls
+            .iter()
+            .find(|control| control.kind == FormControlKind::Select)
+            .expect("select");
+        assert_eq!(select.options.len(), 3);
+        assert_eq!(select.options[0].group.as_deref(), Some("Fruits"));
+        assert_eq!(select.options[1].group.as_deref(), Some("Fruits"));
+        assert_eq!(select.options[2].group.as_deref(), Some("Veg"));
     }
 
     #[test]

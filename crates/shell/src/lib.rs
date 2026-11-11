@@ -64,9 +64,13 @@
 //!   [`download`]). Frames keep the render-produced PNG bytes ([`worker::RenderFrame::png_bytes`])
 //!   so saves write them directly (atomic tmp+rename, no re-encode, byte-identical to
 //!   `--screenshot`); headless renders once when `--save-*` is combined with `--screenshot`.
-//! - **Browser chrome (R135)**: a shell-drawn overlay ([`chrome`]) with a tab strip
+//! - **Browser chrome (R135/R174)**: a shell-drawn overlay ([`chrome`]) with a tab strip
+//!   (ellipsis titles, per-tab deterministic loading dot, wheel/click switching and a real
+//!   overflow menu with activate/close) and an address bar
 //!   (click to activate/close, `+` new tab, `+N` overflow) and an address bar (`Ctrl+L`,
-//!   caret editing, `Enter` navigates via `Url::join`, `Esc` cancels), plus the floating
+//!   with full text editing (Home/End, Shift-selection, Ctrl+A/C/X/V using an internal
+//!   process clipboard, Ctrl+Backspace, history autocomplete + Tab, URL selected on Ctrl+L;
+//!   `Enter` navigates via `Url::join`, `Esc` cancels), plus the floating
 //!   `<select>` dropdown (options anchored under the control, capped height, hover/active
 //!   rows, click/Enter updates `selected` in the DOM snapshot and re-renders). The page
 //!   viewport is not reduced: the chrome occludes the top `CHROME_HEIGHT` CSS pixels

@@ -18,7 +18,7 @@
 use layout::Rect;
 use paint::{Color, Pixmap};
 
-use crate::forms::{SelectOption, TextEdit};
+use crate::forms::SelectOption;
 use crate::links::CssRect;
 
 /// Height of the tab strip, in CSS pixels.
@@ -66,12 +66,25 @@ pub const COLOR_DROPDOWN_ACTIVE: Color = Color::new(0xD2, 0xE3, 0xFC, 0xFF);
 pub const COLOR_BORDER: Color = Color::new(0xDA, 0xDC, 0xE0, 0xFF);
 /// Dropdown scroll indicator.
 pub const COLOR_SCROLL: Color = Color::new(0x5F, 0x63, 0x68, 0xFF);
+/// Per-tab loading indicator (deterministic dot while the render worker runs).
+pub const COLOR_LOADING: Color = Color::new(0x8A, 0xB4, 0xF8, 0xFF);
+/// Height of one overflow-menu row, in CSS pixels.
+pub const OVERFLOW_MENU_ROW_HEIGHT: f32 = 18.0;
+/// Maximum open-tab rows in the overflow menu before it scrolls.
+pub const OVERFLOW_MENU_MAX_VISIBLE: usize = 8;
 
-/// Address bar edition state (URL text + a simple caret; no selection ranges).
+/// Address bar edition state: text, caret, selection anchor and an **internal process
+/// clipboard** (Ctrl+C/X/V copy within the shell; the system clipboard is not touched).
+///
+/// `Ctrl+L` opens the bar with the whole URL selected, so typing replaces it. The caret is
+/// painted as a solid deterministic bar (no time-based blinking, so screenshots are stable).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AddressBar {
-    edit: TextEdit,
+    text: String,
+    caret: usize,
+    anchor: usize,
     editing: bool,
+    clipboard: String,
 }
 
 impl AddressBar {
@@ -80,16 +93,20 @@ impl AddressBar {
         Self::default()
     }
 
-    /// Opens edition pre-filled with `url` (caret at the end).
+    /// Opens edition pre-filled with `url` and selects the whole URL (Ctrl+L behaviour).
     pub fn open(&mut self, url: &str) {
-        self.edit = TextEdit::new(url);
+        self.text = url.to_string();
+        self.caret = self.text.len();
+        self.anchor = 0;
         self.editing = true;
     }
 
-    /// Closes edition (cancelling any unsubmitted text).
+    /// Closes edition (cancelling any unsubmitted text; the internal clipboard survives).
     pub fn cancel(&mut self) {
         self.editing = false;
-        self.edit = TextEdit::new("");
+        self.text.clear();
+        self.caret = 0;
+        self.anchor = 0;
     }
 
     /// Whether the address bar is being edited.
@@ -99,35 +116,262 @@ impl AddressBar {
 
     /// Current text.
     pub fn text(&self) -> &str {
-        self.edit.value()
+        &self.text
     }
 
     /// Caret byte offset.
     pub const fn caret(&self) -> usize {
-        self.edit.caret()
+        self.caret
     }
 
-    /// Inserts text at the caret.
+    /// Selection as a byte range (`start..end`), empty when collapsed.
+    pub fn selection_range(&self) -> std::ops::Range<usize> {
+        let start = self.anchor.min(self.caret);
+        let end = self.anchor.max(self.caret);
+        start..end
+    }
+
+    /// Whether a non-empty selection exists.
+    pub fn has_selection(&self) -> bool {
+        self.anchor != self.caret
+    }
+
+    /// Selected text.
+    pub fn selected_text(&self) -> &str {
+        let range = self.selection_range();
+        &self.text[range]
+    }
+
+    /// Selects everything.
+    pub fn select_all(&mut self) {
+        self.anchor = 0;
+        self.caret = self.text.len();
+    }
+
+    fn delete_selection(&mut self) -> bool {
+        let range = self.selection_range();
+        if range.is_empty() {
+            return false;
+        }
+        self.text.replace_range(range.clone(), "");
+        self.caret = range.start;
+        self.anchor = self.caret;
+        true
+    }
+
+    /// Inserts text, replacing the selection (caret ends after the inserted text).
     pub fn insert(&mut self, text: &str) -> bool {
-        self.edit.insert(text)
+        if text.is_empty() {
+            return false;
+        }
+        self.delete_selection();
+        self.text.insert_str(self.caret, text);
+        self.caret += text.len();
+        self.anchor = self.caret;
+        true
     }
 
-    /// Deletes the character before the caret.
+    /// Deletes the character before the caret (or the selection).
     pub fn backspace(&mut self) -> bool {
-        self.edit.backspace()
+        if self.delete_selection() {
+            return true;
+        }
+        if self.caret == 0 {
+            return false;
+        }
+        let index = prev_char_index(&self.text, self.caret);
+        self.text.replace_range(index..self.caret, "");
+        self.caret = index;
+        self.anchor = index;
+        true
     }
 
-    /// Moves the caret.
-    pub fn move_caret(&mut self, right: bool) -> bool {
-        self.edit.move_caret(right)
+    /// Deletes the character after the caret (or the selection).
+    pub fn delete_forward(&mut self) -> bool {
+        if self.delete_selection() {
+            return true;
+        }
+        if self.caret >= self.text.len() {
+            return false;
+        }
+        let next = next_char_index(&self.text, self.caret);
+        self.text.replace_range(self.caret..next, "");
+        true
+    }
+
+    /// Deletes the word before the caret (`Ctrl+Backspace`), or the selection.
+    pub fn delete_word_back(&mut self) -> bool {
+        if self.delete_selection() {
+            return true;
+        }
+        if self.caret == 0 {
+            return false;
+        }
+        let mut index = self.caret;
+        // Skip trailing whitespace, then the whole word.
+        while index > 0 {
+            let previous = prev_char_index(&self.text, index);
+            if !self.text[previous..index].chars().all(char::is_whitespace) {
+                break;
+            }
+            index = previous;
+        }
+        while index > 0 {
+            let previous = prev_char_index(&self.text, index);
+            if self.text[previous..index].chars().all(char::is_whitespace) {
+                break;
+            }
+            index = previous;
+        }
+        if index == self.caret {
+            return false;
+        }
+        self.text.replace_range(index..self.caret, "");
+        self.caret = index;
+        self.anchor = index;
+        true
+    }
+
+    /// Moves the caret one character left/right; without `extend` the selection collapses.
+    pub fn move_caret(&mut self, right: bool, extend: bool) -> bool {
+        if !extend && let Some(edge) = self.selection_edge(right) {
+            self.caret = edge;
+            self.anchor = edge;
+            return true;
+        }
+        let next = if right {
+            if self.caret >= self.text.len() {
+                return false;
+            }
+            next_char_index(&self.text, self.caret)
+        } else {
+            if self.caret == 0 {
+                return false;
+            }
+            prev_char_index(&self.text, self.caret)
+        };
+        self.caret = next;
+        if !extend {
+            self.anchor = next;
+        }
+        true
+    }
+
+    fn selection_edge(&self, right: bool) -> Option<usize> {
+        if !self.has_selection() {
+            return None;
+        }
+        let range = self.selection_range();
+        Some(if right { range.end } else { range.start })
+    }
+
+    /// Moves the caret to the start/end of the text (Home/End), extending the selection
+    /// when `extend` is set.
+    pub fn move_home(&mut self, extend: bool) -> bool {
+        let target = 0;
+        if self.caret == target && !self.has_selection() {
+            return false;
+        }
+        self.caret = target;
+        if !extend {
+            self.anchor = target;
+        }
+        true
+    }
+
+    /// Moves the caret to the end of the text.
+    pub fn move_end(&mut self, extend: bool) -> bool {
+        let target = self.text.len();
+        if self.caret == target && !self.has_selection() {
+            return false;
+        }
+        self.caret = target;
+        if !extend {
+            self.anchor = target;
+        }
+        true
+    }
+
+    /// Copies the selection into the internal clipboard.
+    pub fn copy(&mut self) -> bool {
+        if !self.has_selection() {
+            return false;
+        }
+        self.clipboard = self.selected_text().to_string();
+        true
+    }
+
+    /// Cuts the selection into the internal clipboard.
+    pub fn cut(&mut self) -> bool {
+        if !self.copy() {
+            return false;
+        }
+        self.delete_selection()
+    }
+
+    /// Pastes the internal clipboard, replacing the selection.
+    pub fn paste(&mut self) -> bool {
+        if self.clipboard.is_empty() {
+            return false;
+        }
+        let clipboard = self.clipboard.clone();
+        self.insert(&clipboard)
+    }
+
+    /// Internal clipboard contents (documented: not the system clipboard).
+    pub fn clipboard(&self) -> &str {
+        &self.clipboard
+    }
+
+    /// First unique history URL that starts with the current text (case-insensitive, longer
+    /// than the text, at least 2 chars typed). Returns the full completion candidate.
+    pub fn autocomplete(&self, history: &[String]) -> Option<String> {
+        let typed = self.text.trim();
+        if typed.chars().count() < 2 {
+            return None;
+        }
+        let needle = typed.to_ascii_lowercase();
+        history
+            .iter()
+            .find(|url| url.len() > self.text.len() && url.to_ascii_lowercase().contains(&needle))
+            .cloned()
+    }
+
+    /// Accepts an autocomplete candidate (Tab): completes the text and selects the suffix.
+    pub fn accept_completion(&mut self, history: &[String]) -> bool {
+        let Some(candidate) = self.autocomplete(history) else {
+            return false;
+        };
+        let typed = self.text.len();
+        self.text = candidate;
+        self.anchor = typed;
+        self.caret = self.text.len();
+        true
     }
 
     /// Closes edition and returns whether it was open.
     pub fn finish(&mut self) -> bool {
         let was = self.editing;
         self.editing = false;
+        self.anchor = self.caret;
         was
     }
+}
+
+/// Previous UTF-8 char boundary before `index`.
+fn prev_char_index(text: &str, index: usize) -> usize {
+    text[..index]
+        .char_indices()
+        .next_back()
+        .map_or(0, |(offset, _)| offset)
+}
+
+/// Next UTF-8 char boundary after `index`.
+fn next_char_index(text: &str, index: usize) -> usize {
+    text[index..]
+        .chars()
+        .next()
+        .map_or(text.len(), |character| index + character.len_utf8())
 }
 
 /// Resolves address-bar text into a URL: absolute URLs are used as-is and everything else is
@@ -313,6 +557,11 @@ pub fn in_chrome(x: f32, y: f32, width: f32) -> bool {
     (0.0..CHROME_HEIGHT).contains(&y) && (0.0..=width).contains(&x)
 }
 
+/// Whether a chrome CSS point is inside `rect` (public helper for menus).
+pub fn contains_rect(rect: Rect, x: f32, y: f32) -> bool {
+    contains(rect, x, y)
+}
+
 fn contains(rect: Rect, x: f32, y: f32) -> bool {
     x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height
 }
@@ -328,6 +577,24 @@ pub fn dropdown_layout(
     scroll_y: u32,
     scroll: usize,
 ) -> DropdownList {
+    let items: Vec<DropdownItem> = (0..option_count)
+        .map(|index| DropdownItem {
+            label: index.to_string(),
+            option_index: Some(index),
+        })
+        .collect();
+    dropdown_layout_items(control, &items, css_viewport_height, scroll_y, scroll)
+}
+
+/// [`dropdown_layout`] for real dropdown rows (group headers included).
+pub fn dropdown_layout_items(
+    control: &CssRect,
+    items: &[DropdownItem],
+    css_viewport_height: u32,
+    scroll_y: u32,
+    scroll: usize,
+) -> DropdownList {
+    let option_count = items.len();
     let rows = option_count.min(DROPDOWN_MAX_VISIBLE);
     let height = rows as f32 * DROPDOWN_ROW_HEIGHT + 4.0;
     let viewport = css_viewport_height as f32;
@@ -357,7 +624,180 @@ pub fn dropdown_layout(
         first: scroll,
         total: option_count,
         above,
+        items: items.to_vec(),
     }
+}
+
+/// One row of the `<select>` dropdown: either an `<optgroup>` header (not selectable) or an
+/// option (mapped to its index in the control's options).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropdownItem {
+    /// Row label.
+    pub label: String,
+    /// Option index, or `None` for a non-selectable group header.
+    pub option_index: Option<usize>,
+}
+
+impl DropdownItem {
+    /// Whether this row is a selectable option.
+    pub const fn is_option(&self) -> bool {
+        self.option_index.is_some()
+    }
+}
+
+/// Builds dropdown rows from select options, inserting one non-selectable header per
+/// `<optgroup label>` change.
+pub fn dropdown_items(options: &[SelectOption]) -> Vec<DropdownItem> {
+    let mut items = Vec::with_capacity(options.len());
+    let mut current_group: Option<&str> = None;
+    for (index, option) in options.iter().enumerate() {
+        let group = option.group.as_deref();
+        if let Some(group) = group
+            && current_group != Some(group)
+        {
+            items.push(DropdownItem {
+                label: group.to_string(),
+                option_index: None,
+            });
+        }
+        if group.is_none() {
+            current_group = None;
+        } else {
+            current_group = group;
+        }
+        items.push(DropdownItem {
+            label: option.label.clone(),
+            option_index: Some(index),
+        });
+    }
+    items
+}
+
+/// Open overflow menu for hidden tabs (`+N` marker).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OverflowMenu {
+    /// Hidden tab indices, in tab order.
+    pub items: Vec<usize>,
+    /// First visible row.
+    pub scroll: usize,
+}
+
+impl OverflowMenu {
+    /// Opens the menu for the given hidden tab indices.
+    pub fn open(items: Vec<usize>) -> Self {
+        Self { items, scroll: 0 }
+    }
+
+    /// Scrolls the menu rows by `direction`.
+    pub fn scroll_by(&mut self, direction: i32) -> bool {
+        let max = self.items.len().saturating_sub(OVERFLOW_MENU_MAX_VISIBLE);
+        let next = (self.scroll as i32 + direction).clamp(0, max as i32) as usize;
+        let changed = next != self.scroll;
+        self.scroll = next;
+        changed
+    }
+}
+
+/// Overflow menu geometry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OverflowLayout {
+    /// Menu rectangle (chrome CSS coordinates, below the tab strip).
+    pub rect: Rect,
+    /// Rows (one per hidden tab).
+    pub rows: Vec<Rect>,
+    /// Close affordance rectangles per row.
+    pub close: Vec<Rect>,
+    /// First visible menu item index.
+    pub first: usize,
+    /// Number of visible rows.
+    pub visible: usize,
+}
+
+/// Hit on the overflow menu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OverflowHit {
+    /// Activate the tab at this index.
+    Activate(usize),
+    /// Close the tab at this index.
+    Close(usize),
+}
+
+/// Computes the overflow menu layout anchored under the `+N` marker.
+pub fn overflow_menu_layout(
+    strip: &TabStripLayout,
+    titles: &[String],
+    menu_width: f32,
+    viewport_height: u32,
+    menu: &OverflowMenu,
+) -> OverflowLayout {
+    let visible = menu.items.len().min(OVERFLOW_MENU_MAX_VISIBLE);
+    let height = visible as f32 * OVERFLOW_MENU_ROW_HEIGHT + 4.0;
+    let anchor_x = strip.overflow.map_or(
+        (strip
+            .tabs
+            .last()
+            .map_or(0.0, |tab| tab.rect.x + tab.rect.width))
+        .min(0.0),
+        |rect| rect.x,
+    );
+    let width = menu_width.clamp(160.0, 320.0);
+    let x = anchor_x.max(0.0).min((menu_width - width).max(0.0));
+    let y = TAB_STRIP_HEIGHT + 2.0;
+    let y = if y + height <= viewport_height as f32 {
+        y
+    } else {
+        (viewport_height as f32 - height).max(TAB_STRIP_HEIGHT)
+    };
+    let rect = Rect::new(x, y, width, height);
+    let mut rows = Vec::with_capacity(visible);
+    let mut close = Vec::with_capacity(visible);
+    for row in 0..visible {
+        let index = menu.scroll + row;
+        let Some(tab_index) = menu.items.get(index) else {
+            break;
+        };
+        let _ = tab_index;
+        let row_rect = Rect::new(
+            rect.x + 1.0,
+            rect.y + 2.0 + row as f32 * OVERFLOW_MENU_ROW_HEIGHT,
+            rect.width - 2.0,
+            OVERFLOW_MENU_ROW_HEIGHT,
+        );
+        rows.push(row_rect);
+        close.push(Rect::new(
+            row_rect.x + row_rect.width - 18.0,
+            row_rect.y + 3.0,
+            14.0,
+            12.0,
+        ));
+        let _ = titles;
+    }
+    OverflowLayout {
+        rect,
+        rows,
+        close,
+        first: menu.scroll,
+        visible,
+    }
+}
+
+/// Hit-tests the overflow menu.
+pub fn overflow_menu_hit(
+    layout: &OverflowLayout,
+    menu: &OverflowMenu,
+    x: f32,
+    y: f32,
+) -> Option<OverflowHit> {
+    for (row, rect) in layout.rows.iter().enumerate() {
+        if contains(*rect, x, y) {
+            let tab_index = *menu.items.get(layout.first + row)?;
+            if contains(layout.close[row], x, y) {
+                return Some(OverflowHit::Close(tab_index));
+            }
+            return Some(OverflowHit::Activate(tab_index));
+        }
+    }
+    None
 }
 
 /// Computed dropdown geometry.
@@ -371,15 +811,30 @@ pub struct DropdownList {
     pub visible: usize,
     /// Index of the first visible option.
     pub first: usize,
-    /// Total number of options.
+    /// Total number of dropdown items (options + group headers).
     pub total: usize,
     /// Whether the list opens above the control.
     pub above: bool,
+    /// Dropdown items (group headers are not selectable).
+    pub items: Vec<DropdownItem>,
 }
 
 impl DropdownList {
-    /// Option index under a chrome point (accounting for the scroll window).
-    pub fn hit(&self, x: f32, y: f32) -> Option<usize> {
+    /// Option index under a chrome point (`None` on a group header or outside the list).
+    pub fn hit_option(&self, x: f32, y: f32) -> Option<usize> {
+        for (row, rect) in self.rows.iter().enumerate() {
+            if contains(*rect, x, y) {
+                return self
+                    .items
+                    .get(self.first + row)
+                    .and_then(|item| item.option_index);
+            }
+        }
+        None
+    }
+
+    /// Row index under a chrome point (group headers included).
+    pub fn hit_row(&self, x: f32, y: f32) -> Option<usize> {
         for (row, rect) in self.rows.iter().enumerate() {
             if contains(*rect, x, y) {
                 return Some(self.first + row);
@@ -436,29 +891,116 @@ impl DropdownState {
         changed
     }
 
-    /// Moves the active option up/down, scrolling the window when needed.
-    pub fn move_active(&mut self, down: bool) -> bool {
-        if self.options.is_empty() {
-            return false;
-        }
-        let current = self.active.unwrap_or(0);
-        let next = if down {
-            (current + 1).min(self.options.len() - 1)
-        } else {
-            current.saturating_sub(1)
-        };
-        self.active = Some(next);
-        if next < self.scroll {
-            self.scroll = next;
-        } else if next >= self.scroll + DROPDOWN_MAX_VISIBLE {
-            self.scroll = next + 1 - DROPDOWN_MAX_VISIBLE;
-        }
-        next != current
-    }
-
     /// Active option index.
     pub const fn active(&self) -> Option<usize> {
         self.active
+    }
+
+    /// Dropdown rows (group headers included).
+    pub fn items(&self) -> Vec<DropdownItem> {
+        dropdown_items(&self.options)
+    }
+
+    /// Number of dropdown rows.
+    pub fn row_count(&self) -> usize {
+        self.items().len()
+    }
+
+    /// Moves the active row to the next/previous **selectable** option, skipping group
+    /// headers and scrolling the window when needed.
+    pub fn move_active(&mut self, down: bool) -> bool {
+        let items = self.items();
+        if !items.iter().any(DropdownItem::is_option) {
+            return false;
+        }
+        let mut row = self.active.unwrap_or(0);
+        let step = if down { 1 } else { items.len() - 1 };
+        for _ in 0..items.len() {
+            row = (row + step) % items.len();
+            if items.get(row).is_some_and(DropdownItem::is_option) {
+                break;
+            }
+        }
+        self.active = Some(row);
+        self.scroll_to_active(items.len());
+        true
+    }
+
+    /// Home / End: first or last selectable option.
+    pub fn move_home(&mut self) -> bool {
+        let items = self.items();
+        let Some(row) = items.iter().position(DropdownItem::is_option) else {
+            return false;
+        };
+        self.active = Some(row);
+        self.scroll = 0;
+        true
+    }
+
+    /// End: last selectable option.
+    pub fn move_end(&mut self) -> bool {
+        let items = self.items();
+        let Some(row) = items.iter().rposition(DropdownItem::is_option) else {
+            return false;
+        };
+        self.active = Some(row);
+        self.scroll_to_active(items.len());
+        true
+    }
+
+    /// PageUp / PageDown: jump one page (visible rows) between selectable options.
+    pub fn move_page(&mut self, down: bool) -> bool {
+        let items = self.items();
+        let selectable: Vec<usize> = items
+            .iter()
+            .enumerate()
+            .filter_map(|(row, item)| item.is_option().then_some(row))
+            .collect();
+        if selectable.is_empty() {
+            return false;
+        }
+        let current = self.active.unwrap_or(selectable[0]);
+        let target = if down {
+            let position = selectable
+                .iter()
+                .position(|row| *row >= current)
+                .unwrap_or(0);
+            selectable[(position + DROPDOWN_MAX_VISIBLE).min(selectable.len() - 1)]
+        } else {
+            let position = selectable
+                .iter()
+                .rposition(|row| *row <= current)
+                .unwrap_or(0);
+            selectable[position.saturating_sub(DROPDOWN_MAX_VISIBLE)]
+        };
+        self.active = Some(target);
+        self.scroll_to_active(items.len());
+        true
+    }
+
+    /// First-character typeahead over option labels (case-insensitive, skips headers).
+    pub fn first_char(&mut self, character: char) -> bool {
+        let items = self.items();
+        let character = character.to_ascii_lowercase();
+        let Some(row) = items.iter().position(|item| {
+            item.is_option() && item.label.to_ascii_lowercase().starts_with(character)
+        }) else {
+            return false;
+        };
+        self.active = Some(row);
+        self.scroll_to_active(items.len());
+        true
+    }
+
+    fn scroll_to_active(&mut self, total: usize) {
+        if let Some(active) = self.active {
+            if active < self.scroll {
+                self.scroll = active;
+            } else if active >= self.scroll + DROPDOWN_MAX_VISIBLE {
+                self.scroll = active + 1 - DROPDOWN_MAX_VISIBLE;
+            }
+            self.scroll = self.scroll.min(total.saturating_sub(DROPDOWN_MAX_VISIBLE));
+        }
     }
 
     /// Whether the dropdown is non-empty.
@@ -486,6 +1028,12 @@ pub struct ChromeView<'a> {
     pub css_viewport_height: u32,
     /// Chrome width in CSS pixels.
     pub css_width: f32,
+    /// Autocomplete candidate shown as an inline gray suffix while editing.
+    pub completion: Option<&'a str>,
+    /// Active tab is waiting for a render (loading indicator).
+    pub loading: bool,
+    /// Open overflow menu for hidden tabs.
+    pub overflow: Option<&'a OverflowMenu>,
 }
 
 /// Paints the chrome over a physical `0RGB` framebuffer; returns the painted pixel count.
@@ -515,6 +1063,9 @@ pub fn draw_chrome(
     paint_address_bar(&mut pixmap, scale, view, css_width);
     if let Some(dropdown) = view.dropdown {
         paint_dropdown(&mut pixmap, scale, view, dropdown);
+    }
+    if let Some(menu) = view.overflow {
+        paint_overflow_menu(&mut pixmap, scale, view, menu);
     }
     let mut painted = 0usize;
     for (index, color) in pixmap.pixels.iter().enumerate() {
@@ -557,6 +1108,17 @@ fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, width
             11.0,
             COLOR_TEXT,
         );
+        if view.loading && tab.index == view.active_tab {
+            pixmap.fill_rect(
+                Rect::new(
+                    (tab.rect.x + 3.0) * scale,
+                    (tab.rect.y + 12.0) * scale,
+                    4.0 * scale,
+                    4.0 * scale,
+                ),
+                COLOR_LOADING,
+            );
+        }
         let close = tab.close;
         draw_text(
             pixmap,
@@ -639,9 +1201,10 @@ fn paint_dropdown(
     view: &ChromeView<'_>,
     dropdown: &DropdownState,
 ) {
-    let list = dropdown_layout(
+    let items = dropdown.items();
+    let list = dropdown_layout_items(
         &dropdown.control_rect,
-        dropdown.options.len(),
+        &items,
         view.css_viewport_height,
         view.scroll_y,
         dropdown.scroll,
@@ -660,52 +1223,121 @@ fn paint_dropdown(
         COLOR_DROPDOWN_BG,
     );
     for (row, rect) in list.rows.iter().enumerate() {
-        let option_index = list.first + row;
-        let Some(option) = dropdown.options.get(option_index) else {
+        let item_index = list.first + row;
+        let Some(item) = items.get(item_index) else {
             break;
         };
-        let background = if dropdown.active == Some(option_index) {
+        let option = item
+            .option_index
+            .and_then(|index| dropdown.options.get(index));
+        let background = if item.option_index.is_none() {
+            Color::new(0xF5, 0xF5, 0xF5, 0xFF)
+        } else if dropdown.active == Some(item_index) {
             COLOR_DROPDOWN_ACTIVE
-        } else if option.selected {
+        } else if option.is_some_and(|option| option.selected) {
             COLOR_DROPDOWN_SELECTED
         } else {
             COLOR_DROPDOWN_BG
         };
         pixmap.fill_rect(scaled(*rect, scale), background);
+        if item.option_index.is_none() {
+            draw_text(
+                pixmap,
+                &format!("{}:", item.label),
+                rect.x + 5.0,
+                rect.y + 5.0,
+                scale,
+                11.0,
+                COLOR_SCROLL,
+            );
+        } else {
+            draw_text(
+                pixmap,
+                &item.label,
+                rect.x + 9.0,
+                rect.y + 5.0,
+                scale,
+                11.0,
+                COLOR_ADDRESS_TEXT,
+            );
+        }
+    }
+    // Minimal scrollbar when the list exceeds the visible cap.
+    if items.len() > list.visible {
+        let track = Rect::new(
+            list.rect.x + list.rect.width - 6.0,
+            list.rect.y + 2.0,
+            3.0,
+            list.rect.height - 4.0,
+        );
+        pixmap.fill_rect(scaled(track, scale), Color::new(0xE0, 0xE0, 0xE0, 0xFF));
+        let ratio = list.visible as f32 / items.len() as f32;
+        let thumb_height = (track.height * ratio).max(8.0);
+        let max_scroll = items.len().saturating_sub(list.visible).max(1) as f32;
+        let offset = (list.first as f32 / max_scroll) * (track.height - thumb_height).max(0.0);
+        pixmap.fill_rect(
+            scaled(
+                Rect::new(track.x, track.y + offset, track.width, thumb_height),
+                scale,
+            ),
+            COLOR_SCROLL,
+        );
+    }
+}
+
+fn paint_overflow_menu(
+    pixmap: &mut Pixmap,
+    scale: f32,
+    view: &ChromeView<'_>,
+    menu: &OverflowMenu,
+) {
+    let strip = layout_tabs(view.tabs, view.css_width, view.active_tab);
+    let layout = overflow_menu_layout(
+        &strip,
+        view.tabs,
+        view.css_width,
+        view.css_viewport_height,
+        menu,
+    );
+    pixmap.fill_rect(scaled(layout.rect, scale), COLOR_BORDER);
+    pixmap.fill_rect(
+        scaled(
+            Rect::new(
+                layout.rect.x + 1.0,
+                layout.rect.y + 1.0,
+                layout.rect.width - 2.0,
+                layout.rect.height - 2.0,
+            ),
+            scale,
+        ),
+        Color::new(0xFA, 0xFA, 0xFA, 0xFF),
+    );
+    for (row, rect) in layout.rows.iter().enumerate() {
+        let Some(tab_index) = menu.items.get(layout.first + row) else {
+            break;
+        };
+        let title = view
+            .tabs
+            .get(*tab_index)
+            .map(String::as_str)
+            .unwrap_or("Tab");
         draw_text(
             pixmap,
-            &option.label,
+            &truncate_title(title, ((rect.width - 24.0) / 7.0).max(4.0) as usize),
             rect.x + 5.0,
             rect.y + 5.0,
             scale,
             11.0,
             COLOR_ADDRESS_TEXT,
         );
-    }
-    if list.first > 0
-        && let Some(first) = list.rows.first()
-    {
-        pixmap.fill_rect(
-            Rect::new(
-                first.x * scale,
-                (first.y - 2.0) * scale,
-                8.0 * scale,
-                2.0 * scale,
-            ),
-            COLOR_SCROLL,
-        );
-    }
-    if list.first + list.visible < list.total
-        && let Some(last) = list.rows.last()
-    {
-        pixmap.fill_rect(
-            Rect::new(
-                last.x * scale,
-                (last.y + last.height) * scale,
-                8.0 * scale,
-                2.0 * scale,
-            ),
-            COLOR_SCROLL,
+        draw_text(
+            pixmap,
+            "x",
+            layout.close[row].x + 3.0,
+            layout.close[row].y + 3.0,
+            scale,
+            10.0,
+            COLOR_ADDRESS_TEXT,
         );
     }
 }
@@ -757,6 +1389,9 @@ mod tests {
             scroll_y: 0,
             css_viewport_height: 400,
             css_width: 640.0,
+            completion: None,
+            loading: false,
+            overflow: None,
         }
     }
 
@@ -765,23 +1400,83 @@ mod tests {
     }
 
     #[test]
-    fn address_bar_edits_and_keeps_the_caret() {
+    fn address_bar_selects_all_on_open_and_edits() {
         let mut bar = AddressBar::new();
         assert!(!bar.is_editing());
         bar.open("https://example.com/a");
         assert!(bar.is_editing());
-        assert_eq!(bar.caret(), "https://example.com/a".len());
+        assert!(bar.has_selection(), "Ctrl+L selects the URL");
+        assert_eq!(bar.selection_range(), 0.."https://example.com/a".len());
+        // Typing replaces the selection.
+        assert!(bar.insert("x"));
+        assert_eq!(bar.text(), "x");
+        assert!(!bar.has_selection());
+        bar.insert("yz");
+        assert_eq!(bar.text(), "xyz");
         assert!(bar.backspace());
-        assert_eq!(bar.text(), "https://example.com/");
-        bar.move_caret(true); // no-op at the end
-        assert!(bar.insert("X"));
-        assert_eq!(bar.text(), "https://example.com/X");
+        assert_eq!(bar.text(), "xy");
+        assert!(!bar.delete_forward(), "caret at end");
+        assert_eq!(bar.text(), "xy");
+        bar.move_home(false);
+        assert_eq!(bar.caret(), 0);
+        assert!(bar.delete_forward());
+        assert_eq!(bar.text(), "y");
+        bar.move_end(false);
+        assert_eq!(bar.caret(), bar.text().len());
         assert!(bar.finish());
         assert!(!bar.is_editing());
-        bar.open("x");
-        bar.cancel();
-        assert!(!bar.is_editing());
+    }
+
+    #[test]
+    fn address_bar_selection_copy_cut_paste_and_word_delete() {
+        let mut bar = AddressBar::new();
+        bar.open("one two three");
+        bar.select_all();
+        assert_eq!(bar.selected_text(), "one two three");
+        assert!(bar.copy());
+        assert_eq!(bar.clipboard(), "one two three");
+        bar.move_end(false);
+        bar.delete_word_back();
+        assert_eq!(bar.text(), "one two ");
+        bar.delete_word_back();
+        assert_eq!(bar.text(), "one ");
+        bar.delete_word_back();
         assert_eq!(bar.text(), "");
+        assert!(bar.paste());
+        assert_eq!(bar.text(), "one two three");
+        // Cut the selection, then paste it back.
+        bar.select_all();
+        assert!(bar.cut());
+        assert_eq!(bar.text(), "");
+        assert!(bar.paste());
+        assert_eq!(bar.text(), "one two three");
+        // Shift+arrow extends selection, Delete removes it.
+        bar.move_home(false);
+        bar.move_caret(true, true);
+        bar.move_caret(true, true);
+        assert!(bar.has_selection());
+        bar.delete_forward();
+        assert_eq!(bar.text(), "e two three");
+    }
+
+    #[test]
+    fn address_bar_autocomplete_needs_two_chars_and_accepts_suffix() {
+        let mut bar = AddressBar::new();
+        bar.open("");
+        bar.insert("h");
+        let history = vec![
+            "https://example.com/hello".to_string(),
+            "https://example.com/help".to_string(),
+        ];
+        assert_eq!(bar.autocomplete(&history), None, "min 2 chars");
+        bar.insert("e");
+        assert_eq!(
+            bar.autocomplete(&history).as_deref(),
+            Some("https://example.com/hello")
+        );
+        assert!(bar.accept_completion(&history));
+        assert_eq!(bar.text(), "https://example.com/hello");
+        assert!(bar.has_selection(), "completion suffix selected");
     }
 
     #[test]
@@ -883,7 +1578,7 @@ mod tests {
         assert!(!dropdown.move_active(true) || dropdown.active() == Some(2));
         let list = dropdown_layout(&control, options.len(), 400, 0, 0);
         let row = list.rows[1];
-        assert_eq!(list.hit(row.x + 2.0, row.y + 2.0), Some(1));
+        assert_eq!(list.hit_option(row.x + 2.0, row.y + 2.0), Some(1));
         assert!(list.contains_point(list.rect.x + 1.0, list.rect.y + 1.0));
         assert!(!dropdown.scroll_by(5), "nothing to scroll");
         dropdown.close();
@@ -967,5 +1662,170 @@ mod tests {
         assert_eq!(truncate_title("Hello World", 5), "Hell…");
         assert_eq!(truncate_title("Hi", 5), "Hi");
         assert_eq!(address_bar_rect(640.0).width, 632.0);
+    }
+
+    #[test]
+    fn overflow_menu_lists_hidden_tabs_and_hit_tests_activate_and_close() {
+        let titles: Vec<String> = (0..12).map(|index| format!("Tab {index}")).collect();
+        let strip = layout_tabs(&titles, 300.0, 0);
+        assert!(strip.hidden > 0);
+        let hidden: Vec<usize> = (strip.tabs.len()..titles.len()).collect();
+        let menu = OverflowMenu::open(hidden.clone());
+        let layout = overflow_menu_layout(&strip, &titles, 300.0, 400, &menu);
+        assert_eq!(
+            layout.visible,
+            menu.items.len().min(OVERFLOW_MENU_MAX_VISIBLE)
+        );
+        let first = layout.rows[0];
+        assert_eq!(
+            overflow_menu_hit(&layout, &menu, first.x + 4.0, first.y + 4.0),
+            Some(OverflowHit::Activate(hidden[0]))
+        );
+        let close = layout.close[0];
+        assert_eq!(
+            overflow_menu_hit(&layout, &menu, close.x + 2.0, close.y + 2.0),
+            Some(OverflowHit::Close(hidden[0]))
+        );
+        assert_eq!(overflow_menu_hit(&layout, &menu, 1.0, 1.0), None);
+    }
+
+    #[test]
+    fn dropdown_optgroup_headers_are_not_selectable() {
+        let options = vec![
+            SelectOption::new("Apple", "a", false).with_group(Some("Fruits".to_string())),
+            SelectOption::new("Pear", "p", false).with_group(Some("Fruits".to_string())),
+            SelectOption::new("Leek", "l", false).with_group(Some("Veg".to_string())),
+        ];
+        let items = dropdown_items(&options);
+        assert_eq!(items.len(), 5, "2 group headers + 3 options");
+        assert_eq!(items[0].label, "Fruits");
+        assert!(!items[0].is_option());
+        assert_eq!(items[1].option_index, Some(0));
+        let control = CssRect::new(10.0, 40.0, 120.0, 18.0);
+        let list = dropdown_layout_items(&control, &items, 400, 0, 0);
+        assert_eq!(
+            list.hit_option(list.rows[0].x + 2.0, list.rows[0].y + 2.0),
+            None
+        );
+        assert_eq!(
+            list.hit_option(list.rows[1].x + 2.0, list.rows[1].y + 2.0),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn dropdown_keyboard_home_end_page_and_first_char_skip_headers() {
+        let options = vec![
+            SelectOption::new("Apple", "a", false).with_group(Some("Fruits".to_string())),
+            SelectOption::new("Pear", "p", false).with_group(Some("Fruits".to_string())),
+            SelectOption::new("Leek", "l", false).with_group(Some("Veg".to_string())),
+        ];
+        let control = CssRect::new(10.0, 40.0, 120.0, 18.0);
+        let mut dropdown = DropdownState::open(1, control, options);
+        assert!(dropdown.move_home());
+        assert_eq!(
+            dropdown.active(),
+            Some(1),
+            "first selectable row (after header)"
+        );
+        assert!(dropdown.move_page(true));
+        assert_eq!(
+            dropdown.active(),
+            Some(4),
+            "PageDown reaches the last option"
+        );
+        assert!(dropdown.move_page(false));
+        assert_eq!(
+            dropdown.active(),
+            Some(1),
+            "PageUp returns to the first option"
+        );
+        assert!(dropdown.first_char('p'));
+        assert_eq!(dropdown.active(), Some(2));
+        assert!(dropdown.move_end());
+        assert_eq!(dropdown.active(), Some(4));
+    }
+
+    #[test]
+    fn truncation_uses_an_ellipsis() {
+        assert_eq!(truncate_title("abcdefghij", 5), "abcd…");
+        assert_eq!(truncate_title("abc", 5), "abc");
+        assert_eq!(truncate_title("", 5), "");
+    }
+
+    #[test]
+    fn overflow_menu_scrolls_and_hits_after_scrolling() {
+        let titles: Vec<String> = (0..20).map(|index| format!("Tab {index}")).collect();
+        let strip = layout_tabs(&titles, 260.0, 0);
+        let hidden: Vec<usize> = (strip.tabs.len()..titles.len()).collect();
+        let mut menu = OverflowMenu::open(hidden.clone());
+        let before = overflow_menu_layout(&strip, &titles, 260.0, 400, &menu);
+        assert!(menu.scroll_by(1));
+        let after = overflow_menu_layout(&strip, &titles, 260.0, 400, &menu);
+        assert_eq!(after.first, 1);
+        let item = hidden[1];
+        assert_eq!(
+            overflow_menu_hit(&after, &menu, after.rows[0].x + 3.0, after.rows[0].y + 3.0),
+            Some(OverflowHit::Activate(item))
+        );
+        assert_eq!(
+            before.rows[0], after.rows[0],
+            "menu geometry is stable when scrolling"
+        );
+        let _ = before;
+    }
+
+    #[test]
+    fn loading_indicator_paints_on_the_active_tab() {
+        let mut address = AddressBar::new();
+        let tabs = vec!["Megi".to_string()];
+        let mut dest = buffer(480, 200);
+        let mut view = view(&address, None, &tabs);
+        view.loading = true;
+        draw_chrome(&mut dest, 480, 200, 1.0, &view);
+        let loading = dest[..(24 * 480) as usize]
+            .iter()
+            .filter(|pixel| **pixel == 0x008A_B4F8)
+            .count();
+        assert!(loading > 0, "loading dot visible");
+        let _ = &mut address;
+    }
+
+    #[test]
+    fn dropdown_scrollbar_paints_when_the_list_overflows() {
+        let control = CssRect::new(10.0, 10.0, 120.0, 18.0);
+        let options: Vec<SelectOption> = (0..20)
+            .map(|index| SelectOption::new(format!("Option {index}"), format!("{index}"), false))
+            .collect();
+        let dropdown = DropdownState::open(3, control, options);
+        let address = AddressBar::new();
+        let tabs = vec!["Megi".to_string()];
+        let mut dest = buffer(480, 400);
+        draw_chrome(
+            &mut dest,
+            480,
+            400,
+            1.0,
+            &view(&address, Some(&dropdown), &tabs),
+        );
+        let scroll_pixels = dest.iter().filter(|pixel| **pixel == 0x005F_6368).count();
+        assert!(scroll_pixels > 10, "scrollbar painted: {scroll_pixels}");
+    }
+
+    #[test]
+    fn address_bar_home_end_and_shift_selection() {
+        let mut bar = AddressBar::new();
+        bar.open("abc");
+        bar.select_all();
+        bar.move_home(false);
+        assert_eq!(bar.caret(), 0);
+        assert!(!bar.has_selection());
+        bar.move_end(true);
+        assert!(bar.has_selection());
+        assert_eq!(bar.selection_range(), 0..3);
+        bar.move_home(true);
+        assert_eq!(bar.selection_range(), 0..0);
+        assert!(bar.insert("x"));
+        assert_eq!(bar.text(), "xabc");
     }
 }

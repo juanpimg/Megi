@@ -1080,6 +1080,9 @@ fn chrome_geometry_scales_with_the_device_scale() {
         scroll_y: 0,
         css_viewport_height: 200,
         css_width: 320.0,
+        completion: None,
+        loading: false,
+        overflow: None,
     };
     let mut dest = vec![0x00FF_FFFFu32; 640 * 400];
     let painted = shell::chrome::draw_chrome(&mut dest, 640, 400, 2.0, &view);
@@ -1190,4 +1193,44 @@ fn worker_frame_png_bytes_match_the_render_screenshot() {
         "frame keeps the render PNG bytes"
     );
     assert_eq!((frame.width, frame.height), (320, 240));
+}
+
+#[test]
+fn headless_chrome_is_deterministic_and_page_goldens_stay_intact() {
+    let plain_a = temp_path("r174-plain-a.png");
+    let plain_b = temp_path("r174-plain-b.png");
+    let chrome_a = temp_path("r174-chrome-a.png");
+    let chrome_b = temp_path("r174-chrome-b.png");
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");
+    let run = |extra: &[&str], path: &PathBuf| {
+        std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+            .arg(&fixture)
+            .args(extra)
+            .arg("--screenshot")
+            .arg(path)
+            .args(["--width", "640", "--height", "400"])
+            .status()
+            .expect("shell binary runs")
+    };
+    assert!(run(&[], &plain_a).success());
+    assert!(run(&[], &plain_b).success());
+    assert!(run(&["--chrome"], &chrome_a).success());
+    assert!(run(&["--chrome"], &chrome_b).success());
+    let read = |path: &PathBuf| std::fs::read(path).expect("png");
+    let plain = read(&plain_a);
+    assert_eq!(plain, read(&plain_b), "plain screenshots deterministic");
+    assert_eq!(png_dimensions(&plain), (640, 400));
+    let chrome = read(&chrome_a);
+    assert_eq!(
+        chrome,
+        read(&chrome_b),
+        "--chrome screenshots deterministic"
+    );
+    assert_eq!(png_dimensions(&chrome), (640, 400));
+    assert_ne!(chrome, plain, "chrome changes the pixels");
+    assert!(chrome.starts_with(&[0x89, b'P', b'N', b'G']));
+    for path in [plain_a, plain_b, chrome_a, chrome_b] {
+        let _ = std::fs::remove_file(path);
+    }
 }

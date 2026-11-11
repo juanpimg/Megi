@@ -81,6 +81,9 @@ pub fn render_target_with_chrome(
         scroll_y: 0,
         css_viewport_height: height,
         css_width: width as f32,
+        completion: None,
+        loading: false,
+        overflow: None,
     };
     crate::chrome::draw_chrome(&mut dest, width, height, 1.0, &view);
     output.pixmap.pixels = dest
