@@ -245,6 +245,8 @@ pub struct ScriptingHostContext {
     pub fetch_options: net::FetchOptions,
     /// `--no-network`: `http(s)` module imports fail with a non-fatal warning.
     pub no_network: bool,
+    /// Enable deterministic cooperative Web Workers (file:// scripts).
+    pub enable_workers: bool,
     /// Events dispatched on `window` by the host after `load` (e.g. `hashchange`,
     /// `popstate`) so their listeners can mutate the DOM before the final re-render.
     pub host_events: Vec<String>,
@@ -270,6 +272,7 @@ impl ScriptingHostContext {
             fetch_options: net::FetchOptions::default(),
             no_network: false,
             host_events: Vec::new(),
+            enable_workers: true,
             #[cfg(feature = "js")]
             layout: None,
         }
@@ -286,6 +289,7 @@ impl ScriptingHostContext {
             fetch_options: net::FetchOptions::default(),
             no_network: false,
             host_events: Vec::new(),
+            enable_workers: true,
             #[cfg(feature = "js")]
             layout: None,
         }
@@ -640,6 +644,17 @@ pub fn execute_scripts(
         scroll_y: 0.0,
     };
     runtime.set_viewport_provider(Box::new(move || viewport_info));
+    if host.enable_workers {
+        runtime.set_worker_loader(Box::new(|url| {
+            let path = url.strip_prefix("file://").ok_or_else(|| {
+                js::JsError::Runtime(format!(
+                    "worker scripts only support file:// in render: {url}"
+                ))
+            })?;
+            std::fs::read_to_string(path)
+                .map_err(|error| js::JsError::Runtime(format!("worker script {url}: {error}")))
+        }));
+    }
     #[cfg(feature = "js")]
     if let Some(layout) = host.layout.clone() {
         runtime.set_layout_provider(Box::new(move |node_id| layout.get(&node_id).copied()));
@@ -898,6 +913,16 @@ pub fn execute_scripts(
         match runtime.dispatch_event(js::JsEventTarget::Window, event, false) {
             Ok(_) => execution.events_dispatched += 1,
             Err(error) => warnings.push(format!("dispatching host event {event} failed: {error}")),
+        }
+        drain_microtasks(&mut runtime, warnings);
+        run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);
+    }
+    // 5. Deterministic cooperative workers: drain main→worker and worker→main queues,
+    // then pump timers/microtasks scheduled by worker callbacks before the re-render.
+    if host.enable_workers {
+        match runtime.run_worker_tasks(limits.max_tasks) {
+            Ok(delivered) => execution.tasks_ran += delivered,
+            Err(error) => warnings.push(format!("worker tasks failed: {error}")),
         }
         drain_microtasks(&mut runtime, warnings);
         run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);

@@ -1,0 +1,10 @@
+<!doctype html><html><body>
+<div id="out">pending</div>
+<script>
+var worker = new Worker('worker_sum.js');
+worker.onmessage = function (event) {
+  document.getElementById('out').textContent = 'sum=' + event.data;
+};
+worker.postMessage({ a: 20, b: 22 });
+</script>
+</body></html>

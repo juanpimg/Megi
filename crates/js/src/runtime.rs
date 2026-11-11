@@ -42,7 +42,7 @@ use boa_engine::{
 };
 use dom::{Attribute as DomAttribute, Document, Namespace, NodeId};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 
 use crate::error::JsError;
@@ -384,6 +384,7 @@ impl JsRuntime {
             let delivered = deliver_mutation_records(&mut self.context);
             drop(_scope);
             delivered?;
+            let _ = self.run_worker_tasks(64);
         }
         result
     }
@@ -552,6 +553,21 @@ fn install_browser_features(context: &mut Context) -> Result<(), JsError> {
             .length(1)
             .constructor(true)
             .build();
+    let worker_constructor =
+        FunctionObjectBuilder::new(context.realm(), native(worker_constructor))
+            .name(js_string!("Worker"))
+            .length(1)
+            .constructor(true)
+            .build();
+    context
+        .global_object()
+        .set(
+            js_string!("Worker"),
+            JsValue::from(worker_constructor),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
     context
         .global_object()
         .set(
@@ -4293,4 +4309,521 @@ fn window_device_pixel_ratio(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> 
     .flatten()
     .unwrap_or(1.0);
     Ok(JsValue::from(ratio))
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic cooperative Web Workers (round 30; no threads)
+// ---------------------------------------------------------------------------
+
+/// One live worker realm plus its FIFO queues and main-side callbacks.
+pub(crate) struct WorkerState {
+    pub runtime: JsRuntime,
+    pub terminated: bool,
+    pub to_worker: VecDeque<String>,
+    pub to_main: Rc<RefCell<VecDeque<String>>>,
+    pub onmessage: Vec<u32>,
+    pub onerror: Option<u32>,
+    pub pending_error: Option<String>,
+}
+
+const MAX_WORKERS: usize = 8;
+const MAX_WORKER_MESSAGES: usize = 256;
+
+impl JsRuntime {
+    /// Installs the worker script loader (`url → source text`; the host owns all I/O).
+    pub fn set_worker_loader(&mut self, loader: crate::host::WorkerLoader) {
+        self.host.borrow_mut().worker_loader = Some(loader);
+    }
+
+    /// Creates an isolated worker realm without DOM globals (only timers/console/
+    /// `postMessage`/`onmessage`/`addEventListener('message')`).
+    fn new_worker(
+        parent: Rc<RefCell<Host>>,
+        id: u32,
+        outbox: Rc<RefCell<VecDeque<String>>>,
+    ) -> Result<Self, JsError> {
+        let runtime = Self::new()?;
+        {
+            let mut host = runtime.host.borrow_mut();
+            host.worker_parent = Some(parent);
+            host.worker_id = Some(id);
+            host.worker_outbox = Some(outbox);
+        }
+        Ok(runtime)
+    }
+
+    /// Drains the deterministic worker queues: main→worker messages are delivered first,
+    /// then worker→main replies/errors invoke `onmessage`/`onerror`/listeners on the main
+    /// runtime. Returns the number of messages delivered.
+    pub fn run_worker_tasks(&mut self, max_steps: usize) -> Result<usize, JsError> {
+        let mut delivered = 0usize;
+        for _ in 0..max_steps {
+            let mut progressed = false;
+            let ids: Vec<usize> = self
+                .host
+                .borrow()
+                .workers
+                .iter()
+                .enumerate()
+                .filter_map(|(id, worker)| worker.as_ref().map(|_| id))
+                .collect();
+            for id in &ids {
+                let mut state = self.host.borrow_mut().workers[*id].take();
+                let Some(mut worker) = state.take() else {
+                    continue;
+                };
+                if worker.terminated {
+                    worker.to_worker.clear();
+                    worker.to_main.borrow_mut().clear();
+                    self.host.borrow_mut().workers[*id] = Some(worker);
+                    continue;
+                }
+                while let Some(json) = worker.to_worker.pop_front() {
+                    progressed = true;
+                    delivered += 1;
+                    if let Err(error) = worker.runtime.deliver_worker_message(&json) {
+                        worker.pending_error = Some(error.to_string());
+                    }
+                }
+                if worker.pending_error.is_some() {
+                    progressed = true;
+                }
+                self.host.borrow_mut().workers[*id] = Some(worker);
+            }
+            for id in &ids {
+                let reply = self.host.borrow().workers[*id].as_ref().and_then(|worker| {
+                    if worker.terminated {
+                        None
+                    } else {
+                        worker.to_main.borrow_mut().pop_front()
+                    }
+                });
+                if let Some(json) = reply {
+                    progressed = true;
+                    delivered += 1;
+                    self.deliver_worker_reply(*id as u32, &json)?;
+                }
+                let error = self.host.borrow_mut().workers[*id]
+                    .as_mut()
+                    .and_then(|worker| worker.pending_error.take());
+                if let Some(message) = error {
+                    progressed = true;
+                    delivered += 1;
+                    self.deliver_worker_error(*id as u32, &message)?;
+                }
+            }
+            if !progressed {
+                break;
+            }
+        }
+        Ok(delivered)
+    }
+
+    fn deliver_worker_reply(&mut self, id: u32, json: &str) -> Result<(), JsError> {
+        let onmessage = {
+            let host = self.host.borrow();
+            match host
+                .workers
+                .get(id as usize)
+                .and_then(|worker| worker.as_ref())
+            {
+                Some(worker) => worker.onmessage.clone(),
+                None => return Ok(()),
+            }
+        };
+        let event = self.parse_json_value(json)?;
+        let mut init = ObjectInitializer::new(&mut self.context);
+        init.property(js_string!("data"), event, Attribute::all());
+        let event = JsValue::from(init.build());
+        let _scope = HostScope::enter(&self.host);
+        for slot in onmessage {
+            if let Ok(callback) = root_get(
+                &mut self.context,
+                "__megi_worker_callbacks",
+                u64::from(slot),
+            ) && let Some(callback) = callback.as_object()
+            {
+                let _ = callback.call(
+                    &JsValue::undefined(),
+                    std::slice::from_ref(&event),
+                    &mut self.context,
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn deliver_worker_error(&mut self, id: u32, message: &str) -> Result<(), JsError> {
+        let slot = {
+            let host = self.host.borrow();
+            host.workers
+                .get(id as usize)
+                .and_then(|worker| worker.as_ref())
+                .and_then(|worker| worker.onerror)
+        };
+        let Some(slot) = slot else { return Ok(()) };
+        let mut init = ObjectInitializer::new(&mut self.context);
+        init.property(
+            js_string!("message"),
+            JsValue::from(js_string!(message.to_string())),
+            Attribute::all(),
+        )
+        .property(
+            js_string!("error"),
+            JsValue::from(js_string!(message.to_string())),
+            Attribute::all(),
+        );
+        let event = JsValue::from(init.build());
+        let _scope = HostScope::enter(&self.host);
+        if let Ok(callback) = root_get(
+            &mut self.context,
+            "__megi_worker_callbacks",
+            u64::from(slot),
+        ) && let Some(callback) = callback.as_object()
+        {
+            let _ = callback.call(
+                &JsValue::undefined(),
+                std::slice::from_ref(&event),
+                &mut self.context,
+            );
+        }
+        Ok(())
+    }
+
+    fn parse_json_value(&mut self, json: &str) -> Result<JsValue, JsError> {
+        let script = format!("JSON.parse({})", module_quote(json));
+        self.context
+            .eval(Source::from_bytes(&script))
+            .map_err(|error| JsError::Runtime(error.to_string()))
+    }
+}
+
+impl WorkerState {
+    fn new(runtime: JsRuntime, outbox: Rc<RefCell<VecDeque<String>>>) -> Self {
+        Self {
+            runtime,
+            terminated: false,
+            to_worker: VecDeque::new(),
+            to_main: outbox,
+            onmessage: Vec::new(),
+            onerror: None,
+            pending_error: None,
+        }
+    }
+}
+
+impl JsRuntime {
+    fn deliver_worker_message(&mut self, json: &str) -> Result<(), JsError> {
+        let data = self.parse_json_value(json)?;
+        self.context
+            .global_object()
+            .set(
+                js_string!("__megi_worker_data"),
+                data,
+                false,
+                &mut self.context,
+            )
+            .map_err(|error| JsError::Runtime(error.to_string()))?;
+        let script = r#"
+(function () {
+  var event = { data: __megi_worker_data };
+  if (typeof onmessage === "function") { onmessage(event); }
+  if (typeof __megi_worker_listeners !== "undefined") {
+    for (var i = 0; i < __megi_worker_listeners.length; i++) { __megi_worker_listeners[i](event); }
+  }
+})();
+"#;
+        let _scope = HostScope::enter(&self.host);
+        self.context
+            .eval(Source::from_bytes(script))
+            .map(|_| ())
+            .map_err(|error| JsError::Runtime(error.to_string()))
+    }
+}
+
+fn worker_handle(this: &JsValue, context: &mut Context) -> JsResult<u32> {
+    let object = this
+        .as_object()
+        .ok_or_else(|| js_error("worker receiver"))?;
+    object
+        .get(js_string!("__megi_worker"), context)
+        .map_err(|error| js_error(error.to_string()))?
+        .as_number()
+        .filter(|value| *value >= 0.0)
+        .map(|value| value as u32)
+        .ok_or_else(|| js_error("invalid Worker"))
+}
+
+fn worker_constructor(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let url = arg_string(args, 0, context)?;
+    let parent =
+        crate::host::current_host().ok_or_else(|| js_error("no active JavaScript host"))?;
+    let (resolved, source) = {
+        let host = parent.borrow();
+        let resolved = host.resolve_url(&url);
+        let loader = host
+            .worker_loader
+            .as_ref()
+            .ok_or_else(|| js_error("Worker scripts are not available in this host"))?;
+        let source = loader(&resolved).map_err(|error| js_error(error.to_string()))?;
+        (resolved, source)
+    };
+    let id = {
+        let mut host = parent.borrow_mut();
+        let existing = host.workers.iter().position(|worker| worker.is_none());
+        let id = match existing {
+            Some(id) => id,
+            None if host.workers.len() < MAX_WORKERS => {
+                host.workers.push(None);
+                host.workers.len() - 1
+            }
+            None => return Err(js_error("too many Web Workers (limit 8)")),
+        };
+        id as u32
+    };
+    let outbox = Rc::new(RefCell::new(VecDeque::new()));
+    let mut runtime = JsRuntime::new_worker(parent.clone(), id, outbox.clone())
+        .map_err(|error| js_error(error.to_string()))?;
+    runtime
+        .install_worker_globals()
+        .map_err(|error| js_error(error.to_string()))?;
+    let error = runtime.eval(&source, &resolved).err();
+    {
+        let mut host = parent.borrow_mut();
+        host.workers[id as usize] = Some(WorkerState::new(runtime, outbox));
+        if let Some(error) = error
+            && let Some(worker) = host.workers[id as usize].as_mut()
+        {
+            worker.pending_error = Some(error.to_string());
+        }
+    }
+    let mut init = ObjectInitializer::new(context);
+    init.property(
+        js_string!("__megi_worker"),
+        JsValue::from(f64::from(id)),
+        Attribute::all(),
+    );
+    init.function(native(worker_post_message), js_string!("postMessage"), 1);
+    init.function(native(worker_terminate), js_string!("terminate"), 0);
+    init.function(
+        native(worker_add_listener),
+        js_string!("addEventListener"),
+        2,
+    );
+    let worker_object = init.build();
+    define_accessor(
+        context,
+        &worker_object,
+        "onmessage",
+        worker_onmessage_get,
+        Some(worker_onmessage_set),
+    )
+    .map_err(|error| js_error(error.to_string()))?;
+    define_accessor(
+        context,
+        &worker_object,
+        "onerror",
+        worker_onerror_get,
+        Some(worker_onerror_set),
+    )
+    .map_err(|error| js_error(error.to_string()))?;
+    Ok(JsValue::from(worker_object))
+}
+
+fn worker_post_message(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let id = worker_handle(this, context)?;
+    let value = args.first().cloned().unwrap_or_else(JsValue::undefined);
+    let json = json_state(&value, context);
+    let queued = with_host(|host| {
+        let Some(Some(worker)) = host.workers.get_mut(id as usize) else {
+            return false;
+        };
+        if worker.terminated || worker.to_worker.len() >= MAX_WORKER_MESSAGES {
+            return false;
+        }
+        worker.to_worker.push_back(json);
+        true
+    })
+    .unwrap_or(false);
+    if !queued {
+        return Err(js_error("worker is terminated or its queue is full"));
+    }
+    Ok(JsValue::undefined())
+}
+
+fn worker_terminate(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let id = worker_handle(this, context)?;
+    with_host(|host| {
+        if let Some(Some(worker)) = host.workers.get_mut(id as usize) {
+            worker.terminated = true;
+            worker.to_worker.clear();
+            worker.to_main.borrow_mut().clear();
+        }
+    });
+    Ok(JsValue::undefined())
+}
+
+fn worker_add_listener(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let id = worker_handle(this, context)?;
+    let event_type = arg_string(args, 0, context)?;
+    if event_type != "message" {
+        return Ok(JsValue::undefined());
+    }
+    let callback = args.get(1).cloned().unwrap_or_else(JsValue::undefined);
+    let slot = root_push(context, "__megi_worker_callbacks", callback)?;
+    with_host(|host| {
+        if let Some(Some(worker)) = host.workers.get_mut(id as usize) {
+            worker.onmessage.push(slot);
+        }
+    });
+    Ok(JsValue::undefined())
+}
+
+fn worker_onmessage_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let id = worker_handle(this, context)?;
+    let slot = with_host(|host| {
+        host.workers
+            .get(id as usize)
+            .and_then(|worker| worker.as_ref())
+            .and_then(|worker| worker.onmessage.first().copied())
+    })
+    .flatten();
+    match slot {
+        Some(slot) => root_get(context, "__megi_worker_callbacks", u64::from(slot)),
+        None => Ok(JsValue::null()),
+    }
+}
+
+fn worker_onmessage_set(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let id = worker_handle(this, context)?;
+    let callback = args.first().cloned().unwrap_or_else(JsValue::undefined);
+    let slot = root_push(context, "__megi_worker_callbacks", callback)?;
+    with_host(|host| {
+        if let Some(Some(worker)) = host.workers.get_mut(id as usize) {
+            worker.onmessage.clear();
+            worker.onmessage.push(slot);
+        }
+    });
+    Ok(JsValue::undefined())
+}
+
+fn worker_onerror_get(
+    _this: &JsValue,
+    _args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<JsValue> {
+    Ok(JsValue::null())
+}
+
+fn worker_onerror_set(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let id = worker_handle(this, context)?;
+    let callback = args.first().cloned().unwrap_or_else(JsValue::undefined);
+    let slot = root_push(context, "__megi_worker_callbacks", callback)?;
+    with_host(|host| {
+        if let Some(Some(worker)) = host.workers.get_mut(id as usize) {
+            worker.onerror = Some(slot);
+        }
+    });
+    Ok(JsValue::undefined())
+}
+
+impl JsRuntime {
+    fn install_worker_globals(&mut self) -> Result<(), JsError> {
+        let global = self.context.global_object();
+        let worker_post =
+            FunctionObjectBuilder::new(self.context.realm(), native(worker_self_post_message))
+                .name(js_string!("postMessage"))
+                .length(1)
+                .build();
+        global
+            .set(
+                js_string!("postMessage"),
+                JsValue::from(worker_post),
+                false,
+                &mut self.context,
+            )
+            .map_err(|error| JsError::Internal(error.to_string()))?;
+        global
+            .set(
+                js_string!("self"),
+                JsValue::from(global.clone()),
+                false,
+                &mut self.context,
+            )
+            .map_err(|error| JsError::Internal(error.to_string()))?;
+        global
+            .set(
+                js_string!("document"),
+                JsValue::undefined(),
+                false,
+                &mut self.context,
+            )
+            .map_err(|error| JsError::Internal(error.to_string()))?;
+        global
+            .set(
+                js_string!("window"),
+                JsValue::undefined(),
+                false,
+                &mut self.context,
+            )
+            .map_err(|error| JsError::Internal(error.to_string()))?;
+        let prelude = r#"
+var __megi_worker_listeners = [];
+function addEventListener(type, callback) { if (type === "message" && typeof callback === "function") { __megi_worker_listeners.push(callback); } }
+function removeEventListener() {}
+"#;
+        self.context
+            .eval(Source::from_bytes(prelude))
+            .map(|_| ())
+            .map_err(|error| JsError::Internal(error.to_string()))
+    }
+}
+
+fn worker_self_post_message(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let value = args.first().cloned().unwrap_or_else(JsValue::undefined);
+    let json = json_state(&value, context);
+    let sent = with_host(|host| {
+        let Some(outbox) = &host.worker_outbox else {
+            return false;
+        };
+        let mut outbox = outbox.borrow_mut();
+        if outbox.len() >= MAX_WORKER_MESSAGES {
+            return false;
+        }
+        outbox.push_back(json);
+        true
+    })
+    .unwrap_or(false);
+    if !sent {
+        return Err(js_error("worker message queue is full"));
+    }
+    Ok(JsValue::undefined())
 }

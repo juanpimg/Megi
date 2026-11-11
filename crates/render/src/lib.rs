@@ -415,6 +415,9 @@ pub struct RenderOptions {
     /// `"hashchange"` or `"popstate"`. Listeners can mutate the DOM and run timers; the
     /// final styles/layout/paint pass includes their effects. Empty by default.
     pub host_events: Vec<String>,
+    /// Enable deterministic cooperative Web Workers (R194). Default `true`; worker
+    /// scripts are loaded from `file://` URLs only (the renderer owns all I/O).
+    pub enable_workers: bool,
 }
 
 impl Default for RenderOptions {
@@ -437,6 +440,7 @@ impl Default for RenderOptions {
             max_total_background_bytes: DEFAULT_MAX_TOTAL_BACKGROUND_BYTES,
             scripting: ScriptingMode::default(),
             scripting_limits: ScriptingLimits::default(),
+            enable_workers: true,
             parse_options: html::ParseOptions::DEFAULT,
             fetch_options: FetchOptions::default(),
             cookies: false,
@@ -823,6 +827,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             }
         }
         host_context.storage = options.storage.clone();
+        host_context.enable_workers = options.enable_workers;
         host_context.host_events = options.host_events.clone();
         host_context.fetch_options = loader.fetch_options().clone();
         host_context.no_network = options.no_network;

@@ -163,6 +163,9 @@ pub struct LayoutRect {
     pub content_box: (f32, f32, f32, f32),
 }
 
+/// Loads the source text of a worker script URL (the host owns I/O).
+pub type WorkerLoader = Box<dyn Fn(&str) -> Result<String, crate::error::JsError> + Send + Sync>;
+
 /// Injected geometry provider (`NodeId → LayoutRect`); `None` means the node has no box
 /// (e.g. `display: none` or a node outside the laid-out document).
 pub type LayoutProvider = Box<dyn Fn(dom::NodeId) -> Option<LayoutRect> + Send + Sync>;
@@ -282,6 +285,16 @@ pub(crate) struct Host {
     pub active_element: Option<NodeId>,
     /// Injected layout geometry provider (`getBoundingClientRect`/offset/client metrics).
     pub layout_provider: Option<LayoutProvider>,
+    /// Worker script loader injected by the host.
+    pub worker_loader: Option<WorkerLoader>,
+    /// Deterministic cooperative workers (no threads); `None` slots are terminated/dropped.
+    pub workers: Vec<Option<crate::runtime::WorkerState>>,
+    /// Parent host when this host belongs to a worker realm.
+    pub worker_parent: Option<Rc<RefCell<Host>>>,
+    /// Worker id in the parent host (worker realms only).
+    pub worker_id: Option<u32>,
+    /// Outbox queue of the worker realm (`postMessage` from the worker).
+    pub worker_outbox: Option<Rc<RefCell<std::collections::VecDeque<String>>>>,
     /// ES module resolver/loader injected by the host (no I/O in `js`).
     pub module_resolver: Option<ModuleResolver>,
     pub module_loader: Option<ModuleLoader>,
@@ -325,6 +338,11 @@ impl Host {
             mutations: Vec::new(),
             active_element: None,
             layout_provider: None,
+            worker_loader: None,
+            workers: Vec::new(),
+            worker_parent: None,
+            worker_id: None,
+            worker_outbox: None,
             module_resolver: None,
             module_loader: None,
             import_map: None,

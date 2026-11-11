@@ -1,0 +1,9 @@
+<!doctype html><html><body>
+<div id="out">pending</div>
+<script>
+var worker = new Worker('worker_error.js');
+worker.onerror = function (event) {
+  document.getElementById('out').textContent = 'error:' + event.message;
+};
+</script>
+</body></html>
