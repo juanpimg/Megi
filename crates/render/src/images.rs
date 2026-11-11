@@ -175,7 +175,10 @@ pub fn load_images(
         }
         if matches!(
             image::detect_format(&resource.bytes),
-            image::ImageFormat::Png | image::ImageFormat::Jpeg | image::ImageFormat::Gif
+            image::ImageFormat::Png
+                | image::ImageFormat::Jpeg
+                | image::ImageFormat::Gif
+                | image::ImageFormat::WebP
         ) {
             match image::decode(&resource.bytes) {
                 Ok(decoded) => {

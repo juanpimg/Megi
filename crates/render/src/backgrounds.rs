@@ -280,7 +280,10 @@ pub fn load_backgrounds(
         }
         let bitmap = if matches!(
             image::detect_format(&resource.bytes),
-            image::ImageFormat::Png | image::ImageFormat::Jpeg | image::ImageFormat::Gif
+            image::ImageFormat::Png
+                | image::ImageFormat::Jpeg
+                | image::ImageFormat::Gif
+                | image::ImageFormat::WebP
         ) {
             match image::decode(&resource.bytes) {
                 Ok(bitmap) => bitmap,
@@ -310,7 +313,7 @@ pub fn load_backgrounds(
             let format = image::detect_format(&resource.bytes);
             result.failed += 1;
             result.warnings.push(format!(
-                "skipping background image {url}: unsupported format {format:?} (only PNG, JPEG, GIF and SVG are decoded)"
+                "skipping background image {url}: unsupported format {format:?} (PNG, JPEG, GIF, WebP-lossless and SVG are decoded)"
             ));
             continue;
         };

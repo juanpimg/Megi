@@ -95,12 +95,28 @@ fn single_component_progressive_jpeg_matches_baseline() {
 }
 
 #[test]
-fn multi_component_progressive_refinement_is_a_typed_error() {
-    // Subset documented in the decoder: colour progressive DC/AC-first scans decode,
-    // but refinement scans (Ah > 0) over multiple components are not implemented.
-    let error = decode(fixture!("progressive.jpg")).expect_err("colour progressive refinement");
+fn multi_component_progressive_refinement_matches_baseline() {
+    // Full colour progressive: DC/AC first scans plus successive-approximation refinement
+    // scans over the three components. JPEG quantizes once, so a correct decoder
+    // reconstructs the same coefficients as the sequential baseline; the documented
+    // tolerance covers the IDCT rounding/subsampling order between the two encodings.
+    let progressive =
+        decode(include_bytes!("fixtures/jpeg/color_progressive.jpg")).expect("colour progressive");
+    let baseline =
+        decode(include_bytes!("fixtures/jpeg/color_baseline.jpg")).expect("colour baseline");
+    assert_eq!(
+        (progressive.width, progressive.height),
+        (baseline.width, baseline.height)
+    );
+    let max_delta = progressive
+        .data
+        .iter()
+        .zip(baseline.data.iter())
+        .map(|(a, b)| a.abs_diff(*b))
+        .max()
+        .unwrap_or(0);
     assert!(
-        matches!(error, image::ImageError::UnsupportedFeature { .. }),
-        "{error}"
+        max_delta <= 2,
+        "colour progressive vs baseline max delta {max_delta} (documented tolerance 2)"
     );
 }

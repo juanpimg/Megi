@@ -329,8 +329,8 @@ fn non_png_background_is_skipped_with_a_warning() {
     routes.insert("/page.html", RouteResponse::html(page));
     routes.insert(
         "/bad.gif",
-        // WebP is detected but still unsupported (PNG/JPEG/GIF decode now).
-        RouteResponse::ok("image/webp", b"RIFF\0\0\0\0WEBPVP8 ".to_vec()),
+        // A well-formed VP8 lossy chunk: detected but outside the decoded VP8L subset.
+        RouteResponse::ok("image/webp", b"RIFF\x0c\0\0\0WEBPVP8 \0\0\0\0".to_vec()),
     );
     let server = TestServer::spawn(routes, 2);
     let output = render_url(&server.url("/page.html"), &options()).expect("render page");
@@ -342,8 +342,8 @@ fn non_png_background_is_skipped_with_a_warning() {
             .stats
             .warnings
             .iter()
-            .any(|warning| warning.contains("unsupported format")),
-        "expected unsupported-format warning: {:?}",
+            .any(|warning| warning.contains("WebP") && warning.contains("lossy")),
+        "expected WebP-lossy warning: {:?}",
         output.stats.warnings
     );
     assert!(count_color(&output.pixmap, GREEN) > 500, "fallback color");

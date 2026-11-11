@@ -206,12 +206,11 @@ fn rejects_bad_signature_and_malformed_headers() {
         decode(&[0xFF, 0xD8, 0xFF, 0xE0]).unwrap_err(),
         ImageError::Truncated { .. } | ImageError::InvalidData { .. }
     ));
-    // WebP is still detected but not decoded.
+    // Truncated WebP containers are typed data errors (a complete VP8 lossy chunk is
+    // an UnsupportedFeature).
     assert!(matches!(
         decode(b"RIFF\0\0\0\0WEBPVP8 ").unwrap_err(),
-        ImageError::UnsupportedFormat {
-            format: ImageFormat::WebP
-        }
+        ImageError::InvalidData { .. } | ImageError::Truncated { .. }
     ));
 }
 

@@ -12,6 +12,9 @@
 //!   input. See [`jpeg`] for the documented subset and limits.
 //! - **GIF** (87a/89a, first frame): LZW, global/local palettes, transparency,
 //!   interlacing; animated GIFs decode their first frame. See [`gif`].
+//! - **WebP lossless** (`VP8L` subset): RIFF container, simple Huffman codes and
+//!   literal pixels; complex Huffman/transforms/LZ77 and VP8 lossy are typed errors. See
+//!   [`webp`].
 //! - **PNG** (W3C PNG 1.2 / ISO 15948), decoded to 8-bit RGBA with straight
 //!   (non-premultiplied) alpha:
 //!   - colour types 0 (grayscale), 2 (RGB), 3 (indexed), 4 (grayscale+alpha)
@@ -27,9 +30,10 @@
 //! - **zlib/DEFLATE** (RFC 1950/1951) via [`inflate_zlib`] /
 //!   [`inflate_deflate`], used by the PNG decoder and reusable elsewhere.
 //!
-//! Detected-but-not-decoded formats return [`ImageError::UnsupportedFormat`]: WebP is
-//! detected (and unsupported JPEG modes return [`ImageError::UnsupportedFeature`] with a
-//! clear description).
+//! Detected-but-not-decoded formats/modes return a typed error: VP8 lossy WebP and the
+//! unsupported VP8L subset features (transforms/complex Huffman/LZ77) are
+//! [`ImageError::UnsupportedFeature`] with a clear description; unknown signatures are
+//! [`ImageError::UnsupportedFormat`]/[`ImageError::InvalidSignature`].
 //!
 //! ## Contract for consumers (`paint`/`render`)
 //!
@@ -74,6 +78,7 @@ pub mod gif;
 pub mod inflate;
 pub mod jpeg;
 pub mod png;
+pub mod webp;
 
 pub use error::ImageError;
 pub use inflate::{InflateError, InflateLimits, adler32, inflate_deflate, inflate_zlib};
@@ -91,7 +96,7 @@ pub enum ImageFormat {
     Gif,
     /// JPEG/JFIF baseline — decoded by this crate (progressive is a typed error).
     Jpeg,
-    /// Google WebP — detected, not decoded.
+    /// Google WebP — lossless `VP8L` subset decoded; lossy `VP8` is a typed error.
     WebP,
     /// No known image signature.
     Unknown,
@@ -261,8 +266,8 @@ pub fn exif_orientation(bytes: &[u8]) -> Option<u8> {
 
 /// Decodes an image from `bytes` using the format's default limits.
 ///
-/// Decodes PNG, baseline JPEG and the first frame of GIF; WebP and unsupported JPEG
-/// modes are typed errors. See [`decode_with_limits`] for custom defensive limits
+/// Decodes PNG, JPEG (baseline + progressive), the first frame of GIF and the WebP VP8L
+/// lossless subset; VP8 lossy and unsupported modes are typed errors. See [`decode_with_limits`] for custom defensive limits
 /// (dimensions/pixels/chunk budgets shared by all formats).
 pub fn decode(bytes: &[u8]) -> Result<RgbaImage, ImageError> {
     decode_with_limits(bytes, &PngLimits::default())
@@ -277,9 +282,7 @@ pub fn decode_with_limits(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
             let image = jpeg::decode_jpeg(bytes, limits)?;
             apply_orientation(image, exif::orientation(bytes))
         }
-        ImageFormat::WebP => Err(ImageError::UnsupportedFormat {
-            format: ImageFormat::WebP,
-        }),
+        ImageFormat::WebP => webp::decode_webp(bytes, limits),
         ImageFormat::Unknown => Err(ImageError::InvalidSignature),
     }
 }
@@ -325,12 +328,11 @@ mod tests {
             decode(&[0xFF, 0xD8, 0xFF, 0xE0]).unwrap_err(),
             ImageError::Truncated { .. } | ImageError::InvalidData { .. }
         ));
-        // WebP is detected but still unsupported.
+        // WebP chunks are parsed now: an empty/truncated container is a typed data error
+        // (a complete VP8 lossy chunk returns UnsupportedFeature instead).
         assert!(matches!(
             decode(b"RIFF\0\0\0\0WEBPVP8 ").unwrap_err(),
-            ImageError::UnsupportedFormat {
-                format: ImageFormat::WebP
-            }
+            ImageError::InvalidData { .. } | ImageError::Truncated { .. }
         ));
         assert_eq!(
             decode(b"garbage").unwrap_err(),

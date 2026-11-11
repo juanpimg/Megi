@@ -77,14 +77,12 @@ fn decodes_grayscale_jpeg() {
 }
 
 #[test]
-fn progressive_jpeg_is_rejected_with_a_clear_error() {
-    let error = decode(&fixture("jpeg/progressive.jpg")).expect_err("progressive must fail");
-    match error {
-        ImageError::UnsupportedFeature { feature } => {
-            assert!(feature.contains("progressive"), "feature: {feature}");
-        }
-        other => panic!("expected UnsupportedFeature, got {other:?}"),
-    }
+fn progressive_jpeg_decodes_to_the_expected_dimensions() {
+    // Full progressive (DC/AC first + successive-approximation refinement) is decoded; the
+    // colour-reference comparison against the sequential baseline lives in `exif.rs`.
+    let image = decode(&fixture("jpeg/progressive.jpg")).expect("progressive JPEG");
+    assert_eq!(image.dimensions(), (12, 8));
+    assert!(!image.data.is_empty());
 }
 
 #[test]

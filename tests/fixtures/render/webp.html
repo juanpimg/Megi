@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>WebP lossless fixture</title>
+<style>
+html, body { margin: 0; padding: 0; background-color: #ff00ff; }
+img { display: block; }
+.wc { width: 32px; height: 32px; }
+.wa { width: 32px; height: 32px; }
+.lossy { width: 16px; height: 16px; }
+.bg { width: 40px; height: 20px; background-color: #000000;
+      background-image: url("assets/v8l_alpha.webp"); }
+.ok { width: 20px; height: 20px; background-color: #00ff00; }
+</style></head>
+<body>
+<img class="wc" src="assets/v8l_two_color.webp" alt="vp8l two colours">
+<img class="wa" src="assets/v8l_alpha.webp" alt="vp8l alpha">
+<img class="lossy" src="assets/webp_lossy.webp" alt="vp8 lossy (warning)">
+<div class="bg"></div>
+<div class="ok"></div>
+</body></html>

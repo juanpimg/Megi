@@ -244,8 +244,8 @@ fn test_missing_http_image_warns_and_uses_placeholder() {
 
 #[test]
 fn test_unsupported_webp_image_is_a_warning_not_an_error() {
-    // WebP is detected by the decoder but is still unsupported (JPEG/GIF now decode).
-    let webp = b"RIFF\0\0\0\0WEBPVP8 ".to_vec();
+    // A well-formed VP8 lossy chunk: detected but outside the decoded VP8L subset.
+    let webp = b"RIFF\x0c\0\0\0WEBPVP8 \0\0\0\0".to_vec();
     let page = "<!doctype html><html><body style=\"margin:0\">\
                 <img src=\"/photo.webp\" style=\"width:20px;height:20px\"></body></html>";
     let mut routes = HashMap::new();
@@ -264,7 +264,7 @@ fn test_unsupported_webp_image_is_a_warning_not_an_error() {
             .stats
             .warnings
             .iter()
-            .any(|warning| warning.contains("unsupported format") && warning.contains("WebP")),
+            .any(|warning| warning.contains("WebP") && warning.contains("lossy")),
         "{:?}",
         output.stats.warnings
     );

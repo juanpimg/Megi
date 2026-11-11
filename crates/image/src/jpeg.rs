@@ -2,7 +2,7 @@
 //!
 //! ## Supported subset
 //!
-//! - **Baseline sequential DCT** (`SOF0`) and **progressive DCT (`SOF2`)** subset:
+//! - **Baseline sequential DCT** (`SOF0`) and **progressive DCT (`SOF2`)**:
 //!   DC-first/DC-refinement, AC-first and AC-refinement scans; spectral selection
 //!   and successive approximation are decoded into coefficient buffers and IDCT'd
 //!   once at EOI. Multi-component progressive images are supported up to their
@@ -396,11 +396,6 @@ pub(crate) fn decode_jpeg(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
                 }
                 ensure_progressive_storage(&mut current);
                 let mut reader = BitReader::new(bytes, index);
-                if current.components.len() > 1 && scan.ah > 0 {
-                    return Err(ImageError::UnsupportedFeature {
-                        feature: "progressive JPEG refinement scans for multi-component images                                   (subset: DC/AC first scans for colour; full progressive for                                   single-component images)",
-                    });
-                }
                 decode_progressive_scan(
                     &mut reader,
                     &mut current,
@@ -1259,7 +1254,15 @@ fn decode_progressive_block(
                 reason: "JPEG missing AC Huffman table",
             })?;
         if scan.ah == 0 {
-            decode_ac_first(reader, table, coefficients, scan.ss, scan.se, scan.al)
+            decode_ac_first(
+                reader,
+                table,
+                coefficients,
+                scan.ss,
+                scan.se,
+                scan.al,
+                eob_run,
+            )
         } else {
             decode_ac_refine(
                 reader,
@@ -1315,7 +1318,14 @@ fn decode_ac_first(
     ss: u8,
     se: u8,
     al: u8,
+    eob_run: &mut u32,
 ) -> Result<(), ImageError> {
+    // Progressive AC-first scans may encode an end-of-band run covering several blocks
+    // (ITU T.81 G.1.2.2 + libjpeg's EOBRUN handling).
+    if *eob_run > 0 {
+        *eob_run -= 1;
+        return Ok(());
+    }
     let mut k = usize::from(ss);
     let se = usize::from(se);
     while k <= se {
@@ -1327,6 +1337,8 @@ fn decode_ac_first(
                 k += 16;
                 continue;
             }
+            *eob_run = (1u32 << run) + reader.get_bits(run as u8)?;
+            *eob_run -= 1;
             break;
         }
         k += run;
