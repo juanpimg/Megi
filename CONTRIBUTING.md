@@ -25,7 +25,7 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 - Trabajamos con las suites de prueba de referencia de la industria:
   - **`html5lib-tests`**: Más de 7.000 pruebas de tokenizador, ~1.900 de construcción del DOM y las suites oficiales de **serialización HTML** (`serializer/*.test`).
   - **Web Platform Tests (WPT)**: Pruebas oficiales compartidas por todos los motores de navegación modernos (fixtures de CSS Syntax vendorizadas).
-- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), **árbol 3.904/3.904 (100 %, sin allowlist; las 4 suites `scripted_*` ejecutan JS real vía WP-6.4)**, **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El workspace tiene **1468 tests**.
+- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), **árbol 3.904/3.904 (100 %, sin allowlist; las 4 suites `scripted_*` ejecutan JS real vía WP-6.4)**, **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El workspace tiene **1547 tests**.
 
 ### 1.4 Modelo de Memoria en Arena (Sin `Rc<RefCell<Node>>`)
 - Uno de los mayores cuellos de botella y fuentes de *memory leaks* en motores web en Rust es el uso de `Rc<RefCell<Node>>` o recolectores de basura pesados.
@@ -160,7 +160,7 @@ cargo fmt
 ./tools/dev.sh all
 
 # Comprobaciones individuales útiles
-cargo test --workspace                         # 1468 tests (con JS por defecto)
+cargo test --workspace                         # 1547 tests (con JS por defecto)
 cargo test --workspace --no-default-features   # build mínimo sin JS (CI)
 cargo +1.88 check --workspace --all-targets
 cargo run -p test_harness -- --summary          # gate 4 suites: PASS, exit 0

@@ -1,49 +1,51 @@
-# Handoff de sesión — ronda 23 (perf CSS/paint, EXIF/progresivo, WebP detectado y HTTP/2 flow control)
+# Handoff de sesión — ronda 24 (JS browser APIs, aspect-ratio/object-fit/backdrop, progresivo/WebP, sesión/descargas y fuzz 10 targets)
 
 **Fecha**: 2026-11-11 (Europe/Madrid)
-**Rama**: `sprint/robustez-fase4` — HEAD `d1f3121`
-**Estado**: **1468 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; presupuestos recuperados con margen (css resolve **26,54 ms**, pipeline **~105,5 ms** en A/B; build-display **7,34–7,72 ms ≤8**); F4 ≈99 %, F5 ≈99 %, F6 ≈90 %, F7 ≈90 %. Manifiesto `docs/status/progress.toml` actualizado en esta ronda (F4/F5 + `next_up`); `PROGRESS.md`/SVG se regeneran con `python3 tools/update_progress.py --write`.
-**CI/Repo**: GitHub Actions en verde, con el paso **Status freshness**; `main` y `sprint/robustez-fase4` sincronizadas en `d1f3121`; fuzz PR build-only desde la ronda 18; suite determinista.
+**Rama**: `sprint/robustez-fase4` — HEAD `0b3adee`
+**Estado**: **1547 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; F4 ≈99 %, F5 ≈99 %, **F6 ≈92 %**, **F7 ≈92 %**. Manifiesto `docs/status/progress.toml` actualizado en esta ronda (F4/F6/F7 + `next_up`); `PROGRESS.md`/SVG se regeneran con `python3 tools/update_progress.py --write`.
+**CI/Repo**: GitHub Actions en verde, con **Status freshness**; `main` y `sprint/robustez-fase4` sincronizadas en `0b3adee`; fuzz PR build-only; suite determinista.
 **Estado de fases**: fuente editable [`docs/status/progress.toml`](status/progress.toml), página generada [`PROGRESS.md`](../PROGRESS.md); **no editar a mano** los artefactos generados.
 
-## Qué se hizo en la ronda 23 (4 commits + refresco de status)
+## Qué se hizo en la ronda 24 (6 commits + refresco de status)
 
 | Commit | Bloque | Resultado |
 |---|---|---|
-| `cfad971` `perf(css)` | **CSS perf** | Clave de caché de estilos por **identidad de estilo del padre** (no NodeId), **move-on-miss** (sin clon en la ruta de fallo) y **AST UA cacheado en `OnceLock`**. A/B intercalado: `css/resolve-styles-10k-nodes` 35,81→**26,54 ms** (**−25,9 %**) y `pipeline/html-to-png-800x600` 142,64→**105,47 ms** (**−26,1 %**); clave 128-bit, umbral 2, cap 1024; inline-styled parents con clave única conservadora. |
-| `3f5ce3e` `perf(paint)` | **Paint effects analysis** | Análisis agregado `effects_present` por pase + fast path r21-equivalente (sin filter/blend/image-set no se clonan estilos ni `EffectGroup`), capacidad `DisplayItem` 20480 e `is_list_item` antes de phase. A/B build-display 7,72→**7,34 ms** (−4,8 %) y 9,20→8,31 (−9,6 %); absoluto **7,34–7,72 ms ≤8**. |
-| `1e8e078` `feat(image,render)` | **EXIF + JPEG progresivo + WebP detectado** | **EXIF orientation completa**: APP1/TIFF little+big, IFD0 tag 0x0112, orientaciones 1–8 aplicadas en `image::decode`, `exif_orientation()`, fixtures PIL `exif_o1..o8` con aserciones exactas. **JPEG progresivo subset**: SOF2 multiscan DC/AC first+refine, spectral selection, successive approximation, EOB runs y restart; **gris exacto (delta 0)**; refinamiento multi-componente ⇒ `UnsupportedFeature` claro/documentado. **WebP se detecta** (RIFF/VP8L) pero **no se decodifica** (aviso no fatal `VP8L/VP8 decoder pending`). `render` añade `image_formats.html` E2E (2 imágenes pintadas; aviso WebP sin romper). image **60**/render **138** tests. |
-| `a2fb055` `feat(net)` | **HTTP/2 flow control + multiplexado + SETTINGS** | Flow control de conexión/stream (ventanas, WINDOW_UPDATE replenish, `FLOW_CONTROL_ERROR`, delta 0 inválido), **multiplexado ≥2 streams** (`client::get_many`, Session/scheduler, `next_stream_id` impar, RST aislado, `Limits.max_concurrent_streams` default 8 respetando MAX_CONCURRENT_STREAMS) y **SETTINGS** avanzados (HEADER_TABLE_SIZE/MAX_CONCURRENT_STREAMS/INITIAL_WINDOW_SIZE/MAX_FRAME_SIZE/ENABLE_PUSH validados+ACK, HEADERS+CONTINUATION, HPACK compartido). 12 tests loopback nuevos; net **237**. `load`/fallback h1 intactos. |
-| `d1f3121` `chore(status)` | **Refresco del status** | Regenera `PROGRESS.md`, `docs/status/progress.svg` y badges; manifiesto editable actualizado en esta ronda (r23). |
+| `05e2b77` `feat(js)` | **History/location/Web Storage/MutationObserver** | History API con providers (`pushState/replaceState/back/forward/go`; sin provider no-op), `location` getters + `assign/replace/reload`, `localStorage`/`sessionStorage` (cap 1 MiB/realm, `QuotaExceededError`, `StorageProvider` load/save) y `MutationObserver` subset (childList/attributes/characterData+subtree, `takeRecords`/`disconnect`; records al drenar microtasks). `requestIdleCallback` no implementado. js **83** tests (+12). |
+| `13c3f6a` `feat(css,paint)` | **aspect-ratio/object-fit/backdrop-filter** | `aspect-ratio` (`auto`/ratio), `object-fit` fill/contain/cover/none/scale-down, `object-position` keywords/%/px y `backdrop-filter` + alias `-webkit`; paint `DisplayItem::BackdropFilter` (backdrop ya pintado + funciones + blur determinista; caps 64/16/16,7 Mpx) y object-fit con clip al content box y bilineal (`fill` byte-idéntico, goldens intactos). Fixtures aspect_ratio `a1e4d950…`, object_fit `b54ddebe…`, backdrop_filter `ff04fac9…`; css **210**/paint **205**. |
+| `9ad3391` `feat(layout)` | **Consumo de aspect-ratio** | w/h derivados en block/replaced/flex/grid, ambos definidos gana definido, replaced `auto` usa intrínseco, fallback 300×150. Fixture `layout_aspect_ratio` 400×400 `md5 6f021d43…` (6.016 B); goldens intactos; layout **215** tests. |
+| `c444e96` `feat(image,render)` | **Progresivo color + WebP VP8L subset** | JPEG progresivo de color **completo** (fix EOBRUN en AC-first; color Δmáx ≤2, gris Δ0) y **WebP VP8L subset** (RIFF/VP8L, header, Huffman simple, literales ARGB; transforms/meta-Huffman/LZ77/VP8 lossy ⇒ `UnsupportedFeature` documentado). `render` decodifica el subset y avisa del resto; `webp.html` E2E; image **67**/render **139**. |
+| `0f3f080` `feat(shell)` | **Sesión persistente + descargas** | Sesión JSON v1 (tabs/historial/zoom/scroll, caps 32/64, escritura atómica + lock best-effort, XDG, `--no-session`/`--session-file`, headless no escribe) y descargas (`Ctrl+S` PNG, `Ctrl+Shift+S` HTML serializado con doctype, `--save-png`/`--save-html`, naming sanitizado); shell **180** tests (+20); golden basic intacto. |
+| `1f58102` `test(fuzz)` | **Fuzz 10 targets** | Nuevos `image_decode`, `exif_parse`, `hpack_decode` (matriz 7→10, corpus curado 11/9/21, CI 300 s matrix + PR build-only); build 10/10 y smoke 300 runs sin crashes. |
+| `0b3adee` `chore(status)` | **Refresco del status** | Regenera `PROGRESS.md`, `docs/status/progress.svg` y badges; manifiesto editable actualizado en esta ronda (r24). |
 
 ## Evidencia verificada
 
-- `cargo test --workspace` → **1468 tests, 0 fallos**: css **195**, layout **206**, paint **190**, image **60**, render **138**, net **237**, svg **85**, shell **160**, html **60**, js **71**, dom **28**, fonts 17 + 1 doctest, bench **9**, test_harness **11**.
+- `cargo test --workspace` → **1547 tests, 0 fallos**: css **210**, layout **215**, paint **205**, image **67**, render **139**, shell **180**, js **83**, net **237**, svg **85**, html **60**, dom **28**, fonts 17 + 1 doctest, bench **9**, test_harness **11**.
 - Gate (`cargo run -p test_harness -- --summary`, exit 0): tokenizer **7.050/7.050**, árbol **3.904/3.904**, serializer **230/230**, CSS **30/30**; allowlists tokenizer/tree **(none)**.
-- **A/B de rendimiento** (binarios pre/post del mismo árbol, intercalado, `taskset`): css resolve 35,81→26,54 ms (−25,9 %); pipeline 142,64→105,47 ms (−26,1 %); build-display 7,34–7,72 ms ≤8. Presupuestos ≤140 pipeline/≤43 layout sin subir.
-- **Fixtures**: EXIF o1–o8 y `baseline_ref.jpg`/`gray_prog.jpg`/`progressive.jpg` en `crates/image/tests/fixtures/jpeg/`; `tests/fixtures/render/image_formats.html` + assets `exif.jpg`, `progressive.jpg`, `photo.webp`. Goldens existentes intactos (showcase `c95c7eff…`, basic `7324e851…`, PNG `9e957177…`/`60f8984e…`).
-- **Status**: `docs/status/progress.toml` es la fuente editable; `python3 tools/update_progress.py --write` regenera `PROGRESS.md` + `docs/status/*`; CI ejecuta `--check --no-gate --no-count` (Status freshness).
-- **Fuzz**: sin targets nuevos en la ronda 23; progressive JPEG/EXIF/WebP sniffing/HPACK-flow cubiertos por tests unitarios/loopback, campañas dedicadas pendientes (ver `docs/FUZZING.md`).
+- **Fixtures**: aspect_ratio `a1e4d950…`, object_fit `b54ddebe…`, backdrop_filter `ff04fac9…`; layout_aspect_ratio 400×400 `6f021d43…` (6.016 B); v8l_*/`webp.html`; goldens anteriores intactos (showcase `c95c7eff…`, basic `7324e851…`, PNG `9e957177…`/`60f8984e…`).
+- **Fuzz**: 10 targets, `cargo +nightly fuzz build` 10/10 y smoke 300 runs (`-rss_limit_mb=2048 -timeout=25`) sin panics/ASan/timeouts.
+- **Status**: `docs/status/progress.toml` es la fuente editable; `python3 tools/update_progress.py --write` regenera `PROGRESS.md` + `docs/status/*`; CI ejecuta `--check --no-gate --no-count`.
 
 ## Comandos de verificación
 
 ```bash
-./tools/dev.sh all                                  # fmt, clippy, 1468 tests, doc y gate
-cargo test --workspace                              # 1468 tests (JS por defecto)
+./tools/dev.sh all                                  # fmt, clippy, 1547 tests, doc y gate
+cargo test --workspace                              # 1547 tests (JS por defecto)
 cargo run -p test_harness -- --summary              # gate: 3904/3904 árbol, PASS, exit 0
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo doc --workspace --no-deps
 cargo +1.88 check --workspace --all-targets         # MSRV
 
-# Ronda 23
-cargo run --release -p bench -- --filter resolve-styles-10k-nodes   # 26,54 ms A/B
-cargo run --release -p bench -- --filter build-display              # 7,34–7,72 ms
-cargo run --release -p bench -- --filter pipeline/html-to-png      # 105,47 ms A/B
-cargo test -p image --test exif                                     # EXIF 1–8
-cargo test -p image --test decode                                   # progresivo (gris exacto)
-cargo test -p net --test h2_flow_multiplex_tests                    # flow control/mux/SETTINGS
-cargo run -p render -- tests/fixtures/render/image_formats.html /tmp/image_formats.png --json
+# Ronda 24
+cargo test -p js --test browser_features_r24
+cargo test -p css && cargo test -p layout --test aspect_ratio
+cargo run -p render -- tests/fixtures/render/aspect_ratio.html /tmp/aspect.png --json    # a1e4d950…
+cargo run -p render -- tests/fixtures/render/object_fit.html /tmp/object_fit.png --json  # b54ddebe…
+cargo run -p render -- tests/fixtures/render/backdrop_filter.html /tmp/backdrop.png --json # ff04fac9…
+cargo test -p image --test decode && cargo run -p render -- tests/fixtures/render/webp.html /tmp/webp.png --json
+cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png --width 640 --height 400
+cd fuzz && cargo +nightly fuzz build
 
-# Progress status (regenerar al cerrar la ronda)
+# Progress status
 python3 tools/update_progress.py --write
 python3 tools/update_progress.py --check --no-gate --no-count
 ```
@@ -53,28 +55,27 @@ python3 tools/update_progress.py --check --no-gate --no-count
 | Crate | Estado | Tests |
 |---|---|---|
 | `dom` / `html` | COMPLETOS (arena + parser 3.904/3.904) | 28 / 60 |
-| `css` | F2+F4 + var/calc/pseudos + gradientes + grid completo + filtros/blend/image-set + **caché por estilo de padre** | **195** |
-| `layout` | F4 completa + flex/grid completo + calc mixto/sticky/tipografía + interning | **206** |
+| `css` | F2+F4 + var/calc/pseudos + grid completo + filtros/blend/image-set + **aspect-ratio/object-fit/backdrop** | **210** |
+| `layout` | F4 completa + flex/grid + calc mixto/sticky/tipografía + interning + **aspect-ratio** | **215** |
 | `fonts` | COMPLETO LTR + fuentes web | 17 + 1 doctest |
-| `paint` | F4 completa + backgrounds/decoraciones/clipping/gradientes + EffectGroup + **effects fast path** | **190** |
-| `image` | PNG + JPEG baseline/**progresivo subset** + GIF + **EXIF orientation 1–8**; **WebP solo detectado** | **60** |
-| `net` | F5: TLS/caché/cookies/PSL/Referrer/Range + HTTP/2 (HPACK/framing/ALPN/**flow control/mux/SETTINGS**) | **237** |
-| `js` | F6: DOM/eventos/timers + APIs de navegador (sin cambios r23) | 71 |
+| `paint` | F4 completa + backgrounds/decoraciones/clipping/gradientes + EffectGroup + **BackdropFilter/object-fit** | **205** |
+| `image` | PNG + JPEG baseline/**progresivo color completo** + GIF + EXIF 1–8 + **WebP VP8L subset** | **67** |
+| `net` | F5: TLS/caché/cookies/PSL/Referrer/Range + HTTP/2 (HPACK/framing/flow/mux/SETTINGS) | **237** |
+| `js` | F6: DOM/eventos/timers/APIs + **History/location/Web Storage/MutationObserver** | **83** |
 | `svg` | Parser/modelo/rasterizador + CSS/gradientes/pattern/text + clipPath/mask/filtros | **85** |
-| `render` | Pipeline URL→PNG + imágenes PNG/JPEG/GIF/SVG + event loop + **image_formats E2E** | **138** |
-| `shell` | F7 + tabs/find/forms/zoom + chrome (address bar/tab strip/select) | **160** |
-| `bench` / `test_harness` | Tooling (filas E2E) / gate 4 suites | 9 / 11 |
-| `fuzz` (workspace aparte) | 7 targets + corpus + job PR build-only (sin cambios r23) | build 7/7 |
+| `render` | Pipeline URL→PNG + imágenes PNG/JPEG/GIF/SVG/WebP-subset + **webp E2E** | **139** |
+| `shell` | F7 + chrome/tabs/find/forms/zoom + **sesión persistente/descargas** | **180** |
+| `bench` / `test_harness` | Tooling / gate 4 suites | 9 / 11 |
+| `fuzz` (workspace aparte) | **10 targets** + corpus curado + PR build-only | build 10/10 |
 
 ## Deuda priorizada
 
-1. **Imágenes**: WebP VP8L/VP8 decoder, refinamiento de color en JPEG progresivo, CMYK/12-bit, EXIF thumbnails, GIF animado y presupuestos de decode/rasterizer.
-2. **HTTP/2**: push/prioridades, h2c, trailers, 100-continue y request bodies; streaming de respuestas.
-3. **CSS/paint**: display-p3/espacios de color avanzados, `backdrop-filter`, efectos por capa y `object-fit`/`aspect-ratio`.
-4. **SVG/JS**: `<textPath>`, `feColorMatrix`/`feBlend`/`feMerge`, animación SVG; módulos ES y memoria real en Boa.
-5. **Grid/layout**: overlaps fuera de orden de documento, subgrid/masonry, block-in-inline y colores de `border-collapse`.
-6. **Shell**: autocompletar/historial, favicons, overflow menu, select múltiple/nativo, descargas/bookmarks/sesión e aislamiento.
-7. **Fuzz/bench**: campañas dedicadas para JPEG progresivo/EXIF/HPACK-flow y fuzz más largas; mantener status generado al cerrar cada ronda.
+1. **Imágenes/WebP**: VP8L transforms/meta-Huffman/LZ77 completos, VP8 lossy, display-p3, EXIF thumbnails y rendimiento decode/rasterizer.
+2. **JS**: módulos ES/dynamic import; cableado de providers history/location/storage en render/shell (canal render→shell para location); StorageEvent/proxy/requestIdleCallback; fetch/XHR/workers; memoria real.
+3. **HTTP/2**: push/prioridades, h2c, trailers, request bodies/100-continue y streaming.
+4. **CSS/paint**: efectos por capa, color avanzado, `object-view-box`/`image-set` múltiple, rendimiento de group effects.
+5. **Shell**: save-as/prompt visual, descarga de recursos (no solo PNG/HTML), cookies/passwords, autocompletar/favicons, multi-select/native widgets, aislamiento.
+6. **Fuzz/bench**: campañas más largas (imagen/HTTP2), bench E2E de las features r24 y mantener status generado al cerrar cada ronda.
 
 ## Reglas del repositorio (recordatorio)
 

@@ -6,6 +6,52 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 24 — JS browser APIs, aspect-ratio/object-fit/backdrop, full progressive JPEG, WebP VP8L, session/downloads and 10 fuzz targets (2026-11-11)
+
+#### Added
+
+- **JS browser APIs** (`05e2b77`, js 83 tests, +12): History API with injectable
+  providers (`pushState/replaceState/back/forward/go`, no-op without provider),
+  `location` (`href/pathname/search/hash/origin/protocol/host`,
+  `assign/replace/reload`), `localStorage`/`sessionStorage` (per-realm maps,
+  1 MiB cap with `QuotaExceededError`, optional `StorageProvider` load/save) and
+  `MutationObserver` subset (childList/attributes/characterData + subtree,
+  `disconnect`/`takeRecords`; records delivered when the host drains microtasks).
+  `requestIdleCallback` remains unimplemented. Providers documented for future
+  render/shell wiring (history/location/storage/observer before the final re-render).
+- **CSS/paint layout features** (`13c3f6a`, css 210 / paint 205 tests):
+  `aspect-ratio` (`auto`/ratio), `object-fit`
+  (`fill/contain/cover/none/scale-down`), `object-position` keywords/%/px and
+  `backdrop-filter` (+`-webkit` alias). Paint gains `DisplayItem::BackdropFilter`
+  (already-painted backdrop + filter functions + deterministic blur; caps 64/16/
+  16.7 Mpx) and object-fit with content-box clipping and bilinear sampling
+  (`fill` byte-identical, goldens unchanged). Fixtures `aspect_ratio`
+  `a1e4d950…`, `object_fit` `b54ddebe…`, `backdrop_filter` `ff04fac9…`.
+- **Layout consumes aspect-ratio** (`9ad3391`, layout 215 tests): derived width/
+  height, explicit wins when both defined, replaced `auto` uses intrinsic size,
+  300×150 fallback, and flex/grid support; fixture `layout_aspect_ratio` 400×400
+  `md5 6f021d43…` (6,016 B); goldens unchanged.
+- **Image/render** (`c444e96`, image 67 / render 139 tests): **full progressive
+  JPEG colour** (fix EOBRUN in AC-first; colour Δmax ≤2, grayscale Δ0) and
+  **WebP VP8L subset** (RIFF/VP8L header, simple Huffman, ARGB literals;
+  transforms/meta-Huffman/LZ77/VP8 lossy ⇒ `UnsupportedFeature`), wired into
+  `render` with `webp.html` E2E and non-fatal warning for unsupported files.
+- **Shell session and downloads** (`0f3f080`, shell 180 tests): persistent JSON v1
+  session (tabs/history/zoom/scroll, caps 32 tabs/64 history, atomic write +
+  best-effort lock, XDG paths, `--no-session`/`--session-file`, headless never
+  writes) and downloads (`Ctrl+S` PNG, `Ctrl+Shift+S` serialized HTML with
+  doctype, headless `--save-png`/`--save-html`, sanitized naming).
+- **Fuzzing expanded to 10 targets** (`1f58102`): `image_decode`, `exif_parse`
+  and `hpack_decode` join the matrix (curated corpora 11/9/21, CI 300 s matrix +
+  PR build-only); 10/10 build and 300-run smoke without crashes.
+
+#### Tests
+
+- **1,547 tests, 0 failures** (css 210, layout 215, paint 205, image 67,
+  render 139, shell 180, js 83, net 237, svg 85, html 60, dom 28, fonts 17+1
+  doctest, bench 9, test_harness 11); gate PASS with tokenizer 7,050/7,050,
+  tree 3,904/3,904, serializer 230/230 and CSS 30/30.
+
 ### Round 23 — performance recovery, EXIF/progressive JPEG, WebP detection and HTTP/2 flow control (2026-11-11)
 
 #### Changed

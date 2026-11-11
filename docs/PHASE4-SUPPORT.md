@@ -12,7 +12,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 ---
 
-## 1. Modelo de caja y layout (`crates/layout`, 206 tests)
+## 1. Modelo de caja y layout (`crates/layout`, 215 tests)
 
 | Capacidad CSS 2.2 | Estado | Notas |
 |---|:---:|---|
@@ -33,7 +33,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | `display: list-item` y marcadores (§12.5) | **HECHO** | paint pinta `disc`/`circle`/`square`/`decimal` |
 | `visibility: hidden` (§11.2) | **HECHO** | paint no pinta caja ni texto |
 
-## 2. CSS (`crates/css`, 195 tests + 30 WPT)
+## 2. CSS (`crates/css`, 210 tests + 30 WPT)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -53,6 +53,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **Fast paths de display list (ronda 21)**: retorno barato por caja en `paint_background_border` (28.191 cajas sin fondo/borde/sombra/radio), `DisplayList::with_capacity(16384)`, skip de text-decoration vacío, `first_text_baseline` sin `Vec` y stacks reservados | **HECHO** | A/B build-display 8,62→**7,84 ms** (−9,1 %); goldens intactos |
 | **EffectGroup: filtros y blend (ronda 22)**: filtros CSS (blur/brightness/…/drop-shadow) y mix-blend-mode por grupo con buffer offscreen y composición contra backdrop (fórmula CSS) | **HECHO** | caps área 16,7 Mpx/blur 64/funciones 16; fixtures filter_effects/blend_modes/image_set; goldens intactos |
 | **Effects analysis (ronda 23)**: `effects_present` agregado por pase + fast path r21-equivalente (sin efectos no se clonan estilos/EffectGroup), DisplayItem cap 20480 e `is_list_item` antes de phase | **HECHO** | build-display **7,34–7,72 ms ≤8** (−4,8 %/−9,6 %) |
+| **BackdropFilter/object-fit (ronda 24)**: `DisplayItem::BackdropFilter` (backdrop ya pintado + funciones + blur determinista; caps 64/16/16,7 Mpx) y object-fit con clip al content box y muestredo bilineal | **HECHO** | paint 205 tests; `fill` byte-idéntico; goldens intactos |
 
 | **Backgrounds multicapa (ronda 16)**: `background-origin` (border/padding/content), `background-clip` (text parseado, pinta border-box), `background-attachment` (scroll/fixed), **`background_layers` top-first** (listas cíclicas, shorthand multicapa, color solo última) y `space`/`round` reales | **HECHO** | Espejo legacy para goldens; paint 130 tests |
 | **`@font-face` (ronda 13)**: `Stylesheet.font_faces` + `FontFaceRule { family, sources, weight, style }` | **HECHO** | Consumido por `fonts`/`render` para fuentes web (ver §4) |
@@ -64,6 +65,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **calc() mixto %+px (ronda 20)**: side table `CalcLengths` junto a `Length` intacto; width/height/min/max, margins/paddings, insets, gaps, background-position/size, border-radius; base indefinida ⇒ %=0; calc anidado em/rem/vh/vw | **HECHO** | Layout 196 tests; fixtures `calc_width`/`calc_margin`/`calc_gap`; `font-size` solo absoluto (documentado) |
 | **Sticky y tipografía (ronda 20)**: `position: sticky` (slot de flujo + offsets, top>bottom/left>right, sin afectar hermanos, hook de scroll documentado); `text-transform` en shaping sin mutar DOM; `word-spacing`/`letter-spacing` heredados; `white-space: pre-wrap/pre-line` | **HECHO** | Fixtures `sticky_offsets` (`md5 08d9a63b…`), `text_transform` (`5935cf43…`), `word_spacing` (`a9fcad22…`), `white_space` (`c4134d67…`) |
 | **Interning de `ComputedStyle` (ronda 21)**: fingerprint barato + `eq` exacta antes de compartir `Arc` en tree_builder, estilos anónimos perezosos/cacheados por padre, fast path de spacing cero en IFC, `#[inline]` en resolvers y grid por índice | **HECHO** | A/B layout 46,6→**36,4 ms** (−21,8 %, ≤43 ✅), sticky 42,8→32,3; tests layout 206 |
+| **Consumo de aspect-ratio (ronda 24)**: w/h derivados en block/replaced/flex/grid, ambos definidos gana definido, replaced auto usa intrínseco y fallback 300×150 | **HECHO** | layout 215 tests; fixture 400×400 `md5 6f021d43…` 6016 B; goldens intactos |
 | **Grid completo (ronda 22)**: `grid-auto-flow row/column+dense`, `grid-template-areas`/`grid-area`, líneas nombradas y placement por nombre, `justify/align-content` con stretch y `repeat(auto-fit)` colapsando tracks vacíos | **HECHO** | layout 206 tests; límites: overlaps en orden de documento, auto-fit sólo rango repetido, sin subgrid/masonry |
 
 | **`-webkit-background-clip` (ronda 18)** como alias de `background-clip` | **HECHO** | 5 tests `background_clip_prefixed` |
@@ -73,9 +75,10 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **Grid completo (ronda 22)**: grid-auto-flow row/column+dense, `grid-template-areas`/`grid-area`, líneas nombradas y placement por nombre, justify/align-content de tracks con stretch, `repeat(auto-fit)` | **HECHO** | layout 206/css 195; fixtures grid_areas `8f9a9eba…`/grid_dense `1789daf8…`/grid_content `123d1a2b…` |
 | **Filtros CSS/blend/image-set (ronda 22)**: filter (blur/brightness/contrast/grayscale/invert/opacity/sepia/saturate/hue-rotate/drop-shadow + alias `-webkit`), mix-blend-mode (6 modos) e `image-set()` 1x | **HECHO** | paint `DisplayItem::EffectGroup` offscreen contra backdrop; caps 16,7 Mpx/blur 64/funciones 16; fixtures filter_effects `ffe06406…`/blend_modes `32788e6d…`/image_set `dc638211…` |
 | **CSS perf (ronda 23)**: clave de caché por identidad de estilo del padre, move-on-miss y AST UA cacheado (`OnceLock`) | **HECHO** | css resolve 35,81→**26,54 ms** (−25,9 %); 128-bit key/umbral 2/cap 1024 |
+| **aspect-ratio/object-fit/backdrop (ronda 24)**: `aspect-ratio` (auto/ratio), `object-fit` (fill/contain/cover/none/scale-down), `object-position` (keywords/%/px) y `backdrop-filter` + alias `-webkit` | **HECHO** | css 210/paint 205; fixtures aspect_ratio `a1e4d950…`/object_fit `b54ddebe…`/backdrop_filter `ff04fac9…` |
 
 
-## 3. Pintado (`crates/paint`, 190 tests)
+## 3. Pintado (`crates/paint`, 205 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -117,6 +120,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **HTTP/2 MVP (ronda 22)**: HPACK completo, framing con caps 16 KiB/64 KiB/2 streams, ALPN h2 + fallback h1 | **HECHO** | net 225 tests; sin multiplexado/flow-control/push/h2c/trailers/request bodies |
 | **HTTP/2 avanzado (ronda 23)**: flow control conexión/stream, multiplexado ≥2 streams, SETTINGS avanzados con ACK, HEADERS+CONTINUATION y HPACK compartido | **HECHO** | net 237 tests (+12 loopback); pendientes push/prioridades/h2c/trailers/bodies |
 | **EXIF/JPEG progresivo/WebP (ronda 23)**: orientación EXIF 1–8 aplicada en decode, subset progresivo SOF2 (gris exacto; color refinement `UnsupportedFeature`), WebP detectado sin decoder | **HECHO** | image 60/render 138 tests; fixtures exif_o1..o8 y `image_formats.html` |
+| **JPEG progresivo color + WebP VP8L (ronda 24)**: progresivo de color completo (Δmáx ≤2, gris Δ0) y VP8L subset (RIFF/header/Huffman simple/literales ARGB; resto ⇒ UnsupportedFeature) | **HECHO** | image 67/render 139 tests; fixtures v8l_* y `webp.html` |
 | **Cookies RFC 6265** (`CookieJar`, cap 4.096), **CORS básico**, **gzip/deflate** (caps 64 MiB + ratio 1000:1), **SameSite** (Strict/Lax/None+Secure, top-level aproximado), **PSL reducida** y **Referrer-Policy** (8 políticas, header>meta>default) instalados en el loader | **HECHO** | Ronda 8 + ronda 18; **ronda 19**: `ReferrerConfig` cableado en render antes de subrecursos (%Referer% y SameSite reales) y `RenderStats.referrer_policy`; CORS completo/HTTP2 pendientes |
 | **Decoder PNG propio + inflate zlib/DEFLATE** (color types 0/2/3/4/6, bit depth 1–16, filtros 0–4, Adam7, CRC, `PngLimits`) | **HECHO** | `crates/image`, 45 tests + 1 doctest; GIF/JPEG/WebP solo detectados |
 | **Pipeline de navegador** `URL → PNG` con CSS externo: charset UTF-8/Windows-1252, `<base>`, `<style>`+`<link rel=stylesheet>` (dedup/media/caps), cascada UA+autor, layout con fuentes y backgrounds, PNG; **`RenderOutput.hit_regions`**, **red avanzada E2E** (cookies por render/sesión, CORS/credentials con denegación no fatal, gzip/deflate, `--cookies`/`--origin`) y **event loop presupuestado** (reloj virtual, `DOMContentLoaded`/`load`, timers, re-render único) | **HECHO** | `crates/render`, **138 tests**; fixture 640×400 → 15.498 B `md5 7324e851…`; showcase 1024×768 → 80.220 B `md5 c95c7eff…`; **ronda 13**: webfonts E2E; **ronda 15**: SVG inline (`inline_svgs`) y event loop determinista; **ronda 16**: estilos pre-script con `getComputedStyle` real (`styles_pre_script`), matchMedia/viewport, rAF con epoch fijo (48 ms), `readyState`, onerror/console ⇒ warnings (`console_errors`) y multi-capa (`background_layers.html`, md5 `c357cc2c…`); **ronda 18**: clipping+clip:text; **ronda 19**: `ReferrerConfig`/SameSite reales, estado CSS real (`css_state.html`) y 2 tests de integración de gradientes |
@@ -140,7 +144,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, eventos DOM/foco y formularios del host (Fase 7), animaciones, `border-radius`, `box-shadow`, gradientes y medios paginados. JavaScript está en Fase 6 (ver §8); hit-testing y navegación ya existen (rondas 9–10).
 
-## 8. Fase 6: JavaScript (`crates/js`, 71 tests + scripting E2E en `render`/parser)
+## 8. Fase 6: JavaScript (`crates/js`, 83 tests + scripting E2E en `render`/parser)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -154,7 +158,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 | **WP-6.4 (ronda 11)**: hook `html::scripting::{ScriptExecutor, ScriptExecution}`; scripts parser-inserted al `</script>`/EOF y `document.write` **re-tokenizado en la posición actual** (scripts anidados incluidos); externos `src` los ejecuta el host; errores no fatales; camino sin scripting zero-cost | **HECHO** | **árbol 3.904/3.904 (100 %), allowlist de tree vacía** |
 | Pendientes F6: `document.onerror` para errores de scripts, módulos ES/`async`/`defer`, memoria real y aislamiento, provider de `getComputedStyle` cableado al pipeline y event loop vivo en el shell | **PENDIENTE** | Fase 6 ≈80-85 % |
 
-## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 160 tests)
+## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 180 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -175,7 +179,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 ## 10. Verificación de la matriz
 
 ```bash
-./tools/dev.sh all                             # fmt, clippy, 1468 tests, doc y gate PASS
+./tools/dev.sh all                             # fmt, clippy, 1547 tests, doc y gate PASS
 cargo test -p css -p layout -p paint -p fonts -p dom -p html
 cargo test -p net -p render -p image -p shell
 cargo test -p js

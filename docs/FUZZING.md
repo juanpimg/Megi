@@ -294,9 +294,10 @@ New targets and corpora for the round-22/23 image and HTTP/2 work:
   No panics, ASan/UBSan findings or timeouts were found; Ok/Err results are
   discarded on purpose.
 
-### Round 23 status
+### Round 24 status
 
-Round 23 added no fuzz targets at the time; its progressive-JPEG/EXIF, WebP sniffing and
-HPACK flow-control surfaces are covered from round 24 by `image_decode`/`exif_parse`/
-`hpack_decode` (frame parsing in the last one; the full multiplexing/flow-control client
-state machine remains covered by loopback tests, see Limitations).
+The matrix now has **10 targets**: the original seven plus `image_decode`, `exif_parse` and
+`hpack_decode` (curated corpora 11/9/21 seeds). `cargo +nightly fuzz build` builds 10/10 and
+300-run smoke campaigns (`-rss_limit_mb=2048 -timeout=25`) finish without panics/ASan/
+timeouts. CI runs a 300 s matrix smoke plus the PR build-only job; longer campaigns remain a
+future item.

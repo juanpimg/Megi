@@ -571,6 +571,30 @@ Límites de la ronda: JPEG progresivo solo subset (DC/AC first+refine, spectral 
 
 Cifras de referencia en la ronda 23: **1468 tests** (bench 9, css 195, dom 28, fonts 17+1 doctest, html 60, image 60, js 71, layout 206, net 237, paint 190, render 138, shell 160, svg 85, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; css resolve 26,54 ms, pipeline 105,47 ms (A/B), build-display ≤8 ms; status generado desde `docs/status/progress.toml` (`python3 tools/update_progress.py --write`).
 
+### 2.16q Ronda 24: JS browser APIs, aspect-ratio/object-fit/backdrop, imagen, sesión/descargas y fuzz 10 targets
+
+```bash
+# JS: History/location/Web Storage/MutationObserver
+cargo test -p js --test browser_features_r24
+# CSS/paint/layout: aspect-ratio, object-fit/object-position y backdrop-filter
+cargo test -p css
+cargo run -p render -- tests/fixtures/render/aspect_ratio.html /tmp/aspect.png --json    # a1e4d950…
+cargo run -p render -- tests/fixtures/render/object_fit.html /tmp/object_fit.png --json  # b54ddebe…
+cargo run -p render -- tests/fixtures/render/backdrop_filter.html /tmp/backdrop.png --json # ff04fac9…
+cargo test -p layout --test aspect_ratio                                                 # layout 215
+# Imagen: progresivo color completo + WebP VP8L subset
+cargo test -p image --test decode
+cargo run -p render -- tests/fixtures/render/webp.html /tmp/webp.png --json
+# Shell: sesión persistente y descargas (headless)
+cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png --width 640 --height 400
+# Fuzz: 10 targets
+cd fuzz && cargo +nightly fuzz build
+```
+
+Límites r24: History/location sin provider ⇒ no-op; MutationObserver subset (sin attributeFilter/StorageEvent); WebP solo VP8L subset (transforms/meta-Huffman/LZ77/VP8 lossy ⇒ `UnsupportedFeature`); backdrop-filter caps 64 blur/16 funciones/16,7 Mpx; sesión caps 32 tabs/64 historial y escritura atómica best-effort; descargas PNG/HTML sanizited; fuzz 10 targets con smoke 300 runs.
+
+Cifras de referencia en la ronda 24: **1547 tests** (bench 9, css 210, dom 28, fonts 17+1 doctest, html 60, image 67, js 83, layout 215, net 237, paint 205, render 139, shell 180, svg 85, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
+
 ## 4. Progress status generado (`PROGRESS.md`, `docs/status/*.svg`)
 
 El estado de avance del proyecto se genera **desde datos reales del repositorio**, sin
