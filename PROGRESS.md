@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `a2fb055` (2026-11-11) · overall **97%** · **1,468** tests · conformance **PASS** · **14** crates · **119,910** lines of Rust
+**Snapshot** — commit `210c02b` (2026-11-11) · overall **97%** · **1,468** tests · conformance **PASS** · **14** crates · **119,910** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -68,13 +68,14 @@
 - From-scratch PNG encoder (deterministic), gradients and background geometry
 - SVG crate wired into render (shapes/paths/text/patterns), web fonts (WOFF2)
 - SVG clipPath/mask/basic filters; CSS filters, mix-blend-mode and image-set()
+- EXIF orientation 1-8, progressive JPEG subset (grayscale exact) and WebP sniffing (no decoder)
 
 **Pending**
 
+- WebP VP8L/VP8 decoder and progressive JPEG color refinement
 - Broader color()/display-p3/advanced color-space coverage
 - SVG text-on-path, feColorMatrix/feBlend/feMerge and SVG animation
-- Rasterizer/decoder performance budgets (docs/PERFORMANCE.md: IFC/PNG/decoder)
-- Backdrop-filter and layer-accurate group effects
+- Rasterizer/decoder performance budgets; backdrop-filter and layer-accurate group effects
 
 ### F5 — Networking & fetch (99%)
 
@@ -84,13 +85,14 @@
 - In-memory cache, cookies (RFC 6265), SameSite + public-suffix list, CORS subset
 - gzip/deflate with anti-bomb caps, Referrer-Policy, Range/206 and HEAD
 - HTTP/2 MVP (HPACK, framing, ALPN h2 with HTTP/1.1 fallback)
-- From-scratch JPEG baseline and GIF87a/89a decoders wired into render by sniffing
+- From-scratch JPEG baseline/GIF87a/89a decoders wired into render by sniffing
+- HTTP/2 flow control, stream multiplexing and advanced SETTINGS
 
 **Pending**
 
-- HTTP/2 multiplexing, full flow control, push/priorities, h2c, trailers and request bodies
+- HTTP/2 push/priorities, h2c, trailers, request bodies and 100-continue
 - Streaming bodies (responses are still buffered), complete PSL and multi-range
-- WebP, EXIF orientation and image decode performance budgets
+- WebP VP8L/VP8 decoder and image decode performance budgets
 
 ### F6 — JavaScript & DOM APIs (90%)
 
@@ -126,7 +128,7 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `a2fb055` (2026-11-11) |
+| Commit | `210c02b` (2026-11-11) |
 | Crates in the workspace | 14 |
 | Lines of Rust (tracked `.rs`) | 119910 |
 | Tests (`cargo test --workspace -- --list`) | 1468 |
@@ -146,21 +148,21 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 
 ## Recent rounds
 
+- **Round 23** — performance recovery, EXIF/progressive JPEG, WebP detection and HTTP/2 flow control
 - **Round 22** — JPEG/GIF, SVG effects, HTTP/2 MVP, shell chrome, full grid and CSS filters
 - **Round 21** — performance-budget recovery without raising budgets
 - **Round 20** — custom-property performance fix, conic gradients, mixed calc, typography/sticky, shell tabs and E2E benchmarks
 - **Round 19** — CSS gradients, advanced grid, renderer referrer/state and shell find-in-page
 - **Round 18** — expanded fuzzing, real clipping, Grid MVP, modern CSS and advanced networking
-- **Round 17** — flexbox MVP, rounded corners/shadows, editable forms and SVG pattern/text
 
 ## Next up
 
-- HTTP/2 multiplexing, full flow control and streaming bodies
+- WebP VP8L/VP8 decoder and progressive JPEG color refinement
+- HTTP/2 push/priorities, h2c, trailers and request bodies
 - Broader color()/display-p3 coverage and advanced color spaces
 - ES modules and dynamic import in the JS runtime
 - SVG text-on-path, feColorMatrix/feBlend/feMerge and SVG animation
-- WebP/EXIF orientation and image decode performance budgets
-- Longer fuzz campaigns incl. JPEG/GIF and HPACK
+- Image decode/rasterizer performance budgets and longer fuzz campaigns
 
 ## Cross-cutting areas
 
@@ -179,4 +181,4 @@ python3 tools/update_progress.py --write --no-gate  # skip the conformance gate
 python3 tools/update_progress.py --check --no-gate --no-count  # CI freshness
 ```
 
-_Last manifest update by: docs (round 22). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
+_Last manifest update by: docs (round 23). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
