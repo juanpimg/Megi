@@ -202,24 +202,21 @@ pub(crate) fn layout_box_contents(
         return;
     }
     // Flex containers arrange their children with the flex algorithm instead of the
-    // block flow (CSS Flexbox 1). Documents without `display:flex` never enter this
-    // branch, so block/IFC geometry is unchanged.
-    if layout_box
-        .style
-        .as_ref()
-        .is_some_and(|style| style.display == Display::Flex || style.is_inline_flex)
-    {
+    // block flow (CSS Flexbox 1), and grid containers with the grid algorithm (CSS Grid
+    // 1). Documents without either never enter these branches, so block/IFC geometry is
+    // unchanged. One style lookup resolves both flags.
+    let (is_flex, is_grid) = layout_box.style.as_ref().map_or((false, false), |style| {
+        (
+            style.display == Display::Flex || style.is_inline_flex,
+            style.display == Display::Grid || style.is_inline_grid,
+        )
+    });
+    if is_flex {
         let definite_height = definite_content_height(layout_box, cb_height);
         crate::flex::layout_flex_children(layout_box, definite_height, is_root, measurer);
         return;
     }
-    // Grid containers arrange their children with the grid algorithm (CSS Grid 1);
-    // documents without `display:grid` never reach this branch.
-    if layout_box
-        .style
-        .as_ref()
-        .is_some_and(|style| style.display == Display::Grid || style.is_inline_grid)
-    {
+    if is_grid {
         let definite_height = definite_content_height(layout_box, cb_height);
         crate::grid::layout_grid_children(layout_box, definite_height, is_root, measurer);
         return;
@@ -554,6 +551,10 @@ fn place_float(
 
 /// Returns the horizontal space taken by floats at `y` inside `cb`.
 fn float_exclusions(floats: &[PlacedFloat], cb: Rect, y: f32) -> (f32, f32) {
+    // Documents without floats (the common case) skip the two filter/fold chains per child.
+    if floats.is_empty() {
+        return (0.0, 0.0);
+    }
     let left = floats
         .iter()
         .filter(|placed| {

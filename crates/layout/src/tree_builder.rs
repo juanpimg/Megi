@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use css::{ComputedStyle, Display, Float, Length, Overflow, Position};
+use css::{ComputedStyle, Display, Float, Overflow, Position};
 use dom::{Document, Namespace, NodeId, NodeKind};
 
 use crate::box_tree::{BoxType, LayoutBox, anonymous_style_from, is_collapsible_whitespace_box};
@@ -39,7 +39,7 @@ pub fn build_layout_tree_with_replaced_sizes(
 /// Per-layout-call cache that interns equal `ComputedStyle` values so that the
 /// 28k boxes of a text-heavy document share the (few hundred) distinct styles
 /// instead of deep-cloning one style per element. Equality is always checked on a
-/// fingerprint hit, so a coarse hash cannot change semantics.
+/// bucket hit, so the key (a cached value fingerprint) can never change semantics.
 #[derive(Default)]
 struct StyleCache {
     buckets: HashMap<u64, Vec<Arc<ComputedStyle>>>,
@@ -48,7 +48,16 @@ struct StyleCache {
 
 impl StyleCache {
     fn intern(&mut self, style: &ComputedStyle) -> Arc<ComputedStyle> {
-        let key = style_fingerprint(style);
+        // Styles produced by the cascade carry their value fingerprint (computed once in
+        // `ComputedStyle::compute`), so interning does not re-hash the whole style per
+        // element. Hand-built styles (tests, `initial()`: fingerprint `0`) fall back to
+        // computing it on demand so equal hand-built styles still share.
+        let cached = style.fingerprint();
+        let key = if cached == 0 {
+            style.compute_fingerprint()
+        } else {
+            cached
+        };
         if let Some(bucket) = self.buckets.get(&key) {
             for candidate in bucket {
                 if candidate.as_ref() == style {
@@ -72,100 +81,6 @@ impl StyleCache {
         self.anonymous.insert(key, Arc::clone(&style));
         style
     }
-}
-
-fn mix(hash: &mut u64, value: u64) {
-    *hash ^= value;
-    *hash = hash.wrapping_mul(0x1000_0000_01b3);
-}
-
-fn mix_len(hash: &mut u64, length: Length) {
-    match length {
-        Length::Px(px) => {
-            mix(hash, 1);
-            mix(hash, px.to_bits() as u64);
-        }
-        Length::Percent(percent) => {
-            mix(hash, 2);
-            mix(hash, percent.to_bits() as u64);
-        }
-        Length::Auto => mix(hash, 3),
-    }
-}
-
-/// Cheap fingerprint of a computed style. The cache verifies full equality on a
-/// hit, so this only needs to distribute common styles well.
-fn style_fingerprint(style: &ComputedStyle) -> u64 {
-    let mut hash = 0xcbf2_9ce4_8422_2325u64;
-    mix(&mut hash, style.display as u64);
-    mix(&mut hash, style.position as u64);
-    mix(&mut hash, style.float as u64);
-    mix(&mut hash, style.clear as u64);
-    mix(&mut hash, style.box_sizing as u64);
-    mix(&mut hash, style.overflow as u64);
-    mix(&mut hash, style.visibility as u64);
-    mix_len(&mut hash, style.width);
-    mix_len(&mut hash, style.height);
-    mix_len(&mut hash, style.min_width);
-    mix_len(&mut hash, style.max_width);
-    mix_len(&mut hash, style.min_height);
-    mix_len(&mut hash, style.max_height);
-    for edge in [
-        style.margin.top,
-        style.margin.right,
-        style.margin.bottom,
-        style.margin.left,
-        style.padding.top,
-        style.padding.right,
-        style.padding.bottom,
-        style.padding.left,
-    ] {
-        mix_len(&mut hash, edge);
-    }
-    for width in [
-        style.border_width.top,
-        style.border_width.right,
-        style.border_width.bottom,
-        style.border_width.left,
-    ] {
-        mix(&mut hash, width.to_bits() as u64);
-    }
-    mix(&mut hash, style.font_size.to_bits() as u64);
-    mix(&mut hash, style.font_weight as u64);
-    mix(&mut hash, style.font_style as u64);
-    mix(&mut hash, style.font_family.len() as u64);
-    mix(
-        &mut hash,
-        style
-            .line_height
-            .map_or(0, |height| height.to_bits() as u64),
-    );
-    mix(&mut hash, style.opacity.to_bits() as u64);
-    mix(
-        &mut hash,
-        style.color.r as u64 | ((style.color.g as u64) << 8),
-    );
-    mix(
-        &mut hash,
-        style.color.b as u64 | ((style.color.a as u64) << 8),
-    );
-    mix(
-        &mut hash,
-        style.background_color.r as u64 | ((style.background_color.g as u64) << 8),
-    );
-    mix(
-        &mut hash,
-        style.background_color.b as u64 | ((style.background_color.a as u64) << 8),
-    );
-    mix(&mut hash, style.text_align as u64);
-    mix(&mut hash, style.white_space as u64);
-    mix(&mut hash, style.text_transform as u64);
-    mix_len(&mut hash, style.letter_spacing);
-    mix_len(&mut hash, style.word_spacing);
-    mix(&mut hash, style.calc_lengths.width.is_some() as u64);
-    mix(&mut hash, style.is_inline_flex as u64);
-    mix(&mut hash, style.is_inline_grid as u64);
-    hash
 }
 
 pub(crate) fn build_layout_tree_internal(
@@ -390,9 +305,11 @@ fn build_box_for_node(
                 BoxType::BlockNode(_)
                 | BoxType::InlineBlock(_)
                 | BoxType::TableCell(_)
-                | BoxType::TableCaption(_) => {
-                    normalize_block_children(raw_children, child_style.as_ref())
-                }
+                | BoxType::TableCaption(_) => normalize_block_children(
+                    raw_children,
+                    child_style.as_ref(),
+                    needs_anonymous_style,
+                ),
                 BoxType::Table(_) | BoxType::InlineTable(_) => {
                     table_fixup_children(raw_children, child_style.as_ref())
                 }
@@ -490,12 +407,12 @@ fn build_box_for_node(
 fn normalize_block_children(
     children: Vec<LayoutBox>,
     inherited_style: Option<&Arc<ComputedStyle>>,
+    needs_wrapping: bool,
 ) -> Vec<LayoutBox> {
-    let has_block = children.iter().any(|c| c.is_block());
-    let has_inline = children.iter().any(|c| c.is_inline());
-
-    // If pure blocks or pure inlines, no anonymous wrapping required
-    if !has_block || !has_inline {
+    // `needs_wrapping` is the `has_block && has_inline` scan already performed by the
+    // caller for the anonymous-style decision, so pure-block/pure-inline children avoid a
+    // second pair of scans over the child list.
+    if !needs_wrapping {
         return children;
     }
 

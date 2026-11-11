@@ -1671,6 +1671,34 @@ pub struct CalcLengths {
     pub border_radius: Option<[crate::calc::CalcValue; 8]>,
 }
 
+/// Cached value fingerprint used by layout's `StyleCache` to pick an interning bucket.
+///
+/// This is a **pure cache hint**, not a style value: `PartialEq` always returns `true` so it
+/// never participates in [`ComputedStyle`] value equality. Layout only uses it to select a
+/// bucket and still verifies exact `ComputedStyle` equality before sharing an `Arc`, so a
+/// stale or colliding fingerprint can never change which style a box gets — it only changes
+/// how many candidates the interning has to compare.
+///
+/// `0` means "not computed" (hand-built styles such as [`ComputedStyle::initial`] or test
+/// fixtures); layout then falls back to computing the fingerprint on demand.
+#[derive(Clone, Copy, Debug, Default)]
+struct StyleFingerprint(u64);
+
+impl StyleFingerprint {
+    /// Stores `fingerprint`, remapping `0` to `1` so it cannot be confused with "unset".
+    fn new(fingerprint: u64) -> Self {
+        Self(if fingerprint == 0 { 1 } else { fingerprint })
+    }
+}
+
+impl PartialEq for StyleFingerprint {
+    #[inline(always)]
+    fn eq(&self, _other: &Self) -> bool {
+        // Deliberately excluded from `ComputedStyle` equality (see the type docs).
+        true
+    }
+}
+
 /// Complete computed style for an element in the DOM tree.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComputedStyle {
@@ -1869,6 +1897,11 @@ pub struct ComputedStyle {
     pub word_spacing: Length,
     /// `letter-spacing` (initial `normal` = `0px`), resolved by layout in the IFC.
     pub letter_spacing: Length,
+    /// Cached value fingerprint for layout's style interning (see [`StyleFingerprint`]).
+    ///
+    /// Excluded from `PartialEq`; `0` means "not computed" (hand-built styles), in which
+    /// case layout falls back to hashing the style value itself.
+    style_fingerprint: StyleFingerprint,
 }
 
 impl Default for ComputedStyle {
@@ -2000,7 +2033,110 @@ impl ComputedStyle {
             text_transform: TextTransform::None,
             word_spacing: Length::Px(0.0),
             letter_spacing: Length::Px(0.0),
+            style_fingerprint: StyleFingerprint::default(),
         }
+    }
+
+    /// Returns the cached value fingerprint used by layout's style interning.
+    ///
+    /// `0` means "not computed" (hand-built styles); layout then calls
+    /// [`ComputedStyle::compute_fingerprint`]. The value is only a bucket selector:
+    /// interning verifies exact equality before sharing, so collisions are safe.
+    #[inline]
+    pub fn fingerprint(&self) -> u64 {
+        self.style_fingerprint.0
+    }
+
+    /// Computes the cheap value fingerprint that layout's style interning uses as a bucket
+    /// key. [`ComputedStyle::compute`] caches it in the returned style, so the layout tree
+    /// builder never has to re-hash the (large) style struct per element.
+    #[inline]
+    pub fn compute_fingerprint(&self) -> u64 {
+        fn mix(hash: &mut u64, value: u64) {
+            *hash ^= value;
+            *hash = hash.wrapping_mul(0x1000_0000_01b3);
+        }
+        fn mix_len(hash: &mut u64, length: Length) {
+            match length {
+                Length::Px(px) => {
+                    mix(hash, 1);
+                    mix(hash, px.to_bits() as u64);
+                }
+                Length::Percent(percent) => {
+                    mix(hash, 2);
+                    mix(hash, percent.to_bits() as u64);
+                }
+                Length::Auto => mix(hash, 3),
+            }
+        }
+        let mut hash = 0xcbf2_9ce4_8422_2325u64;
+        mix(&mut hash, self.display as u64);
+        mix(&mut hash, self.position as u64);
+        mix(&mut hash, self.float as u64);
+        mix(&mut hash, self.clear as u64);
+        mix(&mut hash, self.box_sizing as u64);
+        mix(&mut hash, self.overflow as u64);
+        mix(&mut hash, self.visibility as u64);
+        mix_len(&mut hash, self.width);
+        mix_len(&mut hash, self.height);
+        mix_len(&mut hash, self.min_width);
+        mix_len(&mut hash, self.max_width);
+        mix_len(&mut hash, self.min_height);
+        mix_len(&mut hash, self.max_height);
+        for edge in [
+            self.margin.top,
+            self.margin.right,
+            self.margin.bottom,
+            self.margin.left,
+            self.padding.top,
+            self.padding.right,
+            self.padding.bottom,
+            self.padding.left,
+        ] {
+            mix_len(&mut hash, edge);
+        }
+        for width in [
+            self.border_width.top,
+            self.border_width.right,
+            self.border_width.bottom,
+            self.border_width.left,
+        ] {
+            mix(&mut hash, width.to_bits() as u64);
+        }
+        mix(&mut hash, self.font_size.to_bits() as u64);
+        mix(&mut hash, u64::from(self.font_weight));
+        mix(&mut hash, self.font_style as u64);
+        mix(&mut hash, self.font_family.len() as u64);
+        mix(
+            &mut hash,
+            self.line_height.map_or(0, |height| height.to_bits() as u64),
+        );
+        mix(&mut hash, self.opacity.to_bits() as u64);
+        mix(
+            &mut hash,
+            u64::from(self.color.r) | (u64::from(self.color.g) << 8),
+        );
+        mix(
+            &mut hash,
+            u64::from(self.color.b) | (u64::from(self.color.a) << 8),
+        );
+        mix(
+            &mut hash,
+            u64::from(self.background_color.r) | (u64::from(self.background_color.g) << 8),
+        );
+        mix(
+            &mut hash,
+            u64::from(self.background_color.b) | (u64::from(self.background_color.a) << 8),
+        );
+        mix(&mut hash, self.text_align as u64);
+        mix(&mut hash, self.white_space as u64);
+        mix(&mut hash, self.text_transform as u64);
+        mix_len(&mut hash, self.letter_spacing);
+        mix_len(&mut hash, self.word_spacing);
+        mix(&mut hash, self.calc_lengths.width.is_some() as u64);
+        mix(&mut hash, self.is_inline_flex as u64);
+        mix(&mut hash, self.is_inline_grid as u64);
+        hash
     }
 
     /// Computes values given the cascaded declarations for an element and its parent's style.
@@ -2314,7 +2450,7 @@ impl ComputedStyle {
         let (border_width, border_color, border_style) =
             Self::compute_borders(&entries, font_size, root_font_size, color);
 
-        Self {
+        let mut style = Self {
             display,
             position,
             float,
@@ -2410,7 +2546,10 @@ impl ComputedStyle {
             text_transform,
             word_spacing,
             letter_spacing,
-        }
+            style_fingerprint: StyleFingerprint::default(),
+        };
+        style.style_fingerprint = StyleFingerprint::new(style.compute_fingerprint());
+        style
     }
 
     /// Inherits properties from a parent style according to CSS cascading rules.
