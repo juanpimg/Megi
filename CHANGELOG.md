@@ -6,6 +6,57 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 29 — streaming responses/keep-alive, SVG textPath/SMIL, import maps, WebP lossy header, shell pages and fuzz 14 (2026-11-11)
+
+#### Added
+
+- **Streaming responses + keep-alive** (`20b662b`, net 287 / render 162 tests):
+  `get_streaming`/`request_streaming` with a DataCallback (h2 DATA per frame,
+  callback error ⇒ RST_STREAM(CANCEL)); h1 `fetch_streaming` with documented buffered
+  16 KiB fallback; loader `load_streaming`; `H1Pool` keep-alive per origin (cap 4,
+  idle timeout, `FetchOptions.reuse_connections/max_connections_per_origin/
+  connection_idle_timeout`, `idle_connections()`) so 2 loads share 1 TCP connection,
+  and h2 reuses its `Session`; `RenderOptions.stream_responses` stays byte-identical.
+- **SVG textPath + SMIL** (`5bddd19`, svg 109 tests): `<textPath>` flattens the path,
+  advances glyphs with baseline/startOffset px%/text-anchor (no auto-rotate/side
+  right/textLength, direct child only); SMIL `values`+`keyTimes`+`calcMode`
+  linear/discrete/spline with cubic `keySplines`, `keyTimes` with `set`, and
+  opacity/fill/stroke/color/flood-color/stop-color animation in sRGB+alpha; invalid
+  values are ignored with byte-identical fallback.
+- **Import maps + dynamic import** (`6b5ee45`, js 137 / render 162 tests):
+  `set_import_map_json` (exact keys, longest-prefix `/`, `null` blocks with
+  `ImportMapBlocked`, consulted before the host resolver, invalid JSON typed), dynamic
+  `import()` for literals only (eager, resolved Promise; non-literal ⇒
+  `DynamicImport`) and top-level await as a typed gap (`TopLevelAwait`, no fake
+  support); render parses the first `<script type=importmap>` before modules with
+  non-fatal warnings.
+- **WebP lossy header (experimental)** (`4673582`, image 90 tests): `image::vp8` parses
+  the RIFF/VP8 frame tag (versions 0–3), start code, 14-bit dimensions/scaling and
+  partition with caps, exposing `lossy_info`; decode returns a clear
+  `UnsupportedFeature` instead of mis-decoding and render shows a non-fatal
+  "WebP VP8 lossy is experimental" warning + placeholder. The pixel decoder is
+  explicitly pending.
+- **Shell pages/favicons** (`af20b06`, shell 224 tests): deterministic `file://`
+  directory listings (dirs-first, name/type/size, breadcrumb, absolute escaped hrefs)
+  in headless and worker; browser error pages (DNS/HTTP/TLS/network/file) with URL/code/
+  message/Retry (R) and typed invalid URLs; favicon `<link rel=icon>`/`favicon.ico`
+  (64 KiB fetch cap, 16×16 nearest decode, deterministic FNV dot fallback,
+  `FaviconCache`, per-tab drawing and `--chrome`). md5 dir `d0b66f74…`, error
+  `58a65985…`, chrome+dot `4b9033c7…`.
+- **Fuzzing 14 targets** (`376fbf3`): `h2_push`, `body_stream`, `webp_vp8` and
+  `js_module` join the matrix (37 curated seeds, 300 s each, `js_module` with
+  `-detect_leaks=0`, PR build-only compiles 14); 14/14 build and 300-run smoke.
+- **Bench r28** (`d9633b3`): pipeline **115.67/140 ms (82.6 %)**, css 27.51, layout
+  37.99, showcase 26.74, display 8.61, shell 29.25; all budgets met without raising
+  them; pristine r27→r28 A/B parity −1.4 % with the profile/frequency caveat documented.
+
+#### Tests
+
+- **1,796 tests, 0 failures** (net 287, render 162, svg 109, js 137, image 90,
+  shell 224, paint 208, css 230, layout 215, dom 36, html 60, fonts 17+1 doctest,
+  bench 9, test_harness 11); gate PASS with tokenizer 7,050/7,050, tree 3,904/3,904,
+  serializer 230/230 and CSS 30/30.
+
 ### Round 28 — reduced IDCT/EXIF thumbnails, server push, streaming uploads, JS geometry, byte-safe blur/PNG and context menu (2026-11-11)
 
 #### Added

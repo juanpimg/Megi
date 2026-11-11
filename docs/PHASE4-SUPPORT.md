@@ -58,6 +58,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **Module scripts (ronda 26)**: `<script type=module>` inline/externo con resolver/loader reales, file/http(s)/data, caps por módulo/grafo, fallo no fatal | **HECHO** | render 153 tests; fixtures modules/*.js + module_*.html |
 | **Gaps DOM/JS (ronda 27)**: URL/URLSearchParams, dataset, innerText, attributes NamedNodeMap, normalize, compareDocumentPosition, queueMicrotask, idle determinista, Mouse/PointerEvent, focus/blur, atob/btoa, structuredClone | **HECHO** | js 128/dom 36 tests; gaps restantes documentados (geometría sin layout provider, fetch, crypto, Range, NodeList live) |
 | **Geometría JS (ronda 28)**: `LayoutProvider` NodeId→LayoutRect, `getBoundingClientRect`/offset/client y `ViewportProvider`; render instala layout pre-script (primer script 0, display:none 0) | **HECHO** | js 130/render 157 tests; sin provider 0 documentado |
+| **SVG textPath + SMIL (ronda 29)**: `<textPath>` con glyph advance/startOffset/anchor y `values`+`keyTimes`+`calcMode` spline/keySplines + animación opacity/fill/stroke/color sRGB+alpha | **HECHO** | svg 109 tests; inválidos ignorados byte-idéntico |
 
 | **Backgrounds multicapa (ronda 16)**: `background-origin` (border/padding/content), `background-clip` (text parseado, pinta border-box), `background-attachment` (scroll/fixed), **`background_layers` top-first** (listas cíclicas, shorthand multicapa, color solo última) y `space`/`round` reales | **HECHO** | Espejo legacy para goldens; paint 130 tests |
 | **`@font-face` (ronda 13)**: `Stylesheet.font_faces` + `FontFaceRule { family, sources, weight, style }` | **HECHO** | Consumido por `fonts`/`render` para fuentes web (ver §4) |
@@ -151,7 +152,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, eventos DOM/foco y formularios del host (Fase 7), animaciones, `border-radius`, `box-shadow`, gradientes y medios paginados. JavaScript está en Fase 6 (ver §8); hit-testing y navegación ya existen (rondas 9–10).
 
-## 8. Fase 6: JavaScript (`crates/js`, 130 tests + scripting E2E en `render`/parser)
+## 8. Fase 6: JavaScript (`crates/js`, 137 tests + scripting E2E en `render`/parser)
 
 | **ES modules (ronda 25)**: `eval_module` con resolver/loader, imports default/named/namespace/side-effect, exports const/let/var/function/class/default/{as}, `import.meta.url`, orden topológico, ciclos `ModuleCycle` y errores tipados | **HECHO** | js 96 tests; subset line-based documentado (sin import() dinámico/top-level await/export-from/live bindings) |
 | **SVG filters + SMIL (ronda 26)**: `feColorMatrix`/`feBlend`/`feMerge`/`feComposite` arithmetic con cadenas in/in2/result y `<animate>/<set>/<animateTransform>` determinista (`render_svg_with_time`) | **HECHO** | svg 97 tests; sin animación byte-idéntico |
@@ -168,7 +169,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 | **WP-6.4 (ronda 11)**: hook `html::scripting::{ScriptExecutor, ScriptExecution}`; scripts parser-inserted al `</script>`/EOF y `document.write` **re-tokenizado en la posición actual** (scripts anidados incluidos); externos `src` los ejecuta el host; errores no fatales; camino sin scripting zero-cost | **HECHO** | **árbol 3.904/3.904 (100 %), allowlist de tree vacía** |
 | Pendientes F6: `document.onerror` para errores de scripts, módulos ES/`async`/`defer`, memoria real y aislamiento, provider de `getComputedStyle` cableado al pipeline y event loop vivo en el shell | **PENDIENTE** | Fase 6 ≈80-85 % |
 
-## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 204 tests)
+## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 224 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -189,7 +190,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 ## 10. Verificación de la matriz
 
 ```bash
-./tools/dev.sh all                             # fmt, clippy, 1738 tests, doc y gate PASS
+./tools/dev.sh all                             # fmt, clippy, 1796 tests, doc y gate PASS
 cargo test -p css -p layout -p paint -p fonts -p dom -p html
 cargo test -p net -p render -p image -p shell
 cargo test -p js

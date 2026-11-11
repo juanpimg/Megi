@@ -654,6 +654,21 @@ Límites r28: reduced IDCT solo en `decode_scaled` (progresivo fallback document
 
 Cifras de referencia en la ronda 28: **1738 tests** (bench 9, css 230, dom 36, fonts 17+1 doctest, html 60, image 84, js 130, layout 215, net 279, paint 208, render 157, shell 204, svg 97, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
 
+### 2.16v Ronda 29: streaming/keep-alive, textPath/SMIL, import maps, WebP header, shell pages y fuzz 14
+
+```bash
+cargo test -p net --test streaming_responses && cargo test -p net --test connection_reuse
+cargo test -p svg --test textpath_smil
+cargo test -p js --test es_modules
+cargo test -p image --test webp_lossy
+cargo run -p shell -- tests/fixtures/render/basic.html --chrome --screenshot /tmp/chrome.png --width 640 --height 400
+cd fuzz && cargo +nightly fuzz build   # 14/14
+```
+
+Límites r29: h1 streaming con fallback buffered 16 KiB y pool solo http plano (sin pool h2 entre loads); textPath sin auto-rotate/side right/textLength y solo hijo directo; SMIL keyTimes/keySplines subset; import maps solo primer map, import() solo literales eager, top-level await gap tipado; WebP lossy solo cabecera (pixel decoder pendiente, warning/placeholder); shell directorios file:// deterministas y favicon cap 64 KiB; fuzz 14 targets/corpus 37.
+
+Cifras de referencia en la ronda 29: **1796 tests** (bench 9, css 230, dom 36, fonts 17+1 doctest, html 60, image 90, js 137, layout 215, net 287, paint 208, render 162, shell 224, svg 109, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
+
 ## 4. Progress status generado (`PROGRESS.md`, `docs/status/*.svg`)
 
 El estado de avance del proyecto se genera **desde datos reales del repositorio**, sin
