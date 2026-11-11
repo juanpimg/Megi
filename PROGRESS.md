@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `67365af` (2026-11-11) · overall **99%** · **1,853** tests · conformance **PASS** · **14** crates · **148,677** lines of Rust
+**Snapshot** — commit `3753137` (2026-11-11) · overall **99%** · **1,853** tests · conformance **PASS** · **14** crates · **148,677** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -17,10 +17,10 @@
 | **F1** | HTML parsing, DOM & serialization | `████████████████████` | 100% |
 | **F2** | CSS parsing, cascade & selectors | `████████████████████` | 100% |
 | **F3** | Layout (box tree, BFC, IFC, grid & flex) | `████████████████████` | 100% |
-| **F4** | Paint, raster & SVG | `████████████████████` | 99% |
+| **F4** | Paint, raster & SVG | `████████████████████` | 100% |
 | **F5** | Networking & fetch | `████████████████████` | 99% |
 | **F6** | JavaScript & DOM APIs | `████████████████████` | 99% |
-| **F7** | Desktop shell (browser UI) | `███████████████████░` | 96% |
+| **F7** | Desktop shell (browser UI) | `███████████████████░` | 97% |
 | | **Overall** | `████████████████████` | **99%** |
 
 ## What is done and what remains
@@ -59,7 +59,7 @@
 - Grid dense packing/areas/auto-flow: still MVP-level
 - Full spec IFC edge cases (bidi, justify details) and table layout depth
 
-### F4 — Paint, raster & SVG (99%)
+### F4 — Paint, raster & SVG (100%)
 
 **Done**
 
@@ -71,6 +71,7 @@
 - EXIF orientation 1-8, full progressive JPEG colour and WebP VP8L subset
 - CSS aspect-ratio, object-fit/object-position and backdrop-filter (layout consumes aspect-ratio)
 - Complete SVG filter chains (ColorMatrix/Blend/Merge/Composite arithmetic) and basic SMIL
+- Full VP8 keyframe decoder for WebP lossy (pixel-exact tolerances vs PIL)
 
 **Pending**
 
@@ -88,12 +89,13 @@
 - HTTP/2 MVP (HPACK, framing, ALPN h2 with HTTP/1.1 fallback)
 - From-scratch JPEG baseline/GIF87a/89a decoders wired into render by sniffing
 - HTTP/2 flow control, stream multiplexing and advanced SETTINGS
+- Real vendored public suffix list and HTTP/2+HTTP/1.1 request trailers
 
 **Pending**
 
-- Push prioritization/trailers, complete PSL and proxies
+- Push prioritization, proxies, HTTP/1.0 and streaming responses
 - h1 streaming buffered fallback and h2 cross-load pooling
-- WebP VP8 lossy pixel decoder and image decode performance budgets
+- Image decode performance budgets on real pages
 
 ### F6 — JavaScript & DOM APIs (99%)
 
@@ -107,6 +109,7 @@
 - Round-27 DOM/JS gap APIs (URL/dataset/innerText/attributes/normalize/compare/idle/events/base64/clone)
 - Layout geometry provider (getBoundingClientRect/offset/client) wired from render
 - Import maps, dynamic import() literals and typed top-level-await gap
+- Deterministic cooperative Web Workers (postMessage/onerror/terminate, render loop)
 
 **Pending**
 
@@ -114,7 +117,7 @@
 - JS/DOM conformance testing and memory accounting
 - Import-map scopes/integrity and non-literal dynamic import
 
-### F7 — Desktop shell (browser UI) (96%)
+### F7 — Desktop shell (browser UI) (97%)
 
 **Done**
 
@@ -126,6 +129,7 @@
 - Persistent JSON session, PNG/HTML downloads and polished chrome (address bar/autocomplete/tab overflow/select)
 - Link hover status bar, Ctrl+click/middle-click tabs and context menu (Open/Copy/Save image/Reload/Save page)
 - file:// directory listings, browser error pages with Retry and favicon/dot per tab
+- Navigable history (about:history/Ctrl+H/back-forward) and chrome fast path (-89.5 % non-PNG)
 
 **Pending**
 
@@ -137,7 +141,7 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `67365af` (2026-11-11) |
+| Commit | `3753137` (2026-11-11) |
 | Crates in the workspace | 14 |
 | Lines of Rust (tracked `.rs`) | 148677 |
 | Tests (`cargo test --workspace -- --list`) | 1853 |
@@ -157,20 +161,20 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 
 ## Recent rounds
 
+- **Round 30** — full VP8 keyframe decoder, container queries, PSL/trailers, deterministic Web Workers, shell history and chrome fast path
 - **Round 29** — streaming responses/keep-alive, SVG textPath/SMIL, import maps, WebP lossy header, shell pages and fuzz 14
 - **Round 28** — reduced IDCT/EXIF thumbnails, server push, streaming uploads, JS geometry, byte-safe blur/PNG and context menu
 - **Round 27** — PNG regression fix, HTTP/2 push/priorities/h2c, DOM/JS gaps, effects perf and polished chrome
 - **Round 26** — module scripts, scaled decode, HTTP/2 request bodies, DOM/JS bug-bash, SVG filters/SMIL and isolated bench rows
 - **Round 25** — CSS Color 4/5, ES modules, complete WebP VP8L, render provider wiring and direct save-png
-- **Round 24** — JS browser APIs, aspect-ratio/object-fit/backdrop, full progressive JPEG, WebP VP8L, session/downloads and 10 fuzz targets
 
 ## Next up
 
-- HTTP/2 push prioritization/trailers, complete PSL and proxies
-- Top-level await/live bindings, workers/fetch and JS conformance
-- WebP VP8 lossy pixel decoder and EXIF/IDCT edge cases
+- HTTP/2 push prioritization, proxies, HTTP/1.0 and streaming responses
+- Top-level await/live bindings, fetch/workers follow-ups and JS conformance
+- Backdrop blur floor, PNG regions and rasterizer performance
 - SVG auto-rotate/side right/textLength and remaining SMIL
-- Backdrop blur floor, PNG regions and rasterizer budgets
+- Render option to skip redundant page PNG for --chrome/--find
 - Longer image/HTTP2/JS module fuzz campaigns and bench E2E on real pages
 
 ## Cross-cutting areas
@@ -190,4 +194,4 @@ python3 tools/update_progress.py --write --no-gate  # skip the conformance gate
 python3 tools/update_progress.py --check --no-gate --no-count  # CI freshness
 ```
 
-_Last manifest update by: docs (round 29). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
+_Last manifest update by: docs (round 30). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
