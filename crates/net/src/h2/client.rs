@@ -34,7 +34,10 @@
 //! (HEADERS priority section + `PRIORITY` frames, weight 1..=256, dependency, exclusive)
 //! order concurrent request submission and DATA emission; self-dependencies and
 //! non-open dependencies are rejected, and incoming `PRIORITY` frames are validated and
-//! ignored. The opt-in [`h2c_request`] performs the HTTP/1.1 `Upgrade: h2c` handshake
+//! ignored. Server pushes carry an optional PUSH_PROMISE PRIORITY section (R212): complete
+//! pushes are ordered by descending declared weight (FIFO for equal weights) and the
+//! resource cap keeps the highest-weight promises, evicting a lower-weight pending one
+//! with `RST_STREAM(CANCEL)`; [`Limits::pushed_priority`] can restore plain FIFO. The opt-in [`h2c_request`] performs the HTTP/1.1 `Upgrade: h2c` handshake
 //! (requires [`Limits::allow_h2c`]); non-101 responses return `None` (caller reconnects
 //! for HTTP/1.1 fallback). Request bodies may be in-memory bytes or a **streaming
 //! producer** (`RequestBody::Stream`, pulled only when a DATA frame fits the peer
@@ -86,6 +89,12 @@ pub struct H2PushedResponse {
     pub headers: Vec<(String, String)>,
     /// Buffered response body.
     pub body: Vec<u8>,
+    /// Effective push weight (1..=256): explicit PUSH_PROMISE PRIORITY weight when
+    /// present, otherwise the HTTP default (16). Results are ordered by descending
+    /// weight (FIFO for equal weights) when [`PushPriority::ServerWeights`] is used.
+    pub weight: u16,
+    /// Promise arrival order (stable FIFO tie-break for equal weights).
+    pub promise_order: usize,
 }
 
 /// Streaming response callback: receives DATA payloads as frames arrive.
@@ -230,6 +239,18 @@ impl std::fmt::Debug for H2Request {
     }
 }
 
+/// How collected server pushes are ordered and prioritized (R212).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PushPriority {
+    /// Order complete pushes by descending PUSH_PROMISE PRIORITY weight (FIFO for
+    /// equal weights); a higher-weight promise arriving after the resource cap
+    /// evicts the lowest-weight *pending* promise. Default.
+    #[default]
+    ServerWeights,
+    /// Ignore declared weights and keep the previous FIFO promise order.
+    Fifo,
+}
+
 /// Client-side limits for HTTP/2 exchanges.
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
@@ -258,6 +279,10 @@ pub struct Limits {
     pub max_pushed_body: usize,
     /// Maximum total body bytes of all pushed responses collected (default 4 MiB).
     pub max_pushed_total: usize,
+    /// Push ordering policy (default [`PushPriority::ServerWeights`]). With
+    /// [`PushPriority::Fifo`] the previous promise-arrival order is kept and the
+    /// resource cap discards later promises.
+    pub pushed_priority: PushPriority,
     /// Allow the HTTP/1.1 `Upgrade: h2c` handshake in [`h2c_request`].
     pub allow_h2c: bool,
 }
@@ -275,6 +300,7 @@ impl Default for Limits {
             max_pushed_resources: 8,
             max_pushed_body: 1024 * 1024,
             max_pushed_total: 4 * 1024 * 1024,
+            pushed_priority: PushPriority::default(),
             allow_h2c: false,
         }
     }
@@ -434,6 +460,10 @@ struct PushedStream {
     got_headers: bool,
     /// Per-push receive window (we advertise `INITIAL_WINDOW_SIZE` for pushed streams too).
     receive_window: i64,
+    /// Effective priority weight (1..=256) from the promise's PRIORITY section.
+    weight: u16,
+    /// Promise arrival order for FIFO tie-breaks.
+    promise_order: usize,
 }
 
 /// The HTTP/2 connection driver.
@@ -472,6 +502,8 @@ struct Session<'a, S: Read + Write> {
     discarded_pushes: HashSet<u32>,
     last_pushed_stream: u32,
     next_stream_id: u32,
+    /// Monotonic promise counter for stable FIFO ordering of equal weights.
+    push_sequence: usize,
 }
 
 impl<'a, S: Read + Write> Session<'a, S> {
@@ -506,6 +538,7 @@ impl<'a, S: Read + Write> Session<'a, S> {
             discarded_pushes: HashSet::new(),
             last_pushed_stream: 0,
             next_stream_id: 1,
+            push_sequence: 0,
         }
     }
 
@@ -1358,7 +1391,8 @@ impl<'a, S: Read + Write> Session<'a, S> {
                         "fragmented PUSH_PROMISE header blocks are not supported",
                     ));
                 }
-                let (promised, block) = frame.parse_push_promise()?;
+                let (promised, block, priority) = frame.parse_push_promise_with_priority()?;
+                let weight = priority.map_or(16, |(_depends_on, weight, _exclusive)| weight);
                 if promised == 0 || promised % 2 != 0 || promised <= self.last_pushed_stream {
                     return Err(h2_error(format!(
                         "invalid promised stream id {promised} in PUSH_PROMISE"
@@ -1393,10 +1427,28 @@ impl<'a, S: Read + Write> Session<'a, S> {
                 if self.pushed_streams.len() + self.pushed_results.len()
                     >= self.limits.max_pushed_resources
                 {
-                    // Resource-count cap: cancel the promise and ignore its frames.
-                    self.discard_pushed(promised);
-                    return Ok(());
+                    // Resource cap reached. With server-declared priorities, a
+                    // higher-weight promise may evict the lowest-weight *pending*
+                    // push; otherwise keep the earlier promise (FIFO fallback/cap).
+                    let victim = match self.limits.pushed_priority {
+                        PushPriority::ServerWeights => self
+                            .pushed_streams
+                            .iter()
+                            .filter(|(_, pushed)| pushed.weight < weight)
+                            .min_by_key(|(_, pushed)| (pushed.weight, pushed.promise_order))
+                            .map(|(stream_id, _)| *stream_id),
+                        PushPriority::Fifo => None,
+                    };
+                    match victim {
+                        Some(victim) => self.discard_pushed(victim),
+                        None => {
+                            self.discard_pushed(promised);
+                            return Ok(());
+                        }
+                    }
                 }
+                let promise_order = self.push_sequence;
+                self.push_sequence = self.push_sequence.saturating_add(1);
                 self.pushed_streams.insert(
                     promised,
                     PushedStream {
@@ -1406,6 +1458,8 @@ impl<'a, S: Read + Write> Session<'a, S> {
                         body: Vec::new(),
                         got_headers: false,
                         receive_window: i64::from(self.limits.initial_window_size),
+                        weight,
+                        promise_order,
                     },
                 );
                 Ok(())
@@ -1432,7 +1486,20 @@ impl<'a, S: Read + Write> Session<'a, S> {
             reason: reason_phrase(status),
             headers: pushed.headers,
             body: pushed.body,
+            weight: pushed.weight,
+            promise_order: pushed.promise_order,
         });
+    }
+
+    /// Sorts complete pushes by descending declared weight (FIFO for ties).
+    fn sort_pushed_results(&mut self) {
+        if self.limits.pushed_priority == PushPriority::ServerWeights {
+            self.pushed_results.sort_by(|a, b| {
+                b.weight
+                    .cmp(&a.weight)
+                    .then_with(|| a.promise_order.cmp(&b.promise_order))
+            });
+        }
     }
 
     /// Cancels a pushed stream (cap exceeded, unwanted, or connection ending).
@@ -1577,6 +1644,7 @@ fn run_requests<S: Read + Write>(
 ) -> Result<Vec<Result<H2Response, FetchError>>, FetchError> {
     let mut session = Session::new(stream, requests, limits, None);
     session.run()?;
+    session.sort_pushed_results();
     let pushed = std::mem::take(&mut session.pushed_results);
     let mut results: Vec<Result<H2Response, FetchError>> = session
         .results
@@ -1602,6 +1670,7 @@ pub fn request_streaming<S: Read + Write>(
 ) -> Result<Vec<Result<H2Response, FetchError>>, FetchError> {
     let mut session = Session::new(stream, requests, limits, Some(on_data));
     session.run()?;
+    session.sort_pushed_results();
     let pushed = std::mem::take(&mut session.pushed_results);
     let mut results: Vec<Result<H2Response, FetchError>> = session
         .results

@@ -45,6 +45,11 @@
 //!   `Referer`, proxies, HTTP/2, connection reuse or redirect method rewriting.
 //!   (R205 adds opt-in HTTP(S) proxy support through [`FetchOptions::proxy`];
 //!   HTTP/2, connection reuse and `Referer` exist on their own paths.)
+//! - [`fetch_streaming`] parses status/headers first (redirects are resolved without
+//!   invoking the callback) and delivers identity `Content-Length`/chunked bodies as
+//!   socket chunks arrive (R212); gzip/deflate bodies are buffered and decoded with the
+//!   complete-stream inflater before being handed to the callback in 16 KiB slices
+//!   (documented limitation: no incremental brotli/deflate decoder).
 //! - Compression covers single `gzip`/`deflate` codings; the response body is buffered
 //!   and decoded in memory (with the anti-bomb caps). The decoded body keeps the
 //!   `Content-Encoding` header on [`Response::headers`] (matching the Fetch standard's
@@ -502,12 +507,75 @@ pub fn fetch_streaming(
     options: &FetchOptions,
     on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
 ) -> Result<Response, FetchError> {
-    let mut response = fetch(url, options)?;
-    let body = std::mem::take(&mut response.body);
-    for chunk in body.chunks(16 * 1024) {
-        on_data(chunk)?;
+    // Real HTTP/1.1 streaming: status/headers are parsed first (so redirects are
+    // followed without invoking the callback), then the identity body is delivered as
+    // chunks arrive. HTTP/2 uses the h2 client's DATA callback. Compressed bodies are
+    // currently collected/decoded before the callback (documented limitation: the
+    // decoder is complete-stream); identity bodies and chunked framing are incremental.
+    let mut current = url.clone();
+    let mut redirects = 0usize;
+    loop {
+        let raw = fetch_once(
+            &current,
+            options,
+            "GET",
+            &[],
+            None,
+            true,
+            &[],
+            Some(&mut *on_data),
+        )?;
+        if let Some(jar) = &options.cookie_jar {
+            lock_jar(jar).store_from_response(&current, &raw.headers);
+        }
+        if !is_redirect(raw.status) {
+            if let Some(origin) = options.origin.as_deref() {
+                cors::validate_response(
+                    &current,
+                    origin,
+                    &raw.headers,
+                    options.cookie_jar.is_some(),
+                )?;
+            }
+            let content_range = raw
+                .headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case("content-range"))
+                .and_then(|(_, value)| ContentRange::parse(value));
+            let accept_ranges = raw.headers.iter().any(|(name, value)| {
+                name.eq_ignore_ascii_case("accept-ranges")
+                    && value
+                        .split(',')
+                        .any(|token| token.trim().eq_ignore_ascii_case("bytes"))
+            });
+            return Ok(Response {
+                status: raw.status,
+                reason: raw.reason,
+                headers: raw.headers,
+                body: raw.body,
+                final_url: current,
+                content_range,
+                accept_ranges,
+                trailers: raw.trailers,
+                pushed: raw.pushed,
+                pooled_stream: None,
+            });
+        }
+        if redirects >= options.max_redirects {
+            return Err(FetchError::TooManyRedirects);
+        }
+        let location = raw
+            .headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case("location"))
+            .map(|(_, value)| value.trim())
+            .filter(|value| !value.is_empty())
+            .ok_or(FetchError::RedirectWithoutLocation)?;
+        current = current
+            .join(location)
+            .map_err(FetchError::InvalidRedirect)?;
+        redirects += 1;
     }
-    Ok(response)
 }
 
 /// Fetches `url` over HTTP/1.1 (or HTTPS with the `tls` feature), following redirects.
@@ -649,6 +717,7 @@ pub fn fetch_with_request_body_and_trailers(
             attempt_body,
             true,
             trailers,
+            None,
         )?;
         if let Some(jar) = &options.cookie_jar {
             lock_jar(jar).store_from_response(&current, &raw.headers);
@@ -867,7 +936,7 @@ pub fn preflight(
         .iter()
         .map(|(name, value)| (name.as_str(), value.as_str()))
         .collect();
-    let raw = fetch_once(url, options, "OPTIONS", &extra_refs, None, false, &[])?;
+    let raw = fetch_once(url, options, "OPTIONS", &extra_refs, None, false, &[], None)?;
     if !(200..300).contains(&raw.status) {
         return Err(FetchError::Cors(format!(
             "preflight response status {} is not ok",
@@ -884,6 +953,9 @@ pub fn preflight(
     )
 }
 
+/// Streaming body callback used by [`fetch_streaming`] and the internal body readers.
+pub type StreamCallback<'a> = &'a mut dyn FnMut(&[u8]) -> Result<(), FetchError>;
+
 #[derive(Debug)]
 struct RawResponse {
     status: u16,
@@ -898,6 +970,9 @@ fn is_redirect(status: u16) -> bool {
     matches!(status, 301 | 302 | 303 | 307 | 308)
 }
 
+// The request/hop state is carried explicitly (method/headers/body/trailers/cookies/
+// redirect-stream state); grouping it would only move the parameters into a struct.
+#[allow(clippy::too_many_arguments)]
 fn fetch_once(
     url: &Url,
     options: &FetchOptions,
@@ -906,6 +981,7 @@ fn fetch_once(
     body: Option<RequestBody>,
     include_cookies: bool,
     trailers: &[(String, String)],
+    mut on_data: Option<StreamCallback<'_>>,
 ) -> Result<RawResponse, FetchError> {
     if !trailers.is_empty() {
         if body.is_none() {
@@ -1097,8 +1173,11 @@ fn fetch_once(
         if !trailers.is_empty() {
             request = request.with_trailers(trailers);
         }
-        let mut results =
-            crate::h2::client::request_many_owned(&mut stream, vec![request], &limits)?;
+        let mut results = if let Some(callback) = on_data.as_deref_mut() {
+            crate::h2::client::request_streaming(&mut stream, vec![request], &limits, callback)?
+        } else {
+            crate::h2::client::request_many_owned(&mut stream, vec![request], &limits)?
+        };
         let response = results
             .pop()
             .ok_or_else(|| FetchError::InvalidResponse("no HTTP/2 response".to_owned()))??;
@@ -1185,7 +1264,8 @@ fn fetch_once(
             {
                 return Err(crate::proxy::auth_required_error(proxy));
             }
-            let (body, trailers) = read_body(&mut reader, status, &headers, options)?;
+            let (body, trailers) =
+                read_body_dispatch(&mut reader, status, &headers, options, &mut on_data)?;
             return Ok(RawResponse {
                 status,
                 reason,
@@ -1196,7 +1276,8 @@ fn fetch_once(
             });
         }
         // The server answered without 100-continue: don't send the body.
-        let (body, trailers) = read_body(&mut reader, status, &headers, options)?;
+        let (body, trailers) =
+            read_body_dispatch(&mut reader, status, &headers, options, &mut on_data)?;
         return Ok(RawResponse {
             status,
             reason,
@@ -1230,7 +1311,8 @@ fn fetch_once(
     {
         return Err(crate::proxy::auth_required_error(proxy));
     }
-    let (body, trailers) = read_body(&mut reader, status, &headers, options)?;
+    let (body, trailers) =
+        read_body_dispatch(&mut reader, status, &headers, options, &mut on_data)?;
     Ok(RawResponse {
         status,
         reason,
@@ -1526,6 +1608,197 @@ fn is_token_byte(byte: u8) -> bool {
                 | b'|'
                 | b'~'
         )
+}
+
+/// Reads the response body, streaming it to `on_data` when a callback is installed and
+/// the response is not a redirect/interim/empty status (those must be resolved before the
+/// body is exposed, so their (small) bodies are buffered as before).
+fn read_body_or_stream(
+    reader: &mut ConnReader,
+    status: u16,
+    headers: &Headers,
+    options: &FetchOptions,
+    on_data: Option<StreamCallback<'_>>,
+) -> Result<(Vec<u8>, Headers), FetchError> {
+    let no_stream =
+        (100..200).contains(&status) || status == 204 || status == 304 || is_redirect(status);
+    match on_data {
+        Some(callback) if !no_stream => {
+            stream_response_body(reader, status, headers, options, callback)
+        }
+        _ => read_body(reader, status, headers, options),
+    }
+}
+
+/// Reborrow helper so the streaming callback can be used at several call sites.
+fn read_body_dispatch(
+    reader: &mut ConnReader,
+    status: u16,
+    headers: &Headers,
+    options: &FetchOptions,
+    on_data: &mut Option<StreamCallback<'_>>,
+) -> Result<(Vec<u8>, Headers), FetchError> {
+    match on_data {
+        Some(callback) => {
+            read_body_or_stream(reader, status, headers, options, Some(&mut **callback))
+        }
+        None => read_body_or_stream(reader, status, headers, options, None),
+    }
+}
+
+fn header_value<'a>(headers: &'a Headers, name: &str) -> Option<&'a str> {
+    headers
+        .iter()
+        .find(|(header_name, _)| header_name.eq_ignore_ascii_case(name))
+        .map(|(_, value)| value.as_str())
+}
+
+/// Streams a decoded response body to `on_data` (R212).
+///
+/// Identity bodies (`Content-Length`, chunked or read-to-EOF) are delivered as socket
+/// chunks arrive; gzip/deflate responses are buffered and decoded first (complete-stream
+/// inflater) and then delivered in 16 KiB slices. The returned body is always empty (the
+/// caller already consumed it); trailers are still returned for chunked bodies.
+fn stream_response_body(
+    reader: &mut ConnReader,
+    _status: u16,
+    headers: &Headers,
+    options: &FetchOptions,
+    on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
+) -> Result<(Vec<u8>, Headers), FetchError> {
+    let encoded = options.accept_encoding != AcceptEncoding::Identity
+        && header_value(headers, "content-encoding")
+            .and_then(|value| ContentEncoding::parse(value).ok())
+            .is_some_and(|encoding| encoding != ContentEncoding::Identity);
+    if encoded {
+        let (compressed, trailers) = read_body(reader, _status, headers, options)?;
+        let decoded = decode_response_body(headers, compressed, options)?;
+        for chunk in decoded.chunks(16 * 1024) {
+            on_data(chunk)?;
+        }
+        return Ok((Vec::new(), trailers));
+    }
+    let chunked = header_value(headers, "transfer-encoding").is_some_and(|value| {
+        value
+            .split(',')
+            .any(|token| token.trim().eq_ignore_ascii_case("chunked"))
+    });
+    if chunked {
+        return stream_chunked_body(reader, options.max_response_bytes, on_data);
+    }
+    if let Some(length_text) = header_value(headers, "content-length") {
+        let length: usize = length_text.trim().parse().map_err(|_| {
+            FetchError::InvalidResponse(format!("invalid Content-Length `{length_text}`"))
+        })?;
+        if length > options.max_response_bytes {
+            return Err(FetchError::ResponseTooLarge);
+        }
+        return stream_fixed_body(reader, length, on_data);
+    }
+    stream_until_eof(reader, options.max_response_bytes, on_data)
+}
+
+fn stream_fixed_body(
+    reader: &mut ConnReader,
+    length: usize,
+    on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
+) -> Result<(Vec<u8>, Headers), FetchError> {
+    let mut remaining = length;
+    while remaining > 0 {
+        if !reader.fill()? {
+            return Err(FetchError::BodyIncomplete);
+        }
+        let available = reader.buffer.len() - reader.position;
+        let take = available.min(remaining).min(16 * 1024);
+        on_data(&reader.buffer[reader.position..reader.position + take])?;
+        reader.position += take;
+        remaining -= take;
+    }
+    Ok((Vec::new(), Vec::new()))
+}
+
+fn stream_until_eof(
+    reader: &mut ConnReader,
+    max_bytes: usize,
+    on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
+) -> Result<(Vec<u8>, Headers), FetchError> {
+    let mut delivered = 0usize;
+    loop {
+        if !reader.fill()? {
+            return Ok((Vec::new(), Vec::new()));
+        }
+        let available = reader.buffer.len() - reader.position;
+        if delivered + available > max_bytes {
+            return Err(FetchError::ResponseTooLarge);
+        }
+        on_data(&reader.buffer[reader.position..])?;
+        reader.position = reader.buffer.len();
+        delivered += available;
+    }
+}
+
+fn stream_chunked_body(
+    reader: &mut ConnReader,
+    max_bytes: usize,
+    on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
+) -> Result<(Vec<u8>, Headers), FetchError> {
+    let mut delivered = 0usize;
+    loop {
+        let Some(size_line) = reader.read_line(1024)? else {
+            return Err(FetchError::BodyIncomplete);
+        };
+        let size_token = size_line
+            .split(|byte| *byte == b';')
+            .next()
+            .unwrap_or(&[])
+            .trim_ascii();
+        let size_text = std::str::from_utf8(size_token)
+            .map_err(|_| FetchError::InvalidResponse("chunk size is not ASCII".to_owned()))?;
+        let size = u64::from_str_radix(size_text, 16).map_err(|_| {
+            FetchError::InvalidResponse(format!("invalid chunk size `{size_text}`"))
+        })?;
+        if size == 0 {
+            let mut trailers = Vec::new();
+            loop {
+                match reader.read_line(1024)? {
+                    None => return Ok((Vec::new(), trailers)),
+                    Some(line) if line.is_empty() => return Ok((Vec::new(), trailers)),
+                    Some(line) => {
+                        let text = String::from_utf8_lossy(&line);
+                        if let Some((name, value)) = text.split_once(':') {
+                            trailers.push((name.trim().to_owned(), value.trim().to_owned()));
+                        }
+                    }
+                }
+            }
+        }
+        let Ok(size) = usize::try_from(size) else {
+            return Err(FetchError::ResponseTooLarge);
+        };
+        if delivered.saturating_add(size) > max_bytes {
+            return Err(FetchError::ResponseTooLarge);
+        }
+        let mut remaining = size;
+        while remaining > 0 {
+            if !reader.fill()? {
+                return Err(FetchError::BodyIncomplete);
+            }
+            let available = reader.buffer.len() - reader.position;
+            let take = available.min(remaining).min(16 * 1024);
+            on_data(&reader.buffer[reader.position..reader.position + take])?;
+            reader.position += take;
+            remaining -= take;
+            delivered += take;
+        }
+        let Some(terminator) = reader.read_line(2)? else {
+            return Err(FetchError::BodyIncomplete);
+        };
+        if !terminator.is_empty() {
+            return Err(FetchError::InvalidResponse(
+                "missing CRLF after chunk data".to_owned(),
+            ));
+        }
+    }
 }
 
 fn read_body(

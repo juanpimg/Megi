@@ -98,6 +98,10 @@
 //!   ([`ReferrerPolicy::from_meta_html`]); [`ReferrerConfig`] on [`FetchOptions::referrer`]
 //!   makes every HTTP(S) hop send a policy-computed `Referer` (`https`→`http` downgrades
 //!   blocked per policy; render should install it once the document is fetched).
+//! - **Streaming and push priority**: [`http::fetch_streaming`] delivers identity /
+//!   chunked bodies incrementally (redirects/cookies resolved first; compressed bodies
+//!   are buffered then decoded); HTTP/2 pushes are ordered by PUSH_PROMISE PRIORITY
+//!   weight with the cap keeping the best ones (`h2::client::PushPriority`).
 //! - **Proxies**: [`ProxyConfig`] (+ [`ProxyConfig::from_env`]) and
 //!   [`http::FetchOptions::proxy`] route `http:` targets through absolute-form requests
 //!   and `https:` targets through a validated `CONNECT` tunnel (Basic auth from proxy
@@ -149,7 +153,7 @@ pub use cors::{Origin, requires_preflight, validate_preflight_response, validate
 pub use data::{DataUrl, base64_decode, base64_encode, decode_data_url};
 pub use error::{FetchError, LoadError, UrlError};
 pub use file::load_file_url;
-pub use http::{FetchOptions, Response, fetch, fetch_with_headers, preflight};
+pub use http::{FetchOptions, Response, fetch, fetch_streaming, fetch_with_headers, preflight};
 pub use loader::{HEURISTIC_FRESHNESS, Resource, ResourceLoader};
 pub use mime::{MimeHint, resolve_content_type, sniff};
 pub use proxy::{ProxyConfig, proxy_authorization, proxy_authorization_for};
