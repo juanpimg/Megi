@@ -117,6 +117,9 @@ pub struct H2Request {
     /// Optional stream priority (sent in the HEADERS priority section and used to
     /// order concurrent `request_many` submissions).
     pub priority: Option<Priority>,
+    /// Optional request trailers: sent as a final HEADERS block with END_STREAM after
+    /// the request DATA (requires a request body; no pseudo-headers; size-capped).
+    pub trailers: Vec<(String, String)>,
 }
 
 impl H2Request {
@@ -167,6 +170,7 @@ impl H2Request {
             extra_headers: extra_headers.to_vec(),
             body,
             priority: None,
+            trailers: Vec::new(),
         }
     }
 
@@ -180,6 +184,13 @@ impl H2Request {
     /// with a typed HTTP/2 error).
     pub fn with_priority(mut self, priority: Priority) -> Self {
         self.priority = Some(priority);
+        self
+    }
+
+    /// Sets request trailers (sent after the DATA as a final HEADERS block with
+    /// END_STREAM). Requires a request body.
+    pub fn with_trailers(mut self, trailers: &[(String, String)]) -> Self {
+        self.trailers = trailers.to_vec();
         self
     }
 
@@ -199,6 +210,7 @@ impl H2Request {
             extra_headers: self.extra_headers.clone(),
             body,
             priority: self.priority,
+            trailers: self.trailers.clone(),
         })
     }
 }
@@ -213,6 +225,7 @@ impl std::fmt::Debug for H2Request {
             .field("target", &self.target)
             .field("body", &self.body)
             .field("priority", &self.priority)
+            .field("trailers", &self.trailers)
             .finish()
     }
 }
@@ -407,6 +420,8 @@ struct OpenStream {
     awaiting_continue: bool,
     /// Trailing response headers.
     trailers: Vec<(String, String)>,
+    /// Request trailers to emit (final HEADERS with END_STREAM after the DATA).
+    request_trailers: Vec<(String, String)>,
 }
 
 /// A promised (server-pushed) response being received.
@@ -728,6 +743,30 @@ impl<'a, S: Read + Write> Session<'a, S> {
                 self.fail_stream(stream_id, error);
                 continue;
             }
+            let request_trailers = self
+                .streams
+                .get(&stream_id)
+                .map(|stream| stream.request_trailers.clone())
+                .unwrap_or_default();
+            if finished && !request_trailers.is_empty() {
+                // Trailers: remove END_STREAM from the final DATA and send a final
+                // HEADERS block with END_STREAM (RFC 9113 §8.1).
+                if let Some(last) = frames.last_mut()
+                    && last.header.kind == kind::DATA
+                {
+                    last.header.flags &= !flags::END_STREAM;
+                }
+                let block = Encoder::new().encode(&request_trailers);
+                if block.len() > self.limits.max_header_block {
+                    let _ = send_frame(
+                        &mut *self.stream,
+                        &Frame::rst_stream(stream_id, error_code::CANCEL),
+                    );
+                    self.fail_stream(stream_id, FetchError::HeadersTooLarge);
+                    continue;
+                }
+                frames.push(Frame::headers(stream_id, &block, true));
+            }
             for frame in frames {
                 send_frame(&mut *self.stream, &frame)?;
             }
@@ -736,7 +775,16 @@ impl<'a, S: Read + Write> Session<'a, S> {
     }
 
     fn open_stream(&mut self, request_index: usize) -> Result<(), FetchError> {
-        let (scheme, method_raw, authority, target, extra_headers, request_priority, body) = {
+        let (
+            scheme,
+            method_raw,
+            authority,
+            target,
+            extra_headers,
+            request_priority,
+            body,
+            request_trailers,
+        ) = {
             let request = &mut self.requests[request_index];
             (
                 request.scheme.clone(),
@@ -746,8 +794,43 @@ impl<'a, S: Read + Write> Session<'a, S> {
                 request.extra_headers.clone(),
                 request.priority,
                 request.body.take(),
+                request.trailers.clone(),
             )
         };
+        if body.is_none() && !request_trailers.is_empty() {
+            self.fail_request(
+                request_index,
+                FetchError::RequestBody(
+                    "request trailers require a request body on HTTP/2".to_owned(),
+                ),
+            );
+            return Ok(());
+        }
+        if !request_trailers.is_empty() {
+            let total: usize = request_trailers
+                .iter()
+                .map(|(name, value)| name.len() + value.len() + 4)
+                .sum();
+            let invalid = request_trailers.iter().any(|(name, value)| {
+                name.is_empty()
+                    || name.starts_with(':')
+                    || name
+                        .bytes()
+                        .any(|byte| !byte.is_ascii() || byte.is_ascii_control())
+                    || value.bytes().any(|byte| matches!(byte, b'\r' | b'\n' | 0))
+            });
+            if invalid || total > self.limits.max_header_block {
+                self.fail_request(
+                    request_index,
+                    if invalid {
+                        FetchError::InvalidResponse("invalid request trailer name/value".to_owned())
+                    } else {
+                        FetchError::HeadersTooLarge
+                    },
+                );
+                return Ok(());
+            }
+        }
         if !scheme.eq_ignore_ascii_case("https") && !scheme.eq_ignore_ascii_case("http") {
             self.fail_request(request_index, h2_error("unsupported scheme for h2"));
             return Ok(());
@@ -895,6 +978,7 @@ impl<'a, S: Read + Write> Session<'a, S> {
                 },
                 awaiting_continue,
                 trailers: Vec::new(),
+                request_trailers,
             },
         );
         Ok(())

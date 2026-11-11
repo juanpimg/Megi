@@ -546,6 +546,25 @@ pub fn fetch_with_method(
     )
 }
 
+/// Fetches with a bytes body and request trailers (h2 final HEADERS / h1 chunked).
+pub fn fetch_with_trailers(
+    url: &Url,
+    options: &FetchOptions,
+    method: &str,
+    extra_headers: &[(&str, &str)],
+    body: Option<&[u8]>,
+    trailers: &[(String, String)],
+) -> Result<Response, FetchError> {
+    fetch_with_request_body_and_trailers(
+        url,
+        options,
+        method,
+        extra_headers,
+        body.map(|bytes| RequestBody::Bytes(bytes.to_vec())),
+        trailers,
+    )
+}
+
 /// Like [`fetch_with_method`] but accepts a streaming [`RequestBody`] with backpressure.
 ///
 /// - Byte bodies keep `Content-Length`; streaming bodies use `Transfer-Encoding: chunked`
@@ -562,6 +581,23 @@ pub fn fetch_with_request_body(
     method: &str,
     extra_headers: &[(&str, &str)],
     body: Option<RequestBody>,
+) -> Result<Response, FetchError> {
+    fetch_with_request_body_and_trailers(url, options, method, extra_headers, body, &[])
+}
+
+/// Like [`fetch_with_request_body`] but also sends **request trailers** after the body.
+///
+/// HTTP/2: a final HEADERS block with END_STREAM after the DATA (requires a body).
+/// HTTP/1.1: chunked trailers after the `0\r\n` terminator (forces
+/// `Transfer-Encoding: chunked`). Trailer names/values are validated (no pseudo-headers,
+/// no control characters) and total size is capped by `max_header_bytes`.
+pub fn fetch_with_request_body_and_trailers(
+    url: &Url,
+    options: &FetchOptions,
+    method: &str,
+    extra_headers: &[(&str, &str)],
+    body: Option<RequestBody>,
+    trailers: &[(String, String)],
 ) -> Result<Response, FetchError> {
     let mut method = method.trim().to_ascii_uppercase();
     if method.is_empty()
@@ -599,6 +635,7 @@ pub fn fetch_with_request_body(
             extra_headers,
             attempt_body,
             true,
+            trailers,
         )?;
         if let Some(jar) = &options.cookie_jar {
             lock_jar(jar).store_from_response(&current, &raw.headers);
@@ -671,7 +708,17 @@ fn send_request_body(
     body: RequestBody,
     chunked: bool,
     max_request_body: usize,
+    trailers: &[(String, String)],
 ) -> Result<(), FetchError> {
+    let write_last_chunk = |writer: &mut dyn Write| -> Result<(), FetchError> {
+        writer.write_all(b"0\r\n").map_err(map_io_error)?;
+        for (name, value) in trailers {
+            writer
+                .write_all(format!("{name}: {value}\r\n").as_bytes())
+                .map_err(map_io_error)?;
+        }
+        writer.write_all(b"\r\n").map_err(map_io_error)
+    };
     let write_chunk = |writer: &mut dyn Write, chunk: &[u8]| -> Result<(), FetchError> {
         writer
             .write_all(format!("{:x}\r\n", chunk.len()).as_bytes())
@@ -685,7 +732,7 @@ fn send_request_body(
                 if !bytes.is_empty() {
                     write_chunk(writer, &bytes)?;
                 }
-                writer.write_all(b"0\r\n\r\n").map_err(map_io_error)
+                write_last_chunk(writer)
             } else {
                 writer.write_all(&bytes).map_err(map_io_error)
             }
@@ -705,7 +752,7 @@ fn send_request_body(
                     }
                 }
             }
-            writer.write_all(b"0\r\n\r\n").map_err(map_io_error)
+            write_last_chunk(writer)
         }
     }
 }
@@ -807,7 +854,7 @@ pub fn preflight(
         .iter()
         .map(|(name, value)| (name.as_str(), value.as_str()))
         .collect();
-    let raw = fetch_once(url, options, "OPTIONS", &extra_refs, None, false)?;
+    let raw = fetch_once(url, options, "OPTIONS", &extra_refs, None, false, &[])?;
     if !(200..300).contains(&raw.status) {
         return Err(FetchError::Cors(format!(
             "preflight response status {} is not ok",
@@ -845,7 +892,33 @@ fn fetch_once(
     extra_headers: &[(&str, &str)],
     body: Option<RequestBody>,
     include_cookies: bool,
+    trailers: &[(String, String)],
 ) -> Result<RawResponse, FetchError> {
+    if !trailers.is_empty() {
+        if body.is_none() {
+            return Err(FetchError::RequestBody(
+                "request trailers require a request body".to_owned(),
+            ));
+        }
+        let mut total = 0usize;
+        for (name, value) in trailers {
+            let invalid = name.is_empty()
+                || name.starts_with(':')
+                || name
+                    .bytes()
+                    .any(|byte| !byte.is_ascii() || byte.is_ascii_control())
+                || value.bytes().any(|byte| matches!(byte, b'\r' | b'\n' | 0));
+            if invalid {
+                return Err(FetchError::InvalidResponse(
+                    "invalid request trailer name/value".to_owned(),
+                ));
+            }
+            total = total.saturating_add(name.len() + value.len() + 4);
+        }
+        if total > options.max_header_bytes {
+            return Err(FetchError::HeadersTooLarge);
+        }
+    }
     let host = url.host_for_dns();
     let port = match url.scheme() {
         Scheme::Http | Scheme::Https => url
@@ -961,7 +1034,7 @@ fn fetch_once(
             max_pushed_total: options.max_pushed_total,
             ..crate::h2::client::Limits::default()
         };
-        let request = crate::h2::client::H2Request::new_with_body(
+        let mut request = crate::h2::client::H2Request::new_with_body(
             method,
             "https",
             &host_header,
@@ -969,6 +1042,9 @@ fn fetch_once(
             &request_headers,
             body,
         );
+        if !trailers.is_empty() {
+            request = request.with_trailers(trailers);
+        }
         let mut results =
             crate::h2::client::request_many_owned(&mut stream, vec![request], &limits)?;
         let response = results
@@ -1005,10 +1081,10 @@ fn fetch_once(
                 .split(',')
                 .any(|token| token.trim().eq_ignore_ascii_case("chunked"))
     });
-    if body_is_stream && !header_chunked {
+    if (body_is_stream || !trailers.is_empty()) && !header_chunked {
         request_headers.push(("Transfer-Encoding".to_owned(), "chunked".to_owned()));
     }
-    let chunked = body_is_stream || header_chunked;
+    let chunked = body_is_stream || header_chunked || !trailers.is_empty();
     let has_content_length = request_headers
         .iter()
         .any(|(name, _)| name.eq_ignore_ascii_case("content-length"));
@@ -1041,7 +1117,13 @@ fn fetch_once(
         let (status, reason, headers) = parse_head(&interim_head)?;
         if status == 100 {
             let request_body = body.take().expect("checked above");
-            send_request_body(&mut reader, request_body, chunked, options.max_request_body)?;
+            send_request_body(
+                &mut reader,
+                request_body,
+                chunked,
+                options.max_request_body,
+                trailers,
+            )?;
             reader.flush()?;
             let final_head = reader.read_head(options.max_header_bytes)?;
             let (status, reason, headers) = parse_head(&final_head)?;
@@ -1069,7 +1151,13 @@ fn fetch_once(
 
     stream.write_all(head.as_bytes()).map_err(map_io_error)?;
     if let Some(request_body) = body {
-        send_request_body(&mut stream, request_body, chunked, options.max_request_body)?;
+        send_request_body(
+            &mut stream,
+            request_body,
+            chunked,
+            options.max_request_body,
+            trailers,
+        )?;
     } else if chunked {
         stream.write_all(b"0\r\n\r\n").map_err(map_io_error)?;
     }
