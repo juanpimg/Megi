@@ -454,3 +454,15 @@ fn test_color_mix_oklch_shortest_hue() {
         "order symmetric: {mixed:?} vs {reversed:?}"
     );
 }
+
+#[test]
+fn rejects_non_ascii_hex_digits_without_panicking() {
+    // The CSS tokenizer can produce `Hash { value: "aé" }`; slicing that by byte length
+    // used to panic on a non-char-boundary and abort the render.
+    assert!(Color::parse("#aé").is_none());
+    assert!(Color::parse("#12é4").is_none());
+    assert!(Color::parse("#é").is_none());
+    // ASCII hex colors keep working.
+    assert_eq!(Color::parse("#abc").expect("short hex").r, 0xaa);
+    assert_eq!(Color::parse("#a1b2c3").expect("long hex").g, 0xb2);
+}

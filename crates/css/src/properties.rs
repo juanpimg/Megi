@@ -84,6 +84,11 @@ impl Color {
     }
 
     fn from_hex(hex: &str) -> Option<Self> {
+        // Hex digits are ASCII (CSS Color 4 §5.2); checking before slicing keeps a value
+        // like `aé` from splitting a UTF-8 code point in the byte ranges below.
+        if !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return None;
+        }
         match hex.len() {
             3 => {
                 let r = u8::from_str_radix(&hex[0..1].repeat(2), 16).ok()?;
