@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 
 use shell::{
     CliArgs, LaunchMode, RefreshPolicy, ShellError, WindowViewOptions, finish_args, parse_args,
-    screenshot_with_options, zoom,
+    zoom,
 };
 
 /// Builds the render options for one CLI invocation.
@@ -75,60 +75,74 @@ fn run() -> Result<(), ShellError> {
             // writes a PNG half the requested physical size (the window would upscale it).
             let (css_width, css_height) =
                 zoom::zoomed_viewport(args.width, args.height, 1.0, args.zoom);
-            if args.save_png.is_some() || args.save_html.is_some() {
-                let output = shell::headless::render_target_with_options(
+            let overlays = args.chrome || args.find.is_some();
+            let output = if args.chrome {
+                shell::headless::render_target_with_chrome(
                     &args.input,
                     css_width,
                     css_height,
-                    &options,
-                )?;
-                if let Some(path) = &args.save_png {
-                    let bytes =
-                        shell::download::write_png_to(path, &output.pixmap).map_err(|reason| {
-                            shell::ShellError::Io {
-                                path: path.display().to_string(),
-                                reason,
-                            }
-                        })?;
-                    println!("saved png ({bytes} bytes) to {}", path.display());
-                }
-                if let Some(path) = &args.save_html {
-                    let bytes = shell::download::write_html_to(path, &output.document).map_err(
-                        |reason| shell::ShellError::Io {
-                            path: path.display().to_string(),
-                            reason,
-                        },
-                    )?;
-                    println!("saved html ({bytes} bytes) to {}", path.display());
-                }
-            }
-            let info = if args.chrome {
-                shell::headless::screenshot_with_chrome(
-                    &args.input,
-                    css_width,
-                    css_height,
-                    &path,
                     &options,
                     args.find.as_deref(),
                 )?
             } else if let Some(query) = &args.find {
-                shell::headless::screenshot_with_find(
+                let (output, _hits) = shell::headless::render_target_with_find(
                     &args.input,
                     css_width,
                     css_height,
-                    &path,
                     &options,
                     query,
-                )?
+                )?;
+                output
             } else {
-                screenshot_with_options(&args.input, css_width, css_height, &path, &options)?
+                shell::headless::render_target_with_options(
+                    &args.input,
+                    css_width,
+                    css_height,
+                    &options,
+                )?
             };
+            // Reuse the render's PNG bytes unless an overlay (chrome/find) modified the
+            // pixmap and therefore requires one re-encode; saves below share these bytes.
+            let png = if overlays {
+                output.pixmap.to_png()
+            } else {
+                output.png.clone()
+            };
+            if png.is_empty() {
+                return Err(ShellError::Io {
+                    path: path.display().to_string(),
+                    reason: "the render produced no PNG bytes".to_string(),
+                });
+            }
+            shell::download::write_png_bytes_to(&path, &png).map_err(|reason| ShellError::Io {
+                path: path.display().to_string(),
+                reason,
+            })?;
+            if let Some(save_path) = &args.save_png {
+                let bytes =
+                    shell::download::write_png_bytes_to(save_path, &png).map_err(|reason| {
+                        ShellError::Io {
+                            path: save_path.display().to_string(),
+                            reason,
+                        }
+                    })?;
+                println!("saved png ({bytes} bytes) to {}", save_path.display());
+            }
+            if let Some(save_path) = &args.save_html {
+                let bytes = shell::download::write_html_to(save_path, &output.document).map_err(
+                    |reason| ShellError::Io {
+                        path: save_path.display().to_string(),
+                        reason,
+                    },
+                )?;
+                println!("saved html ({bytes} bytes) to {}", save_path.display());
+            }
             println!(
                 "wrote {} ({}x{}, {} bytes, zoom {})",
-                info.path.display(),
-                info.width,
-                info.height,
-                info.png_bytes,
+                path.display(),
+                output.pixmap.width,
+                output.pixmap.height,
+                png.len(),
                 zoom::zoom_label(args.zoom)
             );
             Ok(())

@@ -54,14 +54,16 @@
 //!   decoded transparently by `net`.
 //! - **Dynamic title**: the window title is the document `<title>` plus the short URL and
 //!   scroll percentage ([`title`]); server redirects replace the current history entry.
-//! - **Session & downloads (R150)**: the window persists tabs/history/zoom/scroll to
+//! - **Session & downloads (R150/R158)**: the window persists tabs/history/zoom/scroll to
 //!   `$XDG_DATA_HOME/megi/session.json` (or `--session-file PATH`) with debounced atomic
 //!   saves, tolerant loading of corrupt files and `--no-session` to disable it; headless
 //!   never writes a session. `Ctrl+S` exports the rendered page as
 //!   `megi-<host>-<n>.png` and `Ctrl+Shift+S` the post-script DOM as
 //!   `megi-<host>-<n>.html` (doctype included) into `--download-dir`/`~/Downloads`;
 //!   headless equivalents are `--save-png PATH` / `--save-html PATH` ([`session`],
-//!   [`download`]).
+//!   [`download`]). Frames keep the render-produced PNG bytes ([`worker::RenderFrame::png_bytes`])
+//!   so saves write them directly (atomic tmp+rename, no re-encode, byte-identical to
+//!   `--screenshot`); headless renders once when `--save-*` is combined with `--screenshot`.
 //! - **Browser chrome (R135)**: a shell-drawn overlay ([`chrome`]) with a tab strip
 //!   (click to activate/close, `+` new tab, `+N` overflow) and an address bar (`Ctrl+L`,
 //!   caret editing, `Enter` navigates via `Url::join`, `Esc` cancels), plus the floating

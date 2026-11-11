@@ -736,13 +736,19 @@ impl WindowApp {
         self.request_repaint();
     }
 
-    /// `Ctrl+S`: saves the current frame as a PNG download.
+    /// `Ctrl+S`: writes the **render-produced PNG bytes** of the current frame as a
+    /// download (no re-encoding, no re-render). The saved image is the whole rendered page
+    /// (full content height, not the scrolled viewport; limits documented).
     fn save_frame_png(&mut self) {
         let Some(frame) = self.store.frame() else {
             self.notify("no page to save yet".to_string());
             return;
         };
-        let (width, height, pixels) = (frame.width, frame.height, frame.pixels.clone());
+        let png = frame.png_bytes.clone();
+        if png.is_empty() {
+            self.notify("cannot save PNG: the render produced no PNG bytes".to_string());
+            return;
+        }
         let url = match self.nav.current().cloned() {
             Some(url) => url,
             None => match net::Url::parse(&self.input) {
@@ -754,7 +760,7 @@ impl WindowApp {
             },
         };
         let dir = crate::download::resolve_download_dir(self.download_dir.as_deref());
-        match crate::download::save_png(&dir, &url, width, height, &pixels) {
+        match crate::download::save_png(&dir, &url, &png) {
             Ok(saved) => self.notify(saved.notice()),
             Err(error) => self.notify(format!("cannot save PNG: {error}")),
         }

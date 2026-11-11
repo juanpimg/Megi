@@ -219,6 +219,7 @@ fn worker_channel_applies_only_the_latest_generation() {
                 width: 1,
                 height: 1,
                 pixels: vec![0x00FF_FFFF],
+                png_bytes: vec![0x89, b'P', b'N', b'G'],
                 content_height: 1,
                 capped: false,
                 links: Vec::new(),
@@ -251,6 +252,7 @@ fn worker_channel_applies_only_the_latest_generation() {
         width: 1,
         height: 1,
         pixels: vec![0],
+        png_bytes: vec![0x89, b'P', b'N', b'G'],
         content_height: 1,
         capped: false,
         links: Vec::new(),
@@ -1164,4 +1166,28 @@ fn headless_never_writes_a_session_file() {
         "headless mode must not persist a session"
     );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn worker_frame_png_bytes_match_the_render_screenshot() {
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");
+    let input = shell::cli::normalize_input(&fixture.display().to_string()).expect("fixture URL");
+    let request = RenderRequest {
+        generation: 1,
+        input: input.clone(),
+        css_width: 320,
+        css_height: 240,
+        base_override: None,
+        scripting: true,
+        find_query: None,
+    };
+    let frame = shell::worker::render_document(&request).expect("render");
+    assert!(shell::download::is_png(&frame.png_bytes));
+    let direct = shell::headless::render_target(&input, 320, 240).expect("direct render");
+    assert_eq!(
+        frame.png_bytes, direct.png,
+        "frame keeps the render PNG bytes"
+    );
+    assert_eq!((frame.width, frame.height), (320, 240));
 }

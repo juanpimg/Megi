@@ -13,6 +13,8 @@
 #   - Ctrl+F: find in page (yellow highlights, Enter next, Shift+Enter previous, Esc close);
 #     --find QUERY does the same for headless --screenshot output
 #   - F5 / g / r reload, Alt+Home first history entry, Ctrl+D prints URL + title
+#   - Ctrl+S writes the render-produced PNG bytes directly (atomic, no re-encode);
+#     headless --save-png shares --screenshot bytes
 #   - session: tabs/history/zoom/scroll persist in $XDG_DATA_HOME/megi/session.json
 #     (--no-session, --session-file PATH); Ctrl+S saves PNG, Ctrl+Shift+S saves serialized
 #     HTML (doctype) to --download-dir or ~/Downloads; headless: --save-png/--save-html PATH

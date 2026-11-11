@@ -14,8 +14,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use paint::Pixmap;
-
 use crate::links::CssRect;
 
 /// Largest accepted host label in a download name.
@@ -127,39 +125,45 @@ pub fn resolve_download_dir(explicit: Option<&Path>) -> PathBuf {
     default_download_dir(explicit, home.as_deref())
 }
 
-/// Saves an in-memory `0RGB` frame as a PNG download.
-pub fn save_png(
-    dir: &Path,
-    url: &net::Url,
-    width: u32,
-    height: u32,
-    pixels: &[u32],
-) -> Result<SavedDownload, String> {
-    if width == 0 || height == 0 || pixels.len() < (width as usize) * (height as usize) {
-        return Err(format!(
-            "invalid frame buffer {width}x{height} ({} pixels)",
-            pixels.len()
-        ));
+/// Writes `bytes` atomically: a sibling `.<name>.tmp` file is written and renamed over the
+/// target (same filesystem), so a crash/interruption never leaves a half-written download.
+fn write_atomic(path: &Path, bytes: &[u8]) -> Result<usize, String> {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
+    }
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "download".to_string());
+    let temporary = path.with_file_name(format!(".{file_name}.tmp"));
+    if let Err(error) = fs::write(&temporary, bytes) {
+        let _ = fs::remove_file(&temporary);
+        return Err(format!("cannot write {}: {error}", path.display()));
+    }
+    fs::rename(&temporary, path).map_err(|error| {
+        let _ = fs::remove_file(&temporary);
+        format!("cannot write {}: {error}", path.display())
+    })?;
+    Ok(bytes.len())
+}
+
+/// Saves PNG bytes produced by the render pipeline as a download, **without re-encoding**.
+///
+/// `png` must be a complete PNG file (validated by [`is_png`]); the render's `RenderOutput.png`
+/// is passed through byte for byte, so `Ctrl+S`/`--save-png` are identical to `--screenshot`.
+pub fn save_png(dir: &Path, url: &net::Url, png: &[u8]) -> Result<SavedDownload, String> {
+    if !is_png(png) {
+        return Err("not a PNG image (missing signature)".to_string());
     }
     fs::create_dir_all(dir).map_err(|error| format!("cannot create {}: {error}", dir.display()))?;
     let path = next_download_path(dir, url, DownloadKind::Png.extension());
-    let mut pixmap = Pixmap::new(width, height);
-    for (slot, pixel) in pixmap.pixels.iter_mut().zip(pixels.iter()) {
-        *slot = paint::Color::new(
-            ((*pixel >> 16) & 0xFF) as u8,
-            ((*pixel >> 8) & 0xFF) as u8,
-            (*pixel & 0xFF) as u8,
-            0xFF,
-        );
-    }
-    let png = pixmap.to_png();
-    if png.is_empty() {
-        return Err("PNG encoder returned no bytes".to_string());
-    }
-    fs::write(&path, &png).map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+    let bytes = write_atomic(&path, png)?;
     Ok(SavedDownload {
         path,
-        bytes: png.len(),
+        bytes,
         kind: DownloadKind::Png,
     })
 }
@@ -177,34 +181,19 @@ pub fn serialize_document(document: &dom::Document) -> String {
     html
 }
 
-/// Writes a PNG of `pixmap` to an explicit path (`--save-png`).
-pub fn write_png_to(path: &Path, pixmap: &Pixmap) -> Result<usize, String> {
-    let png = pixmap.to_png();
-    if png.is_empty() {
-        return Err("PNG encoder returned no bytes".to_string());
+/// Writes rendered PNG bytes to an explicit path (`--save-png`), atomically and without
+/// re-encoding.
+pub fn write_png_bytes_to(path: &Path, png: &[u8]) -> Result<usize, String> {
+    if !is_png(png) {
+        return Err("not a PNG image (missing signature)".to_string());
     }
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
-    }
-    fs::write(path, &png).map_err(|error| format!("cannot write {}: {error}", path.display()))?;
-    Ok(png.len())
+    write_atomic(path, png)
 }
 
 /// Writes the serialized DOM (doctype included) to an explicit path (`--save-html`).
 pub fn write_html_to(path: &Path, document: &dom::Document) -> Result<usize, String> {
     let html = serialize_document(document);
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
-    }
-    fs::write(path, html.as_bytes())
-        .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
-    Ok(html.len())
+    write_atomic(path, html.as_bytes())
 }
 
 /// Saves the rendered DOM as an HTML download (the serializer includes the doctype).
@@ -219,11 +208,10 @@ pub fn save_html(
     if html.is_empty() {
         return Err("HTML serializer returned an empty document".to_string());
     }
-    fs::write(&path, html.as_bytes())
-        .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+    let bytes = write_atomic(&path, html.as_bytes())?;
     Ok(SavedDownload {
         path,
-        bytes: html.len(),
+        bytes,
         kind: DownloadKind::Html,
     })
 }
@@ -303,28 +291,14 @@ mod tests {
         let dir = temp_dir("png");
         let output = rendered();
         let url = url("https://example.com/");
-        let first = save_png(
-            &dir,
-            &url,
-            output.pixmap.width,
-            output.pixmap.height,
-            &crate::convert::pixmap_to_0rgb(&output.pixmap),
-        )
-        .expect("save");
+        let first = save_png(&dir, &url, &output.png).expect("save");
         assert!(first.path.is_file());
         assert_eq!(first.kind, DownloadKind::Png);
         let bytes = fs::read(&first.path).expect("read");
         assert!(is_png(&bytes));
         assert_eq!(bytes.len(), first.bytes);
         // Deterministic output: same frame → identical file (different name is fine).
-        let second = save_png(
-            &dir,
-            &url,
-            output.pixmap.width,
-            output.pixmap.height,
-            &crate::convert::pixmap_to_0rgb(&output.pixmap),
-        )
-        .expect("second save");
+        let second = save_png(&dir, &url, &output.png).expect("second save");
         assert_ne!(second.path, first.path);
         assert_eq!(fs::read(&second.path).expect("read"), bytes);
         assert!(first.notice().contains("saved png"));
@@ -357,8 +331,8 @@ mod tests {
     fn invalid_frames_and_hostile_paths_return_errors() {
         let dir = temp_dir("errors");
         let url = url("https://example.com/");
-        assert!(save_png(&dir, &url, 0, 10, &[]).is_err());
-        assert!(save_png(&dir, &url, 4, 4, &[0u32; 3]).is_err());
+        assert!(save_png(&dir, &url, b"").is_err());
+        assert!(save_png(&dir, &url, b"not a png").is_err());
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -368,7 +342,7 @@ mod tests {
         fs::create_dir_all(&dir).expect("mkdir");
         let output = rendered();
         let png_path = dir.join("explicit.png");
-        let bytes = write_png_to(&png_path, &output.pixmap).expect("png");
+        let bytes = write_png_bytes_to(&png_path, &output.png).expect("png");
         let png = fs::read(&png_path).expect("read png");
         assert_eq!(bytes, png.len());
         assert!(is_png(&png));
@@ -378,6 +352,53 @@ mod tests {
         assert_eq!(html_bytes, html.len());
         assert!(html.to_ascii_lowercase().starts_with("<!doctype"));
         assert!(html.contains("Download Page"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn saved_png_is_byte_identical_and_leaves_no_temp_files() {
+        let dir = temp_dir("passthrough");
+        let output = rendered();
+        let saved = save_png(&dir, &url("https://example.com/"), &output.png).expect("save");
+        assert_eq!(
+            fs::read(&saved.path).expect("read"),
+            output.png,
+            "no re-encode"
+        );
+        let leftovers: Vec<_> = fs::read_dir(&dir)
+            .expect("read dir")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "atomic write must not leave tmp files"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unwritable_download_directory_returns_an_error() {
+        let dir = temp_dir("readonly");
+        fs::create_dir_all(&dir).expect("mkdir");
+        let output = rendered();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = fs::metadata(&dir).expect("metadata").permissions();
+            permissions.set_mode(0o500);
+            fs::set_permissions(&dir, permissions).expect("chmod");
+        }
+        let result = save_png(&dir, &url("https://example.com/"), &output.png);
+        #[cfg(unix)]
+        {
+            assert!(result.is_err(), "read-only directory must fail cleanly");
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = fs::metadata(&dir).expect("metadata").permissions();
+            permissions.set_mode(0o700);
+            fs::set_permissions(&dir, permissions).expect("chmod back");
+        }
+        let _ = result;
         let _ = fs::remove_dir_all(&dir);
     }
 

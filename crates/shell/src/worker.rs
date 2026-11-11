@@ -69,6 +69,10 @@ pub struct RenderFrame {
     pub height: u32,
     /// `width * height` pixels in `0RGB` format.
     pub pixels: Vec<u32>,
+    /// PNG bytes produced by the render pipeline (same bytes as `--screenshot`). Kept in the
+    /// frame so downloads (`Ctrl+S`, `--save-png`) write them directly without re-encoding;
+    /// memory trade-off: one extra compressed copy per frame (documented).
+    pub png_bytes: Vec<u8>,
     /// Scrollable page height in CSS pixels (clamped to the render cap).
     pub content_height: u32,
     /// Whether the page was taller than [`scroll::MAX_CONTENT_HEIGHT`] and got clipped.
@@ -100,6 +104,12 @@ pub struct RenderFrame {
 }
 
 /// Message sent from the worker back to the event loop.
+///
+/// `Frame` is intentionally much larger than `Failed`: it carries the page pixels, the DOM
+/// snapshot, form/link/find maps and the render-produced PNG bytes, so downloads can write
+/// them without re-encoding. Only one message per request is in flight (channel of two
+/// variants), so boxing would add indirection without a real benefit.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 pub enum WorkerMessage {
     /// A frame was rendered successfully.
@@ -400,11 +410,13 @@ pub fn render_document_with_options(
             .iter()
             .filter(|message| message.level == "error")
             .count();
+    let png_bytes = output.png.clone();
     Ok(RenderFrame {
         generation: request.generation,
         width: output.pixmap.width,
         height: output.pixmap.height,
         pixels,
+        png_bytes,
         content_height: target_height,
         capped,
         links,
@@ -455,6 +467,7 @@ mod unit_tests {
             width: 2,
             height: 2,
             pixels: vec![0; 4],
+            png_bytes: vec![0x89, b'P', b'N', b'G'],
             content_height: 2,
             capped: false,
             links: Vec::new(),
