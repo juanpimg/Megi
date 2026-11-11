@@ -49,6 +49,16 @@ static WEBP_PHOTO: &[u8] = include_bytes!("../../image/tests/fixtures/webp/photo
 static WEBP_ALPHA: &[u8] = include_bytes!("../../image/tests/fixtures/webp/alpha_real.webp");
 /// Real libwebp lossless palette image (32×24, colour indexing).
 static WEBP_PALETTE: &[u8] = include_bytes!("../../image/tests/fixtures/webp/palette_real.webp");
+/// Real libwebp lossy VP8 keyframe (1024×768, PIL q75, 40 552 B) committed in
+/// `crates/image`; decoded by the in-tree VP8 decoder (from-scratch port).
+static WEBP_LOSSY_1024: &[u8] =
+    include_bytes!("../../image/tests/fixtures/webp/photo_1024x768_lossy.webp");
+/// Real libwebp lossy VP8 keyframe (64×48, PIL q75).
+static WEBP_LOSSY_Q75: &[u8] =
+    include_bytes!("../../image/tests/fixtures/webp/photo_lossy_q75.webp");
+/// Real libwebp lossy VP8 keyframe (64×48, PIL q90).
+static WEBP_LOSSY_Q90: &[u8] =
+    include_bytes!("../../image/tests/fixtures/webp/photo_lossy_q90.webp");
 
 /// Registers every benchmark into `suite`, applying `opts.scale` to the sizes.
 pub fn register(suite: &mut Suite, opts: &Options) {
@@ -1064,32 +1074,67 @@ fn register_backdrop_stage_rows(suite: &mut Suite) {
     ));
 }
 
-/// Image decoding workloads (rounds 22/25): PNG/JPEG/GIF 800×600 and real WebP
-/// VP8L lossless fixtures (transforms/alpha/palette) → RGBA8.
+/// Image decoding workloads (rounds 22/25/31): PNG/JPEG/GIF 800×600, real WebP
+/// VP8L lossless fixtures (transforms/alpha/palette) and WebP VP8 **lossy**
+/// keyframes (1024×768 + 64×48 q75/q90) → RGBA8.
 ///
 /// Real pages spend a meaningful part of their time decoding images, which the
 /// legacy parse/style/layout/paint rows never exercised. These rows use
-/// committed fixtures (PNG from `crates/image/tests/fixtures`, JPEG/GIF from
+/// committed fixtures (PNG/WebP from `crates/image/tests/fixtures`, JPEG/GIF from
 /// `crates/bench/fixtures`, see the README there) loaded with `include_bytes!`,
 /// so the measurement is deterministic and offline. Each row decodes the whole
 /// image with the format defaults and drops the resulting RGBA buffer.
+///
+/// The `image/decode-webp-lossy*` rows exercise the in-tree VP8 keyframe decoder
+/// (boolean entropy decoder, intra prediction, IDCT/WHT, loop filter and
+/// YUV420→RGB); `image/decode-webp-lossy` is the 1024×768 heavy row, while the
+/// 64×48 q75/q90 rows keep the default iteration count for a stable median of
+/// the small-image path. Their determinism is asserted by the unit test below.
+///
 /// Reference medians (release, 5 iterations / heavy cap 3, idle host) are in
 /// `docs/PERFORMANCE.md`; treat a reproducible >15 % regression as a finding.
 fn register_image(suite: &mut Suite) {
-    for (name, bytes, label) in [
-        ("image/decode-png-800x600", PNG_800X600, "PNG"),
-        ("image/decode-jpeg-800x600", JPEG_800X600, "JPEG"),
-        ("image/decode-gif", GIF_800X600, "GIF"),
+    // (name, fixture, label, heavy). Heavy rows get fewer timed iterations; the tiny
+    // 64×48 lossy rows keep the default iteration count so their median is stable.
+    for (name, bytes, label, heavy) in [
+        ("image/decode-png-800x600", PNG_800X600, "PNG", true),
+        ("image/decode-jpeg-800x600", JPEG_800X600, "JPEG", true),
+        ("image/decode-gif", GIF_800X600, "GIF", true),
         (
             "image/decode-webp-lossless",
             WEBP_PHOTO,
             "WebP VP8L (transforms)",
+            true,
         ),
-        ("image/decode-webp-alpha", WEBP_ALPHA, "WebP VP8L (alpha)"),
+        (
+            "image/decode-webp-alpha",
+            WEBP_ALPHA,
+            "WebP VP8L (alpha)",
+            true,
+        ),
         (
             "image/decode-webp-palette",
             WEBP_PALETTE,
             "WebP VP8L (palette)",
+            true,
+        ),
+        (
+            "image/decode-webp-lossy",
+            WEBP_LOSSY_1024,
+            "WebP VP8 lossy (1024×768)",
+            true,
+        ),
+        (
+            "image/decode-webp-lossy-q75",
+            WEBP_LOSSY_Q75,
+            "WebP VP8 lossy (q75)",
+            false,
+        ),
+        (
+            "image/decode-webp-lossy-q90",
+            WEBP_LOSSY_Q90,
+            "WebP VP8 lossy (q90)",
+            false,
         ),
     ] {
         match image::decode(bytes) {
@@ -1101,13 +1146,11 @@ fn register_image(suite: &mut Suite) {
                     probe.height,
                     bytes.len()
                 );
-                suite.add(
-                    BenchEntry::new(name, "image", detail, move || {
-                        black_box(image::decode(bytes).expect("committed image fixture decodes"));
-                    })
-                    .with_units(pixels, "MPix")
-                    .heavy(),
-                );
+                let entry = BenchEntry::new(name, "image", detail, move || {
+                    black_box(image::decode(bytes).expect("committed image fixture decodes"));
+                })
+                .with_units(pixels, "MPix");
+                suite.add(if heavy { entry.heavy() } else { entry });
             }
             Err(error) => suite.skip(name, format!("fixture de imagen inválido: {error}")),
         }
@@ -1239,10 +1282,45 @@ mod tests {
             ("webp-photo", WEBP_PHOTO, 64, 48),
             ("webp-alpha", WEBP_ALPHA, 40, 32),
             ("webp-palette", WEBP_PALETTE, 32, 24),
+            ("webp-lossy-1024", WEBP_LOSSY_1024, 1024, 768),
+            ("webp-lossy-q75", WEBP_LOSSY_Q75, 64, 48),
+            ("webp-lossy-q90", WEBP_LOSSY_Q90, 64, 48),
         ] {
             let decoded = image::decode(bytes).expect("committed fixture decodes");
             assert_eq!((decoded.width, decoded.height), (width, height), "{label}");
             assert_eq!(decoded.data.len(), (width * height * 4) as usize, "{label}");
+        }
+    }
+
+    /// The VP8 lossy bench rows must measure a deterministic decode: two decodes of
+    /// the same fixture produce identical RGBA bytes (and opaque alpha).
+    #[test]
+    fn webp_lossy_bench_fixtures_decode_deterministically() {
+        for (label, bytes) in [
+            ("webp-lossy-1024", WEBP_LOSSY_1024),
+            ("webp-lossy-q75", WEBP_LOSSY_Q75),
+            ("webp-lossy-q90", WEBP_LOSSY_Q90),
+        ] {
+            let first = image::decode(bytes).expect("first decode");
+            let second = image::decode(bytes).expect("second decode");
+            assert_eq!(
+                (first.width, first.height),
+                (second.width, second.height),
+                "{label}"
+            );
+            assert_eq!(
+                first.data, second.data,
+                "{label}: decode must be deterministic"
+            );
+            assert!(
+                first
+                    .data
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .all(|pixel| pixel[3] == 255),
+                "{label}: VP8 lossy has no alpha, pixels must be opaque"
+            );
         }
     }
 }

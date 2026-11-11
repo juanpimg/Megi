@@ -80,6 +80,7 @@ impl<'a> BoolDecoder<'a> {
         decoder
     }
 
+    #[inline]
     fn fill(&mut self) {
         let mut value = self.value;
         let mut count = self.count;
@@ -105,6 +106,7 @@ impl<'a> BoolDecoder<'a> {
         self.count = count;
     }
 
+    #[inline]
     fn read_bool(&mut self, probability: u8) -> bool {
         let split = 1 + (((self.range - 1) * u32::from(probability)) >> 8);
         if self.count < 0 {
@@ -126,6 +128,7 @@ impl<'a> BoolDecoder<'a> {
         bit
     }
 
+    #[inline]
     fn read_literal(&mut self, bits: u8) -> u32 {
         let mut value = 0;
         for bit in (0..bits).rev() {
@@ -134,11 +137,13 @@ impl<'a> BoolDecoder<'a> {
         value
     }
 
+    #[inline]
     fn read_signed_literal(&mut self, bits: u8) -> i32 {
         let value = self.read_literal(bits) as i32;
         if self.read_bool(0x80) { -value } else { value }
     }
 
+    #[inline]
     fn read_tree(&mut self, tree: &[i32], probs: &[u8]) -> usize {
         let mut node = 0usize;
         loop {
@@ -521,6 +526,7 @@ const COSPI8SQRT2MINUS1: i32 = 20091;
 const SINPI8SQRT2: i32 = 35468;
 
 /// VP8 4x4 inverse DCT plus prediction (libvpx `vp8_short_idct4x4llm_c`).
+#[inline]
 fn idct4x4_add(coefficients: &[i32; 16], plane: &mut [u8], stride: usize, x: usize, y: usize) {
     let mut tmp = [0i32; 16];
     for column in 0..4 {
@@ -560,6 +566,7 @@ fn idct4x4_add(coefficients: &[i32; 16], plane: &mut [u8], stride: usize, x: usi
     }
 }
 
+#[inline]
 fn dc_only_idct_add(dc: i32, plane: &mut [u8], stride: usize, x: usize, y: usize) {
     let value = (dc + 4) >> 3;
     for row in 0..4 {
@@ -601,9 +608,11 @@ fn iwht4x4_dc(coefficients: &[i32; 16]) -> i32 {
     (coefficients[0] + 3) >> 3
 }
 
+#[inline]
 fn avg2(a: u8, b: u8) -> u8 {
     ((u16::from(a) + u16::from(b) + 1) >> 1) as u8
 }
+#[inline]
 fn avg3(a: u8, b: u8, c: u8) -> u8 {
     ((u16::from(a) + 2 * u16::from(b) + u16::from(c) + 2) >> 2) as u8
 }
@@ -643,56 +652,71 @@ fn predict_large(
     above_available: bool,
     left_available: bool,
 ) {
-    let above: Vec<u8> = (0..size)
-        .map(|index| plane[y * stride + x + 1 + index])
-        .collect();
-    let left: Vec<u8> = (0..size)
-        .map(|index| plane[(y + 1 + index) * stride + x])
-        .collect();
+    // `size` is 8 or 16: keep the edge samples on the stack and write the prediction
+    // straight into the plane (no per-call heap allocation).
+    let mut above = [0u8; 16];
+    let above_start = y * stride + x + 1;
+    above[..size].copy_from_slice(&plane[above_start..above_start + size]);
+    let mut left = [0u8; 16];
+    for (index, value) in left[..size].iter_mut().enumerate() {
+        *value = plane[(y + 1 + index) * stride + x];
+    }
     let top_left = plane[y * stride + x];
-    let mut out = vec![0u8; size * size];
+    let row_start = |row: usize| (y + 1 + row) * stride + x + 1;
     match mode {
         0 => {
             let mut sum = 0u32;
             let mut count = 0u32;
             if above_available {
-                sum += above.iter().map(|value| u32::from(*value)).sum::<u32>();
+                sum += above[..size]
+                    .iter()
+                    .map(|value| u32::from(*value))
+                    .sum::<u32>();
                 count += size as u32;
             }
             if left_available {
-                sum += left.iter().map(|value| u32::from(*value)).sum::<u32>();
+                sum += left[..size]
+                    .iter()
+                    .map(|value| u32::from(*value))
+                    .sum::<u32>();
                 count += size as u32;
             }
             let dc = match count {
                 0 => 128,
                 count => ((sum + count / 2) / count) as u8,
             };
-            out.fill(dc);
+            for row in 0..size {
+                let start = row_start(row);
+                plane[start..start + size].fill(dc);
+            }
         }
         1 => {
-            for row in out.chunks_exact_mut(size) {
-                row.copy_from_slice(&above);
+            for row in 0..size {
+                let start = row_start(row);
+                plane[start..start + size].copy_from_slice(&above[..size]);
             }
         }
         2 => {
-            for (row, value) in out.chunks_exact_mut(size).zip(left.iter()) {
-                row.fill(*value);
+            for (row, value) in left[..size].iter().enumerate() {
+                let start = row_start(row);
+                plane[start..start + size].fill(*value);
             }
         }
         3 => {
-            for (row, left_value) in out.chunks_exact_mut(size).zip(left.iter()) {
-                for (pixel, above_value) in row.iter_mut().zip(above.iter()) {
-                    let value =
-                        i32::from(*above_value) + i32::from(*left_value) - i32::from(top_left);
-                    *pixel = value.clamp(0, 255) as u8;
+            for (row, left_value) in left[..size].iter().enumerate() {
+                let start = row_start(row);
+                let left_value = i32::from(*left_value) - i32::from(top_left);
+                for (column, above_value) in above[..size].iter().enumerate() {
+                    let value = i32::from(*above_value) + left_value;
+                    plane[start + column] = value.clamp(0, 255) as u8;
                 }
             }
         }
-        _ => out.fill(128),
-    }
-    for row in 0..size {
-        for column in 0..size {
-            plane[(y + 1 + row) * stride + (x + 1 + column)] = out[row * size + column];
+        _ => {
+            for row in 0..size {
+                let start = row_start(row);
+                plane[start..start + size].fill(128);
+            }
         }
     }
 }
@@ -915,6 +939,7 @@ fn neighbor_left_mode(
     }
 }
 
+#[inline]
 fn plane_offset(stride: usize, x: usize, y: usize) -> usize {
     (y + 1) * stride + (x + 1)
 }
@@ -1231,58 +1256,78 @@ fn decode_frame(
     )
 }
 
-fn fancy_line(
+/// Fancy chroma upsampling + YUV->RGB for one output row (libwebp
+/// `UpsampleRgbaLinePair_C` + `VP8YuvToRgba`), writing RGBA into `dst`.
+///
+/// `top_*` is the upper chroma row and `cur_*` the lower one; `bottom` selects the
+/// 3:1 vertical weighting direction (libwebp `EmitFancyRGB` row mapping).
+#[allow(clippy::too_many_arguments)]
+fn yuv_row_rgba(
+    y_row: &[u8],
     top_u: &[u8],
     top_v: &[u8],
     cur_u: &[u8],
     cur_v: &[u8],
     len: usize,
     bottom: bool,
-) -> Vec<(u8, u8)> {
-    let mut out = Vec::with_capacity(len);
-    if top_u.is_empty() || len == 0 {
-        return out;
+    dst: &mut [u8],
+) {
+    if len == 0 {
+        return;
     }
     let mut tl_u = i32::from(top_u[0]);
     let mut tl_v = i32::from(top_v[0]);
     let mut l_u = i32::from(cur_u[0]);
     let mut l_v = i32::from(cur_v[0]);
-    // top-left / left sample.
-    if bottom {
-        out.push((
-            ((3 * l_u + tl_u + 2) >> 2) as u8,
-            ((3 * l_v + tl_v + 2) >> 2) as u8,
-        ));
+    let (first_u, first_v) = if bottom {
+        ((3 * l_u + tl_u + 2) >> 2, (3 * l_v + tl_v + 2) >> 2)
     } else {
-        out.push((
-            ((3 * tl_u + l_u + 2) >> 2) as u8,
-            ((3 * tl_v + l_v + 2) >> 2) as u8,
-        ));
-    }
+        ((3 * tl_u + l_u + 2) >> 2, (3 * tl_v + l_v + 2) >> 2)
+    };
+    write_rgba(dst, 0, y_row[0], first_u as u8, first_v as u8);
     let last_pair = (len - 1) >> 1;
     for x in 1..=last_pair {
-        let t_u = i32::from(top_u[x.min(top_u.len() - 1)]);
-        let t_v = i32::from(top_v[x.min(top_v.len() - 1)]);
-        let uv_u = i32::from(cur_u[x.min(cur_u.len() - 1)]);
-        let uv_v = i32::from(cur_v[x.min(cur_v.len() - 1)]);
+        let t_u = i32::from(top_u[x]);
+        let t_v = i32::from(top_v[x]);
+        let uv_u = i32::from(cur_u[x]);
+        let uv_v = i32::from(cur_v[x]);
         let avg_u = tl_u + t_u + l_u + uv_u + 8;
         let avg_v = tl_v + t_v + l_v + uv_v + 8;
         let diag12_u = (avg_u + 2 * (t_u + l_u)) >> 3;
         let diag12_v = (avg_v + 2 * (t_v + l_v)) >> 3;
         let diag03_u = (avg_u + 2 * (tl_u + uv_u)) >> 3;
         let diag03_v = (avg_v + 2 * (tl_v + uv_v)) >> 3;
+        let odd = 2 * x - 1;
         if bottom {
-            out.push((((diag03_u + l_u) >> 1) as u8, ((diag03_v + l_v) >> 1) as u8));
-            out.push((
+            write_rgba(
+                dst,
+                odd,
+                y_row[odd],
+                ((diag03_u + l_u) >> 1) as u8,
+                ((diag03_v + l_v) >> 1) as u8,
+            );
+            write_rgba(
+                dst,
+                odd + 1,
+                y_row[odd + 1],
                 ((diag12_u + uv_u) >> 1) as u8,
                 ((diag12_v + uv_v) >> 1) as u8,
-            ));
+            );
         } else {
-            out.push((
+            write_rgba(
+                dst,
+                odd,
+                y_row[odd],
                 ((diag12_u + tl_u) >> 1) as u8,
                 ((diag12_v + tl_v) >> 1) as u8,
-            ));
-            out.push((((diag03_u + t_u) >> 1) as u8, ((diag03_v + t_v) >> 1) as u8));
+            );
+            write_rgba(
+                dst,
+                odd + 1,
+                y_row[odd + 1],
+                ((diag03_u + t_u) >> 1) as u8,
+                ((diag03_v + t_v) >> 1) as u8,
+            );
         }
         tl_u = t_u;
         tl_v = t_v;
@@ -1290,25 +1335,29 @@ fn fancy_line(
         l_v = uv_v;
     }
     if len.is_multiple_of(2) {
-        if bottom {
-            out.push((
-                ((3 * l_u + tl_u + 2) >> 2) as u8,
-                ((3 * l_v + tl_v + 2) >> 2) as u8,
-            ));
+        let last = len - 1;
+        let (u, v) = if bottom {
+            ((3 * l_u + tl_u + 2) >> 2, (3 * l_v + tl_v + 2) >> 2)
         } else {
-            out.push((
-                ((3 * tl_u + l_u + 2) >> 2) as u8,
-                ((3 * tl_v + l_v + 2) >> 2) as u8,
-            ));
-        }
+            ((3 * tl_u + l_u + 2) >> 2, (3 * tl_v + l_v + 2) >> 2)
+        };
+        write_rgba(dst, last, y_row[last], u as u8, v as u8);
     }
-    out
 }
 
+/// Writes the RGBA8 pixel for output column `x` into `dst`.
+#[inline]
+fn write_rgba(dst: &mut [u8], x: usize, y: u8, u: u8, v: u8) {
+    let pixel = yuv_pixel(y, u, v);
+    dst[x * 4..x * 4 + 4].copy_from_slice(&pixel);
+}
+
+#[inline]
 fn mult_hi(value: i32, coefficient: i32) -> i32 {
     (value * coefficient) >> 8
 }
 
+#[inline]
 fn clip8(value: i32) -> u8 {
     if value < 0 {
         0
@@ -1473,6 +1522,8 @@ fn simple_filter(mask: i32, p1: &mut u8, p0: &mut u8, q0: &mut u8, q1: &mut u8) 
     *p0 = (value as u8) ^ 0x80;
 }
 
+/// Converts one YUV420 pixel to RGBA8 (libwebp fixed-point BT.601).
+#[inline]
 fn yuv_pixel(y: u8, u: u8, v: u8) -> [u8; 4] {
     let yy = i32::from(y);
     let uu = i32::from(u);
@@ -1497,7 +1548,7 @@ fn yuv420_to_rgba(
 ) -> Result<RgbaImage, ImageError> {
     let cw = width.div_ceil(2).min(chroma_width);
     let last_chroma = chroma_height.saturating_sub(1);
-    let mut data = Vec::with_capacity(width * height * 4);
+    let mut data = vec![0u8; width * height * 4];
     // Row mapping of libwebp's fancy upsampler (`EmitFancyRGB`): output row 0
     // mirrors chroma row 0; odd rows 2k+1 mix chroma rows k (3/4) and k+1 (1/4);
     // even rows 2k mix chroma rows k-1 (1/4) and k (3/4).
@@ -1511,19 +1562,20 @@ fn yuv420_to_rgba(
             let k = y / 2;
             ((k - 1).min(last_chroma), k.min(last_chroma), true)
         };
-        let top_u =
-            &u_plane[plane_offset(c_stride, 0, top_row)..plane_offset(c_stride, 0, top_row) + cw];
-        let top_v =
-            &v_plane[plane_offset(c_stride, 0, top_row)..plane_offset(c_stride, 0, top_row) + cw];
-        let cur_u =
-            &u_plane[plane_offset(c_stride, 0, cur_row)..plane_offset(c_stride, 0, cur_row) + cw];
-        let cur_v =
-            &v_plane[plane_offset(c_stride, 0, cur_row)..plane_offset(c_stride, 0, cur_row) + cw];
-        let line = fancy_line(top_u, top_v, cur_u, cur_v, width, bottom);
-        for (x, (u, v)) in line.iter().enumerate() {
-            let yy = y_plane[plane_offset(y_stride, x, y)];
-            data.extend_from_slice(&yuv_pixel(yy, *u, *v));
-        }
+        let top_offset = plane_offset(c_stride, 0, top_row);
+        let cur_offset = plane_offset(c_stride, 0, cur_row);
+        let y_offset = plane_offset(y_stride, 0, y);
+        let row = &mut data[y * width * 4..(y + 1) * width * 4];
+        yuv_row_rgba(
+            &y_plane[y_offset..y_offset + width],
+            &u_plane[top_offset..top_offset + cw],
+            &v_plane[top_offset..top_offset + cw],
+            &u_plane[cur_offset..cur_offset + cw],
+            &v_plane[cur_offset..cur_offset + cw],
+            width,
+            bottom,
+            row,
+        );
     }
     RgbaImage::new(width as u32, height as u32, data)
 }
@@ -1538,90 +1590,83 @@ struct FilterHeader {
     mode_deltas: [i32; 4],
 }
 
+#[inline]
 fn signed_clamp(value: i32) -> i32 {
     value.clamp(-128, 127)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn filter_mask(
-    limit: u8,
-    blimit: u8,
-    p3: u8,
-    p2: u8,
-    p1: u8,
-    p0: u8,
-    q0: u8,
-    q1: u8,
-    q2: u8,
-    q3: u8,
-) -> i32 {
-    let abs = |a: u8, b: u8| i32::from(a.abs_diff(b));
-    let mut mask = 0;
-    mask |= i32::from(abs(p3, p2) > i32::from(limit));
-    mask |= i32::from(abs(p2, p1) > i32::from(limit));
-    mask |= i32::from(abs(p1, p0) > i32::from(limit));
-    mask |= i32::from(abs(q1, q0) > i32::from(limit));
-    mask |= i32::from(abs(q2, q1) > i32::from(limit));
-    mask |= i32::from(abs(q3, q2) > i32::from(limit));
-    mask |= i32::from(abs(p0, q0) * 2 + abs(p1, q1) / 2 > i32::from(blimit));
-    mask - 1
+/// "Should any filter be applied at all" mask (libvpx `vp8_filter_mask`).
+///
+/// `w` holds `[p3, p2, p1, p0, q0, q1, q2, q3]` around the edge.
+#[inline]
+fn filter_mask(limit: u8, blimit: u8, w: &[u8; 8]) -> i32 {
+    // Scalar early-exit: the mask is "apply" only when *every* condition holds, so a
+    // single failing comparison returns immediately (libvpx ORs the SIMD lanes).
+    let abs = |a: u8, b: u8| u8::abs_diff(a, b);
+    if abs(w[0], w[1]) > limit
+        || abs(w[1], w[2]) > limit
+        || abs(w[2], w[3]) > limit
+        || abs(w[5], w[4]) > limit
+        || abs(w[6], w[5]) > limit
+        || abs(w[7], w[6]) > limit
+        || u16::from(abs(w[3], w[4])) * 2 + u16::from(abs(w[2], w[5])) / 2 > u16::from(blimit)
+    {
+        return 0;
+    }
+    -1
 }
 
-fn hev_mask(thresh: u8, p1: u8, p0: u8, q0: u8, q1: u8) -> i32 {
+/// High-edge-variance mask (libvpx `vp8_hevmask`).
+#[inline]
+fn hev_mask(thresh: u8, w: &[u8; 8]) -> i32 {
     let mut hev = 0;
-    if p1.abs_diff(p0) > thresh {
-        hev |= -1;
+    if w[2].abs_diff(w[3]) > thresh {
+        hev = -1;
     }
-    if q1.abs_diff(q0) > thresh {
-        hev |= -1;
+    if w[5].abs_diff(w[4]) > thresh {
+        hev = -1;
     }
     hev
 }
 
+#[inline]
 fn signed_xor(value: u8) -> i32 {
     ((value ^ 0x80) as i8) as i32
 }
 
-fn filter_pixels(mask: i32, hev: i32, p1: &mut u8, p0: &mut u8, q0: &mut u8, q1: &mut u8) {
-    let ps1 = signed_xor(*p1);
-    let ps0 = signed_xor(*p0);
-    let qs0 = signed_xor(*q0);
-    let qs1 = signed_xor(*q1);
+/// 4-tap filter around an internal edge: returns `[p1, p0, q0, q1]`
+/// (libvpx `vp8_filter`).
+#[inline]
+fn filter_pixels(mask: i32, hev: i32, w: &[u8; 8]) -> [u8; 4] {
+    let ps1 = signed_xor(w[2]);
+    let ps0 = signed_xor(w[3]);
+    let qs0 = signed_xor(w[4]);
+    let qs1 = signed_xor(w[5]);
     let mut filter_value = signed_clamp(ps1 - qs1) & hev;
     filter_value = signed_clamp(filter_value + 3 * (qs0 - ps0)) & mask;
     let filter1 = signed_clamp(filter_value + 4) >> 3;
     let filter2 = signed_clamp(filter_value + 3) >> 3;
-    let value = signed_clamp(qs0 - filter1);
-    *q0 = (value as u8) ^ 0x80;
-    let value = signed_clamp(ps0 + filter2);
-    *p0 = (value as u8) ^ 0x80;
+    let p0 = (signed_clamp(ps0 + filter2) as u8) ^ 0x80;
+    let q0 = (signed_clamp(qs0 - filter1) as u8) ^ 0x80;
     filter_value = filter1;
     filter_value += 1;
     filter_value >>= 1;
     filter_value &= !hev;
-    let value = signed_clamp(qs1 - filter_value);
-    *q1 = (value as u8) ^ 0x80;
-    let value = signed_clamp(ps1 + filter_value);
-    *p1 = (value as u8) ^ 0x80;
+    let p1 = (signed_clamp(ps1 + filter_value) as u8) ^ 0x80;
+    let q1 = (signed_clamp(qs1 - filter_value) as u8) ^ 0x80;
+    [p1, p0, q0, q1]
 }
 
-#[allow(clippy::too_many_arguments)]
-fn mb_filter_pixels(
-    mask: i32,
-    hev: i32,
-    p2: &mut u8,
-    p1: &mut u8,
-    p0: &mut u8,
-    q0: &mut u8,
-    q1: &mut u8,
-    q2: &mut u8,
-) {
-    let ps2 = signed_xor(*p2);
-    let ps1 = signed_xor(*p1);
-    let mut ps0 = signed_xor(*p0);
-    let mut qs0 = signed_xor(*q0);
-    let qs1 = signed_xor(*q1);
-    let qs2 = signed_xor(*q2);
+/// Macroblock-edge filter: 6 pixels around the edge, returns `[p2, p1, p0, q0, q1, q2]`
+/// (libvpx `vp8_mbfilter`).
+#[inline]
+fn mb_filter_pixels(mask: i32, hev: i32, w: &[u8; 8]) -> [u8; 6] {
+    let ps2 = signed_xor(w[1]);
+    let ps1 = signed_xor(w[2]);
+    let mut ps0 = signed_xor(w[3]);
+    let mut qs0 = signed_xor(w[4]);
+    let qs1 = signed_xor(w[5]);
+    let qs2 = signed_xor(w[6]);
     let mut filter_value = signed_clamp(ps1 - qs1);
     filter_value = signed_clamp(filter_value + 3 * (qs0 - ps0));
     filter_value &= mask;
@@ -1631,22 +1676,17 @@ fn mb_filter_pixels(
     qs0 = signed_clamp(qs0 - filter1);
     ps0 = signed_clamp(ps0 + filter2);
     filter_value &= !hev;
-    filter2 = filter_value;
+    let filter2 = filter_value;
     let u = signed_clamp((63 + filter2 * 27) >> 7);
-    let value = signed_clamp(qs0 - u);
-    *q0 = (value as u8) ^ 0x80;
-    let value = signed_clamp(ps0 + u);
-    *p0 = (value as u8) ^ 0x80;
+    let q0 = (signed_clamp(qs0 - u) as u8) ^ 0x80;
+    let p0 = (signed_clamp(ps0 + u) as u8) ^ 0x80;
     let u = signed_clamp((63 + filter2 * 18) >> 7);
-    let value = signed_clamp(qs1 - u);
-    *q1 = (value as u8) ^ 0x80;
-    let value = signed_clamp(ps1 + u);
-    *p1 = (value as u8) ^ 0x80;
+    let q1 = (signed_clamp(qs1 - u) as u8) ^ 0x80;
+    let p1 = (signed_clamp(ps1 + u) as u8) ^ 0x80;
     let u = signed_clamp((63 + filter2 * 9) >> 7);
-    let value = signed_clamp(qs2 - u);
-    *q2 = (value as u8) ^ 0x80;
-    let value = signed_clamp(ps2 + u);
-    *p2 = (value as u8) ^ 0x80;
+    let q2 = (signed_clamp(qs2 - u) as u8) ^ 0x80;
+    let p2 = (signed_clamp(ps2 + u) as u8) ^ 0x80;
+    [p2, p1, p0, q0, q1, q2]
 }
 
 struct FilterLimits {
@@ -1689,6 +1729,7 @@ fn filter_limits(level: i32, sharpness: i32, keyframe: bool) -> FilterLimits {
     }
 }
 
+/// Vertical edge filter: `count * 8` rows, `w = plane[base-4..base+4]`.
 fn vertical_edge(
     plane: &mut [u8],
     stride: usize,
@@ -1698,50 +1739,30 @@ fn vertical_edge(
     limits: &FilterLimits,
     mb: bool,
 ) {
-    for row in 0..count * 8 {
-        let base = plane_offset(stride, x, y + row);
-        let get = |offset: isize| -> u8 { plane[(base as isize + offset) as usize] };
-        let p3 = get(-4);
-        let p2 = get(-3);
-        let p1 = get(-2);
-        let p0 = get(-1);
-        let q0 = get(0);
-        let q1 = get(1);
-        let q2 = get(2);
-        let q3 = get(3);
-        let mask = filter_mask(limits.lim, limits.blim, p3, p2, p1, p0, q0, q1, q2, q3);
-        let hev = hev_mask(limits.hev_thr, p1, p0, q0, q1);
-        let index = |offset: isize| -> usize { (base as isize + offset) as usize };
-        if mb {
-            let mut p2v = p2;
-            let mut p1v = p1;
-            let mut p0v = p0;
-            let mut q0v = q0;
-            let mut q1v = q1;
-            let mut q2v = q2;
-            mb_filter_pixels(
-                mask, hev, &mut p2v, &mut p1v, &mut p0v, &mut q0v, &mut q1v, &mut q2v,
-            );
-            plane[index(-3)] = p2v;
-            plane[index(-2)] = p1v;
-            plane[index(-1)] = p0v;
-            plane[index(0)] = q0v;
-            plane[index(1)] = q1v;
-            plane[index(2)] = q2v;
-        } else {
-            let mut p1v = p1;
-            let mut p0v = p0;
-            let mut q0v = q0;
-            let mut q1v = q1;
-            filter_pixels(mask, hev, &mut p1v, &mut p0v, &mut q0v, &mut q1v);
-            plane[index(-2)] = p1v;
-            plane[index(-1)] = p0v;
-            plane[index(0)] = q0v;
-            plane[index(1)] = q1v;
+    let mut base = plane_offset(stride, x, y);
+    for _ in 0..count * 8 {
+        let w: &[u8; 8] = plane[base - 4..base + 4]
+            .try_into()
+            .expect("8-byte filter window");
+        let mask = filter_mask(limits.lim, limits.blim, w);
+        if mask == 0 {
+            base += stride;
+            continue;
         }
+        let hev = hev_mask(limits.hev_thr, w);
+        if mb {
+            let out = mb_filter_pixels(mask, hev, w);
+            plane[base - 3..base + 3].copy_from_slice(&out);
+        } else {
+            let out = filter_pixels(mask, hev, w);
+            plane[base - 2..base + 2].copy_from_slice(&out);
+        }
+        base += stride;
     }
 }
 
+/// Horizontal edge filter: `count * 8` columns, strided window
+/// `w = [plane[base-4s], ..., plane[base+3s]]`.
 fn horizontal_edge(
     plane: &mut [u8],
     stride: usize,
@@ -1751,46 +1772,42 @@ fn horizontal_edge(
     limits: &FilterLimits,
     mb: bool,
 ) {
-    for column in 0..count * 8 {
-        let base = plane_offset(stride, x + column, y);
-        let get = |offset: isize| -> u8 { plane[(base as isize + offset) as usize] };
-        let p3 = get(-4 * (stride as isize));
-        let p2 = get(-3 * (stride as isize));
-        let p1 = get(-2 * (stride as isize));
-        let p0 = get(-(stride as isize));
-        let q0 = get(0);
-        let q1 = get(stride as isize);
-        let q2 = get(2 * stride as isize);
-        let q3 = get(3 * stride as isize);
-        let mask = filter_mask(limits.lim, limits.blim, p3, p2, p1, p0, q0, q1, q2, q3);
-        let hev = hev_mask(limits.hev_thr, p1, p0, q0, q1);
-        let index = |offset: isize| -> usize { (base as isize + offset) as usize };
-        if mb {
-            let mut p2v = p2;
-            let mut p1v = p1;
-            let mut p0v = p0;
-            let mut q0v = q0;
-            let mut q1v = q1;
-            let mut q2v = q2;
-            mb_filter_pixels(
-                mask, hev, &mut p2v, &mut p1v, &mut p0v, &mut q0v, &mut q1v, &mut q2v,
-            );
-            plane[index(-3 * (stride as isize))] = p2v;
-            plane[index(-2 * (stride as isize))] = p1v;
-            plane[index(-(stride as isize))] = p0v;
-            plane[index(0)] = q0v;
-            plane[index(stride as isize)] = q1v;
-            plane[index(2 * stride as isize)] = q2v;
-        } else {
-            let mut p1v = p1;
-            let mut p0v = p0;
-            let mut q0v = q0;
-            let mut q1v = q1;
-            filter_pixels(mask, hev, &mut p1v, &mut p0v, &mut q0v, &mut q1v);
-            plane[index(-2 * (stride as isize))] = p1v;
-            plane[index(-(stride as isize))] = p0v;
-            plane[index(0)] = q0v;
-            plane[index(stride as isize)] = q1v;
+    let s1 = stride;
+    let s2 = 2 * stride;
+    let s3 = 3 * stride;
+    let s4 = 4 * stride;
+    let mut base = plane_offset(stride, x, y);
+    let mut w = [0u8; 8];
+    for _ in 0..count * 8 {
+        w[0] = plane[base - s4];
+        w[1] = plane[base - s3];
+        w[2] = plane[base - s2];
+        w[3] = plane[base - s1];
+        w[4] = plane[base];
+        w[5] = plane[base + s1];
+        w[6] = plane[base + s2];
+        w[7] = plane[base + s3];
+        let mask = filter_mask(limits.lim, limits.blim, &w);
+        if mask == 0 {
+            base += 1;
+            continue;
         }
+        let hev = hev_mask(limits.hev_thr, &w);
+        if mb {
+            let out = mb_filter_pixels(mask, hev, &w);
+            plane[base - s3] = out[0];
+            plane[base - s2] = out[1];
+            plane[base - s1] = out[2];
+            plane[base] = out[3];
+            plane[base + s1] = out[4];
+            plane[base + s2] = out[5];
+        } else {
+            let out = filter_pixels(mask, hev, &w);
+            plane[base - s2] = out[0];
+            plane[base - s1] = out[1];
+            plane[base] = out[2];
+            plane[base + s1] = out[3];
+        }
+        base += 1;
     }
 }

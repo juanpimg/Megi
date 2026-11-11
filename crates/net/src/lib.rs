@@ -98,6 +98,12 @@
 //!   ([`ReferrerPolicy::from_meta_html`]); [`ReferrerConfig`] on [`FetchOptions::referrer`]
 //!   makes every HTTP(S) hop send a policy-computed `Referer` (`https`→`http` downgrades
 //!   blocked per policy; render should install it once the document is fetched).
+//! - **Proxies**: [`ProxyConfig`] (+ [`ProxyConfig::from_env`]) and
+//!   [`http::FetchOptions::proxy`] route `http:` targets through absolute-form requests
+//!   and `https:` targets through a validated `CONNECT` tunnel (Basic auth from proxy
+//!   URL userinfo, `no_proxy` host/suffix/IP/port matching). `PAC`/`WPAD`, SOCKS and
+//!   non-Basic proxy auth are out of scope; an `https:` proxy only forwards `http:`
+//!   targets (no nested TLS).
 //! - **Ranges**: [`ByteRange`] parsing/serialization and [`ContentRange`] response parsing;
 //!   [`FetchOptions::range`] sends `Range: bytes=...` (single range only) and
 //!   [`ResourceLoader::load_range`] performs a one-shot partial load (HTTP `206`, plus
@@ -123,6 +129,7 @@ pub mod h2;
 pub mod http;
 pub mod loader;
 pub mod mime;
+pub mod proxy;
 pub mod psl;
 pub mod range;
 pub mod referrer;
@@ -145,6 +152,7 @@ pub use file::load_file_url;
 pub use http::{FetchOptions, Response, fetch, fetch_with_headers, preflight};
 pub use loader::{HEURISTIC_FRESHNESS, Resource, ResourceLoader};
 pub use mime::{MimeHint, resolve_content_type, sniff};
+pub use proxy::{ProxyConfig, proxy_authorization, proxy_authorization_for};
 pub use psl::{
     is_public_suffix, normalize_host, registrable_domain, same_origin, same_site, site_for_url,
 };

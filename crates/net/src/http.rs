@@ -43,6 +43,8 @@
 //!   client only issued `GET`; other methods and
 //!   custom CORS-preflighted requests need the explicit [`preflight`] entry point. No
 //!   `Referer`, proxies, HTTP/2, connection reuse or redirect method rewriting.
+//!   (R205 adds opt-in HTTP(S) proxy support through [`FetchOptions::proxy`];
+//!   HTTP/2, connection reuse and `Referer` exist on their own paths.)
 //! - Compression covers single `gzip`/`deflate` codings; the response body is buffered
 //!   and decoded in memory (with the anti-bomb caps). The decoded body keeps the
 //!   `Content-Encoding` header on [`Response::headers`] (matching the Fetch standard's
@@ -146,6 +148,12 @@ pub struct FetchOptions {
     /// Optional `Referrer-Policy`/`Referer` configuration. When set, every hop of the
     /// request sends a `Referer` header computed from the source URL with that policy.
     pub referrer: Option<ReferrerConfig>,
+    /// Optional HTTP(S) proxy configuration (R205). When set, `http:` targets use
+    /// absolute-form requests through the selected proxy and `https:` targets open a
+    /// `CONNECT` tunnel before the normal TLS handshake; `no_proxy` bypasses per host.
+    /// `None` (default) connects directly. Use [`crate::ProxyConfig::from_env`] to read
+    /// the conventional environment variables.
+    pub proxy: Option<Arc<crate::proxy::ProxyConfig>>,
     /// Custom TLS client configuration (root store, client auth, protocol versions).
     ///
     /// `None` (the default) uses the built-in webpki-roots (Mozilla) trust anchors and
@@ -179,6 +187,7 @@ impl Default for FetchOptions {
             compression_limits: CompressionLimits::default(),
             range: None,
             referrer: None,
+            proxy: None,
             #[cfg(feature = "tls")]
             tls_config: None,
         }
@@ -365,6 +374,10 @@ pub fn fetch_pooled(
     pool: &mut H1Pool,
 ) -> Result<Response, FetchError> {
     if url.scheme() != Scheme::Http
+        || options
+            .proxy
+            .as_deref()
+            .is_some_and(|config| config.proxy_for(url).is_some())
         || !options.reuse_connections
         || options.cookie_jar.is_some()
         || options.origin.is_some()
@@ -930,51 +943,84 @@ fn fetch_once(
     if host.is_empty() {
         return Err(FetchError::Dns(url.host().to_owned()));
     }
-    let addresses: Vec<SocketAddr> = (host, port)
-        .to_socket_addrs()
-        .map_err(|error| FetchError::Dns(format!("{host}: {error}")))?
-        .collect();
-    if addresses.is_empty() {
-        return Err(FetchError::Dns(host.to_owned()));
-    }
-
-    let mut last_error: Option<io::Error> = None;
-    let mut tcp_stream = None;
-    for address in &addresses {
-        match TcpStream::connect_timeout(address, options.connect_timeout) {
-            Ok(connected) => {
-                tcp_stream = Some(connected);
-                break;
-            }
-            Err(error) => last_error = Some(error),
-        }
-    }
-    let tcp_stream = tcp_stream.ok_or_else(|| {
-        FetchError::Connect(last_error.unwrap_or_else(|| {
-            io::Error::new(io::ErrorKind::AddrNotAvailable, "no address to connect to")
-        }))
-    })?;
-    tcp_stream
-        .set_read_timeout(Some(options.read_timeout))
-        .map_err(FetchError::Io)?;
-    tcp_stream
-        .set_write_timeout(Some(options.read_timeout))
-        .map_err(FetchError::Io)?;
-
-    let (mut stream, h2_negotiated) = match url.scheme() {
-        Scheme::Http => (Transport::Plain(tcp_stream), false),
-        Scheme::Https => {
-            let (transport, negotiated_h2) =
-                connect_tls(host, tcp_stream, options, method != "OPTIONS")?;
-            (transport, negotiated_h2)
-        }
-        Scheme::File | Scheme::Data => {
-            return Err(FetchError::UnsupportedScheme(
-                url.scheme().as_str().to_owned(),
-            ));
-        }
+    let host_header = match url.port() {
+        Some(port) => format!("{}:{port}", url.host()),
+        None => url.host().to_owned(),
     };
 
+    // Proxy selection (R205): per scheme and per hop (`no_proxy` is checked against the
+    // current target URL, so redirects can switch between proxied and direct).
+    let proxy = options
+        .proxy
+        .as_deref()
+        .and_then(|config| config.proxy_for(url));
+    let mut absolute_form: Option<String> = None;
+    let mut proxy_auth_header: Option<String> = None;
+    let (mut stream, h2_negotiated) = match proxy {
+        Some(proxy_url) => {
+            let proxy_host = proxy_url.host_for_dns();
+            let proxy_port = proxy_url.port_or_default().ok_or_else(|| {
+                FetchError::UnsupportedScheme(format!(
+                    "proxy URL without a usable port: {proxy_url}"
+                ))
+            })?;
+            let auth = crate::proxy::proxy_authorization(proxy_url);
+            let tcp_stream = connect_tcp(proxy_host, proxy_port, options)?;
+            if url.scheme() == Scheme::Https {
+                if proxy_url.scheme() == Scheme::Https {
+                    return Err(FetchError::ProxyConnect(
+                        "an https proxy can only forward http targets (nested TLS is not supported)"
+                            .to_owned(),
+                    ));
+                }
+                let tunnel = establish_connect_tunnel(
+                    tcp_stream,
+                    host,
+                    port,
+                    auth.as_deref(),
+                    proxy_url,
+                    options,
+                )?;
+                let (transport, negotiated_h2) =
+                    connect_tls(host, tunnel, options, method != "OPTIONS").map_err(|error| {
+                        match error {
+                            // IO during the handshake means the proxy closed/broke the
+                            // tunnel; certificate/SNI failures stay typed as TLS errors.
+                            FetchError::Io(reason) => FetchError::ProxyTunnel(reason.to_string()),
+                            other => other,
+                        }
+                    })?;
+                (transport, negotiated_h2)
+            } else {
+                // `http:` target: absolute-form request through the proxy. An `https:`
+                // proxy wraps that hop in TLS (only for plain-http targets).
+                absolute_form = Some(absolute_request_target(url, &host_header));
+                proxy_auth_header = auth;
+                if proxy_url.scheme() == Scheme::Https {
+                    let (transport, _) = connect_tls(proxy_host, tcp_stream, options, false)?;
+                    (transport, false)
+                } else {
+                    (Transport::Plain(tcp_stream), false)
+                }
+            }
+        }
+        None => {
+            let tcp_stream = connect_tcp(host, port, options)?;
+            match url.scheme() {
+                Scheme::Http => (Transport::Plain(tcp_stream), false),
+                Scheme::Https => {
+                    let (transport, negotiated_h2) =
+                        connect_tls(host, tcp_stream, options, method != "OPTIONS")?;
+                    (transport, negotiated_h2)
+                }
+                Scheme::File | Scheme::Data => {
+                    return Err(FetchError::UnsupportedScheme(
+                        url.scheme().as_str().to_owned(),
+                    ));
+                }
+            }
+        }
+    };
     let host_header = match url.port() {
         Some(port) => format!("{}:{port}", url.host()),
         None => url.host().to_owned(),
@@ -1018,6 +1064,12 @@ fn fetch_once(
     }
     for (name, value) in extra_headers {
         request_headers.push((name.to_string(), value.to_string()));
+    }
+    if let Some(auth) = proxy_auth_header {
+        request_headers.push(("Proxy-Authorization".to_owned(), auth));
+    }
+    if absolute_form.is_some() {
+        request_headers.push(("Proxy-Connection".to_owned(), "keep-alive".to_owned()));
     }
 
     if h2_negotiated {
@@ -1095,10 +1147,10 @@ fn fetch_once(
     {
         request_headers.push(("Content-Length".to_owned(), length.to_string()));
     }
-    let mut head = format!(
-        "{method} {} HTTP/1.1\r\nHost: {host_header}\r\n",
-        url.request_target(),
-    );
+    let h1_target = absolute_form
+        .clone()
+        .unwrap_or_else(|| url.request_target());
+    let mut head = format!("{method} {h1_target} HTTP/1.1\r\nHost: {host_header}\r\n",);
     for (name, value) in &request_headers {
         head.push_str(name);
         head.push_str(": ");
@@ -1127,6 +1179,12 @@ fn fetch_once(
             reader.flush()?;
             let final_head = reader.read_head(options.max_header_bytes)?;
             let (status, reason, headers) = parse_head(&final_head)?;
+            if status == 407
+                && absolute_form.is_some()
+                && let Some(proxy) = proxy
+            {
+                return Err(crate::proxy::auth_required_error(proxy));
+            }
             let (body, trailers) = read_body(&mut reader, status, &headers, options)?;
             return Ok(RawResponse {
                 status,
@@ -1166,6 +1224,12 @@ fn fetch_once(
     let mut reader = ConnReader::new(stream);
     let final_head = reader.read_head(options.max_header_bytes)?;
     let (status, reason, headers) = parse_head(&final_head)?;
+    if status == 407
+        && absolute_form.is_some()
+        && let Some(proxy) = proxy
+    {
+        return Err(crate::proxy::auth_required_error(proxy));
+    }
     let (body, trailers) = read_body(&mut reader, status, &headers, options)?;
     Ok(RawResponse {
         status,
@@ -1175,6 +1239,103 @@ fn fetch_once(
         trailers,
         pushed: Vec::new(),
     })
+}
+
+/// Resolves `host:port` and opens a TCP stream with the configured timeouts.
+fn connect_tcp(host: &str, port: u16, options: &FetchOptions) -> Result<TcpStream, FetchError> {
+    let addresses: Vec<SocketAddr> = (host, port)
+        .to_socket_addrs()
+        .map_err(|error| FetchError::Dns(format!("{host}: {error}")))?
+        .collect();
+    if addresses.is_empty() {
+        return Err(FetchError::Dns(host.to_owned()));
+    }
+    let mut last_error: Option<io::Error> = None;
+    let mut tcp_stream = None;
+    for address in &addresses {
+        match TcpStream::connect_timeout(address, options.connect_timeout) {
+            Ok(connected) => {
+                tcp_stream = Some(connected);
+                break;
+            }
+            Err(error) => last_error = Some(error),
+        }
+    }
+    let tcp_stream = tcp_stream.ok_or_else(|| {
+        FetchError::Connect(last_error.unwrap_or_else(|| {
+            io::Error::new(io::ErrorKind::AddrNotAvailable, "no address to connect to")
+        }))
+    })?;
+    tcp_stream
+        .set_read_timeout(Some(options.read_timeout))
+        .map_err(FetchError::Io)?;
+    tcp_stream
+        .set_write_timeout(Some(options.read_timeout))
+        .map_err(FetchError::Io)?;
+    Ok(tcp_stream)
+}
+
+/// Absolute-form request target used by `http:` requests through a proxy.
+fn absolute_request_target(url: &Url, host_header: &str) -> String {
+    format!(
+        "{}://{}{}",
+        url.scheme().as_str(),
+        host_header,
+        url.request_target()
+    )
+}
+
+/// Opens a `CONNECT host:port` tunnel through `proxy`, returning the raw stream.
+///
+/// Sends `Proxy-Authorization` when the proxy URL carries Basic credentials and maps
+/// `407` to [`FetchError::ProxyAuthRequired`], other non-200 statuses to
+/// [`FetchError::ProxyConnect`] and early/extra tunnel bytes to
+/// [`FetchError::ProxyTunnel`].
+fn establish_connect_tunnel(
+    mut tcp_stream: TcpStream,
+    host: &str,
+    port: u16,
+    authorization: Option<&str>,
+    proxy: &Url,
+    options: &FetchOptions,
+) -> Result<TcpStream, FetchError> {
+    let authority = format!("{host}:{port}");
+    let mut request = format!(
+        "CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\nProxy-Connection: keep-alive\r\n"
+    );
+    if let Some(value) = authorization {
+        request.push_str("Proxy-Authorization: ");
+        request.push_str(value);
+        request.push_str("\r\n");
+    }
+    request.push_str("\r\n");
+    tcp_stream
+        .write_all(request.as_bytes())
+        .map_err(FetchError::Io)?;
+    tcp_stream.flush().map_err(FetchError::Io)?;
+    let mut reader = ConnReader::new(Transport::Plain(tcp_stream));
+    let head = reader.read_head(options.max_header_bytes)?;
+    let (status, _reason, _headers) = parse_head(&head)?;
+    if status == 407 {
+        return Err(crate::proxy::auth_required_error(proxy));
+    }
+    if status != 200 {
+        return Err(FetchError::ProxyConnect(format!(
+            "proxy CONNECT returned status {status}"
+        )));
+    }
+    if reader.position < reader.buffer.len() {
+        return Err(FetchError::ProxyTunnel(
+            "unexpected bytes after the CONNECT response".to_owned(),
+        ));
+    }
+    match reader.stream {
+        Transport::Plain(stream) => Ok(stream),
+        #[cfg(feature = "tls")]
+        Transport::Tls(_) => Err(FetchError::ProxyTunnel(
+            "TLS transport used for a plain CONNECT tunnel".to_owned(),
+        )),
+    }
 }
 
 /// Establishes the TLS layer over an already-connected TCP stream.

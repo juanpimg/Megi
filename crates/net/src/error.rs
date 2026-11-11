@@ -125,6 +125,12 @@ pub enum FetchError {
         /// Configured maximum compression ratio (`decompressed / compressed`).
         max_ratio: u64,
     },
+    /// A proxy answered `407 Proxy Authentication Required` (wrong/missing credentials).
+    ProxyAuthRequired(String),
+    /// The proxy refused or malformed a `CONNECT` tunnel (non-200 status or bad reply).
+    ProxyConnect(String),
+    /// The proxy tunnel broke after `CONNECT` succeeded (closed/broken TLS-over-tunnel).
+    ProxyTunnel(String),
 }
 
 impl fmt::Display for FetchError {
@@ -177,6 +183,11 @@ impl fmt::Display for FetchError {
                 f,
                 "decompression exceeded anti-bomb limits (max {max_output} bytes, ratio {max_ratio}:1)"
             ),
+            Self::ProxyAuthRequired(proxy) => {
+                write!(f, "proxy `{proxy}` requires authentication (407)")
+            }
+            Self::ProxyConnect(reason) => write!(f, "proxy CONNECT failed: {reason}"),
+            Self::ProxyTunnel(reason) => write!(f, "proxy tunnel failed: {reason}"),
         }
     }
 }

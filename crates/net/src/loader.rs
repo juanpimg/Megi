@@ -174,6 +174,22 @@ impl ResourceLoader {
         Self::with_options(FetchOptions::default())
     }
 
+    /// Installs a proxy configuration for every subsequent HTTP(S) fetch.
+    ///
+    /// Equivalent to setting [`FetchOptions::proxy`] before constructing the loader;
+    /// `no_proxy` matches per target URL/redirect hop and the HTTP cache/cookies/CORS
+    /// are unchanged. Returns `&mut Self` for chaining.
+    pub fn set_proxy(&mut self, proxy: crate::proxy::ProxyConfig) -> &mut Self {
+        self.options.proxy = Some(Arc::new(proxy));
+        self
+    }
+
+    /// Builder variant of [`Self::set_proxy`].
+    pub fn with_proxy(mut self, proxy: crate::proxy::ProxyConfig) -> Self {
+        self.set_proxy(proxy);
+        self
+    }
+
     /// Creates a loader with custom [`FetchOptions`] and the cache enabled.
     pub fn with_options(options: FetchOptions) -> Self {
         let h1_pool = crate::http::H1Pool::new(
