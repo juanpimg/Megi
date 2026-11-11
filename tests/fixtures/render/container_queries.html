@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Container queries</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  .card {
+    width: 320px;
+    margin: 0;
+    container-type: inline-size;
+    background: #eeeeee;
+  }
+  .title {
+    width: 100px;
+    height: 40px;
+    background: #cc0000;
+  }
+  .meta {
+    width: 100px;
+    height: 20px;
+    background: #0000cc;
+  }
+  @container (min-width: 300px) {
+    .title { width: 240px; background: #00aa00; }
+    .meta { width: 160px; }
+  }
+  @container (max-width: 299px) {
+    .title { width: 80px; }
+  }
+</style></head>
+<body>
+<div class="card">
+  <div class="title"></div>
+  <div class="meta"></div>
+</div>
+</body>
+</html>

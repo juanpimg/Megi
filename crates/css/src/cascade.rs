@@ -134,6 +134,13 @@ pub struct CompiledRule {
     pub source_order: u32,
 }
 
+/// One compiled `@container` rule: query + nested style rule (selectors/declarations).
+#[derive(Clone, Debug)]
+pub struct ContainerRule {
+    pub query: crate::container::ContainerQuery,
+    pub rule: CompiledRule,
+}
+
 /// Media environment used to evaluate `@media` rules and imported stylesheet media lists.
 ///
 /// Re-exported from [`crate::media`], which owns the full media query parser/evaluator.
@@ -283,9 +290,32 @@ pub struct StyleCollection {
     pub next_source_order: u32,
     /// Media environment used when compiling `@media` rules; set it before adding stylesheets.
     pub media: MediaContext,
+    /// Compiled `@container` rules (added in source order; evaluated per node during the
+    /// cascade against the nearest ancestor query container).
+    pub container_rules: Vec<ContainerRule>,
     /// Rule index by rightmost-compound key. Maintained by the `add_*` methods; if the public
     /// `rules` vector is mutated directly, resolution falls back to evaluating every rule.
     index: RuleIndex,
+}
+
+/// Compiles one style rule (selectors + expanded declarations) without assigning a source
+/// order; callers set `source_order` before inserting it.
+fn compile_style_rule(style_rule: &crate::rule::StyleRule, origin: Origin) -> Option<CompiledRule> {
+    let selector_str = serialize_component_values(&style_rule.prelude);
+    let selectors = parse_selectors(&selector_str);
+    if selectors.selectors.is_empty() {
+        return None;
+    }
+    let declarations = expand_declarations(&style_rule.declarations);
+    if declarations.is_empty() {
+        return None;
+    }
+    Some(CompiledRule {
+        selectors,
+        declarations,
+        origin,
+        source_order: 0,
+    })
 }
 
 impl StyleCollection {
@@ -318,30 +348,74 @@ impl StyleCollection {
                         self.add_rules(&nested.rules, origin);
                     }
                 }
+                Rule::At(at_rule) if at_rule.name.eq_ignore_ascii_case("container") => {
+                    let prelude = serialize_component_values(&at_rule.prelude);
+                    let Some(query) = crate::container::parse_query(&prelude) else {
+                        continue;
+                    };
+                    let Some(block) = &at_rule.block else {
+                        continue;
+                    };
+                    let nested_text = serialize_component_values(&block.values);
+                    let nested = crate::parser::parse_stylesheet(&nested_text);
+                    self.add_container_rules(&nested.rules, origin, &query);
+                }
                 Rule::At(_) => {}
             }
         }
     }
 
+    /// Compiles the style rules inside an `@container` block (nested `@container` at-rules
+    /// are not supported; `@media` inside is evaluated immediately).
+    fn add_container_rules(
+        &mut self,
+        rules: &[Rule],
+        origin: Origin,
+        query: &crate::container::ContainerQuery,
+    ) {
+        for rule in rules {
+            match rule {
+                Rule::Style(style_rule) => {
+                    if let Some(compiled) = compile_style_rule(style_rule, origin) {
+                        let compiled = CompiledRule {
+                            source_order: self.next_source_order,
+                            ..compiled
+                        };
+                        self.next_source_order += 1;
+                        self.container_rules.push(ContainerRule {
+                            query: query.clone(),
+                            rule: compiled,
+                        });
+                    }
+                }
+                Rule::At(at_rule) if at_rule.name.eq_ignore_ascii_case("media") => {
+                    let prelude = serialize_component_values(&at_rule.prelude);
+                    let query_list = crate::media::parse_media_query_list(&prelude);
+                    if crate::media::evaluate(&query_list, &self.media)
+                        && let Some(block) = &at_rule.block
+                    {
+                        let nested_text = serialize_component_values(&block.values);
+                        let nested = crate::parser::parse_stylesheet(&nested_text);
+                        self.add_container_rules(&nested.rules, origin, query);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn add_style_rule(&mut self, style_rule: &crate::rule::StyleRule, origin: Origin) {
-        let selector_str = serialize_component_values(&style_rule.prelude);
-        let selectors = parse_selectors(&selector_str);
-        if selectors.selectors.is_empty() {
+        let Some(compiled) = compile_style_rule(style_rule, origin) else {
             return;
-        }
-        let declarations = expand_declarations(&style_rule.declarations);
-        if declarations.is_empty() {
-            return;
-        }
-        let rule_index = self.rules.len() as u32;
-        self.index.insert(rule_index, &selectors);
-        self.rules.push(CompiledRule {
-            selectors,
-            declarations,
-            origin,
+        };
+        let compiled = CompiledRule {
             source_order: self.next_source_order,
-        });
+            ..compiled
+        };
         self.next_source_order += 1;
+        let rule_index = self.rules.len() as u32;
+        self.index.insert(rule_index, &compiled.selectors);
+        self.rules.push(compiled);
     }
 
     /// Returns the candidate selectors that can possibly match `node_id`, in ascending
@@ -415,13 +489,15 @@ pub fn resolve_cascaded_properties<'a>(
 ) -> HashMap<String, &'a Declaration> {
     let mut candidates = Vec::new();
     collection.candidate_selectors(doc, node_id, &mut candidates);
-    resolve_cascaded_properties_from_candidates(
+    let mut best = resolve_base_cascaded_properties(
         doc,
         node_id,
         collection,
         inline_declarations,
         &candidates,
-    )
+    );
+    merge_container_rules(doc, node_id, collection, &mut best);
+    owned_declarations(best)
 }
 
 /// Shared cascade resolution over the candidate rules selected by the index.
@@ -429,13 +505,13 @@ pub fn resolve_cascaded_properties<'a>(
 /// `candidates` is a superset of the selectors that can match `node_id`, in ascending source
 /// order (the index only prunes; matching still decides). Passing every `(rule, selector)`
 /// pair yields the exact unindexed behaviour, which the equivalence tests use as reference.
-fn resolve_cascaded_properties_from_candidates<'a>(
+fn resolve_base_cascaded_properties<'a>(
     doc: &Document,
     node_id: NodeId,
     collection: &'a StyleCollection,
     inline_declarations: Option<&'a [Declaration]>,
     candidates: &[Candidate],
-) -> HashMap<String, &'a Declaration> {
+) -> HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher> {
     let mut best_candidates: HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher> =
         HashMap::with_hasher(FastBuildHasher);
 
@@ -500,9 +576,97 @@ fn resolve_cascaded_properties_from_candidates<'a>(
     }
 
     best_candidates
-        .into_iter()
+}
+
+/// Reference implementation used by cascade-equivalence tests (no `@container` rules).
+#[cfg(test)]
+fn resolve_cascaded_properties_from_candidates<'a>(
+    doc: &Document,
+    node_id: NodeId,
+    collection: &'a StyleCollection,
+    inline_declarations: Option<&'a [Declaration]>,
+    candidates: &[Candidate],
+) -> HashMap<String, &'a Declaration> {
+    owned_declarations(resolve_base_cascaded_properties(
+        doc,
+        node_id,
+        collection,
+        inline_declarations,
+        candidates,
+    ))
+}
+
+/// Applies the collection's `@container` rules to `best` (already resolved base cascade).
+fn merge_container_rules<'a>(
+    doc: &Document,
+    node_id: NodeId,
+    collection: &'a StyleCollection,
+    best: &mut HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher>,
+) {
+    for container_rule in &collection.container_rules {
+        let rule = &container_rule.rule;
+        for selector in &rule.selectors.selectors {
+            if !selector.matches(doc, node_id) {
+                continue;
+            }
+            let Some((size, container_style)) =
+                crate::container::matching_size(doc, node_id, &container_rule.query, collection)
+            else {
+                continue;
+            };
+            if !crate::container::evaluate(&container_rule.query, &size, &container_style) {
+                continue;
+            }
+            let specificity = selector.specificity();
+            for (declaration_order, decl) in rule.declarations.iter().enumerate() {
+                let origin_importance = CascadeOriginImportance::new(rule.origin, decl.important);
+                let candidate = MatchedDeclaration {
+                    declaration: decl,
+                    origin_importance,
+                    specificity,
+                    source_order: rule.source_order,
+                    declaration_order: declaration_order as u32,
+                };
+                match best.entry(decl.name.as_str()) {
+                    std::collections::hash_map::Entry::Occupied(mut occupied) => {
+                        if candidate > *occupied.get() {
+                            occupied.insert(candidate);
+                        }
+                    }
+                    std::collections::hash_map::Entry::Vacant(vacant) => {
+                        vacant.insert(candidate);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn owned_declarations<'a>(
+    best: HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher>,
+) -> HashMap<String, &'a Declaration> {
+    best.into_iter()
         .map(|(name, matched)| (name.to_string(), matched.declaration))
         .collect()
+}
+
+/// Resolves only the unconditional cascade (no `@container` rules); used by container size
+/// prediction so it cannot recurse through itself.
+pub(crate) fn resolve_cascaded_properties_base<'a>(
+    doc: &Document,
+    node_id: NodeId,
+    collection: &'a StyleCollection,
+    inline_declarations: Option<&'a [Declaration]>,
+) -> HashMap<String, &'a Declaration> {
+    let mut candidates = Vec::new();
+    collection.candidate_selectors(doc, node_id, &mut candidates);
+    owned_declarations(resolve_base_cascaded_properties(
+        doc,
+        node_id,
+        collection,
+        inline_declarations,
+        &candidates,
+    ))
 }
 
 /// Resolves computed styles with an explicit interaction [`crate::StateContext`] for dynamic
@@ -605,13 +769,15 @@ pub fn resolve_document_styles_with_media(
             });
 
             collection.candidate_selectors(doc, node_id, &mut candidates);
-            let cascaded = resolve_cascaded_properties_from_candidates(
+            let mut best = resolve_base_cascaded_properties(
                 doc,
                 node_id,
                 &collection,
                 inline_decls.as_deref(),
                 &candidates,
             );
+            merge_container_rules(doc, node_id, &collection, &mut best);
+            let cascaded = owned_declarations(best);
 
             let parent_style = doc.node(node_id).parent.and_then(|p| styles.get(&p));
             let root_style = styles.get(&root);

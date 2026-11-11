@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Container queries (named/nested)</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  .outer {
+    width: 360px;
+    container-type: inline-size;
+    container-name: outer;
+    background: #dddddd;
+  }
+  .inner {
+    width: 240px;
+    container-type: inline-size;
+    container-name: inner;
+    background: #f4f4f4;
+  }
+  .child { width: 40px; height: 20px; background: #cc0000; }
+  @container inner (max-width: 250px) {
+    .child { width: 120px; background: #00aa00; }
+  }
+  @container outer (min-width: 350px) {
+    .child { height: 36px; }
+  }
+  @container other (min-width: 1px) {
+    .child { width: 1px; }
+  }
+</style></head>
+<body>
+<div class="outer"><div class="inner"><div class="child"></div></div></div>
+</body>
+</html>

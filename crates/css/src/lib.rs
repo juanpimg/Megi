@@ -6,7 +6,13 @@
 //! Round 2 additions: functional `:is()`/`:where()`/`:not()`/`:has()` and the remaining
 //! structural pseudo-classes, pre-cascade shorthand expansion (see [`shorthand`]) so that
 //! origin/specificity/source order decide per longhand, the `font` shorthand, and basic
-//! `@media` support ([`MediaContext`], [`resolve_document_styles_with_viewport`]).
+//! `@media` support ([`MediaContext`], [`resolve_document_styles_with_viewport`]) and a
+//! **Container Queries MVP** ([`container`]): `container-type: normal|inline-size|size`,
+//! `container-name` and `@container [<name>] (min/max-width|inline-size|height|block-size)
+//! ...)` with `and`. Sizes are predicted from the viewport down the block chain before
+//! layout (single deterministic pass, no oscillation); style/scroll-state queries, nested
+//! `@container` at-rules and `cqi`/`cqw` units are documented as unsupported. No `@container`
+//! rule leaves existing cascades/geometry byte-identical.
 
 #![forbid(unsafe_code)]
 
@@ -14,6 +20,7 @@ pub mod calc;
 pub mod cascade;
 mod color;
 pub mod component_value;
+pub mod container;
 pub mod custom;
 mod flex;
 mod grid;
@@ -53,11 +60,12 @@ pub use properties::{
     AspectRatio, BackgroundAttachment, BackgroundClip, BackgroundLayer, BackgroundOrigin,
     BackgroundPosition, BackgroundRepeat, BackgroundRepeatAxis, BackgroundSize, BorderCollapse,
     BorderRadii, BorderStyle, BoxShadow, BoxSizing, CaptionSide, Clear, Color, ComputedStyle,
-    ConicGradient, Display, EmptyCells, FilterFunction, Float, FontStyle, Gradient, GradientKind,
-    GradientStop, InterpolationSpace, Length, LinearDirection, LinearGradient, ListStyleType,
-    MAX_FILTER_FUNCTIONS, MAX_GRADIENT_STOPS, MAX_GRADIENTS, MixBlendMode, ObjectFit, Overflow,
-    Position, RadialExtent, RadialGradient, RadialShape, Radius, RectEdges, TableLayout, TextAlign,
-    TextDecoration, TextShadow, TextTransform, VerticalAlign, Visibility, WhiteSpace,
+    ConicGradient, ContainerType, Display, EmptyCells, FilterFunction, Float, FontStyle, Gradient,
+    GradientKind, GradientStop, InterpolationSpace, Length, LinearDirection, LinearGradient,
+    ListStyleType, MAX_FILTER_FUNCTIONS, MAX_GRADIENT_STOPS, MAX_GRADIENTS, MixBlendMode,
+    ObjectFit, Overflow, Position, RadialExtent, RadialGradient, RadialShape, Radius, RectEdges,
+    TableLayout, TextAlign, TextDecoration, TextShadow, TextTransform, VerticalAlign, Visibility,
+    WhiteSpace,
 };
 pub use query::{
     SelectorParseError, matches, matches_with_state, query_selector, query_selector_all,

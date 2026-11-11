@@ -1381,6 +1381,43 @@ impl MixBlendMode {
 /// Hard cap on the number of `filter` functions kept per computed style.
 pub const MAX_FILTER_FUNCTIONS: usize = 16;
 
+/// Computed `container-type` (CSS Containment 3 §3.1).
+///
+/// MVP: only size containment is exposed (`normal`, `inline-size`, `size`); `style` and
+/// `scroll-state` queries are documented as unsupported.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ContainerType {
+    /// No size containment (default).
+    #[default]
+    Normal,
+    /// Queryable by inline-size/width (block-size is not queryable).
+    InlineSize,
+    /// Queryable by inline-size and block-size (both dimensions).
+    Size,
+}
+
+impl ContainerType {
+    /// Parses the `container-type` keywords.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "normal" => Some(Self::Normal),
+            "inline-size" => Some(Self::InlineSize),
+            "size" => Some(Self::Size),
+            _ => None,
+        }
+    }
+
+    /// Returns `true` when inline-size (width) queries are allowed.
+    pub fn is_inline_queryable(self) -> bool {
+        !matches!(self, Self::Normal)
+    }
+
+    /// Returns `true` when block-size (height) queries are allowed.
+    pub fn is_block_queryable(self) -> bool {
+        matches!(self, Self::Size)
+    }
+}
+
 /// Computed `aspect-ratio` (CSS Box Sizing 4 §5).
 ///
 /// `ratio` is `width / height`; `auto` keeps the replaced element's intrinsic
@@ -1721,6 +1758,11 @@ pub struct ComputedStyle {
     pub backdrop_filter: Vec<FilterFunction>,
     /// Computed `aspect-ratio` (`None` = `auto`, the initial value). Not inherited.
     pub aspect_ratio: Option<AspectRatio>,
+    /// Computed `container-type` (initial `normal`). Not inherited. Container queries use
+    /// this to find the nearest query container in [`crate::container`].
+    pub container_type: ContainerType,
+    /// Computed `container-name` list (initial empty). Not inherited.
+    pub container_names: Vec<String>,
     /// Computed `object-fit` for replaced elements (initial: `fill`). Not inherited.
     pub object_fit: ObjectFit,
     /// Computed `object-position` (initial: `50% 50%`). Not inherited.
@@ -1899,6 +1941,8 @@ impl ComputedStyle {
             mix_blend_mode: MixBlendMode::Normal,
             backdrop_filter: Vec::new(),
             aspect_ratio: None,
+            container_type: ContainerType::Normal,
+            container_names: Vec::new(),
             object_fit: ObjectFit::Fill,
             object_position: BackgroundPosition {
                 x: Length::Percent(50.0),
@@ -2175,6 +2219,18 @@ impl ComputedStyle {
             Self::compute_effects(&entries, font_size, root_font_size, color);
         let (aspect_ratio, object_fit, object_position) =
             Self::compute_replaced_properties(&entries, font_size, root_font_size);
+        let container_type = find_declaration(&entries, "container-type")
+            .and_then(|decl| ContainerType::parse(&decl.raw_value))
+            .unwrap_or(ContainerType::Normal);
+        let container_names = find_declaration(&entries, "container-name")
+            .map(|decl| {
+                decl.raw_value
+                    .split_ascii_whitespace()
+                    .filter(|name| !name.eq_ignore_ascii_case("none"))
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
         let inherited_text_shadows = parent
             .map(|style| style.text_shadows.as_slice())
             .unwrap_or_default();
@@ -2301,6 +2357,8 @@ impl ComputedStyle {
             mix_blend_mode,
             backdrop_filter,
             aspect_ratio,
+            container_type,
+            container_names,
             object_fit,
             object_position,
 
