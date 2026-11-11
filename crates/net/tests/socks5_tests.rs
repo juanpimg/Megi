@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use net::proxy::ProxyConfig;
 use net::socks::SocksProxy;
-use net::{FetchError, FetchOptions, Url, fetch};
+use net::{FetchError, FetchOptions, ResourceLoader, Url, fetch};
 
 fn spawn(handler: impl FnOnce(TcpStream) + Send + 'static) -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -194,4 +194,25 @@ fn socks_proxy_url_parsing_roundtrips() {
     assert_eq!(proxy.password.as_deref(), Some("secret"));
     let plain = SocksProxy::parse("socks5h://proxy.example:1080").expect("parse plain");
     assert!(!plain.requires_auth());
+}
+
+#[test]
+fn resource_loader_uses_the_socks_proxy() {
+    let (port, server) = spawn(|stream| {
+        let head = socks_and_http(stream, None);
+        let text = String::from_utf8_lossy(&head);
+        assert!(text.starts_with("GET / HTTP/1.1"), "{text}");
+    });
+    let socks = SocksProxy {
+        host: "127.0.0.1".to_owned(),
+        port,
+        username: None,
+        password: None,
+    };
+    let mut loader = ResourceLoader::with_options(options(socks));
+    let resource = loader
+        .load(&Url::parse("http://example.test/").expect("url"))
+        .expect("loader through SOCKS5");
+    server.join().expect("server");
+    assert_eq!(resource.bytes, b"via-socks");
 }
