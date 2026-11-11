@@ -2440,18 +2440,22 @@ fn write_classes(node_id: NodeId, classes: &[String]) {
 
 fn class_add(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let (node_id, mut classes) = classes_of(this, context)?;
-    let class = arg_string(args, 0, context)?;
-    if !classes.contains(&class) {
-        classes.push(class);
-        write_classes(node_id, &classes);
+    for index in 0..args.len() {
+        let class = arg_string(args, index, context)?;
+        if !class.is_empty() && !classes.contains(&class) {
+            classes.push(class);
+        }
     }
+    write_classes(node_id, &classes);
     Ok(JsValue::undefined())
 }
 
 fn class_remove(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let (node_id, mut classes) = classes_of(this, context)?;
-    let class = arg_string(args, 0, context)?;
-    classes.retain(|existing| *existing != class);
+    for index in 0..args.len() {
+        let class = arg_string(args, index, context)?;
+        classes.retain(|existing| *existing != class);
+    }
     write_classes(node_id, &classes);
     Ok(JsValue::undefined())
 }
@@ -2466,13 +2470,19 @@ fn class_toggle(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     let (node_id, mut classes) = classes_of(this, context)?;
     let class = arg_string(args, 0, context)?;
     let contains = classes.contains(&class);
-    if contains {
-        classes.retain(|existing| *existing != class);
+    let add = match args.get(1) {
+        Some(force) if force.is_boolean() => force.to_boolean(),
+        _ => !contains,
+    };
+    if add {
+        if !contains {
+            classes.push(class);
+        }
     } else {
-        classes.push(class);
+        classes.retain(|existing| *existing != class);
     }
     write_classes(node_id, &classes);
-    Ok(JsValue::from(!contains))
+    Ok(JsValue::from(add))
 }
 
 fn class_to_string(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {

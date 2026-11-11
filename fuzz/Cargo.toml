@@ -126,6 +126,21 @@ test = false
 doc = false
 bench = false
 
+# Round 34 (R228): VP8 lossy keyframe decoder and CSS container queries/at-rules.
+[[bin]]
+name = "webp_lossy"
+path = "fuzz_targets/webp_lossy.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "container_queries"
+path = "fuzz_targets/container_queries.rs"
+test = false
+doc = false
+bench = false
+
 # Keep symbols + ASan stack traces readable in crash reports (cargo-fuzz enables
 # `-Zsanitizer=address` internally; this only affects the fuzz binaries).
 [profile.release]

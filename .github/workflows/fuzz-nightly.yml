@@ -1,11 +1,10 @@
 name: Fuzz (nightly)
 
-# Nightly libFuzzer smoke runs over every parser/renderer surface that consumes untrusted
-# input (14 targets: 5 minutes each), plus a fast "build every target" job on pull
-# requests.
-# Not a substitute for a long-running fuzzing farm: the scheduled job is a cheap daily
-# regression gate (5 minutes per target) that keeps the harnesses compiling and catches
-# shallow crashes.
+# Nightly libFuzzer runs over every parser/renderer surface that consumes untrusted
+# input (16 targets): the 9 critical parsers/decoders run 10 minutes each, the remaining
+# targets 5 minutes. Pull requests get a fast "build every target" job instead.
+# Not a substitute for a long-running fuzzing farm: the scheduled job is a daily
+# regression gate that keeps the harnesses compiling and catches shallow crashes.
 #
 # Run it on demand from the Actions tab (`workflow_dispatch`) or locally:
 #   cd fuzz && cargo +nightly fuzz build
@@ -58,48 +57,69 @@ jobs:
     name: fuzz ${{ matrix.target }}
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Round 1-7 parsers.
+          # 10 minutes for the critical parsers/decoders (R228).
           - target: html_parse
+            seconds: 600
             extra: ""
           - target: css_parse
+            seconds: 600
             extra: ""
           - target: selectors
+            seconds: 600
             extra: ""
           - target: net_url
+            seconds: 600
             extra: ""
           # Round 18 (R105): render pipeline, JavaScript host and SVG.
           - target: render_pipeline
+            seconds: 600
             extra: ""
           - target: js_eval
             # Boa 0.21 leaks a constant ~56 bytes / 2 allocations once per process (checked
             # with -runs=1/10/50: it does not grow per iteration). This is a third-party
             # one-time allocation, not a memory-safety bug in the host; run without LSan
             # like other Boa embeddings do, see docs/FUZZING.md.
+            seconds: 600
             extra: "-detect_leaks=0"
           - target: svg_parse
+            seconds: 600
             extra: ""
           # Round 24 (R151): image decoders/EXIF and HTTP/2 HPACK + framing.
           - target: image_decode
+            seconds: 600
             extra: ""
           - target: exif_parse
+            seconds: 300
             extra: ""
           - target: hpack_decode
+            seconds: 600
             extra: ""
-          # Round 29 (R190): HTTP/2 server push, streaming bodies, WebP VP8
-          # sniff/lossy path and ES modules + import maps (Boa leak flag as js_eval).
+          # Round 29 (R190): HTTP/2 server push, streaming bodies, WebP lossy/lossless
+          # sniffing and ES modules + import maps (Boa leak flag as js_eval).
           - target: h2_push
+            seconds: 300
             extra: ""
           - target: body_stream
+            seconds: 300
             extra: ""
           - target: webp_vp8
+            seconds: 300
             extra: ""
           - target: js_module
+            seconds: 300
             extra: "-detect_leaks=0"
+          # Round 34 (R228): VP8 lossy keyframe decoder + CSS container queries.
+          - target: webp_lossy
+            seconds: 300
+            extra: ""
+          - target: container_queries
+            seconds: 300
+            extra: ""
     steps:
       - uses: actions/checkout@v4
 
@@ -117,14 +137,14 @@ jobs:
         working-directory: fuzz
         run: cargo +nightly fuzz build ${{ matrix.target }}
 
-      # 300 s per target is deliberately short: the goal is a daily smoke run that stays
-      # within a few CI minutes, not a coverage-maximising campaign. Raise it via
-      # workflow_dispatch edits or run the corpus longer locally before a release.
+      # 600 s for the 9 critical parsers/decoders and 300 s for the rest: a daily smoke
+      # run, not a coverage-maximising campaign. Raise it via workflow_dispatch edits or
+      # run the corpus longer locally before a release.
       - name: Run ${{ matrix.target }}
         working-directory: fuzz
         run: >-
           cargo +nightly fuzz run ${{ matrix.target }} --
-          -max_total_time=300
+          -max_total_time=${{ matrix.seconds }}
           -rss_limit_mb=2048
           -timeout=25
           ${{ matrix.extra }}
