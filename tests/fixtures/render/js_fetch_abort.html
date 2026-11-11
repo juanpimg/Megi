@@ -1,0 +1,12 @@
+<!doctype html><html><body>
+<div id="out">pending</div>
+<script>
+var controller = new AbortController();
+fetch('fetch_data.json', { signal: controller.signal }).then(function () {
+  document.getElementById('out').textContent = 'resolved';
+}).catch(function (error) {
+  document.getElementById('out').textContent = 'aborted:' + error.name;
+});
+controller.abort();
+</script>
+</body></html>

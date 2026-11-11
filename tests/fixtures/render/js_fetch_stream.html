@@ -1,0 +1,21 @@
+<!doctype html><html><body>
+<div id="out">pending</div>
+<script>
+fetch('fetch_data.json').then(function (response) {
+  var reader = response.body.getReader();
+  var chunks = 0;
+  var text = '';
+  function pump() {
+    return reader.read().then(function (step) {
+      if (step.done) { return text; }
+      chunks += 1;
+      for (var i = 0; i < step.value.length; i++) { text += String.fromCharCode(step.value[i]); }
+      return pump();
+    });
+  }
+  return pump().then(function (body) {
+    document.getElementById('out').textContent = 'chunks=' + chunks + ':json=' + JSON.parse(body).answer;
+  });
+}).catch(function (error) { document.getElementById('out').textContent = 'error:' + error; });
+</script>
+</body></html>

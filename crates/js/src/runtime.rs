@@ -4199,6 +4199,78 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
   Headers.prototype.forEach = function (callback, thisArg) { for (var i = 0; i < this._h.length; i++) { callback.call(thisArg, this._h[i][1], this._h[i][0], this); } };
   Headers.prototype.entries = function () { return this._h.slice(); };
   define("Headers", Headers);
+  function AbortSignal() {
+    this.aborted = false;
+    this.reason = undefined;
+    this._listeners = [];
+    this.onabort = null;
+  }
+  AbortSignal.prototype.addEventListener = function (type, callback) {
+    if (type === "abort" && typeof callback === "function") { this._listeners.push(callback); }
+  };
+  AbortSignal.prototype.removeEventListener = function (type, callback) {
+    if (type === "abort") { this._listeners = this._listeners.filter(function (item) { return item !== callback; }); }
+  };
+  AbortSignal.prototype.throwIfAborted = function () { if (this.aborted) { throw abortError(this.reason); } };
+  AbortSignal.prototype._abort = function (reason) {
+    if (this.aborted) { return; }
+    this.aborted = true;
+    this.reason = reason;
+    var event = { type: "abort", target: this };
+    if (typeof this.onabort === "function") { this.onabort(event); }
+    for (var i = 0; i < this._listeners.length; i++) { this._listeners[i](event); }
+  };
+  define("AbortSignal", AbortSignal);
+  function AbortController() { this.signal = new AbortSignal(); }
+  AbortController.prototype.abort = function (reason) { this.signal._abort(reason); };
+  define("AbortController", AbortController);
+  function abortError(reason) {
+    var error = new Error("The operation was aborted");
+    error.name = "AbortError";
+    if (reason !== undefined) { error.reason = reason; }
+    return error;
+  }
+  function ReadableStream(chunks) {
+    this._chunks = chunks || [];
+    this._index = 0;
+    this._cancelled = false;
+    this.locked = false;
+    this._onRead = null;
+  }
+  ReadableStream.prototype.getReader = function () {
+    var stream = this;
+    this.locked = true;
+    return {
+      read: function () {
+        if (stream._onRead) { stream._onRead(); }
+        if (stream._cancelled || stream._index >= stream._chunks.length) {
+          return Promise.resolve({ value: undefined, done: true });
+        }
+        var chunk = stream._chunks[stream._index++];
+        return Promise.resolve({ value: chunk, done: false });
+      },
+      cancel: function (reason) { stream.cancel(reason); return Promise.resolve(); },
+      releaseLock: function () { stream.locked = false; },
+      closed: Promise.resolve()
+    };
+  };
+  ReadableStream.prototype.cancel = function (reason) {
+    this._cancelled = true;
+    this._chunks = [];
+    this._index = 0;
+    return Promise.resolve(reason);
+  };
+  define("ReadableStream", ReadableStream);
+  function byteChunks(bytes) {
+    var chunks = [];
+    if (!bytes || bytes.length === 0) { return chunks; }
+    var parts = Math.min(3, bytes.length);
+    var size = Math.ceil(bytes.length / parts);
+    for (var start = 0; start < bytes.length; start += size) {
+      chunks.push(new Uint8Array(bytes.slice(start, start + size)));
+    }
+    return chunks;
+  }
   function Response(data) {
     this.status = data.status;
     this.statusText = data.statusText || "";
@@ -4207,8 +4279,11 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     this.redirected = false;
     this.headers = new Headers(data.headers || []);
     this._body = data.bodyText || "";
-    this._bodyLength = data.bodyLength || 0;
+    this._bytes = data.bodyBytes || [];
     this._bodyUsed = false;
+    var self = this;
+    this.body = new ReadableStream(byteChunks(this._bytes));
+    this.body._onRead = function () { self._bodyUsed = true; };
   }
   Response.prototype._consume = function () { if (this._bodyUsed) { return null; } this._bodyUsed = true; return this._body; };
   Response.prototype.text = function () { var body = this._consume(); return body === null ? Promise.reject(new TypeError("body already used")) : Promise.resolve(body); };
@@ -4216,11 +4291,11 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
   Response.prototype.arrayBuffer = function () {
     var body = this._consume();
     if (body === null) { return Promise.reject(new TypeError("body already used")); }
-    var bytes = new Uint8Array(body.length);
-    for (var i = 0; i < body.length; i++) { bytes[i] = body.charCodeAt(i) & 255; }
-    return Promise.resolve(bytes);
+    return Promise.resolve(new Uint8Array(this._bytes.slice()));
   };
-  Response.prototype.clone = function () { var copy = new Response({ status: this.status, statusText: this.statusText, url: this.url, headers: this.headers.entries(), bodyText: this._body, bodyLength: this._bodyLength }); return copy; };
+  Response.prototype.clone = function () {
+    return new Response({ status: this.status, statusText: this.statusText, url: this.url, headers: this.headers.entries(), bodyText: this._body, bodyBytes: this._bytes.slice() });
+  };
   define("Response", Response);
   function Request(input, init) {
     init = init || {};
@@ -4229,23 +4304,43 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       this.method = String(init.method || input.method || "GET").toUpperCase();
       this.headers = new Headers(init.headers || input.headers);
       this.body = init.body !== undefined ? String(init.body) : (input.body || null);
+      this.signal = init.signal || input.signal || null;
     } else {
       this.url = new URL(String(input), location.href).href;
       this.method = String(init.method || "GET").toUpperCase();
       this.headers = new Headers(init.headers);
       this.body = init.body !== undefined && init.body !== null ? String(init.body) : null;
+      this.signal = init.signal || null;
     }
+    if (this.method === "GET" || this.method === "HEAD") { this.body = null; }
   }
   define("Request", Request);
   define("fetch", function (input, init) {
     return new Promise(function (resolve, reject) {
+      var request;
+      try { request = new Request(input, init); } catch (error) { reject(error); return; }
+      var signal = request.signal;
+      if (signal && signal.aborted) { reject(abortError(signal.reason)); return; }
+      var settled = false;
+      var onAbort = function () { if (!settled) { settled = true; reject(abortError(signal.reason)); } };
+      if (signal) { signal.addEventListener("abort", onAbort); }
       try {
-        var request = new Request(input, init);
         var headerText = "";
         request.headers.forEach(function (value, name) { headerText += name + ":" + value + "\n"; });
         var raw = __megi_fetch_native(request.url, request.method, headerText, request.body === null ? "" : request.body);
-        resolve(new Response(raw));
-      } catch (error) { reject(error); }
+        Promise.resolve().then(function () {
+          if (settled) { return; }
+          settled = true;
+          if (signal) { signal.removeEventListener("abort", onAbort); }
+          var response = new Response(raw);
+          if (request.method === "HEAD") { response._bytes = []; response._body = ""; response.body = new ReadableStream([]); }
+          resolve(response);
+        });
+      } catch (error) {
+        settled = true;
+        if (signal) { signal.removeEventListener("abort", onAbort); }
+        reject(new TypeError("fetch failed: " + String(error)));
+      }
     });
   });
 })();
@@ -4944,14 +5039,20 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
     if body_text.len() > MAX_FETCH_BODY {
         return Err(js_error("fetch body limit exceeded"));
     }
-    if !matches!(method.as_str(), "GET" | "POST") {
-        return Err(js_error("fetch only supports GET and POST"));
+    if !matches!(
+        method.as_str(),
+        "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "HEAD" | "OPTIONS"
+    ) {
+        return Err(js_error(
+            "fetch supports GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS",
+        ));
     }
     let request = crate::host::FetchRequest {
         url,
-        method,
+        method: method.clone(),
         headers,
-        body: (!body_text.is_empty()).then(|| body_text.into_bytes()),
+        body: (!body_text.is_empty() && method != "GET" && method != "HEAD")
+            .then(|| body_text.into_bytes()),
     };
     let result = with_host(|host| {
         host.fetch_provider
@@ -4990,6 +5091,17 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
             .map_err(|error| js_error(error.to_string()))?;
     }
     let body_text = String::from_utf8_lossy(&result.body).to_string();
+    let body_bytes = JsArray::new(context);
+    for (index, byte) in result.body.iter().enumerate() {
+        body_bytes
+            .set(
+                js_string!(index.to_string()),
+                JsValue::from(f64::from(*byte)),
+                false,
+                context,
+            )
+            .map_err(|error| js_error(error.to_string()))?;
+    }
     let mut init = ObjectInitializer::new(context);
     init.property(
         js_string!("status"),
@@ -5020,7 +5132,13 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
         js_string!("bodyLength"),
         JsValue::from(result.body.len() as f64),
         Attribute::all(),
+    )
+    .property(
+        js_string!("bodyBytes"),
+        JsValue::from(body_bytes),
+        Attribute::all(),
     );
+
     Ok(JsValue::from(init.build()))
 }
 
