@@ -8,8 +8,9 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 
 > **Status**: the harness is wired into CI via
 > [`.github/workflows/fuzz-nightly.yml`](../.github/workflows/fuzz-nightly.yml) — a daily
-> 5-minute-per-target smoke run plus `workflow_dispatch`. This closes the "fuzzing targets
-> are not wired into CI yet" item from `SECURITY.md`.
+> run of **16 targets**: 10 minutes for the 9 critical parsers/decoders and 5 minutes for
+> the rest, plus `workflow_dispatch`. This closes the "fuzzing targets are not wired into
+> CI yet" item from `SECURITY.md`.
 
 ## Layout
 
@@ -29,8 +30,10 @@ fuzz/
 │   ├── hpack_decode.rs   # HPACK header blocks + HTTP/2 framing
 │   ├── h2_push.rs        # PUSH_PROMISE/HEADERS/DATA server push (capped)
 │   ├── body_stream.rs    # RequestBody/BodyProducer streaming contract
-│   ├── webp_vp8.rs       # WebP sniffing + VP8 lossy/lossless container path
-│   └── js_module.rs      # ES modules + import maps (resolver/loader, budgeted)
+│   ├── webp_vp8.rs       # WebP sniffing + VP8/VP8L container validation path
+│   ├── js_module.rs      # ES modules + import maps (resolver/loader, budgeted)
+│   ├── webp_lossy.rs     # VP8 lossy keyframe decoder under anti-DoS caps
+│   └── container_queries.rs # CSS @container/@layer parsing + query evaluation
 └── corpus/<target>/      # versioned seed inputs (small, hand-written)
 ```
 
@@ -73,8 +76,10 @@ cargo +nightly fuzz build          # builds every [[bin]] target
 
 | `h2_push` | `net::h2::frame::{FrameReader, HeaderAssembler, Frame::{parse_push_promise, headers_payload, data_payload}, validate_frame}`, `net::h2::hpack::{Decoder, huffman_decode}` | Round 28 server push: PUSH_PROMISE + promised HEADERS/DATA arrive from an untrusted peer. Caps: ≤128 KiB input, ≤48 frames, 16 KiB frame limit, ≤8 promises, ≤4 decoded header blocks (≤64 KiB each), ≤64 KiB pushed DATA. Covers push-promise stream-id/payload parsing, HEADERS+CONTINUATION reassembly, HPACK tables and frame validation. |
 | `body_stream` | `net::{RequestBody, BodyProducer, FetchError}` | Round 28 streaming uploads: pull-based producers with backpressure. Drives a `RequestBody::Stream` with bounded pull sizes (chunk ≤ max, ≤96 pulls, ≤128 KiB total), checks `Bytes` helpers (`len`/`is_empty`/`Debug`) and typed producer-error aborts; never opens a socket. |
-| `webp_vp8` | `image::{detect_format, decode_with_limits, PngLimits}` | WebP lossy `VP8 ` is detected and rejected with a typed error while the VP8L lossless decoder is implemented. The input is decoded directly and also wrapped in minimal RIFF containers with `VP8 `/`VP8L` chunks (plus truncated variants), exercising RIFF/chunk-size validation, sniffing and the future lossy path. Caps: ≤512 KiB input, 8 KiB synthesized chunks, 1024 px/side, 512 Ki pixels. |
+| `webp_vp8` | `image::{detect_format, decode_with_limits, PngLimits}` | WebP sniffing + RIFF/VP8/VP8L container validation: the input is decoded directly and also wrapped in minimal RIFF containers with `VP8 `/`VP8L` chunks (plus truncated variants), exercising chunk-size/RIFF arithmetic and the lossless/container paths. The focused VP8 keyframe decoder campaign is `webp_lossy`. Caps: ≤512 KiB input, 8 KiB synthesized chunks, 1024 px/side, 512 Ki pixels. |
 | `js_module` | `js::{JsRuntime::{new, set_budget, set_import_map_json, set_module_resolver, set_module_loader, eval_module}, ImportMap::from_json, Budget, JsError}` | Round 27 ES modules + import maps. Input is split on NUL into import-map JSON, entry module and dependency modules; resolver/loader callbacks are bounded (8 modules, ≤8 KiB/module, ≤24 loader calls) and the budget is 2k loop iterations / 64 recursion / 2 KiB stack. Covers JSON import-map validation, specifier resolution, static imports, cycles, blocked mappings, missing exports, dynamic-import/TLA rejections and budget exhaustion; no network/FS and no page DOM fixture. |
+| `webp_lossy` | `image::{detect_format, decode_with_limits, PngLimits}` | R228 VP8 lossy keyframe decoder: RIFF/WEBP inputs are decoded directly and via truncated prefixes; non-container inputs are wrapped in a synthesized `VP8 ` chunk (raw and truncated) so the keyframe header/decoder is reached from any seed. Caps: ≤512 KiB input, 2048 px/side, 2 Mi pixels, 128 KiB chunks. |
+| `container_queries` | `css::{parse_stylesheet, parse_list_of_declarations, tokenize}`, `css::container::{parse_query, evaluate, ContainerSize}`, `css::ComputedStyle` | R228 CSS container queries + cascade layers: parses `@container`/`@layer` stylesheets and declaration lists, then parses the input (and each line) as a query prelude and evaluates it against fixed container sizes/inline+block combinations. No DOM/layout required; the CSS parser depth/count caps bound each iteration. |
 
 All targets run on the **public** API with release-like defaults; they look for panics,
 aborts (stack overflow), ASan/UBSan findings and target timeouts, not for semantic
@@ -114,7 +119,8 @@ prefer `-runs=100`/`-max_total_time=15` for a quick local smoke run. `js_eval` a
 good local guard. `js_module` also needs `-detect_leaks=0` for the same constant Boa
 one-time allocation as `js_eval`.
 
-The nightly workflow now runs **14 targets × 300 s** (`fuzz-nightly.yml` matrix) and the
+The nightly workflow now runs **16 targets** (`fuzz-nightly.yml` matrix): 600 s for the 9
+critical parsers/decoders and 300 s for the rest, and the
 pull-request job builds all 14 without running libFuzzer. New in r27–r29: server push
 (`h2_push`), streaming request bodies (`body_stream`), WebP VP8 lossy sniff/lossless path
 (`webp_vp8`) and ES modules/import maps (`js_module`). Local smoke used in the round report:
@@ -160,7 +166,16 @@ successful local session grows the tracked seed corpus (curate with `cmin`, belo
   - `body_stream`: empty/zero-length/length-prefixed chunk plans, including a
     255-byte chunk;
   - `webp_vp8`: the crate's real WebP fixtures (VP8 lossy q75/q90, VP8L
-    photo/alpha/palette) plus a raw payload and a truncated RIFF container;
+    photo/alpha/palette) plus a raw payload and a truncated RIFF container, and
+    `webp_lossy` (R228) adds real VP8 keyframe fixtures for the focused decoder target;
+  - `image_decode` / `exif_parse` (R228): a real **1024×768 JPEG** fixture, its reduced
+    EXIF-thumbnail variant and a plain JPEG keep the decoder's size/IFD paths covered;
+  - `webp_lossy` (R228): real VP8 lossy fixtures (`photo_lossy.webp`, `webp_lossy.webp`)
+    plus their RIFF-header mutations;
+  - `svg_parse` (R228): SVG fixtures with filters (`filter_blur.svg`) and SMIL
+    animations (`smil.svg`) on top of the existing XML/geometry seeds;
+  - `css_parse` / `container_queries` (R228): extracted `@layer`/`@container` stylesheets
+    from the render fixtures plus query-prelude seeds for the evaluator;
   - `js_module`: NUL-separated import-map JSON + entry/dependency modules
     (simple export, bare-specifier import map, prefix mappings, malformed JSON,
     cycle, blocked mapping, dynamic import, top-level await, syntax error and an
@@ -186,6 +201,8 @@ successful local session grows the tracked seed corpus (curate with `cmin`, belo
   cargo +nightly fuzz cmin body_stream
   cargo +nightly fuzz cmin webp_vp8
   cargo +nightly fuzz cmin js_module
+  cargo +nightly fuzz cmin webp_lossy
+  cargo +nightly fuzz cmin container_queries
   ```
 
 ## Crashes and triage policy
@@ -231,23 +248,25 @@ the 3 `xmlViolation` tokenizer failures are documented conformance gaps, not cra
 
 - triggers: `schedule` (daily, 03:17 UTC), `workflow_dispatch` and `pull_request` (only
   when `fuzz/**` or the workflow itself changes);
-- the scheduled/dispatch matrix builds **and runs** every target for 300 s
-  (`-rss_limit_mb=2048 -timeout=25`): `html_parse`, `css_parse`, `selectors`, `net_url`,
-  `render_pipeline`, `js_eval`, `svg_parse`, `image_decode`, `exif_parse`,
-  `hpack_decode` (10 targets);
+- the scheduled/dispatch matrix builds **and runs** all **16 targets**: the 9 critical
+  ones (`html_parse`, `css_parse`, `selectors`, `net_url`, `render_pipeline`, `js_eval`,
+  `svg_parse`, `image_decode`, `hpack_decode`) for **600 s** each, and `exif_parse`,
+  `h2_push`, `body_stream`, `webp_vp8`, `js_module`, `webp_lossy`,
+  `container_queries` for **300 s** (`-rss_limit_mb=2048 -timeout=25`). The job timeout
+  is 30 minutes to fit the longer critical campaigns;
 - pull requests run a cheap **build-only** job (`cargo +nightly fuzz build`, all targets)
   with a 20-minute job timeout. A stable-only build job is **not viable**: `cargo-fuzz`
   passes `-Zsanitizer=…` to rustc, so the build itself needs nightly;
 - on failure uploads `fuzz/artifacts/` and the corpus as a workflow artifact (14 days).
 
-Keep the workflow cheap: the matrix is one job per target with a 20-minute job timeout.
-Longer campaigns should run outside CI (dedicated fuzzing host or OSS-Fuzz) with a larger
-corpus and parallelism.
+Keep the workflow cheap: the matrix is one job per target with a 30-minute job timeout
+(10-minute critical campaigns + build). Longer campaigns should run outside CI (dedicated
+fuzzing host or OSS-Fuzz) with a larger corpus and parallelism.
 
 ## Limitations
 
-- Daily 5-minute runs only scratch the surface; they are a regression gate, not a
-  coverage guarantee.
+- Daily 10-minute critical / 5-minute secondary runs only scratch the surface; they are a
+  regression gate, not a coverage guarantee.
 - No coverage-guided corpus merging with OSS-Fuzz and no differential testing against
   other engines.
 - `render_pipeline` runs with scripting disabled and `js_eval` runs a fixed budget: the
@@ -257,11 +276,11 @@ corpus and parallelism.
   not by this harness.
 - libFuzzer + ASan require Linux/macOS nightly toolchains; the harness is not built on
   stable or Windows CI.
-- `image_decode` cannot reach a WebP *decoder* (the `image` crate detects WebP but
-  deliberately returns `UnsupportedFormat`; that path is still fuzzed), and an
-  individual container format only gets ~1/4 of `image_decode`'s iterations; split it
-  into `jpeg_decode`/`gif_decode`/`webp_decode` targets if a format-specific campaign is
-  needed later.
+- `image_decode` covers PNG/JPEG/GIF/WebP sniffing plus EXIF; the dedicated
+  `webp_vp8` (VP8/VP8L container + lossless) and `webp_lossy` (VP8 keyframe decoder)
+  targets give WebP a focused campaign, and `exif_parse` owns the APP1/TIFF parser.
+  JPEG/GIF decoding still share `image_decode`'s iterations; split them further if a
+  format-specific campaign is needed later.
 - `hpack_decode` fuzzes `FrameReader`/`Frame` helpers but not the full `h2::client`
   state machine (multiplexing/flow control live in loopback integration tests).
 
@@ -340,3 +359,48 @@ The matrix now has **10 targets**: the original seven plus `image_decode`, `exif
 300-run smoke campaigns (`-rss_limit_mb=2048 -timeout=25`) finish without panics/ASan/
 timeouts. CI runs a 300 s matrix smoke plus the PR build-only job; longer campaigns remain a
 future item.
+
+## Round 34 additions (R228)
+
+Campañas más largas, dos targets nuevos y corpus ampliado con los fixtures recientes:
+
+- **CI**: el matrix pasa a **16 targets**; los 9 críticos (`html_parse`, `css_parse`,
+  `selectors`, `net_url`, `render_pipeline`, `js_eval`, `svg_parse`, `image_decode`,
+  `hpack_decode`) corren **600 s** y el resto (`exif_parse`, `h2_push`, `body_stream`,
+  `webp_vp8`, `js_module`, `webp_lossy`, `container_queries`) **300 s**. El timeout del
+  job sube a 30 min para absorber la campaña de 10 min por target crítico.
+- **`webp_lossy`**: target dedicado al decoder **VP8 keyframe** (`image::decode_with_limits`
+  con caps 2048 px/side y 2 Mi pixels); envuelve payloads arbitrarios en un chunk
+  `VP8 ` sintético y prueba truncados, de modo que el parser de cabecera y el decoder
+  lossy se alcanzan aunque el corpus no sea un contenedor RIFF válido.
+- **`container_queries`**: parsea `@container`/`@layer` con `css::parse_stylesheet`,
+  declaration lists y tokenizer, y evalúa `css::container::parse_query` +
+  `container::evaluate` contra varias combinaciones de tamaño inline/block, sin DOM.
+- **Corpus**: seeds reales de un JPEG **1024×768** (`reduced_1024x768.jpg`), variantes
+  EXIF-thumbnail, WebP lossy (`photo_lossy.webp`, `webp_lossy.webp`), SVG con filtros
+  (`filter_blur.svg`) y SMIL (`smil.svg`), y CSS con `@layer`/`@container` extraído de
+  los fixtures de render (más preludes de query para el evaluador).
+- **Coste local** (this environment, nightly + cargo-fuzz 0.13.2, release + ASan):
+  `cargo +nightly fuzz build` compila **16/16** targets (~2–4 min en caliente); un smoke
+  de 200–400 ejecuciones por target desde el corpus tarda segundos por target y pico de
+  RSS ~40–90 MB; las campañas de CI de 600 s/300 s son el coste relevante (~2 h de CPU
+  en total si todos corren en paralelo por job).
+
+### Round 34 smoke results
+
+Verificación local de la ronda (misma máquina, `-rss_limit_mb=2048 -timeout=25`,
+`-detect_leaks=0` para los targets que embeben Boa):
+
+| Target | Runs | Resultado |
+|---|---|---|
+| `webp_lossy` | 400 | sin panics/ASan/timeouts, pico RSS ~60 MB |
+| `container_queries` | 400 | sin panics/ASan/timeouts, pico RSS ~50 MB |
+| `html_parse` | 400 | sin panics/ASan/timeouts (regresión rápida) |
+| `image_decode` | 300 | sin panics/ASan/timeouts |
+| `svg_parse` | 300 | sin panics/ASan/timeouts |
+| `exif_parse` | 300 | sin panics/ASan/timeouts |
+| `hpack_decode` | 300 | sin panics/ASan/timeouts |
+
+Los 16 targets compilan con `cargo +nightly fuzz build`; el YAML se validó con un parser
+YAML (16 entradas en el matrix, timeout 30). Los resultados Ok/Err se descartan: el signal
+son panics, aborts, ASan/UBSan y timeouts.

@@ -174,6 +174,8 @@
 
 #![forbid(unsafe_code)]
 
+/// Generated `file://` directory listings and load-error pages.
+pub mod a11y;
 pub mod chrome;
 pub mod cli;
 pub mod convert;
@@ -188,7 +190,6 @@ pub mod history;
 pub mod images;
 pub mod links;
 pub mod navigation;
-/// Generated `file://` directory listings and load-error pages.
 pub mod pages;
 pub mod present;
 pub mod reader;
@@ -202,6 +203,7 @@ pub mod window;
 pub mod worker;
 pub mod zoom;
 
+pub use a11y::{AccessNode, collect as collect_access, focus_order, is_hidden, name, role};
 pub use chrome::{
     ADDRESS_BAR_HEIGHT, AddressBar, CHROME_HEIGHT, ChromeView, DropdownList, DropdownState,
     TAB_STRIP_HEIGHT, TabHit, TabRect, TabStripLayout, address_bar_rect, draw_chrome,

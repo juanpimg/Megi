@@ -992,4 +992,32 @@ mod tests {
                 .is_empty()
         );
     }
+
+    #[test]
+    fn persisted_recent_history_keeps_titles_and_domains() {
+        let mut session = sample();
+        session.recent = vec![
+            crate::history::HistoryEntry {
+                title: "Home".to_string(),
+                url: "https://example.com/home".to_string(),
+                logical_time: 1,
+            },
+            crate::history::HistoryEntry {
+                title: "Docs".to_string(),
+                url: "https://docs.example/start".to_string(),
+                logical_time: 2,
+            },
+        ];
+        let parsed = Session::from_json(&session.to_json()).expect("parse");
+        assert_eq!(parsed.recent, session.recent);
+        assert_eq!(
+            crate::history::domain_of(&parsed.recent[1].url),
+            "docs.example"
+        );
+        assert!(
+            crate::history::domain_badge(&parsed.recent[1].url)
+                .0
+                .is_ascii_uppercase()
+        );
+    }
 }
