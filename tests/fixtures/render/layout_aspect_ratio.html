@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>aspect-ratio geometry</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  .block-w { width: 160px; aspect-ratio: 16 / 9; background: #ff0000; }
+  .block-h { height: 60px; aspect-ratio: 2 / 1; background: #00aa00; margin-left: 200px; }
+  .replaced { width: 64px; aspect-ratio: 1 / 1; }
+  .flex { display: flex; width: 300px; background: #eeeeee; }
+  .flex-item { width: 80px; aspect-ratio: 2 / 1; background: #0000ff; }
+  .grid { display: grid; grid-template-columns: 200px; width: 300px; background: #dddddd; }
+  .grid-item { width: 100px; aspect-ratio: 3 / 1; background: #ff00ff; }
+</style></head>
+<body>
+  <div class="block-w"></div>
+  <div class="block-h"></div>
+  <img class="replaced" src="assets/px.png" alt="replaced">
+  <div class="flex"><div class="flex-item"></div></div>
+  <div class="grid"><div class="grid-item"></div></div>
+</body></html>

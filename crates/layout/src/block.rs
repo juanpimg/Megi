@@ -22,6 +22,10 @@
 //!   equation always uses the LTR rule (ignore `margin-right`).
 //! * Percentage `height` resolves against a definite containing block height; against
 //!   an auto-height containing block it behaves as `auto` (CSS 2.2 §10.5).
+//! * `aspect-ratio` (CSS Box Sizing 4 §5): a definite width derives the automatic
+//!   height (and a definite height the automatic width of in-flow blocks); both
+//!   definite sizes keep their declared values. Replaced boxes prefer their
+//!   intrinsic ratio with `auto` (or the declared ratio when it is explicit).
 
 use css::calc::CalcValue;
 use css::{BoxSizing, Clear, ComputedStyle, Display, Float, Length, Overflow, Position};
@@ -137,6 +141,16 @@ fn layout_child_box(
         + child.dimensions.padding.left;
     child.dimensions.content.y =
         border_top_y + child.dimensions.border.top + child.dimensions.padding.top;
+    // `aspect-ratio` with a definite height derives the automatic width before the
+    // contents are laid out (their available width changes).
+    if let Some(style) = child.style.as_ref()
+        && style.width == Length::Auto
+        && style.height != Length::Auto
+        && let Some(ratio) = aspect_ratio_for_box(style, false, None)
+        && let Some(defined_height) = defined_content_height(child, parent_definite_height)
+    {
+        child.dimensions.content.width = (defined_height * ratio).max(0.0);
+    }
     let child_pos = self_positioning_context(child, pos);
     layout_box_contents(child, parent_definite_height, false, measurer, child_pos);
     apply_relative_offset(child, cb.width, parent_definite_height);
@@ -875,6 +889,29 @@ fn layout_absolutely_positioned(
     }
 }
 
+/// Returns the declared content height of a box when its `height` is definite
+/// (px, or percentage against a definite containing block height).
+fn defined_content_height(layout_box: &LayoutBox, cb_height: Option<f32>) -> Option<f32> {
+    let style = layout_box.style.as_ref()?;
+    let edges_v = layout_box.dimensions.padding.top
+        + layout_box.dimensions.padding.bottom
+        + layout_box.dimensions.border.top
+        + layout_box.dimensions.border.bottom;
+    let is_border_box = style.box_sizing == BoxSizing::BorderBox;
+    let to_content = |border_box: f32| {
+        if is_border_box {
+            (border_box - edges_v).max(0.0)
+        } else {
+            border_box
+        }
+    };
+    match style.height {
+        Length::Px(px) => Some(to_content(px)),
+        Length::Percent(pct) => cb_height.map(|height| to_content(height * (pct / 100.0))),
+        Length::Auto => None,
+    }
+}
+
 /// Computes the used height of a block container per CSS 2.2 §10.6.3 / §10.6.7.
 pub(crate) fn calculate_block_height(
     layout_box: &mut LayoutBox,
@@ -887,6 +924,19 @@ pub(crate) fn calculate_block_height(
         Some(height) => height,
         None => intrinsic_content_height(layout_box, is_root),
     };
+
+    // `aspect-ratio` with a definite width derives the automatic height
+    // (CSS Box Sizing 4 §5); min/max below still clamp the result.
+    if definite_height.is_none()
+        && let Some(style) = layout_box.style.as_ref()
+        && style.height == Length::Auto
+        && style.width != Length::Auto
+        && let Some(ratio) = aspect_ratio_for_box(style, false, None)
+        && ratio.is_finite()
+        && ratio > 0.0
+    {
+        content_height = layout_box.dimensions.content.width / ratio;
+    }
 
     // CSS 2.2 §10.6.7: the height of a formatting context root encloses its floats.
     if definite_height.is_none()
@@ -1560,6 +1610,30 @@ pub(crate) fn resolve_horizontal_edges(layout_box: &mut LayoutBox, cb_width: f32
     );
 }
 
+/// Returns the ratio (`width / height`) that `aspect-ratio` contributes to a box.
+///
+/// * Non-replaced boxes have no intrinsic ratio: `auto` falls back to the declared
+///   ratio (CSS Box Sizing 4 §5); an explicit ratio is always returned.
+/// * Replaced boxes: an explicit ratio always wins; with `auto` the **intrinsic**
+///   ratio is used when present, and when there is none the property is ignored so
+///   the pre-existing fallback (300x150, documented) is preserved.
+pub(crate) fn aspect_ratio_for_box(
+    style: &ComputedStyle,
+    is_replaced: bool,
+    intrinsic: Option<(f32, f32)>,
+) -> Option<f32> {
+    let aspect_ratio = style.aspect_ratio?;
+    if !aspect_ratio.auto {
+        return Some(aspect_ratio.ratio);
+    }
+    if is_replaced {
+        intrinsic
+            .and_then(|(width, height)| (width > 0.0 && height > 0.0).then_some(width / height))
+    } else {
+        Some(aspect_ratio.ratio)
+    }
+}
+
 /// Computes the used content size of a replaced element (CSS 2.2 §10.3.2 / §10.6.2):
 /// CSS `width`/`height` first, then the intrinsic size, applying the intrinsic aspect
 /// ratio when only one dimension is specified.
@@ -1614,6 +1688,29 @@ pub(crate) fn replaced_content_size(
         }),
         Length::Auto => None,
     };
+
+    // `aspect-ratio` participates when at least one axis is auto (CSS Box Sizing 4 §5).
+    if let Some(ratio) = aspect_ratio_for_box(style, true, layout_box.intrinsic_size) {
+        let has_intrinsic = layout_box.intrinsic_size.is_some();
+        let explicit = style.aspect_ratio.is_some_and(|value| !value.auto);
+        let sized = match (specified_width, specified_height) {
+            (Some(width), Some(height)) => Some((width, height)),
+            (Some(width), None) => Some((width, width / ratio)),
+            (None, Some(height)) => Some((height * ratio, height)),
+            (None, None) if !explicit => {
+                // `auto` + intrinsic content: keep the current intrinsic geometry.
+                has_intrinsic.then_some((intrinsic_width, intrinsic_height))
+            }
+            (None, None) => {
+                // Explicit ratio with both axes auto: use the intrinsic width (or the
+                // documented 300x150 fallback width) as the base of the relation.
+                Some((intrinsic_width, intrinsic_width / ratio))
+            }
+        };
+        if let Some(size) = sized {
+            return size;
+        }
+    }
 
     match (specified_width, specified_height) {
         (Some(width), Some(height)) => (width, height),
