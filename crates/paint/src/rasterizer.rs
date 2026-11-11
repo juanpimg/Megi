@@ -3384,28 +3384,38 @@ fn blur_rgba(buf: &mut Pixmap, blur: f32) {
     }
     let width = buf.width as usize;
     let height = buf.height as usize;
-    let uniform_alpha = buf
-        .pixels
-        .first()
-        .map(|pixel| pixel.a)
-        .filter(|alpha| buf.pixels.iter().all(|pixel| pixel.a == *alpha));
     BLUR_PLANES.with(|planes| {
         let mut planes = planes.borrow_mut();
-        let channels = if uniform_alpha.is_some() { 3 } else { 4 };
         for plane in planes.iter_mut() {
             plane.clear();
         }
-        for index in 0..channels {
+        for index in 0..3 {
             planes[index].resize(width * height, 0.0);
         }
+        // Fill RGB and detect uniform alpha in the same pass (common backdrop
+        // case: fully opaque region); only non-uniform regions get a fourth
+        // planar pass. The planes and arithmetic are unchanged (R231).
+        let mut first_alpha = None;
+        let mut uniform_alpha = true;
         for (index, pixel) in buf.pixels.iter().enumerate() {
             planes[0][index] = f32::from(pixel.r);
             planes[1][index] = f32::from(pixel.g);
             planes[2][index] = f32::from(pixel.b);
-            if channels == 4 {
+            match first_alpha {
+                None => first_alpha = Some(pixel.a),
+                Some(alpha) if alpha != pixel.a => uniform_alpha = false,
+                Some(_) => {}
+            }
+        }
+        let channels = if uniform_alpha { 3 } else { 4 };
+        if channels == 4 {
+            planes[3].clear();
+            planes[3].resize(width * height, 0.0);
+            for (index, pixel) in buf.pixels.iter().enumerate() {
                 planes[3][index] = f32::from(pixel.a);
             }
         }
+        let uniform_alpha = uniform_alpha.then_some(first_alpha.unwrap_or(255));
         let mut scratch = BLUR_OUTPUT.with(|slot| std::mem::take(&mut *slot.borrow_mut()));
         scratch.clear();
         scratch.resize(width * height, 0.0);
