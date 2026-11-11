@@ -70,6 +70,7 @@ pub fn register(suite: &mut Suite, opts: &Options) {
     register_fixture_effect_rows(suite);
     register_effect_fixture_pipelines(suite);
     register_backdrop_stage_rows(suite);
+    register_png_region_encoders(suite);
     register_image(suite);
     register_render_pipeline(suite);
     register_png_rows(suite);
@@ -1074,6 +1075,104 @@ fn register_backdrop_stage_rows(suite: &mut Suite) {
             black_box(pixmap_bare.to_png());
         },
     ));
+}
+
+/// R216: full PNG encode vs row-cached region encode at 10/25/50/100 % dirty rows.
+///
+/// The cache re-filters only changed rows (+ the row below each change, whose PNG
+/// filter depends on its predecessor); the DEFLATE stream still covers the whole
+/// image, so output bytes are identical to `Pixmap::to_png()`. Each pair mutates the
+/// same rows and colors, making the A/B fair at both report sizes.
+fn register_png_region_encoders(suite: &mut Suite) {
+    fn fixture(width: u32, height: u32) -> paint::Pixmap {
+        let mut pixmap = paint::Pixmap::new(width, height);
+        for y in 0..height {
+            for x in 0..width {
+                let r = ((x * 7 + y * 3) % 256) as u8;
+                let g = ((x * 2 + y * 11) % 256) as u8;
+                let b = ((x * 5 + y * 5) % 256) as u8;
+                pixmap.set_pixel(x, y, css::Color::new(r, g, b, 255));
+            }
+        }
+        pixmap
+    }
+
+    fn fill_band(pixmap: &mut paint::Pixmap, rows: u32, color: css::Color) {
+        let stride = pixmap.width as usize;
+        let end = (rows as usize * stride).min(pixmap.pixels.len());
+        pixmap.pixels[..end].fill(color);
+    }
+
+    for (width, height) in [(800u32, 600u32), (1024, 768)] {
+        for pct in [10u32, 25, 50, 100] {
+            let dirty_rows = ((height as u64 * u64::from(pct)) / 100) as u32;
+            let dirty = layout::Rect::new(0.0, 0.0, width as f32, dirty_rows as f32);
+            let full_name: &'static str = match (width, pct) {
+                (800, 10) => "paint/png-encode-full-800x600-10pct",
+                (800, 25) => "paint/png-encode-full-800x600-25pct",
+                (800, 50) => "paint/png-encode-full-800x600-50pct",
+                (800, _) => "paint/png-encode-full-800x600-100pct",
+                (_, 10) => "paint/png-encode-full-1024x768-10pct",
+                (_, 25) => "paint/png-encode-full-1024x768-25pct",
+                (_, 50) => "paint/png-encode-full-1024x768-50pct",
+                (_, _) => "paint/png-encode-full-1024x768-100pct",
+            };
+            let region_name: &'static str = match (width, pct) {
+                (800, 10) => "paint/png-encode-regions-10pct",
+                (800, 25) => "paint/png-encode-regions-25pct",
+                (800, 50) => "paint/png-encode-regions-50pct",
+                (800, _) => "paint/png-encode-regions-100pct",
+                (_, 10) => "paint/png-encode-regions-1024x768-10pct",
+                (_, 25) => "paint/png-encode-regions-1024x768-25pct",
+                (_, 50) => "paint/png-encode-regions-1024x768-50pct",
+                (_, _) => "paint/png-encode-regions-1024x768-100pct",
+            };
+
+            let mut full_pixmap = fixture(width, height);
+            let mut full_alternate = false;
+            suite.add(
+                BenchEntry::new(
+                    full_name,
+                    "paint",
+                    format!("full Pixmap::to_png {width}x{height}, {pct}% rows redrawn"),
+                    move || {
+                        full_alternate = !full_alternate;
+                        let color = if full_alternate {
+                            css::Color::new(11, 22, 33, 255)
+                        } else {
+                            css::Color::new(44, 55, 66, 255)
+                        };
+                        fill_band(&mut full_pixmap, dirty_rows, color);
+                        black_box(full_pixmap.to_png());
+                    },
+                )
+                .heavy(),
+            );
+
+            let mut pixmap = fixture(width, height);
+            let mut encoder = paint::PngRegionEncoder::new();
+            let _ = encoder.encode_regions(&pixmap, &[dirty]);
+            let mut alternate = false;
+            suite.add(
+                BenchEntry::new(
+                    region_name,
+                    "paint",
+                    format!("row-cached to_png {width}x{height}, {pct}% dirty rows"),
+                    move || {
+                        alternate = !alternate;
+                        let color = if alternate {
+                            css::Color::new(11, 22, 33, 255)
+                        } else {
+                            css::Color::new(44, 55, 66, 255)
+                        };
+                        fill_band(&mut pixmap, dirty_rows, color);
+                        black_box(encoder.encode_regions(&pixmap, &[dirty]));
+                    },
+                )
+                .heavy(),
+            );
+        }
+    }
 }
 
 /// Image decoding workloads (rounds 22/25/31): PNG/JPEG/GIF 800×600, real WebP

@@ -103,7 +103,10 @@ mod vp8_tables;
 pub mod webp;
 
 pub use error::ImageError;
-pub use inflate::{InflateError, InflateLimits, adler32, inflate_deflate, inflate_zlib};
+pub use inflate::{
+    InflateError, InflateLimits, StreamingInflater, adler32, inflate_deflate,
+    inflate_gzip_streaming, inflate_zlib, inflate_zlib_streaming,
+};
 pub use png::{PngLimits, decode_png};
 
 /// The 8-byte PNG file signature.
