@@ -41,6 +41,13 @@ static JPEG_800X600: &[u8] = include_bytes!("../fixtures/jpeg-800x600.jpg");
 /// Deterministic indexed GIF (800×600, single frame, ~82 KiB); the decoder only
 /// materialises the first frame.
 static GIF_800X600: &[u8] = include_bytes!("../fixtures/gif-800x600.gif");
+/// Real libwebp lossless photo (64×48, predictor/colour transforms) generated
+/// with Pillow; committed in `crates/image` and pixel-verified against PIL.
+static WEBP_PHOTO: &[u8] = include_bytes!("../../image/tests/fixtures/webp/photo_transforms.webp");
+/// Real libwebp lossless alpha image (40×32, straight alpha).
+static WEBP_ALPHA: &[u8] = include_bytes!("../../image/tests/fixtures/webp/alpha_real.webp");
+/// Real libwebp lossless palette image (32×24, colour indexing).
+static WEBP_PALETTE: &[u8] = include_bytes!("../../image/tests/fixtures/webp/palette_real.webp");
 
 /// Registers every benchmark into `suite`, applying `opts.scale` to the sizes.
 pub fn register(suite: &mut Suite, opts: &Options) {
@@ -594,7 +601,8 @@ fn probe_pipeline(html_source: &str, viewport: Rect) -> Option<(usize, usize)> {
     Some((display_list.items.len(), pixmap.to_png().len()))
 }
 
-/// Image decoding workloads (round 22): PNG/JPEG/GIF 800×600 → RGBA8.
+/// Image decoding workloads (rounds 22/25): PNG/JPEG/GIF 800×600 and real WebP
+/// VP8L lossless fixtures (transforms/alpha/palette) → RGBA8.
 ///
 /// Real pages spend a meaningful part of their time decoding images, which the
 /// legacy parse/style/layout/paint rows never exercised. These rows use
@@ -609,6 +617,17 @@ fn register_image(suite: &mut Suite) {
         ("image/decode-png-800x600", PNG_800X600, "PNG"),
         ("image/decode-jpeg-800x600", JPEG_800X600, "JPEG"),
         ("image/decode-gif", GIF_800X600, "GIF"),
+        (
+            "image/decode-webp-lossless",
+            WEBP_PHOTO,
+            "WebP VP8L (transforms)",
+        ),
+        ("image/decode-webp-alpha", WEBP_ALPHA, "WebP VP8L (alpha)"),
+        (
+            "image/decode-webp-palette",
+            WEBP_PALETTE,
+            "WebP VP8L (palette)",
+        ),
     ] {
         match image::decode(bytes) {
             Ok(probe) => {
@@ -749,15 +768,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn committed_image_fixtures_decode_to_800x600_rgba() {
-        for (label, bytes) in [
-            ("png", PNG_800X600),
-            ("jpeg", JPEG_800X600),
-            ("gif", GIF_800X600),
+    fn committed_image_fixtures_decode_to_rgba() {
+        for (label, bytes, width, height) in [
+            ("png", PNG_800X600, 800, 600),
+            ("jpeg", JPEG_800X600, 800, 600),
+            ("gif", GIF_800X600, 800, 600),
+            ("webp-photo", WEBP_PHOTO, 64, 48),
+            ("webp-alpha", WEBP_ALPHA, 40, 32),
+            ("webp-palette", WEBP_PALETTE, 32, 24),
         ] {
             let decoded = image::decode(bytes).expect("committed fixture decodes");
-            assert_eq!((decoded.width, decoded.height), (800, 600), "{label}");
-            assert_eq!(decoded.data.len(), 800 * 600 * 4, "{label}");
+            assert_eq!((decoded.width, decoded.height), (width, height), "{label}");
+            assert_eq!(decoded.data.len(), (width * height * 4) as usize, "{label}");
         }
     }
 }

@@ -9,7 +9,7 @@
 #   ./tools/bench.sh --json                # machine-readable output
 #   ./tools/bench.sh --filter html         # one group
 #   ./tools/bench.sh --filter pipeline     # E2E rows (incl. gradients/grid/clipping)
-#   ./tools/bench.sh --filter image        # image decode (PNG/JPEG/GIF 800x600)
+#   ./tools/bench.sh --filter image        # image decode (PNG/JPEG/GIF 800x600 + WebP VP8L)
 #   BENCH_FEATURES=fonts ./tools/bench.sh  # optional font benchmarks
 #
 # All arguments are forwarded verbatim to the `bench` binary.
