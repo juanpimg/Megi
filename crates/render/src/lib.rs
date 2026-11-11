@@ -393,6 +393,12 @@ pub struct RenderOptions {
     /// `data:` documents send no `Origin`. Cross-origin subresource CORS failures are
     /// non-fatal warnings (the resource is skipped, the page still renders).
     pub origin: Option<String>,
+    /// Opt-in streaming response path (R185 MVP): documented API switch. The default
+    /// deterministic pipeline still buffers every subresource; when enabled the loader's
+    /// `load_streaming` entry point is available for embedders, but the render pipeline is
+    /// intentionally unchanged so PNG bytes stay identical (`stream_responses=true` and
+    /// `false` render byte-identically; future phases can stream large images/fonts).
+    pub stream_responses: bool,
     /// Accept HTTP/2 server pushes and preload images/stylesheets/scripts from the
     /// same-origin push cache of the document load (R177). Default `false`: the client
     /// advertises `SETTINGS_ENABLE_PUSH=0`. Pushes completing after the main response are
@@ -436,6 +442,7 @@ impl Default for RenderOptions {
             cookies: false,
             cookie_jar: None,
             origin: None,
+            stream_responses: false,
             accept_server_push: false,
             storage: None,
             host_events: Vec::new(),
