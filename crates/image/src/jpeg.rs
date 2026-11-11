@@ -287,6 +287,99 @@ struct JpegFrame {
 
 /// Decodes a baseline JPEG stream into an [`RgbaImage`].
 pub(crate) fn decode_jpeg(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageError> {
+    decode_jpeg_with_scale(bytes, limits, 1)
+}
+
+/// Decodes a baseline JPEG with a reduced IDCT (scale 1/2/4/8) for `decode_scaled`.
+///
+/// `scale` is a power of two: 2 selects a 4x4 IDCT, 4 a 2x2 IDCT and 8 a 1x1
+/// (DC-only) IDCT per 8x8 block; AC coefficients that cannot be represented in the
+/// smaller block are discarded. Output dimensions are `ceil(width / scale) x
+/// ceil(height / scale)`. Progressive JPEGs are handled by the caller (full decode +
+/// post-subsample) and return a typed error here when `scale > 1`.
+pub(crate) fn decode_jpeg_scaled(
+    bytes: &[u8],
+    limits: &PngLimits,
+    max_dim: u32,
+) -> Result<RgbaImage, ImageError> {
+    let (width, height, progressive) = jpeg_dimensions(bytes, limits)?;
+    let factor = width.max(height).div_ceil(max_dim.max(1)).max(1) as usize;
+    let scale = factor.next_power_of_two().min(8);
+    if scale <= 1 {
+        return decode_jpeg_with_scale(bytes, limits, 1);
+    }
+    if progressive {
+        return Err(ImageError::UnsupportedFeature {
+            feature: "reduced-IDCT decode of progressive JPEG is not supported",
+        });
+    }
+    decode_jpeg_with_scale(bytes, limits, scale)
+}
+
+/// Scans JPEG marker segments until the SOF header and returns its dimensions and
+/// whether the stream is progressive (used to pick the reduced-IDCT scale before any
+/// component planes are allocated).
+pub(crate) fn jpeg_dimensions(
+    bytes: &[u8],
+    limits: &PngLimits,
+) -> Result<(u32, u32, bool), ImageError> {
+    if bytes.get(..2) != Some(&[0xFF, 0xD8]) {
+        return Err(ImageError::InvalidSignature);
+    }
+    let mut index = 2usize;
+    loop {
+        let marker = next_marker(bytes, &mut index)?;
+        match marker {
+            0xC0 | 0xC2 => {
+                let segment = read_segment(bytes, &mut index)?;
+                if segment.len() < 6 {
+                    return Err(ImageError::Truncated {
+                        context: "JPEG SOF header",
+                    });
+                }
+                let precision = segment[0];
+                if precision != 8 {
+                    return Err(ImageError::UnsupportedFeature {
+                        feature: "JPEG sample precision other than 8 bits",
+                    });
+                }
+                let height = u32::from(u16::from_be_bytes([segment[1], segment[2]]));
+                let width = u32::from(u16::from_be_bytes([segment[3], segment[4]]));
+                if width == 0 || height == 0 {
+                    return Err(ImageError::InvalidDimensions { width, height });
+                }
+                if width > limits.max_dimension || height > limits.max_dimension {
+                    return Err(ImageError::LimitExceeded {
+                        what: "JPEG dimension",
+                        limit: u64::from(limits.max_dimension),
+                        actual: u64::from(width.max(height)),
+                    });
+                }
+                return Ok((width, height, marker == 0xC2));
+            }
+            0xD9 => {
+                return Err(ImageError::InvalidData {
+                    reason: "JPEG ended before the frame header",
+                });
+            }
+            0xD8 => {
+                return Err(ImageError::InvalidData {
+                    reason: "unexpected second JPEG SOI marker",
+                });
+            }
+            _ => {
+                let _ = read_segment(bytes, &mut index)?;
+            }
+        }
+    }
+}
+
+fn decode_jpeg_with_scale(
+    bytes: &[u8],
+    limits: &PngLimits,
+    scale: usize,
+) -> Result<RgbaImage, ImageError> {
+    let scale = scale.clamp(1, 8);
     let mut index = 0usize;
     if bytes.get(..2) != Some(&[0xFF, 0xD8]) {
         return Err(ImageError::InvalidSignature);
@@ -326,7 +419,7 @@ pub(crate) fn decode_jpeg(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
                     });
                 }
                 let progressive = marker == 0xC2;
-                frame = Some(parse_sof(bytes, &mut index, limits, progressive)?);
+                frame = Some(parse_sof(bytes, &mut index, limits, progressive, scale)?);
             }
             0xC1 | 0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF => {
                 return Err(ImageError::UnsupportedFeature {
@@ -384,15 +477,26 @@ pub(crate) fn decode_jpeg(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
                         &ac_tables,
                         &scan,
                         restart_interval,
+                        scale,
                     )?;
+                    let (out_width, out_height) = if scale <= 1 {
+                        (width, height)
+                    } else {
+                        (width.div_ceil(scale as u32), height.div_ceil(scale as u32))
+                    };
                     return render_components(
-                        width,
-                        height,
+                        out_width,
+                        out_height,
                         &components,
                         max_h,
                         max_v,
                         adobe_transform,
                     );
+                }
+                if scale > 1 {
+                    return Err(ImageError::UnsupportedFeature {
+                        feature: "reduced-IDCT decode of progressive JPEG is not supported",
+                    });
                 }
                 ensure_progressive_storage(&mut current);
                 let mut reader = BitReader::new(bytes, index);
@@ -504,6 +608,7 @@ fn parse_sof(
     index: &mut usize,
     limits: &PngLimits,
     progressive: bool,
+    scale: usize,
 ) -> Result<JpegFrame, ImageError> {
     let segment = read_segment(bytes, index)?;
     if segment.len() < 6 {
@@ -582,22 +687,29 @@ fn parse_sof(
         });
     }
     // Allocate component planes now so a corrupt later segment cannot trigger huge work.
+    // With a reduced IDCT each 8x8 block yields `sample x sample` samples (`sample =
+    // 8 / scale`), so the planes and the output are correspondingly smaller.
+    let sample = (8 / scale.clamp(1, 8)).max(1);
     for component in &mut components {
         let plane_width = div_ceil(width as usize * component.h as usize, max_h as usize);
         let plane_height = div_ceil(height as usize * component.v as usize, max_v as usize);
         let blocks_x = div_ceil(plane_width, 8);
         let blocks_y = div_ceil(plane_height, 8);
         component.blocks_y = blocks_y;
-        let plane_w = blocks_x.checked_mul(8).ok_or(ImageError::LimitExceeded {
-            what: "JPEG component plane",
-            limit: limits.max_pixels,
-            actual: pixels,
-        })?;
-        let plane_h = blocks_y.checked_mul(8).ok_or(ImageError::LimitExceeded {
-            what: "JPEG component plane",
-            limit: limits.max_pixels,
-            actual: pixels,
-        })?;
+        let plane_w = blocks_x
+            .checked_mul(sample)
+            .ok_or(ImageError::LimitExceeded {
+                what: "JPEG component plane",
+                limit: limits.max_pixels,
+                actual: pixels,
+            })?;
+        let plane_h = blocks_y
+            .checked_mul(sample)
+            .ok_or(ImageError::LimitExceeded {
+                what: "JPEG component plane",
+                limit: limits.max_pixels,
+                actual: pixels,
+            })?;
         let plane_len = plane_w
             .checked_mul(plane_h)
             .ok_or(ImageError::LimitExceeded {
@@ -834,7 +946,10 @@ fn decode_scan(
     ac_tables: &[Option<HuffmanTable>; 4],
     scan: &ScanHeader,
     restart_interval: usize,
+    scale: usize,
 ) -> Result<(), ImageError> {
+    let scale = scale.clamp(1, 8);
+    let sample = (8 / scale).max(1);
     let mcu_width = max_h * 8;
     let mcu_height = max_v * 8;
     let mcus_x = div_ceil(width as usize, mcu_width);
@@ -861,6 +976,7 @@ fn decode_scan(
     }
     let mut reader = BitReader::new(bytes, *index);
     let cosine = cosine_table();
+    let reduced_cosine = (scale > 1).then(|| reduced_cosine_table(scale));
     let mut coefficients = [0i32; BLOCK_LEN];
     let mut blocks = [0u8; BLOCK_LEN];
     let mut mcu_count = 0usize;
@@ -908,8 +1024,19 @@ fn decode_scan(
                             continue;
                         }
                         dequantize(&mut coefficients, quant);
-                        inverse_dct(&coefficients, &cosine, &mut blocks);
-                        store_block(&mut components[meta.index], block_col, block_row, &blocks);
+                        if let Some(reduced_cosine) = reduced_cosine.as_ref() {
+                            inverse_dct_reduced(&coefficients, reduced_cosine, sample, &mut blocks);
+                            store_block_scaled(
+                                &mut components[meta.index],
+                                block_col,
+                                block_row,
+                                &blocks,
+                                sample,
+                            );
+                        } else {
+                            inverse_dct(&coefficients, &cosine, &mut blocks);
+                            store_block(&mut components[meta.index], block_col, block_row, &blocks);
+                        }
                     }
                 }
             }
@@ -992,6 +1119,86 @@ fn inverse_dct(coefficients: &[i32; BLOCK_LEN], cosine: &[[f32; 8]; 8], out: &mu
                 sum += cosine[v][y] * intermediate[v * 8 + x];
             }
             out[y * 8 + x] = (sum + 128.0).round().clamp(0.0, 255.0) as u8;
+        }
+    }
+}
+
+/// Cosine basis for a reduced `sample x sample` IDCT: each output sample is evaluated
+/// at the centre of its `8/sample` pixel group in the original 8x8 block (approximates
+/// the box downsampling of libjpeg's scaled IDCT; tolerance documented in the crate).
+fn reduced_cosine_table(scale: usize) -> Vec<[f32; 8]> {
+    let sample = (8 / scale.clamp(1, 8)).max(1);
+    let mut basis = Vec::with_capacity(sample);
+    for out in 0..sample {
+        let position = ((out as f32 + 0.5) * (8.0 / sample as f32)) - 0.5;
+        let mut row = [0f32; 8];
+        for (u, value) in row.iter_mut().enumerate() {
+            let c = if u == 0 {
+                std::f32::consts::FRAC_1_SQRT_2
+            } else {
+                1.0
+            };
+            let angle = (2.0 * position + 1.0) * (u as f32) * std::f32::consts::PI / 16.0;
+            *value = c * angle.cos() / 2.0;
+        }
+        basis.push(row);
+    }
+    basis
+}
+
+/// Reduced separable IDCT: produces `sample x sample` samples from the 8x8
+/// dequantized coefficients (higher AC coefficients are discarded by the basis).
+fn inverse_dct_reduced(
+    coefficients: &[i32; BLOCK_LEN],
+    basis: &[[f32; 8]],
+    sample: usize,
+    out: &mut [u8; BLOCK_LEN],
+) {
+    let sample = sample.clamp(1, 8);
+    let mut intermediate = [0f32; BLOCK_LEN];
+    for v in 0..8 {
+        for (x, row) in basis.iter().enumerate() {
+            let mut sum = 0f32;
+            for (u, weight) in row.iter().enumerate() {
+                sum += weight * coefficients[v * 8 + u] as f32;
+            }
+            intermediate[v * 8 + x] = sum;
+        }
+    }
+    for (y, row) in basis.iter().enumerate() {
+        for x in 0..sample {
+            let mut sum = 0f32;
+            for (v, weight) in row.iter().enumerate() {
+                sum += weight * intermediate[v * 8 + x];
+            }
+            out[y * sample + x] = (sum + 128.0).round().clamp(0.0, 255.0) as u8;
+        }
+    }
+}
+
+/// Stores a reduced `sample x sample` block into the reduced component plane.
+fn store_block_scaled(
+    component: &mut FrameComponent,
+    block_col: usize,
+    block_row: usize,
+    block: &[u8; BLOCK_LEN],
+    sample: usize,
+) {
+    let sample = sample.clamp(1, 8);
+    let base_x = block_col * sample;
+    let base_y = block_row * sample;
+    for y in 0..sample {
+        let row = base_y + y;
+        if row >= component.plane_height {
+            break;
+        }
+        for x in 0..sample {
+            let column = base_x + x;
+            if column >= component.plane_width {
+                break;
+            }
+            let value = block[y * sample + x];
+            component.plane[row * component.plane_width + column] = value;
         }
     }
 }

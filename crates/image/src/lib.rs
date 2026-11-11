@@ -39,6 +39,10 @@
 //!
 //! ## Scaled decoding
 //!
+//! JPEG baseline streams use a reduced IDCT (4x4/2x2/1x1) and can fall back to the
+//! EXIF (IFD1) thumbnail when it is large enough; [`exif_thumbnail`] exposes the
+//! embedded thumbnail decoder (64 KiB payload cap, ≤2048 px/side).
+//!
 //! [`decode_scaled`] / [`decode_scaled_with_limits`] add an additive fast path for
 //! large images displayed much smaller: PNG row/column subsampling happens while
 //! unfiltering scanlines (no full RGBA buffer), while JPEG/GIF/WebP decode with the
@@ -274,6 +278,46 @@ pub fn exif_orientation(bytes: &[u8]) -> Option<u8> {
     exif::orientation(bytes)
 }
 
+/// Decodes the EXIF (IFD1) embedded JPEG thumbnail of a JPEG byte stream, if present.
+///
+/// Caps: the thumbnail payload is limited to [`exif::MAX_THUMBNAIL_BYTES`] (64 KiB) and
+/// decoded with reduced limits (≤2048 px/side, ≤4 Mpx). Malformed EXIF, a missing IFD1,
+/// out-of-range offsets or a non-JPEG thumbnail return `None` (never a panic).
+pub fn exif_thumbnail(bytes: &[u8]) -> Option<RgbaImage> {
+    let thumbnail = exif::thumbnail(bytes)?;
+    let limits = PngLimits::new(2048, 4 * 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024);
+    decode_with_limits(thumbnail, &limits).ok()
+}
+
+/// Nearest-neighbour resize to exact `(target_width, target_height)` dimensions.
+pub(crate) fn resize_nearest_dims(
+    image: &RgbaImage,
+    target_width: u32,
+    target_height: u32,
+) -> Result<RgbaImage, ImageError> {
+    if target_width == 0 || target_height == 0 {
+        return Err(ImageError::InvalidDimensions {
+            width: target_width,
+            height: target_height,
+        });
+    }
+    if image.width == target_width && image.height == target_height {
+        return RgbaImage::new(image.width, image.height, image.data.clone());
+    }
+    let mut data = Vec::with_capacity((target_width as usize) * (target_height as usize) * 4);
+    for y in 0..target_height {
+        let source_y = (y as u64 * image.height as u64 / target_height as u64) as u32;
+        let source_y = source_y.min(image.height - 1);
+        for x in 0..target_width {
+            let source_x = (x as u64 * image.width as u64 / target_width as u64) as u32;
+            let source_x = source_x.min(image.width - 1);
+            let offset = ((source_y as usize) * (image.width as usize) + source_x as usize) * 4;
+            data.extend_from_slice(&image.data[offset..offset + 4]);
+        }
+    }
+    RgbaImage::new(target_width, target_height, data)
+}
+
 /// Decodes an image from `bytes` using the format's default limits.
 ///
 /// Decodes PNG, JPEG (baseline + progressive), the first frame of GIF and the WebP VP8L
@@ -291,9 +335,14 @@ pub fn decode(bytes: &[u8]) -> Result<RgbaImage, ImageError> {
 /// - **PNG**: row/column subsampling is performed while unfiltering scanlines
 ///   (including Adam7), so the full-resolution RGBA buffer is never allocated and only
 ///   the sampled pixels are converted to RGBA.
-/// - **JPEG / GIF / WebP**: the image is decoded with the existing caps and then
-///   row/column subsampled to the same target size (documented post-downsample; no
-///   reduced IDCT or region decode).
+/// - **JPEG**: baseline streams use a **reduced IDCT** (4x4/2x2/1x1 per block for
+///   scale 2/4/8, discarding the AC coefficients the smaller block cannot represent);
+///   output dimensions are `ceil(width / 2^k) x ceil(height / 2^k)`. When an EXIF
+///   (IFD1) JPEG thumbnail exists and is at least as large as the requested output, it
+///   is decoded instead and nearest-resized to the exact target size (policy in
+///   `decode_jpeg_scaled`). Progressive JPEGs fall back to a full decode + nearest
+///   resize (documented; no reduced progressive/ROI decode).
+/// - **GIF / WebP**: decoded with the existing caps and row/column subsampled.
 ///
 /// The factor is `ceil(longest_side / max_dim)` and the output dimensions are
 /// `ceil(width / factor) x ceil(height / factor)`, preserving the aspect ratio
@@ -318,11 +367,51 @@ pub fn decode_scaled_with_limits(
             reason: "max_dim must be greater than zero",
         });
     }
-    if detect_format(bytes) == ImageFormat::Png {
-        return png::decode_png_scaled(bytes, limits, max_dim);
+    match detect_format(bytes) {
+        ImageFormat::Png => png::decode_png_scaled(bytes, limits, max_dim),
+        ImageFormat::Jpeg => decode_jpeg_scaled(bytes, limits, max_dim),
+        _ => {
+            let image = decode_with_limits(bytes, limits)?;
+            downsample_nearest(&image, max_dim)
+        }
     }
-    let image = decode_with_limits(bytes, limits)?;
-    downsample_nearest(&image, max_dim)
+}
+
+/// Scaled JPEG path: reduced IDCT (baseline) or EXIF thumbnail / full decode + exact
+/// nearest resize (progressive), see [`decode_scaled`] documentation.
+fn decode_jpeg_scaled(
+    bytes: &[u8],
+    limits: &PngLimits,
+    max_dim: u32,
+) -> Result<RgbaImage, ImageError> {
+    let (width, height, progressive) = jpeg::jpeg_dimensions(bytes, limits)?;
+    let factor = width.max(height).div_ceil(max_dim.max(1)).max(1) as usize;
+    let scale = factor.next_power_of_two().min(8) as u32;
+    let target_width = width.div_ceil(scale);
+    let target_height = height.div_ceil(scale);
+    // EXIF thumbnail policy: only for a real downscale, and only when the thumbnail
+    // already has at least the requested output resolution (its longest side ≥ target
+    // longest side). The decoded thumbnail is nearest-resized to the exact target dims;
+    // thumbnails are capped by the `exif_thumbnail` limits.
+    if scale > 1
+        && let Some(thumbnail) = exif::thumbnail(bytes)
+        && let Ok(decoded) = {
+            let limits = PngLimits::new(2048, 4 * 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024);
+            decode_with_limits(thumbnail, &limits)
+        }
+        && decoded.width.max(decoded.height) >= target_width.max(target_height)
+    {
+        let resized = resize_nearest_dims(&decoded, target_width, target_height)?;
+        return apply_orientation(resized, exif::orientation(bytes));
+    }
+    if progressive {
+        // Documented limitation: no reduced progressive decode; full decode + resize.
+        let image = decode_with_limits(bytes, limits)?;
+        let resized = resize_nearest_dims(&image, target_width, target_height)?;
+        return apply_orientation(resized, exif::orientation(bytes));
+    }
+    let image = jpeg::decode_jpeg_scaled(bytes, limits, max_dim)?;
+    apply_orientation(image, exif::orientation(bytes))
 }
 
 /// Nearest-neighbour row/column subsampling so that `longest_side <= max_dim`.
