@@ -1,7 +1,7 @@
 //! Offline tests for HTTP/2 server push, priorities and h2c upgrade (R171).
 
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::time::Duration;
 
 use net::FetchError;
@@ -306,6 +306,12 @@ fn h2c_upgrade_succeeds_and_uses_stream_one() {
         let frame = read_client_request(&mut stream);
         assert_eq!(frame.header.stream_id, 1);
         response_headers(&mut stream, 1, true);
+        let _ = stream.shutdown(Shutdown::Write);
+        // The client acknowledges our SETTINGS asynchronously: read until it closes so the
+        // socket is not dropped with unread bytes (that sends RST and can discard the
+        // response frame, which surfaced as a flaky ConnectionReset).
+        let mut sink = [0u8; 256];
+        while matches!(stream.read(&mut sink), Ok(read) if read > 0) {}
     });
     let mut stream = TcpStream::connect(&authority).expect("connect");
     stream
@@ -319,6 +325,8 @@ fn h2c_upgrade_succeeds_and_uses_stream_one() {
         .expect("h2c handshake")
         .expect("101 upgrade");
     assert_eq!(response.status, 200);
+    // Close our side so the server's drain sees EOF before we join it.
+    drop(stream);
     let _ = handle.join();
 }
 

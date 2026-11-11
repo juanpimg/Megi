@@ -141,6 +141,11 @@ const HUFFMAN: [(u32, u8); 257] = [
 
 /// HPACK dynamic table entry overhead (RFC 7541 §4.1).
 const ENTRY_OVERHEAD: usize = 32;
+/// Default cap for a decoded header list (`name + value + 32` per field).
+///
+/// A 64 KiB compressed block can expand into gigabytes through repeated indexed
+/// references, so the decoded list is bounded independently of the block size.
+pub const DEFAULT_MAX_HEADER_LIST_SIZE: usize = 256 * 1024;
 /// Hard cap for the dynamic table regardless of what `SETTINGS` advertises.
 pub const MAX_DYNAMIC_TABLE_SIZE: usize = 65_536;
 
@@ -326,6 +331,11 @@ fn static_name_index(name: &str) -> Option<usize> {
 pub struct Decoder {
     dynamic: VecDeque<(String, String)>,
     max_table_size: usize,
+    /// Ceiling a dynamic table size update may raise the table to: the value this decoder
+    /// advertised in `SETTINGS_HEADER_TABLE_SIZE` (RFC 7541 §4.2).
+    settings_max_table_size: usize,
+    /// Cap for the decoded header list (`name + value + 32` per field).
+    max_header_list_size: usize,
     table_size: usize,
     /// Set once a dynamic table size update is seen; further updates are allowed
     /// only before the first header field of the block.
@@ -345,16 +355,27 @@ impl Decoder {
         Self {
             dynamic: VecDeque::new(),
             max_table_size,
+            settings_max_table_size: max_table_size,
+            max_header_list_size: DEFAULT_MAX_HEADER_LIST_SIZE,
             table_size: 0,
             seen_field: false,
         }
     }
 
-    /// Updates the dynamic-table cap from `SETTINGS_HEADER_TABLE_SIZE` (evicting
-    /// entries as needed).
+    /// Sets the table cap *and* the ceiling a peer update may raise it to.
+    ///
+    /// This is the value advertised in `SETTINGS_HEADER_TABLE_SIZE`; an update above it is
+    /// a decoding error (RFC 7541 §4.2), which bounds the memory a peer can make us use.
     pub fn set_max_table_size(&mut self, size: usize) {
-        self.max_table_size = size.min(MAX_DYNAMIC_TABLE_SIZE);
+        let size = size.min(MAX_DYNAMIC_TABLE_SIZE);
+        self.max_table_size = size;
+        self.settings_max_table_size = size;
         self.evict();
+    }
+
+    /// Caps the decoded header list size (`name + value + 32` bytes per field).
+    pub fn set_max_header_list_size(&mut self, limit: usize) {
+        self.max_header_list_size = limit;
     }
 
     /// Current dynamic-table byte size (entries + 32 bytes each).
@@ -401,7 +422,11 @@ impl Decoder {
 
     /// Decodes a complete header block into `(name, value)` pairs.
     pub fn decode(&mut self, block: &[u8]) -> Result<Vec<(String, String)>, FetchError> {
+        // Size updates are allowed at the start of *every* header block, not just the first
+        // one (RFC 7541 §4.2); reset the per-block state here.
+        self.seen_field = false;
         let mut headers = Vec::new();
+        let mut decoded_size = 0usize;
         let mut pos = 0usize;
         while pos < block.len() {
             let byte = block[pos];
@@ -412,7 +437,13 @@ impl Decoder {
                 if !name.is_ascii() || name.bytes().any(|b| b.is_ascii_uppercase()) {
                     return Err(h2_error("HPACK header name must be lowercase ASCII"));
                 }
-                headers.push((name, value));
+                push_header(
+                    &mut headers,
+                    &mut decoded_size,
+                    self.max_header_list_size,
+                    name,
+                    value,
+                )?;
                 self.seen_field = true;
             } else if byte & 0x40 != 0 {
                 // Literal header field with incremental indexing.
@@ -427,7 +458,13 @@ impl Decoder {
                     return Err(h2_error("HPACK header name must be lowercase ASCII"));
                 }
                 self.insert(name.clone(), value.clone());
-                headers.push((name, value));
+                push_header(
+                    &mut headers,
+                    &mut decoded_size,
+                    self.max_header_list_size,
+                    name,
+                    value,
+                )?;
                 self.seen_field = true;
             } else if byte & 0x20 != 0 {
                 // Dynamic table size update.
@@ -435,7 +472,15 @@ impl Decoder {
                     return Err(h2_error("HPACK table size update after header fields"));
                 }
                 let size = decode_integer(block, &mut pos, 5)?;
-                self.set_max_table_size(size);
+                if size > self.settings_max_table_size {
+                    return Err(h2_error(format!(
+                        "HPACK dynamic table size update {size} exceeds the advertised \
+                         maximum {}",
+                        self.settings_max_table_size
+                    )));
+                }
+                self.max_table_size = size;
+                self.evict();
             } else {
                 // Literal without indexing (0000) or never indexed (0001).
                 let index = decode_integer(block, &mut pos, 4)?;
@@ -448,12 +493,36 @@ impl Decoder {
                 if !name.is_ascii() || name.bytes().any(|b| b.is_ascii_uppercase()) {
                     return Err(h2_error("HPACK header name must be lowercase ASCII"));
                 }
-                headers.push((name, value));
+                push_header(
+                    &mut headers,
+                    &mut decoded_size,
+                    self.max_header_list_size,
+                    name,
+                    value,
+                )?;
                 self.seen_field = true;
             }
         }
         Ok(headers)
     }
+}
+
+/// Appends one decoded field, enforcing the decoded header-list cap.
+fn push_header(
+    headers: &mut Vec<(String, String)>,
+    decoded_size: &mut usize,
+    limit: usize,
+    name: String,
+    value: String,
+) -> Result<(), FetchError> {
+    *decoded_size = decoded_size.saturating_add(name.len() + value.len() + ENTRY_OVERHEAD);
+    if *decoded_size > limit {
+        return Err(h2_error(
+            "HPACK decoded header list exceeds the configured maximum",
+        ));
+    }
+    headers.push((name, value));
+    Ok(())
 }
 
 /// Minimal HPACK encoder: static-table indexed fields where possible and raw
@@ -539,6 +608,53 @@ mod tests {
         // After C.4.2 the dynamic table holds :authority (57 B) and
         // cache-control: no-cache (53 B): 110 B total.
         assert_eq!(decoder.table_size(), 110);
+    }
+
+    #[test]
+    fn rejects_a_table_size_update_above_the_advertised_maximum() {
+        let mut decoder = Decoder::new(4096);
+        // Dynamic table size update to 8192 (5-bit prefix 31 + 7-bit continuation).
+        let error = decoder
+            .decode(&[0x3f, 0xe1, 0x3f])
+            .expect_err("update above the advertised cap");
+        assert!(
+            error.to_string().contains("exceeds the advertised maximum"),
+            "{error}"
+        );
+        // Shrinking the table is valid (2048).
+        decoder
+            .decode(&[0x3f, 0xe1, 0x0f])
+            .expect("2048 is allowed");
+    }
+
+    #[test]
+    fn caps_the_decoded_header_list() {
+        // One 3001-byte value with incremental indexing (it fits the 4096-byte table)...
+        let mut block = vec![0x40, 0x01, b'a', 0x7f, 0xb9, 0x16];
+        block.extend(std::iter::repeat_n(b'a', 3000));
+        // ... then index it repeatedly: 100 * (3001 + 32) exceeds the 256 KiB cap.
+        block.extend(std::iter::repeat_n(0xbe, 100));
+        let mut decoder = Decoder::new(4096);
+        let error = decoder.decode(&block).expect_err("header list cap");
+        assert!(error.to_string().contains("decoded header list"), "{error}");
+
+        // The same block under the cap decodes fine.
+        let mut small = vec![0x40, 0x01, b'a', 0x7f, 0xb9, 0x16];
+        small.extend(std::iter::repeat_n(b'a', 3000));
+        small.extend(std::iter::repeat_n(0xbe, 10));
+        let mut decoder = Decoder::new(4096);
+        assert_eq!(decoder.decode(&small).expect("under the cap").len(), 11);
+    }
+
+    #[test]
+    fn allows_a_table_size_update_at_the_start_of_a_later_block() {
+        let mut decoder = Decoder::new(4096);
+        decoder
+            .decode(&[0x82])
+            .expect("first block: indexed :method GET");
+        decoder
+            .decode(&[0x3f, 0xe1, 0x0f])
+            .expect("a size update at the start of the next block is valid");
     }
 
     #[test]
