@@ -37,6 +37,10 @@ network, no JavaScript.
 | `text_transform.html` | R121: `text-transform: uppercase/lowercase/capitalize` applied while shaping (colored paragraphs). |
 | `word_spacing.html` | R121: `word-spacing`/`letter-spacing` on inline text (`one two three`, `spaced letters`, combined). |
 | `white_space.html` | R121: `white-space: normal` vs `pre-wrap` vs `pre-line` with spaces/newlines (colored bands). |
+| `module_inline.html`, `module_external.html`, `module_chain.html` | R162 `<script type="module">`: inline mutation, external module with two relative imports (`modules/*.js`), and one module importing another module. |
+| `module_error.html`, `module_no_network.html` | R162 non-fatal module failures: missing dependency URL and a `http(s)` import blocked by `--no-network`; the rest of the page still paints. |
+| `module_observers_timers.html` | R162 module registering a MutationObserver and a `setTimeout` whose mutations land before the final re-render. |
+| `modules/*.js` | ES module fixtures: `geometry.js`/`colors.js`/`meta.js` (exports), `app.js` (applies them to the DOM), `painter.js`/`chain.js` (module importing another module), `broken.js` (missing dependency for the non-fatal error test) and `observer_timer.js`. |
 | `js_provider_actions.html` | R155: script using `history.pushState/replaceState` and `location.assign/href/replace/reload`; the renderer queues the actions in `RenderOutput.history_actions`/`location_actions` without navigating. |
 | `js_storage_write.html` / `js_storage_read.html` | R155 Web Storage: write/read pair used to prove `localStorage` persistence across renders with a shared `RenderOptions.storage` while `sessionStorage` stays per-render. |
 | `js_observer_chain.html` | R155 chained `MutationObserver`s: a childList mutation triggers observer 1 (mutates a second node) and observer 2 (mutates a third); both are delivered in microtask checkpoints before the final re-render. |
