@@ -1,5 +1,7 @@
 //! Round 35: WPT-like DOM/JS conformance audit (regression tests for found gaps).
 
+#![cfg(feature = "js")]
+
 use js::runtime::JsRuntime;
 
 fn runtime() -> JsRuntime {
