@@ -10,11 +10,14 @@ description = "Megi Engine — Phase 5 network stack: WHATWG URL subset, HTTP/1.
 
 [dependencies]
 image = { workspace = true }
+js = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 webpki-roots = { workspace = true, optional = true }
 
 [features]
 default = ["tls"]
+# PAC/WPAD auto-configuration evaluates the proxy script with the JS runtime.
+pac = ["dep:js"]
 # TLS 1.2/1.3 transport for https: (rustls + webpki-roots Mozilla root store).
 tls = ["dep:rustls", "dep:webpki-roots"]
 

@@ -305,6 +305,10 @@ struct WindowApp {
     history_menu: Option<HistoryMenu>,
     /// Download progress/last-download state shown in the status bar.
     download: crate::download::DownloadProgress,
+    /// Last clicked option of a multi-select list (Shift range anchor).
+    multi_anchor: Option<(u32, usize)>,
+    /// Form control under the mouse (native hover visual).
+    hover_form: Option<usize>,
     /// Per-origin zoom memory (persisted in the session when enabled).
     site_zooms: Vec<(String, f64)>,
     /// Reader-mode data URL for the current `about:reader` view.
@@ -403,6 +407,8 @@ impl WindowApp {
             recent_history: recent,
             history_menu: None,
             download: crate::download::DownloadProgress::new(),
+            multi_anchor: None,
+            hover_form: None,
             site_zooms,
             reader_html: None,
             tabs,
@@ -580,6 +586,7 @@ impl WindowApp {
             Ok(Some(url)) => Some(url.as_str()),
             _ => None,
         };
+        self.hover_form = crate::forms::control_at(&self.forms, x, y);
         let changed = link != self.hover_url;
         self.hover_url = link;
         let menu_x = (physical_x / self.metrics.scale) as f32;
@@ -596,7 +603,7 @@ impl WindowApp {
         }
         if changed {
             if let Some(window) = &self.window {
-                window.set_cursor(if self.hover_url.is_some() {
+                window.set_cursor(if self.hover_url.is_some() || self.hover_form.is_some() {
                     winit::window::CursorIcon::Pointer
                 } else {
                     winit::window::CursorIcon::Default
@@ -1367,6 +1374,18 @@ impl WindowApp {
 
     /// Handles clicks inside the chrome band (tab strip or address bar).
     fn chrome_click(&mut self, x: f32, y: f32) {
+        if chrome::history_button_hit(self.metrics.css_width as f32, x, y) {
+            if self.history_menu.take().is_none() {
+                let rect = chrome::address_bar_rect(self.metrics.css_width as f32);
+                self.history_menu = Some(HistoryMenu::open(
+                    self.recent_history.menu_entries(),
+                    rect.x,
+                    rect.y + rect.height,
+                ));
+            }
+            self.request_repaint();
+            return;
+        }
         let buttons = chrome::navigation_buttons(self.metrics.css_width as f32);
         if let Some(button) = chrome::navigation_button_at(
             &buttons,
@@ -1433,11 +1452,15 @@ impl WindowApp {
         }
         if control.kind == FormControlKind::Select {
             self.editor = None;
-            self.dropdown = Some(DropdownState::open(
-                control.form_id,
-                control.rect,
-                control.options.clone(),
-            ));
+            if control.multiple {
+                self.multi_select_click(&control);
+            } else {
+                self.dropdown = Some(DropdownState::open(
+                    control.form_id,
+                    control.rect,
+                    control.options.clone(),
+                ));
+            }
             self.request_repaint();
             return;
         }
@@ -1455,6 +1478,56 @@ impl WindowApp {
             self.editor = None;
             self.apply_form_patch(Some(control.form_id), None, None, false);
         }
+    }
+
+    /// Applies a Ctrl/Shift/plain click to a `<select multiple>` list box.
+    fn multi_select_click(&mut self, control: &FormControl) {
+        let relative_y = self
+            .cursor
+            .map(|(x, y)| {
+                let (_, page_y) = self.page_coordinates(x, y);
+                page_y - control.rect.y
+            })
+            .unwrap_or(0.0);
+        let Some(option) = crate::forms::multi_option_at(control, relative_y) else {
+            return;
+        };
+        let ctrl = self.modifiers.control_key();
+        let shift = self.modifiers.shift_key();
+        let current = crate::forms::selected_indices(control);
+        let anchor = self
+            .multi_anchor
+            .filter(|(form_id, _)| *form_id == control.form_id)
+            .map(|(_, index)| index);
+        let selected =
+            crate::forms::multi_click(&control.options, &current, anchor, option, ctrl, shift);
+        self.multi_anchor = Some((control.form_id, option));
+        self.apply_multi_select(control, &selected);
+    }
+
+    /// Writes a multi-select selection into the DOM snapshot and re-renders it.
+    fn apply_multi_select(&mut self, control: &FormControl, selected: &[usize]) {
+        let Some(document) = self.document.clone() else {
+            return;
+        };
+        let Some(sender) = self.request_sender.as_ref() else {
+            return;
+        };
+        let mut patched = (*document).clone();
+        if !crate::forms::patch_multi_select(&mut patched, control.form_id, selected) {
+            return;
+        }
+        let snapshot = crate::forms::snapshot_data_url(&patched);
+        let base = self.nav.current_url();
+        let request = self.store.begin_patched_request(
+            &snapshot,
+            self.metrics.css_width,
+            self.metrics.css_height,
+            base.as_deref(),
+        );
+        let _ = sender.send(request);
+        self.document = Some(Arc::new(patched));
+        self.update_title();
     }
 
     /// Patches the current DOM snapshot (value/checked/focus/active) and re-renders it as an
@@ -1500,9 +1573,19 @@ impl WindowApp {
 
     /// Handles typing/Tab/Escape while a form control is focused; returns `true` when the key
     /// was consumed.
-    fn handle_form_key(&mut self, key: &Key, ctrl_pressed: bool, alt_pressed: bool) -> bool {
+    fn handle_form_key(
+        &mut self,
+        key: &Key,
+        ctrl_pressed: bool,
+        alt_pressed: bool,
+        shift_pressed: bool,
+    ) -> bool {
         if matches!(key, Key::Named(NamedKey::Tab)) && !self.forms.is_empty() {
-            self.focus.next(self.forms.len());
+            if shift_pressed {
+                self.focus.previous(self.forms.len());
+            } else {
+                self.focus.next(self.forms.len());
+            }
             self.editor = self
                 .focus
                 .focused()
@@ -1515,6 +1598,23 @@ impl WindowApp {
                 self.apply_form_patch(Some(control.form_id), None, None, false);
             }
             return true;
+        }
+        if matches!(key, Key::Named(NamedKey::Space))
+            && !ctrl_pressed
+            && !alt_pressed
+            && let Some(index) = self.focus.focused()
+            && let Some(control) = self.forms.get(index).cloned()
+            && !control.disabled
+        {
+            if control.kind.is_checkable() {
+                self.apply_form_patch(Some(control.form_id), None, Some(!control.checked), false);
+                return true;
+            }
+            if control.kind.is_button() {
+                self.apply_form_patch(Some(control.form_id), None, None, true);
+                self.release_button = Some(control.form_id);
+                return true;
+            }
         }
         if matches!(key, Key::Named(NamedKey::Escape)) && self.focus.focused().is_some() {
             self.focus.blur();
@@ -1913,6 +2013,7 @@ impl WindowApp {
             can_go_forward: self.nav.can_go_forward(),
             history_menu: self.history_menu.as_ref(),
             download_status: None,
+            history_button: true,
         };
         let download_status = self.download.status_text();
         let view = ChromeView {
@@ -2232,7 +2333,12 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                 {
                     return;
                 }
-                if self.handle_form_key(&event.logical_key, ctrl_pressed, alt_pressed) {
+                if self.handle_form_key(
+                    &event.logical_key,
+                    ctrl_pressed,
+                    alt_pressed,
+                    shift_pressed,
+                ) {
                     return;
                 }
                 match event.logical_key.as_ref() {

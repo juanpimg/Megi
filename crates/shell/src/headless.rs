@@ -142,6 +142,7 @@ pub fn render_target_with_chrome(
         can_go_forward: false,
         history_menu: None,
         download_status: None,
+        history_button: false,
     };
     // Only the chrome band is painted: the simple `--chrome` view has no
     // dropdown/status/menu overlays, so the direct RGBA compositor skips the
@@ -199,6 +200,7 @@ pub fn render_target_with_chrome_menu(
         can_go_forward: false,
         history_menu: None,
         download_status: None,
+        history_button: false,
     };
     crate::chrome::draw_chrome(&mut dest, width, height, 1.0, &view);
     output.pixmap.pixels = dest

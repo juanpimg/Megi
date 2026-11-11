@@ -146,6 +146,8 @@ pub struct FormControl {
     pub disabled: bool,
     /// Options of a `<select>` (empty for every other control).
     pub options: Vec<SelectOption>,
+    /// `<select multiple>` (list box, Ctrl/Shift multi-selection instead of a dropdown).
+    pub multiple: bool,
 }
 
 /// Assigns a stable `data-megi-form-id` to every form control in document order.
@@ -270,6 +272,7 @@ pub fn collect_controls(document: &Document, layout: &LayoutBox) -> Vec<FormCont
                     checked: element.get_attribute("checked").is_some(),
                     disabled: element.get_attribute("disabled").is_some(),
                     options,
+                    multiple: element.get_attribute("multiple").is_some(),
                 });
             }
         }
@@ -342,6 +345,105 @@ fn select_options(document: &Document, select_id: NodeId) -> Vec<SelectOption> {
         first.selected = true;
     }
     options
+}
+
+/// Selected option indices of a multi-select control.
+pub fn selected_indices(control: &FormControl) -> Vec<usize> {
+    control
+        .options
+        .iter()
+        .enumerate()
+        .filter_map(|(index, option)| option.selected.then_some(index))
+        .collect()
+}
+
+/// Applies a plain/Ctrl/Shift click to a multi-select list, returning the new selected
+/// indices (Ctrl toggles, Shift extends from `anchor`, plain replaces the selection).
+pub fn multi_click(
+    options: &[SelectOption],
+    current: &[usize],
+    anchor: Option<usize>,
+    index: usize,
+    ctrl: bool,
+    shift: bool,
+) -> Vec<usize> {
+    if index >= options.len() {
+        return current.to_vec();
+    }
+    if shift {
+        let from = anchor.unwrap_or(index).min(index);
+        let to = anchor.unwrap_or(index).max(index);
+        return (from..=to).collect();
+    }
+    if ctrl {
+        let mut selected: Vec<usize> = current.to_vec();
+        if let Some(position) = selected.iter().position(|value| *value == index) {
+            selected.remove(position);
+        } else {
+            selected.push(index);
+            selected.sort_unstable();
+        }
+        return selected;
+    }
+    vec![index]
+}
+
+/// Writes a multi-select selection to the DOM (`selected` attributes on the chosen options;
+/// every other option is cleared). Returns whether the document changed.
+pub fn patch_multi_select(document: &mut Document, form_id: u32, selected: &[usize]) -> bool {
+    let ids = element_ids(document);
+    let target = ids.iter().copied().find(|node_id| {
+        document
+            .node(*node_id)
+            .as_element()
+            .and_then(|element| element.get_attribute(FORM_ID_ATTR))
+            .and_then(|value| value.parse::<u32>().ok())
+            == Some(form_id)
+    });
+    let Some(select_id) = target else {
+        return false;
+    };
+    let options = option_nodes(document, select_id);
+    let mut changed = false;
+    for (index, node_id) in options.into_iter().enumerate() {
+        let element = document
+            .node(node_id)
+            .as_element()
+            .expect("option node")
+            .clone();
+        let has = element.get_attribute("selected").is_some();
+        let wanted = selected.contains(&index);
+        if has != wanted {
+            let mut updated = element;
+            if wanted {
+                updated.set_attribute(Attribute::new("selected", ""), true);
+            } else {
+                updated
+                    .attributes
+                    .retain(|attr| attr.local_name != "selected");
+            }
+            *document
+                .node_mut(node_id)
+                .as_element_mut()
+                .expect("element") = updated;
+            changed = true;
+        }
+    }
+    changed
+}
+
+/// Row index of a multi-select list at control-relative `y` (rows divide the box evenly).
+pub fn multi_option_at(control: &FormControl, y_relative: f32) -> Option<usize> {
+    if !control.multiple || control.options.is_empty() {
+        return None;
+    }
+    let height = control.rect.height.max(1.0);
+    let row = (y_relative / (height / control.options.len() as f32)).floor();
+    if row < 0.0 || row as usize >= control.options.len() {
+        None
+    } else {
+        Some(row as usize)
+    }
 }
 
 /// Marks option `option_index` as selected inside the `<select>` with `form_id`.
@@ -669,6 +771,57 @@ pub fn snapshot_data_url(document: &Document) -> String {
     )
 }
 
+/// Visual state of a native widget (UA-style colors used by the shell overlay/tests).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WidgetVisual {
+    /// Background RGB.
+    pub background: [u8; 3],
+    /// Border/focus-ring RGB.
+    pub border: [u8; 3],
+    /// Whether a focus ring is drawn.
+    pub focus_ring: bool,
+}
+
+/// Deterministic UA-style widget colors for hover/active/focus/disabled states.
+pub fn widget_visual(
+    kind: FormControlKind,
+    checked: bool,
+    focused: bool,
+    hovered: bool,
+    pressed: bool,
+    disabled: bool,
+) -> WidgetVisual {
+    let (background, border) = if disabled {
+        ([0xE9, 0xEC, 0xEF], [0xB8, 0xBF, 0xC7])
+    } else if pressed {
+        ([0xD8, 0xDE, 0xE6], [0x70, 0x7A, 0x87])
+    } else if hovered {
+        ([0xF3, 0xF6, 0xF9], [0x70, 0x7A, 0x87])
+    } else {
+        ([0xFF, 0xFF, 0xFF], [0x8C, 0x95, 0x9F])
+    };
+    let background = if kind.is_checkable() && checked {
+        if disabled {
+            [0xBC, 0xCF, 0xEA]
+        } else {
+            [0x1F, 0x6F, 0xEB]
+        }
+    } else {
+        background
+    };
+    WidgetVisual {
+        background,
+        border,
+        focus_ring: focused && !disabled,
+    }
+}
+
+/// Deterministic caret visibility for text inputs: visible for the first half of a
+/// 1060 ms blink period (logical ticks, no wall clock). `tick` counts 50 ms units.
+pub fn caret_visible(tick: u64) -> bool {
+    (tick % 21) < 11
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -683,6 +836,7 @@ mod tests {
             checked: false,
             disabled: false,
             options: Vec::new(),
+            multiple: false,
         }
     }
 
@@ -879,5 +1033,97 @@ mod tests {
         let url = snapshot_data_url(&document);
         assert!(url.starts_with("data:text/html;base64,"));
         assert!(!url.contains("<form"), "base64 payload is not plain text");
+    }
+
+    #[test]
+    fn multi_select_extraction_and_click_semantics() {
+        let mut document = html::parse_document(
+            "<select multiple data-megi-form-id=\"7\"><option>One</option><option selected>Two</option><option>Three</option><option>Four</option></select>",
+            true,
+        );
+        crate::forms::assign_form_ids(&mut document);
+        let options = vec![
+            SelectOption::new("One", "1", false),
+            SelectOption::new("Two", "2", true),
+            SelectOption::new("Three", "3", false),
+            SelectOption::new("Four", "4", false),
+        ];
+        let current = vec![1usize];
+        assert_eq!(
+            super::multi_click(&options, &current, Some(1), 3, false, true),
+            vec![1, 2, 3]
+        );
+        assert_eq!(
+            super::multi_click(&options, &current, Some(1), 1, true, false),
+            Vec::<usize>::new()
+        );
+        assert_eq!(
+            super::multi_click(&options, &current, Some(1), 0, true, false),
+            vec![0, 1]
+        );
+        assert_eq!(
+            super::multi_click(&options, &current, Some(1), 2, false, false),
+            vec![2]
+        );
+        let control = FormControl {
+            form_id: 7,
+            node_id: document.body().expect("body"),
+            kind: FormControlKind::Select,
+            rect: CssRect::new(0.0, 0.0, 100.0, 80.0),
+            value: "Two".to_string(),
+            checked: false,
+            disabled: false,
+            options: options.clone(),
+            multiple: true,
+        };
+        assert_eq!(super::multi_option_at(&control, 25.0), Some(1));
+        assert_eq!(super::multi_option_at(&control, 200.0), None);
+        assert!(super::patch_multi_select(&mut document, 7, &[0, 2]));
+        let text = html::serialize_html(&document);
+        assert!(text.contains("selected"));
+    }
+
+    #[test]
+    fn multi_select_visual_state_reaches_the_dom() {
+        let mut document = html::parse_document(
+            "<select multiple data-megi-form-id=\"3\"><option>A</option><option>B</option><option>C</option></select>",
+            true,
+        );
+        crate::forms::assign_form_ids(&mut document);
+        assert!(super::patch_multi_select(&mut document, 3, &[2]));
+        let serialized = html::serialize_html(&document);
+        assert!(serialized.contains("selected"), "{serialized}");
+        let options = super::select_options(&document, document.body().expect("body"));
+        assert!(!options.is_empty());
+    }
+
+    #[test]
+    fn widget_visual_covers_native_states() {
+        let normal = widget_visual(FormControlKind::Button, false, false, false, false, false);
+        let hovered = widget_visual(FormControlKind::Button, false, false, true, false, false);
+        let pressed = widget_visual(FormControlKind::Button, false, false, false, true, false);
+        let disabled = widget_visual(FormControlKind::Button, false, false, false, false, true);
+        assert_ne!(normal.background, hovered.background);
+        assert_ne!(normal.background, pressed.background);
+        assert_eq!(disabled.border, [0xB8, 0xBF, 0xC7]);
+        let checked = widget_visual(FormControlKind::Checkbox, true, true, false, false, false);
+        assert_eq!(checked.background, [0x1F, 0x6F, 0xEB]);
+        assert!(checked.focus_ring);
+        let focused_disabled =
+            widget_visual(FormControlKind::Radio, true, true, false, false, true);
+        assert!(!focused_disabled.focus_ring);
+    }
+
+    #[test]
+    fn caret_blink_is_deterministic() {
+        assert!(caret_visible(0));
+        assert!(caret_visible(10));
+        assert!(!caret_visible(11));
+        assert!(!caret_visible(20));
+        assert!(caret_visible(21));
+        // Same logical tick always yields the same visibility (no wall clock).
+        for tick in 0..100u64 {
+            assert_eq!(caret_visible(tick), caret_visible(tick + 21));
+        }
     }
 }

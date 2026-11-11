@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80">
+  <defs>
+    <filter id="soft" filterUnits="userSpaceOnUse" x="0" y="0" width="120" height="80">
+      <feGaussianBlur stdDeviation="3"/>
+      <feOffset dx="6" dy="2"/>
+    </filter>
+    <filter id="tint" x="-0.2" y="-0.2" width="1.4" height="1.4">
+      <feFlood flood-color="#00acc1" flood-opacity="0.85"/>
+      <feComposite operator="over"/>
+    </filter>
+  </defs>
+  <rect width="120" height="80" fill="#ffffff"/>
+  <circle cx="45" cy="40" r="22" fill="#212121" filter="url(#soft)"/>
+  <rect x="75" y="24" width="30" height="30" fill="#fdd835" filter="url(#tint)"/>
+</svg>
