@@ -1,5 +1,5 @@
-//! End-to-end WebP VP8L lossless rendering (R147): `<img>` and CSS `background-image`,
-//! plus the VP8-lossy warning/placeholder path.
+//! End-to-end WebP rendering: VP8L lossless `<img>`/CSS `background-image` pixels and the
+//! VP8 lossy `<img>` path (decoded by the in-tree VP8 keyframe decoder).
 
 use std::path::Path;
 
@@ -30,17 +30,20 @@ fn count_where(pixmap: &paint::Pixmap, predicate: impl Fn([u8; 4]) -> bool) -> u
 #[test]
 fn webp_lossless_images_and_backgrounds_paint() {
     let output = render_fixture("webp.html");
-    assert_eq!(output.stats.images_loaded, 2, "two VP8L lossless images");
-    assert_eq!(output.stats.images_failed, 1, "VP8 lossy falls back");
+    assert_eq!(
+        output.stats.images_loaded, 3,
+        "two VP8L lossless images + one VP8 lossy image"
+    );
+    assert_eq!(output.stats.images_failed, 0);
     assert_eq!(output.stats.background_images_loaded, 1, "VP8L background");
     assert_eq!(output.stats.background_images_failed, 0);
     assert!(
-        output
+        !output
             .stats
             .warnings
             .iter()
-            .any(|warning| warning.contains("WebP") && warning.contains("lossy")),
-        "VP8 lossy must warn: {:?}",
+            .any(|warning| warning.contains("lossy")),
+        "decoded lossy WebP must not warn: {:?}",
         output.stats.warnings
     );
 

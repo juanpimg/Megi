@@ -1,31 +1,22 @@
-//! WebP lossy container/frame-header parser (VP8 keyframe) — **experimental**.
+//! WebP lossy (VP8 keyframe) header parser — `std` only, no `unsafe`.
 //!
-//! The render pipeline accepts WebP lossless (VP8L) fully, but the lossy WebP
-//! payload (`VP8 ` chunk, a single VP8 keyframe) is still a large decoder: boolean
-//! entropy decoder, segmentation, loop filter, token partitions, intra modes,
-//! dequantization/IDCT and YUV420→RGB. This module ships the verified **container
-//! and keyframe-header parser** (dimensions, keyframe validation, first-partition
-//! sizing) so WebP lossy files are detected, capped and reported with a clear
-//! experimental error instead of being confused with VP8L or silently mis-decoded.
+//! WebP lossy files carry a single VP8 keyframe in the `VP8 ` chunk. Pixel
+//! reconstruction lives in the private `vp8_decoder` module (boolean decoder,
+//! segmentation, loop filter, token partitions, intra prediction, IDCT,
+//! YUV420→RGB); this module keeps the **container/frame-header parser** that
+//! validates and caps a payload before decoding starts.
 //!
 //! ## What is parsed
 //!
-//! - RIFF/WEBP `VP8 ` chunk (payload is one VP8 keyframe);
 //! - the 3-byte frame tag: keyframe bit, version (0–3), show-frame bit and the
 //!   19-bit size of the first partition;
 //! - the keyframe start code `9d 01 2a` and the 14-bit dimensions (+ scaling bits);
 //! - defensive caps from [`crate::png::PngLimits`] before any allocation.
 //!
-//! ## Not decoded yet (documented experimental limits)
-//!
-//! Pixel reconstruction (boolean entropy decoder/partitions, token decoding,
-//! intra prediction, IDCT, loop filter, YUV420→RGB) is **not implemented**; the
-//! lossy decoder returns a typed [`ImageError::UnsupportedFeature`] and the
-//! renderer keeps a non-fatal warning/placeholder. VP8L remains fully supported.
-//! Extended lossy variants (VP8X with `ALPH`, animation) are also out of scope.
-//!
 //! Interframe VP8 frames (keyframe bit = 1) are rejected: WebP lossy always starts
 //! with a keyframe, so a non-keyframe payload is corrupt for this container.
+//! Extended lossy variants (VP8X with `ALPH`, animation) are out of scope and fail
+//! with a typed error. The internal `vp8_decoder` module implements the pixel reconstruction.
 
 use crate::error::ImageError;
 use crate::png::PngLimits;
@@ -134,8 +125,8 @@ pub(crate) fn parse_keyframe(payload: &[u8], limits: &PngLimits) -> Result<Vp8In
 
 /// Public helper: parses a RIFF/WEBP lossy payload and returns its header info.
 ///
-/// This is the **experimental** path used by tests/tools; `image::decode` returns a
-/// typed unsupported-feature error for lossy WebP until pixel reconstruction lands.
+/// Useful for tooling/tests that only need the intrinsic dimensions and frame-tag
+/// fields without decoding pixels; [`crate::decode`] performs the full decode.
 pub fn lossy_info(bytes: &[u8], limits: &PngLimits) -> Result<Vp8Info, ImageError> {
     let payload = crate::webp::find_vp8_chunk(bytes)?;
     parse_keyframe(payload, limits)

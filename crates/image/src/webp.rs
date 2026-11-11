@@ -1,9 +1,11 @@
-//! WebP lossless (VP8L) decoder — `std` only, no `unsafe`.
+//! WebP decoder (VP8L lossless and VP8 lossy) — `std` only, no `unsafe`.
 //!
-//! Supports the full VP8L lossless bitstream used by libwebp/PIL photos:
+//! Supports the full VP8L lossless bitstream used by libwebp/PIL photos, plus the
+//! VP8 keyframe subset that WebP lossy files carry (internal `vp8_decoder` module).
 //!
-//! - RIFF/WEBP container with a `VP8L` chunk (`VP8 ` lossy is rejected with a
-//!   clear [`ImageError::UnsupportedFeature`]);
+//! VP8L:
+//!
+//! - RIFF/WEBP container with a `VP8L` chunk;
 //! - VP8L header (signature, 14-bit width/height, alpha-used flag, version 0);
 //! - **all four transforms** and their inverses, applied in reverse order:
 //!   predictor (14 modes, per-block modes), colour transform, subtract-green and
@@ -16,10 +18,10 @@
 //!   counts, palette sizes, code-group counts and cache sizes are capped before
 //!   allocating.
 //!
-//! VP8 lossy (`VP8 ` chunk) is detected and its keyframe header validated by
-//! [`crate::vp8`] (experimental), but pixel reconstruction is not implemented yet:
-//! [`crate::decode`] returns a typed unsupported-feature error and the renderer keeps a
-//! non-fatal warning/placeholder. Animation/alpha-only WebP variants are out of scope.
+//! VP8 lossy (`VP8 ` chunk) is decoded by the internal `vp8_decoder` module (boolean entropy
+//! decoder, segmentation, loop filter, token partitions, intra prediction, IDCT and
+//! YUV420→RGB); `image::decode` returns its pixels and corrupt payloads keep typed
+//! errors. Animation/alpha-only WebP variants (VP8X) are out of scope.
 
 use crate::RgbaImage;
 use crate::error::ImageError;
@@ -922,15 +924,19 @@ pub(crate) fn find_vp8_chunk(bytes: &[u8]) -> Result<&[u8], ImageError> {
     find_chunk(bytes, b"VP8 ")
 }
 
-/// Decodes a VP8L (lossless) WebP image into RGBA8.
+/// Decodes a VP8L (lossless) or VP8 (lossy keyframe) WebP image into RGBA8.
 pub(crate) fn decode_webp(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageError> {
-    // WebP lossy (`VP8 `) is detected and header-validated, but pixel reconstruction is
-    // still experimental: keep a clear typed error instead of mis-decoding it as VP8L.
-    if let Ok(payload) = find_vp8_chunk(bytes) {
-        let _info = crate::vp8::parse_keyframe(payload, limits)?;
+    // The extended container (VP8X: canvas, alpha, animation) is out of scope: decoding
+    // only the inner VP8/VP8L chunk would silently drop alpha/offsets, so reject it with
+    // a typed error instead of returning wrong pixels.
+    if find_chunk(bytes, b"VP8X").is_ok() {
         return Err(ImageError::UnsupportedFeature {
-            feature: "WebP VP8 lossy decoding is experimental (keyframe header validated; pixel reconstruction pending, use VP8L for now)",
+            feature: "WebP extended container (VP8X alpha/animation)",
         });
+    }
+    // WebP lossy (`VP8 `) is a single VP8 keyframe: decode it instead of trying VP8L.
+    if let Ok(payload) = find_vp8_chunk(bytes) {
+        return crate::vp8_decoder::decode_keyframe(payload, limits);
     }
     let payload = find_vp8l_chunk(bytes)?;
     let Some((&signature, bitstream)) = payload.split_first() else {

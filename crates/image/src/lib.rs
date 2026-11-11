@@ -15,8 +15,13 @@
 //! - **WebP lossless** (`VP8L`): RIFF container, all four transforms (predictor,
 //!   colour, subtract-green and colour indexing) applied in reverse order, simple and
 //!   complex canonical Huffman codes, meta-Huffman images (per-block code groups),
-//!   LZ77 backward references with overlapping copies and the colour cache. VP8 *lossy*
-//!   is a typed [`ImageError::UnsupportedFeature`]. See [`webp`].
+//!   LZ77 backward references with overlapping copies and the colour cache. See
+//!   [`webp`].
+//! - **WebP lossy** (`VP8 ` keyframe): VP8 boolean entropy decoder, segmentation,
+//!   normal/simple loop filter, 1/2/4/8 token partitions, Y16/UV and B_PRED intra
+//!   prediction, dequantization, IDCT/WHT and YUV420→RGB with libwebp-compatible
+//!   fancy upsampling. Only keyframes (all WebP lossy files) are accepted; VP8X
+//!   alpha/animation containers stay unsupported. See [`vp8`] and [`webp`].
 //! - **PNG** (W3C PNG 1.2 / ISO 15948), decoded to 8-bit RGBA with straight
 //!   (non-premultiplied) alpha:
 //!   - colour types 0 (grayscale), 2 (RGB), 3 (indexed), 4 (grayscale+alpha)
@@ -32,8 +37,8 @@
 //! - **zlib/DEFLATE** (RFC 1950/1951) via [`inflate_zlib`] /
 //!   [`inflate_deflate`], used by the PNG decoder and reusable elsewhere.
 //!
-//! Detected-but-not-decoded formats/modes return a typed error: VP8 *lossy* WebP,
-//! animation/alpha-only containers and unsupported JPEG modes are
+//! Detected-but-not-decoded formats/modes return a typed error: animation/alpha-only
+//! WebP containers (VP8X) and unsupported JPEG modes are
 //! [`ImageError::UnsupportedFeature`] with a clear description; unknown signatures are
 //! [`ImageError::UnsupportedFormat`]/[`ImageError::InvalidSignature`].
 //!
@@ -93,6 +98,8 @@ pub mod inflate;
 pub mod jpeg;
 pub mod png;
 pub mod vp8;
+mod vp8_decoder;
+mod vp8_tables;
 pub mod webp;
 
 pub use error::ImageError;
@@ -111,7 +118,7 @@ pub enum ImageFormat {
     Gif,
     /// JPEG/JFIF baseline — decoded by this crate (progressive is a typed error).
     Jpeg,
-    /// Google WebP — full lossless `VP8L` decoded; lossy `VP8` is a typed error.
+    /// Google WebP — lossless `VP8L` and lossy `VP8 ` keyframes are decoded.
     WebP,
     /// No known image signature.
     Unknown,
@@ -321,8 +328,9 @@ pub(crate) fn resize_nearest_dims(
 
 /// Decodes an image from `bytes` using the format's default limits.
 ///
-/// Decodes PNG, JPEG (baseline + progressive), the first frame of GIF and the WebP VP8L
-/// lossless subset; VP8 lossy and unsupported modes are typed errors. See [`decode_with_limits`] for custom defensive limits
+/// Decodes PNG, JPEG (baseline + progressive), the first frame of GIF, the WebP VP8L
+/// lossless subset and WebP VP8 lossy keyframes; unsupported modes are typed errors.
+/// See [`decode_with_limits`] for custom defensive limits
 /// (dimensions/pixels/chunk budgets shared by all formats).
 pub fn decode(bytes: &[u8]) -> Result<RgbaImage, ImageError> {
     decode_with_limits(bytes, &PngLimits::default())
@@ -512,7 +520,7 @@ mod tests {
             ImageError::Truncated { .. } | ImageError::InvalidData { .. }
         ));
         // WebP chunks are parsed now: an empty/truncated container is a typed data error
-        // (a complete VP8 lossy chunk returns UnsupportedFeature instead).
+        // (a complete VP8 lossy chunk decodes to pixels instead).
         assert!(matches!(
             decode(b"RIFF\0\0\0\0WEBPVP8 ").unwrap_err(),
             ImageError::InvalidData { .. } | ImageError::Truncated { .. }

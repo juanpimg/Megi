@@ -8,11 +8,10 @@
 //!
 //! - Missing/blocked/failed subresources are **non-fatal**: the render yields a
 //!   gray placeholder box (painted by `paint::IMAGE_PLACEHOLDER`) and a warning.
-//! - PNG, baseline/progressive JPEG, GIF (first frame) and **lossless WebP (VP8L)** are
-//!   decoded with the in-tree `image` crate; **VP8 lossy** WebP is detected and its
-//!   keyframe header validated (experimental), then degrades to a non-fatal warning +
-//!   placeholder until pixel reconstruction lands; unsupported JPEG
-//!   variants produce a warning and a placeholder, never an error.
+//! - PNG, baseline/progressive JPEG, GIF (first frame), **lossless WebP (VP8L)** and
+//!   **lossy WebP (VP8 keyframe)** are decoded with the in-tree `image` crate;
+//!   unsupported JPEG variants and corrupt/unsupported WebP payloads produce a
+//!   non-fatal warning and a placeholder, never a hard error.
 //! - Defensive caps, configurable through [`crate::RenderOptions`]:
 //!   [`DEFAULT_MAX_IMAGES`] images, [`DEFAULT_MAX_IMAGE_BYTES`] per image and
 //!   [`DEFAULT_MAX_TOTAL_IMAGE_BYTES`] of downloaded image bytes per page.
@@ -200,15 +199,15 @@ pub fn load_images(
                 Err(error) => {
                     result.failed += 1;
                     let message = format!("skipping image {url}: {error}");
-                    // Valid/broken VP8 lossy payloads are an experimental decoder path:
-                    // keep the warning explicit (the image degrades to a placeholder).
+                    // Broken/unsupported VP8 lossy payloads (e.g. VP8X containers or a
+                    // truncated keyframe) keep an explicit WebP-lossy warning.
                     if matches!(
                         image::detect_format(&resource.bytes),
                         image::ImageFormat::WebP
                     ) && error.to_string().contains("VP8")
                     {
                         result.warnings.push(format!(
-                            "skipping image {url}: WebP VP8 lossy is experimental ({error})"
+                            "skipping image {url}: invalid WebP VP8 lossy payload ({error})"
                         ));
                     } else {
                         result.warnings.push(message);

@@ -200,13 +200,36 @@ def main():
     # Real libwebp lossless encodings (transforms/LZ77/cache/colour indexing):
     # the Rust decoder is checked byte-exactly against the PIL RGBA oracle.
     write_real_fixtures()
-    # VP8 lossy is deliberately unsupported (typed error + render warning).
+    # VP8 lossy: the solid 16x16 fixture has no oracle (the test checks the solid
+    # colour within a tolerance), while the real PIL-encoded photos are checked
+    # against their PIL decode stored as `.rgba`.
     lossy_path = os.path.join(FIXTURES, "lossy.webp")
     Image.new("RGB", (16, 16), (30, 160, 90)).save(lossy_path, "WEBP", quality=80)
     print(lossy_path, os.path.getsize(lossy_path), "bytes (VP8 lossy)")
     render_lossy = os.path.join(RENDER, "webp_lossy.webp")
     Image.new("RGB", (16, 16), (30, 160, 90)).save(render_lossy, "WEBP", quality=80)
     print(render_lossy, os.path.getsize(render_lossy), "bytes (VP8 lossy)")
+    write_lossy_oracles()
+
+
+def write_lossy_oracles():
+    """Regenerates the PIL RGBA oracles for the committed VP8 lossy photo fixtures.
+
+    The lossy `.webp` files themselves are committed fixtures (a deterministic synthetic
+    photo encoded with PIL/libwebp at q75/q90); their oracles are simply the PIL decodes,
+    so they can be regenerated without re-encoding the source.
+    """
+    for name in (
+        "photo_lossy_q75",
+        "photo_lossy_q90",
+        "photo_1024x768_lossy",
+    ):
+        webp_path = os.path.join(FIXTURES, name + ".webp")
+        rgba_path = os.path.join(FIXTURES, name + ".rgba")
+        image = Image.open(webp_path).convert("RGBA")
+        with open(rgba_path, "wb") as handle:
+            handle.write(image.tobytes())
+        print(rgba_path, image.size, "PIL RGBA oracle (VP8 lossy)")
 
 if __name__ == "__main__":
     main()
