@@ -259,6 +259,9 @@ pub struct Limits {
     /// Maximum assembled header block size (default
     /// [`super::MAX_HEADER_BLOCK_BYTES`]).
     pub max_header_block: usize,
+    /// Maximum decoded header list size, `name + value + 32` per field (default
+    /// [`super::hpack::DEFAULT_MAX_HEADER_LIST_SIZE`]).
+    pub max_header_list_size: usize,
     /// Maximum buffered response body per stream.
     pub max_body: usize,
     /// Maximum number of streams this client keeps open concurrently (default 8).
@@ -292,6 +295,7 @@ impl Default for Limits {
         Self {
             max_frame_size: DEFAULT_MAX_FRAME_SIZE,
             max_header_block: super::MAX_HEADER_BLOCK_BYTES,
+            max_header_list_size: super::hpack::DEFAULT_MAX_HEADER_LIST_SIZE,
             max_body: 16 * 1024 * 1024,
             max_concurrent_streams: 8,
             initial_window_size: 65_535,
@@ -516,7 +520,11 @@ impl<'a, S: Read + Write> Session<'a, S> {
         Self {
             stream,
             limits,
-            decoder: Decoder::new(4096),
+            decoder: {
+                let mut decoder = Decoder::new(4096);
+                decoder.set_max_header_list_size(limits.max_header_list_size);
+                decoder
+            },
             assembler: HeaderAssembler::default(),
             connection_receive_window: i64::from(limits.initial_window_size),
             connection_send_window: 65_535,
@@ -1051,9 +1059,10 @@ impl<'a, S: Read + Write> Session<'a, S> {
                 let entries = frame.parse_settings()?;
                 for (identifier, value) in entries {
                     match identifier {
-                        settings::HEADER_TABLE_SIZE => {
-                            self.decoder.set_max_table_size(value as usize);
-                        }
+                        // `SETTINGS_HEADER_TABLE_SIZE` sizes the *encoder's* table. Our
+                        // encoder is stateless, so it has no effect here; letting it widen
+                        // the decoder would bypass the advertised 4096-byte cap.
+                        settings::HEADER_TABLE_SIZE => {}
                         settings::ENABLE_PUSH => {
                             if value != 0 {
                                 return Err(h2_error(
