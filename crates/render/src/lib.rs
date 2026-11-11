@@ -918,7 +918,15 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     // Inline `<svg>` elements become synthetic `<img>` data URLs after scripts (so DOM
     // mutations are honored) and before style resolution/layout; the existing SVG image
     // pipeline then supplies intrinsic size, caps and warnings.
-    let inline_svg_report = inline_svg::replace_inline_svgs(&mut document);
+    // Render-glue fast path: with no executed scripts the DOM is exactly what the parser
+    // produced, so an inline <svg> can only exist if the source markup contains "<svg".
+    // Skipping the full 30k-node scan is output-identical (bench document: no scripts/svg).
+    let source_mentions_svg = contains_ascii_case_insensitive(decoded.text.as_bytes(), b"<svg");
+    let inline_svg_report = if scripts_executed == 0 && !source_mentions_svg {
+        inline_svg::InlineSvgReport::default()
+    } else {
+        inline_svg::replace_inline_svgs(&mut document)
+    };
     warnings.extend(inline_svg_report.warnings.iter().cloned());
 
     let styles_start = Instant::now();
@@ -1217,6 +1225,19 @@ fn load_document(
             })
         }
     }
+}
+
+/// ASCII case-insensitive substring search (used for the inline-SVG fast path).
+fn contains_ascii_case_insensitive(haystack: &[u8], needle: &[u8]) -> bool {
+    if needle.is_empty() || haystack.len() < needle.len() {
+        return false;
+    }
+    haystack.windows(needle.len()).any(|window| {
+        window
+            .iter()
+            .zip(needle)
+            .all(|(left, right)| left.eq_ignore_ascii_case(right))
+    })
 }
 
 /// Returns `true` when the resource should be parsed as HTML.

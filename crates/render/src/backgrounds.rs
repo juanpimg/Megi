@@ -133,6 +133,10 @@ pub fn collect_background_references(
 ) -> Vec<BackgroundReference> {
     let mut references = Vec::new();
     for node_id in document.descendants(document.root()) {
+        // Text nodes never carry computed styles: skip them before the hash lookup.
+        if document.node(node_id).as_element().is_none() {
+            continue;
+        }
         let Some(style) = styles.get(&node_id) else {
             continue;
         };
@@ -198,6 +202,21 @@ pub fn load_backgrounds(
         downloaded_bytes: 0,
         warnings: Vec::new(),
     };
+    // Render-glue fast path: most pages (including the realistic bench document) never
+    // reference a background/list-style image. Scanning ~30k DOM nodes with a styles-map
+    // lookup per node costs several milliseconds; scanning the style map values once is
+    // much cheaper and produces exactly the same empty result.
+    let has_any_image = styles.values().any(|style| {
+        style.background_image.is_some()
+            || style.list_style_image.is_some()
+            || style
+                .background_layers
+                .iter()
+                .any(|layer| layer.image.is_some())
+    });
+    if !has_any_image {
+        return result;
+    }
     let references = collect_background_references(document, styles);
     result.references = references.len();
     if references.is_empty() {

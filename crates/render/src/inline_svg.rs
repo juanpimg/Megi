@@ -48,6 +48,7 @@ pub const MAX_TOTAL_INLINE_SVG_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_INLINE_SVG_DEPTH: usize = 256;
 
 /// Outcome of the inline-SVG pre-processing pass.
+#[derive(Default)]
 pub struct InlineSvgReport {
     /// Inline SVGs replaced by synthetic `<img>` elements.
     pub replaced: usize,
