@@ -119,11 +119,18 @@ impl Default for InflateLimits {
 /// Computes the Adler-32 checksum used by the zlib wrapper.
 pub fn adler32(data: &[u8]) -> u32 {
     const MOD_ADLER: u32 = 65_521;
+    // Process in bounded chunks so `b` cannot overflow `u32`; deferring the modulo
+    // removes a division per input byte.
+    const CHUNK: usize = 1_024;
     let mut a = 1u32;
     let mut b = 0u32;
-    for &byte in data {
-        a = (a + byte as u32) % MOD_ADLER;
-        b = (b + a) % MOD_ADLER;
+    for chunk in data.chunks(CHUNK) {
+        for &byte in chunk {
+            a += byte as u32;
+            b += a;
+        }
+        a %= MOD_ADLER;
+        b %= MOD_ADLER;
     }
     (b << 16) | a
 }

@@ -701,14 +701,18 @@ fn unfilter(row: &mut [u8], previous: &[u8], filter: u8, bpp: usize) -> Result<(
             Ok(())
         }
         2 => {
-            for (index, value) in row.iter_mut().enumerate() {
-                *value = value.wrapping_add(previous[index]);
+            for (value, up) in row.iter_mut().zip(previous.iter()) {
+                *value = value.wrapping_add(*up);
             }
             Ok(())
         }
         3 => {
-            for index in 0..row.len() {
-                let left = if index >= bpp { row[index - bpp] } else { 0 };
+            // The first `bpp` bytes have no left neighbour: average is `up / 2`.
+            for index in 0..bpp.min(row.len()) {
+                row[index] = row[index].wrapping_add(previous[index] / 2);
+            }
+            for index in bpp..row.len() {
+                let left = row[index - bpp];
                 let up = previous[index];
                 let average = ((left as u16 + up as u16) / 2) as u8;
                 row[index] = row[index].wrapping_add(average);
@@ -716,14 +720,14 @@ fn unfilter(row: &mut [u8], previous: &[u8], filter: u8, bpp: usize) -> Result<(
             Ok(())
         }
         4 => {
-            for index in 0..row.len() {
-                let left = if index >= bpp { row[index - bpp] } else { 0 };
+            // With no left neighbour the Paeth predictor always selects `up`.
+            for index in 0..bpp.min(row.len()) {
+                row[index] = row[index].wrapping_add(previous[index]);
+            }
+            for index in bpp..row.len() {
+                let left = row[index - bpp];
                 let up = previous[index];
-                let upper_left = if index >= bpp {
-                    previous[index - bpp]
-                } else {
-                    0
-                };
+                let upper_left = previous[index - bpp];
                 row[index] = row[index].wrapping_add(paeth(left, up, upper_left));
             }
             Ok(())
@@ -765,6 +769,60 @@ impl Context<'_> {
         image: &mut [u8],
     ) -> Result<(), ImageError> {
         let header = self.header;
+        // Fast path for the common non-interlaced full-byte layouts: compute the row
+        // destination once and convert in tight chunks instead of doing checked index
+        // arithmetic per pixel.
+        if x0 == 0 && dx == 1 {
+            let row_start = (y as usize)
+                .checked_mul(header.width as usize)
+                .and_then(|value| value.checked_mul(4))
+                .ok_or_else(bad_row)?;
+            let row_pixels = width as usize;
+            let end = row_start
+                .checked_add(row_pixels.checked_mul(4).ok_or_else(bad_row)?)
+                .ok_or_else(bad_row)?;
+            let target = image.get_mut(row_start..end).ok_or_else(bad_row)?;
+            match (header.color_type, header.bit_depth, self.transparency) {
+                (2, 8, None) => {
+                    let (sources, _) = row.as_chunks::<3>();
+                    let (destinations, _) = target.as_chunks_mut::<4>();
+                    for (source, dest) in sources.iter().zip(destinations.iter_mut()) {
+                        dest[0] = source[0];
+                        dest[1] = source[1];
+                        dest[2] = source[2];
+                        dest[3] = 255;
+                    }
+                    return Ok(());
+                }
+                (6, 8, _) => {
+                    target.copy_from_slice(&row[..row_pixels * 4]);
+                    return Ok(());
+                }
+                (0, 8, None) => {
+                    let (destinations, _) = target.as_chunks_mut::<4>();
+                    for (source, dest) in row.iter().zip(destinations.iter_mut()) {
+                        dest[0] = *source;
+                        dest[1] = *source;
+                        dest[2] = *source;
+                        dest[3] = 255;
+                    }
+                    return Ok(());
+                }
+                (3, 8, None) => {
+                    let palette = self.palette.ok_or_else(bad_row)?;
+                    let (destinations, _) = target.as_chunks_mut::<4>();
+                    for (source, dest) in row.iter().zip(destinations.iter_mut()) {
+                        let entry = palette.get(*source as usize).ok_or_else(bad_row)?;
+                        dest[0] = entry[0];
+                        dest[1] = entry[1];
+                        dest[2] = entry[2];
+                        dest[3] = 255;
+                    }
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
         for pixel_index in 0..width {
             let Some(x) = x0.checked_add(pixel_index.checked_mul(dx).ok_or_else(bad_row)?) else {
                 return Err(bad_row());
