@@ -126,6 +126,11 @@ struct PaintResources<'a> {
     regions: Option<&'a RefCell<RegionCollector>>,
     /// Render viewport; used by `background-attachment: fixed` layers.
     viewport: Rect,
+    /// True when any box in the layout tree authors `filter`/`mix-blend-mode`.
+    ///
+    /// Precomputed once per pass so the hot `phase()` classification can skip
+    /// per-box style checks when the whole document has no effects (R141).
+    effects_present: bool,
 }
 
 impl PaintResources<'_> {
@@ -292,17 +297,19 @@ fn build_display_list_inner(
     backgrounds: &BackgroundImages,
     regions: Option<&RefCell<RegionCollector>>,
 ) -> (DisplayList, Vec<HitRegion>) {
+    let effects_present = tree_has_effects(root);
     let resources = PaintResources {
         images,
         backgrounds,
         regions,
         viewport,
+        effects_present,
     };
-    let canvas = canvas_background(root);
+    let canvas = canvas_background(root, effects_present);
     // Reserve a modest starting capacity: the painter emits roughly one item per
     // text run plus one per painted box, and `DisplayItem` is a large enum, so a
     // few reallocations are expensive on text-heavy pages (R129).
-    let mut list = DisplayList::with_capacity(16384);
+    let mut list = DisplayList::with_capacity(20480);
 
     match canvas {
         CanvasBackground::None => {}
@@ -335,14 +342,15 @@ fn build_display_list_inner(
 }
 
 /// Returns the first block-level child of the root box, interpreted as `body`.
-fn first_body_box(root: &LayoutBox) -> Option<&LayoutBox> {
+fn first_body_box(root: &LayoutBox, effects_present: bool) -> Option<&LayoutBox> {
     root.children.iter().find(|child| {
-        matches!(child.box_type, BoxType::BlockNode(_)) && phase(child) == Phase::InFlow
+        matches!(child.box_type, BoxType::BlockNode(_))
+            && phase(child, effects_present) == Phase::InFlow
     })
 }
 
 /// Computes the canvas background propagated from `html`/`body` (CSS 2.2 §14.2).
-fn canvas_background(root: &LayoutBox) -> CanvasBackground {
+fn canvas_background(root: &LayoutBox, effects_present: bool) -> CanvasBackground {
     let root_background = root
         .style
         .as_ref()
@@ -352,7 +360,7 @@ fn canvas_background(root: &LayoutBox) -> CanvasBackground {
         return CanvasBackground::Root(root_background);
     }
 
-    let Some(body) = first_body_box(root) else {
+    let Some(body) = first_body_box(root, effects_present) else {
         return CanvasBackground::None;
     };
     let body_background = body
@@ -402,7 +410,7 @@ fn border_sides(style: &css::ComputedStyle, border: layout::EdgeSizes) -> [Borde
 
 /// Appendix E phase of `layout_box` inside its nearest stacking context.
 #[inline]
-fn phase(layout_box: &LayoutBox) -> Phase {
+fn phase(layout_box: &LayoutBox, effects_present: bool) -> Phase {
     if layout_box.establishes_stacking_context {
         if layout_box.z_index < 0 {
             Phase::Negative
@@ -415,7 +423,7 @@ fn phase(layout_box: &LayoutBox) -> Phase {
         // Positioned with `z-index: auto`: painted in step 8 as if it created a
         // stacking context for ordering purposes (CSS 2.2 Appendix E step 8).
         Phase::Zero
-    } else if has_effects(layout_box) {
+    } else if effects_present && has_effects(layout_box) {
         // `filter`/`mix-blend-mode` create a stacking context (CSS Filter
         // Effects 1 §2 / Compositing 1 §5): paint it in the zero/negative/
         // positive phase instead of the in-flow passes (R137).
@@ -450,6 +458,24 @@ fn is_hidden(layout_box: &LayoutBox) -> bool {
         .style
         .as_ref()
         .is_some_and(|style| matches!(style.visibility, Visibility::Hidden | Visibility::Collapse))
+}
+
+/// True when any box in the layout tree authors `filter`/`mix-blend-mode`.
+///
+/// One cheap tree walk per paint pass; when false the painter takes the legacy
+/// (pre-R137) phase classification path without touching per-box styles,
+/// recovering the generic display-list overhead (R141).
+fn tree_has_effects(root: &LayoutBox) -> bool {
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if node.style.as_ref().is_some_and(|style| {
+            !style.filter.is_empty() || style.mix_blend_mode != css::MixBlendMode::Normal
+        }) {
+            return true;
+        }
+        stack.extend(node.children.iter());
+    }
+    false
 }
 
 /// Rounded clip applied to a box's descendants when `overflow: hidden`/`clip`
@@ -656,7 +682,13 @@ fn paint_stacking_context(
     let mut negative: Vec<&LayoutBox> = Vec::new();
     let mut zero: Vec<&LayoutBox> = Vec::new();
     let mut positive: Vec<&LayoutBox> = Vec::new();
-    collect_context_boxes(layout_box, &mut negative, &mut zero, &mut positive);
+    collect_context_boxes(
+        layout_box,
+        &mut negative,
+        &mut zero,
+        &mut positive,
+        resources.effects_present,
+    );
     negative.sort_by_key(|context| context.z_index);
     positive.sort_by_key(|context| context.z_index);
 
@@ -743,13 +775,14 @@ fn collect_context_boxes<'a>(
     negative: &mut Vec<&'a LayoutBox>,
     zero: &mut Vec<&'a LayoutBox>,
     positive: &mut Vec<&'a LayoutBox>,
+    layout_box_effects: bool,
 ) {
     let mut stack: Vec<&'a LayoutBox> = Vec::new();
     for child in layout_box.children.iter().rev() {
         stack.push(child);
     }
     while let Some(child) = stack.pop() {
-        match phase(child) {
+        match phase(child, layout_box_effects) {
             Phase::Negative => negative.push(child),
             Phase::Zero => zero.push(child),
             Phase::Positive => positive.push(child),
@@ -787,7 +820,13 @@ fn paint_block_backgrounds(
 ) {
     let mut stack: Vec<BlockTask<'_>> =
         Vec::with_capacity(layout_box.children.len().saturating_mul(2).max(8));
-    push_block_children(layout_box, inherited_hidden, alpha_scale, &mut stack);
+    push_block_children(
+        layout_box,
+        inherited_hidden,
+        alpha_scale,
+        &mut stack,
+        resources.effects_present,
+    );
     while let Some(task) = stack.pop() {
         match task {
             BlockTask::PopClip => pop_clip_item(list, resources),
@@ -811,7 +850,7 @@ fn paint_block_backgrounds(
                     list.push(DisplayItem::PushRoundedGroup { rect, radii });
                     stack.push(BlockTask::PopRoundedGroup);
                 }
-                push_block_children(child, hidden, alpha, &mut stack);
+                push_block_children(child, hidden, alpha, &mut stack, resources.effects_present);
             }
         }
     }
@@ -822,9 +861,10 @@ fn push_block_children<'a>(
     inherited_hidden: bool,
     alpha_scale: f32,
     stack: &mut Vec<BlockTask<'a>>,
+    effects_present: bool,
 ) {
     for child in parent.children.iter().rev() {
-        if phase(child) != Phase::InFlow {
+        if phase(child, effects_present) != Phase::InFlow {
             continue;
         }
         stack.push(BlockTask::Visit {
@@ -852,7 +892,7 @@ fn paint_floats(
         stack.push(child);
     }
     while let Some(child) = stack.pop() {
-        match phase(child) {
+        match phase(child, resources.effects_present) {
             Phase::Float => paint_float(
                 child,
                 list,
@@ -959,6 +999,7 @@ fn paint_inline_content(
         alpha_scale,
         owner,
         &mut stack,
+        resources.effects_present,
     );
     while let Some(task) = stack.pop() {
         match task {
@@ -1041,6 +1082,7 @@ fn paint_inline_content(
                             alpha,
                             own_owner,
                             &mut stack,
+                            resources.effects_present,
                         );
                     }
                     BoxType::BlockNode(_) | BoxType::AnonymousBlock | BoxType::LineBox => {
@@ -1058,6 +1100,7 @@ fn paint_inline_content(
                             alpha,
                             own_owner,
                             &mut stack,
+                            resources.effects_present,
                         );
                     }
                     // Table internals and inline-block wrappers: backgrounds and
@@ -1085,6 +1128,7 @@ fn paint_inline_content(
                             alpha,
                             own_owner,
                             &mut stack,
+                            resources.effects_present,
                         );
                     }
                     _ => {}
@@ -1108,6 +1152,7 @@ fn push_inline_children<'a>(
     alpha_scale: f32,
     owner: Option<dom::NodeId>,
     stack: &mut Vec<InlineTask<'a>>,
+    effects_present: bool,
 ) {
     let parent_decoration = inherited_decoration
         | parent
@@ -1120,16 +1165,18 @@ fn push_inline_children<'a>(
         .children
         .iter()
         .filter(|child| {
-            !matches!(
-                phase(child),
-                Phase::Float | Phase::Negative | Phase::Zero | Phase::Positive
-            ) && is_list_item(child)
+            // Cheap flag first: `phase()` only needs to run for list items here.
+            is_list_item(child)
+                && !matches!(
+                    phase(child, effects_present),
+                    Phase::Float | Phase::Negative | Phase::Zero | Phase::Positive
+                )
         })
         .count() as u32;
 
     for child in parent.children.iter().rev() {
         if matches!(
-            phase(child),
+            phase(child, effects_present),
             Phase::Float | Phase::Negative | Phase::Zero | Phase::Positive
         ) {
             continue;
