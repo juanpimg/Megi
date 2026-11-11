@@ -1,5 +1,7 @@
 //! Round 31: fetch() subset with a host provider (Headers/Request/Response).
 
+#![cfg(feature = "js")]
+
 use std::sync::{Arc, Mutex};
 
 use js::host::{FetchProvider, FetchRequest, FetchResult};

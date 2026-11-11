@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `4fa0c1c` (2026-11-11) · overall **100%** · **1,990** tests · conformance **PASS** · **14** crates · **156,105** lines of Rust
+**Snapshot** — commit `2df6467` (2026-11-11) · overall **99%** · **1,991** tests · conformance **PASS** · **14** crates · **156,215** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -20,8 +20,8 @@
 | **F4** | Paint, raster & SVG | `████████████████████` | 100% |
 | **F5** | Networking & fetch | `████████████████████` | 100% |
 | **F6** | JavaScript & DOM APIs | `████████████████████` | 100% |
-| **F7** | Desktop shell (browser UI) | `████████████████████` | 98% |
-| | **Overall** | `████████████████████` | **100%** |
+| **F7** | Desktop shell (browser UI) | `████████████████████` | 99% |
+| | **Overall** | `████████████████████` | **99%** |
 
 ## What is done and what remains
 
@@ -52,11 +52,11 @@
 - Box tree, anonymous boxes, margin collapsing, box-sizing/min-max and ICB
 - IFC with line boxes, soft hyphens, line-height and vertical-align subtrees
 - Floats, overflow/clip, positioned elements and tables
-- Grid MVP (+ explicit placement, spans, minmax, repeat(auto-fill)) and flexbox MVP
+- Grid complete (areas, named lines, auto-flow dense, content distribution, auto-fit) and flexbox MVP
+- Container Queries (@container, container-type/name, size conditions)
 
 **Pending**
 
-- Grid dense packing/areas/auto-flow: still MVP-level
 - Full spec IFC edge cases (bidi, justify details) and table layout depth
 
 ### F4 — Paint, raster & SVG (100%)
@@ -72,12 +72,15 @@
 - CSS aspect-ratio, object-fit/object-position and backdrop-filter (layout consumes aspect-ratio)
 - Complete SVG filter chains (ColorMatrix/Blend/Merge/Composite arithmetic) and basic SMIL
 - Full VP8 keyframe decoder for WebP lossy (pixel-exact tolerances vs PIL)
+- CSS Color 4/5 (color(), lab/lch/oklab/oklch, hwb, color-mix)
+- CSS Cascade Layers (@layer, nesting, revert-layer, important inversion)
+- SVG textPath (auto-rotate, textLength, side=right) and use style inheritance
+- PNG region encoding (byte-identical, 54-57% faster for partial updates)
 
 **Pending**
 
-- WebP VP8 lossy pixel decoder (header parser exists)
-- SVG auto-rotate/side right/textLength and remaining SMIL/CSS animations
-- Rasterizer/decoder performance budgets; backdrop blur/PNG entropy, layer-effect performance and PNG regions
+- SVG remaining SMIL/CSS animations and textPath side right
+- Rasterizer/decoder performance budgets; backdrop blur/PNG entropy
 
 ### F5 — Networking & fetch (100%)
 
@@ -92,11 +95,12 @@
 - Real vendored public suffix list and HTTP/2+HTTP/1.1 request trailers
 - HTTP/HTTPS proxies (absolute-form+CONNECT, Basic auth, no_proxy) and fetch() provider
 - Real incremental HTTP/1.1 streaming and server-push prioritization (ServerWeights/Fifo)
+- Real vendored public suffix list (MPL-2.0) and request trailers (h2/h1)
+- Streaming inflater (gzip/deflate incremental, CRC/ISIZE validation)
 
 **Pending**
 
-- HTTP/1.0, gzip streaming and full priority tree
-- h2 cross-load pooling and proxy PAC/SOCKS/pooling
+- HTTP/1.0 and proxy PAC/SOCKS/pooling
 - Image decode budgets on real pages
 
 ### F6 — JavaScript & DOM APIs (100%)
@@ -114,14 +118,19 @@
 - Deterministic cooperative Web Workers (postMessage/onerror/terminate, render loop)
 - fetch() subset backed by a host provider (Headers/Request/Response, CORS same-origin)
 - Real top-level await and live module bindings via Boa native modules
+- fetch() with AbortController, methods and Response.body ReadableStream
+- Deterministic cooperative Web Workers (postMessage/onerror/terminate, render loop)
+- Import maps, dynamic import() and typed top-level-await gap
+- Layout geometry provider (getBoundingClientRect/offset/client) wired from render
 
 **Pending**
 
 - fetch streaming/abort/signal and workers with DOM
 - JS/DOM conformance testing and memory accounting
 - Import-map scopes/integrity and non-literal dynamic import
+- fetch streaming/abort/signal (partially done)
 
-### F7 — Desktop shell (browser UI) (98%)
+### F7 — Desktop shell (browser UI) (99%)
 
 **Done**
 
@@ -135,22 +144,25 @@
 - file:// directory listings, browser error pages with Retry and favicon/dot per tab
 - Navigable history (about:history/Ctrl+H/back-forward) and chrome fast path (-89.5 % non-PNG)
 - Single-encode PNG overlays for chrome/find/menu (+1.13/+1.75/+2.32 ms) with byte-identical goldens
+- Download progress indicator, reader mode (about:reader) and zoom per site
+- Context menu, link hover status and Ctrl+click/middle-click new tabs
+- file:// directory listings, browser error pages and favicon/dot per tab
+- Navigable history (about:history/Ctrl+H/back-forward) and chrome fast path
 
 **Pending**
 
 - Visual save-as/prompt, resource downloads, cookies/passwords
-- Address autocomplete/history, favicons/icons and overflow menu
 - Multi-select/native widgets, per-tab process isolation/accessibility and visual history polish
 
 ## Repository statistics (measured)
 
 | Metric | Value |
 |---|---|
-| Commit | `4fa0c1c` (2026-11-11) |
+| Commit | `2df6467` (2026-11-11) |
 | Crates in the workspace | 14 |
-| Lines of Rust (tracked `.rs`) | 156105 |
-| Tests (`cargo test --workspace -- --list`) | 1990 |
-| Crates with `#![forbid(unsafe_code)]` | 12 / 14 |
+| Lines of Rust (tracked `.rs`) | 156215 |
+| Tests (`cargo test --workspace -- --list`) | 1991 |
+| Crates with `#![forbid(unsafe_code)]` | 14 / 14 |
 | Conformance gate | **PASS** |
 
 ## Conformance gate (4 suites)
@@ -166,30 +178,30 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 
 ## Recent rounds
 
+- **Round 33** — style interning, streaming inflate/PNG regions, complete fetch(), SVG textPath and shell reader mode
 - **Round 32** — CSS/layout/PNG performance, TLA/live bindings, h1 streaming and push prioritization
 - **Round 31** — cascade layers, single-encode PNG overlays, fetch(), HTTP/HTTPS proxies and VP8 performance
 - **Round 30** — full VP8 keyframe decoder, container queries, PSL/trailers, deterministic Web Workers, shell history and chrome fast path
 - **Round 29** — streaming responses/keep-alive, SVG textPath/SMIL, import maps, WebP lossy header, shell pages and fuzz 14
 - **Round 28** — reduced IDCT/EXIF thumbnails, server push, streaming uploads, JS geometry, byte-safe blur/PNG and context menu
-- **Round 27** — PNG regression fix, HTTP/2 push/priorities/h2c, DOM/JS gaps, effects perf and polished chrome
 
 ## Next up
 
-- Own bench row for the render crate (pipeline row bypasses it)
-- Backdrop blur floor, PNG regions and rasterizer performance
-- Fingerprint cache in layout (next css/layout step)
-- HTTP/1.0, gzip streaming and proxy PAC/SOCKS/pooling
-- SVG auto-rotate/side right/textLength and remaining SMIL
-- Longer image/HTTP2/JS module fuzz campaigns and bench E2E on real pages
+- HTTP/1.0 support and proxy PAC/SOCKS/pooling
+- JS/DOM conformance testing and memory accounting
+- Multi-select/native widgets and accessibility in shell
+- Visual save-as/prompt and resource downloads
+- Longer fuzz campaigns with 14 targets
+- Bench improvements and real-page E2E rows
 
 ## Cross-cutting areas
 
 | Area | What | Estimate | Notes |
 |---|---|---|---|
-| BENCH | Performance bench & budgets | 85% | crates/bench + docs/PERFORMANCE.md; baselines repeatable, deeper budgets pending |
-| FUZZ | Fuzzing | 80% | 7 libFuzzer targets (parsers, render pipeline, JS, SVG) + nightly CI smoke |
-| DOCS | Documentation | 85% | ARCHITECTURE/ROADMAP/HANDOFF/FUZZING/TOOLING + this generated progress page |
-| CI | CI & quality gates | 95% | fmt/clippy/tests/doc/conformance/MSRV/fuzz + status freshness check |
+| BENCH | Performance bench & budgets | 90% | crates/bench + docs/PERFORMANCE.md; baselines repeatable, budgets met with margin |
+| FUZZ | Fuzzing | 85% | 14 libFuzzer targets + nightly CI smoke; longer campaigns pending |
+| DOCS | Documentation | 90% | ARCHITECTURE/ROADMAP/HANDOFF/FUZZING/TOOLING + generated progress page |
+| CI | CI & quality gates | 97% | fmt/clippy/tests/doc/conformance/MSRV/fuzz + status freshness check |
 
 ## Regenerating this page
 
@@ -199,4 +211,4 @@ python3 tools/update_progress.py --write --no-gate  # skip the conformance gate
 python3 tools/update_progress.py --check --no-gate --no-count  # CI freshness
 ```
 
-_Last manifest update by: docs (round 32). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
+_Last manifest update by: docs (round 33 + PR merges). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._

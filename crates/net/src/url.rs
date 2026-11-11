@@ -162,9 +162,10 @@ impl Url {
         if self.scheme == Scheme::Data {
             return Err(UrlError::UnsupportedScheme("data".to_owned()));
         }
-        // Backslashes are path separators for special schemes.
+        // Backslashes are path separators for special schemes, but a `?` or `#` ends the
+        // path state: a backslash in the query or fragment is literal data.
         let relative = if self.scheme.is_special() {
-            cleaned.replace('\\', "/")
+            replace_path_backslashes(&cleaned)
         } else {
             cleaned
         };
@@ -213,9 +214,10 @@ impl Url {
                 fragment: fragment.map(encode_fragment),
             });
         }
-        // WHATWG: backslashes are treated as slashes for special schemes.
+        // WHATWG: backslashes are treated as slashes for special schemes, in the path and
+        // authority only (`?`/`#` terminate those states).
         let rest = if scheme.is_special() {
-            rest.replace('\\', "/")
+            replace_path_backslashes(rest)
         } else {
             rest.to_string()
         };
@@ -402,6 +404,19 @@ fn clean_input(input: &str) -> String {
         .collect()
 }
 
+/// Makes a special-scheme reference's path use `/` separators, leaving query/fragment alone.
+///
+/// The URL parser treats a backslash as a slash only while parsing the authority and path
+/// states; `?` and `#` end those, so a backslash after them is literal data (WHATWG URL
+/// "path state", "query state" and "fragment state").
+fn replace_path_backslashes(input: &str) -> String {
+    let split = input.find(['?', '#']).unwrap_or(input.len());
+    let mut out = String::with_capacity(input.len());
+    out.push_str(&input[..split].replace('\\', "/"));
+    out.push_str(&input[split..]);
+    out
+}
+
 /// Splits `scheme:rest` when `input` starts with a syntactically valid scheme.
 fn split_scheme(input: &str) -> Option<(&str, &str)> {
     let mut chars = input.char_indices();
@@ -469,6 +484,15 @@ fn parse_authority(
     let (raw_host, raw_port) = split_host_port(host_port)?;
     let host = normalize_host(scheme, raw_host)?;
     let port = match raw_port {
+        // WHATWG URL "port state": an empty buffer sets the port to null (a validation
+        // error, not a failure), so `http://host:/` is valid. `file:` URLs never carry a
+        // port, so the stray colon stays a failure there.
+        Some("") => {
+            if scheme == Scheme::File {
+                return Err(UrlError::InvalidPort(String::new()));
+            }
+            None
+        }
         Some(raw_port) => {
             let parsed: u16 = raw_port
                 .parse()

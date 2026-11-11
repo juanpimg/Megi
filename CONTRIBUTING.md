@@ -133,6 +133,20 @@ rustc --version
 cargo +1.88 check --workspace --all-targets
 ```
 
+#### Dependencias del sistema (Linux)
+
+Solo `crates/shell` necesita bibliotecas nativas (`winit`/`softbuffer` con X11 y Wayland); el resto del workspace no necesita bibliotecas de sistema. En Debian/Ubuntu, los mismos paquetes que instala CI:
+
+```bash
+sudo apt-get install -y --no-install-recommends \
+  pkg-config libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev \
+  libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev \
+  libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+  libxcb-shm0-dev libxcb-randr0-dev
+```
+
+Sin ellas `cargo check --workspace` falla al compilar `wayland-sys`/`x11` y `cargo test --workspace` no llega a ejecutar los tests. Si no quieres instalarlas, añade `--exclude shell` a `check`/`clippy`/`test`/`doc` y verifica el crate de ventana solo en CI.
+
 ### 4.2 Utilizar las Herramientas de Inspección
 
 Megi incluye scripts CLI dedicados en `tools/` para acelerar el desarrollo:
@@ -160,11 +174,15 @@ cargo fmt
 ./tools/dev.sh all
 
 # Comprobaciones individuales útiles
-cargo test --workspace                         # 1929 tests (con JS por defecto)
-cargo test --workspace --no-default-features   # build mínimo sin JS (CI)
+cargo test --workspace                         # 1986 tests (con JS por defecto)
+cargo test -p js --no-default-features         # stub del motor sin Boa (CI)
+cargo test -p render --no-default-features     # render sin scripts (CI)
 cargo +1.88 check --workspace --all-targets
 cargo run -p test_harness -- --summary          # gate 4 suites: PASS, exit 0
 cargo run -p test_harness -- --summary --strict # exit 1 si hay fallos no aceptados
+
+# Si tu CPU es más lenta que la de CI, escala los presupuestos de complejidad (CI usa 1.0)
+MEGI_PERF_BUDGET_SCALE=4 cargo test -p html --test perf
 
 # Pipeline HTML → PNG (Fase 4) y validación de la imagen
 cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
@@ -214,7 +232,7 @@ cargo install cargo-fuzz --locked
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Si `./tools/dev.sh all` reporta `==> All checks passed!`, tu código está listo para ser revisado. La CI remota (`.github/workflows/ci.yml`) ejecuta los mismos pasos: `quality` (fmt, clippy, tests, doc), `conformance` (gate `--summary`) y `msrv` (`cargo check` con Rust 1.88).
+Si `./tools/dev.sh all` reporta `==> All checks passed!`, tu código está listo para ser revisado. La CI remota (`.github/workflows/ci.yml`) ejecuta los mismos pasos: `quality` (fmt, clippy, tests, doc), `conformance` (gate `--summary`), `msrv` (`cargo check` con Rust 1.88) y `minimal` (clippy y tests de `js`/`render` con `--no-default-features`). El build sin JS se comprueba **por crate**: `shell` y `test_harness` enlazan Boa aunque se pase `--no-default-features` al workspace, así que ese comando no produce un build sin motor.
 - **CI (ronda 12)**: los jobs instalan en el runner los paquetes de sistema Wayland/X11/xcb (`libwayland-dev`, `libxkbcommon*`, `libx11*`, `libxcb*`) que necesitan `winit`/`softbuffer`; los 3 jobs están en verde y `main`/`feature` sincronizadas.
 
 ---

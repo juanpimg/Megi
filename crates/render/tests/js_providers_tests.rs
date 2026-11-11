@@ -2,6 +2,8 @@
 //! dispatches host events (hashchange/popstate) before the final re-render and delivers
 //! MutationObserver records through microtask checkpoints.
 
+#![cfg(feature = "js")]
+
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
