@@ -6,6 +6,47 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 32 — CSS/layout/PNG performance, TLA/live bindings, h1 streaming and push prioritization (2026-11-11)
+
+#### Added
+
+- **CSS/layout performance** (`8f3956c`, css 260 / layout 224 tests): ancestor-class
+  Bloom pruning in selector matching (descendant/child only; bench candidates 33→1-2 per
+  span), @container-empty/`has_revert_layer` fast paths, exact-capacity child Vec and a
+  single block/inline pass: **css resolve 28.58→14.14 ms (−50.5 %)** and **layout
+  40.18→37.35 ms (−7.0 %)**; resolve-2k −47 %, vars-calc −8.5 %; goldens intact.
+- **PNG decode/encode performance** (`a90ab4a` / `a477061`, image 90 / paint 208 tests):
+  block adler32 (1024 B, deferred modulo), non-interlaced render_row fast path and
+  specialized unfilter: **decode 6.739→2.536 ms (−62.4 %)** (inflate 4.06→1.24,
+  render 1.25→0.31; raw md5 identical to PIL); byte-safe encode **−18 % flat /
+  −22 % alpha** (filter −36/−29 %, deflate −17.4/−18.8 %), **render-to-png
+  8.653→6.259 ms (−27.7 %)**; goldens byte-identical.
+- **Render fast paths** (`343f75c`, render 172 tests): backgrounds 7.0→0.8 ms when no
+  style references images; inline_svg 2.8→0.6 ms when no scripts/`<svg` in markup.
+  Finding documented: the bench pipeline row does **not** use the render crate (it
+  composes html/paint/layout/raster by hand), so render cannot move it; real CLI profile
+  fetch 0.7/parse 20.8/styles 77.5/layout 104.6/display 10.6/raster 1.1/PNG ~8 ms
+  (total ~234, glue ~5) and CLI A/B 235.0→219.8 ms (−6.5 %) with identical PNG
+  (`b37c60c3…`).
+- **Real top-level await + live bindings** (`b4eb190`, js 168 / render 172 tests):
+  `eval_module_async` on Boa 0.21 native modules with a host `ModuleLoader` over the
+  resolver/loader (file/http/data, `import.meta.url`): await Promise/fetch/timer,
+  topological order, typed rejections, `let`/`var` live without re-eval, `const`
+  immutable and native cycles; render uses async for modules containing `await` and
+  keeps the preprocessed path for import maps; fixtures js_tla_fetch/timer.
+- **Real h1 streaming + push prioritization** (`5296cab`, net 325 tests): status/headers
+  incremental, redirects before the body, CL/chunked/read-to-EOF incremental, caps/
+  timeouts and callback-error abort/close (gzip/deflate buffered + 16 KiB slices
+  documented); PADDED/PRIORITY parsing, `Limits.pushed_priority: ServerWeights|Fifo`,
+  weight ordering with lowest-weight RST_STREAM eviction (default weight 16 ⇒ FIFO).
+
+#### Tests
+
+- **1,929 tests, 0 failures** (net 325, render 172, js 168, css 260, layout 224,
+  image 90, paint 208, shell 238, dom 36, html 60, svg 109, fonts 17+1 doctest,
+  bench 10, test_harness 11); gate PASS with tokenizer 7,050/7,050, tree 3,904/3,904,
+  serializer 230/230 and CSS 30/30.
+
 ### Round 31 — cascade layers, single-encode PNG overlays, fetch(), HTTP/HTTPS proxies and VP8 performance (2026-11-11)
 
 #### Added

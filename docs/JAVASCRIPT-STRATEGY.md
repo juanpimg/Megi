@@ -39,7 +39,7 @@ Megi ha cerrado funcionalmente la Fase 4 (renderizado) y tiene un pipeline de na
 
 **Estado real verificado en la decisión (ronda 7)**: **602 tests, 0 fallos**; gate de 4 suites PASS (tokenizer 7.050/7.050, árbol 3.898/3.904, serializador 230/230, CSS 30/30); Fase 6 con **decisión ACEPTADA el 2026-11-10**, implementación arrancando por `WP-6.1`.
 
-**Estado a ronda 31 (HEAD `aba05f8`)**: **1907 tests, 0 fallos**; gate PASS; **158 tests js**; **fetch() subset HECHO** (`Headers`/`Request`/`Response`, provider `set_fetch_provider`, GET/POST, caps 64/8 MiB, sin provider ⇒ rejection tipada) y **fix HostScope en `run_microtasks`** para que las Promises toquen DOM/console; render instala provider con `net::http::fetch_with_method`+ResourceLoader, CORS same-origin, `--no-network` y 404 sintético. Pendientes F6: TLA real/live bindings/workers con DOM, conformance/memoria y follow-ups de fetch (streaming/abort/timeout). Todos los crates con `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+**Estado a ronda 32 (HEAD `3e69968`)**: **1929 tests, 0 fallos**; gate PASS; **168 tests js**; **TLA real y live bindings HECHOS** con el sistema nativo de módulos de Boa 0.21: `eval_module_async` con `ModuleLoader` sobre resolver/loader del host (file/http/data, `import.meta.url`), await Promise/fetch/timer, orden topológico, rechazos tipados, let/var vivas sin re-eval, const inmutable y ciclos nativos; render usa async para módulos con await y mantiene el preprocesado para import maps. Pendientes F6: fetch streaming/abort/signal, conformance/memoria y workers con DOM. Todos los crates con `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
 
 ---
 

@@ -71,6 +71,7 @@ pub fn register(suite: &mut Suite, opts: &Options) {
     register_effect_fixture_pipelines(suite);
     register_backdrop_stage_rows(suite);
     register_image(suite);
+    register_render_pipeline(suite);
     register_png_rows(suite);
     #[cfg(feature = "fonts")]
     register_fonts(suite, opts.scale);
@@ -1173,6 +1174,59 @@ fn register_image(suite: &mut Suite) {
             },
         )
         .with_units(0.12, "MPix")
+        .heavy(),
+    );
+}
+
+/// Registers the **render crate** end-to-end row (`render/html-to-png`).
+///
+/// `pipeline/html-to-png` predates the `render` crate and composes html/css/layout/paint
+/// manually, so it never exercises the real browser pipeline (loader, resource scanning,
+/// style collection, scripts/images scans, render options and the final PNG encode). This
+/// row feeds a deterministic data URL through `render::render_url` to measure that path.
+fn register_render_pipeline(suite: &mut Suite) {
+    fn percent_encode_data_url(html: &str) -> String {
+        let mut out = String::with_capacity(html.len() + html.len() / 2 + 16);
+        out.push_str("data:text/html,");
+        for byte in html.bytes() {
+            if byte.is_ascii_alphanumeric() || b"-_.~".contains(&byte) {
+                out.push(byte as char);
+            } else {
+                out.push_str(&format!("%{byte:02X}"));
+            }
+        }
+        out
+    }
+
+    let mut html = String::from(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><style>\
+         html,body{margin:0;padding:0;background:#fff}\
+         .card{display:inline-block;width:80px;height:24px;margin:2px;background:#ddd}\
+         .card:nth-child(3n){background:#9cf}\
+         .card:nth-child(4n-1){background:#fc9}\
+         .label{color:#123;font:12px sans-serif}\
+         </style></head><body>",
+    );
+    for index in 0..240 {
+        html.push_str("<div class=\"card\"><span class=\"label\">item ");
+        html.push_str(&index.to_string());
+        html.push_str("</span></div>");
+    }
+    html.push_str("</body></html>");
+    let url = percent_encode_data_url(&html);
+    let options = render::RenderOptions {
+        viewport: render::Viewport::new(800, 600).expect("render viewport"),
+        ..render::RenderOptions::default()
+    };
+    let detail = format!(
+        "render crate end-to-end: data URL ({} B HTML) → DOM/styles/layout/paint → PNG",
+        html.len()
+    );
+    suite.add(
+        BenchEntry::new("render/html-to-png", "render", detail, move || {
+            black_box(render::render_url(&url, &options).expect("render benchmark fixture"));
+        })
+        .with_units(0.096, "MPix")
         .heavy(),
     );
 }

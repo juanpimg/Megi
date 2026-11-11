@@ -127,6 +127,7 @@ dependencies = [
  "image",
  "layout",
  "paint",
+ "render",
 ]
 
 [[package]]

@@ -697,6 +697,20 @@ Límites r31: layers sin `layer()` en imports y sublayers aproximadas; `encode_p
 
 Cifras de referencia en la ronda 31: **1907 tests** (bench 10, css 260, dom 36, fonts 17+1 doctest, html 60, image 90, js 158, layout 224, net 315, paint 208, render 170, shell 238, svg 109, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
 
+### 2.16y Ronda 32: perf CSS/layout/PNG, TLA/live bindings, h1 streaming y push priority
+
+```bash
+cargo run --release -p bench -- --filter css/resolve-styles
+cargo run --release -p bench -- --filter image/decode-png
+cargo run --release -p bench -- --filter paint/encode-png-1024
+cargo test -p js --test tla_live_bindings && cargo test -p render --test tla_tests
+cargo test -p net --test h1_streaming && cargo test -p net --test push_priority
+```
+
+Límites r32: Bloom pruning solo en relaciones descendiente/hijo (no rechaza matches válidos); PNG decode sin SIMD/unsafe y raw md5 idéntico a PIL; encode byte-safe mantiene goldens; backgrounds/inline_svg fast paths solo si el documento no puede necesitar imágenes/SVG; TLA/live bindings en la ruta de módulos nativos (import maps no se consultan ahí); h1 streaming con gzip/deflate buffered y 16 KiB slices, sin HTTP/1.0; push prioritization sin grafo completo de prioridades.
+
+Cifras de referencia en la ronda 32: **1929 tests** (bench 10, css 260, dom 36, fonts 17+1 doctest, html 60, image 90, js 168, layout 224, net 325, paint 208, render 172, shell 238, svg 109, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
+
 ## 4. Progress status generado (`PROGRESS.md`, `docs/status/*.svg`)
 
 El estado de avance del proyecto se genera **desde datos reales del repositorio**, sin
