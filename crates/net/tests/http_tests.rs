@@ -265,3 +265,70 @@ fn file_and_unsupported_schemes_are_not_fetched_over_http() {
         Err(FetchError::UnsupportedScheme(scheme)) if scheme == "file"
     ));
 }
+
+#[test]
+fn chunked_chunk_size_overflow_is_rejected() {
+    // `FFFFFFFFFFFFFFFF` is a valid hex chunk size that overflows usize arithmetic when
+    // added to the bytes already buffered (RFC 9112 §7.1).
+    let response =
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nA\r\nFFFFFFFFFFFFFFFF\r\n"
+            .to_vec();
+    let (base, server) = spawn_server(vec![response]);
+    let url = base_url(&base).join("/overflow").expect("join");
+
+    let error = fetch(&url, &options()).expect_err("overflowing chunk size");
+    assert!(
+        matches!(error, FetchError::ResponseTooLarge),
+        "expected ResponseTooLarge, got {error}"
+    );
+    let _ = server.join();
+}
+
+#[test]
+fn oversized_trailer_section_is_rejected() {
+    let mut response = String::from("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n");
+    for index in 0..40 {
+        response.push_str(&format!("x-t{index}: {}\r\n", "a".repeat(40)));
+    }
+    response.push_str("\r\n");
+    let (base, server) = spawn_server(vec![response.into_bytes()]);
+    let url = base_url(&base).join("/trailers").expect("join");
+    let small_headers = FetchOptions {
+        max_header_bytes: 256,
+        ..options()
+    };
+
+    let error = fetch(&url, &small_headers).expect_err("oversized trailer section");
+    assert!(
+        matches!(error, FetchError::HeadersTooLarge),
+        "expected HeadersTooLarge, got {error}"
+    );
+    let _ = server.join();
+}
+
+#[test]
+fn conflicting_content_length_headers_are_rejected() {
+    let response =
+        b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nContent-Length: 5\r\n\r\nhello".to_vec();
+    let (base, server) = spawn_server(vec![response]);
+    let url = base_url(&base).join("/smuggled").expect("join");
+
+    let error = fetch(&url, &options()).expect_err("conflicting Content-Length");
+    assert!(
+        matches!(error, FetchError::InvalidResponse(_)),
+        "expected InvalidResponse, got {error}"
+    );
+    let _ = server.join();
+}
+
+#[test]
+fn duplicate_identical_content_length_headers_are_accepted() {
+    let response =
+        b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\nContent-Length: 5\r\n\r\nhello".to_vec();
+    let (base, server) = spawn_server(vec![response]);
+    let url = base_url(&base).join("/duplicate").expect("join");
+
+    let response = fetch(&url, &options()).expect("identical duplicates are valid");
+    assert_eq!(response.body, b"hello");
+    let _ = server.join();
+}

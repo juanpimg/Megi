@@ -1927,10 +1927,22 @@ fn read_body(
             .any(|token| token.trim().eq_ignore_ascii_case("chunked"))
     });
     if chunked {
-        return reader.read_chunked(options.max_response_bytes);
+        return reader.read_chunked(options.max_response_bytes, options.max_header_bytes);
     }
-    if let Some(length_text) = header("content-length") {
-        let length: usize = length_text.trim().parse().map_err(|_| {
+    // RFC 9112 §6.3: reject differing Content-Length values (duplicates that agree are
+    // allowed). Taking the first one silently would let a malicious server split the
+    // response across a pooled connection and have the next response start mid-body.
+    let mut content_lengths = headers
+        .iter()
+        .filter(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+        .map(|(_, value)| value.trim());
+    if let Some(length_text) = content_lengths.next() {
+        if content_lengths.any(|other| other != length_text) {
+            return Err(FetchError::InvalidResponse(
+                "conflicting Content-Length headers".to_owned(),
+            ));
+        }
+        let length: usize = length_text.parse().map_err(|_| {
             FetchError::InvalidResponse(format!("invalid Content-Length `{length_text}`"))
         })?;
         if length > options.max_response_bytes {
@@ -2077,7 +2089,11 @@ impl ConnReader {
         self.stream.flush().map_err(map_io_error)
     }
 
-    fn read_chunked(&mut self, max_bytes: usize) -> Result<(Vec<u8>, Headers), FetchError> {
+    fn read_chunked(
+        &mut self,
+        max_bytes: usize,
+        max_header_bytes: usize,
+    ) -> Result<(Vec<u8>, Headers), FetchError> {
         let mut body = Vec::new();
         loop {
             let Some(size_line) = self.read_line(1024)? else {
@@ -2094,13 +2110,19 @@ impl ConnReader {
                 FetchError::InvalidResponse(format!("invalid chunk size `{size_text}`"))
             })?;
             if size == 0 {
-                // Trailer headers followed by a terminating empty line.
+                // Trailer headers followed by a terminating empty line, capped like the
+                // response head so a peer cannot grow the trailer list without limit.
                 let mut trailers = Vec::new();
+                let mut trailer_bytes = 0usize;
                 loop {
                     match self.read_line(1024)? {
                         None => return Ok((body, trailers)),
                         Some(line) if line.is_empty() => return Ok((body, trailers)),
                         Some(line) => {
+                            trailer_bytes = trailer_bytes.saturating_add(line.len() + 2);
+                            if trailer_bytes > max_header_bytes {
+                                return Err(FetchError::HeadersTooLarge);
+                            }
                             let text = String::from_utf8_lossy(&line);
                             if let Some((name, value)) = text.split_once(':') {
                                 trailers.push((name.trim().to_owned(), value.trim().to_owned()));
@@ -2112,7 +2134,9 @@ impl ConnReader {
             let Ok(size) = usize::try_from(size) else {
                 return Err(FetchError::ResponseTooLarge);
             };
-            if body.len() + size > max_bytes {
+            // `body.len() + size` can wrap for a crafted 16-hex-digit chunk size; compare
+            // against the remaining budget instead (RFC 9112 §7.1).
+            if size > max_bytes.saturating_sub(body.len()) {
                 return Err(FetchError::ResponseTooLarge);
             }
             body.extend_from_slice(&self.read_exact_body(size)?);
