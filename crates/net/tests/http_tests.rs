@@ -332,3 +332,47 @@ fn duplicate_identical_content_length_headers_are_accepted() {
     assert_eq!(response.body, b"hello");
     let _ = server.join();
 }
+
+#[test]
+fn streaming_trailer_section_is_capped() {
+    let mut response = String::from("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n");
+    for index in 0..40 {
+        response.push_str(&format!("x-t{index}: {}\r\n", "a".repeat(40)));
+    }
+    response.push_str("\r\n");
+    let (base, server) = spawn_server(vec![response.into_bytes()]);
+    let url = base_url(&base).join("/stream-trailers").expect("join");
+    let small_headers = FetchOptions {
+        max_header_bytes: 256,
+        ..options()
+    };
+
+    let mut chunks = 0usize;
+    let error = net::fetch_streaming(&url, &small_headers, &mut |_chunk| {
+        chunks += 1;
+        Ok(())
+    })
+    .expect_err("streaming trailer cap");
+    assert!(
+        matches!(error, FetchError::HeadersTooLarge),
+        "expected HeadersTooLarge, got {error}"
+    );
+    assert_eq!(chunks, 0, "the trailer error must abort before data");
+    let _ = server.join();
+}
+
+#[test]
+fn streaming_conflicting_content_length_is_rejected() {
+    let response =
+        b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nContent-Length: 5\r\n\r\nhello".to_vec();
+    let (base, server) = spawn_server(vec![response]);
+    let url = base_url(&base).join("/stream-smuggled").expect("join");
+
+    let error = net::fetch_streaming(&url, &options(), &mut |_chunk| Ok(()))
+        .expect_err("streaming conflicting Content-Length");
+    assert!(
+        matches!(error, FetchError::InvalidResponse(_)),
+        "expected InvalidResponse, got {error}"
+    );
+    let _ = server.join();
+}

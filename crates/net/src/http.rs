@@ -1684,12 +1684,14 @@ fn stream_response_body(
             .any(|token| token.trim().eq_ignore_ascii_case("chunked"))
     });
     if chunked {
-        return stream_chunked_body(reader, options.max_response_bytes, on_data);
+        return stream_chunked_body(
+            reader,
+            options.max_response_bytes,
+            options.max_header_bytes,
+            on_data,
+        );
     }
-    if let Some(length_text) = header_value(headers, "content-length") {
-        let length: usize = length_text.trim().parse().map_err(|_| {
-            FetchError::InvalidResponse(format!("invalid Content-Length `{length_text}`"))
-        })?;
+    if let Some(length) = content_length(headers)? {
         if length > options.max_response_bytes {
             return Err(FetchError::ResponseTooLarge);
         }
@@ -1757,11 +1759,16 @@ fn stream_encoded_body(
             .any(|token| token.trim().eq_ignore_ascii_case("chunked"))
     });
     let (_, trailers) = if chunked {
-        stream_chunked_body(reader, options.max_response_bytes, &mut feed)?
-    } else if let Some(length_text) = header_value(headers, "content-length") {
-        let length: usize = length_text.trim().parse().map_err(|_| {
-            FetchError::InvalidResponse(format!("invalid Content-Length `{length_text}`"))
-        })?;
+        stream_chunked_body(
+            reader,
+            options.max_response_bytes,
+            options.max_header_bytes,
+            &mut feed,
+        )?
+    } else if let Some(length) = content_length(headers)? {
+        if length > options.max_response_bytes {
+            return Err(FetchError::ResponseTooLarge);
+        }
         stream_fixed_body(reader, length, &mut feed)?
     } else {
         stream_until_eof(reader, options.max_response_bytes, &mut feed)?
@@ -1845,6 +1852,7 @@ fn stream_until_eof(
 fn stream_chunked_body(
     reader: &mut ConnReader,
     max_bytes: usize,
+    max_header_bytes: usize,
     on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
 ) -> Result<(Vec<u8>, Headers), FetchError> {
     let mut delivered = 0usize;
@@ -1863,12 +1871,19 @@ fn stream_chunked_body(
             FetchError::InvalidResponse(format!("invalid chunk size `{size_text}`"))
         })?;
         if size == 0 {
+            // Streaming path: the trailer section must be capped like the buffered one,
+            // otherwise a `fetch_streaming` consumer can be fed unbounded memory.
             let mut trailers = Vec::new();
+            let mut trailer_bytes = 0usize;
             loop {
                 match reader.read_line(1024)? {
                     None => return Ok((Vec::new(), trailers)),
                     Some(line) if line.is_empty() => return Ok((Vec::new(), trailers)),
                     Some(line) => {
+                        trailer_bytes = trailer_bytes.saturating_add(line.len() + 2);
+                        if trailer_bytes > max_header_bytes {
+                            return Err(FetchError::HeadersTooLarge);
+                        }
                         let text = String::from_utf8_lossy(&line);
                         if let Some((name, value)) = text.split_once(':') {
                             trailers.push((name.trim().to_owned(), value.trim().to_owned()));
@@ -1906,6 +1921,29 @@ fn stream_chunked_body(
     }
 }
 
+/// Returns the response's `Content-Length`, rejecting differing duplicates (RFC 9112 §6.3).
+///
+/// Identical duplicates are valid; taking the first one silently would let a malicious
+/// server split a response across a pooled connection or a streaming callback.
+fn content_length(headers: &Headers) -> Result<Option<usize>, FetchError> {
+    let mut values = headers
+        .iter()
+        .filter(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+        .map(|(_, value)| value.trim());
+    let Some(first) = values.next() else {
+        return Ok(None);
+    };
+    if values.any(|other| other != first) {
+        return Err(FetchError::InvalidResponse(
+            "conflicting Content-Length headers".to_owned(),
+        ));
+    }
+    let length: usize = first
+        .parse()
+        .map_err(|_| FetchError::InvalidResponse(format!("invalid Content-Length `{first}`")))?;
+    Ok(Some(length))
+}
+
 fn read_body(
     reader: &mut ConnReader,
     status: u16,
@@ -1929,22 +1967,7 @@ fn read_body(
     if chunked {
         return reader.read_chunked(options.max_response_bytes, options.max_header_bytes);
     }
-    // RFC 9112 §6.3: reject differing Content-Length values (duplicates that agree are
-    // allowed). Taking the first one silently would let a malicious server split the
-    // response across a pooled connection and have the next response start mid-body.
-    let mut content_lengths = headers
-        .iter()
-        .filter(|(name, _)| name.eq_ignore_ascii_case("content-length"))
-        .map(|(_, value)| value.trim());
-    if let Some(length_text) = content_lengths.next() {
-        if content_lengths.any(|other| other != length_text) {
-            return Err(FetchError::InvalidResponse(
-                "conflicting Content-Length headers".to_owned(),
-            ));
-        }
-        let length: usize = length_text.parse().map_err(|_| {
-            FetchError::InvalidResponse(format!("invalid Content-Length `{length_text}`"))
-        })?;
+    if let Some(length) = content_length(headers)? {
         if length > options.max_response_bytes {
             return Err(FetchError::ResponseTooLarge);
         }
