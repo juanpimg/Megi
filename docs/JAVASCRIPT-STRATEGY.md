@@ -39,7 +39,7 @@ Megi ha cerrado funcionalmente la Fase 4 (renderizado) y tiene un pipeline de na
 
 **Estado real verificado en la decisión (ronda 7)**: **602 tests, 0 fallos**; gate de 4 suites PASS (tokenizer 7.050/7.050, árbol 3.898/3.904, serializador 230/230, CSS 30/30); Fase 6 con **decisión ACEPTADA el 2026-11-10**, implementación arrancando por `WP-6.1`.
 
-**Estado a ronda 30 (HEAD `f7dad8d`)**: **1853 tests, 0 fallos**; gate PASS; **147 tests js**; **Web Workers cooperativos deterministas HECHOS** (`Worker(url)` con `set_worker_loader`, realm aislado sin DOM, `postMessage`/`onmessage`/`addEventListener('message')`/`terminate`, colas FIFO JSON-safe, entrega `run_worker_tasks`/microtasks, `onerror` tipado, caps 8/256; render `RenderOptions.enable_workers` con loader file:// y drenaje en el event loop; fix de dos bugs de HostScope). Pendientes F6 (~99 %): TLA real/live bindings/fetch, conformance/memoria y gaps DOM restantes. Todos los crates con `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+**Estado a ronda 31 (HEAD `aba05f8`)**: **1907 tests, 0 fallos**; gate PASS; **158 tests js**; **fetch() subset HECHO** (`Headers`/`Request`/`Response`, provider `set_fetch_provider`, GET/POST, caps 64/8 MiB, sin provider ⇒ rejection tipada) y **fix HostScope en `run_microtasks`** para que las Promises toquen DOM/console; render instala provider con `net::http::fetch_with_method`+ResourceLoader, CORS same-origin, `--no-network` y 404 sintético. Pendientes F6: TLA real/live bindings/workers con DOM, conformance/memoria y follow-ups de fetch (streaming/abort/timeout). Todos los crates con `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
 
 ---
 

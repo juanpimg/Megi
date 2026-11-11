@@ -683,6 +683,20 @@ Límites r30: VP8 keyframe only, simple filter luma-only y fixtures de 1 partici
 
 Cifras de referencia en la ronda 30: **1853 tests** (bench 9, css 241, dom 36, fonts 17+1 doctest, html 60, image 90, js 147, layout 224, net 299, paint 208, render 165, shell 236, svg 109, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
 
+### 2.16x Ronda 31: cascade layers, PNG single-encode, fetch, proxies y perf VP8
+
+```bash
+cargo test -p css --test cascade_layers
+cargo test -p render --test encode_png_tests
+cargo test -p js --test fetch_tests && cargo test -p render --test fetch_tests
+cargo test -p net --test proxy
+cargo run --release -p bench -- --filter image/decode-webp-lossy
+```
+
+Límites r31: layers sin `layer()` en imports y sublayers aproximadas; `encode_png=false` solo útil si el caller muta el pixmap y los overlays requieren un encode final; fetch sin streaming/abort/timeout, GET/POST y CORS same-origin; proxies sin PAC/WPAD/SOCKS, Basic solo y sin pooling; VP8 mantiene caps y tolerancias (keyframe-only).
+
+Cifras de referencia en la ronda 31: **1907 tests** (bench 10, css 260, dom 36, fonts 17+1 doctest, html 60, image 90, js 158, layout 224, net 315, paint 208, render 170, shell 238, svg 109, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
+
 ## 4. Progress status generado (`PROGRESS.md`, `docs/status/*.svg`)
 
 El estado de avance del proyecto se genera **desde datos reales del repositorio**, sin

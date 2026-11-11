@@ -1,46 +1,45 @@
-# Handoff de sesión — ronda 30 (VP8 lossy, container queries, PSL/trailers, Web Workers, historial y chrome fast path)
+# Handoff de sesión — ronda 31 (cascade layers, PNG single-encode, fetch, proxies y perf VP8)
 
 **Fecha**: 2026-11-11 (Europe/Madrid)
-**Rama**: `sprint/robustez-fase4` — HEAD `f7dad8d`
-**Estado**: **1853 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; **F4 ≈100 %**, F5 ≈99 %, F6 ≈99 %, **F7 ≈97 %**. Manifiesto `docs/status/progress.toml` actualizado (F4/F5/F6/F7 + `next_up`); `PROGRESS.md`/SVG se regeneran con `python3 tools/update_progress.py --write`.
-**CI/Repo**: GitHub Actions en verde, con **Status freshness**; `main` y `sprint/robustez-fase4` sincronizadas en `f7dad8d`; fuzz PR build-only (14 targets); suite determinista.
+**Rama**: `sprint/robustez-fase4` — HEAD `aba05f8`
+**Estado**: **1907 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; **F4/F5/F6 ≈100 %**, **F7 ≈98 %**. Manifiesto `docs/status/progress.toml` actualizado (F5/F6/F7 + `next_up`); `PROGRESS.md`/SVG se regeneran con `python3 tools/update_progress.py --write`.
+**CI/Repo**: GitHub Actions en verde, con **Status freshness**; `main` y `sprint/robustez-fase4` sincronizadas en `aba05f8`; fuzz PR build-only (14 targets); suite determinista.
 **Estado de fases**: fuente editable [`docs/status/progress.toml`](status/progress.toml), página generada [`PROGRESS.md`](../PROGRESS.md); **no editar a mano** los artefactos generados.
 
-## Qué se hizo en la ronda 30 (5 commits + status)
+## Qué se hizo en la ronda 31 (4 commits + status)
 
 | Commit | Bloque | Resultado |
 |---|---|---|
-| `7ed6be3` `feat(image,render)` | **Decoder VP8 keyframe completo** | WebP lossy desde cero (~1.8k líneas + tablas): boolean decoder, segmentación, loop filters normal+simple, particiones 1/2/4/8, intra Y16/UV DC/V/H/TM y B_PRED 10 modos, dequant/IDCT 4×4/Y2 IWHT, YUV420→RGB fancy upsampling libwebp y BT.601 fixed-point. Tolerancias vs PIL q75 max 6/0,12, q90 max 2/0,01, 1024×768 max 7/0,01; decode **53,6 ms** release; image **90**/render **165**. Límites: keyframe only, simple filter luma-only, fixtures 1 partición (multi implementada). |
-| `a2ee4a0` `feat(css,layout)` | **Container Queries** | `container-type: normal|inline-size|size`, `container-name`, `@container [name] (min/max-width|height|inline-size|block-size, and)` con px/%/em/rem, ancestro compatible más cercano, anidamiento y fast path sin reglas; predicción de tamaño de una pasada documentada; css **241**/layout **224**; fixtures container_queries `c358c11f…`/named `57b09283…`. Límites sin style/scroll-state ni cqi/cqw completas. |
-| `87b493d` `feat(net)` | **PSL real + request trailers** | PSL vendorizada `crates/net/data/public_suffix_list.dat` (snapshot publicsuffix.org, 16.610 líneas/~339 KB, MPL-2.0, include_str!, parser OnceLock, reglas normal/wildcard/exception, algoritmo completo, fallback último label, IDN ASCII/punycode documentado, `tools/update_psl.sh`) y trailers h2 (`H2Request::with_trailers`, HEADERS final END_STREAM tras DATA, body requerido) y h1 (`fetch_with_trailers`, chunked `0\r\n`+trailers); framing sin trailers byte-idéntico; net **299**. |
-| `89c56ba` `feat(js,render)` | **Web Workers deterministas** | `Worker(url)` con `set_worker_loader`, realm aislado sin DOM, `postMessage`/`onmessage`/`addEventListener('message')`/`terminate`, colas FIFO JSON-safe, entrega `run_worker_tasks`/microtasks, `onerror` tipado, caps 8/256; fix de 2 bugs de HostScope (handler worker y callbacks principal) + drenaje en `execute_scripts`; `RenderOptions.enable_workers` y loader `file://`; js **147**/render **164**. Límites: cooperativos, sin SharedWorker/importScripts. |
-| `67365af` `feat(shell,bench)` | **Historial + chrome fast path** | `HistoryLog` por pestaña (cap 64, dedupe), `RecentHistory` cap 10, `about:history` determinista, Ctrl+H, botones ←/→/⟳ con hit-testing/disabled, recent en session.json; `draw_chrome_over_pixmap` dibuja solo banda superior sobre el Pixmap RGBA (sin round-trip 0RGB), píxeles idénticos, componente no-PNG **10,06→1,06 ms (−89,5 %)**; resto wall dominado por PNG final (floor 22,9 ms a 1024), follow-up omitir PNG redundante en `--chrome`/`--find`; shell **236**; goldens basic `7324e851…`, showcase `c95c7eff…`, phase4 `9e957177…`, basic.rgba `60f8984e…`, about:history `5ad5a2be…`. |
-| `f7dad8d` `chore(status)` | **Refresco del status** | Regenera `PROGRESS.md`, `docs/status/progress.svg` y badges; manifiesto editable actualizado en esta ronda (r30). |
+| `b37457e` `feat(css)` | **Cascade Layers** | `@layer name;`/bloques/anónimas/anidadas/compuestas, orden por primera aparición, origin→capa→especificidad→orden, unlayered normal gana/implicit final, `!important` invierte capas, `revert-layer`, @media/@container dentro de capa y fast path byte-idéntico sin capas; fix AtKeyword; css **260** (+19); fixtures `ddeafab9…`/`5944fb8a…`. Límites: sin `layer()` en imports, sublayers aproximadas. |
+| `6e97eae` `feat(render,shell)` | **PNG single-encode en overlays** | `RenderOptions.encode_png` (default true) + `ensure_png()`/`png_bytes()` perezosos idempotentes byte-idénticos; shell `--chrome/--find/--chrome-menu` clona con encode_png=false, pinta overlay y codifica **una vez**; A/B release CLI `--chrome` **+8,57→+1,13 ms** 640, **+21,67→+1,75 ms** 1024, showcase **+91,20→+2,32 ms** (≤8,5); goldens de overlay byte-idénticos; shell **238**/render **170**. |
+| `8dde3dc` `feat(js,render)` | **fetch() subset** | Headers/Request/Response (ok/status/statusText/url/text/json/arrayBuffer/clone, body single-use), `set_fetch_provider` (FetchRequest/FetchResult), GET/POST, caps 64 headers/8 MiB, sin provider ⇒ rejection tipada; **fix HostScope en `run_microtasks`** para Promises con DOM/console; render con `net::http::fetch_with_method`+ResourceLoader file/data, URL contra `location.href`, CORS same-origin, `--no-network` rejection y 404 sintético; js **158**/render **170**. |
+| `822c8a2` `feat(net)` + `perf(image)` | **Proxies HTTP/HTTPS + perf VP8** | `ProxyConfig{http,https,no_proxy}`/env, matching host/sufijo/IP/host:port/`*`, absolute-form+Basic auth, CONNECT validado+TLS h1/h2, errores ProxyAuthRequired/ProxyConnect/ProxyTunnel y no_proxy por hop; net **315** (+16). VP8: allocs 25.305→9, YUV sin Vec por fila, predict stack y loop filter early-exit; A/B 1024×768 **13,96→10,91 ms (−22,2 %)**; bench `image/decode-webp-lossy` **10,815 ms** (−20,2 %, 72,7 MPix/s); image **90**. |
+| `aba05f8` `chore(status)` | **Refresco del status** | Regenera `PROGRESS.md`, `docs/status/progress.svg` y badges; manifiesto editable actualizado en esta ronda (r31). |
 
 ## Evidencia verificada
 
-- `cargo test --workspace` → **1853 tests, 0 fallos**: css **241**, layout **224**, net **299**, js **147**, shell **236**, render **165**, image **90**, paint **208**, dom **36**, html **60**, svg **109**, fonts 17 + 1 doctest, bench **9**, test_harness **11**.
+- `cargo test --workspace` → **1907 tests, 0 fallos**: css **260**, net **315**, js **158**, shell **238**, render **170**, image **90**, layout **224**, paint **208**, dom **36**, html **60**, svg **109**, fonts 17 + 1 doctest, bench **10**, test_harness **11**.
 - Gate (`cargo run -p test_harness -- --summary`, exit 0): tokenizer **7.050/7.050**, árbol **3.904/3.904**, serializer **230/230**, CSS **30/30**; allowlists tokenizer/tree **(none)**.
-- **Perf**: VP8 1024×768 decode 53,6 ms; chrome fast path no-PNG −89,5 % (10,06→1,06 ms) con píxeles idénticos.
-- **Goldens**: página basic/showcase/phase4/basic.rgba intactos; about:history `5ad5a2be…`; container fixtures `c358c11f…`/`57b09283…`.
+- **Perf**: chrome overlay overhead +1,13/+1,75/+2,32 ms (antes +8,57/+21,67/+91,20); VP8 10,91 ms A/B y bench 10,815 ms.
+- **Goldens**: basic plain `7324e851…`, showcase `c95c7eff…`, phase4 `9e957177…`, basic.rgba `60f8984e…`; overlay basic chrome `93e53942`/`00b7d375`, menu `e9a8d7ad`/`b8422fc3`, showcase chrome `2d85b856`/`931e45ce`, menu `6e63a7a9`/`c06b0268`.
 - **Status**: `docs/status/progress.toml` es la fuente editable; `python3 tools/update_progress.py --write` regenera `PROGRESS.md` + `docs/status/*`; CI ejecuta `--check --no-gate --no-count`.
 - **Fuzz**: 14 targets, corpus 37, CI 300 s + PR build-only.
 
 ## Comandos de verificación
 
 ```bash
-./tools/dev.sh all                                  # fmt, clippy, 1853 tests, doc y gate
-cargo test --workspace                              # 1853 tests (JS por defecto)
+./tools/dev.sh all                                  # fmt, clippy, 1907 tests, doc y gate
+cargo test --workspace                              # 1907 tests (JS por defecto)
 cargo run -p test_harness -- --summary              # gate: 3904/3904 árbol, PASS, exit 0
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo doc --workspace --no-deps
 cargo +1.88 check --workspace --all-targets         # MSRV
 
-# Ronda 30
-cargo test -p image --test vp8
-cargo test -p css && cargo test -p layout
-cargo test -p net --test psl && cargo test -p net --test trailers
-cargo test -p js --test workers && cargo test -p render --test worker_tests
-cargo test -p shell --test history
+# Ronda 31
+cargo test -p css --test cascade_layers
+cargo test -p render --test encode_png_tests
+cargo test -p js --test fetch_tests && cargo test -p render --test fetch_tests
+cargo test -p net --test proxy
+cargo run --release -p bench -- --filter image/decode-webp-lossy
 
 # Progress status
 python3 tools/update_progress.py --write
@@ -52,27 +51,27 @@ python3 tools/update_progress.py --check --no-gate --no-count
 | Crate | Estado | Tests |
 |---|---|---|
 | `dom` / `html` | COMPLETOS + gaps r27 | **36** / 60 |
-| `css` | F2+F4 + var/calc/pseudos + grid + filtros/blend + Color 4/5 + **container queries** | **241** |
-| `layout` | F4 completa + flex/grid + calc mixto/sticky/tipografía + interning + aspect-ratio + **container queries** | **224** |
+| `css` | F2+F4 + grid + filtros/blend + Color 4/5 + container queries + **cascade layers** | **260** |
+| `layout` | F4 completa + flex/grid + calc/sticky/tipografía + interning + aspect-ratio + container queries | **224** |
 | `fonts` | COMPLETO LTR + fuentes web | 17 + 1 doctest |
 | `paint` | F4 completa + backgrounds/decoraciones/clipping/gradientes + EffectGroup + Color 4/5 + blur/PNG byte-safe | **208** |
-| `image` | PNG + JPEG baseline/progresivo/IDCT/EXIF + GIF + EXIF 1–8 + WebP VP8L + **VP8 lossy keyframe** | **90** |
-| `net` | F5: TLS/caché/cookies/**PSL real**/Referrer/Range + HTTP/2 (HPACK/framing/flow/mux/SETTINGS/bodies/trailers/100-continue/push/priorities/h2c/streaming/keep-alive) + h1 POST | **299** |
-| `js` | F6: DOM/eventos/timers/APIs + ES modules/import maps + geometría + **Web Workers** | **147** |
+| `image` | PNG + JPEG baseline/progresivo/IDCT/EXIF + GIF + EXIF 1–8 + WebP VP8L + VP8 lossy keyframe (+perf) | **90** |
+| `net` | F5: TLS/caché/cookies/PSL/Referrer/Range + HTTP/2 (HPACK/framing/flow/mux/SETTINGS/bodies/trailers/100-continue/push/priorities/h2c/streaming/keep-alive) + h1 POST + **proxies HTTP/HTTPS** | **315** |
+| `js` | F6: DOM/eventos/timers/APIs + ES modules/import maps + geometría + Web Workers + **fetch()** | **158** |
 | `svg` | Parser/modelo/rasterizador + CSS/gradientes/pattern/text + clipPath/mask/filtros + textPath/SMIL avanzado | **109** |
-| `render` | Pipeline URL→PNG + imágenes (VP8 lossy) + module scripts/importmap + scaled decode + providers JS + streaming/keep-alive + workers | **165** |
-| `shell` | F7 + chrome contextual + pages/favicons + **historial** + **chrome fast path** + sesión/save-png | **236** |
-| `bench` / `test_harness` | Tooling (chrome-png rows) / gate 4 suites | 9 / 11 |
+| `render` | Pipeline URL→PNG + imágenes + module scripts/importmap + scaled decode + providers JS + streaming/keep-alive + workers + **encode_png/fetch** | **170** |
+| `shell` | F7 + chrome contextual + pages/favicons + historial + chrome fast path + **PNG single-encode** + sesión/save-png | **238** |
+| `bench` / `test_harness` | Tooling (VP8/chrome-png rows) / gate 4 suites | 10 / 11 |
 | `fuzz` (workspace aparte) | 14 targets + corpus 37 + PR build-only | build 14/14 |
 
 ## Deuda priorizada
 
-1. **Red**: push prioritization, proxies, HTTP/1.0, streaming responses; IDN PSL y trailers sin body.
-2. **JS**: TLA real/live bindings/fetch, conformance/memoria; workers follow-ups (loader no-file, SharedWorker fuera de alcance).
-3. **Imágenes/SVG**: VP8 interframe/VP8X/ALPH/ANIM y multi-partition fixtures; SVG auto-rotate/side right/textLength y SMIL restante.
-4. **Paint/bench**: backdrop blur floor, PNG regions, rasterizer budgets y opción render para omitir PNG redundante en `--chrome`/`--find`.
-5. **Shell**: save-as/prompt visual, descarga de recursos, cookies/passwords, favicons/multi-select y pulido de historial.
-6. **Fuzz/bench**: campañas más largas (imagen/HTTP2/JS module), bench E2E de las features r30 y mantener el status al cerrar cada ronda.
+1. **Red**: push prioritization, HTTP/1.0, streaming responses; proxy PAC/SOCKS/pooling.
+2. **JS**: TLA real/live bindings, fetch streaming/abort/timeout, workers con DOM, conformance/memoria.
+3. **Imágenes/SVG**: VP8 interframe/VP8X/ALPH/ANIM, SVG auto-rotate/side right/textLength y SMIL restante.
+4. **Paint/bench**: backdrop blur floor, PNG regions y rasterizer budgets.
+5. **Shell**: save-as/prompt visual, descarga de recursos, cookies/passwords, favicons/multi-select y pulido de overlay.
+6. **Fuzz/bench**: campañas más largas (imagen/HTTP2/JS module), bench E2E de las features r31 y mantener el status al cerrar cada ronda.
 
 ## Reglas del repositorio (recordatorio)
 

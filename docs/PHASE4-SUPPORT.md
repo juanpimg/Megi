@@ -33,7 +33,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | `display: list-item` y marcadores (§12.5) | **HECHO** | paint pinta `disc`/`circle`/`square`/`decimal` |
 | `visibility: hidden` (§11.2) | **HECHO** | paint no pinta caja ni texto |
 
-## 2. CSS (`crates/css`, 241 tests + 30 WPT)
+## 2. CSS (`crates/css`, 260 tests + 30 WPT)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -152,7 +152,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, eventos DOM/foco y formularios del host (Fase 7), animaciones, `border-radius`, `box-shadow`, gradientes y medios paginados. JavaScript está en Fase 6 (ver §8); hit-testing y navegación ya existen (rondas 9–10).
 
-## 8. Fase 6: JavaScript (`crates/js`, 147 tests + scripting E2E en `render`/parser)
+## 8. Fase 6: JavaScript (`crates/js`, 158 tests + scripting E2E en `render`/parser)
 
 | **ES modules (ronda 25)**: `eval_module` con resolver/loader, imports default/named/namespace/side-effect, exports const/let/var/function/class/default/{as}, `import.meta.url`, orden topológico, ciclos `ModuleCycle` y errores tipados | **HECHO** | js 96 tests; subset line-based documentado (sin import() dinámico/top-level await/export-from/live bindings) |
 | **SVG filters + SMIL (ronda 26)**: `feColorMatrix`/`feBlend`/`feMerge`/`feComposite` arithmetic con cadenas in/in2/result y `<animate>/<set>/<animateTransform>` determinista (`render_svg_with_time`) | **HECHO** | svg 97 tests; sin animación byte-idéntico |
@@ -169,7 +169,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 | **WP-6.4 (ronda 11)**: hook `html::scripting::{ScriptExecutor, ScriptExecution}`; scripts parser-inserted al `</script>`/EOF y `document.write` **re-tokenizado en la posición actual** (scripts anidados incluidos); externos `src` los ejecuta el host; errores no fatales; camino sin scripting zero-cost | **HECHO** | **árbol 3.904/3.904 (100 %), allowlist de tree vacía** |
 | Pendientes F6: `document.onerror` para errores de scripts, módulos ES/`async`/`defer`, memoria real y aislamiento, provider de `getComputedStyle` cableado al pipeline y event loop vivo en el shell | **PENDIENTE** | Fase 6 ≈80-85 % |
 
-## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 236 tests)
+## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 238 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -190,7 +190,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 ## 10. Verificación de la matriz
 
 ```bash
-./tools/dev.sh all                             # fmt, clippy, 1853 tests, doc y gate PASS
+./tools/dev.sh all                             # fmt, clippy, 1907 tests, doc y gate PASS
 cargo test -p css -p layout -p paint -p fonts -p dom -p html
 cargo test -p net -p render -p image -p shell
 cargo test -p js

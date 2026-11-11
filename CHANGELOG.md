@@ -6,6 +6,52 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 31 — cascade layers, single-encode PNG overlays, fetch(), HTTP/HTTPS proxies and VP8 performance (2026-11-11)
+
+#### Added
+
+- **Cascade layers** (`b37457e`, css 260 tests): `@layer name;`/block/anonymous/nested/
+  compound layers, order by first appearance, origin→layer→specificity→order,
+  unlayered normal wins/implicit final, `!important` reverses layer order,
+  `revert-layer` (skips the same layer, no UA fallback), `@media`/`@container` inside
+  layers, byte-identical no-layers fast path and AtKeyword serialization fix; fixtures
+  `cascade_layers` `ddeafab9…` / nested `5944fb8a…`. Limits: no `layer()` in imports,
+  approximated sublayers.
+- **Single-encode PNG overlays** (`6e97eae`, render 170 / shell 238 tests):
+  `RenderOptions.encode_png` (default true) with lazy idempotent byte-identical
+  `ensure_png()`/`png_bytes()`; shell `--chrome/--find/--chrome-menu` clones with
+  `encode_png=false`, paints the overlay and encodes **once**. A/B CLI overhead
+  `--chrome` **+8.57→+1.13 ms** (640 basic), **+21.67→+1.75 ms** (1024 basic),
+  **+91.20→+2.32 ms** (showcase 1024), target ≤8.5 met; overlay goldens byte-identical
+  (basic chrome `93e53942`/`00b7d375`, menu `e9a8d7ad`/`b8422fc3`, showcase chrome
+  `2d85b856`/`931e45ce`, menu `6e63a7a9`/`c06b0268`).
+- **fetch() subset** (`8dde3dc`, js 158 / render 170 tests): `Headers`/`Request`/
+  `Response` (`ok/status/statusText/url/text()/json()/arrayBuffer()/clone()`,
+  single-use body), injectable `set_fetch_provider` (`FetchRequest`/`FetchResult` in
+  `js::host`), GET/POST, 64 headers/8 MiB caps, typed rejection without provider;
+  **HostScope fix in `run_microtasks`** so Promise callbacks can touch DOM/console.
+  Render installs a provider via `net::http::fetch_with_method` + `ResourceLoader`
+  (file/data), resolves URLs against `location.href`, same-origin CORS, `--no-network`
+  rejection and synthetic file 404; no event-loop blocking (microtask drain).
+- **HTTP/HTTPS proxies** (`822c8a2`, net 315 tests): `ProxyConfig{http,https,no_proxy}`
+  with `from_env()`/`from_vars()`, host/suffix/IP/host:port/`*` matching, credential-free
+  `Display`, `FetchOptions.proxy`/`ResourceLoader::with_proxy`; HTTP targets via
+  proxy absolute-form + Host + Basic auth; HTTPS via validated CONNECT + TLS (h1/h2);
+  typed `ProxyAuthRequired`/`ProxyConnect`/`ProxyTunnel`, `no_proxy` per hop. Limits:
+  no PAC/WPAD/SOCKS, Basic only, no proxy pooling, opt-in.
+- **VP8 performance** (`822c8a2`, image 90 tests): allocation 25,305→9 (YUV without
+  per-row `Vec`, `predict_large` on stack, loop-filter early-exit, inline) while keeping
+  tolerances (q75 max 6/mean 0.065, q90 max 2/0.0046, 1024 max 7/0.0099); A/B 1024×768
+  **13.96→10.91 ms (−22.2 %)**; bench row `image/decode-webp-lossy` **10.815 ms**
+  (−20.2 %, 72.7 MPix/s).
+
+#### Tests
+
+- **1,907 tests, 0 failures** (css 260, net 315, js 158, shell 238, render 170, image 90,
+  layout 224, paint 208, dom 36, html 60, svg 109, fonts 17+1 doctest, bench 10,
+  test_harness 11); gate PASS with tokenizer 7,050/7,050, tree 3,904/3,904,
+  serializer 230/230 and CSS 30/30.
+
 ### Round 30 — full VP8 keyframe decoder, container queries, PSL/trailers, deterministic Web Workers, shell history and chrome fast path (2026-11-11)
 
 #### Added
