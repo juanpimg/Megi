@@ -109,12 +109,22 @@ def count_rust_lines(root: Path) -> int:
 
 
 def unsafe_forbidden_crates(root: Path) -> list[str]:
+    """Returns the crates whose root module forbids unsafe code.
+
+    Binary-only crates (`bench`) carry the attribute in `main.rs`, so both roots are
+    checked; the first file that exists wins.
+    """
     pattern = re.compile(r"#!\s*\[\s*forbid\s*\(\s*unsafe_code\s*\)\s*\]")
     crates = []
     for cargo in sorted((root / "crates").glob("*/Cargo.toml")):
-        lib = cargo.parent / "src" / "lib.rs"
-        if lib.is_file() and pattern.search(lib.read_text(encoding="utf-8", errors="ignore")):
-            crates.append(cargo.parent.name)
+        for root_module in ("lib.rs", "main.rs"):
+            module = cargo.parent / "src" / root_module
+            if not module.is_file():
+                continue
+            text = module.read_text(encoding="utf-8", errors="ignore")
+            if pattern.search(text):
+                crates.append(cargo.parent.name)
+            break
     return crates
 
 
