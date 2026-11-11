@@ -32,16 +32,16 @@ next_up = [
 # GENERATED STATS (rewritten by tools/update_progress.py --write; safe to inspect)
 # ---------------------------------------------------------------------------------------
 [stats]
-tests = 1991
-tests_commit = "2df6467"
+tests = 1995
+tests_commit = "ce983c2"
 tests_date = "2026-11-11"
 crates = 14
-rust_lines = 156215
+rust_lines = 156306
 unsafe_forbidden_crates = 14
 
 [gate]
 status = "PASS"
-verified_commit = "2df6467"
+verified_commit = "ce983c2"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"
