@@ -92,6 +92,7 @@ pub mod gif;
 pub mod inflate;
 pub mod jpeg;
 pub mod png;
+pub mod vp8;
 pub mod webp;
 
 pub use error::ImageError;

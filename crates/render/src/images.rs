@@ -9,7 +9,9 @@
 //! - Missing/blocked/failed subresources are **non-fatal**: the render yields a
 //!   gray placeholder box (painted by `paint::IMAGE_PLACEHOLDER`) and a warning.
 //! - PNG, baseline/progressive JPEG, GIF (first frame) and **lossless WebP (VP8L)** are
-//!   decoded with the in-tree `image` crate; VP8 *lossy* WebP and unsupported JPEG
+//!   decoded with the in-tree `image` crate; **VP8 lossy** WebP is detected and its
+//!   keyframe header validated (experimental), then degrades to a non-fatal warning +
+//!   placeholder until pixel reconstruction lands; unsupported JPEG
 //!   variants produce a warning and a placeholder, never an error.
 //! - Defensive caps, configurable through [`crate::RenderOptions`]:
 //!   [`DEFAULT_MAX_IMAGES`] images, [`DEFAULT_MAX_IMAGE_BYTES`] per image and
@@ -197,9 +199,20 @@ pub fn load_images(
                 }
                 Err(error) => {
                     result.failed += 1;
-                    result
-                        .warnings
-                        .push(format!("skipping image {url}: {error}"));
+                    let message = format!("skipping image {url}: {error}");
+                    // Valid/broken VP8 lossy payloads are an experimental decoder path:
+                    // keep the warning explicit (the image degrades to a placeholder).
+                    if matches!(
+                        image::detect_format(&resource.bytes),
+                        image::ImageFormat::WebP
+                    ) && error.to_string().contains("VP8")
+                    {
+                        result.warnings.push(format!(
+                            "skipping image {url}: WebP VP8 lossy is experimental ({error})"
+                        ));
+                    } else {
+                        result.warnings.push(message);
+                    }
                 }
             }
         } else if svg_assets::looks_like_svg(&resource.content_type, &resource.bytes) {

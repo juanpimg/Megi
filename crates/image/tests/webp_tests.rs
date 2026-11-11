@@ -70,13 +70,76 @@ fn decodes_real_pil_lossless_photos_exactly() {
 }
 
 #[test]
-fn vp8_lossy_is_a_clear_unsupported_feature() {
+fn vp8_lossy_is_a_clear_experimental_feature() {
     let error = decode(&fixture("lossy.webp")).expect_err("VP8 lossy");
     match error {
         ImageError::UnsupportedFeature { feature } => {
-            assert!(feature.contains("lossy"), "{feature}");
+            assert!(
+                feature.contains("VP8 lossy") && feature.contains("experimental"),
+                "{feature}"
+            );
         }
         other => panic!("expected UnsupportedFeature, got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_real_pil_lossy_webp_keyframe_headers() {
+    // PIL/libwebp lossy (VP8 keyframe, 4:2:0): header/dimensions validation is the
+    // supported experimental surface until pixel reconstruction lands.
+    for (name, width, height) in [
+        ("photo_lossy_q75", 64u32, 48u32),
+        ("photo_lossy_q90", 64, 48),
+        ("photo_1024x768_lossy", 1024, 768),
+    ] {
+        let info = image::vp8::lossy_info(
+            &fixture(&format!("{name}.webp")),
+            &image::PngLimits::default(),
+        )
+        .unwrap_or_else(|error| panic!("{name}: {error:?}"));
+        assert_eq!((info.width, info.height), (width, height), "{name}");
+        assert!(info.version <= 3, "{name}");
+        assert!(info.first_partition_size > 0, "{name}");
+        let error = decode(&fixture(&format!("{name}.webp"))).expect_err("experimental");
+        assert!(
+            matches!(error, ImageError::UnsupportedFeature { .. }),
+            "{name}: {error:?}"
+        );
+    }
+}
+
+#[test]
+fn lossy_vp8_dimension_caps_are_enforced() {
+    let limits = image::PngLimits {
+        max_dimension: 32,
+        ..image::PngLimits::default()
+    };
+    let error = image::vp8::lossy_info(&fixture("photo_lossy_q75.webp"), &limits)
+        .expect_err("dimension cap");
+    assert!(
+        matches!(error, ImageError::LimitExceeded { .. }),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn corrupt_lossy_webp_is_a_typed_error() {
+    let bytes = fixture("photo_lossy_q75.webp");
+    for length in [0, 4, 12, 20] {
+        let error = image::vp8::lossy_info(
+            &bytes[..length.min(bytes.len())],
+            &image::PngLimits::default(),
+        )
+        .expect_err("truncated lossy");
+        assert!(
+            matches!(
+                error,
+                ImageError::Truncated { .. }
+                    | ImageError::InvalidData { .. }
+                    | ImageError::InvalidSignature
+            ),
+            "length {length}: {error:?}"
+        );
     }
 }
 
@@ -134,4 +197,27 @@ fn truncated_real_vp8l_photos_are_typed_errors() {
             );
         }
     }
+}
+
+#[test]
+fn vp8_header_parse_1024x768_timing_and_determinism() {
+    // A/B note: VP8 *pixel* decode is not implemented yet (experimental header-only),
+    // so this reports the container/header parse cost for the 1024×768 lossy fixture
+    // instead of a decode time. VP8L decode remains the A/B reference (see r25 docs).
+    use std::time::Instant;
+    let bytes = fixture("photo_1024x768_lossy.webp");
+    let start = Instant::now();
+    for _ in 0..100 {
+        let info = image::vp8::lossy_info(&bytes, &image::PngLimits::default()).expect("header");
+        assert_eq!((info.width, info.height), (1024, 768));
+    }
+    let elapsed = start.elapsed();
+    eprintln!(
+        "VP8 keyframe header parse 1024x768: {:.2} us/parse",
+        elapsed.as_secs_f64() * 1e6 / 100.0
+    );
+    assert!(
+        elapsed.as_millis() < 500,
+        "header parse too slow: {elapsed:?}"
+    );
 }

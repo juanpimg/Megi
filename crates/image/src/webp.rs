@@ -16,9 +16,10 @@
 //!   counts, palette sizes, code-group counts and cache sizes are capped before
 //!   allocating.
 //!
-//! VP8 lossy (`VP8 ` chunk) and animation/alpha-only WebP variants are not
-//! decoded (see `ImageFormat::WebP` handling in [`crate::decode`]); the renderer
-//! keeps a non-fatal warning for those.
+//! VP8 lossy (`VP8 ` chunk) is detected and its keyframe header validated by
+//! [`crate::vp8`] (experimental), but pixel reconstruction is not implemented yet:
+//! [`crate::decode`] returns a typed unsupported-feature error and the renderer keeps a
+//! non-fatal warning/placeholder. Animation/alpha-only WebP variants are out of scope.
 
 use crate::RgbaImage;
 use crate::error::ImageError;
@@ -875,14 +876,14 @@ fn decode_transform(
     Ok(transform)
 }
 
-/// Locates the `VP8L` chunk inside a RIFF/WEBP container and returns its payload.
-fn find_vp8l_chunk(bytes: &[u8]) -> Result<&[u8], ImageError> {
+/// Locates a chunk `id` inside a RIFF/WEBP container and returns its payload.
+fn find_chunk<'a>(bytes: &'a [u8], id: &[u8; 4]) -> Result<&'a [u8], ImageError> {
     if bytes.len() < RIFF_HEADER_LEN || !bytes.starts_with(b"RIFF") || &bytes[8..12] != b"WEBP" {
         return Err(ImageError::InvalidSignature);
     }
     let mut offset = RIFF_HEADER_LEN;
     while offset + 8 <= bytes.len() {
-        let id = &bytes[offset..offset + 4];
+        let chunk_id = &bytes[offset..offset + 4];
         let length = u32::from_le_bytes([
             bytes[offset + 4],
             bytes[offset + 5],
@@ -900,23 +901,37 @@ fn find_vp8l_chunk(bytes: &[u8]) -> Result<&[u8], ImageError> {
                 context: "WebP RIFF chunk payload",
             });
         }
-        if id == b"VP8L" {
+        if chunk_id == id {
             return Ok(&bytes[payload_start..payload_end]);
         }
-        if id == b"VP8 " {
-            return Err(ImageError::UnsupportedFeature {
-                feature: "WebP VP8 lossy decoding is not supported (only VP8L lossless)",
-            });
-        }
+        // Chunks are padded to an even size.
         offset = payload_end + (length & 1);
     }
     Err(ImageError::InvalidData {
-        reason: "WebP container has no VP8L or VP8 chunk",
+        reason: "WebP container has no matching chunk",
     })
+}
+
+/// Locates the `VP8L` chunk (lossless) and returns its payload.
+fn find_vp8l_chunk(bytes: &[u8]) -> Result<&[u8], ImageError> {
+    find_chunk(bytes, b"VP8L")
+}
+
+/// Locates the `VP8 ` chunk (lossy keyframe) and returns its payload.
+pub(crate) fn find_vp8_chunk(bytes: &[u8]) -> Result<&[u8], ImageError> {
+    find_chunk(bytes, b"VP8 ")
 }
 
 /// Decodes a VP8L (lossless) WebP image into RGBA8.
 pub(crate) fn decode_webp(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageError> {
+    // WebP lossy (`VP8 `) is detected and header-validated, but pixel reconstruction is
+    // still experimental: keep a clear typed error instead of mis-decoding it as VP8L.
+    if let Ok(payload) = find_vp8_chunk(bytes) {
+        let _info = crate::vp8::parse_keyframe(payload, limits)?;
+        return Err(ImageError::UnsupportedFeature {
+            feature: "WebP VP8 lossy decoding is experimental (keyframe header validated; pixel reconstruction pending, use VP8L for now)",
+        });
+    }
     let payload = find_vp8l_chunk(bytes)?;
     let Some((&signature, bitstream)) = payload.split_first() else {
         return Err(ImageError::Truncated {

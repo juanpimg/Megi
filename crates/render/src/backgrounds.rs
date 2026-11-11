@@ -296,9 +296,19 @@ pub fn load_backgrounds(
                 Ok(bitmap) => bitmap,
                 Err(error) => {
                     result.failed += 1;
-                    result.warnings.push(format!(
-                        "skipping background image {url}: image decode failed ({error})"
-                    ));
+                    if matches!(
+                        image::detect_format(&resource.bytes),
+                        image::ImageFormat::WebP
+                    ) && error.to_string().contains("VP8")
+                    {
+                        result.warnings.push(format!(
+                            "skipping background image {url}: WebP VP8 lossy is experimental ({error})"
+                        ));
+                    } else {
+                        result.warnings.push(format!(
+                            "skipping background image {url}: image decode failed ({error})"
+                        ));
+                    }
                     continue;
                 }
             }
