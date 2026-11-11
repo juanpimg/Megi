@@ -24,6 +24,10 @@
 #   - links: hover shows the URL in a bottom status bar; Ctrl+click / middle click opens the
 #     link in a new tab; right click opens a context menu (open/copy link, save image,
 #     reload, save page PNG/HTML; arrows/Enter/Esc); --chrome --chrome-menu for headless
+#   - file:// directories render a generated listing (name/type/size, breadcrumb, safe links);
+#     load failures (DNS/HTTP/TLS/file) render a deterministic error page with a Reintentar
+#     link (press r to reload); tabs show the page favicon (16x16 nearest decode) or a
+#     deterministic per-origin dot fallback
 #   - tabs: Ctrl+T new, Ctrl+W close (last tab -> New Tab), Ctrl+Tab / Ctrl+Shift+Tab
 #     cycle, Alt+1..9 activate; --tabs URL repeatable (headless renders the first/active tab)
 #   - Ctrl+L: print the current URL; title shows page — zoom% — scroll% (+warnings)

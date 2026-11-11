@@ -9,7 +9,8 @@
 //! pixels out) so it is unit-tested without a display; headless screenshots can include the
 //! chrome with `--chrome`.
 //!
-//! Deliberate limits: no autocomplete, no visual history dropdown, no icons/favicons,
+//! Deliberate limits: no autocomplete, no visual history dropdown, no favicon network
+//! fetch in the chrome painter (the worker supplies decoded 16x16 icons or a dot),
 //! no native menus, ASCII text rendered with the paint crate's built-in 8×8 bitmap font
 //! (uppercase glyphs used for lowercase input), and the address bar edits the URL only
 //! (search terms are treated as URLs). The tab strip shows a compact title per tab with
@@ -1211,6 +1212,8 @@ pub fn context_menu_hit(layout: &ContextMenuLayout, x: f32, y: f32) -> Option<us
 pub struct ChromeView<'a> {
     /// Tab titles, in order.
     pub tabs: &'a [String],
+    /// Per-tab favicon (decoded 16x16) or `None` for the deterministic dot fallback.
+    pub favicons: &'a [Option<crate::favicon::Favicon>],
     /// Active tab index.
     pub active_tab: usize,
     /// Address bar state.
@@ -1306,10 +1309,49 @@ fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, width
             COLOR_TAB
         };
         pixmap.fill_rect(scaled(tab.rect, scale), color);
+        let mut title_x = tab.rect.x + 6.0;
+        if let Some(Some(icon)) = view.favicons.get(tab.index) {
+            title_x = tab.rect.x + 23.0;
+            if let Some(pixels) = icon.pixels {
+                for y in 0..crate::favicon::ICON_SIZE {
+                    for x in 0..crate::favicon::ICON_SIZE {
+                        let offset = ((y * crate::favicon::ICON_SIZE + x) * 4) as usize;
+                        let alpha = pixels[offset + 3];
+                        if alpha == 0 {
+                            continue;
+                        }
+                        pixmap.fill_rect(
+                            Rect::new(
+                                (tab.rect.x + 3.0 + x as f32) * scale,
+                                (tab.rect.y + 4.0 + y as f32) * scale,
+                                scale,
+                                scale,
+                            ),
+                            Color::new(
+                                pixels[offset],
+                                pixels[offset + 1],
+                                pixels[offset + 2],
+                                alpha,
+                            ),
+                        );
+                    }
+                }
+            } else {
+                pixmap.fill_rect(
+                    Rect::new(
+                        (tab.rect.x + 5.0) * scale,
+                        (tab.rect.y + 8.0) * scale,
+                        8.0 * scale,
+                        8.0 * scale,
+                    ),
+                    Color::new(icon.color[0], icon.color[1], icon.color[2], 0xFF),
+                );
+            }
+        }
         draw_text(
             pixmap,
             &tab.title,
-            tab.rect.x + 6.0,
+            title_x,
             tab.rect.y + 8.0,
             scale,
             11.0,
@@ -1636,6 +1678,7 @@ mod tests {
         tabs: &'a [String],
     ) -> ChromeView<'a> {
         ChromeView {
+            favicons: &[],
             tabs,
             active_tab: 0,
             address,

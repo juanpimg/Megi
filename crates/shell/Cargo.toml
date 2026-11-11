@@ -15,6 +15,7 @@ layout.workspace = true
 render.workspace = true
 paint.workspace = true
 net.workspace = true
+image.workspace = true
 winit.workspace = true
 softbuffer.workspace = true
 

@@ -47,7 +47,27 @@ pub fn render_target_with_options(
     let viewport = render::Viewport::new(width, height)?;
     let mut effective = options.clone();
     effective.viewport = viewport;
-    Ok(render::render_url(input, &effective)?)
+    let prepared = match crate::pages::prepare_input(input) {
+        Ok(prepared) => prepared,
+        Err((code, message)) => {
+            let page = crate::pages::data_url(&crate::pages::error_html(input, &code, &message));
+            return render::render_url(&page, &effective).map_err(ShellError::from);
+        }
+    };
+    match render::render_url(&prepared, &effective) {
+        Ok(output) => Ok(output),
+        Err(error) => {
+            // Invalid URLs stay typed errors; network/TLS/HTTP/file failures render the
+            // browser error page instead of an empty/failed screenshot.
+            if matches!(error, render::RenderError::Url(_)) {
+                return Err(ShellError::from(error));
+            }
+            let code = crate::pages::error_code(&error);
+            let page =
+                crate::pages::data_url(&crate::pages::error_html(input, code, &error.to_string()));
+            render::render_url(&page, &effective).map_err(|_| ShellError::from(error))
+        }
+    }
 }
 
 /// Renders `input` and paints the shell chrome (tab strip + address bar) over the page.
@@ -71,8 +91,14 @@ pub fn render_target_with_chrome(
     let mut dest = crate::convert::pixmap_to_0rgb(&output.pixmap);
     let title = crate::title::document_title(&output.document).unwrap_or_else(|| input.to_string());
     let tabs = vec![crate::chrome::truncate_title(&title, 24)];
+    let favicons = vec![Some(crate::favicon::for_page(
+        &output.document,
+        &output.document_url,
+        options,
+    ))];
     let address = crate::chrome::AddressBar::new();
     let view = crate::chrome::ChromeView {
+        favicons: &favicons,
         tabs: &tabs,
         active_tab: 0,
         address: &address,
@@ -119,9 +145,15 @@ pub fn render_target_with_chrome_menu(
     let mut dest = crate::convert::pixmap_to_0rgb(&output.pixmap);
     let title = crate::title::document_title(&output.document).unwrap_or_else(|| input.to_string());
     let tabs = vec![crate::chrome::truncate_title(&title, 24)];
+    let favicons = vec![Some(crate::favicon::for_page(
+        &output.document,
+        &output.document_url,
+        options,
+    ))];
     let address = crate::chrome::AddressBar::new();
     let menu = crate::chrome::ContextMenu::new(None, None, 40.0, 80.0);
     let view = crate::chrome::ChromeView {
+        favicons: &favicons,
         tabs: &tabs,
         active_tab: 0,
         address: &address,

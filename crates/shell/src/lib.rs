@@ -69,6 +69,14 @@
 //!   [`tabs::MAX_TABS`]); right click opens a deterministic context menu (open/copy link,
 //!   save image fetched on demand into the download directory, copy image documented no-op,
 //!   reload, save page PNG/HTML) with keyboard navigation and click-outside to close.
+//! - **Generated pages and tab identity (R189)**: `file://` directories render a
+//!   deterministic listing ([`pages`]: sorted names, type, human size, breadcrumb and
+//!   absolute escaped links); load failures (DNS/HTTP/TLS/network/file) render a
+//!   browser error page with the URL, code, message and a `Reintentar` link (press `r`),
+//!   instead of a blank frame; tabs draw a 16x16 favicon decoded from `<link rel=icon>`
+//!   / `favicon.ico` with a deterministic per-origin dot fallback ([`favicon`], memory
+//!   cache per origin). Limits: generated pages run no scripts, listings are `file://`
+//!   only, and only the first icon link is used (no SVG/sizes selection).
 //! - **Browser chrome (R135/R174)**: a shell-drawn overlay ([`chrome`]) with a tab strip
 //!   (ellipsis titles, per-tab deterministic loading dot, wheel/click switching and a real
 //!   overflow menu with activate/close) and an address bar
@@ -160,12 +168,16 @@ pub mod cli;
 pub mod convert;
 pub mod download;
 pub mod error;
+/// Tab favicons and deterministic fallback dots.
+pub mod favicon;
 pub mod find;
 pub mod forms;
 pub mod headless;
 pub mod images;
 pub mod links;
 pub mod navigation;
+/// Generated `file://` directory listings and load-error pages.
+pub mod pages;
 pub mod present;
 pub mod refresh;
 pub mod scale;

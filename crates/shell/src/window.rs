@@ -1738,7 +1738,12 @@ impl WindowApp {
             );
         }
         // Browser chrome is an overlay in CSS coordinates over the page frame.
+        let favicons: Vec<Option<crate::favicon::Favicon>> = chrome_titles
+            .iter()
+            .map(|title| Some(crate::favicon::Favicon::fallback(title)))
+            .collect();
         let view = ChromeView {
+            favicons: &favicons,
             tabs: &chrome_titles,
             active_tab: chrome_active_tab,
             address: &chrome_address,

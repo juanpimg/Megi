@@ -17,8 +17,10 @@
 //!   newer request superseded it.
 //! * **Debounce**: resize/scale changes are coalesced by [`Debounce`] (about
 //!   120 ms) before a request is enqueued.
-//! * **Errors**: a failed render becomes [`WorkerMessage::Failed`]; the window
-//!   shows a white frame and logs to stderr.
+//! * **Errors**: invalid URLs become [`WorkerMessage::Failed`] (logged to stderr);
+//!   network/TLS/HTTP/file load failures render a deterministic browser error page
+//!   instead of a blank frame (press `r` to retry). `file://` directories render a
+//!   generated listing page.
 //!
 //! No new dependencies: `std::sync::mpsc`, `std::thread` and `std::time` only.
 //! The production renderer ([`render_document`]) is separated from the worker
@@ -395,6 +397,12 @@ pub fn render_document_with_options(
     );
     let title = document_title(&output.document);
     let document_url = output.document_url.as_str();
+    let document_url =
+        if document_url.starts_with("data:text/html") && !request.input.starts_with("data:") {
+            request.input.clone()
+        } else {
+            document_url.to_owned()
+        };
     let mut document = output.document;
     crate::forms::assign_form_ids(&mut document);
     let forms = crate::forms::collect_controls(&document, &output.layout);
@@ -429,7 +437,7 @@ pub fn render_document_with_options(
         links,
         images,
         title,
-        document_url,
+        document_url: document_url.clone(),
         scripts_executed,
         script_timers_pending,
         warnings,
@@ -461,7 +469,27 @@ fn render_view(
     if !request.scripting {
         options.scripting = render::ScriptingMode::Disabled;
     }
-    render::render_url(&request.input, &options).map_err(|error| error.to_string())
+    let prepared = match crate::pages::prepare_input(&request.input) {
+        Ok(prepared) => prepared,
+        Err((code, message)) => {
+            let page =
+                crate::pages::data_url(&crate::pages::error_html(&request.input, &code, &message));
+            return render::render_url(&page, &options).map_err(|error| error.to_string());
+        }
+    };
+    match render::render_url(&prepared, &options) {
+        Ok(output) => Ok(output),
+        Err(error) => {
+            // Browser error page for DNS/HTTP/TLS/file failures instead of a blank window.
+            let code = crate::pages::error_code(&error);
+            let page = crate::pages::data_url(&crate::pages::error_html(
+                &request.input,
+                code,
+                &error.to_string(),
+            ));
+            render::render_url(&page, &options).map_err(|_| error.to_string())
+        }
+    }
 }
 
 #[cfg(test)]
