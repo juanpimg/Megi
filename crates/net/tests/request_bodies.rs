@@ -202,6 +202,10 @@ fn h2_response_trailers_are_exposed() {
         H2Request::get("http", "example", "/trailers", &[]),
         Limits::default(),
         move |stream| {
+            // Drain the request before answering: closing a socket with unread bytes makes
+            // the kernel send RST, which can discard the trailers before the client reads
+            // them (BrokenPipe / "connection closed before all responses completed").
+            let _ = collect_request_body(stream);
             response_headers(stream, 1, "200", false);
             send_frame(stream, &Frame::data(1, b"payload", false));
             trailer_headers(stream, 1, &[("x-checksum", "abc123"), ("x-done", "yes")]);
