@@ -418,6 +418,14 @@ pub struct RenderOptions {
     /// Enable deterministic cooperative Web Workers (R194). Default `true`; worker
     /// scripts are loaded from `file://` URLs only (the renderer owns all I/O).
     pub enable_workers: bool,
+    /// Encode the deterministic PNG at the end of the pipeline (default `true`).
+    ///
+    /// Set to `false` when the caller will modify [`RenderOutput::pixmap`] before writing an
+    /// image (the shell's `--chrome`/`--find` overlays do this): the pipeline then leaves
+    /// [`RenderOutput::png`] empty and the caller encodes **once** after the overlay with
+    /// [`RenderOutput::ensure_png`]. The pixmap, DOM, layout, stats and warnings are
+    /// identical either way; only the eager PNG bytes are skipped (R201).
+    pub encode_png: bool,
 }
 
 impl Default for RenderOptions {
@@ -441,6 +449,7 @@ impl Default for RenderOptions {
             scripting: ScriptingMode::default(),
             scripting_limits: ScriptingLimits::default(),
             enable_workers: true,
+            encode_png: true,
             parse_options: html::ParseOptions::DEFAULT,
             fetch_options: FetchOptions::default(),
             cookies: false,
@@ -590,7 +599,10 @@ pub struct RenderStats {
 
 /// Result of a successful render.
 pub struct RenderOutput {
-    /// Deterministic PNG bytes.
+    /// Deterministic PNG bytes, or **empty** when [`RenderOptions::encode_png`] was `false`.
+    ///
+    /// Call [`RenderOutput::ensure_png`] (or [`RenderOutput::png_bytes`]) after mutating the
+    /// pixmap to encode lazily exactly once.
     pub png: Vec<u8>,
     /// Rasterized pixel buffer (opaque white canvas).
     pub pixmap: paint::Pixmap,
@@ -620,6 +632,22 @@ pub struct RenderOutput {
 }
 
 impl RenderOutput {
+    /// Encodes the PNG lazily when [`RenderOptions::encode_png`] skipped it (idempotent).
+    ///
+    /// This is the single re-encode entry point for callers that painted overlays on
+    /// [`Self::pixmap`] (the shell chrome/find highlights): call it once at the end.
+    pub fn ensure_png(&mut self) {
+        if self.png.is_empty() {
+            self.png = self.pixmap.to_png();
+        }
+    }
+
+    /// Returns the PNG bytes, encoding them lazily if the eager pass was skipped.
+    pub fn png_bytes(&mut self) -> &[u8] {
+        self.ensure_png();
+        &self.png
+    }
+
     /// Convenience accessor for the PNG dimensions.
     pub fn dimensions(&self) -> (u32, u32) {
         (self.pixmap.width, self.pixmap.height)
@@ -991,10 +1019,17 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         measurer.database(),
     );
     let raster_time = raster_start.elapsed();
-    let png = pixmap.to_png();
-    if png.is_empty() {
-        return Err(RenderError::LayoutFailed);
-    }
+    // Encode the deterministic PNG eagerly unless the caller asked to skip it because it
+    // will paint overlays on the pixmap and encode once at the end (`--chrome`/`--find`).
+    let png = if options.encode_png {
+        let png = pixmap.to_png();
+        if png.is_empty() {
+            return Err(RenderError::LayoutFailed);
+        }
+        png
+    } else {
+        Vec::new()
+    };
 
     let hit_region_count = hit_regions.len();
     let cookies_stored = cookie_jar

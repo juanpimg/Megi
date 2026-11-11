@@ -75,7 +75,7 @@ fn run() -> Result<(), ShellError> {
             // writes a PNG half the requested physical size (the window would upscale it).
             let (css_width, css_height) =
                 zoom::zoomed_viewport(args.width, args.height, 1.0, args.zoom);
-            let overlays = args.chrome || args.find.is_some();
+
             let output = if args.chrome && args.chrome_menu {
                 shell::headless::render_target_with_chrome_menu(
                     &args.input,
@@ -109,9 +109,10 @@ fn run() -> Result<(), ShellError> {
                     &options,
                 )?
             };
-            // Reuse the render's PNG bytes unless an overlay (chrome/find) modified the
-            // pixmap and therefore requires one re-encode; saves below share these bytes.
-            let png = if overlays {
+            // The render either produced the PNG eagerly (plain path) or skipped it and the
+            // overlay helpers encoded it once at the end (chrome/find). Reuse those bytes so
+            // exactly one encode happens per screenshot (R201).
+            let png = if output.png.is_empty() {
                 output.pixmap.to_png()
             } else {
                 output.png.clone()

@@ -83,7 +83,11 @@ pub fn render_target_with_chrome(
     options: &render::RenderOptions,
     find_query: Option<&str>,
 ) -> Result<render::RenderOutput, ShellError> {
-    let mut output = render_target_with_options(input, width, height, options)?;
+    // Chrome/find paint the pixmap after the pipeline, so skip the eager page PNG and
+    // encode once at the end (R201); the final bytes are identical to the previous path.
+    let mut base = options.clone();
+    base.encode_png = false;
+    let mut output = render_target_with_options(input, width, height, &base)?;
     if let Some(query) = find_query {
         let rects = crate::find::highlight_rects(&output.layout, query);
         crate::find::overlay_highlights_pixmap(&mut output.pixmap, &rects, 0);
@@ -120,6 +124,7 @@ pub fn render_target_with_chrome(
     // full-framebuffer `0RGB` round-trip and the whole-frame draw (R196).
     let band_rows = (crate::chrome::CHROME_HEIGHT.ceil() as u32).min(height);
     crate::chrome::draw_chrome_over_pixmap(&mut output.pixmap, band_rows, 1.0, &view);
+    output.ensure_png();
     Ok(output)
 }
 
@@ -132,7 +137,9 @@ pub fn render_target_with_chrome_menu(
     options: &render::RenderOptions,
     find_query: Option<&str>,
 ) -> Result<render::RenderOutput, ShellError> {
-    let mut output = render_target_with_options(input, width, height, options)?;
+    let mut base = options.clone();
+    base.encode_png = false;
+    let mut output = render_target_with_options(input, width, height, &base)?;
     if let Some(query) = find_query {
         let rects = crate::find::highlight_rects(&output.layout, query);
         crate::find::overlay_highlights_pixmap(&mut output.pixmap, &rects, 0);
@@ -180,6 +187,7 @@ pub fn render_target_with_chrome_menu(
             )
         })
         .collect();
+    output.ensure_png();
     Ok(output)
 }
 
@@ -192,8 +200,8 @@ pub fn screenshot_with_chrome(
     options: &render::RenderOptions,
     find_query: Option<&str>,
 ) -> Result<ScreenshotInfo, ShellError> {
-    let output = render_target_with_chrome(input, width, height, options, find_query)?;
-    let png = output.pixmap.to_png();
+    let mut output = render_target_with_chrome(input, width, height, options, find_query)?;
+    let png = output.png_bytes().to_vec();
     let path = path.as_ref().to_path_buf();
     if png.is_empty() {
         return Err(ShellError::Io {
@@ -213,9 +221,8 @@ pub fn screenshot_with_chrome(
 /// Renders `input` and paints find-in-page highlights for `query` into the pixmap.
 ///
 /// Returns the render output (with the highlight overlay already blended into
-/// [`render::RenderOutput::pixmap`]) and the number of hits. The PNG field of the output is
-/// **not** updated: use [`screenshot_with_find`] or [`render::RenderOutput::pixmap`]'s
-/// [`paint::to_png`] for an encoded image with highlights.
+/// [`render::RenderOutput::pixmap`] and the final PNG encoded **once** after the overlay)
+/// and the number of hits.
 pub fn render_target_with_find(
     input: &str,
     width: u32,
@@ -223,10 +230,13 @@ pub fn render_target_with_find(
     options: &render::RenderOptions,
     query: &str,
 ) -> Result<(render::RenderOutput, usize), ShellError> {
-    let mut output = render_target_with_options(input, width, height, options)?;
+    let mut base = options.clone();
+    base.encode_png = false;
+    let mut output = render_target_with_options(input, width, height, &base)?;
     let hits = crate::find::search(&output.document, query).len();
     let rects = crate::find::highlight_rects(&output.layout, query);
     crate::find::overlay_highlights_pixmap(&mut output.pixmap, &rects, 0);
+    output.ensure_png();
     Ok((output, hits))
 }
 
@@ -242,8 +252,8 @@ pub fn screenshot_with_find(
     options: &render::RenderOptions,
     query: &str,
 ) -> Result<ScreenshotInfo, ShellError> {
-    let (output, hits) = render_target_with_find(input, width, height, options, query)?;
-    let png = output.pixmap.to_png();
+    let (mut output, hits) = render_target_with_find(input, width, height, options, query)?;
+    let png = output.png_bytes().to_vec();
     let path = path.as_ref().to_path_buf();
     if png.is_empty() {
         return Err(ShellError::Io {

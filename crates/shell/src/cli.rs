@@ -42,9 +42,11 @@ options:
   --refresh-ms [MS]   auto-refresh pages whose scripts leave timers pending
                       (setInterval); MS defaults to 250, 0/disabling flag = off
   --find QUERY        highlight case-insensitive matches of QUERY in the
-                      rendered page (headless screenshots; window: Ctrl+F)
+                      rendered page (headless screenshots; window: Ctrl+F); the
+                      PNG is encoded once after the overlay
   --chrome            include the shell chrome (tab strip + address bar) in the
-                      headless --screenshot output (window always shows chrome)
+                      headless --screenshot output (window always shows chrome);
+                      the page PNG is skipped and encoded once after the overlay
   --chrome-menu       with --chrome, also draw a deterministic open context menu (tests)
   --no-session        do not load/save the persistent session
   --session-file PATH session JSON path (default: $XDG_DATA_HOME/megi/session.json)
