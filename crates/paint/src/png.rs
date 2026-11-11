@@ -165,12 +165,9 @@ pub fn encode_pixels(width: u32, height: u32, pixels: &[Color]) -> Vec<u8> {
     let mut row = vec![0u8; stride];
     let mut previous = vec![0u8; stride];
     for chunk in pixels.chunks(width as usize) {
-        for (index, pixel) in chunk.iter().enumerate() {
-            let base = index * 4;
-            row[base] = pixel.r;
-            row[base + 1] = pixel.g;
-            row[base + 2] = pixel.b;
-            row[base + 3] = pixel.a;
+        let (row_pixels, _) = row.as_chunks_mut::<4>();
+        for (destination, pixel) in row_pixels.iter_mut().zip(chunk) {
+            *destination = [pixel.r, pixel.g, pixel.b, pixel.a];
         }
         filter_row(&row, previous.as_slice(), stride, &mut filtered);
         previous.copy_from_slice(&row);
@@ -191,6 +188,14 @@ fn filter_row(row: &[u8], previous: &[u8], stride: usize, filtered: &mut Vec<u8>
         } else {
             filtered.push(2);
         }
+        filtered.resize(filtered.len() + stride, 0);
+        return;
+    }
+    // Fast path: an all-zero row always wins the tie-break with filter `None` (cost 0,
+    // first in selection order), even when the previous row is not zero. Skipping the
+    // five-candidate score scan is byte-safe: the emitted filter byte is still 0.
+    if row.iter().all(|&byte| byte == 0) {
+        filtered.push(0);
         filtered.resize(filtered.len() + stride, 0);
         return;
     }
@@ -233,25 +238,48 @@ fn filter_row(row: &[u8], previous: &[u8], stride: usize, filtered: &mut Vec<u8>
 /// selected filter and the resulting PNG bytes do not change.
 #[inline]
 fn row_filter_scores(row: &[u8], previous: &[u8]) -> (u64, u64, u64, u64, u64) {
+    // u32 accumulators are enough (a row of 4-byte pixels times 127 is far below
+    // u32::MAX) and the split loops hoist the `x >= 4` left-pixel branch out of the
+    // hot loop (R213; the summed values and therefore the chosen filter are identical).
+    let mut none_score = 0u32;
+    let mut sub_score = 0u32;
+    let mut up_score = 0u32;
+    let mut average_score = 0u32;
+    let mut paeth_score = 0u32;
     let stride = row.len();
-    let mut none_score = 0u64;
-    let mut sub_score = 0u64;
-    let mut up_score = 0u64;
-    let mut average_score = 0u64;
-    let mut paeth_score = 0u64;
-    for x in 0..stride {
+    let mut x = 0usize;
+    while x < stride.min(4) {
         let byte = row[x];
-        let left = if x >= 4 { row[x - 4] } else { 0 };
         let above = previous[x];
-        let upper_left = if x >= 4 { previous[x - 4] } else { 0 };
-        none_score += abs_signed(byte);
-        sub_score += abs_signed(byte.wrapping_sub(left));
-        up_score += abs_signed(byte.wrapping_sub(above));
-        let average = ((u16::from(left) + u16::from(above)) / 2) as u8;
-        average_score += abs_signed(byte.wrapping_sub(average));
-        paeth_score += abs_signed(byte.wrapping_sub(paeth_predictor(left, above, upper_left)));
+        none_score += u32::from((byte as i8).unsigned_abs());
+        sub_score += u32::from((byte as i8).unsigned_abs());
+        up_score += u32::from((byte.wrapping_sub(above) as i8).unsigned_abs());
+        average_score += u32::from((byte.wrapping_sub(above / 2) as i8).unsigned_abs());
+        paeth_score += u32::from((byte.wrapping_sub(above) as i8).unsigned_abs());
+        x += 1;
     }
-    (none_score, sub_score, up_score, average_score, paeth_score)
+    while x < stride {
+        let byte = row[x];
+        let left = row[x - 4];
+        let above = previous[x];
+        let upper_left = previous[x - 4];
+        none_score += u32::from((byte as i8).unsigned_abs());
+        sub_score += u32::from((byte.wrapping_sub(left) as i8).unsigned_abs());
+        up_score += u32::from((byte.wrapping_sub(above) as i8).unsigned_abs());
+        let average = ((u16::from(left) + u16::from(above)) / 2) as u8;
+        average_score += u32::from((byte.wrapping_sub(average) as i8).unsigned_abs());
+        paeth_score += u32::from(
+            (byte.wrapping_sub(paeth_predictor(left, above, upper_left)) as i8).unsigned_abs(),
+        );
+        x += 1;
+    }
+    (
+        u64::from(none_score),
+        u64::from(sub_score),
+        u64::from(up_score),
+        u64::from(average_score),
+        u64::from(paeth_score),
+    )
 }
 
 /// Writes the filtered bytes of `filter` into `output` (same length as `row`).
@@ -302,12 +330,6 @@ fn apply_filter(filter: usize, row: &[u8], previous: &[u8], output: &mut [u8]) {
             }
         }
     }
-}
-
-/// `abs(byte as i8)` as a `u64`, branch-free.
-#[inline]
-fn abs_signed(byte: u8) -> u64 {
-    u64::from((byte as i8).unsigned_abs())
 }
 
 /// Encodes raw `rgba` bytes (row-major, 4 bytes per pixel) as a PNG file.

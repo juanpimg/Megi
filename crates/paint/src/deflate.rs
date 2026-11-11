@@ -33,6 +33,8 @@ const MAX_CHAIN: usize = 48;
 /// Stop searching once a match this long is found (greedy "nice length").
 const NICE_LENGTH: usize = 128;
 
+use std::cell::RefCell;
+
 /// Bit-order helper for the DEFLATE bit stream.
 ///
 /// Non-Huffman fields are packed starting with the least-significant bit of the
@@ -55,6 +57,7 @@ impl BitWriter {
     }
 
     /// Writes the low `count` bits of `value`, least-significant bit first.
+    #[inline(always)]
     fn write_bits(&mut self, value: u32, count: u32) {
         debug_assert!(count <= 32);
         self.bit_buffer |= u64::from(value) << self.bit_count;
@@ -82,105 +85,163 @@ impl BitWriter {
     }
 }
 
-/// Writes one literal/length symbol with the fixed Huffman table.
-fn write_fixed_literal(writer: &mut BitWriter, symbol: u16) {
+/// Fixed-Huffman literal/length codes, pre-reversed for the LSB-first writer (R213).
+/// Index is the 0..=287 symbol; the stream bytes are identical to the old per-write
+/// `reverse_bits` path.
+const FIXED_CODES: [u32; 288] = build_fixed_codes();
+/// Fixed-Huffman code lengths (bits) for the same symbols.
+const FIXED_LENGTHS: [u32; 288] = build_fixed_lengths();
+
+const fn fixed_code_bits(symbol: usize) -> (u32, u32) {
     match symbol {
-        0..=143 => writer.write_huffman(0x30 + u32::from(symbol), 8),
-        144..=255 => writer.write_huffman(0x190 + u32::from(symbol - 144), 9),
-        256..=279 => writer.write_huffman(u32::from(symbol - 256), 7),
-        // 280..=287
-        _ => writer.write_huffman(0xC0 + u32::from(symbol - 280), 8),
+        0..=143 => (0x30 + symbol as u32, 8),
+        144..=255 => (0x190 + (symbol as u32 - 144), 9),
+        256..=279 => ((symbol as u32) - 256, 7),
+        _ => (0xC0 + (symbol as u32 - 280), 8),
     }
 }
 
+const fn build_fixed_codes() -> [u32; 288] {
+    let mut codes = [0u32; 288];
+    let mut symbol = 0usize;
+    while symbol < 288 {
+        let (code, length) = fixed_code_bits(symbol);
+        codes[symbol] = code.reverse_bits() >> (32 - length);
+        symbol += 1;
+    }
+    codes
+}
+
+const fn build_fixed_lengths() -> [u32; 288] {
+    let mut lengths = [0u32; 288];
+    let mut symbol = 0usize;
+    while symbol < 288 {
+        let (_, length) = fixed_code_bits(symbol);
+        lengths[symbol] = length;
+        symbol += 1;
+    }
+    lengths
+}
+
+/// Writes one literal/length symbol with the fixed Huffman table.
+#[inline(always)]
+fn write_fixed_literal(writer: &mut BitWriter, symbol: u16) {
+    let index = symbol as usize;
+    writer.write_bits(FIXED_CODES[index], FIXED_LENGTHS[index]);
+}
+
+/// Length symbol and extra-bits table indexed by match length (`3..=258`), built once at
+/// compile time to avoid the per-match reverse scan (R213; same values as the old lookup).
+const LENGTH_TABLE: [(u16, u32, u32); 259] = build_length_table();
+/// Distance code bases/extras per base-2 category (R213).
+const DISTANCE_SYMBOL_BASE: [u16; 32] = build_distance_symbols();
+const DISTANCE_EXTRA: [u32; 32] = build_distance_extra();
+
+const LENGTH_BASES: [(u16, u32, usize); 29] = [
+    (257, 0, 3),
+    (258, 0, 4),
+    (259, 0, 5),
+    (260, 0, 6),
+    (261, 0, 7),
+    (262, 0, 8),
+    (263, 0, 9),
+    (264, 0, 10),
+    (265, 1, 11),
+    (266, 1, 13),
+    (267, 1, 15),
+    (268, 1, 17),
+    (269, 2, 19),
+    (270, 2, 23),
+    (271, 2, 27),
+    (272, 2, 31),
+    (273, 3, 35),
+    (274, 3, 43),
+    (275, 3, 51),
+    (276, 3, 59),
+    (277, 4, 67),
+    (278, 4, 83),
+    (279, 4, 99),
+    (280, 4, 115),
+    (281, 5, 131),
+    (282, 5, 163),
+    (283, 5, 195),
+    (284, 5, 227),
+    (285, 0, 258),
+];
+
+const fn build_length_table() -> [(u16, u32, u32); 259] {
+    let mut table = [(0u16, 0u32, 0u32); 259];
+    let mut length = 3usize;
+    while length <= 258 {
+        let mut index = 0usize;
+        let mut candidate = 0usize;
+        while candidate < LENGTH_BASES.len() {
+            if LENGTH_BASES[candidate].2 <= length {
+                index = candidate;
+            }
+            candidate += 1;
+        }
+        table[length] = (
+            LENGTH_BASES[index].0,
+            LENGTH_BASES[index].1,
+            (length - LENGTH_BASES[index].2) as u32,
+        );
+        length += 1;
+    }
+    table
+}
+
+const fn build_distance_symbols() -> [u16; 32] {
+    let mut symbols = [0u16; 32];
+    let mut category = 0usize;
+    while category < 30 {
+        symbols[category] = (2 * category) as u16;
+        category += 1;
+    }
+    symbols
+}
+
+const fn build_distance_extra() -> [u32; 32] {
+    let mut extra = [0u32; 32];
+    let mut category = 0usize;
+    while category < 30 {
+        extra[category] = if category == 0 {
+            0
+        } else {
+            category as u32 - 1
+        };
+        category += 1;
+    }
+    extra
+}
+
 /// Length symbol and extra-bits payload for a match length (`3..=258`).
+#[inline]
 fn length_code(length: usize) -> (u16, u32, u32) {
     debug_assert!((MIN_MATCH..=MAX_MATCH).contains(&length));
-    const TABLE: [(u16, u32, usize); 29] = [
-        (257, 0, 3),
-        (258, 0, 4),
-        (259, 0, 5),
-        (260, 0, 6),
-        (261, 0, 7),
-        (262, 0, 8),
-        (263, 0, 9),
-        (264, 0, 10),
-        (265, 1, 11),
-        (266, 1, 13),
-        (267, 1, 15),
-        (268, 1, 17),
-        (269, 2, 19),
-        (270, 2, 23),
-        (271, 2, 27),
-        (272, 2, 31),
-        (273, 3, 35),
-        (274, 3, 43),
-        (275, 3, 51),
-        (276, 3, 59),
-        (277, 4, 67),
-        (278, 4, 83),
-        (279, 4, 99),
-        (280, 4, 115),
-        (281, 5, 131),
-        (282, 5, 163),
-        (283, 5, 195),
-        (284, 5, 227),
-        (285, 0, 258),
-    ];
-    TABLE
-        .iter()
-        .rev()
-        .find(|(_, _, base)| *base <= length)
-        .map(|(symbol, extra, base)| (*symbol, *extra, (length - *base) as u32))
-        .expect("length in table")
+    LENGTH_TABLE[length]
 }
 
 /// Distance symbol and extra-bits payload for a match distance (`1..=32768`).
+#[inline]
 fn distance_code(distance: usize) -> (u16, u32, u32) {
     debug_assert!((1..=WINDOW_SIZE).contains(&distance));
-    const TABLE: [(u16, u32, usize); 30] = [
-        (0, 0, 1),
-        (1, 0, 2),
-        (2, 0, 3),
-        (3, 0, 4),
-        (4, 1, 5),
-        (5, 1, 7),
-        (6, 2, 9),
-        (7, 2, 13),
-        (8, 3, 17),
-        (9, 3, 25),
-        (10, 4, 33),
-        (11, 4, 49),
-        (12, 5, 65),
-        (13, 5, 97),
-        (14, 6, 129),
-        (15, 6, 193),
-        (16, 7, 257),
-        (17, 7, 385),
-        (18, 8, 513),
-        (19, 8, 769),
-        (20, 9, 1025),
-        (21, 9, 1537),
-        (22, 10, 2049),
-        (23, 10, 3073),
-        (24, 11, 4097),
-        (25, 11, 6145),
-        (26, 12, 8193),
-        (27, 12, 12289),
-        (28, 13, 16385),
-        (29, 13, 24577),
-    ];
-    TABLE
-        .iter()
-        .rev()
-        .find(|(_, _, base)| *base <= distance)
-        .map(|(symbol, extra, base)| (*symbol, *extra, (distance - *base) as u32))
-        .expect("distance in table")
+    let adjusted = distance - 1;
+    if adjusted < 4 {
+        return (adjusted as u16, 0, 0);
+    }
+    let category = (usize::BITS - 1 - adjusted.leading_zeros()) as usize;
+    let symbol = DISTANCE_SYMBOL_BASE[category] + (((adjusted >> (category - 1)) & 1) as u16);
+    let extra = DISTANCE_EXTRA[category];
+    let extra_value = if extra == 0 {
+        0
+    } else {
+        (adjusted & ((1usize << extra) - 1)) as u32
+    };
+    (symbol, extra, extra_value)
 }
 
-use std::cell::RefCell;
-
-/// 3-byte rolling hash used for the LZ77 match finder.
+/// 3-byte rolling hash used for the LZ77 match finder./// 3-byte rolling hash used for the LZ77 match finder.
 fn hash3(data: &[u8], position: usize) -> usize {
     let a = u32::from(data[position]);
     let b = u32::from(data[position + 1]);
@@ -224,29 +285,29 @@ fn deflate_fixed(data: &[u8]) -> Vec<u8> {
         writer.write_bits(1, 2);
 
         let DeflateScratch { hashes, head, prev } = &mut scratch;
-        // Every position that can be inserted/looked up needs its 3-byte hash.
+        // Sequential hash prefill (kept from R181): the vectorized pass is cheaper than
+        // recomputing each hash during the greedy inserts, especially for flat UI rows.
         let mut position = 0usize;
         while position + MIN_MATCH <= data.len() {
             hashes[position] = hash3(data, position) as u16;
             position += 1;
         }
 
-        let insert = |hashes: &[u16], head: &mut [u32], prev: &mut [u32], position: usize| {
-            if position + MIN_MATCH > data.len() {
-                return;
-            }
-            let hash = hashes[position] as usize;
-            prev[position % WINDOW_SIZE] = head[hash];
+        #[inline]
+        fn insert_known_hash(head: &mut [u32], prev: &mut [u32], hash: usize, position: usize) {
+            prev[position & (WINDOW_SIZE - 1)] = head[hash];
             head[hash] = position as u32;
-        };
+        }
 
         let mut position = 0usize;
         while position < data.len() {
             let max_length = (data.len() - position).min(MAX_MATCH);
             let mut best_length = 0usize;
             let mut best_distance = 0usize;
+            let mut current_hash = 0usize;
             if max_length >= MIN_MATCH {
                 let hash = hashes[position] as usize;
+                current_hash = hash;
                 let mut candidate = head[hash];
                 let mut budget = MAX_CHAIN;
                 while candidate != u32::MAX && budget > 0 {
@@ -257,6 +318,21 @@ fn deflate_fixed(data: &[u8]) -> Vec<u8> {
                     let distance = position - candidate_position;
                     if distance > WINDOW_SIZE {
                         break;
+                    }
+                    // Cheap rejection (R213): a candidate whose first MIN_MATCH bytes differ
+                    // cannot yield a match, so skip `match_length` for it. This preserves
+                    // the exact greedy parse (a <3-byte match never changes the output).
+                    if best_length < MIN_MATCH
+                        && data[candidate_position..candidate_position + MIN_MATCH]
+                            != data[position..position + MIN_MATCH]
+                    {
+                        let next = prev[candidate_position & (WINDOW_SIZE - 1)];
+                        if next == u32::MAX || next as usize >= candidate_position {
+                            break;
+                        }
+                        candidate = next;
+                        budget -= 1;
+                        continue;
                     }
                     // Fast rejection: to beat `best_length` the candidate must match
                     // through byte `best_length` as well. This preserves the exact
@@ -304,13 +380,30 @@ fn deflate_fixed(data: &[u8]) -> Vec<u8> {
                     writer.write_bits(extra_value, extra_bits);
                 }
                 let end = (position + best_length).min(data.len());
+                if max_length >= MIN_MATCH {
+                    insert_known_hash(head, prev, current_hash, position);
+                } else {
+                    position = end;
+                }
+                position += 1;
+                // Hoist the window guard out of the hot insert loop: only the last two
+                // positions of the buffer need it (R213; same table contents).
+                let safe_end = end.min(data.len().saturating_sub(MIN_MATCH - 1));
+                while position < safe_end {
+                    insert_known_hash(head, prev, hashes[position] as usize, position);
+                    position += 1;
+                }
                 while position < end {
-                    insert(hashes, head, prev, position);
+                    if position + MIN_MATCH <= data.len() {
+                        insert_known_hash(head, prev, hashes[position] as usize, position);
+                    }
                     position += 1;
                 }
             } else {
                 write_fixed_literal(&mut writer, u16::from(data[position]));
-                insert(hashes, head, prev, position);
+                if max_length >= MIN_MATCH {
+                    insert_known_hash(head, prev, current_hash, position);
+                }
                 position += 1;
             }
         }
@@ -328,6 +421,18 @@ fn deflate_fixed(data: &[u8]) -> Vec<u8> {
 #[inline]
 fn match_length(data: &[u8], candidate: usize, position: usize, max_length: usize) -> usize {
     let mut length = 0usize;
+    while length + 16 <= max_length {
+        let candidate_chunk: [u8; 16] = data[candidate + length..candidate + length + 16]
+            .try_into()
+            .expect("16-byte window");
+        let position_chunk: [u8; 16] = data[position + length..position + length + 16]
+            .try_into()
+            .expect("16-byte window");
+        if candidate_chunk != position_chunk {
+            break;
+        }
+        length += 16;
+    }
     while length + 8 <= max_length {
         let candidate_chunk: [u8; 8] = data[candidate + length..candidate + length + 8]
             .try_into()

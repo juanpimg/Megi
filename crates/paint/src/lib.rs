@@ -44,7 +44,7 @@ pub use painter::{
     build_display_list_and_hit_regions, build_display_list_with_hit_regions,
     build_display_list_with_images, build_display_list_with_images_and_backgrounds,
 };
-pub use png::{encode_pixels, encode_rgba};
+pub use png::{encode_pixels, encode_rgba, filter_scanlines};
 pub use rasterizer::{
     MAX_PIXMAP_PIXELS, Pixmap, RasterStats, RenderConfig, bundled_font_database,
     rasterize_display_list, rasterize_display_list_with_config,
