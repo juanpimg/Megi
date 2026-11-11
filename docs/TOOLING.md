@@ -669,6 +669,20 @@ Límites r29: h1 streaming con fallback buffered 16 KiB y pool solo http plano (
 
 Cifras de referencia en la ronda 29: **1796 tests** (bench 9, css 230, dom 36, fonts 17+1 doctest, html 60, image 90, js 137, layout 215, net 287, paint 208, render 162, shell 224, svg 109, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
 
+### 2.16w Ronda 30: VP8 lossy, container queries, PSL/trailers, workers, historial y chrome fast path
+
+```bash
+cargo test -p image --test vp8
+cargo test -p css && cargo test -p layout
+cargo test -p net --test psl && cargo test -p net --test trailers
+cargo test -p js --test workers && cargo test -p render --test worker_tests
+cargo test -p shell --test history
+```
+
+Límites r30: VP8 keyframe only, simple filter luma-only y fixtures de 1 partición (multi-partición implementada); container queries sin style/scroll-state ni cqi/cqw completas y predicción de tamaño de una pasada; PSL IDN no implementado y trailers requieren body; workers cooperativos sin SharedWorker/importScripts y loader file://; historial cap 64/dedupe y fast path chrome con PNG final dominante (floor 22,9 ms a 1024).
+
+Cifras de referencia en la ronda 30: **1853 tests** (bench 9, css 241, dom 36, fonts 17+1 doctest, html 60, image 90, js 147, layout 224, net 299, paint 208, render 165, shell 236, svg 109, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
+
 ## 4. Progress status generado (`PROGRESS.md`, `docs/status/*.svg`)
 
 El estado de avance del proyecto se genera **desde datos reales del repositorio**, sin

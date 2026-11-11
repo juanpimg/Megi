@@ -6,6 +6,54 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 30 — full VP8 keyframe decoder, container queries, PSL/trailers, deterministic Web Workers, shell history and chrome fast path (2026-11-11)
+
+#### Added
+
+- **Full VP8 keyframe decoder (WebP lossy)** (`7ed6be3`, image 90 / render 165 tests):
+  boolean decoder, segmentation, normal/simple loop filters, 1/2/4/8 partitions,
+  intra Y16/UV DC/V/H/TM and B_PRED 10 modes with above-right down-copy, dequant,
+  4×4 IDCT, Y2 IWHT, YUV420→RGB with libwebp fancy upsampling (9/3/3/1, mirrored
+  rows) and BT.601 fixed-point. `image::decode`/`decode_scaled` decode lossy WebP;
+  render drops the experimental warning for valid lossy data (corrupt/VP8X/ALPH/
+  ANIM/interframes typed). PIL tolerances: q75 max 6/mean 0.12, q90 max 2/0.01,
+  1024×768 max 7/0.01; decode 53.6 ms release. Keyframe-only, simple filter
+  luma-only, fixtures use 1 partition (multi-partition implemented).
+- **Container queries** (`a2ee4a0`, css 241 / layout 224 tests): `container-type:
+  normal|inline-size|size`, `container-name`, `@container [name] (min/max-width|
+  height|inline-size|block-size, and)` with px/%/em/rem, nearest compatible ancestor,
+  nesting and a no-rules fast path (identical cascade/geometry); one-pass size
+  prediction documented. Fixtures `container_queries` `c358c11f…` / named `57b09283…`.
+- **Vendored real PSL + request trailers** (`87b493d`, net 299 tests): MPL-2.0
+  snapshot of publicsuffix.org (16,610 lines/~339 KB, `include_str!`, OnceLock
+  parser, normal/wildcard/exception rules, complete algorithm, last-label fallback,
+  ASCII/punycode IDN documented, `tools/update_psl.sh`) and trailers for h2
+  (`H2Request::with_trailers`, final HEADERS END_STREAM after DATA, body required,
+  caps/typed) and h1 (`fetch_with_trailers`, chunked `0\r\n` + trailers); framing
+  without trailers is byte-identical.
+- **Deterministic cooperative Web Workers** (`89c56ba`, js 147 / render 164 tests):
+  `Worker(url)` with `set_worker_loader`, isolated DOM-less realm, `postMessage`/
+  `onmessage`/`addEventListener('message')`/`terminate`, JSON-safe FIFO queues,
+  delivery in `run_worker_tasks`/microtasks, typed `onerror`, caps 8 workers/256
+  messages; fixed two `HostScope` bugs (worker handler and main callbacks) and wired
+  `RenderOptions.enable_workers` into the event loop; render loader `file://` only.
+- **Navigable history + chrome fast path** (`67365af`, shell 236 tests): `HistoryLog`
+  per tab (cap 64, dedupe), `RecentHistory` cap 10, `about:history` deterministic
+  page, Ctrl+H menu and ←/→/⟳ buttons with hit-testing/disabled states, recent
+  entries persisted; `draw_chrome_over_pixmap` draws only the top band over the RGBA
+  pixmap (no 0RGB round-trip/composite), identical pixels, non-PNG component
+  10.06→1.06 ms (−89.5 %); the remaining wall cost is the final PNG (floor 22.9 ms
+  at 1024), follow-up to skip the redundant page PNG for `--chrome`/`--find`.
+  Goldens intact (basic `7324e851…`, showcase `c95c7eff…`, phase4 `9e957177…`,
+  basic.rgba `60f8984e…`), about:history `5ad5a2be…`.
+
+#### Tests
+
+- **1,853 tests, 0 failures** (css 241, layout 224, net 299, js 147, shell 236,
+  render 165, image 90, paint 208, dom 36, html 60, svg 109, fonts 17+1 doctest,
+  bench 9, test_harness 11); gate PASS with tokenizer 7,050/7,050, tree 3,904/3,904,
+  serializer 230/230 and CSS 30/30.
+
 ### Round 29 — streaming responses/keep-alive, SVG textPath/SMIL, import maps, WebP lossy header, shell pages and fuzz 14 (2026-11-11)
 
 #### Added
