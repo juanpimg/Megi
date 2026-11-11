@@ -40,6 +40,7 @@
 //! bitmap font survives only as [`Pixmap::draw_text_run_fallback`] for a
 //! missing/corrupt font database.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
@@ -57,6 +58,15 @@ use crate::png;
 /// pixels ≈ 256 MiB of RGBA). Prevents absurd allocations/overflow from
 /// untrusted dimensions (audit finding F-22).
 pub const MAX_PIXMAP_PIXELS: usize = 1 << 26;
+
+thread_local! {
+    /// Reusable scalar planes for the deterministic box blur (R166).
+    static BLUR_PLANES: RefCell<[Vec<f32>; 4]> = RefCell::new(std::array::from_fn(|_| Vec::new()));
+    /// Reusable alpha mask for drop-shadow (R166).
+    static DROP_SHADOW_MASK: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
+    /// Reusable offscreen pixmap for backdrop-filter (R166).
+    static BACKDROP_BUFFER: RefCell<Option<Pixmap>> = const { RefCell::new(None) };
+}
 
 /// Configuration for a rasterization pass.
 ///
@@ -3068,6 +3078,124 @@ fn blend_channel(mode: css::MixBlendMode, backdrop: f32, source: f32) -> f32 {
     }
 }
 
+/// Whether the filter only changes color/alpha per pixel (no spatial kernel).
+fn is_color_filter(filter: &css::FilterFunction) -> bool {
+    !matches!(
+        filter,
+        css::FilterFunction::Blur(_) | css::FilterFunction::DropShadow { .. }
+    )
+}
+
+fn apply_color_filter(pixel: &mut Color, filter: &css::FilterFunction) {
+    match *filter {
+        css::FilterFunction::Brightness(k) => {
+            pixel.r = clamp_channel(f32::from(pixel.r) / 255.0 * k);
+            pixel.g = clamp_channel(f32::from(pixel.g) / 255.0 * k);
+            pixel.b = clamp_channel(f32::from(pixel.b) / 255.0 * k);
+        }
+        css::FilterFunction::Contrast(k) => {
+            let apply = |channel: u8| clamp_channel((f32::from(channel) / 255.0 - 0.5) * k + 0.5);
+            pixel.r = apply(pixel.r);
+            pixel.g = apply(pixel.g);
+            pixel.b = apply(pixel.b);
+        }
+        css::FilterFunction::Grayscale(amount) => {
+            let amount = amount.clamp(0.0, 1.0);
+            let gray = luma(*pixel);
+            pixel.r = clamp_channel(mix(f32::from(pixel.r) / 255.0, gray, amount));
+            pixel.g = clamp_channel(mix(f32::from(pixel.g) / 255.0, gray, amount));
+            pixel.b = clamp_channel(mix(f32::from(pixel.b) / 255.0, gray, amount));
+        }
+        css::FilterFunction::Invert(amount) => {
+            let amount = amount.clamp(0.0, 1.0);
+            let invert = |channel: u8| {
+                clamp_channel(mix(
+                    f32::from(channel) / 255.0,
+                    1.0 - f32::from(channel) / 255.0,
+                    amount,
+                ))
+            };
+            pixel.r = invert(pixel.r);
+            pixel.g = invert(pixel.g);
+            pixel.b = invert(pixel.b);
+        }
+        css::FilterFunction::Opacity(amount) => {
+            let amount = amount.clamp(0.0, 1.0);
+            pixel.a = (f32::from(pixel.a) * amount).round().clamp(0.0, 255.0) as u8;
+        }
+        css::FilterFunction::Sepia(amount) => {
+            let amount = amount.clamp(0.0, 1.0);
+            let (r, g, b) = (
+                f32::from(pixel.r) / 255.0,
+                f32::from(pixel.g) / 255.0,
+                f32::from(pixel.b) / 255.0,
+            );
+            let sepia_r = 0.393 * r + 0.769 * g + 0.189 * b;
+            let sepia_g = 0.349 * r + 0.686 * g + 0.168 * b;
+            let sepia_b = 0.272 * r + 0.534 * g + 0.131 * b;
+            pixel.r = clamp_channel(mix(r, sepia_r, amount));
+            pixel.g = clamp_channel(mix(g, sepia_g, amount));
+            pixel.b = clamp_channel(mix(b, sepia_b, amount));
+        }
+        css::FilterFunction::Saturate(amount) => {
+            let amount = amount.max(0.0);
+            let (r, g, b) = (
+                f32::from(pixel.r) / 255.0,
+                f32::from(pixel.g) / 255.0,
+                f32::from(pixel.b) / 255.0,
+            );
+            let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            let matrix = |channel: f32| lum + amount * (channel - lum);
+            pixel.r = clamp_channel(matrix(r));
+            pixel.g = clamp_channel(matrix(g));
+            pixel.b = clamp_channel(matrix(b));
+        }
+        css::FilterFunction::HueRotate(degrees) => {
+            let radians = degrees.to_radians();
+            let cos = radians.cos();
+            let sin = radians.sin();
+            let matrix = [
+                [
+                    0.213 + cos * 0.787 - sin * 0.213,
+                    0.715 - cos * 0.715 - sin * 0.715,
+                    0.072 - cos * 0.072 + sin * 0.928,
+                ],
+                [
+                    0.213 - cos * 0.213 + sin * 0.143,
+                    0.715 + cos * 0.285 + sin * 0.140,
+                    0.072 - cos * 0.072 - sin * 0.283,
+                ],
+                [
+                    0.213 - cos * 0.213 - sin * 0.787,
+                    0.715 - cos * 0.715 + sin * 0.715,
+                    0.072 + cos * 0.928 + sin * 0.072,
+                ],
+            ];
+            let (r, g, b) = (
+                f32::from(pixel.r) / 255.0,
+                f32::from(pixel.g) / 255.0,
+                f32::from(pixel.b) / 255.0,
+            );
+            pixel.r = clamp_channel(matrix[0][0] * r + matrix[0][1] * g + matrix[0][2] * b);
+            pixel.g = clamp_channel(matrix[1][0] * r + matrix[1][1] * g + matrix[1][2] * b);
+            pixel.b = clamp_channel(matrix[2][0] * r + matrix[2][1] * g + matrix[2][2] * b);
+        }
+        css::FilterFunction::Blur(_) | css::FilterFunction::DropShadow { .. } => {}
+    }
+}
+
+/// Applies a chain of color-only filters to a single solid color.
+///
+/// Used by the painter's inline fast path for boxes whose filtered subtree is
+/// just a solid background (avoids an offscreen `EffectGroup`, R166).
+pub(crate) fn filter_solid_color(color: Color, filters: &[css::FilterFunction]) -> Color {
+    let mut color = color;
+    for filter in filters.iter().take(css::MAX_FILTER_FUNCTIONS) {
+        apply_color_filter(&mut color, filter);
+    }
+    color
+}
+
 /// Applies one `filter` function to every pixel of the offscreen buffer.
 fn apply_filter(buf: &mut Pixmap, filter: &css::FilterFunction) {
     match *filter {
@@ -3194,6 +3322,10 @@ fn apply_filter(buf: &mut Pixmap, filter: &css::FilterFunction) {
 }
 
 /// Deterministic separable box blur over the RGBA channels (3 passes).
+///
+/// Planar scratch buffers are reused across calls (thread-local) so filtered
+/// elements do not pay four fresh `Vec` allocations each (R166); the arithmetic
+/// is unchanged and deterministic.
 fn blur_rgba(buf: &mut Pixmap, blur: f32) {
     let radius = ((blur * 0.5).round() as usize).min(64);
     if radius == 0 || buf.width == 0 || buf.height == 0 {
@@ -3201,25 +3333,45 @@ fn blur_rgba(buf: &mut Pixmap, blur: f32) {
     }
     let width = buf.width as usize;
     let height = buf.height as usize;
-    let mut planes: [Vec<f32>; 4] = std::array::from_fn(|_| vec![0.0; width * height]);
-    for (index, pixel) in buf.pixels.iter().enumerate() {
-        planes[0][index] = f32::from(pixel.r);
-        planes[1][index] = f32::from(pixel.g);
-        planes[2][index] = f32::from(pixel.b);
-        planes[3][index] = f32::from(pixel.a);
-    }
-    for plane in &mut planes {
-        for _ in 0..3 {
-            crate::rasterizer::blur_mask_pass(plane, width, height, true, radius);
-            crate::rasterizer::blur_mask_pass(plane, width, height, false, radius);
+    let uniform_alpha = buf
+        .pixels
+        .first()
+        .map(|pixel| pixel.a)
+        .filter(|alpha| buf.pixels.iter().all(|pixel| pixel.a == *alpha));
+    BLUR_PLANES.with(|planes| {
+        let mut planes = planes.borrow_mut();
+        let channels = if uniform_alpha.is_some() { 3 } else { 4 };
+        for plane in planes.iter_mut() {
+            plane.clear();
         }
-    }
-    for (index, pixel) in buf.pixels.iter_mut().enumerate() {
-        pixel.r = planes[0][index].round().clamp(0.0, 255.0) as u8;
-        pixel.g = planes[1][index].round().clamp(0.0, 255.0) as u8;
-        pixel.b = planes[2][index].round().clamp(0.0, 255.0) as u8;
-        pixel.a = planes[3][index].round().clamp(0.0, 255.0) as u8;
-    }
+        for index in 0..channels {
+            planes[index].resize(width * height, 0.0);
+        }
+        for (index, pixel) in buf.pixels.iter().enumerate() {
+            planes[0][index] = f32::from(pixel.r);
+            planes[1][index] = f32::from(pixel.g);
+            planes[2][index] = f32::from(pixel.b);
+            if channels == 4 {
+                planes[3][index] = f32::from(pixel.a);
+            }
+        }
+        for plane in planes.iter_mut().take(channels) {
+            for _ in 0..3 {
+                crate::rasterizer::blur_mask_pass(plane, width, height, true, radius);
+                crate::rasterizer::blur_mask_pass(plane, width, height, false, radius);
+            }
+        }
+        for (index, pixel) in buf.pixels.iter_mut().enumerate() {
+            pixel.r = planes[0][index].round().clamp(0.0, 255.0) as u8;
+            pixel.g = planes[1][index].round().clamp(0.0, 255.0) as u8;
+            pixel.b = planes[2][index].round().clamp(0.0, 255.0) as u8;
+            if let Some(alpha) = uniform_alpha {
+                pixel.a = alpha;
+            } else {
+                pixel.a = planes[3][index].round().clamp(0.0, 255.0) as u8;
+            }
+        }
+    });
 }
 
 /// Paints a drop-shadow layer behind the current offscreen content.
@@ -3229,7 +3381,9 @@ fn apply_drop_shadow(buf: &mut Pixmap, offset_x: f32, offset_y: f32, blur: f32, 
     }
     let width = buf.width as usize;
     let height = buf.height as usize;
-    let mut mask = vec![0.0f32; width * height];
+    let mut mask = DROP_SHADOW_MASK.with(|slot| std::mem::take(&mut *slot.borrow_mut()));
+    mask.clear();
+    mask.resize(width * height, 0.0);
     let dx = offset_x.round() as i64;
     let dy = offset_y.round() as i64;
     for y in 0..height as i64 {
@@ -3259,6 +3413,7 @@ fn apply_drop_shadow(buf: &mut Pixmap, offset_x: f32, offset_y: f32, blur: f32, 
         let shadow = Color::new(color.r, color.g, color.b, shadow_alpha);
         *pixel = blend_over(shadow, *pixel);
     }
+    DROP_SHADOW_MASK.with(|slot| *slot.borrow_mut() = mask);
 }
 
 /// Composites an effect-group buffer over the destination using `blend`.
@@ -3362,7 +3517,12 @@ fn paint_effect_group(
         dx - x0 as f32,
         dy - y0 as f32,
     );
-    for filter in filters.iter().take(css::MAX_FILTER_FUNCTIONS) {
+    let filters: Vec<css::FilterFunction> = filters
+        .iter()
+        .take(css::MAX_FILTER_FUNCTIONS)
+        .copied()
+        .collect();
+    for filter in &filters {
         apply_filter(&mut buffer, filter);
     }
     composite_effect(pixmap, &buffer, x0, y0, blend);
@@ -3374,9 +3534,10 @@ fn paint_effect_group(
 
 /// Applies a `backdrop-filter` to the already-painted destination inside `rect`.
 ///
-/// The backdrop pixels are copied to a temporary buffer, filtered with the same
-/// deterministic color/blur operations as `filter`, and written back. Groups
-/// larger than the documented area cap are left untouched (DoS bound).
+/// Color-only filter chains are applied **in place** (no copy or offscreen
+/// buffer); spatial filters (blur/drop-shadow) use a reused thread-local pixmap
+/// for the intersected region only (R166). Groups larger than the documented
+/// area cap are left untouched (DoS bound).
 fn paint_backdrop_filter(pixmap: &mut Pixmap, rect: Rect, filters: &[css::FilterFunction]) {
     if filters.is_empty() {
         return;
@@ -3404,27 +3565,60 @@ fn paint_backdrop_filter(pixmap: &mut Pixmap, rect: Rect, filters: &[css::Filter
     if (width as usize).saturating_mul(height as usize) > MAX_ROUNDED_GROUP_PIXELS {
         return;
     }
-    let mut buffer = Pixmap::new(width, height);
+    let filters: Vec<css::FilterFunction> = filters
+        .iter()
+        .take(css::MAX_FILTER_FUNCTIONS)
+        .copied()
+        .collect();
     let stride = pixmap.width as usize;
-    let buffer_stride = buffer.width as usize;
-    for y in 0..height {
-        let src_row = (y0 + y) as usize * stride;
-        let dst_row = y as usize * buffer_stride;
-        for x in 0..width {
-            buffer.pixels[dst_row + x as usize] = pixmap.pixels[src_row + (x0 + x) as usize];
+
+    // Fast path: color-only chains mutate the destination region in place.
+    if filters.iter().all(is_color_filter) {
+        for y in y0..y1 {
+            let row = y as usize * stride;
+            for x in x0..x1 {
+                let mut pixel = pixmap.pixels[row + x as usize];
+                for filter in &filters {
+                    apply_color_filter(&mut pixel, filter);
+                }
+                pixmap.pixels[row + x as usize] = pixel;
+            }
+        }
+        return;
+    }
+
+    // Spatial filters need an offscreen copy of the intersected backdrop.
+    let mut buffer = BACKDROP_BUFFER.with(|slot| {
+        slot.borrow_mut()
+            .take()
+            .unwrap_or_else(|| Pixmap::new(width, height))
+    });
+    buffer.width = width;
+    buffer.height = height;
+    buffer.pixels.clear();
+    buffer.pixels.reserve((width * height) as usize);
+    for y in y0..y1 {
+        let row = y as usize * stride;
+        for x in x0..x1 {
+            buffer.pixels.push(pixmap.pixels[row + x as usize]);
         }
     }
-    for filter in filters.iter().take(css::MAX_FILTER_FUNCTIONS) {
+    for filter in &filters {
         apply_filter(&mut buffer, filter);
     }
-    // Write the filtered backdrop back (it replaces the original pixels).
+    let buffer_stride = buffer.width as usize;
     for y in 0..height {
         let dst_row = (y0 + y) as usize * stride;
         let src_row = y as usize * buffer_stride;
         for x in 0..width {
             let filtered = buffer.pixels[src_row + x as usize];
             let index = dst_row + (x0 + x) as usize;
-            pixmap.pixels[index] = blend_over(pixmap.pixels[index], filtered);
+            pixmap.pixels[index] = if filtered.a == 255 {
+                filtered
+            } else {
+                blend_over(pixmap.pixels[index], filtered)
+            };
         }
     }
+    BACKDROP_BUFFER.with(|slot| *slot.borrow_mut() = Some(buffer));
 }

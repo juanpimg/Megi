@@ -10,6 +10,7 @@
 #   ./tools/bench.sh --filter html         # one group
 #   ./tools/bench.sh --filter pipeline     # E2E rows (incl. gradients/grid/clipping)
 #   ./tools/bench.sh --filter image        # image decode (PNG/JPEG/GIF 800x600 + WebP VP8L)
+#   ./tools/bench.sh --save-png-isolated  # isolated shell --screenshot vs --save-png
 #   BENCH_FEATURES=fonts ./tools/bench.sh  # optional font benchmarks
 #
 # All arguments are forwarded verbatim to the `bench` binary.
@@ -34,6 +35,43 @@ case "${1:-}" in
 esac
 
 mkdir -p target
+
+# Isolated save-png measurement (R166): the shell only enters headless mode when
+# `--screenshot` is present, so the pure `--save-png` cost is measured as
+# `--screenshot` (one PNG write) versus `--screenshot --save-png` (the second
+# write reuses the same PNG bytes). Component costs live in the `shell/save-png-*`
+# bench rows (`cargo run --release -p bench -- --filter shell`).
+if [[ "${1:-}" == "--save-png-isolated" ]]; then
+    shift
+    fixture="${1:-tests/fixtures/render/showcase/index.html}"
+    mkdir -p target/bench-save-png
+    echo "==> Building release shell"
+    cargo build --release -p shell
+    binary=target/release/megi
+    screenshot=target/bench-save-png/screenshot.png
+    saved=target/bench-save-png/saved.png
+    measure() {
+        local label="$1"
+        shift
+        local values=()
+        for _ in $(seq 1 7); do
+            local start end
+            start=$(date +%s%N)
+            "$@" >/dev/null 2>&1 || true
+            end=$(date +%s%N)
+            values+=($(((end - start) / 1000000)))
+        done
+        local median
+        median=$(printf '%s\n' "${values[@]}" | sort -n | sed -n '4p')
+        printf '%-46s %s ms\n' "${label}" "${median}"
+    }
+    measure "--screenshot only" "${binary}" "${fixture}" --screenshot "${screenshot}" --width 1024 --height 768
+    measure "--screenshot + --save-png" "${binary}" "${fixture}" --screenshot "${screenshot}" --save-png "${saved}" --width 1024 --height 768
+    echo
+    echo "Note: '--save-png' alone opens a window today; the second write reuses the"
+    echo "already-encoded PNG. Isolated encode/write rows: --filter shell."
+    exit 0
+fi
 
 features_args=()
 if [[ -n "${BENCH_FEATURES:-}" ]]; then

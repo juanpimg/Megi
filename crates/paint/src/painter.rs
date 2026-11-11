@@ -620,6 +620,43 @@ fn effect_padding(filters: &[css::FilterFunction]) -> f32 {
     padding
 }
 
+/// Inline fast path for boxes whose `filter` only affects a solid background.
+///
+/// When a box has no children, images, borders, radii or shadows and every
+/// `filter` function is a color operation, the filtered result is exactly the
+/// filtered background color, so the painter can emit one `SolidColor` and skip
+/// the offscreen `EffectGroup` entirely (R166). Returns `None` otherwise.
+fn inline_filtered_solid(layout_box: &LayoutBox) -> Option<Color> {
+    let style = layout_box.style.as_ref()?;
+    if style.filter.is_empty()
+        || style.mix_blend_mode != css::MixBlendMode::Normal
+        || !layout_box.children.is_empty()
+        || style.background_image.is_some()
+        || style.background_geometry_explicit
+        || !style.box_shadows.is_empty()
+        || !style.border_radius.is_zero()
+        || !style.backdrop_filter.is_empty()
+    {
+        return None;
+    }
+    let border = layout_box.dimensions.border;
+    if border.top > 0.0 || border.right > 0.0 || border.bottom > 0.0 || border.left > 0.0 {
+        return None;
+    }
+    if style.filter.iter().any(|filter| {
+        matches!(
+            filter,
+            css::FilterFunction::Blur(_) | css::FilterFunction::DropShadow { .. }
+        )
+    }) {
+        return None;
+    }
+    Some(crate::rasterizer::filter_solid_color(
+        style.background_color,
+        &style.filter,
+    ))
+}
+
 /// Paints the appendix E phases of one stacking context.
 fn paint_stacking_context(
     layout_box: &LayoutBox,
@@ -729,14 +766,16 @@ fn paint_stacking_context(
 
     // Filter / blend group: the whole subtree is rasterized offscreen, the
     // filters are applied, and the result is composited against the backdrop.
-    let effect = layout_box
-        .style
-        .as_ref()
-        .map(|style| (style.filter.clone(), style.mix_blend_mode));
-    if let Some((filters, blend)) = effect
-        && (!filters.is_empty() || blend != css::MixBlendMode::Normal)
+    // Boxes handled by the inline filtered-solid fast path already applied their
+    // filters, so they must not be wrapped again (R166).
+    if resources.effects_present
+        && inline_filtered_solid(layout_box).is_none()
+        && let Some(style) = layout_box.style.as_ref()
+        && (!style.filter.is_empty() || style.mix_blend_mode != css::MixBlendMode::Normal)
         && list.len() > start
     {
+        let filters = style.filter.clone();
+        let blend = style.mix_blend_mode;
         let items: Vec<DisplayItem> = list.items.drain(start..).collect();
         let bounds = items_bounds(&items).unwrap_or_else(|| layout_box.dimensions.border_box());
         let padding = effect_padding(&filters);
@@ -1276,19 +1315,26 @@ fn paint_replaced_element(
             let drawn =
                 object_fit_rect(rect, image.width as f32, image.height as f32, fit, position);
             // `object-fit: fill` is the historical stretched image: emit the item
-            // without a clip so existing goldens stay byte-identical.
+            // without a clip so existing goldens stay byte-identical. Contain,
+            // none and scale-down draw inside the content box, so only `cover`
+            // needs the clip item (R166).
             if fit == css::ObjectFit::Fill {
                 list.push(DisplayItem::Image {
                     rect,
                     image: std::sync::Arc::clone(image),
                 });
-            } else {
+            } else if fit == css::ObjectFit::Cover {
                 push_clip_item(list, resources, rect);
                 list.push(DisplayItem::Image {
                     rect: drawn,
                     image: std::sync::Arc::clone(image),
                 });
                 pop_clip_item(list, resources);
+            } else {
+                list.push(DisplayItem::Image {
+                    rect: drawn,
+                    image: std::sync::Arc::clone(image),
+                });
             }
             // A translucent element (flat-opacity fallback) darkens the image
             // through a normal-alpha fill when needed.
@@ -1335,6 +1381,16 @@ fn paint_background_border(
             rect: border_box,
             filters: style.backdrop_filter.clone(),
         });
+    }
+
+    if let Some(filtered) = inline_filtered_solid(layout_box) {
+        if filtered.a > 0 && !(is_root && skip.root_background) {
+            list.push(DisplayItem::SolidColor {
+                rect: border_box,
+                color: scaled(filtered, alpha_scale),
+            });
+        }
+        return;
     }
 
     let background_is_propagated = (is_root && skip.root_background)
