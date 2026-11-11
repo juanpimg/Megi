@@ -762,27 +762,21 @@ fn parse_dqt(
                 reason: "JPEG quantization table id out of range",
             });
         }
+        if precision != 0 {
+            // 16-bit quantization tables only exist for 12-bit sample precision (T.81
+            // B.2.4.1), which this decoder rejects; accepting them here would let
+            // `dequantize` multiply past `i32::MAX`.
+            return Err(ImageError::UnsupportedFeature {
+                feature: "16-bit JPEG quantization tables (12-bit sample precision)",
+            });
+        }
         let mut values = [0u16; BLOCK_LEN];
         for value in &mut values {
-            if precision == 0 {
-                let raw = *segment.get(offset).ok_or(ImageError::Truncated {
-                    context: "JPEG DQT values",
-                })?;
-                offset += 1;
-                *value = u16::from(raw);
-            } else if precision == 1 {
-                let raw = segment
-                    .get(offset..offset + 2)
-                    .ok_or(ImageError::Truncated {
-                        context: "JPEG DQT values",
-                    })?;
-                offset += 2;
-                *value = u16::from_be_bytes([raw[0], raw[1]]);
-            } else {
-                return Err(ImageError::InvalidData {
-                    reason: "invalid JPEG quantization precision",
-                });
-            }
+            let raw = *segment.get(offset).ok_or(ImageError::Truncated {
+                context: "JPEG DQT values",
+            })?;
+            offset += 1;
+            *value = u16::from(raw);
         }
         tables[id] = Some(QuantTable { values });
     }
@@ -1095,7 +1089,9 @@ fn decode_block(
 
 fn dequantize(coefficients: &mut [i32; BLOCK_LEN], quant: &QuantTable) {
     for (coefficient, quant_value) in coefficients.iter_mut().zip(quant.values.iter()) {
-        *coefficient *= i32::from(*quant_value);
+        // Saturating: the DC predictor accumulates with `wrapping_add`, so a crafted
+        // stream can put a coefficient far outside the nominal 11-bit range.
+        *coefficient = coefficient.saturating_mul(i32::from(*quant_value));
     }
 }
 

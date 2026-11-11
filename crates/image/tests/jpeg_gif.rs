@@ -136,3 +136,17 @@ fn animated_gif_roundtrip_uses_the_first_frame() {
     // First frame is palette index 1 (pure green in the fixture palette).
     assert_eq!(image.pixel(6, 4), Some([0, 255, 0, 255]));
 }
+
+#[test]
+fn rejects_16_bit_quantization_tables() {
+    // SOI, DQT with Pq=1 (16-bit values, only valid for 12-bit sample precision), EOI.
+    let mut jpeg = vec![0xFF, 0xD8, 0xFF, 0xDB, 0x00, 0x83, 0x10];
+    jpeg.extend(std::iter::repeat_n(0xFFu8, 128));
+    jpeg.extend([0xFF, 0xD9]);
+
+    let error = decode(&jpeg).expect_err("16-bit DQT must be rejected");
+    assert!(
+        matches!(error, ImageError::UnsupportedFeature { .. }),
+        "unexpected error: {error:?}"
+    );
+}
