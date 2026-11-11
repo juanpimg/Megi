@@ -610,6 +610,22 @@ Límites r25: Color 4/5 con matrices CSS Color 4 y clamp por canal (sin HDR/colo
 
 Cifras de referencia en la ronda 25: **1594 tests** (bench 9, css 230, dom 28, fonts 17+1 doctest, html 60, image 69, js 96, layout 215, net 237, paint 208, render 145, shell 183, svg 85, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
 
+### 2.16s Ronda 26: module scripts, decode escalado, h2 bodies, DOM bug-bash, SVG filters/SMIL y bench aislado
+
+```bash
+cargo test -p render --test module_scripts_tests      # <script type=module> inline/externo
+cargo test -p image --test scaled                     # decode_scaled
+cargo run -p render -- tests/fixtures/render/module_chain.html /tmp/modules.png --json
+cargo test -p net                                      # h2 bodies/trailers/100-continue + h1 POST
+cargo test -p dom && cargo test -p js                  # bug-bash DOM/JS
+cargo test -p svg --test filters_smil                  # feColorMatrix/Blend/Merge/Composite + SMIL
+cargo run --release -p bench -- --filter shell/save-png-encode-800x600
+```
+
+Límites r26: subset ESM estático (sin dynamic import/TLA/import maps; una raíz por script; loader http con caché propia); decode escalado PNG exacto por unfilter/Adam7, JPEG/GIF/WebP post-subsample; h2 sin push/priorities/h2c y cuerpos buffered; 100-continue sin timer; bug-bash deja gaps documentados (fetch/dataset/innerText/Range/MouseEvent/URLSearchParams/queueMicrotask…); SMIL sin keyTimes/sync/CSS animations/textPath; bench `--save-png-isolated` reutiliza bytes.
+
+Cifras de referencia en la ronda 26: **1653 tests** (bench 9, css 230, dom 33, fonts 17+1 doctest, html 60, image 76, js 111, layout 215, net 249, paint 208, render 153, shell 183, svg 97, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
+
 ## 4. Progress status generado (`PROGRESS.md`, `docs/status/*.svg`)
 
 El estado de avance del proyecto se genera **desde datos reales del repositorio**, sin

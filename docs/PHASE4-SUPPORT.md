@@ -55,6 +55,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **Effects analysis (ronda 23)**: `effects_present` agregado por pase + fast path r21-equivalente (sin efectos no se clonan estilos/EffectGroup), DisplayItem cap 20480 e `is_list_item` antes de phase | **HECHO** | build-display **7,34–7,72 ms ≤8** (−4,8 %/−9,6 %) |
 | **BackdropFilter/object-fit (ronda 24)**: `DisplayItem::BackdropFilter` (backdrop ya pintado + funciones + blur determinista; caps 64/16/16,7 Mpx) y object-fit con clip al content box y muestredo bilineal | **HECHO** | paint 205 tests; `fill` byte-idéntico; goldens intactos |
 | **Pintado Color 4/5 (ronda 25)**: espacios modernos y `color-mix` resueltos a sRGB con matrices/clamp | **HECHO** | paint 208 tests; fixture color_spaces; goldens intactos |
+| **Module scripts (ronda 26)**: `<script type=module>` inline/externo con resolver/loader reales, file/http(s)/data, caps por módulo/grafo, fallo no fatal | **HECHO** | render 153 tests; fixtures modules/*.js + module_*.html |
 
 | **Backgrounds multicapa (ronda 16)**: `background-origin` (border/padding/content), `background-clip` (text parseado, pinta border-box), `background-attachment` (scroll/fixed), **`background_layers` top-first** (listas cíclicas, shorthand multicapa, color solo última) y `space`/`round` reales | **HECHO** | Espejo legacy para goldens; paint 130 tests |
 | **`@font-face` (ronda 13)**: `Stylesheet.font_faces` + `FontFaceRule { family, sources, weight, style }` | **HECHO** | Consumido por `fonts`/`render` para fuentes web (ver §4) |
@@ -124,6 +125,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **EXIF/JPEG progresivo/WebP (ronda 23)**: orientación EXIF 1–8 aplicada en decode, subset progresivo SOF2 (gris exacto; color refinement `UnsupportedFeature`), WebP detectado sin decoder | **HECHO** | image 60/render 138 tests; fixtures exif_o1..o8 y `image_formats.html` |
 | **JPEG progresivo color + WebP VP8L (ronda 24)**: progresivo de color completo (Δmáx ≤2, gris Δ0) y VP8L subset (RIFF/header/Huffman simple/literales ARGB; resto ⇒ UnsupportedFeature) | **HECHO** | image 67/render 139 tests; fixtures v8l_* y `webp.html` |
 | **WebP VP8L completo (ronda 25)**: predictor 14, color transform 3.5, subtract-green, color indexing con paleta delta/índices, Huffman complejo/meta y LZ77 con overlap | **HECHO** | image 69/render 145; fixtures reales píxel-exactas vs `.rgba` |
+| **Decode escalado (ronda 26)**: `decode_scaled`/`--max-image-dim`, PNG unfilter+Adam7 sin buffer completo y post-subsample JPEG/GIF/WebP | **HECHO** | image 76 tests; PNG full ×2/−28 %, ×8/−36 %; stage images −30 % |
 | **Cookies RFC 6265** (`CookieJar`, cap 4.096), **CORS básico**, **gzip/deflate** (caps 64 MiB + ratio 1000:1), **SameSite** (Strict/Lax/None+Secure, top-level aproximado), **PSL reducida** y **Referrer-Policy** (8 políticas, header>meta>default) instalados en el loader | **HECHO** | Ronda 8 + ronda 18; **ronda 19**: `ReferrerConfig` cableado en render antes de subrecursos (%Referer% y SameSite reales) y `RenderStats.referrer_policy`; CORS completo/HTTP2 pendientes |
 | **Decoder PNG propio + inflate zlib/DEFLATE** (color types 0/2/3/4/6, bit depth 1–16, filtros 0–4, Adam7, CRC, `PngLimits`) | **HECHO** | `crates/image`, 45 tests + 1 doctest; GIF/JPEG/WebP solo detectados |
 | **Pipeline de navegador** `URL → PNG` con CSS externo: charset UTF-8/Windows-1252, `<base>`, `<style>`+`<link rel=stylesheet>` (dedup/media/caps), cascada UA+autor, layout con fuentes y backgrounds, PNG; **`RenderOutput.hit_regions`**, **red avanzada E2E** (cookies por render/sesión, CORS/credentials con denegación no fatal, gzip/deflate, `--cookies`/`--origin`) y **event loop presupuestado** (reloj virtual, `DOMContentLoaded`/`load`, timers, re-render único) | **HECHO** | `crates/render`, **138 tests**; fixture 640×400 → 15.498 B `md5 7324e851…`; showcase 1024×768 → 80.220 B `md5 c95c7eff…`; **ronda 13**: webfonts E2E; **ronda 15**: SVG inline (`inline_svgs`) y event loop determinista; **ronda 16**: estilos pre-script con `getComputedStyle` real (`styles_pre_script`), matchMedia/viewport, rAF con epoch fijo (48 ms), `readyState`, onerror/console ⇒ warnings (`console_errors`) y multi-capa (`background_layers.html`, md5 `c357cc2c…`); **ronda 18**: clipping+clip:text; **ronda 19**: `ReferrerConfig`/SameSite reales, estado CSS real (`css_state.html`) y 2 tests de integración de gradientes |
@@ -134,7 +136,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | `br`/stacked encodings, HTTP/2 y streaming, CORS completo, PSL completa y multi-range | **PENDIENTE** | WP-5.9; SameSite/PSL reducida/Referrer-Policy/Range ya HECHO (rondas 18-19) |
 | Ventana/eventos/scroll/zoom | **PARCIAL** | Fase 7: ventana+scroll+inputs+HiDPI+worker+navegación+zoom+auto-refresh hechos; formularios/pestañas/event-loop real/eventos DOM pendientes |
 
-## 6. DOM generacional + API de navegador (`crates/dom`, 28 tests)
+## 6. DOM generacional + API de navegador (`crates/dom`, 33 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -147,9 +149,10 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, eventos DOM/foco y formularios del host (Fase 7), animaciones, `border-radius`, `box-shadow`, gradientes y medios paginados. JavaScript está en Fase 6 (ver §8); hit-testing y navegación ya existen (rondas 9–10).
 
-## 8. Fase 6: JavaScript (`crates/js`, 96 tests + scripting E2E en `render`/parser)
+## 8. Fase 6: JavaScript (`crates/js`, 111 tests + scripting E2E en `render`/parser)
 
 | **ES modules (ronda 25)**: `eval_module` con resolver/loader, imports default/named/namespace/side-effect, exports const/let/var/function/class/default/{as}, `import.meta.url`, orden topológico, ciclos `ModuleCycle` y errores tipados | **HECHO** | js 96 tests; subset line-based documentado (sin import() dinámico/top-level await/export-from/live bindings) |
+| **SVG filters + SMIL (ronda 26)**: `feColorMatrix`/`feBlend`/`feMerge`/`feComposite` arithmetic con cadenas in/in2/result y `<animate>/<set>/<animateTransform>` determinista (`render_svg_with_time`) | **HECHO** | svg 97 tests; sin animación byte-idéntico |
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -163,7 +166,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 | **WP-6.4 (ronda 11)**: hook `html::scripting::{ScriptExecutor, ScriptExecution}`; scripts parser-inserted al `</script>`/EOF y `document.write` **re-tokenizado en la posición actual** (scripts anidados incluidos); externos `src` los ejecuta el host; errores no fatales; camino sin scripting zero-cost | **HECHO** | **árbol 3.904/3.904 (100 %), allowlist de tree vacía** |
 | Pendientes F6: `document.onerror` para errores de scripts, módulos ES/`async`/`defer`, memoria real y aislamiento, provider de `getComputedStyle` cableado al pipeline y event loop vivo en el shell | **PENDIENTE** | Fase 6 ≈80-85 % |
 
-## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 180 tests)
+## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 183 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -184,7 +187,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 ## 10. Verificación de la matriz
 
 ```bash
-./tools/dev.sh all                             # fmt, clippy, 1594 tests, doc y gate PASS
+./tools/dev.sh all                             # fmt, clippy, 1653 tests, doc y gate PASS
 cargo test -p css -p layout -p paint -p fonts -p dom -p html
 cargo test -p net -p render -p image -p shell
 cargo test -p js

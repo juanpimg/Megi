@@ -6,6 +6,52 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 26 — module scripts, scaled decode, HTTP/2 request bodies, DOM/JS bug-bash, SVG filters/SMIL and isolated bench rows (2026-11-11)
+
+#### Added
+
+- **`<script type="module">` wiring** (`0167bf8`, render 153 tests): inline and external
+  module scripts resolve against the importing module URL (file/http(s)/data; bare
+  specifiers fail with `ModuleNotFound`) and load through a real file/http loader
+  honouring `FetchOptions`/`--no-network`, with per-module and total-graph caps. Module
+  failure is non-fatal; microtasks/timers/re-render keep the event loop deterministic.
+  Fixtures `modules/*.js` + `module_*.html`.
+- **Scaled decoding** (`cf258fa`, image 76 / render 153 tests): `decode_scaled` /
+  `decode_scaled_with_limits` choose `ceil(longest/max_dim)`, PNG subsamples during
+  unfiltering (including Adam7) without a full-resolution buffer, and JPEG/GIF/WebP
+  subsample after decode (documented); `RenderOptions.max_image_dim` and
+  `--max-image-dim`. A/B PNG full ×2 7.98→5.74 ms (−28 %) and ×8 5.08→3.25 ms
+  (−36 %); render images stage −30 %, total 23.3–24.7→18.1–18.7 ms.
+- **HTTP/2 request bodies, trailers and 100-continue + HTTP/1.1 POST** (`7a5893e`,
+  net 249 tests): `H2Request`/`request_many`, DATA frames with MAX_FRAME_SIZE and
+  flow-control windows, single END_STREAM, 16 MiB body cap (`RequestBodyTooLarge`),
+  RST during upload, h2/h1 trailers, `Expect: 100-continue` and h1 POST CL/chunked;
+  loader `fetch_with_method`.
+- **DOM/JS bug-bash** (`025a292`, dom 33 / js 111 tests): fragment insertion in
+  append/insert/replace and replace-in-position, case-insensitive HTML attributes,
+  childNodes NodeList snapshots, reflected `value/checked/disabled/selected/options`,
+  `createDocumentFragment` and deep `cloneNode`, with 20 WPT-like regression tests;
+  remaining gaps documented (fetch, dataset, innerText, attributes, normalize,
+  compareDocumentPosition, getBoundingClientRect, Range, MouseEvent/relatedTarget,
+  URLSearchParams, queueMicrotask, NodeList snapshots).
+- **Complete SVG filters + basic SMIL** (`2fb05a1`, svg 97 tests): `feColorMatrix`
+  (matrix/saturate/hueRotate/luminanceToAlpha), `feBlend`, `feMerge`,
+  `feComposite` arithmetic k1–k4 and `in`/`in2`/`result` chains; deterministic
+  `<animate from/to/by>`, `<set>` and `<animateTransform>` at t=0/half via
+  `render_svg_with_time`; documents without animation stay byte-identical.
+- **Isolated benchmark rows and safe optimisations** (`7ab354c`): paint layer-effects/
+  object-fit/filter/backdrop rows (paint tail; backdrop/aspect overhead is not in
+  paint), `shell/save-png-encode` 3.76 ms (write 0.003, total 3.78), and
+  `tools/bench.sh --save-png-isolated` (screenshot alone vs +save-png: 30 vs 29 ms;
+  the previous +38.8 ms was writing two PNGs).
+
+#### Tests
+
+- **1,653 tests, 0 failures** (render 153, net 249, image 76, svg 97, dom 33, js 111,
+  paint 208, css 230, layout 215, shell 183, html 60, fonts 17+1 doctest, bench 9,
+  test_harness 11); gate PASS with tokenizer 7,050/7,050, tree 3,904/3,904,
+  serializer 230/230 and CSS 30/30.
+
 ### Round 25 — CSS Color 4/5, ES modules, complete WebP VP8L, render provider wiring and direct save-png (2026-11-11)
 
 #### Added
