@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Megi CSS Color 4 fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #ffffff; }
+  .row { margin: 8px; }
+  .swatch { display: inline-block; width: 64px; height: 48px; margin-right: 8px; }
+  .p3 { background-color: color(display-p3 1 0 0); }
+  .lab { background-color: lab(50 0 0); }
+  .oklab { background-color: oklab(0.6 0.1 -0.1); }
+  .oklch { background-color: oklch(0.7 0.15 140); }
+  .lch { background-color: lch(60 40 30); }
+  .hwb { background-color: hwb(210 10% 20%); }
+  .mix { background-color: color-mix(in srgb, red, blue); }
+  .mix-linear { background-color: color-mix(in srgb-linear, red, blue); }
+  .mix-oklab { background-color: color-mix(in oklab, red, blue); }
+  .mix-oklch { background-color: color-mix(in oklch, red, blue); }
+  .gradient { width: 220px; height: 48px; background-image: linear-gradient(to right, color(display-p3 1 0 0), oklch(0.8 0.15 250), color-mix(in srgb, red, blue)); }
+</style></head>
+<body>
+  <div class="row">
+    <div class="swatch p3"></div><div class="swatch lab"></div><div class="swatch oklab"></div><div class="swatch oklch"></div>
+  </div>
+  <div class="row">
+    <div class="swatch lch"></div><div class="swatch hwb"></div><div class="swatch mix"></div><div class="swatch mix-linear"></div>
+  </div>
+  <div class="row">
+    <div class="swatch mix-oklab"></div><div class="swatch mix-oklch"></div>
+  </div>
+  <div class="row"><div class="gradient"></div></div>
+</body></html>

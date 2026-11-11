@@ -76,6 +76,10 @@ impl Color {
             return Self::from_rgb_fn(&s[5..s.len() - 1]);
         }
 
+        if let Some(color) = crate::color::parse_modern(s) {
+            return Some(color);
+        }
+
         Self::from_named(s)
     }
 

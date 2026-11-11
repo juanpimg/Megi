@@ -12,6 +12,7 @@
 
 pub mod calc;
 pub mod cascade;
+mod color;
 pub mod component_value;
 pub mod custom;
 mod flex;
