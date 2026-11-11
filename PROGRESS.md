@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `30c27b3` (2026-11-11) · overall **100%** · **1,986** tests · conformance **PASS** · **14** crates · **156,014** lines of Rust
+**Snapshot** — commit `c85d1f5` (2026-11-11) · overall **100%** · **1,986** tests · conformance **PASS** · **14** crates · **156,014** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -146,7 +146,7 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `30c27b3` (2026-11-11) |
+| Commit | `c85d1f5` (2026-11-11) |
 | Crates in the workspace | 14 |
 | Lines of Rust (tracked `.rs`) | 156014 |
 | Tests (`cargo test --workspace -- --list`) | 1986 |
@@ -166,12 +166,12 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 
 ## Recent rounds
 
+- **Round 33** — style interning, streaming inflate/PNG regions, complete fetch(), SVG textPath and shell reader mode
 - **Round 32** — CSS/layout/PNG performance, TLA/live bindings, h1 streaming and push prioritization
 - **Round 31** — cascade layers, single-encode PNG overlays, fetch(), HTTP/HTTPS proxies and VP8 performance
 - **Round 30** — full VP8 keyframe decoder, container queries, PSL/trailers, deterministic Web Workers, shell history and chrome fast path
 - **Round 29** — streaming responses/keep-alive, SVG textPath/SMIL, import maps, WebP lossy header, shell pages and fuzz 14
 - **Round 28** — reduced IDCT/EXIF thumbnails, server push, streaming uploads, JS geometry, byte-safe blur/PNG and context menu
-- **Round 27** — PNG regression fix, HTTP/2 push/priorities/h2c, DOM/JS gaps, effects perf and polished chrome
 
 ## Next up
 
