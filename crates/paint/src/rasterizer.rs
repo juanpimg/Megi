@@ -66,6 +66,8 @@ thread_local! {
     static DROP_SHADOW_MASK: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
     /// Reusable offscreen pixmap for backdrop-filter (R166).
     static BACKDROP_BUFFER: RefCell<Option<Pixmap>> = const { RefCell::new(None) };
+    /// Reusable output plane for the separable box blur passes (R181).
+    static BLUR_OUTPUT: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Configuration for a rasterization pass.
@@ -2002,49 +2004,98 @@ fn rounded_rect_coverage(rect: Rect, radii: BorderRadii, px: f32, py: f32) -> f3
 }
 
 /// One separable box-blur pass over a scalar mask (deterministic f32 arithmetic).
-fn blur_mask_pass(mask: &mut [f32], width: usize, height: usize, horizontal: bool, radius: usize) {
+/// One box-blur pass over `input`, writing to `output`.
+///
+/// The loop is split into left/middle/right regions so the middle (the vast
+/// majority of pixels) has no per-pixel bounds branches. The floating-point
+/// accumulation order is exactly the same as the previous single-loop version,
+/// so the resulting values — and therefore every rendered byte — are unchanged
+/// (R181).
+fn blur_pass_into(
+    input: &[f32],
+    output: &mut [f32],
+    width: usize,
+    height: usize,
+    horizontal: bool,
+    radius: usize,
+) {
     if radius == 0 || width == 0 || height == 0 {
+        output.copy_from_slice(input);
         return;
     }
     let window = 2 * radius + 1;
-    let mut output = vec![0.0f32; mask.len()];
+    let divisor = window as f32;
     if horizontal {
+        let left_end = (radius + 1).min(width);
+        let middle_end = width.saturating_sub(radius);
         for y in 0..height {
             let row = y * width;
             let mut sum = 0.0f32;
             for x in 0..width.min(radius) {
-                sum += mask[row + x];
+                sum += input[row + x];
             }
-            for x in 0..width {
+            // x <= radius: no subtraction yet.
+            for x in 0..left_end {
                 let add = x + radius;
                 if add < width {
-                    sum += mask[row + add];
+                    sum += input[row + add];
                 }
+                output[row + x] = sum / divisor;
+            }
+            // Both neighbours inside the row: no branches.
+            for x in left_end..middle_end.max(left_end) {
+                sum += input[row + x + radius];
+                sum -= input[row + x - radius - 1];
+                output[row + x] = sum / divisor;
+            }
+            // Right border: the addition falls off the row.
+            for x in middle_end.max(left_end)..width {
                 if x > radius {
-                    sum -= mask[row + x - radius - 1];
+                    sum -= input[row + x - radius - 1];
                 }
-                output[row + x] = sum / window as f32;
+                output[row + x] = sum / divisor;
             }
         }
     } else {
+        let left_end = (radius + 1).min(height);
+        let middle_end = height.saturating_sub(radius);
         for x in 0..width {
             let mut sum = 0.0f32;
             for y in 0..height.min(radius) {
-                sum += mask[y * width + x];
+                sum += input[y * width + x];
             }
-            for y in 0..height {
+            for y in 0..left_end {
                 let add = y + radius;
                 if add < height {
-                    sum += mask[add * width + x];
+                    sum += input[add * width + x];
                 }
+                output[y * width + x] = sum / divisor;
+            }
+            for y in left_end..middle_end.max(left_end) {
+                sum += input[(y + radius) * width + x];
+                sum -= input[(y - radius - 1) * width + x];
+                output[y * width + x] = sum / divisor;
+            }
+            for y in middle_end.max(left_end)..height {
                 if y > radius {
-                    sum -= mask[(y - radius - 1) * width + x];
+                    sum -= input[(y - radius - 1) * width + x];
                 }
-                output[y * width + x] = sum / window as f32;
+                output[y * width + x] = sum / divisor;
             }
         }
     }
+}
+
+fn blur_mask_pass(mask: &mut [f32], width: usize, height: usize, horizontal: bool, radius: usize) {
+    if radius == 0 || width == 0 || height == 0 {
+        return;
+    }
+    let mut output = BLUR_OUTPUT.with(|slot| std::mem::take(&mut *slot.borrow_mut()));
+    output.clear();
+    output.resize(mask.len(), 0.0);
+    blur_pass_into(mask, &mut output, width, height, horizontal, radius);
     mask.copy_from_slice(&output);
+    BLUR_OUTPUT.with(|slot| *slot.borrow_mut() = output);
 }
 
 /// Three-pass separable box blur (Gaussian approximation) with radius `r`.
@@ -3355,12 +3406,16 @@ fn blur_rgba(buf: &mut Pixmap, blur: f32) {
                 planes[3][index] = f32::from(pixel.a);
             }
         }
+        let mut scratch = BLUR_OUTPUT.with(|slot| std::mem::take(&mut *slot.borrow_mut()));
+        scratch.clear();
+        scratch.resize(width * height, 0.0);
         for plane in planes.iter_mut().take(channels) {
             for _ in 0..3 {
-                crate::rasterizer::blur_mask_pass(plane, width, height, true, radius);
-                crate::rasterizer::blur_mask_pass(plane, width, height, false, radius);
+                blur_pass_into(plane, &mut scratch, width, height, true, radius);
+                blur_pass_into(&scratch, plane, width, height, false, radius);
             }
         }
+        BLUR_OUTPUT.with(|slot| *slot.borrow_mut() = scratch);
         for (index, pixel) in buf.pixels.iter_mut().enumerate() {
             pixel.r = planes[0][index].round().clamp(0.0, 255.0) as u8;
             pixel.g = planes[1][index].round().clamp(0.0, 255.0) as u8;

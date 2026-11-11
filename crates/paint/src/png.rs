@@ -195,18 +195,20 @@ fn filter_row(row: &[u8], previous: &[u8], stride: usize, filtered: &mut Vec<u8>
         return;
     }
 
-    // General path, pass 1: candidate costs only (no candidate buffers).
-    // Index order preserves the libpng tie-break (`score < best` keeps the
-    // lowest filter index).
+    // General path, pass 1: candidate costs in a single scan. Each score is
+    // accumulated with exactly the same per-byte operations and order as the
+    // separate `*_score` helpers, so the chosen filter byte is unchanged; only
+    // the number of scans over the row drops from five to one (R181).
+    let (none_score, sub_score, up_score, average_score, paeth_score) =
+        row_filter_scores(row, previous);
     let mut best_filter = 0usize;
-    let mut best_score = score_bytes(row); // filter 0: None
-    for filter in 1..=4usize {
-        let score = match filter {
-            1 => sub_score(row, stride),
-            2 => up_score(row, previous, stride),
-            3 => average_score(row, previous, stride),
-            _ => paeth_score(row, previous, stride),
-        };
+    let mut best_score = none_score;
+    for (filter, score) in [
+        (1usize, sub_score),
+        (2, up_score),
+        (3, average_score),
+        (4, paeth_score),
+    ] {
         if score < best_score {
             best_score = score;
             best_filter = filter;
@@ -215,6 +217,7 @@ fn filter_row(row: &[u8], previous: &[u8], stride: usize, filtered: &mut Vec<u8>
             }
         }
     }
+    let _ = best_score;
 
     // Pass 2: write the chosen filter byte + filtered row directly.
     filtered.push(best_filter as u8);
@@ -223,59 +226,32 @@ fn filter_row(row: &[u8], previous: &[u8], stride: usize, filtered: &mut Vec<u8>
     apply_filter(best_filter, row, previous, &mut filtered[start..]);
 }
 
-/// Absolute-deviation cost of the `Sub` filter.
+/// Computes the five filter costs for one row in a single scan.
+///
+/// The per-byte contributions (including the first four bytes, where left/upper
+/// neighbours are zero) are identical to the separate score helpers, so the
+/// selected filter and the resulting PNG bytes do not change.
 #[inline]
-fn sub_score(row: &[u8], stride: usize) -> u64 {
-    let mut score = 0u64;
-    for &byte in row.iter().take(4.min(stride)) {
-        score += abs_signed(byte);
-    }
-    for x in 4..stride {
-        score += abs_signed(row[x].wrapping_sub(row[x - 4]));
-    }
-    score
-}
-
-/// Absolute-deviation cost of the `Up` filter.
-#[inline]
-fn up_score(row: &[u8], previous: &[u8], stride: usize) -> u64 {
-    let mut score = 0u64;
+fn row_filter_scores(row: &[u8], previous: &[u8]) -> (u64, u64, u64, u64, u64) {
+    let stride = row.len();
+    let mut none_score = 0u64;
+    let mut sub_score = 0u64;
+    let mut up_score = 0u64;
+    let mut average_score = 0u64;
+    let mut paeth_score = 0u64;
     for x in 0..stride {
-        score += abs_signed(row[x].wrapping_sub(previous[x]));
-    }
-    score
-}
-
-/// Absolute-deviation cost of the `Average` filter.
-#[inline]
-fn average_score(row: &[u8], previous: &[u8], stride: usize) -> u64 {
-    let mut score = 0u64;
-    for (&byte, &above) in row.iter().zip(previous.iter()).take(4.min(stride)) {
-        score += abs_signed(byte.wrapping_sub(above / 2));
-    }
-    for x in 4..stride {
-        let left = row[x - 4];
+        let byte = row[x];
+        let left = if x >= 4 { row[x - 4] } else { 0 };
         let above = previous[x];
+        let upper_left = if x >= 4 { previous[x - 4] } else { 0 };
+        none_score += abs_signed(byte);
+        sub_score += abs_signed(byte.wrapping_sub(left));
+        up_score += abs_signed(byte.wrapping_sub(above));
         let average = ((u16::from(left) + u16::from(above)) / 2) as u8;
-        score += abs_signed(row[x].wrapping_sub(average));
+        average_score += abs_signed(byte.wrapping_sub(average));
+        paeth_score += abs_signed(byte.wrapping_sub(paeth_predictor(left, above, upper_left)));
     }
-    score
-}
-
-/// Absolute-deviation cost of the `Paeth` filter.
-#[inline]
-fn paeth_score(row: &[u8], previous: &[u8], stride: usize) -> u64 {
-    let mut score = 0u64;
-    for x in 0..4.min(stride) {
-        score += abs_signed(row[x].wrapping_sub(previous[x]));
-    }
-    for x in 4..stride {
-        let left = row[x - 4];
-        let above = previous[x];
-        let upper_left = previous[x - 4];
-        score += abs_signed(row[x].wrapping_sub(paeth_predictor(left, above, upper_left)));
-    }
-    score
+    (none_score, sub_score, up_score, average_score, paeth_score)
 }
 
 /// Writes the filtered bytes of `filter` into `output` (same length as `row`).
@@ -326,12 +302,6 @@ fn apply_filter(filter: usize, row: &[u8], previous: &[u8], output: &mut [u8]) {
             }
         }
     }
-}
-
-/// Sum of absolute signed byte deviations (the libpng filter heuristic).
-#[inline]
-fn score_bytes(bytes: &[u8]) -> u64 {
-    bytes.iter().map(|&byte| abs_signed(byte)).sum()
 }
 
 /// `abs(byte as i8)` as a `u64`, branch-free.

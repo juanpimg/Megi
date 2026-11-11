@@ -178,6 +178,8 @@ fn distance_code(distance: usize) -> (u16, u32, u32) {
         .expect("distance in table")
 }
 
+use std::cell::RefCell;
+
 /// 3-byte rolling hash used for the LZ77 match finder.
 fn hash3(data: &[u8], position: usize) -> usize {
     let a = u32::from(data[position]);
@@ -187,111 +189,138 @@ fn hash3(data: &[u8], position: usize) -> usize {
     (hash as usize) & (HASH_SIZE - 1)
 }
 
+/// Reusable LZ77 tables for the fixed-Huffman deflate path (R181).
+///
+/// Reusing the hash chains avoids ~1 MiB of allocations per PNG encode; the
+/// `u32` position fields halve their memory footprint. The greedy parse and
+/// therefore the output bytes are unchanged.
+#[derive(Default)]
+struct DeflateScratch {
+    hashes: Vec<u16>,
+    head: Vec<u32>,
+    prev: Vec<u32>,
+}
+
+thread_local! {
+    static DEFLATE_SCRATCH: RefCell<DeflateScratch> = const {
+        RefCell::new(DeflateScratch { hashes: Vec::new(), head: Vec::new(), prev: Vec::new() })
+    };
+}
+
 /// Compresses `data` into a raw DEFLATE stream (final fixed-Huffman block).
 fn deflate_fixed(data: &[u8]) -> Vec<u8> {
-    let mut writer = BitWriter::with_capacity(data.len() / 8 + 64);
-    // BFINAL=1, BTYPE=01 (fixed Huffman codes).
-    writer.write_bits(1, 1);
-    writer.write_bits(1, 2);
+    let mut scratch = DEFLATE_SCRATCH.with(|slot| std::mem::take(&mut *slot.borrow_mut()));
+    scratch.hashes.clear();
+    scratch.hashes.resize(data.len(), 0);
+    scratch.head.clear();
+    scratch.head.resize(HASH_SIZE, u32::MAX);
+    scratch.prev.clear();
+    scratch.prev.resize(WINDOW_SIZE, u32::MAX);
 
-    // Every position that can be inserted/looked up needs its 3-byte hash; the
-    // hash table is computed once instead of once for the lookup and again for
-    // the insertion (the parse — and therefore the output — is unchanged).
-    let mut hashes = vec![0u16; data.len()];
-    let mut position = 0usize;
-    while position + MIN_MATCH <= data.len() {
-        hashes[position] = hash3(data, position) as u16;
-        position += 1;
-    }
+    let output = {
+        let mut writer = BitWriter::with_capacity(data.len() / 8 + 64);
+        // BFINAL=1, BTYPE=01 (fixed Huffman codes).
+        writer.write_bits(1, 1);
+        writer.write_bits(1, 2);
 
-    let mut head = vec![usize::MAX; HASH_SIZE];
-    let mut prev = vec![usize::MAX; WINDOW_SIZE];
-
-    let insert = |head: &mut [usize], prev: &mut [usize], position: usize| {
-        if position + MIN_MATCH > data.len() {
-            return;
+        let DeflateScratch { hashes, head, prev } = &mut scratch;
+        // Every position that can be inserted/looked up needs its 3-byte hash.
+        let mut position = 0usize;
+        while position + MIN_MATCH <= data.len() {
+            hashes[position] = hash3(data, position) as u16;
+            position += 1;
         }
-        let hash = hashes[position] as usize;
-        prev[position % WINDOW_SIZE] = head[hash];
-        head[hash] = position;
-    };
 
-    let mut position = 0usize;
-    while position < data.len() {
-        let max_length = (data.len() - position).min(MAX_MATCH);
-        let mut best_length = 0usize;
-        let mut best_distance = 0usize;
-        if max_length >= MIN_MATCH {
+        let insert = |hashes: &[u16], head: &mut [u32], prev: &mut [u32], position: usize| {
+            if position + MIN_MATCH > data.len() {
+                return;
+            }
             let hash = hashes[position] as usize;
-            let mut candidate = head[hash];
-            let mut budget = MAX_CHAIN;
-            while candidate != usize::MAX && budget > 0 {
-                if candidate >= position {
-                    break;
-                }
-                let distance = position - candidate;
-                if distance > WINDOW_SIZE {
-                    break;
-                }
-                // Fast rejection: to beat `best_length` the candidate must match
-                // through byte `best_length` as well. This preserves the exact
-                // greedy parse (a shorter match would not change the output).
-                if best_length > 0
-                    && (best_length >= max_length
-                        || data[candidate + best_length] != data[position + best_length])
-                {
-                    let next = prev[candidate % WINDOW_SIZE];
-                    if next == usize::MAX || next >= candidate {
+            prev[position % WINDOW_SIZE] = head[hash];
+            head[hash] = position as u32;
+        };
+
+        let mut position = 0usize;
+        while position < data.len() {
+            let max_length = (data.len() - position).min(MAX_MATCH);
+            let mut best_length = 0usize;
+            let mut best_distance = 0usize;
+            if max_length >= MIN_MATCH {
+                let hash = hashes[position] as usize;
+                let mut candidate = head[hash];
+                let mut budget = MAX_CHAIN;
+                while candidate != u32::MAX && budget > 0 {
+                    let candidate_position = candidate as usize;
+                    if candidate_position >= position {
+                        break;
+                    }
+                    let distance = position - candidate_position;
+                    if distance > WINDOW_SIZE {
+                        break;
+                    }
+                    // Fast rejection: to beat `best_length` the candidate must match
+                    // through byte `best_length` as well. This preserves the exact
+                    // greedy parse (a shorter match would not change the output).
+                    if best_length > 0
+                        && (best_length >= max_length
+                            || data[candidate_position + best_length]
+                                != data[position + best_length])
+                    {
+                        let next = prev[candidate_position % WINDOW_SIZE];
+                        if next == u32::MAX || next as usize >= candidate_position {
+                            break;
+                        }
+                        candidate = next;
+                        budget -= 1;
+                        continue;
+                    }
+                    let length = match_length(data, candidate_position, position, max_length);
+                    if length > best_length {
+                        best_length = length;
+                        best_distance = distance;
+                        if length >= NICE_LENGTH {
+                            break;
+                        }
+                    }
+                    let next = prev[candidate_position % WINDOW_SIZE];
+                    // Defensive: a chain that does not strictly decrease would loop.
+                    if next == u32::MAX || next as usize >= candidate_position {
                         break;
                     }
                     candidate = next;
                     budget -= 1;
-                    continue;
                 }
-                let length = match_length(data, candidate, position, max_length);
-                if length > best_length {
-                    best_length = length;
-                    best_distance = distance;
-                    if length >= NICE_LENGTH {
-                        break;
-                    }
-                }
-                let next = prev[candidate % WINDOW_SIZE];
-                // Defensive: a chain that does not strictly decrease would loop.
-                if next == usize::MAX || next >= candidate {
-                    break;
-                }
-                candidate = next;
-                budget -= 1;
             }
-        }
 
-        if best_length >= MIN_MATCH {
-            let (length_symbol, extra_bits, extra_value) = length_code(best_length);
-            write_fixed_literal(&mut writer, length_symbol);
-            if extra_bits > 0 {
-                writer.write_bits(extra_value, extra_bits);
-            }
-            let (distance_symbol, extra_bits, extra_value) = distance_code(best_distance);
-            writer.write_huffman(u32::from(distance_symbol), 5);
-            if extra_bits > 0 {
-                writer.write_bits(extra_value, extra_bits);
-            }
-            let end = (position + best_length).min(data.len());
-            while position < end {
-                insert(&mut head, &mut prev, position);
+            if best_length >= MIN_MATCH {
+                let (length_symbol, extra_bits, extra_value) = length_code(best_length);
+                write_fixed_literal(&mut writer, length_symbol);
+                if extra_bits > 0 {
+                    writer.write_bits(extra_value, extra_bits);
+                }
+                let (distance_symbol, extra_bits, extra_value) = distance_code(best_distance);
+                writer.write_huffman(u32::from(distance_symbol), 5);
+                if extra_bits > 0 {
+                    writer.write_bits(extra_value, extra_bits);
+                }
+                let end = (position + best_length).min(data.len());
+                while position < end {
+                    insert(hashes, head, prev, position);
+                    position += 1;
+                }
+            } else {
+                write_fixed_literal(&mut writer, u16::from(data[position]));
+                insert(hashes, head, prev, position);
                 position += 1;
             }
-        } else {
-            write_fixed_literal(&mut writer, u16::from(data[position]));
-            insert(&mut head, &mut prev, position);
-            position += 1;
         }
-    }
 
-    // End-of-block symbol.
-    write_fixed_literal(&mut writer, 256);
-    writer.finish()
+        // End-of-block symbol.
+        write_fixed_literal(&mut writer, 256);
+        writer.finish()
+    };
+    DEFLATE_SCRATCH.with(|slot| *slot.borrow_mut() = scratch);
+    output
 }
 
 /// Length of the common prefix of `data[candidate..]` and `data[position..]`,

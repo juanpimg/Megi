@@ -59,6 +59,7 @@ pub fn register(suite: &mut Suite, opts: &Options) {
     register_layer_effects(suite);
     register_fixture_effect_rows(suite);
     register_effect_fixture_pipelines(suite);
+    register_backdrop_stage_rows(suite);
     register_image(suite);
     #[cfg(feature = "fonts")]
     register_fonts(suite, opts.scale);
@@ -956,6 +957,82 @@ fn register_effect_fixture_pipelines(suite: &mut Suite) {
         "pipeline",
         "same fixture without backdrop-filter declarations".to_string(),
         pipeline_row(backdrop_bare, 300, 260),
+    ));
+}
+
+/// Sub-stage rows for backdrop-filter (R181): raster of the display list vs
+/// PNG encoding of the resulting pixmap, full fixture and no-effect variant.
+/// This splits the r27 E2E overhead (+0,55 ms) between the two stages.
+fn register_backdrop_stage_rows(suite: &mut Suite) {
+    fn stages(
+        html_source: &'static str,
+        width: u32,
+        height: u32,
+    ) -> (paint::DisplayList, paint::Pixmap) {
+        static PATTERN_PNG: &[u8] =
+            include_bytes!("../../../tests/fixtures/render/assets/pattern.png");
+        let document = html::parse_document(html_source, false);
+        let styles = paint::resolve_embedded_styles(&document);
+        let viewport = Rect::new(0.0, 0.0, width as f32, height as f32);
+        let root = layout::layout_document(&document, &styles, viewport).expect("layout");
+        let mut backgrounds = paint::BackgroundImages::new();
+        if let Ok(pattern) = image::decode(PATTERN_PNG) {
+            backgrounds.insert("assets/pattern.png".to_string(), Arc::new(pattern));
+        }
+        let images = paint::ImageStore::new();
+        let display_list = paint::build_display_list_with_images_and_backgrounds(
+            &root,
+            viewport,
+            &images,
+            &backgrounds,
+        );
+        let pixmap = paint::rasterize_display_list(&display_list, width, height);
+        (display_list, pixmap)
+    }
+    fn strip(html_source: &'static str, property: &str) -> &'static str {
+        let needle = format!("{property}:");
+        let stripped = html_source
+            .lines()
+            .filter(|line| !line.trim_start().starts_with(&needle))
+            .collect::<Vec<_>>()
+            .join("\n");
+        Box::leak(stripped.into_boxed_str())
+    }
+    let fixture: &'static str = include_str!("../../../tests/fixtures/render/backdrop_filter.html");
+    let bare = strip(fixture, "backdrop-filter");
+    let (display_list, pixmap) = stages(fixture, 300, 260);
+    let (display_list_bare, pixmap_bare) = stages(bare, 300, 260);
+    suite.add(BenchEntry::new(
+        "paint/backdrop-fixture-raster",
+        "paint",
+        "backdrop_filter.html display list → pixmap (no PNG)".to_string(),
+        move || {
+            black_box(paint::rasterize_display_list(&display_list, 300, 260));
+        },
+    ));
+    suite.add(BenchEntry::new(
+        "paint/backdrop-fixture-raster-no-effect",
+        "paint",
+        "same fixture without backdrop-filter → pixmap (no PNG)".to_string(),
+        move || {
+            black_box(paint::rasterize_display_list(&display_list_bare, 300, 260));
+        },
+    ));
+    suite.add(BenchEntry::new(
+        "paint/backdrop-fixture-png",
+        "paint",
+        "backdrop_filter.html pixmap → PNG encode".to_string(),
+        move || {
+            black_box(pixmap.to_png());
+        },
+    ));
+    suite.add(BenchEntry::new(
+        "paint/backdrop-fixture-png-no-effect",
+        "paint",
+        "same fixture without backdrop-filter → PNG encode".to_string(),
+        move || {
+            black_box(pixmap_bare.to_png());
+        },
     ));
 }
 
