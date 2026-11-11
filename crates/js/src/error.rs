@@ -18,6 +18,14 @@ pub enum JsError {
     Dom(String),
     /// Internal bridge failure (missing host context, GC/runtime setup).
     Internal(String),
+    /// ES module resolution failed (specifier could not be mapped to a URL).
+    ModuleNotFound(String),
+    /// ES module syntax/export shape not supported by the subset preprocessor.
+    ModuleSyntax(String),
+    /// A requested import is not exported by the dependency module.
+    ModuleExport(String),
+    /// Circular ES module dependency (documented limitation).
+    ModuleCycle(String),
 }
 
 impl fmt::Display for JsError {
@@ -32,6 +40,10 @@ impl fmt::Display for JsError {
             Self::Budget(message) => write!(f, "JavaScript budget exceeded: {message}"),
             Self::Dom(message) => write!(f, "DOM error: {message}"),
             Self::Internal(message) => write!(f, "JavaScript runtime error: {message}"),
+            Self::ModuleNotFound(message) => write!(f, "module not found: {message}"),
+            Self::ModuleSyntax(message) => write!(f, "module syntax error: {message}"),
+            Self::ModuleExport(message) => write!(f, "module export missing: {message}"),
+            Self::ModuleCycle(message) => write!(f, "circular module dependency: {message}"),
         }
     }
 }

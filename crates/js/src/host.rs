@@ -154,6 +154,16 @@ pub enum StorageKind {
     Session,
 }
 
+/// Resolves an ES module specifier against the importing module's URL.
+///
+/// Returns `Ok(None)` when the specifier cannot be resolved; the runtime then reports a
+/// typed `ModuleNotFound` error. The host owns all I/O (files/network); `js` never reads.
+pub type ModuleResolver =
+    Box<dyn Fn(&str, &str) -> Result<Option<String>, crate::error::JsError> + Send + Sync>;
+
+/// Loads the source text of an already-resolved module URL.
+pub type ModuleLoader = Box<dyn Fn(&str) -> Result<String, crate::error::JsError> + Send + Sync>;
+
 /// Loads the persisted entries for one storage area.
 pub type StorageLoadFn = Box<dyn Fn(StorageKind) -> Vec<(String, String)> + Send + Sync>;
 /// Saves the current entries of one storage area (called after writes).
@@ -255,6 +265,9 @@ pub(crate) struct Host {
     /// MutationObserver registrations and pending records.
     pub observers: Vec<ObserverRegistration>,
     pub mutations: Vec<MutationRecord>,
+    /// ES module resolver/loader injected by the host (no I/O in `js`).
+    pub module_resolver: Option<ModuleResolver>,
+    pub module_loader: Option<ModuleLoader>,
 }
 
 impl Host {
@@ -291,6 +304,8 @@ impl Host {
             storage_provider: None,
             observers: Vec::new(),
             mutations: Vec::new(),
+            module_resolver: None,
+            module_loader: None,
         }
     }
 

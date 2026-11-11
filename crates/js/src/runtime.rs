@@ -2910,3 +2910,416 @@ fn deliver_mutation_records(context: &mut Context) -> Result<(), JsError> {
     }
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// ES modules (round 25 subset preprocessor + host resolver/loader)
+// ---------------------------------------------------------------------------
+
+use crate::ModuleOutcome;
+
+#[derive(Clone, Debug)]
+enum ImportBinding {
+    SideEffect,
+    Default(String),
+    Namespace(String),
+    Named(Vec<(String, String)>), // local, exported
+}
+
+#[derive(Clone, Debug)]
+struct ImportSpec {
+    specifier: String,
+    binding: ImportBinding,
+}
+
+#[derive(Clone, Debug)]
+struct ParsedModule {
+    imports: Vec<ImportSpec>,
+    body: String,
+    exports: Vec<(String, String)>, // exported name, local expression
+}
+
+fn module_quote(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            _ => out.push(ch),
+        }
+    }
+    out.push('"');
+    out
+}
+
+fn import_specifier(rest: &str) -> Option<(String, String)> {
+    // Returns (binding head, specifier). Import declarations must be single-line.
+    let rest = rest.trim().trim_end_matches(';').trim();
+    if let Some((head, tail)) = rest.rsplit_once(" from ") {
+        let specifier = tail.trim().trim_matches(['"', '\'']);
+        if specifier.is_empty() {
+            return None;
+        }
+        let head = head.trim().trim_end_matches(',').trim();
+        Some((head.to_string(), specifier.to_string()))
+    } else {
+        let specifier = rest.trim_matches(['"', '\'']);
+        (!specifier.is_empty()).then(|| (String::new(), specifier.to_string()))
+    }
+}
+
+fn parse_named_list(raw: &str) -> Vec<(String, String)> {
+    let raw = raw.trim().trim_start_matches('{').trim_end_matches('}');
+    raw.split(',')
+        .filter_map(|item| {
+            let item = item.trim();
+            if item.is_empty() {
+                return None;
+            }
+            if let Some((local, exported)) = item.split_once(" as ") {
+                Some((local.trim().to_string(), exported.trim().to_string()))
+            } else {
+                Some((item.to_string(), item.to_string()))
+            }
+        })
+        .collect()
+}
+
+fn parse_import_named_list(raw: &str) -> Vec<(String, String)> {
+    parse_named_list(raw)
+        .into_iter()
+        .map(|(local, exported)| (exported, local))
+        .collect()
+}
+
+fn export_declared_names(decl: &str) -> Vec<String> {
+    let decl = decl.trim();
+    if let Some(rest) = decl
+        .strip_prefix("function ")
+        .or_else(|| decl.strip_prefix("class "))
+    {
+        return rest
+            .split(|ch: char| ch == '(' || ch == '{' || ch.is_whitespace())
+            .next()
+            .filter(|name| !name.is_empty())
+            .map(str::to_string)
+            .into_iter()
+            .collect();
+    }
+    let rest = decl
+        .strip_prefix("const ")
+        .or_else(|| decl.strip_prefix("let "))
+        .or_else(|| decl.strip_prefix("var "))
+        .unwrap_or(decl);
+    // Naive top-level declarator split; enough for the documented subset.
+    rest.split(',')
+        .filter_map(|declarator| {
+            let name = declarator
+                .split('=')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .trim_start_matches(['{', '[', '('])
+                .trim();
+            (!name.is_empty()).then(|| name.to_string())
+        })
+        .collect()
+}
+
+fn transform_module(source: &str, url: &str) -> Result<ParsedModule, JsError> {
+    let quoted_url = module_quote(url);
+    let mut imports = Vec::new();
+    let mut exports = Vec::new();
+    let mut body_lines: Vec<String> = Vec::new();
+    for raw_line in source.lines() {
+        let line = raw_line.replace("import.meta.url", &quoted_url);
+        let trimmed = line.trim();
+        if trimmed.starts_with("import ") {
+            let rest = trimmed
+                .trim_start_matches("import ")
+                .trim()
+                .trim_end_matches(';')
+                .trim();
+            if rest.starts_with('"') || rest.starts_with('\'') {
+                let specifier = rest.trim_matches(['"', '\'']).to_string();
+                imports.push(ImportSpec {
+                    specifier,
+                    binding: ImportBinding::SideEffect,
+                });
+                continue;
+            }
+            let Some((head, specifier)) = import_specifier(rest) else {
+                return Err(JsError::ModuleSyntax(format!(
+                    "unsupported import statement in {url}: {trimmed}"
+                )));
+            };
+            let binding = if head.is_empty() {
+                ImportBinding::SideEffect
+            } else if head.starts_with("* as ") {
+                ImportBinding::Namespace(
+                    head.strip_prefix("* as ")
+                        .map(str::trim)
+                        .unwrap_or_else(|| head.trim())
+                        .to_string(),
+                )
+            } else if head.starts_with('{') {
+                ImportBinding::Named(parse_import_named_list(&head))
+            } else if let Some((default_name, named)) = head.split_once(',') {
+                let mut bindings = vec![(default_name.trim().to_string(), "default".to_string())];
+                bindings.extend(parse_import_named_list(named));
+                ImportBinding::Named(bindings)
+            } else {
+                ImportBinding::Default(head.to_string())
+            };
+            imports.push(ImportSpec { specifier, binding });
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("export ") {
+            let rest = rest.trim();
+            if let Some(default) = rest.strip_prefix("default ") {
+                let default = default.trim().trim_end_matches(';').trim();
+                body_lines.push(format!("const __megi_default = ({default});"));
+                exports.push(("default".to_string(), "__megi_default".to_string()));
+                continue;
+            }
+            if rest.starts_with('{') {
+                let mapping = parse_named_list(rest);
+                for (local, exported) in mapping {
+                    exports.push((exported, local));
+                }
+                continue;
+            }
+            let names = export_declared_names(rest);
+            if names.is_empty() {
+                return Err(JsError::ModuleSyntax(format!(
+                    "unsupported export statement in {url}: {trimmed}"
+                )));
+            }
+            for name in names {
+                exports.push((name.clone(), name));
+            }
+            body_lines.push(rest.to_string());
+            continue;
+        }
+        body_lines.push(line);
+    }
+    Ok(ParsedModule {
+        imports,
+        body: body_lines.join("\n"),
+        exports,
+    })
+}
+
+fn module_error(error: boa_engine::JsError) -> JsError {
+    classify_error(&error.to_string())
+}
+
+fn resolve_module(
+    host: &Rc<RefCell<Host>>,
+    specifier: &str,
+    base: &str,
+) -> Result<String, JsError> {
+    let resolved = {
+        let host = host.borrow();
+        match host.module_resolver.as_ref() {
+            Some(resolver) => resolver(specifier, base)?,
+            None => None,
+        }
+    };
+    resolved.ok_or_else(|| JsError::ModuleNotFound(format!("{specifier} (base {base})")))
+}
+
+fn load_module(host: &Rc<RefCell<Host>>, url: &str) -> Result<String, JsError> {
+    let loaded = {
+        let host = host.borrow();
+        match host.module_loader.as_ref() {
+            Some(loader) => Some(loader(url)?),
+            None => None,
+        }
+    };
+    loaded.ok_or_else(|| JsError::ModuleNotFound(url.to_string()))
+}
+
+fn apply_budget(context: &mut Context, budget: &Budget) {
+    context
+        .runtime_limits_mut()
+        .set_loop_iteration_limit(budget.loop_iterations);
+    context
+        .runtime_limits_mut()
+        .set_recursion_limit(budget.recursion_limit);
+    context
+        .runtime_limits_mut()
+        .set_stack_size_limit(budget.stack_size_limit);
+}
+
+fn eval_module_graph(
+    context: &mut Context,
+    host: &Rc<RefCell<Host>>,
+    url: &str,
+    source: &str,
+    budget: &Budget,
+    visiting: &mut Vec<String>,
+    done: &mut HashMap<String, JsObject>,
+) -> Result<JsObject, JsError> {
+    if let Some(object) = done.get(url) {
+        return Ok(object.clone());
+    }
+    if visiting.iter().any(|visited| visited == url) {
+        return Err(JsError::ModuleCycle(url.to_string()));
+    }
+    visiting.push(url.to_string());
+    let parsed = transform_module(source, url)?;
+    let mut namespaces = Vec::with_capacity(parsed.imports.len());
+    for import in &parsed.imports {
+        let dep_url = resolve_module(host, &import.specifier, url)?;
+        let dep_source = load_module(host, &dep_url)?;
+        let namespace =
+            eval_module_graph(context, host, &dep_url, &dep_source, budget, visiting, done)?;
+        namespaces.push(namespace);
+    }
+    let mut prelude = String::new();
+    for (index, import) in parsed.imports.iter().enumerate() {
+        let global = format!("__megi_module_{index}");
+        context
+            .global_object()
+            .set(
+                js_string!(global.clone()),
+                JsValue::from(namespaces[index].clone()),
+                false,
+                context,
+            )
+            .map_err(module_error)?;
+        match &import.binding {
+            ImportBinding::SideEffect => {
+                prelude.push_str(&format!("{global};\n"));
+            }
+            ImportBinding::Default(name) => {
+                let value = namespaces[index]
+                    .get(js_string!("default"), context)
+                    .map_err(module_error)?;
+                if value.is_undefined() {
+                    return Err(JsError::ModuleExport(format!(
+                        "{} has no default export (wanted by {url})",
+                        import.specifier
+                    )));
+                }
+                prelude.push_str(&format!("const {name} = {global}.default;\n"));
+            }
+            ImportBinding::Namespace(name) => {
+                prelude.push_str(&format!("const {name} = {global};\n"));
+            }
+            ImportBinding::Named(bindings) => {
+                for (local, exported) in bindings {
+                    let value = namespaces[index]
+                        .get(js_string!(exported.clone()), context)
+                        .map_err(module_error)?;
+                    if value.is_undefined() {
+                        return Err(JsError::ModuleExport(format!(
+                            "{} has no export named {exported} (wanted by {url})",
+                            import.specifier
+                        )));
+                    }
+                    let _ = local;
+                    prelude.push_str(&format!(
+                        "const {local} = {global}[{}];\n",
+                        module_quote(exported)
+                    ));
+                }
+            }
+        }
+    }
+    let return_fields: Vec<String> = parsed
+        .exports
+        .iter()
+        .map(|(exported, local)| format!("{}: ({local})", module_quote(exported)))
+        .collect();
+    let script = format!(
+        "'use strict';\n(function() {{\n{prelude}\n{}\nreturn {{ {} }};\n}}).call(undefined);",
+        parsed.body,
+        return_fields.join(", ")
+    );
+    apply_budget(context, budget);
+    let value = {
+        let _scope = HostScope::enter(host);
+        context.eval(Source::from_bytes(&script))
+    }
+    .map_err(module_error)?;
+    for index in 0..parsed.imports.len() {
+        let _ = context.global_object().set(
+            js_string!(format!("__megi_module_{index}")),
+            JsValue::undefined(),
+            false,
+            context,
+        );
+    }
+    let object = value
+        .as_object()
+        .ok_or_else(|| JsError::Internal("module evaluation returned no namespace".to_string()))?
+        .clone();
+    visiting.pop();
+    done.insert(url.to_string(), object.clone());
+    Ok(object)
+}
+
+impl JsRuntime {
+    /// Installs the ES module resolver (specifier + importer URL → resolved URL).
+    pub fn set_module_resolver(&mut self, resolver: crate::host::ModuleResolver) {
+        self.host.borrow_mut().module_resolver = Some(resolver);
+    }
+
+    /// Installs the ES module loader (`url → source text`; `js` performs no I/O itself).
+    pub fn set_module_loader(&mut self, loader: crate::host::ModuleLoader) {
+        self.host.borrow_mut().module_loader = Some(loader);
+    }
+
+    /// Evaluates an ES module graph using the injected resolver/loader.
+    ///
+    /// Supported subset: default/named/namespace/side-effect imports, `export
+    /// const/let/var/function/class`, `export default` and `export { a as b }`;
+    /// `import.meta.url` is replaced with the module URL. Cycles are rejected with
+    /// [`JsError::ModuleCycle`] (documented), missing modules with
+    /// [`JsError::ModuleNotFound`], missing/undefined exports with
+    /// [`JsError::ModuleExport`]. No dynamic `import()`, no top-level await and no
+    /// network/filesystem access (the host supplies all module text).
+    pub fn eval_module(
+        &mut self,
+        source: &str,
+        _source_name: &str,
+        base_url: &str,
+        budget: &Budget,
+    ) -> Result<ModuleOutcome, JsError> {
+        apply_budget(&mut self.context, budget);
+        let mut visiting = Vec::new();
+        let mut done = HashMap::new();
+        let namespace = eval_module_graph(
+            &mut self.context,
+            &self.host,
+            base_url,
+            source,
+            budget,
+            &mut visiting,
+            &mut done,
+        )?;
+        let mut values = Vec::new();
+        let keys = namespace
+            .own_property_keys(&mut self.context)
+            .map_err(module_error)?;
+        for key in keys {
+            let key_text = key.to_string();
+            if let Ok(value) = namespace.get(js_string!(key_text.clone()), &mut self.context) {
+                let text = value
+                    .to_string(&mut self.context)
+                    .map(|text| text.to_std_string_escaped())
+                    .unwrap_or_else(|_| "<unprintable>".to_string());
+                values.push((key_text, text));
+            }
+        }
+        values.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(ModuleOutcome {
+            url: base_url.to_string(),
+            exports: values,
+        })
+    }
+}

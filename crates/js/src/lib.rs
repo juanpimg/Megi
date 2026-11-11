@@ -143,6 +143,19 @@
 //!   implemented.
 //!
 //!
+//! ## ES modules (Round 25)
+//!
+//! - `JsRuntime::eval_module(source, source_name, base_url, budget)` evaluates a module
+//!   graph in the shared realm using an injected **resolver** (`specifier + importer URL →
+//!   URL`) and **loader** (`URL → source text`); `js` never performs I/O.
+//! - Subset: default/named/namespace/side-effect imports, `export
+//!   const/let/var/function/class`, `export default`, `export { a as b }` and
+//!   `import.meta.url`. Imports/exports must start their line; no dynamic `import()`, no
+//!   top-level await, no re-exports (`export ... from`).
+//! - Topological dependency order; **cycles are rejected** with
+//!   `JsError::ModuleCycle`; missing modules/exports and malformed modules return typed
+//!   errors (`ModuleNotFound`/`ModuleExport`/`ModuleSyntax`). `ModuleOutcome` exposes the
+//!   entry URL and stringified exports. The host supplies all module text (docs/FUZZING).
 pub mod error;
 #[cfg(feature = "js")]
 pub mod events;
@@ -152,6 +165,15 @@ pub mod host;
 pub mod runtime;
 
 pub use error::JsError;
+
+/// Result of evaluating an ES module graph.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModuleOutcome {
+    /// Resolved URL of the entry module.
+    pub url: String,
+    /// Exported bindings of the entry module (name → stringified value).
+    pub exports: Vec<(String, String)>,
+}
 #[cfg(feature = "js")]
 pub use events::JsEventTarget;
 #[cfg(feature = "js")]
@@ -160,6 +182,23 @@ pub use host::ConsoleEntry;
 pub use host::{MediaProvider, ViewportInfo, ViewportProvider};
 #[cfg(feature = "js")]
 pub use runtime::{Budget, JsRuntime};
+
+/// Minimal stand-in types so the stub API keeps the same signatures without Boa.
+#[cfg(not(feature = "js"))]
+pub mod runtime {
+    /// Stub budget (no engine to configure).
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct Budget;
+}
+
+#[cfg(not(feature = "js"))]
+pub mod host {
+    /// Stub module resolver type (never called in the feature-less build).
+    pub type ModuleResolver =
+        Box<dyn Fn(&str, &str) -> Result<Option<String>, crate::JsError> + Send + Sync>;
+    /// Stub module loader type (never called in the feature-less build).
+    pub type ModuleLoader = Box<dyn Fn(&str) -> Result<String, crate::JsError> + Send + Sync>;
+}
 
 /// Stub runtime used when the crate is built without the `js` feature.
 #[cfg(not(feature = "js"))]
@@ -177,4 +216,21 @@ impl JsRuntime {
     pub fn eval(&mut self, _script: &str, _source_name: &str) -> Result<String, JsError> {
         Err(JsError::FeatureDisabled)
     }
+
+    /// Always fails: ES modules are compiled out with `--no-default-features`.
+    pub fn eval_module(
+        &mut self,
+        _source: &str,
+        _source_name: &str,
+        _base_url: &str,
+        _budget: &crate::runtime::Budget,
+    ) -> Result<crate::ModuleOutcome, JsError> {
+        Err(JsError::FeatureDisabled)
+    }
+
+    /// Accepted as a no-op in the feature-less stub.
+    pub fn set_module_resolver(&mut self, _resolver: crate::host::ModuleResolver) {}
+
+    /// Accepted as a no-op in the feature-less stub.
+    pub fn set_module_loader(&mut self, _loader: crate::host::ModuleLoader) {}
 }
