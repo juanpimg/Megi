@@ -58,9 +58,9 @@
 //! ## Deliberate limitations / next steps (Phase 5 continuation)
 //!
 //! - HTTP/2 (`h2`) supports multiplexed requests with connection/stream flow control,
-//!   SETTINGS, request bodies (DATA/END_STREAM), response trailers and interim
-//!   `100 Continue`; server push, priorities, h2c and
-//!   request bodies are not implemented (HTTP/1.1 remains the transparent fallback).
+//!   SETTINGS, request bodies (DATA/END_STREAM), response trailers, interim
+//!   `100 Continue`, stream priorities and opt-in server-push cancellation; `h2c`
+//!   upgrade is opt-in (`Limits::allow_h2c`) and HTTP/1.1 remains the fallback.
 //!   CORS is the subset described in [`cors`] (no preflight caching, no
 //!   `Access-Control-Expose-Headers`).
 //! - Compression covers only single `gzip`/`deflate` codings (no `br`/`zstd`, no stacked

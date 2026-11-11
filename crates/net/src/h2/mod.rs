@@ -2,9 +2,14 @@
 //!
 //! ## What works
 //!
-//! - **ALPN**: the TLS layer advertises `h2` (then `http/1.1`) for `GET`; if the
-//!   server negotiates `h2` the request goes through [`client::get`], otherwise the
-//!   existing HTTP/1.1 client is used unchanged (transparent fallback).
+//! - **ALPN / h2c**: the TLS layer advertises `h2` (then `http/1.1`); the opt-in
+//!   [`client::h2c_request`] (with [`client::Limits::allow_h2c`]) performs the cleartext
+//!   `Upgrade: h2c` handshake and returns `None` on refusal so callers can fall back.
+//! - **Server push**: disabled by default (`SETTINGS_ENABLE_PUSH=0` ⇒ clean typed error);
+//!   opt-in [`client::Limits::enable_server_push`] cancels/discards promised streams.
+//! - **Priorities**: `HEADERS` priority blocks + `PRIORITY` frames (weight/dependency/
+//!   exclusive) order request submission and DATA; self/closed dependencies are typed
+//!   errors and incoming frames are validated/ignored.
 //! - **HPACK** ([`hpack`]): static/dynamic tables, Huffman decoding (Appendix B),
 //!   literals with/without indexing, never-indexed and table-size updates; a
 //!   minimal encoder for tests/loopback.

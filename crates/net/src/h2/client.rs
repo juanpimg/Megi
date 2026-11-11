@@ -28,13 +28,20 @@
 //!
 //! ## Deliberate limitations (documented in [`super`])
 //!
-//! No server push (PUSH_PROMISE is a connection error), no prioritization/priority
-//! signalling, no h2c cleartext upgrade, no response streaming (bodies are buffered),
-//! request bodies are buffered in memory (`max_request_body`, default 16 MiB), and
-//! `Expect: 100-continue` has no dedicated timer (the socket read timeout bounds the
-//! wait). Only one `GOAWAY` is handled (as a typed error for the in-flight batch).
+//! Server push is **disabled by default** (`SETTINGS_ENABLE_PUSH=0`, PUSH_PROMISE is a
+//! clean typed error); with [`Limits::enable_server_push`] the promised stream is
+//! cancelled with `RST_STREAM(CANCEL)` and its frames are discarded. Stream priorities
+//! (HEADERS priority section + `PRIORITY` frames, weight 1..=256, dependency, exclusive)
+//! order concurrent request submission and DATA emission; self-dependencies and
+//! non-open dependencies are rejected, and incoming `PRIORITY` frames are validated and
+//! ignored. The opt-in [`h2c_request`] performs the HTTP/1.1 `Upgrade: h2c` handshake
+//! (requires [`Limits::allow_h2c`]); non-101 responses return `None` (caller reconnects
+//! for HTTP/1.1 fallback). No response streaming (bodies are buffered), request bodies
+//! are buffered in memory (`max_request_body`, default 16 MiB), `Expect: 100-continue`
+//! has no dedicated timer (socket timeout bounds it), and only one `GOAWAY` is handled
+//! (as a typed error for the in-flight batch).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::io::{Read, Write};
 
 use crate::error::FetchError;
@@ -56,6 +63,15 @@ pub struct H2Response {
     pub trailers: Vec<(String, String)>,
 }
 
+/// Stream priority (RFC 9113 §5.3): weight 1..=256, `depends_on` stream id
+/// (0 = root) and the exclusive bit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Priority {
+    pub depends_on: u32,
+    pub weight: u16,
+    pub exclusive: bool,
+}
+
 /// One multiplexable HTTP/2 request (GET/POST/PUT/... with an optional body).
 #[derive(Clone, Debug)]
 pub struct H2Request {
@@ -71,6 +87,9 @@ pub struct H2Request {
     pub extra_headers: Vec<(String, String)>,
     /// Optional request body; `None`/empty sends END_STREAM on the HEADERS frame.
     pub body: Option<Vec<u8>>,
+    /// Optional stream priority (sent in the HEADERS priority section and used to
+    /// order concurrent `request_many` submissions).
+    pub priority: Option<Priority>,
 }
 
 impl H2Request {
@@ -101,7 +120,15 @@ impl H2Request {
             target: target.to_owned(),
             extra_headers: extra_headers.to_vec(),
             body,
+            priority: None,
         }
+    }
+
+    /// Sets the stream priority (weight 1..=256; invalid values fail the request
+    /// with a typed HTTP/2 error).
+    pub fn with_priority(mut self, priority: Priority) -> Self {
+        self.priority = Some(priority);
+        self
     }
 }
 
@@ -122,6 +149,11 @@ pub struct Limits {
     pub initial_window_size: u32,
     /// Maximum accepted request body size (default 16 MiB).
     pub max_request_body: usize,
+    /// Advertise `SETTINGS_ENABLE_PUSH=1` and accept (then cancel/discard) server
+    /// push promises. Default `false`: PUSH_PROMISE is a clean protocol error.
+    pub enable_server_push: bool,
+    /// Allow the HTTP/1.1 `Upgrade: h2c` handshake in [`h2c_request`].
+    pub allow_h2c: bool,
 }
 
 impl Default for Limits {
@@ -133,6 +165,8 @@ impl Default for Limits {
             max_concurrent_streams: 8,
             initial_window_size: 65_535,
             max_request_body: 16 * 1024 * 1024,
+            enable_server_push: false,
+            allow_h2c: false,
         }
     }
 }
@@ -224,7 +258,15 @@ struct Session<'a, S: Read + Write> {
     streams: BTreeMap<u32, OpenStream>,
     results: Vec<Option<Result<H2Response, FetchError>>>,
     requests: &'a [H2Request],
-    next_request: usize,
+    /// Requests not opened yet (ordered by the priority scheduler).
+    remaining: Vec<usize>,
+    /// Stream ids already opened (priority dependencies can reference these).
+    opened_stream_ids: HashSet<u32>,
+    /// Outgoing stream weights (for DATA ordering).
+    stream_weights: BTreeMap<u32, u16>,
+    /// Pushed streams we cancelled/discarded (their frames are ignored).
+    pushed_streams: HashSet<u32>,
+    last_pushed_stream: u32,
     next_stream_id: u32,
 }
 
@@ -244,7 +286,11 @@ impl<'a, S: Read + Write> Session<'a, S> {
             streams: BTreeMap::new(),
             results: (0..requests.len()).map(|_| None).collect(),
             requests,
-            next_request: 0,
+            remaining: (0..requests.len()).collect(),
+            opened_stream_ids: HashSet::new(),
+            stream_weights: BTreeMap::new(),
+            pushed_streams: HashSet::new(),
+            last_pushed_stream: 0,
             next_stream_id: 1,
         }
     }
@@ -261,7 +307,10 @@ impl<'a, S: Read + Write> Session<'a, S> {
         send_frame(
             self.stream,
             &Frame::settings(&[
-                (settings::ENABLE_PUSH, 0),
+                (
+                    settings::ENABLE_PUSH,
+                    if self.limits.enable_server_push { 1 } else { 0 },
+                ),
                 (settings::MAX_CONCURRENT_STREAMS, max_streams),
                 (settings::INITIAL_WINDOW_SIZE, initial_window),
                 (
@@ -296,7 +345,41 @@ impl<'a, S: Read + Write> Session<'a, S> {
     }
 
     fn all_done(&self) -> bool {
-        self.next_request >= self.requests.len() && self.streams.is_empty()
+        self.remaining.is_empty() && self.streams.is_empty()
+    }
+
+    /// Chooses the next request to open: ready requests (dependency already open, or
+    /// root) with the highest weight win, ties broken by submission order. Dependencies
+    /// that are not open yet fall back to the first pending request (stream ids are
+    /// monotonic, so the dependency is opened first in every acyclic case).
+    fn pick_next_request(&mut self) -> Option<usize> {
+        let mut best: Option<(u16, usize, usize)> = None; // (weight, order, index)
+        let mut ready = false;
+        for (order, &index) in self.remaining.iter().enumerate() {
+            let Some(priority) = self.requests[index].priority else {
+                let candidate = (1u16, order, index);
+                ready = true;
+                if best.is_none_or(|(weight, best_order, _)| {
+                    candidate.0 > weight || (candidate.0 == weight && order < best_order)
+                }) {
+                    best = Some(candidate);
+                }
+                continue;
+            };
+            if priority.depends_on != 0 && !self.opened_stream_ids.contains(&priority.depends_on) {
+                continue;
+            }
+            ready = true;
+            if best.is_none_or(|(weight, best_order, _)| {
+                priority.weight > weight || (priority.weight == weight && order < best_order)
+            }) {
+                best = Some((priority.weight, order, index));
+            }
+        }
+        if !ready && !self.remaining.is_empty() {
+            return Some(self.remaining[0]);
+        }
+        best.map(|(_, _, index)| index)
     }
 
     fn active_streams(&self) -> usize {
@@ -310,11 +393,16 @@ impl<'a, S: Read + Write> Session<'a, S> {
 
     /// Submits one pending request immediately (used for the first stream).
     fn submit_next(&mut self) -> Result<(), FetchError> {
-        if self.next_request >= self.requests.len() {
+        let Some(request_index) = self.pick_next_request() else {
             return Ok(());
+        };
+        if let Some(position) = self
+            .remaining
+            .iter()
+            .position(|&index| index == request_index)
+        {
+            self.remaining.remove(position);
         }
-        let request_index = self.next_request;
-        self.next_request += 1;
         self.open_stream(request_index)?;
         self.send_pending_bodies()
     }
@@ -324,9 +412,17 @@ impl<'a, S: Read + Write> Session<'a, S> {
         if !self.peer_settings_received {
             return Ok(());
         }
-        while self.next_request < self.requests.len() && self.active_streams() < self.stream_cap() {
-            let request_index = self.next_request;
-            self.next_request += 1;
+        while !self.remaining.is_empty() && self.active_streams() < self.stream_cap() {
+            let Some(request_index) = self.pick_next_request() else {
+                break;
+            };
+            if let Some(position) = self
+                .remaining
+                .iter()
+                .position(|&index| index == request_index)
+            {
+                self.remaining.remove(position);
+            }
             self.open_stream(request_index)?;
             self.send_pending_bodies()?;
         }
@@ -337,12 +433,18 @@ impl<'a, S: Read + Write> Session<'a, S> {
     /// both send windows. Streams waiting for `100-continue` are skipped until the
     /// interim response clears `awaiting_continue`.
     fn send_pending_bodies(&mut self) -> Result<(), FetchError> {
-        let ids: Vec<u32> = self
+        let mut ids: Vec<u32> = self
             .streams
             .iter()
             .filter(|(_, stream)| stream.pending_body.is_some() && !stream.awaiting_continue)
             .map(|(id, _)| *id)
             .collect();
+        // Higher weight first (RFC 9113 §5.3.2); ties by stream id for determinism.
+        ids.sort_by(|a, b| {
+            let weight_a = self.stream_weights.get(a).copied().unwrap_or(1);
+            let weight_b = self.stream_weights.get(b).copied().unwrap_or(1);
+            weight_b.cmp(&weight_a).then_with(|| a.cmp(b))
+        });
         for stream_id in ids {
             let mut frames: Vec<Frame> = Vec::new();
             {
@@ -414,6 +516,32 @@ impl<'a, S: Read + Write> Session<'a, S> {
         });
         let stream_id = self.next_stream_id;
         self.next_stream_id = self.next_stream_id.saturating_add(2);
+        let priority = match request.priority {
+            Some(priority) => {
+                if priority.weight == 0 || priority.weight > 256 {
+                    self.fail_request(
+                        request_index,
+                        h2_error("priority weight must be in 1..=256"),
+                    );
+                    return Ok(());
+                }
+                if priority.depends_on == stream_id {
+                    self.fail_request(request_index, h2_error("stream priority depends on itself"));
+                    return Ok(());
+                }
+                if priority.depends_on != 0
+                    && !self.opened_stream_ids.contains(&priority.depends_on)
+                {
+                    self.fail_request(
+                        request_index,
+                        h2_error("stream priority dependency is not an open stream"),
+                    );
+                    return Ok(());
+                }
+                Some(priority)
+            }
+            None => None,
+        };
         let mut headers: Vec<(String, String)> = vec![
             (":method".to_owned(), method),
             (":scheme".to_owned(), request.scheme.to_ascii_lowercase()),
@@ -455,9 +583,42 @@ impl<'a, S: Read + Write> Session<'a, S> {
         if fragment_count > 1 && std::env::var_os("H2_DEBUG").is_some() {
             eprintln!("DEBUG: fragmented request headers into {fragment_count} frames");
         }
-        for frame in &frames {
-            send_frame(&mut *self.stream, frame)?;
+        if let Some(priority) = priority {
+            if let [first] = frames.as_slice() {
+                let end_stream = first.header.flags & flags::END_STREAM != 0;
+                send_frame(
+                    &mut *self.stream,
+                    &Frame::headers_with_priority(
+                        stream_id,
+                        &block,
+                        end_stream,
+                        priority.exclusive,
+                        priority.depends_on,
+                        priority.weight,
+                    ),
+                )?;
+            } else {
+                send_frame(
+                    &mut *self.stream,
+                    &Frame::priority(
+                        stream_id,
+                        priority.exclusive,
+                        priority.depends_on,
+                        priority.weight,
+                    ),
+                )?;
+                for frame in &frames {
+                    send_frame(&mut *self.stream, frame)?;
+                }
+            }
+        } else {
+            for frame in &frames {
+                send_frame(&mut *self.stream, frame)?;
+            }
         }
+        self.opened_stream_ids.insert(stream_id);
+        self.stream_weights
+            .insert(stream_id, priority.map_or(1, |priority| priority.weight));
         self.streams.insert(
             stream_id,
             OpenStream {
@@ -552,7 +713,8 @@ impl<'a, S: Read + Write> Session<'a, S> {
                         _ => {}
                     }
                 }
-                send_frame(&mut *self.stream, &Frame::settings_ack())?;
+                // Best-effort ACK: the peer may already have closed after its final response.
+                let _ = send_frame(&mut *self.stream, &Frame::settings_ack());
                 self.peer_settings_received = true;
                 Ok(())
             }
@@ -563,7 +725,7 @@ impl<'a, S: Read + Write> Session<'a, S> {
                     }
                     let mut payload = [0u8; 8];
                     payload.copy_from_slice(&frame.payload);
-                    send_frame(&mut *self.stream, &Frame::ping(payload, true))?;
+                    let _ = send_frame(&mut *self.stream, &Frame::ping(payload, true));
                 }
                 Ok(())
             }
@@ -594,6 +756,12 @@ impl<'a, S: Read + Write> Session<'a, S> {
                 let Some((block, end_stream)) = self.assembler.feed(&frame)? else {
                     return Ok(());
                 };
+                if self.pushed_streams.contains(&stream_id) {
+                    if end_stream {
+                        self.pushed_streams.remove(&stream_id);
+                    }
+                    return Ok(());
+                }
                 if !self.streams.contains_key(&stream_id) {
                     // Header block for a stream this client never opened (or already closed).
                     return Err(h2_error(format!(
@@ -659,6 +827,14 @@ impl<'a, S: Read + Write> Session<'a, S> {
             kind::DATA => {
                 let payload = frame.data_payload()?;
                 let length = i64::try_from(payload.len()).unwrap_or(i64::MAX);
+                if self.pushed_streams.contains(&stream_id) {
+                    let increment = u32::try_from(payload.len()).unwrap_or(u32::MAX);
+                    self.send_window_update(0, increment);
+                    if frame.header.flags & flags::END_STREAM != 0 {
+                        self.pushed_streams.remove(&stream_id);
+                    }
+                    return Ok(());
+                }
                 let Some(stream) = self.streams.get_mut(&stream_id) else {
                     return Err(h2_error(format!("DATA on unknown stream {stream_id}")));
                 };
@@ -715,20 +891,53 @@ impl<'a, S: Read + Write> Session<'a, S> {
                         )),
                     );
                 }
-                while self.next_request < self.requests.len() {
+                while let Some(index) = self.remaining.first().copied() {
+                    self.remaining.remove(0);
                     self.fail_request(
-                        self.next_request,
+                        index,
                         h2_error(format!(
                             "connection closed by GOAWAY before the request was sent (last stream {last_stream_id})"
                         )),
                     );
-                    self.next_request += 1;
                 }
                 Err(h2_error(format!(
                     "connection closed by GOAWAY (error code 0x{code:x}, last stream {last_stream_id})"
                 )))
             }
-            kind::PUSH_PROMISE => Err(h2_error("unexpected PUSH_PROMISE (server push disabled)")),
+            kind::PUSH_PROMISE => {
+                if !self.limits.enable_server_push {
+                    return Err(h2_error(
+                        "PUSH_PROMISE received but server push is disabled (SETTINGS_ENABLE_PUSH=0)",
+                    ));
+                }
+                if frame.header.flags & flags::END_HEADERS == 0 {
+                    return Err(h2_error(
+                        "fragmented PUSH_PROMISE header blocks are not supported",
+                    ));
+                }
+                let (promised, block) = frame.parse_push_promise()?;
+                if promised == 0 || promised % 2 != 0 || promised <= self.last_pushed_stream {
+                    return Err(h2_error(format!(
+                        "invalid promised stream id {promised} in PUSH_PROMISE"
+                    )));
+                }
+                if block.len() > self.limits.max_header_block {
+                    return Err(FetchError::HeadersTooLarge);
+                }
+                // Keep the HPACK decoder in sync even though the request is discarded.
+                self.decoder
+                    .decode(block)
+                    .map_err(|_| h2_error("invalid HPACK block in PUSH_PROMISE"))?;
+                self.last_pushed_stream = promised;
+                self.pushed_streams.insert(promised);
+                // Cancel the pushed stream and ignore any of its frames. Best-effort:
+                // the peer may have already sent the final response and closed.
+                let _ = send_frame(
+                    &mut *self.stream,
+                    &Frame::rst_stream(promised, error_code::CANCEL),
+                );
+                Ok(())
+            }
             kind::PRIORITY => Ok(()),
             _ => Ok(()),
         }
@@ -862,4 +1071,123 @@ pub fn request_many<S: Read + Write>(
     limits: &Limits,
 ) -> Result<Vec<Result<H2Response, FetchError>>, FetchError> {
     get_many(stream, requests, limits)
+}
+
+/// Opt-in cleartext HTTP/2 upgrade (`Upgrade: h2c`, RFC 7540 §3.2).
+///
+/// Sends an HTTP/1.1 `GET` with `Upgrade: h2c` and `HTTP2-Settings` (the same
+/// SETTINGS this client would send after the preface). If the server answers
+/// `101 Switching Protocols`, the request continues as HTTP/2 stream 1 and the
+/// decoded response is returned as `Some`. Any other status is returned as `None`
+/// (the HTTP/1.1 response head has been consumed; callers that want to fall back
+/// to HTTP/1.1 must reconnect). Requires [`Limits::allow_h2c`].
+pub fn h2c_request<S: Read + Write>(
+    stream: &mut S,
+    authority: &str,
+    target: &str,
+    extra_headers: &[(String, String)],
+    limits: &Limits,
+) -> Result<Option<H2Response>, FetchError> {
+    if !limits.allow_h2c {
+        return Ok(None);
+    }
+    let settings = Frame::settings(&[
+        (
+            settings::ENABLE_PUSH,
+            if limits.enable_server_push { 1 } else { 0 },
+        ),
+        (
+            settings::MAX_CONCURRENT_STREAMS,
+            u32::try_from(limits.max_concurrent_streams).unwrap_or(u32::MAX),
+        ),
+        (settings::INITIAL_WINDOW_SIZE, limits.initial_window_size),
+        (
+            settings::MAX_FRAME_SIZE,
+            limits.max_frame_size.max(DEFAULT_MAX_FRAME_SIZE),
+        ),
+        (settings::HEADER_TABLE_SIZE, 4096),
+    ]);
+    let mut head = format!(
+        "GET {target} HTTP/1.1\r\nHost: {authority}\r\n\
+         Connection: Upgrade, HTTP2-Settings\r\nUpgrade: h2c\r\n\
+         HTTP2-Settings: {}\r\n",
+        base64_url_nopad(&settings.payload)
+    );
+    for (name, value) in extra_headers {
+        let lower = name.to_ascii_lowercase();
+        if matches!(
+            lower.as_str(),
+            "connection"
+                | "host"
+                | "upgrade"
+                | "http2-settings"
+                | "keep-alive"
+                | "transfer-encoding"
+        ) {
+            continue;
+        }
+        head.push_str(name);
+        head.push_str(": ");
+        head.push_str(value);
+        head.push_str("\r\n");
+    }
+    head.push_str("\r\n");
+    stream.write_all(head.as_bytes()).map_err(map_io)?;
+    stream.flush().map_err(map_io)?;
+
+    let mut response_head = Vec::new();
+    let mut byte = [0u8; 1];
+    let max_head = limits.max_header_block.min(64 * 1024);
+    while !response_head.ends_with(b"\r\n\r\n") {
+        let count = stream.read(&mut byte).map_err(map_io)?;
+        if count == 0 {
+            return Err(h2_error(
+                "connection closed during the h2c upgrade handshake",
+            ));
+        }
+        response_head.push(byte[0]);
+        if response_head.len() > max_head {
+            return Err(FetchError::HeadersTooLarge);
+        }
+    }
+    let first_line_end = response_head
+        .windows(2)
+        .position(|window| window == b"\r\n")
+        .ok_or_else(|| h2_error("malformed h2c upgrade response"))?;
+    let status_line = std::str::from_utf8(&response_head[..first_line_end])
+        .map_err(|_| h2_error("non-ASCII h2c upgrade status line"))?;
+    let status = status_line
+        .split_whitespace()
+        .nth(1)
+        .and_then(|value| value.parse::<u16>().ok())
+        .ok_or_else(|| h2_error("malformed h2c upgrade status line"))?;
+    if status != 101 {
+        return Ok(None);
+    }
+    let request = H2Request::get("http", authority, target, extra_headers);
+    let mut results = request_many(stream, &[request], limits)?;
+    match results.pop() {
+        Some(result) => result.map(Some),
+        None => Err(h2_error("h2c upgrade produced no response")),
+    }
+}
+
+fn base64_url_nopad(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut output = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let b0 = u32::from(chunk[0]);
+        let b1 = u32::from(*chunk.get(1).unwrap_or(&0));
+        let b2 = u32::from(*chunk.get(2).unwrap_or(&0));
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        output.push(ALPHABET[((triple >> 18) & 0x3f) as usize] as char);
+        output.push(ALPHABET[((triple >> 12) & 0x3f) as usize] as char);
+        if chunk.len() > 1 {
+            output.push(ALPHABET[((triple >> 6) & 0x3f) as usize] as char);
+        }
+        if chunk.len() > 2 {
+            output.push(ALPHABET[(triple & 0x3f) as usize] as char);
+        }
+    }
+    output
 }

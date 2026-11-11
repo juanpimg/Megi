@@ -132,6 +132,44 @@ impl Frame {
         Self::new(kind::HEADERS, flags, stream_id, block.to_vec())
     }
 
+    /// HEADERS frame with a priority section (`PRIORITY` flag).
+    pub fn headers_with_priority(
+        stream_id: u32,
+        block: &[u8],
+        end_stream: bool,
+        exclusive: bool,
+        depends_on: u32,
+        weight: u16,
+    ) -> Self {
+        let mut flags = flags::END_HEADERS | flags::PRIORITY;
+        if end_stream {
+            flags |= flags::END_STREAM;
+        }
+        let mut payload = Vec::with_capacity(5 + block.len());
+        let dependency = (depends_on & 0x7fff_ffff) | if exclusive { 0x8000_0000 } else { 0 };
+        payload.extend_from_slice(&dependency.to_be_bytes());
+        payload.push((weight.clamp(1, 256) - 1) as u8);
+        payload.extend_from_slice(block);
+        Self::new(kind::HEADERS, flags, stream_id, payload)
+    }
+
+    /// PRIORITY frame (`depends_on` stream, weight 1..=256, exclusive bit).
+    pub fn priority(stream_id: u32, exclusive: bool, depends_on: u32, weight: u16) -> Self {
+        let mut payload = Vec::with_capacity(5);
+        let dependency = (depends_on & 0x7fff_ffff) | if exclusive { 0x8000_0000 } else { 0 };
+        payload.extend_from_slice(&dependency.to_be_bytes());
+        payload.push((weight.clamp(1, 256) - 1) as u8);
+        Self::new(kind::PRIORITY, 0, stream_id, payload)
+    }
+
+    /// PUSH_PROMISE frame (`promised_id` + encoded request header block).
+    pub fn push_promise(stream_id: u32, promised_id: u32, block: &[u8]) -> Self {
+        let mut payload = Vec::with_capacity(4 + block.len());
+        payload.extend_from_slice(&(promised_id & 0x7fff_ffff).to_be_bytes());
+        payload.extend_from_slice(block);
+        Self::new(kind::PUSH_PROMISE, flags::END_HEADERS, stream_id, payload)
+    }
+
     /// CONTINUATION frame.
     pub fn continuation(stream_id: u32, block: &[u8], end_headers: bool) -> Self {
         Self::new(
@@ -299,6 +337,43 @@ impl Frame {
         } else {
             Ok(&self.payload)
         }
+    }
+
+    /// Parses a PRIORITY frame into `(exclusive, depends_on, weight)`.
+    pub fn parse_priority(&self) -> Result<(bool, u32, u16), FetchError> {
+        if self.header.kind != kind::PRIORITY {
+            return Err(h2_error("not a PRIORITY frame"));
+        }
+        if self.payload.len() != 5 {
+            return Err(h2_error("PRIORITY payload must be 5 bytes"));
+        }
+        let dependency = u32::from_be_bytes([
+            self.payload[0],
+            self.payload[1],
+            self.payload[2],
+            self.payload[3],
+        ]);
+        let exclusive = dependency & 0x8000_0000 != 0;
+        let depends_on = dependency & 0x7fff_ffff;
+        let weight = u16::from(self.payload[4]) + 1;
+        Ok((exclusive, depends_on, weight))
+    }
+
+    /// Parses a PUSH_PROMISE frame into `(promised_stream_id, header_block)`.
+    pub fn parse_push_promise(&self) -> Result<(u32, &[u8]), FetchError> {
+        if self.header.kind != kind::PUSH_PROMISE {
+            return Err(h2_error("not a PUSH_PROMISE frame"));
+        }
+        if self.payload.len() < 4 {
+            return Err(h2_error("PUSH_PROMISE payload shorter than 4 bytes"));
+        }
+        let promised_id = u32::from_be_bytes([
+            self.payload[0],
+            self.payload[1],
+            self.payload[2],
+            self.payload[3],
+        ]) & 0x7fff_ffff;
+        Ok((promised_id, &self.payload[4..]))
     }
 
     /// Returns the HEADERS payload with PADDED/PRIORITY framing removed.
