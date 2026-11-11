@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Generates the VP8L fixtures used by the R147 WebP tests (own synthetic content).
+"""Generates the VP8L fixtures used by the R147 WebP tests.
 
-The simple-code VP8L files exercise the decoder subset; PIL/libwebp is used as an
-independent oracle in CI: the tests compare the Rust decoder against the exact RGBA
-expectations stored next to each fixture (`.rgba` raw files).
+Two families are produced:
+
+- simple, hand-written VP8L streams (own synthetic content, ``v8l_*``) that exercise
+  the literal/Huffman subset without relying on PIL, with their exact RGBA stored;
+- **real libwebp lossless encodings** (``photo_transforms``, ``palette_real``,
+  ``alpha_real``, ``palette_transform``) that use the full VP8L feature set
+  (predictor/colour transforms, LZ77, colour cache, colour indexing). PIL/libwebp is
+  the independent oracle: the Rust decoder is compared byte-exactly against the
+  RGBA oracle stored next to each fixture (``.rgba`` raw files).
 
 Run from the repository root: python3 crates/image/tests/fixtures/generate_webp.py
 """
@@ -94,7 +100,7 @@ def write_fixture(name, image, directory):
     # Validate with libwebp (PIL) as an independent encoder oracle, and store the
     # expected RGBA bytes for the Rust tests.
     decoded = Image.open(path).convert("RGBA")
-    assert list(decoded.getdata()) == pixels, f"{name}: PIL roundtrip mismatch"
+    assert decoded.tobytes() == image.convert("RGBA").tobytes(), f"{name}: PIL roundtrip mismatch"
     rgba_path = os.path.splitext(path)[0] + ".rgba"
     with open(rgba_path, "wb") as handle:
         handle.write(decoded.tobytes())
@@ -110,6 +116,78 @@ def make_two_color(size, left, right):
     return image
 
 
+def write_pil_lossless_fixture(name, image):
+    """Encodes `image` with PIL/libwebp lossless and stores the PIL RGBA oracle.
+
+    These are *real* libwebp encodings (predictor/colour transforms, LZ77, colour
+    cache and colour indexing as selected by the encoder), so the Rust decoder is
+    validated byte-exactly against an independent implementation.
+    """
+    os.makedirs(FIXTURES, exist_ok=True)
+    webp_path = os.path.join(FIXTURES, name + ".webp")
+    image.save(webp_path, "WEBP", lossless=True, quality=100, method=6)
+    decoded = Image.open(webp_path).convert("RGBA")
+    rgba_path = os.path.join(FIXTURES, name + ".rgba")
+    with open(rgba_path, "wb") as handle:
+        handle.write(decoded.tobytes())
+    print(webp_path, os.path.getsize(webp_path), "bytes (libwebp lossless)")
+    return decoded
+
+
+def make_photo_transforms(width, height):
+    """Smooth RGB gradients + colour bars: forces predictor/colour transforms and
+    the colour cache in libwebp's encoder (no palette: > 256 colours)."""
+    image = Image.new("RGB", (width, height))
+    pixels = image.load()
+    for y in range(height):
+        for x in range(width):
+            red = (x * 4 + y * 2) % 256
+            green = (x + y * 3) % 256
+            blue = ((x * 7) ^ (y * 5)) % 256
+            pixels[x, y] = (red, green, blue)
+    return image
+
+
+def make_palette_real(width, height):
+    """Eight-colour deterministic pattern: libwebp uses colour indexing (bundled
+    indices) for it."""
+    colors = [
+        (0, 0, 0, 255),
+        (20, 60, 220, 255),
+        (30, 200, 60, 255),
+        (120, 30, 180, 255),
+        (230, 30, 40, 255),
+        (240, 120, 20, 255),
+        (250, 220, 30, 255),
+        (255, 255, 255, 255),
+    ]
+    image = Image.new("RGBA", (width, height))
+    pixels = image.load()
+    for y in range(height):
+        for x in range(width):
+            pixels[x, y] = colors[(x // 4 + y // 3) % len(colors)]
+    return image
+
+
+def make_alpha_real(width, height):
+    """RGBA gradients with varying alpha (lossless alpha is part of VP8L)."""
+    image = Image.new("RGBA", (width, height))
+    pixels = image.load()
+    for y in range(height):
+        for x in range(width):
+            alpha = (x * 255) // max(1, width - 1)
+            pixels[x, y] = ((x * 3) % 256, (y * 5) % 256, (x + y) % 256, alpha)
+    return image
+
+
+def write_real_fixtures():
+    write_pil_lossless_fixture("photo_transforms", make_photo_transforms(64, 48))
+    write_pil_lossless_fixture("palette_real", make_palette_real(32, 24))
+    write_pil_lossless_fixture("alpha_real", make_alpha_real(40, 32))
+    # Single solid colour: libwebp emits a colour-indexing transform here too.
+    write_pil_lossless_fixture("palette_transform", Image.new("RGBA", (16, 16), (200, 30, 40, 255)))
+
+
 def main():
     left = (255, 0, 0, 255)
     right = (0, 0, 255, 255)
@@ -119,11 +197,10 @@ def main():
     write_fixture("v8l_two_color.webp", make_two_color(8, left, right), RENDER)
     write_fixture("v8l_alpha.webp", make_two_color(8, left, transparent), RENDER)
 
-    # Unsupported-in-subset fixtures (valid WebP, typed errors expected).
-    palette_image = Image.new("RGB", (16, 16), (200, 30, 40))
-    palette_path = os.path.join(FIXTURES, "palette_transform.webp")
-    palette_image.save(palette_path, "WEBP", lossless=True)
-    print(palette_path, os.path.getsize(palette_path), "bytes (PIL palette transform)")
+    # Real libwebp lossless encodings (transforms/LZ77/cache/colour indexing):
+    # the Rust decoder is checked byte-exactly against the PIL RGBA oracle.
+    write_real_fixtures()
+    # VP8 lossy is deliberately unsupported (typed error + render warning).
     lossy_path = os.path.join(FIXTURES, "lossy.webp")
     Image.new("RGB", (16, 16), (30, 160, 90)).save(lossy_path, "WEBP", quality=80)
     print(lossy_path, os.path.getsize(lossy_path), "bytes (VP8 lossy)")

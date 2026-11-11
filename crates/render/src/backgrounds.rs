@@ -10,8 +10,8 @@
 //!    `--no-network`, the HTTP cache, redirects and TLS) under defensive caps:
 //!    [`DEFAULT_MAX_BACKGROUNDS`] distinct images, [`DEFAULT_MAX_BACKGROUND_BYTES`] per
 //!    image and [`DEFAULT_MAX_TOTAL_BACKGROUND_BYTES`] per page;
-//! 4. decodes PNG bytes with the in-tree `image` crate (GIF/JPEG/WebP are detected but
-//!    not decoded: warning + no image) and
+//! 4. decodes the bitmap with the in-tree `image` crate — PNG, JPEG, GIF and lossless
+//!    WebP (VP8L); VP8 lossy produces a warning and no image — and
 //! 5. builds the [`paint::BackgroundImages`] map that
 //!    [`paint::build_display_list_with_images_and_backgrounds`] consumes: key = the raw
 //!    CSS URL string (so both `background-image` and `list-style-image` share the same
@@ -290,7 +290,7 @@ pub fn load_backgrounds(
                 Err(error) => {
                     result.failed += 1;
                     result.warnings.push(format!(
-                        "skipping background image {url}: PNG decode failed ({error})"
+                        "skipping background image {url}: image decode failed ({error})"
                     ));
                     continue;
                 }

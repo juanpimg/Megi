@@ -12,9 +12,11 @@
 //!   input. See [`jpeg`] for the documented subset and limits.
 //! - **GIF** (87a/89a, first frame): LZW, global/local palettes, transparency,
 //!   interlacing; animated GIFs decode their first frame. See [`gif`].
-//! - **WebP lossless** (`VP8L` subset): RIFF container, simple Huffman codes and
-//!   literal pixels; complex Huffman/transforms/LZ77 and VP8 lossy are typed errors. See
-//!   [`webp`].
+//! - **WebP lossless** (`VP8L`): RIFF container, all four transforms (predictor,
+//!   colour, subtract-green and colour indexing) applied in reverse order, simple and
+//!   complex canonical Huffman codes, meta-Huffman images (per-block code groups),
+//!   LZ77 backward references with overlapping copies and the colour cache. VP8 *lossy*
+//!   is a typed [`ImageError::UnsupportedFeature`]. See [`webp`].
 //! - **PNG** (W3C PNG 1.2 / ISO 15948), decoded to 8-bit RGBA with straight
 //!   (non-premultiplied) alpha:
 //!   - colour types 0 (grayscale), 2 (RGB), 3 (indexed), 4 (grayscale+alpha)
@@ -30,8 +32,8 @@
 //! - **zlib/DEFLATE** (RFC 1950/1951) via [`inflate_zlib`] /
 //!   [`inflate_deflate`], used by the PNG decoder and reusable elsewhere.
 //!
-//! Detected-but-not-decoded formats/modes return a typed error: VP8 lossy WebP and the
-//! unsupported VP8L subset features (transforms/complex Huffman/LZ77) are
+//! Detected-but-not-decoded formats/modes return a typed error: VP8 *lossy* WebP,
+//! animation/alpha-only containers and unsupported JPEG modes are
 //! [`ImageError::UnsupportedFeature`] with a clear description; unknown signatures are
 //! [`ImageError::UnsupportedFormat`]/[`ImageError::InvalidSignature`].
 //!
@@ -96,7 +98,7 @@ pub enum ImageFormat {
     Gif,
     /// JPEG/JFIF baseline — decoded by this crate (progressive is a typed error).
     Jpeg,
-    /// Google WebP — lossless `VP8L` subset decoded; lossy `VP8` is a typed error.
+    /// Google WebP — full lossless `VP8L` decoded; lossy `VP8` is a typed error.
     WebP,
     /// No known image signature.
     Unknown,

@@ -42,14 +42,30 @@ fn decodes_vp8l_alpha_fixture_exactly() {
 }
 
 #[test]
-fn vp8l_transforms_outside_the_subset_are_typed_errors() {
+fn decodes_vp8l_colour_indexing_fixture_exactly() {
     // PIL/libwebp encodes a solid colour with the colour-indexing transform.
-    let error = decode(&fixture("palette_transform.webp")).expect_err("palette transform");
-    match error {
-        ImageError::UnsupportedFeature { feature } => {
-            assert!(feature.contains("transform"), "{feature}");
-        }
-        other => panic!("expected UnsupportedFeature, got {other:?}"),
+    let image = decode(&fixture("palette_transform.webp")).expect("palette transform");
+    assert_eq!(image.dimensions(), (16, 16));
+    assert_eq!(image.data, fixture("palette_transform.rgba"));
+}
+
+#[test]
+fn decodes_real_pil_lossless_photos_exactly() {
+    // Real libwebp lossless encodings: predictor/colour transforms, palette and alpha.
+    for (name, width, height) in [
+        ("photo_transforms", 64u32, 48u32),
+        ("palette_real", 32, 24),
+        ("alpha_real", 40, 32),
+    ] {
+        let image = decode(&fixture(&format!("{name}.webp")))
+            .unwrap_or_else(|error| panic!("{name}: {error:?}"));
+        assert_eq!(image.dimensions(), (width, height), "{name}");
+        let expected = fixture(&format!("{name}.rgba"));
+        assert_eq!(image.data.len(), expected.len(), "{name}");
+        assert_eq!(
+            image.data, expected,
+            "{name}: pixels must match PIL exactly"
+        );
     }
 }
 
@@ -92,5 +108,30 @@ fn truncated_webp_is_a_typed_error_without_panic() {
             ),
             "length {length}: {error:?}"
         );
+    }
+}
+
+#[test]
+fn truncated_real_vp8l_photos_are_typed_errors() {
+    // Every prefix of a real libwebp lossless stream (transforms + LZ77 + cache)
+    // must fail with a typed error and never panic.
+    for name in ["photo_transforms", "palette_real", "alpha_real"] {
+        let bytes = fixture(&format!("{name}.webp"));
+        for fraction in [1usize, 2, 4, 8, 16] {
+            let length = bytes.len() / fraction;
+            if length == 0 || length >= bytes.len() {
+                continue;
+            }
+            let error = decode(&bytes[..length]).expect_err("truncated VP8L");
+            assert!(
+                matches!(
+                    error,
+                    ImageError::Truncated { .. }
+                        | ImageError::InvalidData { .. }
+                        | ImageError::InvalidSignature
+                ),
+                "{name} @ {length}: {error:?}"
+            );
+        }
     }
 }

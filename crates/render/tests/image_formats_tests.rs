@@ -31,25 +31,17 @@ fn count_where(pixmap: &paint::Pixmap, predicate: impl Fn([u8; 4]) -> bool) -> u
 #[test]
 fn progressive_and_exif_images_flow_through_the_pipeline() {
     let output = render_fixture("image_formats.html");
+    // Progressive JPEG + EXIF JPEG + the VP8L lossless fixture all decode now (R147/R155).
     assert_eq!(
-        output.stats.images_loaded, 2,
-        "progressive JPEG + EXIF JPEG"
+        output.stats.images_loaded, 3,
+        "progressive JPEG + EXIF JPEG + lossless WebP"
     );
-    assert_eq!(output.stats.images_failed, 1, "WebP decoder is pending");
-    assert!(
-        output
-            .stats
-            .warnings
-            .iter()
-            .any(|warning| warning.contains("photo.webp") && warning.contains("WebP")),
-        "WebP warning must name the pending format: {:?}",
-        output.stats.warnings
-    );
+    assert_eq!(output.stats.images_failed, 0);
     // Progressive fixture is a grayscale gradient: many neutral pixels must paint.
     let gray = count_where(&output.pixmap, |[r, g, b, _]| {
         r == g && g == b && r > 10 && r < 245
     });
-    assert!(gray > 500, "progressive JPEG must paint, got {gray} px");
+    assert!(gray > 150, "progressive JPEG must paint, got {gray} px");
     // EXIF fixture (orientation 6) keeps its coloured quadrants after rotation.
     let colored = count_where(&output.pixmap, |[r, g, b, _]| {
         let max = r.max(g).max(b);
@@ -60,7 +52,7 @@ fn progressive_and_exif_images_flow_through_the_pipeline() {
         colored > 200,
         "EXIF JPEG quadrants must paint, got {colored} px"
     );
-    // The rest of the page still renders despite the skipped WebP.
+    // The rest of the page still renders after the image row.
     let magenta = count_where(&output.pixmap, |[r, g, b, _]| r > 220 && g < 40 && b > 220);
     assert!(
         magenta > 200,

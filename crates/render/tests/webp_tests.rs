@@ -59,3 +59,32 @@ fn webp_lossless_images_and_backgrounds_paint() {
     let green = count_where(&output.pixmap, |[r, g, b, _]| g > 200 && r < 80 && b < 80);
     assert!(green > 300, "content after lossy WebP");
 }
+
+#[test]
+fn webp_real_lossless_photo_paints_exact_pixels() {
+    // libwebp-encoded 64x48 lossless photo (predictor/colour transforms + colour
+    // cache); the RGBA oracle is the PIL decode stored next to the image fixture.
+    let output = render_fixture("webp_real.html");
+    assert_eq!(output.stats.images_loaded, 1, "VP8L photo loaded");
+    assert_eq!(output.stats.images_failed, 0);
+    let oracle = std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../crates/image/tests/fixtures/webp/photo_transforms.rgba"),
+    )
+    .expect("PIL RGBA oracle");
+    assert_eq!(oracle.len(), 64 * 48 * 4);
+    for (x, y) in [(0usize, 0usize), (10, 5), (32, 24), (63, 47)] {
+        let source = (y * 64 + x) * 4;
+        let pixel = output.pixmap.pixels[y * output.pixmap.width as usize + x];
+        assert_eq!(
+            [pixel.r, pixel.g, pixel.b, pixel.a],
+            [
+                oracle[source],
+                oracle[source + 1],
+                oracle[source + 2],
+                oracle[source + 3]
+            ],
+            "pixel ({x},{y}) must match the libwebp/PIL decode"
+        );
+    }
+}
