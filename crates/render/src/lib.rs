@@ -197,6 +197,8 @@
 //!   resource); redirects are followed by `net`.
 //! - Canvas is opaque white, the PNG encoder is the deterministic paint writer.
 
+#![forbid(unsafe_code)]
+
 pub mod backgrounds;
 #[cfg(feature = "js")]
 mod browser_host;
