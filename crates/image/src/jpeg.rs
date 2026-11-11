@@ -2,7 +2,14 @@
 //!
 //! ## Supported subset
 //!
-//! - **Baseline sequential DCT** (`SOF0`), Huffman entropy coding (`DHT`/`SOS`);
+//! - **Baseline sequential DCT** (`SOF0`) and **progressive DCT (`SOF2`)** subset:
+//!   DC-first/DC-refinement, AC-first and AC-refinement scans; spectral selection
+//!   and successive approximation are decoded into coefficient buffers and IDCT'd
+//!   once at EOI. Multi-component progressive images are supported up to their
+//!   first/refinement scan split: colour refinement scans (`Ah > 0` with more than
+//!   one component) return a clear [`ImageError::UnsupportedFeature`]; grayscale
+//!   progressive (including refinement) and colour DC/AC-first scans decode fully;
+//! - Huffman entropy coding (`DHT`/`SOS`);
 //! - quantization tables (`DQT`, 8- and 16-bit precision), 1-4 components;
 //! - sampling factors **4:4:4, 4:2:2 and 4:2:0** (any `H/V` 1-4 within the MCU limits);
 //! - restart intervals (`DRI` + `RSTn` markers, DC predictor reset);
@@ -10,11 +17,14 @@
 //!   (RGB) is honoured, `CMYK`/`YCCK` are rejected with a clear error;
 //! - nearest-neighbour chroma upsampling (4:4:4 is exact; 4:2:2/4:2:0 are documented as
 //!   blocky chroma — acceptable for photographs at the engine's current fidelity);
-//! - EXIF `APP1`/JFIF `APP0` are skipped; EXIF **orientation is not applied** (documented).
+//! - EXIF `APP1`/JFIF `APP0` are skipped by the JPEG decoder itself; **EXIF orientation**
+//!   (`IFD0` tag `0x0112`) is parsed by [`crate::exif`] and applied by [`crate::decode`]
+//!   after decoding (all eight orientations).
 //!
 //! ## Rejected with a clear error (never a panic)
 //!
-//! - progressive (`SOF2`) and all other DCT modes (arithmetic/lossless/hierarchical);
+//! - progressive **refinement scans for multi-component** images (subset documented
+//!   above), arithmetic/lossless/hierarchical DCT modes;
 //! - multiple scans: only the first `SOS` scan is decoded (baseline files encode
 //!   everything in one interleaved scan; extra scans are ignored, documented);
 //! - `CMYK`/`YCCK` (4-component Adobe) and 12-bit sample precision.
@@ -258,7 +268,21 @@ struct FrameComponent {
     plane_width: usize,
     plane_height: usize,
     blocks_x: usize,
+    blocks_y: usize,
+    /// Progressive JPEG coefficient accumulator (natural row-major order),
+    /// `blocks_x * blocks_y` blocks; `None` for baseline decodes.
+    coeffs: Option<Vec<[i32; BLOCK_LEN]>>,
     dc_pred: i32,
+}
+
+/// JPEG frame header data (SOF0 baseline or SOF2 progressive).
+struct JpegFrame {
+    width: u32,
+    height: u32,
+    components: Vec<FrameComponent>,
+    max_h: usize,
+    max_v: usize,
+    progressive: bool,
 }
 
 /// Decodes a baseline JPEG stream into an [`RgbaImage`].
@@ -272,7 +296,7 @@ pub(crate) fn decode_jpeg(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
     let mut quant_tables: [Option<QuantTable>; 4] = [None, None, None, None];
     let mut dc_tables: [Option<HuffmanTable>; 4] = [None, None, None, None];
     let mut ac_tables: [Option<HuffmanTable>; 4] = [None, None, None, None];
-    let mut frame: Option<(u32, u32, Vec<FrameComponent>, usize, usize)> = None;
+    let mut frame: Option<JpegFrame> = None;
     let mut restart_interval = 0usize;
     let mut adobe_transform: Option<u8> = None;
 
@@ -284,19 +308,25 @@ pub(crate) fn decode_jpeg(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
                     reason: "unexpected second JPEG SOI marker",
                 });
             }
-            0xD9 => break,
-            0xC0 => {
+            0xD9 => {
+                if let Some(frame) = frame.take() {
+                    if !frame.progressive {
+                        return Err(ImageError::InvalidData {
+                            reason: "JPEG ended before the baseline scan",
+                        });
+                    }
+                    return render_progressive_components(frame, &quant_tables, adobe_transform);
+                }
+                break;
+            }
+            0xC0 | 0xC2 => {
                 if frame.is_some() {
                     return Err(ImageError::InvalidData {
                         reason: "duplicate JPEG frame header",
                     });
                 }
-                frame = Some(parse_sof0(bytes, &mut index, limits)?);
-            }
-            0xC2 => {
-                return Err(ImageError::UnsupportedFeature {
-                    feature: "progressive JPEG (SOF2) is not supported",
-                });
+                let progressive = marker == 0xC2;
+                frame = Some(parse_sof(bytes, &mut index, limits, progressive)?);
             }
             0xC1 | 0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF => {
                 return Err(ImageError::UnsupportedFeature {
@@ -325,34 +355,62 @@ pub(crate) fn decode_jpeg(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
                 read_segment(bytes, &mut index)?;
             }
             0xDA => {
-                let Some((width, height, mut components, max_h, max_v)) = frame.take() else {
+                let Some(mut current) = frame.take() else {
                     return Err(ImageError::InvalidData {
                         reason: "JPEG scan before frame header",
                     });
                 };
-                let scan = parse_sos(bytes, &mut index, &components)?;
-                decode_scan(
-                    bytes,
-                    &mut index,
-                    width,
-                    height,
-                    &mut components,
-                    max_h,
-                    max_v,
-                    &quant_tables,
+                let progressive = current.progressive;
+                let scan = parse_sos(bytes, &mut index, &current.components, progressive)?;
+                if !progressive {
+                    let JpegFrame {
+                        width,
+                        height,
+                        mut components,
+                        max_h,
+                        max_v,
+                        ..
+                    } = current;
+                    decode_scan(
+                        bytes,
+                        &mut index,
+                        width,
+                        height,
+                        &mut components,
+                        max_h,
+                        max_v,
+                        &quant_tables,
+                        &dc_tables,
+                        &ac_tables,
+                        &scan,
+                        restart_interval,
+                    )?;
+                    return render_components(
+                        width,
+                        height,
+                        &components,
+                        max_h,
+                        max_v,
+                        adobe_transform,
+                    );
+                }
+                ensure_progressive_storage(&mut current);
+                let mut reader = BitReader::new(bytes, index);
+                if current.components.len() > 1 && scan.ah > 0 {
+                    return Err(ImageError::UnsupportedFeature {
+                        feature: "progressive JPEG refinement scans for multi-component images                                   (subset: DC/AC first scans for colour; full progressive for                                   single-component images)",
+                    });
+                }
+                decode_progressive_scan(
+                    &mut reader,
+                    &mut current,
                     &dc_tables,
                     &ac_tables,
                     &scan,
                     restart_interval,
                 )?;
-                return render_components(
-                    width,
-                    height,
-                    &components,
-                    max_h,
-                    max_v,
-                    adobe_transform,
-                );
+                index = skip_to_next_marker(bytes, reader.pos)?;
+                frame = Some(current);
             }
             other => {
                 return Err(ImageError::UnsupportedFeature {
@@ -367,6 +425,35 @@ pub(crate) fn decode_jpeg(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
     }
     Err(ImageError::InvalidData {
         reason: "JPEG has no image scan (SOS)",
+    })
+}
+
+/// Advances from the end of an entropy-coded segment to the next real marker.
+///
+/// Progressive scans can end before the last entropy byte is consumed (an
+/// end-of-band run may cover the remaining blocks); the skipped bytes are
+/// padding/stuffing of the current segment, never marker data.
+fn skip_to_next_marker(bytes: &[u8], mut index: usize) -> Result<usize, ImageError> {
+    while index < bytes.len() {
+        if bytes[index] == 0xFF {
+            let mut next = index + 1;
+            while bytes.get(next) == Some(&0xFF) {
+                next += 1;
+            }
+            match bytes.get(next) {
+                Some(0x00) => {
+                    // Stuffed data byte: skip and keep scanning.
+                    index = next + 1;
+                    continue;
+                }
+                Some(_) => return Ok(index),
+                None => break,
+            }
+        }
+        index += 1;
+    }
+    Err(ImageError::Truncated {
+        context: "JPEG marker after progressive scan",
     })
 }
 
@@ -415,12 +502,14 @@ fn read_segment<'a>(bytes: &'a [u8], index: &mut usize) -> Result<&'a [u8], Imag
     Ok(payload)
 }
 
-/// Parses `SOF0` and allocates the component planes (dimension limits enforced here).
-fn parse_sof0(
+/// Parses `SOF0` (baseline) or `SOF2` (progressive) and allocates the component
+/// planes/coefficient storage (dimension limits enforced here).
+fn parse_sof(
     bytes: &[u8],
     index: &mut usize,
     limits: &PngLimits,
-) -> Result<(u32, u32, Vec<FrameComponent>, usize, usize), ImageError> {
+    progressive: bool,
+) -> Result<JpegFrame, ImageError> {
     let segment = read_segment(bytes, index)?;
     if segment.len() < 6 {
         return Err(ImageError::Truncated {
@@ -492,6 +581,8 @@ fn parse_sof0(
             plane_width: 0,
             plane_height: 0,
             blocks_x: 0,
+            blocks_y: 0,
+            coeffs: None,
             dc_pred: 0,
         });
     }
@@ -501,6 +592,7 @@ fn parse_sof0(
         let plane_height = div_ceil(height as usize * component.v as usize, max_v as usize);
         let blocks_x = div_ceil(plane_width, 8);
         let blocks_y = div_ceil(plane_height, 8);
+        component.blocks_y = blocks_y;
         let plane_w = blocks_x.checked_mul(8).ok_or(ImageError::LimitExceeded {
             what: "JPEG component plane",
             limit: limits.max_pixels,
@@ -531,7 +623,14 @@ fn parse_sof0(
         component.blocks_x = blocks_x;
         component.dc_pred = 0;
     }
-    Ok((width, height, components, max_h as usize, max_v as usize))
+    Ok(JpegFrame {
+        width,
+        height,
+        components,
+        max_h: max_h as usize,
+        max_v: max_v as usize,
+        progressive,
+    })
 }
 
 fn div_ceil(value: usize, divisor: usize) -> usize {
@@ -630,15 +729,21 @@ fn parse_dht(
     Ok(())
 }
 
-/// Parsed `SOS` header: component ids in scan order and their table selectors.
+/// Parsed `SOS` header: components in scan order, their table selectors and the
+/// progressive spectral-selection/successive-approximation parameters.
 struct ScanHeader {
     components: Vec<(u8, usize, usize)>,
+    ss: u8,
+    se: u8,
+    ah: u8,
+    al: u8,
 }
 
 fn parse_sos(
     bytes: &[u8],
     index: &mut usize,
     frame_components: &[FrameComponent],
+    progressive: bool,
 ) -> Result<ScanHeader, ImageError> {
     let segment = read_segment(bytes, index)?;
     if segment.len() < 3 {
@@ -673,14 +778,40 @@ fn parse_sos(
         components.push((id, dc, ac));
         let _ = index;
     }
-    // Baseline requires the spectral selection to be 0..=63 with successive approximation 0.
     let tail = &segment[1 + count * 2..];
-    if tail.len() != 3 || tail[0] != 0 || tail[1] != 63 || tail[2] != 0 {
-        return Err(ImageError::UnsupportedFeature {
-            feature: "non-baseline JPEG spectral selection",
+    if tail.len() != 3 {
+        return Err(ImageError::InvalidData {
+            reason: "invalid JPEG SOS spectral selection bytes",
         });
     }
-    Ok(ScanHeader { components })
+    let (ss, se) = (tail[0], tail[1]);
+    let (ah, al) = (tail[2] >> 4, tail[2] & 0x0F);
+    if !progressive {
+        if ss != 0 || se != 63 || ah != 0 || al != 0 {
+            return Err(ImageError::UnsupportedFeature {
+                feature: "non-baseline JPEG spectral selection",
+            });
+        }
+    } else {
+        if ss > se || se > 63 || (ss == 0 && se != 0) || ah > 13 || al > 13 || (ah != 0 && al > ah)
+        {
+            return Err(ImageError::InvalidData {
+                reason: "invalid progressive JPEG scan parameters",
+            });
+        }
+        if components.len() > 1 && ss != 0 {
+            return Err(ImageError::UnsupportedFeature {
+                feature: "interleaved progressive JPEG AC scan",
+            });
+        }
+    }
+    Ok(ScanHeader {
+        components,
+        ss,
+        se,
+        ah,
+        al,
+    })
 }
 
 /// Per-scan component metadata resolved before the MCU loop.
@@ -954,4 +1085,362 @@ fn render_components(
         }
     }
     RgbaImage::new(width, height, data)
+}
+
+// ---------------------------------------------------------------------------
+// Progressive JPEG (SOF2) coefficient accumulation and rendering
+// ---------------------------------------------------------------------------
+
+/// Allocates the per-component coefficient buffers used by progressive scans.
+fn ensure_progressive_storage(frame: &mut JpegFrame) {
+    for component in &mut frame.components {
+        if component.coeffs.is_none() {
+            let blocks = component.blocks_x.saturating_mul(component.blocks_y);
+            component.coeffs = Some(vec![[0i32; BLOCK_LEN]; blocks]);
+        }
+    }
+}
+
+/// Decodes one progressive scan into the frame's coefficient buffers.
+fn decode_progressive_scan(
+    reader: &mut BitReader<'_>,
+    frame: &mut JpegFrame,
+    dc_tables: &[Option<HuffmanTable>; 4],
+    ac_tables: &[Option<HuffmanTable>; 4],
+    scan: &ScanHeader,
+    restart_interval: usize,
+) -> Result<(), ImageError> {
+    let mut scan_components = Vec::with_capacity(scan.components.len());
+    for (component_id, dc, ac) in &scan.components {
+        let index = frame
+            .components
+            .iter()
+            .position(|component| component.id == *component_id)
+            .ok_or(ImageError::InvalidData {
+                reason: "progressive JPEG scan references an unknown component",
+            })?;
+        let component = &mut frame.components[index];
+        component.dc_table = *dc;
+        component.ac_table = *ac;
+        component.dc_pred = 0;
+        scan_components.push(index);
+    }
+
+    let (mcus_x, mcus_y) = if scan_components.len() == 1 {
+        let component = &frame.components[scan_components[0]];
+        (component.blocks_x, component.blocks_y)
+    } else {
+        (
+            div_ceil(frame.width as usize, frame.max_h * 8),
+            div_ceil(frame.height as usize, frame.max_v * 8),
+        )
+    };
+
+    let mut mcu_count = 0usize;
+    let mut eob_run = 0u32;
+    for mcu_y in 0..mcus_y {
+        for mcu_x in 0..mcus_x {
+            if restart_interval > 0 && mcu_count > 0 && mcu_count.is_multiple_of(restart_interval) {
+                let expected = ((mcu_count / restart_interval - 1) % 8) as u8;
+                reader.expect_restart(expected)?;
+                for &index in &scan_components {
+                    frame.components[index].dc_pred = 0;
+                }
+                eob_run = 0;
+            }
+            if scan_components.len() == 1 {
+                let FrameComponent {
+                    dc_pred,
+                    dc_table,
+                    ac_table,
+                    blocks_x,
+                    blocks_y,
+                    coeffs,
+                    ..
+                } = &mut frame.components[scan_components[0]];
+                let block_index = mcu_y * *blocks_x + mcu_x;
+                if block_index >= *blocks_x * *blocks_y {
+                    continue;
+                }
+                let coefficients = coeffs
+                    .as_mut()
+                    .and_then(|coeffs| coeffs.get_mut(block_index))
+                    .ok_or(ImageError::InvalidData {
+                        reason: "progressive JPEG coefficient buffer missing",
+                    })?;
+                decode_progressive_block(
+                    reader,
+                    dc_tables,
+                    ac_tables,
+                    dc_pred,
+                    *dc_table,
+                    *ac_table,
+                    coefficients,
+                    scan,
+                    &mut eob_run,
+                )?;
+            } else {
+                for &index in &scan_components {
+                    let FrameComponent {
+                        h,
+                        v,
+                        dc_table,
+                        dc_pred,
+                        blocks_x,
+                        blocks_y,
+                        coeffs,
+                        ..
+                    } = &mut frame.components[index];
+                    let (h, v) = (*h as usize, *v as usize);
+                    let dc_table = dc_tables
+                        .get(*dc_table)
+                        .and_then(|table| table.as_ref())
+                        .ok_or(ImageError::InvalidData {
+                            reason: "JPEG missing DC Huffman table",
+                        })?;
+                    for block_y in 0..v {
+                        for block_x in 0..h {
+                            let block_col = mcu_x * h + block_x;
+                            let block_row = mcu_y * v + block_y;
+                            if block_col >= *blocks_x || block_row >= *blocks_y {
+                                continue;
+                            }
+                            let block_index = block_row * *blocks_x + block_col;
+                            let coefficients = coeffs
+                                .as_mut()
+                                .and_then(|coeffs| coeffs.get_mut(block_index))
+                                .ok_or(ImageError::InvalidData {
+                                    reason: "progressive JPEG coefficient buffer missing",
+                                })?;
+                            if scan.ah == 0 {
+                                decode_dc_first(reader, dc_table, coefficients, dc_pred, scan.al)?;
+                            } else {
+                                decode_dc_refine(reader, coefficients, scan.al)?;
+                            }
+                        }
+                    }
+                }
+            }
+            mcu_count += 1;
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn decode_progressive_block(
+    reader: &mut BitReader<'_>,
+    dc_tables: &[Option<HuffmanTable>; 4],
+    ac_tables: &[Option<HuffmanTable>; 4],
+    dc_pred: &mut i32,
+    dc_table_index: usize,
+    ac_table_index: usize,
+    coefficients: &mut [i32; BLOCK_LEN],
+    scan: &ScanHeader,
+    eob_run: &mut u32,
+) -> Result<(), ImageError> {
+    if scan.ss == 0 {
+        if scan.ah == 0 {
+            let table = dc_tables
+                .get(dc_table_index)
+                .and_then(|table| table.as_ref())
+                .ok_or(ImageError::InvalidData {
+                    reason: "JPEG missing DC Huffman table",
+                })?;
+            decode_dc_first(reader, table, coefficients, dc_pred, scan.al)
+        } else {
+            decode_dc_refine(reader, coefficients, scan.al)
+        }
+    } else {
+        let table = ac_tables
+            .get(ac_table_index)
+            .and_then(|table| table.as_ref())
+            .ok_or(ImageError::InvalidData {
+                reason: "JPEG missing AC Huffman table",
+            })?;
+        if scan.ah == 0 {
+            decode_ac_first(reader, table, coefficients, scan.ss, scan.se, scan.al)
+        } else {
+            decode_ac_refine(
+                reader,
+                table,
+                coefficients,
+                scan.ss,
+                scan.se,
+                scan.al,
+                eob_run,
+            )
+        }
+    }
+}
+
+fn decode_dc_first(
+    reader: &mut BitReader<'_>,
+    dc_table: &HuffmanTable,
+    coefficients: &mut [i32; BLOCK_LEN],
+    dc_pred: &mut i32,
+    al: u8,
+) -> Result<(), ImageError> {
+    let magnitude = reader.decode_huffman(dc_table)? as u32;
+    if magnitude > 16 {
+        return Err(ImageError::InvalidData {
+            reason: "JPEG DC coefficient magnitude out of range",
+        });
+    }
+    let difference = if magnitude == 0 {
+        0
+    } else {
+        extend_coefficient(reader.get_bits(magnitude as u8)? as i32, magnitude)
+    };
+    *dc_pred = dc_pred.wrapping_add(difference);
+    coefficients[0] = *dc_pred << al;
+    Ok(())
+}
+
+fn decode_dc_refine(
+    reader: &mut BitReader<'_>,
+    coefficients: &mut [i32; BLOCK_LEN],
+    al: u8,
+) -> Result<(), ImageError> {
+    if reader.get_bits(1)? == 1 {
+        coefficients[0] |= 1 << al;
+    }
+    Ok(())
+}
+
+fn decode_ac_first(
+    reader: &mut BitReader<'_>,
+    ac_table: &HuffmanTable,
+    coefficients: &mut [i32; BLOCK_LEN],
+    ss: u8,
+    se: u8,
+    al: u8,
+) -> Result<(), ImageError> {
+    let mut k = usize::from(ss);
+    let se = usize::from(se);
+    while k <= se {
+        let symbol = reader.decode_huffman(ac_table)?;
+        let run = usize::from(symbol >> 4);
+        let size = u32::from(symbol & 0x0F);
+        if size == 0 {
+            if run == 15 {
+                k += 16;
+                continue;
+            }
+            break;
+        }
+        k += run;
+        if k > se {
+            return Err(ImageError::InvalidData {
+                reason: "progressive JPEG AC run exceeds the band",
+            });
+        }
+        let value = extend_coefficient(reader.get_bits(size as u8)? as i32, size);
+        coefficients[ZIGZAG[k]] = value << al;
+        k += 1;
+    }
+    Ok(())
+}
+
+fn decode_ac_refine(
+    reader: &mut BitReader<'_>,
+    ac_table: &HuffmanTable,
+    coefficients: &mut [i32; BLOCK_LEN],
+    ss: u8,
+    se: u8,
+    al: u8,
+    eob_run: &mut u32,
+) -> Result<(), ImageError> {
+    if *eob_run > 0 {
+        *eob_run -= 1;
+        return Ok(());
+    }
+    let p1 = 1i32 << al;
+    let m1 = -p1;
+    let mut k = usize::from(ss);
+    let se = usize::from(se);
+    while k <= se {
+        let symbol = reader.decode_huffman(ac_table)?;
+        let mut r = i32::from(symbol >> 4);
+        let mut s = i32::from(symbol & 0x0F);
+        if s == 0 {
+            if r < 15 {
+                *eob_run = (1u32 << r) + reader.get_bits(r as u8)?;
+                *eob_run -= 1;
+                return Ok(());
+            }
+        } else {
+            if s != 1 {
+                return Err(ImageError::InvalidData {
+                    reason: "progressive JPEG AC refinement symbol size is not 1",
+                });
+            }
+            s = if reader.get_bits(1)? == 1 { p1 } else { m1 };
+        }
+        // Advance over already-nonzero coefficients (appending correction bits)
+        // until the run of still-zero coefficients is exhausted.
+        while k <= se {
+            let natural = ZIGZAG[k];
+            if coefficients[natural] != 0 {
+                if reader.get_bits(1)? == 1 {
+                    if coefficients[natural] >= 0 {
+                        coefficients[natural] += p1;
+                    } else {
+                        coefficients[natural] += m1;
+                    }
+                }
+            } else if r == 0 {
+                break;
+            } else {
+                r -= 1;
+            }
+            k += 1;
+        }
+        if k > se {
+            break;
+        }
+        if s != 0 {
+            coefficients[ZIGZAG[k]] = s;
+        }
+        k += 1;
+    }
+    Ok(())
+}
+
+fn render_progressive_components(
+    mut frame: JpegFrame,
+    quant_tables: &[Option<QuantTable>; 4],
+    adobe_transform: Option<u8>,
+) -> Result<RgbaImage, ImageError> {
+    ensure_progressive_storage(&mut frame);
+    let cosine = cosine_table();
+    let mut block = [0u8; BLOCK_LEN];
+    for component in &mut frame.components {
+        let quant = quant_tables
+            .get(component.quant)
+            .and_then(|table| table.as_ref())
+            .ok_or(ImageError::InvalidData {
+                reason: "JPEG missing quantization table",
+            })?;
+        let coeffs = component.coeffs.take().ok_or(ImageError::InvalidData {
+            reason: "progressive JPEG coefficient buffer missing",
+        })?;
+        for (block_index, stored) in coeffs.into_iter().enumerate() {
+            let mut coefficients = stored;
+            dequantize(&mut coefficients, quant);
+            inverse_dct(&coefficients, &cosine, &mut block);
+            let block_row = block_index / component.blocks_x.max(1);
+            let block_col = block_index % component.blocks_x.max(1);
+            store_block(component, block_col, block_row, &block);
+        }
+    }
+    let JpegFrame {
+        width,
+        height,
+        components,
+        max_h,
+        max_v,
+        ..
+    } = frame;
+    render_components(width, height, &components, max_h, max_v, adobe_transform)
 }

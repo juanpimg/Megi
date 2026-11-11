@@ -69,6 +69,7 @@
 
 mod crc32;
 pub mod error;
+pub mod exif;
 pub mod gif;
 pub mod inflate;
 pub mod jpeg;
@@ -203,6 +204,61 @@ pub(crate) fn rgba_len(width: u32, height: u32) -> Result<usize, ImageError> {
     })
 }
 
+/// Applies an EXIF orientation (1–8) to an [`RgbaImage`], returning the image
+/// with the visual orientation corrected. `None`/1 is the identity.
+///
+/// The eight EXIF transforms are the standard rotate/flip combination:
+/// 1 identity, 2 flip-horizontal, 3 rotate 180°, 4 flip-vertical, 5 transpose,
+/// 6 rotate 90° clockwise, 7 transverse (anti-transpose), 8 rotate 270° clockwise.
+pub fn apply_orientation(
+    image: RgbaImage,
+    orientation: Option<u8>,
+) -> Result<RgbaImage, ImageError> {
+    let Some(orientation) = orientation else {
+        return Ok(image);
+    };
+    let (width, height) = (image.width, image.height);
+    let src = image.data;
+    let pixel = |x: u32, y: u32| -> [u8; 4] {
+        let offset = ((y as usize) * (width as usize) + (x as usize)) * 4;
+        [
+            src[offset],
+            src[offset + 1],
+            src[offset + 2],
+            src[offset + 3],
+        ]
+    };
+    let (dst_width, dst_height) = if matches!(orientation, 5..=8) {
+        (height, width)
+    } else {
+        (width, height)
+    };
+    let mut data = vec![0u8; (dst_width as usize) * (dst_height as usize) * 4];
+    for y in 0..dst_height {
+        for x in 0..dst_width {
+            let (sx, sy) = match orientation {
+                2 => (width - 1 - x, y),
+                3 => (width - 1 - x, height - 1 - y),
+                4 => (x, height - 1 - y),
+                5 => (y, x),
+                6 => (y, height - 1 - x),
+                7 => (width - 1 - y, height - 1 - x),
+                8 => (width - 1 - y, x),
+                _ => (x, y),
+            };
+            let rgba = pixel(sx.min(width - 1), sy.min(height - 1));
+            let offset = ((y as usize) * (dst_width as usize) + (x as usize)) * 4;
+            data[offset..offset + 4].copy_from_slice(&rgba);
+        }
+    }
+    RgbaImage::new(dst_width, dst_height, data)
+}
+
+/// Returns the EXIF orientation of a JPEG/WebP byte stream when it carries one.
+pub fn exif_orientation(bytes: &[u8]) -> Option<u8> {
+    exif::orientation(bytes)
+}
+
 /// Decodes an image from `bytes` using the format's default limits.
 ///
 /// Decodes PNG, baseline JPEG and the first frame of GIF; WebP and unsupported JPEG
@@ -217,7 +273,10 @@ pub fn decode_with_limits(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
     match detect_format(bytes) {
         ImageFormat::Png => png::decode_png(bytes, limits),
         ImageFormat::Gif => gif::decode_gif(bytes, limits),
-        ImageFormat::Jpeg => jpeg::decode_jpeg(bytes, limits),
+        ImageFormat::Jpeg => {
+            let image = jpeg::decode_jpeg(bytes, limits)?;
+            apply_orientation(image, exif::orientation(bytes))
+        }
         ImageFormat::WebP => Err(ImageError::UnsupportedFormat {
             format: ImageFormat::WebP,
         }),
@@ -277,5 +336,53 @@ mod tests {
             decode(b"garbage").unwrap_err(),
             ImageError::InvalidSignature
         );
+    }
+}
+
+#[cfg(test)]
+mod orientation_tests {
+    use super::{RgbaImage, apply_orientation};
+
+    /// 4x2 image whose red channel encodes the source index, so every transform
+    /// can be checked against its exact destination pixel.
+    fn indexed_image() -> RgbaImage {
+        let mut data = Vec::new();
+        for y in 0..2u8 {
+            for x in 0..4u8 {
+                let index = y * 4 + x;
+                data.extend_from_slice(&[index, index, index, 255]);
+            }
+        }
+        RgbaImage::new(4, 2, data).expect("valid image")
+    }
+
+    fn reds(image: &RgbaImage) -> Vec<u8> {
+        image.data.chunks(4).map(|pixel| pixel[0]).collect()
+    }
+
+    #[test]
+    fn applies_all_eight_orientations() {
+        // Source indices: [0 1 2 3 / 4 5 6 7]
+        let cases: &[(u8, u32, u32, &[u8])] = &[
+            (1, 4, 2, &[0, 1, 2, 3, 4, 5, 6, 7]),
+            (2, 4, 2, &[3, 2, 1, 0, 7, 6, 5, 4]),
+            (3, 4, 2, &[7, 6, 5, 4, 3, 2, 1, 0]),
+            (4, 4, 2, &[4, 5, 6, 7, 0, 1, 2, 3]),
+            (5, 2, 4, &[0, 4, 1, 5, 2, 6, 3, 7]),
+            (6, 2, 4, &[4, 0, 5, 1, 6, 2, 7, 3]),
+            (7, 2, 4, &[7, 3, 6, 2, 5, 1, 4, 0]),
+            (8, 2, 4, &[3, 7, 2, 6, 1, 5, 0, 4]),
+        ];
+        for &(orientation, width, height, expected) in cases {
+            let image = apply_orientation(indexed_image(), Some(orientation)).expect("transform");
+            assert_eq!(
+                (image.width, image.height),
+                (width, height),
+                "orientation {orientation} size"
+            );
+            assert_eq!(reds(&image), expected, "orientation {orientation}");
+        }
+        let identity = apply_orientation(indexed_image(), None).expect("identity");
+        assert_eq!(reds(&identity), [0, 1, 2, 3, 4, 5, 6, 7]);
     }
 }

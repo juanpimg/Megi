@@ -8,7 +8,7 @@
 //!
 //! - Missing/blocked/failed subresources are **non-fatal**: the render yields a
 //!   gray placeholder box (painted by `paint::IMAGE_PLACEHOLDER`) and a warning.
-//! - PNG, baseline JPEG and GIF (first frame) are decoded with the in-tree `image`
+//! - PNG, baseline/progressive JPEG and GIF (first frame) are decoded with the in-tree `image`
 //!   crate; detected WebP (and unsupported JPEG variants) produce a warning and a
 //!   placeholder, never an error.
 //! - Defensive caps, configurable through [`crate::RenderOptions`]:
@@ -212,7 +212,7 @@ pub fn load_images(
             let format = image::detect_format(&resource.bytes);
             result.failed += 1;
             result.warnings.push(format!(
-                "skipping image {url}: unsupported format {format:?} (only PNG, JPEG, GIF and SVG are decoded)"
+                "skipping image {url}: unsupported format {format:?} (PNG, JPEG/GIF and SVG are decoded; WebP lossless/VP8 is pending)"
             ));
         }
     }
