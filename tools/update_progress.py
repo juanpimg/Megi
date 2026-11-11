@@ -128,25 +128,32 @@ def unsafe_forbidden_crates(root: Path) -> list[str]:
     return crates
 
 
-def count_tests(root: Path, cache_path: Path, head: str, manifest_tests: int, no_count: bool) -> int:
-    """Counts workspace tests, caching by HEAD; `--no-count` reuses the manifest value."""
+def count_tests(
+    root: Path, cache_path: Path, head: str, manifest_tests: int, no_count: bool
+) -> tuple[int, bool]:
+    """Counts workspace tests, caching by HEAD.
+
+    Returns `(count, measured)`: `measured` is `False` when the value comes from the
+    manifest (`--no-count`) or from the fallback after a failed `cargo test --list`, so the
+    caller can avoid claiming the count was verified at `HEAD`.
+    """
     if no_count:
-        return manifest_tests
+        return manifest_tests, False
     if cache_path.is_file():
         try:
             cache = json.loads(cache_path.read_text(encoding="utf-8"))
             if cache.get("head") == head and isinstance(cache.get("tests"), int):
-                return int(cache["tests"])
+                return int(cache["tests"]), True
         except (OSError, ValueError):
             pass
     result = run(root, ["cargo", "test", "--workspace", "--", "--list"], timeout=900)
     count = sum(1 for line in result.stdout.splitlines() if line.rstrip().endswith(": test"))
     if count == 0:
         print("warning: `cargo test --workspace -- --list` returned no tests; using manifest value", file=sys.stderr)
-        return manifest_tests
+        return manifest_tests, False
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps({"head": head, "tests": count}, indent=2) + "\n", encoding="utf-8")
-    return count
+    return count, True
 
 
 def run_gate(root: Path, manifest_gate: dict[str, str]) -> dict[str, str]:
@@ -179,7 +186,15 @@ def parse_rounds(changelog: Path, limit: int = 6) -> list[tuple[str, str]]:
 
 
 def bar(percent: int, width: int = 20) -> str:
-    filled = max(0, min(width, round(percent * width / 100)))
+    """Renders the bar, which only fills completely at 100 %.
+
+    Rounding used to give 99 % a full 20/20 bar, making an incomplete phase look done; floor
+    keeps 98-99 % visibly short of the last block.
+    """
+    filled = int(percent * width // 100)
+    if percent < 100:
+        filled = min(filled, width - 1)
+    filled = max(0, min(width, filled))
     return "█" * filled + "░" * (width - filled)
 
 
@@ -461,8 +476,8 @@ def update_manifest(text: str, stats: dict, gate: dict[str, str]) -> str:
     stats_block = [
         "[stats]",
         f"tests = {stats['tests']}",
-        f'tests_commit = "{stats["head"]}"',
-        f'tests_date = "{stats["date"]}"',
+        f'tests_commit = "{stats["tests_commit"]}"',
+        f'tests_date = "{stats["tests_date"]}"',
         f"crates = {stats['crates']}",
         f"rust_lines = {stats['rust_lines']}",
         f"unsafe_forbidden_crates = {stats['unsafe_forbidden']}",
@@ -471,7 +486,7 @@ def update_manifest(text: str, stats: dict, gate: dict[str, str]) -> str:
     gate_block = [
         "[gate]",
         f'status = "{gate["status"]}"',
-        f'verified_commit = "{stats["head"]}"',
+        f'verified_commit = "{gate["verified_commit"]}"',
         f'tokenizer = "{gate.get("tokenizer", "n/a")}"',
         f'tree = "{gate.get("tree", "n/a")}"',
         f'serializer = "{gate.get("serializer", "n/a")}"',
@@ -537,7 +552,7 @@ def build_artifacts(root: Path, no_count: bool, no_gate: bool) -> dict[str, byte
 
     manifest_stats = manifest.get("stats", {})
     manifest_gate = manifest.get("gate", {})
-    tests = count_tests(
+    tests, tests_measured = count_tests(
         root,
         root / "target" / "progress-stats.json",
         head,
@@ -546,9 +561,24 @@ def build_artifacts(root: Path, no_count: bool, no_gate: bool) -> dict[str, byte
     )
     gate = run_gate(root, manifest_gate) if not no_gate else dict(manifest_gate)
     unsafe = unsafe_forbidden_crates(root)
+    # Provenance: only claim the current commit for the test count / conformance gate when
+    # they were actually measured here; with --no-count/--no-gate (or a failed count) keep
+    # the previous stamps instead of pretending the cached result belongs to HEAD.
+    if tests_measured:
+        tests_commit = head
+        tests_date = date
+    else:
+        tests_commit = manifest_stats.get("tests_commit", head)
+        tests_date = manifest_stats.get("tests_date", date)
+    if no_gate:
+        verified_commit = manifest_gate.get("verified_commit", head)
+    else:
+        verified_commit = head
     stats = {
         "head": head,
         "date": date,
+        "tests_commit": tests_commit,
+        "tests_date": tests_date,
         "crates": count_crates(root),
         "rust_lines": count_rust_lines(root),
         "tests": tests,
