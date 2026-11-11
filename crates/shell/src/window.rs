@@ -46,6 +46,8 @@
 //! | `Ctrl+-` (or `-`) | Zoom out |
 //! | `Ctrl+0` (or `0`) | Reset zoom to 100 % |
 //! | `Ctrl+L` | Edit the address bar (`Enter` navigates, `Esc` cancels) |
+//! | `Ctrl+S` | Save the rendered page as a PNG download |
+//! | `Ctrl+Shift+S` | Save the rendered DOM as an HTML download (doctype included) |
 //! | `Ctrl+F` | Find in page (type, `Enter` next, `Shift+Enter` previous, `Esc` close) |
 //! | `Ctrl+D` | Print the final URL and page title |
 //! | `F5`, `g` | Reload |
@@ -113,6 +115,10 @@ pub struct WindowViewOptions {
     pub refresh: RefreshPolicy,
     /// Initial tabs (empty = the single `input` tab passed to the runner).
     pub tabs: Vec<String>,
+    /// Session file to load/save (`None` disables persistence).
+    pub session_path: Option<std::path::PathBuf>,
+    /// Download directory (`None` = `$HOME/Downloads`/temp fallback).
+    pub download_dir: Option<std::path::PathBuf>,
 }
 
 impl Default for WindowViewOptions {
@@ -121,6 +127,8 @@ impl Default for WindowViewOptions {
             zoom: zoom::DEFAULT_ZOOM,
             refresh: RefreshPolicy::disabled(),
             tabs: Vec::new(),
+            session_path: None,
+            download_dir: None,
         }
     }
 }
@@ -132,6 +140,8 @@ impl WindowViewOptions {
             zoom,
             refresh,
             tabs: Vec::new(),
+            session_path: None,
+            download_dir: None,
         }
     }
 
@@ -266,6 +276,16 @@ struct WindowApp {
     address: AddressBar,
     /// Open `<select>` dropdown, if any.
     dropdown: Option<DropdownState>,
+    /// Session file to load/save (`None` = persistence disabled).
+    session_path: Option<std::path::PathBuf>,
+    /// Download directory override.
+    download_dir: Option<std::path::PathBuf>,
+    /// Debounced session save.
+    session_debounce: Debounce,
+    /// Whether unsaved session changes exist.
+    session_dirty: bool,
+    /// Transient status notice shown in the window title (downloads/session).
+    status: Option<String>,
 }
 
 impl WindowApp {
@@ -278,14 +298,29 @@ impl WindowApp {
         render_options: render::RenderOptions,
         view: WindowViewOptions,
     ) -> Self {
-        let zoom = zoom::sanitize_zoom(view.zoom);
-        let tabs = if view.tabs.is_empty() {
+        let mut startup_notice = None;
+        let tabs = if let Some(path) = &view.session_path {
+            let loaded = crate::session::load(path);
+            if let Some(warning) = &loaded.warning {
+                eprintln!("megi: {warning}");
+                startup_notice = Some(warning.clone());
+            }
+            match loaded.session {
+                Some(session) => {
+                    startup_notice = Some(format!("restored {} tab(s)", session.tabs.len()));
+                    session.restore()
+                }
+                None => TabsState::from_urls(view.tabs.clone()),
+            }
+        } else if view.tabs.is_empty() {
             TabsState::new(input.clone())
         } else {
             TabsState::from_urls(view.tabs.clone())
         };
         let input = tabs.active().url.clone();
         let nav = tabs.active().navigation.clone();
+        let zoom = zoom::sanitize_zoom(tabs.active().zoom);
+        let restored_scroll = tabs.active().scroll;
         Self {
             input,
             title,
@@ -298,7 +333,7 @@ impl WindowApp {
             render_options,
             metrics: window_metrics_zoomed(width, height, 1.0, zoom),
             scale_factor: 1.0,
-            scroll: ScrollState::default(),
+            scroll: restored_scroll,
             store: FrameStore::new(),
             request_sender: None,
             message_receiver: None,
@@ -328,6 +363,11 @@ impl WindowApp {
             find_rects: Vec::new(),
             address: AddressBar::new(),
             dropdown: None,
+            session_path: view.session_path.clone(),
+            download_dir: view.download_dir.clone(),
+            session_debounce: Debounce::new(std::time::Duration::from_millis(600)),
+            session_dirty: false,
+            status: startup_notice,
             tabs,
         }
     }
@@ -673,6 +713,74 @@ impl WindowApp {
             window.request_redraw();
         }
         self.request_render();
+    }
+
+    /// Saves the live tabs into the session file (debounced and on exit).
+    fn save_session(&mut self) {
+        let Some(path) = self.session_path.clone() else {
+            return;
+        };
+        self.save_active_tab();
+        let session = crate::session::Session::capture(&self.tabs);
+        match crate::session::save(&path, &session) {
+            Ok(()) => self.session_dirty = false,
+            Err(error) => eprintln!("megi: cannot save session {}: {error}", path.display()),
+        }
+    }
+
+    /// Sets a transient status notice (downloads/session events) and echoes it to stdout.
+    fn notify(&mut self, message: String) {
+        println!("megi: {message}");
+        self.status = Some(message);
+        self.update_title();
+        self.request_repaint();
+    }
+
+    /// `Ctrl+S`: saves the current frame as a PNG download.
+    fn save_frame_png(&mut self) {
+        let Some(frame) = self.store.frame() else {
+            self.notify("no page to save yet".to_string());
+            return;
+        };
+        let (width, height, pixels) = (frame.width, frame.height, frame.pixels.clone());
+        let url = match self.nav.current().cloned() {
+            Some(url) => url,
+            None => match net::Url::parse(&self.input) {
+                Ok(url) => url,
+                Err(error) => {
+                    self.notify(format!("cannot save PNG: invalid URL ({error})"));
+                    return;
+                }
+            },
+        };
+        let dir = crate::download::resolve_download_dir(self.download_dir.as_deref());
+        match crate::download::save_png(&dir, &url, width, height, &pixels) {
+            Ok(saved) => self.notify(saved.notice()),
+            Err(error) => self.notify(format!("cannot save PNG: {error}")),
+        }
+    }
+
+    /// `Ctrl+Shift+S`: saves the rendered DOM as an HTML download (doctype included).
+    fn save_frame_html(&mut self) {
+        let Some(document) = self.document.clone() else {
+            self.notify("no page to save yet".to_string());
+            return;
+        };
+        let url = match self.nav.current().cloned() {
+            Some(url) => url,
+            None => match net::Url::parse(&self.input) {
+                Ok(url) => url,
+                Err(error) => {
+                    self.notify(format!("cannot save HTML: invalid URL ({error})"));
+                    return;
+                }
+            },
+        };
+        let dir = crate::download::resolve_download_dir(self.download_dir.as_deref());
+        match crate::download::save_html(&dir, &url, &document) {
+            Ok(saved) => self.notify(saved.notice()),
+            Err(error) => self.notify(format!("cannot save HTML: {error}")),
+        }
     }
 
     /// URL text shown in the address bar (current history entry, else the input).
@@ -1418,6 +1526,16 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                 let alt_pressed = self.modifiers.alt_key();
                 let ctrl_pressed = self.modifiers.control_key();
                 if ctrl_pressed
+                    && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("s"))
+                {
+                    if self.modifiers.shift_key() {
+                        self.save_frame_html();
+                    } else {
+                        self.save_frame_png();
+                    }
+                    return;
+                }
+                if ctrl_pressed
                     && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("l"))
                 {
                     self.open_address_bar();
@@ -1555,11 +1673,20 @@ impl ApplicationHandler<UserEvent> for WindowApp {
             self.scroll.set_viewport_height(metrics.css_height);
             self.request_render();
         }
-        let deadline = match (self.debounce.deadline(), self.refresh.deadline()) {
+        if self.session_dirty && self.session_debounce.take_due(now) {
+            self.save_session();
+        }
+        let mut deadline = match (self.debounce.deadline(), self.refresh.deadline()) {
             (Some(debounce), Some(refresh)) => Some(debounce.min(refresh)),
             (Some(deadline), None) | (None, Some(deadline)) => Some(deadline),
             (None, None) => None,
         };
+        if self.session_dirty
+            && let Some(session_deadline) = self.session_debounce.deadline()
+        {
+            deadline =
+                Some(deadline.map_or(session_deadline, |deadline| deadline.min(session_deadline)));
+        }
         match deadline {
             Some(deadline) => event_loop.set_control_flow(ControlFlow::WaitUntil(deadline)),
             None => event_loop.set_control_flow(ControlFlow::Wait),
@@ -1567,6 +1694,8 @@ impl ApplicationHandler<UserEvent> for WindowApp {
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        // Persist the session before shutting the worker down.
+        self.save_session();
         // Dropping the sender stops the worker; join so the process exits cleanly.
         self.request_sender = None;
         if let Some(handle) = self.worker.take() {

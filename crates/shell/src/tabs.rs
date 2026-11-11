@@ -102,6 +102,26 @@ impl Tab {
         tab
     }
 
+    /// Rebuilds a tab from persisted session state (history, URL, zoom, scroll).
+    pub fn restored(
+        navigation: NavigationState,
+        url: String,
+        zoom: f64,
+        scroll: ScrollState,
+    ) -> Self {
+        Self {
+            navigation,
+            title: None,
+            url,
+            scroll,
+            zoom: zoom::sanitize_zoom(zoom),
+            find: FindState::new(),
+            find_editing: false,
+            error: None,
+            content_capped: false,
+        }
+    }
+
     /// Title used for the window title: document title, else the URL, else `New Tab`.
     pub fn display_title(&self) -> String {
         match self.title.as_deref() {
@@ -142,6 +162,16 @@ impl TabsState {
         }
         tabs.truncate(MAX_TABS);
         Self { tabs, active: 0 }
+    }
+
+    /// Builds a tab state from restored tabs (caps the count and clamps the active index).
+    pub fn from_parts(mut tabs: Vec<Tab>, active: usize) -> Self {
+        if tabs.is_empty() {
+            return Self::new(BLANK_TAB_URL);
+        }
+        tabs.truncate(MAX_TABS);
+        let active = active.min(tabs.len() - 1);
+        Self { tabs, active }
     }
 
     /// Number of open tabs (always at least 1).

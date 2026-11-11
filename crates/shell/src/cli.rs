@@ -45,6 +45,11 @@ options:
                       rendered page (headless screenshots; window: Ctrl+F)
   --chrome            include the shell chrome (tab strip + address bar) in the
                       headless --screenshot output (window always shows chrome)
+  --no-session        do not load/save the persistent session
+  --session-file PATH session JSON path (default: $XDG_DATA_HOME/megi/session.json)
+  --download-dir PATH directory for Ctrl+S PNG / Ctrl+Shift+S HTML downloads
+  --save-png PATH     headless: also write the rendered PNG to PATH
+  --save-html PATH    headless: also write the serialized DOM (doctype) to PATH
   --tabs URL          open URL as an extra tab (repeatable, max 32); the positional
                       URL is the first/active tab, headless renders the active tab
   -h, --help          print this help
@@ -103,6 +108,16 @@ pub struct CliArgs {
     pub tabs: Vec<String>,
     /// Include the shell chrome in headless screenshots (`--chrome`).
     pub chrome: bool,
+    /// Disable session persistence (`--no-session`).
+    pub no_session: bool,
+    /// Explicit session file (`--session-file`).
+    pub session_file: Option<PathBuf>,
+    /// Download directory override (`--download-dir`).
+    pub download_dir: Option<PathBuf>,
+    /// Headless: also write the rendered PNG to this path (`--save-png`).
+    pub save_png: Option<PathBuf>,
+    /// Headless: also write the serialized DOM to this path (`--save-html`).
+    pub save_html: Option<PathBuf>,
     /// Auto-refresh interval in milliseconds when `--refresh-ms` was given (`None` = off).
     pub refresh_ms: Option<u64>,
 }
@@ -132,6 +147,16 @@ pub struct RawArgs {
     pub tabs: Vec<String>,
     /// `--chrome` was passed.
     pub chrome: bool,
+    /// `--no-session` was passed.
+    pub no_session: bool,
+    /// `--session-file` value.
+    pub session_file: Option<PathBuf>,
+    /// `--download-dir` value.
+    pub download_dir: Option<PathBuf>,
+    /// `--save-png` value.
+    pub save_png: Option<PathBuf>,
+    /// `--save-html` value.
+    pub save_html: Option<PathBuf>,
     /// `--refresh-ms` value (default 250 when passed without a value), if provided.
     pub refresh_ms: Option<u64>,
     /// `-h`/`--help` was passed.
@@ -168,6 +193,35 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
                 raw.tabs.push(next_value(&arguments, &mut index, "--tabs")?);
             }
             "--chrome" => raw.chrome = true,
+            "--no-session" => raw.no_session = true,
+            "--session-file" => {
+                raw.session_file = Some(PathBuf::from(next_value(
+                    &arguments,
+                    &mut index,
+                    "--session-file",
+                )?));
+            }
+            "--download-dir" => {
+                raw.download_dir = Some(PathBuf::from(next_value(
+                    &arguments,
+                    &mut index,
+                    "--download-dir",
+                )?));
+            }
+            "--save-png" => {
+                raw.save_png = Some(PathBuf::from(next_value(
+                    &arguments,
+                    &mut index,
+                    "--save-png",
+                )?));
+            }
+            "--save-html" => {
+                raw.save_html = Some(PathBuf::from(next_value(
+                    &arguments,
+                    &mut index,
+                    "--save-html",
+                )?));
+            }
             "--zoom" => {
                 let value = next_value(&arguments, &mut index, "--zoom")?;
                 raw.zoom = Some(value.parse::<f64>().map_err(|_| {
@@ -287,6 +341,11 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
             find: raw.find,
             tabs,
             chrome: raw.chrome,
+            no_session: raw.no_session,
+            session_file: raw.session_file,
+            download_dir: raw.download_dir,
+            save_png: raw.save_png,
+            save_html: raw.save_html,
         });
     }
     Ok(CliArgs {
@@ -302,6 +361,11 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
         find: raw.find,
         tabs,
         chrome: raw.chrome,
+        no_session: raw.no_session,
+        session_file: raw.session_file,
+        download_dir: raw.download_dir,
+        save_png: raw.save_png,
+        save_html: raw.save_html,
     })
 }
 
@@ -393,6 +457,45 @@ mod unit_tests {
         assert!(!plain.cookies);
         assert!(plain.origin.is_none());
         assert!(parse_cli(args(&["data:,x", "--origin"])).is_err());
+    }
+
+    #[test]
+    fn parses_session_and_download_flags() {
+        let cli = parse_cli(args(&[
+            "data:,x",
+            "--no-session",
+            "--session-file",
+            "/tmp/s.json",
+            "--download-dir",
+            "/tmp/dl",
+            "--save-png",
+            "/tmp/a.png",
+            "--save-html",
+            "/tmp/a.html",
+        ]))
+        .expect("parse");
+        assert!(cli.no_session);
+        assert_eq!(
+            cli.session_file.as_deref(),
+            Some(std::path::Path::new("/tmp/s.json"))
+        );
+        assert_eq!(
+            cli.download_dir.as_deref(),
+            Some(std::path::Path::new("/tmp/dl"))
+        );
+        assert_eq!(
+            cli.save_png.as_deref(),
+            Some(std::path::Path::new("/tmp/a.png"))
+        );
+        assert_eq!(
+            cli.save_html.as_deref(),
+            Some(std::path::Path::new("/tmp/a.html"))
+        );
+        let defaults = parse_cli(args(&["data:,x"])).expect("parse");
+        assert!(!defaults.no_session);
+        assert!(defaults.session_file.is_none());
+        assert!(USAGE.contains("--no-session"));
+        assert!(USAGE.contains("--save-html"));
     }
 
     #[test]

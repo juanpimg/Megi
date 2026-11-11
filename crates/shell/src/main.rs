@@ -62,12 +62,46 @@ fn run() -> Result<(), ShellError> {
             .map_or_else(RefreshPolicy::disabled, RefreshPolicy::every_ms),
     )
     .with_tabs(args.tabs.clone());
+    let mut view = view;
+    view.session_path = if args.no_session {
+        None
+    } else {
+        shell::session::resolve_session_path(args.session_file.as_deref())
+    };
+    view.download_dir = args.download_dir.clone();
     match args.mode {
         LaunchMode::Screenshot(path) => {
             // Headless screenshots render at the CSS viewport (physical / zoom): `--zoom 2`
             // writes a PNG half the requested physical size (the window would upscale it).
             let (css_width, css_height) =
                 zoom::zoomed_viewport(args.width, args.height, 1.0, args.zoom);
+            if args.save_png.is_some() || args.save_html.is_some() {
+                let output = shell::headless::render_target_with_options(
+                    &args.input,
+                    css_width,
+                    css_height,
+                    &options,
+                )?;
+                if let Some(path) = &args.save_png {
+                    let bytes =
+                        shell::download::write_png_to(path, &output.pixmap).map_err(|reason| {
+                            shell::ShellError::Io {
+                                path: path.display().to_string(),
+                                reason,
+                            }
+                        })?;
+                    println!("saved png ({bytes} bytes) to {}", path.display());
+                }
+                if let Some(path) = &args.save_html {
+                    let bytes = shell::download::write_html_to(path, &output.document).map_err(
+                        |reason| shell::ShellError::Io {
+                            path: path.display().to_string(),
+                            reason,
+                        },
+                    )?;
+                    println!("saved html ({bytes} bytes) to {}", path.display());
+                }
+            }
             let info = if args.chrome {
                 shell::headless::screenshot_with_chrome(
                     &args.input,

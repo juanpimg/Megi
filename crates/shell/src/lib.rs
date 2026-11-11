@@ -54,6 +54,14 @@
 //!   decoded transparently by `net`.
 //! - **Dynamic title**: the window title is the document `<title>` plus the short URL and
 //!   scroll percentage ([`title`]); server redirects replace the current history entry.
+//! - **Session & downloads (R150)**: the window persists tabs/history/zoom/scroll to
+//!   `$XDG_DATA_HOME/megi/session.json` (or `--session-file PATH`) with debounced atomic
+//!   saves, tolerant loading of corrupt files and `--no-session` to disable it; headless
+//!   never writes a session. `Ctrl+S` exports the rendered page as
+//!   `megi-<host>-<n>.png` and `Ctrl+Shift+S` the post-script DOM as
+//!   `megi-<host>-<n>.html` (doctype included) into `--download-dir`/`~/Downloads`;
+//!   headless equivalents are `--save-png PATH` / `--save-html PATH` ([`session`],
+//!   [`download`]).
 //! - **Browser chrome (R135)**: a shell-drawn overlay ([`chrome`]) with a tab strip
 //!   (click to activate/close, `+` new tab, `+N` overflow) and an address bar (`Ctrl+L`,
 //!   caret editing, `Enter` navigates via `Url::join`, `Esc` cancels), plus the floating
@@ -139,6 +147,7 @@
 pub mod chrome;
 pub mod cli;
 pub mod convert;
+pub mod download;
 pub mod error;
 pub mod find;
 pub mod forms;
@@ -149,6 +158,7 @@ pub mod present;
 pub mod refresh;
 pub mod scale;
 pub mod scroll;
+pub mod session;
 pub mod tabs;
 pub mod title;
 pub mod window;
@@ -162,6 +172,11 @@ pub use chrome::{
 };
 pub use cli::{CliArgs, LaunchMode, finish_args, parse_args, parse_cli};
 pub use convert::{PIXEL_FORMAT, expected_buffer_len, pixmap_to_0rgb};
+pub use download::{
+    DOWNLOAD_PREFIX, DownloadKind, MAX_HOST_CHARS, SavedDownload, default_download_dir,
+    download_file_name, is_png, next_download_path, resolve_download_dir, sanitize_host, save_html,
+    save_png,
+};
 pub use error::ShellError;
 pub use find::{
     FindMatch, FindState, HIGHLIGHT_ALPHA, HIGHLIGHT_CURRENT_ALPHA, HIGHLIGHT_RGB, highlight_rects,
@@ -187,6 +202,11 @@ pub use scale::{
     WindowMetrics, logical_to_physical, physical_to_logical, window_metrics, window_metrics_zoomed,
 };
 pub use scroll::{MAX_CONTENT_HEIGHT, ScrollState};
+pub use session::{
+    LoadedSession, MAX_HISTORY_PER_TAB, MAX_SESSION_TABS, SCHEMA_VERSION, SESSION_FILE_NAME,
+    Session, SessionLock, SessionTab, default_session_path, load as load_session,
+    resolve_session_path, save as save_session,
+};
 pub use tabs::{BLANK_TAB_TITLE, BLANK_TAB_URL, CloseOutcome, MAX_TABS, Tab, TabsState};
 pub use title::{
     CAPPED_MARKER, FALLBACK_NAME, MAX_SHORT_URL_CHARS, MAX_TITLE_CHARS, document_title, page_title,

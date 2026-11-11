@@ -141,6 +141,17 @@ impl NavigationState {
         self.current()
     }
 
+    /// Rebuilds a history from persisted URLs, clamping the current index and the cap.
+    pub fn from_history(mut history: Vec<Url>, index: usize) -> Self {
+        history.truncate(MAX_HISTORY);
+        let index = if history.is_empty() {
+            0
+        } else {
+            index.min(history.len() - 1)
+        };
+        Self { history, index }
+    }
+
     /// First (home) history entry — the destination of `Alt+Home`.
     pub fn home_target(&self) -> Option<&Url> {
         self.history.first()

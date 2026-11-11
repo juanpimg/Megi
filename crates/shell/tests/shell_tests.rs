@@ -1103,3 +1103,65 @@ fn cli_parses_chrome_flag_and_documents_it() {
     assert!(shell::cli::USAGE.contains("--chrome"));
     assert!(shell::cli::USAGE.contains("address bar"));
 }
+
+#[test]
+fn cli_save_html_and_png_flags_write_explicit_files() {
+    let dir = std::env::temp_dir().join(format!("megi-cli-save-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let screenshot = dir.join("shot.png");
+    let png = dir.join("saved.png");
+    let html = dir.join("saved.html");
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+        .args([
+            "data:text/html,%3Ctitle%3ESave%20Me%3C%2Ftitle%3E%3Ch1%3Ehi%3C%2Fh1%3E",
+            "--screenshot",
+            screenshot.to_str().expect("path"),
+            "--width",
+            "160",
+            "--height",
+            "120",
+            "--save-png",
+            png.to_str().expect("path"),
+            "--save-html",
+            html.to_str().expect("path"),
+        ])
+        .status()
+        .expect("shell binary runs");
+    assert!(status.success());
+    assert!(png.is_file() && screenshot.is_file());
+    let saved_png = std::fs::read(&png).expect("png");
+    let shot = std::fs::read(&screenshot).expect("shot");
+    assert_eq!(png_dimensions(&saved_png), (160, 120));
+    assert_eq!(saved_png, shot, "the saved PNG is the rendered screenshot");
+    let saved_html = std::fs::read_to_string(&html).expect("html");
+    assert!(saved_html.to_ascii_lowercase().starts_with("<!doctype"));
+    assert!(saved_html.contains("<title>Save Me</title>"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn headless_never_writes_a_session_file() {
+    let dir = std::env::temp_dir().join(format!("megi-session-headless-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+        .args([
+            "data:text/html,<h1>no session</h1>",
+            "--screenshot",
+            dir.join("out.png").to_str().expect("path"),
+            "--width",
+            "120",
+            "--height",
+            "80",
+        ])
+        .env("XDG_DATA_HOME", &dir)
+        .status()
+        .expect("shell binary runs");
+    assert!(status.success());
+    assert!(
+        !dir.join("megi").join("session.json").exists(),
+        "headless mode must not persist a session"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
