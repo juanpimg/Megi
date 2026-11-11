@@ -4,12 +4,13 @@
 //! recomputes styles, layout and paint on the mutated DOM. This module owns the host side:
 //!
 //! 1. [`discover_scripts`] walks the parsed document in tree order and collects classic
-//!    `<script>` elements (inline or `src`):
+//!    and module `<script>` elements (inline or `src`):
 //!    - missing/empty `type`, `text/javascript`, `application/javascript`,
 //!      `application/ecmascript`, `text/ecmascript` ⇒ classic script;
-//!    - `type="module"` ⇒ skipped with a warning (modules are not implemented);
+//!    - `type="module"` ⇒ ES module evaluated through the js crate's module subset
+//!      (`eval_module` + host resolver/loader, R162);
 //!    - any other `type` (JSON, templates, ...) ⇒ ignored, as browsers do;
-//!    - `nomodule` scripts are ignored (we only support classic scripts).
+//!    - `nomodule` only affects classic scripts (module scripts ignore it).
 //! 2. [`load_scripts`] applies the loading policy: external sources are resolved against
 //!    the **document base URL** and fetched with the shared [`net::ResourceLoader`]
 //!    (`--no-network` is honoured, HTTP cache/redirects/TLS included), deduplicated by
@@ -28,6 +29,13 @@
 //!    `MutationObserver` records queued by those callbacks are delivered and their DOM
 //!    mutations reach the re-render. The mutated [`Document`] is returned so the pipeline
 //!    re-runs styles → layout → paint **once** at the end.
+//!
+//! Module scripts use a host `set_module_resolver` (relative/absolute specifiers resolved
+//! with the net `Url` against the importing module URL; bare specifiers fail as
+//! `ModuleNotFound`) and a host `set_module_loader` (`file://` from the filesystem,
+//! `http(s)` through a `ResourceLoader` with the render's FetchOptions; `--no-network`,
+//! per-module/total byte caps enforced). A failing module is a non-fatal warning; the
+//! remaining scripts and the re-render continue.
 //!
 //! Host providers wired in this stage (R155): `History` (`history.pushState/replaceState/
 //! back/forward/go`), `location.assign/replace/reload` and Web Storage. History/location
@@ -56,7 +64,9 @@
 //!   `window.addEventListener('load'/'DOMContentLoaded', …)` work with browser-like capture/
 //!   target/bubble phases. `event.currentTarget` is `null` inside listeners (use
 //!   `event.target`), and inline `onclick`-style attributes are not executed.
-//! - Script types/modules/workers/imports/network APIs are not supported.
+//! - `<script type="module">` is supported for the js crate's ESM subset (static imports
+//!   only, one realm, each script is an independent module graph root; see `execute_scripts`).
+//!   Dynamic `import()`, top-level await, import maps and workers are not supported.
 //! - Without the `js` crate feature this module compiles to a no-op: scripts are counted
 //!   as skipped and the DOM is left untouched (documented in [`crate::ScriptingMode`]).
 
@@ -166,6 +176,8 @@ pub struct ScriptCandidate {
     pub deferred: bool,
     /// `async` attribute (recorded; ordering is document order, see module docs).
     pub is_async: bool,
+    /// `<script type="module">` (ES module evaluated with the js crate's module subset).
+    pub is_module: bool,
 }
 
 /// A script ready to be evaluated.
@@ -177,6 +189,11 @@ pub struct LoadedScript {
     pub source_name: String,
     /// Source size in bytes (for the byte budget).
     pub bytes: usize,
+    /// `true` for `<script type="module">`.
+    pub is_module: bool,
+    /// Module base URL used for relative imports (external `src` URL or the document URL for
+    /// inline modules); `None` for classic scripts.
+    pub module_url: Option<String>,
 }
 
 /// Result of the discovery + loading stage.
@@ -220,6 +237,11 @@ pub struct ScriptingHostContext {
     pub viewport: (u32, u32),
     /// Shared `localStorage` (see [`RenderStorage`]); `None` = per-render memory only.
     pub storage: Option<Arc<Mutex<RenderStorage>>>,
+    /// Fetch configuration used by the ES module loader (`http(s)` imports share the same
+    /// timeouts/caps/cookie jar as the rest of the render).
+    pub fetch_options: net::FetchOptions,
+    /// `--no-network`: `http(s)` module imports fail with a non-fatal warning.
+    pub no_network: bool,
     /// Events dispatched on `window` by the host after `load` (e.g. `hashchange`,
     /// `popstate`) so their listeners can mutate the DOM before the final re-render.
     pub host_events: Vec<String>,
@@ -237,6 +259,8 @@ impl ScriptingHostContext {
             media,
             viewport,
             storage: None,
+            fetch_options: net::FetchOptions::default(),
+            no_network: false,
             host_events: Vec::new(),
         }
     }
@@ -249,6 +273,8 @@ impl ScriptingHostContext {
             media: css::MediaContext::with_viewport(800.0, 600.0),
             viewport: (800, 600),
             storage: None,
+            fetch_options: net::FetchOptions::default(),
+            no_network: false,
             host_events: Vec::new(),
         }
     }
@@ -328,28 +354,25 @@ fn is_module_script(type_attr: Option<&str>) -> bool {
     })
 }
 
-/// Discovers classic `<script>` elements in document order.
+/// Discovers classic and module `<script>` elements in document order.
 ///
-/// Unsupported/ignored scripts are skipped (module scripts also emit a warning) and
-/// appended to `warnings`.
-pub fn discover_scripts(document: &Document, warnings: &mut Vec<String>) -> Vec<ScriptCandidate> {
+/// Unsupported/ignored script types (JSON data blocks, templates, ...) are skipped
+/// silently; `<script type="module">` elements are included and executed later through the
+/// ES module subset. `warnings` is currently unused by this stage (kept for API stability).
+pub fn discover_scripts(document: &Document, _warnings: &mut Vec<String>) -> Vec<ScriptCandidate> {
     let mut candidates = Vec::new();
     for element in document.get_elements_by_tag_name("script") {
         let Some(data) = document.node(element).as_element() else {
             continue;
         };
         let type_attr = data.get_attribute("type");
-        if is_module_script(type_attr) {
-            warnings
-                .push("skipping <script type=\"module\">: modules are not supported".to_owned());
-            continue;
-        }
-        if !is_classic_script_type(type_attr) {
+        let is_module = is_module_script(type_attr);
+        if !is_module && !is_classic_script_type(type_attr) {
             // JSON data blocks, templates and other non-JS types are ignored silently.
             continue;
         }
-        if data.has_attribute("nomodule") {
-            // Classic-only engine: `nomodule` fallbacks are intentionally ignored.
+        if !is_module && data.has_attribute("nomodule") {
+            // `nomodule` only affects classic scripts; module scripts ignore it.
             continue;
         }
         let src = data
@@ -368,6 +391,7 @@ pub fn discover_scripts(document: &Document, warnings: &mut Vec<String>) -> Vec<
             src,
             deferred: data.has_attribute("defer"),
             is_async: data.has_attribute("async"),
+            is_module,
         });
     }
     candidates
@@ -399,6 +423,7 @@ pub fn load_scripts(
         }
         let source_name;
         let text;
+        let mut module_url = None;
         if let Some(src) = &candidate.src {
             let url = match base_url.join(src) {
                 Ok(url) => url,
@@ -437,6 +462,9 @@ pub fn load_scripts(
                 continue;
             }
             source_name = url.as_str();
+            if candidate.is_module {
+                module_url = Some(url.as_str().to_owned());
+            }
             text = match String::from_utf8(resource.bytes.clone()) {
                 Ok(text) => text,
                 Err(error) => {
@@ -452,6 +480,9 @@ pub fn load_scripts(
             };
             source_name = format!("inline-script-{index}");
             text = inline.clone();
+            if candidate.is_module {
+                module_url = Some(base_url.as_str().to_owned());
+            }
         }
 
         if text.trim().is_empty() {
@@ -479,6 +510,8 @@ pub fn load_scripts(
             bytes: text.len(),
             text,
             source_name,
+            is_module: candidate.is_module,
+            module_url,
         });
     }
     report
@@ -638,6 +671,76 @@ pub fn execute_scripts(
             }),
         });
     }
+    // ES module support (R162): relative/absolute specifiers resolve against the importing
+    // module URL (or the document URL for inline modules) with the net `Url`; the loader
+    // reads `file://` from disk or `http(s)` through a dedicated `ResourceLoader` configured
+    // with the render's FetchOptions (`--no-network` and size caps are enforced). Each
+    // `<script type="module">` is an independent root (no shared graph between scripts).
+    if scripts.iter().any(|script| script.is_module) {
+        runtime.set_module_resolver(Box::new(
+            |specifier: &str, base: &str| -> Result<Option<String>, js::JsError> {
+                let resolved = match Url::parse(specifier) {
+                    Ok(url) => Some(url),
+                    Err(_) => Url::parse(base)
+                        .ok()
+                        .and_then(|base_url| base_url.join(specifier).ok()),
+                };
+                Ok(resolved
+                    .filter(|url| {
+                        matches!(
+                            url.scheme(),
+                            Scheme::File | Scheme::Http | Scheme::Https | Scheme::Data
+                        )
+                    })
+                    .map(|url| url.as_str().to_owned()))
+            },
+        ));
+        let module_loader = Arc::new(Mutex::new(ResourceLoader::with_options(
+            host.fetch_options.clone(),
+        )));
+        let no_network = host.no_network;
+        let max_module_bytes = limits.max_script_bytes;
+        let total_module_bytes = Arc::new(Mutex::new(0usize));
+        let max_total_module_bytes = limits.max_total_bytes;
+        runtime.set_module_loader(Box::new(
+            move |url_str: &str| -> Result<String, js::JsError> {
+                let url = Url::parse(url_str).map_err(|error| {
+                    js::JsError::ModuleNotFound(format!("invalid module URL {url_str}: {error}"))
+                })?;
+                if no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
+                    return Err(js::JsError::ModuleNotFound(format!(
+                        "cannot load module {url}: --no-network is set"
+                    )));
+                }
+                let resource = module_loader
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .load(&url)
+                    .map_err(|error| {
+                        js::JsError::ModuleNotFound(format!("cannot load module {url}: {error}"))
+                    })?;
+                if resource.bytes.len() > max_module_bytes {
+                    return Err(js::JsError::ModuleNotFound(format!(
+                        "module {url}: {} bytes exceeds max_script_bytes={max_module_bytes}",
+                        resource.bytes.len()
+                    )));
+                }
+                let text = String::from_utf8(resource.bytes.clone()).map_err(|error| {
+                    js::JsError::ModuleNotFound(format!("module {url} is not valid UTF-8: {error}"))
+                })?;
+                let mut total = total_module_bytes
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                *total = total.saturating_add(text.len());
+                if *total > max_total_module_bytes {
+                    return Err(js::JsError::ModuleNotFound(format!(
+                        "module graph exceeds max_total_bytes={max_total_module_bytes}"
+                    )));
+                }
+                Ok(text)
+            },
+        ));
+    }
     runtime.set_ready_state("loading");
 
     // Deterministic virtual clock: pin `now` to a fixed epoch before any script runs (the
@@ -657,19 +760,32 @@ pub fn execute_scripts(
             break;
         }
         remaining_loops -= grant;
-        runtime.set_budget(js::Budget {
+        let budget = js::Budget {
             loop_iterations: grant,
             recursion_limit: limits.budget.recursion_limit,
             stack_size_limit: limits.budget.stack_size_limit,
-        });
-        match runtime.eval(&script.text, &script.source_name) {
-            Ok(_) => execution.executed += 1,
+        };
+        runtime.set_budget(budget);
+        let result = if script.is_module {
+            let base = script
+                .module_url
+                .clone()
+                .unwrap_or_else(|| document_url.as_str());
+            runtime
+                .eval_module(&script.text, &script.source_name, &base, &budget)
+                .map(|_| ())
+        } else {
+            runtime.eval(&script.text, &script.source_name).map(|_| ())
+        };
+        match result {
+            Ok(()) => execution.executed += 1,
             Err(error) => {
                 execution.failed += 1;
                 if matches!(error, js::JsError::Budget(_)) {
                     execution.limited = true;
                 }
-                warnings.push(format!("script {} failed: {error}", script.source_name));
+                let kind = if script.is_module { "module" } else { "script" };
+                warnings.push(format!("{kind} {} failed: {error}", script.source_name));
             }
         }
         // Promise jobs scheduled by the script (microtask checkpoint).
@@ -913,11 +1029,18 @@ mod unit_tests {
         );
         let mut warnings = Vec::new();
         let candidates = discover_scripts(&doc, &mut warnings);
-        assert_eq!(candidates.len(), 3);
+        // Classic scripts + the inline module are candidates; `application/json`,
+        // `nomodule` and unsupported types are skipped.
+        assert_eq!(candidates.len(), 4);
         assert_eq!(candidates[0].src.as_deref(), Some("a.js"));
         assert_eq!(candidates[1].inline_text.as_deref(), Some("x()"));
-        assert_eq!(candidates[2].inline_text.as_deref(), Some("y()"));
-        assert!(warnings.iter().any(|warning| warning.contains("module")));
+        assert!(candidates[2].is_module);
+        assert_eq!(candidates[2].inline_text.as_deref(), Some("m()"));
+        assert_eq!(candidates[3].inline_text.as_deref(), Some("y()"));
+        assert!(
+            warnings.is_empty(),
+            "module discovery is not a warning: {warnings:?}"
+        );
     }
 
     #[test]

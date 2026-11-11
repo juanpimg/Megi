@@ -45,6 +45,7 @@ struct Args {
     cookies: bool,
     origin: Option<String>,
     json: bool,
+    max_image_dim: Option<u32>,
 }
 
 fn main() -> ExitCode {
@@ -81,6 +82,7 @@ fn run() -> Result<(), CliError> {
         },
         cookies: args.cookies,
         origin: args.origin.clone(),
+        max_image_dim: args.max_image_dim,
         ..RenderOptions::default()
     };
 
@@ -150,6 +152,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
     let mut cookies = false;
     let mut origin = None;
     let mut json = false;
+    let mut max_image_dim = None;
     let mut args = args;
     while let Some(argument) = args.next() {
         match argument.as_str() {
@@ -167,6 +170,9 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
                 );
             }
             "--json" => json = true,
+            "--max-image-dim" => {
+                max_image_dim = Some(parse_dimension(&mut args, "--max-image-dim")?);
+            }
             "--width" => {
                 width = parse_dimension(&mut args, "--width")?;
             }
@@ -203,6 +209,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
         cookies,
         origin,
         json,
+        max_image_dim,
     })
 }
 

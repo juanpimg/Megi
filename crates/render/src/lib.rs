@@ -118,9 +118,14 @@
 //!   Limits: hover/active have no headless meaning, `:focus` is not tracked by render
 //!   itself, and the state is a per-render snapshot (no live restyle/change events).
 //!
+//! `<script type="module">` runs through the js crate's static ES-module subset (relative
+//! imports resolved against the importing module/baseURI, `file://`/`http(s)` loader with
+//! `--no-network` and script caps); each module script is an independent graph root.
+//!
 //! Not yet supported: executing scripts *during* parsing (needed for the html5lib
 //! `scripted_*` cases and script-driven `document.write` re-tokenization — WP-6.4),
-//! `async` ordering, ES modules, real-wall-clock/event-driven loops (`change` events on
+//! `async` ordering, dynamic `import()`/top-level await/import maps, real-wall-clock/
+//! event-driven loops (`change` events on
 //! `MediaQueryList` are not fired), inline `onclick`-style handler attributes and used-px
 //! `width`/`height` in `getComputedStyle` (specified values are returned).
 //!
@@ -345,6 +350,16 @@ pub struct RenderOptions {
     pub max_image_bytes: usize,
     /// Maximum total downloaded image bytes for the page.
     pub max_total_image_bytes: usize,
+    /// Decode images/backgrounds downscaled so neither side exceeds this many pixels
+    /// (`--max-image-dim`).
+    ///
+    /// Additive performance option for large photos displayed much smaller than their
+    /// intrinsic size: the `image` crate box-averages during/after decode (PNG while
+    /// unfiltering; JPEG/GIF/WebP post-downsample, documented). The decoded dimensions
+    /// reported to layout are the scaled ones, so use explicit CSS `width`/`height`
+    /// (as the E2E fixture does) when relying on this option. `None` (default) decodes
+    /// at full resolution.
+    pub max_image_dim: Option<u32>,
     /// Maximum number of distinct `background-image`/`list-style-image` URLs loaded.
     pub max_backgrounds: usize,
     /// Maximum downloaded size of a single background image (bytes).
@@ -399,6 +414,7 @@ impl Default for RenderOptions {
             max_images: DEFAULT_MAX_IMAGES,
             max_image_bytes: DEFAULT_MAX_IMAGE_BYTES,
             max_total_image_bytes: DEFAULT_MAX_TOTAL_IMAGE_BYTES,
+            max_image_dim: None,
             max_backgrounds: DEFAULT_MAX_BACKGROUNDS,
             max_background_bytes: DEFAULT_MAX_BACKGROUND_BYTES,
             max_total_background_bytes: DEFAULT_MAX_TOTAL_BACKGROUND_BYTES,
@@ -763,6 +779,8 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         );
         host_context.storage = options.storage.clone();
         host_context.host_events = options.host_events.clone();
+        host_context.fetch_options = loader.fetch_options().clone();
+        host_context.no_network = options.no_network;
         let mut execution = scripts::execute_scripts(
             document,
             &document_url,
@@ -861,6 +879,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             max_images: options.max_images,
             max_image_bytes: options.max_image_bytes,
             max_total_bytes: options.max_total_image_bytes,
+            max_image_dim: options.max_image_dim,
         },
         &mut warnings,
     );
@@ -877,6 +896,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             max_backgrounds: options.max_backgrounds,
             max_background_bytes: options.max_background_bytes,
             max_total_bytes: options.max_total_background_bytes,
+            max_image_dim: options.max_image_dim,
         },
         &mut warnings,
     );
