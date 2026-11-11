@@ -1,0 +1,9 @@
+<!doctype html><html><body style="margin:0">
+<div id="box" style="width:80px;height:40px;background:#0f0"></div><div id="out"></div>
+<script>
+setTimeout(function () {
+  var r = document.getElementById('box').getBoundingClientRect();
+  document.getElementById('out').textContent = Math.round(r.width) + 'x' + Math.round(r.height);
+}, 10);
+</script>
+</body></html>

@@ -154,6 +154,19 @@ pub enum StorageKind {
     Session,
 }
 
+/// Viewport-space rectangle (CSS pixels) for one DOM node, as supplied by the host.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LayoutRect {
+    /// Border-box `(x, y, width, height)` in viewport coordinates.
+    pub border_box: (f32, f32, f32, f32),
+    /// Content-box `(x, y, width, height)` in viewport coordinates.
+    pub content_box: (f32, f32, f32, f32),
+}
+
+/// Injected geometry provider (`NodeId → LayoutRect`); `None` means the node has no box
+/// (e.g. `display: none` or a node outside the laid-out document).
+pub type LayoutProvider = Box<dyn Fn(dom::NodeId) -> Option<LayoutRect> + Send + Sync>;
+
 /// Resolves an ES module specifier against the importing module's URL.
 ///
 /// Returns `Ok(None)` when the specifier cannot be resolved; the runtime then reports a
@@ -267,6 +280,8 @@ pub(crate) struct Host {
     pub mutations: Vec<MutationRecord>,
     /// Currently focused element (best-effort `focus()`/`blur()` bookkeeping).
     pub active_element: Option<NodeId>,
+    /// Injected layout geometry provider (`getBoundingClientRect`/offset/client metrics).
+    pub layout_provider: Option<LayoutProvider>,
     /// ES module resolver/loader injected by the host (no I/O in `js`).
     pub module_resolver: Option<ModuleResolver>,
     pub module_loader: Option<ModuleLoader>,
@@ -307,6 +322,7 @@ impl Host {
             observers: Vec::new(),
             mutations: Vec::new(),
             active_element: None,
+            layout_provider: None,
             module_resolver: None,
             module_loader: None,
         }

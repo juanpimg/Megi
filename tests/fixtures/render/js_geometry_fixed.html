@@ -1,0 +1,8 @@
+<!doctype html><html><body style="margin:0">
+<div id="box" style="position:absolute;left:20px;top:30px;width:100px;height:50px;background:#f00"></div>
+<div id="out"></div>
+<script>
+var r = document.getElementById('box').getBoundingClientRect();
+document.getElementById('out').textContent = Math.round(r.left) + ',' + Math.round(r.top) + ',' + Math.round(r.width) + ',' + Math.round(r.height);
+</script>
+</body></html>

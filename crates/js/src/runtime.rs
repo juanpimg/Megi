@@ -883,7 +883,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 21] = [
+    let accessors: [(&str, AccessorKind); 25] = [
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
         ("className", AccessorKind::ClassName),
@@ -905,6 +905,10 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("innerText", AccessorKind::InnerText),
         ("dataset", AccessorKind::Dataset),
         ("attributes", AccessorKind::Attributes),
+        ("offsetWidth", AccessorKind::OffsetWidth),
+        ("offsetHeight", AccessorKind::OffsetHeight),
+        ("clientWidth", AccessorKind::ClientWidth),
+        ("clientHeight", AccessorKind::ClientHeight),
     ];
     type Prepared<'a> = (
         &'a str,
@@ -964,6 +968,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("focus", 0, node_focus),
         ("blur", 0, node_blur),
         ("scrollIntoView", 0, node_scroll_into_view),
+        ("getBoundingClientRect", 0, node_get_bounding_client_rect),
     ] {
         init.function(native(function), js_string!(name), length);
     }
@@ -1005,6 +1010,10 @@ enum AccessorKind {
     InnerText,
     Dataset,
     Attributes,
+    OffsetWidth,
+    OffsetHeight,
+    ClientWidth,
+    ClientHeight,
 }
 
 fn accessor_functions(kind: AccessorKind) -> AccessorPair {
@@ -1030,6 +1039,10 @@ fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::InnerText => (node_inner_text_get, Some(node_text_content_set)),
         AccessorKind::Dataset => (node_dataset_get, None),
         AccessorKind::Attributes => (node_attributes_get, None),
+        AccessorKind::OffsetWidth => (node_offset_width, None),
+        AccessorKind::OffsetHeight => (node_offset_height, None),
+        AccessorKind::ClientWidth => (node_client_width, None),
+        AccessorKind::ClientHeight => (node_client_height, None),
     }
 }
 
@@ -3509,6 +3522,13 @@ fn eval_module_graph(
 }
 
 impl JsRuntime {
+    /// Installs the layout geometry provider used by `getBoundingClientRect`,
+    /// `offsetWidth/offsetHeight` and `clientWidth/clientHeight`. Without a provider those
+    /// APIs return zeros (documented gap); render installs the real layout before scripts.
+    pub fn set_layout_provider(&mut self, provider: crate::host::LayoutProvider) {
+        self.host.borrow_mut().layout_provider = Some(provider);
+    }
+
     /// Installs the ES module resolver (specifier + importer URL → resolved URL).
     pub fn set_module_resolver(&mut self, resolver: crate::host::ModuleResolver) {
         self.host.borrow_mut().module_resolver = Some(resolver);
@@ -3866,6 +3886,22 @@ fn document_compare_document_position(
 /// Installs small standard-library gap APIs (URL/SearchParams, base64, structuredClone,
 /// queueMicrotask, requestIdleCallback, MouseEvent/PointerEvent and Node constants).
 fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
+    let global = context.global_object();
+    for (name, getter) in [
+        ("innerWidth", window_inner_width as NativeFn),
+        ("innerHeight", window_inner_height),
+        ("devicePixelRatio", window_device_pixel_ratio),
+    ] {
+        let get = accessor_fn(context, getter);
+        let descriptor = PropertyDescriptor::builder()
+            .get(JsValue::from(get))
+            .enumerable(true)
+            .configurable(true)
+            .build();
+        global
+            .define_property_or_throw(js_string!(name), descriptor, context)
+            .map_err(|error| JsError::Internal(error.to_string()))?;
+    }
     const PRELUDE: &str = r#"
 (function () {
   function define(name, value) { window[name] = value; }
@@ -3984,4 +4020,128 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
         .eval(Source::from_bytes(PRELUDE))
         .map(|_| ())
         .map_err(|error| JsError::Internal(error.to_string()))
+}
+
+// ---------------------------------------------------------------------------
+// Layout geometry provider (round 28)
+// ---------------------------------------------------------------------------
+
+fn node_layout_rect(
+    this: &JsValue,
+    context: &mut Context,
+) -> JsResult<Option<crate::host::LayoutRect>> {
+    let node_id = this_node(this, context)?;
+    Ok(with_host(|host| {
+        host.layout_provider
+            .as_ref()
+            .and_then(|provider| provider(node_id))
+    })
+    .flatten())
+}
+
+fn rect_from_border(rect: &crate::host::LayoutRect) -> (f64, f64, f64, f64) {
+    let (x, y, width, height) = rect.border_box;
+    (
+        f64::from(x),
+        f64::from(y),
+        f64::from(width),
+        f64::from(height),
+    )
+}
+
+fn node_get_bounding_client_rect(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let rect = node_layout_rect(this, context)?;
+    let (x, y, width, height) = rect
+        .as_ref()
+        .map(rect_from_border)
+        .unwrap_or((0.0, 0.0, 0.0, 0.0));
+    let mut init = ObjectInitializer::new(context);
+    init.property(js_string!("x"), JsValue::from(x), Attribute::all())
+        .property(js_string!("y"), JsValue::from(y), Attribute::all())
+        .property(js_string!("width"), JsValue::from(width), Attribute::all())
+        .property(
+            js_string!("height"),
+            JsValue::from(height),
+            Attribute::all(),
+        )
+        .property(js_string!("top"), JsValue::from(y), Attribute::all())
+        .property(js_string!("left"), JsValue::from(x), Attribute::all())
+        .property(
+            js_string!("right"),
+            JsValue::from(x + width),
+            Attribute::all(),
+        )
+        .property(
+            js_string!("bottom"),
+            JsValue::from(y + height),
+            Attribute::all(),
+        );
+    Ok(JsValue::from(init.build()))
+}
+
+fn layout_metric(
+    this: &JsValue,
+    context: &mut Context,
+    border: bool,
+    width: bool,
+) -> JsResult<JsValue> {
+    let rect = node_layout_rect(this, context)?;
+    let Some(rect) = rect else {
+        return Ok(JsValue::from(0.0));
+    };
+    let (x, y, w, h) = if border {
+        rect.border_box
+    } else {
+        rect.content_box
+    };
+    let value = if width { w } else { h };
+    let _ = (x, y);
+    Ok(JsValue::from((value.round() as i64) as f64))
+}
+
+fn node_offset_width(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    layout_metric(this, c, true, true)
+}
+fn node_offset_height(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    layout_metric(this, c, true, false)
+}
+fn node_client_width(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    layout_metric(this, c, false, true)
+}
+fn node_client_height(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    layout_metric(this, c, false, false)
+}
+
+fn viewport_metric(context: &mut Context, width: bool) -> JsResult<JsValue> {
+    let _ = context;
+    let value = with_host(|host| {
+        host.viewport_provider.as_ref().map(|provider| {
+            let info = provider();
+            if width { info.width } else { info.height }
+        })
+    })
+    .flatten()
+    .unwrap_or(if width { 1280 } else { 720 });
+    Ok(JsValue::from(f64::from(value)))
+}
+
+fn window_inner_width(_t: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    viewport_metric(c, true)
+}
+fn window_inner_height(_t: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    viewport_metric(c, false)
+}
+fn window_device_pixel_ratio(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
+    let ratio = with_host(|host| {
+        host.viewport_provider
+            .as_ref()
+            .map(|provider| provider().device_pixel_ratio)
+    })
+    .flatten()
+    .unwrap_or(1.0);
+    Ok(JsValue::from(ratio))
 }

@@ -1,0 +1,7 @@
+<!doctype html><html><body>
+<div id="hidden" style="display:none;width:50px;height:50px"></div><div id="out"></div>
+<script>
+var r = document.getElementById('hidden').getBoundingClientRect();
+document.getElementById('out').textContent = r.width + ':' + document.getElementById('hidden').offsetWidth;
+</script>
+</body></html>

@@ -228,3 +228,63 @@ fn idle_callback_can_be_cancelled() {
     rt.run_tasks(64).expect("tasks");
     assert_eq!(rt.eval("__idle2", "t").unwrap(), "0");
 }
+
+#[test]
+fn layout_provider_geometry() {
+    use js::host::{LayoutProvider, LayoutRect, ViewportInfo};
+    let mut rt = runtime();
+    let provider: LayoutProvider = Box::new(|_node| {
+        Some(LayoutRect {
+            border_box: (10.0, 20.0, 100.0, 50.0),
+            content_box: (12.0, 22.0, 96.0, 46.0),
+        })
+    });
+    rt.set_layout_provider(provider);
+    rt.set_viewport_provider(Box::new(|| ViewportInfo {
+        width: 800,
+        height: 600,
+        device_pixel_ratio: 2.0,
+        scroll_x: 0.0,
+        scroll_y: 0.0,
+    }));
+    rt.eval(
+        "var el = document.createElement('div'); document.body.appendChild(el)",
+        "t",
+    )
+    .unwrap();
+    assert_eq!(rt.eval("el.getBoundingClientRect().x + ',' + el.getBoundingClientRect().width + ',' + el.getBoundingClientRect().right", "t").unwrap(), "10,100,110");
+    assert_eq!(
+        rt.eval("el.offsetWidth + ',' + el.offsetHeight", "t")
+            .unwrap(),
+        "100,50"
+    );
+    assert_eq!(
+        rt.eval("el.clientWidth + ',' + el.clientHeight", "t")
+            .unwrap(),
+        "96,46"
+    );
+    assert_eq!(
+        rt.eval(
+            "window.innerWidth + ',' + window.innerHeight + ',' + window.devicePixelRatio",
+            "t"
+        )
+        .unwrap(),
+        "800,600,2"
+    );
+}
+
+#[test]
+fn geometry_without_provider_is_zero() {
+    let mut rt = runtime();
+    rt.eval("var el = document.createElement('div')", "t")
+        .unwrap();
+    assert_eq!(
+        rt.eval(
+            "el.getBoundingClientRect().width + ':' + el.offsetWidth + ':' + el.clientWidth",
+            "t"
+        )
+        .unwrap(),
+        "0:0:0"
+    );
+    assert_eq!(rt.eval("window.innerWidth", "t").unwrap(), "1280"); // documented default without a provider
+}
