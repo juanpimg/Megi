@@ -22,25 +22,44 @@
 //! | distinct_active_formatting_32k | 510 ms | 316 ms | 60 ms | 58 ms |
 //! | unknown_end_tags_deep_generic_stack | 25.637 s | 52 ms | 1.993 s | 8 ms |
 //! | text_with_deep_formatting_stack_100k | 1.735 s | 52 ms | 99 ms | 9 ms |
+//!
+//! The budgets assume a warm build on the reference/CI machine. On slower hardware export
+//! `MEGI_PERF_BUDGET_SCALE=4` (any positive finite number, capped at 1000) to scale them
+//! instead of skipping the test; CI and the default run keep the strict `1.0`, so a real
+//! super-linear regression still fails there.
 
 use std::time::{Duration, Instant};
 
 use html::parse_document;
 
+/// Budget multiplier from `MEGI_PERF_BUDGET_SCALE` (default `1.0`).
+fn budget_scale() -> f64 {
+    parse_budget_scale(std::env::var("MEGI_PERF_BUDGET_SCALE").ok().as_deref())
+}
+
+/// Parses the scale: finite and positive, capped at 1000; anything else means `1.0`.
+fn parse_budget_scale(raw: Option<&str>) -> f64 {
+    raw.and_then(|value| value.trim().parse::<f64>().ok())
+        .filter(|scale| scale.is_finite() && *scale > 0.0)
+        .map_or(1.0, |scale| scale.min(1000.0))
+}
+
 /// Runs one case, prints its timing (visible with `--nocapture`) and asserts the budget.
 fn run_case(name: &str, input: &str, budget: Duration) {
+    let scale = budget_scale();
+    let budget = budget.mul_f64(scale);
     let start = Instant::now();
     let doc = parse_document(input, false);
     let elapsed = start.elapsed();
     eprintln!(
-        "perf {name}: {elapsed:?} (input {} bytes, {} nodes)",
+        "perf {name}: {elapsed:?} (input {} bytes, {} nodes, budget {budget:?})",
         input.len(),
         doc.len(),
     );
     assert!(
         elapsed < budget,
-        "perf {name} took {elapsed:?} (budget {budget:?}); the tree builder may have \
-         regressed to super-linear complexity"
+        "perf {name} took {elapsed:?} (budget {budget:?}, scale {scale}); the tree builder \
+         may have regressed to super-linear complexity"
     );
 }
 
@@ -111,4 +130,17 @@ fn perf_text_with_deep_formatting_stack_100k() {
         &input,
         Duration::from_secs(2),
     );
+}
+
+#[test]
+fn parses_the_budget_scale() {
+    assert_eq!(parse_budget_scale(None), 1.0);
+    assert_eq!(parse_budget_scale(Some("")), 1.0);
+    assert_eq!(parse_budget_scale(Some(" 2 ")), 2.0);
+    assert_eq!(parse_budget_scale(Some("0")), 1.0);
+    assert_eq!(parse_budget_scale(Some("-3")), 1.0);
+    assert_eq!(parse_budget_scale(Some("nan")), 1.0);
+    assert_eq!(parse_budget_scale(Some("inf")), 1.0);
+    assert_eq!(parse_budget_scale(Some("nope")), 1.0);
+    assert_eq!(parse_budget_scale(Some("1e9")), 1000.0);
 }
