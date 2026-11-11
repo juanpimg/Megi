@@ -78,11 +78,14 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy}
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
 
-use crate::chrome::{self, AddressBar, ChromeView, ContextMenu, DropdownState, MenuAction, TabHit};
+use crate::chrome::{
+    self, AddressBar, ChromeView, ContextMenu, DropdownState, MenuAction, NavigationButton, TabHit,
+};
 use crate::convert::{WHITE_0RGB, expected_buffer_len};
 use crate::error::ShellError;
 use crate::find::{self, FindState};
 use crate::forms::{self, FocusState, FormControl, FormControlKind, TextEdit};
+use crate::history::{HistoryMenu, RecentHistory, is_history_url};
 use crate::links::{LinkRegion, link_url_at, physical_to_page};
 use crate::navigation::{NavigationOutcome, NavigationState};
 use crate::present;
@@ -296,6 +299,10 @@ struct WindowApp {
     context_menu: Option<ContextMenu>,
     /// Internal text clipboard shared by context-menu copy actions.
     clipboard: String,
+    /// Global recent history (newest first) for Ctrl+H and the internal history page.
+    recent_history: RecentHistory,
+    /// Open Ctrl+H history menu.
+    history_menu: Option<HistoryMenu>,
 }
 
 impl WindowApp {
@@ -309,6 +316,7 @@ impl WindowApp {
         view: WindowViewOptions,
     ) -> Self {
         let mut startup_notice = None;
+        let mut recent = RecentHistory::new();
         let tabs = if let Some(path) = &view.session_path {
             let loaded = crate::session::load(path);
             if let Some(warning) = &loaded.warning {
@@ -318,6 +326,7 @@ impl WindowApp {
             match loaded.session {
                 Some(session) => {
                     startup_notice = Some(format!("restored {} tab(s)", session.tabs.len()));
+                    recent = crate::history::RecentHistory::from_entries(session.recent.clone());
                     session.restore()
                 }
                 None => TabsState::from_urls(view.tabs.clone()),
@@ -383,6 +392,8 @@ impl WindowApp {
             hover_url: None,
             context_menu: None,
             clipboard: String::new(),
+            recent_history: recent,
+            history_menu: None,
             tabs,
         }
     }
@@ -439,12 +450,24 @@ impl WindowApp {
             self.update_title();
             return;
         };
+        let render_input = if is_history_url(&self.input) {
+            let html = crate::history::history_page_html(&self.tabs.active().history_log.recent());
+            format!(
+                "data:text/html;base64,{}",
+                net::base64_encode(html.as_bytes())
+            )
+        } else {
+            self.input.clone()
+        };
         let request = if self.find.query().is_empty() {
-            self.store
-                .begin_request(&self.input, self.metrics.css_width, self.metrics.css_height)
+            self.store.begin_request(
+                &render_input,
+                self.metrics.css_width,
+                self.metrics.css_height,
+            )
         } else {
             self.store.begin_find_request(
-                &self.input,
+                &render_input,
                 self.metrics.css_width,
                 self.metrics.css_height,
                 self.find.query(),
@@ -477,6 +500,7 @@ impl WindowApp {
         self.dropdown = None;
         self.overflow_menu = None;
         self.context_menu = None;
+        self.history_menu = None;
         self.hover_url = None;
         self.address.cancel();
         self.scroll = ScrollState::new(1, self.metrics.css_height);
@@ -569,6 +593,24 @@ impl WindowApp {
         };
         let menu_x = (physical_x / self.metrics.scale) as f32;
         let menu_y = (physical_y / self.metrics.scale) as f32;
+        if self.history_menu.is_some() {
+            let menu = self.history_menu.clone().expect("menu");
+            let layout = chrome::history_menu_layout(
+                &menu,
+                self.metrics.css_width as f32,
+                self.metrics.css_height,
+            );
+            if let Some(index) = chrome::history_menu_hit(&layout, menu_x, menu_y) {
+                if let Some(menu) = self.history_menu.as_mut() {
+                    menu.selected = index;
+                }
+                self.navigate_selected_history();
+            } else if !chrome::contains_rect(layout.rect, menu_x, menu_y) {
+                self.history_menu = None;
+                self.request_repaint();
+            }
+            return;
+        }
         if self.context_menu.is_some() {
             self.handle_context_menu_click(menu_x, menu_y);
             return;
@@ -831,6 +873,18 @@ impl WindowApp {
                     self.content_capped = frame.capped;
                     self.links = frame.links.clone();
                     self.doc_title = frame.title.clone();
+                    if !frame.document_url.starts_with("data:") {
+                        let title = frame
+                            .title
+                            .clone()
+                            .unwrap_or_else(|| frame.document_url.clone());
+                        let logical = self.recent_history.record(&title, &frame.document_url);
+                        self.tabs.active_mut().history_log.record(
+                            &title,
+                            &frame.document_url,
+                            logical,
+                        );
+                    }
                     self.frame_scripts_executed = frame.scripts_executed;
                     self.frame_timers_pending = frame.script_timers_pending;
                     self.frame_warnings = frame.warnings;
@@ -977,7 +1031,8 @@ impl WindowApp {
             return;
         };
         self.save_active_tab();
-        let session = crate::session::Session::capture(&self.tabs);
+        let mut session = crate::session::Session::capture(&self.tabs);
+        session.recent = self.recent_history.entries().to_vec();
         match crate::session::save(&path, &session) {
             Ok(()) => self.session_dirty = false,
             Err(error) => eprintln!("megi: cannot save session {}: {error}", path.display()),
@@ -1058,6 +1113,19 @@ impl WindowApp {
             }
         }
         urls
+    }
+
+    /// Navigates to the entry selected in the Ctrl+H history menu.
+    fn navigate_selected_history(&mut self) {
+        let Some(menu) = self.history_menu.take() else {
+            return;
+        };
+        if let Some(entry) = menu.selected_entry()
+            && let Ok(url) = net::Url::parse(&entry.url)
+        {
+            self.start_navigation(&url);
+        }
+        self.request_repaint();
     }
 
     /// URL text shown in the address bar (current history entry, else the input).
@@ -1230,6 +1298,21 @@ impl WindowApp {
 
     /// Handles clicks inside the chrome band (tab strip or address bar).
     fn chrome_click(&mut self, x: f32, y: f32) {
+        let buttons = chrome::navigation_buttons(self.metrics.css_width as f32);
+        if let Some(button) = chrome::navigation_button_at(
+            &buttons,
+            x,
+            y,
+            self.nav.can_go_back(),
+            self.nav.can_go_forward(),
+        ) {
+            match button {
+                NavigationButton::Back => self.go_back(),
+                NavigationButton::Forward => self.go_forward(),
+                NavigationButton::Reload => self.reload(),
+            }
+            return;
+        }
         if y >= chrome::TAB_STRIP_HEIGHT {
             self.open_address_bar();
             return;
@@ -1757,6 +1840,9 @@ impl WindowApp {
             overflow: self.overflow_menu.as_ref(),
             hover_url: self.hover_url.as_deref(),
             menu: self.context_menu.as_ref(),
+            can_go_back: self.nav.can_go_back(),
+            can_go_forward: self.nav.can_go_forward(),
+            history_menu: self.history_menu.as_ref(),
         };
         let _ = chrome::draw_chrome(&mut buffer, width, height, chrome_scale, &view);
         let _ = buffer.present();
@@ -1906,6 +1992,22 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                 let alt_pressed = self.modifiers.alt_key();
                 let ctrl_pressed = self.modifiers.control_key();
                 if ctrl_pressed
+                    && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("h"))
+                {
+                    if self.history_menu.is_some() {
+                        self.history_menu = None;
+                    } else {
+                        let rect = chrome::address_bar_rect(self.metrics.css_width as f32);
+                        self.history_menu = Some(HistoryMenu::open(
+                            self.recent_history.menu_entries(),
+                            rect.x,
+                            rect.y + rect.height,
+                        ));
+                    }
+                    self.request_repaint();
+                    return;
+                }
+                if ctrl_pressed
                     && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("s"))
                 {
                     if self.modifiers.shift_key() {
@@ -1959,6 +2061,34 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                 {
                     self.activate_tab(index as usize - 1);
                     return;
+                }
+                if self.history_menu.is_some() {
+                    match event.logical_key.as_ref() {
+                        Key::Named(NamedKey::Escape) => {
+                            self.history_menu = None;
+                            self.request_repaint();
+                            return;
+                        }
+                        Key::Named(NamedKey::ArrowDown) => {
+                            if let Some(menu) = self.history_menu.as_mut() {
+                                menu.move_selection(true);
+                            }
+                            self.request_repaint();
+                            return;
+                        }
+                        Key::Named(NamedKey::ArrowUp) => {
+                            if let Some(menu) = self.history_menu.as_mut() {
+                                menu.move_selection(false);
+                            }
+                            self.request_repaint();
+                            return;
+                        }
+                        Key::Named(NamedKey::Enter) => {
+                            self.navigate_selected_history();
+                            return;
+                        }
+                        _ => {}
+                    }
                 }
                 if self.context_menu.is_some() {
                     match event.logical_key.as_ref() {

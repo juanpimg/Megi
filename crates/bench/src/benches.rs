@@ -800,6 +800,34 @@ fn register_layer_effects(suite: &mut Suite) {
             },
         ));
     }
+
+    // (d) Chrome screenshot sizes: the final PNG encode is the floor of
+    // `--chrome` (the page pixmap is already rasterized; only the top band is
+    // painted, then the full PNG is re-encoded). R196 baseline: +16,91 ms total
+    // chrome overhead; these rows document the encoder share at both viewports.
+    for (width, height) in [(640u32, 400u32), (1024, 768)] {
+        let mut pattern = paint::Pixmap::new_with_background(width, height, css::Color::WHITE);
+        for y in 0..height {
+            let color = if y < 58 {
+                css::Color::new(0x20, 0x21, 0x24, 255)
+            } else {
+                css::Color::new(0xF1, 0xF3, 0xF4, 255)
+            };
+            pattern.fill_rect(Rect::new(0.0, y as f32, width as f32, 1.0), color);
+        }
+        suite.add(BenchEntry::new(
+            if width == 640 {
+                "shell/chrome-png-640x400"
+            } else {
+                "shell/chrome-png-1024x768"
+            },
+            "shell",
+            format!("Pixmap::to_png chrome-sized {width}x{height} (final --chrome encode floor)"),
+            move || {
+                black_box(pattern.to_png());
+            },
+        ));
+    }
 }
 
 /// Fixture-based layer-effect rows (R166): full feature vs. the same fixture

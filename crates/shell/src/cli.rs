@@ -393,6 +393,9 @@ pub fn validate_dimensions(width: u32, height: u32) -> Result<(), ShellError> {
 /// filesystem path, canonicalized and converted to a `file://` URL. The render URL parser
 /// percent-encodes spaces and non-ASCII path bytes.
 pub fn normalize_input(input: &str) -> Result<String, ShellError> {
+    if crate::history::is_history_url(input) {
+        return Ok(input.to_string());
+    }
     if net::Url::parse(input).is_ok() {
         return Ok(input.to_string());
     }

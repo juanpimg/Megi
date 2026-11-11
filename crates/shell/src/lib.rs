@@ -64,6 +64,12 @@
 //!   [`download`]). Frames keep the render-produced PNG bytes ([`worker::RenderFrame::png_bytes`])
 //!   so saves write them directly (atomic tmp+rename, no re-encode, byte-identical to
 //!   `--screenshot`); headless renders once when `--save-*` is combined with `--screenshot`.
+//! - **Navigable history (R197)**: per-tab history metadata (titles + deterministic logical
+//!   timestamps, bounded), `Ctrl+H` recent-history menu (last 10, keyboard/hover), back/
+//!   forward/reload buttons in the chrome with disabled states, and the generated
+//!   `about:history` / `megi://history` page (static HTML table with links, no scripting);
+//!   the global recent list is persisted in `session.json` unless `--no-session`
+//!   ([`history`]).
 //! - **Mouse/link interactions (R182)**: hovering a link paints a bottom status bar with the
 //!   resolved URL (hand cursor); Ctrl+click or middle click opens it in a new tab (bounded by
 //!   [`tabs::MAX_TABS`]); right click opens a deterministic context menu (open/copy link,
@@ -173,6 +179,7 @@ pub mod favicon;
 pub mod find;
 pub mod forms;
 pub mod headless;
+pub mod history;
 pub mod images;
 pub mod links;
 pub mod navigation;
@@ -214,6 +221,10 @@ pub use headless::{
     ScreenshotInfo, render_target, render_target_with_chrome, render_target_with_chrome_menu,
     render_target_with_find, render_target_with_options, save_screenshot, screenshot,
     screenshot_with_chrome, screenshot_with_find, screenshot_with_options,
+};
+pub use history::{
+    HistoryEntry, HistoryLog, HistoryMenu, MAX_RECENT_HISTORY, MAX_TAB_HISTORY, RecentHistory,
+    history_page_html, is_history_url,
 };
 pub use images::{ImageRegion, collect_image_regions, image_at};
 pub use links::{

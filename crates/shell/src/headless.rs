@@ -88,7 +88,6 @@ pub fn render_target_with_chrome(
         let rects = crate::find::highlight_rects(&output.layout, query);
         crate::find::overlay_highlights_pixmap(&mut output.pixmap, &rects, 0);
     }
-    let mut dest = crate::convert::pixmap_to_0rgb(&output.pixmap);
     let title = crate::title::document_title(&output.document).unwrap_or_else(|| input.to_string());
     let tabs = vec![crate::chrome::truncate_title(&title, 24)];
     let favicons = vec![Some(crate::favicon::for_page(
@@ -112,19 +111,15 @@ pub fn render_target_with_chrome(
         overflow: None,
         hover_url: None,
         menu: None,
+        can_go_back: false,
+        can_go_forward: false,
+        history_menu: None,
     };
-    crate::chrome::draw_chrome(&mut dest, width, height, 1.0, &view);
-    output.pixmap.pixels = dest
-        .iter()
-        .map(|pixel| {
-            paint::Color::new(
-                ((pixel >> 16) & 0xFF) as u8,
-                ((pixel >> 8) & 0xFF) as u8,
-                (pixel & 0xFF) as u8,
-                0xFF,
-            )
-        })
-        .collect();
+    // Only the chrome band is painted: the simple `--chrome` view has no
+    // dropdown/status/menu overlays, so the direct RGBA compositor skips the
+    // full-framebuffer `0RGB` round-trip and the whole-frame draw (R196).
+    let band_rows = (crate::chrome::CHROME_HEIGHT.ceil() as u32).min(height);
+    crate::chrome::draw_chrome_over_pixmap(&mut output.pixmap, band_rows, 1.0, &view);
     Ok(output)
 }
 
@@ -142,6 +137,8 @@ pub fn render_target_with_chrome_menu(
         let rects = crate::find::highlight_rects(&output.layout, query);
         crate::find::overlay_highlights_pixmap(&mut output.pixmap, &rects, 0);
     }
+    // The context menu + hover status bar can cover the whole viewport, so this
+    // path keeps the full-framebuffer conversion (only `--chrome` is band-optimised).
     let mut dest = crate::convert::pixmap_to_0rgb(&output.pixmap);
     let title = crate::title::document_title(&output.document).unwrap_or_else(|| input.to_string());
     let tabs = vec![crate::chrome::truncate_title(&title, 24)];
@@ -167,6 +164,9 @@ pub fn render_target_with_chrome_menu(
         overflow: None,
         hover_url: Some("https://example.com/link"),
         menu: Some(&menu),
+        can_go_back: true,
+        can_go_forward: false,
+        history_menu: None,
     };
     crate::chrome::draw_chrome(&mut dest, width, height, 1.0, &view);
     output.pixmap.pixels = dest

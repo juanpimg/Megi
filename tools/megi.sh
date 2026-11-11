@@ -21,6 +21,10 @@
 #   - session: tabs/history/zoom/scroll persist in $XDG_DATA_HOME/megi/session.json
 #     (--no-session, --session-file PATH); Ctrl+S saves PNG, Ctrl+Shift+S saves serialized
 #     HTML (doctype) to --download-dir or ~/Downloads; headless: --save-png/--save-html PATH
+#   - history: Ctrl+H opens the last-10 menu (arrows/Enter/Esc); chrome back/forward/reload
+#     buttons (disabled per history); about:history/megi://history renders the internal
+#     history page (headless --chrome deterministic); recent picks persist in session.json
+#     unless --no-session
 #   - links: hover shows the URL in a bottom status bar; Ctrl+click / middle click opens the
 #     link in a new tab; right click opens a context menu (open/copy link, save image,
 #     reload, save page PNG/HTML; arrows/Enter/Esc); --chrome --chrome-menu for headless

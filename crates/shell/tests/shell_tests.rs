@@ -1088,6 +1088,9 @@ fn chrome_geometry_scales_with_the_device_scale() {
         overflow: None,
         hover_url: None,
         menu: None,
+        can_go_back: false,
+        can_go_forward: false,
+        history_menu: None,
     };
     let mut dest = vec![0x00FF_FFFFu32; 640 * 400];
     let painted = shell::chrome::draw_chrome(&mut dest, 640, 400, 2.0, &view);
@@ -1404,4 +1407,40 @@ fn headless_chrome_decodes_a_file_favicon_in_the_tab() {
         "favicon changes chrome pixels"
     );
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn headless_about_history_page_is_deterministic() {
+    let first = temp_path("r197-history-a.png");
+    let second = temp_path("r197-history-b.png");
+    let run = |path: &PathBuf| {
+        std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+            .arg("about:history")
+            .args(["--chrome", "--screenshot"])
+            .arg(path)
+            .args(["--width", "480", "--height", "320"])
+            .status()
+            .expect("shell binary runs")
+    };
+    assert!(run(&first).success());
+    assert!(run(&second).success());
+    let a = std::fs::read(&first).expect("png");
+    let b = std::fs::read(&second).expect("png");
+    assert_eq!(a, b, "history page + chrome deterministic");
+    assert_eq!(png_dimensions(&a), (480, 320));
+    assert!(a.starts_with(&[0x89, b'P', b'N', b'G']));
+    assert!(a.len() > 1000);
+    let _ = std::fs::remove_file(&first);
+    let _ = std::fs::remove_file(&second);
+}
+
+#[test]
+fn headless_about_history_renders_the_internal_page() {
+    let output = shell::render_target("about:history", 480, 320).expect("history page render");
+    let text = output
+        .document
+        .text_content(output.document.body().expect("body"));
+    assert!(text.contains("History"), "page text: {text}");
+    assert!(text.contains("No history yet") || text.contains("Title"));
+    let _ = output.dimensions();
 }

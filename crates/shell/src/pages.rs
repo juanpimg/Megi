@@ -23,6 +23,40 @@ pub struct ListingEntry {
     pub size: Option<u64>,
 }
 
+/// Builds the deterministic internal `about:history` page (no scripting) from entries.
+///
+/// Rows are newest first with the logical timestamp, a link to the URL and the escaped
+/// title; an empty history renders a friendly placeholder. The page is plain HTML rendered
+/// through the normal pipeline from a `data:` URL.
+pub fn history_page(entries: &[crate::history::HistoryEntry]) -> String {
+    let mut rows = String::new();
+    if entries.is_empty() {
+        rows.push_str("<p class=\"empty\">No history yet. Navigate to some pages first.</p>");
+    } else {
+        rows.push_str("<table><thead><tr><th>#</th><th>Title</th><th>URL</th></tr></thead><tbody>");
+        for entry in entries {
+            let _ = write!(
+                rows,
+                "<tr><td>{}</td><td>{}</td><td><a href=\"{}\" title=\"{}\">{}</a></td></tr>",
+                entry.logical_time,
+                escape_html(&entry.title),
+                escape_html(&entry.url),
+                escape_html(&entry.title),
+                escape_html(&entry.url),
+            );
+        }
+        rows.push_str("</tbody></table>");
+    }
+    format!(
+        "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>History</title>\
+         <style>body{{font-family:sans-serif;margin:16px;background:#fff;color:#1f2328;}}\
+         h1{{font-size:20px}}table{{border-collapse:collapse;width:100%}}\
+         th,td{{border-bottom:1px solid #d0d7de;padding:4px 8px;text-align:left;font-size:13px}}\
+         a{{color:#1f6feb}}.empty{{color:#57606a}}</style></head>\
+         <body><h1>History</h1>{rows}</body></html>"
+    )
+}
+
 /// Escapes `&`, `<`, `>`, `"` and `'` for safe HTML text/attribute insertion.
 pub fn escape_html(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
@@ -270,6 +304,11 @@ pub fn resolve_directory(input: &str) -> Option<Result<String, (String, String)>
 ///
 /// Errors are reported as `(code, message)` so callers can render [`error_html`].
 pub fn prepare_input(input: &str) -> Result<String, (String, String)> {
+    // Internal generated page: headless renders its empty deterministic state; the window
+    // fills it from the live per-tab history before requesting the render.
+    if crate::history::is_history_url(input) {
+        return Ok(data_url(&crate::history::history_page_html(&[])));
+    }
     match resolve_directory(input) {
         Some(Ok(url)) => Ok(url),
         Some(Err(error)) => Err(error),

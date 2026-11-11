@@ -61,6 +61,8 @@ pub struct Session {
     pub active: usize,
     /// Tabs, in order.
     pub tabs: Vec<SessionTab>,
+    /// Global recent history (newest first, optional extension; empty in old files).
+    pub recent: Vec<crate::history::HistoryEntry>,
 }
 
 impl Session {
@@ -70,6 +72,7 @@ impl Session {
             version: SCHEMA_VERSION,
             active: 0,
             tabs: Vec::new(),
+            recent: Vec::new(),
         }
     }
 
@@ -113,6 +116,7 @@ impl Session {
             version: SCHEMA_VERSION,
             active,
             tabs: session_tabs,
+            recent: Vec::new(),
         }
     }
 
@@ -133,6 +137,7 @@ impl Session {
             tab.zoom = tab.zoom.clamp(0.5, 3.0);
         }
         self.active = self.active.min(self.tabs.len().saturating_sub(1));
+        self.recent.truncate(crate::history::MAX_RECENT_HISTORY);
     }
 
     /// Restores the session into a usable [`TabsState`] (no network is touched here).
@@ -183,11 +188,24 @@ impl Session {
                 )
             })
             .collect();
+        let recent: Vec<String> = self
+            .recent
+            .iter()
+            .map(|entry| {
+                format!(
+                    "{{\"title\":{},\"url\":{},\"time\":{}}}",
+                    json_string(&entry.title),
+                    json_string(&entry.url),
+                    entry.logical_time
+                )
+            })
+            .collect();
         format!(
-            "{{\"version\":{},\"active\":{},\"tabs\":[{}]}}",
+            "{{\"version\":{},\"active\":{},\"tabs\":[{}],\"recent\":[{}]}}",
             self.version,
             self.active,
-            tabs.join(",")
+            tabs.join(","),
+            recent.join(",")
         )
     }
 
@@ -248,10 +266,37 @@ impl Session {
                 scroll,
             });
         }
+        let mut recent = Vec::new();
+        if let Some(entries) = get("recent").and_then(JsonValue::as_array) {
+            for value in entries {
+                let Some(object) = value.as_object() else {
+                    continue;
+                };
+                let entry_get = |key: &str| {
+                    object
+                        .iter()
+                        .find(|(name, _)| name == key)
+                        .map(|(_, value)| value)
+                };
+                let (Some(title), Some(url)) = (
+                    entry_get("title").and_then(JsonValue::as_str),
+                    entry_get("url").and_then(JsonValue::as_str),
+                ) else {
+                    continue;
+                };
+                let time = entry_get("time").and_then(JsonValue::as_u32).unwrap_or(0) as u64;
+                recent.push(crate::history::HistoryEntry {
+                    title: title.to_owned(),
+                    url: url.to_owned(),
+                    logical_time: time,
+                });
+            }
+        }
         let mut session = Self {
             version: SCHEMA_VERSION,
             active,
             tabs,
+            recent,
         };
         session.normalize();
         Ok(session)
@@ -702,6 +747,7 @@ mod tests {
                     scroll: 120,
                 },
             ],
+            recent: Vec::new(),
         }
     }
 
@@ -758,6 +804,7 @@ mod tests {
             version: SCHEMA_VERSION,
             active: 999,
             tabs,
+            recent: Vec::new(),
         };
         session.normalize();
         assert_eq!(session.tabs.len(), MAX_SESSION_TABS);
@@ -872,5 +919,23 @@ mod tests {
         drop(first);
         assert!(SessionLock::acquire(&path).expect("acquire").is_some());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn recent_history_roundtrips_through_the_session() {
+        let mut session = sample();
+        session.recent = vec![crate::history::HistoryEntry {
+            title: "Example".to_string(),
+            url: "https://example.com/".to_string(),
+            logical_time: 4,
+        }];
+        let parsed = Session::from_json(&session.to_json()).expect("parse");
+        assert_eq!(parsed.recent, session.recent);
+        assert!(
+            Session::from_json(&sample().to_json())
+                .expect("old files")
+                .recent
+                .is_empty()
+        );
     }
 }

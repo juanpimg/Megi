@@ -1207,6 +1207,107 @@ pub fn context_menu_hit(layout: &ContextMenuLayout, x: f32, y: f32) -> Option<us
     layout.rows.iter().position(|rect| contains(*rect, x, y))
 }
 
+/// Size of one navigation button, in CSS pixels.
+pub const NAV_BUTTON_SIZE: f32 = 22.0;
+/// Gap between navigation buttons, in CSS pixels.
+pub const NAV_BUTTON_GAP: f32 = 2.0;
+
+/// Back/forward/reload buttons drawn at the left of the address bar.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NavigationButtons {
+    /// Back button.
+    pub back: Rect,
+    /// Forward button.
+    pub forward: Rect,
+    /// Reload button.
+    pub reload: Rect,
+}
+
+/// Hit on the navigation buttons.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NavigationButton {
+    /// Go back.
+    Back,
+    /// Go forward.
+    Forward,
+    /// Reload.
+    Reload,
+}
+
+/// Computes the navigation buttons layout (left of the address bar row).
+pub fn navigation_buttons(_width: f32) -> NavigationButtons {
+    let y = TAB_STRIP_HEIGHT + 4.0;
+    let step = NAV_BUTTON_SIZE + NAV_BUTTON_GAP;
+    NavigationButtons {
+        back: Rect::new(4.0, y, NAV_BUTTON_SIZE, NAV_BUTTON_SIZE),
+        forward: Rect::new(4.0 + step, y, NAV_BUTTON_SIZE, NAV_BUTTON_SIZE),
+        reload: Rect::new(4.0 + 2.0 * step, y, NAV_BUTTON_SIZE, NAV_BUTTON_SIZE),
+    }
+}
+
+/// Hit-tests the navigation buttons honouring their disabled state.
+pub fn navigation_button_at(
+    buttons: &NavigationButtons,
+    x: f32,
+    y: f32,
+    can_go_back: bool,
+    can_go_forward: bool,
+) -> Option<NavigationButton> {
+    if can_go_back && contains(buttons.back, x, y) {
+        return Some(NavigationButton::Back);
+    }
+    if can_go_forward && contains(buttons.forward, x, y) {
+        return Some(NavigationButton::Forward);
+    }
+    if contains(buttons.reload, x, y) {
+        return Some(NavigationButton::Reload);
+    }
+    None
+}
+
+/// Width reserved by the navigation buttons before the address bar text starts.
+pub fn navigation_buttons_width() -> f32 {
+    3.0 * NAV_BUTTON_SIZE + 2.0 * NAV_BUTTON_GAP + 6.0
+}
+
+/// History-menu geometry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HistoryMenuLayout {
+    /// Menu rectangle.
+    pub rect: Rect,
+    /// Rows (one per entry).
+    pub rows: Vec<Rect>,
+}
+
+/// Computes the Ctrl+H history menu layout below the address bar.
+pub fn history_menu_layout(
+    menu: &crate::history::HistoryMenu,
+    css_width: f32,
+    css_height: u32,
+) -> HistoryMenuLayout {
+    let width = 320.0_f32.min((css_width - 8.0).max(120.0));
+    let height = menu.entries.len().max(1) as f32 * 20.0 + 4.0;
+    let x = menu.x.min((css_width - width - 2.0).max(2.0)).max(2.0);
+    let y = (menu.y + 2.0).min((css_height as f32 - height - 2.0).max(TAB_STRIP_HEIGHT));
+    let rect = Rect::new(x, y, width, height);
+    let rows = (0..menu.entries.len())
+        .map(|index| {
+            Rect::new(
+                rect.x + 1.0,
+                rect.y + 2.0 + index as f32 * 20.0,
+                rect.width - 2.0,
+                20.0,
+            )
+        })
+        .collect();
+    HistoryMenuLayout { rect, rows }
+}
+
+/// Row index under a chrome point.
+pub fn history_menu_hit(layout: &HistoryMenuLayout, x: f32, y: f32) -> Option<usize> {
+    layout.rows.iter().position(|rect| contains(*rect, x, y))
+}
+
 /// All data the chrome painter needs (plain references, no shell state).
 #[derive(Clone, Copy, Debug)]
 pub struct ChromeView<'a> {
@@ -1238,6 +1339,12 @@ pub struct ChromeView<'a> {
     pub hover_url: Option<&'a str>,
     /// Open context menu.
     pub menu: Option<&'a ContextMenu>,
+    /// Back navigation enabled (history has a previous entry).
+    pub can_go_back: bool,
+    /// Forward navigation enabled.
+    pub can_go_forward: bool,
+    /// Open Ctrl+H history menu.
+    pub history_menu: Option<&'a crate::history::HistoryMenu>,
 }
 
 /// Paints the chrome over a physical `0RGB` framebuffer; returns the painted pixel count.
@@ -1267,6 +1374,10 @@ pub fn draw_chrome(
     paint_address_bar(&mut pixmap, scale, view, css_width);
     if let Some(dropdown) = view.dropdown {
         paint_dropdown(&mut pixmap, scale, view, dropdown);
+    }
+    paint_navigation_buttons(&mut pixmap, scale, view);
+    if let Some(menu) = view.history_menu {
+        paint_history_menu(&mut pixmap, scale, view, menu);
     }
     if let Some(menu) = view.overflow {
         paint_overflow_menu(&mut pixmap, scale, view, menu);
@@ -1639,6 +1750,84 @@ fn paint_context_menu(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, me
     }
 }
 
+fn paint_navigation_buttons(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>) {
+    let buttons = navigation_buttons(view.css_width);
+    let mut draw = |rect: Rect, label: &str, enabled: bool| {
+        let color = if enabled {
+            COLOR_ADDRESS_TEXT
+        } else {
+            Color::new(0x9A, 0xA0, 0xA6, 0xFF)
+        };
+        draw_text(
+            pixmap,
+            label,
+            rect.x + 6.0,
+            rect.y + 5.0,
+            scale,
+            12.0,
+            color,
+        );
+    };
+    draw(buttons.back, "<", view.can_go_back);
+    draw(buttons.forward, ">", view.can_go_forward);
+    draw(buttons.reload, "R", true);
+}
+
+fn paint_history_menu(
+    pixmap: &mut Pixmap,
+    scale: f32,
+    view: &ChromeView<'_>,
+    menu: &crate::history::HistoryMenu,
+) {
+    let layout = history_menu_layout(menu, view.css_width, view.css_viewport_height);
+    pixmap.fill_rect(scaled(layout.rect, scale), COLOR_BORDER);
+    pixmap.fill_rect(
+        scaled(
+            Rect::new(
+                layout.rect.x + 1.0,
+                layout.rect.y + 1.0,
+                layout.rect.width - 2.0,
+                layout.rect.height - 2.0,
+            ),
+            scale,
+        ),
+        COLOR_MENU_BG,
+    );
+    if menu.entries.is_empty() {
+        draw_text(
+            pixmap,
+            "No history yet",
+            layout.rect.x + 8.0,
+            layout.rect.y + 6.0,
+            scale,
+            11.0,
+            COLOR_SCROLL,
+        );
+        return;
+    }
+    for (index, row) in layout.rows.iter().enumerate() {
+        let Some(entry) = menu.entries.get(index) else {
+            break;
+        };
+        if index == menu.selected {
+            pixmap.fill_rect(scaled(*row, scale), COLOR_MENU_SELECTED);
+        }
+        let label = truncate_title(
+            &format!("{} — {}", entry.title, entry.url),
+            ((row.width - 8.0) / 6.6).max(8.0) as usize,
+        );
+        draw_text(
+            pixmap,
+            &label,
+            row.x + 6.0,
+            row.y + 5.0,
+            scale,
+            11.0,
+            COLOR_ADDRESS_TEXT,
+        );
+    }
+}
+
 fn scaled(rect: Rect, scale: f32) -> Rect {
     Rect::new(
         rect.x * scale,
@@ -1668,6 +1857,73 @@ fn draw_text(
     );
 }
 
+/// Paints the simple chrome band (tab strip + address bar) **directly over** an
+/// RGBA page pixmap, avoiding the full-framebuffer `0RGB` round-trip used by
+/// [`draw_chrome`] (R196).
+///
+/// Only the top [`CHROME_HEIGHT`] CSS pixels are touched. The caller must not
+/// pass overlays (dropdown/overflow/status/context menu); the headless
+/// `--chrome` path uses a plain view without them. The blend formula and the
+/// opaque-alpha output match the full-framebuffer path byte for byte, so the
+/// deterministic chrome screenshot bytes do not change.
+pub fn draw_chrome_over_pixmap(
+    dest: &mut Pixmap,
+    rows: u32,
+    scale: f32,
+    view: &ChromeView<'_>,
+) -> usize {
+    let width = dest.width;
+    let height = dest.height;
+    if width == 0 || height == 0 || rows == 0 {
+        return 0;
+    }
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
+    let rows = rows.min(height);
+    // The painted surfaces only need the band they can cover; every paint helper
+    // clips/fills within this height and the composite loop below mirrors the
+    // full-buffer mix for exactly these rows.
+    let mut band = Pixmap::new(width, rows);
+    let css_width = view.css_width.max(1.0);
+    paint_tab_strip(&mut band, scale, view, css_width);
+    paint_address_bar(&mut band, scale, view, css_width);
+    paint_navigation_buttons(&mut band, scale, view);
+    debug_assert!(view.dropdown.is_none());
+    debug_assert!(view.overflow.is_none());
+    debug_assert!(view.menu.is_none());
+    debug_assert!(view.hover_url.is_none());
+    let mut painted = 0usize;
+    for (index, color) in band.pixels.iter().enumerate() {
+        if color.a == 0 {
+            continue;
+        }
+        if color.a == 255 {
+            // The chrome surfaces are overwhelmingly opaque; assigning directly is
+            // byte-identical to the alpha mix at alpha == 1.0 and skips the f32 work (R196).
+            dest.pixels[index] = Color::new(color.r, color.g, color.b, 0xFF);
+            painted += 1;
+            continue;
+        }
+        let base = dest.pixels[index];
+        let alpha = f32::from(color.a) / 255.0;
+        let mix = |channel: u8, target: u8| -> u8 {
+            let value = f32::from(channel) * (1.0 - alpha) + f32::from(target) * alpha;
+            value.round().clamp(0.0, 255.0) as u8
+        };
+        dest.pixels[index] = Color::new(
+            mix(base.r, color.r),
+            mix(base.g, color.g),
+            mix(base.b, color.b),
+            0xFF,
+        );
+        painted += 1;
+    }
+    painted
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1692,6 +1948,9 @@ mod tests {
             overflow: None,
             hover_url: None,
             menu: None,
+            can_go_back: false,
+            can_go_forward: false,
+            history_menu: None,
         }
     }
 
@@ -2223,5 +2482,111 @@ mod tests {
         let pixel = dest[(selected.y as u32 * 400 + selected.x as u32 + 3) as usize];
         assert_eq!(pixel, 0x00D2_E3FC, "selected row background");
         assert!(selected.width > 0.0);
+    }
+
+    #[test]
+    fn navigation_buttons_layout_hit_and_disabled_state() {
+        let buttons = navigation_buttons(640.0);
+        assert_eq!(buttons.back.width, NAV_BUTTON_SIZE);
+        assert!(buttons.forward.x > buttons.back.x);
+        assert_eq!(
+            navigation_button_at(
+                &buttons,
+                buttons.back.x + 2.0,
+                buttons.back.y + 2.0,
+                true,
+                false
+            ),
+            Some(NavigationButton::Back)
+        );
+        assert_eq!(
+            navigation_button_at(
+                &buttons,
+                buttons.back.x + 2.0,
+                buttons.back.y + 2.0,
+                false,
+                false
+            ),
+            None,
+            "disabled back button is not clickable"
+        );
+        assert_eq!(
+            navigation_button_at(
+                &buttons,
+                buttons.forward.x + 2.0,
+                buttons.forward.y + 2.0,
+                false,
+                true
+            ),
+            Some(NavigationButton::Forward)
+        );
+        assert_eq!(
+            navigation_button_at(
+                &buttons,
+                buttons.reload.x + 2.0,
+                buttons.reload.y + 2.0,
+                false,
+                false
+            ),
+            Some(NavigationButton::Reload),
+            "reload is always enabled"
+        );
+        assert_eq!(navigation_button_at(&buttons, 1.0, 1.0, true, true), None);
+    }
+
+    #[test]
+    fn chrome_paints_navigation_buttons() {
+        let address = AddressBar::new();
+        let tabs = vec!["Megi".to_string()];
+        let mut dest = buffer(480, 200);
+        let view = view(&address, None, &tabs);
+        draw_chrome(&mut dest, 480, 200, 1.0, &view);
+        let buttons = navigation_buttons(480.0);
+        // The enabled reload glyph paints dark text pixels inside its box.
+        let mut dark = 0usize;
+        for y in buttons.reload.y as usize..(buttons.reload.y + buttons.reload.height) as usize {
+            for x in buttons.reload.x as usize..(buttons.reload.x + buttons.reload.width) as usize {
+                if dest[y * 480 + x] != 0x00F1_F3F4 && dest[y * 480 + x] != 0x00DE_E1E6 {
+                    dark += 1;
+                }
+            }
+        }
+        assert!(dark > 0, "reload glyph painted");
+    }
+
+    #[test]
+    fn history_menu_layout_hit_and_draw() {
+        let entries = vec![
+            crate::history::HistoryEntry {
+                title: "A".to_string(),
+                url: "https://example.com/a".to_string(),
+                logical_time: 1,
+            },
+            crate::history::HistoryEntry {
+                title: "B".to_string(),
+                url: "https://example.com/b".to_string(),
+                logical_time: 2,
+            },
+        ];
+        let menu = crate::history::HistoryMenu::open(entries, 40.0, 60.0);
+        let layout = history_menu_layout(&menu, 480.0, 300);
+        assert_eq!(layout.rows.len(), 2);
+        assert_eq!(
+            history_menu_hit(&layout, layout.rows[1].x + 2.0, layout.rows[1].y + 2.0),
+            Some(1)
+        );
+        assert_eq!(history_menu_hit(&layout, 1.0, 1.0), None);
+        let address = AddressBar::new();
+        let tabs = vec!["Megi".to_string()];
+        let mut dest = buffer(480, 300);
+        let mut view = view(&address, None, &tabs);
+        view.history_menu = Some(&menu);
+        draw_chrome(&mut dest, 480, 300, 1.0, &view);
+        let selected = layout.rows[0];
+        assert_eq!(
+            dest[(selected.y as u32 * 480 + selected.x as u32 + 3) as usize],
+            0x00D2_E3FC,
+            "selected history row"
+        );
     }
 }

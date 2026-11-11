@@ -63,6 +63,8 @@ pub struct Tab {
     pub error: Option<String>,
     /// Whether the last frame of this tab was clipped by the content cap.
     pub content_capped: bool,
+    /// Presentation metadata of this tab's navigation history (titles/logical times).
+    pub history_log: crate::history::HistoryLog,
 }
 
 impl Tab {
@@ -82,6 +84,7 @@ impl Tab {
             find_editing: false,
             error: None,
             content_capped: false,
+            history_log: crate::history::HistoryLog::new(),
         })
     }
 
@@ -97,6 +100,7 @@ impl Tab {
             find_editing: false,
             error: None,
             content_capped: false,
+            history_log: crate::history::HistoryLog::new(),
         });
         tab.title = Some(BLANK_TAB_TITLE.to_string());
         tab
@@ -119,6 +123,7 @@ impl Tab {
             find_editing: false,
             error: None,
             content_capped: false,
+            history_log: crate::history::HistoryLog::new(),
         }
     }
 
