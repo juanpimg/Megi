@@ -226,3 +226,53 @@ fn join_rejects_unsupported_schemes() {
         Err(UrlError::UnsupportedScheme(scheme)) if scheme == "ftp"
     ));
 }
+
+#[test]
+fn accepts_an_empty_port_as_no_port() {
+    // WHATWG URL "port state": an empty buffer sets the port to null (a validation error,
+    // not a failure), so browsers and Node accept `http://host:/`.
+    let url = parse("http://example.com:/");
+    assert_eq!(url.port(), None);
+    assert_eq!(url.as_str(), "http://example.com/");
+    assert_eq!(
+        parse("https://user@example.com:/p").as_str(),
+        "https://user@example.com/p"
+    );
+    assert_eq!(parse("http://[::1]:/x").as_str(), "http://[::1]/x");
+
+    // Out-of-range ports are still failures, and `file:` URLs never accept a port.
+    assert!(matches!(
+        Url::parse("http://example.com:65536/"),
+        Err(UrlError::InvalidPort(_))
+    ));
+    assert!(matches!(
+        Url::parse("file://host:/x"),
+        Err(UrlError::InvalidPort(_))
+    ));
+}
+
+#[test]
+fn backslashes_are_separators_only_in_the_path_section() {
+    // `\` is a path separator for special schemes, but `?`/`#` end the path state.
+    assert_eq!(serialized("http://a/b\\c#frag"), "http://a/b/c#frag");
+    assert_eq!(serialized("http://a?\\x"), "http://a/?\\x");
+    assert_eq!(serialized("http://a#\\x"), "http://a/#\\x");
+
+    let base = parse("http://a/b?q=1");
+    assert_eq!(
+        base.join("http://a/c?x=\\y")
+            .expect("absolute join")
+            .as_str(),
+        "http://a/c?x=\\y"
+    );
+    assert_eq!(
+        base.join("http://a/c#z\\w")
+            .expect("absolute join")
+            .as_str(),
+        "http://a/c#z\\w"
+    );
+    assert_eq!(
+        base.join("..\\d").expect("relative join").as_str(),
+        "http://a/d"
+    );
+}
