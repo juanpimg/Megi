@@ -184,9 +184,17 @@ def bar(percent: int, width: int = 20) -> str:
 
 
 def overall_percent(phases: list[dict]) -> int:
+    """Averages the phase estimates without ever rounding an incomplete phase up to 100.
+
+    `progress.toml` calls its percentages honest estimates, so a phase below 100 % (with
+    documented `pending` work) must not disappear into a rounded "100 % complete".
+    """
     if not phases:
         return 0
-    return round(sum(int(p.get("percent", 0)) for p in phases) / len(phases))
+    mean = sum(int(p.get("percent", 0)) for p in phases) / len(phases)
+    if mean < 100:
+        return min(99, round(mean))
+    return 100
 
 
 def phase_color(percent: int) -> str:
