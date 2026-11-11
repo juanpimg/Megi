@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>MutationObserver chain</title>
+<style>
+html, body { margin: 0; padding: 0; background-color: #ffffff; }
+#seed { width: 40px; height: 40px; background-color: #ff0000; }
+#observed { width: 20px; height: 20px; background-color: #0000ff; }
+#second { width: 20px; height: 20px; background-color: #00ff00; }
+</style></head>
+<body>
+<div id="seed"></div><div id="observed"></div><div id="second"></div>
+<script>
+// Two chained observers: a childList/attributes mutation in #seed triggers observer 1,
+// whose callback mutates #observed; observer 2 watches #observed and mutates #second.
+// Both callbacks must be delivered in microtask checkpoints before the final re-render.
+const seed = document.getElementById("seed");
+const observed = document.getElementById("observed");
+const second = document.getElementById("second");
+const observer1 = new MutationObserver((records) => {
+  observed.setAttribute("data-chain", String(records.length));
+  observed.style.backgroundColor = "#00ff00";
+});
+observer1.observe(seed, { childList: true, attributes: true });
+const observer2 = new MutationObserver(() => {
+  second.style.backgroundColor = "#ff00ff";
+});
+observer2.observe(observed, { attributes: true });
+// A childList mutation (textContent replacement is not tracked as childList by the
+// observer subset); appending a node is the canonical childList signal.
+const extra = document.createElement("span");
+seed.appendChild(extra);
+</script>
+</body>
+</html>

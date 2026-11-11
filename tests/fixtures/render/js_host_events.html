@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Host events</title>
+<style>html, body { margin: 0; padding: 0; background-color: #ffffff; }
+#a { width: 20px; height: 20px; background-color: #ff0000; }
+#b { width: 20px; height: 20px; background-color: #ff0000; }
+</style></head>
+<body>
+<div id="a"></div><div id="b"></div>
+<script>
+window.addEventListener("hashchange", () => {
+  document.getElementById("a").style.backgroundColor = "#00ff00";
+});
+window.addEventListener("popstate", () => {
+  document.getElementById("b").style.backgroundColor = "#0000ff";
+});
+</script>
+</body>
+</html>

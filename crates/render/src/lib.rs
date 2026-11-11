@@ -210,7 +210,7 @@ use images::{
 };
 
 pub use error::RenderError;
-pub use scripts::{ConsoleMessage, ScriptBudget, ScriptingLimits};
+pub use scripts::{ConsoleMessage, RenderStorage, ScriptBudget, ScriptingLimits};
 
 /// Largest accepted viewport dimension for a single render.
 pub const MAX_VIEWPORT_DIMENSION: u32 = 8192;
@@ -286,6 +286,38 @@ impl Default for ScriptingMode {
     }
 }
 
+/// A `location.assign/replace/reload` request made by a page script.
+///
+/// The renderer **does not navigate**: it records the requests in
+/// [`RenderOutput::location_actions`] so the shell can decide to navigate or reload after the
+/// render completes (the documented host channel for `location.*`). URLs are already
+/// resolved against the document URL.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LocationAction {
+    /// `location.assign(url)` or an assignment to `location.href`.
+    Assign(String),
+    /// `location.replace(url)`.
+    Replace(String),
+    /// `location.reload()`.
+    Reload,
+}
+
+/// A History API request made by a page script (queued in
+/// [`RenderOutput::history_actions`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HistoryAction {
+    /// `history.pushState(state, title, url)` (state is JSON).
+    Push { state: String, url: Option<String> },
+    /// `history.replaceState(...)`.
+    Replace { state: String, url: Option<String> },
+    /// `history.back()`.
+    Back,
+    /// `history.forward()`.
+    Forward,
+    /// `history.go(delta)`.
+    Go(i64),
+}
+
 /// Configuration for [`render_url`].
 #[derive(Clone, Debug)]
 pub struct RenderOptions {
@@ -340,6 +372,17 @@ pub struct RenderOptions {
     /// `data:` documents send no `Origin`. Cross-origin subresource CORS failures are
     /// non-fatal warnings (the resource is skipped, the page still renders).
     pub origin: Option<String>,
+    /// Optional shared Web Storage for `localStorage` across renders (R155).
+    ///
+    /// Pass the same `Arc<Mutex<RenderStorage>>` to two renders to emulate a browser
+    /// profile: values written by one page are visible to the next. `sessionStorage` is
+    /// always a fresh per-render area. `None` (default) keeps storage in memory for this
+    /// render only.
+    pub storage: Option<Arc<Mutex<RenderStorage>>>,
+    /// Events the host wants dispatched on `window` after `load` (R155), e.g.
+    /// `"hashchange"` or `"popstate"`. Listeners can mutate the DOM and run timers; the
+    /// final styles/layout/paint pass includes their effects. Empty by default.
+    pub host_events: Vec<String>,
 }
 
 impl Default for RenderOptions {
@@ -366,6 +409,8 @@ impl Default for RenderOptions {
             cookies: false,
             cookie_jar: None,
             origin: None,
+            storage: None,
+            host_events: Vec::new(),
         }
     }
 }
@@ -472,6 +517,12 @@ pub struct RenderStats {
     pub script_events: usize,
     /// Timers still pending when the event loop stopped (budget exhausted or interval).
     pub script_timers_pending: usize,
+    /// `location.*` navigation requests captured during scripting (see
+    /// [`RenderOutput::location_actions`]).
+    pub location_actions: usize,
+    /// History API requests captured during scripting (see
+    /// [`RenderOutput::history_actions`]).
+    pub history_actions: usize,
     /// Number of display-list items painted.
     pub display_items: usize,
     /// Additive hit-testing regions recorded while painting (same display list: the PNG is
@@ -512,6 +563,14 @@ pub struct RenderOutput {
     pub hit_regions: Vec<paint::HitRegion>,
     /// Final document URL (after HTTP redirects).
     pub document_url: Url,
+    /// `location.assign/replace/reload` requests made by page scripts, in execution
+    /// order. The renderer does not navigate; the shell is expected to act on these after a
+    /// render (see [`LocationAction`]).
+    pub location_actions: Vec<LocationAction>,
+    /// History API requests made by page scripts, in execution order (see
+    /// [`HistoryAction`]; the in-page `history.length`/`history.state` already reflect
+    /// push/replace).
+    pub history_actions: Vec<HistoryAction>,
     /// Pipeline observability data.
     pub stats: RenderStats,
 }
@@ -697,11 +756,13 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             )
         };
         script_bytes = load_report.script_bytes;
-        let host_context = scripts::ScriptingHostContext::new(
+        let mut host_context = scripts::ScriptingHostContext::new(
             pre_script_styles.clone(),
             media_context,
             (options.viewport.width, options.viewport.height),
         );
+        host_context.storage = options.storage.clone();
+        host_context.host_events = options.host_events.clone();
         let mut execution = scripts::execute_scripts(
             document,
             &document_url,
@@ -727,6 +788,8 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         script_events,
         script_timers_pending,
         event_loop_time,
+        location_actions,
+        history_actions,
     ) = match scripting_execution {
         Some(execution) => (
             execution.executed,
@@ -738,8 +801,22 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             execution.events_dispatched,
             execution.timers_pending,
             execution.event_loop,
+            execution.location_actions,
+            execution.history_actions,
         ),
-        None => (0, 0, Vec::new(), 0, 0, 0, 0, 0, Duration::ZERO),
+        None => (
+            0,
+            0,
+            Vec::new(),
+            0,
+            0,
+            0,
+            0,
+            0,
+            Duration::ZERO,
+            Vec::new(),
+            Vec::new(),
+        ),
     };
 
     // Inline `<svg>` elements become synthetic `<img>` data URLs after scripts (so DOM
@@ -865,6 +942,8 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         .filter(|entry| entry.level == "error")
         .count();
     let total = total_start.elapsed();
+    let location_action_count = location_actions.len();
+    let history_action_count = history_actions.len();
     Ok(RenderOutput {
         png,
         pixmap,
@@ -874,6 +953,8 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         display_list,
         hit_regions,
         document_url,
+        location_actions,
+        history_actions,
         stats: RenderStats {
             document_bytes: loaded.bytes.len(),
             charset: decoded.charset,
@@ -906,6 +987,8 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             script_virtual_time_ms,
             script_events,
             script_timers_pending,
+            location_actions: location_action_count,
+            history_actions: history_action_count,
             display_items,
             hit_regions: hit_region_count,
             cookies_stored,

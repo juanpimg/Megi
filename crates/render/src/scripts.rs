@@ -21,9 +21,20 @@
 //!    clock: promise microtasks → `DOMContentLoaded` on `document` → timers in `(due, id)`
 //!    order (delays > 0 included, clock advanced in 1 ms virtual steps up to
 //!    [`ScriptingLimits::max_virtual_time_ms`]) → `load` on `window` → remaining timers
-//!    scheduled by `load` listeners. Timer callbacks are bounded by
-//!    [`ScriptingLimits::max_tasks`]. The mutated [`Document`] is returned so the pipeline
+//!    scheduled by `load` listeners → optional host events (e.g. `hashchange`/`popstate`)
+//!    and their timers. Timer callbacks are bounded by [`ScriptingLimits::max_tasks`].
+//!    **Microtask checkpoints** run after every script, before/inside every timer batch and
+//!    after each host event (plus a final checkpoint before the document is returned), so
+//!    `MutationObserver` records queued by those callbacks are delivered and their DOM
+//!    mutations reach the re-render. The mutated [`Document`] is returned so the pipeline
 //!    re-runs styles → layout → paint **once** at the end.
+//!
+//! Host providers wired in this stage (R155): `History` (`history.pushState/replaceState/
+//! back/forward/go`), `location.assign/replace/reload` and Web Storage. History/location
+//! actions are queued and exposed through [`ScriptExecution::history_actions`] /
+//! [`ScriptExecution::location_actions`] (the renderer never navigates); `localStorage` is
+//! persisted only when the caller passes a shared [`RenderStorage`], while `sessionStorage`
+//! is always a fresh per-render area.
 //!
 //! ## Deliberate limitations (WP-6.4 and later)
 //!
@@ -50,7 +61,9 @@
 //!   as skipped and the DOM is left untouched (documented in [`crate::ScriptingMode`]).
 
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+
+use crate::{HistoryAction, LocationAction};
 
 use css::ComputedStyle;
 use dom::{Document, NodeId};
@@ -177,8 +190,22 @@ pub struct ScriptLoadReport {
     pub skipped: usize,
 }
 
+/// Persistent Web Storage shared across renders (R155).
+///
+/// Only `localStorage` is persisted: `sessionStorage` is a per-render in-memory area (a
+/// new render is a new browsing context). Pass it through
+/// [`crate::RenderOptions::storage`] as `Arc<Mutex<RenderStorage>>` to emulate a browser
+/// profile: writes made by scripts in one render are visible to later renders sharing the
+/// same value. Without a shared value every render starts with empty storage.
+#[derive(Clone, Debug, Default)]
+pub struct RenderStorage {
+    /// `localStorage` entries (`(key, value)` pairs, insertion order).
+    pub local: Vec<(String, String)>,
+}
+
 /// Host environment exposed to page scripts (WP-6.5): the **pre-script computed style
-/// snapshot**, the render's media context and the real viewport.
+/// snapshot**, the render's media context, the real viewport, shared Web Storage and any
+/// host-dispatched events (e.g. `hashchange`/`popstate`).
 ///
 /// The style snapshot is taken right after parsing (author + UA cascade) and before scripts
 /// run, so `getComputedStyle` reads what the page looked like when scripting started;
@@ -191,6 +218,11 @@ pub struct ScriptingHostContext {
     pub media: css::MediaContext,
     /// Viewport size in CSS pixels (`window.innerWidth`/`innerHeight`).
     pub viewport: (u32, u32),
+    /// Shared `localStorage` (see [`RenderStorage`]); `None` = per-render memory only.
+    pub storage: Option<Arc<Mutex<RenderStorage>>>,
+    /// Events dispatched on `window` by the host after `load` (e.g. `hashchange`,
+    /// `popstate`) so their listeners can mutate the DOM before the final re-render.
+    pub host_events: Vec<String>,
 }
 
 impl ScriptingHostContext {
@@ -204,6 +236,8 @@ impl ScriptingHostContext {
             styles,
             media,
             viewport,
+            storage: None,
+            host_events: Vec::new(),
         }
     }
 
@@ -214,6 +248,8 @@ impl ScriptingHostContext {
             styles: None,
             media: css::MediaContext::with_viewport(800.0, 600.0),
             viewport: (800, 600),
+            storage: None,
+            host_events: Vec::new(),
         }
     }
 }
@@ -248,6 +284,10 @@ pub struct ScriptExecution {
     pub virtual_time_ms: u64,
     /// Timers still pending when the event loop stopped.
     pub timers_pending: usize,
+    /// `location.assign/replace/reload` actions requested by scripts, in order.
+    pub location_actions: Vec<LocationAction>,
+    /// `history.pushState/replaceState/back/forward/go` actions, in order.
+    pub history_actions: Vec<HistoryAction>,
     /// Lifecycle events successfully dispatched (`DOMContentLoaded`, `load`).
     pub events_dispatched: usize,
     /// Wall-clock duration of the event-loop stage (microtasks + events + timers).
@@ -471,6 +511,8 @@ pub fn execute_scripts(
         timers_pending: 0,
         events_dispatched: 0,
         event_loop: std::time::Duration::ZERO,
+        location_actions: Vec::new(),
+        history_actions: Vec::new(),
     };
     if scripts.is_empty() {
         return execution;
@@ -508,6 +550,94 @@ pub fn execute_scripts(
         scroll_y: 0.0,
     };
     runtime.set_viewport_provider(Box::new(move || viewport_info));
+
+    // Browser-facing host providers (R155): History/location actions are queued for the
+    // host (the shell decides whether to navigate/reload after the render) and Web Storage
+    // is persisted for `localStorage` when the caller shares `RenderOptions::storage`;
+    // `sessionStorage` is always a fresh per-render in-memory area.
+    let location_actions: Arc<Mutex<Vec<LocationAction>>> = Arc::new(Mutex::new(Vec::new()));
+    {
+        let queue = Arc::clone(&location_actions);
+        runtime.set_location_provider(Box::new(move |action| {
+            queue
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push(match action {
+                    js::host::LocationAction::Assign(url) => LocationAction::Assign(url),
+                    js::host::LocationAction::Replace(url) => LocationAction::Replace(url),
+                    js::host::LocationAction::Reload => LocationAction::Reload,
+                });
+        }));
+    }
+    let history_actions: Arc<Mutex<Vec<HistoryAction>>> = Arc::new(Mutex::new(Vec::new()));
+    {
+        let queue = Arc::clone(&history_actions);
+        runtime.set_history_provider(Box::new(move |action| {
+            queue
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push(match action {
+                    js::host::HistoryAction::Push { state, url } => {
+                        HistoryAction::Push { state, url }
+                    }
+                    js::host::HistoryAction::Replace { state, url } => {
+                        HistoryAction::Replace { state, url }
+                    }
+                    js::host::HistoryAction::Back => HistoryAction::Back,
+                    js::host::HistoryAction::Forward => HistoryAction::Forward,
+                    js::host::HistoryAction::Go(delta) => HistoryAction::Go(delta),
+                });
+        }));
+    }
+    let per_render_local: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
+    let per_render_session: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
+    {
+        let shared_for_load = host.storage.clone();
+        let shared_for_save = host.storage.clone();
+        let local_load = Arc::clone(&per_render_local);
+        let session_load = Arc::clone(&per_render_session);
+        let local_save = Arc::clone(&per_render_local);
+        let session_save = Arc::clone(&per_render_session);
+        runtime.set_storage_provider(js::host::StorageProvider {
+            load: Box::new(move |kind| match kind {
+                js::host::StorageKind::Local => match &shared_for_load {
+                    Some(storage) => storage
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .local
+                        .clone(),
+                    None => local_load
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .clone(),
+                },
+                js::host::StorageKind::Session => session_load
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .clone(),
+            }),
+            save: Box::new(move |kind, entries| match kind {
+                js::host::StorageKind::Local => match &shared_for_save {
+                    Some(storage) => {
+                        storage
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner())
+                            .local = entries.to_vec();
+                    }
+                    None => {
+                        *local_save
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner()) = entries.to_vec();
+                    }
+                },
+                js::host::StorageKind::Session => {
+                    *session_save
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner()) = entries.to_vec();
+                }
+            }),
+        });
+    }
     runtime.set_ready_state("loading");
 
     // Deterministic virtual clock: pin `now` to a fixed epoch before any script runs (the
@@ -584,6 +714,22 @@ pub fn execute_scripts(
     drain_microtasks(&mut runtime, warnings);
     run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);
 
+    // 4. Host-dispatched events (e.g. `hashchange`/`popstate` after a shell navigation).
+    // Listeners run on `window`, may mutate the DOM and schedule timers; microtasks and the
+    // timer queue are pumped again so the final re-render sees their effects.
+    for event in &host.host_events {
+        match runtime.dispatch_event(js::JsEventTarget::Window, event, false) {
+            Ok(_) => execution.events_dispatched += 1,
+            Err(error) => warnings.push(format!("dispatching host event {event} failed: {error}")),
+        }
+        drain_microtasks(&mut runtime, warnings);
+        run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);
+    }
+    // Final microtask checkpoint: MutationObserver records queued by the last timer/host
+    // callback callbacks are delivered **before** the document is handed back, so their
+    // own DOM mutations are included in the re-render.
+    drain_microtasks(&mut runtime, warnings);
+
     if let Some(error) = runtime.last_event_error() {
         warnings.push(format!("uncaught script error: {error}"));
     }
@@ -605,6 +751,16 @@ pub fn execute_scripts(
         execution.console.push(message);
     }
     execution.document = std::mem::take(&mut *runtime.document_mut());
+    execution.location_actions = std::mem::take(
+        &mut *location_actions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+    );
+    execution.history_actions = std::mem::take(
+        &mut *history_actions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+    );
     execution
 }
 

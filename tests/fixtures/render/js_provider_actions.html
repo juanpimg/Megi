@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>JS host providers</title></head>
+<body style="margin:0;background:#ffffff">
+<script>
+history.pushState({ page: 1 }, "", "/one");
+history.replaceState({ page: 2 }, "", "/two");
+localStorage.setItem("shared-key", "shared-value");
+sessionStorage.setItem("session-key", "session-value");
+location.assign("/assigned");
+location.href = "/href";
+location.replace("/replaced");
+location.reload();
+</script>
+<div style="width:20px;height:20px;background:#00ff00"></div>
+</body>
+</html>
