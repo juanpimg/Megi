@@ -96,6 +96,36 @@ test = false
 doc = false
 bench = false
 
+# Round 29 (R190): HTTP/2 server push, streaming request bodies, WebP VP8 lossy
+# sniffing and ES modules/import maps.
+[[bin]]
+name = "h2_push"
+path = "fuzz_targets/h2_push.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "body_stream"
+path = "fuzz_targets/body_stream.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "webp_vp8"
+path = "fuzz_targets/webp_vp8.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "js_module"
+path = "fuzz_targets/js_module.rs"
+test = false
+doc = false
+bench = false
+
 # Keep symbols + ASan stack traces readable in crash reports (cargo-fuzz enables
 # `-Zsanitizer=address` internally; this only affects the fuzz binaries).
 [profile.release]

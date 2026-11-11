@@ -1,7 +1,8 @@
 name: Fuzz (nightly)
 
 # Nightly libFuzzer smoke runs over every parser/renderer surface that consumes untrusted
-# input, plus a fast "build every target" job on pull requests.
+# input (14 targets: 5 minutes each), plus a fast "build every target" job on pull
+# requests.
 # Not a substitute for a long-running fuzzing farm: the scheduled job is a cheap daily
 # regression gate (5 minutes per target) that keeps the harnesses compiling and catches
 # shallow crashes.
@@ -89,6 +90,16 @@ jobs:
             extra: ""
           - target: hpack_decode
             extra: ""
+          # Round 29 (R190): HTTP/2 server push, streaming bodies, WebP VP8
+          # sniff/lossy path and ES modules + import maps (Boa leak flag as js_eval).
+          - target: h2_push
+            extra: ""
+          - target: body_stream
+            extra: ""
+          - target: webp_vp8
+            extra: ""
+          - target: js_module
+            extra: "-detect_leaks=0"
     steps:
       - uses: actions/checkout@v4
 

@@ -23,7 +23,14 @@ fuzz/
 │   ├── net_url.rs        # WHATWG URL subset parser + relative resolution
 │   ├── render_pipeline.rs# full render pipeline: data: HTML -> styles/layout/paint/PNG
 │   ├── js_eval.rs        # JavaScript evaluation + DOM/event/timer host bridge (budgeted)
-│   └── svg_parse.rs      # SVG XML parse + rasterization under strict anti-DoS limits
+│   ├── svg_parse.rs      # SVG XML parse + rasterization under strict anti-DoS limits
+│   ├── image_decode.rs   # PNG/JPEG/GIF/WebP sniffing + EXIF orientation (capped)
+│   ├── exif_parse.rs     # APP1/TIFF EXIF orientation parser
+│   ├── hpack_decode.rs   # HPACK header blocks + HTTP/2 framing
+│   ├── h2_push.rs        # PUSH_PROMISE/HEADERS/DATA server push (capped)
+│   ├── body_stream.rs    # RequestBody/BodyProducer streaming contract
+│   ├── webp_vp8.rs       # WebP sniffing + VP8 lossy/lossless container path
+│   └── js_module.rs      # ES modules + import maps (resolver/loader, budgeted)
 └── corpus/<target>/      # versioned seed inputs (small, hand-written)
 ```
 
@@ -64,6 +71,11 @@ cargo +nightly fuzz build          # builds every [[bin]] target
 | `exif_parse` | `image::exif::orientation` on arbitrary JPEG-ish bytes | Dedicated campaign for the APP1/TIFF orientation parser (little/big endian IFD0, malformed segments must return `None`). Input ≤64 KiB; seeds are the `exif_o1..o8.jpg` fixtures. |
 | `hpack_decode` | `net::h2::hpack::Decoder::decode`, `net::h2::frame::FrameReader`/`Frame::{parse_settings, window_increment, parse_rst_stream, parse_goaway, data_payload, headers_payload}`, `frame::validate_frame` | HTTP/2 from the network is adversarial: full HPACK block decoding (static/dynamic tables, Huffman, literals, table-size updates), a raw frame stream (length/flag/stream-id validation, SETTINGS/WINDOW_UPDATE/PING/RST_STREAM/GOAWAY, HEADERS payloads decoded through a fresh HPACK table) and an arbitrary 9-byte frame header. Input ≤64 KiB, 16 KiB frame cap, ≤64 frames/iteration. |
 
+| `h2_push` | `net::h2::frame::{FrameReader, HeaderAssembler, Frame::{parse_push_promise, headers_payload, data_payload}, validate_frame}`, `net::h2::hpack::{Decoder, huffman_decode}` | Round 28 server push: PUSH_PROMISE + promised HEADERS/DATA arrive from an untrusted peer. Caps: ≤128 KiB input, ≤48 frames, 16 KiB frame limit, ≤8 promises, ≤4 decoded header blocks (≤64 KiB each), ≤64 KiB pushed DATA. Covers push-promise stream-id/payload parsing, HEADERS+CONTINUATION reassembly, HPACK tables and frame validation. |
+| `body_stream` | `net::{RequestBody, BodyProducer, FetchError}` | Round 28 streaming uploads: pull-based producers with backpressure. Drives a `RequestBody::Stream` with bounded pull sizes (chunk ≤ max, ≤96 pulls, ≤128 KiB total), checks `Bytes` helpers (`len`/`is_empty`/`Debug`) and typed producer-error aborts; never opens a socket. |
+| `webp_vp8` | `image::{detect_format, decode_with_limits, PngLimits}` | WebP lossy `VP8 ` is detected and rejected with a typed error while the VP8L lossless decoder is implemented. The input is decoded directly and also wrapped in minimal RIFF containers with `VP8 `/`VP8L` chunks (plus truncated variants), exercising RIFF/chunk-size validation, sniffing and the future lossy path. Caps: ≤512 KiB input, 8 KiB synthesized chunks, 1024 px/side, 512 Ki pixels. |
+| `js_module` | `js::{JsRuntime::{new, set_budget, set_import_map_json, set_module_resolver, set_module_loader, eval_module}, ImportMap::from_json, Budget, JsError}` | Round 27 ES modules + import maps. Input is split on NUL into import-map JSON, entry module and dependency modules; resolver/loader callbacks are bounded (8 modules, ≤8 KiB/module, ≤24 loader calls) and the budget is 2k loop iterations / 64 recursion / 2 KiB stack. Covers JSON import-map validation, specifier resolution, static imports, cycles, blocked mappings, missing exports, dynamic-import/TLA rejections and budget exhaustion; no network/FS and no page DOM fixture. |
+
 All targets run on the **public** API with release-like defaults; they look for panics,
 aborts (stack overflow), ASan/UBSan findings and target timeouts, not for semantic
 mismatches.
@@ -84,6 +96,10 @@ cargo +nightly fuzz run svg_parse       -- -max_total_time=30
 cargo +nightly fuzz run image_decode    -- -max_total_time=30
 cargo +nightly fuzz run exif_parse      -- -max_total_time=30
 cargo +nightly fuzz run hpack_decode    -- -max_total_time=30
+cargo +nightly fuzz run h2_push         -- -max_total_time=30
+cargo +nightly fuzz run body_stream     -- -max_total_time=30
+cargo +nightly fuzz run webp_vp8        -- -max_total_time=30
+cargo +nightly fuzz run js_module       -- -max_total_time=30 -detect_leaks=0
 ```
 
 `js_eval` needs `-detect_leaks=0`: Boa 0.21 leaks a **constant** ~56 bytes / 2 allocations
@@ -93,8 +109,16 @@ nightly job. `render_pipeline` is the most expensive target (full layout + raste
 iteration): prefer `-runs=100`/`-max_total_time=15` for a quick local smoke run.
 
 `render_pipeline` is the most expensive target (full layout + raster + PNG per iteration):
-prefer `-runs=100`/`-max_total_time=15` for a quick local smoke run. `js_eval` can be
-slowed by pathological scripts even under the budget; `-timeout=10` is a good local guard.
+prefer `-runs=100`/`-max_total_time=15` for a quick local smoke run. `js_eval` and
+`js_module` can be slowed by pathological scripts even under the budget; `-timeout=10` is a
+good local guard. `js_module` also needs `-detect_leaks=0` for the same constant Boa
+one-time allocation as `js_eval`.
+
+The nightly workflow now runs **14 targets × 300 s** (`fuzz-nightly.yml` matrix) and the
+pull-request job builds all 14 without running libFuzzer. New in r27–r29: server push
+(`h2_push`), streaming request bodies (`body_stream`), WebP VP8 lossy sniff/lossless path
+(`webp_vp8`) and ES modules/import maps (`js_module`). Local smoke used in the round report:
+`cargo +nightly fuzz build` (14/14) and `-runs=300` per target; no crashes.
 
 Useful libFuzzer flags:
 
@@ -129,7 +153,18 @@ successful local session grows the tracked seed corpus (curate with `cmin`, belo
   - `hpack_decode`: RFC 7541 header blocks (indexed/literal/Huffman/table-size
     update/truncated) and HTTP/2 frame streams (SETTINGS(+ACK/entry), PING,
     HEADERS(+CONTINUATION/padded), DATA, RST_STREAM, WINDOW_UPDATE, GOAWAY and a
-    malformed frame header).
+    malformed frame header);
+  - `h2_push`: the shared frame seeds above plus synthesized PUSH_PROMISE →
+    promised HEADERS → DATA flows, an empty promised block, a truncated promise
+    and a malformed header;
+  - `body_stream`: empty/zero-length/length-prefixed chunk plans, including a
+    255-byte chunk;
+  - `webp_vp8`: the crate's real WebP fixtures (VP8 lossy q75/q90, VP8L
+    photo/alpha/palette) plus a raw payload and a truncated RIFF container;
+  - `js_module`: NUL-separated import-map JSON + entry/dependency modules
+    (simple export, bare-specifier import map, prefix mappings, malformed JSON,
+    cycle, blocked mapping, dynamic import, top-level await, syntax error and an
+    infinite-loop budget seed).
 - Keep seeds **small** (a few hundred bytes): they are inputs for mutation, not test
   fixtures. The semantic conformance corpus lives in `tests/html5lib-tests` and is not used
   here.
@@ -147,6 +182,10 @@ successful local session grows the tracked seed corpus (curate with `cmin`, belo
   cargo +nightly fuzz cmin image_decode
   cargo +nightly fuzz cmin exif_parse
   cargo +nightly fuzz cmin hpack_decode
+  cargo +nightly fuzz cmin h2_push
+  cargo +nightly fuzz cmin body_stream
+  cargo +nightly fuzz cmin webp_vp8
+  cargo +nightly fuzz cmin js_module
   ```
 
 ## Crashes and triage policy
