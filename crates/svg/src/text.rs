@@ -44,6 +44,8 @@ pub(crate) struct TextPathSpec {
     /// `startOffset`: absolute user units (`percent == false`) or fraction of path length.
     pub start_offset: f32,
     pub percent: bool,
+    /// `side="right"`: baseline shifted to the right of the path direction.
+    pub side_right: bool,
 }
 
 /// One parsed `<text>` element (contents flattened; child `<tspan>` positions are ignored).
@@ -71,6 +73,9 @@ pub(crate) struct TextSpec {
     pub bbox: (f32, f32, f32, f32),
     /// Optional `<textPath>` geometry (glyphs advance along the flattened path).
     pub text_path: Option<TextPathSpec>,
+    /// SVG `textLength` (user units) and whether `lengthAdjust="spacingAndGlyphs"`.
+    pub text_length: Option<f32>,
+    pub spacing_and_glyphs: bool,
 }
 
 impl TextSpec {

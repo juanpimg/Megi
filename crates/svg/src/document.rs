@@ -937,6 +937,9 @@ impl<'a> Builder<'a> {
                             0.0
                         },
                         percent,
+                        side_right: path_child
+                            .attribute("side")
+                            .is_some_and(|value| value.trim().eq_ignore_ascii_case("right")),
                     });
                 }
             }
@@ -975,6 +978,11 @@ impl<'a> Builder<'a> {
             value.eq_ignore_ascii_case("italic") || value.eq_ignore_ascii_case("oblique")
         });
         let letter_spacing = parse_length(element.attribute("letter-spacing"), 0.0).unwrap_or(0.0);
+        let text_length = parse_length(element.attribute("textLength"), 0.0)
+            .filter(|value| value.is_finite() && *value >= 0.0);
+        let spacing_and_glyphs = element
+            .attribute("lengthAdjust")
+            .is_some_and(|value| value.trim().eq_ignore_ascii_case("spacingAndGlyphs"));
         let opacity = group_opacity * parse_opacity_attribute(element, "opacity").unwrap_or(1.0);
         let mut spec = TextSpec {
             text,
@@ -997,6 +1005,8 @@ impl<'a> Builder<'a> {
             transform,
             bbox: (0.0, 0.0, 0.0, 0.0),
             text_path,
+            text_length,
+            spacing_and_glyphs,
         };
         spec.bbox = spec.local_bbox();
         self.texts.push(spec);

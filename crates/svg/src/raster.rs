@@ -915,7 +915,9 @@ fn draw_text(
     };
     canvas.clear_coverage();
     if let Some(text_path) = &spec.text_path {
-        // Glyph advance along the flattened path (no auto-rotation; documented subset).
+        // Glyph advance along the flattened path with auto-rotation (tangent angle, flipped
+        // when the text would be upside down), optional textLength adjustment and
+        // side="right" baseline offset (approximate normal offset, documented subset).
         let mut lengths: Vec<TextPathSegment> = Vec::new();
         let mut total_length = 0.0f32;
         for subpath in &text_path.subpaths {
@@ -935,6 +937,30 @@ fn draw_text(
             } else {
                 text_path.start_offset
             };
+            let mut natural = 0.0f32;
+            for character in spec.text.chars() {
+                if let Ok(mask) =
+                    database.rasterize_char(&family_refs, spec.font_weight, style, size, character)
+                {
+                    natural += mask.advance + spacing;
+                }
+            }
+            let length_scale = spec
+                .text_length
+                .filter(|target| *target > 0.0 && natural > 0.0)
+                .map(|target| target / natural)
+                .unwrap_or(1.0);
+            let character_count = spec.text.chars().count().max(1) as f32;
+            let spacing_extra = if spec.spacing_and_glyphs || spec.text_length.is_none() {
+                0.0
+            } else {
+                (natural * (length_scale - 1.0)) / (character_count - 1.0).max(1.0)
+            };
+            let glyph_size = if spec.spacing_and_glyphs {
+                size * length_scale
+            } else {
+                size
+            };
             let mut distance = (offset - anchor_shift).clamp(0.0, total_length);
             for character in spec.text.chars() {
                 let Some((start, from, to)) = segment_at(&lengths, distance) else {
@@ -944,13 +970,35 @@ fn draw_text(
                 let t = ((distance - start) / length).clamp(0.0, 1.0);
                 let point = (from.0 + (to.0 - from.0) * t, from.1 + (to.1 - from.1) * t);
                 let (px, py) = matrix.apply(point.0, point.1);
-                let Ok(mask) =
-                    database.rasterize_char(&family_refs, spec.font_weight, style, size, character)
-                else {
+                let tangent = matrix.apply(to.0, to.1);
+                let mut angle = (tangent.1 - py).atan2(tangent.0 - px);
+                // Keep glyphs upright: flip on the left half-plane / descending segments.
+                if angle > std::f32::consts::FRAC_PI_2 || angle < -std::f32::consts::FRAC_PI_2 {
+                    angle += std::f32::consts::PI;
+                }
+                let normal = if text_path.side_right {
+                    (angle.sin(), -angle.cos())
+                } else {
+                    (0.0, 0.0)
+                };
+                let side_offset = if text_path.side_right {
+                    size * 0.9
+                } else {
+                    0.0
+                };
+                let gx = px + normal.0 * side_offset;
+                let gy = py + normal.1 * side_offset;
+                let Ok(mask) = database.rasterize_char(
+                    &family_refs,
+                    spec.font_weight,
+                    style,
+                    glyph_size,
+                    character,
+                ) else {
                     continue;
                 };
-                canvas.add_mask(px + mask.left, py + mask.top, &mask);
-                distance += mask.advance + spacing;
+                canvas.add_mask_rotated(gx, gy, &mask, angle);
+                distance += mask.advance + spacing + spacing_extra;
             }
         }
     } else {
@@ -1243,6 +1291,39 @@ impl Canvas {
     }
 
     /// Adds a glyph coverage mask at the given device position (max coverage).
+    /// Adds a glyph mask rotated by `angle` radians around its baseline origin `(x, y)`.
+    fn add_mask_rotated(&mut self, x: f32, y: f32, mask: &fonts::GlyphMask, angle: f32) {
+        if angle.abs() < 1e-4 {
+            self.add_mask(x, y, mask);
+            return;
+        }
+        let (sin, cos) = angle.sin_cos();
+        let origin_x = x.round() as i64;
+        let origin_y = y.round() as i64;
+        for row in 0..mask.height {
+            for column in 0..mask.width {
+                let value = mask.data[(row * mask.width + column) as usize];
+                if value == 0 {
+                    continue;
+                }
+                let local_x = column as f32 + mask.left;
+                let local_y = row as f32 + mask.top;
+                let dx = local_x * cos - local_y * sin;
+                let dy = local_x * sin + local_y * cos;
+                let px = origin_x + dx.round() as i64;
+                let py = origin_y + dy.round() as i64;
+                if px < 0 || py < 0 || px >= self.width as i64 || py >= self.height as i64 {
+                    continue;
+                }
+                let index = py as usize * self.width + px as usize;
+                let alpha = f32::from(value) / 255.0;
+                if alpha > self.coverage[index] {
+                    self.coverage[index] = alpha;
+                }
+            }
+        }
+    }
+
     fn add_mask(&mut self, x: f32, y: f32, mask: &fonts::GlyphMask) {
         let origin_x = x.round() as i64;
         let origin_y = y.round() as i64;
