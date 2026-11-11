@@ -116,6 +116,7 @@ impl Json {
         let mut parser = Parser {
             bytes: text.as_bytes(),
             position: 0,
+            depth: 0,
         };
         let value = parser.value()?;
         parser.skip_whitespace();
@@ -126,17 +127,37 @@ impl Json {
     }
 }
 
+/// Maximum object/array nesting accepted by the import-map JSON parser.
+///
+/// Import maps arrive inside `<script type="importmap">`; without a bound, a ~100 KB page
+/// of `[` overflows the host stack in the recursive descent below.
+const MAX_JSON_DEPTH: usize = 128;
+
 struct Parser<'a> {
     bytes: &'a [u8],
     position: usize,
+    depth: usize,
 }
 
 impl Parser<'_> {
     fn value(&mut self) -> Result<Json, String> {
+        if self.depth >= MAX_JSON_DEPTH {
+            return Err("nesting too deep".to_string());
+        }
         self.skip_whitespace();
         match self.peek() {
-            Some(b'{') => self.object(),
-            Some(b'[') => self.array(),
+            Some(b'{') => {
+                self.depth += 1;
+                let value = self.object();
+                self.depth -= 1;
+                value
+            }
+            Some(b'[') => {
+                self.depth += 1;
+                let value = self.array();
+                self.depth -= 1;
+                value
+            }
             Some(b'"') => self.string().map(Json::String),
             Some(b't') => {
                 self.literal("true")?;
