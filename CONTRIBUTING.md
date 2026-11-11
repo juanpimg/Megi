@@ -133,6 +133,20 @@ rustc --version
 cargo +1.88 check --workspace --all-targets
 ```
 
+#### Dependencias del sistema (Linux)
+
+Solo `crates/shell` necesita bibliotecas nativas (`winit`/`softbuffer` con X11 y Wayland); el resto del workspace no necesita bibliotecas de sistema. En Debian/Ubuntu, los mismos paquetes que instala CI:
+
+```bash
+sudo apt-get install -y --no-install-recommends \
+  pkg-config libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev \
+  libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev \
+  libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+  libxcb-shm0-dev libxcb-randr0-dev
+```
+
+Sin ellas `cargo check --workspace` falla al compilar `wayland-sys`/`x11` y `cargo test --workspace` no llega a ejecutar los tests. Si no quieres instalarlas, añade `--exclude shell` a `check`/`clippy`/`test`/`doc` y verifica el crate de ventana solo en CI.
+
 ### 4.2 Utilizar las Herramientas de Inspección
 
 Megi incluye scripts CLI dedicados en `tools/` para acelerar el desarrollo:
