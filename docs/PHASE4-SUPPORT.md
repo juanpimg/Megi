@@ -33,7 +33,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | `display: list-item` y marcadores (§12.5) | **HECHO** | paint pinta `disc`/`circle`/`square`/`decimal` |
 | `visibility: hidden` (§11.2) | **HECHO** | paint no pinta caja ni texto |
 
-## 2. CSS (`crates/css`, 210 tests + 30 WPT)
+## 2. CSS (`crates/css`, 230 tests + 30 WPT)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -54,6 +54,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **EffectGroup: filtros y blend (ronda 22)**: filtros CSS (blur/brightness/…/drop-shadow) y mix-blend-mode por grupo con buffer offscreen y composición contra backdrop (fórmula CSS) | **HECHO** | caps área 16,7 Mpx/blur 64/funciones 16; fixtures filter_effects/blend_modes/image_set; goldens intactos |
 | **Effects analysis (ronda 23)**: `effects_present` agregado por pase + fast path r21-equivalente (sin efectos no se clonan estilos/EffectGroup), DisplayItem cap 20480 e `is_list_item` antes de phase | **HECHO** | build-display **7,34–7,72 ms ≤8** (−4,8 %/−9,6 %) |
 | **BackdropFilter/object-fit (ronda 24)**: `DisplayItem::BackdropFilter` (backdrop ya pintado + funciones + blur determinista; caps 64/16/16,7 Mpx) y object-fit con clip al content box y muestredo bilineal | **HECHO** | paint 205 tests; `fill` byte-idéntico; goldens intactos |
+| **Pintado Color 4/5 (ronda 25)**: espacios modernos y `color-mix` resueltos a sRGB con matrices/clamp | **HECHO** | paint 208 tests; fixture color_spaces; goldens intactos |
 
 | **Backgrounds multicapa (ronda 16)**: `background-origin` (border/padding/content), `background-clip` (text parseado, pinta border-box), `background-attachment` (scroll/fixed), **`background_layers` top-first** (listas cíclicas, shorthand multicapa, color solo última) y `space`/`round` reales | **HECHO** | Espejo legacy para goldens; paint 130 tests |
 | **`@font-face` (ronda 13)**: `Stylesheet.font_faces` + `FontFaceRule { family, sources, weight, style }` | **HECHO** | Consumido por `fonts`/`render` para fuentes web (ver §4) |
@@ -76,9 +77,10 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **Filtros CSS/blend/image-set (ronda 22)**: filter (blur/brightness/contrast/grayscale/invert/opacity/sepia/saturate/hue-rotate/drop-shadow + alias `-webkit`), mix-blend-mode (6 modos) e `image-set()` 1x | **HECHO** | paint `DisplayItem::EffectGroup` offscreen contra backdrop; caps 16,7 Mpx/blur 64/funciones 16; fixtures filter_effects `ffe06406…`/blend_modes `32788e6d…`/image_set `dc638211…` |
 | **CSS perf (ronda 23)**: clave de caché por identidad de estilo del padre, move-on-miss y AST UA cacheado (`OnceLock`) | **HECHO** | css resolve 35,81→**26,54 ms** (−25,9 %); 128-bit key/umbral 2/cap 1024 |
 | **aspect-ratio/object-fit/backdrop (ronda 24)**: `aspect-ratio` (auto/ratio), `object-fit` (fill/contain/cover/none/scale-down), `object-position` (keywords/%/px) y `backdrop-filter` + alias `-webkit` | **HECHO** | css 210/paint 205; fixtures aspect_ratio `a1e4d950…`/object_fit `b54ddebe…`/backdrop_filter `ff04fac9…` |
+| **CSS Color 4/5 (ronda 25)**: `color()` (srgb/srgb-linear/display-p3/a98-rgb/prophoto-rgb/rec2020/xyz), `lab/lch/oklab/oklch`, `hwb()` y `color-mix()` | **HECHO** | css 230/paint 208; fixture color_spaces; matrices CSS Color 4 documentadas, clamp por canal |
 
 
-## 3. Pintado (`crates/paint`, 205 tests)
+## 3. Pintado (`crates/paint`, 208 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -121,6 +123,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **HTTP/2 avanzado (ronda 23)**: flow control conexión/stream, multiplexado ≥2 streams, SETTINGS avanzados con ACK, HEADERS+CONTINUATION y HPACK compartido | **HECHO** | net 237 tests (+12 loopback); pendientes push/prioridades/h2c/trailers/bodies |
 | **EXIF/JPEG progresivo/WebP (ronda 23)**: orientación EXIF 1–8 aplicada en decode, subset progresivo SOF2 (gris exacto; color refinement `UnsupportedFeature`), WebP detectado sin decoder | **HECHO** | image 60/render 138 tests; fixtures exif_o1..o8 y `image_formats.html` |
 | **JPEG progresivo color + WebP VP8L (ronda 24)**: progresivo de color completo (Δmáx ≤2, gris Δ0) y VP8L subset (RIFF/header/Huffman simple/literales ARGB; resto ⇒ UnsupportedFeature) | **HECHO** | image 67/render 139 tests; fixtures v8l_* y `webp.html` |
+| **WebP VP8L completo (ronda 25)**: predictor 14, color transform 3.5, subtract-green, color indexing con paleta delta/índices, Huffman complejo/meta y LZ77 con overlap | **HECHO** | image 69/render 145; fixtures reales píxel-exactas vs `.rgba` |
 | **Cookies RFC 6265** (`CookieJar`, cap 4.096), **CORS básico**, **gzip/deflate** (caps 64 MiB + ratio 1000:1), **SameSite** (Strict/Lax/None+Secure, top-level aproximado), **PSL reducida** y **Referrer-Policy** (8 políticas, header>meta>default) instalados en el loader | **HECHO** | Ronda 8 + ronda 18; **ronda 19**: `ReferrerConfig` cableado en render antes de subrecursos (%Referer% y SameSite reales) y `RenderStats.referrer_policy`; CORS completo/HTTP2 pendientes |
 | **Decoder PNG propio + inflate zlib/DEFLATE** (color types 0/2/3/4/6, bit depth 1–16, filtros 0–4, Adam7, CRC, `PngLimits`) | **HECHO** | `crates/image`, 45 tests + 1 doctest; GIF/JPEG/WebP solo detectados |
 | **Pipeline de navegador** `URL → PNG` con CSS externo: charset UTF-8/Windows-1252, `<base>`, `<style>`+`<link rel=stylesheet>` (dedup/media/caps), cascada UA+autor, layout con fuentes y backgrounds, PNG; **`RenderOutput.hit_regions`**, **red avanzada E2E** (cookies por render/sesión, CORS/credentials con denegación no fatal, gzip/deflate, `--cookies`/`--origin`) y **event loop presupuestado** (reloj virtual, `DOMContentLoaded`/`load`, timers, re-render único) | **HECHO** | `crates/render`, **138 tests**; fixture 640×400 → 15.498 B `md5 7324e851…`; showcase 1024×768 → 80.220 B `md5 c95c7eff…`; **ronda 13**: webfonts E2E; **ronda 15**: SVG inline (`inline_svgs`) y event loop determinista; **ronda 16**: estilos pre-script con `getComputedStyle` real (`styles_pre_script`), matchMedia/viewport, rAF con epoch fijo (48 ms), `readyState`, onerror/console ⇒ warnings (`console_errors`) y multi-capa (`background_layers.html`, md5 `c357cc2c…`); **ronda 18**: clipping+clip:text; **ronda 19**: `ReferrerConfig`/SameSite reales, estado CSS real (`css_state.html`) y 2 tests de integración de gradientes |
@@ -144,7 +147,9 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, eventos DOM/foco y formularios del host (Fase 7), animaciones, `border-radius`, `box-shadow`, gradientes y medios paginados. JavaScript está en Fase 6 (ver §8); hit-testing y navegación ya existen (rondas 9–10).
 
-## 8. Fase 6: JavaScript (`crates/js`, 83 tests + scripting E2E en `render`/parser)
+## 8. Fase 6: JavaScript (`crates/js`, 96 tests + scripting E2E en `render`/parser)
+
+| **ES modules (ronda 25)**: `eval_module` con resolver/loader, imports default/named/namespace/side-effect, exports const/let/var/function/class/default/{as}, `import.meta.url`, orden topológico, ciclos `ModuleCycle` y errores tipados | **HECHO** | js 96 tests; subset line-based documentado (sin import() dinámico/top-level await/export-from/live bindings) |
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -179,7 +184,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 ## 10. Verificación de la matriz
 
 ```bash
-./tools/dev.sh all                             # fmt, clippy, 1547 tests, doc y gate PASS
+./tools/dev.sh all                             # fmt, clippy, 1594 tests, doc y gate PASS
 cargo test -p css -p layout -p paint -p fonts -p dom -p html
 cargo test -p net -p render -p image -p shell
 cargo test -p js

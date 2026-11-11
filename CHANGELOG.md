@@ -6,6 +6,51 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 25 — CSS Color 4/5, ES modules, complete WebP VP8L, render provider wiring and direct save-png (2026-11-11)
+
+#### Added
+
+- **CSS Color 4/5** (`bd3b317`, css 230 / paint 208 tests): `color(<space> …)` for
+  `srgb`, `srgb-linear`, `display-p3`, `a98-rgb`, `prophoto-rgb`, `rec2020`,
+  `xyz`/`xyz-d50`/`xyz-d65`; `lab()`, `lch()`, `oklab()`, `oklch()`, `hwb()` and
+  `color-mix()` (srgb/srgb-linear/oklab/oklch, weighted and premultiplied-alpha
+  mixes, short-arc hue) with the documented CSS Color 4 matrices and per-channel
+  clamping; all colour properties inherit the new spaces. Fixture `color_spaces`.
+- **ES modules** (`9522cb1`, js 96 tests): `JsRuntime::eval_module(source,
+  source_name, base_url, budget) -> ModuleOutcome` with injectable
+  `set_module_resolver`/`set_module_loader` (the host owns all I/O). Supports
+  default/named/namespace/side-effect imports, `export
+  const/let/var/function/class`, `export default`, `export { a as b }`,
+  `import.meta.url`, topological execution in one realm; cycles return
+  `ModuleCycle`, missing modules/exports/syntax return typed errors. Documented
+  subset: no dynamic `import()`, top-level await, `export … from` or real live
+  bindings.
+- **Complete WebP VP8L** (`6d80b20`, image 69 / render 145 tests): inverse
+  transforms (14-mode predictor, 3.5 fixed colour transform, subtract-green),
+  colour indexing with delta palettes and 1/2/4/8-bit indices, complex and
+  meta-Huffman, and LZ77 with overlap/distance maps. Real PIL/libwebp fixtures are
+  pixel-exact against `.rgba`; `render` decodes VP8L without warning while VP8
+  lossy/corrupt stays a non-fatal warning (`webp_real.html`).
+- **Render JS provider wiring** (`c90aab4`, render 145 tests): `RenderOutput.history_actions`
+  and `location_actions` (resolved URLs, stats; render deliberately does not
+  navigate), `RenderOptions.storage` shared for persistent `localStorage` with
+  per-render `sessionStorage`, `RenderOptions.host_events` for
+  `hashchange`/`popstate`, and microtask checkpoints after scripts/timers/host
+  events and before the final re-render so `MutationObserver` records reach the
+  DOM→PNG E2E chain (`7411a495…`; fixtures js_provider_actions/js_storage_*/
+  js_observer_chain/js_host_events).
+- **Direct save-png** (`560f036`, shell 183 tests): `--save-png`/Ctrl+S write the
+  render's PNG bytes without re-encoding and headless rendering happens once
+  (+200.1 ms → **+1.7 ms**), with atomic replacement and signature validation;
+  Ctrl+S saves the full page.
+
+#### Tests
+
+- **1,594 tests, 0 failures** (css 230, paint 208, js 96, image 69, render 145,
+  shell 183, layout 215, net 237, svg 85, html 60, dom 28, fonts 17+1 doctest,
+  bench 9, test_harness 11); gate PASS with tokenizer 7,050/7,050, tree
+  3,904/3,904, serializer 230/230 and CSS 30/30.
+
 ### Round 24 — JS browser APIs, aspect-ratio/object-fit/backdrop, full progressive JPEG, WebP VP8L, session/downloads and 10 fuzz targets (2026-11-11)
 
 #### Added

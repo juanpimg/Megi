@@ -595,6 +595,21 @@ Límites r24: History/location sin provider ⇒ no-op; MutationObserver subset (
 
 Cifras de referencia en la ronda 24: **1547 tests** (bench 9, css 210, dom 28, fonts 17+1 doctest, html 60, image 67, js 83, layout 215, net 237, paint 205, render 139, shell 180, svg 85, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
 
+### 2.16r Ronda 25: CSS Color 4/5, ES modules, WebP VP8L, providers render y save-png
+
+```bash
+cargo test -p css --test color4                        # color()/lab/lch/oklab/oklch/hwb/color-mix
+cargo run -p render -- tests/fixtures/render/color_spaces.html /tmp/colors.png --json
+cargo test -p js --test es_modules                     # resolver/loader, import/export, ciclos
+cargo run -p render -- tests/fixtures/render/webp_real.html /tmp/webp_real.png --json
+cargo run -p render -- tests/fixtures/render/js_observer_chain.html /tmp/observer.png --json
+cargo run -p shell -- tests/fixtures/render/basic.html --save-png /tmp/page.png --width 640 --height 400
+```
+
+Límites r25: Color 4/5 con matrices CSS Color 4 y clamp por canal (sin HDR/color spaces arbitrarios); ES modules subset line-based (sin import() dinámico/top-level await/export-from/live bindings; ciclos ⇒ `ModuleCycle`); VP8L completo pero VP8 lossy/corrupto ⇒ warning; providers de render son canales (`history_actions`/`location_actions`) — render no navega; save-png directo valida firma y escribe atómico.
+
+Cifras de referencia en la ronda 25: **1594 tests** (bench 9, css 230, dom 28, fonts 17+1 doctest, html 60, image 69, js 96, layout 215, net 237, paint 208, render 145, shell 183, svg 85, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
+
 ## 4. Progress status generado (`PROGRESS.md`, `docs/status/*.svg`)
 
 El estado de avance del proyecto se genera **desde datos reales del repositorio**, sin
