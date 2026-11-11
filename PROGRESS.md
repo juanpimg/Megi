@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `dd11450` (2026-11-11) · overall **99%** · **2,019** tests · conformance **PASS** · **14** crates · **158,495** lines of Rust
+**Snapshot** — commit `9ea6d60` (2026-11-11) · overall **99%** · **2,019** tests · conformance **PASS** · **14** crates · **158,495** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -20,8 +20,8 @@
 | **F4** | Paint, raster & SVG | `████████████████████` | 100% |
 | **F5** | Networking & fetch | `████████████████████` | 100% |
 | **F6** | JavaScript & DOM APIs | `████████████████████` | 100% |
-| **F7** | Desktop shell (browser UI) | `████████████████████` | 99% |
-| | **Overall** | `████████████████████` | **99%** |
+| **F7** | Desktop shell (browser UI) | `███████████████████░` | 99% |
+| | **Overall** | `███████████████████░` | **99%** |
 
 ## What is done and what remains
 
@@ -158,7 +158,7 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `dd11450` (2026-11-11) |
+| Commit | `9ea6d60` (2026-11-11) |
 | Crates in the workspace | 14 |
 | Lines of Rust (tracked `.rs`) | 158495 |
 | Tests (`cargo test --workspace -- --list`) | 2019 |
