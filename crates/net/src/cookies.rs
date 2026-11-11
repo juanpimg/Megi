@@ -165,6 +165,8 @@ pub enum SetCookieError {
     EmptyName,
     /// The name contains characters outside the RFC 6265 token set.
     InvalidName(String),
+    /// The value contains control characters, which would corrupt the `Cookie` header.
+    InvalidValue,
     /// The `Domain` attribute is empty or cannot be scoped to the request host.
     InvalidDomain(String),
     /// The `Path` attribute is malformed (kept for explicit diagnostics).
@@ -183,6 +185,7 @@ impl fmt::Display for SetCookieError {
             Self::Empty => f.write_str("empty Set-Cookie header"),
             Self::EmptyName => f.write_str("Set-Cookie has an empty cookie name"),
             Self::InvalidName(name) => write!(f, "invalid cookie name `{name}`"),
+            Self::InvalidValue => f.write_str("cookie value contains a control character"),
             Self::InvalidDomain(domain) => write!(f, "invalid cookie domain `{domain}`"),
             Self::InvalidPath(path) => write!(f, "invalid cookie path `{path}`"),
             Self::InvalidMaxAge(value) => write!(f, "invalid cookie Max-Age `{value}`"),
@@ -272,6 +275,12 @@ pub fn parse_set_cookie(
     }
     if !is_valid_cookie_name(raw_name) {
         return Err(SetCookieError::InvalidName(raw_name.to_owned()));
+    }
+    // RFC 6265 §4.1.1 restricts the value to cookie-octets (no control characters). A bare
+    // CR/LF here would be echoed verbatim into the request's `Cookie` header, letting a
+    // server inject headers on later requests to the same (sub)domain.
+    if raw_value.bytes().any(|byte| byte < 0x20 || byte == 0x7F) {
+        return Err(SetCookieError::InvalidValue);
     }
 
     let mut parsed = ParsedSetCookie {
@@ -683,6 +692,40 @@ mod tests {
         assert!(!is_valid_cookie_name(""));
         assert!(!is_valid_cookie_name("bad name"));
         assert!(!is_valid_cookie_name("bad;name"));
+    }
+
+    #[test]
+    fn rejects_control_characters_in_the_value() {
+        let base = url("https://example.com/");
+        for header in [
+            "a=x\nContent-Length: 0",
+            "a=x\rContent-Length: 0",
+            "a=x\t1",
+            "a=x\u{7f}",
+        ] {
+            assert_eq!(
+                parse_set_cookie(header, &base, UNIX_EPOCH).err(),
+                Some(SetCookieError::InvalidValue),
+                "{header:?}"
+            );
+        }
+        // Spaces are not control characters; several sites send them and browsers accept.
+        assert_eq!(
+            parse_set_cookie("a=hello world", &base, UNIX_EPOCH)
+                .expect("space is not a CTL")
+                .value,
+            "hello world"
+        );
+    }
+
+    #[test]
+    fn control_characters_are_not_echoed_into_the_cookie_header() {
+        let (mut jar, _) = fixed_clock(0);
+        let base = url("https://example.com/");
+        assert!(!jar.store_set_cookie(&base, "a=x\nContent-Length: 0"));
+        assert_eq!(jar.header_for_url(&base), None);
+        assert!(jar.store_set_cookie(&base, "ok=1"));
+        assert_eq!(jar.header_for_url(&base).as_deref(), Some("ok=1"));
     }
 
     #[test]
