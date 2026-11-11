@@ -55,7 +55,7 @@
 
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use std::sync::{Arc, Mutex};
 
@@ -97,6 +97,13 @@ pub struct FetchOptions {
     pub max_response_bytes: usize,
     /// Maximum request body size in bytes accepted while streaming an upload.
     pub max_request_body: usize,
+    /// Reuse HTTP/1.1 connections through the loader's per-origin keep-alive pool
+    /// (plain-`http` GETs with no cookies/range/referrer, see `H1Pool`). Default `true`.
+    pub reuse_connections: bool,
+    /// Maximum idle HTTP/1.1 connections kept per origin (default 4).
+    pub max_connections_per_origin: usize,
+    /// Idle timeout for pooled HTTP/1.1 connections (default 30 s).
+    pub connection_idle_timeout: Duration,
     /// Accept HTTP/2 server pushes (`PUSH_PROMISE`) and let the resource loader preload
     /// them into a per-load session cache. Default `false`.
     pub accept_push: bool,
@@ -156,6 +163,9 @@ impl Default for FetchOptions {
             max_redirects: DEFAULT_MAX_REDIRECTS,
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
             max_request_body: 16 * 1024 * 1024,
+            reuse_connections: true,
+            max_connections_per_origin: 4,
+            connection_idle_timeout: Duration::from_secs(30),
             accept_push: false,
             max_pushed_resources: 8,
             max_pushed_body: 1024 * 1024,
@@ -191,7 +201,7 @@ pub struct PushedResponse {
 }
 
 /// A complete HTTP response.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Response {
     /// HTTP status code (e.g. `200`).
     pub status: u16,
@@ -212,6 +222,25 @@ pub struct Response {
     /// HTTP/2 server pushes collected while this response was in flight (empty unless
     /// [`FetchOptions::accept_push`] is enabled and the server pushed resources).
     pub pushed: Vec<PushedResponse>,
+    /// Internal: idle connection to return to the loader pool (never exposed meaningfully).
+    pooled_stream: Option<(String, TcpStream)>,
+}
+
+impl Clone for Response {
+    fn clone(&self) -> Self {
+        Self {
+            status: self.status,
+            reason: self.reason.clone(),
+            headers: self.headers.clone(),
+            body: self.body.clone(),
+            final_url: self.final_url.clone(),
+            content_range: self.content_range,
+            accept_ranges: self.accept_ranges,
+            trailers: self.trailers.clone(),
+            pushed: self.pushed.clone(),
+            pooled_stream: None,
+        }
+    }
 }
 
 impl Response {
@@ -250,6 +279,222 @@ impl Response {
     pub fn referrer_policy(&self) -> Option<crate::ReferrerPolicy> {
         crate::ReferrerPolicy::from_headers(&self.headers)
     }
+}
+
+/// Per-origin idle keep-alive pool for plain HTTP/1.1 GET connections (R185).
+#[derive(Debug, Default)]
+pub struct H1Pool {
+    entries: std::collections::HashMap<String, Vec<PooledH1>>,
+    max_per_origin: usize,
+    idle_timeout: Duration,
+}
+
+#[derive(Debug)]
+struct PooledH1 {
+    stream: TcpStream,
+    last_used: Instant,
+}
+
+impl H1Pool {
+    /// Creates a pool with `max_per_origin` idle connections and an idle timeout.
+    pub fn new(max_per_origin: usize, idle_timeout: Duration) -> Self {
+        Self {
+            entries: std::collections::HashMap::new(),
+            max_per_origin: max_per_origin.max(1),
+            idle_timeout,
+        }
+    }
+
+    fn take(&mut self, origin: &str) -> Option<TcpStream> {
+        let now = Instant::now();
+        let entries = self.entries.get_mut(origin)?;
+        while let Some(pooled) = entries.pop() {
+            if now.duration_since(pooled.last_used) < self.idle_timeout {
+                return Some(pooled.stream);
+            }
+        }
+        None
+    }
+
+    fn put(&mut self, origin: String, stream: TcpStream) {
+        let entries = self.entries.entry(origin).or_default();
+        if entries.len() >= self.max_per_origin {
+            entries.remove(0);
+        }
+        entries.push(PooledH1 {
+            stream,
+            last_used: Instant::now(),
+        });
+    }
+
+    /// Drops expired idle connections.
+    pub fn prune_expired(&mut self) {
+        let timeout = self.idle_timeout;
+        let now = Instant::now();
+        for entries in self.entries.values_mut() {
+            entries.retain(|pooled| now.duration_since(pooled.last_used) < timeout);
+        }
+        self.entries.retain(|_, entries| !entries.is_empty());
+    }
+
+    /// Number of idle connections currently pooled (tests/diagnostics).
+    pub fn idle_connections(&self) -> usize {
+        self.entries.values().map(Vec::len).sum()
+    }
+}
+
+fn origin_key(url: &Url) -> String {
+    format!(
+        "{}://{}:{}",
+        url.scheme().as_str(),
+        url.host(),
+        url.port_or_default().unwrap_or(0)
+    )
+}
+
+/// Fetches a plain-HTTP GET reusing an idle connection from `pool` when possible.
+///
+/// MVP semantics (documented): only `http:` GET requests without cookies/range/referrer/
+/// compression are pooled; redirects, `https:`, cookies and encoded responses fall back to
+/// the regular buffered [`fetch`] (same response semantics, just no connection reuse for
+/// that request). The connection is returned to the pool only when the body was fully
+/// delimited (Content-Length/chunked) and the server kept it alive.
+pub fn fetch_pooled(
+    url: &Url,
+    options: &FetchOptions,
+    pool: &mut H1Pool,
+) -> Result<Response, FetchError> {
+    if url.scheme() != Scheme::Http
+        || !options.reuse_connections
+        || options.cookie_jar.is_some()
+        || options.origin.is_some()
+        || options.range.is_some()
+        || options.referrer.is_some()
+        || options.accept_encoding != AcceptEncoding::Identity
+    {
+        return fetch(url, options);
+    }
+    let origin = origin_key(url);
+    let port = url.port_or_default().unwrap_or(80);
+    let host_header = match url.port() {
+        Some(port) => format!("{}:{port}", url.host()),
+        None => url.host().to_owned(),
+    };
+    let mut last_error = None;
+    for attempt in 0..2 {
+        let stream = match pool.take(&origin) {
+            Some(stream) => stream,
+            None => {
+                let address = format!("{}:{port}", url.host());
+                TcpStream::connect(&address).map_err(map_io_error)?
+            }
+        };
+        stream.set_read_timeout(Some(options.read_timeout)).ok();
+        stream.set_write_timeout(Some(options.read_timeout)).ok();
+        let mut reader = ConnReader::new(Transport::Plain(stream));
+        let mut request = format!(
+            "GET {} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\n\r\n",
+            url.request_target(),
+            options.user_agent
+        );
+        if options.accept_encoding != AcceptEncoding::Identity {
+            request = format!(
+                "GET {} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\nAccept-Encoding: {}\r\n\r\n",
+                url.request_target(),
+                options.user_agent,
+                options.accept_encoding.header_value().unwrap_or("identity")
+            );
+        }
+        let result = (|| -> Result<Response, FetchError> {
+            reader
+                .stream
+                .write_all(request.as_bytes())
+                .map_err(map_io_error)?;
+            reader.stream.flush().map_err(map_io_error)?;
+            let head = reader.read_head(options.max_header_bytes)?;
+            let (status, reason, headers) = parse_head(&head)?;
+            if (300..400).contains(&status) {
+                return Err(FetchError::InvalidResponse(
+                    "redirect in pooled fetch".to_owned(),
+                ));
+            }
+            if headers.iter().any(|(name, _)| {
+                name.eq_ignore_ascii_case("content-encoding")
+                    || name.eq_ignore_ascii_case("transfer-encoding")
+            }) {
+                return Err(FetchError::InvalidResponse(
+                    "encoded pooled response".to_owned(),
+                ));
+            }
+            let has_length = headers
+                .iter()
+                .any(|(name, _)| name.eq_ignore_ascii_case("content-length"));
+            let connection_close = headers.iter().any(|(name, value)| {
+                name.eq_ignore_ascii_case("connection")
+                    && value
+                        .split(',')
+                        .any(|token| token.trim().eq_ignore_ascii_case("close"))
+            });
+            let (body, trailers) = read_body(&mut reader, status, &headers, options)?;
+            let mut keep_alive = has_length && !connection_close;
+            if reader.position < reader.buffer.len() {
+                keep_alive = false; // unexpected pipelined bytes: do not reuse
+            }
+            let stream = match reader.stream {
+                Transport::Plain(stream) => Some(stream),
+                #[cfg(feature = "tls")]
+                Transport::Tls(_) => None,
+            };
+            Ok(Response {
+                status,
+                reason,
+                headers,
+                body,
+                final_url: url.clone(),
+                content_range: None,
+                accept_ranges: false,
+                trailers,
+                pushed: Vec::new(),
+                pooled_stream: stream
+                    .filter(|_| keep_alive)
+                    .map(|stream| (origin.clone(), stream)),
+            })
+        })();
+        match result {
+            Ok(mut response) => {
+                if let Some((origin, stream)) = response.pooled_stream.take() {
+                    pool.put(origin, stream);
+                }
+                return Ok(response);
+            }
+            Err(error) => {
+                last_error = Some(error);
+                if attempt == 0 {
+                    continue;
+                }
+            }
+        }
+    }
+    // Redirects/encoded responses/races fall back to the buffered fetch (semantics first).
+    fetch(url, options).or(Err(last_error.unwrap_or(FetchError::InvalidResponse(
+        "pooled fetch failed".to_owned(),
+    ))))
+}
+
+/// Buffered fallback streaming fetch: the response is fetched normally (redirects,
+/// cookies, cache validators and compression all respected by [`fetch`]), then the body is
+/// delivered to `on_data` in 16 KiB chunks. A callback error aborts with that error.
+pub fn fetch_streaming(
+    url: &Url,
+    options: &FetchOptions,
+    on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
+) -> Result<Response, FetchError> {
+    let mut response = fetch(url, options)?;
+    let body = std::mem::take(&mut response.body);
+    for chunk in body.chunks(16 * 1024) {
+        on_data(chunk)?;
+    }
+    Ok(response)
 }
 
 /// Fetches `url` over HTTP/1.1 (or HTTPS with the `tls` feature), following redirects.
@@ -389,6 +634,7 @@ pub fn fetch_with_request_body(
                 accept_ranges,
                 trailers: raw.trailers,
                 pushed: raw.pushed,
+                pooled_stream: None,
             });
         }
         if redirects >= options.max_redirects {

@@ -158,6 +158,8 @@ pub struct ResourceLoader {
     pushed_discarded: usize,
     /// Encoded bytes currently held in the push cache.
     pushed_bytes: usize,
+    /// Per-origin idle HTTP/1.1 keep-alive connections (R185).
+    h1_pool: crate::http::H1Pool,
 }
 
 impl Default for ResourceLoader {
@@ -174,6 +176,10 @@ impl ResourceLoader {
 
     /// Creates a loader with custom [`FetchOptions`] and the cache enabled.
     pub fn with_options(options: FetchOptions) -> Self {
+        let h1_pool = crate::http::H1Pool::new(
+            options.max_connections_per_origin,
+            options.connection_idle_timeout,
+        );
         Self {
             options,
             cache: Some(HashMap::new()),
@@ -184,6 +190,7 @@ impl ResourceLoader {
             pushed_used: 0,
             pushed_discarded: 0,
             pushed_bytes: 0,
+            h1_pool,
         }
     }
 
@@ -199,6 +206,7 @@ impl ResourceLoader {
             pushed_used: 0,
             pushed_discarded: 0,
             pushed_bytes: 0,
+            h1_pool: crate::http::H1Pool::new(4, std::time::Duration::from_secs(30)),
         }
     }
 
@@ -353,6 +361,51 @@ impl ResourceLoader {
         Ok(resource)
     }
 
+    /// Loads `url` with a streaming callback.
+    ///
+    /// MVP fallback documented: for `http(s)` the response is fetched with the regular
+    /// buffered [`crate::http::fetch`] (redirects, cookie jar, CORS and compression are
+    /// respected) and its body is delivered to `on_data` in 16 KiB chunks; the resource is
+    /// returned with an empty body. The HTTP/preload caches are bypassed by design for this
+    /// streaming entry point. `file:`/`data:` bodies are read normally and chunked.
+    pub fn load_streaming(
+        &mut self,
+        url: &Url,
+        on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
+    ) -> Result<Resource, LoadError> {
+        match url.scheme() {
+            Scheme::Http | Scheme::Https => {
+                let response = crate::http::fetch_streaming(url, &self.options, on_data)?;
+                Ok(Resource {
+                    url: response.final_url,
+                    content_type: response
+                        .headers
+                        .iter()
+                        .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+                        .map(|(_, value)| value.split(';').next().unwrap_or("").trim().to_owned())
+                        .unwrap_or_default(),
+                    bytes: response.body,
+                })
+            }
+            Scheme::File | Scheme::Data => {
+                let resource = self.load(url)?;
+                for chunk in resource.bytes.chunks(16 * 1024) {
+                    on_data(chunk)?;
+                }
+                Ok(Resource {
+                    url: resource.url.clone(),
+                    content_type: resource.content_type.clone(),
+                    bytes: Vec::new(),
+                })
+            }
+        }
+    }
+
+    /// Number of idle HTTP/1.1 connections currently pooled across origins.
+    pub fn idle_connections(&self) -> usize {
+        self.h1_pool.idle_connections()
+    }
+
     /// Fetches without consulting the cache (still stores the result when allowed).
     ///
     /// Returns the response headers (when fetched over HTTP) so the caller can apply
@@ -360,7 +413,11 @@ impl ResourceLoader {
     fn fetch_resource(&mut self, url: &Url) -> Result<(Resource, Option<Headers>), FetchError> {
         match url.scheme() {
             Scheme::Http | Scheme::Https => {
-                let mut response = fetch(url, &self.options)?;
+                let mut response = if url.scheme() == Scheme::Http {
+                    crate::http::fetch_pooled(url, &self.options, &mut self.h1_pool)?
+                } else {
+                    fetch(url, &self.options)?
+                };
                 if response.status == 304 {
                     // Reached only when no conditional request was sent (no cached
                     // representation): a server bug must be a typed error.

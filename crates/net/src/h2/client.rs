@@ -88,6 +88,9 @@ pub struct H2PushedResponse {
     pub body: Vec<u8>,
 }
 
+/// Streaming response callback: receives DATA payloads as frames arrive.
+pub type DataCallback<'a> = &'a mut dyn FnMut(&[u8]) -> Result<(), FetchError>;
+
 /// Stream priority (RFC 9113 §5.3): weight 1..=256, `depends_on` stream id
 /// (0 = root) and the exclusive bit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -447,6 +450,9 @@ struct Session<'a, S: Read + Write> {
     pushed_total_bytes: usize,
     /// Number of pushes cancelled/discarded by caps or due to cancellation.
     pushed_discarded: usize,
+    /// Optional streaming callback: response DATA is delivered as it arrives (the body is
+    /// not accumulated, except pushes). A callback error sends `RST_STREAM(CANCEL)`.
+    on_data: Option<DataCallback<'a>>,
     /// Promised stream ids we cancelled: later in-flight frames are ignored.
     discarded_pushes: HashSet<u32>,
     last_pushed_stream: u32,
@@ -454,7 +460,12 @@ struct Session<'a, S: Read + Write> {
 }
 
 impl<'a, S: Read + Write> Session<'a, S> {
-    fn new(stream: &'a mut S, requests: Vec<H2Request>, limits: &'a Limits) -> Self {
+    fn new(
+        stream: &'a mut S,
+        requests: Vec<H2Request>,
+        limits: &'a Limits,
+        on_data: Option<DataCallback<'a>>,
+    ) -> Self {
         Self {
             stream,
             limits,
@@ -476,6 +487,7 @@ impl<'a, S: Read + Write> Session<'a, S> {
             pushed_results: Vec::new(),
             pushed_total_bytes: 0,
             pushed_discarded: 0,
+            on_data,
             discarded_pushes: HashSet::new(),
             last_pushed_stream: 0,
             next_stream_id: 1,
@@ -1166,6 +1178,31 @@ impl<'a, S: Read + Write> Session<'a, S> {
                 }
                 self.connection_receive_window -= length;
                 stream.receive_window -= length;
+                if let Some(callback) = self.on_data.take() {
+                    let outcome = callback(payload);
+                    self.on_data = Some(callback);
+                    match outcome {
+                        Ok(()) => {}
+                        Err(error) => {
+                            let _ = send_frame(
+                                &mut *self.stream,
+                                &Frame::rst_stream(stream_id, error_code::CANCEL),
+                            );
+                            return Err(error);
+                        }
+                    }
+                    self.connection_receive_window += length;
+                    let increment = u32::try_from(payload.len()).unwrap_or(u32::MAX);
+                    self.send_window_update(0, increment);
+                    if let Some(stream) = self.streams.get_mut(&stream_id) {
+                        stream.receive_window += length;
+                    }
+                    self.send_window_update(stream_id, increment);
+                    if frame.header.flags & flags::END_STREAM != 0 {
+                        self.finish_stream(stream_id);
+                    }
+                    return Ok(());
+                }
                 if stream.body.len().saturating_add(payload.len()) > self.limits.max_body {
                     self.fail_stream(stream_id, FetchError::ResponseTooLarge);
                     return Ok(());
@@ -1454,7 +1491,7 @@ fn run_requests<S: Read + Write>(
     requests: Vec<H2Request>,
     limits: &Limits,
 ) -> Result<Vec<Result<H2Response, FetchError>>, FetchError> {
-    let mut session = Session::new(stream, requests, limits);
+    let mut session = Session::new(stream, requests, limits, None);
     session.run()?;
     let pushed = std::mem::take(&mut session.pushed_results);
     let mut results: Vec<Result<H2Response, FetchError>> = session
@@ -1468,6 +1505,49 @@ fn run_requests<S: Read + Write>(
         first.pushed = pushed;
     }
     Ok(results)
+}
+
+/// Streaming variant of [`get_many`]: response DATA is delivered to `on_data` as frames
+/// arrive (flow-controlled per window); accumulated bodies are left empty. If the callback
+/// returns an error the stream is reset with `RST_STREAM(CANCEL)` and the error is returned.
+pub fn request_streaming<S: Read + Write>(
+    stream: &mut S,
+    requests: Vec<H2Request>,
+    limits: &Limits,
+    on_data: DataCallback<'_>,
+) -> Result<Vec<Result<H2Response, FetchError>>, FetchError> {
+    let mut session = Session::new(stream, requests, limits, Some(on_data));
+    session.run()?;
+    let pushed = std::mem::take(&mut session.pushed_results);
+    let mut results: Vec<Result<H2Response, FetchError>> = session
+        .results
+        .into_iter()
+        .map(|result| result.expect("all requests resolved"))
+        .collect();
+    if !pushed.is_empty()
+        && let Some(Ok(first)) = results.iter_mut().find(|result| result.is_ok())
+    {
+        first.pushed = pushed;
+    }
+    Ok(results)
+}
+
+/// Single-request convenience wrapper around [`request_streaming`].
+pub fn get_streaming<S: Read + Write>(
+    stream: &mut S,
+    scheme: &str,
+    authority: &str,
+    target: &str,
+    extra_headers: &[(String, String)],
+    limits: &Limits,
+    on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
+) -> Result<H2Response, FetchError> {
+    let request = H2Request::get(scheme, authority, target, extra_headers);
+    let mut results = request_streaming(stream, vec![request], limits, on_data)?;
+    match results.pop() {
+        Some(result) => result,
+        None => Err(h2_error("HTTP/2 streaming request produced no response")),
+    }
 }
 
 /// Additive API for arbitrary methods/bodies/trailers over one HTTP/2 connection.

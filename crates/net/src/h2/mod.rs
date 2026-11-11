@@ -31,6 +31,9 @@
 //! - **SETTINGS**: `HEADER_TABLE_SIZE`, `MAX_CONCURRENT_STREAMS`, `INITIAL_WINDOW_SIZE`,
 //!   `MAX_FRAME_SIZE`, `ENABLE_PUSH` validated and ACKed; outgoing HEADERS are fragmented
 //!   with CONTINUATION according to the peer's `MAX_FRAME_SIZE`.
+//! - **Response streaming** (`client::get_streaming`/`client::request_streaming`): DATA
+//!   payloads are delivered to the caller as frames arrive (flow-controlled); the body is
+//!   not accumulated, and a callback error resets the stream with `RST_STREAM(CANCEL)`.
 //! - Requests (GET/HEAD/POST with optional buffered or streamed bodies) carry stream
 //!   priorities; responses are fully buffered per stream and capped by
 //!   [`crate::http::FetchOptions::max_response_bytes`].
