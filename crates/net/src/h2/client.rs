@@ -36,12 +36,17 @@
 //! non-open dependencies are rejected, and incoming `PRIORITY` frames are validated and
 //! ignored. The opt-in [`h2c_request`] performs the HTTP/1.1 `Upgrade: h2c` handshake
 //! (requires [`Limits::allow_h2c`]); non-101 responses return `None` (caller reconnects
-//! for HTTP/1.1 fallback). No response streaming (bodies are buffered), request bodies
-//! are buffered in memory (`max_request_body`, default 16 MiB), `Expect: 100-continue`
-//! has no dedicated timer (socket timeout bounds it), and only one `GOAWAY` is handled
-//! (as a typed error for the in-flight batch).
+//! for HTTP/1.1 fallback). Request bodies may be in-memory bytes or a **streaming
+//! producer** (`RequestBody::Stream`, pulled only when a DATA frame fits the peer
+//! `MAX_FRAME_SIZE`/send windows ⇒ backpressure, never buffered whole;
+//! `Limits::max_request_body` caps the total; producer errors abort with
+//! `RST_STREAM(CANCEL)`). Responses are still buffered whole, `Expect: 100-continue` has
+//! no dedicated timer (socket timeout bounds it), and only one `GOAWAY` is handled (as a
+//! typed error for the in-flight batch).
 
 use std::collections::{BTreeMap, HashSet};
+
+use crate::body::RequestBody;
 use std::io::{Read, Write};
 
 use crate::error::FetchError;
@@ -61,6 +66,26 @@ pub struct H2Response {
     pub body: Vec<u8>,
     /// Trailing headers (a final HEADERS block with END_STREAM after the body).
     pub trailers: Vec<(String, String)>,
+    /// Server-pushed responses collected while this exchange was in flight (opt-in via
+    /// [`Limits::enable_server_push`]). Pushes are attached to the first successful
+    /// response of a batch; resource caps in [`Limits`] bound count/body sizes.
+    pub pushed: Vec<H2PushedResponse>,
+}
+
+/// One server-pushed HTTP/2 response (RFC 9113 §8.4).
+#[derive(Clone, Debug)]
+pub struct H2PushedResponse {
+    /// Absolute URL reconstructed from the `PUSH_PROMISE` pseudo-headers
+    /// (`:scheme://:authority:path`).
+    pub url: String,
+    /// Response status.
+    pub status: u16,
+    /// Canonical reason phrase for `status`.
+    pub reason: String,
+    /// Response headers (lowercased, pseudo-headers removed).
+    pub headers: Vec<(String, String)>,
+    /// Buffered response body.
+    pub body: Vec<u8>,
 }
 
 /// Stream priority (RFC 9113 §5.3): weight 1..=256, `depends_on` stream id
@@ -73,7 +98,6 @@ pub struct Priority {
 }
 
 /// One multiplexable HTTP/2 request (GET/POST/PUT/... with an optional body).
-#[derive(Clone, Debug)]
 pub struct H2Request {
     /// HTTP method (sent as `:method`; uppercased and token-validated).
     pub method: String,
@@ -85,8 +109,8 @@ pub struct H2Request {
     pub target: String,
     /// Extra request headers (connection-specific and pseudo headers are dropped).
     pub extra_headers: Vec<(String, String)>,
-    /// Optional request body; `None`/empty sends END_STREAM on the HEADERS frame.
-    pub body: Option<Vec<u8>>,
+    /// Optional request body (bytes or a streaming producer with backpressure).
+    pub body: Option<RequestBody>,
     /// Optional stream priority (sent in the HEADERS priority section and used to
     /// order concurrent `request_many` submissions).
     pub priority: Option<Priority>,
@@ -113,6 +137,25 @@ impl H2Request {
         extra_headers: &[(String, String)],
         body: Option<Vec<u8>>,
     ) -> Self {
+        Self::new_with_body(
+            method,
+            scheme,
+            authority,
+            target,
+            extra_headers,
+            body.map(RequestBody::Bytes),
+        )
+    }
+
+    /// Builds a request with an arbitrary [`RequestBody`] (bytes or streaming).
+    pub fn new_with_body(
+        method: &str,
+        scheme: &str,
+        authority: &str,
+        target: &str,
+        extra_headers: &[(String, String)],
+        body: Option<RequestBody>,
+    ) -> Self {
         Self {
             method: method.to_owned(),
             scheme: scheme.to_owned(),
@@ -124,11 +167,50 @@ impl H2Request {
         }
     }
 
+    /// Sets a streaming/bytes body (builder).
+    pub fn with_body(mut self, body: RequestBody) -> Self {
+        self.body = Some(body);
+        self
+    }
+
     /// Sets the stream priority (weight 1..=256; invalid values fail the request
     /// with a typed HTTP/2 error).
     pub fn with_priority(mut self, priority: Priority) -> Self {
         self.priority = Some(priority);
         self
+    }
+
+    fn clone_bytes_only(&self) -> Result<Self, FetchError> {
+        let body =
+            match &self.body {
+                Some(body) => Some(body.try_clone().ok_or_else(|| {
+                    h2_error("streaming request bodies require request_many_owned")
+                })?),
+                None => None,
+            };
+        Ok(Self {
+            method: self.method.clone(),
+            scheme: self.scheme.clone(),
+            authority: self.authority.clone(),
+            target: self.target.clone(),
+            extra_headers: self.extra_headers.clone(),
+            body,
+            priority: self.priority,
+        })
+    }
+}
+
+impl std::fmt::Debug for H2Request {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("H2Request")
+            .field("method", &self.method)
+            .field("scheme", &self.scheme)
+            .field("authority", &self.authority)
+            .field("target", &self.target)
+            .field("body", &self.body)
+            .field("priority", &self.priority)
+            .finish()
     }
 }
 
@@ -149,9 +231,17 @@ pub struct Limits {
     pub initial_window_size: u32,
     /// Maximum accepted request body size (default 16 MiB).
     pub max_request_body: usize,
-    /// Advertise `SETTINGS_ENABLE_PUSH=1` and accept (then cancel/discard) server
-    /// push promises. Default `false`: PUSH_PROMISE is a clean protocol error.
+    /// Advertise `SETTINGS_ENABLE_PUSH=1` and collect promised responses into
+    /// [`H2Response::pushed`]. Default `false`: PUSH_PROMISE is a clean protocol error.
     pub enable_server_push: bool,
+    /// Maximum number of pushed responses collected per exchange (default 8). Extra
+    /// promises are cancelled with `RST_STREAM(CANCEL)` and ignored.
+    pub max_pushed_resources: usize,
+    /// Maximum body size of a single pushed response (default 1 MiB). Larger pushes are
+    /// cancelled and dropped (the normal response is unaffected).
+    pub max_pushed_body: usize,
+    /// Maximum total body bytes of all pushed responses collected (default 4 MiB).
+    pub max_pushed_total: usize,
     /// Allow the HTTP/1.1 `Upgrade: h2c` handshake in [`h2c_request`].
     pub allow_h2c: bool,
 }
@@ -166,6 +256,9 @@ impl Default for Limits {
             initial_window_size: 65_535,
             max_request_body: 16 * 1024 * 1024,
             enable_server_push: false,
+            max_pushed_resources: 8,
+            max_pushed_body: 1024 * 1024,
+            max_pushed_total: 4 * 1024 * 1024,
             allow_h2c: false,
         }
     }
@@ -223,6 +316,77 @@ fn reason_phrase(status: u16) -> String {
     .to_owned()
 }
 
+/// Incremental request-body source: pulls from [`RequestBody`] only when the send
+/// window/frame size allow a write (backpressure; never buffers the whole upload).
+struct ActiveBody {
+    source: RequestBody,
+    buffer: Vec<u8>,
+    buffer_offset: usize,
+    /// Bytes already emitted for the cap (`Limits::max_request_body`).
+    total_sent: usize,
+    done: bool,
+}
+
+impl ActiveBody {
+    fn new(source: RequestBody) -> Self {
+        Self {
+            source,
+            buffer: Vec::new(),
+            buffer_offset: 0,
+            total_sent: 0,
+            done: false,
+        }
+    }
+
+    /// True when the last pulled chunk completes the body (no further DATA needed).
+    fn at_end(&self) -> bool {
+        self.done && self.buffer_offset == self.buffer.len()
+    }
+
+    /// Pulls the next chunk of at most `max` bytes (`None` = end of body).
+    fn next_chunk(&mut self, max: usize) -> Result<Option<Vec<u8>>, FetchError> {
+        if max == 0 {
+            return Ok(Some(Vec::new()));
+        }
+        loop {
+            if self.buffer_offset < self.buffer.len() {
+                let take = max.min(self.buffer.len() - self.buffer_offset);
+                let chunk = self.buffer[self.buffer_offset..self.buffer_offset + take].to_vec();
+                self.buffer_offset += take;
+                if self.buffer_offset == self.buffer.len() {
+                    self.buffer.clear();
+                    self.buffer_offset = 0;
+                }
+                return Ok(Some(chunk));
+            }
+            if self.done {
+                return Ok(None);
+            }
+            match &mut self.source {
+                RequestBody::Bytes(bytes) => {
+                    self.buffer = std::mem::take(bytes);
+                    self.buffer_offset = 0;
+                    self.done = true;
+                }
+                RequestBody::Stream(producer) => match producer.next_chunk(max)? {
+                    None => {
+                        self.done = true;
+                        return Ok(None);
+                    }
+                    Some(chunk) if chunk.is_empty() => {
+                        self.done = true;
+                        return Ok(None);
+                    }
+                    Some(chunk) => {
+                        self.buffer = chunk;
+                        self.buffer_offset = 0;
+                    }
+                },
+            }
+        }
+    }
+}
+
 /// State of one open stream.
 struct OpenStream {
     request_index: usize,
@@ -234,13 +398,24 @@ struct OpenStream {
     /// Peer-advertised send window (reduced as request DATA is emitted).
     send_window: i64,
     got_headers: bool,
-    /// Request body still to be emitted (None once fully sent / for bodyless requests).
-    pending_body: Option<Vec<u8>>,
-    body_offset: usize,
+    /// Request body still to be emitted (None once fully sent / bodyless requests).
+    pending_body: Option<ActiveBody>,
     /// `Expect: 100-continue`: hold DATA until the interim 100 response arrives.
     awaiting_continue: bool,
     /// Trailing response headers.
     trailers: Vec<(String, String)>,
+}
+
+/// A promised (server-pushed) response being received.
+struct PushedStream {
+    /// Absolute URL reconstructed from the promise pseudo-headers.
+    url: String,
+    status: Option<u16>,
+    headers: Vec<(String, String)>,
+    body: Vec<u8>,
+    got_headers: bool,
+    /// Per-push receive window (we advertise `INITIAL_WINDOW_SIZE` for pushed streams too).
+    receive_window: i64,
 }
 
 /// The HTTP/2 connection driver.
@@ -257,21 +432,29 @@ struct Session<'a, S: Read + Write> {
     peer_settings_received: bool,
     streams: BTreeMap<u32, OpenStream>,
     results: Vec<Option<Result<H2Response, FetchError>>>,
-    requests: &'a [H2Request],
+    requests: Vec<H2Request>,
     /// Requests not opened yet (ordered by the priority scheduler).
     remaining: Vec<usize>,
     /// Stream ids already opened (priority dependencies can reference these).
     opened_stream_ids: HashSet<u32>,
     /// Outgoing stream weights (for DATA ordering).
     stream_weights: BTreeMap<u32, u16>,
-    /// Pushed streams we cancelled/discarded (their frames are ignored).
-    pushed_streams: HashSet<u32>,
+    /// Accepted server-pushed streams, in promise order (removed when finished/discarded).
+    pushed_streams: BTreeMap<u32, PushedStream>,
+    /// Fully received pushed responses, attached to the first successful result.
+    pushed_results: Vec<H2PushedResponse>,
+    /// Total body bytes of accepted pushed responses (cap: `max_pushed_total`).
+    pushed_total_bytes: usize,
+    /// Number of pushes cancelled/discarded by caps or due to cancellation.
+    pushed_discarded: usize,
+    /// Promised stream ids we cancelled: later in-flight frames are ignored.
+    discarded_pushes: HashSet<u32>,
     last_pushed_stream: u32,
     next_stream_id: u32,
 }
 
 impl<'a, S: Read + Write> Session<'a, S> {
-    fn new(stream: &'a mut S, requests: &'a [H2Request], limits: &'a Limits) -> Self {
+    fn new(stream: &'a mut S, requests: Vec<H2Request>, limits: &'a Limits) -> Self {
         Self {
             stream,
             limits,
@@ -285,11 +468,15 @@ impl<'a, S: Read + Write> Session<'a, S> {
             peer_settings_received: false,
             streams: BTreeMap::new(),
             results: (0..requests.len()).map(|_| None).collect(),
-            requests,
             remaining: (0..requests.len()).collect(),
+            requests,
             opened_stream_ids: HashSet::new(),
             stream_weights: BTreeMap::new(),
-            pushed_streams: HashSet::new(),
+            pushed_streams: BTreeMap::new(),
+            pushed_results: Vec::new(),
+            pushed_total_bytes: 0,
+            pushed_discarded: 0,
+            discarded_pushes: HashSet::new(),
             last_pushed_stream: 0,
             next_stream_id: 1,
         }
@@ -327,6 +514,11 @@ impl<'a, S: Read + Write> Session<'a, S> {
         self.send_pending_bodies()?;
         loop {
             if self.all_done() {
+                // Client requests are complete: pushes still in flight are cancelled (the
+                // connection may stay open, so waiting could block indefinitely).
+                for stream_id in self.pushed_streams.keys().copied().collect::<Vec<_>>() {
+                    self.discard_pushed(stream_id);
+                }
                 break;
             }
             self.send_pending_bodies()?;
@@ -431,7 +623,8 @@ impl<'a, S: Read + Write> Session<'a, S> {
 
     /// Emits pending request bodies as DATA frames, respecting the peer frame size and
     /// both send windows. Streams waiting for `100-continue` are skipped until the
-    /// interim response clears `awaiting_continue`.
+    /// interim response clears `awaiting_continue`. Streaming producers are pulled only
+    /// when a window/frame slot is available (backpressure; never buffers the upload).
     fn send_pending_bodies(&mut self) -> Result<(), FetchError> {
         let mut ids: Vec<u32> = self
             .streams
@@ -447,37 +640,81 @@ impl<'a, S: Read + Write> Session<'a, S> {
         });
         for stream_id in ids {
             let mut frames: Vec<Frame> = Vec::new();
+            let mut producer_error: Option<FetchError> = None;
+            let mut cap_error = false;
+            let mut finished = false;
             {
                 let Some(stream) = self.streams.get_mut(&stream_id) else {
                     continue;
                 };
-                let Some(body) = stream.pending_body.as_ref() else {
+                let Some(mut active) = stream.pending_body.take() else {
                     continue;
                 };
-                while stream.body_offset < body.len() {
+                loop {
                     let available =
                         stream.send_window.min(self.connection_send_window).max(0) as usize;
                     if available == 0 {
                         break;
                     }
-                    let remaining = body.len() - stream.body_offset;
                     let max_frame = usize::try_from(self.peer_max_frame_size.max(1))
                         .unwrap_or(DEFAULT_MAX_FRAME_SIZE as usize);
-                    let chunk_len = remaining.min(available).min(max_frame);
-                    if chunk_len == 0 {
-                        break;
-                    }
-                    let end = stream.body_offset + chunk_len == body.len();
-                    let chunk = body[stream.body_offset..stream.body_offset + chunk_len].to_vec();
-                    frames.push(Frame::data(stream_id, &chunk, end));
-                    stream.body_offset += chunk_len;
-                    stream.send_window -= chunk_len as i64;
-                    self.connection_send_window -= chunk_len as i64;
-                    if end {
-                        stream.pending_body = None;
-                        break;
+                    let max = available.min(max_frame);
+                    match active.next_chunk(max) {
+                        Ok(None) => {
+                            // Empty DATA with END_STREAM terminates the request body.
+                            frames.push(Frame::data(stream_id, &[], true));
+                            finished = true;
+                            break;
+                        }
+                        Ok(Some(chunk)) => {
+                            if active.total_sent.saturating_add(chunk.len())
+                                > self.limits.max_request_body
+                            {
+                                cap_error = true;
+                                break;
+                            }
+                            active.total_sent += chunk.len();
+                            stream.send_window -= chunk.len() as i64;
+                            self.connection_send_window -= chunk.len() as i64;
+                            let end = active.at_end();
+                            frames.push(Frame::data(stream_id, &chunk, end));
+                            if end {
+                                finished = true;
+                                break;
+                            }
+                            if chunk.is_empty() {
+                                // A producer returning an empty chunk means EOF.
+                                frames.pop();
+                                frames.push(Frame::data(stream_id, &[], true));
+                                finished = true;
+                                break;
+                            }
+                        }
+                        Err(error) => {
+                            producer_error = Some(error);
+                            break;
+                        }
                     }
                 }
+                if !finished {
+                    stream.pending_body = Some(active);
+                }
+            }
+            if cap_error {
+                let _ = send_frame(
+                    &mut *self.stream,
+                    &Frame::rst_stream(stream_id, error_code::CANCEL),
+                );
+                self.fail_stream(stream_id, FetchError::RequestBodyTooLarge);
+                continue;
+            }
+            if let Some(error) = producer_error {
+                let _ = send_frame(
+                    &mut *self.stream,
+                    &Frame::rst_stream(stream_id, error_code::CANCEL),
+                );
+                self.fail_stream(stream_id, error);
+                continue;
             }
             for frame in frames {
                 send_frame(&mut *self.stream, &frame)?;
@@ -487,14 +724,23 @@ impl<'a, S: Read + Write> Session<'a, S> {
     }
 
     fn open_stream(&mut self, request_index: usize) -> Result<(), FetchError> {
-        let request = &self.requests[request_index];
-        if !request.scheme.eq_ignore_ascii_case("https")
-            && !request.scheme.eq_ignore_ascii_case("http")
-        {
+        let (scheme, method_raw, authority, target, extra_headers, request_priority, body) = {
+            let request = &mut self.requests[request_index];
+            (
+                request.scheme.clone(),
+                request.method.clone(),
+                request.authority.clone(),
+                request.target.clone(),
+                request.extra_headers.clone(),
+                request.priority,
+                request.body.take(),
+            )
+        };
+        if !scheme.eq_ignore_ascii_case("https") && !scheme.eq_ignore_ascii_case("http") {
             self.fail_request(request_index, h2_error("unsupported scheme for h2"));
             return Ok(());
         }
-        let method = request.method.trim().to_ascii_uppercase();
+        let method = method_raw.trim().to_ascii_uppercase();
         if method.is_empty()
             || method.len() > 32
             || !method
@@ -504,19 +750,20 @@ impl<'a, S: Read + Write> Session<'a, S> {
             self.fail_request(request_index, h2_error("invalid HTTP method"));
             return Ok(());
         }
-        if let Some(body) = &request.body
-            && body.len() > self.limits.max_request_body
+        if let Some(body) = &body
+            && let Some(length) = body.len()
+            && length > self.limits.max_request_body
         {
             self.fail_request(request_index, FetchError::RequestBodyTooLarge);
             return Ok(());
         }
-        let expect_continue = request.extra_headers.iter().any(|(name, value)| {
+        let expect_continue = extra_headers.iter().any(|(name, value)| {
             name.eq_ignore_ascii_case("expect")
                 && value.to_ascii_lowercase().contains("100-continue")
         });
         let stream_id = self.next_stream_id;
         self.next_stream_id = self.next_stream_id.saturating_add(2);
-        let priority = match request.priority {
+        let priority = match request_priority {
             Some(priority) => {
                 if priority.weight == 0 || priority.weight > 256 {
                     self.fail_request(
@@ -544,11 +791,11 @@ impl<'a, S: Read + Write> Session<'a, S> {
         };
         let mut headers: Vec<(String, String)> = vec![
             (":method".to_owned(), method),
-            (":scheme".to_owned(), request.scheme.to_ascii_lowercase()),
-            (":authority".to_owned(), request.authority.clone()),
-            (":path".to_owned(), request.target.clone()),
+            (":scheme".to_owned(), scheme.to_ascii_lowercase()),
+            (":authority".to_owned(), authority),
+            (":path".to_owned(), target),
         ];
-        for (name, value) in &request.extra_headers {
+        for (name, value) in &extra_headers {
             let lower = name.to_ascii_lowercase();
             if matches!(
                 lower.as_str(),
@@ -571,7 +818,7 @@ impl<'a, S: Read + Write> Session<'a, S> {
             self.fail_request(request_index, FetchError::HeadersTooLarge);
             return Ok(());
         }
-        let body = request.body.clone().filter(|body| !body.is_empty());
+        let body = body.filter(|body| !body.is_empty());
         let awaiting_continue = expect_continue && body.is_some();
         let end_stream_on_headers = body.is_none() && !awaiting_continue;
         let (frames, fragment_count) = fragment_headers_with_end(
@@ -629,8 +876,11 @@ impl<'a, S: Read + Write> Session<'a, S> {
                 receive_window: i64::from(self.limits.initial_window_size),
                 send_window: self.peer_initial_window,
                 got_headers: false,
-                pending_body: if end_stream_on_headers { None } else { body },
-                body_offset: 0,
+                pending_body: if end_stream_on_headers {
+                    None
+                } else {
+                    body.map(ActiveBody::new)
+                },
                 awaiting_continue,
                 trailers: Vec::new(),
             },
@@ -756,9 +1006,37 @@ impl<'a, S: Read + Write> Session<'a, S> {
                 let Some((block, end_stream)) = self.assembler.feed(&frame)? else {
                     return Ok(());
                 };
-                if self.pushed_streams.contains(&stream_id) {
+                if self.discarded_pushes.contains(&stream_id) {
+                    return Ok(());
+                }
+                if self.pushed_streams.contains_key(&stream_id) {
+                    let decoded = self
+                        .decoder
+                        .decode(&block)
+                        .map_err(|_| h2_error("invalid HPACK header block for a pushed stream"))?;
+                    let Some(pushed) = self.pushed_streams.get_mut(&stream_id) else {
+                        return Ok(());
+                    };
+                    if pushed.got_headers {
+                        // Pushed trailers: accept only as the final block.
+                        if !end_stream {
+                            return Err(h2_error("pushed-stream trailers must carry END_STREAM"));
+                        }
+                        self.finish_pushed(stream_id);
+                        return Ok(());
+                    }
+                    pushed.got_headers = true;
+                    for (name, value) in decoded {
+                        if name == ":status" {
+                            pushed.status = Some(value.parse::<u16>().map_err(|_| {
+                                h2_error("invalid :status value for a pushed response")
+                            })?);
+                        } else if !name.starts_with(':') {
+                            pushed.headers.push((name, value));
+                        }
+                    }
                     if end_stream {
-                        self.pushed_streams.remove(&stream_id);
+                        self.finish_pushed(stream_id);
                     }
                     return Ok(());
                 }
@@ -827,11 +1105,49 @@ impl<'a, S: Read + Write> Session<'a, S> {
             kind::DATA => {
                 let payload = frame.data_payload()?;
                 let length = i64::try_from(payload.len()).unwrap_or(i64::MAX);
-                if self.pushed_streams.contains(&stream_id) {
-                    let increment = u32::try_from(payload.len()).unwrap_or(u32::MAX);
-                    self.send_window_update(0, increment);
-                    if frame.header.flags & flags::END_STREAM != 0 {
-                        self.pushed_streams.remove(&stream_id);
+                if self.discarded_pushes.contains(&stream_id) {
+                    // Frames for a cancelled promise may still be in flight; DATA still
+                    // consumes the connection window, so replenish it to keep the peer going.
+                    self.send_window_update(0, u32::try_from(payload.len()).unwrap_or(u32::MAX));
+                    return Ok(());
+                }
+                if let Some(pushed) = self.pushed_streams.get(&stream_id) {
+                    let length = i64::try_from(payload.len()).unwrap_or(i64::MAX);
+                    if length > self.connection_receive_window {
+                        return Err(h2_error(
+                            "FLOW_CONTROL_ERROR: pushed DATA exceeds the connection receive window",
+                        ));
+                    }
+                    if length > pushed.receive_window {
+                        return Err(h2_error(
+                            "FLOW_CONTROL_ERROR: pushed DATA exceeds the stream receive window",
+                        ));
+                    }
+                    let new_body_len = pushed.body.len().saturating_add(payload.len());
+                    let new_total_len = self.pushed_total_bytes.saturating_add(new_body_len);
+                    let body_ok = new_body_len <= self.limits.max_pushed_body;
+                    let total_ok = new_total_len <= self.limits.max_pushed_total;
+                    let end_stream = frame.header.flags & flags::END_STREAM != 0;
+                    self.connection_receive_window -= length;
+                    self.connection_receive_window += length;
+                    self.send_window_update(0, u32::try_from(payload.len()).unwrap_or(u32::MAX));
+                    if !body_ok || !total_ok {
+                        self.discard_pushed(stream_id);
+                        return Ok(());
+                    }
+                    let pushed = self
+                        .pushed_streams
+                        .get_mut(&stream_id)
+                        .expect("pushed stream checked above");
+                    pushed.receive_window -= length;
+                    pushed.receive_window += length;
+                    pushed.body.extend_from_slice(payload);
+                    self.send_window_update(
+                        stream_id,
+                        u32::try_from(payload.len()).unwrap_or(u32::MAX),
+                    );
+                    if end_stream {
+                        self.finish_pushed(stream_id);
                     }
                     return Ok(());
                 }
@@ -872,6 +1188,12 @@ impl<'a, S: Read + Write> Session<'a, S> {
                 Ok(())
             }
             kind::RST_STREAM => {
+                self.discarded_pushes.remove(&stream_id);
+                if self.pushed_streams.contains_key(&stream_id) {
+                    self.pushed_streams.remove(&stream_id);
+                    self.pushed_discarded += 1;
+                    return Ok(());
+                }
                 let code = frame
                     .parse_rst_stream()
                     .unwrap_or(error_code::INTERNAL_ERROR);
@@ -924,23 +1246,83 @@ impl<'a, S: Read + Write> Session<'a, S> {
                 if block.len() > self.limits.max_header_block {
                     return Err(FetchError::HeadersTooLarge);
                 }
-                // Keep the HPACK decoder in sync even though the request is discarded.
-                self.decoder
+                // Keep the HPACK decoder in sync even when the promise is discarded.
+                let decoded = self
+                    .decoder
                     .decode(block)
                     .map_err(|_| h2_error("invalid HPACK block in PUSH_PROMISE"))?;
                 self.last_pushed_stream = promised;
-                self.pushed_streams.insert(promised);
-                // Cancel the pushed stream and ignore any of its frames. Best-effort:
-                // the peer may have already sent the final response and closed.
-                let _ = send_frame(
-                    &mut *self.stream,
-                    &Frame::rst_stream(promised, error_code::CANCEL),
+                let mut scheme = None;
+                let mut authority = None;
+                let mut path = None;
+                for (name, value) in &decoded {
+                    match name.as_str() {
+                        ":scheme" => scheme = Some(value.clone()),
+                        ":authority" => authority = Some(value.clone()),
+                        ":path" => path = Some(value.clone()),
+                        _ => {}
+                    }
+                }
+                let (Some(scheme), Some(authority), Some(path)) = (scheme, authority, path) else {
+                    return Err(h2_error(
+                        "PUSH_PROMISE is missing :scheme/:authority/:path pseudo-headers",
+                    ));
+                };
+                let url = format!("{scheme}://{authority}{path}");
+                if self.pushed_streams.len() + self.pushed_results.len()
+                    >= self.limits.max_pushed_resources
+                {
+                    // Resource-count cap: cancel the promise and ignore its frames.
+                    self.discard_pushed(promised);
+                    return Ok(());
+                }
+                self.pushed_streams.insert(
+                    promised,
+                    PushedStream {
+                        url,
+                        status: None,
+                        headers: Vec::new(),
+                        body: Vec::new(),
+                        got_headers: false,
+                        receive_window: i64::from(self.limits.initial_window_size),
+                    },
                 );
                 Ok(())
             }
             kind::PRIORITY => Ok(()),
             _ => Ok(()),
         }
+    }
+
+    /// Completes an accepted pushed stream and stores its response (body caps were checked
+    /// while receiving DATA).
+    fn finish_pushed(&mut self, stream_id: u32) {
+        let Some(pushed) = self.pushed_streams.remove(&stream_id) else {
+            return;
+        };
+        let Some(status) = pushed.status else {
+            self.pushed_discarded += 1;
+            return;
+        };
+        self.pushed_total_bytes = self.pushed_total_bytes.saturating_add(pushed.body.len());
+        self.pushed_results.push(H2PushedResponse {
+            url: pushed.url,
+            status,
+            reason: reason_phrase(status),
+            headers: pushed.headers,
+            body: pushed.body,
+        });
+    }
+
+    /// Cancels a pushed stream (cap exceeded, unwanted, or connection ending).
+    fn discard_pushed(&mut self, stream_id: u32) {
+        self.pushed_streams.remove(&stream_id);
+        self.pushed_discarded += 1;
+        self.discarded_pushes.insert(stream_id);
+        let _ = send_frame(
+            &mut *self.stream,
+            &Frame::rst_stream(stream_id, error_code::CANCEL),
+        );
     }
 
     fn finish_stream(&mut self, stream_id: u32) {
@@ -959,6 +1341,7 @@ impl<'a, S: Read + Write> Session<'a, S> {
             headers: stream.headers,
             body: stream.body,
             trailers: stream.trailers,
+            pushed: Vec::new(),
         }));
     }
 }
@@ -1047,13 +1430,44 @@ pub fn get_many<S: Read + Write>(
     requests: &[H2Request],
     limits: &Limits,
 ) -> Result<Vec<Result<H2Response, FetchError>>, FetchError> {
+    let owned = requests
+        .iter()
+        .map(H2Request::clone_bytes_only)
+        .collect::<Result<Vec<_>, _>>()?;
+    run_requests(stream, owned, limits)
+}
+
+/// Additive owned-batch API used for streaming request bodies (and by `http`).
+///
+/// Identical to [`request_many`] but takes ownership of the requests so
+/// [`RequestBody::Stream`] producers can be consumed incrementally (single-shot).
+pub fn request_many_owned<S: Read + Write>(
+    stream: &mut S,
+    requests: Vec<H2Request>,
+    limits: &Limits,
+) -> Result<Vec<Result<H2Response, FetchError>>, FetchError> {
+    run_requests(stream, requests, limits)
+}
+
+fn run_requests<S: Read + Write>(
+    stream: &mut S,
+    requests: Vec<H2Request>,
+    limits: &Limits,
+) -> Result<Vec<Result<H2Response, FetchError>>, FetchError> {
     let mut session = Session::new(stream, requests, limits);
     session.run()?;
-    Ok(session
+    let pushed = std::mem::take(&mut session.pushed_results);
+    let mut results: Vec<Result<H2Response, FetchError>> = session
         .results
         .into_iter()
         .map(|result| result.expect("all requests resolved"))
-        .collect())
+        .collect();
+    if !pushed.is_empty()
+        && let Some(Ok(first)) = results.iter_mut().find(|result| result.is_ok())
+    {
+        first.pushed = pushed;
+    }
+    Ok(results)
 }
 
 /// Additive API for arbitrary methods/bodies/trailers over one HTTP/2 connection.

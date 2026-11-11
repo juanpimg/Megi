@@ -58,9 +58,11 @@
 //! ## Deliberate limitations / next steps (Phase 5 continuation)
 //!
 //! - HTTP/2 (`h2`) supports multiplexed requests with connection/stream flow control,
-//!   SETTINGS, request bodies (DATA/END_STREAM), response trailers, interim
-//!   `100 Continue`, stream priorities and opt-in server-push cancellation; `h2c`
-//!   upgrade is opt-in (`Limits::allow_h2c`) and HTTP/1.1 remains the fallback.
+//!   SETTINGS, request bodies (bytes or streaming with backpressure), response trailers,
+//!   interim `100 Continue`, stream priorities and opt-in server-push cancellation; `h2c`
+//!   upgrade is opt-in (`Limits::allow_h2c`) and HTTP/1.1 remains the fallback. Streaming
+//!   uploads for h1 use chunked transfer (`fetch_with_request_body`); streaming bodies are
+//!   single-shot (a 307/308 redirect cannot replay them).
 //!   CORS is the subset described in [`cors`] (no preflight caching, no
 //!   `Access-Control-Expose-Headers`).
 //! - Compression covers only single `gzip`/`deflate` codings (no `br`/`zstd`, no stacked
@@ -109,6 +111,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod body;
 pub mod cache;
 pub mod compression;
 pub mod cookies;
@@ -125,6 +128,7 @@ pub mod range;
 pub mod referrer;
 pub mod url;
 
+pub use body::{BodyProducer, RequestBody};
 pub use cache::{CachePolicy, parse_cache_policy, parse_http_date};
 pub use compression::{
     AcceptEncoding, CompressionLimits, ContentEncoding, DEFAULT_MAX_COMPRESSION_RATIO,

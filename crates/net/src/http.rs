@@ -59,6 +59,7 @@ use std::time::Duration;
 
 use std::sync::{Arc, Mutex};
 
+use crate::body::RequestBody;
 use crate::compression::{AcceptEncoding, CompressionLimits, ContentEncoding, decode_body};
 use crate::cookies::{CookieJar, RequestSite};
 use crate::cors;
@@ -94,6 +95,17 @@ pub struct FetchOptions {
     /// Maximum response body size in bytes; larger bodies fail with
     /// [`FetchError::ResponseTooLarge`].
     pub max_response_bytes: usize,
+    /// Maximum request body size in bytes accepted while streaming an upload.
+    pub max_request_body: usize,
+    /// Accept HTTP/2 server pushes (`PUSH_PROMISE`) and let the resource loader preload
+    /// them into a per-load session cache. Default `false`.
+    pub accept_push: bool,
+    /// Maximum number of server-pushed resources kept by the loader (default 8).
+    pub max_pushed_resources: usize,
+    /// Maximum body size of a single server-pushed resource (default 1 MiB).
+    pub max_pushed_body: usize,
+    /// Maximum total body bytes of all server-pushed resources (default 4 MiB).
+    pub max_pushed_total: usize,
     /// Maximum response header section size in bytes; larger headers fail with
     /// [`FetchError::HeadersTooLarge`].
     pub max_header_bytes: usize,
@@ -143,6 +155,11 @@ impl Default for FetchOptions {
             read_timeout: DEFAULT_READ_TIMEOUT,
             max_redirects: DEFAULT_MAX_REDIRECTS,
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
+            max_request_body: 16 * 1024 * 1024,
+            accept_push: false,
+            max_pushed_resources: 8,
+            max_pushed_body: 1024 * 1024,
+            max_pushed_total: 4 * 1024 * 1024,
             max_header_bytes: DEFAULT_MAX_HEADER_BYTES,
             user_agent: DEFAULT_USER_AGENT.to_owned(),
             cookie_jar: None,
@@ -160,6 +177,18 @@ impl Default for FetchOptions {
 
 /// HTTP header list in wire order: `(name, value)` pairs with the original name casing.
 pub type Headers = Vec<(String, String)>;
+
+/// One HTTP/2 server-pushed subresource, surfaced by [`fetch`] when
+/// [`FetchOptions::accept_push`] is enabled and consumed by the HTTP cache/preload layer.
+#[derive(Clone, Debug)]
+pub struct PushedResponse {
+    /// Absolute URL reconstructed from the promise pseudo-headers.
+    pub url: Url,
+    /// Response headers in wire order.
+    pub headers: Headers,
+    /// Response body bytes (compressed body already decoded by the transport).
+    pub body: Vec<u8>,
+}
 
 /// A complete HTTP response.
 #[derive(Clone, Debug)]
@@ -180,6 +209,9 @@ pub struct Response {
     pub accept_ranges: bool,
     /// Trailing response headers (HTTP/2 trailer HEADERS or HTTP/1.1 chunked trailers).
     pub trailers: Headers,
+    /// HTTP/2 server pushes collected while this response was in flight (empty unless
+    /// [`FetchOptions::accept_push`] is enabled and the server pushed resources).
+    pub pushed: Vec<PushedResponse>,
 }
 
 impl Response {
@@ -260,6 +292,32 @@ pub fn fetch_with_method(
     extra_headers: &[(&str, &str)],
     body: Option<&[u8]>,
 ) -> Result<Response, FetchError> {
+    fetch_with_request_body(
+        url,
+        options,
+        method,
+        extra_headers,
+        body.map(|bytes| RequestBody::Bytes(bytes.to_vec())),
+    )
+}
+
+/// Like [`fetch_with_method`] but accepts a streaming [`RequestBody`] with backpressure.
+///
+/// - Byte bodies keep `Content-Length`; streaming bodies use `Transfer-Encoding: chunked`
+///   on HTTP/1.1 and incremental DATA on HTTP/2 (wired in the h2 client) without ever
+///   buffering the whole upload.
+/// - `Expect: 100-continue` delays the first body chunk until the interim response.
+/// - Streaming bodies are **single-shot**: a `307/308` redirect that would replay them
+///   returns [`FetchError::RequestBody`] instead of silently truncating.
+/// - `options.max_request_body` caps the bytes produced (typed `RequestBodyTooLarge`);
+///   a producer error aborts with the producer's typed [`FetchError`].
+pub fn fetch_with_request_body(
+    url: &Url,
+    options: &FetchOptions,
+    method: &str,
+    extra_headers: &[(&str, &str)],
+    body: Option<RequestBody>,
+) -> Result<Response, FetchError> {
     let mut method = method.trim().to_ascii_uppercase();
     if method.is_empty()
         || !method
@@ -270,26 +328,37 @@ pub fn fetch_with_method(
             "invalid request method `{method}`"
         )));
     }
-    let mut body: Option<Vec<u8>> = body.map(|body| body.to_vec());
+    let streaming_body = matches!(body, Some(RequestBody::Stream(_)));
+    let mut body_state = body;
+    let mut first_attempt = true;
     let mut current = url.clone();
     let mut redirects = 0usize;
     loop {
+        let attempt_body = match body_state.as_ref() {
+            Some(bytes_or_stream) => match bytes_or_stream.try_clone() {
+                Some(clone) => Some(clone),
+                None if first_attempt => body_state.take(),
+                None => {
+                    return Err(FetchError::RequestBody(
+                        "cannot replay a streaming request body on redirect".to_owned(),
+                    ));
+                }
+            },
+            None => None,
+        };
+        first_attempt = false;
         let raw = fetch_once(
             &current,
             options,
             &method,
             extra_headers,
-            body.as_deref(),
+            attempt_body,
             true,
         )?;
-        // Store `Set-Cookie` for every hop (browsers do this before following a
-        // redirect so the next request already sees the new cookies).
         if let Some(jar) = &options.cookie_jar {
             lock_jar(jar).store_from_response(&current, &raw.headers);
         }
         if !is_redirect(raw.status) {
-            // CORS is checked before decoding so unauthorized bodies are never
-            // decompressed (a hostile server cannot spend our CPU/memory first).
             if let Some(origin) = options.origin.as_deref() {
                 cors::validate_response(
                     &current,
@@ -319,18 +388,21 @@ pub fn fetch_with_method(
                 content_range,
                 accept_ranges,
                 trailers: raw.trailers,
+                pushed: raw.pushed,
             });
         }
         if redirects >= options.max_redirects {
             return Err(FetchError::TooManyRedirects);
         }
-        // Fetch semantics: 303 (and 301/302 on non-GET/HEAD) become GET without body;
-        // 307/308 preserve the method and body.
         if raw.status == 303
             || (matches!(raw.status, 301 | 302) && method != "GET" && method != "HEAD")
         {
             method = "GET".to_owned();
-            body = None;
+            body_state = None;
+        } else if streaming_body && body_state.is_none() {
+            return Err(FetchError::RequestBody(
+                "cannot replay a streaming request body on redirect".to_owned(),
+            ));
         }
         let location = raw
             .headers
@@ -343,6 +415,52 @@ pub fn fetch_with_method(
             .join(location)
             .map_err(FetchError::InvalidRedirect)?;
         redirects += 1;
+    }
+}
+
+/// Sends a request body to an HTTP/1.1 socket: raw bytes, one chunked chunk, or an
+/// incremental producer (chunked, 16 KiB pulls, capped by `max_request_body`).
+fn send_request_body(
+    writer: &mut dyn Write,
+    body: RequestBody,
+    chunked: bool,
+    max_request_body: usize,
+) -> Result<(), FetchError> {
+    let write_chunk = |writer: &mut dyn Write, chunk: &[u8]| -> Result<(), FetchError> {
+        writer
+            .write_all(format!("{:x}\r\n", chunk.len()).as_bytes())
+            .map_err(map_io_error)?;
+        writer.write_all(chunk).map_err(map_io_error)?;
+        writer.write_all(b"\r\n").map_err(map_io_error)
+    };
+    match body {
+        RequestBody::Bytes(bytes) => {
+            if chunked {
+                if !bytes.is_empty() {
+                    write_chunk(writer, &bytes)?;
+                }
+                writer.write_all(b"0\r\n\r\n").map_err(map_io_error)
+            } else {
+                writer.write_all(&bytes).map_err(map_io_error)
+            }
+        }
+        RequestBody::Stream(mut producer) => {
+            let mut total = 0usize;
+            loop {
+                match producer.next_chunk(16 * 1024)? {
+                    None => break,
+                    Some(chunk) if chunk.is_empty() => break,
+                    Some(chunk) => {
+                        total = total.saturating_add(chunk.len());
+                        if total > max_request_body {
+                            return Err(FetchError::RequestBodyTooLarge);
+                        }
+                        write_chunk(writer, &chunk)?;
+                    }
+                }
+            }
+            writer.write_all(b"0\r\n\r\n").map_err(map_io_error)
+        }
     }
 }
 
@@ -467,6 +585,7 @@ struct RawResponse {
     headers: Headers,
     body: Vec<u8>,
     trailers: Headers,
+    pushed: Vec<PushedResponse>,
 }
 
 fn is_redirect(status: u16) -> bool {
@@ -478,7 +597,7 @@ fn fetch_once(
     options: &FetchOptions,
     method: &str,
     extra_headers: &[(&str, &str)],
-    body: Option<&[u8]>,
+    body: Option<RequestBody>,
     include_cookies: bool,
 ) -> Result<RawResponse, FetchError> {
     let host = url.host_for_dns();
@@ -590,46 +709,69 @@ fn fetch_once(
             max_frame_size: crate::h2::MAX_FRAME_SIZE,
             max_header_block: options.max_header_bytes,
             max_body: options.max_response_bytes,
+            enable_server_push: options.accept_push,
+            max_pushed_resources: options.max_pushed_resources,
+            max_pushed_body: options.max_pushed_body,
+            max_pushed_total: options.max_pushed_total,
             ..crate::h2::client::Limits::default()
         };
-        let request = crate::h2::client::H2Request::new(
+        let request = crate::h2::client::H2Request::new_with_body(
             method,
             "https",
             &host_header,
             &url.request_target(),
             &request_headers,
-            body.map(<[u8]>::to_vec),
+            body,
         );
-        let mut results = crate::h2::client::request_many(&mut stream, &[request], &limits)?;
+        let mut results =
+            crate::h2::client::request_many_owned(&mut stream, vec![request], &limits)?;
         let response = results
             .pop()
             .ok_or_else(|| FetchError::InvalidResponse("no HTTP/2 response".to_owned()))??;
+        let pushed = response
+            .pushed
+            .into_iter()
+            .filter_map(|pushed| {
+                Url::parse(&pushed.url).ok().map(|url| PushedResponse {
+                    url,
+                    headers: pushed.headers,
+                    body: pushed.body,
+                })
+            })
+            .collect();
         return Ok(RawResponse {
             status: response.status,
             reason: response.reason,
             headers: response.headers,
             body: response.body,
             trailers: response.trailers,
+            pushed,
         });
     }
 
     let expect_continue = request_headers.iter().any(|(name, value)| {
         name.eq_ignore_ascii_case("expect") && value.to_ascii_lowercase().contains("100-continue")
     });
-    let chunked = request_headers.iter().any(|(name, value)| {
+    let body_is_stream = matches!(body, Some(RequestBody::Stream(_)));
+    let header_chunked = request_headers.iter().any(|(name, value)| {
         name.eq_ignore_ascii_case("transfer-encoding")
             && value
                 .split(',')
                 .any(|token| token.trim().eq_ignore_ascii_case("chunked"))
     });
+    if body_is_stream && !header_chunked {
+        request_headers.push(("Transfer-Encoding".to_owned(), "chunked".to_owned()));
+    }
+    let chunked = body_is_stream || header_chunked;
     let has_content_length = request_headers
         .iter()
         .any(|(name, _)| name.eq_ignore_ascii_case("content-length"));
-    if let Some(body) = body
+    if let Some(body) = body.as_ref()
+        && let Some(length) = body.len()
         && !chunked
         && !has_content_length
     {
-        request_headers.push(("Content-Length".to_owned(), body.len().to_string()));
+        request_headers.push(("Content-Length".to_owned(), length.to_string()));
     }
     let mut head = format!(
         "{method} {} HTTP/1.1\r\nHost: {host_header}\r\n",
@@ -643,22 +785,8 @@ fn fetch_once(
     }
     head.push_str("Connection: close\r\n\r\n");
 
-    let encode_body = |body: &[u8]| -> Vec<u8> {
-        if chunked {
-            let mut framed = Vec::with_capacity(body.len() + 32);
-            if !body.is_empty() {
-                framed.extend_from_slice(format!("{:x}\r\n", body.len()).as_bytes());
-                framed.extend_from_slice(body);
-                framed.extend_from_slice(b"\r\n");
-            }
-            framed.extend_from_slice(b"0\r\n\r\n");
-            framed
-        } else {
-            body.to_vec()
-        }
-    };
-
-    if expect_continue && let Some(body) = body {
+    let mut body = body;
+    if expect_continue && body.is_some() {
         // Send only the head, wait for the interim response, then stream the body.
         stream.write_all(head.as_bytes()).map_err(map_io_error)?;
         stream.flush().map_err(map_io_error)?;
@@ -666,7 +794,8 @@ fn fetch_once(
         let interim_head = reader.read_head(options.max_header_bytes)?;
         let (status, reason, headers) = parse_head(&interim_head)?;
         if status == 100 {
-            reader.write_all(&encode_body(body))?;
+            let request_body = body.take().expect("checked above");
+            send_request_body(&mut reader, request_body, chunked, options.max_request_body)?;
             reader.flush()?;
             let final_head = reader.read_head(options.max_header_bytes)?;
             let (status, reason, headers) = parse_head(&final_head)?;
@@ -677,6 +806,7 @@ fn fetch_once(
                 headers,
                 body,
                 trailers,
+                pushed: Vec::new(),
             });
         }
         // The server answered without 100-continue: don't send the body.
@@ -687,14 +817,15 @@ fn fetch_once(
             headers,
             body,
             trailers,
+            pushed: Vec::new(),
         });
     }
 
     stream.write_all(head.as_bytes()).map_err(map_io_error)?;
-    if let Some(body) = body {
-        stream.write_all(&encode_body(body)).map_err(map_io_error)?;
+    if let Some(request_body) = body {
+        send_request_body(&mut stream, request_body, chunked, options.max_request_body)?;
     } else if chunked {
-        stream.write_all(&encode_body(&[])).map_err(map_io_error)?;
+        stream.write_all(b"0\r\n\r\n").map_err(map_io_error)?;
     }
     stream.flush().map_err(map_io_error)?;
 
@@ -708,6 +839,7 @@ fn fetch_once(
         headers,
         body,
         trailers,
+        pushed: Vec::new(),
     })
 }
 
@@ -1068,10 +1200,6 @@ impl ConnReader {
         }
     }
 
-    fn write_all(&mut self, bytes: &[u8]) -> Result<(), FetchError> {
-        self.stream.write_all(bytes).map_err(map_io_error)
-    }
-
     fn flush(&mut self) -> Result<(), FetchError> {
         self.stream.flush().map_err(map_io_error)
     }
@@ -1124,6 +1252,16 @@ impl ConnReader {
                 ));
             }
         }
+    }
+}
+
+impl Write for ConnReader {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        self.stream.write(buffer)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.stream.flush()
     }
 }
 

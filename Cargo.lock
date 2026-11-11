@@ -1952,6 +1952,8 @@ dependencies = [
  "layout",
  "net",
  "paint",
+ "rcgen",
+ "rustls",
  "svg",
 ]
 

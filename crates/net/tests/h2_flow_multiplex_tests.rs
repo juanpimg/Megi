@@ -338,6 +338,9 @@ fn server_enable_push_setting_is_rejected() {
         read_preface(&mut tcp);
         send_settings(&mut tcp, &[(settings::ENABLE_PUSH, 1)]);
         let _ = tcp.shutdown(Shutdown::Write);
+        // Keep the socket open briefly so the client observes the SETTINGS error
+        // instead of racing a BrokenPipe on its preface/request writes.
+        std::thread::sleep(std::time::Duration::from_millis(150));
     });
     let mut stream = connect(port);
     let request = H2Request::get("http", &format!("127.0.0.1:{port}"), "/", &[]);

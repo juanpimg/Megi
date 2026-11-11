@@ -150,6 +150,14 @@ pub struct ResourceLoader {
     cache_hits: u64,
     cache_misses: u64,
     cache_revalidations: u64,
+    /// Server-pushed resources preloaded for this load session (consumed by `load`).
+    push_cache: HashMap<String, Arc<Resource>>,
+    /// Pushed resources actually consumed by `load`.
+    pushed_used: usize,
+    /// Pushed resources dropped (cap/count/body limits).
+    pushed_discarded: usize,
+    /// Encoded bytes currently held in the push cache.
+    pushed_bytes: usize,
 }
 
 impl Default for ResourceLoader {
@@ -172,6 +180,10 @@ impl ResourceLoader {
             cache_hits: 0,
             cache_misses: 0,
             cache_revalidations: 0,
+            push_cache: HashMap::new(),
+            pushed_used: 0,
+            pushed_discarded: 0,
+            pushed_bytes: 0,
         }
     }
 
@@ -183,6 +195,10 @@ impl ResourceLoader {
             cache_hits: 0,
             cache_misses: 0,
             cache_revalidations: 0,
+            push_cache: HashMap::new(),
+            pushed_used: 0,
+            pushed_discarded: 0,
+            pushed_bytes: 0,
         }
     }
 
@@ -212,6 +228,88 @@ impl ResourceLoader {
         &mut self.options
     }
 
+    /// Number of server-pushed resources consumed by [`Self::load`] in this load session.
+    pub const fn pushed_used(&self) -> usize {
+        self.pushed_used
+    }
+
+    /// Transfers the server-pushed preloads of `other` into this loader.
+    ///
+    /// Render uses two loaders per render (document + subresources) that share the same
+    /// load session: pushes received while fetching the document must be visible to the
+    /// subresource loader. Caps of `self` are applied while transferring.
+    pub fn absorb_pushes_from(&mut self, other: &mut ResourceLoader) {
+        for (key, resource) in other.push_cache.drain() {
+            let bytes = resource.bytes.len();
+            if self.push_cache.len() >= self.options.max_pushed_resources
+                || self.pushed_bytes.saturating_add(bytes) > self.options.max_pushed_total
+            {
+                self.pushed_discarded += 1;
+                continue;
+            }
+            self.pushed_bytes = self.pushed_bytes.saturating_add(bytes);
+            self.push_cache.insert(key, resource);
+        }
+        other.pushed_bytes = 0;
+    }
+
+    /// Returns `true` when `url` has a server-pushed preload waiting in this load session.
+    pub fn cache_key_is_preloaded(&self, url: &Url) -> bool {
+        self.push_cache.contains_key(&url.cache_key())
+    }
+
+    /// Number of server-pushed resources dropped because a push cap was exceeded.
+    pub const fn pushed_discarded(&self) -> usize {
+        self.pushed_discarded
+    }
+
+    /// Stores server-pushed responses fetched by a caller that used [`crate::http::fetch`]
+    /// directly (the render document loader) so subresource loads can consume them.
+    pub fn absorb_pushed(&mut self, pushed: Vec<crate::http::PushedResponse>) {
+        self.store_pushed(pushed);
+    }
+
+    /// Stores server-pushed responses for later [`Self::load`] calls.
+    ///
+    /// Only resources from HTTP/2 connections of the fetch that produced them are stored
+    /// (the loader is a per-load-session object in render), with the
+    /// `FetchOptions::{max_pushed_*,accept_push}` caps. Entries are consumed once so a
+    /// later real request still goes to the network.
+    fn store_pushed(&mut self, pushed: Vec<crate::http::PushedResponse>) {
+        for pushed in pushed {
+            let bytes = pushed.body.len();
+            if pushed.body.len() > self.options.max_pushed_body
+                || self.push_cache.len() >= self.options.max_pushed_resources
+                || self.pushed_bytes.saturating_add(bytes) > self.options.max_pushed_total
+            {
+                self.pushed_discarded += 1;
+                continue;
+            }
+            let content_type = pushed
+                .headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+                .map(|(_, value)| value.split(';').next().unwrap_or("").trim().to_owned())
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| mime::sniff(&pushed.body).mime_type().to_owned());
+            let key = pushed.url.cache_key();
+            if self
+                .push_cache
+                .insert(
+                    key,
+                    Arc::new(Resource {
+                        url: pushed.url,
+                        content_type,
+                        bytes: pushed.body,
+                    }),
+                )
+                .is_none()
+            {
+                self.pushed_bytes = self.pushed_bytes.saturating_add(bytes);
+            }
+        }
+    }
+
     /// Loads `url`, using the HTTP cache (fresh entry, revalidation or full fetch).
     pub fn load(&mut self, url: &Url) -> Result<Arc<Resource>, LoadError> {
         // `data:` URLs are immutable inline payloads: decode on demand, no cache.
@@ -222,6 +320,12 @@ impl ResourceLoader {
                 bytes: data.bytes,
                 content_type: data.mime_type,
             }));
+        }
+
+        // Server-pushed preloads are consumed before any cache/network work (per session).
+        if let Some(resource) = self.push_cache.remove(&url.cache_key()) {
+            self.pushed_used += 1;
+            return Ok(resource);
         }
 
         let cache_key = url.cache_key();
@@ -253,15 +357,16 @@ impl ResourceLoader {
     ///
     /// Returns the response headers (when fetched over HTTP) so the caller can apply
     /// `Cache-Control`/validators to the stored entry.
-    fn fetch_resource(&self, url: &Url) -> Result<(Resource, Option<Headers>), FetchError> {
+    fn fetch_resource(&mut self, url: &Url) -> Result<(Resource, Option<Headers>), FetchError> {
         match url.scheme() {
             Scheme::Http | Scheme::Https => {
-                let response = fetch(url, &self.options)?;
+                let mut response = fetch(url, &self.options)?;
                 if response.status == 304 {
                     // Reached only when no conditional request was sent (no cached
                     // representation): a server bug must be a typed error.
                     return Err(FetchError::UnconditionalNotModified);
                 }
+                self.store_pushed(std::mem::take(&mut response.pushed));
                 let headers = response.headers.clone();
                 Ok((resource_from_response(response), Some(headers)))
             }
@@ -323,6 +428,8 @@ impl ResourceLoader {
             return Ok(updated.resource);
         }
         self.cache_misses += 1;
+        let mut response = response;
+        self.store_pushed(std::mem::take(&mut response.pushed));
         let headers = response.headers.clone();
         let resource = Arc::new(resource_from_response(response));
         self.store(url, cache_key, Arc::clone(&resource), Some(&headers));
@@ -373,6 +480,27 @@ impl ResourceLoader {
                 vary_user_agent,
             },
         );
+    }
+
+    /// Fetches `url` with an arbitrary method and a streaming [`crate::RequestBody`].
+    ///
+    /// Streaming bodies are single-shot (no cache); byte bodies delegate to
+    /// [`Self::fetch_with_method`] so the GET cache path is unchanged. Redirects that
+    /// would replay a stream return a typed error.
+    pub fn fetch_with_request_body(
+        &mut self,
+        url: &Url,
+        method: &str,
+        extra_headers: &[(&str, &str)],
+        body: Option<crate::body::RequestBody>,
+    ) -> Result<Arc<Resource>, LoadError> {
+        let streaming = matches!(body, Some(crate::body::RequestBody::Stream(_)));
+        if method.eq_ignore_ascii_case("GET") && !streaming && body.is_none() {
+            return self.load(url);
+        }
+        let response =
+            crate::http::fetch_with_request_body(url, &self.options, method, extra_headers, body)?;
+        Ok(Arc::new(resource_from_response(response)))
     }
 
     /// Parses `url` and loads it; convenience wrapper for callers holding strings.

@@ -5,8 +5,12 @@
 //! - **ALPN / h2c**: the TLS layer advertises `h2` (then `http/1.1`); the opt-in
 //!   [`client::h2c_request`] (with [`client::Limits::allow_h2c`]) performs the cleartext
 //!   `Upgrade: h2c` handshake and returns `None` on refusal so callers can fall back.
-//! - **Server push**: disabled by default (`SETTINGS_ENABLE_PUSH=0` ⇒ clean typed error);
-//!   opt-in [`client::Limits::enable_server_push`] cancels/discards promised streams.
+//! - **Server push** (opt-in [`client::Limits::enable_server_push`]): promises are decoded
+//!   to absolute URLs, promised HEADERS/DATA are followed with per-push flow control, and
+//!   completed responses land in [`client::H2Response::pushed`]; `max_pushed_*` caps cancel
+//!   excess promises with `RST_STREAM(CANCEL)` (their late frames are ignored). The loader
+//!   preloads them per load session via `FetchOptions::accept_push` and render consumes them
+//!   for images/stylesheets/scripts (`RenderOptions::accept_server_push`).
 //! - **Priorities**: `HEADERS` priority blocks + `PRIORITY` frames (weight/dependency/
 //!   exclusive) order request submission and DATA; self/closed dependencies are typed
 //!   errors and incoming frames are validated/ignored.
@@ -27,16 +31,21 @@
 //! - **SETTINGS**: `HEADER_TABLE_SIZE`, `MAX_CONCURRENT_STREAMS`, `INITIAL_WINDOW_SIZE`,
 //!   `MAX_FRAME_SIZE`, `ENABLE_PUSH` validated and ACKed; outgoing HEADERS are fragmented
 //!   with CONTINUATION according to the peer's `MAX_FRAME_SIZE`.
-//! - One `GET`/stream, no request body, response fully buffered per stream and capped by
+//! - Requests (GET/HEAD/POST with optional buffered or streamed bodies) carry stream
+//!   priorities; responses are fully buffered per stream and capped by
 //!   [`crate::http::FetchOptions::max_response_bytes`].
+//!
+//! Server push is opt-in; resources are consumed by the loader/render only within the same
+//! load session (see `loader` and `render` docs).
 //!
 //! ## Deliberate limitations (next phase)
 //!
-//! - No server push (`SETTINGS_ENABLE_PUSH = 0`; PUSH_PROMISE is a connection error),
-//!   no prioritization/priority signalling, no h2c cleartext upgrade (HTTPS + ALPN only),
-//!   no `Expect: 100-continue`, no trailers (a trailer HEADERS block is only accepted as
-//!   the final END_STREAM block) and no request bodies (send windows are tracked but no
-//!   DATA is emitted).
+//! - Server push is opt-in and only from the same h2 connection/authority; pushes that
+//!   complete after the main response are cancelled. No response streaming (responses are
+//!   buffered), no push prioritization, no h1 server push and no cross-connection preload
+//!   cache (the loader cache lives for one load session). Request bodies *can* stream
+//!   incrementally with backpressure ([`client::RequestBody`]/`request_many_owned`; no
+//!   request trailers or `sendfile`).
 //! - Header blocks are returned lowercased (HPACK requires lowercase names); the
 //!   HTTP/1.1 path keeps original casing.
 
