@@ -33,7 +33,7 @@ next_up = [
 # ---------------------------------------------------------------------------------------
 [stats]
 tests = 2046
-tests_commit = "06ae932"
+tests_commit = "fb146b3"
 tests_date = "2026-11-11"
 crates = 14
 rust_lines = 159138
@@ -41,7 +41,7 @@ unsafe_forbidden_crates = 14
 
 [gate]
 status = "PASS"
-verified_commit = "1b4cc65"
+verified_commit = "fb146b3"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"
@@ -199,13 +199,13 @@ notes = "crates/bench + docs/PERFORMANCE.md; baselines repeatable, budgets met w
 [[area]]
 id = "FUZZ"
 title = "Fuzzing"
-percent = 85
-notes = "14 libFuzzer targets + nightly CI smoke; longer campaigns pending"
+percent = 90
+notes = "16 libFuzzer targets + nightly CI smoke; longer campaigns pending"
 
 [[area]]
 id = "DOCS"
 title = "Documentation"
-percent = 90
+percent = 92
 notes = "ARCHITECTURE/ROADMAP/HANDOFF/FUZZING/TOOLING + generated progress page"
 
 [[area]]
