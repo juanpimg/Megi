@@ -10,6 +10,7 @@
 use std::sync::OnceLock;
 
 use crate::document::Paint;
+use crate::path::SubPath;
 use crate::transform::Transform;
 
 /// Anti-DoS: maximum number of `<text>` elements in one document.
@@ -36,6 +37,15 @@ impl TextAnchor {
     }
 }
 
+/// Flattened path used by `<textPath>` (root user space; no rotation of glyphs).
+#[derive(Clone, Debug)]
+pub(crate) struct TextPathSpec {
+    pub subpaths: Vec<SubPath>,
+    /// `startOffset`: absolute user units (`percent == false`) or fraction of path length.
+    pub start_offset: f32,
+    pub percent: bool,
+}
+
 /// One parsed `<text>` element (contents flattened; child `<tspan>` positions are ignored).
 #[derive(Clone, Debug)]
 pub(crate) struct TextSpec {
@@ -59,6 +69,8 @@ pub(crate) struct TextSpec {
     pub transform: Transform,
     /// Local bounding box (`x, y, width, height`) used by gradient `objectBoundingBox`.
     pub bbox: (f32, f32, f32, f32),
+    /// Optional `<textPath>` geometry (glyphs advance along the flattened path).
+    pub text_path: Option<TextPathSpec>,
 }
 
 impl TextSpec {

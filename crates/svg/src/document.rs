@@ -905,8 +905,44 @@ impl<'a> Builder<'a> {
         if self.texts.len() >= MAX_TEXTS {
             return Err(SvgError::Limit("too many <text> elements".to_owned()));
         }
+        let mut text_path = None;
+        let text_path_child = element.children.iter().find_map(|child| {
+            let XmlNode::Element(child) = child else {
+                return None;
+            };
+            (child.local_name_lower() == "textpath").then_some(child)
+        });
         let mut text = String::new();
-        collect_text(element, &mut text);
+        if let Some(path_child) = text_path_child {
+            collect_text(path_child, &mut text);
+            if let Some(href) = path_child
+                .attribute("href")
+                .or_else(|| path_child.attribute("xlink:href"))
+            {
+                let id = href.trim().trim_start_matches('#');
+                if let Some(path_element) = self.defs.get(id)
+                    && let Some(data) = path_element.attribute("d")
+                {
+                    let subpaths = parse_path_data(data, self.limits)?;
+                    let raw = path_child.attribute("startOffset").unwrap_or("0").trim();
+                    let (start_offset, percent) = match raw.strip_suffix('%') {
+                        Some(value) => (value.trim().parse::<f32>().unwrap_or(0.0) / 100.0, true),
+                        None => (raw.parse::<f32>().unwrap_or(0.0), false),
+                    };
+                    text_path = Some(crate::text::TextPathSpec {
+                        subpaths,
+                        start_offset: if start_offset.is_finite() {
+                            start_offset
+                        } else {
+                            0.0
+                        },
+                        percent,
+                    });
+                }
+            }
+        } else {
+            collect_text(element, &mut text);
+        }
         if text.is_empty() {
             return Ok(());
         }
@@ -960,6 +996,7 @@ impl<'a> Builder<'a> {
             opacity: opacity.clamp(0.0, 1.0),
             transform,
             bbox: (0.0, 0.0, 0.0, 0.0),
+            text_path,
         };
         spec.bbox = spec.local_bbox();
         self.texts.push(spec);
@@ -1552,6 +1589,153 @@ fn numbers(raw: &str) -> Vec<f32> {
         .collect()
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CalcMode {
+    Linear,
+    Discrete,
+    Spline,
+}
+
+fn calc_mode(element: &XmlElement) -> CalcMode {
+    match element
+        .attribute("calcMode")
+        .map(|value| value.trim().to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("discrete") => CalcMode::Discrete,
+        Some("spline") => CalcMode::Spline,
+        _ => CalcMode::Linear,
+    }
+}
+
+fn key_times(element: &XmlElement) -> Option<Vec<f32>> {
+    let raw = element.attribute("keyTimes")?;
+    let times: Vec<f32> = raw
+        .split(';')
+        .filter_map(|part| part.trim().parse::<f32>().ok())
+        .filter(|value| value.is_finite() && *value >= 0.0 && *value <= 1.0)
+        .collect();
+    if times.len() < 2 || times.windows(2).any(|pair| pair[0] > pair[1]) {
+        return None;
+    }
+    Some(times)
+}
+
+fn key_splines(element: &XmlElement) -> Vec<[f32; 4]> {
+    element
+        .attribute("keySplines")
+        .map(|raw| {
+            raw.split(';')
+                .filter_map(|part| {
+                    let values: Vec<f32> = part
+                        .split([' ', ',', '\t'])
+                        .filter_map(|value| value.trim().parse::<f32>().ok())
+                        .filter(|value| value.is_finite())
+                        .collect();
+                    (values.len() == 4).then(|| [values[0], values[1], values[2], values[3]])
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn cubic_ease(x: f32, spline: [f32; 4]) -> f32 {
+    let [x1, y1, x2, y2] = spline;
+    let sample = |t: f32, p1: f32, p2: f32| {
+        let mt = 1.0 - t;
+        3.0 * mt * mt * t * p1 + 3.0 * mt * t * t * p2 + t * t * t
+    };
+    let mut low = 0.0f32;
+    let mut high = 1.0f32;
+    for _ in 0..24 {
+        let mid = (low + high) * 0.5;
+        if sample(mid, x1, x2) < x {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    sample((low + high) * 0.5, y1, y2).clamp(0.0, 1.0)
+}
+
+fn values_progress(element: &XmlElement, fraction: f32, count: usize) -> Option<(usize, f32)> {
+    if count < 2 {
+        return None;
+    }
+    let times = key_times(element).unwrap_or_else(|| {
+        (0..count)
+            .map(|index| index as f32 / (count - 1) as f32)
+            .collect()
+    });
+    if times.len() != count {
+        return None;
+    }
+    let mode = calc_mode(element);
+    let splines = key_splines(element);
+    let mut index = count - 1;
+    for candidate in 0..count - 1 {
+        if fraction >= times[candidate] && fraction <= times[candidate + 1] {
+            index = candidate;
+            break;
+        }
+    }
+    if index >= count - 1 {
+        return Some((count - 1, 1.0));
+    }
+    let span = (times[index + 1] - times[index]).max(1e-6);
+    let mut local = ((fraction - times[index]) / span).clamp(0.0, 1.0);
+    match mode {
+        CalcMode::Discrete => Some((index, 0.0)),
+        CalcMode::Spline => {
+            if let Some(spline) = splines.get(index) {
+                local = cubic_ease(local, *spline);
+            }
+            Some((index, local))
+        }
+        CalcMode::Linear => Some((index, local)),
+    }
+}
+
+fn interpolate_colors(a: &str, b: &str, fraction: f32) -> Option<String> {
+    let from = parse_color(a.trim())?;
+    let to = parse_color(b.trim())?;
+    let mix = |a: u8, b: u8| {
+        (f32::from(a) + (f32::from(b) - f32::from(a)) * fraction)
+            .round()
+            .clamp(0.0, 255.0) as u8
+    };
+    let (r, g, b, alpha) = (
+        mix(from.r, to.r),
+        mix(from.g, to.g),
+        mix(from.b, to.b),
+        mix(from.a, to.a),
+    );
+    Some(if alpha == 255 {
+        format!("rgb({r},{g},{b})")
+    } else {
+        format!("rgba({r},{g},{b},{})", f32::from(alpha) / 255.0)
+    })
+}
+
+fn interpolate_attribute(attribute: &str, from: &str, to: &str, fraction: f32) -> String {
+    if matches!(
+        attribute,
+        "fill" | "stroke" | "color" | "flood-color" | "stop-color"
+    ) && let Some(color) = interpolate_colors(from, to, fraction)
+    {
+        return color;
+    }
+    if let (Ok(from_number), Ok(to_number)) = (from.trim().parse::<f32>(), to.trim().parse::<f32>())
+    {
+        return format_number(from_number + (to_number - from_number) * fraction);
+    }
+    if fraction >= 0.5 {
+        to.to_string()
+    } else {
+        from.to_string()
+    }
+}
+
 fn animated_value(
     element: &XmlElement,
     attributes: &[(String, String)],
@@ -1559,10 +1743,38 @@ fn animated_value(
 ) -> Option<String> {
     let fraction = animation_fraction(element, time)?;
     let attribute = element.attribute("attributeName")?;
+    if let Some(raw_values) = element.attribute("values") {
+        let values: Vec<&str> = raw_values
+            .split(';')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .collect();
+        if values.len() >= 2
+            && let Some((index, local)) = values_progress(element, fraction, values.len())
+        {
+            if calc_mode(element) == CalcMode::Discrete {
+                return Some(values[index].to_string());
+            }
+            if index + 1 < values.len() {
+                return Some(interpolate_attribute(
+                    attribute,
+                    values[index],
+                    values[index + 1],
+                    local,
+                ));
+            }
+            return Some(values[index].to_string());
+        }
+    }
     let base = attribute_value(attributes, attribute).unwrap_or("0");
     let from = element.attribute("from");
     let to = element.attribute("to");
     let by = element.attribute("by");
+    if let (Some(from), Some(to)) = (from, to)
+        && let Some(value) = interpolate_colors(from, to, fraction)
+    {
+        return Some(value);
+    }
     let base_number = base.trim().parse::<f32>().ok();
     let from_number = from.and_then(|value| value.trim().parse::<f32>().ok());
     let to_number = to.and_then(|value| value.trim().parse::<f32>().ok());
@@ -1583,7 +1795,6 @@ fn animated_value(
         let start = base_number.unwrap_or(0.0);
         return Some(format_number(start + (to_number - start) * fraction));
     }
-    // Non-numeric values: switch at half the duration (documented approximation).
     if fraction >= 0.5 {
         to.or(from).map(str::to_string)
     } else {
@@ -1611,6 +1822,25 @@ fn apply_animate_transform(
         .attribute("type")
         .map(|value| value.trim().to_ascii_lowercase())
         .unwrap_or_else(|| "translate".to_string());
+    let mut value = Vec::new();
+    if let Some(raw_values) = element.attribute("values") {
+        let values: Vec<Vec<f32>> = raw_values
+            .split(';')
+            .map(numbers)
+            .filter(|value| !value.is_empty())
+            .collect();
+        if values.len() >= 2
+            && let Some((index, local)) = values_progress(element, fraction, values.len())
+        {
+            let from = &values[index];
+            let to = values.get(index + 1).unwrap_or(from);
+            for slot in 0..from.len().max(to.len()) {
+                let a = from.get(slot).copied().unwrap_or(0.0);
+                let b = to.get(slot).copied().unwrap_or(a);
+                value.push(a + (b - a) * local);
+            }
+        }
+    }
     let from = element.attribute("from").map(numbers).unwrap_or_default();
     let to = element.attribute("to").map(numbers).unwrap_or_default();
     let by = element.attribute("by").map(numbers).unwrap_or_default();
@@ -1626,11 +1856,12 @@ fn apply_animate_transform(
     } else {
         start.clone()
     };
-    let mut value = Vec::new();
-    for index in 0..start.len().max(end.len()) {
-        let a = start.get(index).copied().unwrap_or(0.0);
-        let b = end.get(index).copied().unwrap_or(a);
-        value.push(a + (b - a) * fraction);
+    if value.is_empty() {
+        for index in 0..start.len().max(end.len()) {
+            let a = start.get(index).copied().unwrap_or(0.0);
+            let b = end.get(index).copied().unwrap_or(a);
+            value.push(a + (b - a) * fraction);
+        }
     }
     let transform = match kind.as_str() {
         "rotate" => {

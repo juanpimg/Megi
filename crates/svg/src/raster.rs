@@ -861,6 +861,18 @@ fn offset_pixels(pixels: &mut [u8], width: usize, height: usize, dx: i32, dy: i3
 
 /// Draws a `<text>` element: per-glyph advance positioning (no shaping/kerning),
 /// `text-anchor`, `letter-spacing`, font size/weight/style and fill/stroke.
+type TextPathSegment = (f32, (f32, f32), (f32, f32));
+
+fn segment_at(segments: &[TextPathSegment], distance: f32) -> Option<TextPathSegment> {
+    for &(start, from, to) in segments {
+        let length = ((to.0 - from.0).powi(2) + (to.1 - from.1).powi(2)).sqrt();
+        if distance >= start && distance <= start + length {
+            return Some((start, from, to));
+        }
+    }
+    None
+}
+
 fn draw_text(
     canvas: &mut Canvas,
     spec: &TextSpec,
@@ -901,20 +913,61 @@ fn draw_text(
         TextAnchor::Middle => total * 0.5,
         TextAnchor::End => total,
     };
-    let (start_x, baseline_y) = matrix.apply(spec.x + spec.dx, spec.y + spec.dy);
-    let mut pen_x = start_x - anchor_shift;
     canvas.clear_coverage();
-    for character in spec.text.chars() {
-        if !pen_x.is_finite() {
-            break;
+    if let Some(text_path) = &spec.text_path {
+        // Glyph advance along the flattened path (no auto-rotation; documented subset).
+        let mut lengths: Vec<TextPathSegment> = Vec::new();
+        let mut total_length = 0.0f32;
+        for subpath in &text_path.subpaths {
+            for window in subpath.points.windows(2) {
+                let (x0, y0) = window[0];
+                let (x1, y1) = window[1];
+                let length = ((x1 - x0).powi(2) + (y1 - y0).powi(2)).sqrt();
+                if length.is_finite() && length > 0.0 {
+                    lengths.push((total_length, (x0, y0), (x1, y1)));
+                    total_length += length;
+                }
+            }
         }
-        let Ok(mask) =
-            database.rasterize_char(&family_refs, spec.font_weight, style, size, character)
-        else {
-            continue;
-        };
-        canvas.add_mask(pen_x + mask.left, baseline_y + mask.top, &mask);
-        pen_x += mask.advance + spacing;
+        if total_length > 0.0 {
+            let offset = if text_path.percent {
+                text_path.start_offset * total_length
+            } else {
+                text_path.start_offset
+            };
+            let mut distance = (offset - anchor_shift).clamp(0.0, total_length);
+            for character in spec.text.chars() {
+                let Some((start, from, to)) = segment_at(&lengths, distance) else {
+                    break;
+                };
+                let length = ((to.0 - from.0).powi(2) + (to.1 - from.1).powi(2)).sqrt();
+                let t = ((distance - start) / length).clamp(0.0, 1.0);
+                let point = (from.0 + (to.0 - from.0) * t, from.1 + (to.1 - from.1) * t);
+                let (px, py) = matrix.apply(point.0, point.1);
+                let Ok(mask) =
+                    database.rasterize_char(&family_refs, spec.font_weight, style, size, character)
+                else {
+                    continue;
+                };
+                canvas.add_mask(px + mask.left, py + mask.top, &mask);
+                distance += mask.advance + spacing;
+            }
+        }
+    } else {
+        let (start_x, baseline_y) = matrix.apply(spec.x + spec.dx, spec.y + spec.dy);
+        let mut pen_x = start_x - anchor_shift;
+        for character in spec.text.chars() {
+            if !pen_x.is_finite() {
+                break;
+            }
+            let Ok(mask) =
+                database.rasterize_char(&family_refs, spec.font_weight, style, size, character)
+            else {
+                continue;
+            };
+            canvas.add_mask(pen_x + mask.left, baseline_y + mask.top, &mask);
+            pen_x += mask.advance + spacing;
+        }
     }
     let context = PaintContext {
         gradients,
