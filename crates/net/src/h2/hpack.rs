@@ -422,6 +422,9 @@ impl Decoder {
 
     /// Decodes a complete header block into `(name, value)` pairs.
     pub fn decode(&mut self, block: &[u8]) -> Result<Vec<(String, String)>, FetchError> {
+        // Size updates are allowed at the start of *every* header block, not just the first
+        // one (RFC 7541 §4.2); reset the per-block state here.
+        self.seen_field = false;
         let mut headers = Vec::new();
         let mut decoded_size = 0usize;
         let mut pos = 0usize;
@@ -641,6 +644,17 @@ mod tests {
         small.extend(std::iter::repeat_n(0xbe, 10));
         let mut decoder = Decoder::new(4096);
         assert_eq!(decoder.decode(&small).expect("under the cap").len(), 11);
+    }
+
+    #[test]
+    fn allows_a_table_size_update_at_the_start_of_a_later_block() {
+        let mut decoder = Decoder::new(4096);
+        decoder
+            .decode(&[0x82])
+            .expect("first block: indexed :method GET");
+        decoder
+            .decode(&[0x3f, 0xe1, 0x0f])
+            .expect("a size update at the start of the next block is valid");
     }
 
     #[test]

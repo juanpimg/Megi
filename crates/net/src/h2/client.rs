@@ -16,8 +16,9 @@
 //!   `WINDOW_UPDATE` replenishment as DATA is consumed, `FLOW_CONTROL_ERROR` on window
 //!   violations);
 //! - peer SETTINGS are applied and acknowledged: `MAX_CONCURRENT_STREAMS`,
-//!   `MAX_FRAME_SIZE`, `INITIAL_WINDOW_SIZE`, `HEADER_TABLE_SIZE`; invalid values are
-//!   typed connection errors. Send windows are tracked (and updated by peer
+//!   `MAX_FRAME_SIZE` and `INITIAL_WINDOW_SIZE`; `HEADER_TABLE_SIZE` only sizes our
+//!   encoder, which is stateless, so it is validated but not applied to the decoder;
+//!   invalid values are typed connection errors. Send windows are tracked (and updated by peer
 //!   `WINDOW_UPDATE`s) for the request-body path that a later phase will add.
 //!
 //! Request bodies, trailer headers and `Expect: 100-continue` are supported by the
@@ -573,6 +574,10 @@ impl<'a, S: Read + Write> Session<'a, S> {
                     self.limits.max_frame_size.max(DEFAULT_MAX_FRAME_SIZE),
                 ),
                 (settings::HEADER_TABLE_SIZE, 4096),
+                (
+                    settings::MAX_HEADER_LIST_SIZE,
+                    u32::try_from(self.limits.max_header_list_size).unwrap_or(u32::MAX),
+                ),
             ]),
         )?;
         // Start the first request immediately (HTTP/2 permits it before the peer SETTINGS);
@@ -1145,9 +1150,21 @@ impl<'a, S: Read + Write> Session<'a, S> {
                     return Ok(());
                 };
                 if self.discarded_pushes.contains(&stream_id) {
+                    // HPACK's dynamic table is connection-wide: skipping a discarded push's
+                    // header block would desynchronise every later block, so decode it too.
+                    if block.len() > self.limits.max_header_block {
+                        return Err(FetchError::HeadersTooLarge);
+                    }
+                    let _ = self
+                        .decoder
+                        .decode(&block)
+                        .map_err(|_| h2_error("invalid HPACK header block for a discarded push"))?;
                     return Ok(());
                 }
                 if self.pushed_streams.contains_key(&stream_id) {
+                    if block.len() > self.limits.max_header_block {
+                        return Err(FetchError::HeadersTooLarge);
+                    }
                     let decoded = self
                         .decoder
                         .decode(&block)
@@ -1762,6 +1779,10 @@ pub fn h2c_request<S: Read + Write>(
             limits.max_frame_size.max(DEFAULT_MAX_FRAME_SIZE),
         ),
         (settings::HEADER_TABLE_SIZE, 4096),
+        (
+            settings::MAX_HEADER_LIST_SIZE,
+            u32::try_from(limits.max_header_list_size).unwrap_or(u32::MAX),
+        ),
     ]);
     let mut head = format!(
         "GET {target} HTTP/1.1\r\nHost: {authority}\r\n\
