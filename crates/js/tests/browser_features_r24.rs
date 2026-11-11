@@ -306,3 +306,28 @@ fn location_relative_url_and_hash_navigation() {
         "/docs/other"
     );
 }
+
+#[test]
+fn mutation_observer_ignores_a_target_freed_before_delivery() {
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime
+        .eval(
+            "window.__delivered = 0;
+             var obs = new MutationObserver(function (records) { __delivered += records.length; });
+             obs.observe(document.body, { attributes: true, subtree: true });
+             var d = document.createElement('div');
+             document.body.appendChild(d);
+             d.setAttribute('x', '1');
+             d.outerHTML = '<span></span>';   // frees d; the record target is now stale
+             __delivered += obs.takeRecords().length;
+             document.body.setAttribute('y', '2');",
+            "t",
+        )
+        .expect("mutations");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime.eval("__delivered", "t").expect("delivered"),
+        "1",
+        "only the live mutation is delivered"
+    );
+}

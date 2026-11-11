@@ -3104,12 +3104,22 @@ fn record_matches(host: &Host, observer: &ObserverRegistration, record: &Mutatio
         if !target.subtree {
             return false;
         }
-        let mut current = host.document.node(record.target).parent;
+        // The target (or an ancestor) may have been removed between the mutation and the
+        // records being drained (`outerHTML`, `innerHTML`, `textContent` free the old
+        // subtree). A freed slot must simply not match, instead of panicking on a stale
+        // `NodeId`.
+        let mut current = match host.document.try_node(record.target) {
+            Some(node) => node.parent,
+            None => return false,
+        };
         while let Some(node) = current {
             if node == target.node {
                 return true;
             }
-            current = host.document.node(node).parent;
+            let Some(parent) = host.document.try_node(node) else {
+                return false;
+            };
+            current = parent.parent;
         }
         false
     })
