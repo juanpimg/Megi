@@ -166,6 +166,9 @@ cargo +1.88 check --workspace --all-targets
 cargo run -p test_harness -- --summary          # gate 4 suites: PASS, exit 0
 cargo run -p test_harness -- --summary --strict # exit 1 si hay fallos no aceptados
 
+# Si tu CPU es más lenta que la de CI, escala los presupuestos de complejidad (CI usa 1.0)
+MEGI_PERF_BUDGET_SCALE=4 cargo test -p html --test perf
+
 # Pipeline HTML → PNG (Fase 4) y validación de la imagen
 cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
 python3 tools/png_check.py /tmp/basic.png
