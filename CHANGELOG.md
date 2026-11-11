@@ -6,6 +6,56 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 23 — performance recovery, EXIF/progressive JPEG, WebP detection and HTTP/2 flow control (2026-11-11)
+
+#### Changed
+
+- **Performance budgets recovered with margin** (`cfad971` CSS, `3f5ce3e` paint):
+  - **CSS** (`cfad971`): style cache keyed by the **parent's computed-style identity**
+    instead of the parent `NodeId` (repeated subtrees hit across distinct DOM nodes),
+    move-on-miss (no clone on the miss path) and a cached UA stylesheet AST in a
+    `OnceLock`. Interleaved A/B: `css/resolve-styles-10k-nodes` 35.81→**26.54 ms**
+    (−25.9 %) and `pipeline/html-to-png-800x600` 142.64→**105.47 ms** (−26.1 %);
+    128-bit key, 2-observation threshold, 1024-entry cap; inline-styled parents get
+    a conservative unique key.
+  - **Paint** (`3f5ce3e`): aggregate `effects_present` analysis per pass plus an
+    r21-equivalent fast path (no filter/blend/image-set ⇒ no style cloning or
+    EffectGroup), `DisplayItem` capacity 20480 and `is_list_item` checked before the
+    phase pass. A/B build-display 7.72→**7.34 ms** (−4.8 %) and 9.20→8.31 (−9.6 %),
+    absolute 7.34–7.72 ms (**≤8.0 budget**).
+
+#### Added
+
+- **EXIF orientation and progressive JPEG subset** (`1e8e078`, image 60 / render 138
+  tests): complete EXIF orientation 1–8 (APP1/TIFF little-endian and big-endian,
+  IFD0 tag 0x0112 applied in `image::decode`, `exif_orientation()`, PIL fixtures
+  `exif_o1..o8` with exact-pixel assertions); progressive JPEG subset (SOF2
+  multiscan DC/AC first + refine, spectral selection, successive approximation,
+  EOB runs, restart markers; grayscale exact with delta 0; multi-component
+  refinement returns a clear `UnsupportedFeature`). `render` adds
+  `image_formats.html` E2E (EXIF + progressive + WebP). **WebP is detected**
+  (RIFF/VP8L sniffing, non-fatal `VP8L/VP8 decoder pending` warning) but **not
+  decoded** yet.
+- **HTTP/2 flow control, multiplexing and advanced SETTINGS** (`a2fb055`, net 237
+  tests, +12 loopback): connection/stream windows with WINDOW_UPDATE replenish,
+  `FLOW_CONTROL_ERROR` for invalid deltas, multiplexing of ≥2 streams
+  (`client::get_many`, Session/scheduler, odd `next_stream_id`, isolated RST,
+  `Limits.max_concurrent_streams` default 8 respecting MAX_CONCURRENT_STREAMS),
+  and SETTINGS validation/ACK for HEADER_TABLE_SIZE/MAX_CONCURRENT_STREAMS/
+  INITIAL_WINDOW_SIZE/MAX_FRAME_SIZE/ENABLE_PUSH with HEADERS+CONTINUATION
+  fragmentation and shared HPACK. Limits: no push/priorities/h2c/trailers/
+  100-continue/request bodies.
+- **Status manifest update**: `docs/status/progress.toml` refreshes F4/F5 items
+  and pending gaps for round 23 and `next_up`; `PROGRESS.md`/SVG regenerate via
+  `python3 tools/update_progress.py --write`.
+
+#### Tests
+
+- **1,468 tests, 0 failures** (css 195, layout 206, paint 190, image 60,
+  render 138, net 237, svg 85, shell 160, html 60, js 71, dom 28, fonts 17+1
+  doctest, bench 9, test_harness 11); gate PASS with tokenizer 7,050/7,050,
+  tree 3,904/3,904, serializer 230/230 and CSS 30/30.
+
 ### Round 22 — JPEG/GIF, SVG effects, HTTP/2 MVP, shell chrome, full grid and CSS filters (2026-11-11)
 
 #### Added

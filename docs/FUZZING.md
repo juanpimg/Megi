@@ -250,3 +250,10 @@ remain current. The new parsers (JPEG/GIF decoders, HPACK/framing) are covered b
 unit/robustness tests but still need dedicated fuzz campaigns (report-only until triaged);
 `svg_parse` covers the new clipPath/mask/filter XML/attribute surface, while `net_url`
 still only fuzzes URL parsing.
+
+### Round 23 status
+
+Round 23 adds **no new fuzz targets**: the 7-target matrix/corpus and PR build-only job
+remain current. New parsers (progressive JPEG/EXIF, WebP sniffing, HPACK flow-control)
+are covered by unit/loopback tests but need dedicated campaigns; `svg_parse` covers the
+round-22 effect surface and `net_url` still only fuzzes URL parsing.

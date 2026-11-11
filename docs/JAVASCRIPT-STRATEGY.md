@@ -39,7 +39,7 @@ Megi ha cerrado funcionalmente la Fase 4 (renderizado) y tiene un pipeline de na
 
 **Estado real verificado en la decisión (ronda 7)**: **602 tests, 0 fallos**; gate de 4 suites PASS (tokenizer 7.050/7.050, árbol 3.898/3.904, serializador 230/230, CSS 30/30); Fase 6 con **decisión ACEPTADA el 2026-11-10**, implementación arrancando por `WP-6.1`.
 
-**Estado a ronda 22 (HEAD `00d8388`)**: **1449 tests, 0 fallos**; gate PASS; **71 tests js**; WP-6.1/6.2/6.4, WP-A/B, eventos avanzados y APIs de navegador siguen HECHOS; el runtime Boa no cambia en la ronda 22 (JPEG/GIF, efectos SVG, HTTP/2, chrome del shell, grid y filtros CSS son de otros crates). Los frames por generación del shell (pestañas/chrome) mantienen el estado JS por pestaña; pendientes: módulos ES, contabilidad de memoria real, eventos `resize`/`scroll`/`change` y event loop vivo multi-frame. Todos los crates con `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+**Estado a ronda 23 (HEAD `d1f3121`)**: **1468 tests, 0 fallos**; gate PASS; **71 tests js**; el runtime Boa/JS no cambia en la ronda 23 (perf CSS/paint, EXIF, JPEG progresivo/WebP y HTTP/2 son de otros crates). Los frames por generación del shell siguen manteniendo el estado JS por pestaña; pendientes: módulos ES, contabilidad de memoria real, eventos `resize`/`scroll`/`change` y event loop vivo multi-frame. Todos los crates con `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
 
 ---
 

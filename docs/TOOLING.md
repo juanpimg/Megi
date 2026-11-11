@@ -550,6 +550,27 @@ Límites de la ronda: JPEG sin progressive/CMYK/EXIF orientation; GIF animado so
 
 Cifras de referencia en la ronda 22: **1449 tests** (bench 9, css 195, dom 28, fonts 17+1 doctest, html 60, image 54, js 71, layout 206, net 225, paint 190, render 137, shell 160, svg 85, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; decode PNG 800×600 **6,65 ms p50 (~290 MB/s)**; status generado desde `docs/status/progress.toml` (regenerar con `python3 tools/update_progress.py --write`).
 
+### 2.16p Ronda 23: perf CSS/paint, EXIF/JPEG progresivo, WebP detectado y HTTP/2 avanzado
+
+```bash
+# Perf recuperada (A/B intercalado contra el binario pre-r23)
+cargo run --release -p bench -- --filter resolve-styles-10k-nodes   # 35,81 → 26,54 ms
+cargo run --release -p bench -- --filter build-display              # 7,34–7,72 ms (≤8)
+cargo run --release -p bench -- --filter pipeline/html-to-png      # 142,64 → 105,47 ms
+
+# EXIF orientation, JPEG progresivo y detección WebP
+cargo test -p image --test exif                                     # orientaciones 1–8
+cargo test -p image --test decode                                   # progresivo (gris exacto)
+cargo run -p render -- tests/fixtures/render/image_formats.html /tmp/image_formats.png --json
+
+# HTTP/2 flow control, multiplexado y SETTINGS
+cargo test -p net --test h2_flow_multiplex_tests                    # 12 tests loopback
+```
+
+Límites de la ronda: JPEG progresivo solo subset (DC/AC first+refine, spectral selection, successive approximation; color refinement ⇒ `UnsupportedFeature`), sin CMYK/12-bit; EXIF solo orientación (sin thumbnails); WebP **detectado sin decoder** (aviso no fatal); HTTP/2 con ventanas conexión/stream y SETTINGS, pero sin push/prioridades/h2c/trailers/100-continue/request bodies; paint fast path no altera semántica; caché CSS 128-bit/umbral 2/cap 1024 con StyleCollection inmutable.
+
+Cifras de referencia en la ronda 23: **1468 tests** (bench 9, css 195, dom 28, fonts 17+1 doctest, html 60, image 60, js 71, layout 206, net 237, paint 190, render 138, shell 160, svg 85, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; css resolve 26,54 ms, pipeline 105,47 ms (A/B), build-display ≤8 ms; status generado desde `docs/status/progress.toml` (`python3 tools/update_progress.py --write`).
+
 ## 4. Progress status generado (`PROGRESS.md`, `docs/status/*.svg`)
 
 El estado de avance del proyecto se genera **desde datos reales del repositorio**, sin
