@@ -1,5 +1,7 @@
 //! Round 31: fetch() provider wired into the render event loop.
 
+#![cfg(feature = "js")]
+
 use render::{RenderOptions, Viewport, render_url};
 use std::path::{Path, PathBuf};
 

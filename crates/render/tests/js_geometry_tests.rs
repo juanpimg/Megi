@@ -1,5 +1,7 @@
 //! Round 28: layout provider geometry exposed to scripts.
 
+#![cfg(feature = "js")]
+
 use render::{RenderOptions, Viewport, render_url};
 
 fn options() -> RenderOptions {

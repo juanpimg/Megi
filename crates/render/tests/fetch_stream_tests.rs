@@ -1,5 +1,7 @@
 //! Round 33: AbortController and Response.body stream in the render pipeline.
 
+#![cfg(feature = "js")]
+
 use render::{RenderOptions, Viewport, render_url};
 use std::path::Path;
 

@@ -1,5 +1,7 @@
 //! Round 24: History API, location, Web Storage and MutationObserver.
 
+#![cfg(feature = "js")]
+
 use std::sync::{Arc, Mutex};
 
 use dom::Document;

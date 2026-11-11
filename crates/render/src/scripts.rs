@@ -103,6 +103,7 @@ pub const VIRTUAL_TIME_STEP_MS: u64 = 1;
 /// times and make `script_virtual_time_ms` machine-speed dependent (CI flake). Pinning a
 /// large fixed origin (16 min) before any script runs gives every callback a stable absolute
 /// timestamp; the reported virtual time is relative to this origin.
+#[cfg(feature = "js")]
 const VIRTUAL_EPOCH_MS: u64 = 1_000_000;
 
 /// Per-script execution budget (mirrors the `js` crate's `Budget` without requiring the
@@ -1168,6 +1169,8 @@ pub fn execute_scripts(
         loop_iterations: 0,
         virtual_time_ms: 0,
         timers_pending: 0,
+        location_actions: Vec::new(),
+        history_actions: Vec::new(),
         events_dispatched: 0,
         event_loop: std::time::Duration::ZERO,
     }

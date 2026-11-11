@@ -1,6 +1,8 @@
 //! Round 27: DOM/JS gap APIs (URL/SearchParams, dataset, innerText, attributes,
 //! normalize/compareDocumentPosition, queueMicrotask/idle, MouseEvent, base64, clone).
 
+#![cfg(feature = "js")]
+
 use js::runtime::{Budget, JsRuntime};
 
 fn runtime() -> JsRuntime {
