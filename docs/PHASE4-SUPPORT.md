@@ -56,6 +56,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | **BackdropFilter/object-fit (ronda 24)**: `DisplayItem::BackdropFilter` (backdrop ya pintado + funciones + blur determinista; caps 64/16/16,7 Mpx) y object-fit con clip al content box y muestredo bilineal | **HECHO** | paint 205 tests; `fill` byte-idéntico; goldens intactos |
 | **Pintado Color 4/5 (ronda 25)**: espacios modernos y `color-mix` resueltos a sRGB con matrices/clamp | **HECHO** | paint 208 tests; fixture color_spaces; goldens intactos |
 | **Module scripts (ronda 26)**: `<script type=module>` inline/externo con resolver/loader reales, file/http(s)/data, caps por módulo/grafo, fallo no fatal | **HECHO** | render 153 tests; fixtures modules/*.js + module_*.html |
+| **Gaps DOM/JS (ronda 27)**: URL/URLSearchParams, dataset, innerText, attributes NamedNodeMap, normalize, compareDocumentPosition, queueMicrotask, idle determinista, Mouse/PointerEvent, focus/blur, atob/btoa, structuredClone | **HECHO** | js 128/dom 36 tests; gaps restantes documentados (geometría sin layout provider, fetch, crypto, Range, NodeList live) |
 
 | **Backgrounds multicapa (ronda 16)**: `background-origin` (border/padding/content), `background-clip` (text parseado, pinta border-box), `background-attachment` (scroll/fixed), **`background_layers` top-first** (listas cíclicas, shorthand multicapa, color solo última) y `space`/`round` reales | **HECHO** | Espejo legacy para goldens; paint 130 tests |
 | **`@font-face` (ronda 13)**: `Stylesheet.font_faces` + `FontFaceRule { family, sources, weight, style }` | **HECHO** | Consumido por `fonts`/`render` para fuentes web (ver §4) |
@@ -136,7 +137,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | `br`/stacked encodings, HTTP/2 y streaming, CORS completo, PSL completa y multi-range | **PENDIENTE** | WP-5.9; SameSite/PSL reducida/Referrer-Policy/Range ya HECHO (rondas 18-19) |
 | Ventana/eventos/scroll/zoom | **PARCIAL** | Fase 7: ventana+scroll+inputs+HiDPI+worker+navegación+zoom+auto-refresh hechos; formularios/pestañas/event-loop real/eventos DOM pendientes |
 
-## 6. DOM generacional + API de navegador (`crates/dom`, 33 tests)
+## 6. DOM generacional + API de navegador (`crates/dom`, 36 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -149,7 +150,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 
 Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, eventos DOM/foco y formularios del host (Fase 7), animaciones, `border-radius`, `box-shadow`, gradientes y medios paginados. JavaScript está en Fase 6 (ver §8); hit-testing y navegación ya existen (rondas 9–10).
 
-## 8. Fase 6: JavaScript (`crates/js`, 111 tests + scripting E2E en `render`/parser)
+## 8. Fase 6: JavaScript (`crates/js`, 128 tests + scripting E2E en `render`/parser)
 
 | **ES modules (ronda 25)**: `eval_module` con resolver/loader, imports default/named/namespace/side-effect, exports const/let/var/function/class/default/{as}, `import.meta.url`, orden topológico, ciclos `ModuleCycle` y errores tipados | **HECHO** | js 96 tests; subset line-based documentado (sin import() dinámico/top-level await/export-from/live bindings) |
 | **SVG filters + SMIL (ronda 26)**: `feColorMatrix`/`feBlend`/`feMerge`/`feComposite` arithmetic con cadenas in/in2/result y `<animate>/<set>/<animateTransform>` determinista (`render_svg_with_time`) | **HECHO** | svg 97 tests; sin animación byte-idéntico |
@@ -166,7 +167,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 | **WP-6.4 (ronda 11)**: hook `html::scripting::{ScriptExecutor, ScriptExecution}`; scripts parser-inserted al `</script>`/EOF y `document.write` **re-tokenizado en la posición actual** (scripts anidados incluidos); externos `src` los ejecuta el host; errores no fatales; camino sin scripting zero-cost | **HECHO** | **árbol 3.904/3.904 (100 %), allowlist de tree vacía** |
 | Pendientes F6: `document.onerror` para errores de scripts, módulos ES/`async`/`defer`, memoria real y aislamiento, provider de `getComputedStyle` cableado al pipeline y event loop vivo en el shell | **PENDIENTE** | Fase 6 ≈80-85 % |
 
-## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 183 tests)
+## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 195 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -187,7 +188,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 ## 10. Verificación de la matriz
 
 ```bash
-./tools/dev.sh all                             # fmt, clippy, 1653 tests, doc y gate PASS
+./tools/dev.sh all                             # fmt, clippy, 1695 tests, doc y gate PASS
 cargo test -p css -p layout -p paint -p fonts -p dom -p html
 cargo test -p net -p render -p image -p shell
 cargo test -p js

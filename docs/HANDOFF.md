@@ -1,49 +1,46 @@
-# Handoff de sesión — ronda 26 (module scripts, decode escalado, HTTP/2 bodies, bug-bash DOM/JS, SVG filters/SMIL y bench aislado)
+# Handoff de sesión — ronda 27 (fix PNG, h2 push/priorities/h2c, gaps DOM/JS, perf efectos y chrome pulido)
 
 **Fecha**: 2026-11-11 (Europe/Madrid)
-**Rama**: `sprint/robustez-fase4` — HEAD `f42b9b9`
-**Estado**: **1653 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; F4 ≈99 %, F5 ≈99 %, **F6 ≈96 %**, F7 ≈93 %. Manifiesto `docs/status/progress.toml` actualizado (F4/F5/F6 + `next_up`); `PROGRESS.md`/SVG se regeneran con `python3 tools/update_progress.py --write`.
-**CI/Repo**: GitHub Actions en verde, con **Status freshness**; `main` y `sprint/robustez-fase4` sincronizadas en `f42b9b9`; fuzz PR build-only; suite determinista.
+**Rama**: `sprint/robustez-fase4` — HEAD `9d2298b`
+**Estado**: **1695 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; F4 ≈99 %, F5 ≈99 %, **F6 ≈97 %**, **F7 ≈94 %**. Manifiesto `docs/status/progress.toml` actualizado (F4/F5/F6/F7 + `next_up`); `PROGRESS.md`/SVG se regeneran con `python3 tools/update_progress.py --write`.
+**CI/Repo**: GitHub Actions en verde, con **Status freshness**; `main` y `sprint/robustez-fase4` sincronizadas en `9d2298b`; fuzz PR build-only; suite determinista.
 **Estado de fases**: fuente editable [`docs/status/progress.toml`](status/progress.toml), página generada [`PROGRESS.md`](../PROGRESS.md); **no editar a mano** los artefactos generados.
 
-## Qué se hizo en la ronda 26 (7 commits + status)
+## Qué se hizo en la ronda 27 (5 commits + status)
 
 | Commit | Bloque | Resultado |
 |---|---|---|
-| `0167bf8` `feat(render)` | **`<script type=module>`** | Inline/externos con resolver `Url` contra el módulo importador (file/http(s)/data; bare ⇒ `ModuleNotFound`) y loader file/http con `FetchOptions`/`--no-network`, caps por módulo y total del grafo; fallo no fatal; microtasks/timers/re-render. Fixtures `modules/*.js` + `module_*.html`; render **153** (+6). |
-| `cf258fa` `feat(image,render)` | **Decode escalado** | `decode_scaled`/`decode_scaled_with_limits`: factor `ceil(longest/max_dim)`; PNG submuestrea durante unfilter (incl. Adam7) sin buffer completo, JPEG/GIF/WebP post-subsample (documentado); `RenderOptions.max_image_dim` + `--max-image-dim`. A/B PNG full ×2 7,98→5,74 ms (−28 %) y ×8 5,08→3,25 ms (−36 %); stage images −30 %, total 23,3–24,7→18,1–18,7 ms; image **76**/render **153**. |
-| `7a5893e` `feat(net)` | **HTTP/2 bodies/trailers/100-continue + h1 POST** | `H2Request`/`request_many`, DATA con MAX_FRAME_SIZE/ventanas, END_STREAM único, cap 16 MiB (`RequestBodyTooLarge`), RST durante envío, trailers h2/h1, `Expect: 100-continue` h2/h1 y h1 POST CL/chunked; loader `fetch_with_method`; net **249** (+12). Límites: sin push/priorities/h2c, cuerpos buffered, 100-continue sin timer. |
-| `025a292` `fix(dom,js)` | **Bug-bash DOM/JS** | 6 bugs reales: fragmentos en append/insert/replace y replace en posición, atributos case-insensitive HTML, childNodes NodeList snapshot, propiedades reflejadas value/checked/disabled/selected/options, `createDocumentFragment` y `cloneNode` deep; +20 tests WPT-like; dom **33**/js **111**. Gaps documentados (fetch/dataset/innerText/attributes/normalize/compareDocumentPosition/getBoundingClientRect/Range/MouseEvent/relatedTarget/URLSearchParams/queueMicrotask/NodeList snapshot). |
-| `2fb05a1` `feat(svg)` | **Filtros completos + SMIL básica** | `feColorMatrix` (matrix/saturate/hueRotate/luminanceToAlpha), `feBlend` (normal/multiply/screen/darken/lighten), `feMerge`, `feComposite` arithmetic k1–k4 y over/in/out/atop, con cadenas `in`/`in2`/`result`/`SourceGraphic`/`SourceAlpha` y región; SMIL `<animate from/to/by>`, `<set>`, `<animateTransform translate/rotate/scale>` determinista con `render_svg_with_time` (t=0/mitad); sin animación byte-idéntico; svg **97** (+12). Límites: sin keyTimes/keySplines/sync/CSS animations/textPath. |
-| `7ab354c` `perf(paint,bench)` | **Bench aislado + optimizaciones seguras** | Filas `paint/layer-effects-800x600`, `object-fit-800x600`, filter/backdrop fixtures (paint tail; el sobrecoste de backdrop/aspect no está en paint), `shell/save-png-encode-800x600` 3,76 ms (write 0,003; total 3,78); `tools/bench.sh --save-png-isolated` (screenshot solo vs +save-png = 30 vs 29 ms; +38,8 ms era escribir 2 PNG). Optimizaciones: backdrop color-only in-place, buffers thread-local, blur salta alpha uniforme, object-fit clip solo cover, fast path SolidColor filtrado. |
-| `a39c4ab` `docs(fixtures)` | **Fixtures r26** | Documenta fixtures de module scripts y scaled decode. |
-| `f42b9b9` `chore(status)` | **Refresco del status** | Regenera `PROGRESS.md`, `docs/status/progress.svg` y badges; manifiesto editable actualizado en esta ronda (r26). |
+| `0ff6434` `perf(image)` | **Fix regresión PNG** | El segundo caller de `pixel_from_row`/`render_row` perdió el inlining; `#[inline(always)]` en decode_pass/unfilter/render_row/pixel_from_row. A/B r25 6,62 / r26 7,97 / fix **6,54 ms** (≤6,6); escalado preservado full 6,27–6,43, ×2 5,53–5,69, ×8 5,02–5,13 (−29/−36 %); image 76. |
+| `d34d078` `feat(net)` | **HTTP/2 push/priorities/h2c** | PUSH_PROMISE con SETTINGS_ENABLE_PUSH=0 por defecto y error tipado; `Limits.enable_server_push` valida y cancela con RST_STREAM(CANCEL) sincronizando HPACK. `Priority{depends_on,weight 1..=256,exclusive}` + `H2Request::with_priority` y scheduler por peso; `Limits.allow_h2c` + `h2c_request` (101+preface+stream 1, fallback h1). 10 tests `h2_advanced.rs`; net **259**. Límites: push descartado (render no lo consume), h2c GET-only, prioridades MVP. |
+| `a373d47` `feat(dom,js)` | **Gaps DOM/JS r26** | URL/URLSearchParams subset, dataset lectura, innerText aprox documentada, attributes NamedNodeMap, normalize recursivo, compareDocumentPosition bits+constantes, queueMicrotask, requestIdleCallback determinista (timeRemaining 50), MouseEvent/PointerEvent relatedTarget/pointerId, focus/blur + activeElement, scrollIntoView no-op, atob/btoa, structuredClone subset; js **128**/dom **36** (+20). Gaps restantes documentados (geometría sin layout provider, fetch/XHR, crypto, dataset escritura, innerText con layout, Range, NodeList live). |
+| `ecd3092` `perf(css,paint,bench)` | **Perf de efectos** | `compute_effects` de un solo barrido (antes 5 búsquedas/elemento) y parseo unificado filter/-webkit/backdrop/mix-blend; E2E filter overhead 0,148→**0,036 ms (−75,7 %)**; backdrop 0,692→0,684 (1,2 %: el resto es blur raster + PNG más entrópico; byte-safe no toca el encoder de goldens). Paint consolida optimizaciones r26 y corrige doble filtrado; filas `pipeline/filter-fixture-300x260(±no-effect)` y backdrop. |
+| `d07d70a` `feat(shell)` | **Chrome pulido** | Address bar Home/End/Shift-selección/Delete/Ctrl+A-C-X-V con portapapeles interno/Ctrl+Backspace, autocompletado historial-sesión (≥2 chars, sufijo gris, Tab), Ctrl+L, caret sólido determinista; tab strip con overflow real (lista scroll, activar/cerrar, Esc/fuera), rueda wrap, indicador de carga, ellipsis; `<select>` con optgroup no seleccionable, Home/End/PageUp/PageDown/primer-carácter y scrollbar minimal; shell **195** (+12); `--chrome` md5 `1a29d6b3…` y golden página `7324e851…` intactos. |
+| `9d2298b` `chore(status)` | **Refresco del status** | Regenera `PROGRESS.md`, `docs/status/progress.svg` y badges; manifiesto editable actualizado en esta ronda (r27). |
 
 ## Evidencia verificada
 
-- `cargo test --workspace` → **1653 tests, 0 fallos**: render **153**, net **249**, image **76**, svg **97**, dom **33**, js **111**, paint **208**, css **230**, layout **215**, shell **183**, html **60**, fonts 17 + 1 doctest, bench **9**, test_harness **11**.
+- `cargo test --workspace` → **1695 tests, 0 fallos**: net **259**, js **128**, dom **36**, shell **195**, image **76**, paint **208**, css **230**, layout **215**, render **153**, svg **97**, html **60**, fonts 17 + 1 doctest, bench **9**, test_harness **11**.
 - Gate (`cargo run -p test_harness -- --summary`, exit 0): tokenizer **7.050/7.050**, árbol **3.904/3.904**, serializer **230/230**, CSS **30/30**; allowlists tokenizer/tree **(none)**.
-- **Fixtures**: `modules/*.js` + `module_inline/external/chain/error/no_network/observers_timers.html`; foto 1024×768 para scaled decode; goldens showcase/basic intactos.
-- **Bench**: `shell/save-png-encode-800x600` 3,76 ms; `--save-png-isolated` 30 vs 29 ms; filas layer-effects/object-fit/filter/backdrop documentadas.
+- **Perf**: PNG decode **6,54 ms** (r25 6,62, r26 7,97) con escalado ×2 5,53–5,69 y ×8 5,02–5,13; filter E2E −75,7 %; backdrop 0,692→0,684 documentado.
+- **Goldens**: `--chrome` md5 `1a29d6b3…`; página `7324e851…`; resto intactos.
 - **Status**: `docs/status/progress.toml` es la fuente editable; `python3 tools/update_progress.py --write` regenera `PROGRESS.md` + `docs/status/*`; CI ejecuta `--check --no-gate --no-count`.
 - **Fuzz**: matriz sin cambios (10 targets, corpora 11/9/21, CI 300 s + PR build-only).
 
 ## Comandos de verificación
 
 ```bash
-./tools/dev.sh all                                  # fmt, clippy, 1653 tests, doc y gate
-cargo test --workspace                              # 1653 tests (JS por defecto)
+./tools/dev.sh all                                  # fmt, clippy, 1695 tests, doc y gate
+cargo test --workspace                              # 1695 tests (JS por defecto)
 cargo run -p test_harness -- --summary              # gate: 3904/3904 árbol, PASS, exit 0
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo doc --workspace --no-deps
 cargo +1.88 check --workspace --all-targets         # MSRV
 
-# Ronda 26
-cargo test -p render --test module_scripts_tests
-cargo test -p image --test scaled
-cargo run -p render -- tests/fixtures/render/module_chain.html /tmp/modules.png --json
-cargo test -p net && cargo test -p dom && cargo test -p js
-cargo test -p svg --test filters_smil
-cargo run -p render -- tests/fixtures/render/showcase.html /tmp/showcase.png --json
+# Ronda 27
+cargo test -p image
+cargo test -p net --test h2_advanced
+cargo test -p js --test gap_apis && cargo test -p dom --test gap_api
+cargo run --release -p bench -- --filter pipeline/filter-fixture-300x260
+cargo run -p shell -- tests/fixtures/render/basic.html --chrome --screenshot /tmp/chrome.png --width 640 --height 400
 
 # Progress status
 python3 tools/update_progress.py --write
@@ -54,28 +51,28 @@ python3 tools/update_progress.py --check --no-gate --no-count
 
 | Crate | Estado | Tests |
 |---|---|---|
-| `dom` / `html` | COMPLETOS + bug-bash DOM (fragmentos/atributos/reflejadas/clone) | **33** / 60 |
-| `css` | F2+F4 + var/calc/pseudos + grid completo + filtros/blend + Color 4/5 | **230** |
+| `dom` / `html` | COMPLETOS + gaps r27 (normalize/compareDocumentPosition) | **36** / 60 |
+| `css` | F2+F4 + var/calc/pseudos + grid completo + filtros/blend + Color 4/5 + effects single-pass | **230** |
 | `layout` | F4 completa + flex/grid + calc mixto/sticky/tipografía + interning + aspect-ratio | **215** |
 | `fonts` | COMPLETO LTR + fuentes web | 17 + 1 doctest |
-| `paint` | F4 completa + backgrounds/decoraciones/clipping/gradientes + EffectGroup + Color 4/5 | **208** |
-| `image` | PNG + JPEG baseline/progresivo color + GIF + EXIF 1–8 + WebP VP8L completo + **decode escalado** | **76** |
-| `net` | F5: TLS/caché/cookies/PSL/Referrer/Range + HTTP/2 (HPACK/framing/flow/mux/SETTINGS/**bodies/trailers/100-continue**) + h1 POST | **249** |
-| `js` | F6: DOM/eventos/timers/APIs + ES modules + **bug-bash DOM/JS** | **111** |
-| `svg` | Parser/modelo/rasterizador + CSS/gradientes/pattern/text + clipPath/mask/filtros + **feColorMatrix/Blend/Merge/Composite + SMIL** | **97** |
-| `render` | Pipeline URL→PNG + imágenes + **module scripts** + **scaled decode** + providers JS | **153** |
-| `shell` | F7 + chrome/tabs/find/forms/zoom + sesión persistente/save-png directo | **183** |
-| `bench` / `test_harness` | Tooling (filas aisladas r26) / gate 4 suites | 9 / 11 |
+| `paint` | F4 completa + backgrounds/decoraciones/clipping/gradientes + EffectGroup + Color 4/5 + perf r27 | **208** |
+| `image` | PNG (fix regresión) + JPEG baseline/progresivo color + GIF + EXIF 1–8 + WebP VP8L + decode escalado | **76** |
+| `net` | F5: TLS/caché/cookies/PSL/Referrer/Range + HTTP/2 (HPACK/framing/flow/mux/SETTINGS/bodies/trailers/100-continue/**push/priorities/h2c**) + h1 POST | **259** |
+| `js` | F6: DOM/eventos/timers/APIs + ES modules + gaps r27 | **128** |
+| `svg` | Parser/modelo/rasterizador + CSS/gradientes/pattern/text + clipPath/mask/filtros + SMIL | **97** |
+| `render` | Pipeline URL→PNG + imágenes + module scripts + scaled decode + providers JS | **153** |
+| `shell` | F7 + chrome pulido/address bar/autocompletado/tab overflow/select + sesión/save-png | **195** |
+| `bench` / `test_harness` | Tooling (filas E2E filter/backdrop r27) / gate 4 suites | 9 / 11 |
 | `fuzz` (workspace aparte) | 10 targets + corpus curado + PR build-only | build 10/10 |
 
 ## Deuda priorizada
 
-1. **JS/DOM**: dynamic import/TLA/import maps y live bindings, loader real, StorageEvent/proxy/requestIdleCallback, fetch/XHR/workers, gaps DOM documentados, conformance y memoria.
-2. **Red**: h2 push/priorities/h2c, streaming uploads y cuerpos/respuestas en streaming, PSL completa/multi-range.
-3. **Imágenes/SVG**: VP8 lossy, reduced IDCT/EXIF thumbnails, SVG textPath y keyTimes/eventos/CSS animations, rendimiento de decode en páginas reales.
-4. **Paint/bench**: rendimiento de layer-effects/backdrop, PNG regions y presupuestos de rasterizer.
-5. **Shell**: save-as/prompt visual, descarga de recursos, cookies/passwords, autocompletar/favicons y multi-select.
-6. **Fuzz/bench**: campañas más largas (imagen/HTTP2), bench E2E de las features r26 y mantener el status al cerrar cada ronda.
+1. **JS/DOM**: geometry provider para `getBoundingClientRect`/`offset*`, fetch/XHR, crypto inyectable, dataset writes, innerText con layout, Range/NodeList live; dynamic import/TLA/import maps/live bindings y conformance.
+2. **Red**: push-to-render, streaming uploads y respuestas en streaming, PSL completa/multi-range.
+3. **Imágenes/SVG**: VP8 lossy, reduced IDCT/EXIF thumbnails, SVG textPath/keyTimes/eventos/CSS animations y rendimiento en páginas reales.
+4. **Paint/bench**: backdrop blur/PNG entropy, layer-effect performance, PNG regions y presupuestos de rasterizer.
+5. **Shell**: save-as/prompt visual, descarga de recursos, cookies/passwords, favicons y multi-select/native widgets.
+6. **Fuzz/bench**: campañas más largas (imagen/HTTP2), bench E2E de las features r27 y mantener el status al cerrar cada ronda.
 
 ## Reglas del repositorio (recordatorio)
 

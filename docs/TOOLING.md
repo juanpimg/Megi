@@ -626,6 +626,20 @@ Límites r26: subset ESM estático (sin dynamic import/TLA/import maps; una raí
 
 Cifras de referencia en la ronda 26: **1653 tests** (bench 9, css 230, dom 33, fonts 17+1 doctest, html 60, image 76, js 111, layout 215, net 249, paint 208, render 153, shell 183, svg 97, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
 
+### 2.16t Ronda 27: fix PNG, h2 push/priorities/h2c, gaps DOM/JS, perf efectos y chrome
+
+```bash
+cargo test -p image                                   # regresión PNG 6,54 ms y escalado
+cargo test -p net --test h2_advanced                  # PUSH_PROMISE/priorities/h2c
+cargo test -p js --test gap_apis && cargo test -p dom --test gap_api
+cargo run --release -p bench -- --filter pipeline/filter-fixture-300x260
+cargo run -p shell -- tests/fixtures/render/basic.html --chrome --screenshot /tmp/chrome.png --width 640 --height 400
+```
+
+Límites r27: push h2 descartado (render no lo consume aún), h2c GET-only con reconexión y prioridades MVP; gaps DOM restantes (getBoundingClientRect/offset sin layout provider, fetch/XHR, crypto, dataset escritura, innerText con layout, Range, NodeList live); chrome con portapapeles interno documentado y caret sólido determinista; backdrop sigue pagando blur+PNG entrópico (byte-safe no toca el encoder de goldens).
+
+Cifras de referencia en la ronda 27: **1695 tests** (bench 9, css 230, dom 36, fonts 17+1 doctest, html 60, image 76, js 128, layout 215, net 259, paint 208, render 153, shell 195, svg 97, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
+
 ## 4. Progress status generado (`PROGRESS.md`, `docs/status/*.svg`)
 
 El estado de avance del proyecto se genera **desde datos reales del repositorio**, sin

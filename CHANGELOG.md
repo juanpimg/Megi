@@ -6,6 +6,51 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 27 — PNG regression fix, HTTP/2 push/priorities/h2c, DOM/JS gaps, effects perf and polished chrome (2026-11-11)
+
+#### Added
+
+- **PNG regression fix** (`0ff6434`, image 76 tests): the scaled-decode caller lost the
+  inlining of `pixel_from_row`/`render_row`; `#[inline(always)]` on
+  decode_pass/unfilter/render_row/pixel_from_row restores A/B r25 6.62 / r26 7.97 /
+  fix **6.54 ms** (≤6.6) while scaled decode stays 6.27–6.43 (full), 5.53–5.69 (×2)
+  and 5.02–5.13 ms (×8, −29/−36 %).
+- **HTTP/2 PUSH_PROMISE, priorities and h2c** (`d34d078`, net 259 tests):
+  SETTINGS_ENABLE_PUSH=0 by default with a typed error, `Limits.enable_server_push`
+  validates/cancels push with RST_STREAM(CANCEL) keeping HPACK in sync;
+  `Priority{depends_on, weight 1..=256, exclusive}` with `H2Request::with_priority`
+  and a weighted scheduler; `Limits.allow_h2c` + `h2c_request` (101 + preface +
+  stream 1, `None` → HTTP/1.1 fallback). 10 new `h2_advanced.rs` tests.
+- **DOM/JS gap APIs** (`a373d47`, js 128 / dom 36 tests): URL/URLSearchParams subset,
+  read-only dataset, documented innerText approximation, attributes NamedNodeMap,
+  recursive normalize, compareDocumentPosition bits + Node constants, queueMicrotask,
+  deterministic requestIdleCallback (timeRemaining 50), MouseEvent/PointerEvent with
+  relatedTarget/pointerId, focus/blur + document.activeElement, scrollIntoView no-op,
+  atob/btoa and structuredClone subset; remaining gaps documented (geometry without a
+  layout provider, fetch/XHR, crypto, dataset writes, innerText layout, Range, live
+  NodeList).
+- **Effects performance** (`ecd3092`, css 230 / paint 208 tests): single-pass
+  `compute_effects` (was five lookups per element) and unified
+  filter/-webkit/backdrop/mix-blend parsing; E2E filter overhead 0.148→**0.036 ms
+  (−75.7 %)**; backdrop 0.692→0.684 (1.2 %: the rest is blur rasterization + more
+  entropic PNG, byte-safe goldens forbid encoder changes); paint consolidates r26
+  optimizations and fixes double filtering; new `pipeline/filter-fixture-300x260(±no-effect)`
+  and backdrop rows.
+- **Polished shell chrome** (`d07d70a`, shell 195 tests): address bar Home/End/
+  Shift-selection/Delete/Ctrl+A-C-X-V with internal clipboard/Ctrl+Backspace,
+  session-history autocomplete (≥2 chars, grey suffix, Tab), Ctrl+L, deterministic
+  solid caret; real tab-strip overflow menu (scrolling list, activate/close, Esc/outside),
+  wheel wrap, deterministic loading indicator, ellipsis; `<select>` with
+  non-selectable optgroups, Home/End/PageUp/PageDown/first-character and minimal
+  scrollbar; `--chrome` md5 `1a29d6b3…` and page golden `7324e851…` intact.
+
+#### Tests
+
+- **1,695 tests, 0 failures** (net 259, js 128, dom 36, shell 195, image 76, paint 208,
+  css 230, layout 215, render 153, svg 97, html 60, fonts 17+1 doctest, bench 9,
+  test_harness 11); gate PASS with tokenizer 7,050/7,050, tree 3,904/3,904,
+  serializer 230/230 and CSS 30/30.
+
 ### Round 26 — module scripts, scaled decode, HTTP/2 request bodies, DOM/JS bug-bash, SVG filters/SMIL and isolated bench rows (2026-11-11)
 
 #### Added
