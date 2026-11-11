@@ -60,7 +60,7 @@ impl std::hash::BuildHasher for FastBuildHasher {
 }
 
 use crate::rule::{Declaration, Rule, Stylesheet, serialize_component_values};
-use crate::selector::{ComplexSelector, SelectorList, Specificity, parse_selectors};
+use crate::selector::{Combinator, ComplexSelector, SelectorList, Specificity, parse_selectors};
 use crate::shorthand::expand_declarations;
 use dom::{Document, NodeId};
 
@@ -207,6 +207,58 @@ enum RuleKey {
 struct Candidate {
     rule: u32,
     selector: u32,
+    /// Bloom mask of the classes the selector requires on *ancestor* compounds (only
+    /// descendant/child combinators). A candidate whose mask is not covered by the target
+    /// element's ancestor-class mask cannot match, so it is dropped before the (expensive)
+    /// full selector match.
+    ancestor_mask: u64,
+}
+
+/// One bit of the ancestor-class Bloom filter for `class`.
+///
+/// Class matching is ASCII case-insensitive, so the hash folds ASCII case; false positives
+/// are harmless because the mask only prunes candidates that would fail to match anyway.
+fn class_hash_bit(class: &str) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    for byte in class.bytes() {
+        hash ^= u64::from(byte.to_ascii_lowercase());
+        hash = hash.wrapping_mul(0x100_0000_01b3);
+    }
+    1u64 << (hash & 63)
+}
+
+/// Classes that `selector` requires on ancestors of the target element.
+///
+/// Only compounds followed by a descendant or child combinator are guaranteed to be on the
+/// ancestor chain; compounds followed by a sibling combinator are not, so their classes are
+/// left out (the mask must never reject a selector that could match).
+fn ancestor_class_mask(selector: &ComplexSelector) -> u64 {
+    let mut mask = 0u64;
+    for (compound, combinator) in &selector.compounds {
+        if matches!(combinator, Some(Combinator::Descendant | Combinator::Child)) {
+            for class in &compound.classes {
+                mask |= class_hash_bit(class);
+            }
+        }
+    }
+    mask
+}
+
+/// Bloom mask of every class on the ancestor chain of `node_id`.
+fn ancestor_classes_mask(doc: &Document, node_id: NodeId) -> u64 {
+    let mut mask = 0u64;
+    let mut current = doc.node(node_id).parent;
+    while let Some(ancestor) = current {
+        if let Some(element) = doc.node(ancestor).as_element()
+            && let Some(classes) = element.get_attribute("class")
+        {
+            for class in classes.split_ascii_whitespace() {
+                mask |= class_hash_bit(class);
+            }
+        }
+        current = doc.node(ancestor).parent;
+    }
+    mask
 }
 
 /// Index of selectors by the key of their rightmost compound.
@@ -233,6 +285,7 @@ impl RuleIndex {
             let candidate = Candidate {
                 rule,
                 selector: selector_index as u32,
+                ancestor_mask: ancestor_class_mask(selector),
             };
             match selector_key(selector) {
                 Some(RuleKey::Id(id)) => self.by_id.entry(id).or_default().push(candidate),
@@ -256,6 +309,7 @@ impl RuleIndex {
             out.sort_unstable();
             return;
         };
+        let ancestor_mask = ancestor_classes_mask(doc, node_id);
 
         if let Some(id) = element.get_attribute("id")
             && let Some(rules) = self.by_id.get(id)
@@ -288,6 +342,11 @@ impl RuleIndex {
             }
         }
 
+        // Prune descendant-selector candidates whose required ancestor classes are not on
+        // this element's ancestor chain (a cheap Bloom test before the full match).
+        if ancestor_mask != 0 {
+            out.retain(|candidate| candidate.ancestor_mask & !ancestor_mask == 0);
+        }
         out.sort_unstable();
         out.dedup();
     }
@@ -338,6 +397,9 @@ pub struct StyleCollection {
     /// Rule index by rightmost-compound key. Maintained by the `add_*` methods; if the public
     /// `rules` vector is mutated directly, resolution falls back to evaluating every rule.
     index: RuleIndex,
+    /// Whether any compiled declaration uses the `revert-layer` value. When false (the
+    /// common case) the per-element revert-layer scan is skipped entirely.
+    has_revert_layer: bool,
 }
 
 /// Compiles one style rule (selectors + expanded declarations) without assigning a source
@@ -491,6 +553,9 @@ impl StyleCollection {
                             ..compiled
                         };
                         self.next_source_order += 1;
+                        if compiled.declarations.iter().any(is_revert_layer) {
+                            self.has_revert_layer = true;
+                        }
                         self.container_rules.push(ContainerRule {
                             query: query.clone(),
                             rule: compiled,
@@ -527,6 +592,9 @@ impl StyleCollection {
         self.next_source_order += 1;
         let rule_index = self.rules.len() as u32;
         self.index.insert(rule_index, &compiled.selectors);
+        if compiled.declarations.iter().any(is_revert_layer) {
+            self.has_revert_layer = true;
+        }
         self.rules.push(compiled);
     }
 
@@ -545,6 +613,7 @@ impl StyleCollection {
                     out.push(Candidate {
                         rule: rule_index as u32,
                         selector: selector_index as u32,
+                        ancestor_mask: 0,
                     });
                 }
             }
@@ -718,6 +787,10 @@ fn merge_container_rules<'a>(
     collection: &'a StyleCollection,
     best: &mut HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher>,
 ) {
+    // Documents without `@container` rules (the vast majority) skip the loop entirely.
+    if collection.container_rules.is_empty() {
+        return;
+    }
     for container_rule in &collection.container_rules {
         let rule = &container_rule.rule;
         for selector in &rule.selectors.selectors {
@@ -783,6 +856,13 @@ fn apply_revert_layer<'a>(
     collection: &'a StyleCollection,
     best: &mut HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher>,
 ) {
+    // `revert-layer` is rare: without any such declaration the per-element scan (which
+    // allocates a Vec and string-compares every winning declaration) is pure overhead.
+    // The flag is only trusted when the index is in sync; a `rules` vector mutated
+    // directly (documented fallback path) keeps the slow, always-correct scan.
+    if !collection.has_revert_layer && collection.index.indexed_rules == collection.rules.len() {
+        return;
+    }
     let losers: Vec<&'a str> = best
         .iter()
         .filter(|(_, matched)| is_revert_layer(matched.declaration))
@@ -1124,6 +1204,7 @@ mod tests {
                 candidates.push(Candidate {
                     rule: rule_index as u32,
                     selector: selector_index as u32,
+                    ancestor_mask: 0,
                 });
             }
         }

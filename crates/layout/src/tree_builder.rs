@@ -319,7 +319,19 @@ fn build_box_for_node(
             // `ComputedStyle::initial() + inherit_from` is skipped for them.
             let mut child_style: Option<Arc<ComputedStyle>> = None;
 
-            let mut raw_children = Vec::with_capacity(4);
+            // Size the children buffer to the exact DOM child count instead of a fixed
+            // `with_capacity(4)`: most elements have 1–2 children, so the old capacity
+            // over-allocated (and grew to 8 on the fifth child) for every element.
+            let child_count = {
+                let mut count = 0usize;
+                let mut child = node.first_child;
+                while let Some(child_id) = child {
+                    count += 1;
+                    child = doc.node(child_id).next_sibling;
+                }
+                count
+            };
+            let mut raw_children = Vec::with_capacity(child_count);
             let mut curr = node.first_child;
             while let Some(child_id) = curr {
                 let child_node = doc.node(child_id);
@@ -350,8 +362,19 @@ fn build_box_for_node(
                 | BoxType::InlineBlock(_)
                 | BoxType::TableCell(_)
                 | BoxType::TableCaption(_) => {
-                    raw_children.iter().any(LayoutBox::is_block)
-                        && raw_children.iter().any(LayoutBox::is_inline)
+                    let mut has_block = false;
+                    let mut has_inline = false;
+                    for child in &raw_children {
+                        if child.is_block() {
+                            has_block = true;
+                        } else {
+                            has_inline = true;
+                        }
+                        if has_block && has_inline {
+                            break;
+                        }
+                    }
+                    has_block && has_inline
                 }
                 // Table fixups may need anonymous row-group/row/cell wrappers.
                 BoxType::Table(_)
