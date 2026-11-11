@@ -76,7 +76,15 @@ fn run() -> Result<(), ShellError> {
             let (css_width, css_height) =
                 zoom::zoomed_viewport(args.width, args.height, 1.0, args.zoom);
             let overlays = args.chrome || args.find.is_some();
-            let output = if args.chrome {
+            let output = if args.chrome && args.chrome_menu {
+                shell::headless::render_target_with_chrome_menu(
+                    &args.input,
+                    css_width,
+                    css_height,
+                    &options,
+                    args.find.as_deref(),
+                )?
+            } else if args.chrome {
                 shell::headless::render_target_with_chrome(
                     &args.input,
                     css_width,

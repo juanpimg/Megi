@@ -21,6 +21,9 @@
 #   - session: tabs/history/zoom/scroll persist in $XDG_DATA_HOME/megi/session.json
 #     (--no-session, --session-file PATH); Ctrl+S saves PNG, Ctrl+Shift+S saves serialized
 #     HTML (doctype) to --download-dir or ~/Downloads; headless: --save-png/--save-html PATH
+#   - links: hover shows the URL in a bottom status bar; Ctrl+click / middle click opens the
+#     link in a new tab; right click opens a context menu (open/copy link, save image,
+#     reload, save page PNG/HTML; arrows/Enter/Esc); --chrome --chrome-menu for headless
 #   - tabs: Ctrl+T new, Ctrl+W close (last tab -> New Tab), Ctrl+Tab / Ctrl+Shift+Tab
 #     cycle, Alt+1..9 activate; --tabs URL repeatable (headless renders the first/active tab)
 #   - Ctrl+L: print the current URL; title shows page — zoom% — scroll% (+warnings)

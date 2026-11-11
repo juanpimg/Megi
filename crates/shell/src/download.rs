@@ -28,6 +28,8 @@ pub enum DownloadKind {
     Png,
     /// Rendered DOM serialized as HTML.
     Html,
+    /// A rendered page image resource (`<img>` bytes fetched on demand).
+    Image,
 }
 
 impl DownloadKind {
@@ -36,6 +38,7 @@ impl DownloadKind {
         match self {
             Self::Png => "png",
             Self::Html => "html",
+            Self::Image => "image",
         }
     }
 }
@@ -165,6 +168,52 @@ pub fn save_png(dir: &Path, url: &net::Url, png: &[u8]) -> Result<SavedDownload,
         path,
         bytes,
         kind: DownloadKind::Png,
+    })
+}
+
+/// Infers a download extension from image bytes (magic) or the URL path.
+pub fn image_extension(bytes: &[u8], url: &net::Url) -> &'static str {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+        return "png";
+    }
+    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return "jpg";
+    }
+    if bytes.starts_with(b"GIF8") {
+        return "gif";
+    }
+    if bytes.len() > 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        return "webp";
+    }
+    if bytes.starts_with(b"<svg") || bytes.starts_with(b"<?xml") {
+        return "svg";
+    }
+    let path = url.as_str().to_ascii_lowercase();
+    for extension in ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"] {
+        if path.ends_with(&format!(".{extension}")) {
+            return if extension == "jpeg" {
+                "jpg"
+            } else {
+                extension
+            };
+        }
+    }
+    "img"
+}
+
+/// Saves fetched image bytes as a download `megi-<host>-<n>.<ext>` (atomic, no re-encode).
+pub fn save_image(dir: &Path, url: &net::Url, bytes: &[u8]) -> Result<SavedDownload, String> {
+    if bytes.is_empty() {
+        return Err("the image resource is empty".to_string());
+    }
+    fs::create_dir_all(dir).map_err(|error| format!("cannot create {}: {error}", dir.display()))?;
+    let extension = image_extension(bytes, url);
+    let path = next_download_path(dir, url, extension);
+    let written = write_atomic(&path, bytes)?;
+    Ok(SavedDownload {
+        path,
+        bytes: written,
+        kind: DownloadKind::Image,
     })
 }
 
@@ -414,5 +463,20 @@ mod tests {
             PathBuf::from("/home/user/Downloads")
         );
         assert_eq!(default_download_dir(None, None), std::env::temp_dir());
+    }
+
+    #[test]
+    fn image_downloads_infer_extension_and_keep_bytes() {
+        let dir = temp_dir("save-image");
+        let png_bytes = [0x89u8, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 1];
+        let saved = save_image(&dir, &url("https://example.com/pic"), &png_bytes).expect("save");
+        assert_eq!(saved.kind, DownloadKind::Image);
+        assert!(saved.path.to_string_lossy().ends_with(".png"));
+        assert_eq!(fs::read(&saved.path).expect("read"), png_bytes);
+        let jpeg = [0xFFu8, 0xD8, 0xFF, 0x00];
+        let saved_jpeg = save_image(&dir, &url("https://example.com/photo"), &jpeg).expect("jpeg");
+        assert!(saved_jpeg.path.to_string_lossy().ends_with(".jpg"));
+        assert!(save_image(&dir, &url("https://example.com/x"), b"").is_err());
+        let _ = fs::remove_dir_all(&dir);
     }
 }

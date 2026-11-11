@@ -72,6 +72,20 @@ pub const COLOR_LOADING: Color = Color::new(0x8A, 0xB4, 0xF8, 0xFF);
 pub const OVERFLOW_MENU_ROW_HEIGHT: f32 = 18.0;
 /// Maximum open-tab rows in the overflow menu before it scrolls.
 pub const OVERFLOW_MENU_MAX_VISIBLE: usize = 8;
+/// Height of the link-hover status bar at the bottom of the window, in CSS pixels.
+pub const STATUS_BAR_HEIGHT: f32 = 20.0;
+/// Width of the context menu, in CSS pixels.
+pub const CONTEXT_MENU_WIDTH: f32 = 220.0;
+/// Height of one context-menu row, in CSS pixels.
+pub const CONTEXT_MENU_ROW_HEIGHT: f32 = 20.0;
+/// Link-hover status bar background.
+pub const COLOR_STATUS_BAR: Color = Color::new(0x20, 0x21, 0x24, 0xFF);
+/// Link-hover status text.
+pub const COLOR_STATUS_TEXT: Color = Color::new(0xE8, 0xEA, 0xED, 0xFF);
+/// Context menu background.
+pub const COLOR_MENU_BG: Color = Color::new(0xFA, 0xFA, 0xFA, 0xFF);
+/// Context menu selected row.
+pub const COLOR_MENU_SELECTED: Color = Color::new(0xD2, 0xE3, 0xFC, 0xFF);
 
 /// Address bar edition state: text, caret, selection anchor and an **internal process
 /// clipboard** (Ctrl+C/X/V copy within the shell; the system clipboard is not touched).
@@ -1009,6 +1023,189 @@ impl DropdownState {
     }
 }
 
+/// Action of a context-menu row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MenuAction {
+    /// Open the target link in a new tab.
+    OpenLinkInNewTab,
+    /// Copy the target link to the internal clipboard.
+    CopyLinkAddress,
+    /// Save the target image resource into the download directory.
+    SaveImage,
+    /// Copy the image (documented no-op: no image clipboard).
+    CopyImage,
+    /// Reload the page.
+    Reload,
+    /// Save the page as PNG (same path as Ctrl+S).
+    SavePagePng,
+    /// Save the page as serialized HTML (same path as Ctrl+Shift+S).
+    SavePageHtml,
+}
+
+impl MenuAction {
+    /// Whether executing this action has an effect (copy-image is a documented no-op).
+    pub const fn is_implemented(self) -> bool {
+        !matches!(self, Self::CopyImage)
+    }
+}
+
+/// One context-menu row.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ContextMenuItem {
+    /// Action executed when the row is chosen.
+    pub action: MenuAction,
+    /// Visible label.
+    pub label: &'static str,
+}
+
+/// Context menu state: target under the cursor, rows, selected row and anchor position.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContextMenu {
+    /// Link URL under the cursor, if any.
+    pub target_link: Option<String>,
+    /// Image under the cursor, if any.
+    pub target_image: Option<crate::images::ImageRegion>,
+    /// Menu rows (contextual first, page actions last).
+    pub items: Vec<ContextMenuItem>,
+    /// Selected row index (keyboard/hover).
+    pub selected: usize,
+    /// Anchor position (chrome CSS coordinates).
+    pub x: f32,
+    /// Anchor position (chrome CSS coordinates).
+    pub y: f32,
+}
+
+impl ContextMenu {
+    /// Builds the contextual menu for the given targets.
+    pub fn new(
+        target_link: Option<String>,
+        target_image: Option<crate::images::ImageRegion>,
+        x: f32,
+        y: f32,
+    ) -> Self {
+        let mut items = Vec::new();
+        if target_link.is_some() {
+            items.push(ContextMenuItem {
+                action: MenuAction::OpenLinkInNewTab,
+                label: "Open link in new tab",
+            });
+            items.push(ContextMenuItem {
+                action: MenuAction::CopyLinkAddress,
+                label: "Copy link address",
+            });
+        }
+        if target_image.is_some() {
+            items.push(ContextMenuItem {
+                action: MenuAction::SaveImage,
+                label: "Save image",
+            });
+            items.push(ContextMenuItem {
+                action: MenuAction::CopyImage,
+                label: "Copy image (not supported)",
+            });
+        }
+        items.push(ContextMenuItem {
+            action: MenuAction::Reload,
+            label: "Reload",
+        });
+        items.push(ContextMenuItem {
+            action: MenuAction::SavePagePng,
+            label: "Save page as PNG",
+        });
+        items.push(ContextMenuItem {
+            action: MenuAction::SavePageHtml,
+            label: "Save page as HTML",
+        });
+        Self {
+            target_link,
+            target_image,
+            items,
+            selected: 0,
+            x,
+            y,
+        }
+    }
+
+    /// Moves the selection up/down with wrap-around.
+    pub fn move_selection(&mut self, down: bool) -> bool {
+        if self.items.is_empty() {
+            return false;
+        }
+        self.selected = if down {
+            (self.selected + 1) % self.items.len()
+        } else if self.selected == 0 {
+            self.items.len() - 1
+        } else {
+            self.selected - 1
+        };
+        true
+    }
+
+    /// Currently selected action.
+    pub fn selected_action(&self) -> Option<MenuAction> {
+        self.items.get(self.selected).map(|item| item.action)
+    }
+}
+
+/// Rectangle of the link-hover status bar.
+pub fn status_bar_rect(css_width: f32, css_height: u32) -> Rect {
+    Rect::new(
+        0.0,
+        (css_height as f32 - STATUS_BAR_HEIGHT).max(0.0),
+        css_width.max(1.0),
+        STATUS_BAR_HEIGHT,
+    )
+}
+
+/// Truncates a hover URL to fit the status bar width.
+pub fn status_text(url: &str, css_width: f32) -> String {
+    let max_chars = ((css_width - 12.0) / 6.6).max(8.0) as usize;
+    truncate_title(url, max_chars)
+}
+
+/// Computed context-menu geometry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContextMenuLayout {
+    /// Menu rectangle.
+    pub rect: Rect,
+    /// Row rectangles (one per item).
+    pub rows: Vec<Rect>,
+}
+
+/// Computes the context-menu layout anchored at the cursor and clamped to the window.
+pub fn context_menu_layout(
+    menu: &ContextMenu,
+    css_width: f32,
+    css_height: u32,
+) -> ContextMenuLayout {
+    let width = CONTEXT_MENU_WIDTH.min((css_width - 8.0).max(80.0));
+    let height = menu.items.len() as f32 * CONTEXT_MENU_ROW_HEIGHT + 4.0;
+    let x = menu.x.min((css_width - width - 2.0).max(2.0)).max(2.0);
+    let below = menu.y + height + 2.0 <= css_height as f32;
+    let y = if below {
+        menu.y + 2.0
+    } else {
+        (menu.y - height - 2.0).max(2.0)
+    };
+    let rect = Rect::new(x, y, width, height);
+    let rows = (0..menu.items.len())
+        .map(|index| {
+            Rect::new(
+                rect.x + 1.0,
+                rect.y + 2.0 + index as f32 * CONTEXT_MENU_ROW_HEIGHT,
+                rect.width - 2.0,
+                CONTEXT_MENU_ROW_HEIGHT,
+            )
+        })
+        .collect();
+    ContextMenuLayout { rect, rows }
+}
+
+/// Row index under a chrome point.
+pub fn context_menu_hit(layout: &ContextMenuLayout, x: f32, y: f32) -> Option<usize> {
+    layout.rows.iter().position(|rect| contains(*rect, x, y))
+}
+
 /// All data the chrome painter needs (plain references, no shell state).
 #[derive(Clone, Copy, Debug)]
 pub struct ChromeView<'a> {
@@ -1034,6 +1231,10 @@ pub struct ChromeView<'a> {
     pub loading: bool,
     /// Open overflow menu for hidden tabs.
     pub overflow: Option<&'a OverflowMenu>,
+    /// Hovered link URL shown in the bottom status bar.
+    pub hover_url: Option<&'a str>,
+    /// Open context menu.
+    pub menu: Option<&'a ContextMenu>,
 }
 
 /// Paints the chrome over a physical `0RGB` framebuffer; returns the painted pixel count.
@@ -1066,6 +1267,12 @@ pub fn draw_chrome(
     }
     if let Some(menu) = view.overflow {
         paint_overflow_menu(&mut pixmap, scale, view, menu);
+    }
+    if let Some(url) = view.hover_url {
+        paint_status_bar(&mut pixmap, scale, view, url);
+    }
+    if let Some(menu) = view.menu {
+        paint_context_menu(&mut pixmap, scale, view, menu);
     }
     let mut painted = 0usize;
     for (index, color) in pixmap.pixels.iter().enumerate() {
@@ -1342,6 +1549,54 @@ fn paint_overflow_menu(
     }
 }
 
+fn paint_status_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, url: &str) {
+    let rect = status_bar_rect(view.css_width, view.css_viewport_height);
+    pixmap.fill_rect(scaled(rect, scale), COLOR_STATUS_BAR);
+    draw_text(
+        pixmap,
+        &status_text(url, rect.width),
+        rect.x + 6.0,
+        rect.y + 6.0,
+        scale,
+        11.0,
+        COLOR_STATUS_TEXT,
+    );
+}
+
+fn paint_context_menu(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, menu: &ContextMenu) {
+    let layout = context_menu_layout(menu, view.css_width, view.css_viewport_height);
+    pixmap.fill_rect(scaled(layout.rect, scale), COLOR_BORDER);
+    pixmap.fill_rect(
+        scaled(
+            Rect::new(
+                layout.rect.x + 1.0,
+                layout.rect.y + 1.0,
+                layout.rect.width - 2.0,
+                layout.rect.height - 2.0,
+            ),
+            scale,
+        ),
+        COLOR_MENU_BG,
+    );
+    for (index, row) in layout.rows.iter().enumerate() {
+        let Some(item) = menu.items.get(index) else {
+            break;
+        };
+        if index == menu.selected {
+            pixmap.fill_rect(scaled(*row, scale), COLOR_MENU_SELECTED);
+        }
+        draw_text(
+            pixmap,
+            item.label,
+            row.x + 8.0,
+            row.y + 6.0,
+            scale,
+            11.0,
+            COLOR_ADDRESS_TEXT,
+        );
+    }
+}
+
 fn scaled(rect: Rect, scale: f32) -> Rect {
     Rect::new(
         rect.x * scale,
@@ -1392,6 +1647,8 @@ mod tests {
             completion: None,
             loading: false,
             overflow: None,
+            hover_url: None,
+            menu: None,
         }
     }
 
@@ -1827,5 +2084,101 @@ mod tests {
         assert_eq!(bar.selection_range(), 0..0);
         assert!(bar.insert("x"));
         assert_eq!(bar.text(), "xabc");
+    }
+
+    #[test]
+    fn status_bar_shows_hover_url_and_clears() {
+        let rect = status_bar_rect(640.0, 400);
+        assert_eq!(rect.height, STATUS_BAR_HEIGHT);
+        assert_eq!(rect.y, 400.0 - STATUS_BAR_HEIGHT);
+        assert!(status_text("https://example.com/a/very/long/path", 200.0).ends_with('…'));
+        assert_eq!(status_text("abc", 640.0), "abc");
+
+        let address = AddressBar::new();
+        let tabs = vec!["Megi".to_string()];
+        let mut dest = buffer(320, 200);
+        let mut view = view(&address, None, &tabs);
+        view.hover_url = Some("https://example.com/hovered");
+        view.css_viewport_height = 200;
+        draw_chrome(&mut dest, 320, 200, 1.0, &view);
+        let bottom = ((200 - STATUS_BAR_HEIGHT as u32 + 2) * 320) as usize;
+        assert_eq!(dest[bottom], 0x0020_2124, "status bar background");
+        let mut clean = buffer(320, 200);
+        draw_chrome(
+            &mut clean,
+            320,
+            200,
+            1.0,
+            &view_without_hover(&address, &tabs),
+        );
+        assert_ne!(clean[bottom], 0x0020_2124, "no bar without hover");
+    }
+
+    fn view_without_hover<'a>(address: &'a AddressBar, tabs: &'a [String]) -> ChromeView<'a> {
+        let mut view = view(address, None, tabs);
+        view.hover_url = None;
+        view
+    }
+
+    #[test]
+    fn context_menu_items_depend_on_targets() {
+        let page = ContextMenu::new(None, None, 10.0, 10.0);
+        assert_eq!(page.items.len(), 3, "page actions");
+        let link = ContextMenu::new(Some("https://example.com/a".to_string()), None, 10.0, 10.0);
+        assert_eq!(link.items.len(), 5);
+        assert_eq!(link.items[0].action, MenuAction::OpenLinkInNewTab);
+        assert_eq!(link.items[1].action, MenuAction::CopyLinkAddress);
+        let image = crate::images::ImageRegion {
+            node_id: dom::NodeId::from_index(0),
+            rect: crate::links::CssRect::new(0.0, 0.0, 10.0, 10.0),
+            url: "https://example.com/i.png".to_string(),
+        };
+        let both = ContextMenu::new(
+            Some("https://example.com/a".to_string()),
+            Some(image),
+            10.0,
+            10.0,
+        );
+        assert_eq!(both.items.len(), 7);
+        assert_eq!(both.items[2].action, MenuAction::SaveImage);
+        assert_eq!(both.items[3].action, MenuAction::CopyImage);
+        assert!(!MenuAction::CopyImage.is_implemented());
+        assert!(MenuAction::SavePagePng.is_implemented());
+    }
+
+    #[test]
+    fn context_menu_navigation_layout_and_hit() {
+        let mut menu = ContextMenu::new(None, None, 10.0, 10.0);
+        assert!(menu.move_selection(true));
+        assert_eq!(menu.selected, 1);
+        assert!(menu.move_selection(false));
+        menu.move_selection(false);
+        assert_eq!(menu.selected, menu.items.len() - 1, "wraps upward");
+        let layout = context_menu_layout(&menu, 320.0, 200);
+        assert!(layout.rect.x >= 2.0 && layout.rect.y >= 2.0);
+        assert_eq!(layout.rows.len(), menu.items.len());
+        let row = layout.rows[1];
+        assert_eq!(context_menu_hit(&layout, row.x + 2.0, row.y + 2.0), Some(1));
+        assert_eq!(context_menu_hit(&layout, 1.0, 1.0), None);
+        // Near the bottom edge the menu flips above the cursor.
+        let flipped = ContextMenu::new(None, None, 300.0, 195.0);
+        let flipped_layout = context_menu_layout(&flipped, 320.0, 200);
+        assert!(flipped_layout.rect.y + flipped_layout.rect.height <= 200.0);
+    }
+
+    #[test]
+    fn context_menu_paints_selected_row() {
+        let address = AddressBar::new();
+        let tabs = vec!["Megi".to_string()];
+        let menu = ContextMenu::new(Some("https://example.com/a".to_string()), None, 20.0, 40.0);
+        let mut dest = buffer(400, 240);
+        let mut view = view(&address, None, &tabs);
+        view.menu = Some(&menu);
+        draw_chrome(&mut dest, 400, 240, 1.0, &view);
+        let layout = context_menu_layout(&menu, 400.0, 240);
+        let selected = layout.rows[0];
+        let pixel = dest[(selected.y as u32 * 400 + selected.x as u32 + 3) as usize];
+        assert_eq!(pixel, 0x00D2_E3FC, "selected row background");
+        assert!(selected.width > 0.0);
     }
 }

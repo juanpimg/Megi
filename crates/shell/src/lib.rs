@@ -64,6 +64,11 @@
 //!   [`download`]). Frames keep the render-produced PNG bytes ([`worker::RenderFrame::png_bytes`])
 //!   so saves write them directly (atomic tmp+rename, no re-encode, byte-identical to
 //!   `--screenshot`); headless renders once when `--save-*` is combined with `--screenshot`.
+//! - **Mouse/link interactions (R182)**: hovering a link paints a bottom status bar with the
+//!   resolved URL (hand cursor); Ctrl+click or middle click opens it in a new tab (bounded by
+//!   [`tabs::MAX_TABS`]); right click opens a deterministic context menu (open/copy link,
+//!   save image fetched on demand into the download directory, copy image documented no-op,
+//!   reload, save page PNG/HTML) with keyboard navigation and click-outside to close.
 //! - **Browser chrome (R135/R174)**: a shell-drawn overlay ([`chrome`]) with a tab strip
 //!   (ellipsis titles, per-tab deterministic loading dot, wheel/click switching and a real
 //!   overflow menu with activate/close) and an address bar
@@ -158,6 +163,7 @@ pub mod error;
 pub mod find;
 pub mod forms;
 pub mod headless;
+pub mod images;
 pub mod links;
 pub mod navigation;
 pub mod present;
@@ -193,10 +199,11 @@ pub use forms::{
     assign_form_ids, collect_controls, control_at, patch_control, snapshot_data_url,
 };
 pub use headless::{
-    ScreenshotInfo, render_target, render_target_with_chrome, render_target_with_find,
-    render_target_with_options, save_screenshot, screenshot, screenshot_with_chrome,
-    screenshot_with_find, screenshot_with_options,
+    ScreenshotInfo, render_target, render_target_with_chrome, render_target_with_chrome_menu,
+    render_target_with_find, render_target_with_options, save_screenshot, screenshot,
+    screenshot_with_chrome, screenshot_with_find, screenshot_with_options,
 };
+pub use images::{ImageRegion, collect_image_regions, image_at};
 pub use links::{
     CssRect, LinkError, LinkRegion, collect_link_regions, find_link_at, is_navigable, link_url_at,
     physical_to_page, resolve_href,

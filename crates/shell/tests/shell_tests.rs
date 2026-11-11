@@ -223,6 +223,7 @@ fn worker_channel_applies_only_the_latest_generation() {
                 content_height: 1,
                 capped: false,
                 links: Vec::new(),
+                images: Vec::new(),
                 title: None,
                 document_url: "data:,x".to_string(),
                 scripts_executed: 0,
@@ -256,6 +257,7 @@ fn worker_channel_applies_only_the_latest_generation() {
         content_height: 1,
         capped: false,
         links: Vec::new(),
+        images: Vec::new(),
         title: None,
         document_url: "data:,x".to_string(),
         scripts_executed: 0,
@@ -1083,6 +1085,8 @@ fn chrome_geometry_scales_with_the_device_scale() {
         completion: None,
         loading: false,
         overflow: None,
+        hover_url: None,
+        menu: None,
     };
     let mut dest = vec![0x00FF_FFFFu32; 640 * 400];
     let painted = shell::chrome::draw_chrome(&mut dest, 640, 400, 2.0, &view);
@@ -1233,4 +1237,49 @@ fn headless_chrome_is_deterministic_and_page_goldens_stay_intact() {
     for path in [plain_a, plain_b, chrome_a, chrome_b] {
         let _ = std::fs::remove_file(path);
     }
+}
+
+#[test]
+fn worker_frame_exposes_image_regions_for_the_context_menu() {
+    let request = RenderRequest {
+        generation: 1,
+        input: "data:text/html,<img src='data:image/png;base64,iVBORw0KGgo=' width=20 height=20>"
+            .to_string(),
+        css_width: 120,
+        css_height: 80,
+        base_override: None,
+        scripting: true,
+        find_query: None,
+    };
+    let frame = shell::worker::render_document(&request).expect("render");
+    assert!(!frame.images.is_empty(), "img region extracted");
+    assert!(frame.images[0].is_usable());
+    assert!(frame.images[0].rect.width > 0.0);
+}
+
+#[test]
+fn headless_chrome_context_menu_is_deterministic() {
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");
+    let first = temp_path("r182-menu-a.png");
+    let second = temp_path("r182-menu-b.png");
+    let run = |path: &PathBuf| {
+        std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+            .arg(&fixture)
+            .args(["--chrome", "--chrome-menu", "--screenshot"])
+            .arg(path)
+            .args(["--width", "640", "--height", "400"])
+            .status()
+            .expect("shell binary runs")
+    };
+    assert!(run(&first).success());
+    assert!(run(&second).success());
+    let a = std::fs::read(&first).expect("png");
+    let b = std::fs::read(&second).expect("png");
+    assert_eq!(a, b, "menu screenshots deterministic");
+    assert_eq!(png_dimensions(&a), (640, 400));
+    assert!(a.starts_with(&[0x89, b'P', b'N', b'G']));
+    assert!(a.len() > 1000);
+    let _ = std::fs::remove_file(&first);
+    let _ = std::fs::remove_file(&second);
 }

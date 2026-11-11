@@ -78,7 +78,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy}
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
 
-use crate::chrome::{self, AddressBar, ChromeView, DropdownState, TabHit};
+use crate::chrome::{self, AddressBar, ChromeView, ContextMenu, DropdownState, MenuAction, TabHit};
 use crate::convert::{WHITE_0RGB, expected_buffer_len};
 use crate::error::ShellError;
 use crate::find::{self, FindState};
@@ -290,6 +290,12 @@ struct WindowApp {
     render_pending: bool,
     /// Open overflow menu for hidden tabs.
     overflow_menu: Option<crate::chrome::OverflowMenu>,
+    /// URL of the link under the cursor (bottom status bar).
+    hover_url: Option<String>,
+    /// Open right-click context menu.
+    context_menu: Option<ContextMenu>,
+    /// Internal text clipboard shared by context-menu copy actions.
+    clipboard: String,
 }
 
 impl WindowApp {
@@ -374,6 +380,9 @@ impl WindowApp {
             status: startup_notice,
             render_pending: false,
             overflow_menu: None,
+            hover_url: None,
+            context_menu: None,
+            clipboard: String::new(),
             tabs,
         }
     }
@@ -467,6 +476,8 @@ impl WindowApp {
         self.close_find();
         self.dropdown = None;
         self.overflow_menu = None;
+        self.context_menu = None;
+        self.hover_url = None;
         self.address.cancel();
         self.scroll = ScrollState::new(1, self.metrics.css_height);
         self.update_title();
@@ -507,6 +518,200 @@ impl WindowApp {
     }
 
     /// Handles a left click: resolves the link under the cursor and navigates to it.
+    /// Converts a physical cursor position into page CSS coordinates (scroll/zoom aware).
+    fn page_coordinates(&self, physical_x: f64, physical_y: f64) -> (f32, f32) {
+        physical_to_page(
+            physical_x,
+            physical_y,
+            self.scale_factor,
+            self.scroll.offset(),
+        )
+    }
+
+    /// Updates the bottom status-bar hover URL and the context-menu hover selection.
+    fn update_hover(&mut self, physical_x: f64, physical_y: f64) {
+        let (x, y) = self.page_coordinates(physical_x, physical_y);
+        let current = self.nav.current().cloned();
+        let link = match crate::links::link_url_at(current.as_ref(), &self.links, x, y) {
+            Ok(Some(url)) => Some(url.as_str()),
+            _ => None,
+        };
+        let changed = link != self.hover_url;
+        self.hover_url = link;
+        let menu_x = (physical_x / self.metrics.scale) as f32;
+        let menu_y = (physical_y / self.metrics.scale) as f32;
+        if let Some(menu) = self.context_menu.as_mut() {
+            let layout = chrome::context_menu_layout(
+                menu,
+                self.metrics.css_width as f32,
+                self.metrics.css_height,
+            );
+            if let Some(index) = chrome::context_menu_hit(&layout, menu_x, menu_y) {
+                menu.selected = index;
+            }
+        }
+        if changed {
+            if let Some(window) = &self.window {
+                window.set_cursor(if self.hover_url.is_some() {
+                    winit::window::CursorIcon::Pointer
+                } else {
+                    winit::window::CursorIcon::Default
+                });
+            }
+            self.request_repaint();
+        }
+    }
+
+    /// Left click: context menu/overflow first, then Ctrl+click (new tab) or normal navigation.
+    fn left_click(&mut self) {
+        let Some((physical_x, physical_y)) = self.cursor else {
+            return;
+        };
+        let menu_x = (physical_x / self.metrics.scale) as f32;
+        let menu_y = (physical_y / self.metrics.scale) as f32;
+        if self.context_menu.is_some() {
+            self.handle_context_menu_click(menu_x, menu_y);
+            return;
+        }
+        if self.modifiers.control_key() && self.open_hovered_link_in_new_tab() {
+            return;
+        }
+        self.click_at_cursor();
+    }
+
+    /// Middle click: open the link under the cursor in a new tab.
+    fn middle_click(&mut self) {
+        let _ = self.open_hovered_link_in_new_tab();
+    }
+
+    /// Opens the link under the cursor in a new tab (respecting the tab limit).
+    fn open_hovered_link_in_new_tab(&mut self) -> bool {
+        let Some((physical_x, physical_y)) = self.cursor else {
+            return false;
+        };
+        let (x, y) = self.page_coordinates(physical_x, physical_y);
+        let current = self.nav.current().cloned();
+        let Ok(Some(url)) = crate::links::link_url_at(current.as_ref(), &self.links, x, y) else {
+            return false;
+        };
+        self.save_active_tab();
+        match self.tabs.open_tab(url.as_str()) {
+            Some(_) => {
+                self.load_active_tab();
+                true
+            }
+            None => {
+                self.notify("cannot open a new tab: limit reached".to_string());
+                false
+            }
+        }
+    }
+
+    /// Opens the right-click context menu for the link/image under the cursor.
+    fn open_context_menu(&mut self) {
+        let Some((physical_x, physical_y)) = self.cursor else {
+            return;
+        };
+        let (x, y) = self.page_coordinates(physical_x, physical_y);
+        let current = self.nav.current().cloned();
+        let link = match crate::links::link_url_at(current.as_ref(), &self.links, x, y) {
+            Ok(Some(url)) => Some(url.as_str()),
+            _ => None,
+        };
+        let image = self.store.frame().and_then(|frame| {
+            crate::images::image_at(&frame.images, x, y)
+                .filter(|image| image.is_usable())
+                .cloned()
+        });
+        let menu_x = (physical_x / self.metrics.scale) as f32;
+        let menu_y = (physical_y / self.metrics.scale) as f32;
+        self.context_menu = Some(ContextMenu::new(link, image, menu_x, menu_y));
+        self.request_repaint();
+    }
+
+    /// Handles a click while the context menu is open (row or click-outside).
+    fn handle_context_menu_click(&mut self, x: f32, y: f32) {
+        let Some(mut menu) = self.context_menu.clone() else {
+            return;
+        };
+        let layout = chrome::context_menu_layout(
+            &menu,
+            self.metrics.css_width as f32,
+            self.metrics.css_height,
+        );
+        if let Some(index) = chrome::context_menu_hit(&layout, x, y) {
+            menu.selected = index;
+            self.context_menu = Some(menu);
+            self.execute_selected_menu_action();
+        } else if !chrome::contains_rect(layout.rect, x, y) {
+            self.context_menu = None;
+            self.request_repaint();
+        }
+    }
+
+    /// Executes the selected context-menu action and closes the menu.
+    fn execute_selected_menu_action(&mut self) {
+        let Some(menu) = self.context_menu.take() else {
+            return;
+        };
+        let Some(action) = menu.items.get(menu.selected).map(|item| item.action) else {
+            return;
+        };
+        match action {
+            MenuAction::OpenLinkInNewTab => {
+                if let Some(url) = menu.target_link
+                    && let Ok(parsed) = net::Url::parse(&url)
+                {
+                    self.save_active_tab();
+                    if self.tabs.open_tab(parsed.as_str()).is_some() {
+                        self.load_active_tab();
+                    } else {
+                        self.notify("cannot open a new tab: limit reached".to_string());
+                    }
+                }
+            }
+            MenuAction::CopyLinkAddress => {
+                if let Some(url) = menu.target_link {
+                    self.clipboard = url.clone();
+                    self.notify(format!(
+                        "copied link address to the internal clipboard: {url}"
+                    ));
+                }
+            }
+            MenuAction::SaveImage => {
+                if let Some(image) = menu.target_image
+                    && let Ok(url) = net::Url::parse(&image.url)
+                {
+                    self.save_image_resource(&url);
+                }
+            }
+            MenuAction::CopyImage => {
+                self.notify(
+                    "copy image is not supported (internal clipboard is text-only)".to_string(),
+                );
+            }
+            MenuAction::Reload => self.reload(),
+            MenuAction::SavePagePng => self.save_frame_png(),
+            MenuAction::SavePageHtml => self.save_frame_html(),
+        }
+        self.request_repaint();
+    }
+
+    /// Fetches an image resource on demand and saves it as a download.
+    fn save_image_resource(&mut self, url: &net::Url) {
+        let mut loader = net::ResourceLoader::new();
+        match loader.load(url) {
+            Ok(resource) => {
+                let dir = crate::download::resolve_download_dir(self.download_dir.as_deref());
+                match crate::download::save_image(&dir, &resource.url, &resource.bytes) {
+                    Ok(saved) => self.notify(saved.notice()),
+                    Err(error) => self.notify(format!("cannot save image: {error}")),
+                }
+            }
+            Err(error) => self.notify(format!("cannot fetch image: {error}")),
+        }
+    }
+
     fn click_at_cursor(&mut self) {
         let Some((physical_x, physical_y)) = self.cursor else {
             return;
@@ -1545,6 +1750,8 @@ impl WindowApp {
             completion: chrome_completion.as_deref(),
             loading: self.render_pending,
             overflow: self.overflow_menu.as_ref(),
+            hover_url: self.hover_url.as_deref(),
+            menu: self.context_menu.as_ref(),
         };
         let _ = chrome::draw_chrome(&mut buffer, width, height, chrome_scale, &view);
         let _ = buffer.present();
@@ -1646,6 +1853,7 @@ impl ApplicationHandler<UserEvent> for WindowApp {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = Some((position.x, position.y));
+                self.update_hover(position.x, position.y);
                 if let Some(dropdown) = self.dropdown.as_mut() {
                     let scale = self.metrics.scale;
                     let list = chrome::dropdown_layout(
@@ -1672,9 +1880,22 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                 button: MouseButton::Left,
                 ..
             } => {
-                self.click_at_cursor();
+                self.left_click();
             }
-            // Right/middle clicks are deliberately ignored (no context menu yet).
+            WindowEvent::MouseInput {
+                state: ElementState::Pressed,
+                button: MouseButton::Right,
+                ..
+            } => {
+                self.open_context_menu();
+            }
+            WindowEvent::MouseInput {
+                state: ElementState::Pressed,
+                button: MouseButton::Middle,
+                ..
+            } => {
+                self.middle_click();
+            }
             WindowEvent::MouseInput { .. } => {}
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 let alt_pressed = self.modifiers.alt_key();
@@ -1733,6 +1954,34 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                 {
                     self.activate_tab(index as usize - 1);
                     return;
+                }
+                if self.context_menu.is_some() {
+                    match event.logical_key.as_ref() {
+                        Key::Named(NamedKey::Escape) => {
+                            self.context_menu = None;
+                            self.request_repaint();
+                            return;
+                        }
+                        Key::Named(NamedKey::ArrowDown) => {
+                            if let Some(menu) = self.context_menu.as_mut() {
+                                menu.move_selection(true);
+                            }
+                            self.request_repaint();
+                            return;
+                        }
+                        Key::Named(NamedKey::ArrowUp) => {
+                            if let Some(menu) = self.context_menu.as_mut() {
+                                menu.move_selection(false);
+                            }
+                            self.request_repaint();
+                            return;
+                        }
+                        Key::Named(NamedKey::Enter) => {
+                            self.execute_selected_menu_action();
+                            return;
+                        }
+                        _ => {}
+                    }
                 }
                 if self.overflow_menu.is_some()
                     && matches!(event.logical_key.as_ref(), Key::Named(NamedKey::Escape))

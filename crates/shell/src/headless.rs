@@ -84,6 +84,57 @@ pub fn render_target_with_chrome(
         completion: None,
         loading: false,
         overflow: None,
+        hover_url: None,
+        menu: None,
+    };
+    crate::chrome::draw_chrome(&mut dest, width, height, 1.0, &view);
+    output.pixmap.pixels = dest
+        .iter()
+        .map(|pixel| {
+            paint::Color::new(
+                ((pixel >> 16) & 0xFF) as u8,
+                ((pixel >> 8) & 0xFF) as u8,
+                (pixel & 0xFF) as u8,
+                0xFF,
+            )
+        })
+        .collect();
+    Ok(output)
+}
+
+/// Like [`render_target_with_chrome`] but with a deterministic **context menu open**
+/// (`--screenshot --chrome --chrome-menu`), used by tests/screenshots of the menu.
+pub fn render_target_with_chrome_menu(
+    input: &str,
+    width: u32,
+    height: u32,
+    options: &render::RenderOptions,
+    find_query: Option<&str>,
+) -> Result<render::RenderOutput, ShellError> {
+    let mut output = render_target_with_options(input, width, height, options)?;
+    if let Some(query) = find_query {
+        let rects = crate::find::highlight_rects(&output.layout, query);
+        crate::find::overlay_highlights_pixmap(&mut output.pixmap, &rects, 0);
+    }
+    let mut dest = crate::convert::pixmap_to_0rgb(&output.pixmap);
+    let title = crate::title::document_title(&output.document).unwrap_or_else(|| input.to_string());
+    let tabs = vec![crate::chrome::truncate_title(&title, 24)];
+    let address = crate::chrome::AddressBar::new();
+    let menu = crate::chrome::ContextMenu::new(None, None, 40.0, 80.0);
+    let view = crate::chrome::ChromeView {
+        tabs: &tabs,
+        active_tab: 0,
+        address: &address,
+        fallback_url: input,
+        dropdown: None,
+        scroll_y: 0,
+        css_viewport_height: height,
+        css_width: width as f32,
+        completion: None,
+        loading: false,
+        overflow: None,
+        hover_url: Some("https://example.com/link"),
+        menu: Some(&menu),
     };
     crate::chrome::draw_chrome(&mut dest, width, height, 1.0, &view);
     output.pixmap.pixels = dest

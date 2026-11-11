@@ -80,6 +80,8 @@ pub struct RenderFrame {
     /// Clickable `<a href>` regions in page CSS coordinates, extracted from the same
     /// render pass as the pixels (so the hit map always matches the frame).
     pub links: Vec<LinkRegion>,
+    /// Rendered `<img>` regions (page CSS coordinates) for the context menu's image actions.
+    pub images: Vec<crate::images::ImageRegion>,
     /// Document `<title>` text, if the page declared one.
     pub title: Option<String>,
     /// Final document URL after HTTP redirects (the history entry is replaced with it).
@@ -386,6 +388,11 @@ pub fn render_document_with_options(
     };
     let pixels = pixmap_to_0rgb(&output.pixmap);
     let links = collect_link_regions(&output);
+    let images = crate::images::collect_image_regions(
+        &output.document,
+        &output.layout,
+        Some(&output.document_url),
+    );
     let title = document_title(&output.document);
     let document_url = output.document_url.as_str();
     let mut document = output.document;
@@ -420,6 +427,7 @@ pub fn render_document_with_options(
         content_height: target_height,
         capped,
         links,
+        images,
         title,
         document_url,
         scripts_executed,
@@ -471,6 +479,7 @@ mod unit_tests {
             content_height: 2,
             capped: false,
             links: Vec::new(),
+            images: Vec::new(),
             title: None,
             document_url: "https://example.com/".to_string(),
             scripts_executed: 0,
