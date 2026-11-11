@@ -14,8 +14,8 @@
 
 use crate::color::Color;
 use crate::document::{
-    ClipPathSpec, CompositeOperator, Document, EffectRef, FillRule, FilterPrimitive, FilterSpec,
-    LineCap, LineJoin, MAX_BLUR_RADIUS, MaskSpec, Paint,
+    BlendMode, ClipPathSpec, ColorMatrixKind, CompositeOperator, Document, EffectRef, FillRule,
+    FilterInput, FilterPrimitive, FilterSpec, LineCap, LineJoin, MAX_BLUR_RADIUS, MaskSpec, Paint,
 };
 use crate::gradient::GradientSpec;
 use crate::path::SubPath;
@@ -400,7 +400,11 @@ fn mask_region_pixels(
     )))
 }
 
-/// Applies a supported filter chain to the layer pixels (blur/offset/flood/composite).
+/// Applies a supported filter chain to the layer pixels.
+///
+/// Primitives are resolved in order with `in`/`in2`/`result` references
+/// (`SourceGraphic`, `SourceAlpha`, `Previous` or a named result); the last primitive's
+/// output is the filter result. The filter region clips the final result.
 fn apply_filter(
     layer: &mut Canvas,
     spec: &FilterSpec,
@@ -426,44 +430,111 @@ fn apply_filter(
     if !scale.is_finite() || scale <= 0.0 {
         return Ok(());
     }
-    let mut current = layer.pixels.clone();
-    let source = current.clone();
-    let mut flood_color: Option<(u8, u8, u8)> = None;
-    let mut flood_alpha = 0.0f32;
+    let source = layer.pixels.clone();
+    let mut source_alpha = source.clone();
+    for pixel in source_alpha.as_chunks_mut::<4>().0 {
+        pixel[0] = 0;
+        pixel[1] = 0;
+        pixel[2] = 0;
+    }
+    let mut results: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
+    let mut previous = source.clone();
     for primitive in &spec.primitives {
-        match primitive {
-            FilterPrimitive::GaussianBlur { std_deviation } => {
+        let input = |reference: &FilterInput| -> Vec<u8> {
+            match reference {
+                FilterInput::SourceGraphic => source.clone(),
+                FilterInput::SourceAlpha => source_alpha.clone(),
+                FilterInput::Previous => previous.clone(),
+                FilterInput::Named(name) => {
+                    results.get(name).cloned().unwrap_or_else(|| source.clone())
+                }
+            }
+        };
+        let (pixels, result) = match primitive {
+            FilterPrimitive::GaussianBlur {
+                std_deviation,
+                input: reference,
+                result,
+            } => {
+                let mut pixels = input(reference);
                 box_blur(
-                    &mut current,
+                    &mut pixels,
                     layer.width,
                     layer.height,
                     (*std_deviation * scale).max(0.0),
                 );
+                (pixels, result)
             }
-            FilterPrimitive::Offset { dx, dy } => {
+            FilterPrimitive::Offset {
+                dx,
+                dy,
+                input: reference,
+                result,
+            } => {
+                let mut pixels = input(reference);
                 offset_pixels(
-                    &mut current,
+                    &mut pixels,
                     layer.width,
                     layer.height,
                     (dx * scale).round() as i32,
                     (dy * scale).round() as i32,
                 );
+                (pixels, result)
             }
-            FilterPrimitive::Flood { color, opacity } => {
-                flood_color = Some((color.r, color.g, color.b));
-                flood_alpha = (f32::from(color.a) / 255.0 * opacity).clamp(0.0, 1.0);
+            FilterPrimitive::Flood {
+                color,
+                opacity,
+                result,
+            } => {
+                let alpha = (f32::from(color.a) / 255.0 * opacity).clamp(0.0, 1.0);
+                let mut pixels = vec![0u8; layer.pixels.len()];
+                for pixel in pixels.as_chunks_mut::<4>().0 {
+                    pixel[0] = color.r;
+                    pixel[1] = color.g;
+                    pixel[2] = color.b;
+                    pixel[3] = (alpha * 255.0).round() as u8;
+                }
+                (pixels, result)
             }
-            FilterPrimitive::Composite { operator } => {
-                let (r, g, b) = flood_color.unwrap_or((0, 0, 0));
-                let flood = if flood_color.is_some() {
-                    Some((r, g, b, flood_alpha))
-                } else {
-                    None
-                };
-                current = composite_images(&current, &source, &flood, *operator);
+            FilterPrimitive::ColorMatrix {
+                kind,
+                input: reference,
+                result,
+            } => (apply_color_matrix(&input(reference), kind), result),
+            FilterPrimitive::Blend {
+                mode,
+                input: reference,
+                input2,
+                result,
+            } => {
+                let src = input(reference);
+                let dst = input(input2);
+                (blend_images(&src, &dst, *mode), result)
             }
+            FilterPrimitive::Merge { inputs, result } => {
+                let mut pixels = vec![0u8; layer.pixels.len()];
+                for reference in inputs {
+                    pixels = composite_over(&input(reference), &pixels);
+                }
+                (pixels, result)
+            }
+            FilterPrimitive::Composite {
+                operator,
+                input: reference,
+                input2,
+                result,
+            } => {
+                let src = input(reference);
+                let dst = input(input2);
+                (composite_images_ext(&src, &dst, operator), result)
+            }
+        };
+        previous = pixels.clone();
+        if let Some(name) = result {
+            results.insert(name.clone(), pixels.clone());
         }
     }
+    let mut output = previous;
     if let Some((x0, y0, x1, y1)) = region {
         for y in 0..layer.height {
             for x in 0..layer.width {
@@ -473,13 +544,220 @@ fn apply_filter(
                     && (y as f32 + 0.5) < y1;
                 if !inside {
                     let offset = (y * layer.width + x) * 4;
-                    current[offset + 3] = 0;
+                    output[offset + 3] = 0;
                 }
             }
         }
     }
-    layer.pixels = current;
+    layer.pixels = output;
     Ok(())
+}
+
+fn premultiply(pixel: &[u8]) -> [f32; 4] {
+    let alpha = f32::from(pixel[3]) / 255.0;
+    [
+        f32::from(pixel[0]) / 255.0 * alpha,
+        f32::from(pixel[1]) / 255.0 * alpha,
+        f32::from(pixel[2]) / 255.0 * alpha,
+        alpha,
+    ]
+}
+
+fn unpremultiply(premultiplied: [f32; 4]) -> [u8; 4] {
+    let alpha = premultiplied[3].clamp(0.0, 1.0);
+    if alpha <= 0.0 {
+        return [0, 0, 0, 0];
+    }
+    [
+        ((premultiplied[0].clamp(0.0, 1.0) / alpha) * 255.0).round() as u8,
+        ((premultiplied[1].clamp(0.0, 1.0) / alpha) * 255.0).round() as u8,
+        ((premultiplied[2].clamp(0.0, 1.0) / alpha) * 255.0).round() as u8,
+        (alpha * 255.0).round() as u8,
+    ]
+}
+
+fn composite_over(src: &[u8], dst: &[u8]) -> Vec<u8> {
+    let mut out = vec![0u8; src.len()];
+    for (index, target) in out.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        let s = premultiply(&src[index * 4..index * 4 + 4]);
+        let d = premultiply(&dst[index * 4..index * 4 + 4]);
+        let alpha = s[3] + d[3] * (1.0 - s[3]);
+        let mut result = [0.0f32; 4];
+        for channel in 0..3 {
+            result[channel] = s[channel] + d[channel] * (1.0 - s[3]);
+        }
+        result[3] = alpha;
+        target.copy_from_slice(&unpremultiply(result));
+    }
+    out
+}
+
+fn composite_images_ext(src: &[u8], dst: &[u8], operator: &CompositeOperator) -> Vec<u8> {
+    let mut out = vec![0u8; src.len()];
+    for index in 0..src.len() / 4 {
+        let s = premultiply(&src[index * 4..index * 4 + 4]);
+        let d = premultiply(&dst[index * 4..index * 4 + 4]);
+        let alpha = match operator {
+            CompositeOperator::Over => s[3] + d[3] * (1.0 - s[3]),
+            CompositeOperator::In => s[3] * d[3],
+            CompositeOperator::Out => s[3] * (1.0 - d[3]),
+            CompositeOperator::Atop => d[3],
+            CompositeOperator::Arithmetic(k) => {
+                k[0] * s[3] * d[3] + k[1] * s[3] + k[2] * d[3] + k[3]
+            }
+        }
+        .clamp(0.0, 1.0);
+        let mut result = [0.0f32; 4];
+        match operator {
+            CompositeOperator::Over => {
+                for channel in 0..3 {
+                    result[channel] = s[channel] + d[channel] * (1.0 - s[3]);
+                }
+            }
+            CompositeOperator::In => {
+                for channel in 0..3 {
+                    result[channel] = s[channel] * d[3];
+                }
+            }
+            CompositeOperator::Out => {
+                for channel in 0..3 {
+                    result[channel] = s[channel] * (1.0 - d[3]);
+                }
+            }
+            CompositeOperator::Atop => {
+                for channel in 0..3 {
+                    result[channel] = s[channel] * d[3] + d[channel] * (1.0 - s[3]);
+                }
+            }
+            CompositeOperator::Arithmetic(k) => {
+                for channel in 0..3 {
+                    result[channel] = k[0] * s[channel] * d[channel]
+                        + k[1] * s[channel]
+                        + k[2] * d[channel]
+                        + k[3];
+                }
+            }
+        }
+        result[3] = alpha;
+        let offset = index * 4;
+        out[offset..offset + 4].copy_from_slice(&unpremultiply(result));
+    }
+    out
+}
+
+fn blend_images(src: &[u8], dst: &[u8], mode: BlendMode) -> Vec<u8> {
+    let mut out = vec![0u8; src.len()];
+    for index in 0..src.len() / 4 {
+        let s = premultiply(&src[index * 4..index * 4 + 4]);
+        let d = premultiply(&dst[index * 4..index * 4 + 4]);
+        let alpha = s[3] + d[3] * (1.0 - s[3]);
+        let mut result = [0.0f32; 4];
+        for channel in 0..3 {
+            let src_channel = if s[3] > 0.0 { s[channel] / s[3] } else { 0.0 };
+            let dst_channel = if d[3] > 0.0 { d[channel] / d[3] } else { 0.0 };
+            let blended = match mode {
+                BlendMode::Normal => src_channel,
+                BlendMode::Multiply => src_channel * dst_channel,
+                BlendMode::Screen => src_channel + dst_channel - src_channel * dst_channel,
+                BlendMode::Darken => src_channel.min(dst_channel),
+                BlendMode::Lighten => src_channel.max(dst_channel),
+            };
+            // CSS compositing formula for feBlend.
+            result[channel] =
+                (1.0 - d[3]) * s[channel] + (1.0 - s[3]) * d[channel] + s[3] * d[3] * blended;
+        }
+        result[3] = alpha;
+        let offset = index * 4;
+        out[offset..offset + 4].copy_from_slice(&unpremultiply(result));
+    }
+    out
+}
+
+fn apply_color_matrix(pixels: &[u8], kind: &ColorMatrixKind) -> Vec<u8> {
+    let saturate_matrix = |s: f32| {
+        [
+            0.213 + 0.787 * s,
+            0.715 - 0.715 * s,
+            0.072 - 0.072 * s,
+            0.0,
+            0.0,
+            0.213 - 0.213 * s,
+            0.715 + 0.285 * s,
+            0.072 - 0.072 * s,
+            0.0,
+            0.0,
+            0.213 - 0.213 * s,
+            0.715 - 0.715 * s,
+            0.072 + 0.928 * s,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+        ]
+    };
+    let hue_matrix = |angle_deg: f32| {
+        let angle = angle_deg.to_radians();
+        let (cos, sin) = (angle.cos(), angle.sin());
+        [
+            0.213 + cos * 0.787 - sin * 0.213,
+            0.715 - cos * 0.715 - sin * 0.715,
+            0.072 - cos * 0.072 + sin * 0.928,
+            0.0,
+            0.0,
+            0.213 - cos * 0.213 + sin * 0.143,
+            0.715 + cos * 0.285 + sin * 0.140,
+            0.072 - cos * 0.072 - sin * 0.283,
+            0.0,
+            0.0,
+            0.213 - cos * 0.213 - sin * 0.787,
+            0.715 - cos * 0.715 + sin * 0.715,
+            0.072 + cos * 0.928 + sin * 0.072,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+        ]
+    };
+    let matrix: Vec<f32> = match kind {
+        ColorMatrixKind::Matrix(values) => values.to_vec(),
+        ColorMatrixKind::Saturate(value) => saturate_matrix(*value).to_vec(),
+        ColorMatrixKind::HueRotate(angle) => hue_matrix(*angle).to_vec(),
+        ColorMatrixKind::LuminanceToAlpha => vec![
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2126,
+            0.7152, 0.0722, 0.0,
+        ],
+    };
+    let mut out = vec![0u8; pixels.len()];
+    for index in 0..pixels.len() / 4 {
+        let r = f32::from(pixels[index * 4]) / 255.0;
+        let g = f32::from(pixels[index * 4 + 1]) / 255.0;
+        let b = f32::from(pixels[index * 4 + 2]) / 255.0;
+        let a = f32::from(pixels[index * 4 + 3]) / 255.0;
+        let mut channels = [r, g, b, a, 1.0];
+        for (row, item) in matrix.as_chunks::<5>().0.iter().enumerate().take(4) {
+            if row == 3 && !matches!(kind, ColorMatrixKind::LuminanceToAlpha) {
+                // Generic matrices keep the alpha row; luminanceToAlpha sets it below.
+            }
+            channels[row] =
+                (item[0] * r + item[1] * g + item[2] * b + item[3] * a + item[4]).clamp(0.0, 1.0);
+        }
+        if matches!(kind, ColorMatrixKind::LuminanceToAlpha) {
+            let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            channels = [0.0, 0.0, 0.0, luminance, 1.0];
+        }
+        let offset = index * 4;
+        out[offset] = (channels[0] * 255.0).round() as u8;
+        out[offset + 1] = (channels[1] * 255.0).round() as u8;
+        out[offset + 2] = (channels[2] * 255.0).round() as u8;
+        out[offset + 3] = (channels[3] * 255.0).round() as u8;
+    }
+    out
 }
 
 /// Deterministic separable box blur (3 passes ≈ Gaussian) on straight RGBA pixels.
@@ -579,45 +857,6 @@ fn offset_pixels(pixels: &mut [u8], width: usize, height: usize, dx: i32, dy: i3
                 .copy_from_slice(&source[source_index..source_index + 4]);
         }
     }
-}
-
-/// Simplified `feComposite` subset (over/in/out/atop) between the current result, the
-/// source graphic and an optional flood layer.
-fn composite_images(
-    current: &[u8],
-    source: &[u8],
-    flood: &Option<(u8, u8, u8, f32)>,
-    operator: CompositeOperator,
-) -> Vec<u8> {
-    let mut out = vec![0u8; current.len()];
-    for index in 0..current.len() / 4 {
-        let offset = index * 4;
-        let (r, g, b, a) = match flood {
-            Some((fr, fg, fb, fa)) => (*fr, *fg, *fb, *fa),
-            None => (
-                source[offset],
-                source[offset + 1],
-                source[offset + 2],
-                f32::from(source[offset + 3]) / 255.0,
-            ),
-        };
-        let ca = f32::from(current[offset + 3]) / 255.0;
-        let out_alpha = match operator {
-            CompositeOperator::Over => a + ca * (1.0 - a),
-            CompositeOperator::In => ca * a,
-            CompositeOperator::Out => ca * (1.0 - a),
-            CompositeOperator::Atop => a * ca,
-        }
-        .clamp(0.0, 1.0);
-        if out_alpha <= 0.0 {
-            continue;
-        }
-        out[offset] = r;
-        out[offset + 1] = g;
-        out[offset + 2] = b;
-        out[offset + 3] = (out_alpha * 255.0).round() as u8;
-    }
-    out
 }
 
 /// Draws a `<text>` element: per-glyph advance positioning (no shaping/kerning),

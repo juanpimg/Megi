@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <defs>
+    <filter id="gray" x="0" y="0" width="1" height="1">
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <filter id="lum" x="0" y="0" width="1" height="1">
+      <feColorMatrix type="luminanceToAlpha"/>
+    </filter>
+  </defs>
+  <rect width="40" height="40" fill="#ff0000" filter="url(#gray)"/>
+</svg>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <defs>
+    <filter id="lighten" x="0" y="0" width="1" height="1">
+      <feFlood flood-color="#0000ff" result="blue"/>
+      <feBlend in="SourceGraphic" in2="blue" mode="lighten"/>
+    </filter>
+    <filter id="merge" x="0" y="0" width="1" height="1">
+      <feFlood flood-color="#00ff00" result="green"/>
+      <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="green"/></feMerge>
+    </filter>
+    <filter id="arith" x="0" y="0" width="1" height="1">
+      <feFlood flood-color="#0000ff" result="blue"/>
+      <feComposite in="SourceGraphic" in2="blue" operator="arithmetic" k1="0" k2="0" k3="0" k4="0.5"/>
+    </filter>
+  </defs>
+  <rect width="40" height="40" fill="#ff0000" filter="url(#lighten)"/>
+</svg>

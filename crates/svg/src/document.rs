@@ -193,22 +193,84 @@ pub(crate) struct MaskSpec {
     pub shapes: Vec<Shape>,
 }
 
-/// `feComposite` operator subset.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Reference to a filter primitive input (`in`/`in2`).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum FilterInput {
+    SourceGraphic,
+    SourceAlpha,
+    Previous,
+    Named(String),
+}
+
+/// `feComposite` operators (arips `arithmetic` with k1..k4).
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum CompositeOperator {
     Over,
     In,
     Out,
     Atop,
+    Arithmetic([f32; 4]),
+}
+
+/// `feBlend` modes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BlendMode {
+    Normal,
+    Multiply,
+    Screen,
+    Darken,
+    Lighten,
+}
+
+/// `feColorMatrix` variants.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ColorMatrixKind {
+    Matrix([f32; 20]),
+    Saturate(f32),
+    HueRotate(f32),
+    LuminanceToAlpha,
 }
 
 /// Supported filter primitives (unsupported elements are ignored, documented).
 #[derive(Clone, Debug)]
 pub(crate) enum FilterPrimitive {
-    GaussianBlur { std_deviation: f32 },
-    Offset { dx: f32, dy: f32 },
-    Flood { color: Color, opacity: f32 },
-    Composite { operator: CompositeOperator },
+    GaussianBlur {
+        std_deviation: f32,
+        input: FilterInput,
+        result: Option<String>,
+    },
+    Offset {
+        dx: f32,
+        dy: f32,
+        input: FilterInput,
+        result: Option<String>,
+    },
+    Flood {
+        color: Color,
+        opacity: f32,
+        result: Option<String>,
+    },
+    ColorMatrix {
+        kind: ColorMatrixKind,
+        input: FilterInput,
+        result: Option<String>,
+    },
+    Blend {
+        mode: BlendMode,
+        input: FilterInput,
+        input2: FilterInput,
+        result: Option<String>,
+    },
+    Merge {
+        inputs: Vec<FilterInput>,
+        result: Option<String>,
+    },
+    Composite {
+        operator: CompositeOperator,
+        input: FilterInput,
+        input2: FilterInput,
+        result: Option<String>,
+    },
 }
 
 /// A resolved `<filter>` definition.
@@ -222,8 +284,9 @@ pub(crate) struct FilterSpec {
     pub primitives: Vec<FilterPrimitive>,
 }
 
-/// Anti-DoS caps for masks/filters/clip paths.
+/// Anti-DoS caps for masks/filters/clip paths and SMIL.
 pub(crate) const MAX_EFFECT_SHAPES: usize = 4096;
+pub(crate) const MAX_SMIL_ELEMENTS: usize = 1024;
 pub(crate) const MAX_FILTER_PRIMITIVES: usize = 16;
 pub(crate) const MAX_BLUR_RADIUS: u32 = 64;
 
@@ -254,7 +317,9 @@ pub(crate) struct Document {
 
 impl Document {
     /// Builds the model from the parsed XML root.
-    pub fn build(root: &XmlElement, limits: &Limits) -> Result<Self, SvgError> {
+    pub fn build(root: &XmlElement, limits: &Limits, svg_time: f32) -> Result<Self, SvgError> {
+        let animated = apply_smil(root, svg_time)?;
+        let root = animated.as_ref().unwrap_or(root);
         let root_name = root.local_name_lower();
         if root_name != "svg" {
             return Err(SvgError::Invalid(format!(
@@ -1350,6 +1415,253 @@ fn parse_preserve_aspect_ratio(raw: Option<&str>) -> PreserveAspectRatio {
     }
 }
 
+/// Applies the deterministic SMIL subset at `svg_time` seconds.
+///
+/// Returns `None` when the document has no animation elements (so the caller can use the
+/// original tree and keep output byte-identical). Supported: `<animate from/to/by
+/// dur repeatCount>`, `<set>` and `<animateTransform translate|rotate|scale>`; `begin`
+/// must be absent/zero, no `keyTimes`/`keySplines`/event sync. Numeric attribute values
+/// are linearly interpolated; non-numeric values switch from `from` to `to` at half the
+/// duration. `animateTransform` appends the animated transform after the element's own
+/// transform (documented approximation).
+fn apply_smil(root: &XmlElement, svg_time: f32) -> Result<Option<XmlElement>, SvgError> {
+    if !svg_time.is_finite() {
+        return Ok(None);
+    }
+    let mut count = 0usize;
+    let (element, changed) = smil_walk(root, svg_time.max(0.0), &mut count)?;
+    Ok(changed.then_some(element))
+}
+
+fn smil_walk(
+    element: &XmlElement,
+    time: f32,
+    count: &mut usize,
+) -> Result<(XmlElement, bool), SvgError> {
+    let mut attributes = element.attributes.clone();
+    let mut children = Vec::with_capacity(element.children.len());
+    let mut changed = false;
+    for child in &element.children {
+        match child {
+            XmlNode::Text(text) => children.push(XmlNode::Text(text.clone())),
+            XmlNode::Element(child_element) => {
+                let name = child_element.local_name_lower();
+                if matches!(name.as_str(), "animate" | "set" | "animatetransform") {
+                    *count += 1;
+                    if *count > MAX_SMIL_ELEMENTS {
+                        return Err(SvgError::Limit(
+                            "too many SMIL animation elements".to_owned(),
+                        ));
+                    }
+                    changed = true;
+                    if name == "animatetransform" {
+                        apply_animate_transform(&mut attributes, child_element, time);
+                    } else if name == "set" {
+                        if let (Some(attribute), Some(value)) = (
+                            child_element.attribute("attributeName"),
+                            child_element.attribute("to"),
+                        ) && begin_allows(child_element, time)
+                        {
+                            set_attribute(&mut attributes, attribute, value);
+                        }
+                    } else if let (Some(attribute), Some(value)) = (
+                        child_element.attribute("attributeName"),
+                        animated_value(child_element, &attributes, time),
+                    ) {
+                        set_attribute(&mut attributes, attribute, &value);
+                    }
+                    continue;
+                }
+                let (nested, nested_changed) = smil_walk(child_element, time, count)?;
+                changed |= nested_changed;
+                children.push(XmlNode::Element(nested));
+            }
+        }
+    }
+    Ok((
+        XmlElement {
+            name: element.name.clone(),
+            attributes,
+            children,
+        },
+        changed,
+    ))
+}
+
+fn set_attribute(attributes: &mut Vec<(String, String)>, name: &str, value: &str) {
+    if let Some(existing) = attributes
+        .iter_mut()
+        .find(|(key, _)| key.eq_ignore_ascii_case(name))
+    {
+        existing.1 = value.to_string();
+    } else {
+        attributes.push((name.to_string(), value.to_string()));
+    }
+}
+
+fn attribute_value<'a>(attributes: &'a [(String, String)], name: &str) -> Option<&'a str> {
+    attributes
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(name))
+        .map(|(_, value)| value.as_str())
+}
+
+fn parse_clock(value: Option<&str>) -> Option<f32> {
+    let value = value?.trim();
+    if let Some(ms) = value.strip_suffix("ms") {
+        return ms.trim().parse::<f32>().ok().map(|value| value / 1000.0);
+    }
+    if let Some(seconds) = value.strip_suffix('s') {
+        return seconds.trim().parse::<f32>().ok();
+    }
+    value.parse::<f32>().ok()
+}
+
+fn begin_allows(element: &XmlElement, time: f32) -> bool {
+    parse_clock(element.attribute("begin")).unwrap_or(0.0) <= time
+}
+
+fn animation_fraction(element: &XmlElement, time: f32) -> Option<f32> {
+    if !begin_allows(element, time) {
+        return None;
+    }
+    let duration = parse_clock(element.attribute("dur"))?;
+    if !duration.is_finite() || duration <= 0.0 {
+        return None;
+    }
+    let elapsed = time - parse_clock(element.attribute("begin")).unwrap_or(0.0);
+    let repeats = element
+        .attribute("repeatCount")
+        .map(str::trim)
+        .filter(|value| !value.eq_ignore_ascii_case("indefinite"))
+        .and_then(|value| value.parse::<f32>().ok());
+    if let Some(repeats) = repeats
+        && repeats.is_finite()
+        && repeats >= 0.0
+        && elapsed >= duration * repeats
+    {
+        return Some(1.0);
+    }
+    Some((elapsed % duration) / duration)
+}
+
+fn numbers(raw: &str) -> Vec<f32> {
+    raw.split([' ', ',', '\t', '\n'])
+        .filter_map(|part| part.trim().parse::<f32>().ok())
+        .filter(|value| value.is_finite())
+        .collect()
+}
+
+fn animated_value(
+    element: &XmlElement,
+    attributes: &[(String, String)],
+    time: f32,
+) -> Option<String> {
+    let fraction = animation_fraction(element, time)?;
+    let attribute = element.attribute("attributeName")?;
+    let base = attribute_value(attributes, attribute).unwrap_or("0");
+    let from = element.attribute("from");
+    let to = element.attribute("to");
+    let by = element.attribute("by");
+    let base_number = base.trim().parse::<f32>().ok();
+    let from_number = from.and_then(|value| value.trim().parse::<f32>().ok());
+    let to_number = to.and_then(|value| value.trim().parse::<f32>().ok());
+    let by_number = by.and_then(|value| value.trim().parse::<f32>().ok());
+    if let Some(by_number) = by_number {
+        let start = from_number.or(base_number).unwrap_or(0.0);
+        return Some(format_number(start + by_number * fraction));
+    }
+    if let (Some(from_number), Some(to_number)) = (from_number, to_number) {
+        return Some(format_number(
+            from_number + (to_number - from_number) * fraction,
+        ));
+    }
+    if let (Some(from_number), None) = (from_number, to) {
+        return Some(format_number(from_number));
+    }
+    if let Some(to_number) = to_number {
+        let start = base_number.unwrap_or(0.0);
+        return Some(format_number(start + (to_number - start) * fraction));
+    }
+    // Non-numeric values: switch at half the duration (documented approximation).
+    if fraction >= 0.5 {
+        to.or(from).map(str::to_string)
+    } else {
+        from.or(to).map(str::to_string)
+    }
+}
+
+fn format_number(value: f32) -> String {
+    if (value - value.round()).abs() < 1e-4 {
+        format!("{}", value.round() as i64)
+    } else {
+        format!("{value}")
+    }
+}
+
+fn apply_animate_transform(
+    attributes: &mut Vec<(String, String)>,
+    element: &XmlElement,
+    time: f32,
+) {
+    let Some(fraction) = animation_fraction(element, time) else {
+        return;
+    };
+    let kind = element
+        .attribute("type")
+        .map(|value| value.trim().to_ascii_lowercase())
+        .unwrap_or_else(|| "translate".to_string());
+    let from = element.attribute("from").map(numbers).unwrap_or_default();
+    let to = element.attribute("to").map(numbers).unwrap_or_default();
+    let by = element.attribute("by").map(numbers).unwrap_or_default();
+    let start = if from.is_empty() {
+        vec![0.0, 0.0]
+    } else {
+        from.clone()
+    };
+    let end = if !to.is_empty() {
+        to
+    } else if !by.is_empty() {
+        start.iter().zip(by.iter()).map(|(a, b)| a + b).collect()
+    } else {
+        start.clone()
+    };
+    let mut value = Vec::new();
+    for index in 0..start.len().max(end.len()) {
+        let a = start.get(index).copied().unwrap_or(0.0);
+        let b = end.get(index).copied().unwrap_or(a);
+        value.push(a + (b - a) * fraction);
+    }
+    let transform = match kind.as_str() {
+        "rotate" => {
+            let angle = value.first().copied().unwrap_or(0.0);
+            match (value.get(1), value.get(2)) {
+                (Some(cx), Some(cy)) => format!("rotate({angle} {cx} {cy})"),
+                _ => format!("rotate({angle})"),
+            }
+        }
+        "scale" => {
+            let sx = value.first().copied().unwrap_or(1.0);
+            let sy = value.get(1).copied().unwrap_or(sx);
+            format!("scale({sx} {sy})")
+        }
+        _ => {
+            let tx = value.first().copied().unwrap_or(0.0);
+            let ty = value.get(1).copied().unwrap_or(0.0);
+            format!("translate({tx} {ty})")
+        }
+    };
+    let existing = attribute_value(attributes, "transform")
+        .unwrap_or("")
+        .to_string();
+    let combined = if existing.is_empty() {
+        transform
+    } else {
+        format!("{existing} {transform}")
+    };
+    set_attribute(attributes, "transform", &combined);
+}
+
 fn nested_viewport_transform(element: &XmlElement) -> Transform {
     let x = length_attr(element, "x");
     let y = length_attr(element, "y");
@@ -1544,6 +1856,94 @@ fn build_masks(
 }
 
 /// Builds every `<filter>` (supported primitive subset: blur/offset/flood/composite).
+fn filter_input(value: Option<&str>, default: FilterInput) -> FilterInput {
+    match value.map(str::trim) {
+        Some("SourceGraphic") | Some("sourceGraphic") => FilterInput::SourceGraphic,
+        Some("SourceAlpha") | Some("sourceAlpha") => FilterInput::SourceAlpha,
+        Some("*") | None | Some("") => default,
+        Some(name) => FilterInput::Named(name.to_string()),
+    }
+}
+
+fn filter_result(child: &XmlElement) -> Option<String> {
+    child
+        .attribute("result")
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn parse_color_matrix(child: &XmlElement) -> Option<ColorMatrixKind> {
+    match child
+        .attribute("type")
+        .map(|value| value.trim().to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("saturate") => {
+            let value = first_number(child.attribute("values"));
+            value
+                .is_finite()
+                .then_some(ColorMatrixKind::Saturate(value))
+        }
+        Some("huerotate") | Some("hueRotate") => {
+            let value = first_number(child.attribute("values"));
+            value
+                .is_finite()
+                .then_some(ColorMatrixKind::HueRotate(value))
+        }
+        Some("luminancetoalpha") | Some("luminanceToAlpha") => {
+            Some(ColorMatrixKind::LuminanceToAlpha)
+        }
+        None | Some("matrix") => {
+            let raw = child.attribute("values")?;
+            let values: Vec<f32> = raw
+                .split([' ', ',', '\t', '\n'])
+                .filter_map(|part| part.trim().parse::<f32>().ok())
+                .filter(|value| value.is_finite())
+                .collect();
+            if values.len() != 20 {
+                return None;
+            }
+            let mut matrix = [0.0f32; 20];
+            matrix.copy_from_slice(&values);
+            Some(ColorMatrixKind::Matrix(matrix))
+        }
+        _ => None,
+    }
+}
+
+fn parse_blend_mode(raw: Option<&str>) -> BlendMode {
+    match raw
+        .map(|value| value.trim().to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("multiply") => BlendMode::Multiply,
+        Some("screen") => BlendMode::Screen,
+        Some("darken") => BlendMode::Darken,
+        Some("lighten") => BlendMode::Lighten,
+        _ => BlendMode::Normal,
+    }
+}
+
+fn parse_composite_operator(child: &XmlElement) -> CompositeOperator {
+    match child
+        .attribute("operator")
+        .map(|value| value.trim().to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("in") => CompositeOperator::In,
+        Some("out") => CompositeOperator::Out,
+        Some("atop") => CompositeOperator::Atop,
+        Some("arithmetic") => CompositeOperator::Arithmetic([
+            first_number(child.attribute("k1")),
+            first_number(child.attribute("k2")),
+            first_number(child.attribute("k3")),
+            first_number(child.attribute("k4")),
+        ]),
+        _ => CompositeOperator::Over,
+    }
+}
+
 fn build_filters(elements: &[(String, &XmlElement)]) -> Vec<FilterSpec> {
     let mut specs = Vec::new();
     for (_id, element) in elements {
@@ -1559,14 +1959,23 @@ fn build_filters(elements: &[(String, &XmlElement)]) -> Vec<FilterSpec> {
                 "fegaussianblur" => {
                     let std_deviation = first_number(child.attribute("stdDeviation"));
                     if std_deviation.is_finite() && std_deviation > 0.0 {
-                        primitives.push(FilterPrimitive::GaussianBlur { std_deviation });
+                        primitives.push(FilterPrimitive::GaussianBlur {
+                            std_deviation,
+                            input: filter_input(child.attribute("in"), FilterInput::Previous),
+                            result: filter_result(child),
+                        });
                     }
                 }
                 "feoffset" => {
                     let dx = first_number(child.attribute("dx"));
                     let dy = first_number(child.attribute("dy"));
                     if dx.is_finite() && dy.is_finite() {
-                        primitives.push(FilterPrimitive::Offset { dx, dy });
+                        primitives.push(FilterPrimitive::Offset {
+                            dx,
+                            dy,
+                            input: filter_input(child.attribute("in"), FilterInput::Previous),
+                            result: filter_result(child),
+                        });
                     }
                 }
                 "feflood" => {
@@ -1578,20 +1987,54 @@ fn build_filters(elements: &[(String, &XmlElement)]) -> Vec<FilterSpec> {
                         .attribute("flood-opacity")
                         .and_then(parse_opacity)
                         .unwrap_or(1.0);
-                    primitives.push(FilterPrimitive::Flood { color, opacity });
+                    primitives.push(FilterPrimitive::Flood {
+                        color,
+                        opacity,
+                        result: filter_result(child),
+                    });
+                }
+                "fecolormatrix" => {
+                    if let Some(kind) = parse_color_matrix(child) {
+                        primitives.push(FilterPrimitive::ColorMatrix {
+                            kind,
+                            input: filter_input(child.attribute("in"), FilterInput::Previous),
+                            result: filter_result(child),
+                        });
+                    }
+                }
+                "feblend" => {
+                    primitives.push(FilterPrimitive::Blend {
+                        mode: parse_blend_mode(child.attribute("mode")),
+                        input: filter_input(child.attribute("in"), FilterInput::Previous),
+                        input2: filter_input(child.attribute("in2"), FilterInput::SourceGraphic),
+                        result: filter_result(child),
+                    });
+                }
+                "femerge" => {
+                    let mut inputs = Vec::new();
+                    for node in &child.children {
+                        let XmlNode::Element(node) = node else {
+                            continue;
+                        };
+                        if node.local_name_lower() == "femergenode" {
+                            inputs.push(filter_input(node.attribute("in"), FilterInput::Previous));
+                        }
+                        if inputs.len() >= MAX_FILTER_PRIMITIVES {
+                            break;
+                        }
+                    }
+                    primitives.push(FilterPrimitive::Merge {
+                        inputs,
+                        result: filter_result(child),
+                    });
                 }
                 "fecomposite" => {
-                    let operator = match child
-                        .attribute("operator")
-                        .map(|value| value.trim().to_ascii_lowercase())
-                        .as_deref()
-                    {
-                        Some("in") => CompositeOperator::In,
-                        Some("out") => CompositeOperator::Out,
-                        Some("atop") => CompositeOperator::Atop,
-                        _ => CompositeOperator::Over,
-                    };
-                    primitives.push(FilterPrimitive::Composite { operator });
+                    primitives.push(FilterPrimitive::Composite {
+                        operator: parse_composite_operator(child),
+                        input: filter_input(child.attribute("in"), FilterInput::Previous),
+                        input2: filter_input(child.attribute("in2"), FilterInput::SourceGraphic),
+                        result: filter_result(child),
+                    });
                 }
                 _ => {}
             }
@@ -1751,7 +2194,7 @@ mod tests {
 
     fn build(source: &str) -> Document {
         let root = parse_document(source.as_bytes(), &Limits::default()).expect("xml");
-        Document::build(&root, &Limits::default()).expect("document")
+        Document::build(&root, &Limits::default(), 0.0).expect("document")
     }
 
     #[test]

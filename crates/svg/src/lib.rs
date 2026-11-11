@@ -233,11 +233,33 @@ pub fn render_svg(bytes: &[u8], options: &SvgOptions) -> Result<SvgImage, SvgErr
     render_svg_with_limits(bytes, options, &Limits::default())
 }
 
+/// Like [`render_svg`] but evaluates the deterministic SMIL subset at `svg_time`
+/// seconds (default rendering uses `t = 0`; `t = 0.5 * dur` is the documented
+/// midpoint of `from`/`to` animations). Without animation elements the output is
+/// byte-identical to [`render_svg`].
+pub fn render_svg_with_time(
+    bytes: &[u8],
+    options: &SvgOptions,
+    svg_time: f32,
+) -> Result<SvgImage, SvgError> {
+    render_svg_with_limits_and_time(bytes, options, &Limits::default(), svg_time)
+}
+
 /// Like [`render_svg`] but with explicit anti-DoS [`Limits`].
 pub fn render_svg_with_limits(
     bytes: &[u8],
     options: &SvgOptions,
     limits: &Limits,
+) -> Result<SvgImage, SvgError> {
+    render_svg_with_limits_and_time(bytes, options, limits, 0.0)
+}
+
+/// Like [`render_svg_with_limits`] but with an explicit deterministic SMIL time.
+pub fn render_svg_with_limits_and_time(
+    bytes: &[u8],
+    options: &SvgOptions,
+    limits: &Limits,
+    svg_time: f32,
 ) -> Result<SvgImage, SvgError> {
     if bytes.is_empty() {
         return Err(SvgError::Empty);
@@ -250,7 +272,7 @@ pub fn render_svg_with_limits(
         )));
     }
     let root = xml::parse_document(bytes, limits)?;
-    let doc = document::Document::build(&root, limits)?;
+    let doc = document::Document::build(&root, limits, svg_time)?;
     let (width, height) = resolve_output_size(&doc, options, limits)?;
     raster::rasterize(&doc, width, height, limits)
 }
@@ -269,7 +291,7 @@ pub fn intrinsic_size_with_limits(bytes: &[u8], limits: &Limits) -> Result<(f32,
         return Err(SvgError::Limit("input too large".to_owned()));
     }
     let root = xml::parse_document(bytes, limits)?;
-    let doc = document::Document::build(&root, limits)?;
+    let doc = document::Document::build(&root, limits, 0.0)?;
     Ok((doc.width, doc.height))
 }
 
