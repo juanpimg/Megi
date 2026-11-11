@@ -794,6 +794,11 @@ fn build_document_object(context: &mut Context) -> JsObject {
         ("querySelectorAll", 1, document_query_selector_all),
         ("createElement", 1, document_create_element),
         ("createTextNode", 1, document_create_text_node),
+        (
+            "createDocumentFragment",
+            0,
+            document_create_document_fragment,
+        ),
     ] {
         init.function(native(function), js_string!(name), length);
     }
@@ -864,7 +869,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 12] = [
+    let accessors: [(&str, AccessorKind); 18] = [
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
         ("className", AccessorKind::ClassName),
@@ -877,6 +882,12 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("nextSibling", AccessorKind::NextSibling),
         ("style", AccessorKind::Style),
         ("classList", AccessorKind::ClassList),
+        ("childNodes", AccessorKind::ChildNodes),
+        ("value", AccessorKind::Value),
+        ("checked", AccessorKind::Checked),
+        ("disabled", AccessorKind::Disabled),
+        ("selected", AccessorKind::Selected),
+        ("options", AccessorKind::Options),
     ];
     type Prepared<'a> = (
         &'a str,
@@ -930,6 +941,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("closest", 1, node_closest),
         ("insertAdjacentHTML", 2, node_insert_adjacent_html),
         ("insertAdjacentText", 2, node_insert_adjacent_text),
+        ("cloneNode", 1, node_clone_node),
     ] {
         init.function(native(function), js_string!(name), length);
     }
@@ -962,6 +974,12 @@ enum AccessorKind {
     NextSibling,
     Style,
     ClassList,
+    ChildNodes,
+    Value,
+    Checked,
+    Disabled,
+    Selected,
+    Options,
 }
 
 fn accessor_functions(kind: AccessorKind) -> AccessorPair {
@@ -978,6 +996,12 @@ fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::NextSibling => (node_next_sibling, None),
         AccessorKind::Style => (node_style_get, Some(node_style_set)),
         AccessorKind::ClassList => (node_class_list_get, None),
+        AccessorKind::ChildNodes => (node_child_nodes, None),
+        AccessorKind::Value => (node_value_get, Some(node_value_set)),
+        AccessorKind::Checked => (node_checked_get, Some(node_checked_set)),
+        AccessorKind::Disabled => (node_disabled_get, Some(node_disabled_set)),
+        AccessorKind::Selected => (node_selected_get, Some(node_selected_set)),
+        AccessorKind::Options => (node_options, None),
     }
 }
 
@@ -1280,13 +1304,189 @@ fn node_class_list_get(
 // Node methods
 // ---------------------------------------------------------------------------
 
+/// Returns the attribute name to use for `node_id`: HTML elements lowercase attribute names
+/// (DOM `getAttribute`/`setAttribute` case-insensitivity for HTML), foreign elements keep
+/// the authored case.
+fn attribute_name(node_id: NodeId, name: &str) -> String {
+    let is_html = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .is_some_and(|element| element.namespace == Namespace::Html)
+    })
+    .unwrap_or(false);
+    if is_html {
+        name.to_ascii_lowercase()
+    } else {
+        name.to_string()
+    }
+}
+
+fn node_child_nodes(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let parent = this_node(this, context)?;
+    let nodes: Vec<NodeId> =
+        with_host(|host| host.document.children(parent).collect()).unwrap_or_default();
+    node_list(context, nodes)
+}
+
+fn node_value_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let value = with_host(|host| {
+        let document = &host.document;
+        let element = document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())?;
+        if element.local_name == "textarea" {
+            return Some(document.text_content(node_id));
+        }
+        if element.local_name == "select" {
+            let selected = document
+                .descendants(node_id)
+                .filter_map(|child| document.try_node(child).and_then(|node| node.as_element()))
+                .find(|option| {
+                    option.local_name == "option" && option.get_attribute("selected").is_some()
+                });
+            if let Some(option) = selected {
+                if let Some(value) = option.get_attribute("value") {
+                    return Some(value.to_string());
+                }
+                return Some(document.text_content(node_id));
+            }
+            return Some(String::new());
+        }
+        Some(element.get_attribute("value").unwrap_or("").to_string())
+    })
+    .flatten()
+    .unwrap_or_default();
+    Ok(JsValue::from(js_string!(value)))
+}
+
+fn node_value_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let value = arg_string(args, 0, context)?;
+    let result = with_host(|host| {
+        let document = &mut host.document;
+        let tag = document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .map(|element| element.local_name.clone())
+            .ok_or_else(|| "node is not an element".to_string())?;
+        if tag == "textarea" {
+            document
+                .set_text_content(node_id, &value)
+                .map_err(|error| error.to_string())?;
+            return Ok::<(), String>(());
+        }
+        let element = document
+            .try_node_mut(node_id)
+            .and_then(|node| node.as_element_mut())
+            .ok_or_else(|| "node is not an element".to_string())?;
+        element.set_attribute(DomAttribute::new("value", value.clone()), true);
+        Ok(())
+    });
+    match result {
+        Some(Ok(())) => Ok(JsValue::undefined()),
+        Some(Err(message)) => Err(js_error(message)),
+        None => Err(js_error("no active JavaScript host")),
+    }
+}
+
+fn boolean_attribute_get(this: &JsValue, name: &str, context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let present = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .is_some_and(|element| element.get_attribute(name).is_some())
+    })
+    .unwrap_or(false);
+    Ok(JsValue::from(present))
+}
+
+fn boolean_attribute_set(
+    this: &JsValue,
+    name: &str,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let enabled = args.first().and_then(JsValue::as_boolean).unwrap_or(false);
+    let result = with_host(|host| {
+        let element = host
+            .document
+            .try_node_mut(node_id)
+            .and_then(|node| node.as_element_mut())
+            .ok_or_else(|| "node is not an element".to_string())?;
+        if enabled {
+            element.set_attribute(DomAttribute::new(name, ""), true);
+        } else {
+            element.remove_attribute(name);
+        }
+        Ok::<(), String>(())
+    });
+    match result {
+        Some(Ok(())) => Ok(JsValue::undefined()),
+        Some(Err(message)) => Err(js_error(message)),
+        None => Err(js_error("no active JavaScript host")),
+    }
+}
+
+fn node_checked_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    boolean_attribute_get(this, "checked", context)
+}
+
+fn node_checked_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    boolean_attribute_set(this, "checked", args, context)
+}
+
+fn node_disabled_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    boolean_attribute_get(this, "disabled", context)
+}
+
+fn node_disabled_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    boolean_attribute_set(this, "disabled", args, context)
+}
+
+fn node_selected_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    boolean_attribute_get(this, "selected", context)
+}
+
+fn node_selected_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    boolean_attribute_set(this, "selected", args, context)
+}
+
+fn node_options(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let options: Vec<NodeId> = with_host(|host| {
+        host.document
+            .descendants(node_id)
+            .filter(|child| {
+                host.document
+                    .try_node(*child)
+                    .and_then(|node| node.as_element())
+                    .is_some_and(|element| element.local_name == "option")
+            })
+            .collect()
+    })
+    .unwrap_or_default();
+    node_list(context, options)
+}
+
 fn node_set_attribute(
     this: &JsValue,
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let name = arg_string(args, 0, context)?;
+    let name = attribute_name(node_id, &arg_string(args, 0, context)?);
     let value = arg_string(args, 1, context)?;
     let old_value = with_host(|host| {
         host.document
@@ -1320,7 +1520,7 @@ fn node_get_attribute(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let name = arg_string(args, 0, context)?;
+    let name = attribute_name(node_id, &arg_string(args, 0, context)?);
     let value = with_host(|host| {
         host.document
             .try_node(node_id)
@@ -1343,7 +1543,7 @@ fn node_remove_attribute(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let name = arg_string(args, 0, context)?;
+    let name = attribute_name(node_id, &arg_string(args, 0, context)?);
     let old_value = with_host(|host| {
         host.document
             .try_node(node_id)
@@ -1372,7 +1572,7 @@ fn node_has_attribute(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let name = arg_string(args, 0, context)?;
+    let name = attribute_name(node_id, &arg_string(args, 0, context)?);
     let has = with_host(|host| {
         host.document
             .try_node(node_id)
@@ -1405,10 +1605,21 @@ fn argument_node(args: &[JsValue], index: usize, context: &mut Context) -> JsRes
         .map_err(js_error)
 }
 
+fn node_clone_node(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let deep = args.first().and_then(JsValue::as_boolean).unwrap_or(false);
+    let clone = with_host(|host| host.document.clone_node(node_id, deep))
+        .ok_or_else(|| js_error("no active JavaScript host"))?;
+    wrap_node(context, clone)
+}
+
 fn node_append_child(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let parent = this_node(this, context)?;
     let child = argument_node(args, 0, context)?;
-    let appended = with_host(|host| host.document.append_child(parent, child)).unwrap_or(false);
+    // DOM insertion expands document fragments (their children are moved, the fragment
+    // itself is never attached).
+    let appended =
+        with_host(|host| host.document.insert_node(parent, child, None).is_ok()).unwrap_or(false);
     if !appended {
         return Err(js_error("appendChild failed (hierarchy or unknown node)"));
     }
@@ -1423,10 +1634,14 @@ fn node_insert_before(
 ) -> JsResult<JsValue> {
     let parent = this_node(this, context)?;
     let new_node = argument_node(args, 0, context)?;
-    let reference = argument_node(args, 1, context)?;
+    // `insertBefore(node, null)` (or a missing reference) appends, per DOM.
+    let reference = match args.get(1) {
+        Some(value) if !value.is_null_or_undefined() => Some(argument_node(args, 1, context)?),
+        _ => None,
+    };
     let inserted = with_host(|host| {
         host.document
-            .insert_before_child(parent, new_node, Some(reference))
+            .insert_node(parent, new_node, reference)
             .is_ok()
     })
     .unwrap_or(false);
@@ -1458,17 +1673,9 @@ fn node_replace_child(
     let new_node = argument_node(args, 0, context)?;
     let old_node = argument_node(args, 1, context)?;
     let replaced = with_host(|host| {
-        if host.document.remove_child(parent, old_node).is_err() {
-            return false;
-        }
-        if host
-            .document
-            .insert_before_child(parent, new_node, None)
-            .is_err()
-        {
-            host.document.append_child(parent, new_node);
-        }
-        true
+        host.document
+            .replace_node(parent, new_node, old_node)
+            .is_ok()
     })
     .unwrap_or(false);
     if !replaced {
@@ -1556,6 +1763,16 @@ fn document_query_selector_all(
     let nodes = with_host(|host| css::query::query_selector_all(&host.document, &selector))
         .unwrap_or_default();
     wrap_list(context, nodes)
+}
+
+fn document_create_document_fragment(
+    _this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let fragment = with_host(|host| host.document.create_document_fragment())
+        .ok_or_else(|| js_error("no active JavaScript host"))?;
+    wrap_node(context, fragment)
 }
 
 fn document_create_element(

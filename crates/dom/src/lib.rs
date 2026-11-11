@@ -1774,6 +1774,119 @@ impl Document {
         Ok(new_child_id)
     }
 
+    /// Inserts a single node under a `Document`, `Element` or `DocumentFragment`.
+    ///
+    /// Unlike [`Self::insert_before_child`] this also accepts a `Document` parent (needed by
+    /// `document.appendChild`, used by the html5lib scripted tree tests); the html parser
+    /// keeps using `append_child`/`insert_before` directly.
+    fn insert_one(
+        &mut self,
+        parent_id: NodeId,
+        node_id: NodeId,
+        reference: Option<NodeId>,
+    ) -> Result<(), DomError> {
+        if self.slot_of(parent_id).is_none() {
+            return Err(DomError::UnknownNode(parent_id));
+        }
+        if self.slot_of(node_id).is_none() {
+            return Err(DomError::UnknownNode(node_id));
+        }
+        let parent_kind_ok = self.try_node(parent_id).is_some_and(|node| {
+            matches!(
+                node.kind,
+                NodeKind::Document | NodeKind::DocumentFragment | NodeKind::Element(_)
+            )
+        });
+        if !parent_kind_ok {
+            return Err(DomError::CannotHaveChildren(parent_id));
+        }
+        let inserted = match reference {
+            Some(reference_id) => {
+                if self.slot_of(reference_id).is_none() {
+                    return Err(DomError::UnknownNode(reference_id));
+                }
+                if self.node(reference_id).parent != Some(parent_id) {
+                    return Err(DomError::NotAChild {
+                        parent: parent_id,
+                        child: reference_id,
+                    });
+                }
+                self.insert_before(reference_id, node_id)
+            }
+            None => self.append_child(parent_id, node_id),
+        };
+        if !inserted {
+            return Err(DomError::HierarchyRequest {
+                parent: parent_id,
+                child: node_id,
+            });
+        }
+        Ok(())
+    }
+
+    /// Inserts `node_id` under `parent_id` following the DOM insertion algorithm:
+    /// a [`NodeKind::DocumentFragment`] is expanded into its children (which are moved from
+    /// the fragment), any other node is inserted directly.
+    ///
+    /// Returns the inserted node handles in order (empty fragment ⇒ empty vector). This is
+    /// the primitive used by the JavaScript `appendChild`/`insertBefore`/`replaceChild`
+    /// bindings; [`Self::insert_before_child`] keeps its single-node semantics.
+    pub fn insert_node(
+        &mut self,
+        parent_id: NodeId,
+        node_id: NodeId,
+        reference: Option<NodeId>,
+    ) -> Result<Vec<NodeId>, DomError> {
+        if self.slot_of(node_id).is_none() {
+            return Err(DomError::UnknownNode(node_id));
+        }
+        let is_fragment = matches!(self.node(node_id).kind, NodeKind::DocumentFragment);
+        if !is_fragment {
+            self.insert_one(parent_id, node_id, reference)?;
+            return Ok(vec![node_id]);
+        }
+        let children: Vec<NodeId> = self.children(node_id).collect();
+        let mut inserted = Vec::with_capacity(children.len());
+        for child in children {
+            // Re-inserting each child before the same reference preserves fragment order.
+            self.insert_one(parent_id, child, reference)?;
+            inserted.push(child);
+        }
+        Ok(inserted)
+    }
+
+    /// Replaces `old_node` by `new_node` in place (DOM `replaceChild`): the new node (or the
+    /// children of a document fragment, expanded in order) takes the old node's position.
+    ///
+    /// Returns the removed node. Fails with [`DomError::NotAChild`] when `old_node` is not a
+    /// child of `parent_id`; on an insertion failure the old node is restored.
+    pub fn replace_node(
+        &mut self,
+        parent_id: NodeId,
+        new_node: NodeId,
+        old_node: NodeId,
+    ) -> Result<NodeId, DomError> {
+        if self.slot_of(old_node).is_none() {
+            return Err(DomError::UnknownNode(old_node));
+        }
+        if self.node(old_node).parent != Some(parent_id) {
+            return Err(DomError::NotAChild {
+                parent: parent_id,
+                child: old_node,
+            });
+        }
+        let reference = self.node(old_node).next_sibling;
+        self.remove_child(parent_id, old_node)?;
+        match self.insert_node(parent_id, new_node, reference) {
+            Ok(_) => Ok(old_node),
+            Err(error) => {
+                // Best-effort restore so a failed replacement does not lose the old node.
+                let _ = self.insert_one(parent_id, old_node, reference);
+                Err(error)
+            }
+        }
+    }
+
     /// Appends a text node to `parent_id`, coalescing with a trailing text node
     /// (DOM `appendChild(createTextNode(text))` plus the WHATWG HTML text-node coalescing).
     ///
@@ -2749,5 +2862,123 @@ mod tests {
         assert_eq!(doc.body(), Some(body));
         assert_eq!(doc.get_elements_by_tag_name("div"), Vec::<NodeId>::new());
         assert!(doc.validate_invariants().is_ok());
+    }
+}
+
+#[cfg(test)]
+mod fragment_insertion_tests {
+    use super::*;
+
+    fn container_children(document: &Document, parent: NodeId) -> Vec<String> {
+        document
+            .children(parent)
+            .filter_map(|child| match &document.node(child).kind {
+                NodeKind::Element(element) => Some(element.local_name.clone()),
+                NodeKind::Text(text) => Some(format!("#text:{text}")),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn setup() -> (Document, NodeId, NodeId) {
+        let mut document = Document::new();
+        let root = document.root();
+        let html = document.create_element(Namespace::Html, "html", Vec::new());
+        document.append_child(root, html);
+        let body = document.create_element(Namespace::Html, "body", Vec::new());
+        document.append_child(html, body);
+        (document, body, html)
+    }
+
+    fn element(document: &mut Document, name: &str) -> NodeId {
+        document.create_element(Namespace::Html, name, Vec::new())
+    }
+
+    #[test]
+    fn append_child_with_fragment_expands_children_in_order() {
+        let (mut document, body, _html) = setup();
+        let fragment = document.create_document_fragment();
+        let a = element(&mut document, "a");
+        let b = element(&mut document, "b");
+        document.append_child(fragment, a);
+        document.append_child(fragment, b);
+        let inserted = document.insert_node(body, fragment, None).expect("insert");
+        assert_eq!(inserted, vec![a, b]);
+        assert_eq!(container_children(&document, body), vec!["a", "b"]);
+        assert_eq!(
+            container_children(&document, fragment),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn insert_before_with_fragment_keeps_reference_position() {
+        let (mut document, body, _html) = setup();
+        let first = element(&mut document, "first");
+        let last = element(&mut document, "last");
+        document.append_child(body, first);
+        document.append_child(body, last);
+        let fragment = document.create_document_fragment();
+        let x = element(&mut document, "x");
+        let y = element(&mut document, "y");
+        document.append_child(fragment, x);
+        document.append_child(fragment, y);
+        document
+            .insert_node(body, fragment, Some(last))
+            .expect("insert fragment");
+        assert_eq!(
+            container_children(&document, body),
+            vec!["first", "x", "y", "last"]
+        );
+    }
+
+    #[test]
+    fn replace_node_keeps_position_and_expands_fragments() {
+        let (mut document, body, _html) = setup();
+        let a = element(&mut document, "a");
+        let b = element(&mut document, "b");
+        let c = element(&mut document, "c");
+        for node in [a, b, c] {
+            document.append_child(body, node);
+        }
+        let fragment = document.create_document_fragment();
+        let x = element(&mut document, "x");
+        let y = element(&mut document, "y");
+        document.append_child(fragment, x);
+        document.append_child(fragment, y);
+        document.replace_node(body, fragment, b).expect("replace");
+        assert_eq!(
+            container_children(&document, body),
+            vec!["a", "x", "y", "c"]
+        );
+    }
+
+    #[test]
+    fn insert_node_accepts_a_document_parent() {
+        let (mut document, _body, html) = setup();
+        let body = document.body().expect("body");
+        document.remove_child(html, body).expect("detach body");
+        document
+            .remove_child(document.root(), html)
+            .expect("detach html");
+        document
+            .insert_node(document.root(), html, None)
+            .expect("document.appendChild");
+        assert_eq!(
+            document.children(document.root()).collect::<Vec<_>>(),
+            vec![html]
+        );
+        assert_eq!(document.document_element(), Some(html));
+    }
+
+    #[test]
+    fn replace_node_rejects_non_children() {
+        let (mut document, body, _html) = setup();
+        let orphan = element(&mut document, "orphan");
+        let new_node = element(&mut document, "new");
+        assert!(matches!(
+            document.replace_node(body, new_node, orphan),
+            Err(DomError::NotAChild { .. })
+        ));
     }
 }
