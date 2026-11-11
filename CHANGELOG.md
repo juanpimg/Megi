@@ -6,6 +6,49 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+### Round 28 — reduced IDCT/EXIF thumbnails, server push, streaming uploads, JS geometry, byte-safe blur/PNG and context menu (2026-11-11)
+
+#### Added
+
+- **Reduced IDCT + EXIF thumbnails** (`972bd7d`, image 84 tests): `decode_scaled`
+  uses 4×4/2×2/1×1 IDCT for scales 2/4/8 (centered separable basis, dropped AC,
+  reduced planes, exact dims; full decode unchanged, progressive fallback documented)
+  and `exif_thumbnail` reads APP1/IFD1 with caps/resize policy. A/B 1024×768:
+  full 19.28 → ×2 8.24 (−57 %) / ×4 3.30 (−82 %) / ×8 1.97 ms (−90 %); PIL
+  tolerance max ≤4/mean <1.
+- **Server push consumption + streaming uploads** (`f5423e8`, net 279 tests):
+  opt-in `Limits.enable_server_push` maps PUSH_PROMISE via HPACK to URLs and consumes
+  promised HEADERS/DATA with per-stream flow control (`H2Response.pushed:
+  Vec<H2PushedResponse>`), caps/RST(CANCEL) and late-frame ignore; `RequestBody::Stream`
+  is pull-based with backpressure, `H2Request`/`request_many_owned` send incremental
+  DATA without buffering, cap 16 MiB and typed `RequestBody` errors; h1 chunked
+  incremental + 100-continue + typed redirects; loader `accept_push` and per-load
+  preload cache (`pushed_used/pushed_discarded`).
+- **JS geometry provider** (`ffa49e0`, js 130 / render 157 tests): `LayoutProvider`
+  (NodeId→`LayoutRect{border_box,content_box}`), `getBoundingClientRect`,
+  `offsetWidth/Height`, `clientWidth/Height` and `ViewportProvider`
+  (innerWidth/Height/DPR); zeros without provider. Render computes a pre-script layout
+  and installs the provider before scripts (first script without snapshot ⇒ 0,
+  `display:none` ⇒ 0), plus `accept_server_push` preloading with stats.
+- **Byte-safe blur/PNG speedups** (`2cc1127`, paint 208 tests): zone-based separable
+  blur with alternating thread-local plane (same f32 arithmetic) and single-pass PNG
+  filter/LZ77 tables (same greedy bytes); backdrop encode 0.243→0.186 ms (−23.5 %),
+  E2E 0.569→0.494 (−13.2 %), blur −4.7 %; 1.65 ms target unreachable (no-effect floor
+  ~1.54 ms, documented); goldens byte-identical.
+- **Shell context menu and link affordances** (`9b5ea6b`, shell 204 tests): 20 px
+  hover status bar (scroll/zoom hit-test, hand cursor), Ctrl+click/middle-click new tab
+  (MAX_TABS), context menu with Open link in new tab/Copy link address (internal
+  clipboard)/Save image (ResourceLoader + magic png/jpg/gif/webp/svg + naming +
+  atomic)/Copy image no-op/Reload/Save page PNG/HTML, keyboard ↑↓/Enter/Esc, hover,
+  click-outside and edge flip; `--chrome --chrome-menu` md5 `b59202c1…`.
+
+#### Tests
+
+- **1,738 tests, 0 failures** (net 279, render 157, js 130, image 84, shell 204,
+  paint 208, css 230, layout 215, dom 36, svg 97, html 60, fonts 17+1 doctest, bench 9,
+  test_harness 11); gate PASS with tokenizer 7,050/7,050, tree 3,904/3,904,
+  serializer 230/230 and CSS 30/30.
+
 ### Round 27 — PNG regression fix, HTTP/2 push/priorities/h2c, DOM/JS gaps, effects perf and polished chrome (2026-11-11)
 
 #### Added

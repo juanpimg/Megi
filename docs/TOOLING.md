@@ -640,6 +640,20 @@ Límites r27: push h2 descartado (render no lo consume aún), h2c GET-only con r
 
 Cifras de referencia en la ronda 27: **1695 tests** (bench 9, css 230, dom 36, fonts 17+1 doctest, html 60, image 76, js 128, layout 215, net 259, paint 208, render 153, shell 195, svg 97, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
 
+### 2.16u Ronda 28: reduced IDCT/EXIF, push+uploads streaming, geometría JS, blur byte-safe y menú contextual
+
+```bash
+cargo test -p image                                      # IDCT reducida y EXIF thumbnails
+cargo test -p net --test h2_push_tests && cargo test -p net --test upload_streaming
+cargo test -p js --test gap_apis && cargo test -p render --test js_geometry_tests
+cargo run -p render -- tests/fixtures/render/js_geometry_fixed.html /tmp/geo.png --json
+cargo run -p shell -- tests/fixtures/render/basic.html --chrome --chrome-menu --screenshot /tmp/menu.png --width 640 --height 400
+```
+
+Límites r28: reduced IDCT solo en `decode_scaled` (progresivo fallback documentado) y EXIF thumbnails con caps; push h2 solo misma conexión, preload cache por carga y sin push h1/trailers/sendfile; streaming uploads single-shot con cap 16 MiB; geometría sin scroll offsets reales/transforms/zoom y primer script sin layout ⇒ 0; blur/PNG byte-safe con objetivo 1,65 ms no alcanzable (floor ~1,54 ms); menú contextual con portapapeles interno, sin submenús/nativo y Save image re-descarga solo `<img>`.
+
+Cifras de referencia en la ronda 28: **1738 tests** (bench 9, css 230, dom 36, fonts 17+1 doctest, html 60, image 84, js 130, layout 215, net 279, paint 208, render 157, shell 204, svg 97, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30; allowlists vacías; status generado desde `docs/status/progress.toml`.
+
 ## 4. Progress status generado (`PROGRESS.md`, `docs/status/*.svg`)
 
 El estado de avance del proyecto se genera **desde datos reales del repositorio**, sin
