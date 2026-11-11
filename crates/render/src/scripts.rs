@@ -64,9 +64,12 @@
 //!   `window.addEventListener('load'/'DOMContentLoaded', …)` work with browser-like capture/
 //!   target/bubble phases. `event.currentTarget` is `null` inside listeners (use
 //!   `event.target`), and inline `onclick`-style attributes are not executed.
-//! - `<script type="module">` is supported for the js crate's ESM subset (static imports
-//!   only, one realm, each script is an independent module graph root; see `execute_scripts`).
-//!   Dynamic `import()`, top-level await, import maps and workers are not supported.
+//! - `<script type="module">` is supported for the js crate's ESM subset (one realm, each
+//!   script is an independent module graph root; see `execute_scripts`). `<script
+//!   type="importmap">` is parsed before modules (first map only; duplicates/invalid JSON are
+//!   non-fatal warnings), dynamic `import()` accepts **string literals** (evaluated eagerly
+//!   with the graph, Promise resolved immediately) and top-level await is a documented typed
+//!   gap. Workers are not supported.
 //! - Without the `js` crate feature this module compiles to a no-op: scripts are counted
 //!   as skipped and the DOM is left untouched (documented in [`crate::ScriptingMode`]).
 
@@ -532,6 +535,41 @@ pub fn load_scripts(
 /// evaluates every script with the configured budgets, drains promise microtasks and a
 /// bounded number of timer callbacks, captures `console` output, and hands the document
 /// back. Without the feature it is a no-op that reports the scripts as skipped.
+/// Returns the JSON source of the first `<script type="importmap">`, recording a warning
+/// for duplicates or unparsable maps. Import maps must appear before module scripts; this
+/// helper scans the document once up front (the executor runs scripts after parsing).
+#[cfg(feature = "js")]
+fn import_map_source(document: &dom::Document, warnings: &mut Vec<String>) -> Option<String> {
+    let mut maps = Vec::new();
+    for node in document.descendants(document.root()) {
+        let Some(element) = document.try_node(node).and_then(|node| node.as_element()) else {
+            continue;
+        };
+        if element.local_name != "script"
+            || element
+                .get_attribute("type")
+                .is_none_or(|kind| !kind.eq_ignore_ascii_case("importmap"))
+        {
+            continue;
+        }
+        maps.push(document.text_content(node));
+    }
+    if maps.len() > 1 {
+        warnings.push(format!(
+            "multiple import maps ({}); only the first one is used",
+            maps.len()
+        ));
+    }
+    let source = maps.into_iter().next()?;
+    match js::ImportMap::from_json(&source) {
+        Ok(_) => Some(source),
+        Err(error) => {
+            warnings.push(format!("invalid import map: {error}"));
+            None
+        }
+    }
+}
+
 #[cfg(feature = "js")]
 pub fn execute_scripts(
     document: Document,
@@ -560,6 +598,10 @@ pub fn execute_scripts(
         return execution;
     }
 
+    // Import maps are installed before any module is evaluated (R187). Only the first
+    // `<script type="importmap">` is used; duplicates/invalid JSON are non-fatal warnings.
+    let import_map_json = import_map_source(&execution.document, warnings);
+
     // Keep the original document so a runtime-construction failure is not fatal.
     let mut runtime = match js::JsRuntime::with_document(
         execution.document.clone(),
@@ -571,6 +613,12 @@ pub fn execute_scripts(
             return execution;
         }
     };
+
+    if let Some(json) = &import_map_json
+        && let Err(error) = runtime.set_import_map_json(json)
+    {
+        warnings.push(format!("invalid import map: {error}"));
+    }
 
     // Browser-facing host providers (R96): getComputedStyle reads the pre-script snapshot,
     // matchMedia evaluates with the render's MediaContext (same viewport as the cascade),

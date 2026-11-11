@@ -285,6 +285,8 @@ pub(crate) struct Host {
     /// ES module resolver/loader injected by the host (no I/O in `js`).
     pub module_resolver: Option<ModuleResolver>,
     pub module_loader: Option<ModuleLoader>,
+    /// Installed import map (resolution happens before the host resolver).
+    pub import_map: Option<crate::import_map::ImportMap>,
 }
 
 impl Host {
@@ -325,6 +327,7 @@ impl Host {
             layout_provider: None,
             module_resolver: None,
             module_loader: None,
+            import_map: None,
         }
     }
 

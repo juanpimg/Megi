@@ -3194,6 +3194,9 @@ struct ParsedModule {
     imports: Vec<ImportSpec>,
     body: String,
     exports: Vec<(String, String)>, // exported name, local expression
+    /// Literal specifiers of dynamic `import()` calls (evaluated with the graph; the
+    /// returned Promise resolves immediately — documented subset).
+    dynamic_imports: Vec<String>,
 }
 
 fn module_quote(value: &str) -> String {
@@ -3363,11 +3366,93 @@ fn transform_module(source: &str, url: &str) -> Result<ParsedModule, JsError> {
         }
         body_lines.push(line);
     }
+    let mut body = body_lines.join("\n");
+    let dynamic_imports = rewrite_dynamic_imports(&mut body)?;
     Ok(ParsedModule {
         imports,
-        body: body_lines.join("\n"),
+        body,
         exports,
+        dynamic_imports,
     })
+}
+
+/// Rewrites literal `import("specifier")` calls into `__MEGI_DYNAMIC_k__` placeholders and
+/// returns the specifiers. Non-literal arguments are a documented subset limitation.
+fn rewrite_dynamic_imports(body: &mut String) -> Result<Vec<String>, JsError> {
+    let mut specifiers: Vec<String> = Vec::new();
+    let mut output = String::with_capacity(body.len());
+    let mut rest = body.as_str();
+    while let Some(index) = rest.find("import") {
+        let after = &rest[index + "import".len()..];
+        let mut spaces = after.len() - after.trim_start().len();
+        let trimmed = after.trim_start();
+        if !trimmed.starts_with('(') {
+            output.push_str(&rest[..index + "import".len()]);
+            rest = after;
+            continue;
+        }
+        spaces += 0;
+        let mut inner = &trimmed[1..];
+        inner = inner.trim_start();
+        let Some(quote) = inner.chars().next().filter(|ch| *ch == '\'' || *ch == '"') else {
+            return Err(JsError::DynamicImport(
+                "only string-literal import() specifiers are supported".to_string(),
+            ));
+        };
+        let Some(close) = inner[1..].find(quote) else {
+            return Err(JsError::DynamicImport(
+                "unterminated import() specifier".to_string(),
+            ));
+        };
+        let specifier = inner[1..1 + close].to_string();
+        let after_literal = &inner[1 + close + 1..];
+        let Some(paren_offset) = after_literal.find(')') else {
+            return Err(JsError::DynamicImport(
+                "unterminated import() call".to_string(),
+            ));
+        };
+        if !after_literal[..paren_offset].trim().is_empty() {
+            return Err(JsError::DynamicImport(
+                "only one string-literal argument is supported".to_string(),
+            ));
+        }
+        let position = specifiers
+            .iter()
+            .position(|existing| *existing == specifier)
+            .unwrap_or_else(|| {
+                specifiers.push(specifier.clone());
+                specifiers.len() - 1
+            });
+        output.push_str(&format!("__MEGI_DYNAMIC_{position}__"));
+        rest = &after_literal[paren_offset + 1..];
+        let _ = spaces;
+    }
+    output.push_str(rest);
+    *body = output;
+    Ok(specifiers)
+}
+
+/// Detects top-level `await` (the synchronous module evaluator cannot suspend).
+fn module_has_top_level_await(body: &str) -> bool {
+    let mut depth = 0i32;
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if depth <= 0
+            && (trimmed.starts_with("await ")
+                || trimmed.starts_with("export default await ")
+                || trimmed.contains("= await "))
+        {
+            return true;
+        }
+        for ch in line.chars() {
+            match ch {
+                '{' => depth += 1,
+                '}' => depth -= 1,
+                _ => {}
+            }
+        }
+    }
+    false
 }
 
 fn module_error(error: boa_engine::JsError) -> JsError {
@@ -3381,6 +3466,17 @@ fn resolve_module(
 ) -> Result<String, JsError> {
     let resolved = {
         let host = host.borrow();
+        if let Some(map) = host.import_map.as_ref() {
+            match map.resolve(specifier) {
+                Some(Some(target)) => return Ok(target),
+                Some(None) => {
+                    return Err(JsError::ImportMapBlocked(format!(
+                        "{specifier} (base {base})"
+                    )));
+                }
+                None => {}
+            }
+        }
         match host.module_resolver.as_ref() {
             Some(resolver) => resolver(specifier, base)?,
             None => None,
@@ -3488,14 +3584,41 @@ fn eval_module_graph(
             }
         }
     }
+    // Literal dynamic imports are evaluated with the graph (documented eager subset).
+    for (index, specifier) in parsed.dynamic_imports.iter().enumerate() {
+        let dep_url = resolve_module(host, specifier, url)?;
+        let dep_source = load_module(host, &dep_url)?;
+        let namespace =
+            eval_module_graph(context, host, &dep_url, &dep_source, budget, visiting, done)?;
+        context
+            .global_object()
+            .set(
+                js_string!(format!("__megi_dynamic_value_{index}")),
+                JsValue::from(namespace),
+                false,
+                context,
+            )
+            .map_err(module_error)?;
+    }
+    let mut body = parsed.body;
+    for index in 0..parsed.dynamic_imports.len() {
+        body = body.replace(
+            &format!("__MEGI_DYNAMIC_{index}__"),
+            &format!("Promise.resolve(__megi_dynamic_value_{index})"),
+        );
+    }
+    if module_has_top_level_await(&body) {
+        return Err(JsError::TopLevelAwait(format!(
+            "top-level await in {url} (synchronous evaluator; use eval_module_async for the typed gap)"
+        )));
+    }
     let return_fields: Vec<String> = parsed
         .exports
         .iter()
         .map(|(exported, local)| format!("{}: ({local})", module_quote(exported)))
         .collect();
     let script = format!(
-        "'use strict';\n(function() {{\n{prelude}\n{}\nreturn {{ {} }};\n}}).call(undefined);",
-        parsed.body,
+        "'use strict';\n(function() {{\n{prelude}\n{body}\nreturn {{ {} }};\n}}).call(undefined);",
         return_fields.join(", ")
     );
     apply_budget(context, budget);
@@ -3539,6 +3662,28 @@ impl JsRuntime {
         self.host.borrow_mut().module_loader = Some(loader);
     }
 
+    /// Installs an import map from JSON source (`{"imports":{...}}` subset; see
+    /// [`crate::ImportMap`]). Resolution is tried before the host module resolver; a `null`
+    /// mapping blocks the specifier with [`JsError::ImportMapBlocked`].
+    pub fn set_import_map_json(&mut self, source: &str) -> Result<(), JsError> {
+        let map = crate::ImportMap::from_json(source)?;
+        self.host.borrow_mut().import_map = Some(map);
+        Ok(())
+    }
+
+    /// Async-flavoured module entry point. This synchronous evaluator **does not support
+    /// top-level await** (documented gap): modules containing it return
+    /// [`JsError::TopLevelAwait`] here and in [`Self::eval_module`].
+    pub fn eval_module_async(
+        &mut self,
+        source: &str,
+        source_name: &str,
+        base_url: &str,
+        budget: &Budget,
+    ) -> Result<ModuleOutcome, JsError> {
+        self.eval_module(source, source_name, base_url, budget)
+    }
+
     /// Evaluates an ES module graph using the injected resolver/loader.
     ///
     /// Supported subset: default/named/namespace/side-effect imports, `export
@@ -3546,8 +3691,12 @@ impl JsRuntime {
     /// `import.meta.url` is replaced with the module URL. Cycles are rejected with
     /// [`JsError::ModuleCycle`] (documented), missing modules with
     /// [`JsError::ModuleNotFound`], missing/undefined exports with
-    /// [`JsError::ModuleExport`]. No dynamic `import()`, no top-level await and no
-    /// network/filesystem access (the host supplies all module text).
+    /// [`JsError::ModuleExport`]. Import maps installed with [`Self::set_import_map_json`]
+    /// are consulted first. Dynamic `import()` is supported with **string literals** and
+    /// evaluates the dependency eagerly when the graph runs, returning a Promise resolved
+    /// immediately; non-literal arguments are [`JsError::DynamicImport`]. Top-level await is
+    /// a documented gap ([`JsError::TopLevelAwait`]). No network/filesystem access (the
+    /// host supplies all module text).
     pub fn eval_module(
         &mut self,
         source: &str,

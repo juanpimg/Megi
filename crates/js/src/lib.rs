@@ -180,6 +180,7 @@ pub mod error;
 pub mod events;
 #[cfg(feature = "js")]
 pub mod host;
+pub mod import_map;
 #[cfg(feature = "js")]
 pub mod runtime;
 
@@ -199,6 +200,7 @@ pub use events::JsEventTarget;
 pub use host::ConsoleEntry;
 #[cfg(feature = "js")]
 pub use host::{MediaProvider, ViewportInfo, ViewportProvider};
+pub use import_map::ImportMap;
 #[cfg(feature = "js")]
 pub use runtime::{Budget, JsRuntime};
 
@@ -252,4 +254,20 @@ impl JsRuntime {
 
     /// Accepted as a no-op in the feature-less stub.
     pub fn set_module_loader(&mut self, _loader: crate::host::ModuleLoader) {}
+
+    /// Always fails: import maps are compiled out with `--no-default-features`.
+    pub fn set_import_map_json(&mut self, _source: &str) -> Result<(), JsError> {
+        Err(JsError::FeatureDisabled)
+    }
+
+    /// Always fails: top-level await is not supported by the synchronous evaluator.
+    pub fn eval_module_async(
+        &mut self,
+        _source: &str,
+        _source_name: &str,
+        _base_url: &str,
+        _budget: &crate::runtime::Budget,
+    ) -> Result<crate::ModuleOutcome, JsError> {
+        Err(JsError::FeatureDisabled)
+    }
 }

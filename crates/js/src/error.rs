@@ -26,6 +26,14 @@ pub enum JsError {
     ModuleExport(String),
     /// Circular ES module dependency (documented limitation).
     ModuleCycle(String),
+    /// Invalid import map (JSON syntax or unsupported shape).
+    ImportMap(String),
+    /// The import map explicitly maps the specifier to `null` (blocked in browsers).
+    ImportMapBlocked(String),
+    /// Dynamic `import()` with a non-literal argument (subset limitation).
+    DynamicImport(String),
+    /// Top-level `await` is not supported by the synchronous module evaluator.
+    TopLevelAwait(String),
 }
 
 impl fmt::Display for JsError {
@@ -44,6 +52,10 @@ impl fmt::Display for JsError {
             Self::ModuleSyntax(message) => write!(f, "module syntax error: {message}"),
             Self::ModuleExport(message) => write!(f, "module export missing: {message}"),
             Self::ModuleCycle(message) => write!(f, "circular module dependency: {message}"),
+            Self::ImportMap(message) => write!(f, "import map error: {message}"),
+            Self::ImportMapBlocked(message) => write!(f, "import map blocked: {message}"),
+            Self::DynamicImport(message) => write!(f, "dynamic import error: {message}"),
+            Self::TopLevelAwait(message) => write!(f, "top-level await unsupported: {message}"),
         }
     }
 }
