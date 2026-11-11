@@ -551,17 +551,8 @@ pub fn resolve_document_styles_with_viewport(
 /// pointers avoids re-hashing every property name/value string per element. Map iteration
 /// order is unspecified, so per-declaration hashes are XOR-ed together. Two independent
 /// 64-bit mixes (different constants/rotations) make accidental collisions negligible.
-fn style_cache_key(parent: Option<NodeId>, cascaded: &HashMap<String, &Declaration>) -> u128 {
-    let mut low = if let Some(parent) = parent {
-        let mut hash = 0xcbf2_9ce4_8422_2325u64;
-        for &byte in parent.get().to_le_bytes().iter() {
-            hash ^= u64::from(byte);
-            hash = hash.wrapping_mul(0x100_0000_01b3);
-        }
-        hash
-    } else {
-        0x9e37_79b9_7f4a_7c15
-    };
+fn style_cache_key(parent_key: u128, cascaded: &HashMap<String, &Declaration>) -> u128 {
+    let mut low = parent_key as u64 ^ (parent_key >> 64) as u64;
     let mut high = low ^ 0xa5a5_5a5a_0123_4567;
     for declaration in cascaded.values() {
         let pointer = std::ptr::from_ref(*declaration) as usize as u64;
@@ -593,6 +584,8 @@ pub fn resolve_document_styles_with_media(
     let mut style_cache: HashMap<u128, crate::properties::ComputedStyle, FastBuildHasher> =
         HashMap::with_hasher(FastBuildHasher);
     let mut style_seen: HashMap<u128, u8, FastBuildHasher> = HashMap::with_hasher(FastBuildHasher);
+    let mut style_keys: HashMap<NodeId, u128, FastBuildHasher> =
+        HashMap::with_hasher(FastBuildHasher);
     let mut candidates: Vec<Candidate> = Vec::new();
     let root = doc.root();
 
@@ -627,21 +620,38 @@ pub fn resolve_document_styles_with_media(
             // pointer-keyed cache (they are also rare); everything else lives in the
             // immutable StyleCollection, where declaration addresses are stable.
             let cacheable = inline_decls.is_none();
-            let cache_key = style_cache_key(doc.node(node_id).parent, &cascaded);
+            let parent_key = doc
+                .node(node_id)
+                .parent
+                .and_then(|parent| style_keys.get(&parent).copied())
+                .unwrap_or(0x9e37_79b9_7f4a_7c15);
+            let cache_key = style_cache_key(parent_key, &cascaded);
             if cacheable && let Some(cached) = style_cache.get(&cache_key) {
                 styles.insert(node_id, cached.clone());
+                style_keys.insert(node_id, cache_key);
             } else {
                 let computed =
                     crate::properties::ComputedStyle::compute(&cascaded, parent_style, root_style);
-                styles.insert(node_id, computed.clone());
                 if cacheable {
-                    // Only repeated declaration sets are cached: unique elements pay a
-                    // cheap hash/counter instead of a full ComputedStyle clone.
+                    // Only repeated declaration sets are cached; unique elements pay a
+                    // cheap hash/counter instead of a full ComputedStyle clone, and the
+                    // miss path never clones (the computed value moves into `styles`).
                     let seen = style_seen.entry(cache_key).or_insert(0);
                     *seen = seen.saturating_add(1);
                     if *seen >= 2 && style_cache.len() < 1024 {
-                        style_cache.insert(cache_key, computed);
+                        style_cache.insert(cache_key, computed.clone());
                     }
+                }
+                styles.insert(node_id, computed);
+                if cacheable {
+                    style_keys.insert(node_id, cache_key);
+                } else {
+                    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+                    for &byte in node_id.get().to_le_bytes().iter() {
+                        hash ^= u64::from(byte);
+                        hash = hash.wrapping_mul(0x100_0000_01b3);
+                    }
+                    style_keys.insert(node_id, u128::from(hash) << 64 | u128::from(hash ^ 0xa5a5));
                 }
             }
         }

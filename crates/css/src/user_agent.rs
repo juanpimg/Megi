@@ -11,6 +11,8 @@
 //! pressed state can be styled here. This is deliberately Chrome-approximate, not pixel-
 //! exact.
 
+use std::sync::OnceLock;
+
 use crate::cascade::{Origin, StyleCollection};
 use crate::rule::Stylesheet;
 
@@ -267,10 +269,19 @@ pub fn parse_user_agent_stylesheet() -> Stylesheet {
 }
 
 /// Creates a [`StyleCollection`] pre-loaded with the default HTML5 User-Agent stylesheet.
+/// Parsed User-Agent stylesheet cached for the lifetime of the process.
+///
+/// The sheet is immutable: caching the **AST** avoids re-tokenizing/parsing the same
+/// UA CSS on every style-resolution pass while still compiling selectors into the
+/// per-resolution collection (which stays cheap and avoids cloning compiled rules).
+fn cached_user_agent_stylesheet() -> &'static crate::rule::Stylesheet {
+    static CACHE: OnceLock<crate::rule::Stylesheet> = OnceLock::new();
+    CACHE.get_or_init(parse_user_agent_stylesheet)
+}
+
 pub fn create_user_agent_style_collection() -> StyleCollection {
     let mut collection = StyleCollection::new();
-    let ua_sheet = parse_user_agent_stylesheet();
-    collection.add_stylesheet(&ua_sheet, Origin::UserAgent);
+    collection.add_stylesheet(cached_user_agent_stylesheet(), Origin::UserAgent);
     collection
 }
 
