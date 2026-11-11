@@ -1,5 +1,7 @@
 //! Round 32: real top-level await and live module bindings (native Boa modules).
 
+#![cfg(feature = "js")]
+
 use std::collections::HashMap;
 
 use js::host::FetchResult;

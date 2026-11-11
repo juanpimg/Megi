@@ -2,6 +2,8 @@
 //! `matchMedia`/viewport, `requestAnimationFrame` on the virtual event loop, `onerror` and
 //! console capture. Offline fixtures only.
 
+#![cfg(feature = "js")]
+
 use std::path::{Path, PathBuf};
 
 use dom::{Document, NodeId};

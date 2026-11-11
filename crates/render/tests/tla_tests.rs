@@ -1,5 +1,7 @@
 //! Round 32: top-level await in `<script type="module">` (native modules).
 
+#![cfg(feature = "js")]
+
 use render::{RenderOptions, Viewport, render_url};
 use std::path::Path;
 

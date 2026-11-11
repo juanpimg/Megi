@@ -5,6 +5,8 @@
 //! the render's FetchOptions (`--no-network` and size caps enforced). Failures are non-fatal
 //! warnings and the rest of the page still renders.
 
+#![cfg(feature = "js")]
+
 use std::path::{Path, PathBuf};
 
 use dom::Document;

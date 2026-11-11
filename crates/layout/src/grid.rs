@@ -1,4 +1,4 @@
-//! # CSS Grid layout (MVP+)
+//! # CSS Grid layout
 //!
 //! Scoped implementation for `display: grid` / `display: inline-grid`.
 //!
@@ -17,8 +17,13 @@
 //!   yet and fall back to the default track (documented).
 //! * Explicit placement with `grid-column`/`grid-row` and their
 //!   `-start`/`-end` longhands: numeric lines (including negative lines, where
-//!   `-1` is the last line), `span <integer>` and `auto`; items may span
-//!   multiple rows/columns.
+//!   `-1` is the last line), named lines, `span <integer>` and `auto`; items may
+//!   span multiple rows/columns.
+//! * `grid-template-areas` / `grid-area` (areas also define named lines).
+//! * `grid-auto-flow: row | column [dense]`, with dense packing backfilling the
+//!   holes left by placed items.
+//! * `auto-fit` empty-track collapse after placement (repeated range only; the
+//!   track count is still computed like `auto-fill`).
 //! * `order` for grid and flex items (stable, document order as tiebreak).
 //! * Automatic row-major placement for unplaced items, skipping occupied cells.
 //! * `justify-items`/`align-items` and `justify-self`/`align-self`
@@ -27,10 +32,9 @@
 //!
 //! ## Out of scope (documented)
 //!
-//! * Named lines/areas, `subgrid`, masonry, `grid-auto-columns` and dense packing.
-//! * `auto-fit` is treated as `auto-fill` (empty tracks are not collapsed).
-//! * Explicitly overlapping items are painted in document order without error
-//!   recovery; auto-placement only fills free cells.
+//! * `subgrid`, masonry and `grid-auto-columns`.
+//! * Full CSS Grid placement-conflict resolution: explicitly overlapping items
+//!   are painted in document order and auto-placement only fills free cells.
 //! * Content-based sizing of auto tracks uses single-cell items only (spanning
 //!   items are measured inside the tracks they occupy but do not stretch auto
 //!   rows/columns); percentages against indefinite axes resolve to `0`.

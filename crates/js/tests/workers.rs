@@ -1,5 +1,7 @@
 //! Round 30: deterministic cooperative Web Workers (no threads).
 
+#![cfg(feature = "js")]
+
 use js::runtime::JsRuntime;
 
 fn runtime_with_worker(source: &'static str) -> JsRuntime {
