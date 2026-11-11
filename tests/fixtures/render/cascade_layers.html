@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Cascade layers</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  @layer base, theme, utilities;
+
+  @layer base {
+    .card { width: 160px; height: 70px; background: #cc0000; }
+    .bar { width: 120px; height: 16px; background: #0066cc; }
+    .important { width: 200px; height: 20px; background: #ff8800 !important; }
+  }
+  @layer theme {
+    .card { width: 220px; background: #00aa00; }
+    .bar { width: revert-layer; height: 24px; background: #aa00aa; }
+    .important { width: 100px; height: 20px; background: #ffee00 !important; }
+  }
+  @layer utilities {
+    .card { height: 90px; }
+    @media screen { .bar { background: #008800; } }
+  }
+</style></head>
+<body>
+<div class="card"></div>
+<div class="bar"></div>
+<div class="important"></div>
+</body>
+</html>

@@ -6,7 +6,10 @@
 //! Round 2 additions: functional `:is()`/`:where()`/`:not()`/`:has()` and the remaining
 //! structural pseudo-classes, pre-cascade shorthand expansion (see [`shorthand`]) so that
 //! origin/specificity/source order decide per longhand, the `font` shorthand, and basic
-//! `@media` support ([`MediaContext`], [`resolve_document_styles_with_viewport`]) and a
+//! `@media` support ([`MediaContext`], [`resolve_document_styles_with_viewport`]), **Cascade
+//! Layers** (`@layer` declarations/blocks, nesting, compound/anonymous names, layer-order
+//! cascade, `!important` inversion and `revert-layer`; fast path when no layer is declared)
+//! and a
 //! **Container Queries MVP** ([`container`]): `container-type: normal|inline-size|size`,
 //! `container-name` and `@container [<name>] (min/max-width|inline-size|height|block-size)
 //! ...)` with `and`. Sizes are predicted from the viewport down the block chain before

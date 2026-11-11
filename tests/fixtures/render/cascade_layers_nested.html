@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Cascade layers nested/anonymous</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  @layer outer {
+    @layer inner { .box { width: 80px; height: 24px; background: #cc0000; } }
+    .box { background: #00aa00; }
+  }
+  @layer outer.inner { .box { width: 200px; } }
+  @layer { .box { height: 40px; } }
+  @layer { .box { background: #0000cc; } }
+</style></head>
+<body><div class="box"></div></body>
+</html>

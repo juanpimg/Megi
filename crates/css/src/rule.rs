@@ -130,7 +130,13 @@ pub fn serialize_component_values(values: &[ComponentValue]) -> String {
     for cv in values {
         match cv {
             ComponentValue::PreservedToken(tok) => match tok {
-                CssToken::Ident(s) | CssToken::Function(s) | CssToken::AtKeyword(s) => {
+                CssToken::Ident(s) | CssToken::Function(s) => {
+                    out.push_str(s);
+                }
+                CssToken::AtKeyword(s) => {
+                    // Preserve the at-keyword marker so nested at-rules (e.g. `@media` inside
+                    // `@layer`) round-trip through `parse_stylesheet`.
+                    out.push('@');
                     out.push_str(s);
                 }
                 CssToken::Hash { value, .. } => {

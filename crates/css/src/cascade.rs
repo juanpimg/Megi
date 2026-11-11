@@ -1,3 +1,17 @@
+//! CSS cascade and `@layer` support.
+//!
+//! Cascade order (highest priority first): origin/importance, then cascade layer, then
+//! specificity, then source/declaration order. Normal declarations follow layer declaration
+//! order with unlayered rules as the implicit last (highest) layer; `!important` inverts the
+//! layer order (unlayered important is the lowest). `revert-layer` rolls the winner back to
+//! the previous layer (not the UA origin) in a single step; same-layer candidates are
+//! skipped.
+//!
+//! MVP limits (documented in `lib.rs`): no `layer()` in `@import`/programmatic API, nested
+//! `@layer` at-rules are supported but declarations directly inside a layer are approximated
+//! as part of that layer (ordered before its sublayers), and `@container`/`@media` inside
+//! layers only participate through the layer rank they are declared in.
+
 //! # W3C CSS Cascading and Inheritance Level 4 (§6)
 //!
 //! Implements declaration origin and importance ranking, specificity calculation,
@@ -50,6 +64,11 @@ use crate::selector::{ComplexSelector, SelectorList, Specificity, parse_selector
 use crate::shorthand::expand_declarations;
 use dom::{Document, NodeId};
 
+/// Layer rank for declarations that do not belong to any `@layer`. Normal unlayered
+/// declarations outrank every layer; important unlayered declarations are the lowest
+/// (the order is inverted for `!important`).
+pub const UNLAYERED_LAYER: u32 = u32::MAX;
+
 /// Origin of a CSS declaration per W3C Cascading and Inheritance Level 4 §6.1.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Origin {
@@ -98,6 +117,8 @@ impl CascadeOriginImportance {
 pub struct MatchedDeclaration<'a> {
     pub declaration: &'a Declaration,
     pub origin_importance: CascadeOriginImportance,
+    /// Global cascade-layer rank (0 = first declared layer; [`UNLAYERED_LAYER`] = no layer).
+    pub layer_rank: u32,
     pub specificity: Specificity,
     pub source_order: u32,
     /// Position of the declaration inside its rule (or inline block). Later declarations win
@@ -117,8 +138,22 @@ impl<'a> PartialOrd for MatchedDeclaration<'a> {
 impl<'a> Ord for MatchedDeclaration<'a> {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
+        let important = matches!(
+            self.origin_importance,
+            CascadeOriginImportance::AuthorImportant
+                | CascadeOriginImportance::UserImportant
+                | CascadeOriginImportance::UserAgentImportant
+        );
+        // Normal declarations: later layers win (unlayered is the implicit last layer).
+        // Important declarations: the layer order is inverted.
+        let layer_order = if important {
+            other.layer_rank.cmp(&self.layer_rank)
+        } else {
+            self.layer_rank.cmp(&other.layer_rank)
+        };
         self.origin_importance
             .cmp(&other.origin_importance)
+            .then(layer_order)
             .then_with(|| self.specificity.cmp(&other.specificity))
             .then_with(|| self.source_order.cmp(&other.source_order))
             .then_with(|| self.declaration_order.cmp(&other.declaration_order))
@@ -132,6 +167,8 @@ pub struct CompiledRule {
     pub declarations: Vec<Declaration>,
     pub origin: Origin,
     pub source_order: u32,
+    /// Cascade-layer rank (see [`UNLAYERED_LAYER`]).
+    pub layer_rank: u32,
 }
 
 /// One compiled `@container` rule: query + nested style rule (selectors/declarations).
@@ -293,6 +330,11 @@ pub struct StyleCollection {
     /// Compiled `@container` rules (added in source order; evaluated per node during the
     /// cascade against the nearest ancestor query container).
     pub container_rules: Vec<ContainerRule>,
+    /// Declared cascade layers in first-appearance order (each path is relative: `["a","b"]`
+    /// for `@layer a.b`). Anonymous layers get a unique `"<anonymous N>"` path segment.
+    pub layers: Vec<Vec<String>>,
+    /// Map from layer path to its global rank; used by `@layer` registration.
+    layer_index: HashMap<Vec<String>, u32>,
     /// Rule index by rightmost-compound key. Maintained by the `add_*` methods; if the public
     /// `rules` vector is mutated directly, resolution falls back to evaluating every rule.
     index: RuleIndex,
@@ -315,6 +357,7 @@ fn compile_style_rule(style_rule: &crate::rule::StyleRule, origin: Origin) -> Op
         declarations,
         origin,
         source_order: 0,
+        layer_rank: UNLAYERED_LAYER,
     })
 }
 
@@ -330,13 +373,49 @@ impl StyleCollection {
     /// `@media` rules are evaluated against [`StyleCollection::media`]; other at-rules
     /// (`@import`, `@supports`, `@font-face`, ...) are still ignored.
     pub fn add_stylesheet(&mut self, stylesheet: &Stylesheet, origin: Origin) {
-        self.add_rules(&stylesheet.rules, origin);
+        self.add_rules(&stylesheet.rules, origin, &[], UNLAYERED_LAYER);
     }
 
-    fn add_rules(&mut self, rules: &[Rule], origin: Origin) {
+    /// Registers a layer path (first appearance wins the rank) and returns its rank.
+    fn register_layer(&mut self, path: Vec<String>) -> u32 {
+        if let Some(&rank) = self.layer_index.get(&path) {
+            return rank;
+        }
+        let rank = self.layers.len() as u32;
+        self.layers.push(path.clone());
+        self.layer_index.insert(path, rank);
+        rank
+    }
+
+    /// Composes a possibly dotted layer name relative to the current layer path.
+    fn compose_layer_path(current: &[String], name: &str) -> Vec<String> {
+        let mut path = current.to_vec();
+        for segment in name.split('.') {
+            let segment = segment.trim();
+            if !segment.is_empty() {
+                path.push(segment.to_ascii_lowercase());
+            }
+        }
+        path
+    }
+
+    /// Returns the global layer rank for a path (0-based, first appearance order).
+    pub fn layer_rank(&self, path: &[String]) -> Option<u32> {
+        self.layer_index.get(path).copied()
+    }
+
+    fn add_rules(
+        &mut self,
+        rules: &[Rule],
+        origin: Origin,
+        layer_path: &[String],
+        layer_rank: u32,
+    ) {
         for rule in rules {
             match rule {
-                Rule::Style(style_rule) => self.add_style_rule(style_rule, origin),
+                Rule::Style(style_rule) => {
+                    self.add_style_rule(style_rule, origin, layer_rank);
+                }
                 Rule::At(at_rule) if at_rule.name.eq_ignore_ascii_case("media") => {
                     let prelude = serialize_component_values(&at_rule.prelude);
                     let query_list = crate::media::parse_media_query_list(&prelude);
@@ -345,7 +424,7 @@ impl StyleCollection {
                     {
                         let nested_text = serialize_component_values(&block.values);
                         let nested = crate::parser::parse_stylesheet(&nested_text);
-                        self.add_rules(&nested.rules, origin);
+                        self.add_rules(&nested.rules, origin, layer_path, layer_rank);
                     }
                 }
                 Rule::At(at_rule) if at_rule.name.eq_ignore_ascii_case("container") => {
@@ -358,20 +437,49 @@ impl StyleCollection {
                     };
                     let nested_text = serialize_component_values(&block.values);
                     let nested = crate::parser::parse_stylesheet(&nested_text);
-                    self.add_container_rules(&nested.rules, origin, &query);
+                    self.add_container_rules(&nested.rules, origin, &query, layer_rank);
+                }
+                Rule::At(at_rule) if at_rule.name.eq_ignore_ascii_case("layer") => {
+                    let prelude = serialize_component_values(&at_rule.prelude);
+                    let prelude = prelude.trim();
+                    match &at_rule.block {
+                        // `@layer name;` / `@layer a, b;`: declaration only.
+                        None => {
+                            for name in prelude.split(',') {
+                                let name = name.trim();
+                                if !name.is_empty() {
+                                    let path = Self::compose_layer_path(layer_path, name);
+                                    self.register_layer(path);
+                                }
+                            }
+                        }
+                        Some(block) => {
+                            let name = if prelude.is_empty() {
+                                format!("<anonymous-{}>", self.layers.len())
+                            } else {
+                                prelude.to_owned()
+                            };
+                            let path = Self::compose_layer_path(layer_path, &name);
+                            let rank = self.register_layer(path.clone());
+                            let nested_text = serialize_component_values(&block.values);
+                            let nested = crate::parser::parse_stylesheet(&nested_text);
+                            self.add_rules(&nested.rules, origin, &path, rank);
+                        }
+                    }
                 }
                 Rule::At(_) => {}
             }
         }
     }
 
-    /// Compiles the style rules inside an `@container` block (nested `@container` at-rules
-    /// are not supported; `@media` inside is evaluated immediately).
+    /// Compiles the style rules inside an `@container` block (nested `@container`/`@layer`
+    /// at-rules are not supported; `@media` inside is evaluated immediately).
     fn add_container_rules(
         &mut self,
         rules: &[Rule],
         origin: Origin,
         query: &crate::container::ContainerQuery,
+        layer_rank: u32,
     ) {
         for rule in rules {
             match rule {
@@ -379,6 +487,7 @@ impl StyleCollection {
                     if let Some(compiled) = compile_style_rule(style_rule, origin) {
                         let compiled = CompiledRule {
                             source_order: self.next_source_order,
+                            layer_rank,
                             ..compiled
                         };
                         self.next_source_order += 1;
@@ -396,7 +505,7 @@ impl StyleCollection {
                     {
                         let nested_text = serialize_component_values(&block.values);
                         let nested = crate::parser::parse_stylesheet(&nested_text);
-                        self.add_container_rules(&nested.rules, origin, query);
+                        self.add_container_rules(&nested.rules, origin, query, layer_rank);
                     }
                 }
                 _ => {}
@@ -404,14 +513,17 @@ impl StyleCollection {
         }
     }
 
-    fn add_style_rule(&mut self, style_rule: &crate::rule::StyleRule, origin: Origin) {
-        let Some(compiled) = compile_style_rule(style_rule, origin) else {
+    fn add_style_rule(
+        &mut self,
+        style_rule: &crate::rule::StyleRule,
+        origin: Origin,
+        layer_rank: u32,
+    ) {
+        let Some(mut compiled) = compile_style_rule(style_rule, origin) else {
             return;
         };
-        let compiled = CompiledRule {
-            source_order: self.next_source_order,
-            ..compiled
-        };
+        compiled.source_order = self.next_source_order;
+        compiled.layer_rank = layer_rank;
         self.next_source_order += 1;
         let rule_index = self.rules.len() as u32;
         self.index.insert(rule_index, &compiled.selectors);
@@ -497,6 +609,7 @@ pub fn resolve_cascaded_properties<'a>(
         &candidates,
     );
     merge_container_rules(doc, node_id, collection, &mut best);
+    apply_revert_layer(doc, node_id, collection, &mut best);
     owned_declarations(best)
 }
 
@@ -529,6 +642,7 @@ fn resolve_base_cascaded_properties<'a>(
                 let candidate = MatchedDeclaration {
                     declaration: decl,
                     origin_importance,
+                    layer_rank: rule.layer_rank,
                     specificity: spec,
                     source_order: rule.source_order,
                     declaration_order: declaration_order as u32,
@@ -557,6 +671,7 @@ fn resolve_base_cascaded_properties<'a>(
             let candidate = MatchedDeclaration {
                 declaration: decl,
                 origin_importance,
+                layer_rank: UNLAYERED_LAYER,
                 specificity: inline_specificity,
                 source_order: inline_source_order,
                 declaration_order: declaration_order as u32,
@@ -623,6 +738,7 @@ fn merge_container_rules<'a>(
                 let candidate = MatchedDeclaration {
                     declaration: decl,
                     origin_importance,
+                    layer_rank: rule.layer_rank,
                     specificity,
                     source_order: rule.source_order,
                     declaration_order: declaration_order as u32,
@@ -637,6 +753,130 @@ fn merge_container_rules<'a>(
                         vacant.insert(candidate);
                     }
                 }
+            }
+        }
+    }
+}
+
+fn is_revert_layer(declaration: &Declaration) -> bool {
+    declaration
+        .raw_value
+        .trim()
+        .eq_ignore_ascii_case("revert-layer")
+}
+
+fn is_important(origin_importance: CascadeOriginImportance) -> bool {
+    matches!(
+        origin_importance,
+        CascadeOriginImportance::AuthorImportant
+            | CascadeOriginImportance::UserImportant
+            | CascadeOriginImportance::UserAgentImportant
+    )
+}
+
+/// Applies `revert-layer`: the winner rolls back to the previous cascade layer (not the UA
+/// origin). Candidates from the same layer are skipped; a missing previous layer removes the
+/// property (initial/inherited value).
+fn apply_revert_layer<'a>(
+    doc: &Document,
+    node_id: NodeId,
+    collection: &'a StyleCollection,
+    best: &mut HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher>,
+) {
+    let losers: Vec<&'a str> = best
+        .iter()
+        .filter(|(_, matched)| is_revert_layer(matched.declaration))
+        .map(|(name, _)| *name)
+        .collect();
+    for property in losers {
+        let Some(winner) = best.get(property).cloned() else {
+            continue;
+        };
+        let important = is_important(winner.origin_importance);
+        let mut candidates: Vec<MatchedDeclaration<'a>> = Vec::new();
+        for rule in &collection.rules {
+            for selector in &rule.selectors.selectors {
+                if !selector.matches(doc, node_id) {
+                    continue;
+                }
+                let specificity = selector.specificity();
+                for (declaration_order, declaration) in rule.declarations.iter().enumerate() {
+                    if declaration.name != property {
+                        continue;
+                    }
+                    let origin_importance =
+                        CascadeOriginImportance::new(rule.origin, declaration.important);
+                    if origin_importance != winner.origin_importance {
+                        continue;
+                    }
+                    candidates.push(MatchedDeclaration {
+                        declaration,
+                        origin_importance,
+                        layer_rank: rule.layer_rank,
+                        specificity,
+                        source_order: rule.source_order,
+                        declaration_order: declaration_order as u32,
+                    });
+                }
+            }
+        }
+        for container_rule in &collection.container_rules {
+            let rule = &container_rule.rule;
+            let Some((size, container_style)) =
+                crate::container::matching_size(doc, node_id, &container_rule.query, collection)
+            else {
+                continue;
+            };
+            if !crate::container::evaluate(&container_rule.query, &size, &container_style) {
+                continue;
+            }
+            for selector in &rule.selectors.selectors {
+                if !selector.matches(doc, node_id) {
+                    continue;
+                }
+                let specificity = selector.specificity();
+                for (declaration_order, declaration) in rule.declarations.iter().enumerate() {
+                    if declaration.name != property {
+                        continue;
+                    }
+                    let origin_importance =
+                        CascadeOriginImportance::new(rule.origin, declaration.important);
+                    if origin_importance != winner.origin_importance {
+                        continue;
+                    }
+                    candidates.push(MatchedDeclaration {
+                        declaration,
+                        origin_importance,
+                        layer_rank: rule.layer_rank,
+                        specificity,
+                        source_order: rule.source_order,
+                        declaration_order: declaration_order as u32,
+                    });
+                }
+            }
+        }
+        candidates.sort_by(|a, b| b.cmp(a));
+        let mut replacement = None;
+        for candidate in candidates {
+            if candidate.layer_rank == winner.layer_rank {
+                continue;
+            }
+            let lower_priority = if important {
+                candidate.layer_rank > winner.layer_rank
+            } else {
+                candidate.layer_rank < winner.layer_rank
+            };
+            if lower_priority {
+                replacement = Some(candidate);
+                break;
+            }
+        }
+        match replacement {
+            Some(candidate) if !is_revert_layer(candidate.declaration) => {
+                best.insert(property, candidate);
+            }
+            _ => {
+                best.remove(property);
             }
         }
     }
@@ -777,6 +1017,7 @@ pub fn resolve_document_styles_with_media(
                 &candidates,
             );
             merge_container_rules(doc, node_id, &collection, &mut best);
+            apply_revert_layer(doc, node_id, &collection, &mut best);
             let cascaded = owned_declarations(best);
 
             let parent_style = doc.node(node_id).parent.and_then(|p| styles.get(&p));
@@ -1116,6 +1357,7 @@ mod tests {
             }],
             origin: Origin::Author,
             source_order: 99,
+            layer_rank: UNLAYERED_LAYER,
         });
 
         let mut doc = Document::new();
