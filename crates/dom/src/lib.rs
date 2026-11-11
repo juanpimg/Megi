@@ -1688,7 +1688,6 @@ impl Document {
         }
         let common = a_ancestors
             .iter()
-            .rev()
             .find(|ancestor| b_ancestors.contains(ancestor));
         let Some(common) = common else {
             return DISCONNECTED | IMPLEMENTATION_SPECIFIC;

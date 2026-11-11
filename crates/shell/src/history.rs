@@ -227,6 +227,51 @@ pub fn history_page_html(entries: &[HistoryEntry]) -> String {
     pages::history_page(entries)
 }
 
+/// Domain shown in the history menu thumbnails (`host`, `file`, `data` or the raw URL).
+pub fn domain_of(url: &str) -> String {
+    let Ok(parsed) = net::Url::parse(url) else {
+        return url.chars().take(24).collect();
+    };
+    match parsed.scheme() {
+        net::Scheme::Http | net::Scheme::Https => {
+            let host = parsed.host();
+            if host.is_empty() {
+                "local".to_string()
+            } else {
+                host.to_string()
+            }
+        }
+        net::Scheme::File => "file".to_string(),
+        net::Scheme::Data => "data".to_string(),
+    }
+}
+
+/// Deterministic thumbnail badge for a URL: one uppercase letter plus a stable RGB color
+/// derived from the domain (no images, no randomness).
+pub fn domain_badge(url: &str) -> (char, [u8; 3]) {
+    const PALETTE: [[u8; 3]; 8] = [
+        [0x1F, 0x6F, 0xEB],
+        [0x2D, 0xA4, 0x4E],
+        [0xBF, 0x39, 0x83],
+        [0xD2, 0x4D, 0x1F],
+        [0x8B, 0x5C, 0xF6],
+        [0x0F, 0x76, 0x6E],
+        [0xB4, 0x79, 0x00],
+        [0x55, 0x5F, 0x6B],
+    ];
+    let domain = domain_of(url);
+    let letter = domain
+        .chars()
+        .find(|ch| ch.is_ascii_alphanumeric())
+        .unwrap_or('?')
+        .to_ascii_uppercase();
+    let mut hash = 0usize;
+    for byte in domain.bytes() {
+        hash = hash.wrapping_mul(31).wrapping_add(byte as usize);
+    }
+    (letter, PALETTE[hash % PALETTE.len()])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -322,5 +367,22 @@ mod tests {
         assert!(html.contains("&lt;script&gt;"));
         assert!(html.contains("href=\"https://example.com/a?x=1&amp;y=2\""));
         assert!(html.contains("History"));
+    }
+}
+
+#[cfg(test)]
+mod thumbnail_tests {
+    use super::*;
+
+    #[test]
+    fn domain_badges_are_deterministic_and_cover_schemes() {
+        assert_eq!(domain_of("https://Example.com/a"), "example.com");
+        assert_eq!(domain_of("file:///tmp/a.html"), "file");
+        assert_eq!(domain_of("data:text/html,x"), "data");
+        let first = domain_badge("https://example.com/page");
+        let second = domain_badge("https://example.com/other");
+        assert_eq!(first, second, "same domain ⇒ same badge");
+        assert_eq!(first.0, 'E');
+        assert!(domain_badge("not a url").0.is_ascii_uppercase());
     }
 }

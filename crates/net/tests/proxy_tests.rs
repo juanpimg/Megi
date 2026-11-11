@@ -228,6 +228,8 @@ fn options_with_proxy(proxy: Url) -> FetchOptions {
             http: Some(proxy.clone()),
             https: Some(proxy),
             no_proxy: Vec::new(),
+            socks: None,
+            pac_url: None,
         })),
         ..FetchOptions::default()
     }
@@ -355,6 +357,8 @@ fn no_proxy_bypasses_the_configured_proxy() {
             http: Some(Url::parse("http://127.0.0.1:1/").expect("proxy URL")),
             https: None,
             no_proxy: vec!["127.0.0.1".to_owned()],
+            socks: None,
+            pac_url: None,
         })),
         ..FetchOptions::default()
     };
@@ -448,6 +452,8 @@ fn https_proxy_url_can_forward_http_targets() {
             http: Some(Url::parse(&format!("https://localhost:{port}/")).expect("https proxy URL")),
             https: None,
             no_proxy: Vec::new(),
+            socks: None,
+            pac_url: None,
         })),
         ..FetchOptions::default()
     };

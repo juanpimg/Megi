@@ -112,6 +112,11 @@ pub struct FetchOptions {
     pub max_connections_per_origin: usize,
     /// Idle timeout for pooled HTTP/1.1 connections (default 30 s).
     pub connection_idle_timeout: Duration,
+    /// Send `HTTP/1.0` request lines (default `false` = `HTTP/1.1`). Responses are always
+    /// parsed by their own status-line version. HTTP/1.0 requests cannot use chunked
+    /// request bodies; `Connection: close` is sent for non-pooled fetches and
+    /// `Connection: keep-alive` for pooled reuse.
+    pub force_http10: bool,
     /// Accept HTTP/2 server pushes (`PUSH_PROMISE`) and let the resource loader preload
     /// them into a per-load session cache. Default `false`.
     pub accept_push: bool,
@@ -180,6 +185,7 @@ impl Default for FetchOptions {
             reuse_connections: true,
             max_connections_per_origin: 4,
             connection_idle_timeout: Duration::from_secs(30),
+            force_http10: false,
             accept_push: false,
             max_pushed_resources: 8,
             max_pushed_body: 1024 * 1024,
@@ -379,11 +385,21 @@ pub fn fetch_pooled(
     options: &FetchOptions,
     pool: &mut H1Pool,
 ) -> Result<Response, FetchError> {
+    let pool_proxy = options
+        .proxy
+        .as_deref()
+        .and_then(|config| config.proxy_for_url(url))
+        .filter(|proxy| proxy.scheme() == Scheme::Http);
+    let socks_configured = options
+        .proxy
+        .as_deref()
+        .is_some_and(|config| config.socks_for(url).is_some());
     if url.scheme() != Scheme::Http
+        || socks_configured
         || options
             .proxy
             .as_deref()
-            .is_some_and(|config| config.proxy_for(url).is_some())
+            .is_some_and(|config| config.proxy_for_url(url).is_some() && pool_proxy.is_none())
         || !options.reuse_connections
         || options.cookie_jar.is_some()
         || options.origin.is_some()
@@ -393,35 +409,75 @@ pub fn fetch_pooled(
     {
         return fetch(url, options);
     }
-    let origin = origin_key(url);
-    let port = url.port_or_default().unwrap_or(80);
+    let (connect_host, connect_port, origin, request_target) = match &pool_proxy {
+        Some(proxy) => {
+            let proxy_port = proxy.port_or_default().ok_or_else(|| {
+                FetchError::UnsupportedScheme("proxy URL without port".to_owned())
+            })?;
+            let origin = format!(
+                "proxy:{}://{}:{}",
+                proxy.scheme().as_str(),
+                proxy.host(),
+                proxy_port
+            );
+            let target = absolute_request_target(
+                url,
+                &match url.port() {
+                    Some(port) => format!("{}:{port}", url.host()),
+                    None => url.host().to_owned(),
+                },
+            );
+            (proxy.host_for_dns().to_owned(), proxy_port, origin, target)
+        }
+        None => (
+            url.host().to_owned(),
+            url.port_or_default().unwrap_or(80),
+            origin_key(url),
+            url.request_target(),
+        ),
+    };
     let host_header = match url.port() {
         Some(port) => format!("{}:{port}", url.host()),
         None => url.host().to_owned(),
     };
+    let proxy_auth = pool_proxy
+        .as_ref()
+        .and_then(crate::proxy::proxy_authorization);
     let mut last_error = None;
     for attempt in 0..2 {
         let stream = match pool.take(&origin) {
             Some(stream) => stream,
             None => {
-                let address = format!("{}:{port}", url.host());
+                let address = format!("{connect_host}:{connect_port}");
                 TcpStream::connect(&address).map_err(map_io_error)?
             }
         };
         stream.set_read_timeout(Some(options.read_timeout)).ok();
         stream.set_write_timeout(Some(options.read_timeout)).ok();
         let mut reader = ConnReader::new(Transport::Plain(stream));
+        let http_version = if options.force_http10 { "1.0" } else { "1.1" };
+        let keep_alive_header = if options.force_http10 {
+            "Connection: keep-alive\r\n"
+        } else {
+            ""
+        };
         let mut request = format!(
-            "GET {} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\n\r\n",
-            url.request_target(),
-            options.user_agent
+            "GET {request_target} HTTP/{http_version}\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\n{}{keep_alive_header}\r\n",
+            options.user_agent,
+            proxy_auth
+                .as_ref()
+                .map(|auth| format!("Proxy-Authorization: {auth}\r\n"))
+                .unwrap_or_default()
         );
         if options.accept_encoding != AcceptEncoding::Identity {
             request = format!(
-                "GET {} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\nAccept-Encoding: {}\r\n\r\n",
-                url.request_target(),
+                "GET {request_target} HTTP/{http_version}\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\nAccept-Encoding: {}\r\n{}{keep_alive_header}\r\n",
                 options.user_agent,
-                options.accept_encoding.header_value().unwrap_or("identity")
+                options.accept_encoding.header_value().unwrap_or("identity"),
+                proxy_auth
+                    .as_ref()
+                    .map(|auth| format!("Proxy-Authorization: {auth}\r\n"))
+                    .unwrap_or_default()
             );
         }
         let result = (|| -> Result<Response, FetchError> {
@@ -431,7 +487,7 @@ pub fn fetch_pooled(
                 .map_err(map_io_error)?;
             reader.stream.flush().map_err(map_io_error)?;
             let head = reader.read_head(options.max_header_bytes)?;
-            let (status, reason, headers) = parse_head(&head)?;
+            let (version, status, reason, headers) = parse_head_verbose(&head)?;
             if (300..400).contains(&status) {
                 return Err(FetchError::InvalidResponse(
                     "redirect in pooled fetch".to_owned(),
@@ -455,7 +511,18 @@ pub fn fetch_pooled(
                         .any(|token| token.trim().eq_ignore_ascii_case("close"))
             });
             let (body, trailers) = read_body(&mut reader, status, &headers, options)?;
-            let mut keep_alive = has_length && !connection_close;
+            let connection_keep_alive = headers.iter().any(|(name, value)| {
+                name.eq_ignore_ascii_case("connection")
+                    && value
+                        .split(',')
+                        .any(|token| token.trim().eq_ignore_ascii_case("keep-alive"))
+            });
+            let mut keep_alive = if version == (1, 0) {
+                // HTTP/1.0 keeps the connection alive only when explicitly requested.
+                has_length && connection_keep_alive && !connection_close
+            } else {
+                has_length && !connection_close
+            };
             if reader.position < reader.buffer.len() {
                 keep_alive = false; // unexpected pipelined bytes: do not reuse
             }
@@ -1030,18 +1097,49 @@ fn fetch_once(
     let proxy = options
         .proxy
         .as_deref()
-        .and_then(|config| config.proxy_for(url));
+        .and_then(|config| config.proxy_for_url(url));
+    let socks_proxy = options
+        .proxy
+        .as_deref()
+        .and_then(|config| config.socks_for(url))
+        .cloned();
     let mut absolute_form: Option<String> = None;
     let mut proxy_auth_header: Option<String> = None;
-    let (mut stream, h2_negotiated) = match proxy {
-        Some(proxy_url) => {
+    let proxy_for_407 = proxy.clone();
+    let (mut stream, h2_negotiated) = match (socks_proxy, proxy) {
+        (Some(socks), _) => {
+            let tcp_stream = connect_tcp(&socks.host, socks.port, options)?;
+            let mut tunnel = tcp_stream;
+            crate::socks::connect(&mut tunnel, &socks, url.host(), port)?;
+            match url.scheme() {
+                Scheme::Http => (Transport::Plain(tunnel), false),
+                Scheme::Https => {
+                    let (transport, negotiated_h2) =
+                        connect_tls(host, tunnel, options, method != "OPTIONS").map_err(
+                            |error| match error {
+                                FetchError::Io(reason) => {
+                                    FetchError::ProxyTunnel(reason.to_string())
+                                }
+                                other => other,
+                            },
+                        )?;
+                    (transport, negotiated_h2)
+                }
+                Scheme::File | Scheme::Data => {
+                    return Err(FetchError::UnsupportedScheme(
+                        url.scheme().as_str().to_owned(),
+                    ));
+                }
+            }
+        }
+        (None, Some(proxy_url)) => {
             let proxy_host = proxy_url.host_for_dns();
             let proxy_port = proxy_url.port_or_default().ok_or_else(|| {
                 FetchError::UnsupportedScheme(format!(
                     "proxy URL without a usable port: {proxy_url}"
                 ))
             })?;
-            let auth = crate::proxy::proxy_authorization(proxy_url);
+            let auth = crate::proxy::proxy_authorization(&proxy_url);
             let tcp_stream = connect_tcp(proxy_host, proxy_port, options)?;
             if url.scheme() == Scheme::Https {
                 if proxy_url.scheme() == Scheme::Https {
@@ -1055,7 +1153,7 @@ fn fetch_once(
                     host,
                     port,
                     auth.as_deref(),
-                    proxy_url,
+                    &proxy_url,
                     options,
                 )?;
                 let (transport, negotiated_h2) =
@@ -1081,7 +1179,7 @@ fn fetch_once(
                 }
             }
         }
-        None => {
+        (None, None) => {
             let tcp_stream = connect_tcp(host, port, options)?;
             match url.scheme() {
                 Scheme::Http => (Transport::Plain(tcp_stream), false),
@@ -1230,7 +1328,13 @@ fn fetch_once(
     let h1_target = absolute_form
         .clone()
         .unwrap_or_else(|| url.request_target());
-    let mut head = format!("{method} {h1_target} HTTP/1.1\r\nHost: {host_header}\r\n",);
+    let http_version = if options.force_http10 { "1.0" } else { "1.1" };
+    if options.force_http10 && (body_is_stream || !trailers.is_empty()) {
+        return Err(FetchError::RequestBody(
+            "chunked request bodies/trailers require HTTP/1.1".to_owned(),
+        ));
+    }
+    let mut head = format!("{method} {h1_target} HTTP/{http_version}\r\nHost: {host_header}\r\n",);
     for (name, value) in &request_headers {
         head.push_str(name);
         head.push_str(": ");
@@ -1261,7 +1365,7 @@ fn fetch_once(
             let (status, reason, headers) = parse_head(&final_head)?;
             if status == 407
                 && absolute_form.is_some()
-                && let Some(proxy) = proxy
+                && let Some(proxy) = proxy_for_407.as_ref()
             {
                 return Err(crate::proxy::auth_required_error(proxy));
             }
@@ -1308,7 +1412,7 @@ fn fetch_once(
     let (status, reason, headers) = parse_head(&final_head)?;
     if status == 407
         && absolute_form.is_some()
-        && let Some(proxy) = proxy
+        && let Some(proxy) = proxy_for_407.as_ref()
     {
         return Err(crate::proxy::auth_required_error(proxy));
     }
@@ -1536,6 +1640,13 @@ impl Write for Transport {
 
 /// Reads and parses the status line and header fields.
 fn parse_head(head: &[u8]) -> Result<(u16, String, Headers), FetchError> {
+    let (_, status, reason, headers) = parse_head_verbose(head)?;
+    Ok((status, reason, headers))
+}
+
+/// Parses a status line returning `(major, minor)` as well, for HTTP/1.0 keep-alive and
+/// connection-reuse decisions.
+fn parse_head_verbose(head: &[u8]) -> Result<((u8, u8), u16, String, Headers), FetchError> {
     // HTTP header field values are ISO-8859-1 on the wire; decode lossily instead of
     // rejecting non-UTF-8 bytes (robustness: a wrong charset must not kill the fetch).
     let text = String::from_utf8_lossy(head);
@@ -1552,6 +1663,10 @@ fn parse_head(head: &[u8]) -> Result<(u16, String, Headers), FetchError> {
             "unsupported protocol `{version}`"
         )));
     }
+    let minor = version
+        .rsplit_once('.')
+        .and_then(|(_, minor)| minor.parse::<u8>().ok())
+        .ok_or_else(|| FetchError::InvalidResponse("malformed HTTP version".to_owned()))?;
     let status_text = parts
         .next()
         .ok_or_else(|| FetchError::InvalidResponse("missing status code".to_owned()))?;
@@ -1587,7 +1702,7 @@ fn parse_head(head: &[u8]) -> Result<(u16, String, Headers), FetchError> {
         }
         headers.push((name.to_owned(), value.trim().to_owned()));
     }
-    Ok((status, reason, headers))
+    Ok(((1, minor), status, reason, headers))
 }
 
 fn is_token_byte(byte: u8) -> bool {

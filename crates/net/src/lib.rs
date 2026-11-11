@@ -105,9 +105,17 @@
 //! - **Proxies**: [`ProxyConfig`] (+ [`ProxyConfig::from_env`]) and
 //!   [`http::FetchOptions::proxy`] route `http:` targets through absolute-form requests
 //!   and `https:` targets through a validated `CONNECT` tunnel (Basic auth from proxy
-//!   URL userinfo, `no_proxy` host/suffix/IP/port matching). `PAC`/`WPAD`, SOCKS and
-//!   non-Basic proxy auth are out of scope; an `https:` proxy only forwards `http:`
-//!   targets (no nested TLS).
+//!   URL userinfo, `no_proxy` host/suffix/IP/port matching). Additionally:
+//!   **SOCKS5** (`ProxyConfig::socks`, RFC 1928 CONNECT, no-auth or username/password
+//!   RFC 1929) and **PAC** (`ProxyConfig::pac_url`, feature `pac`: evaluates
+//!   `FindProxyForURL(url, host)` with the JS runtime and caches per host for 5 min).
+//!   HTTP proxy connections are pooled per proxy origin (cap 4, idle timeout).
+//!   `https:` proxies still only forward `http:` targets (no nested TLS); PAC without
+//!   the feature falls back to the static proxy/direct connection.
+//! - **HTTP/1.0**: responses may be `HTTP/1.0` (version detected from the status line);
+//!   keep-alive is off by default and requires an explicit `Connection: keep-alive`
+//!   (only then is the connection pooled); request lines can be forced to HTTP/1.0
+//!   with [`http::FetchOptions::force_http10`] (no chunked request bodies/trailers).
 //! - **Ranges**: [`ByteRange`] parsing/serialization and [`ContentRange`] response parsing;
 //!   [`FetchOptions::range`] sends `Range: bytes=...` (single range only) and
 //!   [`ResourceLoader::load_range`] performs a one-shot partial load (HTTP `206`, plus
@@ -133,10 +141,13 @@ pub mod h2;
 pub mod http;
 pub mod loader;
 pub mod mime;
+#[cfg(feature = "pac")]
+pub mod pac;
 pub mod proxy;
 pub mod psl;
 pub mod range;
 pub mod referrer;
+pub mod socks;
 pub mod url;
 
 pub use body::{BodyProducer, RequestBody};
