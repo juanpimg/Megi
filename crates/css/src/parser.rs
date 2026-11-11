@@ -82,15 +82,26 @@ impl TokenStream {
     }
 }
 
+/// Maximum nesting of simple blocks and functions accepted while parsing component values.
+///
+/// The grammar is recursive (§5.5.8-§5.5.10); without a bound a ~100 KB stylesheet of `(`
+/// overflows the host stack before any declaration is validated. Deeper content is
+/// consumed iteratively and dropped, so the surrounding declarations still parse.
+pub const MAX_COMPONENT_NESTING: usize = 256;
+
 /// Consumes a component value from the stream (§5.5.8).
 pub fn consume_component_value(stream: &mut TokenStream) -> ComponentValue {
+    consume_component_value_at(stream, 0)
+}
+
+fn consume_component_value_at(stream: &mut TokenStream, depth: usize) -> ComponentValue {
     match stream.consume() {
         open @ (CssToken::LeftBrace | CssToken::LeftBracket | CssToken::LeftParen) => {
-            let block = consume_simple_block(stream, open);
+            let block = consume_simple_block_at(stream, open, depth);
             ComponentValue::Block(block)
         }
         CssToken::Function(name) => {
-            let func = consume_function(stream, name);
+            let func = consume_function_at(stream, name, depth);
             ComponentValue::Function(func)
         }
         tok => ComponentValue::PreservedToken(tok),
@@ -99,11 +110,26 @@ pub fn consume_component_value(stream: &mut TokenStream) -> ComponentValue {
 
 /// Consumes a simple block from the stream (§5.5.9).
 pub fn consume_simple_block(stream: &mut TokenStream, associated_token: CssToken) -> SimpleBlock {
+    consume_simple_block_at(stream, associated_token, 0)
+}
+
+fn consume_simple_block_at(
+    stream: &mut TokenStream,
+    associated_token: CssToken,
+    depth: usize,
+) -> SimpleBlock {
     let mirror = match associated_token {
         CssToken::LeftBracket => CssToken::RightBracket,
         CssToken::LeftParen => CssToken::RightParen,
         _ => CssToken::RightBrace,
     };
+    if depth >= MAX_COMPONENT_NESTING {
+        skip_to_matching(stream, closing_byte(&mirror).unwrap_or(b'}'));
+        return SimpleBlock {
+            associated_token,
+            values: Vec::new(),
+        };
+    }
     let mut values = Vec::new();
     loop {
         if stream.peek() == &mirror {
@@ -113,7 +139,7 @@ pub fn consume_simple_block(stream: &mut TokenStream, associated_token: CssToken
         if stream.peek().is_eof() {
             break;
         }
-        values.push(consume_component_value(stream));
+        values.push(consume_component_value_at(stream, depth + 1));
     }
     SimpleBlock {
         associated_token,
@@ -123,6 +149,17 @@ pub fn consume_simple_block(stream: &mut TokenStream, associated_token: CssToken
 
 /// Consumes a function from the stream (§5.5.10).
 pub fn consume_function(stream: &mut TokenStream, name: String) -> FunctionCall {
+    consume_function_at(stream, name, 0)
+}
+
+fn consume_function_at(stream: &mut TokenStream, name: String, depth: usize) -> FunctionCall {
+    if depth >= MAX_COMPONENT_NESTING {
+        skip_to_matching(stream, b')');
+        return FunctionCall {
+            name,
+            values: Vec::new(),
+        };
+    }
     let mut values = Vec::new();
     loop {
         if matches!(stream.peek(), CssToken::RightParen | CssToken::Eof) {
@@ -131,9 +168,51 @@ pub fn consume_function(stream: &mut TokenStream, name: String) -> FunctionCall 
             }
             break;
         }
-        values.push(consume_component_value(stream));
+        values.push(consume_component_value_at(stream, depth + 1));
     }
     FunctionCall { name, values }
+}
+
+/// Iteratively consumes tokens up to the close that matches `mirror`, tracking nesting.
+///
+/// Used at [`MAX_COMPONENT_NESTING`] instead of recursing, so adversarial nesting costs a
+/// single loop rather than stack frames.
+fn skip_to_matching(stream: &mut TokenStream, mirror: u8) {
+    // One byte per open block keeps a 1 MiB adversarial sheet at ~1 MiB of bookkeeping.
+    let mut expected = vec![mirror];
+    while let Some(&wanted) = expected.last() {
+        let token = stream.consume();
+        if token.is_eof() {
+            break;
+        }
+        if let Some(close) = closing_byte(&token) {
+            if close == wanted {
+                expected.pop();
+            }
+            continue;
+        }
+        if let Some(open) = opening_byte(&token) {
+            expected.push(open);
+        }
+    }
+}
+
+fn closing_byte(token: &CssToken) -> Option<u8> {
+    match token {
+        CssToken::RightBrace => Some(b'}'),
+        CssToken::RightBracket => Some(b']'),
+        CssToken::RightParen => Some(b')'),
+        _ => None,
+    }
+}
+
+fn opening_byte(token: &CssToken) -> Option<u8> {
+    match token {
+        CssToken::LeftBrace => Some(b'}'),
+        CssToken::LeftBracket => Some(b']'),
+        CssToken::LeftParen | CssToken::Function(_) => Some(b')'),
+        _ => None,
+    }
 }
 
 /// Consumes a list of component values until EOF or `stop_token` (§5.5.7).
