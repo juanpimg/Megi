@@ -11,20 +11,27 @@
 //! - **Framing** ([`frame`]): HEADERS + CONTINUATION, DATA, SETTINGS (+ACK),
 //!   WINDOW_UPDATE, PING (+ACK), RST_STREAM and GOAWAY, with length/flag/stream-id
 //!   validation and anti-DoS caps ([`frame::DEFAULT_MAX_FRAME_SIZE`] 16 KiB,
-//!   [`frame::MAX_HEADER_BLOCK_BYTES`] 64 KiB, [`MAX_CONCURRENT_STREAMS`] 2).
-//! - One `GET` per connection, no request body, response fully buffered and capped
-//!   by [`crate::http::FetchOptions::max_response_bytes`].
+//!   [`frame::MAX_HEADER_BLOCK_BYTES`] 64 KiB).
+//! - **Multiplexing** ([`client::get_many`]): several concurrent GET streams over one
+//!   connection (frame scheduler, per-stream HEADERS/DATA buffers, stream ids, RST of one
+//!   stream does not affect the others, `MAX_CONCURRENT_STREAMS` cap).
+//! - **Flow control**: connection and stream receive windows (advertised
+//!   `INITIAL_WINDOW_SIZE`, default 65535), `WINDOW_UPDATE` replenishment as DATA is
+//!   consumed, typed `FLOW_CONTROL_ERROR` on violations/zero deltas; peer send windows are
+//!   tracked for the future request-body path.
+//! - **SETTINGS**: `HEADER_TABLE_SIZE`, `MAX_CONCURRENT_STREAMS`, `INITIAL_WINDOW_SIZE`,
+//!   `MAX_FRAME_SIZE`, `ENABLE_PUSH` validated and ACKed; outgoing HEADERS are fragmented
+//!   with CONTINUATION according to the peer's `MAX_FRAME_SIZE`.
+//! - One `GET`/stream, no request body, response fully buffered per stream and capped by
+//!   [`crate::http::FetchOptions::max_response_bytes`].
 //!
 //! ## Deliberate limitations (next phase)
 //!
-//! - No multiplexing (one stream at a time), no server push
-//!   (`SETTINGS_ENABLE_PUSH = 0`; PUSH_PROMISE is a connection error), no
-//!   prioritization.
-//! - No full flow control: the client sends a large `WINDOW_UPDATE` for the
-//!   connection and the stream, enough for responses under the size cap; it does
-//!   not replenish windows per DATA chunk.
-//! - No `Expect: 100-continue`, no trailers, no extended CONNECT, no HTTP/2
-//!   cleartext (h2c) upgrade; only HTTPS with ALPN.
+//! - No server push (`SETTINGS_ENABLE_PUSH = 0`; PUSH_PROMISE is a connection error),
+//!   no prioritization/priority signalling, no h2c cleartext upgrade (HTTPS + ALPN only),
+//!   no `Expect: 100-continue`, no trailers (a trailer HEADERS block is only accepted as
+//!   the final END_STREAM block) and no request bodies (send windows are tracked but no
+//!   DATA is emitted).
 //! - Header blocks are returned lowercased (HPACK requires lowercase names); the
 //!   HTTP/1.1 path keeps original casing.
 
@@ -36,5 +43,6 @@ pub mod hpack;
 pub const MAX_FRAME_SIZE: u32 = 16_384;
 /// Maximum header block assembled from HEADERS + CONTINUATION frames.
 pub const MAX_HEADER_BLOCK_BYTES: usize = 65_536;
-/// Maximum concurrent streams this client will ever use (MVP: one request).
-pub const MAX_CONCURRENT_STREAMS: usize = 2;
+/// Default maximum concurrent streams this client keeps open (see
+/// [`client::Limits::max_concurrent_streams`]; also advertised in SETTINGS).
+pub const MAX_CONCURRENT_STREAMS: usize = 8;

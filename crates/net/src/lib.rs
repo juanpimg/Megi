@@ -57,11 +57,10 @@
 //!
 //! ## Deliberate limitations / next steps (Phase 5 continuation)
 //!
-//! - HTTP/2 is an MVP (`h2`): one request at a time, no server push, no
-//!   prioritization and only the initial/stream window updates needed for
-//!   responses up to the response-size cap. No `Referer` policy, no cookie
-//!   `SameSite`/Public-Suffix-List handling,
-//!   and only the CORS subset described in [`cors`] (no preflight caching, no
+//! - HTTP/2 (`h2`) supports multiplexed GET streams with connection/stream flow control
+//!   and SETTINGS handling; server push, priorities, h2c, trailers, `100-continue` and
+//!   request bodies are not implemented (HTTP/1.1 remains the transparent fallback).
+//!   CORS is the subset described in [`cors`] (no preflight caching, no
 //!   `Access-Control-Expose-Headers`).
 //! - Compression covers only single `gzip`/`deflate` codings (no `br`/`zstd`, no stacked
 //!   encodings) and buffers the whole body before decoding. The inflater is the `image`

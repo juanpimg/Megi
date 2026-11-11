@@ -536,6 +536,7 @@ fn fetch_once(
             max_frame_size: crate::h2::MAX_FRAME_SIZE,
             max_header_block: options.max_header_bytes,
             max_body: options.max_response_bytes,
+            ..crate::h2::client::Limits::default()
         };
         let response = crate::h2::client::get(
             &mut stream,
