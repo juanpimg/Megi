@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `822c8a2` (2026-11-11) · overall **99%** · **1,907** tests · conformance **PASS** · **14** crates · **150,946** lines of Rust
+**Snapshot** — commit `bf4c5c4` (2026-11-11) · overall **100%** · **1,907** tests · conformance **PASS** · **14** crates · **150,946** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -18,10 +18,10 @@
 | **F2** | CSS parsing, cascade & selectors | `████████████████████` | 100% |
 | **F3** | Layout (box tree, BFC, IFC, grid & flex) | `████████████████████` | 100% |
 | **F4** | Paint, raster & SVG | `████████████████████` | 100% |
-| **F5** | Networking & fetch | `████████████████████` | 99% |
-| **F6** | JavaScript & DOM APIs | `████████████████████` | 99% |
-| **F7** | Desktop shell (browser UI) | `███████████████████░` | 97% |
-| | **Overall** | `████████████████████` | **99%** |
+| **F5** | Networking & fetch | `████████████████████` | 100% |
+| **F6** | JavaScript & DOM APIs | `████████████████████` | 100% |
+| **F7** | Desktop shell (browser UI) | `████████████████████` | 98% |
+| | **Overall** | `████████████████████` | **100%** |
 
 ## What is done and what remains
 
@@ -79,7 +79,7 @@
 - SVG auto-rotate/side right/textLength and remaining SMIL/CSS animations
 - Rasterizer/decoder performance budgets; backdrop blur/PNG entropy, layer-effect performance and PNG regions
 
-### F5 — Networking & fetch (99%)
+### F5 — Networking & fetch (100%)
 
 **Done**
 
@@ -90,14 +90,15 @@
 - From-scratch JPEG baseline/GIF87a/89a decoders wired into render by sniffing
 - HTTP/2 flow control, stream multiplexing and advanced SETTINGS
 - Real vendored public suffix list and HTTP/2+HTTP/1.1 request trailers
+- HTTP/HTTPS proxies (absolute-form+CONNECT, Basic auth, no_proxy) and fetch() provider
 
 **Pending**
 
-- Push prioritization, proxies, HTTP/1.0 and streaming responses
+- Push prioritization, HTTP/1.0 and streaming responses
 - h1 streaming buffered fallback and h2 cross-load pooling
-- Image decode performance budgets on real pages
+- Proxy PAC/SOCKS/pooling and image decode budgets on real pages
 
-### F6 — JavaScript & DOM APIs (99%)
+### F6 — JavaScript & DOM APIs (100%)
 
 **Done**
 
@@ -110,14 +111,15 @@
 - Layout geometry provider (getBoundingClientRect/offset/client) wired from render
 - Import maps, dynamic import() literals and typed top-level-await gap
 - Deterministic cooperative Web Workers (postMessage/onerror/terminate, render loop)
+- fetch() subset backed by a host provider (Headers/Request/Response, CORS same-origin)
 
 **Pending**
 
-- Real top-level await, live bindings, workers/fetch and remaining DOM gaps
+- Real top-level await, live bindings and fetch streaming/abort/timeout
 - JS/DOM conformance testing and memory accounting
-- Import-map scopes/integrity and non-literal dynamic import
+- Import-map scopes/integrity, non-literal dynamic import and workers with DOM
 
-### F7 — Desktop shell (browser UI) (97%)
+### F7 — Desktop shell (browser UI) (98%)
 
 **Done**
 
@@ -130,6 +132,7 @@
 - Link hover status bar, Ctrl+click/middle-click tabs and context menu (Open/Copy/Save image/Reload/Save page)
 - file:// directory listings, browser error pages with Retry and favicon/dot per tab
 - Navigable history (about:history/Ctrl+H/back-forward) and chrome fast path (-89.5 % non-PNG)
+- Single-encode PNG overlays for chrome/find/menu (+1.13/+1.75/+2.32 ms) with byte-identical goldens
 
 **Pending**
 
@@ -141,7 +144,7 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `822c8a2` (2026-11-11) |
+| Commit | `bf4c5c4` (2026-11-11) |
 | Crates in the workspace | 14 |
 | Lines of Rust (tracked `.rs`) | 150946 |
 | Tests (`cargo test --workspace -- --list`) | 1907 |
@@ -161,20 +164,20 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 
 ## Recent rounds
 
+- **Round 31** — cascade layers, single-encode PNG overlays, fetch(), HTTP/HTTPS proxies and VP8 performance
 - **Round 30** — full VP8 keyframe decoder, container queries, PSL/trailers, deterministic Web Workers, shell history and chrome fast path
 - **Round 29** — streaming responses/keep-alive, SVG textPath/SMIL, import maps, WebP lossy header, shell pages and fuzz 14
 - **Round 28** — reduced IDCT/EXIF thumbnails, server push, streaming uploads, JS geometry, byte-safe blur/PNG and context menu
 - **Round 27** — PNG regression fix, HTTP/2 push/priorities/h2c, DOM/JS gaps, effects perf and polished chrome
 - **Round 26** — module scripts, scaled decode, HTTP/2 request bodies, DOM/JS bug-bash, SVG filters/SMIL and isolated bench rows
-- **Round 25** — CSS Color 4/5, ES modules, complete WebP VP8L, render provider wiring and direct save-png
 
 ## Next up
 
-- HTTP/2 push prioritization, proxies, HTTP/1.0 and streaming responses
-- Top-level await/live bindings, fetch/workers follow-ups and JS conformance
+- HTTP/2 push prioritization, HTTP/1.0 and streaming responses
+- Top-level await/live bindings, fetch streaming/abort and JS conformance
 - Backdrop blur floor, PNG regions and rasterizer performance
 - SVG auto-rotate/side right/textLength and remaining SMIL
-- Render option to skip redundant page PNG for --chrome/--find
+- Proxy follow-ups (PAC/SOCKS/pooling) and image VP8 edge cases
 - Longer image/HTTP2/JS module fuzz campaigns and bench E2E on real pages
 
 ## Cross-cutting areas
@@ -194,4 +197,4 @@ python3 tools/update_progress.py --write --no-gate  # skip the conformance gate
 python3 tools/update_progress.py --check --no-gate --no-count  # CI freshness
 ```
 
-_Last manifest update by: docs (round 30). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
+_Last manifest update by: docs (round 31). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
