@@ -1100,7 +1100,7 @@ fn run_event_loop(
         // its delay has elapsed on the virtual timeline, making the number of
         // executed callbacks depend on machine speed (this was caught by CI:
         // the same render produced different task counts on different runs).
-        match runtime.run_until(state.virtual_time_ms) {
+        match runtime.run_until_with_budget(state.virtual_time_ms, remaining) {
             Ok(0) => {}
             Ok(ran) => {
                 state.tasks += ran;
@@ -1126,7 +1126,8 @@ fn run_event_loop(
             return;
         }
         let next = state.virtual_time_ms.saturating_add(VIRTUAL_TIME_STEP_MS);
-        match runtime.run_until(next) {
+        let remaining = limits.max_tasks.saturating_sub(state.tasks);
+        match runtime.run_until_with_budget(next, remaining) {
             Ok(ran) => {
                 state.tasks += ran;
                 state.iterations += 1;

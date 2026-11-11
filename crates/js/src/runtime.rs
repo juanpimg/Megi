@@ -419,8 +419,20 @@ impl JsRuntime {
 
     /// Moves the virtual clock to `deadline_ms` and runs every timer due up to then.
     pub fn run_until(&mut self, deadline_ms: u64) -> Result<usize, JsError> {
+        self.run_until_with_budget(deadline_ms, usize::MAX)
+    }
+
+    /// [`Self::run_until`] that runs at most `max_timers` callbacks.
+    ///
+    /// The render event loop passes its remaining `max_tasks` budget so one batch cannot
+    /// overshoot the documented cap.
+    pub fn run_until_with_budget(
+        &mut self,
+        deadline_ms: u64,
+        max_timers: usize,
+    ) -> Result<usize, JsError> {
         let _scope = HostScope::enter(&self.host);
-        let result = crate::events::run_until(&mut self.context, deadline_ms);
+        let result = crate::events::run_until(&mut self.context, deadline_ms, max_timers);
         if let Err(error) = &result {
             let message = error.to_string();
             let _ = crate::events::report_uncaught(&mut self.context, &message, "<timer>");

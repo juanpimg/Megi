@@ -1387,11 +1387,15 @@ pub(crate) fn advance_clock(context: &mut Context, delta: Duration) -> Result<u6
     Ok(now)
 }
 
-/// Sets the virtual clock to `deadline_ms` and runs due timers.
-pub(crate) fn run_until(context: &mut Context, deadline_ms: u64) -> Result<usize, CrateJsError> {
+/// Sets the virtual clock to `deadline_ms` and runs due timers, at most `max_steps` of them.
+pub(crate) fn run_until(
+    context: &mut Context,
+    deadline_ms: u64,
+    max_steps: usize,
+) -> Result<usize, CrateJsError> {
     let effective = with_host(|host| host.set_clock(deadline_ms))
         .ok_or_else(|| CrateJsError::Internal("no active JavaScript host".to_string()))?;
-    run_due_timers(context, effective, 100_000)
+    run_due_timers(context, effective, max_steps)
 }
 
 /// Current scheduler time (virtual or real).

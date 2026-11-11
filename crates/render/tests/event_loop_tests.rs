@@ -311,3 +311,46 @@ fn cli_json_exposes_event_loop_stats_and_respects_no_scripting() {
     assert_eq!(json_number(&no_scripting, "scripts_executed"), 0);
     let _ = std::fs::remove_file(&out_path);
 }
+
+#[test]
+fn timer_task_budget_caps_a_single_batch() {
+    // 100 zero-delay timers with `max_tasks = 10`: the loop must stop at the budget and
+    // report it, instead of running a whole 100k batch inside one `run_until`.
+    let html = "<html><body><script>window.__n = 0;\
+                for (var i = 0; i < 100; i++) { setTimeout(function () { window.__n++; }, 0); }\
+                </script><p id=\"out\">x</p></body></html>";
+    let encoded: String = html
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || b"-_.~".contains(&byte) {
+                (byte as char).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect();
+    let options = RenderOptions {
+        viewport: Viewport::new(400, 240).expect("viewport"),
+        scripting: ScriptingMode::Enabled,
+        scripting_limits: ScriptingLimits {
+            max_tasks: 10,
+            ..ScriptingLimits::default()
+        },
+        ..base_options()
+    };
+    let output = render_url(&format!("data:text/html,{encoded}"), &options).expect("render");
+    assert!(
+        output.stats.script_tasks <= 10,
+        "ran {} timer callbacks with max_tasks = 10",
+        output.stats.script_tasks
+    );
+    assert!(
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("timer task budget")),
+        "{:?}",
+        output.stats.warnings
+    );
+}
