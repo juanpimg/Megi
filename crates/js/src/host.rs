@@ -118,6 +118,86 @@ pub type ViewportProvider = Box<dyn Fn() -> ViewportInfo + Send + Sync>;
 pub type ComputedStyleProvider =
     Box<dyn Fn(&Document, NodeId) -> Vec<(String, String)> + Send + Sync>;
 
+/// History API action forwarded to the host provider.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HistoryAction {
+    /// `history.pushState(state, title, url)` (state is JSON; url already resolved).
+    Push { state: String, url: Option<String> },
+    /// `history.replaceState(...)`.
+    Replace { state: String, url: Option<String> },
+    /// `history.back()`.
+    Back,
+    /// `history.forward()`.
+    Forward,
+    /// `history.go(delta)`.
+    Go(i64),
+}
+
+/// Provider invoked by the History API (no provider ⇒ documented no-op).
+pub type HistoryProvider = Box<dyn Fn(HistoryAction) + Send + Sync>;
+
+/// `location.assign/replace/reload` action forwarded to the host.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LocationAction {
+    Assign(String),
+    Replace(String),
+    Reload,
+}
+
+/// Provider invoked by `location.*` navigation methods.
+pub type LocationProvider = Box<dyn Fn(LocationAction) + Send + Sync>;
+
+/// Which Web Storage area an operation refers to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StorageKind {
+    Local,
+    Session,
+}
+
+/// Loads the persisted entries for one storage area.
+pub type StorageLoadFn = Box<dyn Fn(StorageKind) -> Vec<(String, String)> + Send + Sync>;
+/// Saves the current entries of one storage area (called after writes).
+pub type StorageSaveFn = Box<dyn Fn(StorageKind, &[(String, String)]) + Send + Sync>;
+
+/// Optional persistence provider: load is called once when installed, save after writes.
+pub struct StorageProvider {
+    pub load: StorageLoadFn,
+    pub save: StorageSaveFn,
+}
+
+/// One queued MutationObserver record.
+#[derive(Clone, Debug)]
+pub(crate) struct MutationRecord {
+    pub kind: MutationKind,
+    pub target: NodeId,
+    pub name: Option<String>,
+    pub old_value: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MutationKind {
+    ChildList,
+    Attributes,
+    CharacterData,
+}
+
+/// A `MutationObserver` registration (callbacks/records live in JS-side roots).
+#[derive(Clone, Debug)]
+pub(crate) struct ObserverRegistration {
+    pub callback_slot: u32,
+    pub object_slot: u32,
+    pub targets: Vec<ObserverTarget>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ObserverTarget {
+    pub node: NodeId,
+    pub child_list: bool,
+    pub attributes: bool,
+    pub character_data: bool,
+    pub subtree: bool,
+}
+
 /// Shared, mutable host state.
 pub(crate) struct Host {
     /// The document scripts operate on.
@@ -161,6 +241,20 @@ pub(crate) struct Host {
     pub scroll_y: f64,
     /// Last non-fatal exception thrown by an event listener (dispatch continues).
     pub last_event_error: Option<String>,
+    /// History API provider and current length.
+    pub history_provider: Option<HistoryProvider>,
+    pub history_length: u32,
+    /// Current history state serialized as JSON (rooted JS value also kept).
+    pub history_state: String,
+    /// `location` navigation provider.
+    pub location_provider: Option<LocationProvider>,
+    /// Web Storage maps (per realm) and optional persistence provider.
+    pub local_storage: HashMap<String, String>,
+    pub session_storage: HashMap<String, String>,
+    pub storage_provider: Option<StorageProvider>,
+    /// MutationObserver registrations and pending records.
+    pub observers: Vec<ObserverRegistration>,
+    pub mutations: Vec<MutationRecord>,
 }
 
 impl Host {
@@ -188,6 +282,15 @@ impl Host {
             scroll_x: 0.0,
             scroll_y: 0.0,
             last_event_error: None,
+            history_provider: None,
+            history_length: 1,
+            history_state: "null".to_string(),
+            location_provider: None,
+            local_storage: HashMap::new(),
+            session_storage: HashMap::new(),
+            storage_provider: None,
+            observers: Vec::new(),
+            mutations: Vec::new(),
         }
     }
 
@@ -204,6 +307,48 @@ impl Host {
         self.nodes.push(node_id);
         self.node_index.insert(raw, index);
         u32::try_from(index).map_err(|_| "node handle table overflow".to_string())
+    }
+
+    /// Adds a MutationObserver record (bounded, see MAX_PENDING_MUTATIONS).
+    pub fn record_mutation(&mut self, record: MutationRecord) {
+        if self.mutations.len() < 4096 {
+            self.mutations.push(record);
+        }
+    }
+
+    /// Resolves `url` against the current document URL (absolute, root-relative or hash).
+    pub fn resolve_url(&self, url: &str) -> String {
+        if url.contains("://") {
+            return url.to_string();
+        }
+        let base = self.url.clone();
+        if url.starts_with('#') {
+            let without_hash = base.split('#').next().unwrap_or(&base);
+            return format!("{without_hash}{url}");
+        }
+        if url.starts_with('/') {
+            if let Some(scheme) = base.find("://") {
+                let rest = &base[scheme + 3..];
+                let host = rest.split('/').next().unwrap_or(rest);
+                return format!("{}://{}{}", &base[..scheme], host, url);
+            }
+            return url.to_string();
+        }
+        let (base_without_fragment, _) = base.split_once('#').unwrap_or((&base, ""));
+        if url.starts_with('?') {
+            return format!(
+                "{}{}",
+                base_without_fragment
+                    .split('?')
+                    .next()
+                    .unwrap_or(base_without_fragment),
+                url
+            );
+        }
+        match base_without_fragment.rsplit_once('/') {
+            Some((prefix, _)) => format!("{prefix}/{url}"),
+            None => format!("{base_without_fragment}/{url}"),
+        }
     }
 
     /// Validates a JS handle and returns the live node id.

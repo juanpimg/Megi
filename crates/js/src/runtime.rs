@@ -34,15 +34,22 @@
 
 use boa_engine::{
     Context, JsError as BoaError, JsNativeError, JsObject, JsResult, JsValue, NativeFunction,
-    Source, js_string, object::FunctionObjectBuilder, object::ObjectInitializer,
-    property::Attribute,
+    Source, js_string,
+    object::FunctionObjectBuilder,
+    object::ObjectInitializer,
+    object::builtins::JsArray,
+    property::{Attribute, PropertyDescriptor},
 };
 use dom::{Attribute as DomAttribute, Document, Namespace, NodeId};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::error::JsError;
-use crate::host::{ConsoleEntry, Host, HostScope, with_host};
+use crate::host::{
+    ConsoleEntry, HistoryAction, Host, HostScope, LocationAction, MutationKind, MutationRecord,
+    ObserverRegistration, ObserverTarget, StorageKind, StorageProvider, with_host,
+};
 
 impl From<BoaError> for JsError {
     fn from(error: BoaError) -> Self {
@@ -248,6 +255,27 @@ impl JsRuntime {
         host.viewport_provider = Some(provider);
     }
 
+    /// Installs the History API provider (`pushState`/`replaceState`/`back`/`forward`/`go`).
+    /// Without a provider those methods are a documented no-op.
+    pub fn set_history_provider(&mut self, provider: crate::host::HistoryProvider) {
+        self.host.borrow_mut().history_provider = Some(provider);
+    }
+
+    /// Installs the `location.assign/replace/reload` provider.
+    pub fn set_location_provider(&mut self, provider: crate::host::LocationProvider) {
+        self.host.borrow_mut().location_provider = Some(provider);
+    }
+
+    /// Installs optional Web Storage persistence and loads the current snapshots.
+    pub fn set_storage_provider(&mut self, provider: StorageProvider) {
+        let local = (provider.load)(StorageKind::Local);
+        let session = (provider.load)(StorageKind::Session);
+        let mut host = self.host.borrow_mut();
+        host.local_storage = local.into_iter().collect();
+        host.session_storage = session.into_iter().collect();
+        host.storage_provider = Some(provider);
+    }
+
     /// Current `document.readyState` (`loading` until the host changes it).
     pub fn ready_state(&self) -> String {
         self.host.borrow().ready_state.clone()
@@ -339,7 +367,7 @@ impl JsRuntime {
 
     /// Runs pending promise/microtask jobs (Boa's job queue).
     pub fn run_microtasks(&mut self) -> Result<(), JsError> {
-        match self.context.run_jobs() {
+        let result = match self.context.run_jobs() {
             Ok(()) => Ok(()),
             Err(error) => {
                 let message = error.to_string();
@@ -350,7 +378,14 @@ impl JsRuntime {
                 self.last_error = Some(message);
                 Err(typed)
             }
+        };
+        if result.is_ok() {
+            let _scope = HostScope::enter(&self.host);
+            let delivered = deliver_mutation_records(&mut self.context);
+            drop(_scope);
+            delivered?;
         }
+        result
     }
 
     /// Advances the injectable virtual clock by `delta` and runs the timers now due.
@@ -478,7 +513,160 @@ fn install_globals(context: &mut Context, host: &Rc<RefCell<Host>>) -> Result<()
             .map_err(|error| JsError::Internal(error.to_string()))?;
     }
     crate::events::install(context)?;
+    install_browser_features(context)?;
     Ok(())
+}
+
+/// Installs History/location, Web Storage and MutationObserver (round 24).
+fn install_browser_features(context: &mut Context) -> Result<(), JsError> {
+    for name in [
+        "__megi_history_state",
+        "__megi_observer_callbacks",
+        "__megi_observer_objects",
+    ] {
+        let array = JsArray::new(context);
+        context
+            .global_object()
+            .set(js_string!(name), JsValue::from(array), false, context)
+            .map_err(|error| JsError::Internal(error.to_string()))?;
+    }
+    let history = build_history(context)?;
+    let location = build_location(context)?;
+    let local_storage = build_storage(context, StorageKind::Local)?;
+    let session_storage = build_storage(context, StorageKind::Session)?;
+    for (name, value) in [
+        ("history", JsValue::from(history)),
+        ("location", JsValue::from(location)),
+        ("localStorage", JsValue::from(local_storage)),
+        ("sessionStorage", JsValue::from(session_storage)),
+    ] {
+        context
+            .global_object()
+            .set(js_string!(name), value, false, context)
+            .map_err(|error| JsError::Internal(error.to_string()))?;
+    }
+    let constructor =
+        FunctionObjectBuilder::new(context.realm(), native(mutation_observer_constructor))
+            .name(js_string!("MutationObserver"))
+            .length(1)
+            .constructor(true)
+            .build();
+    context
+        .global_object()
+        .set(
+            js_string!("MutationObserver"),
+            JsValue::from(constructor),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
+    Ok(())
+}
+
+fn build_history(context: &mut Context) -> Result<JsObject, JsError> {
+    let mut init = ObjectInitializer::new(context);
+    init.function(native(history_push_state), js_string!("pushState"), 3);
+    init.function(native(history_replace_state), js_string!("replaceState"), 3);
+    init.function(native(history_back), js_string!("back"), 0);
+    init.function(native(history_forward), js_string!("forward"), 0);
+    init.function(native(history_go), js_string!("go"), 1);
+    let history = init.build();
+    define_accessor(context, &history, "length", history_length_get, None)?;
+    define_accessor(context, &history, "state", history_state_get, None)?;
+    Ok(history)
+}
+
+fn build_location(context: &mut Context) -> Result<JsObject, JsError> {
+    let mut init = ObjectInitializer::new(context);
+    init.function(native(location_assign), js_string!("assign"), 1);
+    init.function(native(location_replace), js_string!("replace"), 1);
+    init.function(native(location_reload), js_string!("reload"), 0);
+    let location = init.build();
+    for (name, getter, setter) in [
+        (
+            "href",
+            location_href_get as NativeFn,
+            Some(location_href_set as NativeFn),
+        ),
+        ("pathname", location_pathname_get as NativeFn, None),
+        ("search", location_search_get as NativeFn, None),
+        ("hash", location_hash_get as NativeFn, None),
+        ("origin", location_origin_get as NativeFn, None),
+        ("protocol", location_protocol_get as NativeFn, None),
+        ("host", location_host_get as NativeFn, None),
+    ] {
+        let get = accessor_fn(context, getter);
+        let descriptor = match setter {
+            Some(setter) => {
+                let set = accessor_fn(context, setter);
+                PropertyDescriptor::builder()
+                    .get(JsValue::from(get))
+                    .set(JsValue::from(set))
+                    .enumerable(true)
+                    .configurable(true)
+                    .build()
+            }
+            None => PropertyDescriptor::builder()
+                .get(JsValue::from(get))
+                .enumerable(true)
+                .configurable(true)
+                .build(),
+        };
+        location
+            .define_property_or_throw(js_string!(name), descriptor, context)
+            .map_err(|error| JsError::Internal(error.to_string()))?;
+    }
+    Ok(location)
+}
+
+fn define_accessor(
+    context: &mut Context,
+    object: &JsObject,
+    name: &str,
+    getter: NativeFn,
+    setter: Option<NativeFn>,
+) -> Result<(), JsError> {
+    let get = accessor_fn(context, getter);
+    let descriptor = match setter {
+        Some(setter) => {
+            let set = accessor_fn(context, setter);
+            PropertyDescriptor::builder()
+                .get(JsValue::from(get))
+                .set(JsValue::from(set))
+                .enumerable(true)
+                .configurable(true)
+                .build()
+        }
+        None => PropertyDescriptor::builder()
+            .get(JsValue::from(get))
+            .enumerable(true)
+            .configurable(true)
+            .build(),
+    };
+    object
+        .define_property_or_throw(js_string!(name), descriptor, context)
+        .map_err(|error| JsError::Internal(error.to_string()))?;
+    Ok(())
+}
+
+fn build_storage(context: &mut Context, kind: StorageKind) -> Result<JsObject, JsError> {
+    let mut init = ObjectInitializer::new(context);
+    init.function(native(storage_get_item), js_string!("getItem"), 1);
+    init.function(native(storage_set_item), js_string!("setItem"), 2);
+    init.function(native(storage_remove_item), js_string!("removeItem"), 1);
+    init.function(native(storage_clear), js_string!("clear"), 0);
+    init.function(native(storage_key), js_string!("key"), 1);
+    let storage = init.build();
+    storage
+        .set(
+            js_string!("__megi_storage_kind"),
+            JsValue::from(kind == StorageKind::Session),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
+    define_accessor(context, &storage, "length", storage_length_get, None)?;
+    Ok(storage)
 }
 
 fn build_console(context: &mut Context) -> JsObject {
@@ -951,7 +1139,10 @@ fn node_text_content_set(
     let text = arg_string(args, 0, context)?;
     let result = with_host(|host| host.document.set_text_content(node_id, &text));
     match result {
-        Some(Ok(())) => Ok(JsValue::undefined()),
+        Some(Ok(())) => {
+            note_mutation(MutationKind::CharacterData, node_id, None, None);
+            Ok(JsValue::undefined())
+        }
         Some(Err(error)) => Err(js_error(error.to_string())),
         None => Err(js_error("no active JavaScript host")),
     }
@@ -1097,17 +1288,27 @@ fn node_set_attribute(
     let node_id = this_node(this, context)?;
     let name = arg_string(args, 0, context)?;
     let value = arg_string(args, 1, context)?;
+    let old_value = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute(&name).map(str::to_owned))
+    })
+    .flatten();
     let result = with_host(|host| {
         let element = host
             .document
             .try_node_mut(node_id)
             .and_then(|node| node.as_element_mut())
             .ok_or_else(|| "node is not an element".to_string())?;
-        element.set_attribute(DomAttribute::new(name, value), true);
+        element.set_attribute(DomAttribute::new(name.clone(), value), true);
         Ok::<(), String>(())
     });
     match result {
-        Some(Ok(())) => Ok(JsValue::undefined()),
+        Some(Ok(())) => {
+            note_mutation(MutationKind::Attributes, node_id, Some(name), old_value);
+            Ok(JsValue::undefined())
+        }
         Some(Err(message)) => Err(js_error(message)),
         None => Err(js_error("no active JavaScript host")),
     }
@@ -1143,6 +1344,13 @@ fn node_remove_attribute(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let name = arg_string(args, 0, context)?;
+    let old_value = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute(&name).map(str::to_owned))
+    })
+    .flatten();
     with_host(|host| {
         if let Some(element) = host
             .document
@@ -1154,6 +1362,7 @@ fn node_remove_attribute(
                 .retain(|attribute| attribute.local_name != name);
         }
     });
+    note_mutation(MutationKind::Attributes, node_id, Some(name), old_value);
     Ok(JsValue::undefined())
 }
 
@@ -1203,6 +1412,7 @@ fn node_append_child(this: &JsValue, args: &[JsValue], context: &mut Context) ->
     if !appended {
         return Err(js_error("appendChild failed (hierarchy or unknown node)"));
     }
+    note_mutation(MutationKind::ChildList, parent, None, None);
     wrap_node(context, child)
 }
 
@@ -1223,6 +1433,7 @@ fn node_insert_before(
     if !inserted {
         return Err(js_error("insertBefore failed (hierarchy or unknown node)"));
     }
+    note_mutation(MutationKind::ChildList, parent, None, None);
     wrap_node(context, new_node)
 }
 
@@ -1234,6 +1445,7 @@ fn node_remove_child(this: &JsValue, args: &[JsValue], context: &mut Context) ->
     if !removed {
         return Err(js_error("removeChild failed (node is not a child)"));
     }
+    note_mutation(MutationKind::ChildList, parent, None, None);
     wrap_node(context, child)
 }
 
@@ -1262,6 +1474,7 @@ fn node_replace_child(
     if !replaced {
         return Err(js_error("replaceChild failed"));
     }
+    note_mutation(MutationKind::ChildList, parent, None, None);
     wrap_node(context, old_node)
 }
 
@@ -1984,3 +2197,716 @@ fn class_length(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsR
 
 // ---------------------------------------------------------------------------
 // Timers
+
+// ---------------------------------------------------------------------------
+// History, location, Web Storage and MutationObserver (round 24)
+// ---------------------------------------------------------------------------
+
+fn root_array(context: &mut Context, name: &str, create: bool) -> JsResult<JsObject> {
+    let global = context.global_object();
+    let value = global
+        .get(js_string!(name), context)
+        .map_err(|error| js_error(error.to_string()))?;
+    if let Some(array) = value.as_object() {
+        return Ok(array.clone());
+    }
+    let array = JsArray::new(context);
+    global
+        .set(
+            js_string!(name),
+            JsValue::from(array.clone()),
+            false,
+            context,
+        )
+        .map_err(|error| js_error(error.to_string()))?;
+    let _ = create;
+    Ok(JsObject::from(array))
+}
+
+fn root_push(context: &mut Context, name: &str, value: JsValue) -> JsResult<u32> {
+    let array = root_array(context, name, true)?;
+    let length = array
+        .get(js_string!("length"), context)
+        .map_err(|error| js_error(error.to_string()))?
+        .as_number()
+        .unwrap_or(0.0) as u32;
+    array
+        .set(js_string!(length.to_string()), value, false, context)
+        .map_err(|error| js_error(error.to_string()))?;
+    Ok(length)
+}
+
+fn root_get(context: &mut Context, name: &str, index: u64) -> JsResult<JsValue> {
+    let array = root_array(context, name, false)?;
+    array
+        .get(js_string!(index.to_string()), context)
+        .map_err(|error| js_error(error.to_string()))
+}
+
+fn root_set(context: &mut Context, name: &str, index: u64, value: JsValue) -> JsResult<()> {
+    let array = root_array(context, name, true)?;
+    array
+        .set(js_string!(index.to_string()), value, false, context)
+        .map(|_| ())
+        .map_err(|error| js_error(error.to_string()))
+}
+
+/// Serializes a JS value to JSON for the history provider (falls back to stringification).
+fn json_state(value: &JsValue, context: &mut Context) -> String {
+    let json = context
+        .global_object()
+        .get(js_string!("JSON"), context)
+        .ok()
+        .and_then(|value| value.as_object());
+    if let Some(json) = json
+        && let Ok(stringify) = json.get(js_string!("stringify"), context)
+        && let Some(function) = stringify.as_object()
+        && let Ok(result) =
+            function.call(&JsValue::undefined(), std::slice::from_ref(value), context)
+        && let Ok(text) = result.to_string(context)
+    {
+        return text.to_std_string_escaped();
+    }
+    value
+        .to_string(context)
+        .map(|text| text.to_std_string_escaped())
+        .unwrap_or_else(|_| "null".to_string())
+}
+
+fn history_push_state(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let state = args.first().cloned().unwrap_or_else(JsValue::undefined);
+    let json = json_state(&state, context);
+    let url = args.get(2).and_then(|value| {
+        value
+            .to_string(context)
+            .ok()
+            .map(|text| text.to_std_string_escaped())
+            .filter(|text| !text.is_empty())
+    });
+    let resolved = with_host(|host| url.as_deref().map(|url| host.resolve_url(url)));
+    let Some(resolved) = resolved else {
+        return Err(js_error("no active JavaScript host"));
+    };
+    let applied = with_host(|host| {
+        if let Some(provider) = &host.history_provider {
+            provider(HistoryAction::Push {
+                state: json.clone(),
+                url: resolved.clone(),
+            });
+            true
+        } else {
+            false
+        }
+    })
+    .unwrap_or(false);
+    if applied {
+        root_set(context, "__megi_history_state", 0, state)?;
+        with_host(|host| {
+            host.history_length = host.history_length.saturating_add(1);
+            host.history_state = json.clone();
+            if let Some(url) = &resolved {
+                host.url = url.clone();
+            }
+        });
+    }
+    Ok(JsValue::undefined())
+}
+
+fn history_replace_state(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let state = args.first().cloned().unwrap_or_else(JsValue::undefined);
+    let json = json_state(&state, context);
+    let url = args.get(2).and_then(|value| {
+        value
+            .to_string(context)
+            .ok()
+            .map(|text| text.to_std_string_escaped())
+            .filter(|text| !text.is_empty())
+    });
+    let resolved = with_host(|host| url.as_deref().map(|url| host.resolve_url(url)));
+    let Some(resolved) = resolved else {
+        return Err(js_error("no active JavaScript host"));
+    };
+    let applied = with_host(|host| {
+        if let Some(provider) = &host.history_provider {
+            provider(HistoryAction::Replace {
+                state: json.clone(),
+                url: resolved.clone(),
+            });
+            true
+        } else {
+            false
+        }
+    })
+    .unwrap_or(false);
+    if applied {
+        root_set(context, "__megi_history_state", 0, state)?;
+        with_host(|host| {
+            host.history_state = json.clone();
+            if let Some(url) = &resolved {
+                host.url = url.clone();
+            }
+        });
+    }
+    Ok(JsValue::undefined())
+}
+
+fn history_back(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+    with_host(|host| {
+        if let Some(provider) = &host.history_provider {
+            provider(HistoryAction::Back);
+        }
+    });
+    Ok(JsValue::undefined())
+}
+
+fn history_forward(
+    _this: &JsValue,
+    _args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<JsValue> {
+    with_host(|host| {
+        if let Some(provider) = &host.history_provider {
+            provider(HistoryAction::Forward);
+        }
+    });
+    Ok(JsValue::undefined())
+}
+
+fn history_go(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let delta = args
+        .first()
+        .and_then(|value| value.to_number(context).ok())
+        .map(|number| number as i64)
+        .unwrap_or(0);
+    with_host(|host| {
+        if let Some(provider) = &host.history_provider {
+            provider(HistoryAction::Go(delta));
+        }
+    });
+    Ok(JsValue::undefined())
+}
+
+fn history_length_get(
+    _this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let _ = context;
+    Ok(JsValue::from(
+        with_host(|host| host.history_length).unwrap_or(1),
+    ))
+}
+
+fn history_state_get(
+    _this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let value = root_get(context, "__megi_history_state", 0)?;
+    if value.is_undefined() {
+        Ok(JsValue::null())
+    } else {
+        Ok(value)
+    }
+}
+
+fn url_parts(url: &str) -> (String, String, String, String, String) {
+    let (scheme, rest) = url.split_once("://").unwrap_or(("", url));
+    let protocol = if scheme.is_empty() {
+        String::new()
+    } else {
+        format!("{scheme}:")
+    };
+    let (authority, tail) = rest.split_once('/').unwrap_or((rest, ""));
+    let origin = if scheme.is_empty() {
+        String::new()
+    } else {
+        format!("{scheme}://{authority}")
+    };
+    let (path_query, hash) = tail.split_once('#').unwrap_or((tail, ""));
+    let pathname = if scheme.is_empty() && rest.starts_with('/') {
+        rest.split(['?', '#']).next().unwrap_or("").to_string()
+    } else {
+        format!("/{}", path_query.split('?').next().unwrap_or(""))
+    };
+    let search = path_query
+        .split_once('?')
+        .map(|(_, query)| format!("?{query}"))
+        .unwrap_or_default();
+    let hash = if hash.is_empty() {
+        String::new()
+    } else {
+        format!("#{hash}")
+    };
+    (
+        protocol,
+        origin,
+        authority.to_string(),
+        pathname,
+        format!("{search}\u{1f}{hash}"),
+    )
+}
+
+fn current_location(
+    context: &mut Context,
+) -> JsResult<(String, String, String, String, String, String)> {
+    let _ = context;
+    let url =
+        with_host(|host| host.url.clone()).ok_or_else(|| js_error("no active JavaScript host"))?;
+    let (protocol, origin, host, pathname, rest) = url_parts(&url);
+    let (search, hash) = rest.split_once('\u{1f}').unwrap_or(("", ""));
+    Ok((
+        protocol,
+        origin,
+        host,
+        pathname,
+        search.to_string(),
+        hash.to_string(),
+    ))
+}
+
+fn location_protocol_get(_t: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(js_string!(current_location(c)?.0)))
+}
+fn location_origin_get(_t: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(js_string!(current_location(c)?.1)))
+}
+fn location_host_get(_t: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(js_string!(current_location(c)?.2)))
+}
+fn location_pathname_get(_t: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(js_string!(current_location(c)?.3)))
+}
+fn location_search_get(_t: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(js_string!(current_location(c)?.4)))
+}
+fn location_hash_get(_t: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(js_string!(current_location(c)?.5)))
+}
+fn location_href_get(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
+    let url =
+        with_host(|host| host.url.clone()).ok_or_else(|| js_error("no active JavaScript host"))?;
+    Ok(JsValue::from(js_string!(url)))
+}
+
+fn navigate_location(args: &[JsValue], context: &mut Context, replace: bool) -> JsResult<JsValue> {
+    let url = arg_string(args, 0, context)?;
+    let resolved = with_host(|host| host.resolve_url(&url));
+    let Some(resolved) = resolved else {
+        return Err(js_error("no active JavaScript host"));
+    };
+    with_host(|host| {
+        if let Some(provider) = &host.location_provider {
+            provider(if replace {
+                LocationAction::Replace(resolved.clone())
+            } else {
+                LocationAction::Assign(resolved.clone())
+            });
+        }
+        host.url = resolved.clone();
+    });
+    Ok(JsValue::undefined())
+}
+
+fn location_assign(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    navigate_location(args, context, false)
+}
+fn location_replace(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    navigate_location(args, context, true)
+}
+fn location_reload(_t: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+    with_host(|host| {
+        if let Some(provider) = &host.location_provider {
+            provider(LocationAction::Reload);
+        }
+    });
+    Ok(JsValue::undefined())
+}
+fn location_href_set(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    navigate_location(args, context, false)
+}
+
+fn storage_kind(this: &JsValue, context: &mut Context) -> JsResult<StorageKind> {
+    let object = this
+        .as_object()
+        .ok_or_else(|| js_error("storage receiver"))?;
+    let value = object
+        .get(js_string!("__megi_storage_kind"), context)
+        .map_err(|error| js_error(error.to_string()))?;
+    Ok(if value.to_boolean() {
+        StorageKind::Session
+    } else {
+        StorageKind::Local
+    })
+}
+
+fn storage_read<F: Fn(&Host) -> &HashMap<String, String>>(
+    this: &JsValue,
+    context: &mut Context,
+    f: F,
+) -> JsResult<HashMap<String, String>> {
+    let kind = storage_kind(this, context)?;
+    let map = with_host(|host| match kind {
+        StorageKind::Local => host.local_storage.clone(),
+        StorageKind::Session => host.session_storage.clone(),
+    })
+    .unwrap_or_default();
+    let _ = f;
+    Ok(map)
+}
+
+fn persist_storage(kind: StorageKind) {
+    with_host(|host| {
+        let snapshot: Vec<(String, String)> = match kind {
+            StorageKind::Local => host
+                .local_storage
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            StorageKind::Session => host
+                .session_storage
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+        };
+        if let Some(provider) = &host.storage_provider {
+            (provider.save)(kind, &snapshot);
+        }
+    });
+}
+
+fn storage_get_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let key = arg_string(args, 0, context)?;
+    let map = storage_read(this, context, |_| unreachable!())?;
+    Ok(map.get(&key).map_or_else(JsValue::null, |value| {
+        JsValue::from(js_string!(value.clone()))
+    }))
+}
+
+fn storage_set_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let key = arg_string(args, 0, context)?;
+    let value = arg_string(args, 1, context)?;
+    let kind = storage_kind(this, context)?;
+    let current = storage_read(this, context, |_| unreachable!())?;
+    let mut total: usize = current.iter().map(|(k, v)| k.len() + v.len()).sum();
+    if let Some(previous) = current.get(&key) {
+        total = total.saturating_sub(key.len() + previous.len());
+    }
+    total = total.saturating_add(key.len() + value.len());
+    if total > 1024 * 1024 {
+        return Err(js_error(
+            "QuotaExceededError: Web Storage limit of 1 MiB per realm exceeded",
+        ));
+    }
+    with_host(|host| match kind {
+        StorageKind::Local => host.local_storage.insert(key, value),
+        StorageKind::Session => host.session_storage.insert(key, value),
+    });
+    persist_storage(kind);
+    Ok(JsValue::undefined())
+}
+
+fn storage_remove_item(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let key = arg_string(args, 0, context)?;
+    let kind = storage_kind(this, context)?;
+    with_host(|host| match kind {
+        StorageKind::Local => host.local_storage.remove(&key),
+        StorageKind::Session => host.session_storage.remove(&key),
+    });
+    persist_storage(kind);
+    Ok(JsValue::undefined())
+}
+
+fn storage_clear(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let kind = storage_kind(this, context)?;
+    with_host(|host| match kind {
+        StorageKind::Local => host.local_storage.clear(),
+        StorageKind::Session => host.session_storage.clear(),
+    });
+    persist_storage(kind);
+    Ok(JsValue::undefined())
+}
+
+fn storage_key(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let index = args
+        .first()
+        .and_then(|value| value.to_number(context).ok())
+        .map(|number| number as usize)
+        .unwrap_or(0);
+    let map = storage_read(this, context, |_| unreachable!())?;
+    Ok(map
+        .keys()
+        .nth(index)
+        .map_or_else(JsValue::null, |key| JsValue::from(js_string!(key.clone()))))
+}
+
+fn storage_length_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let map = storage_read(this, context, |_| unreachable!())?;
+    Ok(JsValue::from(map.len() as f64))
+}
+
+// --- MutationObserver -----------------------------------------------------
+
+fn observer_slot(this: &JsValue, context: &mut Context) -> JsResult<u32> {
+    let object = this
+        .as_object()
+        .ok_or_else(|| js_error("observer receiver"))?;
+    object
+        .get(js_string!("__megi_observer"), context)
+        .map_err(|error| js_error(error.to_string()))?
+        .as_number()
+        .filter(|number| *number >= 0.0)
+        .map(|number| number as u32)
+        .ok_or_else(|| js_error("invalid MutationObserver"))
+}
+
+fn mutation_observer_constructor(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let Some(callback) = args.first().filter(|value| value.is_callable()) else {
+        return Err(js_error("MutationObserver callback must be a function"));
+    };
+    let callback_slot = root_push(context, "__megi_observer_callbacks", callback.clone())?;
+    let object_slot = {
+        let array = root_array(context, "__megi_observer_objects", true)?;
+        array
+            .get(js_string!("length"), context)
+            .map_err(|error| js_error(error.to_string()))?
+            .as_number()
+            .unwrap_or(0.0) as u32
+    };
+    let mut init = ObjectInitializer::new(context);
+    init.function(native(observer_observe), js_string!("observe"), 2);
+    init.function(native(observer_disconnect), js_string!("disconnect"), 0);
+    init.function(native(observer_take_records), js_string!("takeRecords"), 0);
+    let observer = init.build();
+    observer
+        .set(
+            js_string!("__megi_observer"),
+            JsValue::from(object_slot),
+            false,
+            context,
+        )
+        .map_err(|error| js_error(error.to_string()))?;
+    root_set(
+        context,
+        "__megi_observer_objects",
+        u64::from(object_slot),
+        JsValue::from(observer.clone()),
+    )?;
+    with_host(|host| {
+        host.observers.push(ObserverRegistration {
+            callback_slot,
+            object_slot,
+            targets: Vec::new(),
+        });
+    });
+    Ok(JsValue::from(observer))
+}
+
+fn observer_observe(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let slot = observer_slot(this, context)?;
+    let node = argument_node(args, 0, context)?;
+    let options = args
+        .get(1)
+        .and_then(|value| value.as_object())
+        .ok_or_else(|| js_error("MutationObserver.observe options are required"))?;
+    let mut flag = |name: &str| -> bool {
+        options
+            .get(js_string!(name), context)
+            .ok()
+            .is_some_and(|value| value.to_boolean())
+    };
+    let target = ObserverTarget {
+        node,
+        child_list: flag("childList"),
+        attributes: flag("attributes"),
+        character_data: flag("characterData"),
+        subtree: flag("subtree"),
+    };
+    with_host(|host| {
+        if let Some(registration) = host.observers.iter_mut().find(|r| r.object_slot == slot) {
+            registration.targets.push(target);
+        }
+    });
+    Ok(JsValue::undefined())
+}
+
+fn observer_disconnect(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let slot = observer_slot(this, context)?;
+    with_host(|host| host.observers.retain(|r| r.object_slot != slot));
+    Ok(JsValue::undefined())
+}
+
+fn observer_take_records(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let slot = observer_slot(this, context)?;
+    let records = collect_observer_records(context, slot, true)?;
+    Ok(JsValue::from(records))
+}
+
+fn note_mutation(
+    kind: MutationKind,
+    target: NodeId,
+    name: Option<String>,
+    old_value: Option<String>,
+) {
+    with_host(|host| {
+        if !host.observers.is_empty() {
+            host.record_mutation(MutationRecord {
+                kind,
+                target,
+                name,
+                old_value,
+            });
+        }
+    });
+}
+
+fn record_matches(host: &Host, observer: &ObserverRegistration, record: &MutationRecord) -> bool {
+    observer.targets.iter().any(|target| {
+        let kind_enabled = match record.kind {
+            MutationKind::ChildList => target.child_list,
+            MutationKind::Attributes => target.attributes,
+            MutationKind::CharacterData => target.character_data,
+        };
+        if !kind_enabled {
+            return false;
+        }
+        if target.node == record.target {
+            return true;
+        }
+        if !target.subtree {
+            return false;
+        }
+        let mut current = host.document.node(record.target).parent;
+        while let Some(node) = current {
+            if node == target.node {
+                return true;
+            }
+            current = host.document.node(node).parent;
+        }
+        false
+    })
+}
+
+fn collect_observer_records(context: &mut Context, slot: u32, take: bool) -> JsResult<JsArray> {
+    let (registration, records) = with_host(|host| {
+        let registration = host
+            .observers
+            .iter()
+            .find(|r| r.object_slot == slot)
+            .cloned();
+        let records = match &registration {
+            Some(registration) => host
+                .mutations
+                .iter()
+                .filter(|record| record_matches(host, registration, record))
+                .cloned()
+                .collect::<Vec<_>>(),
+            None => Vec::new(),
+        };
+        if take {
+            host.mutations.retain(|record| {
+                !records.iter().any(|taken| {
+                    taken.kind == record.kind
+                        && taken.target == record.target
+                        && taken.name == record.name
+                        && taken.old_value == record.old_value
+                })
+            });
+        }
+        (registration, records)
+    })
+    .unwrap_or((None, Vec::new()));
+    let _ = registration;
+    let array = JsArray::new(context);
+    for (index, record) in records.iter().enumerate() {
+        let kind = match record.kind {
+            MutationKind::ChildList => "childList",
+            MutationKind::Attributes => "attributes",
+            MutationKind::CharacterData => "characterData",
+        };
+        let target = wrap_node(context, record.target)?;
+        let mut init = ObjectInitializer::new(context);
+        init.property(
+            js_string!("type"),
+            JsValue::from(js_string!(kind)),
+            Attribute::READONLY,
+        );
+        init.property(js_string!("target"), target, Attribute::READONLY);
+        if let Some(name) = &record.name {
+            init.property(
+                js_string!("attributeName"),
+                JsValue::from(js_string!(name.clone())),
+                Attribute::READONLY,
+            );
+        }
+        let record = init.build();
+        array
+            .set(
+                js_string!(index.to_string()),
+                JsValue::from(record),
+                false,
+                context,
+            )
+            .map_err(|error| js_error(error.to_string()))?;
+    }
+    Ok(array)
+}
+
+fn deliver_mutation_records(context: &mut Context) -> Result<(), JsError> {
+    let registrations = with_host(|host| host.observers.clone()).unwrap_or_default();
+    for registration in registrations {
+        let records = collect_observer_records(context, registration.object_slot, true)
+            .map_err(|error| JsError::Runtime(error.to_string()))?;
+        if records.length(context).unwrap_or(0) == 0 {
+            continue;
+        }
+        let callback = root_get(
+            context,
+            "__megi_observer_callbacks",
+            u64::from(registration.callback_slot),
+        )
+        .map_err(|error| JsError::Runtime(error.to_string()))?;
+        let object = root_get(
+            context,
+            "__megi_observer_objects",
+            u64::from(registration.object_slot),
+        )
+        .map_err(|error| JsError::Runtime(error.to_string()))?;
+        let Some(callback) = callback.as_object() else {
+            continue;
+        };
+        let args = [JsValue::from(records), object];
+        if let Err(error) = callback.call(&JsValue::undefined(), &args, context) {
+            return Err(JsError::Runtime(error.to_string()));
+        }
+    }
+    Ok(())
+}

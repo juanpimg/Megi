@@ -127,6 +127,22 @@
 
 #![forbid(unsafe_code)]
 
+//! ## Round 24 browser APIs
+//!
+//! - `history.pushState/replaceState/back/forward/go` call an injectable
+//!   `HistoryProvider`; without one they are a documented no-op. `history.length`/
+//!   `state` reflect the latest push/replace.
+//! - `location.href/pathname/search/hash/origin/protocol/host` derive from the
+//!   document URL; `assign`/`replace`/`reload` call a `LocationProvider` and the host
+//!   can dispatch `hashchange`/`popstate` via `dispatch_event`.
+//! - `localStorage`/`sessionStorage`: per-realm maps, full Storage API, 1 MiB cap per
+//!   realm (`QuotaExceededError`), optional `StorageProvider` persistence.
+//! - `MutationObserver`: childList/attributes/characterData + subtree, disconnect,
+//!   takeRecords; records are delivered when `run_microtasks` drains microtasks (in
+//!   `render`, call it before the final re-render). `requestIdleCallback` is not
+//!   implemented.
+//!
+//!
 pub mod error;
 #[cfg(feature = "js")]
 pub mod events;
