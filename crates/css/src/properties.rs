@@ -2529,30 +2529,40 @@ impl ComputedStyle {
         root_font_size: f32,
         current_color: Color,
     ) -> (Vec<FilterFunction>, MixBlendMode, Vec<FilterFunction>) {
-        let parse_list = |name: &str| {
-            find_declaration(entries, name)
+        // One linear scan over the cascaded declarations instead of five
+        // `find_declaration` lookups per element (R173).
+        let mut filter_decl = None;
+        let mut webkit_filter_decl = None;
+        let mut backdrop_decl = None;
+        let mut webkit_backdrop_decl = None;
+        let mut mix_decl = None;
+        for (name, declaration) in entries {
+            match *name {
+                "filter" => filter_decl = Some(*declaration),
+                "-webkit-filter" => webkit_filter_decl = Some(*declaration),
+                "backdrop-filter" => backdrop_decl = Some(*declaration),
+                "-webkit-backdrop-filter" => webkit_backdrop_decl = Some(*declaration),
+                "mix-blend-mode" => mix_decl = Some(*declaration),
+                _ => {}
+            }
+        }
+        let parse_list = |declaration: Option<&Declaration>| {
+            declaration
                 .map(|decl| {
                     parse_filter_list(&decl.raw_value, font_size, root_font_size, current_color)
                 })
                 .unwrap_or_default()
         };
-        let filter = {
-            let unprefixed = find_declaration(entries, "filter");
-            let prefixed = find_declaration(entries, "-webkit-filter");
-            match unprefixed.or(prefixed) {
-                Some(decl) => {
-                    parse_filter_list(&decl.raw_value, font_size, root_font_size, current_color)
-                }
-                None => Vec::new(),
+        let filter = parse_list(filter_decl.or(webkit_filter_decl));
+        let backdrop_filter = {
+            let parsed = parse_list(backdrop_decl);
+            if parsed.is_empty() {
+                parse_list(webkit_backdrop_decl)
+            } else {
+                parsed
             }
         };
-        let backdrop_filter = parse_list("backdrop-filter");
-        let backdrop_filter = if backdrop_filter.is_empty() {
-            parse_list("-webkit-backdrop-filter")
-        } else {
-            backdrop_filter
-        };
-        let mix_blend_mode = find_declaration(entries, "mix-blend-mode")
+        let mix_blend_mode = mix_decl
             .and_then(|decl| MixBlendMode::parse(&decl.raw_value))
             .unwrap_or_default();
         (filter, mix_blend_mode, backdrop_filter)

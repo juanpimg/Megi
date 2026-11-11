@@ -58,6 +58,7 @@ pub fn register(suite: &mut Suite, opts: &Options) {
     register_feature_e2e(suite, opts.scale);
     register_layer_effects(suite);
     register_fixture_effect_rows(suite);
+    register_effect_fixture_pipelines(suite);
     register_image(suite);
     #[cfg(feature = "fonts")]
     register_fonts(suite, opts.scale);
@@ -875,6 +876,86 @@ fn register_fixture_effect_rows(suite: &mut Suite) {
         "paint",
         "same fixture without backdrop-filter declarations → display list + pixmap".to_string(),
         paint_tail(backdrop_stripped, backdrop_viewport),
+    ));
+}
+
+/// End-to-end pipeline rows for the layer-effect fixtures (R173): parse →
+/// styles → layout → display list → raster → PNG, with the committed pattern
+/// asset available so the backdrop fixture mirrors the render output. The
+/// `*-no-effect` rows strip the CSS declarations to expose the feature cost.
+fn register_effect_fixture_pipelines(suite: &mut Suite) {
+    static PATTERN_PNG: &[u8] = include_bytes!("../../../tests/fixtures/render/assets/pattern.png");
+
+    fn pipeline_row(html_source: &'static str, width: u32, height: u32) -> impl Fn() {
+        let document = html::parse_document(html_source, false);
+        let styles = paint::resolve_embedded_styles(&document);
+        let viewport = Rect::new(0.0, 0.0, width as f32, height as f32);
+        let root = layout::layout_document(&document, &styles, viewport);
+        let mut backgrounds = paint::BackgroundImages::new();
+        if let Ok(pattern) = image::decode(PATTERN_PNG) {
+            backgrounds.insert("assets/pattern.png".to_string(), Arc::new(pattern));
+        }
+        let images = paint::ImageStore::new();
+        move || {
+            if let Some(root) = &root {
+                let display_list = paint::build_display_list_with_images_and_backgrounds(
+                    root,
+                    viewport,
+                    &images,
+                    &backgrounds,
+                );
+                let pixmap = paint::rasterize_display_list(&display_list, width, height);
+                black_box(pixmap.to_png());
+            }
+        }
+    }
+
+    fn without_property(fixture: &'static str, properties: &[&str]) -> &'static str {
+        let mut text = fixture.to_string();
+        for property in properties {
+            let needle = format!("{property}:");
+            text = text
+                .lines()
+                .filter(|line| !line.trim_start().starts_with(&needle))
+                .collect::<Vec<_>>()
+                .join("\n");
+        }
+        Box::leak(text.into_boxed_str())
+    }
+
+    let filter_fixture: &'static str =
+        include_str!("../../../tests/fixtures/render/filter_effects.html");
+    let filter_bare = without_property(filter_fixture, &["filter", "-webkit-filter"]);
+    suite.add(BenchEntry::new(
+        "pipeline/filter-fixture-300x260",
+        "pipeline",
+        "filter_effects.html → parse/styles/layout/display-list/raster/PNG".to_string(),
+        pipeline_row(filter_fixture, 300, 260),
+    ));
+    suite.add(BenchEntry::new(
+        "pipeline/filter-fixture-300x260-no-effect",
+        "pipeline",
+        "same fixture without filter declarations".to_string(),
+        pipeline_row(filter_bare, 300, 260),
+    ));
+
+    let backdrop_fixture: &'static str =
+        include_str!("../../../tests/fixtures/render/backdrop_filter.html");
+    let backdrop_bare = without_property(
+        backdrop_fixture,
+        &["backdrop-filter", "-webkit-backdrop-filter"],
+    );
+    suite.add(BenchEntry::new(
+        "pipeline/backdrop-fixture-300x260",
+        "pipeline",
+        "backdrop_filter.html (pattern asset) → full pipeline + PNG".to_string(),
+        pipeline_row(backdrop_fixture, 300, 260),
+    ));
+    suite.add(BenchEntry::new(
+        "pipeline/backdrop-fixture-300x260-no-effect",
+        "pipeline",
+        "same fixture without backdrop-filter declarations".to_string(),
+        pipeline_row(backdrop_bare, 300, 260),
     ));
 }
 
