@@ -1,5 +1,7 @@
 //! Round 33: AbortController/AbortSignal, extended fetch methods and Response.body stream.
 
+#![cfg(feature = "js")]
+
 use js::host::{FetchProvider, FetchRequest, FetchResult};
 use js::runtime::JsRuntime;
 use std::sync::{Arc, Mutex};

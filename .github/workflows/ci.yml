@@ -76,3 +76,24 @@ jobs:
             libxcb-shm0-dev libxcb-randr0-dev
       - name: Check workspace against declared MSRV
         run: cargo check --workspace --all-targets
+
+  minimal:
+    name: JS-free build (--no-default-features)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # `js` and `render` are the only crates with a `js` feature, and a workspace-wide
+      # `--no-default-features` still links Boa through `shell`/`test_harness`, so the
+      # documented JS-free build is checked per crate (no system libraries needed here).
+      - name: Clippy the renderer without the JavaScript engine
+        run: cargo clippy -p render --no-default-features --all-targets -- -D warnings
+      - name: Clippy the engine stub
+        run: cargo clippy -p js --no-default-features --all-targets -- -D warnings
+      - name: Test the engine stub
+        run: cargo test -p js --no-default-features
+      - name: Test the renderer without scripts
+        run: cargo test -p render --no-default-features

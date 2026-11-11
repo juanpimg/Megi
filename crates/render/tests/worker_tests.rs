@@ -1,5 +1,7 @@
 //! Round 30: deterministic Web Workers in the render event loop.
 
+#![cfg(feature = "js")]
+
 use render::{RenderOptions, Viewport, render_url};
 use std::path::{Path, PathBuf};
 

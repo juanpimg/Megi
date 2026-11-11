@@ -5,6 +5,8 @@
 //! No display, no sleeps and no network: every case renders a local `file://` fixture whose
 //! scripts only mutate the DOM.
 
+#![cfg(feature = "js")]
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
