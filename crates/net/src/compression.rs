@@ -27,8 +27,9 @@
 //! unknown/unsupported `Content-Encoding` maps to [`FetchError::ContentEncoding`].
 //!
 //! Deliberate limits: only single `gzip`/`deflate` codings (no `br`/`zstd`, no stacked
-//! encodings), and no streaming decompression (bodies are buffered, like the rest of the
-//! HTTP client).
+//! encodings), `fetch` decodes complete bodies; [`crate::http::fetch_streaming`] decodes gzip/
+//! deflate incrementally with [`image::StreamingInflater`], delivering decompressed
+//! chunks as they arrive (CRC/ISIZE/Adler verified at the trailer).
 
 use std::fmt;
 

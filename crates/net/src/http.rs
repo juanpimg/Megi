@@ -48,8 +48,9 @@
 //! - [`fetch_streaming`] parses status/headers first (redirects are resolved without
 //!   invoking the callback) and delivers identity `Content-Length`/chunked bodies as
 //!   socket chunks arrive (R212); gzip/deflate bodies are buffered and decoded with the
-//!   complete-stream inflater before being handed to the callback in 16 KiB slices
-//!   (documented limitation: no incremental brotli/deflate decoder).
+//!   incremental [`image::StreamingInflater`] (R218), so decompressed chunks reach the
+//!   callback as the compressed bytes arrive; CRC-32/ISIZE/Adler are validated at the
+//!   trailer. brotli remains unsupported.
 //! - Compression covers single `gzip`/`deflate` codings; the response body is buffered
 //!   and decoded in memory (with the anti-bomb caps). The decoded body keeps the
 //!   `Content-Encoding` header on [`Response::headers`] (matching the Fetch standard's
@@ -1656,9 +1657,10 @@ fn header_value<'a>(headers: &'a Headers, name: &str) -> Option<&'a str> {
 /// Streams a decoded response body to `on_data` (R212).
 ///
 /// Identity bodies (`Content-Length`, chunked or read-to-EOF) are delivered as socket
-/// chunks arrive; gzip/deflate responses are buffered and decoded first (complete-stream
-/// inflater) and then delivered in 16 KiB slices. The returned body is always empty (the
-/// caller already consumed it); trailers are still returned for chunked bodies.
+/// chunks arrive; gzip/deflate responses are decoded incrementally with
+/// [`image::StreamingInflater`] and delivered as decompressed chunks (CRC/ISIZE/Adler
+/// verified at the trailer). The returned body is always empty (the caller already
+/// consumed it); trailers are still returned for chunked bodies.
 fn stream_response_body(
     reader: &mut ConnReader,
     _status: u16,
@@ -1666,17 +1668,15 @@ fn stream_response_body(
     options: &FetchOptions,
     on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
 ) -> Result<(Vec<u8>, Headers), FetchError> {
-    let encoded = options.accept_encoding != AcceptEncoding::Identity
-        && header_value(headers, "content-encoding")
+    let encoding = if options.accept_encoding == AcceptEncoding::Identity {
+        None
+    } else {
+        header_value(headers, "content-encoding")
             .and_then(|value| ContentEncoding::parse(value).ok())
-            .is_some_and(|encoding| encoding != ContentEncoding::Identity);
-    if encoded {
-        let (compressed, trailers) = read_body(reader, _status, headers, options)?;
-        let decoded = decode_response_body(headers, compressed, options)?;
-        for chunk in decoded.chunks(16 * 1024) {
-            on_data(chunk)?;
-        }
-        return Ok((Vec::new(), trailers));
+            .filter(|encoding| *encoding != ContentEncoding::Identity)
+    };
+    if let Some(encoding) = encoding {
+        return stream_encoded_body(reader, headers, options, encoding, on_data);
     }
     let chunked = header_value(headers, "transfer-encoding").is_some_and(|value| {
         value
@@ -1696,6 +1696,111 @@ fn stream_response_body(
         return stream_fixed_body(reader, length, on_data);
     }
     stream_until_eof(reader, options.max_response_bytes, on_data)
+}
+
+/// Streams a gzip/deflate response, decompressing incrementally with
+/// [`image::StreamingInflater`] and delivering each decompressed chunk as it arrives.
+///
+/// The anti-bomb caps run while decoding: the inflater is capped by the tighter of
+/// `max_response_bytes` and [`FetchOptions::compression_limits`]`::max_output`, and the
+/// 1000:1 ratio (for bodies over 64 KiB) is checked after every feed. A CRC/ISIZE/Adler
+/// mismatch at the trailer is a typed [`FetchError::Decompression`] and aborts the socket.
+fn stream_encoded_body(
+    reader: &mut ConnReader,
+    headers: &Headers,
+    options: &FetchOptions,
+    encoding: ContentEncoding,
+    on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
+) -> Result<(Vec<u8>, Headers), FetchError> {
+    let compression = CompressionLimits::new(
+        options.compression_limits.max_output,
+        options.compression_limits.max_ratio,
+    );
+    let output_cap = compression.max_output.min(options.max_response_bytes);
+    let mut inflater = match encoding {
+        ContentEncoding::Gzip => {
+            image::StreamingInflater::new_gzip(image::InflateLimits::new(output_cap))
+        }
+        ContentEncoding::Deflate => {
+            image::StreamingInflater::new_auto_deflate(image::InflateLimits::new(output_cap))
+        }
+        ContentEncoding::Identity => unreachable!("identity responses are streamed directly"),
+    };
+    let mut compressed_seen = 0usize;
+    let mut decoded_seen = 0usize;
+    let mut feed = |chunk: &[u8]| -> Result<(), FetchError> {
+        compressed_seen = compressed_seen.saturating_add(chunk.len());
+        let mut decoded = Vec::new();
+        inflater
+            .feed(chunk, &mut decoded)
+            .map_err(|error| map_stream_inflate_error(error, options))?;
+        decoded_seen = decoded_seen.saturating_add(decoded.len());
+        if decoded_seen > options.max_response_bytes {
+            return Err(FetchError::ResponseTooLarge);
+        }
+        let ratio_exceeded = decoded_seen > 64 * 1024
+            && (decoded_seen as u64) > (compressed_seen.max(1) as u64) * compression.max_ratio;
+        if ratio_exceeded {
+            return Err(FetchError::DecompressionLimit {
+                max_output: compression.max_output,
+                max_ratio: compression.max_ratio,
+            });
+        }
+        if !decoded.is_empty() {
+            on_data(&decoded)?;
+        }
+        Ok(())
+    };
+    let chunked = header_value(headers, "transfer-encoding").is_some_and(|value| {
+        value
+            .split(',')
+            .any(|token| token.trim().eq_ignore_ascii_case("chunked"))
+    });
+    let (_, trailers) = if chunked {
+        stream_chunked_body(reader, options.max_response_bytes, &mut feed)?
+    } else if let Some(length_text) = header_value(headers, "content-length") {
+        let length: usize = length_text.trim().parse().map_err(|_| {
+            FetchError::InvalidResponse(format!("invalid Content-Length `{length_text}`"))
+        })?;
+        stream_fixed_body(reader, length, &mut feed)?
+    } else {
+        stream_until_eof(reader, options.max_response_bytes, &mut feed)?
+    };
+    inflater
+        .finish()
+        .map_err(|error| map_stream_inflate_error(error, options))?;
+    if decoded_seen > options.max_response_bytes {
+        return Err(FetchError::ResponseTooLarge);
+    }
+    let ratio_exceeded = decoded_seen > 64 * 1024
+        && (decoded_seen as u64) > (compressed_seen.max(1) as u64) * compression.max_ratio;
+    if ratio_exceeded {
+        return Err(FetchError::DecompressionLimit {
+            max_output: compression.max_output,
+            max_ratio: compression.max_ratio,
+        });
+    }
+    Ok((Vec::new(), trailers))
+}
+
+fn map_stream_inflate_error(error: image::InflateError, options: &FetchOptions) -> FetchError {
+    match error {
+        image::InflateError::OutputLimitExceeded { .. } => {
+            let compression = CompressionLimits::new(
+                options.compression_limits.max_output,
+                options.compression_limits.max_ratio,
+            );
+            if options.max_response_bytes <= compression.max_output {
+                FetchError::ResponseTooLarge
+            } else {
+                FetchError::DecompressionLimit {
+                    max_output: compression.max_output,
+                    max_ratio: compression.max_ratio,
+                }
+            }
+        }
+        other => FetchError::Decompression(other.to_string()),
+    }
 }
 
 fn stream_fixed_body(
