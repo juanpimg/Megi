@@ -76,9 +76,16 @@ fn run() -> Result<(), ShellError> {
             let (css_width, css_height) =
                 zoom::zoomed_viewport(args.width, args.height, 1.0, args.zoom);
 
+            // `--reader` extracts the article from the source page first and renders the
+            // generated reader data URL; chrome/find then apply to that clean page.
+            let input = if args.reader {
+                shell::headless::reader_url(&args.input, css_width, css_height, &options)?
+            } else {
+                args.input.clone()
+            };
             let output = if args.chrome && args.chrome_menu {
                 shell::headless::render_target_with_chrome_menu(
-                    &args.input,
+                    &input,
                     css_width,
                     css_height,
                     &options,
@@ -86,7 +93,7 @@ fn run() -> Result<(), ShellError> {
                 )?
             } else if args.chrome {
                 shell::headless::render_target_with_chrome(
-                    &args.input,
+                    &input,
                     css_width,
                     css_height,
                     &options,
@@ -94,19 +101,12 @@ fn run() -> Result<(), ShellError> {
                 )?
             } else if let Some(query) = &args.find {
                 let (output, _hits) = shell::headless::render_target_with_find(
-                    &args.input,
-                    css_width,
-                    css_height,
-                    &options,
-                    query,
+                    &input, css_width, css_height, &options, query,
                 )?;
                 output
             } else {
                 shell::headless::render_target_with_options(
-                    &args.input,
-                    css_width,
-                    css_height,
-                    &options,
+                    &input, css_width, css_height, &options,
                 )?
             };
             // The render either produced the PNG eagerly (plain path) or skipped it and the

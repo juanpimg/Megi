@@ -70,6 +70,29 @@ pub fn render_target_with_options(
     }
 }
 
+/// Renders `input`, extracts its main article and returns the generated reader page's
+/// `data:` URL (deterministic; `about:reader` alone renders an empty reader page).
+pub fn reader_url(
+    input: &str,
+    width: u32,
+    height: u32,
+    options: &render::RenderOptions,
+) -> Result<String, ShellError> {
+    if crate::reader::is_reader_url(input) {
+        let page = crate::pages::reader_page("Reader", &[], "about:reader");
+        return Ok(crate::pages::data_url(&page));
+    }
+    let output = render_target_with_options(input, width, height, options)?;
+    let Some(article) = crate::reader::extract(&output.document) else {
+        return Err(ShellError::Usage(
+            "reader mode found no article on this page".to_string(),
+        ));
+    };
+    let source = output.document_url.as_str();
+    let page = crate::reader::reader_page(&article, &source);
+    Ok(crate::pages::data_url(&page))
+}
+
 /// Renders `input` and paints the shell chrome (tab strip + address bar) over the page.
 ///
 /// Headless equivalent of the window overlay: the chrome occupies the top
@@ -118,6 +141,7 @@ pub fn render_target_with_chrome(
         can_go_back: false,
         can_go_forward: false,
         history_menu: None,
+        download_status: None,
     };
     // Only the chrome band is painted: the simple `--chrome` view has no
     // dropdown/status/menu overlays, so the direct RGBA compositor skips the
@@ -174,6 +198,7 @@ pub fn render_target_with_chrome_menu(
         can_go_back: true,
         can_go_forward: false,
         history_menu: None,
+        download_status: None,
     };
     crate::chrome::draw_chrome(&mut dest, width, height, 1.0, &view);
     output.pixmap.pixels = dest

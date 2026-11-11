@@ -65,6 +65,8 @@ pub struct Tab {
     pub content_capped: bool,
     /// Presentation metadata of this tab's navigation history (titles/logical times).
     pub history_log: crate::history::HistoryLog,
+    /// Last completed download name in this tab (in-memory only).
+    pub last_download: Option<String>,
 }
 
 impl Tab {
@@ -85,6 +87,7 @@ impl Tab {
             error: None,
             content_capped: false,
             history_log: crate::history::HistoryLog::new(),
+            last_download: None,
         })
     }
 
@@ -101,6 +104,7 @@ impl Tab {
             error: None,
             content_capped: false,
             history_log: crate::history::HistoryLog::new(),
+            last_download: None,
         });
         tab.title = Some(BLANK_TAB_TITLE.to_string());
         tab
@@ -124,6 +128,7 @@ impl Tab {
             error: None,
             content_capped: false,
             history_log: crate::history::HistoryLog::new(),
+            last_download: None,
         }
     }
 

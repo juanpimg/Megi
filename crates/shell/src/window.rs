@@ -303,6 +303,12 @@ struct WindowApp {
     recent_history: RecentHistory,
     /// Open Ctrl+H history menu.
     history_menu: Option<HistoryMenu>,
+    /// Download progress/last-download state shown in the status bar.
+    download: crate::download::DownloadProgress,
+    /// Per-origin zoom memory (persisted in the session when enabled).
+    site_zooms: Vec<(String, f64)>,
+    /// Reader-mode data URL for the current `about:reader` view.
+    reader_html: Option<String>,
 }
 
 impl WindowApp {
@@ -317,6 +323,7 @@ impl WindowApp {
     ) -> Self {
         let mut startup_notice = None;
         let mut recent = RecentHistory::new();
+        let mut site_zooms: Vec<(String, f64)> = Vec::new();
         let tabs = if let Some(path) = &view.session_path {
             let loaded = crate::session::load(path);
             if let Some(warning) = &loaded.warning {
@@ -327,6 +334,7 @@ impl WindowApp {
                 Some(session) => {
                     startup_notice = Some(format!("restored {} tab(s)", session.tabs.len()));
                     recent = crate::history::RecentHistory::from_entries(session.recent.clone());
+                    site_zooms = session.site_zooms.clone();
                     session.restore()
                 }
                 None => TabsState::from_urls(view.tabs.clone()),
@@ -394,6 +402,9 @@ impl WindowApp {
             clipboard: String::new(),
             recent_history: recent,
             history_menu: None,
+            download: crate::download::DownloadProgress::new(),
+            site_zooms,
+            reader_html: None,
             tabs,
         }
     }
@@ -450,7 +461,11 @@ impl WindowApp {
             self.update_title();
             return;
         };
-        let render_input = if is_history_url(&self.input) {
+        let render_input = if crate::reader::is_reader_url(&self.input) {
+            self.reader_html.clone().unwrap_or_else(|| {
+                crate::pages::data_url(&crate::pages::reader_page("Reader", &[], "about:reader"))
+            })
+        } else if is_history_url(&self.input) {
             let html = crate::history::history_page_html(&self.tabs.active().history_log.recent());
             format!(
                 "data:text/html;base64,{}",
@@ -483,6 +498,11 @@ impl WindowApp {
     /// Starts rendering `url` and resets per-page state (scroll, stale links/title).
     fn start_navigation(&mut self, url: &net::Url) {
         self.input = url.as_str();
+        if let Some(stored) = zoom::site_zoom(&self.site_zooms, &url.as_str()) {
+            self.zoom = stored;
+            self.tabs.active_mut().zoom = stored;
+        }
+        self.reader_html = None;
         self.error = None;
         self.content_capped = false;
         self.links.clear();
@@ -745,10 +765,9 @@ impl WindowApp {
         match loader.load(url) {
             Ok(resource) => {
                 let dir = crate::download::resolve_download_dir(self.download_dir.as_deref());
-                match crate::download::save_image(&dir, &resource.url, &resource.bytes) {
-                    Ok(saved) => self.notify(saved.notice()),
-                    Err(error) => self.notify(format!("cannot save image: {error}")),
-                }
+                self.download.begin("imagen del menú contextual");
+                let result = crate::download::save_image(&dir, &resource.url, &resource.bytes);
+                self.finish_download(result);
             }
             Err(error) => self.notify(format!("cannot fetch image: {error}")),
         }
@@ -1008,6 +1027,14 @@ impl WindowApp {
             return;
         }
         self.zoom = factor;
+        if let Some(current) = self
+            .nav
+            .current()
+            .map(|url| url.as_str().to_string())
+            .or_else(|| Some(self.input.clone()))
+        {
+            zoom::record_site_zoom(&mut self.site_zooms, &current, factor);
+        }
         let (width, height) = self
             .window
             .as_ref()
@@ -1033,9 +1060,31 @@ impl WindowApp {
         self.save_active_tab();
         let mut session = crate::session::Session::capture(&self.tabs);
         session.recent = self.recent_history.entries().to_vec();
+        session.site_zooms = self.site_zooms.clone();
         match crate::session::save(&path, &session) {
             Ok(()) => self.session_dirty = false,
             Err(error) => eprintln!("megi: cannot save session {}: {error}", path.display()),
+        }
+    }
+
+    /// Records a completed (or failed) synchronous download in the deterministic status
+    /// state and the active tab's in-memory last-download slot.
+    fn finish_download(&mut self, result: Result<crate::download::SavedDownload, String>) {
+        match result {
+            Ok(saved) => {
+                let name = saved
+                    .path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| saved.path.display().to_string());
+                self.download.complete(name.clone());
+                self.tabs.active_mut().last_download = Some(name);
+                self.notify(saved.notice());
+            }
+            Err(error) => {
+                self.download.finish();
+                self.notify(format!("download failed: {error}"));
+            }
         }
     }
 
@@ -1071,10 +1120,9 @@ impl WindowApp {
             },
         };
         let dir = crate::download::resolve_download_dir(self.download_dir.as_deref());
-        match crate::download::save_png(&dir, &url, &png) {
-            Ok(saved) => self.notify(saved.notice()),
-            Err(error) => self.notify(format!("cannot save PNG: {error}")),
-        }
+        self.download.begin("page.png");
+        let result = crate::download::save_png(&dir, &url, &png);
+        self.finish_download(result);
     }
 
     /// `Ctrl+Shift+S`: saves the rendered DOM as an HTML download (doctype included).
@@ -1094,10 +1142,9 @@ impl WindowApp {
             },
         };
         let dir = crate::download::resolve_download_dir(self.download_dir.as_deref());
-        match crate::download::save_html(&dir, &url, &document) {
-            Ok(saved) => self.notify(saved.notice()),
-            Err(error) => self.notify(format!("cannot save HTML: {error}")),
-        }
+        self.download.begin("page.html");
+        let result = crate::download::save_html(&dir, &url, &document);
+        self.finish_download(result);
     }
 
     /// Unique URLs from every tab's history, newest first (address-bar autocomplete source).
@@ -1113,6 +1160,28 @@ impl WindowApp {
             }
         }
         urls
+    }
+
+    /// Extracts the active document into reader mode (`Ctrl+Shift+R`) and re-renders it.
+    fn open_reader(&mut self) {
+        let Some(document) = self.document.clone() else {
+            self.notify("reader mode needs a rendered page".to_string());
+            return;
+        };
+        let Some(article) = crate::reader::extract(&document) else {
+            self.notify("reader mode found no article on this page".to_string());
+            return;
+        };
+        let source = self
+            .nav
+            .current()
+            .map(|url| url.as_str().to_string())
+            .unwrap_or_else(|| self.input.clone());
+        let html = crate::reader::reader_page(&article, &source);
+        self.reader_html = Some(crate::pages::data_url(&html));
+        self.input = "about:reader".to_string();
+        self.request_render();
+        self.request_repaint();
     }
 
     /// Navigates to the entry selected in the Ctrl+H history menu.
@@ -1843,6 +1912,12 @@ impl WindowApp {
             can_go_back: self.nav.can_go_back(),
             can_go_forward: self.nav.can_go_forward(),
             history_menu: self.history_menu.as_ref(),
+            download_status: None,
+        };
+        let download_status = self.download.status_text();
+        let view = ChromeView {
+            download_status: download_status.as_deref(),
+            ..view
         };
         let _ = chrome::draw_chrome(&mut buffer, width, height, chrome_scale, &view);
         let _ = buffer.present();
@@ -1991,6 +2066,14 @@ impl ApplicationHandler<UserEvent> for WindowApp {
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 let alt_pressed = self.modifiers.alt_key();
                 let ctrl_pressed = self.modifiers.control_key();
+                let shift_pressed = self.modifiers.shift_key();
+                if ctrl_pressed
+                    && shift_pressed
+                    && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("r"))
+                {
+                    self.open_reader();
+                    return;
+                }
                 if ctrl_pressed
                     && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("h"))
                 {

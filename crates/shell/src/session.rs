@@ -63,6 +63,8 @@ pub struct Session {
     pub tabs: Vec<SessionTab>,
     /// Global recent history (newest first, optional extension; empty in old files).
     pub recent: Vec<crate::history::HistoryEntry>,
+    /// Per-origin zoom values (newest first, capped, optional extension).
+    pub site_zooms: Vec<(String, f64)>,
 }
 
 impl Session {
@@ -73,6 +75,7 @@ impl Session {
             active: 0,
             tabs: Vec::new(),
             recent: Vec::new(),
+            site_zooms: Vec::new(),
         }
     }
 
@@ -117,6 +120,7 @@ impl Session {
             active,
             tabs: session_tabs,
             recent: Vec::new(),
+            site_zooms: Vec::new(),
         }
     }
 
@@ -138,6 +142,7 @@ impl Session {
         }
         self.active = self.active.min(self.tabs.len().saturating_sub(1));
         self.recent.truncate(crate::history::MAX_RECENT_HISTORY);
+        self.site_zooms = crate::zoom::normalize_site_zooms(std::mem::take(&mut self.site_zooms));
     }
 
     /// Restores the session into a usable [`TabsState`] (no network is touched here).
@@ -200,12 +205,18 @@ impl Session {
                 )
             })
             .collect();
+        let zooms: Vec<String> = self
+            .site_zooms
+            .iter()
+            .map(|(origin, zoom)| format!("[{},{}]", json_string(origin), zoom))
+            .collect();
         format!(
-            "{{\"version\":{},\"active\":{},\"tabs\":[{}],\"recent\":[{}]}}",
+            "{{\"version\":{},\"active\":{},\"tabs\":[{}],\"recent\":[{}],\"siteZooms\":[{}]}}",
             self.version,
             self.active,
             tabs.join(","),
-            recent.join(",")
+            recent.join(","),
+            zooms.join(",")
         )
     }
 
@@ -292,11 +303,27 @@ impl Session {
                 });
             }
         }
+        let mut site_zooms = Vec::new();
+        if let Some(entries) = get("siteZooms").and_then(JsonValue::as_array) {
+            for value in entries {
+                let Some(pair) = value.as_array() else {
+                    continue;
+                };
+                let Some(origin) = pair.first().and_then(JsonValue::as_str) else {
+                    continue;
+                };
+                let Some(zoom) = pair.get(1).and_then(JsonValue::as_f64) else {
+                    continue;
+                };
+                site_zooms.push((origin.to_owned(), zoom));
+            }
+        }
         let mut session = Self {
             version: SCHEMA_VERSION,
             active,
             tabs,
             recent,
+            site_zooms: crate::zoom::normalize_site_zooms(site_zooms),
         };
         session.normalize();
         Ok(session)
@@ -748,6 +775,7 @@ mod tests {
                 },
             ],
             recent: Vec::new(),
+            site_zooms: Vec::new(),
         }
     }
 
@@ -805,6 +833,7 @@ mod tests {
             active: 999,
             tabs,
             recent: Vec::new(),
+            site_zooms: Vec::new(),
         };
         session.normalize();
         assert_eq!(session.tabs.len(), MAX_SESSION_TABS);
@@ -935,6 +964,31 @@ mod tests {
             Session::from_json(&sample().to_json())
                 .expect("old files")
                 .recent
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn site_zooms_roundtrip_tolerantly() {
+        let mut session = sample();
+        session.site_zooms = vec![
+            ("https://example.com".to_string(), 1.5),
+            ("file://".to_string(), 0.75),
+        ];
+        let parsed = Session::from_json(&session.to_json()).expect("parse");
+        assert_eq!(parsed.site_zooms, session.site_zooms);
+        let tolerant = Session::from_json(
+            "{\"version\":1,\"active\":0,\"tabs\":[],\"siteZooms\":[[\"https://a.example\",9.0],\"bad\",[\"\",1.0]]}",
+        )
+        .expect("tolerant");
+        assert_eq!(
+            tolerant.site_zooms,
+            vec![("https://a.example".to_string(), 3.0)]
+        );
+        assert!(
+            Session::from_json("{\"version\":1,\"active\":0,\"tabs\":[]}")
+                .expect("old")
+                .site_zooms
                 .is_empty()
         );
     }

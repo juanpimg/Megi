@@ -1091,6 +1091,7 @@ fn chrome_geometry_scales_with_the_device_scale() {
         can_go_back: false,
         can_go_forward: false,
         history_menu: None,
+        download_status: None,
     };
     let mut dest = vec![0x00FF_FFFFu32; 640 * 400];
     let painted = shell::chrome::draw_chrome(&mut dest, 640, 400, 2.0, &view);
@@ -1506,4 +1507,54 @@ fn plain_render_still_encodes_eagerly_and_skips_on_request() {
     assert!(lazy.png.is_empty(), "encode_png=false skips the page PNG");
     lazy.ensure_png();
     assert_eq!(lazy.png, eager.png, "lazy shell encode is byte-identical");
+}
+
+#[test]
+fn headless_reader_mode_is_deterministic_and_clean() {
+    let fixture = temp_path("r221-reader-source.html");
+    std::fs::write(
+        &fixture,
+        "<!doctype html><body><nav>menu</nav><article><h1>Reader Title</h1>\
+         <p>This is the main article paragraph with enough visible text to be extracted.</p>\
+         <p>The second article paragraph continues with additional useful information.</p>\
+         </article><footer>footer</footer></body>",
+    )
+    .expect("write reader source");
+    let first = temp_path("r221-reader-a.png");
+    let second = temp_path("r221-reader-b.png");
+    let run = |path: &PathBuf| {
+        std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+            .arg(&fixture)
+            .args(["--reader", "--screenshot"])
+            .arg(path)
+            .args(["--width", "480", "--height", "320"])
+            .status()
+            .expect("shell binary runs")
+    };
+    assert!(run(&first).success());
+    assert!(run(&second).success());
+    let a = std::fs::read(&first).expect("png");
+    let b = std::fs::read(&second).expect("png");
+    assert_eq!(a, b, "reader screenshot deterministic");
+    assert_eq!(png_dimensions(&a), (480, 320));
+    assert!(a.starts_with(&[0x89, b'P', b'N', b'G']));
+    assert!(a.len() > 1000);
+    let _ = std::fs::remove_file(&first);
+    let _ = std::fs::remove_file(&second);
+    let _ = std::fs::remove_file(&fixture);
+}
+
+#[test]
+fn reader_page_extracts_the_article_and_centers_the_column() {
+    let html = "<!doctype html><body><nav>menu</nav><article><h1>Title</h1>\
+        <p>Main article paragraph with enough visible text to be extracted by the reader.</p>\
+        <p>Second paragraph of the article body that also has plenty of content.</p></article>\
+        <footer>footer</footer></body>";
+    let document = html::parse_document(html, true);
+    let article = shell::reader::extract(&document).expect("article");
+    assert_eq!(article.title, "Title");
+    let page = shell::reader::reader_page(&article, "https://example.com/article");
+    assert!(page.contains("max-width:700px"));
+    assert!(!page.contains("<nav>"));
+    assert!(!page.contains("<footer>"));
 }

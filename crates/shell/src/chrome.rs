@@ -1345,6 +1345,8 @@ pub struct ChromeView<'a> {
     pub can_go_forward: bool,
     /// Open Ctrl+H history menu.
     pub history_menu: Option<&'a crate::history::HistoryMenu>,
+    /// Download progress text (takes precedence over the hover URL in the status bar).
+    pub download_status: Option<&'a str>,
 }
 
 /// Paints the chrome over a physical `0RGB` framebuffer; returns the painted pixel count.
@@ -1382,8 +1384,8 @@ pub fn draw_chrome(
     if let Some(menu) = view.overflow {
         paint_overflow_menu(&mut pixmap, scale, view, menu);
     }
-    if let Some(url) = view.hover_url {
-        paint_status_bar(&mut pixmap, scale, view, url);
+    if let Some(text) = view.download_status.or(view.hover_url) {
+        paint_status_bar(&mut pixmap, scale, view, text);
     }
     if let Some(menu) = view.menu {
         paint_context_menu(&mut pixmap, scale, view, menu);
@@ -1951,6 +1953,7 @@ mod tests {
             can_go_back: false,
             can_go_forward: false,
             history_menu: None,
+            download_status: None,
         }
     }
 
@@ -2588,5 +2591,27 @@ mod tests {
             0x00D2_E3FC,
             "selected history row"
         );
+    }
+
+    #[test]
+    fn download_status_takes_precedence_over_hover_url() {
+        let address = AddressBar::new();
+        let tabs = vec!["Megi".to_string()];
+        let mut dest = buffer(360, 200);
+        let mut view = view(&address, None, &tabs);
+        view.css_viewport_height = 200;
+        view.hover_url = Some("https://example.com/hover");
+        view.download_status = Some("guardando… megi-a.png");
+        draw_chrome(&mut dest, 360, 200, 1.0, &view);
+        let bottom = ((200 - STATUS_BAR_HEIGHT as u32 + 2) * 360) as usize;
+        assert_eq!(dest[bottom], 0x0020_2124, "status bar painted for download");
+        let without = view_without_download(&address, &tabs);
+        assert_eq!(without.download_status, None);
+    }
+
+    fn view_without_download<'a>(address: &'a AddressBar, tabs: &'a [String]) -> ChromeView<'a> {
+        let mut view = view(address, None, tabs);
+        view.download_status = None;
+        view
     }
 }

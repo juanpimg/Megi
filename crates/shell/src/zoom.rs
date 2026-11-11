@@ -152,3 +152,115 @@ mod unit_tests {
         assert_eq!(zoomed_viewport(0, 0, 1.0, 3.0), (1, 1));
     }
 }
+
+/// Maximum number of persisted per-origin zoom entries.
+pub const MAX_SITE_ZOOMS: usize = 64;
+
+/// Returns the origin key used for per-site zoom (`scheme://host[:port]` for http(s), and
+/// the scheme for `file:`); `None` for ephemeral/data URLs.
+pub fn site_origin(url: &str) -> Option<String> {
+    let parsed = net::Url::parse(url).ok()?;
+    match parsed.scheme() {
+        net::Scheme::Http | net::Scheme::Https => {
+            let host = parsed.host();
+            if host.is_empty() {
+                None
+            } else {
+                Some(format!("{}://{}", parsed.scheme().as_str(), host))
+            }
+        }
+        net::Scheme::File => Some("file://".to_string()),
+        _ => None,
+    }
+}
+
+/// Looks up a persisted zoom for `url`'s origin (newest entry wins).
+pub fn site_zoom(entries: &[(String, f64)], url: &str) -> Option<f64> {
+    let origin = site_origin(url)?;
+    entries
+        .iter()
+        .find(|(key, _)| *key == origin)
+        .map(|(_, zoom)| sanitize_zoom(*zoom))
+}
+
+/// Records/updates the zoom for `url`'s origin (newest first, capped, deduplicated).
+pub fn record_site_zoom(entries: &mut Vec<(String, f64)>, url: &str, zoom: f64) {
+    let Some(origin) = site_origin(url) else {
+        return;
+    };
+    let zoom = sanitize_zoom(zoom);
+    entries.retain(|(key, _)| *key != origin);
+    entries.insert(0, (origin, zoom));
+    entries.truncate(MAX_SITE_ZOOMS);
+}
+
+/// Tolerant normalization of persisted site zooms: valid origins, sanitized zoom values,
+/// newest-first order preserved, duplicates collapsed, capped at [`MAX_SITE_ZOOMS`].
+pub fn normalize_site_zooms(entries: Vec<(String, f64)>) -> Vec<(String, f64)> {
+    let mut out: Vec<(String, f64)> = Vec::new();
+    for (origin, zoom) in entries {
+        let origin = origin.trim().to_lowercase();
+        if origin.is_empty() || out.iter().any(|(key, _)| *key == origin) {
+            continue;
+        }
+        out.push((origin, sanitize_zoom(zoom)));
+        if out.len() == MAX_SITE_ZOOMS {
+            break;
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod site_zoom_tests {
+    use super::*;
+
+    #[test]
+    fn site_origin_normalizes_http_and_file() {
+        assert_eq!(
+            site_origin("https://example.com/a?x=1").as_deref(),
+            Some("https://example.com")
+        );
+        assert_eq!(
+            site_origin("http://example.com:8080/").as_deref(),
+            Some("http://example.com")
+        );
+        assert_eq!(
+            site_origin("file:///tmp/a.html").as_deref(),
+            Some("file://")
+        );
+        assert!(site_origin("data:text/html,x").is_none());
+    }
+
+    #[test]
+    fn record_apply_and_normalize_site_zooms() {
+        let mut entries = Vec::new();
+        record_site_zoom(&mut entries, "https://a.example/x", 1.5);
+        record_site_zoom(&mut entries, "https://b.example/y", 0.75);
+        record_site_zoom(&mut entries, "https://a.example/z", 2.0);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(site_zoom(&entries, "https://a.example/other"), Some(2.0));
+        assert_eq!(site_zoom(&entries, "https://c.example/"), None);
+        let normalized = normalize_site_zooms(entries);
+        assert_eq!(normalized.len(), 2);
+        assert!(
+            normalized
+                .iter()
+                .all(|(_, zoom)| (0.5..=3.0).contains(zoom))
+        );
+    }
+
+    #[test]
+    fn site_zoom_cap_is_enforced() {
+        let mut entries = Vec::new();
+        for index in 0..(MAX_SITE_ZOOMS + 10) {
+            record_site_zoom(
+                &mut entries,
+                &format!("https://host{index}.example/"),
+                1.0 + index as f64 / 100.0,
+            );
+        }
+        assert_eq!(entries.len(), MAX_SITE_ZOOMS);
+        assert_eq!(normalize_site_zooms(entries).len(), MAX_SITE_ZOOMS);
+    }
+}

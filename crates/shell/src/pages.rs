@@ -57,6 +57,29 @@ pub fn history_page(entries: &[crate::history::HistoryEntry]) -> String {
     )
 }
 
+/// Builds the deterministic reader-mode page: centered 700 px column, serif fallback,
+/// escaped title/paragraphs and a source link; no scripts or timers.
+pub fn reader_page(title: &str, paragraphs: &[String], source_url: &str) -> String {
+    let mut body = String::new();
+    for paragraph in paragraphs {
+        let _ = write!(body, "<p>{}</p>", escape_html(paragraph));
+    }
+    format!(
+        "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>{}</title>\
+         <style>html{{background:#fbfbf8}}body{{max-width:700px;margin:32px auto;padding:0 20px;\
+         font-family:Georgia,'Times New Roman',serif;font-size:19px;line-height:1.65;color:#222;}}\
+         h1{{font-size:30px;line-height:1.2;margin:0 0 24px}}p{{margin:0 0 18px}}\
+         .source{{font-family:sans-serif;font-size:13px;color:#666;margin-top:36px;\
+         border-top:1px solid #ddd;padding-top:12px}}</style></head><body>\
+         <h1>{}</h1>{body}<div class=\"source\">Leído desde <a href=\"{}\">{}</a></div>\
+         </body></html>",
+        escape_html(title),
+        escape_html(title),
+        escape_html(source_url),
+        escape_html(source_url),
+    )
+}
+
 /// Escapes `&`, `<`, `>`, `"` and `'` for safe HTML text/attribute insertion.
 pub fn escape_html(value: &str) -> String {
     let mut out = String::with_capacity(value.len());

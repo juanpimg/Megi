@@ -64,6 +64,11 @@
 //!   [`download`]). Frames keep the render-produced PNG bytes ([`worker::RenderFrame::png_bytes`])
 //!   so saves write them directly (atomic tmp+rename, no re-encode, byte-identical to
 //!   `--screenshot`); headless renders once when `--save-*` is combined with `--screenshot`.
+//! - **Browser experience (R221)**: deterministic synchronous download progress in the
+//!   status bar (`guardando… <name>`, last download per tab in memory), reader mode
+//!   (`about:reader` / `Ctrl+Shift+R`, simple density heuristic, clean 700 px serif page,
+//!   no scripting) and per-origin zoom persisted in `session.json` (cap 64, tolerant,
+//!   disabled by `--no-session`).
 //! - **Navigable history (R197)**: per-tab history metadata (titles + deterministic logical
 //!   timestamps, bounded), `Ctrl+H` recent-history menu (last 10, keyboard/hover), back/
 //!   forward/reload buttons in the chrome with disabled states, and the generated
@@ -186,6 +191,7 @@ pub mod navigation;
 /// Generated `file://` directory listings and load-error pages.
 pub mod pages;
 pub mod present;
+pub mod reader;
 pub mod refresh;
 pub mod scale;
 pub mod scroll;
@@ -233,6 +239,7 @@ pub use links::{
 };
 pub use navigation::{MAX_HISTORY, NavigationOutcome, NavigationState};
 pub use present::{present_region, viewport_slice};
+pub use reader::{Article, is_reader_url, reader_page};
 pub use refresh::{DEFAULT_REFRESH_MS, MIN_REFRESH_MS, RefreshPolicy, RefreshTimer};
 pub use scale::{
     WindowMetrics, logical_to_physical, physical_to_logical, window_metrics, window_metrics_zoomed,

@@ -48,6 +48,8 @@ options:
                       headless --screenshot output (window always shows chrome);
                       the page PNG is skipped and encoded once after the overlay
   --chrome-menu       with --chrome, also draw a deterministic open context menu (tests)
+  --reader            render the deterministic reader-mode extraction of the page
+                      (headless; window: Ctrl+Shift+R)
   --no-session        do not load/save the persistent session
   --session-file PATH session JSON path (default: $XDG_DATA_HOME/megi/session.json)
   --download-dir PATH directory for Ctrl+S PNG / Ctrl+Shift+S HTML downloads
@@ -113,6 +115,8 @@ pub struct CliArgs {
     pub chrome: bool,
     /// Draw a deterministic open context menu in headless chrome screenshots.
     pub chrome_menu: bool,
+    /// Render the extracted reader page instead of the raw page (`--reader`).
+    pub reader: bool,
     /// Disable session persistence (`--no-session`).
     pub no_session: bool,
     /// Explicit session file (`--session-file`).
@@ -154,6 +158,8 @@ pub struct RawArgs {
     pub chrome: bool,
     /// `--chrome-menu` was passed.
     pub chrome_menu: bool,
+    /// `--reader` was passed.
+    pub reader: bool,
     /// `--no-session` was passed.
     pub no_session: bool,
     /// `--session-file` value.
@@ -201,6 +207,7 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
             }
             "--chrome" => raw.chrome = true,
             "--chrome-menu" => raw.chrome_menu = true,
+            "--reader" => raw.reader = true,
             "--no-session" => raw.no_session = true,
             "--session-file" => {
                 raw.session_file = Some(PathBuf::from(next_value(
@@ -350,6 +357,7 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
             tabs,
             chrome: raw.chrome,
             chrome_menu: raw.chrome_menu,
+            reader: raw.reader,
             no_session: raw.no_session,
             session_file: raw.session_file,
             download_dir: raw.download_dir,
@@ -371,6 +379,7 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
         tabs,
         chrome: raw.chrome,
         chrome_menu: raw.chrome_menu,
+        reader: raw.reader,
         no_session: raw.no_session,
         session_file: raw.session_file,
         download_dir: raw.download_dir,

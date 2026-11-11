@@ -21,6 +21,12 @@
 #   - session: tabs/history/zoom/scroll persist in $XDG_DATA_HOME/megi/session.json
 #     (--no-session, --session-file PATH); Ctrl+S saves PNG, Ctrl+Shift+S saves serialized
 #     HTML (doctype) to --download-dir or ~/Downloads; headless: --save-png/--save-html PATH
+#   - downloads: synchronous saves show a deterministic status-bar indicator
+#     ("guardando… <name>", last download remembered per tab; no animated bar)
+#   - reader: Ctrl+Shift+R extracts the main article into about:reader (700 px serif
+#     column, no JS); headless: --reader (deterministic screenshot)
+#   - zoom per site: origin→zoom remembered in session.json (cap 64, tolerant;
+#     --no-session disables persistence), applied on navigation
 #   - history: Ctrl+H opens the last-10 menu (arrows/Enter/Esc); chrome back/forward/reload
 #     buttons (disabled per history); about:history/megi://history renders the internal
 #     history page (headless --chrome deterministic); recent picks persist in session.json
