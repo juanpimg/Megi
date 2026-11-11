@@ -31,6 +31,20 @@ fn render_html(html: &str, width: u32, height: u32) -> render::RenderOutput {
     render::render_url(&format!("data:text/html,{encoded}"), &options).expect("render")
 }
 
+/// Renders `html` from a `file:` document in `dir` so `file:` module imports are allowed
+/// (a `data:` document may not read the local filesystem).
+fn render_file(html: &str, dir: &std::path::Path, width: u32, height: u32) -> render::RenderOutput {
+    let document = dir.join("index.html");
+    std::fs::write(&document, html).expect("write document");
+    let options = RenderOptions {
+        viewport: Viewport::new(width, height).expect("viewport"),
+        scripting: ScriptingMode::Enabled,
+        ..RenderOptions::default()
+    };
+    let url = format!("file://{}", document.display());
+    render::render_url(&url, &options).expect("render")
+}
+
 fn body_attribute(output: &render::RenderOutput, name: &str) -> Option<String> {
     let document = &output.document;
     let body = document.body()?;
@@ -54,7 +68,7 @@ fn import_map_remaps_a_bare_specifier_to_a_file_module() {
         "<!DOCTYPE html><body><script type=\"importmap\">{importmap}</script>\
          <script type=\"module\">import {{ value }} from 'dep';</script></body>"
     );
-    let output = render_html(&html, 240, 160);
+    let output = render_file(&html, &dir, 240, 160);
     assert_eq!(
         body_attribute(&output, "data-mapped").as_deref(),
         Some("yes")
@@ -106,7 +120,7 @@ fn invalid_import_maps_are_warnings_and_do_not_break_independent_modules() {
          <body><script type=\"module\" src=\"file://{}\"></script></body>",
         module.display()
     );
-    let output = render_html(&html, 240, 160);
+    let output = render_file(&html, &dir, 240, 160);
     assert_eq!(body_attribute(&output, "data-ok").as_deref(), Some("1"));
     assert!(
         output

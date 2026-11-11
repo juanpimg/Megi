@@ -245,3 +245,28 @@ fn loader_cache_can_be_cleared() {
     loader.load(&url).expect("reload after clear");
     assert_eq!(loader.cache_misses(), 2);
 }
+
+#[test]
+fn loader_blocks_file_urls_when_local_access_is_disabled() {
+    let file = TempFile::new("blocked.txt", b"secret");
+    let url = file.url();
+    let mut loader = ResourceLoader::new().with_allow_file(false);
+
+    for error in [
+        loader
+            .load(&url)
+            .expect_err("buffered file load must be blocked"),
+        loader
+            .load_streaming(&url, &mut |_| Ok(()))
+            .expect_err("streaming file load must be blocked"),
+    ] {
+        assert!(
+            matches!(error, LoadError::Fetch(FetchError::FileAccessBlocked)),
+            "{error}"
+        );
+    }
+
+    // Re-enabling access restores the normal behaviour.
+    loader.set_allow_file(true);
+    assert_eq!(loader.load(&url).expect("allowed").bytes, b"secret");
+}

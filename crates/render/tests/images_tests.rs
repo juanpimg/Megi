@@ -331,3 +331,26 @@ fn test_max_images_cap_limits_fetches() {
         output.stats.warnings
     );
 }
+
+#[test]
+fn remote_documents_cannot_load_file_images() {
+    // A data:/http(s) document joining an absolute file: URL must be blocked by the
+    // loader policy, not read from disk.
+    let path = fixture_dir().join("assets/px.png");
+    let document = format!(
+        "data:text/html,<html><body><img src='{}'></body></html>",
+        file_url(&path)
+    );
+    let output = render_url(&document, &options()).expect("data document renders");
+    assert_eq!(output.stats.images_loaded, 0, "file image must not load");
+    assert!(output.stats.images_failed >= 1);
+    assert!(
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("local file access is blocked")),
+        "{:?}",
+        output.stats.warnings
+    );
+}

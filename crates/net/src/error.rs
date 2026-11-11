@@ -97,6 +97,11 @@ pub enum FetchError {
     FilePermissionDenied(PathBuf),
     /// Reading the local file failed for another I/O reason.
     FileIo(io::Error),
+    /// A `file:` URL was requested by a loader that may not read local files.
+    ///
+    /// The renderer disables local-file access for documents that are not themselves
+    /// `file:`, so a remote page cannot read the filesystem through a subresource.
+    FileAccessBlocked,
     /// A `file:` URL used a non-local host (only `file:///...` is supported).
     UnsupportedFileHost(String),
     /// A `data:` URL is malformed (bad mediatype, invalid base64, ...).
@@ -165,6 +170,9 @@ impl fmt::Display for FetchError {
                 write!(f, "permission denied reading file: {}", path.display())
             }
             Self::FileIo(err) => write!(f, "file I/O error: {err}"),
+            Self::FileAccessBlocked => {
+                f.write_str("local file access is blocked for this document")
+            }
             Self::UnsupportedFileHost(host) => {
                 write!(f, "file: URLs can only name the local host, got `{host}`")
             }

@@ -698,7 +698,8 @@ pub fn execute_scripts(
                         body: response.body,
                     });
                 }
-                let mut loader = ResourceLoader::with_options(options.clone());
+                let mut loader =
+                    ResourceLoader::with_options(options.clone()).with_allow_file(base.is_file());
                 match loader.load_str(&request.url) {
                     Ok(resource) => {
                         let mut headers =
@@ -848,9 +849,10 @@ pub fn execute_scripts(
                     .map(|url| url.as_str().to_owned()))
             },
         ));
-        let module_loader = Arc::new(Mutex::new(ResourceLoader::with_options(
-            host.fetch_options.clone(),
-        )));
+        let module_loader = Arc::new(Mutex::new(
+            ResourceLoader::with_options(host.fetch_options.clone())
+                .with_allow_file(document_url.is_file()),
+        ));
         let no_network = host.no_network;
         let max_module_bytes = limits.max_script_bytes;
         let total_module_bytes = Arc::new(Mutex::new(0usize));
