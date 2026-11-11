@@ -574,6 +574,13 @@ fn limit_error() -> ImageError {
 }
 
 /// Decodes one interlace pass from `inflated` into `image`.
+///
+/// These helpers are force-inlined on purpose: the r26 scaled-decode path added a
+/// second caller of `pixel_from_row`, which made the optimiser stop inlining the
+/// per-pixel conversion into the full-resolution decode (+21.7 % regression,
+/// `image/decode-png-800x600` 6.55 → 7.98 ms). `inline(always)` keeps the full path
+/// at r25 cost while the scaled path shares the same conversion code.
+#[inline(always)]
 fn decode_pass(
     context: &Context<'_>,
     inflated: &[u8],
@@ -683,6 +690,7 @@ fn decode_pass_scaled(
 }
 
 /// Reverses PNG scanline filtering (types 0–4).
+#[inline(always)]
 fn unfilter(row: &mut [u8], previous: &[u8], filter: u8, bpp: usize) -> Result<(), ImageError> {
     match filter {
         0 => Ok(()),
@@ -746,6 +754,7 @@ fn paeth(left: u8, up: u8, upper_left: u8) -> u8 {
 
 impl Context<'_> {
     /// Converts one unfiltered scanline from its native layout to RGBA8.
+    #[inline(always)]
     fn render_row(
         &self,
         row: &[u8],
@@ -773,6 +782,7 @@ impl Context<'_> {
     }
 
     /// Reads pixel `index` of an unfiltered scanline and converts it to RGBA8.
+    #[inline(always)]
     fn pixel_from_row(&self, row: &[u8], index: u32) -> Result<[u8; 4], ImageError> {
         let header = self.header;
         let transparency = self.transparency;
