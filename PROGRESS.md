@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `30c27b3` (2026-11-11) · overall **100%** · **1,986** tests · conformance **PASS** · **14** crates · **156,014** lines of Rust
+**Snapshot** — commit `5c42c35` (2026-11-11) · overall **100%** · **1,986** tests · conformance **PASS** · **14** crates · **156,014** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -52,11 +52,10 @@
 - Box tree, anonymous boxes, margin collapsing, box-sizing/min-max and ICB
 - IFC with line boxes, soft hyphens, line-height and vertical-align subtrees
 - Floats, overflow/clip, positioned elements and tables
-- Grid MVP (+ explicit placement, spans, minmax, repeat(auto-fill)) and flexbox MVP
+- Grid (explicit placement, spans, minmax, auto-fill/fit, dense auto-flow and areas) and flexbox MVP
 
 **Pending**
 
-- Grid dense packing/areas/auto-flow: still MVP-level
 - Full spec IFC edge cases (bidi, justify details) and table layout depth
 
 ### F4 — Paint, raster & SVG (100%)
@@ -72,12 +71,12 @@
 - CSS aspect-ratio, object-fit/object-position and backdrop-filter (layout consumes aspect-ratio)
 - Complete SVG filter chains (ColorMatrix/Blend/Merge/Composite arithmetic) and basic SMIL
 - Full VP8 keyframe decoder for WebP lossy (pixel-exact tolerances vs PIL)
+- SVG textPath auto-rotation/textLength/side=right and <use> presentation inheritance
 
 **Pending**
 
-- WebP VP8 lossy pixel decoder (header parser exists)
-- SVG auto-rotate/side right/textLength and remaining SMIL/CSS animations
-- Rasterizer/decoder performance budgets; backdrop blur/PNG entropy, layer-effect performance and PNG regions
+- Remaining SMIL/CSS animations and textPath refinements (kerning/bidi, em/ch startOffset)
+- Rasterizer/decoder performance budgets, backdrop-blur floor and PNG entropy
 
 ### F5 — Networking & fetch (100%)
 
@@ -92,10 +91,11 @@
 - Real vendored public suffix list and HTTP/2+HTTP/1.1 request trailers
 - HTTP/HTTPS proxies (absolute-form+CONNECT, Basic auth, no_proxy) and fetch() provider
 - Real incremental HTTP/1.1 streaming and server-push prioritization (ServerWeights/Fifo)
+- Incremental gzip/deflate decoding of streaming bodies
 
 **Pending**
 
-- HTTP/1.0, gzip streaming and full priority tree
+- HTTP/1.0 and the full HTTP/2 priority tree
 - h2 cross-load pooling and proxy PAC/SOCKS/pooling
 - Image decode budgets on real pages
 
@@ -114,10 +114,11 @@
 - Deterministic cooperative Web Workers (postMessage/onerror/terminate, render loop)
 - fetch() subset backed by a host provider (Headers/Request/Response, CORS same-origin)
 - Real top-level await and live module bindings via Boa native modules
+- fetch(): AbortController/signal, extra methods and a Response.body stream (emulated from the provider body)
 
 **Pending**
 
-- fetch streaming/abort/signal and workers with DOM
+- Real fetch() body streaming and workers with DOM access
 - JS/DOM conformance testing and memory accounting
 - Import-map scopes/integrity and non-literal dynamic import
 
@@ -135,18 +136,19 @@
 - file:// directory listings, browser error pages with Retry and favicon/dot per tab
 - Navigable history (about:history/Ctrl+H/back-forward) and chrome fast path (-89.5 % non-PNG)
 - Single-encode PNG overlays for chrome/find/menu (+1.13/+1.75/+2.32 ms) with byte-identical goldens
+- Download progress, reader mode (about:reader/Ctrl+Shift+R) and per-site zoom persisted in the session
 
 **Pending**
 
-- Visual save-as/prompt, resource downloads, cookies/passwords
-- Address autocomplete/history, favicons/icons and overflow menu
-- Multi-select/native widgets, per-tab process isolation/accessibility and visual history polish
+- Visual save-as prompt, resource downloads and cookie/password storage
+- Overflow menu and native multi-select widgets
+- Per-tab process isolation/accessibility and visual history polish
 
 ## Repository statistics (measured)
 
 | Metric | Value |
 |---|---|
-| Commit | `30c27b3` (2026-11-11) |
+| Commit | `5c42c35` (2026-11-11) |
 | Crates in the workspace | 14 |
 | Lines of Rust (tracked `.rs`) | 156014 |
 | Tests (`cargo test --workspace -- --list`) | 1986 |
@@ -175,12 +177,12 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 
 ## Next up
 
-- Own bench row for the render crate (pipeline row bypasses it)
-- Backdrop blur floor, PNG regions and rasterizer performance
-- Fingerprint cache in layout (next css/layout step)
-- HTTP/1.0, gzip streaming and proxy PAC/SOCKS/pooling
-- SVG auto-rotate/side right/textLength and remaining SMIL
-- Longer image/HTTP2/JS module fuzz campaigns and bench E2E on real pages
+- HTTP/1.0, the full HTTP/2 priority tree and proxy PAC/SOCKS/pooling
+- Real fetch() streaming (bodies are provider-buffered) and workers with DOM
+- Import-map scopes/integrity, non-literal dynamic import and JS/DOM conformance/memory
+- Remaining SMIL/CSS animations and textPath refinements (kerning/bidi, em/ch startOffset)
+- Rasterizer/decoder performance budgets, backdrop-blur floor and PNG entropy
+- Longer image/HTTP2/JS-module fuzz campaigns and bench E2E on real pages
 
 ## Cross-cutting areas
 
@@ -199,4 +201,4 @@ python3 tools/update_progress.py --write --no-gate  # skip the conformance gate
 python3 tools/update_progress.py --check --no-gate --no-count  # CI freshness
 ```
 
-_Last manifest update by: docs (round 32). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
+_Last manifest update by: docs (round 33). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
