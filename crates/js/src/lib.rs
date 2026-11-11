@@ -156,6 +156,25 @@
 //!   `JsError::ModuleCycle`; missing modules/exports and malformed modules return typed
 //!   errors (`ModuleNotFound`/`ModuleExport`/`ModuleSyntax`). `ModuleOutcome` exposes the
 //!   entry URL and stringified exports. The host supplies all module text (docs/FUZZING).
+//! ## Round 27 DOM/JS gap APIs
+//!
+//! Implemented: `URL`/`URLSearchParams` subset (parse/install base, append/delete/get/
+//! getAll/has/set/toString/forEach; no relative URL state sync), `dataset` (read-only
+//! camelCase view of `data-*`; writes are not proxied), `innerText` (documented
+//! `textContent` approximation), `attributes` NamedNodeMap (`length`/`item`/
+//! `getNamedItem`/`removeNamedItem`), `normalize()`, `compareDocumentPosition` bits +
+//! `Node` constants, `focus()`/`blur()` with `document.activeElement` (no focus/blur
+//! event dispatch yet), `scrollIntoView()` no-op, `queueMicrotask`, deterministic
+//! `requestIdleCallback`/`cancelIdleCallback` (timer with `timeRemaining()=50`),
+//! `MouseEvent`/`PointerEvent` with `relatedTarget`/`pointerId`, `atob`/`btoa`,
+//! `structuredClone` subset (plain objects/arrays/Date/Map/Set; no cycles/transferables).
+//!
+//! Remaining gaps (documented): `getBoundingClientRect`/`offsetWidth`/`offsetHeight`
+//! (need a layout provider; not implemented to avoid fake values), `fetch`/XHR,
+//! `crypto.getRandomValues` (deliberately no real randomness), dataset writes,
+//! `innerText` block layout, `Range`, `URLSearchParams` relative-state sync and
+//! live `NodeList`.
+//!
 pub mod error;
 #[cfg(feature = "js")]
 pub mod events;

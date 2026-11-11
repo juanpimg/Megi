@@ -298,12 +298,15 @@ fn documented_unsupported_apis_are_absent() {
         r#"
         var div = document.createElement('div');
         var gaps = [
-          typeof fetch, typeof div.dataset, typeof div.innerText, typeof div.attributes,
-          typeof div.normalize, typeof div.compareDocumentPosition,
-          typeof div.getBoundingClientRect, typeof URLSearchParams, typeof queueMicrotask,
-          typeof MouseEvent
+          typeof fetch, typeof div.getBoundingClientRect,
+          typeof div.offsetWidth, typeof crypto
         ];
-        gaps.every(function (value) { return value === 'undefined'; });
+        var supported = [
+          typeof URLSearchParams, typeof queueMicrotask, typeof MouseEvent,
+          typeof structuredClone, typeof atob, typeof btoa
+        ];
+        gaps.every(function (value) { return value === 'undefined'; }) &&
+          supported.every(function (value) { return value === 'function'; });
         "#,
     );
     assert_eq!(

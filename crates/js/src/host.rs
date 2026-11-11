@@ -265,6 +265,8 @@ pub(crate) struct Host {
     /// MutationObserver registrations and pending records.
     pub observers: Vec<ObserverRegistration>,
     pub mutations: Vec<MutationRecord>,
+    /// Currently focused element (best-effort `focus()`/`blur()` bookkeeping).
+    pub active_element: Option<NodeId>,
     /// ES module resolver/loader injected by the host (no I/O in `js`).
     pub module_resolver: Option<ModuleResolver>,
     pub module_loader: Option<ModuleLoader>,
@@ -304,6 +306,7 @@ impl Host {
             storage_provider: None,
             observers: Vec::new(),
             mutations: Vec::new(),
+            active_element: None,
             module_resolver: None,
             module_loader: None,
         }

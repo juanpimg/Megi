@@ -514,6 +514,7 @@ fn install_globals(context: &mut Context, host: &Rc<RefCell<Host>>) -> Result<()
     }
     crate::events::install(context)?;
     install_browser_features(context)?;
+    install_gap_apis(context)?;
     Ok(())
 }
 
@@ -774,6 +775,7 @@ fn build_document_object(context: &mut Context) -> JsObject {
         .into_iter()
         .map(|(name, get, set)| (name, accessor_fn(context, get), accessor_fn(context, set)))
         .collect();
+    let active_element = pick(context, document_active_element);
     let mut init = ObjectInitializer::new(context);
     // Methods.
     for (name, length, function) in [
@@ -798,6 +800,12 @@ fn build_document_object(context: &mut Context) -> JsObject {
             "createDocumentFragment",
             0,
             document_create_document_fragment,
+        ),
+        ("normalize", 0, document_normalize),
+        (
+            "compareDocumentPosition",
+            2,
+            document_compare_document_position,
         ),
     ] {
         init.function(native(function), js_string!(name), length);
@@ -825,6 +833,12 @@ fn build_document_object(context: &mut Context) -> JsObject {
         js_string!("title"),
         Some(title_get),
         Some(title_set),
+        Attribute::all(),
+    );
+    init.accessor(
+        js_string!("activeElement"),
+        Some(active_element),
+        None,
         Attribute::all(),
     );
     init.accessor(js_string!("URL"), Some(url), None, Attribute::all());
@@ -869,7 +883,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 18] = [
+    let accessors: [(&str, AccessorKind); 21] = [
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
         ("className", AccessorKind::ClassName),
@@ -888,6 +902,9 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("disabled", AccessorKind::Disabled),
         ("selected", AccessorKind::Selected),
         ("options", AccessorKind::Options),
+        ("innerText", AccessorKind::InnerText),
+        ("dataset", AccessorKind::Dataset),
+        ("attributes", AccessorKind::Attributes),
     ];
     type Prepared<'a> = (
         &'a str,
@@ -942,6 +959,11 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("insertAdjacentHTML", 2, node_insert_adjacent_html),
         ("insertAdjacentText", 2, node_insert_adjacent_text),
         ("cloneNode", 1, node_clone_node),
+        ("normalize", 0, node_normalize),
+        ("compareDocumentPosition", 1, node_compare_document_position),
+        ("focus", 0, node_focus),
+        ("blur", 0, node_blur),
+        ("scrollIntoView", 0, node_scroll_into_view),
     ] {
         init.function(native(function), js_string!(name), length);
     }
@@ -980,6 +1002,9 @@ enum AccessorKind {
     Disabled,
     Selected,
     Options,
+    InnerText,
+    Dataset,
+    Attributes,
 }
 
 fn accessor_functions(kind: AccessorKind) -> AccessorPair {
@@ -1002,6 +1027,9 @@ fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::Disabled => (node_disabled_get, Some(node_disabled_set)),
         AccessorKind::Selected => (node_selected_get, Some(node_selected_set)),
         AccessorKind::Options => (node_options, None),
+        AccessorKind::InnerText => (node_inner_text_get, Some(node_text_content_set)),
+        AccessorKind::Dataset => (node_dataset_get, None),
+        AccessorKind::Attributes => (node_attributes_get, None),
     }
 }
 
@@ -3539,4 +3567,421 @@ impl JsRuntime {
             exports: values,
         })
     }
+}
+
+// ---------------------------------------------------------------------------
+// Round 27 DOM/JS gap APIs
+// ---------------------------------------------------------------------------
+
+fn node_inner_text_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let text = with_host(|host| host.document.text_content(node_id)).unwrap_or_default();
+    Ok(JsValue::from(js_string!(text)))
+}
+
+fn camel_case_attribute(name: &str) -> Option<String> {
+    let suffix = name.strip_prefix("data-")?;
+    let mut out = String::new();
+    let mut upper = false;
+    for ch in suffix.chars() {
+        if ch == '-' {
+            upper = true;
+        } else if upper {
+            out.extend(ch.to_uppercase());
+            upper = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    Some(out)
+}
+
+fn node_dataset_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let entries: Vec<(String, String)> = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .map(|element| {
+                element
+                    .attributes
+                    .iter()
+                    .filter_map(|attribute| {
+                        camel_case_attribute(&attribute.local_name)
+                            .map(|key| (key, attribute.value.clone()))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+    .unwrap_or_default();
+    let mut init = ObjectInitializer::new(context);
+    for (key, value) in entries {
+        init.property(
+            js_string!(key),
+            JsValue::from(js_string!(value)),
+            Attribute::all(),
+        );
+    }
+    Ok(JsValue::from(init.build()))
+}
+
+fn attribute_item(context: &mut Context, name: &str, value: &str) -> JsResult<JsValue> {
+    let mut init = ObjectInitializer::new(context);
+    init.property(
+        js_string!("name"),
+        JsValue::from(js_string!(name.to_string())),
+        Attribute::all(),
+    );
+    init.property(
+        js_string!("value"),
+        JsValue::from(js_string!(value.to_string())),
+        Attribute::all(),
+    );
+    Ok(JsValue::from(init.build()))
+}
+
+fn attributes_of(this: &JsValue, context: &mut Context) -> JsResult<(u32, Vec<(String, String)>)> {
+    let node_id = this_node(this, context)?;
+    let attributes = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .map(|element| {
+                element
+                    .attributes
+                    .iter()
+                    .map(|attribute| (attribute.local_name.clone(), attribute.value.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    })
+    .unwrap_or_default();
+    let handle = with_host(|host| host.handle_for(node_id))
+        .ok_or_else(|| js_error("no active JavaScript host"))?
+        .map_err(js_error)?;
+    Ok((handle, attributes))
+}
+
+fn node_attributes_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let (handle, attributes) = attributes_of(this, context)?;
+    let mut items = Vec::with_capacity(attributes.len());
+    for (name, value) in &attributes {
+        items.push(attribute_item(context, name, value)?);
+    }
+    let mut init = ObjectInitializer::new(context);
+    init.property(
+        js_string!("__megi_attr_node"),
+        JsValue::from(f64::from(handle)),
+        Attribute::all(),
+    );
+    init.property(
+        js_string!("length"),
+        JsValue::from(attributes.len() as f64),
+        Attribute::all(),
+    );
+    for (index, item) in items.into_iter().enumerate() {
+        init.property(js_string!(index.to_string()), item, Attribute::all());
+    }
+    init.function(native(attributes_item), js_string!("item"), 1);
+    init.function(native(attributes_get_named), js_string!("getNamedItem"), 1);
+    init.function(
+        native(attributes_remove_named),
+        js_string!("removeNamedItem"),
+        1,
+    );
+    Ok(JsValue::from(init.build()))
+}
+
+fn attributes_handle(this: &JsValue, context: &mut Context) -> JsResult<u32> {
+    let object = this
+        .as_object()
+        .ok_or_else(|| js_error("attributes receiver"))?;
+    object
+        .get(js_string!("__megi_attr_node"), context)
+        .map_err(|error| js_error(error.to_string()))?
+        .as_number()
+        .filter(|number| *number >= 0.0)
+        .map(|number| number as u32)
+        .ok_or_else(|| js_error("invalid NamedNodeMap"))
+}
+
+fn attributes_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let handle = attributes_handle(this, context)?;
+    let index = args
+        .first()
+        .and_then(|value| value.as_number())
+        .unwrap_or(0.0) as usize;
+    let node_id = with_host(|host| host.node_for_handle(handle))
+        .ok_or_else(|| js_error("no active JavaScript host"))?
+        .map_err(js_error)?;
+    let attribute = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.attributes.get(index))
+            .map(|attribute| (attribute.local_name.clone(), attribute.value.clone()))
+    })
+    .flatten();
+    match attribute {
+        Some((name, value)) => attribute_item(context, &name, &value),
+        None => Ok(JsValue::null()),
+    }
+}
+
+fn attributes_get_named(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let handle = attributes_handle(this, context)?;
+    let name = arg_string(args, 0, context)?;
+    let node_id = with_host(|host| host.node_for_handle(handle))
+        .ok_or_else(|| js_error("no active JavaScript host"))?
+        .map_err(js_error)?;
+    let value = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute(&name).map(str::to_owned))
+    })
+    .flatten();
+    match value {
+        Some(value) => attribute_item(context, &name, &value),
+        None => Ok(JsValue::null()),
+    }
+}
+
+fn attributes_remove_named(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let handle = attributes_handle(this, context)?;
+    let name = arg_string(args, 0, context)?;
+    let node_id = with_host(|host| host.node_for_handle(handle))
+        .ok_or_else(|| js_error("no active JavaScript host"))?
+        .map_err(js_error)?;
+    let old = with_host(|host| {
+        host.document
+            .try_node_mut(node_id)
+            .and_then(|node| node.as_element_mut())
+            .and_then(|element| element.remove_attribute(&name))
+    })
+    .flatten();
+    note_mutation(
+        MutationKind::Attributes,
+        node_id,
+        Some(name.clone()),
+        old.clone(),
+    );
+    match old {
+        Some(value) => attribute_item(context, &name, &value),
+        None => Err(js_error("NotFoundError: attribute not present")),
+    }
+}
+
+fn node_normalize(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let removed = with_host(|host| host.document.normalize(node_id)).unwrap_or(0);
+    Ok(JsValue::from(removed as f64))
+}
+
+fn node_compare_document_position(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let other = argument_node(args, 0, context)?;
+    let bits =
+        with_host(|host| host.document.compare_document_position(node_id, other)).unwrap_or(0);
+    Ok(JsValue::from(bits as f64))
+}
+
+fn node_focus(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    with_host(|host| host.active_element = Some(node_id));
+    Ok(JsValue::undefined())
+}
+
+fn node_blur(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+    with_host(|host| host.active_element = None);
+    Ok(JsValue::undefined())
+}
+
+fn node_scroll_into_view(
+    _this: &JsValue,
+    _args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<JsValue> {
+    // Documented no-op: `js` has no layout/viewport provider for scrolling.
+    Ok(JsValue::undefined())
+}
+
+fn document_active_element(
+    _this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    match with_host(|host| host.active_element) {
+        Some(Some(node_id)) => wrap_node(context, node_id),
+        _ => Ok(JsValue::null()),
+    }
+}
+
+fn document_normalize(
+    _this: &JsValue,
+    _args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<JsValue> {
+    let removed = with_host(|host| {
+        let root = host.document.document_element();
+        root.map(|root| host.document.normalize(root)).unwrap_or(0)
+    })
+    .unwrap_or(0);
+    Ok(JsValue::from(removed as f64))
+}
+
+fn document_compare_document_position(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let first = argument_node(args, 0, context)?;
+    let second = argument_node(args, 1, context)?;
+    let bits =
+        with_host(|host| host.document.compare_document_position(first, second)).unwrap_or(0);
+    Ok(JsValue::from(bits as f64))
+}
+
+/// Installs small standard-library gap APIs (URL/SearchParams, base64, structuredClone,
+/// queueMicrotask, requestIdleCallback, MouseEvent/PointerEvent and Node constants).
+fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
+    const PRELUDE: &str = r#"
+(function () {
+  function define(name, value) { window[name] = value; }
+  function urlParse(input, base) {
+    var value = String(input);
+    var match = /^([A-Za-z][A-Za-z0-9+.-]*:)(\/\/[^\/?#]*)?([^?#]*)(\?[^#]*)?(#.*)?$/.exec(value);
+    if (!match && base) {
+      var baseMatch = /^([A-Za-z][A-Za-z0-9+.-]*:)(\/\/[^\/?#]*)?([^?#]*)(\?[^#]*)?(#.*)?$/.exec(String(base));
+      if (baseMatch) {
+        var origin = baseMatch[1] + (baseMatch[2] || "");
+        var path = baseMatch[3] || "/";
+        if (value.charAt(0) === "/") { path = value; }
+        else { path = path.substring(0, path.lastIndexOf("/") + 1) + value; }
+        match = /^([A-Za-z][A-Za-z0-9+.-]*:)(\/\/[^\/?#]*)?([^?#]*)(\?[^#]*)?(#.*)?$/.exec(origin + path);
+      }
+    }
+    if (!match) { throw new TypeError("Invalid URL: " + value); }
+    var protocol = match[1];
+    var hostPart = match[2] || "";
+    var pathname = match[3] || "/";
+    var search = match[4] || "";
+    var hash = match[5] || "";
+    var hostname = hostPart.replace(/^\/\//, "");
+    var port = "";
+    var colon = hostname.lastIndexOf(":");
+    if (colon > 0) { port = hostname.substring(colon + 1); hostname = hostname.substring(0, colon); }
+    return {
+      href: protocol + hostPart + pathname + search + hash,
+      protocol: protocol, host: hostPart.replace(/^\/\//, ""), hostname: hostname, port: port,
+      pathname: pathname, search: search, hash: hash,
+      origin: protocol + hostPart
+    };
+  }
+  function SearchParams(init) {
+    this._list = [];
+    if (typeof init === "string") {
+      init.replace(/^\?/, "").split("&").forEach(function (pair) {
+        if (!pair) { return; }
+        var index = pair.indexOf("=");
+        var key = index < 0 ? pair : pair.substring(0, index);
+        var value = index < 0 ? "" : pair.substring(index + 1);
+        this._list.push([decodeURIComponent(key.replace(/\+/g, " ")), decodeURIComponent(value.replace(/\+/g, " "))]);
+      }, this);
+    } else if (init && init._list) {
+      this._list = init._list.map(function (pair) { return [pair[0], pair[1]]; });
+    }
+  }
+  SearchParams.prototype.append = function (key, value) { this._list.push([String(key), String(value)]); };
+  SearchParams.prototype["delete"] = function (key) { this._list = this._list.filter(function (pair) { return pair[0] !== String(key); }); };
+  SearchParams.prototype.get = function (key) { for (var i = 0; i < this._list.length; i++) { if (this._list[i][0] === String(key)) { return this._list[i][1]; } } return null; };
+  SearchParams.prototype.getAll = function (key) { return this._list.filter(function (pair) { return pair[0] === String(key); }).map(function (pair) { return pair[1]; }); };
+  SearchParams.prototype.has = function (key) { return this.get(key) !== null; };
+  SearchParams.prototype.set = function (key, value) { var found = false; var out = []; this._list.forEach(function (pair) { if (pair[0] === String(key)) { if (!found) { out.push([String(key), String(value)]); found = true; } } else { out.push(pair); } }); if (!found) { out.push([String(key), String(value)]); } this._list = out; };
+  SearchParams.prototype.toString = function () { return this._list.map(function (pair) { return encodeURIComponent(pair[0]) + "=" + encodeURIComponent(pair[1]); }).join("&"); };
+  SearchParams.prototype.forEach = function (callback, thisArg) { this._list.forEach(function (pair) { callback.call(thisArg, pair[1], pair[0], this); }, this); };
+  define("URLSearchParams", SearchParams);
+  function URL(input, base) {
+    var parsed = urlParse(input, base);
+    for (var key in parsed) { if (Object.prototype.hasOwnProperty.call(parsed, key)) { this[key] = parsed[key]; } }
+    this.searchParams = new SearchParams(parsed.search);
+  }
+  URL.prototype.toString = function () { return this.href; };
+  URL.prototype.toJSON = function () { return this.href; };
+  define("URL", URL);
+  var BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  define("btoa", function (input) {
+    var value = String(input); var out = "";
+    for (var i = 0; i < value.length; i += 3) {
+      var a = value.charCodeAt(i), b = value.charCodeAt(i + 1), c = value.charCodeAt(i + 2);
+      var triple = (a << 16) | ((b || 0) << 8) | (c || 0);
+      out += BASE64.charAt((triple >> 18) & 63) + BASE64.charAt((triple >> 12) & 63) + (isNaN(b) ? "=" : BASE64.charAt((triple >> 6) & 63)) + (isNaN(c) ? "=" : BASE64.charAt(triple & 63));
+    }
+    return out;
+  });
+  define("atob", function (input) {
+    var value = String(input).replace(/[^A-Za-z0-9+/=]/g, ""); var out = "";
+    for (var i = 0; i < value.length; i += 4) {
+      var n = (BASE64.indexOf(value.charAt(i)) << 18) | (BASE64.indexOf(value.charAt(i + 1)) << 12) | ((value.charAt(i + 2) === "=" ? 0 : BASE64.indexOf(value.charAt(i + 2))) << 6) | (value.charAt(i + 3) === "=" ? 0 : BASE64.indexOf(value.charAt(i + 3)));
+      out += String.fromCharCode((n >> 16) & 255);
+      if (value.charAt(i + 2) !== "=") { out += String.fromCharCode((n >> 8) & 255); }
+      if (value.charAt(i + 3) !== "=") { out += String.fromCharCode(n & 255); }
+    }
+    return out;
+  });
+  function clone(value, depth) {
+    if (depth > 100 || value === null || typeof value !== "object") { return value; }
+    if (value instanceof Date) { return new Date(value.getTime()); }
+    if (value instanceof Map) { var map = new Map(); value.forEach(function (v, k) { map.set(clone(k, depth + 1), clone(v, depth + 1)); }); return map; }
+    if (value instanceof Set) { var set = new Set(); value.forEach(function (v) { set.add(clone(v, depth + 1)); }); return set; }
+    if (Array.isArray(value)) { return value.map(function (item) { return clone(item, depth + 1); }); }
+    var out = {}; for (var key in value) { if (Object.prototype.hasOwnProperty.call(value, key)) { out[key] = clone(value[key], depth + 1); } } return out;
+  }
+  define("structuredClone", function (value) { return clone(value, 0); });
+  if (typeof Promise !== "undefined") { define("queueMicrotask", function (callback) { Promise.resolve().then(callback); }); }
+  else { define("queueMicrotask", function (callback) { setTimeout(callback, 0); }); }
+  define("requestIdleCallback", function (callback) { return setTimeout(function () { callback({ didTimeout: false, timeRemaining: function () { return 50; } }); }, 0); });
+  define("cancelIdleCallback", function (id) { clearTimeout(id); });
+  function makeMouseEvent(type, init) {
+    init = init || {};
+    this.__megi_event = true;
+    this.type = String(type); this.bubbles = !!init.bubbles; this.cancelable = !!init.cancelable;
+    this.relatedTarget = init.relatedTarget || null;
+    this.clientX = init.clientX || 0; this.clientY = init.clientY || 0;
+    this.button = init.button || 0; this.defaultPrevented = false;
+  }
+  makeMouseEvent.prototype.preventDefault = function () { this.defaultPrevented = true; };
+  makeMouseEvent.prototype.stopPropagation = function () {};
+  makeMouseEvent.prototype.stopImmediatePropagation = function () {};
+  define("MouseEvent", makeMouseEvent);
+  define("PointerEvent", function (type, init) { makeMouseEvent.call(this, type, init); this.pointerId = (init && init.pointerId) || 0; });
+  if (typeof Event === "function" && Event.prototype) { define("PointerEvent", (function (Base) { function PointerEvent(type, init) { Base.call(this, type, init || {}); this.pointerId = (init && init.pointerId) || 0; } PointerEvent.prototype = Object.create(Base.prototype); PointerEvent.prototype.constructor = PointerEvent; return PointerEvent; })(Event)); }
+  define("Node", { DOCUMENT_POSITION_DISCONNECTED: 1, DOCUMENT_POSITION_PRECEDING: 2, DOCUMENT_POSITION_FOLLOWING: 4, DOCUMENT_POSITION_CONTAINS: 8, DOCUMENT_POSITION_CONTAINED_BY: 16, DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: 32 });
+})();
+"#;
+    context
+        .eval(Source::from_bytes(PRELUDE))
+        .map(|_| ())
+        .map_err(|error| JsError::Internal(error.to_string()))
 }

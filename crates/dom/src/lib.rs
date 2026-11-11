@@ -1597,6 +1597,122 @@ impl Document {
     /// Comments, processing instructions, doctypes and inert `<template>` contents are
     /// excluded; a `Text` node returns its own data. Unknown handles return an empty
     /// string. Cost: `O(subtree)` with an explicit heap stack (safe on deep trees).
+    /// Merges adjacent text nodes and removes empty text nodes under `node_id`.
+    ///
+    /// Returns the number of nodes removed (for diagnostics/tests).
+    pub fn normalize(&mut self, node_id: NodeId) -> usize {
+        // Normalize descendants first (DOM spec normalizes the whole subtree).
+        let mut nested: Vec<NodeId> = Vec::new();
+        let mut cursor = self.try_node(node_id).and_then(|node| node.first_child);
+        while let Some(child) = cursor {
+            nested.push(child);
+            cursor = self.try_node(child).and_then(|node| node.next_sibling);
+        }
+        let mut removed_descendants = 0;
+        for child in nested {
+            removed_descendants += self.normalize(child);
+        }
+        let mut children: Vec<NodeId> = Vec::new();
+        let mut current = self.try_node(node_id).and_then(|node| node.first_child);
+        while let Some(child) = current {
+            children.push(child);
+            current = self.try_node(child).and_then(|node| node.next_sibling);
+        }
+        let mut removed = 0;
+        let mut previous_text: Option<NodeId> = None;
+        for child in children {
+            let text = self
+                .try_node(child)
+                .and_then(|node| node.as_text().map(str::to_owned));
+            let Some(text) = text else {
+                previous_text = None;
+                continue;
+            };
+            if text.is_empty() {
+                self.remove_node(child);
+                removed += 1;
+                continue;
+            }
+            if let Some(previous) = previous_text {
+                if let Some(node) = self.try_node_mut(previous)
+                    && let NodeKind::Text(existing) = &mut node.kind
+                {
+                    existing.push_str(&text);
+                }
+                self.remove_node(child);
+                removed += 1;
+            } else {
+                previous_text = Some(child);
+            }
+        }
+        removed + removed_descendants
+    }
+
+    /// Implements the `compareDocumentPosition` bit mask subset (same document).
+    pub fn compare_document_position(&self, a: NodeId, b: NodeId) -> u16 {
+        const DISCONNECTED: u16 = 1;
+        const PRECEDING: u16 = 2;
+        const FOLLOWING: u16 = 4;
+        const CONTAINS: u16 = 8;
+        const CONTAINED_BY: u16 = 16;
+        const IMPLEMENTATION_SPECIFIC: u16 = 32;
+        if a == b {
+            return 0;
+        }
+        let ancestor = |mut node: NodeId, target: NodeId| -> bool {
+            while let Some(parent) = self.try_node(node).and_then(|item| item.parent) {
+                if parent == target {
+                    return true;
+                }
+                node = parent;
+            }
+            false
+        };
+        if ancestor(b, a) {
+            return CONTAINED_BY | FOLLOWING;
+        }
+        if ancestor(a, b) {
+            return CONTAINS | PRECEDING;
+        }
+        let mut a_ancestors = Vec::new();
+        let mut node = a;
+        while let Some(parent) = self.try_node(node).and_then(|item| item.parent) {
+            a_ancestors.push(parent);
+            node = parent;
+        }
+        let mut b_ancestors = Vec::new();
+        let mut node = b;
+        while let Some(parent) = self.try_node(node).and_then(|item| item.parent) {
+            b_ancestors.push(parent);
+            node = parent;
+        }
+        let common = a_ancestors
+            .iter()
+            .rev()
+            .find(|ancestor| b_ancestors.contains(ancestor));
+        let Some(common) = common else {
+            return DISCONNECTED | IMPLEMENTATION_SPECIFIC;
+        };
+        let mut child_a = a;
+        while self.try_node(child_a).and_then(|node| node.parent) != Some(*common) {
+            let Some(parent) = self.try_node(child_a).and_then(|node| node.parent) else {
+                return DISCONNECTED | IMPLEMENTATION_SPECIFIC;
+            };
+            child_a = parent;
+        }
+        let mut current = self.try_node(*common).and_then(|node| node.first_child);
+        while let Some(child) = current {
+            if child == child_a {
+                return FOLLOWING;
+            }
+            if child == b {
+                return PRECEDING;
+            }
+            current = self.try_node(child).and_then(|node| node.next_sibling);
+        }
+        PRECEDING
+    }
+
     pub fn text_content(&self, node_id: NodeId) -> String {
         let Some(node) = self.try_node(node_id) else {
             return String::new();
