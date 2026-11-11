@@ -37,7 +37,10 @@
 //!
 //! ## Deliberate limitations
 //!
-//! - [`fetch`] only issues `GET` (and follows redirects with `GET`); other methods and
+//! - [`fetch`]/[`fetch_with_headers`] issue `GET`; [`fetch_with_method`] adds arbitrary
+//!   methods with optional bodies (Content-Length or chunked), trailers and
+//!   `Expect: 100-continue`; redirects follow the fetch rules. Old note: earlier the
+//!   client only issued `GET`; other methods and
 //!   custom CORS-preflighted requests need the explicit [`preflight`] entry point. No
 //!   `Referer`, proxies, HTTP/2, connection reuse or redirect method rewriting.
 //! - Compression covers single `gzip`/`deflate` codings; the response body is buffered
@@ -175,6 +178,8 @@ pub struct Response {
     pub content_range: Option<ContentRange>,
     /// `true` when the server advertised `Accept-Ranges: bytes`.
     pub accept_ranges: bool,
+    /// Trailing response headers (HTTP/2 trailer HEADERS or HTTP/1.1 chunked trailers).
+    pub trailers: Headers,
 }
 
 impl Response {
@@ -235,10 +240,48 @@ pub fn fetch_with_headers(
     options: &FetchOptions,
     extra_headers: &[(&str, &str)],
 ) -> Result<Response, FetchError> {
+    fetch_with_method(url, options, "GET", extra_headers, None)
+}
+
+/// Fetches `url` with an arbitrary method and optional request body.
+///
+/// - `POST`/`PUT` bodies are sent with `Content-Length`; a caller-supplied
+///   `Transfer-Encoding: chunked` makes the HTTP/1.1 path use chunked framing.
+/// - `Expect: 100-continue` waits for the interim response before sending the body
+///   (HTTP/2: interim HEADERS; HTTP/1.1: `100 Continue`), bounded by the socket timeout.
+/// - Redirects: `303` (and `301/302` for non-`GET/HEAD`) switch to `GET` without body;
+///   `307/308` preserve method and body.
+/// - Trailing headers are exposed on [`Response::trailers`] (HTTP/2 trailers and
+///   HTTP/1.1 chunked trailers).
+pub fn fetch_with_method(
+    url: &Url,
+    options: &FetchOptions,
+    method: &str,
+    extra_headers: &[(&str, &str)],
+    body: Option<&[u8]>,
+) -> Result<Response, FetchError> {
+    let mut method = method.trim().to_ascii_uppercase();
+    if method.is_empty()
+        || !method
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+    {
+        return Err(FetchError::InvalidResponse(format!(
+            "invalid request method `{method}`"
+        )));
+    }
+    let mut body: Option<Vec<u8>> = body.map(|body| body.to_vec());
     let mut current = url.clone();
     let mut redirects = 0usize;
     loop {
-        let raw = fetch_once(&current, options, "GET", extra_headers, true)?;
+        let raw = fetch_once(
+            &current,
+            options,
+            &method,
+            extra_headers,
+            body.as_deref(),
+            true,
+        )?;
         // Store `Set-Cookie` for every hop (browsers do this before following a
         // redirect so the next request already sees the new cookies).
         if let Some(jar) = &options.cookie_jar {
@@ -275,10 +318,19 @@ pub fn fetch_with_headers(
                 final_url: current,
                 content_range,
                 accept_ranges,
+                trailers: raw.trailers,
             });
         }
         if redirects >= options.max_redirects {
             return Err(FetchError::TooManyRedirects);
+        }
+        // Fetch semantics: 303 (and 301/302 on non-GET/HEAD) become GET without body;
+        // 307/308 preserve the method and body.
+        if raw.status == 303
+            || (matches!(raw.status, 301 | 302) && method != "GET" && method != "HEAD")
+        {
+            method = "GET".to_owned();
+            body = None;
         }
         let location = raw
             .headers
@@ -391,7 +443,7 @@ pub fn preflight(
         .iter()
         .map(|(name, value)| (name.as_str(), value.as_str()))
         .collect();
-    let raw = fetch_once(url, options, "OPTIONS", &extra_refs, false)?;
+    let raw = fetch_once(url, options, "OPTIONS", &extra_refs, None, false)?;
     if !(200..300).contains(&raw.status) {
         return Err(FetchError::Cors(format!(
             "preflight response status {} is not ok",
@@ -414,6 +466,7 @@ struct RawResponse {
     reason: String,
     headers: Headers,
     body: Vec<u8>,
+    trailers: Headers,
 }
 
 fn is_redirect(status: u16) -> bool {
@@ -425,6 +478,7 @@ fn fetch_once(
     options: &FetchOptions,
     method: &str,
     extra_headers: &[(&str, &str)],
+    body: Option<&[u8]>,
     include_cookies: bool,
 ) -> Result<RawResponse, FetchError> {
     let host = url.host_for_dns();
@@ -473,7 +527,7 @@ fn fetch_once(
         Scheme::Http => (Transport::Plain(tcp_stream), false),
         Scheme::Https => {
             let (transport, negotiated_h2) =
-                connect_tls(host, tcp_stream, options, method == "GET")?;
+                connect_tls(host, tcp_stream, options, method != "OPTIONS")?;
             (transport, negotiated_h2)
         }
         Scheme::File | Scheme::Data => {
@@ -538,45 +592,122 @@ fn fetch_once(
             max_body: options.max_response_bytes,
             ..crate::h2::client::Limits::default()
         };
-        let response = crate::h2::client::get(
-            &mut stream,
+        let request = crate::h2::client::H2Request::new(
+            method,
             "https",
             &host_header,
             &url.request_target(),
             &request_headers,
-            &limits,
-        )?;
+            body.map(<[u8]>::to_vec),
+        );
+        let mut results = crate::h2::client::request_many(&mut stream, &[request], &limits)?;
+        let response = results
+            .pop()
+            .ok_or_else(|| FetchError::InvalidResponse("no HTTP/2 response".to_owned()))??;
         return Ok(RawResponse {
             status: response.status,
             reason: response.reason,
             headers: response.headers,
             body: response.body,
+            trailers: response.trailers,
         });
     }
 
-    let mut request = format!(
+    let expect_continue = request_headers.iter().any(|(name, value)| {
+        name.eq_ignore_ascii_case("expect") && value.to_ascii_lowercase().contains("100-continue")
+    });
+    let chunked = request_headers.iter().any(|(name, value)| {
+        name.eq_ignore_ascii_case("transfer-encoding")
+            && value
+                .split(',')
+                .any(|token| token.trim().eq_ignore_ascii_case("chunked"))
+    });
+    let has_content_length = request_headers
+        .iter()
+        .any(|(name, _)| name.eq_ignore_ascii_case("content-length"));
+    if let Some(body) = body
+        && !chunked
+        && !has_content_length
+    {
+        request_headers.push(("Content-Length".to_owned(), body.len().to_string()));
+    }
+    let mut head = format!(
         "{method} {} HTTP/1.1\r\nHost: {host_header}\r\n",
         url.request_target(),
     );
     for (name, value) in &request_headers {
-        request.push_str(name);
-        request.push_str(": ");
-        request.push_str(value);
-        request.push_str("\r\n");
+        head.push_str(name);
+        head.push_str(": ");
+        head.push_str(value);
+        head.push_str("\r\n");
     }
-    request.push_str("Connection: close\r\n\r\n");
-    stream.write_all(request.as_bytes()).map_err(map_io_error)?;
+    head.push_str("Connection: close\r\n\r\n");
+
+    let encode_body = |body: &[u8]| -> Vec<u8> {
+        if chunked {
+            let mut framed = Vec::with_capacity(body.len() + 32);
+            if !body.is_empty() {
+                framed.extend_from_slice(format!("{:x}\r\n", body.len()).as_bytes());
+                framed.extend_from_slice(body);
+                framed.extend_from_slice(b"\r\n");
+            }
+            framed.extend_from_slice(b"0\r\n\r\n");
+            framed
+        } else {
+            body.to_vec()
+        }
+    };
+
+    if expect_continue && let Some(body) = body {
+        // Send only the head, wait for the interim response, then stream the body.
+        stream.write_all(head.as_bytes()).map_err(map_io_error)?;
+        stream.flush().map_err(map_io_error)?;
+        let mut reader = ConnReader::new(stream);
+        let interim_head = reader.read_head(options.max_header_bytes)?;
+        let (status, reason, headers) = parse_head(&interim_head)?;
+        if status == 100 {
+            reader.write_all(&encode_body(body))?;
+            reader.flush()?;
+            let final_head = reader.read_head(options.max_header_bytes)?;
+            let (status, reason, headers) = parse_head(&final_head)?;
+            let (body, trailers) = read_body(&mut reader, status, &headers, options)?;
+            return Ok(RawResponse {
+                status,
+                reason,
+                headers,
+                body,
+                trailers,
+            });
+        }
+        // The server answered without 100-continue: don't send the body.
+        let (body, trailers) = read_body(&mut reader, status, &headers, options)?;
+        return Ok(RawResponse {
+            status,
+            reason,
+            headers,
+            body,
+            trailers,
+        });
+    }
+
+    stream.write_all(head.as_bytes()).map_err(map_io_error)?;
+    if let Some(body) = body {
+        stream.write_all(&encode_body(body)).map_err(map_io_error)?;
+    } else if chunked {
+        stream.write_all(&encode_body(&[])).map_err(map_io_error)?;
+    }
     stream.flush().map_err(map_io_error)?;
 
     let mut reader = ConnReader::new(stream);
-    let head = reader.read_head(options.max_header_bytes)?;
-    let (status, reason, headers) = parse_head(&head)?;
-    let body = read_body(&mut reader, status, &headers, options)?;
+    let final_head = reader.read_head(options.max_header_bytes)?;
+    let (status, reason, headers) = parse_head(&final_head)?;
+    let (body, trailers) = read_body(&mut reader, status, &headers, options)?;
     Ok(RawResponse {
         status,
         reason,
         headers,
         body,
+        trailers,
     })
 }
 
@@ -775,9 +906,9 @@ fn read_body(
     status: u16,
     headers: &Headers,
     options: &FetchOptions,
-) -> Result<Vec<u8>, FetchError> {
+) -> Result<(Vec<u8>, Headers), FetchError> {
     if (100..200).contains(&status) || status == 204 || status == 304 {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     }
     let header = |name: &str| {
         headers
@@ -800,9 +931,12 @@ fn read_body(
         if length > options.max_response_bytes {
             return Err(FetchError::ResponseTooLarge);
         }
-        return reader.read_exact_body(length);
+        return Ok((reader.read_exact_body(length)?, Vec::new()));
     }
-    reader.read_to_end_capped(options.max_response_bytes)
+    Ok((
+        reader.read_to_end_capped(options.max_response_bytes)?,
+        Vec::new(),
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -934,7 +1068,15 @@ impl ConnReader {
         }
     }
 
-    fn read_chunked(&mut self, max_bytes: usize) -> Result<Vec<u8>, FetchError> {
+    fn write_all(&mut self, bytes: &[u8]) -> Result<(), FetchError> {
+        self.stream.write_all(bytes).map_err(map_io_error)
+    }
+
+    fn flush(&mut self) -> Result<(), FetchError> {
+        self.stream.flush().map_err(map_io_error)
+    }
+
+    fn read_chunked(&mut self, max_bytes: usize) -> Result<(Vec<u8>, Headers), FetchError> {
         let mut body = Vec::new();
         loop {
             let Some(size_line) = self.read_line(1024)? else {
@@ -951,12 +1093,18 @@ impl ConnReader {
                 FetchError::InvalidResponse(format!("invalid chunk size `{size_text}`"))
             })?;
             if size == 0 {
-                // Consume optional trailer headers up to the terminating empty line.
+                // Trailer headers followed by a terminating empty line.
+                let mut trailers = Vec::new();
                 loop {
                     match self.read_line(1024)? {
-                        None => return Ok(body),
-                        Some(line) if line.is_empty() => return Ok(body),
-                        Some(_) => {}
+                        None => return Ok((body, trailers)),
+                        Some(line) if line.is_empty() => return Ok((body, trailers)),
+                        Some(line) => {
+                            let text = String::from_utf8_lossy(&line);
+                            if let Some((name, value)) = text.split_once(':') {
+                                trailers.push((name.trim().to_owned(), value.trim().to_owned()));
+                            }
+                        }
                     }
                 }
             }

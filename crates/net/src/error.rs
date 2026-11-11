@@ -75,6 +75,8 @@ pub enum FetchError {
     /// state, GOAWAY/RST_STREAM with an error code, or a connection that ended
     /// before the response was complete.
     Http2(String),
+    /// The request body exceeded the configured cap.
+    RequestBodyTooLarge,
     /// The response headers exceeded [`crate::http::FetchOptions::max_header_bytes`].
     HeadersTooLarge,
     /// The response body exceeded [`crate::http::FetchOptions::max_response_bytes`].
@@ -140,6 +142,7 @@ impl fmt::Display for FetchError {
             Self::Timeout => write!(f, "network operation timed out"),
             Self::InvalidResponse(reason) => write!(f, "malformed HTTP response: {reason}"),
             Self::Http2(reason) => write!(f, "HTTP/2 error: {reason}"),
+            Self::RequestBodyTooLarge => write!(f, "request body too large"),
             Self::HeadersTooLarge => write!(f, "HTTP response headers are too large"),
             Self::ResponseTooLarge => write!(f, "HTTP response body is too large"),
             Self::BodyIncomplete => write!(f, "HTTP response body ended prematurely"),

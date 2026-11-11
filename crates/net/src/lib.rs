@@ -57,8 +57,9 @@
 //!
 //! ## Deliberate limitations / next steps (Phase 5 continuation)
 //!
-//! - HTTP/2 (`h2`) supports multiplexed GET streams with connection/stream flow control
-//!   and SETTINGS handling; server push, priorities, h2c, trailers, `100-continue` and
+//! - HTTP/2 (`h2`) supports multiplexed requests with connection/stream flow control,
+//!   SETTINGS, request bodies (DATA/END_STREAM), response trailers and interim
+//!   `100 Continue`; server push, priorities, h2c and
 //!   request bodies are not implemented (HTTP/1.1 remains the transparent fallback).
 //!   CORS is the subset described in [`cors`] (no preflight caching, no
 //!   `Access-Control-Expose-Headers`).

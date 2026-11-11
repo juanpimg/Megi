@@ -20,17 +20,19 @@
 //!   typed connection errors. Send windows are tracked (and updated by peer
 //!   `WINDOW_UPDATE`s) for the request-body path that a later phase will add.
 //!
-//! The public `load`/`fetch` path keeps its previous behaviour for a single request
-//! ([`get`]); [`get_many`] exposes the multiplexed upload several requests over one
-//! connection for tools/tests.
+//! Request bodies, trailer headers and `Expect: 100-continue` are supported by the
+//! additive [`request_many`] API (and the single-request [`get`] helper): DATA frames are
+//! fragmented to the peer `MAX_FRAME_SIZE`, gated by connection/stream send windows (peer
+//! `WINDOW_UPDATE`s are consumed while sending), END_STREAM is set only on the last DATA
+//! frame, and a final HEADERS block with END_STREAM is exposed as response trailers.
 //!
 //! ## Deliberate limitations (documented in [`super`])
 //!
 //! No server push (PUSH_PROMISE is a connection error), no prioritization/priority
-//! signalling, no h2c cleartext upgrade, no trailers (a trailer HEADERS block is only
-//! accepted with END_STREAM), no `Expect: 100-continue`, and no request bodies (send
-//! windows are tracked but no DATA is emitted). Only one `GOAWAY` is handled (as a typed
-//! error for the in-flight batch).
+//! signalling, no h2c cleartext upgrade, no response streaming (bodies are buffered),
+//! request bodies are buffered in memory (`max_request_body`, default 16 MiB), and
+//! `Expect: 100-continue` has no dedicated timer (the socket read timeout bounds the
+//! wait). Only one `GOAWAY` is handled (as a typed error for the in-flight batch).
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -50,11 +52,15 @@ pub struct H2Response {
     pub reason: String,
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
+    /// Trailing headers (a final HEADERS block with END_STREAM after the body).
+    pub trailers: Vec<(String, String)>,
 }
 
-/// One multiplexable HTTP/2 `GET` request.
+/// One multiplexable HTTP/2 request (GET/POST/PUT/... with an optional body).
 #[derive(Clone, Debug)]
 pub struct H2Request {
+    /// HTTP method (sent as `:method`; uppercased and token-validated).
+    pub method: String,
     /// `https` in production, `http` in plain-loopback tests.
     pub scheme: String,
     /// `:authority` value (`host[:port]`).
@@ -63,6 +69,8 @@ pub struct H2Request {
     pub target: String,
     /// Extra request headers (connection-specific and pseudo headers are dropped).
     pub extra_headers: Vec<(String, String)>,
+    /// Optional request body; `None`/empty sends END_STREAM on the HEADERS frame.
+    pub body: Option<Vec<u8>>,
 }
 
 impl H2Request {
@@ -73,11 +81,26 @@ impl H2Request {
         target: &str,
         extra_headers: &[(String, String)],
     ) -> Self {
+        Self::new("GET", scheme, authority, target, extra_headers, None)
+    }
+
+    /// Builds an arbitrary method with an optional body. `Expect: 100-continue` in
+    /// `extra_headers` delays the DATA frames until an interim `:status 100` HEADERS.
+    pub fn new(
+        method: &str,
+        scheme: &str,
+        authority: &str,
+        target: &str,
+        extra_headers: &[(String, String)],
+        body: Option<Vec<u8>>,
+    ) -> Self {
         Self {
+            method: method.to_owned(),
             scheme: scheme.to_owned(),
             authority: authority.to_owned(),
             target: target.to_owned(),
             extra_headers: extra_headers.to_vec(),
+            body,
         }
     }
 }
@@ -97,6 +120,8 @@ pub struct Limits {
     /// Initial receive window advertised for the connection and every stream (default
     /// 65535; tests can shrink it to exercise FLOW_CONTROL errors).
     pub initial_window_size: u32,
+    /// Maximum accepted request body size (default 16 MiB).
+    pub max_request_body: usize,
 }
 
 impl Default for Limits {
@@ -107,6 +132,7 @@ impl Default for Limits {
             max_body: 16 * 1024 * 1024,
             max_concurrent_streams: 8,
             initial_window_size: 65_535,
+            max_request_body: 16 * 1024 * 1024,
         }
     }
 }
@@ -171,9 +197,16 @@ struct OpenStream {
     body: Vec<u8>,
     /// Connection receive window (mirrored per stream for the stream window).
     receive_window: i64,
-    /// Peer-advertised send window (tracked for future request bodies / flow control).
+    /// Peer-advertised send window (reduced as request DATA is emitted).
     send_window: i64,
     got_headers: bool,
+    /// Request body still to be emitted (None once fully sent / for bodyless requests).
+    pending_body: Option<Vec<u8>>,
+    body_offset: usize,
+    /// `Expect: 100-continue`: hold DATA until the interim 100 response arrives.
+    awaiting_continue: bool,
+    /// Trailing response headers.
+    trailers: Vec<(String, String)>,
 }
 
 /// The HTTP/2 connection driver.
@@ -242,10 +275,12 @@ impl<'a, S: Read + Write> Session<'a, S> {
         // further streams are scheduled once the peer SETTINGS are known, so our advertised
         // MAX_CONCURRENT_STREAMS/peer caps are respected.
         self.submit_next()?;
+        self.send_pending_bodies()?;
         loop {
             if self.all_done() {
                 break;
             }
+            self.send_pending_bodies()?;
             let Some(frame) =
                 FrameReader::new(&mut *self.stream, self.limits.max_frame_size).read_frame()?
             else {
@@ -255,6 +290,7 @@ impl<'a, S: Read + Write> Session<'a, S> {
             };
             self.handle_frame(frame)?;
             self.submit_until_cap()?;
+            self.send_pending_bodies()?;
         }
         Ok(())
     }
@@ -279,7 +315,8 @@ impl<'a, S: Read + Write> Session<'a, S> {
         }
         let request_index = self.next_request;
         self.next_request += 1;
-        self.open_stream(request_index)
+        self.open_stream(request_index)?;
+        self.send_pending_bodies()
     }
 
     /// Opens pending requests while the scheduler has capacity.
@@ -291,6 +328,58 @@ impl<'a, S: Read + Write> Session<'a, S> {
             let request_index = self.next_request;
             self.next_request += 1;
             self.open_stream(request_index)?;
+            self.send_pending_bodies()?;
+        }
+        Ok(())
+    }
+
+    /// Emits pending request bodies as DATA frames, respecting the peer frame size and
+    /// both send windows. Streams waiting for `100-continue` are skipped until the
+    /// interim response clears `awaiting_continue`.
+    fn send_pending_bodies(&mut self) -> Result<(), FetchError> {
+        let ids: Vec<u32> = self
+            .streams
+            .iter()
+            .filter(|(_, stream)| stream.pending_body.is_some() && !stream.awaiting_continue)
+            .map(|(id, _)| *id)
+            .collect();
+        for stream_id in ids {
+            let mut frames: Vec<Frame> = Vec::new();
+            {
+                let Some(stream) = self.streams.get_mut(&stream_id) else {
+                    continue;
+                };
+                let Some(body) = stream.pending_body.as_ref() else {
+                    continue;
+                };
+                while stream.body_offset < body.len() {
+                    let available =
+                        stream.send_window.min(self.connection_send_window).max(0) as usize;
+                    if available == 0 {
+                        break;
+                    }
+                    let remaining = body.len() - stream.body_offset;
+                    let max_frame = usize::try_from(self.peer_max_frame_size.max(1))
+                        .unwrap_or(DEFAULT_MAX_FRAME_SIZE as usize);
+                    let chunk_len = remaining.min(available).min(max_frame);
+                    if chunk_len == 0 {
+                        break;
+                    }
+                    let end = stream.body_offset + chunk_len == body.len();
+                    let chunk = body[stream.body_offset..stream.body_offset + chunk_len].to_vec();
+                    frames.push(Frame::data(stream_id, &chunk, end));
+                    stream.body_offset += chunk_len;
+                    stream.send_window -= chunk_len as i64;
+                    self.connection_send_window -= chunk_len as i64;
+                    if end {
+                        stream.pending_body = None;
+                        break;
+                    }
+                }
+            }
+            for frame in frames {
+                send_frame(&mut *self.stream, &frame)?;
+            }
         }
         Ok(())
     }
@@ -303,10 +392,30 @@ impl<'a, S: Read + Write> Session<'a, S> {
             self.fail_request(request_index, h2_error("unsupported scheme for h2"));
             return Ok(());
         }
+        let method = request.method.trim().to_ascii_uppercase();
+        if method.is_empty()
+            || method.len() > 32
+            || !method
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        {
+            self.fail_request(request_index, h2_error("invalid HTTP method"));
+            return Ok(());
+        }
+        if let Some(body) = &request.body
+            && body.len() > self.limits.max_request_body
+        {
+            self.fail_request(request_index, FetchError::RequestBodyTooLarge);
+            return Ok(());
+        }
+        let expect_continue = request.extra_headers.iter().any(|(name, value)| {
+            name.eq_ignore_ascii_case("expect")
+                && value.to_ascii_lowercase().contains("100-continue")
+        });
         let stream_id = self.next_stream_id;
         self.next_stream_id = self.next_stream_id.saturating_add(2);
         let mut headers: Vec<(String, String)> = vec![
-            (":method".to_owned(), "GET".to_owned()),
+            (":method".to_owned(), method),
             (":scheme".to_owned(), request.scheme.to_ascii_lowercase()),
             (":authority".to_owned(), request.authority.clone()),
             (":path".to_owned(), request.target.clone()),
@@ -334,8 +443,15 @@ impl<'a, S: Read + Write> Session<'a, S> {
             self.fail_request(request_index, FetchError::HeadersTooLarge);
             return Ok(());
         }
-        let (frames, fragment_count) =
-            fragment_headers(stream_id, &block, self.peer_max_frame_size);
+        let body = request.body.clone().filter(|body| !body.is_empty());
+        let awaiting_continue = expect_continue && body.is_some();
+        let end_stream_on_headers = body.is_none() && !awaiting_continue;
+        let (frames, fragment_count) = fragment_headers_with_end(
+            stream_id,
+            &block,
+            self.peer_max_frame_size,
+            end_stream_on_headers,
+        );
         if fragment_count > 1 && std::env::var_os("H2_DEBUG").is_some() {
             eprintln!("DEBUG: fragmented request headers into {fragment_count} frames");
         }
@@ -352,6 +468,10 @@ impl<'a, S: Read + Write> Session<'a, S> {
                 receive_window: i64::from(self.limits.initial_window_size),
                 send_window: self.peer_initial_window,
                 got_headers: false,
+                pending_body: if end_stream_on_headers { None } else { body },
+                body_offset: 0,
+                awaiting_continue,
+                trailers: Vec::new(),
             },
         );
         Ok(())
@@ -492,11 +612,31 @@ impl<'a, S: Read + Write> Session<'a, S> {
                     .get_mut(&stream_id)
                     .expect("stream existence checked above");
                 if stream.got_headers {
-                    // Trailers are not supported: accept them only as the final block.
+                    // Trailers: a second HEADERS block must be header-only and end the stream.
                     if !end_stream {
-                        return Err(h2_error("unsupported HTTP/2 trailers"));
+                        return Err(h2_error("HTTP/2 trailers must carry END_STREAM"));
+                    }
+                    for (name, value) in decoded {
+                        if name.starts_with(':') {
+                            return Err(h2_error(
+                                "HTTP/2 trailers must not contain pseudo-headers",
+                            ));
+                        }
+                        stream.trailers.push((name, value));
                     }
                     self.finish_stream(stream_id);
+                    return Ok(());
+                }
+                // Interim (1xx) responses: 100-continue releases the request body.
+                if let Some(status) = decoded
+                    .iter()
+                    .find(|(name, _)| name == ":status")
+                    .and_then(|(_, value)| value.parse::<u16>().ok())
+                    && (100..200).contains(&status)
+                {
+                    if status == 100 && stream.awaiting_continue {
+                        stream.awaiting_continue = false;
+                    }
                     return Ok(());
                 }
                 stream.got_headers = true;
@@ -609,13 +749,19 @@ impl<'a, S: Read + Write> Session<'a, S> {
             reason: reason_phrase(status),
             headers: stream.headers,
             body: stream.body,
+            trailers: stream.trailers,
         }));
     }
 }
 
 /// Splits an encoded header block into HEADERS + CONTINUATION frames honouring the peer
 /// maximum frame size. Returns the frames and their count for diagnostics/tests.
-fn fragment_headers(stream_id: u32, block: &[u8], max_frame_size: u32) -> (Vec<Frame>, usize) {
+fn fragment_headers_with_end(
+    stream_id: u32,
+    block: &[u8],
+    max_frame_size: u32,
+    end_stream: bool,
+) -> (Vec<Frame>, usize) {
     let max = usize::try_from(max_frame_size.max(1))
         .unwrap_or(16_384)
         .max(1);
@@ -627,7 +773,7 @@ fn fragment_headers(stream_id: u32, block: &[u8], max_frame_size: u32) -> (Vec<F
         let chunk = &block[offset..end];
         let last = end == block.len();
         if first {
-            let mut frame_flags = flags::END_STREAM;
+            let mut frame_flags = if end_stream { flags::END_STREAM } else { 0 };
             if last {
                 frame_flags |= flags::END_HEADERS;
             }
@@ -699,4 +845,21 @@ pub fn get_many<S: Read + Write>(
         .into_iter()
         .map(|result| result.expect("all requests resolved"))
         .collect())
+}
+
+/// Additive API for arbitrary methods/bodies/trailers over one HTTP/2 connection.
+///
+/// Each [`H2Request`] may carry a body; DATA frames are fragmented to the peer
+/// `MAX_FRAME_SIZE`, gated by the connection/stream send windows (peer
+/// `WINDOW_UPDATE`s are processed while sending), and END_STREAM is set only on the
+/// last DATA frame. `Expect: 100-continue` waits for the interim `:status 100` HEADERS
+/// before sending the body (no timer inside the client: the socket read timeout bounds
+/// the wait; a final response without 100 cancels the body). A `RST_STREAM` while a body
+/// is pending fails only that stream.
+pub fn request_many<S: Read + Write>(
+    stream: &mut S,
+    requests: &[H2Request],
+    limits: &Limits,
+) -> Result<Vec<Result<H2Response, FetchError>>, FetchError> {
+    get_many(stream, requests, limits)
 }

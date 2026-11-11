@@ -381,6 +381,28 @@ impl ResourceLoader {
         self.load(&parsed)
     }
 
+    /// Fetches `url` with an arbitrary method and optional request body.
+    ///
+    /// Non-`GET` requests bypass the HTTP cache (POST/PUT are not cacheable here) and
+    /// return the response bytes/content type. `GET` without a body delegates to
+    /// [`Self::load`] so the cache/cookies/CORS behaviour is unchanged. Redirects follow
+    /// the [`crate::http::fetch_with_method`] rules; `--no-network` is enforced by the
+    /// caller (the loader never runs when networking is disabled).
+    pub fn fetch_with_method(
+        &mut self,
+        url: &Url,
+        method: &str,
+        extra_headers: &[(&str, &str)],
+        body: Option<&[u8]>,
+    ) -> Result<Arc<Resource>, LoadError> {
+        if method.eq_ignore_ascii_case("GET") && body.is_none() {
+            return self.load(url);
+        }
+        let response =
+            crate::http::fetch_with_method(url, &self.options, method, extra_headers, body)?;
+        Ok(Arc::new(resource_from_response(response)))
+    }
+
     /// Installs the referrer configuration applied to every subsequent HTTP(S) fetch.
     ///
     /// Pass `Some(ReferrerConfig::with_policy(document_url, policy))` once the document
