@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `d07d70a` (2026-11-11) · overall **98%** · **1,695** tests · conformance **PASS** · **14** crates · **134,960** lines of Rust
+**Snapshot** — commit `4601e15` (2026-11-11) · overall **98%** · **1,695** tests · conformance **PASS** · **14** crates · **134,960** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -19,8 +19,8 @@
 | **F3** | Layout (box tree, BFC, IFC, grid & flex) | `████████████████████` | 100% |
 | **F4** | Paint, raster & SVG | `████████████████████` | 99% |
 | **F5** | Networking & fetch | `████████████████████` | 99% |
-| **F6** | JavaScript & DOM APIs | `███████████████████░` | 96% |
-| **F7** | Desktop shell (browser UI) | `███████████████████░` | 93% |
+| **F6** | JavaScript & DOM APIs | `███████████████████░` | 97% |
+| **F7** | Desktop shell (browser UI) | `███████████████████░` | 94% |
 | | **Overall** | `████████████████████` | **98%** |
 
 ## What is done and what remains
@@ -76,7 +76,7 @@
 
 - WebP VP8 lossy decoder (VP8L is complete) and reduced IDCT/EXIF thumbnails
 - SVG textPath, keyTimes/event-based SMIL and CSS animations in SVG
-- Rasterizer/decoder performance budgets; layer-effect performance and PNG regions
+- Rasterizer/decoder performance budgets; backdrop blur/PNG entropy, layer-effect performance and PNG regions
 
 ### F5 — Networking & fetch (99%)
 
@@ -91,11 +91,11 @@
 
 **Pending**
 
-- HTTP/2 push/priorities, h2c and streaming uploads
-- Streaming bodies (responses are still buffered), complete PSL and multi-range
+- Push-to-render consumption, streaming uploads and complete PSL
+- Streaming bodies (responses are still buffered) and multi-range
 - VP8 lossy decoder and image decode performance budgets
 
-### F6 — JavaScript & DOM APIs (96%)
+### F6 — JavaScript & DOM APIs (97%)
 
 **Done**
 
@@ -104,14 +104,15 @@
 - Parser-inserted/external scripts, budgets (loops/recursion/stack) and console
 - History/location, Web Storage and MutationObserver browser APIs (host providers)
 - ES modules subset with resolver/loader, render provider wiring and <script type=module>
+- Round-27 DOM/JS gap APIs (URL/dataset/innerText/attributes/normalize/compare/idle/events/base64/clone)
 
 **Pending**
 
+- Geometry provider (getBoundingClientRect/offset*) and remaining DOM gaps (fetch/XHR/Range/NodeList)
 - Dynamic import(), top-level await, import maps and real live bindings
-- StorageEvent/proxy, requestIdleCallback, fetch/XHR/workers and remaining DOM gaps
 - JS/DOM conformance testing and memory accounting
 
-### F7 — Desktop shell (browser UI) (93%)
+### F7 — Desktop shell (browser UI) (94%)
 
 **Done**
 
@@ -120,7 +121,7 @@
 - Form controls (UA styles, focus, editing, checkboxes, buttons), find-in-page
 - Tabs with per-tab history/scroll/zoom/find state and keyboard shortcuts
 - Browser chrome: address bar, tab strip with hit-testing/overflow and select dropdown
-- Persistent JSON session (tabs/history/zoom/scroll) and PNG/HTML downloads (direct PNG bytes, +1.7 ms)
+- Persistent JSON session (tabs/history/zoom/scroll), PNG/HTML downloads and polished chrome (address bar/autocomplete/tab overflow/select)
 
 **Pending**
 
@@ -132,7 +133,7 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `d07d70a` (2026-11-11) |
+| Commit | `4601e15` (2026-11-11) |
 | Crates in the workspace | 14 |
 | Lines of Rust (tracked `.rs`) | 134960 |
 | Tests (`cargo test --workspace -- --list`) | 1695 |
@@ -152,20 +153,20 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 
 ## Recent rounds
 
+- **Round 27** — PNG regression fix, HTTP/2 push/priorities/h2c, DOM/JS gaps, effects perf and polished chrome
 - **Round 26** — module scripts, scaled decode, HTTP/2 request bodies, DOM/JS bug-bash, SVG filters/SMIL and isolated bench rows
 - **Round 25** — CSS Color 4/5, ES modules, complete WebP VP8L, render provider wiring and direct save-png
 - **Round 24** — JS browser APIs, aspect-ratio/object-fit/backdrop, full progressive JPEG, WebP VP8L, session/downloads and 10 fuzz targets
 - **Round 23** — performance recovery, EXIF/progressive JPEG, WebP detection and HTTP/2 flow control
 - **Round 22** — JPEG/GIF, SVG effects, HTTP/2 MVP, shell chrome, full grid and CSS filters
-- **Round 21** — performance-budget recovery without raising budgets
 
 ## Next up
 
-- HTTP/2 push/priorities, h2c, streaming uploads and complete PSL
+- HTTP/2 push-to-render, streaming uploads and complete PSL
+- Geometry provider for getBoundingClientRect/offset* and DOM conformance round 3
 - Dynamic import/top-level await/import maps and live bindings
 - SVG textPath, keyTimes/event SMIL, reduced IDCT and EXIF thumbnails
-- DOM/JS conformance bug-bash round 2 (fetch/dataset/innerText/Range/events)
-- Layer-effect performance and PNG regions/rasterizer budgets
+- Backdrop blur/PNG entropy and layer-effect performance
 - Longer image/HTTP2 fuzz campaigns and bench E2E on real pages
 
 ## Cross-cutting areas
@@ -185,4 +186,4 @@ python3 tools/update_progress.py --write --no-gate  # skip the conformance gate
 python3 tools/update_progress.py --check --no-gate --no-count  # CI freshness
 ```
 
-_Last manifest update by: docs (round 26). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
+_Last manifest update by: docs (round 27). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
