@@ -71,6 +71,7 @@ pub fn register(suite: &mut Suite, opts: &Options) {
     register_effect_fixture_pipelines(suite);
     register_backdrop_stage_rows(suite);
     register_image(suite);
+    register_png_rows(suite);
     #[cfg(feature = "fonts")]
     register_fonts(suite, opts.scale);
 }
@@ -1155,6 +1156,25 @@ fn register_image(suite: &mut Suite) {
             Err(error) => suite.skip(name, format!("fixture de imagen inválido: {error}")),
         }
     }
+
+    // Scaled-decode companion row: integer box downscale (800×600 → 400×300) while
+    // unfiltering, so the scaled path cannot silently regress against the full decode.
+    let scaled_label = "PNG 800x600 → box downscale ×2 (400x300), decode escalado";
+    suite.add(
+        BenchEntry::new(
+            "image/decode-png-scaled-x2",
+            "image",
+            scaled_label.to_string(),
+            move || {
+                black_box(
+                    image::decode_scaled(PNG_800X600, 400)
+                        .expect("committed PNG fixture decodes scaled"),
+                );
+            },
+        )
+        .with_units(0.12, "MPix")
+        .heavy(),
+    );
 }
 
 /// Counts element nodes in `document` (top-down pre-order).
@@ -1267,6 +1287,120 @@ fn register_fonts(suite: &mut Suite, scale: f64) {
         )
         .with_units(word_count as f64, "words"),
     );
+}
+
+/// Deterministic RGBA pattern for the PNG-phase benchmarks.
+///
+/// `flat` mimics a UI page (repeating rows/bands, long runs); the other mode is a
+/// photo-like gradient plus deterministic LCG noise, which stresses the deflate match search.
+/// `alpha` varies the alpha channel (straight RGBA) for the alpha-encode row.
+fn png_pattern(width: u32, height: u32, photo: bool, alpha: bool) -> Vec<u8> {
+    let mut rgba = Vec::with_capacity((width as usize) * (height as usize) * 4);
+    let mut state = 0x9E37_79B9u32;
+    for y in 0..height {
+        for x in 0..width {
+            let (r, g, b) = if photo {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let noise = (state >> 24) as u8;
+                let gradient = ((x * 255 / width.max(1)) + (y * 127 / height.max(1))) as u8;
+                (
+                    gradient.wrapping_add(noise / 4),
+                    gradient.rotate_left(3).wrapping_add(noise / 8),
+                    gradient.rotate_left(6).wrapping_add(noise / 16),
+                )
+            } else if y < height / 8 {
+                (0x20, 0x21, 0x24)
+            } else if y < height / 4 {
+                (0xF1, 0xF3, 0xF4)
+            } else if (x / 40 + y / 24) % 3 == 0 {
+                (0xE8, 0xF0, 0xFE)
+            } else {
+                (0xFF, 0xFF, 0xFF)
+            };
+            let a = if alpha { (state >> 8) as u8 } else { 0xFF };
+            rgba.extend_from_slice(&[r, g, b, a]);
+        }
+    }
+    rgba
+}
+
+/// Registers the isolated PNG encode-phase rows (`filter`, `deflate`, full `encode`).
+///
+/// The filter/deflate rows let the round report separate the two dominant phases; the
+/// deflate row captures the already-filtered scanlines so only `zlib_compress` runs inside
+/// the measurement window. Rows cover the two render viewports (800×600, 1024×768) with a
+/// flat UI pattern and the full encoder also covers a photo-like alpha pattern.
+fn register_png_rows(suite: &mut Suite) {
+    for (index, width, height) in [(0usize, 800u32, 600u32), (1, 1024, 768)] {
+        let (filter_name, deflate_name, encode_name) = if index == 0 {
+            (
+                "paint/png-filter-800x600",
+                "paint/png-deflate-800x600",
+                "paint/png-encode-800x600",
+            )
+        } else {
+            (
+                "paint/png-filter-1024x768",
+                "paint/png-deflate-1024x768",
+                "paint/png-encode-1024x768",
+            )
+        };
+        let rgba = Arc::new(png_pattern(width, height, false, false));
+        let filtered = Arc::new(paint::filter_scanlines(width, height, &rgba));
+        let filter_rgba = Arc::clone(&rgba);
+        suite.add(
+            BenchEntry::new(
+                filter_name,
+                "paint",
+                format!("filter_scanlines {width}x{height} (flat UI)"),
+                move || {
+                    black_box(paint::filter_scanlines(width, height, &filter_rgba));
+                },
+            )
+            .heavy(),
+        );
+        let deflate_filtered = Arc::clone(&filtered);
+        suite.add(
+            BenchEntry::new(
+                deflate_name,
+                "paint",
+                format!("zlib_compress {width}x{height} (pre-filtered flat UI)"),
+                move || {
+                    black_box(paint::zlib_compress(&deflate_filtered));
+                },
+            )
+            .heavy(),
+        );
+        let encode_rgba = Arc::clone(&rgba);
+        suite.add(
+            BenchEntry::new(
+                encode_name,
+                "paint",
+                format!("encode_rgba {width}x{height} (flat UI)"),
+                move || {
+                    black_box(paint::encode_rgba(width, height, &encode_rgba));
+                },
+            )
+            .heavy(),
+        );
+        let alpha = Arc::new(png_pattern(width, height, true, true));
+        let alpha_name = if index == 0 {
+            "paint/png-encode-800x600-alpha"
+        } else {
+            "paint/png-encode-1024x768-alpha"
+        };
+        suite.add(
+            BenchEntry::new(
+                alpha_name,
+                "paint",
+                format!("encode_rgba {width}x{height} (photo alpha)"),
+                move || {
+                    black_box(paint::encode_rgba(width, height, &alpha));
+                },
+            )
+            .heavy(),
+        );
+    }
 }
 
 #[cfg(test)]
