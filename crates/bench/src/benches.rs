@@ -71,6 +71,7 @@ pub fn register(suite: &mut Suite, opts: &Options) {
     register_effect_fixture_pipelines(suite);
     register_backdrop_stage_rows(suite);
     register_png_region_encoders(suite);
+    register_backdrop_blur_rows(suite);
     register_image(suite);
     register_render_pipeline(suite);
     register_png_rows(suite);
@@ -1075,6 +1076,96 @@ fn register_backdrop_stage_rows(suite: &mut Suite) {
             black_box(pixmap_bare.to_png());
         },
     ));
+}
+
+/// R231: synthetic backdrop-blur raster rows (blur-only and blur+color ops).
+///
+/// The display list paints a checker background, then `BackdropFilter` items over
+/// cells; the `no-effect` row paints the same background without the backdrop
+/// filters so the delta isolates blur/color cost.
+fn register_backdrop_blur_rows(suite: &mut Suite) {
+    let width = 800u32;
+    let height = 600u32;
+    let viewport = Rect::new(0.0, 0.0, width as f32, height as f32);
+    fn checker() -> Vec<paint::DisplayItem> {
+        let mut items = vec![paint::DisplayItem::SolidColor {
+            rect: Rect::new(0.0, 0.0, 800.0, 600.0),
+            color: css::Color::WHITE,
+        }];
+        for y in 0..20 {
+            for x in 0..27 {
+                let color = if (x + y) % 2 == 0 {
+                    css::Color::new(220, 40, 60, 255)
+                } else {
+                    css::Color::new(30, 90, 200, 255)
+                };
+                items.push(paint::DisplayItem::SolidColor {
+                    rect: Rect::new((x * 30) as f32, (y * 30) as f32, 30.0, 30.0),
+                    color,
+                });
+            }
+        }
+        items
+    }
+    fn with_filters(filters: Vec<css::FilterFunction>) -> Vec<paint::DisplayItem> {
+        let mut items = checker();
+        for y in 0..4 {
+            for x in 0..3 {
+                items.push(paint::DisplayItem::BackdropFilter {
+                    rect: Rect::new(
+                        40.0 + (x * 230) as f32,
+                        30.0 + (y * 140) as f32,
+                        180.0,
+                        110.0,
+                    ),
+                    filters: filters.clone(),
+                });
+            }
+        }
+        items
+    }
+    for (name, filters) in [
+        (
+            "paint/backdrop-blur-800x600",
+            vec![css::FilterFunction::Blur(4.0)],
+        ),
+        (
+            "paint/backdrop-blur-color-800x600",
+            vec![
+                css::FilterFunction::Blur(4.0),
+                css::FilterFunction::Brightness(0.9),
+                css::FilterFunction::Grayscale(0.2),
+            ],
+        ),
+    ] {
+        let list = paint::DisplayList {
+            items: with_filters(filters),
+        };
+        suite.add(
+            BenchEntry::new(
+                name,
+                "paint",
+                "12 backdrop-filter overlays over a checker → pixmap".to_string(),
+                move || {
+                    black_box(paint::rasterize_display_list(&list, width, height));
+                },
+            )
+            .heavy(),
+        );
+    }
+    let no_effect = paint::DisplayList { items: checker() };
+    suite.add(
+        BenchEntry::new(
+            "paint/backdrop-blur-no-effect-800x600",
+            "paint",
+            "same checker background without backdrop filters".to_string(),
+            move || {
+                black_box(paint::rasterize_display_list(&no_effect, width, height));
+            },
+        )
+        .heavy(),
+    );
+    let _ = viewport;
 }
 
 /// R216: full PNG encode vs row-cached region encode at 10/25/50/100 % dirty rows.
