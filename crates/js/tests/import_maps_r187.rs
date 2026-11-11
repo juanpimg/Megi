@@ -191,3 +191,12 @@ fn import_map_json_errors_are_typed() {
         Err(JsError::ImportMap(_))
     ));
 }
+
+#[test]
+fn deeply_nested_json_is_rejected_without_overflowing_the_stack() {
+    // A ~100 KB import map of `[` used to abort the process with a stack overflow.
+    let error = ImportMap::from_json(&"[".repeat(100_000)).expect_err("too deep");
+    assert!(error.to_string().contains("nesting too deep"), "{error}");
+    // A normal map still parses.
+    assert!(ImportMap::from_json(r#"{"imports": {}}"#).is_ok());
+}
