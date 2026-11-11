@@ -306,6 +306,10 @@ fn zero_window_update_increment_is_a_typed_error() {
 fn invalid_max_frame_size_setting_is_a_typed_error() {
     let (port, server) = spawn_server(|mut tcp| {
         read_preface(&mut tcp);
+        // The client writes preface + SETTINGS + HEADERS without waiting for the server
+        // SETTINGS, so read the request before answering: closing the socket first races
+        // that write and surfaces EPIPE instead of the typed error below.
+        let _ = read_request_headers(&mut tcp);
         send_settings(&mut tcp, &[(settings::MAX_FRAME_SIZE, 1024)]);
         let _ = tcp.shutdown(Shutdown::Write);
     });
@@ -321,6 +325,8 @@ fn invalid_max_frame_size_setting_is_a_typed_error() {
 fn invalid_initial_window_setting_is_a_typed_error() {
     let (port, server) = spawn_server(|mut tcp| {
         read_preface(&mut tcp);
+        // Read the request before answering (see the MAX_FRAME_SIZE test above).
+        let _ = read_request_headers(&mut tcp);
         send_settings(&mut tcp, &[(settings::INITIAL_WINDOW_SIZE, 0x8000_0000)]);
         let _ = tcp.shutdown(Shutdown::Write);
     });
@@ -336,6 +342,8 @@ fn invalid_initial_window_setting_is_a_typed_error() {
 fn server_enable_push_setting_is_rejected() {
     let (port, server) = spawn_server(|mut tcp| {
         read_preface(&mut tcp);
+        // Read the request before answering (see the MAX_FRAME_SIZE test above).
+        let _ = read_request_headers(&mut tcp);
         send_settings(&mut tcp, &[(settings::ENABLE_PUSH, 1)]);
         let _ = tcp.shutdown(Shutdown::Write);
         // Keep the socket open briefly so the client observes the SETTINGS error
