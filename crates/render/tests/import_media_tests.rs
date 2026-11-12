@@ -509,3 +509,44 @@ fn showcase_render_is_deterministic() {
     assert_eq!(first.png, second.png);
     assert_eq!(first.stats.display_items, second.stats.display_items);
 }
+
+#[test]
+fn failed_import_loads_count_against_the_stylesheet_cap() {
+    // `max_stylesheets` used to bound successful imports only: missing sheets were fetched
+    // once per unique URL with no limit.
+    let dir = std::env::temp_dir().join(format!("megi-import-attempts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let document = dir.join("index.html");
+    std::fs::write(
+        &document,
+        "<!DOCTYPE html><style>\
+         @import url('file:///nonexistent-a.css');\
+         @import url('file:///nonexistent-b.css');\
+         @import url('file:///nonexistent-c.css');\
+         </style><body></body>",
+    )
+    .expect("write document");
+
+    let mut options = RenderOptions::default();
+    options.viewport = Viewport::new(200, 100).expect("viewport");
+    options.max_stylesheets = 2;
+    let output = render_url(&format!("file://{}", document.display()), &options).expect("render");
+    let failed_imports = output
+        .stats
+        .warnings
+        .iter()
+        .filter(|warning| warning.contains("skipping stylesheet file:///nonexistent"))
+        .count();
+    assert_eq!(failed_imports, 2, "only two fetches may reach the loader");
+    assert!(
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("stylesheet loads attempted")),
+        "the cap must be reported: {:?}",
+        output.stats.warnings
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
