@@ -125,7 +125,29 @@ pub struct Stylesheet {
     pub imports: Vec<ImportRule>,
     /// `@font-face` rules found in the stylesheet, in document order.
     pub font_faces: Vec<FontFaceRule>,
+    /// `@keyframes` rules found in the stylesheet, in document order.
+    pub keyframes: Vec<KeyframesRule>,
     pub rules: Vec<Rule>,
+}
+
+/// One keyframe selector (`from`, `to` or `<percentage>`) block (CSS Animations 1 §3).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Keyframe {
+    /// Normalized offsets in `0.0..=1.0` (`from` = 0, `to` = 1); a selector list yields
+    /// several offsets for the same declarations.
+    pub offsets: Vec<f32>,
+    /// Declarations of this keyframe (shorthands kept as authored; expanded by the cascade
+    /// consumer when the animation is applied).
+    pub declarations: Vec<Declaration>,
+}
+
+/// An `@keyframes <name>` rule (CSS Animations 1 §3).
+#[derive(Clone, Debug, PartialEq)]
+pub struct KeyframesRule {
+    /// Animation name (quotes stripped, trimmed).
+    pub name: String,
+    /// Keyframes in authored order.
+    pub frames: Vec<Keyframe>,
 }
 
 /// Helper to serialize component values to a compact string.

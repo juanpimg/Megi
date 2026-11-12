@@ -437,6 +437,7 @@ pub fn parse_stylesheet(input: &str) -> Stylesheet {
     let rules = consume_stylesheet_contents(&mut stream);
     let mut imports: Vec<crate::rule::ImportRule> = Vec::new();
     let mut font_faces: Vec<crate::rule::FontFaceRule> = Vec::new();
+    let mut keyframes: Vec<crate::rule::KeyframesRule> = Vec::new();
     let mut kept_rules = Vec::with_capacity(rules.len());
     let mut seen_non_import = false;
     for rule in rules {
@@ -454,6 +455,15 @@ pub fn parse_stylesheet(input: &str) -> Stylesheet {
                     font_faces.push(rule);
                 }
             }
+            Rule::At(at)
+                if at.name.eq_ignore_ascii_case("keyframes")
+                    || at.name.eq_ignore_ascii_case("-webkit-keyframes") =>
+            {
+                seen_non_import = true;
+                if let Some(rule) = parse_keyframes_rule(at) {
+                    keyframes.push(rule);
+                }
+            }
             _ => {
                 seen_non_import = true;
                 kept_rules.push(rule);
@@ -463,8 +473,70 @@ pub fn parse_stylesheet(input: &str) -> Stylesheet {
     Stylesheet {
         imports,
         font_faces,
+        keyframes,
         rules: kept_rules,
     }
+}
+
+/// Parses an `@keyframes <name> { <selector> { ... } ... }` rule (CSS Animations 1 §3).
+///
+/// Invalid keyframe selectors are skipped (the rest of the rule is kept); a rule with no
+/// usable keyframe, an empty name or no block returns `None`.
+fn parse_keyframes_rule(at: &AtRule) -> Option<crate::rule::KeyframesRule> {
+    let name = strip_quotes(serialize_component_values(&at.prelude).trim());
+    if name.is_empty() {
+        return None;
+    }
+    let block = at.block.as_ref()?;
+    let mut frames = Vec::new();
+    let mut selector_values: Vec<ComponentValue> = Vec::new();
+    for value in &block.values {
+        match value {
+            ComponentValue::Block(frame_block) => {
+                let selector = serialize_component_values(&selector_values)
+                    .trim()
+                    .to_string();
+                selector_values.clear();
+                let Some(offsets) = parse_keyframe_offsets(&selector) else {
+                    continue;
+                };
+                let declarations =
+                    parse_list_of_declarations(&serialize_component_values(&frame_block.values));
+                if !declarations.is_empty() {
+                    frames.push(crate::rule::Keyframe {
+                        offsets,
+                        declarations,
+                    });
+                }
+            }
+            other => selector_values.push(other.clone()),
+        }
+    }
+    if frames.is_empty() {
+        return None;
+    }
+    Some(crate::rule::KeyframesRule { name, frames })
+}
+
+/// Parses a keyframe selector list (`from`, `to`, percentages; comma-separated).
+fn parse_keyframe_offsets(selector: &str) -> Option<Vec<f32>> {
+    let mut offsets = Vec::new();
+    for part in selector.split(',') {
+        let part = part.trim();
+        let offset = if part.eq_ignore_ascii_case("from") {
+            0.0
+        } else if part.eq_ignore_ascii_case("to") {
+            1.0
+        } else {
+            let percent = part.strip_suffix('%')?.trim().parse::<f32>().ok()?;
+            percent / 100.0
+        };
+        if !offset.is_finite() || !(0.0..=1.0).contains(&offset) {
+            return None;
+        }
+        offsets.push(offset);
+    }
+    (!offsets.is_empty()).then_some(offsets)
 }
 
 /// Parses an `@font-face` at-rule (CSS Fonts 4 §4.1). Missing `font-family`/`src` or a
@@ -651,5 +723,48 @@ mod serialization_tests {
     fn string_serialization_keeps_escapes_inside_the_string() {
         let declarations = parse_list_of_declarations(r#"content: "a\"b";"#);
         assert_eq!(declarations[0].raw_value, r#""a\"b""#);
+    }
+}
+
+#[cfg(test)]
+mod keyframes_tests {
+    use super::*;
+
+    #[test]
+    fn parses_keyframes_frames_and_offsets() {
+        let sheet = parse_stylesheet(
+            "@keyframes fade { from { opacity: 0 } 50%, 75% { opacity: 0.5 } to { opacity: 1 } }",
+        );
+        assert_eq!(sheet.keyframes.len(), 1);
+        let rule = &sheet.keyframes[0];
+        assert_eq!(rule.name, "fade");
+        assert_eq!(rule.frames.len(), 3);
+        assert_eq!(rule.frames[0].offsets, vec![0.0]);
+        assert_eq!(rule.frames[1].offsets, vec![0.5, 0.75]);
+        assert_eq!(rule.frames[2].offsets, vec![1.0]);
+        assert_eq!(rule.frames[0].declarations[0].name, "opacity");
+    }
+
+    #[test]
+    fn keyframes_are_forgiving_and_webkit_prefixed() {
+        let sheet = parse_stylesheet(
+            "@-webkit-keyframes spin { bogus { opacity: 1 } 0% { opacity: 0 } to { opacity: 1 } }",
+        );
+        assert_eq!(sheet.keyframes.len(), 1);
+        assert_eq!(sheet.keyframes[0].frames.len(), 2);
+        assert_eq!(sheet.keyframes[0].frames[0].offsets, vec![0.0]);
+        // A rule without a block or name is not a keyframes rule.
+        assert!(parse_stylesheet("@keyframes none").keyframes.is_empty());
+        assert!(
+            parse_stylesheet("@keyframes { from { opacity: 0 } }")
+                .keyframes
+                .is_empty()
+        );
+        // Out-of-range percentages are invalid selectors and are skipped.
+        assert!(
+            parse_stylesheet("@keyframes bad { 120% { opacity: 0 } }")
+                .keyframes
+                .is_empty()
+        );
     }
 }
