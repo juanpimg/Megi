@@ -662,7 +662,11 @@ fn collect_inline_tokens(
             BoxType::LineBreak => {
                 tokens.push(InlineToken::ForcedBreak);
             }
-            BoxType::InlineBlock(_) | BoxType::Replaced(_) | BoxType::InlineTable(_) => {
+            BoxType::InlineBlock(_)
+            | BoxType::Replaced(_)
+            | BoxType::InlineTable(_)
+            | BoxType::BlockNode(_)
+            | BoxType::Table(_) => {
                 let atomic = crate::block::layout_atomic_inline(
                     std::mem::replace(child, LayoutBox::new(BoxType::LineBreak, None)),
                     container_width,

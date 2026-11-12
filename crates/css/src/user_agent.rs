@@ -19,10 +19,14 @@ use crate::rule::Stylesheet;
 /// The normative default HTML5 User-Agent stylesheet string.
 pub const USER_AGENT_STYLESHEET: &str = r#"
 /* WHATWG HTML §15.3.1 Display types */
-html, body, div, p, blockquote, figure, figcaption, header, footer,
+html, body, div, p, blockquote, center, figure, figcaption, header, footer,
 nav, section, article, aside, main, h1, h2, h3, h4, h5, h6,
 ul, ol, dl, dt, dd, pre, address, hr, fieldset, form {
     display: block;
+}
+
+center {
+    text-align: center;
 }
 
 li {
@@ -121,6 +125,7 @@ table {
     border-spacing: 2px;
     border-color: gray;
     box-sizing: border-box;
+    text-align: left;
 }
 caption {
     display: table-caption;

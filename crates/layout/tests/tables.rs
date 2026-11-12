@@ -760,3 +760,23 @@ fn test_border_collapse_cell_text_inside_content_box() {
     assert!((row_box.children[0].dimensions.border.right - 4.0).abs() < 0.01);
     assert!((row_box.children[1].dimensions.border.left - 4.0).abs() < 0.01);
 }
+
+#[test]
+fn test_table_inside_inline_is_laid_out() {
+    let (mut doc, mut styles, body) = setup();
+    let span = mk(&mut doc, body, "span");
+    let mut inline_style = ComputedStyle::initial();
+    inline_style.display = Display::Inline;
+    styles.insert(span, inline_style);
+
+    let table = mk(&mut doc, span, "table");
+    styles.insert(table, table_style(Length::Px(200.0)));
+    let row = add_row(&mut doc, &mut styles, table);
+    let _cell = add_cell(&mut doc, &mut styles, row, "hello", None);
+
+    let tree = layout_tree(&doc, &styles);
+    let mut texts = Vec::new();
+    collect_text_boxes(&tree, &mut texts);
+    assert_eq!(texts.len(), 1, "table inside inline must expose its text");
+    assert!(texts[0].1.width > 0.0 && texts[0].1.height > 0.0);
+}
