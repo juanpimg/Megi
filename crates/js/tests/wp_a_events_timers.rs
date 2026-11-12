@@ -308,3 +308,65 @@ fn timer_can_schedule_another_timer() {
         "outer,inner"
     );
 }
+
+#[test]
+fn completed_timers_release_their_callback_slots() {
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "globalThis.timerId = setTimeout(function () {}, 0);",
+            "slots.js",
+        )
+        .expect("schedule");
+    runtime.run_tasks(10).expect("pump");
+    assert_eq!(
+        runtime
+            .eval("typeof __megi_timer_callbacks[timerId]", "slots.js")
+            .expect("callback slot"),
+        "undefined"
+    );
+    assert_eq!(
+        runtime
+            .eval("typeof __megi_timer_args[timerId]", "slots.js")
+            .expect("args slot"),
+        "undefined"
+    );
+}
+
+#[test]
+fn cleared_timers_release_their_callback_slots() {
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "globalThis.cancelId = setTimeout(function () {}, 100000);
+             clearTimeout(cancelId);",
+            "cancel.js",
+        )
+        .expect("schedule");
+    assert_eq!(
+        runtime
+            .eval("typeof __megi_timer_callbacks[cancelId]", "cancel.js")
+            .expect("callback slot"),
+        "undefined"
+    );
+}
+
+#[test]
+fn pending_timer_cap_is_enforced() {
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "globalThis.timerError = null;
+             for (var i = 0; i < 5000; i++) {
+                 try { setTimeout(function () {}, 100000); }
+                 catch (error) { timerError = String(error); break; }
+             }",
+            "cap.js",
+        )
+        .expect("scheduling loop");
+    let error = runtime.eval("String(timerError)", "cap.js").expect("error");
+    assert!(
+        error.contains("too many pending timers"),
+        "the cap error is reported: {error}"
+    );
+}
