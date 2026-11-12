@@ -23,14 +23,21 @@ const MAX_CURVE_DEPTH: u32 = 12;
 const FLATTEN_TOLERANCE: f32 = 0.2;
 
 /// Parses an SVG path `d` string into flattened sub-paths.
-pub(crate) fn parse_path_data(raw: &str, limits: &Limits) -> Result<Vec<SubPath>, SvgError> {
+///
+/// `segments_used` is the document-wide counter (see
+/// [`Limits::max_path_segments`](crate::Limits::max_path_segments)); it is charged as
+/// points accumulate, not only when a sub-path is flushed.
+pub(crate) fn parse_path_data(
+    raw: &str,
+    limits: &Limits,
+    used: &mut usize,
+) -> Result<Vec<SubPath>, SvgError> {
     let mut scanner = Scanner {
         bytes: raw.as_bytes(),
         position: 0,
     };
     let mut subpaths: Vec<SubPath> = Vec::new();
     let mut current: Vec<(f32, f32)> = Vec::new();
-    let mut total_points = 0usize;
     let mut current_point = (0.0f32, 0.0f32);
     let mut subpath_start = (0.0f32, 0.0f32);
     let mut last_cubic_control: Option<(f32, f32)> = None;
@@ -38,11 +45,11 @@ pub(crate) fn parse_path_data(raw: &str, limits: &Limits) -> Result<Vec<SubPath>
     let mut last_command: Option<char> = None;
     let mut started = false;
 
-    let count = |current: &Vec<(f32, f32)>, total: &mut usize| -> Result<(), SvgError> {
-        *total += current.len();
-        if *total > limits.max_path_segments {
+    let count = |current: &Vec<(f32, f32)>, used: &mut usize| -> Result<(), SvgError> {
+        *used = used.saturating_add(current.len());
+        if *used > limits.max_path_segments {
             return Err(SvgError::Limit(format!(
-                "path data exceeds {} flattened segments",
+                "document exceeds {} flattened segments",
                 limits.max_path_segments
             )));
         }
@@ -74,7 +81,7 @@ pub(crate) fn parse_path_data(raw: &str, limits: &Limits) -> Result<Vec<SubPath>
         match command {
             'M' | 'm' => {
                 if started && !current.is_empty() {
-                    count(&current, &mut total_points)?;
+                    count(&current, used)?;
                     subpaths.push(SubPath {
                         points: std::mem::take(&mut current),
                         closed: false,
@@ -240,7 +247,7 @@ pub(crate) fn parse_path_data(raw: &str, limits: &Limits) -> Result<Vec<SubPath>
             'Z' | 'z' => {
                 if !current.is_empty() {
                     current.push(subpath_start);
-                    count(&current, &mut total_points)?;
+                    count(&current, used)?;
                     subpaths.push(SubPath {
                         points: std::mem::take(&mut current),
                         closed: true,
@@ -257,17 +264,22 @@ pub(crate) fn parse_path_data(raw: &str, limits: &Limits) -> Result<Vec<SubPath>
         // Enforce the budget as points accumulate: checking only when a sub-path is
         // flushed lets one `d` attribute grow unbounded (a single cubic can flatten to
         // 4,097 points, so a few hundred curves would allocate gigabytes before the check).
-        if total_points.saturating_add(current.len()) > limits.max_path_segments {
+        if used.saturating_add(current.len()) > limits.max_path_segments {
             return Err(SvgError::Limit(format!(
-                "path data exceeds {} flattened segments",
+                "document exceeds {} flattened segments",
                 limits.max_path_segments
             )));
         }
-        last_command = Some(command);
+        // `Z` consumes no input; letting it be implicitly repeated turns `d="M0 0Z1"`
+        // into an infinite loop (the scanner position never advances).
+        last_command = match command {
+            'Z' | 'z' => None,
+            other => Some(other),
+        };
     }
 
     if !current.is_empty() {
-        count(&current, &mut total_points)?;
+        count(&current, used)?;
         subpaths.push(SubPath {
             points: current,
             closed: false,
@@ -533,7 +545,8 @@ mod tests {
     use super::*;
 
     fn points(raw: &str) -> Vec<SubPath> {
-        parse_path_data(raw, &Limits::default()).expect("valid path")
+        let mut used = 0usize;
+        parse_path_data(raw, &Limits::default(), &mut used).expect("valid path")
     }
 
     #[test]
@@ -575,9 +588,10 @@ mod tests {
 
     #[test]
     fn test_malformed_paths_error() {
-        assert!(parse_path_data("30 30", &Limits::default()).is_err());
-        assert!(parse_path_data("M0", &Limits::default()).is_err());
-        assert!(parse_path_data("M0 0 X1 1", &Limits::default()).is_err());
-        assert!(parse_path_data("M0 0 A5 5 0 2 0 10 10", &Limits::default()).is_err());
+        let mut used = 0usize;
+        assert!(parse_path_data("30 30", &Limits::default(), &mut used).is_err());
+        assert!(parse_path_data("M0", &Limits::default(), &mut used).is_err());
+        assert!(parse_path_data("M0 0 X1 1", &Limits::default(), &mut used).is_err());
+        assert!(parse_path_data("M0 0 A5 5 0 2 0 10 10", &Limits::default(), &mut used).is_err());
     }
 }
