@@ -24,35 +24,69 @@
 use dom::{Document, Namespace, NodeId, NodeKind};
 use std::cell::Cell;
 
-/// Maximum selector-match steps for one top-level match.
+/// Maximum selector-match steps for one element resolution (cascade) or one top-level
+/// match (direct API use).
 ///
 /// Descendant (and `:has()`) matching backtracks over ancestor combinations: a crafted
 /// selector with 14 `.a` compounds over 40 nested `.a` elements explores C(40, 14) ≈ 2.3e10
-/// paths. The budget bounds CPU per element; when exhausted the selector is treated as not
-/// matching (documented anti-DoS cap, like the other engine limits).
+/// paths. The cascade opens one [`match_scope`] per element so all its candidates share the
+/// budget; when exhausted the match fails closed (even through `:not()`), documented anti-DoS
+/// cap like the other engine limits.
 pub const MAX_MATCH_STEPS: u32 = 200_000;
 
 thread_local! {
-    /// Remaining match steps for the current top-level match.
+    /// Remaining match steps for the current match scope.
     static MATCH_STEPS: Cell<u32> = const { Cell::new(0) };
-    /// Nesting depth of the match entry points (nested `:is`/`:not`/`:has` share the
-    /// budget of the outermost match).
+    /// Nesting depth of the match entry points (nested `:is`/`:not`/`:has` and every
+    /// selector of one element share the budget of the enclosing scope).
     static MATCH_DEPTH: Cell<u32> = const { Cell::new(0) };
+    /// Set when a scope exhausted its budget: the outermost entry returns "no match" even
+    /// when a `:not()` would otherwise negate the budget-limited result.
+    static MATCH_EXHAUSTED: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Runs `f` with a per-top-level-match step budget.
-fn with_match_budget<T>(f: impl FnOnce() -> T) -> T {
+/// Decrements the match depth on every exit path, including panics.
+struct MatchDepthGuard;
+
+impl Drop for MatchDepthGuard {
+    fn drop(&mut self) {
+        MATCH_DEPTH.with(|depth| depth.set(depth.get().saturating_sub(1)));
+    }
+}
+
+/// Runs `f` with a per-top-level-match step budget; an exhausted budget makes the
+/// outermost match report `false` (fail closed, even through `:not()`).
+fn with_match_budget(f: impl FnOnce() -> bool) -> bool {
     let outermost = MATCH_DEPTH.with(|depth| {
         let current = depth.get();
         depth.set(current + 1);
         current == 0
     });
+    let _guard = MatchDepthGuard;
     if outermost {
         MATCH_STEPS.with(|steps| steps.set(MAX_MATCH_STEPS));
+        MATCH_EXHAUSTED.with(|flag| flag.set(false));
     }
     let result = f();
-    MATCH_DEPTH.with(|depth| depth.set(depth.get().saturating_sub(1)));
+    if outermost && MATCH_EXHAUSTED.with(|flag| flag.get()) {
+        return false;
+    }
     result
+}
+
+/// A fresh budget shared by every selector matched during one element's resolution.
+pub(crate) struct MatchScope {
+    _guard: MatchDepthGuard,
+}
+
+/// Starts a match scope (see [`MAX_MATCH_STEPS`]); drop it to end the scope.
+pub(crate) fn match_scope() -> MatchScope {
+    MATCH_DEPTH.with(|depth| depth.set(depth.get() + 1));
+    MATCH_STEPS.with(|steps| steps.set(MAX_MATCH_STEPS));
+    MATCH_EXHAUSTED.with(|flag| flag.set(false));
+    MatchScope {
+        _guard: MatchDepthGuard,
+    }
 }
 
 /// Spends one match step; returns false when the budget is exhausted.
@@ -60,6 +94,7 @@ fn spend_match_step() -> bool {
     MATCH_STEPS.with(|steps| {
         let remaining = steps.get();
         if remaining == 0 {
+            MATCH_EXHAUSTED.with(|flag| flag.set(true));
             false
         } else {
             steps.set(remaining - 1);
@@ -814,6 +849,8 @@ impl SelectorList {
     /// If this selector list matches the given element, returns the maximum specificity
     /// among all the complex selectors in the list that matched.
     pub fn matching_specificity(&self, doc: &Document, node_id: NodeId) -> Option<Specificity> {
+        // Share one budget across the alternative selectors of the list.
+        let _scope = match_scope();
         self.selectors
             .iter()
             .filter(|sel| sel.matches(doc, node_id))
@@ -1456,6 +1493,31 @@ mod budget_tests {
         assert!(
             !list.matches(&doc, leaf),
             "the missing ancestor makes the selector unmatched"
+        );
+    }
+
+    #[test]
+    fn exhaustion_is_fail_closed_even_through_not() {
+        // The inner selector cannot match (missing `x-a`) but its search exhausts the budget;
+        // `:not()` must not turn that into a match.
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", Vec::new());
+        doc.append_child(doc.root(), html);
+        let mut parent = html;
+        for _ in 0..40 {
+            let div =
+                doc.create_element(Namespace::Html, "div", vec![Attribute::new("class", "a")]);
+            doc.append_child(parent, div);
+            parent = div;
+        }
+        let leaf = doc.create_element(Namespace::Html, "p", vec![Attribute::new("class", "t")]);
+        doc.append_child(parent, leaf);
+        let selector_text = format!(":not(x-a {} .t)", ".a ".repeat(14));
+        let list = parse_selectors(&selector_text);
+        assert_eq!(list.selectors.len(), 1, "valid selector");
+        assert!(
+            !list.matches(&doc, leaf),
+            "an exhausted scope reports no match, even under :not()"
         );
     }
 
