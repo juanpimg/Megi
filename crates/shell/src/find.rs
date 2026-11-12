@@ -105,16 +105,14 @@ pub fn highlight_rects(layout: &LayoutBox, query: &str) -> Vec<CssRect> {
     while let Some(layout_box) = stack.pop() {
         if let BoxType::TextNode(text) = &layout_box.box_type {
             let (lower, _) = lower_with_map(text);
-            let hits = lower.matches(&needle).count().min(MAX_FIND_MATCHES);
+            let hits = lower.matches(&needle).count();
             if hits > 0 {
                 let rect = layout_box.dimensions.border_box();
                 let css = CssRect::new(rect.x, rect.y, rect.width, rect.height);
                 if css.width > 0.0 && css.height > 0.0 {
-                    for _ in 0..hits {
-                        rects.push(css);
-                        if rects.len() >= MAX_FIND_MATCHES {
-                            return rects;
-                        }
+                    rects.push(css);
+                    if rects.len() >= MAX_FIND_MATCHES {
+                        return rects;
                     }
                 }
             }
