@@ -694,6 +694,8 @@ fn resolve_base_cascaded_properties<'a>(
     inline_declarations: Option<&'a [Declaration]>,
     candidates: &[Candidate],
 ) -> HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher> {
+    // One selector-matching budget for this element: every candidate selector shares it.
+    let _match_scope = crate::selector::match_scope();
     let mut best_candidates: HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher> =
         HashMap::with_hasher(FastBuildHasher);
 
