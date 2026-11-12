@@ -177,9 +177,11 @@ fn plan_axis(
         BackgroundRepeatAxis::Repeat => {
             let base = positioning_origin + resolve_position(position, positioning_length, tile);
             if tile > 0.0 {
-                let start = ((clip_origin - base - tile) / tile).floor() as i64 - 1;
-                let end = ((clip_end - base) / tile).ceil() as i64 + 1;
-                let count = ((end - start).max(0) as usize).min(limit);
+                // Huge offsets saturate the float→int casts; `±1` must not overflow.
+                let start = (((clip_origin - base - tile) / tile).floor() as i64).saturating_sub(1);
+                let end = (((clip_end - base) / tile).ceil() as i64).saturating_add(1);
+                // Huge quotients saturate the casts; `end - start` can then overflow.
+                let count = (end.saturating_sub(start).max(0) as usize).min(limit);
                 for step in 0..count as i64 {
                     let origin = base + (start + step) as f32 * tile;
                     if intersects_clip(origin, tile) {
@@ -200,6 +202,13 @@ fn plan_axis(
             // Scale the tile so a whole number of copies fits the positioning area.
             if tile > 0.0 && positioning_length > 0.0 {
                 let count = (positioning_length / tile).round().max(1.0);
+                // A sub-pixel `background-size` makes `count` infinite (or ~1e19) and the
+                // rescaled tile 0: iterating `0..count` used to loop ~1e19 times because the
+                // zero-size tiles never intersect the clip. Such a pattern is degenerate;
+                // skip its tiles instead of hanging.
+                if !count.is_finite() || count > limit as f32 {
+                    return (positioning_length / count.max(1.0), origins);
+                }
                 tile = positioning_length / count;
                 for index in 0..count as usize {
                     if origins.len() >= limit {
@@ -219,6 +228,9 @@ fn plan_axis(
             // centred and a too-large tile behaves like `no-repeat` (CSS Backgrounds 3 §2.3).
             if tile > 0.0 && positioning_length >= tile {
                 let count = (positioning_length / tile).floor().max(1.0);
+                if !count.is_finite() || count > limit as f32 {
+                    return (tile, origins);
+                }
                 let count = count as usize;
                 if count == 1 {
                     let origin = positioning_origin + (positioning_length - tile) / 2.0;
@@ -403,6 +415,55 @@ mod tests {
 
     fn padding(width: f32, height: f32) -> Rect {
         Rect::new(0.0, 0.0, width, height)
+    }
+
+    #[test]
+    fn test_round_with_a_sub_pixel_tile_terminates() {
+        // `positioning_length / tile` is infinite for a 1e-38 px tile; the repeat count
+        // used to saturate `usize` and the zero-size tiles never intersected the clip.
+        let (tile, origins) = plan_axis(
+            0.0,
+            100.0,
+            0.0,
+            100.0,
+            Length::Px(0.0),
+            1e-38,
+            BackgroundRepeatAxis::Round,
+            64,
+        );
+        assert!(tile.is_finite(), "{tile}");
+        assert!(origins.len() <= 64);
+    }
+
+    #[test]
+    fn test_space_with_a_sub_pixel_tile_terminates() {
+        let (_, origins) = plan_axis(
+            0.0,
+            100.0,
+            0.0,
+            100.0,
+            Length::Px(0.0),
+            1e-38,
+            BackgroundRepeatAxis::Space,
+            64,
+        );
+        assert!(origins.len() <= 64);
+    }
+
+    #[test]
+    fn test_repeat_with_huge_offsets_does_not_overflow() {
+        let (tile, origins) = plan_axis(
+            1e38,
+            100.0,
+            0.0,
+            100.0,
+            Length::Px(1e38),
+            1.0,
+            BackgroundRepeatAxis::Repeat,
+            64,
+        );
+        assert!(tile.is_finite());
+        assert!(origins.len() <= 64);
     }
 
     #[test]
