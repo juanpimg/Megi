@@ -49,9 +49,16 @@ import json
 import re
 import subprocess
 import sys
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:
+    print("Python 3.11+ required (tomllib). Install Python 3.11 or newer.", file=sys.stderr)
+    sys.exit(1)
 from pathlib import Path
-from xml.sax.saxutils import escape as xml_escape
+from xml.sax.saxutils import escape as _xml_escape
+
+def xml_escape(text: str) -> str:
+    return _xml_escape(str(text), {"\"": "&quot;", "'": "&apos;"})
 
 STATUS_DIR = Path("docs/status")
 BADGE_FILES = {
@@ -70,14 +77,18 @@ FONT = "DejaVu Sans, Verdana, sans-serif"
 
 
 def run(root: Path, args: list[str], timeout: int = 600) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        args,
-        cwd=root,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
-    )
+    try:
+        return subprocess.run(
+            args,
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        print(f"warning: command timed out after {timeout}s: {' '.join(args)}", file=sys.stderr)
+        return subprocess.CompletedProcess(args, 1, "", "timeout")
 
 
 def git_short_head(root: Path) -> str:
@@ -139,6 +150,14 @@ def count_tests(
     """
     if no_count:
         return manifest_tests, False
+    if head == "uncommitted":
+        # Never cache under the sentinel head.
+        result = run(root, ["cargo", "test", "--workspace", "--", "--list"], timeout=900)
+        count = sum(1 for line in result.stdout.splitlines() if line.rstrip().endswith(": test"))
+        if count == 0:
+            print("warning: `cargo test --workspace -- --list` returned no tests; using manifest value", file=sys.stderr)
+            return manifest_tests, False
+        return count, True
     if cache_path.is_file():
         try:
             cache = json.loads(cache_path.read_text(encoding="utf-8"))
@@ -227,7 +246,7 @@ def comma(value: int) -> str:
 
 
 def md_escape(text: str) -> str:
-    return text.replace("|", "\\|")
+    return text.replace("|", "\\|").replace("\n", " ").replace("\r", " ")
 
 
 def render_markdown(data: dict) -> str:
@@ -502,12 +521,17 @@ def update_manifest(text: str, stats: dict, gate: dict[str, str]) -> str:
             output.extend(stats_block)
             index += 1
             while index < len(lines) and not lines[index].strip().startswith("["):
+                # Preserve comment lines.
+                if lines[index].strip().startswith("#"):
+                    output.append(lines[index])
                 index += 1
             continue
         if stripped == "[gate]":
             output.extend(gate_block)
             index += 1
             while index < len(lines) and not lines[index].strip().startswith("["):
+                if lines[index].strip().startswith("#"):
+                    output.append(lines[index])
                 index += 1
             continue
         output.append(lines[index])
