@@ -1,5 +1,11 @@
 //! 2D affine transforms (SVG `transform` attribute) and helpers.
 
+/// Maximum chained transform functions in one `transform` attribute (anti-DoS).
+pub const MAX_TRANSFORM_FUNCTIONS: usize = 32;
+
+/// Maximum numbers accepted in one transform function's argument list.
+pub const MAX_TRANSFORM_VALUES: usize = 64;
+
 /// A 2D affine transform matrix in SVG order (`a b c d e f`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Transform {
@@ -136,6 +142,7 @@ impl Transform {
         let mut index = 0usize;
         let bytes = raw.as_bytes();
         let mut saw_any = false;
+        let mut functions = 0usize;
         while index < bytes.len() {
             while index < bytes.len() && (bytes[index] as char).is_ascii_whitespace() {
                 index += 1;
@@ -173,8 +180,12 @@ impl Transform {
             if depth != 0 {
                 return None;
             }
+            functions += 1;
+            if functions > MAX_TRANSFORM_FUNCTIONS {
+                return None;
+            }
             let arguments = raw.get(arguments_start..index - 1)?;
-            let numbers = parse_number_list(arguments)?;
+            let numbers = parse_number_list_limited(arguments, MAX_TRANSFORM_VALUES)?;
             let transform = match name.as_str() {
                 "matrix" if numbers.len() == 6 => Self {
                     a: numbers[0],
@@ -209,12 +220,20 @@ impl Transform {
 
 /// Parses a list of SVG numbers (whitespace/comma separated, exponents allowed).
 pub(crate) fn parse_number_list(raw: &str) -> Option<Vec<f32>> {
+    parse_number_list_limited(raw, usize::MAX)
+}
+
+/// [`parse_number_list`] with a maximum element count, checked before allocating more.
+fn parse_number_list_limited(raw: &str, limit: usize) -> Option<Vec<f32>> {
     let mut numbers = Vec::new();
     let mut rest = raw;
     loop {
         rest = rest.trim_start_matches(|ch: char| ch.is_whitespace() || ch == ',');
         if rest.is_empty() {
             return Some(numbers);
+        }
+        if numbers.len() >= limit {
+            return None;
         }
         let (number, consumed) = parse_one_number(rest)?;
         if !number.is_finite() {
@@ -313,5 +332,24 @@ mod tests {
         );
         assert_eq!(parse_number_list(""), Some(Vec::new()));
         assert_eq!(parse_number_list("x"), None);
+    }
+}
+
+#[cfg(test)]
+mod cap_tests {
+    use super::*;
+
+    #[test]
+    fn huge_transform_argument_lists_are_rejected() {
+        let arguments = "1 ".repeat(100_000);
+        assert!(Transform::parse(&format!("translate({arguments})")).is_none());
+    }
+
+    #[test]
+    fn too_many_chained_functions_are_rejected() {
+        let chained = "translate(1) ".repeat(MAX_TRANSFORM_FUNCTIONS + 1);
+        assert!(Transform::parse(&chained).is_none());
+        let legitimate = "translate(10, 20) rotate(45) scale(2)";
+        assert!(Transform::parse(legitimate).is_some());
     }
 }
