@@ -1250,7 +1250,9 @@ impl TextCache {
             } else {
                 self.stats.glyph_masks_rasterized += 1;
             }
-            self.masks.insert(key, entry);
+            if self.masks.len() < MAX_TEXT_CACHE_ENTRIES {
+                self.masks.insert(key, entry);
+            }
         } else {
             self.stats.glyph_mask_hits += 1;
         }
