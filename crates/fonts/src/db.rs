@@ -376,8 +376,8 @@ impl FontDatabase {
         names.into_iter().collect()
     }
 
-    /// True if a face with exactly this family name (or an `@font-face` alias) is
-    /// registered.
+    /// True if a face with this family name (ASCII case-insensitive per CSS Fonts 3)
+    /// or an `@font-face` alias is registered.
     pub fn has_family(&self, family: &str) -> bool {
         if self.aliases.contains_key(&family.to_ascii_lowercase()) {
             return true;
@@ -385,7 +385,11 @@ impl FontDatabase {
         self.order
             .iter()
             .filter_map(|id| self.db.face(*id))
-            .any(|face| face.families.iter().any(|(name, _)| name == family))
+            .any(|face| {
+                face.families
+                    .iter()
+                    .any(|(name, _)| name.eq_ignore_ascii_case(family))
+            })
     }
 
     fn cache_lock(&self) -> std::sync::MutexGuard<'_, HashMap<fontdb::ID, Arc<Vec<u8>>>> {
@@ -495,13 +499,28 @@ impl FontDatabase {
         None
     }
 
+    fn resolve_family_name<'a>(&'a self, name: &'a str) -> &'a str {
+        self.order
+            .iter()
+            .filter_map(|id| self.db.face(*id))
+            .flat_map(|face| face.families.iter())
+            .find(|(registered, _)| registered.eq_ignore_ascii_case(name))
+            .map(|(registered, _)| registered.as_str())
+            .unwrap_or(name)
+    }
+
     fn query_face(&self, families: &[&str], weight: u16, style: FontStyle) -> Option<fontdb::ID> {
         if let Some(id) = self.alias_face(families, weight, style) {
             return Some(id);
         }
-        let expanded = Self::expand_families(families);
+        let mut expanded = Self::expand_families(families);
         if expanded.is_empty() {
             return None;
+        }
+        for fam in &mut expanded {
+            if let Family::Name(name) = fam {
+                *name = self.resolve_family_name(name);
+            }
         }
         self.db.query(&Query {
             families: &expanded,
