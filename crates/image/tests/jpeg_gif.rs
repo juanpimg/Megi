@@ -136,3 +136,28 @@ fn animated_gif_roundtrip_uses_the_first_frame() {
     // First frame is palette index 1 (pure green in the fixture palette).
     assert_eq!(image.pixel(6, 4), Some([0, 255, 0, 255]));
 }
+
+#[test]
+fn duplicate_sof_component_ids_are_rejected() {
+    let original = fixture("jpeg/baseline_420.jpg");
+    decode(&original).expect("unpatched fixture decodes");
+
+    let mut patched = original.clone();
+    let marker = patched
+        .windows(2)
+        .position(|window| window == [0xFF, 0xC0])
+        .expect("SOF0 marker");
+    let count = patched[marker + 9] as usize;
+    assert!(count >= 2, "fixture has multiple components");
+    let first_id = patched[marker + 10];
+    patched[marker + 13] = first_id; // id of the second component
+    match decode(&patched) {
+        Err(ImageError::InvalidData { reason }) => {
+            assert!(
+                reason.contains("duplicate JPEG component ID"),
+                "unexpected reason: {reason}"
+            );
+        }
+        other => panic!("expected duplicate-id rejection, got {other:?}"),
+    }
+}
