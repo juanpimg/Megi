@@ -421,6 +421,18 @@ mod tests {
     }
 
     #[test]
+    fn zoomed_metrics_drive_page_coordinates() {
+        // Page hit-testing must divide by the effective scale (device scale * page zoom),
+        // the same factor `present_region` uses to map CSS pixels to the window.
+        let metrics = crate::scale::window_metrics_zoomed(800, 600, 1.0, 2.0);
+        assert_eq!((metrics.css_width, metrics.css_height), (400, 300));
+        assert_eq!(
+            physical_to_page(100.0, 100.0, metrics.scale, 0),
+            (50.0, 50.0)
+        );
+    }
+
+    #[test]
     fn physical_to_page_applies_scale_and_scroll() {
         assert_eq!(physical_to_page(100.0, 200.0, 2.0, 50), (50.0, 150.0));
         assert_eq!(physical_to_page(10.0, 10.0, 1.0, 0), (10.0, 10.0));
