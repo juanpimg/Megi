@@ -14,7 +14,17 @@
 
 #![allow(clippy::excessive_precision)]
 
+use std::cell::Cell;
+
 use crate::properties::{Color, split_components};
+
+/// Maximum accepted `color-mix()` nesting. Deeper input is rejected as an invalid color,
+/// preventing stack exhaustion from adversarial CSS.
+const MAX_COLOR_MIX_DEPTH: u32 = 16;
+
+thread_local! {
+    static COLOR_MIX_DEPTH: Cell<u32> = const { Cell::new(0) };
+}
 
 /// Tries the CSS Color 4/5 function forms (`color()`, `lab()`, `color-mix()`, ...).
 pub(crate) fn parse_modern(input: &str) -> Option<Color> {
@@ -416,6 +426,17 @@ fn parse_hwb(inner: &str) -> Option<Color> {
 // ---------------------------------------------------------------------------
 
 fn parse_color_mix(inner: &str) -> Option<Color> {
+    let depth = COLOR_MIX_DEPTH.with(Cell::get);
+    if depth >= MAX_COLOR_MIX_DEPTH {
+        return None;
+    }
+    COLOR_MIX_DEPTH.with(|cell| cell.set(depth + 1));
+    let result = parse_color_mix_inner(inner);
+    COLOR_MIX_DEPTH.with(|cell| cell.set(depth));
+    result
+}
+
+fn parse_color_mix_inner(inner: &str) -> Option<Color> {
     let parts = crate::properties::split_top_level_commas(inner);
     if parts.len() != 3 {
         return None;
@@ -552,5 +573,33 @@ fn mix_colors(
             }
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn nested_mix(depth: usize) -> String {
+        let mut value = String::from("red");
+        for _ in 0..depth {
+            value = format!("color-mix(in srgb, {value} 50%, blue)");
+        }
+        value
+    }
+
+    #[test]
+    fn nested_color_mix_is_capped_without_overflowing_the_stack() {
+        // 64 levels would previously recurse without a bound.
+        assert_eq!(Color::parse(&nested_mix(64)), None);
+        // Rejection must reset the depth for subsequent parses.
+        assert!(Color::parse(&nested_mix(2)).is_some());
+        assert!(Color::parse("red").is_some());
+    }
+
+    #[test]
+    fn shallow_nesting_still_works() {
+        assert!(Color::parse(&nested_mix(3)).is_some());
+        assert!(Color::parse("color-mix(in srgb, red 50%, blue)").is_some());
     }
 }
