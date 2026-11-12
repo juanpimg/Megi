@@ -16,9 +16,13 @@
 //! Boa 0.21 no longer exposes an interrupt handler; the equivalent limits are its
 //! [`boa_engine::vm::RuntimeLimits`]: loop-iteration limit (fresh budget per `eval`),
 //! recursion limit and VM stack-size limit. Exhausting them maps to
-//! [`JsError::Budget`]. There is no memory accounting: the DOM parser and the handle
-//! side-table are capped separately ([`crate::host`]) and scripts cannot allocate network
-//! or filesystem resources (no such APIs are exposed).
+//! [`JsError::Budget`]. There is no general memory accounting: the DOM parser and the
+//! handle side-table are capped separately ([`crate::host`]), `document.write` has a
+//! cumulative per-document budget (`Host::max_document_write_bytes`, 8 MiB, and
+//! `Host::max_document_write_nodes`, 1M; past it writes are ignored with a single console
+//! warning), and scripts cannot allocate network or filesystem resources (no such APIs are
+//! exposed). The `innerHTML`/`outerHTML`/`insertAdjacentHTML` setters share the same
+//! cumulative parse budget and node cap as `document.write`.
 //!
 //! ## Deliberate limits (this WP)
 //!
@@ -1333,10 +1337,21 @@ fn node_inner_html_set(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let html_text = arg_string(args, 0, context)?;
-    let result = with_host(|host| html::set_inner_html(&mut host.document, node_id, &html_text));
+    let result = with_host(|host| {
+        if !charge_document_parse(host, html_text.len(), "innerHTML assignment") {
+            return Ok(());
+        }
+        let options = html::ParseOptions {
+            max_nodes: host.max_document_write_nodes,
+            ..html::ParseOptions::default()
+        };
+        html::set_inner_html_with_options(&mut host.document, node_id, &html_text, &options)
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    });
     match result {
-        Some(Ok(_)) => Ok(JsValue::undefined()),
-        Some(Err(error)) => Err(js_error(error.to_string())),
+        Some(Ok(())) => Ok(JsValue::undefined()),
+        Some(Err(message)) => Err(js_error(message)),
         None => Err(js_error("no active JavaScript host")),
     }
 }
@@ -1359,10 +1374,21 @@ fn node_outer_html_set(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let html_text = arg_string(args, 0, context)?;
-    let result = with_host(|host| html::set_outer_html(&mut host.document, node_id, &html_text));
+    let result = with_host(|host| {
+        if !charge_document_parse(host, html_text.len(), "outerHTML assignment") {
+            return Ok(());
+        }
+        let options = html::ParseOptions {
+            max_nodes: host.max_document_write_nodes,
+            ..html::ParseOptions::default()
+        };
+        html::set_outer_html_with_options(&mut host.document, node_id, &html_text, &options)
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    });
     match result {
-        Some(Ok(_)) => Ok(JsValue::undefined()),
-        Some(Err(error)) => Err(js_error(error.to_string())),
+        Some(Ok(())) => Ok(JsValue::undefined()),
+        Some(Err(message)) => Err(js_error(message)),
         None => Err(js_error("no active JavaScript host")),
     }
 }
@@ -1894,10 +1920,45 @@ fn document_close(_this: &JsValue, _args: &[JsValue], _context: &mut Context) ->
     Ok(JsValue::undefined())
 }
 
+/// Charges `bytes` of markup parsing against the document's cumulative budget.
+///
+/// `document.write`, `innerHTML`, `outerHTML` and `insertAdjacentHTML` all parse
+/// attacker-controlled markup; each parse is bounded per call, but a script loop could
+/// otherwise force thousands of large parses. The byte budget is shared with the node cap
+/// enforced by the parser ([`Host::max_document_write_nodes`]). Returns `false` when the
+/// assignment must be ignored.
+fn charge_document_parse(host: &mut Host, bytes: usize, sink: &str) -> bool {
+    let total = host.document_write_bytes.saturating_add(bytes);
+    if total > host.max_document_write_bytes || host.document.len() >= host.max_document_write_nodes
+    {
+        if !host.document_write_warned {
+            host.document_write_warned = true;
+            host.console.push(ConsoleEntry {
+                level: "warn".to_string(),
+                message: format!(
+                    "{sink} ignored: the cumulative document budget ({} bytes / {} nodes) is exhausted",
+                    host.max_document_write_bytes, host.max_document_write_nodes
+                ),
+            });
+        }
+        host.document_write_bytes = total;
+        return false;
+    }
+    host.document_write_bytes = total;
+    true
+}
+
 fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let text = arg_string(args, 0, context)?;
     with_host(|host| {
-        let _ = html::document_write(&mut host.document, &text);
+        if !charge_document_parse(host, text.len(), "document.write") {
+            return;
+        }
+        let options = html::ParseOptions {
+            max_nodes: host.max_document_write_nodes,
+            ..html::ParseOptions::default()
+        };
+        let _ = html::document_write_with_options(&mut host.document, &text, false, &options);
     });
     Ok(JsValue::undefined())
 }
@@ -2196,10 +2257,19 @@ fn node_insert_adjacent_html(
     let position = arg_string(args, 0, context)?.to_ascii_lowercase();
     let html_text = arg_string(args, 1, context)?;
     with_host(|host| {
+        if !charge_document_parse(host, html_text.len(), "insertAdjacentHTML") {
+            return;
+        }
         let temp = host
             .document
             .create_element(Namespace::Html, "div", Vec::new());
-        if html::set_inner_html(&mut host.document, temp, &html_text).is_err() {
+        let options = html::ParseOptions {
+            max_nodes: host.max_document_write_nodes,
+            ..html::ParseOptions::default()
+        };
+        if html::set_inner_html_with_options(&mut host.document, temp, &html_text, &options)
+            .is_err()
+        {
             return;
         }
         let children: Vec<NodeId> = host.document.children(temp).collect();
@@ -5713,5 +5783,111 @@ fn node_remove_attribute_node(
     match old {
         Some(value) => attribute_item(context, &name, &value),
         None => Ok(JsValue::null()),
+    }
+}
+
+#[cfg(test)]
+mod document_write_budget_tests {
+    use super::*;
+
+    #[test]
+    fn document_write_stops_at_the_cumulative_budget() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime.host.borrow_mut().max_document_write_bytes = 4 * 1024;
+        runtime
+            .eval(
+                "var s = 'A'.repeat(1024);
+                 for (var i = 0; i < 6; i++) { document.write(s); }",
+                "write_budget.js",
+            )
+            .expect("document.write loop");
+        let console = runtime.take_console();
+        let document = runtime.take_document();
+        let body = document.body().expect("body");
+        assert_eq!(
+            document.text_content(body).len(),
+            4 * 1024,
+            "only the writes that fit the budget are parsed into the document"
+        );
+        assert!(
+            console.iter().any(|entry| {
+                entry.level == "warn" && entry.message.contains("document.write ignored")
+            }),
+            "the exceeded budget must be reported: {console:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod document_write_node_budget_tests {
+    use super::*;
+
+    #[test]
+    fn document_write_node_budget_is_enforced_and_warned_once() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        // The parser must use the host's node cap, not the 1M default: 100 elements with a
+        // 64-node budget leave ~62 nodes.
+        runtime.host.borrow_mut().max_document_write_nodes = 64;
+        runtime
+            .eval("document.write('<i></i>'.repeat(100));", "nodes.js")
+            .expect("first write");
+        let after_first = runtime.document().len();
+        assert!(
+            after_first <= 64,
+            "the write parser stops at the host node cap: {after_first} nodes"
+        );
+        // Host-side rejection: a cap below the current size rejects every write; the
+        // warning must appear exactly once.
+        runtime.host.borrow_mut().max_document_write_nodes = 1;
+        runtime
+            .eval(
+                "for (var j = 0; j < 5; j++) { document.write('<b></b>'); }",
+                "nodes.js",
+            )
+            .expect("rejected writes");
+        let console = runtime.take_console();
+        let warnings = console
+            .iter()
+            .filter(|entry| entry.message.contains("document.write ignored"))
+            .count();
+        assert_eq!(warnings, 1, "the rejection is reported once: {console:?}");
+        let document = runtime.take_document();
+        assert_eq!(
+            document.len(),
+            after_first,
+            "rejected writes add nothing to the document"
+        );
+    }
+}
+
+#[cfg(test)]
+mod markup_parse_budget_tests {
+    use super::*;
+
+    #[test]
+    fn innerhtml_is_charged_against_the_cumulative_budget() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime.host.borrow_mut().max_document_write_bytes = 64;
+        runtime
+            .eval("document.body.innerHTML = '<b>first</b>';", "inner.js")
+            .expect("first assignment");
+        runtime
+            .eval(
+                "document.body.innerHTML = '<b>' + 'x'.repeat(200) + '</b>';",
+                "inner.js",
+            )
+            .expect("over-budget assignment");
+        let text = {
+            let document = runtime.document();
+            let body = document.body().expect("body");
+            document.text_content(body)
+        };
+        assert_eq!(text, "first", "the over-budget assignment is ignored");
+        let console = runtime.take_console();
+        let warnings = console
+            .iter()
+            .filter(|entry| entry.message.contains("innerHTML assignment ignored"))
+            .count();
+        assert_eq!(warnings, 1, "reported once: {console:?}");
     }
 }
