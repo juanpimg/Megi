@@ -200,7 +200,10 @@ def describe_pixels(
             pixel = row[offset : offset + pixel_bytes]
             distinct.add(int.from_bytes(pixel, "big"))
             if color_type in (4, 6):
-                alpha = pixel[-1] if bit_depth == 8 else pixel[-2]
+                if bit_depth == 8:
+                    alpha = pixel[-1]
+                else:
+                    alpha = int.from_bytes(pixel[-2:], "big")
                 if alpha == 0:
                     transparent += 1
                     continue
