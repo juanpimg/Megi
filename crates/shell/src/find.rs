@@ -212,6 +212,19 @@ fn blend_rgb(base: (u8, u8, u8), rgb: (u8, u8, u8), alpha: f32) -> (u8, u8, u8) 
     (mix(base.0, rgb.0), mix(base.1, rgb.1), mix(base.2, rgb.2))
 }
 
+/// Dedupe key for a highlight rectangle (bit patterns, with ±0.0 normalized).
+fn rect_key(rect: &CssRect) -> (u32, u32, u32, u32) {
+    fn bits(value: f32) -> u32 {
+        if value == 0.0 { 0 } else { value.to_bits() }
+    }
+    (
+        bits(rect.x),
+        bits(rect.y),
+        bits(rect.width),
+        bits(rect.height),
+    )
+}
+
 /// Paints highlight rectangles directly into a CSS-resolution pixmap (`--find` screenshots).
 ///
 /// The pixmap is in page CSS coordinates (same as the layout), so rectangles map 1:1. The
@@ -225,19 +238,17 @@ pub fn overlay_highlights_pixmap(
     let mut painted = 0usize;
     // Several hits in one layout fragment share a rectangle; dedupe by bit pattern in a
     // set instead of scanning the seen list (quadratic for many fragments).
+    let current_key = rects.get(current).map(rect_key);
     let mut seen: std::collections::HashSet<(u32, u32, u32, u32)> =
         std::collections::HashSet::new();
-    for (index, rect) in rects.iter().enumerate() {
-        let key = (
-            rect.x.to_bits(),
-            rect.y.to_bits(),
-            rect.width.to_bits(),
-            rect.height.to_bits(),
-        );
+    for rect in rects {
+        let key = rect_key(rect);
         if !seen.insert(key) {
             continue;
         }
-        let alpha = if index == current {
+        // Hits in one fragment share a rectangle: the current one must use the strong alpha
+        // even when its duplicate occurrence would be skipped by the dedupe.
+        let alpha = if Some(key) == current_key {
             HIGHLIGHT_CURRENT_ALPHA
         } else {
             HIGHLIGHT_ALPHA
@@ -286,19 +297,15 @@ pub fn overlay_highlights_dest(
         return 0;
     }
     let mut painted = 0usize;
+    let current_key = rects.get(current).map(rect_key);
     let mut seen: std::collections::HashSet<(u32, u32, u32, u32)> =
         std::collections::HashSet::new();
-    for (index, rect) in rects.iter().enumerate() {
-        let key = (
-            rect.x.to_bits(),
-            rect.y.to_bits(),
-            rect.width.to_bits(),
-            rect.height.to_bits(),
-        );
+    for rect in rects {
+        let key = rect_key(rect);
         if !seen.insert(key) {
             continue;
         }
-        let alpha = if index == current {
+        let alpha = if Some(key) == current_key {
             HIGHLIGHT_CURRENT_ALPHA
         } else {
             HIGHLIGHT_ALPHA
@@ -665,5 +672,20 @@ mod tests {
         let rects = vec![rect; 100];
         let painted = overlay_highlights_pixmap(&mut pixmap, &rects, 0);
         assert_eq!(painted, 4, "the duplicated rectangle is painted once");
+    }
+    #[test]
+    fn the_current_hit_uses_the_strong_alpha_when_its_duplicates_are_merged() {
+        // Two hits in one text fragment produce the same rectangle; the current hit is the
+        // second occurrence, whose duplicate the dedupe skips.
+        let mut pixmap = paint::Pixmap::new(8, 8);
+        let rect = CssRect::new(1.0, 1.0, 2.0, 2.0);
+        assert_eq!(overlay_highlights_pixmap(&mut pixmap, &[rect, rect], 1), 4);
+        let pixel = pixmap.pixels[8 + 1];
+        let (r, g, b) = blend_rgb((0, 0, 0), HIGHLIGHT_RGB, HIGHLIGHT_CURRENT_ALPHA);
+        assert_eq!(
+            (pixel.r, pixel.g, pixel.b),
+            (r, g, b),
+            "the merged rectangle uses the current-hit alpha"
+        );
     }
 }
