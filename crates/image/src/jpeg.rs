@@ -656,9 +656,16 @@ fn parse_sof(
     let mut components = Vec::with_capacity(count);
     let mut max_h = 1u32;
     let mut max_v = 1u32;
+    let mut seen_ids = [false; 256];
     for component in 0..count {
         let base = 6 + component * 3;
         let id = segment[base];
+        if seen_ids[usize::from(id)] {
+            return Err(ImageError::InvalidData {
+                reason: "duplicate JPEG component ID",
+            });
+        }
+        seen_ids[usize::from(id)] = true;
         let sampling = segment[base + 1];
         let h = u32::from(sampling >> 4);
         let v = u32::from(sampling & 0x0F);
