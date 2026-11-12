@@ -179,8 +179,6 @@ fn collect_inline_svgs(document: &Document) -> Vec<NodeId> {
     candidates
 }
 
-/// Iterative maximum nesting depth of the subtree rooted at `root_id`.
-
 /// Number of DOM nodes in the subtree rooted at `root_id`, stopping one past the cap.
 fn inline_svg_node_count(document: &Document, root_id: NodeId) -> usize {
     let mut count = 0usize;
@@ -201,6 +199,7 @@ fn inline_svg_node_count(document: &Document, root_id: NodeId) -> usize {
     count
 }
 
+/// Iterative maximum nesting depth of the subtree rooted at `root_id`.
 fn inline_svg_depth(document: &Document, root_id: NodeId) -> usize {
     let mut maximum = 0usize;
     let mut stack = vec![(root_id, 0usize)];
