@@ -40,6 +40,7 @@ options:
   --zoom FACTOR       page zoom, 0.5–3.0 (default 1.0); the CSS viewport is
                       physical/(device_scale*zoom) and the title shows the percentage
   --refresh-ms [MS]   auto-refresh pages whose scripts leave timers pending
+  --time MS           evaluate CSS animations at MS milliseconds (default 0)
                       (setInterval); MS defaults to 250, 0/disabling flag = off
   --find QUERY        highlight case-insensitive matches of QUERY in the
                       rendered page (headless screenshots; window: Ctrl+F); the
@@ -129,6 +130,8 @@ pub struct CliArgs {
     pub save_html: Option<PathBuf>,
     /// Auto-refresh interval in milliseconds when `--refresh-ms` was given (`None` = off).
     pub refresh_ms: Option<u64>,
+    /// CSS animation time in milliseconds (`--time`; default 0).
+    pub time_ms: f64,
 }
 
 /// Raw flags before validation/normalization (exposed for tests).
@@ -172,6 +175,8 @@ pub struct RawArgs {
     pub save_html: Option<PathBuf>,
     /// `--refresh-ms` value (default 250 when passed without a value), if provided.
     pub refresh_ms: Option<u64>,
+    /// `--time` value in milliseconds, if provided.
+    pub time_ms: Option<f64>,
     /// `-h`/`--help` was passed.
     pub help: bool,
 }
@@ -242,6 +247,14 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
                 raw.zoom = Some(value.parse::<f64>().map_err(|_| {
                     ShellError::Usage(format!(
                         "invalid --zoom value `{value}` (expected a number)"
+                    ))
+                })?);
+            }
+            "--time" => {
+                let value = next_value(&arguments, &mut index, "--time")?;
+                raw.time_ms = Some(value.parse::<f64>().map_err(|_| {
+                    ShellError::Usage(format!(
+                        "invalid --time value `{value}` (expected a number)"
                     ))
                 })?);
             }
@@ -384,6 +397,12 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
         }
         None => crate::zoom::DEFAULT_ZOOM,
     };
+    let time_ms = raw.time_ms.unwrap_or(0.0);
+    if !time_ms.is_finite() || time_ms < 0.0 {
+        return Err(ShellError::Usage(format!(
+            "invalid --time value `{time_ms}` (expected a finite non-negative number)"
+        )));
+    }
     if let Some(0) = raw.refresh_ms {
         // `--refresh-ms 0` explicitly disables auto-refresh; normalise to `None`.
         return Ok(CliArgs {
