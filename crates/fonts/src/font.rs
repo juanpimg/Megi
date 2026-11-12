@@ -67,7 +67,8 @@ impl Font {
             .map_err(|err| FontError::InvalidFont {
                 reason: format!("ttf-parser rejected face {index}: {err}"),
             })?
-            .units_per_em();
+            .units_per_em()
+            .max(1);
         Ok(Self {
             data,
             index,
@@ -149,7 +150,7 @@ impl Font {
             .map(|v| f32::from(v) * scale)
             .unwrap_or(size_px * 0.7);
         Ok(FontMetrics {
-            units_per_em: face.units_per_em(),
+            units_per_em: face.units_per_em().max(1),
             ascent,
             descent,
             line_gap,

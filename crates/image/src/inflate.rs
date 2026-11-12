@@ -800,13 +800,20 @@ impl StreamingInflater {
                 &mut self.total_output,
             ) {
                 Ok(true) => continue,
-                Ok(false) => return Ok(()),
+                Ok(false) => break,
                 Err(error) => {
                     self.failed = Some(error);
                     return Err(error);
                 }
             }
         }
+        // Drain consumed compressed bytes to avoid pinning the full input.
+        if self.position.bit == 0 && self.position.byte > 0 {
+            let consumed = self.position.byte.min(self.input.len());
+            self.input.drain(..consumed);
+            self.position.byte -= consumed;
+        }
+        Ok(())
     }
 
     /// Completes the stream: verifies the trailer and rejects truncated input.
@@ -1213,7 +1220,9 @@ fn append_output(
 }
 
 fn trim_window(window: &mut Vec<u8>) {
-    if window.len() > WINDOW_SIZE {
+    // Only compact when the window exceeds twice the target size, so the O(n) memmove
+    // happens at most once per WINDOW_SIZE bytes instead of once per output byte.
+    if window.len() > 2 * WINDOW_SIZE {
         let excess = window.len() - WINDOW_SIZE;
         window.drain(..excess);
     }
