@@ -25,6 +25,13 @@ pub const MAX_SUBSTITUTION_DEPTH: usize = 32;
 /// is exponential: 31 doublings asked for ~4 GiB. The budget bounds the work and memory.
 pub const MAX_SUBSTITUTION_BYTES: usize = 1024 * 1024;
 
+/// Maximum number of custom properties retained in a single element's map.
+///
+/// Bounds the O(N*P) clone amplification when many elements each declare `--*`
+/// properties (issue #687): once the inherited map exceeds this cap it is not
+/// carried forward, so cascade resolution stays linear in the document size.
+pub const MAX_CUSTOM_PROPERTIES: usize = 256;
+
 /// Result of [`resolve_declarations`]: owned declarations + shared custom-property map.
 type ResolvedDeclarations = (
     Vec<(String, Declaration)>,
@@ -359,8 +366,12 @@ pub(crate) fn resolve_declarations(
 ) -> ResolvedDeclarations {
     let own_custom = cascaded.keys().any(|name| name.starts_with("--"));
     // Copy-on-write: clone the inherited map only when the element declares custom props.
-    let mut custom_owned: Option<HashMap<String, String>> =
-        own_custom.then(|| inherited.map(|map| (**map).clone()).unwrap_or_default());
+    // Bound the amplification (issue #687): a map beyond MAX_CUSTOM_PROPERTIES is not
+    // carried forward, so a single document cannot force quadratic clone work.
+    let mut custom_owned: Option<HashMap<String, String>> = own_custom.then(|| match inherited {
+        Some(map) if map.len() <= MAX_CUSTOM_PROPERTIES => (**map).clone(),
+        _ => HashMap::new(),
+    });
     if let Some(custom) = custom_owned.as_mut() {
         for (name, declaration) in cascaded {
             if !name.starts_with("--") {
@@ -426,6 +437,7 @@ pub(crate) fn resolve_declarations(
     }
     let custom_properties = match custom_owned {
         Some(map) if map.is_empty() => None,
+        Some(map) if map.len() > MAX_CUSTOM_PROPERTIES => None,
         Some(map) => Some(Arc::new(map)),
         None => inherited.cloned(),
     };
