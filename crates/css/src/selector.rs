@@ -22,6 +22,70 @@
 //! over-matching (audit findings F13/F14/F15/F16).
 
 use dom::{Document, Namespace, NodeId, NodeKind};
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+
+/// Maximum selector-match steps for one element resolution (cascade) or one top-level
+/// match (direct API use).
+pub const MAX_MATCH_STEPS: u32 = 200_000;
+
+thread_local! {
+    static MATCH_STEPS: Cell<u32> = const { Cell::new(0) };
+    static MATCH_DEPTH: Cell<u32> = const { Cell::new(0) };
+    static MATCH_EXHAUSTED: Cell<bool> = const { Cell::new(false) };
+}
+
+struct MatchDepthGuard;
+
+impl Drop for MatchDepthGuard {
+    fn drop(&mut self) {
+        MATCH_DEPTH.with(|depth| depth.set(depth.get().saturating_sub(1)));
+    }
+}
+
+fn with_match_budget(f: impl FnOnce() -> bool) -> bool {
+    let outermost = MATCH_DEPTH.with(|depth| {
+        let current = depth.get();
+        depth.set(current + 1);
+        current == 0
+    });
+    let _guard = MatchDepthGuard;
+    if outermost {
+        MATCH_STEPS.with(|steps| steps.set(MAX_MATCH_STEPS));
+        MATCH_EXHAUSTED.with(|flag| flag.set(false));
+    }
+    let result = f();
+    if outermost && MATCH_EXHAUSTED.with(|flag| flag.get()) {
+        return false;
+    }
+    result
+}
+
+pub(crate) struct MatchScope {
+    _guard: MatchDepthGuard,
+}
+
+pub(crate) fn match_scope() -> MatchScope {
+    MATCH_DEPTH.with(|depth| depth.set(depth.get() + 1));
+    MATCH_STEPS.with(|steps| steps.set(MAX_MATCH_STEPS));
+    MATCH_EXHAUSTED.with(|flag| flag.set(false));
+    MatchScope {
+        _guard: MatchDepthGuard,
+    }
+}
+
+fn spend_match_step() -> bool {
+    MATCH_STEPS.with(|steps| {
+        let remaining = steps.get();
+        if remaining == 0 {
+            MATCH_EXHAUSTED.with(|flag| flag.set(true));
+            false
+        } else {
+            steps.set(remaining - 1);
+            true
+        }
+    })
+}
 
 /// Operator for attribute selectors (`[attr=value]`, `[attr~=value]`, etc.).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,6 +115,10 @@ pub struct AttributeSelector {
 
 impl AttributeSelector {
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
+        with_match_budget(|| self.matches_inner(doc, node_id))
+    }
+
+    fn matches_inner(&self, doc: &Document, node_id: NodeId) -> bool {
         let Some(el) = doc.node(node_id).as_element() else {
             return false;
         };
@@ -322,8 +390,129 @@ fn same_element_type(doc: &Document, a: NodeId, b: NodeId) -> bool {
         }
 }
 
+thread_local! {
+    /// Active document-wide sibling-index cache (one style resolution pass).
+    static SIBLING_CACHE: RefCell<Option<SiblingCache>> = const { RefCell::new(None) };
+    /// Nesting depth of document scopes.
+    static SIBLING_SCOPE_DEPTH: Cell<u32> = const { Cell::new(0) };
+    /// Test-only: how many sibling tables were built.
+    #[cfg(test)]
+    static SIBLING_TABLES_BUILT: Cell<usize> = const { Cell::new(0) };
+}
+
+struct SiblingCache {
+    /// Address of the document the cache applies to (avoids cross-document id collisions).
+    document: usize,
+    tables: HashMap<NodeId, SiblingTable>,
+}
+
+struct SiblingTable {
+    /// For each element child: (index from start, index from end, same-type index from
+    /// start, same-type index from end); all 1-based.
+    entries: HashMap<NodeId, (usize, usize, usize, usize)>,
+}
+
+impl SiblingTable {
+    fn build(doc: &Document, parent: NodeId) -> Self {
+        #[cfg(test)]
+        SIBLING_TABLES_BUILT.with(|count| count.set(count.get() + 1));
+        let mut elements: Vec<(NodeId, (Namespace, String))> = Vec::new();
+        let mut totals: HashMap<(Namespace, String), usize> = HashMap::new();
+        for child in doc.children(parent) {
+            if let Some(element) = doc.node(child).as_element() {
+                let name = if element.namespace == Namespace::Html {
+                    element.local_name.to_ascii_lowercase()
+                } else {
+                    element.local_name.clone()
+                };
+                let key = (element.namespace, name);
+                *totals.entry(key.clone()).or_default() += 1;
+                elements.push((child, key));
+            }
+        }
+        let mut seen: HashMap<(Namespace, String), usize> = HashMap::new();
+        let mut entries = HashMap::with_capacity(elements.len());
+        let total = elements.len();
+        for (position, (node, key)) in elements.iter().enumerate() {
+            let count = seen.entry(key.clone()).or_default();
+            *count += 1;
+            let type_total = totals.get(key).copied().unwrap_or(0);
+            entries.insert(
+                *node,
+                (
+                    position + 1,
+                    total - position,
+                    *count,
+                    type_total - *count + 1,
+                ),
+            );
+        }
+        Self { entries }
+    }
+}
+
+/// Opens a document-wide sibling-index cache for one style resolution pass.
+///
+/// `:nth-child`/`:nth-of-type`/`:first-child`... used to scan the sibling chain for every
+/// element; the cache builds one table per parent on first use, making them O(1) afterwards.
+/// It is valid only while the DOM does not mutate (style resolution never does).
+pub(crate) struct DocumentScope;
+
+/// Opens a [`DocumentScope`]; drop it to end the scope.
+pub(crate) fn document_scope() -> DocumentScope {
+    let outermost = SIBLING_SCOPE_DEPTH.with(|depth| {
+        let current = depth.get();
+        depth.set(current + 1);
+        current == 0
+    });
+    if outermost {
+        SIBLING_CACHE.with(|cache| {
+            *cache.borrow_mut() = Some(SiblingCache {
+                document: 0,
+                tables: HashMap::new(),
+            })
+        });
+    }
+    DocumentScope
+}
+
+impl Drop for DocumentScope {
+    fn drop(&mut self) {
+        SIBLING_SCOPE_DEPTH.with(|depth| {
+            let current = depth.get().saturating_sub(1);
+            depth.set(current);
+            if current == 0 {
+                SIBLING_CACHE.with(|cache| *cache.borrow_mut() = None);
+            }
+        });
+    }
+}
+
+/// Cached indices for `node`, when a document scope is active for this document.
+fn cached_sibling_indices(doc: &Document, node: NodeId) -> Option<(usize, usize, usize, usize)> {
+    let parent = doc.node(node).parent?;
+    let document = std::ptr::from_ref(doc) as usize;
+    SIBLING_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        let cache = cache.as_mut()?;
+        if cache.document == 0 {
+            cache.document = document;
+        } else if cache.document != document {
+            return None;
+        }
+        let table = cache
+            .tables
+            .entry(parent)
+            .or_insert_with(|| SiblingTable::build(doc, parent));
+        table.entries.get(&node).copied()
+    })
+}
+
 /// 1-based index of `node_id` among the element children of its parent, from the start.
 fn element_index_from_start(doc: &Document, node_id: NodeId) -> Option<usize> {
+    if let Some((index, _, _, _)) = cached_sibling_indices(doc, node_id) {
+        return Some(index);
+    }
     let parent_id = doc.node(node_id).parent?;
     let mut index = 0;
     let mut curr = doc.node(parent_id).first_child;
@@ -341,6 +530,9 @@ fn element_index_from_start(doc: &Document, node_id: NodeId) -> Option<usize> {
 
 /// 1-based index of `node_id` among the element children of its parent, from the end.
 fn element_index_from_end(doc: &Document, node_id: NodeId) -> Option<usize> {
+    if let Some((_, index, _, _)) = cached_sibling_indices(doc, node_id) {
+        return Some(index);
+    }
     let parent_id = doc.node(node_id).parent?;
     let mut index = 0;
     let mut curr = doc.node(parent_id).last_child;
@@ -358,6 +550,9 @@ fn element_index_from_end(doc: &Document, node_id: NodeId) -> Option<usize> {
 
 /// 1-based index of `node_id` among its same-type element siblings, from the start.
 fn type_index_from_start(doc: &Document, node_id: NodeId) -> Option<usize> {
+    if let Some((_, _, index, _)) = cached_sibling_indices(doc, node_id) {
+        return Some(index);
+    }
     let parent_id = doc.node(node_id).parent?;
     let mut index = 0;
     let mut curr = doc.node(parent_id).first_child;
@@ -375,6 +570,9 @@ fn type_index_from_start(doc: &Document, node_id: NodeId) -> Option<usize> {
 
 /// 1-based index of `node_id` among its same-type element siblings, from the end.
 fn type_index_from_end(doc: &Document, node_id: NodeId) -> Option<usize> {
+    if let Some((_, _, _, index)) = cached_sibling_indices(doc, node_id) {
+        return Some(index);
+    }
     let parent_id = doc.node(node_id).parent?;
     let mut index = 0;
     let mut curr = doc.node(parent_id).last_child;
@@ -448,12 +646,16 @@ pub struct CompoundSelector {
     pub classes: Vec<String>,
     pub attributes: Vec<AttributeSelector>,
     pub pseudo_classes: Vec<PseudoClass>,
+    /// `#a#b` with different ids can never match: an element has a single `id` attribute.
+    pub never_matches: bool,
+    /// Number of `#id` simple selectors in the compound (specificity counts every one).
+    pub id_count: u32,
 }
 
 impl CompoundSelector {
     /// Calculates the specificity of this compound selector according to Selectors Level 4 §16.
     pub fn specificity(&self) -> Specificity {
-        let a = if self.id.is_some() { 1 } else { 0 };
+        let a = self.id_count.max(u32::from(self.id.is_some()));
         let b = (self.classes.len() + self.attributes.len()) as u32;
         let c = if self.tag_name.as_deref().is_some_and(|t| t != "*") {
             1
@@ -474,6 +676,9 @@ impl CompoundSelector {
     /// and universal selectors are no longer restricted to the HTML namespace, so styles now
     /// apply to SVG/MathML elements (F14).
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
+        if self.never_matches {
+            return false;
+        }
         let Some(el) = doc.node(node_id).as_element() else {
             return false;
         };
@@ -501,9 +706,11 @@ impl CompoundSelector {
             let Some(class_attr) = el.get_attribute("class") else {
                 return false;
             };
-            let elem_classes: Vec<&str> = class_attr.split_ascii_whitespace().collect();
             for c in &self.classes {
-                if !elem_classes.iter().any(|ec| ec.eq_ignore_ascii_case(c)) {
+                if !class_attr
+                    .split_ascii_whitespace()
+                    .any(|ec| ec.eq_ignore_ascii_case(c))
+                {
                     return false;
                 }
             }
@@ -549,6 +756,10 @@ pub struct ComplexSelector {
 impl ComplexSelector {
     /// Matches the target element `node_id` against this complex selector.
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
+        with_match_budget(|| self.matches_inner(doc, node_id))
+    }
+
+    fn matches_inner(&self, doc: &Document, node_id: NodeId) -> bool {
         if self.compounds.is_empty() {
             return false;
         }
@@ -572,6 +783,9 @@ impl ComplexSelector {
     }
 
     fn matches_from_right(&self, doc: &Document, current_node: NodeId, index: usize) -> bool {
+        if !spend_match_step() {
+            return false;
+        }
         if index == 0 {
             return true;
         }
@@ -653,6 +867,10 @@ impl RelativeSelector {
     /// are ordinary descendant/child/sibling combinators; it does not evaluate `:scope` and
     /// does not implement the full relative-selector anchoring rules with backtracking budgets.
     pub fn matches(&self, doc: &Document, anchor: NodeId) -> bool {
+        with_match_budget(|| self.matches_inner(doc, anchor))
+    }
+
+    fn matches_inner(&self, doc: &Document, anchor: NodeId) -> bool {
         let compounds = &self.selector.compounds;
         if compounds.is_empty() {
             return false;
@@ -669,6 +887,9 @@ fn relative_chain_matches(
     index: usize,
     combinator: Combinator,
 ) -> bool {
+    if !spend_match_step() {
+        return false;
+    }
     let mut candidates = Vec::new();
     match combinator {
         Combinator::Child => {
@@ -739,12 +960,18 @@ pub struct SelectorList {
 
 impl SelectorList {
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
+        with_match_budget(|| self.matches_inner(doc, node_id))
+    }
+
+    fn matches_inner(&self, doc: &Document, node_id: NodeId) -> bool {
         self.selectors.iter().any(|sel| sel.matches(doc, node_id))
     }
 
     /// If this selector list matches the given element, returns the maximum specificity
     /// among all the complex selectors in the list that matched.
     pub fn matching_specificity(&self, doc: &Document, node_id: NodeId) -> Option<Specificity> {
+        // Share one budget across the alternative selectors of the list.
+        let _scope = match_scope();
         self.selectors
             .iter()
             .filter(|sel| sel.matches(doc, node_id))
@@ -1034,7 +1261,15 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
                 if id.is_empty() {
                     return None;
                 }
-                compound.id = Some(id);
+                compound.id_count = compound.id_count.saturating_add(1);
+                if let Some(existing) = &compound.id {
+                    // `#a#b` requires two different ids on one element, which is impossible.
+                    if existing != &id {
+                        compound.never_matches = true;
+                    }
+                } else {
+                    compound.id = Some(id);
+                }
             }
             '.' => {
                 let mut class = String::new();
@@ -1357,4 +1592,75 @@ fn strip_attribute_value_quotes(value: &str) -> Option<String> {
         return None;
     }
     Some(value.to_string())
+}
+
+#[cfg(test)]
+mod id_list_tests {
+    use super::*;
+    use dom::Attribute;
+
+    fn doc_with_id(id: &str) -> (Document, NodeId) {
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", Vec::new());
+        doc.append_child(doc.root(), html);
+        let div = doc.create_element(Namespace::Html, "div", vec![Attribute::new("id", id)]);
+        doc.append_child(html, div);
+        (doc, div)
+    }
+
+    #[test]
+    fn conflicting_ids_never_match() {
+        let (doc, node) = doc_with_id("a");
+        assert!(
+            !parse_selectors("#a#b").matches(&doc, node),
+            "an element has a single id attribute"
+        );
+        assert!(
+            parse_selectors("#a#a").matches(&doc, node),
+            "repeating the same id is redundant but matchable"
+        );
+        assert!(!parse_selectors("div#b#c").matches(&doc, node));
+    }
+
+    #[test]
+    fn every_id_counts_for_specificity() {
+        let list = parse_selectors("#a#b");
+        assert_eq!(list.max_specificity(), Specificity::new(2, 0, 0));
+        assert_eq!(
+            parse_selectors("#a#a").max_specificity(),
+            Specificity::new(2, 0, 0)
+        );
+        assert_eq!(
+            parse_selectors("div#a").max_specificity(),
+            Specificity::new(1, 0, 1)
+        );
+    }
+}
+
+#[cfg(test)]
+mod sibling_cache_tests {
+    use super::*;
+
+    #[test]
+    fn nth_of_type_reuses_one_sibling_table() {
+        let mut doc = Document::new();
+        let body = doc.create_element(Namespace::Html, "body", Vec::new());
+        doc.append_child(doc.root(), body);
+        for _ in 0..500 {
+            let item = doc.create_element(Namespace::Html, "li", Vec::new());
+            doc.append_child(body, item);
+        }
+        let selector = parse_selectors("li:nth-of-type(odd)");
+        let _scope = document_scope();
+        let matched = doc
+            .children(body)
+            .filter(|node| selector.matches(&doc, *node))
+            .count();
+        assert_eq!(matched, 250);
+        assert_eq!(
+            SIBLING_TABLES_BUILT.with(|count| count.get()),
+            1,
+            "one table for the parent, reused by every child"
+        );
+    }
 }

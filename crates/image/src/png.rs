@@ -149,8 +149,10 @@ pub fn decode_png(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageEr
 /// Decodes a PNG downscaled by an integer box factor so that neither dimension
 /// exceeds `max_dim` (used by the additive `image::decode_scaled` API).
 ///
-/// The box average is accumulated while unfiltering scanlines (including Adam7
-/// passes), so the full-resolution RGBA output buffer is never allocated.
+/// Sampling is nearest-neighbour: one source pixel per output pixel
+/// (`x % factor == 0 && y % factor == 0`, including Adam7 passes), so the full-resolution
+/// RGBA output buffer is never allocated, but high-frequency detail aliases (documented
+/// limitation shared with the GIF/WebP scaled path; the previous doc claimed box averaging).
 pub(crate) fn decode_png_scaled(
     bytes: &[u8],
     limits: &PngLimits,
@@ -173,6 +175,7 @@ fn decode_png_impl(
     let mut palette: Option<Vec<[u8; 3]>> = None;
     let mut transparency: Option<Transparency> = None;
     let mut idat: Vec<u8> = Vec::new();
+    let mut seen_idat = false;
     let mut seen_iend = false;
 
     while position < bytes.len() {
@@ -209,6 +212,9 @@ fn decode_png_impl(
             }
             b"PLTE" => {
                 let current = header.ok_or_else(|| invalid_chunk(kind, "PLTE before IHDR"))?;
+                if seen_idat {
+                    return Err(invalid_chunk(kind, "PLTE after IDAT"));
+                }
                 if palette.is_some() {
                     return Err(invalid_chunk(kind, "duplicate PLTE"));
                 }
@@ -216,6 +222,12 @@ fn decode_png_impl(
             }
             b"tRNS" => {
                 let current = header.ok_or_else(|| invalid_chunk(kind, "tRNS before IHDR"))?;
+                if seen_idat {
+                    return Err(invalid_chunk(kind, "tRNS after IDAT"));
+                }
+                if transparency.is_some() {
+                    return Err(invalid_chunk(kind, "duplicate tRNS"));
+                }
                 transparency = Some(parse_transparency(data, current, palette.as_deref())?);
             }
             b"IDAT" => {
@@ -239,6 +251,7 @@ fn decode_png_impl(
                     });
                 }
                 idat.extend_from_slice(data);
+                seen_idat = true;
             }
             b"IEND" => {
                 if length != 0 {
@@ -474,6 +487,15 @@ fn parse_palette(data: &[u8], header: Header) -> Result<Vec<[u8; 3]>, ImageError
     Ok(entries.to_vec())
 }
 
+/// Largest sample value representable at `bit_depth` bits.
+fn sample_max(bit_depth: u8) -> u32 {
+    if bit_depth >= 16 {
+        0xFFFF
+    } else {
+        (1u32 << bit_depth) - 1
+    }
+}
+
 /// Parses a tRNS payload into [`Transparency`].
 fn parse_transparency(
     data: &[u8],
@@ -488,17 +510,33 @@ fn parse_transparency(
                     "tRNS for grayscale must be 2 bytes",
                 ));
             }
-            Ok(Transparency::Gray(u16::from_be_bytes([data[0], data[1]])))
+            let value = u16::from_be_bytes([data[0], data[1]]);
+            if u32::from(value) > sample_max(header.bit_depth) {
+                return Err(invalid_chunk(
+                    *b"tRNS",
+                    "tRNS grayscale sample exceeds the bit depth",
+                ));
+            }
+            Ok(Transparency::Gray(value))
         }
         2 => {
             if data.len() != 6 {
                 return Err(invalid_chunk(*b"tRNS", "tRNS for RGB must be 6 bytes"));
             }
-            Ok(Transparency::Rgb(
-                u16::from_be_bytes([data[0], data[1]]),
-                u16::from_be_bytes([data[2], data[3]]),
-                u16::from_be_bytes([data[4], data[5]]),
-            ))
+            let max = sample_max(header.bit_depth);
+            let red = u16::from_be_bytes([data[0], data[1]]);
+            let green = u16::from_be_bytes([data[2], data[3]]);
+            let blue = u16::from_be_bytes([data[4], data[5]]);
+            if [red, green, blue]
+                .iter()
+                .any(|sample| u32::from(*sample) > max)
+            {
+                return Err(invalid_chunk(
+                    *b"tRNS",
+                    "tRNS RGB sample exceeds the bit depth",
+                ));
+            }
+            Ok(Transparency::Rgb(red, green, blue))
         }
         3 => {
             let palette = palette.ok_or_else(|| invalid_chunk(*b"tRNS", "tRNS before PLTE"))?;
