@@ -734,3 +734,28 @@ fn test_pattern_phase_beyond_the_tile_budget_still_renders() {
     let image = render_at(source, 8, 8);
     assert_eq!(pixel(&image, 0, 0), [255, 0, 0, 255]);
 }
+
+#[test]
+fn over_long_selectors_are_rejected_instead_of_truncated() {
+    // `.nomatch` + 19 descendant `g` compounds exceeds MAX_SELECTOR_PARTS, so the whole
+    // selector must be dropped. Truncating it to the first 16 compounds used to match a
+    // rect nested 16 levels deep (fail open).
+    let mut nested = String::new();
+    for _ in 0..16 {
+        nested.push_str("<g>");
+    }
+    nested.push_str("<rect width='4' height='4' fill='#00ff00'/>");
+    for _ in 0..16 {
+        nested.push_str("</g>");
+    }
+    let source = format!(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8'>         <style>.nomatch{} {{ fill: red }}</style>         <g class='nomatch'>{nested}</g></svg>",
+        " g".repeat(19)
+    );
+    let image = render_at(&source, 8, 8);
+    assert_eq!(
+        pixel(&image, 1, 1),
+        [0, 255, 0, 255],
+        "the over-long selector must not match"
+    );
+}

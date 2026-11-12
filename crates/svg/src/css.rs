@@ -289,22 +289,17 @@ pub(crate) fn parse_declarations(text: &str) -> Vec<Declaration> {
 }
 
 fn parse_selector(raw: &str) -> Option<Selector> {
-    let mut parts = Vec::new();
-    // `>` is treated as a descendant combinator (documented approximation).
-    for compound in raw
-        .replace('>', " ")
-        .split_ascii_whitespace()
-        .take(MAX_SELECTOR_PARTS)
-        .map(str::to_owned)
-        .collect::<Vec<_>>()
-    {
-        if compound.is_empty() {
-            continue;
-        }
-        parts.push(parse_simple_selector(&compound)?);
-    }
-    if parts.is_empty() || parts.len() > MAX_SELECTOR_PARTS {
+    // `>` is treated as a descendant combinator (documented approximation). Reject an
+    // over-long selector instead of truncating it: dropping trailing compounds (including
+    // the subject) would fail open and match elements the real selector excludes.
+    let normalized = raw.replace('>', " ");
+    let compounds: Vec<&str> = normalized.split_ascii_whitespace().collect();
+    if compounds.is_empty() || compounds.len() > MAX_SELECTOR_PARTS {
         return None;
+    }
+    let mut parts = Vec::with_capacity(compounds.len());
+    for compound in compounds {
+        parts.push(parse_simple_selector(compound)?);
     }
     Some(Selector { parts })
 }
