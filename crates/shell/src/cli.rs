@@ -315,9 +315,29 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
     if raw.help {
         return Err(ShellError::Usage(USAGE.to_string()));
     }
+    const MAX_TABS: usize = 32;
+    const MAX_INPUT_BYTES: usize = 4096;
+    if raw.tabs.len() > MAX_TABS {
+        return Err(ShellError::Usage(format!(
+            "--tabs count exceeds {MAX_TABS}"
+        )));
+    }
     let mut extra_tabs = Vec::with_capacity(raw.tabs.len());
     for tab in &raw.tabs {
+        if tab.len() > MAX_INPUT_BYTES {
+            return Err(ShellError::Usage(format!("input too long (max {MAX_INPUT_BYTES} bytes)")));
+        }
         extra_tabs.push(normalize_input(tab)?);
+    }
+    if let Some(ref find) = raw.find
+        && find.len() > MAX_INPUT_BYTES
+    {
+        return Err(ShellError::Usage(format!("--find value too long (max {MAX_INPUT_BYTES} bytes)")));
+    }
+    if let Some(ref input) = raw.input
+        && input.len() > MAX_INPUT_BYTES
+    {
+        return Err(ShellError::Usage(format!("input too long (max {MAX_INPUT_BYTES} bytes)")));
     }
     let (input, tabs) = match raw.input {
         Some(input) => {
