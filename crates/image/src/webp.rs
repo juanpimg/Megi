@@ -97,9 +97,8 @@ impl Huffman {
         }
         let symbols = count[1..].iter().sum::<u32>();
         if symbols == 0 {
-            return Ok(Self {
-                single: Some(0),
-                codes: Default::default(),
+            return Err(ImageError::InvalidData {
+                reason: "VP8L Huffman code has no symbols",
             });
         }
         if symbols == 1 {
