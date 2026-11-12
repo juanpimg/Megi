@@ -448,8 +448,7 @@ pub fn fetch_pooled(
         let stream = match pool.take(&origin) {
             Some(stream) => stream,
             None => {
-                let address = format!("{connect_host}:{connect_port}");
-                TcpStream::connect(&address).map_err(map_io_error)?
+                connect_tcp(&connect_host, connect_port, options)?
             }
         };
         stream.set_read_timeout(Some(options.read_timeout)).ok();
