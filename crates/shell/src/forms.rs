@@ -156,6 +156,7 @@ pub struct FormControl {
 /// returns the next free id.
 pub fn assign_form_ids(document: &mut Document) -> u32 {
     let ids = element_ids(document);
+    let mut used: std::collections::HashSet<u32> = std::collections::HashSet::new();
     let mut next = 0u32;
     for node_id in ids {
         let Some(element) = document.node(node_id).as_element() else {
@@ -166,17 +167,27 @@ pub fn assign_form_ids(document: &mut Document) -> u32 {
         if FormControlKind::from_element(&tag, type_attr.as_deref()).is_none() {
             continue;
         }
+        // Page content controls these attributes: an id of `u32::MAX` used to overflow
+        // `id + 1`, and duplicate ids made controls ambiguous. Keep a usable existing id
+        // (unique so far) and renumber the rest from a counter that skips used ids.
         let existing = element
             .get_attribute(FORM_ID_ATTR)
-            .and_then(|value| value.parse::<u32>().ok());
+            .and_then(|value| value.parse::<u32>().ok())
+            .filter(|id| !used.contains(id));
         let id = match existing {
             Some(id) => {
-                next = next.max(id + 1);
+                used.insert(id);
+                next = next.max(id.saturating_add(1));
                 id
             }
             None => {
-                let id = next;
-                next += 1;
+                let id = loop {
+                    let candidate = next;
+                    next = next.checked_add(1).unwrap_or(0);
+                    if used.insert(candidate) {
+                        break candidate;
+                    }
+                };
                 let element = document
                     .node_mut(node_id)
                     .as_element_mut()
@@ -1125,5 +1136,30 @@ mod tests {
         for tick in 0..100u64 {
             assert_eq!(caret_visible(tick), caret_visible(tick + 21));
         }
+    }
+    #[test]
+    fn form_ids_survive_hostile_page_values() {
+        // `u32::MAX` used to panic on `id + 1`; duplicates and duplicates of the counter
+        // made several controls share an id.
+        let mut document = html::parse_document(
+            "<body><input data-megi-form-id='4294967295'>\
+             <input data-megi-form-id='4294967294'>\
+             <input data-megi-form-id='7'><input data-megi-form-id='7'>\
+             <input></body>",
+            false,
+        );
+        let next = assign_form_ids(&mut document);
+        let mut ids = Vec::new();
+        for node_id in element_ids(&document) {
+            if let Some(element) = document.node(node_id).as_element()
+                && let Some(value) = element.get_attribute(FORM_ID_ATTR)
+            {
+                ids.push(value.parse::<u32>().expect("numeric form id"));
+            }
+        }
+        assert_eq!(ids.len(), 5, "every control gets an id: {ids:?}");
+        let unique: std::collections::HashSet<u32> = ids.iter().copied().collect();
+        assert_eq!(unique.len(), 5, "ids are unique: {ids:?}");
+        assert!(next > 0);
     }
 }

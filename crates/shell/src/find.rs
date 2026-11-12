@@ -168,12 +168,15 @@ fn map_range(map: &[usize], original_len: usize, start: usize, end: usize) -> Ra
     let original_start = map.get(start).copied().unwrap_or(original_len);
     let last = end.saturating_sub(1).min(map.len() - 1);
     let last_start = map.get(last).copied().unwrap_or(original_len);
-    // End of the last matched source char: advance to the next mapped offset (or the end).
+    // End of the last matched source char: the next char start after it (map values are
+    // char starts), or the end of the text. `last_start + 1` could land inside a multi-byte
+    // scalar (e.g. "İstanbul": U+0130 lowercases to "i" + U+0307, so matching "i" ended at
+    // source byte 1, inside the 2-byte İ) and `&text[range]` then panics.
     let original_end = map
-        .get(end)
+        .iter()
         .copied()
+        .find(|offset| *offset > last_start)
         .unwrap_or(original_len)
-        .max(last_start.saturating_add(1))
         .min(original_len);
     original_start..original_end
 }
@@ -622,5 +625,25 @@ mod tests {
             0
         );
         assert!(untouched.iter().all(|pixel| *pixel == 0x00FF_FFFF));
+    }
+    #[test]
+    fn search_ranges_stay_on_char_boundaries_when_lowercasing_expands() {
+        // U+0130 (İ) lowercases to "i" + U+0307: a match of "i" ends inside the source
+        // scalar, and the returned range must still be a char-boundary range.
+        let document = html::parse_document("<body><p>İstanbul</p></body>", false);
+        let hits = search(&document, "i");
+        assert!(!hits.is_empty(), "the lowercased i matches");
+        for hit in &hits {
+            let text = document.node(hit.node_id).as_text().expect("text node");
+            assert!(text.is_char_boundary(hit.range.start), "{:?}", hit.range);
+            assert!(text.is_char_boundary(hit.range.end), "{:?}", hit.range);
+        }
+        let hit = &hits[0];
+        let text = document.node(hit.node_id).as_text().expect("text node");
+        assert!(
+            text[hit.range.clone()].contains('İ'),
+            "the range covers the whole source char: {:?}",
+            hit.range
+        );
     }
 }
