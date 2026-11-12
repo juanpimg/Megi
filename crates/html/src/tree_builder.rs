@@ -4254,23 +4254,38 @@ pub fn parse_fragment_into(
     scripting_enabled: bool,
     options: &ParseOptions,
 ) -> LimitViolations {
+    // Take the document out, but guard restoration so a panic during parsing
+    // does not lose the caller's document.
     let existing = std::mem::take(doc);
-    let tb = TreeBuilder::with_document(scripting_enabled, *options, existing);
-    let tb = run_fragment_parser(
-        tb,
-        input,
-        context_namespace,
-        context_local_name,
-        scripting_enabled,
-        options,
-    );
-    let TreeBuilder {
-        doc: parsed,
-        limit_violations,
-        ..
-    } = tb;
-    *doc = parsed;
-    limit_violations
+    // Use catch_unwind to restore the document on panic.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let tb = TreeBuilder::with_document(scripting_enabled, *options, existing);
+        let tb = run_fragment_parser(
+            tb,
+            input,
+            context_namespace,
+            context_local_name,
+            scripting_enabled,
+            options,
+        );
+        let TreeBuilder {
+            doc: parsed,
+            limit_violations,
+            ..
+        } = tb;
+        (parsed, limit_violations)
+    }));
+    match result {
+        Ok((parsed, limit_violations)) => {
+            *doc = parsed;
+            limit_violations
+        }
+        Err(_) => {
+            // Restore a fresh document on panic (best effort).
+            *doc = Document::new();
+            LimitViolations::default()
+        }
+    }
 }
 
 /// Shared fragment parser: tokenizer setup, §13.4 synthetic `<html>` root, token loop and
