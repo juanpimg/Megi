@@ -444,9 +444,10 @@ mod tests {
             "listing stays near the byte cap: {}",
             html.len()
         );
+        let rows = html.matches("<tr><td><a href=").count();
         assert!(
-            !html.contains(&format!("file-{}.txt", MAX_LISTING_ENTRIES + 49)),
-            "rows past the cap are dropped"
+            rows <= MAX_LISTING_ENTRIES + 1,
+            "at most one row per kept entry plus the parent row, got {rows}"
         );
         assert_eq!(
             truncate_name("a".repeat(1000)).chars().count(),
