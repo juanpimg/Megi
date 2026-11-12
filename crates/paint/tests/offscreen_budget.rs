@@ -68,8 +68,7 @@ fn sibling_opacity_groups_release_their_budget() {
         });
     }
     let pixmap = rasterize_display_list(&DisplayList { items }, 33, 1);
-    for index in 0..33 {
-        let pixel = pixmap.pixels[index];
+    for (index, pixel) in pixmap.pixels.iter().enumerate().take(33) {
         assert_eq!(
             (pixel.r, pixel.g, pixel.b),
             (255, 127, 127),
