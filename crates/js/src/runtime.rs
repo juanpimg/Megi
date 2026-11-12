@@ -99,6 +99,37 @@ impl Budget {
     };
 }
 
+/// Timer/time budget for the deterministic loop that drives top-level `await`.
+#[derive(Clone, Copy, Debug)]
+pub struct ModuleAsyncBudget {
+    /// Maximum timer callbacks pumped while the module promise is pending.
+    pub timer_tasks: usize,
+    /// Maximum virtual milliseconds the waiting loop may advance.
+    pub virtual_time_ms: u64,
+}
+
+impl Default for ModuleAsyncBudget {
+    fn default() -> Self {
+        Self {
+            timer_tasks: 10_000,
+            virtual_time_ms: 1_000,
+        }
+    }
+}
+
+/// Result of [`JsRuntime::eval_module_async_with_budget`].
+#[derive(Debug)]
+pub struct ModuleAsyncOutcome {
+    /// The evaluated module.
+    pub outcome: ModuleOutcome,
+    /// Timer callbacks pumped while waiting for top-level `await`.
+    pub timer_tasks: usize,
+    /// Virtual milliseconds advanced while waiting.
+    pub virtual_time_ms: u64,
+    /// Whether the waiting loop stopped because its timer/time budget ran out.
+    pub limited: bool,
+}
+
 /// Embedded JavaScript runtime bound to one DOM document.
 pub struct JsRuntime {
     /// Boa context (single realm).
@@ -419,7 +450,9 @@ impl JsRuntime {
 
     /// Moves the virtual clock to `deadline_ms` and runs every timer due up to then.
     pub fn run_until(&mut self, deadline_ms: u64) -> Result<usize, JsError> {
-        self.run_until_with_budget(deadline_ms, usize::MAX)
+        // Bound the unbudgeted entry point: a self-rearming zero-delay timer would never
+        // let the loop return otherwise.
+        self.run_until_with_budget(deadline_ms, 100_000)
     }
 
     /// [`Self::run_until`] that runs at most `max_timers` callbacks.
@@ -5296,10 +5329,33 @@ impl JsRuntime {
     pub fn eval_module_async(
         &mut self,
         source: &str,
-        _source_name: &str,
+        source_name: &str,
         base_url: &str,
         budget: &Budget,
     ) -> Result<ModuleOutcome, JsError> {
+        self.eval_module_async_with_budget(
+            source,
+            source_name,
+            base_url,
+            budget,
+            ModuleAsyncBudget::default(),
+        )
+        .map(|evaluated| evaluated.outcome)
+    }
+
+    /// [`Self::eval_module_async`] with an explicit timer/time budget.
+    ///
+    /// The deterministic loop that drives top-level `await` pumps timers; the render event
+    /// loop passes its remaining `max_tasks`/virtual-time budget here so module evaluation
+    /// cannot overshoot the page budget.
+    pub fn eval_module_async_with_budget(
+        &mut self,
+        source: &str,
+        _source_name: &str,
+        base_url: &str,
+        budget: &Budget,
+        timer_budget: ModuleAsyncBudget,
+    ) -> Result<ModuleAsyncOutcome, JsError> {
         apply_budget(&mut self.context, budget);
         let module = Module::parse(
             Source::from_bytes(source).with_path(Path::new(base_url)),
@@ -5309,6 +5365,9 @@ impl JsRuntime {
         .map_err(module_error)?;
         let promise = module.load_link_evaluate(&mut self.context);
         let _scope = HostScope::enter(&self.host);
+        let mut timer_tasks = 0usize;
+        let mut virtual_time_ms = 0u64;
+        let mut limited = false;
         for _ in 0..10_000 {
             if self.context.run_jobs().is_err() {
                 break;
@@ -5316,12 +5375,28 @@ impl JsRuntime {
             if !matches!(promise.state(), PromiseState::Pending) {
                 break;
             }
-            let _ = crate::events::advance_clock(
+            if timer_tasks >= timer_budget.timer_tasks
+                || virtual_time_ms >= timer_budget.virtual_time_ms
+            {
+                limited = true;
+                break;
+            }
+            let pump = (timer_budget.timer_tasks - timer_tasks).min(64);
+            if let Ok((_, pumped)) = crate::events::advance_clock_pumping(
                 &mut self.context,
                 std::time::Duration::from_millis(1),
-            );
+                pump,
+            ) {
+                timer_tasks += pumped;
+            }
+            virtual_time_ms += 1;
             let now = crate::events::now_ms();
-            let _ = crate::events::run_due_timers(&mut self.context, now, 64);
+            let remaining = timer_budget.timer_tasks - timer_tasks;
+            if let Ok(pumped) =
+                crate::events::run_due_timers(&mut self.context, now, remaining.min(64))
+            {
+                timer_tasks += pumped;
+            }
         }
         drop(_scope);
         match promise.state() {
@@ -5356,9 +5431,14 @@ impl JsRuntime {
             }
         }
         values.sort_by(|a, b| a.0.cmp(&b.0));
-        Ok(ModuleOutcome {
-            url: base_url.to_string(),
-            exports: values,
+        Ok(ModuleAsyncOutcome {
+            outcome: ModuleOutcome {
+                url: base_url.to_string(),
+                exports: values,
+            },
+            timer_tasks,
+            virtual_time_ms,
+            limited,
         })
     }
 }

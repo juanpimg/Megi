@@ -202,7 +202,7 @@ pub use host::ConsoleEntry;
 pub use host::{MediaProvider, ViewportInfo, ViewportProvider};
 pub use import_map::ImportMap;
 #[cfg(feature = "js")]
-pub use runtime::{Budget, JsRuntime};
+pub use runtime::{Budget, JsRuntime, ModuleAsyncBudget, ModuleAsyncOutcome};
 
 /// Minimal stand-in types so the stub API keeps the same signatures without Boa.
 #[cfg(not(feature = "js"))]

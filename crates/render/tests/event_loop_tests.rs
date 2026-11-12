@@ -354,3 +354,52 @@ fn timer_task_budget_caps_a_single_batch() {
         output.stats.warnings
     );
 }
+
+#[test]
+fn top_level_await_respects_the_timer_budget() {
+    // A module with top-level await drives timers while it waits. Those callbacks must
+    // count against `max_tasks` and leave the rest pending; before the fix the module loop
+    // drained up to 100,000 timers and reported none.
+    let html = "<html><body>\
+                <script>for (var i = 0; i < 200; i++) { setTimeout(function () {}, 0); }</script>\
+                <script type=\"module\">await new Promise(function () {});</script>\
+                </body></html>";
+    let encoded: String = html
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || b"-_.~".contains(&byte) {
+                (byte as char).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect();
+    let options = RenderOptions {
+        viewport: Viewport::new(400, 240).expect("viewport"),
+        scripting: ScriptingMode::Enabled,
+        scripting_limits: ScriptingLimits {
+            max_tasks: 10,
+            ..ScriptingLimits::default()
+        },
+        ..base_options()
+    };
+    let output = render_url(&format!("data:text/html,{encoded}"), &options).expect("render");
+    assert!(
+        output.stats.script_tasks <= 10,
+        "ran {} timer callbacks with max_tasks = 10",
+        output.stats.script_tasks
+    );
+    assert!(
+        output.stats.script_timers_pending > 0,
+        "the remaining timers must stay pending, not run inside the module loop"
+    );
+    assert!(
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("timer task budget exhausted")),
+        "hitting the timer budget must be reported: {:?}",
+        output.stats.warnings
+    );
+}
