@@ -46,6 +46,13 @@ impl PartialEq for Font {
 /// (e.g. `f32::MAX`) before they overflow glyph buffer allocations.
 const MAX_FONT_SIZE_PX: f32 = 1_000_000.0;
 
+/// Maximum pixels of one rasterized glyph mask.
+///
+/// `font-size` can be a large finite number, and a glyph's device bounds grow with it; the
+/// mask (`width * height` bytes) and the rasterizer's f32 grid are allocated before the
+/// destination clip is consulted, so a single glyph must be bounded here.
+const MAX_GLYPH_MASK_PIXELS: usize = 16 * 1024 * 1024;
+
 impl Font {
     /// Parses the font bytes, computes `units_per_em` and returns a handle.
     ///
@@ -305,7 +312,13 @@ impl Font {
                 data: Vec::new(),
             });
         }
-        let mut data = vec![0u8; width as usize * height as usize];
+        let pixels = (width as usize)
+            .checked_mul(height as usize)
+            .ok_or(FontError::GlyphTooLarge { width, height })?;
+        if pixels > MAX_GLYPH_MASK_PIXELS {
+            return Err(FontError::GlyphTooLarge { width, height });
+        }
+        let mut data = vec![0u8; pixels];
         outlined.draw(|x, y, coverage| {
             let index = y as usize * width as usize + x as usize;
             if let Some(slot) = data.get_mut(index) {

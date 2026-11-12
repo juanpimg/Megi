@@ -3,7 +3,7 @@
 //! Fixture: Open Sans Regular latin subset (SIL Open Font License 1.1) downloaded from
 //! Google Fonts; see `tests/fixtures/OFL-OpenSans.txt`.
 
-use fonts::{FontDatabase, FontStyle, decode_web_font, is_woff2};
+use fonts::{FontDatabase, FontError, FontStyle, decode_web_font, is_woff2};
 
 const WOFF2: &[u8] = include_bytes!("fixtures/OpenSans-Regular-latin.woff2");
 
@@ -91,4 +91,32 @@ fn non_woff2_bytes_pass_through_and_empty_input_fails() {
         decode_web_font(&[]),
         Err(fonts::FontError::InvalidWebFont { .. })
     ));
+}
+
+#[test]
+fn rejects_a_table_directory_length_past_the_compressed_stream() {
+    // Bumping the last directory entry's `origLength` by one used to panic inside the
+    // third-party decoder (`range end index 31408 out of range for slice of length 31407`);
+    // it must now be a typed error.
+    let mut corrupted = WOFF2.to_vec();
+    corrupted[103] = corrupted[103].wrapping_add(1);
+    let error = decode_web_font(&corrupted).expect_err("corrupted directory length");
+    assert!(
+        matches!(error, FontError::InvalidWebFont { .. }),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn rejects_an_oversized_total_sfnt_size_without_allocating() {
+    // `Vec::with_capacity(totalSfntSize)` used to request 4 GiB from an 18 KB file.
+    let mut corrupted = WOFF2.to_vec();
+    corrupted[16..20].copy_from_slice(&u32::MAX.to_be_bytes());
+    let error = decode_web_font(&corrupted).expect_err("4 GiB totalSfntSize");
+    assert!(
+        matches!(error, FontError::InvalidWebFont { .. }),
+        "{error:?}"
+    );
+    // The untouched fixture still decodes.
+    assert!(decode_web_font(WOFF2).is_ok());
 }

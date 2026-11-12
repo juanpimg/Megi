@@ -14,12 +14,68 @@
 //! # Limits
 //!
 //! - WOFF1 is **not** decoded (only WOFF2; TTF/OTF pass through unchanged).
-//! - The decoder validates the WOFF2 container and reconstructed `glyf`/`loca`/`hmtx`
-//!   tables; malformed input returns [`FontError::InvalidWebFont`] and never panics.
+//! - The header fields that size the decoder's allocations (`totalSfntSize`,
+//!   `totalCompressedSize`, `numTables`, file length) are validated before handing the
+//!   bytes over, the reconstructed sfnt is capped at [`MAX_SFNT_BYTES`], and the
+//!   third-party conversion runs under `catch_unwind`: malformed input returns
+//!   [`FontError::InvalidWebFont`] and never panics.
 //! - No subsetting, color-font (`COLR`/`CBDT`) or variation-specific handling beyond
 //!   what the WOFF2 container itself requires.
 
 use crate::error::FontError;
+
+/// Maximum reconstructed sfnt size accepted from one WOFF2 container.
+const MAX_SFNT_BYTES: usize = 64 * 1024 * 1024;
+
+/// Fixed WOFF2 header length (W3C WOFF2 §4.1).
+const WOFF2_HEADER_LEN: usize = 48;
+
+fn be_u16(bytes: &[u8], offset: usize) -> u16 {
+    u16::from_be_bytes([bytes[offset], bytes[offset + 1]])
+}
+
+fn be_u32(bytes: &[u8], offset: usize) -> u32 {
+    u32::from_be_bytes([
+        bytes[offset],
+        bytes[offset + 1],
+        bytes[offset + 2],
+        bytes[offset + 3],
+    ])
+}
+
+/// Validates the WOFF2 header fields that size the decoder's allocations.
+///
+/// `woff2-patched` 0.4 trusts `totalSfntSize`, `totalCompressedSize` and the table
+/// directory: a crafted header requested a 4 GiB allocation and a directory length one byte
+/// past the compressed stream panicked on a slice range. Reject what can be checked cheaply
+/// before the bytes reach it.
+fn validate_woff2_header(bytes: &[u8]) -> Result<(), FontError> {
+    let invalid = |reason: &str| FontError::InvalidWebFont {
+        reason: reason.to_string(),
+    };
+    if bytes.len() < WOFF2_HEADER_LEN {
+        return Err(invalid("truncated WOFF2 header"));
+    }
+    if &bytes[..4] != b"wOF2" {
+        return Err(invalid("bad WOFF2 signature"));
+    }
+    if be_u32(bytes, 8) as usize > bytes.len() {
+        return Err(invalid("WOFF2 length field exceeds the input"));
+    }
+    let num_tables = be_u16(bytes, 12);
+    if num_tables == 0 || num_tables > 0x3FFF {
+        return Err(invalid("WOFF2 numTables out of range"));
+    }
+    let total_sfnt = be_u32(bytes, 16) as usize;
+    if total_sfnt == 0 || total_sfnt > MAX_SFNT_BYTES {
+        return Err(invalid("WOFF2 totalSfntSize exceeds the cap"));
+    }
+    let total_compressed = be_u32(bytes, 20) as usize;
+    if total_compressed == 0 || total_compressed > bytes.len() {
+        return Err(invalid("WOFF2 totalCompressedSize exceeds the input"));
+    }
+    Ok(())
+}
 
 /// Returns whether `bytes` look like a WOFF2 container (magic `wOF2`).
 pub fn is_woff2(bytes: &[u8]) -> bool {
@@ -39,8 +95,24 @@ pub fn decode_web_font(bytes: &[u8]) -> Result<Vec<u8>, FontError> {
     if !is_woff2(bytes) {
         return Ok(bytes.to_vec());
     }
+    validate_woff2_header(bytes)?;
     let mut cursor = std::io::Cursor::new(bytes);
-    woff2::convert_woff2_to_ttf(&mut cursor).map_err(|error| FontError::InvalidWebFont {
+    // The third-party decoder has unchecked slice ranges and allocation sizes (see the
+    // module limits); a panic on hostile input must become a typed error rather than unwind
+    // through the renderer. Out-of-memory aborts are prevented by the header validation.
+    let converted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        woff2::convert_woff2_to_ttf(&mut cursor)
+    }))
+    .map_err(|_| FontError::InvalidWebFont {
+        reason: "WOFF2 decoder panicked on malformed input".to_string(),
+    })?;
+    let sfnt = converted.map_err(|error| FontError::InvalidWebFont {
         reason: error.to_string(),
-    })
+    })?;
+    if sfnt.len() > MAX_SFNT_BYTES {
+        return Err(FontError::InvalidWebFont {
+            reason: format!("reconstructed font exceeds {MAX_SFNT_BYTES} bytes"),
+        });
+    }
+    Ok(sfnt)
 }
