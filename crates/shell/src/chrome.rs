@@ -348,7 +348,12 @@ impl AddressBar {
         let needle = typed.to_ascii_lowercase();
         history
             .iter()
-            .find(|url| url.len() > self.text.len() && url.to_ascii_lowercase().contains(&needle))
+            .find(|url| {
+                // A completion must extend the typed text: `contains` matched in the middle
+                // ("exa" vs "https://example.com/") and `accept_completion` then selected
+                // garbage (`ps://example.com/`, leaving "httm").
+                url.len() > typed.len() && url.to_ascii_lowercase().starts_with(&needle)
+            })
             .cloned()
     }
 
@@ -357,7 +362,11 @@ impl AddressBar {
         let Some(candidate) = self.autocomplete(history) else {
             return false;
         };
-        let typed = self.text.len();
+        // `autocomplete` compares the *trimmed* text with the candidate prefix, so the
+        // selection anchor must use that trimmed length: with leading/trailing spaces the
+        // raw length could exceed the caret and `selected_text` then panicked on a
+        // non-boundary/out-of-range slice.
+        let typed = self.text.trim().len().min(candidate.len());
         self.text = candidate;
         self.anchor = typed;
         self.caret = self.text.len();
@@ -2085,7 +2094,9 @@ mod tests {
             "https://example.com/help".to_string(),
         ];
         assert_eq!(bar.autocomplete(&history), None, "min 2 chars");
-        bar.insert("e");
+        // Completion extends the typed text, so type the beginning of the URL.
+        bar.insert("t");
+        bar.insert("t");
         assert_eq!(
             bar.autocomplete(&history).as_deref(),
             Some("https://example.com/hello")
@@ -2739,5 +2750,41 @@ mod tests {
             dest[start as usize..(start + 30) as usize].contains(&expected),
             "domain badge color painted"
         );
+    }
+    #[test]
+    fn autocomplete_requires_a_prefix_and_selects_only_the_suffix() {
+        let history = vec!["https://example.com/".to_string()];
+        let mut bar = AddressBar::new();
+        bar.open("");
+        bar.insert("exa");
+        assert_eq!(
+            bar.autocomplete(&history),
+            None,
+            "a middle substring is not a completion"
+        );
+        let mut bar = AddressBar::new();
+        bar.open("");
+        bar.insert("htt");
+        assert_eq!(
+            bar.autocomplete(&history).as_deref(),
+            Some("https://example.com/")
+        );
+        assert!(bar.accept_completion(&history));
+        assert_eq!(bar.text(), "https://example.com/");
+        assert_eq!(bar.selected_text(), "ps://example.com/");
+    }
+    #[test]
+    fn accepting_a_completion_with_surrounding_spaces_keeps_a_valid_selection() {
+        let history = vec!["https://example.com/".to_string()];
+        let mut bar = AddressBar::new();
+        bar.open("");
+        bar.insert("  ht  ");
+        assert!(bar.accept_completion(&history));
+        assert_eq!(bar.text(), "https://example.com/");
+        assert_eq!(bar.selected_text(), "tps://example.com/");
+        let range = bar.selection_range();
+        assert!(range.end <= bar.text().len(), "{range:?}");
+        bar.delete_selection();
+        assert_eq!(bar.text(), "ht");
     }
 }
