@@ -579,6 +579,14 @@ pub(crate) fn layout_flex_children(
         }
     }
 
+    // Pre-compute total height for column-reverse with auto height.
+    let total_column_height = if !row && reverse && content.height <= 0.0 {
+        items.iter().map(|i| i.outer_main()).sum::<f32>()
+            + main_gap * (items.len().saturating_sub(1) as f32)
+    } else {
+        content.height
+    };
+
     // 6. Position and translate every item's subtree.
     for (line_index, line) in lines.iter().enumerate() {
         for index in line {
@@ -597,7 +605,7 @@ pub(crate) fn layout_flex_children(
                 (main_origin, cross_origin + item.cross_offset)
             } else {
                 let main_origin = if reverse {
-                    content.y + content.height - item.main_offset - item.outer_main()
+                    content.y + total_column_height - item.main_offset - item.outer_main()
                 } else {
                     content.y + item.main_offset
                 };
