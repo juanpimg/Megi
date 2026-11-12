@@ -2128,16 +2128,20 @@ fn point_in_rounded_rect(rect: Rect, corners: &[(f32, f32); 4], px: f32, py: f32
 
 /// Antialiased coverage of an axis-aligned rounded rectangle (4×4 supersampling).
 fn rounded_rect_coverage(rect: Rect, radii: BorderRadii, px: f32, py: f32) -> f32 {
+    let corners = resolve_corner_radii(rect, radii);
+    rounded_rect_coverage_with_corners(rect, &corners, px, py)
+}
+
+fn rounded_rect_coverage_with_corners(rect: Rect, corners: &[(f32, f32); 4], px: f32, py: f32) -> f32 {
     if rect.width <= 0.0 || rect.height <= 0.0 {
         return 0.0;
     }
-    let corners = resolve_corner_radii(rect, radii);
     let mut inside = 0u32;
     for sy in 0..4 {
         for sx in 0..4 {
             let x = px + (sx as f32 + 0.5) / 4.0 - 0.5;
             let y = py + (sy as f32 + 0.5) / 4.0 - 0.5;
-            if point_in_rounded_rect(rect, &corners, x, y) {
+            if point_in_rounded_rect(rect, corners, x, y) {
                 inside += 1;
             }
         }
@@ -2297,6 +2301,11 @@ impl Pixmap {
         if color.a == 0 || rect.width <= 0.0 || rect.height <= 0.0 {
             return;
         }
+        let area = (rect.width * rect.height) as usize;
+        if area > 16_777_216 {
+            return;
+        }
+        let corners = resolve_corner_radii(rect, radii);
         let Some(clip) = self.clip_rect() else {
             return;
         };
@@ -2310,7 +2319,7 @@ impl Pixmap {
             .min(self.height as f32) as i64;
         for y in y0..y1 {
             for x in x0..x1 {
-                let coverage = rounded_rect_coverage(rect, radii, x as f32 + 0.5, y as f32 + 0.5);
+                let coverage = rounded_rect_coverage_with_corners(rect, &corners, x as f32 + 0.5, y as f32 + 0.5);
                 self.blend_coverage(x, y, color, coverage);
             }
         }
@@ -2320,6 +2329,10 @@ impl Pixmap {
     pub fn draw_rounded_border(&mut self, rect: Rect, sides: [BorderSide; 4], radii: BorderRadii) {
         let visible = sides.iter().filter(|side| side.is_visible()).count();
         if visible == 0 {
+            return;
+        }
+        let area = (rect.width * rect.height) as usize;
+        if area > 16_777_216 {
             return;
         }
         let [top, right, bottom, left] = sides;
