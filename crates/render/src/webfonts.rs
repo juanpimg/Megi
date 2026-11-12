@@ -72,7 +72,7 @@ pub fn load_webfonts(
     no_network: bool,
     warnings: &mut Vec<String>,
 ) -> LoadedWebFonts {
-    let mut database = FontDatabase::new_with_bundled_and_system_fonts();
+    let mut database = FontDatabase::new_with_bundled_fonts();
     let mut seen: HashSet<String> = HashSet::new();
     let mut loaded = 0usize;
     let mut failed = 0usize;
