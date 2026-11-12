@@ -45,6 +45,7 @@ impl PartialEq for Font {
 /// Upper bound accepted by [`Font::validate_size`] to catch absurd values
 /// (e.g. `f32::MAX`) before they overflow glyph buffer allocations.
 const MAX_FONT_SIZE_PX: f32 = 1_000_000.0;
+const MAX_RASTERIZE_SIZE_PX: f32 = 4096.0;
 
 /// Maximum pixels of one rasterized glyph mask.
 ///
@@ -277,7 +278,9 @@ impl Font {
     /// Glyphs without an outline (e.g. spaces) return an empty mask with the
     /// correct `advance`.
     pub fn rasterize_glyph(&self, size_px: f32, glyph_id: u16) -> Result<GlyphMask, FontError> {
-        Self::validate_size(size_px)?;
+        if !size_px.is_finite() || size_px <= 0.0 || size_px > MAX_RASTERIZE_SIZE_PX {
+            return Err(FontError::InvalidSize { size_px });
+        }
         let num_glyphs = self.num_glyphs();
         if glyph_id >= num_glyphs {
             return Err(FontError::MissingGlyph {
@@ -301,6 +304,12 @@ impl Font {
             });
         };
         let bounds = outlined.px_bounds();
+        if !bounds.width().is_finite() || !bounds.height().is_finite() {
+            return Err(FontError::GlyphTooLarge {
+                width: 0,
+                height: 0,
+            });
+        }
         let width = bounds.width().ceil() as u32;
         let height = bounds.height().ceil() as u32;
         if width == 0 || height == 0 {

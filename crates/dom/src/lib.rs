@@ -1434,7 +1434,6 @@ impl Document {
     /// Iteration is safe against corrupted arenas: it stops (rather than panicking) if a
     /// sibling link stops resolving to a live handle.
     pub fn children(&self, parent_id: NodeId) -> ChildrenIter<'_> {
-        let parent_id = self.template_contents_target(parent_id);
         ChildrenIter {
             doc: self,
             next: self.try_node(parent_id).and_then(|node| node.first_child),

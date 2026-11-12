@@ -97,9 +97,8 @@ impl Huffman {
         }
         let symbols = count[1..].iter().sum::<u32>();
         if symbols == 0 {
-            return Ok(Self {
-                single: Some(0),
-                codes: Default::default(),
+            return Err(ImageError::InvalidData {
+                reason: "VP8L Huffman code has no symbols",
             });
         }
         if symbols == 1 {
@@ -389,7 +388,7 @@ fn decode_entropy_image(
     check_dimensions(width, height, limits)?;
     let mut cache = read_color_cache(reader)?;
     let groups = Groups::read(reader, cache_size_bits(&cache), 1)?;
-    decode_pixels(reader, width, height, &groups, None, 0, &mut cache, None)
+    decode_pixels(reader, width, height, &groups, None, 0, &mut cache, limits)
 }
 
 fn cache_size_bits(cache: &Option<ColorCache>) -> u32 {
@@ -439,9 +438,8 @@ fn decode_pixels(
     huffman_image: Option<&MetaImage>,
     prefix_bits: u32,
     cache: &mut Option<ColorCache>,
-    _limit: Option<usize>,
+    limits: &PngLimits,
 ) -> Result<Vec<u32>, ImageError> {
-    let limits = limit_limits(None);
     let pixels = check_dimensions(width, height, limits)?;
     let mut data: Vec<u32> = Vec::with_capacity(pixels);
     while data.len() < pixels {
@@ -511,13 +509,6 @@ fn decode_pixels(
         }
     }
     Ok(data)
-}
-
-fn limit_limits(_limit: Option<usize>) -> &'static PngLimits {
-    // All sub-images are bounded by the main image pixel cap; this helper keeps the
-    // signature explicit for future per-role limits.
-    static LIMITS: std::sync::OnceLock<PngLimits> = std::sync::OnceLock::new();
-    LIMITS.get_or_init(PngLimits::default)
 }
 
 /// Meta Huffman image: groups a `VP8L` block to its prefix-code group.
@@ -592,7 +583,7 @@ fn decode_main_pixels(
         huffman_image.as_ref(),
         prefix_bits,
         &mut cache,
-        None,
+        limits,
     )
 }
 
@@ -992,6 +983,17 @@ pub(crate) fn decode_webp(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
         return Err(ImageError::InvalidData {
             reason: "VP8L decoded pixel count mismatch",
         });
+    }
+    // Validate trailing bytes: only padding zeros allowed.
+    let remaining_bits = reader.data.len() * 8 - reader.bit;
+    for i in 0..remaining_bits {
+        let byte = reader.data.get((reader.bit + i) / 8).copied().unwrap_or(0);
+        let bit = (byte >> ((reader.bit + i) % 8)) & 1;
+        if bit != 0 {
+            return Err(ImageError::InvalidData {
+                reason: "VP8L trailing non-zero bits",
+            });
+        }
     }
     let mut data = Vec::with_capacity(pixels.len() * 4);
     for argb in pixels {

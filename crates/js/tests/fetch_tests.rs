@@ -38,7 +38,7 @@ fn headers_are_case_insensitive() {
         "application/json"
     );
     assert_eq!(runtime.eval("h.has('x-a')", "t").unwrap(), "true");
-    assert_eq!(runtime.eval("h.get('X-A')", "t").unwrap(), "1");
+    assert_eq!(runtime.eval("h.get('X-A')", "t").unwrap(), "1, 2");
 }
 
 #[test]
