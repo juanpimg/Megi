@@ -149,8 +149,10 @@ pub fn decode_png(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageEr
 /// Decodes a PNG downscaled by an integer box factor so that neither dimension
 /// exceeds `max_dim` (used by the additive `image::decode_scaled` API).
 ///
-/// The box average is accumulated while unfiltering scanlines (including Adam7
-/// passes), so the full-resolution RGBA output buffer is never allocated.
+/// Sampling is nearest-neighbour: one source pixel per output pixel
+/// (`x % factor == 0 && y % factor == 0`, including Adam7 passes), so the full-resolution
+/// RGBA output buffer is never allocated, but high-frequency detail aliases (documented
+/// limitation shared with the GIF/WebP scaled path; the previous doc claimed box averaging).
 pub(crate) fn decode_png_scaled(
     bytes: &[u8],
     limits: &PngLimits,
