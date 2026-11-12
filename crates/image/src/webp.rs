@@ -1023,7 +1023,9 @@ pub(crate) fn decode_webp(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
         }
         if let Ok(alph) = find_chunk(bytes, b"ALPH") {
             apply_alpha_plane(&mut image, alph)?;
-        } else if header.alpha {
+        } else if header.alpha && find_vp8l_chunk(bytes).is_err() {
+            // VP8L carries alpha in its own bitstream; a separate ALPH chunk is
+            // required for VP8 lossy when the alpha flag is set.
             return Err(ImageError::InvalidData {
                 reason: "WebP VP8X declares alpha but the ALPH chunk is missing",
             });
