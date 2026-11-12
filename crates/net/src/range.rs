@@ -180,11 +180,12 @@ pub struct ContentRange {
 impl ContentRange {
     /// Parses `Content-Range: bytes start-end/total` or `bytes * /total`.
     pub fn parse(header: &str) -> Option<Self> {
-        let rest = header
-            .trim()
-            .strip_prefix("bytes")
-            .or_else(|| header.trim().strip_prefix("Bytes"))?
-            .trim();
+        // Range units are case-insensitive (RFC 9110 §14.1): compare on a lowered copy and
+        // keep the original slice for the numeric part (ASCII lowering preserves byte offsets).
+        let header = header.trim();
+        let lower = header.to_ascii_lowercase();
+        let rest = lower.strip_prefix("bytes")?;
+        let rest = header.get(header.len() - rest.len()..)?.trim();
         let (range_part, total_part) = rest.split_once('/')?;
         let total = total_part.trim();
         let total = if total == "*" {
