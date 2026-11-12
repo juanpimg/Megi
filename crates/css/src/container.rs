@@ -210,10 +210,10 @@ pub fn evaluate(query: &ContainerQuery, size: &ContainerSize, style: &ComputedSt
 
 /// Memoized base-style resolver for one container-matching walk.
 ///
-/// `base_style` recomputes the whole ancestor chain per node; `matching_size` calls it for
-/// every ancestor and the size predictions repeat it, which made a deep document cubic
-/// (O(depth³) for a chain where every element matches a container rule). One cache per walk
-/// computes each node's base style once.
+/// Recursive base-style resolution recomputes the whole ancestor chain per node;
+/// `matching_size` called it for every ancestor and the size predictions repeated it per
+/// chain node, which made a deep document cubic (O(depth³) when every element matches a
+/// container rule). One cache per walk computes each node's base style once.
 struct BaseStyles<'a> {
     doc: &'a Document,
     collection: &'a crate::StyleCollection,
@@ -319,19 +319,14 @@ fn predicted_inline_size(
 /// Predicts the content-box block size of `node` when it is definite (explicit height, or
 /// percentage of a definite ancestor height). Auto heights are content-dependent and are
 /// therefore not predicted (documented limit).
-fn predicted_block_size(
-    doc: &Document,
-    node: NodeId,
-    _collection: &crate::StyleCollection,
-    cache: &mut BaseStyles<'_>,
-) -> Option<f32> {
+fn predicted_block_size(doc: &Document, node: NodeId, cache: &mut BaseStyles<'_>) -> Option<f32> {
     let style = cache.base(node);
     match style.height {
         Length::Px(px) => Some(px.max(0.0)),
         Length::Percent(pct) => {
             let parent = doc.node(node).parent?;
             let parent_height = if doc.node(parent).as_element().is_some() {
-                predicted_block_size(doc, parent, _collection, cache)
+                predicted_block_size(doc, parent, cache)
             } else {
                 None
             };
@@ -368,7 +363,7 @@ pub fn matching_size(
             if eligible && style.container_type != ContainerType::Normal {
                 let inline_size = predicted_inline_size(doc, id, collection, &mut cache);
                 let block_size = if style.container_type.is_block_queryable() {
-                    predicted_block_size(doc, id, collection, &mut cache)
+                    predicted_block_size(doc, id, &mut cache)
                 } else {
                     None
                 };
