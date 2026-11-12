@@ -615,10 +615,12 @@ impl std::ops::Add for Specificity {
 
     #[inline]
     fn add(self, rhs: Self) -> Self {
+        // Cascade sums can chain arbitrarily deep selector lists (`:is(#a, #a, ...)`);
+        // saturate instead of panicking on an u32 overflow in debug builds.
         Self {
-            a: self.a + rhs.a,
-            b: self.b + rhs.b,
-            c: self.c + rhs.c,
+            a: self.a.saturating_add(rhs.a),
+            b: self.b.saturating_add(rhs.b),
+            c: self.c.saturating_add(rhs.c),
         }
     }
 }
@@ -626,9 +628,9 @@ impl std::ops::Add for Specificity {
 impl std::ops::AddAssign for Specificity {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
-        self.a += rhs.a;
-        self.b += rhs.b;
-        self.c += rhs.c;
+        self.a = self.a.saturating_add(rhs.a);
+        self.b = self.b.saturating_add(rhs.b);
+        self.c = self.c.saturating_add(rhs.c);
     }
 }
 
@@ -1673,5 +1675,20 @@ mod sibling_cache_tests {
             1,
             "one table for the parent, reused by every child"
         );
+    }
+}
+
+#[cfg(test)]
+mod specificity_overflow_tests {
+    use super::Specificity;
+
+    #[test]
+    fn addition_saturates_instead_of_overflowing() {
+        let huge = Specificity::new(u32::MAX, u32::MAX, u32::MAX);
+        let one = Specificity::new(1, 1, 1);
+        assert_eq!(huge + one, huge);
+        let mut sum = Specificity::new(u32::MAX - 1, 0, 0);
+        sum += Specificity::new(2, 0, 0);
+        assert_eq!(sum, Specificity::new(u32::MAX, 0, 0));
     }
 }
