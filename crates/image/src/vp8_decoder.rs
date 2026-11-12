@@ -297,14 +297,20 @@ pub(crate) fn decode_keyframe(payload: &[u8], limits: &PngLimits) -> Result<Rgba
         partition_sizes,
         token_start,
     };
+    if num_partitions == 0 {
+        return Err(ImageError::Truncated {
+            context: "VP8 token partitions",
+        });
+    }
     let mut token_bds = Vec::with_capacity(num_partitions);
     let mut position = header.token_start;
-    for index in 0..num_partitions {
-        let size = if index + 1 == num_partitions {
-            payload.len() - position
-        } else {
-            header.partition_sizes[index]
-        };
+    // The header stores the sizes of the first `num_partitions - 1` partitions; the last one
+    // extends to the end of the payload (VP8 RFC 6386 §9.7).
+    for &size in header
+        .partition_sizes
+        .iter()
+        .take(num_partitions.saturating_sub(1))
+    {
         let bytes = payload
             .get(position..position + size)
             .ok_or(ImageError::Truncated {
@@ -312,6 +318,18 @@ pub(crate) fn decode_keyframe(payload: &[u8], limits: &PngLimits) -> Result<Rgba
             })?;
         token_bds.push(BoolDecoder::new(bytes));
         position += size;
+    }
+    let last_size = payload.len().saturating_sub(position);
+    let bytes = payload
+        .get(position..position + last_size)
+        .ok_or(ImageError::Truncated {
+            context: "VP8 token partition",
+        })?;
+    token_bds.push(BoolDecoder::new(bytes));
+    if token_bds.len() != num_partitions {
+        return Err(ImageError::Truncated {
+            context: "VP8 token partition count",
+        });
     }
     decode_frame(&mut bd, &mut token_bds, &header)
 }
@@ -351,11 +369,11 @@ fn parse_segment(bd: &mut BoolDecoder<'_>) -> SegmentHeader {
     segment.update_data = bd.read_bool(0x80);
     if segment.update_data {
         segment.abs_delta = bd.read_bool(0x80);
-        for feature in 0..2 {
-            for seg in 0..MAX_MB_SEGMENTS {
+        for (feature, row) in segment.feature.iter_mut().enumerate() {
+            for cell in row.iter_mut() {
                 if bd.read_bool(0x80) {
                     let bits = if feature == 0 { 7 } else { 6 };
-                    segment.feature[feature][seg] = bd.read_signed_literal(bits);
+                    *cell = bd.read_signed_literal(bits);
                 }
             }
         }
