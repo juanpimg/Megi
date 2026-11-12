@@ -700,7 +700,12 @@ impl FontDatabase {
                 if extra >= MAX_EXTRA_FALLBACKS {
                     break;
                 }
-                if face.style != wanted_style || face.weight.0 != weight {
+                // Score by weight distance and style proximity instead of requiring
+                // an exact match: a family with only a regular face should still
+                // provide fallback glyphs for a bold request.
+                let style_match = face.style == wanted_style;
+                let weight_distance = (face.weight.0 as i32 - weight as i32).unsigned_abs();
+                if weight_distance > 300 && !style_match {
                     continue;
                 }
                 if seen.contains(&face.post_script_name) {
