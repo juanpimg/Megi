@@ -82,6 +82,12 @@ fn validate_woff2_header(bytes: &[u8]) -> Result<(), FontError> {
     if &bytes[..4] != b"wOF2" {
         return Err(invalid("bad WOFF2 signature"));
     }
+    // Collections (`ttcf`) carry an extra collection directory after the table directory,
+    // so the compressed-stream bound below would be wrong for them; they are not a web-font
+    // format served through `@font-face`, so reject them instead of validating partially.
+    if &bytes[4..8] == b"ttcf" {
+        return Err(invalid("WOFF2 font collections are not supported"));
+    }
     if be_u32(bytes, 8) as usize > bytes.len() {
         return Err(invalid("WOFF2 length field exceeds the input"));
     }

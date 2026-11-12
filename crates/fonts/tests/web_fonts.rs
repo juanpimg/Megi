@@ -97,7 +97,8 @@ fn non_woff2_bytes_pass_through_and_empty_input_fails() {
 fn rejects_a_table_directory_length_past_the_compressed_stream() {
     // Bumping the last directory entry's `origLength` by one used to panic inside the
     // third-party decoder (`range end index 31408 out of range for slice of length 31407`);
-    // it must now be a typed error.
+    // the directory sums stay under the cap, so this is specifically the `catch_unwind`
+    // regression (the crafted tests below exercise the directory validation itself).
     let mut corrupted = WOFF2.to_vec();
     corrupted[103] = corrupted[103].wrapping_add(1);
     let error = decode_web_font(&corrupted).expect_err("corrupted directory length");
@@ -168,6 +169,20 @@ fn rejects_compressed_data_longer_than_the_input() {
     let mut bytes = crafted_woff2(1, 65_536, &directory, &[0x00]);
     bytes[20..24].copy_from_slice(&3u32.to_be_bytes());
     let error = decode_web_font(&bytes).expect_err("compressed data past EOF");
+    assert!(
+        matches!(error, FontError::InvalidWebFont { .. }),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn rejects_woff2_collections() {
+    // `ttcf` adds a collection directory after the table directory; validate it or reject
+    // it explicitly instead of bounding the compressed stream from the wrong offset.
+    let directory = [0x00, 0x01];
+    let mut bytes = crafted_woff2(1, 65_536, &directory, &[0x00]);
+    bytes[4..8].copy_from_slice(b"ttcf");
+    let error = decode_web_font(&bytes).expect_err("WOFF2 collections are rejected");
     assert!(
         matches!(error, FontError::InvalidWebFont { .. }),
         "{error:?}"
