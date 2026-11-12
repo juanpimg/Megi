@@ -65,6 +65,28 @@ pub fn present_region(
     dest_width: u32,
     dest_height: u32,
 ) -> bool {
+    present_region_at(
+        frame,
+        scroll_y,
+        css_viewport_height,
+        0,
+        dest,
+        dest_width,
+        dest_height,
+    )
+}
+
+/// Like [`present_region`], but starts painting the page below `dest_y_offset`
+/// physical rows (leaving rows `0..dest_y_offset` white for the browser chrome).
+pub fn present_region_at(
+    frame: Option<(&[u32], u32, u32)>,
+    scroll_y: u32,
+    css_viewport_height: u32,
+    dest_y_offset: u32,
+    dest: &mut [u32],
+    dest_width: u32,
+    dest_height: u32,
+) -> bool {
     let expected = match (dest_width as usize).checked_mul(dest_height as usize) {
         Some(expected) => expected,
         None => return false,
@@ -86,9 +108,18 @@ pub fn present_region(
     let css_viewport_height = css_viewport_height.max(1);
     let frame_width = frame_width as usize;
     let frame_height = frame_height as usize;
-    for dest_row in 0..dest_height as usize {
+    let y_offset = (dest_y_offset as usize).min(dest_height as usize);
+    let page_dest_height = (dest_height as usize - y_offset).max(1);
+    for dest_row in 0..y_offset {
+        let dest_offset = dest_row * dest_width as usize;
+        if let Some(row_slice) = dest.get_mut(dest_offset..dest_offset + dest_width as usize) {
+            row_slice.fill(WHITE_0RGB);
+        }
+    }
+    for dest_row in y_offset..dest_height as usize {
+        let page_row = dest_row - y_offset;
         let css_row = u64::from(scroll_y)
-            + (dest_row as u64 * u64::from(css_viewport_height)) / u64::from(dest_height);
+            + (page_row as u64 * u64::from(css_viewport_height)) / page_dest_height as u64;
         let dest_offset = dest_row * dest_width as usize;
         let Some(dest_row_slice) = dest.get_mut(dest_offset..dest_offset + dest_width as usize)
         else {
@@ -199,5 +230,26 @@ mod unit_tests {
             2,
             2
         ));
+    }
+
+    #[test]
+    fn present_region_at_offsets_page_below_chrome_band() {
+        let frame = vec![RED, RED, GREEN, GREEN];
+        let mut dest = vec![0u32; 2 * 4];
+        assert!(present_region_at(
+            Some((&frame, 2, 2)),
+            0,
+            2,
+            2,
+            &mut dest,
+            2,
+            4
+        ));
+        assert_eq!(
+            dest,
+            vec![
+                WHITE_0RGB, WHITE_0RGB, WHITE_0RGB, WHITE_0RGB, RED, RED, GREEN, GREEN
+            ]
+        );
     }
 }

@@ -164,7 +164,15 @@ pub fn load_images(
                 .push(format!("skipping image {url} (--no-network is set)"));
             continue;
         }
-        let resource = match loader.load(&url) {
+        let use_cors = document
+            .node(node_id)
+            .as_element()
+            .is_some_and(|element| element.get_attribute("crossorigin").is_some());
+        let resource = match if use_cors {
+            loader.load(&url)
+        } else {
+            loader.load_no_cors(&url)
+        } {
             Ok(resource) => resource,
             Err(error) => {
                 result.failed += 1;

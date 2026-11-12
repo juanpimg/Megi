@@ -410,6 +410,14 @@ impl ResourceLoader {
         Ok(resource)
     }
 
+    /// Loads `url` in `no-cors` mode (without sending `Origin` or enforcing CORS).
+    pub fn load_no_cors(&mut self, url: &Url) -> Result<Arc<Resource>, LoadError> {
+        let saved_origin = self.options.origin.take();
+        let result = self.load(url);
+        self.options.origin = saved_origin;
+        result
+    }
+
     /// Loads `url` with a streaming callback.
     ///
     /// MVP fallback documented: for `http(s)` the response is fetched with the regular

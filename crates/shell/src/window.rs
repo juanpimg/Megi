@@ -492,17 +492,15 @@ impl WindowApp {
         } else {
             self.input.clone()
         };
+        let page_height = self.page_viewport_height();
         let request = if self.find.query().is_empty() {
-            self.store.begin_request(
-                &render_input,
-                self.metrics.css_width,
-                self.metrics.css_height,
-            )
+            self.store
+                .begin_request(&render_input, self.metrics.css_width, page_height)
         } else {
             self.store.begin_find_request(
                 &render_input,
                 self.metrics.css_width,
-                self.metrics.css_height,
+                page_height,
                 self.find.query(),
             )
         };
@@ -581,10 +579,18 @@ impl WindowApp {
 
     /// Handles a left click: resolves the link under the cursor and navigates to it.
     /// Converts a physical cursor position into page CSS coordinates (scroll/zoom aware).
+    fn page_viewport_height(&self) -> u32 {
+        self.metrics
+            .css_height
+            .saturating_sub(chrome::CHROME_HEIGHT as u32)
+            .max(1)
+    }
+
     fn page_coordinates(&self, physical_x: f64, physical_y: f64) -> (f32, f32) {
+        let chrome_px = f64::from(chrome::CHROME_HEIGHT) * self.metrics.scale;
         physical_to_page(
             physical_x,
-            physical_y,
+            (physical_y - chrome_px).max(0.0),
             // The effective scale includes page zoom: `present_region` maps CSS pixels
             // with device_scale * zoom, so hit-testing must use the same factor.
             self.metrics.scale,
@@ -805,7 +811,7 @@ impl WindowApp {
             self.chrome_click(chrome_x, chrome_y);
             return;
         }
-        let (x, y) = physical_to_page(physical_x, physical_y, scale, self.scroll.offset());
+        let (x, y) = self.page_coordinates(physical_x, physical_y);
         if let Some(menu) = &self.overflow_menu {
             let titles: Vec<String> = self
                 .tabs
@@ -1943,6 +1949,7 @@ impl WindowApp {
         let chrome_active_tab = self.tabs.active_index();
         let chrome_scroll = self.scroll.offset();
         let chrome_css_height = self.metrics.css_height;
+        let page_viewport_height = self.page_viewport_height();
         let chrome_css_width = self.metrics.css_width as f32;
         let chrome_scale = self.metrics.scale as f32;
         let chrome_history = self.address_history();
@@ -1976,10 +1983,13 @@ impl WindowApp {
                 .frame()
                 .map(|frame| (frame.pixels.as_slice(), frame.width, frame.height))
         };
-        let presented = present::present_region(
+        let chrome_px = ((f64::from(chrome::CHROME_HEIGHT) * self.metrics.scale).round() as u32)
+            .min(height.saturating_sub(1));
+        let presented = present::present_region_at(
             frame,
             self.scroll.offset(),
-            self.metrics.css_height,
+            page_viewport_height,
+            chrome_px,
             &mut buffer,
             width,
             height,
@@ -2418,7 +2428,7 @@ impl ApplicationHandler<UserEvent> for WindowApp {
             && let Some(metrics) = self.pending_metrics.take()
         {
             self.metrics = metrics;
-            self.scroll.set_viewport_height(metrics.css_height);
+            self.scroll.set_viewport_height(self.page_viewport_height());
             self.request_render();
         }
         if self.session_dirty && self.session_debounce.take_due(now) {
