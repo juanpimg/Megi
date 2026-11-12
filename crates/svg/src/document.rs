@@ -289,6 +289,10 @@ pub(crate) struct FilterSpec {
 /// Anti-DoS caps for masks/filters/clip paths and SMIL.
 pub(crate) const MAX_EFFECT_SHAPES: usize = 4096;
 pub(crate) const MAX_SMIL_ELEMENTS: usize = 1024;
+
+/// Maximum entries across one animation element's `values`/`keyTimes`/`keySplines` lists
+/// (anti-DoS: a single hostile `values` attribute otherwise allocates millions of entries).
+pub(crate) const MAX_SMIL_LIST_ENTRIES: usize = 4096;
 pub(crate) const MAX_FILTER_PRIMITIVES: usize = 16;
 pub(crate) const MAX_BLUR_RADIUS: u32 = 64;
 
@@ -1569,6 +1573,11 @@ fn smil_walk(
                             "too many SMIL animation elements".to_owned(),
                         ));
                     }
+                    if smil_list_entries(child_element) > MAX_SMIL_LIST_ENTRIES {
+                        return Err(SvgError::Limit(
+                            "SMIL value list budget exceeded".to_owned(),
+                        ));
+                    }
                     changed = true;
                     if name == "animatetransform" {
                         apply_animate_transform(&mut attributes, child_element, time);
@@ -1602,6 +1611,18 @@ fn smil_walk(
         },
         changed,
     ))
+}
+
+/// Total `;`-separated entries in the element's `values`, `keyTimes` and `keySplines`.
+fn smil_list_entries(element: &XmlElement) -> usize {
+    let entries = |name: &str| {
+        element
+            .attribute(name)
+            .map_or(0, |raw| raw.split(';').count())
+    };
+    entries("values")
+        .saturating_add(entries("keyTimes"))
+        .saturating_add(entries("keySplines"))
 }
 
 fn set_attribute(attributes: &mut Vec<(String, String)>, name: &str, value: &str) {

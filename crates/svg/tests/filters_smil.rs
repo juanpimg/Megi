@@ -250,3 +250,27 @@ fn unknown_filter_inputs_are_transparent_black() {
         "an unknown filter input must be transparent black"
     );
 }
+
+#[test]
+fn smil_value_lists_are_capped() {
+    let values = "0;1;".repeat(5000);
+    let source = format!(
+        "<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'>
+           <rect width='20' height='20' fill='red'>
+             <animate attributeName='x' values='{values}' dur='1s' repeatCount='indefinite'/>
+           </rect></svg>"
+    );
+    let error = render_svg_with_time(
+        source.as_bytes(),
+        &SvgOptions {
+            width: Some(20),
+            height: Some(20),
+        },
+        0.5,
+    )
+    .expect_err("the value list exceeds the budget");
+    assert!(
+        matches!(&error, svg::SvgError::Limit(message) if message.contains("SMIL value list")),
+        "{error:?}"
+    );
+}
