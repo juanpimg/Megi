@@ -480,19 +480,35 @@ fn place_float(
     // non-finite margin must not poison the float's position.
     let margin_top = finite_or_zero(child.dimensions.margin.top);
     let margin_bottom = finite_or_zero(child.dimensions.margin.bottom);
-    let margin_box_w = finite_or_zero(child.dimensions.margin_box().width);
+    let margin_left = finite_or_zero(child.dimensions.margin.left);
+    let margin_right = finite_or_zero(child.dimensions.margin.right);
+    let margin_box_w =
+        finite_or_zero(child.dimensions.border_box().width) + margin_left + margin_right;
     let margin_box_h = child.dimensions.border_box().height + margin_top + margin_bottom;
 
     let mut top = cb.y + flow_offset;
     // A NaN-sized or over-wide float can never satisfy the fit test, so moving down cannot
     // make progress: it used to loop until f32 rounding absorbed the step (~2^24 iterations
-    // for finite values, forever for NaN). Place it at the flow position and let it overflow
-    // (CSS 2.2 §9.5.1).
-    if !margin_box_w.is_finite() || !margin_box_h.is_finite() || margin_box_w > cb.width + 0.001 {
+    // for finite values, forever for NaN). Per CSS 2.2 §9.5.1 an over-wide float has no room
+    // next to any float, so it goes below every placed one; a NaN-sized float is placed at
+    // the flow position. Both overflow horizontally.
+    if margin_box_w > cb.width + 0.001 {
+        top = floats
+            .iter()
+            .map(|placed| placed.margin_box.y + placed.margin_box.height)
+            .fold(top, f32::max);
         let x = if side == Float::Left {
             cb.x
         } else {
-            (cb.x + cb.width - margin_box_w).max(cb.x)
+            cb.x + cb.width - margin_box_w
+        };
+        return position_float(child, x, top, side, margin_box_w, measurer, pos);
+    }
+    if !margin_box_h.is_finite() {
+        let x = if side == Float::Left {
+            cb.x
+        } else {
+            cb.x + cb.width - margin_box_w
         };
         return position_float(child, x, top, side, margin_box_w, measurer, pos);
     }

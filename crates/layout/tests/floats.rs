@@ -433,3 +433,39 @@ fn test_over_wide_float_is_placed_at_the_flow_position() {
         "the over-wide float's contents are laid out"
     );
 }
+
+#[test]
+fn test_over_wide_float_is_placed_below_earlier_floats() {
+    // CSS 2.2 §9.5.1: an over-wide float has no room next to any float, so it is shifted
+    // below the already placed ones instead of overlapping them.
+    let (mut doc, mut styles, container) = setup_container();
+    let first = make_div(&mut doc, container);
+    let second = make_div(&mut doc, container);
+    styles.insert(first, make_float_style(Float::Left, 50.0, 30.0));
+    styles.insert(second, make_float_style(Float::Left, 300.0, 10.0));
+
+    let tree = layout_doc(&doc, &styles);
+    let second_layout = &tree.children[0].children[0].children[1];
+    assert_close(
+        second_layout.dimensions.content.y,
+        30.0,
+        "below the first float",
+    );
+}
+
+#[test]
+fn test_right_over_wide_float_hangs_off_the_left_edge() {
+    // A right float wider than the container keeps its right edge at the containing
+    // block's right edge (x is negative); it used to be clamped to x = cb.x.
+    let (mut doc, mut styles, container) = setup_container();
+    let float_box = make_div(&mut doc, container);
+    styles.insert(float_box, make_float_style(Float::Right, 300.0, 30.0));
+
+    let tree = layout_doc(&doc, &styles);
+    let float_layout = &tree.children[0].children[0].children[0];
+    assert_close(
+        float_layout.dimensions.content.x,
+        -100.0,
+        "right edge flush with the container",
+    );
+}
