@@ -301,8 +301,8 @@ impl Font {
             });
         };
         let bounds = outlined.px_bounds();
-        let width = bounds.width() as u32;
-        let height = bounds.height() as u32;
+        let width = bounds.width().ceil() as u32;
+        let height = bounds.height().ceil() as u32;
         if width == 0 || height == 0 {
             return Ok(GlyphMask {
                 width: 0,
