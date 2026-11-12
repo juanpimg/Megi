@@ -28,7 +28,10 @@
 //!   intrinsic ratio with `auto` (or the declared ratio when it is explicit).
 
 use css::calc::CalcValue;
-use css::{BoxSizing, Clear, ComputedStyle, Display, Float, Length, Overflow, Position};
+use css::{
+    BoxSizing, Clear, ComputedStyle, Display, FlexDirection, FlexWrap, Float, Length, Overflow,
+    Position, WhiteSpace,
+};
 
 use crate::box_tree::{BoxType, LayoutBox};
 use crate::geometry::{Dimensions, EdgeSizes, Rect};
@@ -1499,10 +1502,13 @@ fn collect_intrinsic_widths(
                 }
             };
             let max_content = crate::inline::measure_text_width(measurer, text, style);
-            let min_content = text
-                .split_whitespace()
-                .map(|word| crate::inline::measure_text_width(measurer, word, style))
-                .fold(0.0_f32, f32::max);
+            let min_content = if matches!(style.white_space, WhiteSpace::Nowrap | WhiteSpace::Pre) {
+                max_content
+            } else {
+                text.split_whitespace()
+                    .map(|word| crate::inline::measure_text_width(measurer, word, style))
+                    .fold(0.0_f32, f32::max)
+            };
             *minimum = minimum.max(min_content);
             *maximum = maximum.max(max_content);
         }
@@ -1527,6 +1533,9 @@ fn collect_intrinsic_widths(
                             style.calc_lengths.padding_right,
                             cb_width,
                         );
+                let nowrap = matches!(style.white_space, WhiteSpace::Nowrap | WhiteSpace::Pre);
+                let mut inner_min = 0.0_f32;
+                let mut inner_max = 0.0_f32;
                 for child in &layout_box.children {
                     // Absolutely positioned descendants do not contribute to intrinsic
                     // widths (CSS 2.2 §10.3.5).
@@ -1544,9 +1553,15 @@ fn collect_intrinsic_widths(
                         &mut child_min,
                         &mut child_max,
                     );
-                    *minimum = minimum.max(child_min + edges);
-                    *maximum = maximum.max(child_max + edges);
+                    inner_min = if nowrap {
+                        inner_min + child_min
+                    } else {
+                        inner_min.max(child_min)
+                    };
+                    inner_max += child_max;
                 }
+                *minimum = minimum.max(inner_min + edges);
+                *maximum = maximum.max(inner_max + edges);
             }
         }
         BoxType::BlockNode(_)
@@ -1578,6 +1593,15 @@ fn collect_intrinsic_widths(
                             style.calc_lengths.padding_right,
                             cb_width,
                         );
+                let is_flex_row = (style.display == Display::Flex || style.is_inline_flex)
+                    && matches!(
+                        style.flex_direction,
+                        FlexDirection::Row | FlexDirection::RowReverse
+                    );
+                let flex_nowrap = is_flex_row && style.flex_wrap == FlexWrap::NoWrap;
+                let mut inner_min = 0.0_f32;
+                let mut inner_max = 0.0_f32;
+                let mut flex_items = 0usize;
                 for child in &layout_box.children {
                     // Absolutely positioned descendants do not contribute to intrinsic
                     // widths (CSS 2.2 §10.3.5).
@@ -1595,9 +1619,32 @@ fn collect_intrinsic_widths(
                         &mut child_min,
                         &mut child_max,
                     );
-                    *minimum = minimum.max(child_min + edges);
-                    *maximum = maximum.max(child_max + edges);
+                    if is_flex_row {
+                        flex_items += 1;
+                        inner_max += child_max;
+                        inner_min = if flex_nowrap {
+                            inner_min + child_min
+                        } else {
+                            inner_min.max(child_min)
+                        };
+                    } else {
+                        inner_min = inner_min.max(child_min);
+                        inner_max = inner_max.max(child_max);
+                    }
                 }
+                if is_flex_row && flex_items > 1 {
+                    let gap = match style.column_gap {
+                        Length::Px(px) => px.max(0.0),
+                        _ => 0.0,
+                    };
+                    let total_gap = gap * (flex_items - 1) as f32;
+                    inner_max += total_gap;
+                    if flex_nowrap {
+                        inner_min += total_gap;
+                    }
+                }
+                *minimum = minimum.max(inner_min + edges);
+                *maximum = maximum.max(inner_max + edges);
             }
         }
         BoxType::Replaced(_) => {

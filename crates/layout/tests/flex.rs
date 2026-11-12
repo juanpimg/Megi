@@ -443,3 +443,51 @@ fn test_column_flex_auto_height_measures_items_and_vertical_edges() {
         + second_box.dimensions.content.height;
     assert!((container_box.dimensions.content.height - expected_container_height).abs() < 0.01);
 }
+
+#[test]
+fn nested_flex_row_nav_tabs_do_not_overlap() {
+    let (mut doc, mut styles, html) = setup();
+    let toolbar = add_element(
+        &mut doc,
+        html,
+        &mut styles,
+        flex_container_style(Length::Px(800.0), Length::Auto),
+    );
+    let left_nav = add_element(
+        &mut doc,
+        toolbar,
+        &mut styles,
+        item_style(Length::Auto, Length::Auto),
+    );
+    let mut tab_list_style = flex_container_style(Length::Auto, Length::Auto);
+    tab_list_style.flex_grow = 0.0;
+    let tab_list = add_element(&mut doc, left_nav, &mut styles, tab_list_style);
+
+    let mut li1_style = item_style(Length::Auto, Length::Auto);
+    li1_style.margin.left = Length::Px(8.0);
+    li1_style.margin.right = Length::Px(8.0);
+    let li1 = add_element(&mut doc, tab_list, &mut styles, li1_style);
+    let t1 = doc.create_text_node("Artículo");
+    assert!(doc.append_child(li1, t1));
+
+    let mut li2_style = item_style(Length::Auto, Length::Auto);
+    li2_style.margin.left = Length::Px(8.0);
+    li2_style.margin.right = Length::Px(8.0);
+    let li2 = add_element(&mut doc, tab_list, &mut styles, li2_style);
+    let t2 = doc.create_text_node("Discusión");
+    assert!(doc.append_child(li2, t2));
+
+    let root = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)).expect("layout");
+    let li1_box = find_box(&root, li1);
+    let li2_box = find_box(&root, li2);
+    assert!(li1_box.dimensions.content.width > 20.0);
+    assert!(
+        li1_box.dimensions.content.x
+            + li1_box.dimensions.content.width
+            + li1_box.dimensions.margin.right
+            <= li2_box.dimensions.content.x - li2_box.dimensions.margin.left + 0.01,
+        "tabs overlapped: li1={:?} li2={:?}",
+        li1_box.dimensions,
+        li2_box.dimensions
+    );
+}
