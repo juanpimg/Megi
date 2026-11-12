@@ -1750,6 +1750,7 @@ fn numbers(raw: &str) -> Vec<f32> {
     raw.split([' ', ',', '\t', '\n'])
         .filter_map(|part| part.trim().parse::<f32>().ok())
         .filter(|value| value.is_finite())
+        .take(1024)
         .collect()
 }
 
