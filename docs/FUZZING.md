@@ -105,6 +105,8 @@ cargo +nightly fuzz run h2_push         -- -max_total_time=30
 cargo +nightly fuzz run body_stream     -- -max_total_time=30
 cargo +nightly fuzz run webp_vp8        -- -max_total_time=30
 cargo +nightly fuzz run js_module       -- -max_total_time=30 -detect_leaks=0
+cargo +nightly fuzz run webp_lossy      -- -max_total_time=30
+cargo +nightly fuzz run container_queries -- -max_total_time=30
 ```
 
 `js_eval` needs `-detect_leaks=0`: Boa 0.21 leaks a **constant** ~56 bytes / 2 allocations
@@ -120,11 +122,13 @@ good local guard. `js_module` also needs `-detect_leaks=0` for the same constant
 one-time allocation as `js_eval`.
 
 The nightly workflow now runs **16 targets** (`fuzz-nightly.yml` matrix): 600 s for the 9
-critical parsers/decoders and 300 s for the rest, and the
-pull-request job builds all 14 without running libFuzzer. New in r27–r29: server push
-(`h2_push`), streaming request bodies (`body_stream`), WebP VP8 lossy sniff/lossless path
-(`webp_vp8`) and ES modules/import maps (`js_module`). Local smoke used in the round report:
-`cargo +nightly fuzz build` (14/14) and `-runs=300` per target; no crashes.
+critical parsers/decoders and 300 s for the rest, and the pull-request job builds all 16
+without running libFuzzer. New in r27–r29: server push (`h2_push`), streaming request
+bodies (`body_stream`), WebP VP8 lossy sniff/lossless path (`webp_vp8`) and ES modules +
+import maps (`js_module`); R228 adds the focused VP8 keyframe decoder (`webp_lossy`) and
+CSS container queries/layers (`container_queries`). Local R228 campaign:
+`cargo +nightly fuzz build` (**16/16** targets) and `-runs=300` on every target (including
+the two new ones): no crashes, panics, ASan/UBSan findings or timeouts.
 
 Useful libFuzzer flags:
 
@@ -376,7 +380,7 @@ Campañas más largas, dos targets nuevos y corpus ampliado con los fixtures rec
 - **`container_queries`**: parsea `@container`/`@layer` con `css::parse_stylesheet`,
   declaration lists y tokenizer, y evalúa `css::container::parse_query` +
   `container::evaluate` contra varias combinaciones de tamaño inline/block, sin DOM.
-- **Corpus**: seeds reales de un JPEG **1024×768** (`reduced_1024x768.jpg`), variantes
+- **Corpus**: seeds reales de un JPEG **1024×768** (`jpeg_1024x768.jpg`), variantes
   EXIF-thumbnail, WebP lossy (`photo_lossy.webp`, `webp_lossy.webp`), SVG con filtros
   (`filter_blur.svg`) y SMIL (`smil.svg`), y CSS con `@layer`/`@container` extraído de
   los fixtures de render (más preludes de query para el evaluador).

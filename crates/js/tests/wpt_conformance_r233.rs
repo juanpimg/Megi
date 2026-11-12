@@ -213,16 +213,19 @@ fn reflected_form_properties_and_select_options() {
 }
 
 #[test]
-fn select_selected_index_is_a_documented_gap() {
+fn select_selected_index_supported() {
     let mut rt = runtime();
     let value = eval(
         &mut rt,
         r#"
-      var select = document.createElement('select'); select.appendChild(document.createElement('option'));
-      typeof select.selectedIndex
+      var select = document.createElement('select');
+      var o1 = document.createElement('option'); var o2 = document.createElement('option');
+      select.appendChild(o1); select.appendChild(o2);
+      select.selectedIndex = 1;
+      select.selectedIndex + ':' + o2.selected
     "#,
     );
-    assert_eq!(value, "undefined");
+    assert_eq!(value, "1:true");
 }
 
 #[test]
