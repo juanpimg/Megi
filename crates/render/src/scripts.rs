@@ -1390,6 +1390,7 @@ mod unit_tests {
                 .any(|warning| warning.contains("--no-network"))
         );
     }
+    #[cfg(feature = "js")]
     #[test]
     fn file_fetch_is_confined_to_the_document_directory() {
         let root = std::env::temp_dir().join(format!("megi-file-fetch-{}", std::process::id()));
