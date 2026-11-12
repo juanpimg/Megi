@@ -174,7 +174,7 @@ pub fn assign_form_ids(document: &mut Document) -> u32 {
             .get_attribute(FORM_ID_ATTR)
             .and_then(|value| value.parse::<u32>().ok())
             .filter(|id| !used.contains(id));
-        let id = match existing {
+        let _id = match existing {
             Some(id) => {
                 used.insert(id);
                 next = next.max(id.saturating_add(1));
@@ -196,7 +196,11 @@ pub fn assign_form_ids(document: &mut Document) -> u32 {
                 id
             }
         };
-        let _ = id;
+    }
+    // The counter may still sit on a used id (existing ids advance it, and it wraps at
+    // `u32::MAX`); return a genuinely free one.
+    while used.contains(&next) {
+        next = next.checked_add(1).unwrap_or(0);
     }
     next
 }

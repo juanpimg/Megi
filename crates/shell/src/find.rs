@@ -174,6 +174,7 @@ fn map_range(map: &[usize], original_len: usize, start: usize, end: usize) -> Ra
     // source byte 1, inside the 2-byte İ) and `&text[range]` then panics.
     let original_end = map
         .iter()
+        .skip(last + 1)
         .copied()
         .find(|offset| *offset > last_start)
         .unwrap_or(original_len)
@@ -626,6 +627,17 @@ mod tests {
         );
         assert!(untouched.iter().all(|pixel| *pixel == 0x00FF_FFFF));
     }
+    #[test]
+    fn search_ranges_cover_four_byte_scalars() {
+        let document = html::parse_document("<body><p>a😀b</p></body>", false);
+        let hits = search(&document, "😀");
+        assert_eq!(hits.len(), 1);
+        let text = document.node(hits[0].node_id).as_text().expect("text node");
+        assert_eq!(&text[hits[0].range.clone()], "😀");
+        assert!(text.is_char_boundary(hits[0].range.start));
+        assert!(text.is_char_boundary(hits[0].range.end));
+    }
+
     #[test]
     fn search_ranges_stay_on_char_boundaries_when_lowercasing_expands() {
         // U+0130 (İ) lowercases to "i" + U+0307: a match of "i" ends inside the source
