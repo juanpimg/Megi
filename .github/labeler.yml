@@ -1,0 +1,55 @@
+# Auto-label PRs by changed paths (actions/labeler v5+)
+html:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/html/**'
+css:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/css/**'
+dom:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/dom/**'
+layout:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/layout/**'
+paint:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/paint/**'
+net:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/net/**'
+js:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/js/**'
+svg:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/svg/**'
+image:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/image/**'
+fonts:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/fonts/**'
+render:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/render/**'
+shell:
+  - changed-files:
+      - any-glob-to-any-file: 'crates/shell/**'
+ci:
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - '*.md'
+          - 'README.md'
+          - 'CONTRIBUTING.md'
+          - 'SECURITY.md'
+          - 'CHANGELOG.md'
+fuzz:
+  - changed-files:
+      - any-glob-to-any-file: 'fuzz/**'
+tools:
+  - changed-files:
+      - any-glob-to-any-file: 'tools/**'
