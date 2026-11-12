@@ -8,7 +8,7 @@
 //! [`tools/update_psl.sh`](../../tools/update_psl.sh) and keep the snapshot date in the
 //! vendored header in sync.
 //!
-//! The parser ([`RULES`], a `OnceLock`) understands the three rule forms:
+//! The parser (\[`RULES`\], a `OnceLock`) understands the three rule forms:
 //! - normal rules (`com`, `co.uk`, `github.io`, ...);
 //! - wildcard rules (`*.ck` ⇒ `foo.ck` is a public suffix);
 //! - exception rules (`!www.ck` ⇒ `www.ck` is not a suffix; its suffix is `ck`).
