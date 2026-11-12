@@ -207,30 +207,35 @@ impl Length {
         if s == "0" {
             return Some(Self::Px(0.0));
         }
+        // Non-finite numbers (`1e400` parses as `inf`) are invalid CSS values: accept them
+        // would poison percentage resolution (`0 * inf / 100 = NaN`) and the layout math.
         if let Some(val) = s.strip_suffix("px") {
             let px: f32 = val.trim().parse().ok()?;
-            return Some(Self::Px(px));
+            return px.is_finite().then_some(Self::Px(px));
         }
         if let Some(val) = s.strip_suffix("em") {
             let em: f32 = val.trim().parse().ok()?;
-            return Some(Self::Px(em * font_size));
+            let px = em * font_size;
+            return px.is_finite().then_some(Self::Px(px));
         }
         if let Some(val) = s.strip_suffix("rem") {
             let rem: f32 = val.trim().parse().ok()?;
-            return Some(Self::Px(rem * root_font_size));
+            let px = rem * root_font_size;
+            return px.is_finite().then_some(Self::Px(px));
         }
         if let Some(val) = s.strip_suffix("pt") {
             let pt: f32 = val.trim().parse().ok()?;
-            return Some(Self::Px(pt * 96.0 / 72.0));
+            let px = pt * 96.0 / 72.0;
+            return px.is_finite().then_some(Self::Px(px));
         }
         if let Some(val) = s.strip_suffix('%') {
             let pct: f32 = val.trim().parse().ok()?;
-            return Some(Self::Percent(pct));
+            return pct.is_finite().then_some(Self::Percent(pct));
         }
 
         // Raw number without unit treated as px
         if let Ok(px) = s.parse::<f32>() {
-            return Some(Self::Px(px));
+            return px.is_finite().then_some(Self::Px(px));
         }
 
         None

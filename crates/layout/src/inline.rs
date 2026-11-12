@@ -860,17 +860,22 @@ fn trim_trailing_collapsible_spaces(line: &mut Vec<InlineToken>) {
 /// Trims leading and trailing collapsible spaces from a line before it is committed
 /// (CSS Text 3 §4.1: collapsible spaces at the start/end of a line are removed).
 fn finalize_line(mut line: Vec<InlineToken>) -> Vec<InlineToken> {
-    while matches!(
-        line.first(),
-        Some(
-            InlineToken::Space {
-                collapsible: true,
-                ..
-            } | InlineToken::HyphenationPoint { .. }
-        )
-    ) {
-        line.remove(0);
-    }
+    // Drain the leading run once instead of removing from the front one by one: a long
+    // run of soft hyphens (or collapsible spaces) is a single zero-width line, and the
+    // repeated `remove(0)` was quadratic.
+    let leading = line
+        .iter()
+        .take_while(|token| {
+            matches!(
+                token,
+                InlineToken::Space {
+                    collapsible: true,
+                    ..
+                } | InlineToken::HyphenationPoint { .. }
+            )
+        })
+        .count();
+    line.drain(..leading);
     trim_trailing_collapsible_spaces(&mut line);
     line
 }
