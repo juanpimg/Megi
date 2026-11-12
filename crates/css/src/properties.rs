@@ -1925,6 +1925,13 @@ pub struct ComputedStyle {
     pub word_spacing: Length,
     /// `letter-spacing` (initial `normal` = `0px`), resolved by layout in the IFC.
     pub letter_spacing: Length,
+
+    // CSS Animations 1 / CSS Transitions 1: longhand lists resolved into one entry per
+    // animation name / transitioned property. Not inherited.
+    /// Animations declared on this element (initial: empty).
+    pub animations: Vec<crate::animation::AnimationSpec>,
+    /// Transitions declared on this element (initial: empty).
+    pub transitions: Vec<crate::animation::TransitionSpec>,
     /// Cached value fingerprint for layout's style interning (see [`StyleFingerprint`]).
     ///
     /// Excluded from `PartialEq`; `0` means "not computed" (hand-built styles), in which
@@ -2061,6 +2068,8 @@ impl ComputedStyle {
             text_transform: TextTransform::None,
             word_spacing: Length::Px(0.0),
             letter_spacing: Length::Px(0.0),
+            animations: Vec::new(),
+            transitions: Vec::new(),
             style_fingerprint: StyleFingerprint::default(),
         }
     }
@@ -2164,6 +2173,60 @@ impl ComputedStyle {
         mix(&mut hash, self.calc_lengths.width.is_some() as u64);
         mix(&mut hash, self.is_inline_flex as u64);
         mix(&mut hash, self.is_inline_grid as u64);
+
+        fn timing_tag(timing: &crate::animation::TimingFunction) -> u64 {
+            use crate::animation::TimingFunction;
+            match timing {
+                TimingFunction::Linear => 1,
+                TimingFunction::Ease => 2,
+                TimingFunction::EaseIn => 3,
+                TimingFunction::EaseOut => 4,
+                TimingFunction::EaseInOut => 5,
+                TimingFunction::CubicBezier(x1, y1, x2, y2) => {
+                    6 ^ ((x1.to_bits() as u64) << 1)
+                        ^ ((y1.to_bits() as u64) << 17)
+                        ^ ((x2.to_bits() as u64) << 33)
+                        ^ (y2.to_bits() as u64)
+                }
+                TimingFunction::Steps(count, position) => {
+                    7 ^ (u64::from(*count) << 32) ^ (*position as u64)
+                }
+            }
+        }
+
+        for animation in &self.animations {
+            for byte in animation.name.as_bytes() {
+                mix(&mut hash, u64::from(*byte));
+            }
+            mix(&mut hash, animation.duration_ms.to_bits() as u64);
+            mix(&mut hash, animation.delay_ms.to_bits() as u64);
+            mix(&mut hash, timing_tag(&animation.timing));
+            mix(&mut hash, animation.direction as u64);
+            mix(&mut hash, animation.fill_mode as u64);
+            mix(&mut hash, animation.play_state as u64);
+            match animation.iteration_count {
+                crate::animation::IterationCount::Number(count) => {
+                    mix(&mut hash, 8);
+                    mix(&mut hash, count.to_bits() as u64);
+                }
+                crate::animation::IterationCount::Infinite => mix(&mut hash, 9),
+            }
+        }
+        for transition in &self.transitions {
+            match &transition.property {
+                crate::animation::TransitionProperty::All => mix(&mut hash, 10),
+                crate::animation::TransitionProperty::None => mix(&mut hash, 11),
+                crate::animation::TransitionProperty::Property(name) => {
+                    mix(&mut hash, 12);
+                    for byte in name.as_bytes() {
+                        mix(&mut hash, u64::from(*byte));
+                    }
+                }
+            }
+            mix(&mut hash, transition.duration_ms.to_bits() as u64);
+            mix(&mut hash, transition.delay_ms.to_bits() as u64);
+            mix(&mut hash, timing_tag(&transition.timing));
+        }
         hash
     }
 
@@ -2470,6 +2533,10 @@ impl ComputedStyle {
             .map(|val| val.clamp(0.0, 1.0))
             .unwrap_or(1.0);
 
+        // CSS Animations 1 / Transitions 1 longhand lists (not inherited).
+        let animations = crate::animation::parse_animations(&entries);
+        let transitions = crate::animation::parse_transitions(&entries);
+
         // Margins & Paddings
         let margin = Self::compute_edges(&entries, &MARGIN_PROPERTIES, font_size, root_font_size);
         let padding = Self::compute_edges(&entries, &PADDING_PROPERTIES, font_size, root_font_size);
@@ -2574,6 +2641,8 @@ impl ComputedStyle {
             text_transform,
             word_spacing,
             letter_spacing,
+            animations,
+            transitions,
             style_fingerprint: StyleFingerprint::default(),
         };
         style.style_fingerprint = StyleFingerprint::new(style.compute_fingerprint());
@@ -4986,5 +5055,74 @@ impl ComputedStyle {
             }
         }
         calc
+    }
+}
+
+#[cfg(test)]
+mod animation_property_tests {
+    use super::*;
+    use crate::parser::parse_list_of_declarations;
+    use std::collections::HashMap;
+
+    fn compute_inline(source: &str) -> ComputedStyle {
+        let declarations = parse_list_of_declarations(source);
+        let mut cascaded: HashMap<String, &Declaration> = HashMap::new();
+        for declaration in &declarations {
+            cascaded.insert(declaration.name.clone(), declaration);
+        }
+        ComputedStyle::compute(&cascaded, None, None)
+    }
+
+    #[test]
+    fn animation_and_transition_longhands_reach_the_computed_style() {
+        let style = compute_inline(
+            "animation-name: fade, slide; animation-duration: 2s; \
+             animation-delay: 100ms; animation-iteration-count: infinite; \
+             animation-direction: alternate; animation-timing-function: linear; \
+             transition-property: opacity, transform; transition-duration: 300ms; \
+             transition-timing-function: ease-out; transition-delay: 50ms;",
+        );
+        assert_eq!(style.animations.len(), 2);
+        assert_eq!(style.animations[0].name, "fade");
+        assert_eq!(style.animations[1].name, "slide");
+        assert_eq!(style.animations[0].duration_ms, 2000.0);
+        assert_eq!(style.animations[1].duration_ms, 2000.0, "lists cycle");
+        assert_eq!(style.animations[0].delay_ms, 100.0);
+        assert_eq!(
+            style.animations[0].iteration_count,
+            crate::animation::IterationCount::Infinite
+        );
+        assert_eq!(
+            style.animations[0].direction,
+            crate::animation::AnimationDirection::Alternate
+        );
+        assert_eq!(
+            style.animations[0].timing,
+            crate::animation::TimingFunction::Linear
+        );
+        assert_eq!(style.transitions.len(), 2);
+        assert_eq!(style.transitions[0].duration_ms, 300.0);
+        assert_eq!(style.transitions[0].delay_ms, 50.0);
+        assert_eq!(
+            style.transitions[0].property,
+            crate::animation::TransitionProperty::Property("opacity".into())
+        );
+    }
+
+    #[test]
+    fn animation_properties_are_not_inherited() {
+        let declarations =
+            parse_list_of_declarations("animation-name: fade; animation-duration: 1s;");
+        let mut cascaded: HashMap<String, &Declaration> = HashMap::new();
+        for declaration in &declarations {
+            cascaded.insert(declaration.name.clone(), declaration);
+        }
+        let parent = ComputedStyle::compute(&cascaded, None, None);
+        let child = ComputedStyle::compute(&HashMap::new(), Some(&parent), None);
+        assert_eq!(parent.animations.len(), 1);
+        assert!(
+            child.animations.is_empty(),
+            "CSS Animations properties are not inherited"
+        );
     }
 }
