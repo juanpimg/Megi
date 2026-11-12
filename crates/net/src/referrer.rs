@@ -103,10 +103,14 @@ impl ReferrerPolicy {
         let mut search_from = 0usize;
         while let Some(meta_offset) = lower[search_from..].find("<meta") {
             let meta_start = search_from + meta_offset;
-            let meta_end = lower[meta_start..]
+            let Some(meta_end) = lower[meta_start..]
                 .find('>')
                 .map(|offset| meta_start + offset)
-                .unwrap_or(lower.len());
+            else {
+                // Unterminated trailing tag: nothing more can be scanned (and slicing at
+                // `len + 1` used to panic on attacker-controlled HTML).
+                break;
+            };
             let tag = &html[meta_start..meta_end];
             let name_attr = attribute_value(tag, "name");
             if name_attr.is_some_and(|name| name.eq_ignore_ascii_case("referrer")) {

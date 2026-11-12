@@ -771,3 +771,20 @@ fn referrer_source_auto_classifies_cross_site_cookies() {
         "the referrer header is still sent"
     );
 }
+
+#[test]
+fn unterminated_meta_tags_do_not_panic() {
+    for html in [
+        "<meta name=author",
+        "<meta",
+        "<meta name=referrer content=no-referrer",
+        "<meta name=author><meta",
+    ] {
+        let _ = ReferrerPolicy::from_meta_html(html);
+    }
+    assert_eq!(
+        ReferrerPolicy::from_meta_html("<meta name=referrer content=no-referrer"),
+        None,
+        "an unterminated referrer tag has no usable content"
+    );
+}
