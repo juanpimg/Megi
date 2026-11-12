@@ -259,10 +259,8 @@ fn decodes_1024x768_lossy_within_time_budget() {
 }
 
 #[test]
-fn vp8x_animated_containers_are_unsupported() {
-    // Animated VP8X (ANIM/ANMF) is still out of scope: decoding only the first frame
-    // would silently drop the rest, so the extended container is a typed unsupported
-    // error (never wrong pixels).
+fn vp8x_animated_without_anmf_is_rejected() {
+    // An animated VP8X container with ANIM but no ANMF frames is invalid.
     let plain = fixture("photo_lossy_q75.webp");
     let vp8 = vp8_payload(&plain);
     let mut vp8x = [0u8; 10];
@@ -271,11 +269,8 @@ fn vp8x_animated_containers_are_unsupported() {
     let chunks: Vec<(&[u8; 4], &[u8])> =
         vec![(b"VP8X", &vp8x), (b"ANIM", &[0u8; 6]), (b"VP8 ", vp8)];
     let bytes = riff_container(&chunks);
-    let error = decode(&bytes).expect_err("animated VP8X must be rejected");
-    assert!(
-        matches!(error, ImageError::UnsupportedFeature { .. }),
-        "{error:?}"
-    );
+    let error = decode(&bytes).expect_err("animated VP8X without ANMF must be rejected");
+    assert!(matches!(error, ImageError::InvalidData { .. }), "{error:?}");
 }
 
 #[test]
@@ -448,4 +443,139 @@ fn trailing_bytes_and_wrong_riff_size_are_rejected() {
         }
         other => panic!("expected RIFF-size rejection, got {other:?}"),
     }
+}
+
+fn push_riff_chunk(out: &mut Vec<u8>, id: &[u8; 4], payload: &[u8]) {
+    out.extend_from_slice(id);
+    out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    out.extend_from_slice(payload);
+    if payload.len() % 2 == 1 {
+        out.push(0);
+    }
+}
+
+fn extract_vp8l_chunk(webp: &[u8]) -> Vec<u8> {
+    let mut off = 12;
+    while off + 8 <= webp.len() {
+        let id = &webp[off..off + 4];
+        let len = u32::from_le_bytes(webp[off + 4..off + 8].try_into().unwrap()) as usize;
+        if id == b"VP8L" {
+            return webp[off + 8..off + 8 + len].to_vec();
+        }
+        off += 8 + len + (len & 1);
+    }
+    panic!("missing VP8L chunk in fixture");
+}
+
+fn encode_u24_le(v: u32) -> [u8; 3] {
+    [
+        (v & 0xff) as u8,
+        ((v >> 8) & 0xff) as u8,
+        ((v >> 16) & 0xff) as u8,
+    ]
+}
+
+type AnmfFrameSpec<'a> = (u32, u32, u32, u32, u32, u8, &'a [u8]);
+
+fn build_animated_webp(
+    canvas_w: u32,
+    canvas_h: u32,
+    bg_bgra: [u8; 4],
+    loop_count: u16,
+    frames: &[AnmfFrameSpec<'_>],
+) -> Vec<u8> {
+    let mut body = Vec::from(*b"WEBP");
+    let mut vp8x = [0u8; 10];
+    vp8x[0] = 0x12; // alpha + animation
+    vp8x[4..7].copy_from_slice(&encode_u24_le(canvas_w - 1));
+    vp8x[7..10].copy_from_slice(&encode_u24_le(canvas_h - 1));
+    push_riff_chunk(&mut body, b"VP8X", &vp8x);
+
+    let mut anim = [0u8; 6];
+    anim[0..4].copy_from_slice(&bg_bgra);
+    anim[4..6].copy_from_slice(&loop_count.to_le_bytes());
+    push_riff_chunk(&mut body, b"ANIM", &anim);
+
+    for &(fx, fy, fw, fh, delay_ms, flags, vp8l) in frames {
+        let mut anmf = Vec::new();
+        anmf.extend_from_slice(&encode_u24_le(fx / 2));
+        anmf.extend_from_slice(&encode_u24_le(fy / 2));
+        anmf.extend_from_slice(&encode_u24_le(fw - 1));
+        anmf.extend_from_slice(&encode_u24_le(fh - 1));
+        anmf.extend_from_slice(&encode_u24_le(delay_ms));
+        anmf.push(flags);
+        push_riff_chunk(&mut anmf, b"VP8L", vp8l);
+        push_riff_chunk(&mut body, b"ANMF", &anmf);
+    }
+
+    let mut out = Vec::from(*b"RIFF");
+    out.extend_from_slice(&(body.len() as u32).to_le_bytes());
+    out.extend_from_slice(&body);
+    out
+}
+
+#[test]
+fn decodes_animated_webp_frames_blending_and_disposal() {
+    let solid_vp8l = extract_vp8l_chunk(&fixture("v8l_two_color.webp"));
+    let alpha_vp8l = extract_vp8l_chunk(&fixture("v8l_alpha.webp"));
+
+    // Frame 0: 8x8 opaque two-color, 100ms, keep canvas (flags=0).
+    // Frame 1: 8x8 half-transparent alpha-blended over frame 0, 250ms, dispose to bg (flags=1).
+    let webp = build_animated_webp(
+        8,
+        8,
+        [0, 255, 0, 255], // BGRA green
+        3,
+        &[
+            (0, 0, 8, 8, 100, 0x00, &solid_vp8l),
+            (0, 0, 8, 8, 250, 0x01, &alpha_vp8l),
+        ],
+    );
+
+    // Static decode() returns frame 0.
+    let first = decode(&webp).expect("animated webp static decode");
+    assert_eq!(first.dimensions(), (8, 8));
+    assert_eq!(first.pixel(0, 0), Some([255, 0, 0, 255]));
+    assert_eq!(first.pixel(7, 7), Some([0, 0, 255, 255]));
+
+    // Full animated decode returns both composited frames with metadata.
+    let anim = image::decode_animated(&webp).expect("animated webp frames");
+    assert_eq!((anim.width, anim.height, anim.loop_count), (8, 8, 3));
+    assert_eq!(anim.frames.len(), 2);
+    assert_eq!(anim.frames[0].delay_ms, 100);
+    assert_eq!(anim.frames[1].delay_ms, 250);
+    // Transparent half of v8l_alpha preserves frame 0's blue pixel at (7, 7).
+    assert_eq!(anim.frames[1].image.pixel(7, 7), Some([0, 0, 255, 255]));
+}
+
+#[test]
+fn rejects_out_of_bounds_anmf_frame_and_missing_anim() {
+    let solid_vp8l = extract_vp8l_chunk(&fixture("v8l_two_color.webp"));
+    // Frame 8x8 at x=4 on 8x8 canvas overflows.
+    let oob = build_animated_webp(
+        8,
+        8,
+        [0, 0, 0, 0],
+        0,
+        &[(4, 0, 8, 8, 50, 0x00, &solid_vp8l)],
+    );
+    assert!(matches!(
+        image::decode_animated(&oob),
+        Err(ImageError::InvalidData { .. })
+    ));
+
+    // VP8X with animation flag but no ANIM chunk.
+    let mut body = Vec::from(*b"WEBP");
+    let mut vp8x = [0u8; 10];
+    vp8x[0] = 0x02;
+    vp8x[4..7].copy_from_slice(&encode_u24_le(7));
+    vp8x[7..10].copy_from_slice(&encode_u24_le(7));
+    push_riff_chunk(&mut body, b"VP8X", &vp8x);
+    let mut no_anim = Vec::from(*b"RIFF");
+    no_anim.extend_from_slice(&(body.len() as u32).to_le_bytes());
+    no_anim.extend_from_slice(&body);
+    assert!(matches!(
+        image::decode_animated(&no_anim),
+        Err(ImageError::InvalidData { .. })
+    ));
 }

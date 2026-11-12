@@ -877,7 +877,37 @@ fn decode_transform(
 }
 
 /// Locates a chunk `id` inside a RIFF/WEBP container and returns its payload.
-fn find_chunk<'a>(bytes: &'a [u8], id: &[u8; 4]) -> Result<&'a [u8], ImageError> {
+const MAX_ANIMATION_FRAMES: usize = 4096;
+type RiffChunk<'a> = (&'a [u8; 4], &'a [u8]);
+
+/// Parses a sequence of RIFF chunks `(fourcc, payload)` from an arbitrary chunk stream.
+fn parse_chunks_in_slice(mut data: &[u8]) -> Result<Vec<RiffChunk<'_>>, ImageError> {
+    let mut chunks = Vec::new();
+    while data.len() >= 8 {
+        let chunk_id: &[u8; 4] = data[..4].try_into().expect("4 bytes");
+        let length = u32::from_le_bytes([data[4], data[5], data[6], data[7]]) as usize;
+        let payload_end = 8usize.checked_add(length).ok_or(ImageError::Truncated {
+            context: "WebP RIFF chunk",
+        })?;
+        if payload_end > data.len() {
+            return Err(ImageError::Truncated {
+                context: "WebP RIFF chunk payload",
+            });
+        }
+        chunks.push((chunk_id, &data[8..payload_end]));
+        let padded_end = payload_end + (length & 1);
+        if padded_end > data.len() {
+            // Trailing padding byte missing on odd-length final chunk: tolerate if payload fit,
+            // otherwise stop cleanly at end of slice.
+            break;
+        }
+        data = &data[padded_end..];
+    }
+    Ok(chunks)
+}
+
+/// Validates the top-level RIFF/WEBP container and returns all top-level chunks.
+fn top_level_chunks(bytes: &[u8]) -> Result<Vec<RiffChunk<'_>>, ImageError> {
     if bytes.len() < RIFF_HEADER_LEN || !bytes.starts_with(b"RIFF") || &bytes[8..12] != b"WEBP" {
         return Err(ImageError::InvalidSignature);
     }
@@ -889,31 +919,15 @@ fn find_chunk<'a>(bytes: &'a [u8], id: &[u8; 4]) -> Result<&'a [u8], ImageError>
             reason: "WebP RIFF size does not match the file length",
         });
     }
-    let mut offset = RIFF_HEADER_LEN;
-    while offset + 8 <= bytes.len() {
-        let chunk_id = &bytes[offset..offset + 4];
-        let length = u32::from_le_bytes([
-            bytes[offset + 4],
-            bytes[offset + 5],
-            bytes[offset + 6],
-            bytes[offset + 7],
-        ]) as usize;
-        let payload_start = offset + 8;
-        let payload_end = payload_start
-            .checked_add(length)
-            .ok_or(ImageError::Truncated {
-                context: "WebP RIFF chunk",
-            })?;
-        if payload_end > bytes.len() {
-            return Err(ImageError::Truncated {
-                context: "WebP RIFF chunk payload",
-            });
-        }
+    parse_chunks_in_slice(&bytes[RIFF_HEADER_LEN..])
+}
+
+/// Locates the first RIFF chunk matching `id` in a top-level WebP container.
+fn find_chunk<'a>(bytes: &'a [u8], id: &[u8; 4]) -> Result<&'a [u8], ImageError> {
+    for (chunk_id, payload) in top_level_chunks(bytes)? {
         if chunk_id == id {
-            return Ok(&bytes[payload_start..payload_end]);
+            return Ok(payload);
         }
-        // Chunks are padded to an even size.
-        offset = payload_end + (length & 1);
     }
     Err(ImageError::InvalidData {
         reason: "WebP container has no matching chunk",
@@ -1012,13 +1026,26 @@ fn apply_alpha_plane(image: &mut RgbaImage, payload: &[u8]) -> Result<(), ImageE
     Ok(())
 }
 
-/// Decodes a VP8L (lossless) or VP8 (lossy keyframe) WebP image into RGBA8.
+/// Returns `true` when `bytes` is an extended WebP container with the animation flag set.
+pub(crate) fn is_animated_webp(bytes: &[u8]) -> Result<bool, ImageError> {
+    Ok(parse_vp8x_header(bytes)?.is_some_and(|header| header.animation))
+}
+
+/// Decodes a VP8L (lossless), VP8 (lossy keyframe), or animated WebP image into RGBA8.
+///
+/// For animated WebP (`ANIM`/`ANMF`), returns the first composited frame.
 pub(crate) fn decode_webp(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageError> {
     if let Some(header) = parse_vp8x_header(bytes)? {
         if header.animation {
-            return Err(ImageError::UnsupportedFeature {
-                feature: "WebP animation (ANIM/ANMF)",
-            });
+            let animated = decode_webp_frames(bytes, limits, &header, Some(1))?;
+            return animated
+                .frames
+                .into_iter()
+                .next()
+                .map(|frame| frame.image)
+                .ok_or(ImageError::InvalidData {
+                    reason: "WebP animation has no frames",
+                });
         }
         let mut image = decode_still_image(bytes, limits)?;
         if image.width != header.width || image.height != header.height {
@@ -1040,6 +1067,223 @@ pub(crate) fn decode_webp(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
     decode_still_image(bytes, limits)
 }
 
+/// Decodes all frames of an animated WebP container (`VP8X` + `ANIM` + `ANMF`).
+pub(crate) fn decode_animated_webp(
+    bytes: &[u8],
+    limits: &PngLimits,
+) -> Result<crate::AnimatedImage, ImageError> {
+    let header = parse_vp8x_header(bytes)?.ok_or(ImageError::InvalidData {
+        reason: "WebP animation requires a VP8X header",
+    })?;
+    if !header.animation {
+        return Err(ImageError::InvalidData {
+            reason: "WebP VP8X animation flag is not set",
+        });
+    }
+    decode_webp_frames(bytes, limits, &header, None)
+}
+
+fn read_u24_le(bytes: &[u8]) -> u32 {
+    u32::from(bytes[0]) | (u32::from(bytes[1]) << 8) | (u32::from(bytes[2]) << 16)
+}
+
+fn decode_webp_frames(
+    bytes: &[u8],
+    limits: &PngLimits,
+    header: &Vp8xHeader,
+    max_frames: Option<usize>,
+) -> Result<crate::AnimatedImage, ImageError> {
+    check_dimensions(header.width as usize, header.height as usize, limits)?;
+    let chunks = top_level_chunks(bytes)?;
+    let anim = chunks
+        .iter()
+        .find(|(id, _)| *id == b"ANIM")
+        .map(|(_, payload)| *payload)
+        .ok_or(ImageError::InvalidData {
+            reason: "WebP animation is missing the ANIM chunk",
+        })?;
+    if anim.len() < 6 {
+        return Err(ImageError::Truncated {
+            context: "WebP ANIM chunk",
+        });
+    }
+    // WebP ANIM background color is stored in BGRA byte order.
+    let bg_color = [anim[2], anim[1], anim[0], anim[3]];
+    let loop_count = u16::from_le_bytes([anim[4], anim[5]]);
+
+    let canvas_len = (header.width as usize)
+        .checked_mul(header.height as usize)
+        .and_then(|px| px.checked_mul(4))
+        .ok_or(ImageError::InvalidData {
+            reason: "WebP canvas dimensions overflow",
+        })?;
+    let mut canvas = vec![0u8; canvas_len];
+    for px in canvas.as_chunks_mut::<4>().0 {
+        *px = bg_color;
+    }
+
+    let mut frames = Vec::new();
+    for (id, payload) in chunks {
+        if id != b"ANMF" {
+            continue;
+        }
+        if frames.len() >= MAX_ANIMATION_FRAMES {
+            return Err(ImageError::InvalidData {
+                reason: "WebP animation exceeds maximum frame count",
+            });
+        }
+        if payload.len() < 16 {
+            return Err(ImageError::Truncated {
+                context: "WebP ANMF frame header",
+            });
+        }
+        let frame_x = read_u24_le(&payload[0..3]).saturating_mul(2);
+        let frame_y = read_u24_le(&payload[3..6]).saturating_mul(2);
+        let frame_w = 1 + read_u24_le(&payload[6..9]);
+        let frame_h = 1 + read_u24_le(&payload[9..12]);
+        let delay_ms = read_u24_le(&payload[12..15]);
+        let flags = payload[15];
+        let dispose_to_bg = flags & 0x01 != 0;
+        let no_blend = flags & 0x02 != 0;
+
+        if frame_x.saturating_add(frame_w) > header.width
+            || frame_y.saturating_add(frame_h) > header.height
+        {
+            return Err(ImageError::InvalidData {
+                reason: "WebP ANMF frame rectangle exceeds canvas bounds",
+            });
+        }
+
+        let sub = parse_chunks_in_slice(&payload[16..])?;
+        let mut frame_img = decode_chunks_image(&sub, limits)?;
+        if frame_img.width != frame_w || frame_img.height != frame_h {
+            return Err(ImageError::InvalidData {
+                reason: "WebP ANMF frame dimensions do not match decoded bitstream",
+            });
+        }
+        if let Some((_, alph)) = sub.iter().find(|(cid, _)| *cid == b"ALPH") {
+            apply_alpha_plane(&mut frame_img, alph)?;
+        }
+
+        composite_frame(
+            &mut canvas,
+            header.width,
+            &frame_img,
+            frame_x,
+            frame_y,
+            no_blend,
+        );
+        frames.push(crate::AnimatedFrame {
+            image: RgbaImage::new(header.width, header.height, canvas.clone())?,
+            delay_ms,
+        });
+
+        if max_frames.is_some_and(|cap| frames.len() >= cap) {
+            break;
+        }
+        if dispose_to_bg {
+            dispose_rect(
+                &mut canvas,
+                header.width,
+                frame_x,
+                frame_y,
+                frame_w,
+                frame_h,
+                bg_color,
+            );
+        }
+    }
+
+    if frames.is_empty() {
+        return Err(ImageError::InvalidData {
+            reason: "WebP animation contains no ANMF frames",
+        });
+    }
+
+    Ok(crate::AnimatedImage {
+        width: header.width,
+        height: header.height,
+        loop_count,
+        frames,
+    })
+}
+
+fn composite_frame(
+    canvas: &mut [u8],
+    canvas_w: u32,
+    frame: &RgbaImage,
+    fx: u32,
+    fy: u32,
+    no_blend: bool,
+) {
+    let cw = canvas_w as usize;
+    let fw = frame.width as usize;
+    let fh = frame.height as usize;
+    for y in 0..fh {
+        let dy = fy as usize + y;
+        let src_row = &frame.data[y * fw * 4..(y + 1) * fw * 4];
+        let dst_start = (dy * cw + fx as usize) * 4;
+        let dst_row = &mut canvas[dst_start..dst_start + fw * 4];
+        if no_blend {
+            dst_row.copy_from_slice(src_row);
+            continue;
+        }
+        for (src, dst) in src_row
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(dst_row.as_chunks_mut::<4>().0.iter_mut())
+        {
+            let sa = src[3] as u32;
+            if sa == 255 {
+                *dst = *src;
+            } else if sa > 0 {
+                let da = dst[3] as u32;
+                let inv_sa = 255 - sa;
+                let out_a = sa + (da * inv_sa + 127) / 255;
+                if out_a == 0 {
+                    *dst = [0, 0, 0, 0];
+                } else {
+                    for c in 0..3 {
+                        let num = src[c] as u32 * sa * 255 + dst[c] as u32 * da * inv_sa;
+                        dst[c] = ((num + out_a * 127) / (out_a * 255)).min(255) as u8;
+                    }
+                    dst[3] = out_a.min(255) as u8;
+                }
+            }
+        }
+    }
+}
+
+fn dispose_rect(canvas: &mut [u8], canvas_w: u32, rx: u32, ry: u32, rw: u32, rh: u32, bg: [u8; 4]) {
+    let cw = canvas_w as usize;
+    for y in ry as usize..(ry + rh) as usize {
+        let start = (y * cw + rx as usize) * 4;
+        let row = &mut canvas[start..start + rw as usize * 4];
+        for px in row.as_chunks_mut::<4>().0 {
+            *px = bg;
+        }
+    }
+}
+
+/// Decodes the inner `VP8 `/`VP8L` payload from a pre-parsed slice of RIFF chunks.
+fn decode_chunks_image(
+    chunks: &[(&[u8; 4], &[u8])],
+    limits: &PngLimits,
+) -> Result<RgbaImage, ImageError> {
+    if let Some((_, payload)) = chunks.iter().find(|(id, _)| *id == b"VP8 ") {
+        return crate::vp8_decoder::decode_keyframe(payload, limits);
+    }
+    let payload = chunks
+        .iter()
+        .find(|(id, _)| *id == b"VP8L")
+        .map(|(_, p)| *p)
+        .ok_or(ImageError::InvalidData {
+            reason: "WebP container has no VP8 or VP8L chunk",
+        })?;
+    decode_vp8l_payload(payload, limits)
+}
+
 /// Decodes the inner `VP8 `/`VP8L` payload of a (possibly extended) WebP image.
 fn decode_still_image(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageError> {
     // WebP lossy (`VP8 `) is a single VP8 keyframe: decode it instead of trying VP8L.
@@ -1047,6 +1291,10 @@ fn decode_still_image(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, Ima
         return crate::vp8_decoder::decode_keyframe(payload, limits);
     }
     let payload = find_vp8l_chunk(bytes)?;
+    decode_vp8l_payload(payload, limits)
+}
+
+fn decode_vp8l_payload(payload: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageError> {
     let Some((&signature, bitstream)) = payload.split_first() else {
         return Err(ImageError::Truncated {
             context: "WebP VP8L payload",
