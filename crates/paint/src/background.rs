@@ -204,13 +204,13 @@ fn plan_axis(
                 let count = (positioning_length / tile).round().max(1.0);
                 // A sub-pixel `background-size` makes `count` infinite (or ~1e19) and the
                 // rescaled tile 0: iterating `0..count` used to loop ~1e19 times because the
-                // zero-size tiles never intersect the clip. Such a pattern is degenerate;
-                // skip its tiles instead of hanging.
-                if !count.is_finite() || count > limit as f32 {
+                // zero-size tiles never intersect the clip. Bound the iteration at the tile
+                // cap instead (a finite `count > limit` is an ordinary, paintable pattern).
+                if !count.is_finite() {
                     return (positioning_length / count.max(1.0), origins);
                 }
                 tile = positioning_length / count;
-                for index in 0..count as usize {
+                for index in 0..(count as usize).min(limit) {
                     if origins.len() >= limit {
                         break;
                     }
@@ -228,10 +228,11 @@ fn plan_axis(
             // centred and a too-large tile behaves like `no-repeat` (CSS Backgrounds 3 §2.3).
             if tile > 0.0 && positioning_length >= tile {
                 let count = (positioning_length / tile).floor().max(1.0);
-                if !count.is_finite() || count > limit as f32 {
+                if !count.is_finite() {
                     return (tile, origins);
                 }
                 let count = count as usize;
+                let iterations = count.min(limit);
                 if count == 1 {
                     let origin = positioning_origin + (positioning_length - tile) / 2.0;
                     if intersects_clip(origin, tile) {
@@ -239,7 +240,10 @@ fn plan_axis(
                     }
                 } else {
                     let gap = (positioning_length - count as f32 * tile) / (count - 1) as f32;
-                    for index in 0..count {
+                    if !gap.is_finite() {
+                        return (tile, origins);
+                    }
+                    for index in 0..iterations {
                         if origins.len() >= limit {
                             break;
                         }
@@ -437,8 +441,10 @@ mod tests {
 
     #[test]
     fn test_space_with_a_sub_pixel_tile_terminates() {
+        // The origin is far outside the clip on purpose: with an intersecting origin the old
+        // loop stopped at `origins.len() == limit`, so it did not expose the `count` hang.
         let (_, origins) = plan_axis(
-            0.0,
+            1e6,
             100.0,
             0.0,
             100.0,
@@ -447,7 +453,43 @@ mod tests {
             BackgroundRepeatAxis::Space,
             64,
         );
-        assert!(origins.len() <= 64);
+        assert!(origins.is_empty(), "a degenerate space tile paints nothing");
+    }
+
+    #[test]
+    fn test_round_with_a_finite_count_over_the_limit_still_paints() {
+        // 100 / 0.02 = 5,000 tiles > limit: the tiles that fit the cap must still be
+        // emitted (an earlier guard dropped every tile whenever count > limit).
+        let (tile, origins) = plan_axis(
+            0.0,
+            100.0,
+            0.0,
+            100.0,
+            Length::Px(0.0),
+            0.02,
+            BackgroundRepeatAxis::Round,
+            10,
+        );
+        assert!((tile - 0.02).abs() < 1e-6, "{tile}");
+        assert_eq!(origins.len(), 10);
+    }
+
+    #[test]
+    fn test_round_on_the_second_axis_keeps_tiles_after_the_first_consumes_the_budget() {
+        // 800×600 with a 10×10 image: x uses 80 tiles, leaving a y limit of 51 of its 60
+        // tiles. The y axis must still paint 51 rows (it used to return none).
+        let repeat = BackgroundRepeat {
+            x: BackgroundRepeatAxis::Round,
+            y: BackgroundRepeatAxis::Round,
+        };
+        let tiles = background_tiles(
+            padding(800.0, 600.0),
+            (10, 10),
+            repeat,
+            BackgroundSize::Auto,
+            BackgroundPosition::parse("0 0", 10.0, 10.0).unwrap(),
+        );
+        assert_eq!(tiles.len(), 80 * 51);
     }
 
     #[test]
