@@ -2583,7 +2583,7 @@ impl TreeBuilder {
                     let parent = if self
                         .fragment_context
                         .as_ref()
-                        .is_some_and(|(_, n)| n == "html")
+                        .is_some_and(|(_, n)| n.eq_ignore_ascii_case("html"))
                     {
                         self.open_elements
                             .first()
@@ -2599,7 +2599,7 @@ impl TreeBuilder {
                     let parent = if self
                         .fragment_context
                         .as_ref()
-                        .is_some_and(|(_, n)| n == "html")
+                        .is_some_and(|(_, n)| n.eq_ignore_ascii_case("html"))
                     {
                         self.open_elements
                             .first()
@@ -4298,6 +4298,8 @@ fn run_fragment_parser(
     scripting_enabled: bool,
     options: &ParseOptions,
 ) -> TreeBuilder {
+    let context_local_name = context_local_name.to_ascii_lowercase();
+    let context_local_name = context_local_name.as_str();
     let (input, input_truncated) = truncate_input(input, options.max_input_bytes);
     tb.limit_violations.input_truncated = input_truncated;
     let initial_tok_state = if context_namespace == Namespace::Html {
