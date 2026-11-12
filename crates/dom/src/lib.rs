@@ -1955,6 +1955,10 @@ impl Document {
         if self.slot_of(node_id).is_none() {
             return Err(DomError::UnknownNode(node_id));
         }
+        // DOM spec: inserting a node before itself is a no-op.
+        if reference == Some(node_id) {
+            return Ok(Vec::new());
+        }
         let is_fragment = matches!(self.node(node_id).kind, NodeKind::DocumentFragment);
         if !is_fragment {
             self.insert_one(parent_id, node_id, reference)?;
