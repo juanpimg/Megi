@@ -3516,17 +3516,24 @@ fn composite_effect(
                 // Co = (1 - αb) * Cs + αb * B(Cb, Cs)
                 (1.0 - dest_alpha) * cs + dest_alpha * blended
             };
-            let red = blend_component(dest.r, src.r) * source_alpha
-                + f32::from(dest.r) / 255.0 * (1.0 - source_alpha);
-            let green = blend_component(dest.g, src.g) * source_alpha
-                + f32::from(dest.g) / 255.0 * (1.0 - source_alpha);
-            let blue = blend_component(dest.b, src.b) * source_alpha
-                + f32::from(dest.b) / 255.0 * (1.0 - source_alpha);
+            // Porter-Duff source-over (Compositing and Blending 1 §5):
+            //   Co = αs·Cs' + αb·Cb·(1 − αs),  αo = αs + αb·(1 − αs),  C = Co/αo.
+            // The backdrop term was not multiplied by `αb` and the result was not divided by
+            // `αo`, so only an opaque backdrop came out right.
             let alpha = source_alpha + dest_alpha * (1.0 - source_alpha);
+            let composite = |backdrop: u8, source: u8| -> u8 {
+                if alpha <= 0.0 {
+                    return 0;
+                }
+                let backdrop_channel = f32::from(backdrop) / 255.0;
+                let premultiplied = blend_component(backdrop, source) * source_alpha
+                    + backdrop_channel * dest_alpha * (1.0 - source_alpha);
+                clamp_channel(premultiplied / alpha)
+            };
             pixmap.pixels[index] = Color::new(
-                clamp_channel(red),
-                clamp_channel(green),
-                clamp_channel(blue),
+                composite(dest.r, src.r),
+                composite(dest.g, src.g),
+                composite(dest.b, src.b),
                 clamp_channel(alpha),
             );
         }
@@ -3686,4 +3693,65 @@ fn paint_backdrop_filter(pixmap: &mut Pixmap, rect: Rect, filters: &[css::Filter
         }
     }
     BACKDROP_BUFFER.with(|slot| *slot.borrow_mut() = Some(buffer));
+}
+
+#[cfg(test)]
+mod composite_tests {
+    use super::*;
+
+    #[test]
+    fn test_composite_source_over_keeps_a_half_alpha_source_over_transparency() {
+        let mut dest = Pixmap::new(1, 1);
+        let mut src = Pixmap::new(1, 1);
+        src.pixels[0] = Color::new(255, 0, 0, 128);
+        composite_effect(&mut dest, &src, 0, 0, css::MixBlendMode::Normal);
+        let pixel = dest.pixels[0];
+        assert_eq!(
+            (pixel.r, pixel.g, pixel.b, pixel.a),
+            (255, 0, 0, 128),
+            "straight-alpha source-over over transparency must not darken the colour"
+        );
+    }
+
+    #[test]
+    fn test_composite_source_over_weights_a_translucent_backdrop() {
+        // The backdrop term must carry its own alpha and the result must be divided by the
+        // output alpha: (204, 0, 51, 160) instead of the old (128, 0, 127, 160).
+        let mut dest = Pixmap::new(1, 1);
+        dest.pixels[0] = Color::new(0, 0, 255, 64);
+        let mut src = Pixmap::new(1, 1);
+        src.pixels[0] = Color::new(255, 0, 0, 128);
+        composite_effect(&mut dest, &src, 0, 0, css::MixBlendMode::Normal);
+        let pixel = dest.pixels[0];
+        assert_eq!(
+            (pixel.r, pixel.g, pixel.b, pixel.a),
+            (204, 0, 51, 160),
+            "alpha-weighted source-over"
+        );
+    }
+
+    #[test]
+    fn test_composite_multiply_over_a_translucent_backdrop() {
+        let mut dest = Pixmap::new(1, 1);
+        dest.pixels[0] = Color::new(128, 128, 128, 128);
+        let mut src = Pixmap::new(1, 1);
+        src.pixels[0] = Color::new(255, 0, 0, 128);
+        composite_effect(&mut dest, &src, 0, 0, css::MixBlendMode::Multiply);
+        let pixel = dest.pixels[0];
+        assert_eq!((pixel.r, pixel.g, pixel.b, pixel.a), (170, 43, 43, 192));
+    }
+
+    #[test]
+    fn test_composite_source_over_over_an_opaque_backdrop() {
+        let mut dest = Pixmap::new(1, 1);
+        dest.pixels[0] = Color::new(0, 0, 255, 255);
+        let mut src = Pixmap::new(1, 1);
+        src.pixels[0] = Color::new(255, 0, 0, 128);
+        composite_effect(&mut dest, &src, 0, 0, css::MixBlendMode::Normal);
+        let pixel = dest.pixels[0];
+        assert_eq!(pixel.a, 255);
+        assert_eq!(pixel.r, 128);
+        assert_eq!(pixel.g, 0);
+        assert_eq!(pixel.b, 127);
+    }
 }
