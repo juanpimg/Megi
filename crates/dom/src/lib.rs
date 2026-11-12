@@ -879,6 +879,9 @@ impl Document {
         if parent_id == child_id {
             return false;
         }
+        if matches!(self.node(child_id).kind, NodeKind::Document) {
+            return false; // the document node cannot become a child
+        }
         // A node with no children cannot be an ancestor of another node, which keeps
         // the overwhelmingly common parser append path branch-free of the walk.
         if self.node(child_id).first_child.is_some()
@@ -917,14 +920,17 @@ impl Document {
             return false;
         }
 
-        let (parent_id, prev_id) = match self.node(reference_sibling_id).parent {
-            Some(parent) => (parent, self.node(reference_sibling_id).prev_sibling),
+        let parent_id = match self.node(reference_sibling_id).parent {
+            Some(parent) => parent,
             None => return false,
         };
         if new_node_id == parent_id {
             return false;
         }
 
+        if matches!(self.node(new_node_id).kind, NodeKind::Document) {
+            return false; // the document node cannot be a child
+        }
         if self.node(new_node_id).first_child.is_some()
             && self.is_self_or_ancestor_of(new_node_id, parent_id)
         {
@@ -934,6 +940,11 @@ impl Document {
         if self.node(new_node_id).parent.is_some() {
             self.detach(new_node_id);
         }
+
+        // Read the reference's previous sibling *after* detaching: removing the moved node
+        // may have changed it (when it was the reference's previous sibling), and the
+        // snapshotted id then reintroduced a self-link / a dropped first child.
+        let prev_id = self.node(reference_sibling_id).prev_sibling;
 
         if let Some(prev) = prev_id {
             self.node_mut(prev).next_sibling = Some(new_node_id);
@@ -1177,6 +1188,10 @@ impl Document {
             let Some(slot) = self.slot_of(node) else {
                 continue;
             };
+            // Defensive: the root must never be freed, even if a corrupt chain lists it.
+            if slot == self.root.index() {
+                continue;
+            }
             self.free_slot(slot);
             freed += 1;
         }
@@ -1398,6 +1413,7 @@ impl Document {
         ChildrenIter {
             doc: self,
             next: self.try_node(parent_id).and_then(|node| node.first_child),
+            remaining: self.len() + 1,
         }
     }
 
@@ -1601,17 +1617,35 @@ impl Document {
     ///
     /// Returns the number of nodes removed (for diagnostics/tests).
     pub fn normalize(&mut self, node_id: NodeId) -> usize {
-        // Normalize descendants first (DOM spec normalizes the whole subtree).
-        let mut nested: Vec<NodeId> = Vec::new();
-        let mut cursor = self.try_node(node_id).and_then(|node| node.first_child);
-        while let Some(child) = cursor {
-            nested.push(child);
-            cursor = self.try_node(child).and_then(|node| node.next_sibling);
+        if self.try_node(node_id).is_none() {
+            return 0;
         }
-        let mut removed_descendants = 0;
-        for child in nested {
-            removed_descendants += self.normalize(child);
+        // Post-order over the subtree with an explicit stack: the old recursive version
+        // overflowed the native stack for a deep chain (reachable from `node.normalize()`
+        // after building 100k nested elements in a script).
+        let mut order: Vec<NodeId> = Vec::new();
+        let mut stack: Vec<(NodeId, bool)> = vec![(node_id, false)];
+        while let Some((current, visited)) = stack.pop() {
+            if visited {
+                order.push(current);
+                continue;
+            }
+            stack.push((current, true));
+            let mut child = self.try_node(current).and_then(|node| node.first_child);
+            while let Some(child_id) = child {
+                stack.push((child_id, false));
+                child = self.try_node(child_id).and_then(|node| node.next_sibling);
+            }
         }
+        let mut removed = 0;
+        for current in order {
+            removed += self.normalize_children(current);
+        }
+        removed
+    }
+
+    /// Merges adjacent text children and drops empty text children of one node.
+    fn normalize_children(&mut self, node_id: NodeId) -> usize {
         let mut children: Vec<NodeId> = Vec::new();
         let mut current = self.try_node(node_id).and_then(|node| node.first_child);
         while let Some(child) = current {
@@ -1645,7 +1679,7 @@ impl Document {
                 previous_text = Some(child);
             }
         }
-        removed + removed_descendants
+        removed
     }
 
     /// Implements the `compareDocumentPosition` bit mask subset (same document).
@@ -2144,12 +2178,18 @@ impl Document {
 pub struct ChildrenIter<'a> {
     doc: &'a Document,
     next: Option<NodeId>,
+    /// Hard bound so a corrupted sibling chain cannot loop forever.
+    remaining: usize,
 }
 
 impl Iterator for ChildrenIter<'_> {
     type Item = NodeId;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            return None;
+        }
+        self.remaining -= 1;
         let current = self.next?;
         let node = self.doc.try_node(current)?;
         self.next = node.next_sibling;
@@ -3099,5 +3139,61 @@ mod fragment_insertion_tests {
             document.replace_node(body, new_node, orphan),
             Err(DomError::NotAChild { .. })
         ));
+    }
+    #[test]
+    fn insert_before_moving_the_previous_sibling_keeps_the_chain() {
+        let mut doc = Document::new();
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        doc.append_child(doc.root(), body);
+        let a = doc.create_element(Namespace::Html, "a", vec![]);
+        let b = doc.create_element(Namespace::Html, "b", vec![]);
+        doc.append_child(body, a);
+        doc.append_child(body, b);
+
+        // `b` is the reference `a`'s previous sibling: detaching it changed `a.prev` and
+        // the old code then wrote a self-link into `b` and dropped `a` from the chain.
+        assert!(doc.insert_before(a, b));
+        let children: Vec<NodeId> = doc.children(body).collect();
+        assert_eq!(children, vec![b, a], "no cycle and both children present");
+        assert!(
+            doc.validate_invariants().is_ok(),
+            "{:?}",
+            doc.validate_invariants()
+        );
+
+        assert!(doc.insert_before(b, a));
+        let children: Vec<NodeId> = doc.children(body).collect();
+        assert_eq!(children, vec![a, b]);
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn the_document_node_cannot_become_a_child_or_be_freed() {
+        let mut doc = Document::new();
+        let div = doc.create_element(Namespace::Html, "div", vec![]);
+        doc.append_child(doc.root(), div);
+        assert!(!doc.append_child(div, doc.root()), "document as a child");
+        assert_eq!(doc.remove_subtree(doc.root()), 0, "the root is never freed");
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn normalize_handles_a_very_deep_chain_iteratively() {
+        // The recursive version overflowed the native stack around a few thousand levels.
+        let mut doc = Document::new();
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        doc.append_child(doc.root(), body);
+        let mut parent = body;
+        for _ in 0..50_000 {
+            let child = doc.create_element(Namespace::Html, "div", vec![]);
+            doc.append_child(parent, child);
+            parent = child;
+        }
+        // Text normalization at the leaf and empty decorations along the chain.
+        let text = doc.create_text_node("hello");
+        doc.append_child(parent, text);
+        let removed = doc.normalize(body);
+        assert_eq!(removed, 0);
+        assert!(doc.validate_invariants().is_ok());
     }
 }
