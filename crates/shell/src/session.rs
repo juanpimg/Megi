@@ -1122,7 +1122,12 @@ mod tests {
         assert_eq!(tab.history[tab.index], "https://a/");
         let restored = session.restore();
         assert_eq!(
-            restored.active().navigation.current().map(net::Url::as_str),
+            restored
+                .active()
+                .navigation
+                .current()
+                .map(net::Url::as_str)
+                .as_deref(),
             Some("https://a/")
         );
     }
