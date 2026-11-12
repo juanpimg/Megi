@@ -681,6 +681,7 @@ fn test_gradient_cycles_and_malformed_definitions_do_not_paint_or_panic() {
 }
 
 #[test]
+<<<<<<< HEAD
 fn huge_stroke_widths_are_clamped_instead_of_panicking() {
     for shape in [
         "<rect x='4' y='4' width='12' height='12' fill='none' stroke='#123456' stroke-width='1e20'/>",
@@ -699,5 +700,22 @@ fn huge_stroke_widths_are_clamped_instead_of_panicking() {
         )
         .expect("a clamped stroke still renders");
         assert_eq!(image.width, 20);
+||||||| 2a70d69
+=======
+fn far_off_canvas_text_does_not_panic() {
+    for x in ["1e38", "-1e38"] {
+        let source = format!(
+            "<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10'><text x='{x}' y='20'>A</text></svg>"
+        );
+        let image = render_svg(
+            source.as_bytes(),
+            &SvgOptions {
+                width: Some(16),
+                height: Some(16),
+            },
+        )
+        .expect("far-off-canvas text still renders");
+        assert_eq!(image.width, 16);
+>>>>>>> pr930
     }
 }

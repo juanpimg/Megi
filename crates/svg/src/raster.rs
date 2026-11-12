@@ -1312,8 +1312,23 @@ impl Canvas {
             return;
         }
         let (sin, cos) = angle.sin_cos();
-        let origin_x = x.round() as i64;
-        let origin_y = y.round() as i64;
+        if !x.is_finite() || !y.is_finite() {
+            return;
+        }
+        let canvas_width = self.width as f32;
+        let canvas_height = self.height as f32;
+        let margin = 2.0 * mask.width.max(mask.height) as f32 + 2.0;
+        let rounded_x = x.round();
+        let rounded_y = y.round();
+        if rounded_x < -margin
+            || rounded_y < -margin
+            || rounded_x > canvas_width + margin
+            || rounded_y > canvas_height + margin
+        {
+            return;
+        }
+        let origin_x = rounded_x as i64;
+        let origin_y = rounded_y as i64;
         for row in 0..mask.height {
             for column in 0..mask.width {
                 let value = mask.data[(row * mask.width + column) as usize];
@@ -1324,8 +1339,8 @@ impl Canvas {
                 let local_y = row as f32 + mask.top;
                 let dx = local_x * cos - local_y * sin;
                 let dy = local_x * sin + local_y * cos;
-                let px = origin_x + dx.round() as i64;
-                let py = origin_y + dy.round() as i64;
+                let px = origin_x.saturating_add(dx.round() as i64);
+                let py = origin_y.saturating_add(dy.round() as i64);
                 if px < 0 || py < 0 || px >= self.width as i64 || py >= self.height as i64 {
                     continue;
                 }
@@ -1339,15 +1354,31 @@ impl Canvas {
     }
 
     fn add_mask(&mut self, x: f32, y: f32, mask: &fonts::GlyphMask) {
-        let origin_x = x.round() as i64;
-        let origin_y = y.round() as i64;
+        // A far-off-canvas glyph origin (e.g. `x='1e38'`) saturated the i64 cast and then
+        // overflowed when adding the glyph offsets (debug panic / release divergence).
+        if !x.is_finite() || !y.is_finite() {
+            return;
+        }
+        let canvas_width = self.width as f32;
+        let canvas_height = self.height as f32;
+        let rounded_x = x.round();
+        let rounded_y = y.round();
+        if rounded_x + mask.width as f32 <= 0.0
+            || rounded_y + mask.height as f32 <= 0.0
+            || rounded_x >= canvas_width
+            || rounded_y >= canvas_height
+        {
+            return;
+        }
+        let origin_x = rounded_x as i64;
+        let origin_y = rounded_y as i64;
         for row in 0..mask.height {
-            let py = origin_y + i64::from(row);
+            let py = origin_y.saturating_add(i64::from(row));
             if py < 0 || py >= self.height as i64 {
                 continue;
             }
             for column in 0..mask.width {
-                let px = origin_x + i64::from(column);
+                let px = origin_x.saturating_add(i64::from(column));
                 if px < 0 || px >= self.width as i64 {
                     continue;
                 }
