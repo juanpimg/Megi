@@ -16,9 +16,12 @@
 //! Boa 0.21 no longer exposes an interrupt handler; the equivalent limits are its
 //! [`boa_engine::vm::RuntimeLimits`]: loop-iteration limit (fresh budget per `eval`),
 //! recursion limit and VM stack-size limit. Exhausting them maps to
-//! [`JsError::Budget`]. There is no memory accounting: the DOM parser and the handle
-//! side-table are capped separately ([`crate::host`]) and scripts cannot allocate network
-//! or filesystem resources (no such APIs are exposed).
+//! [`JsError::Budget`]. There is no general memory accounting: the DOM parser and the
+//! handle side-table are capped separately ([`crate::host`]), `document.write` has a
+//! cumulative per-document budget (`Host::max_document_write_bytes`, 8 MiB, and
+//! `Host::max_document_write_nodes`, 1M; past it writes are ignored with a console
+//! warning), and scripts cannot allocate network or filesystem resources (no such APIs are
+//! exposed).
 //!
 //! ## Deliberate limits (this WP)
 //!
@@ -1853,6 +1856,23 @@ fn document_close(_this: &JsValue, _args: &[JsValue], _context: &mut Context) ->
 fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let text = arg_string(args, 0, context)?;
     with_host(|host| {
+        let total = host.document_write_bytes.saturating_add(text.len());
+        if total > host.max_document_write_bytes
+            || host.document.len() >= host.max_document_write_nodes
+        {
+            if host.document_write_bytes <= host.max_document_write_bytes {
+                host.console.push(ConsoleEntry {
+                    level: "warn".to_string(),
+                    message: format!(
+                        "document.write ignored: the cumulative document budget ({} bytes / {} nodes) is exhausted",
+                        host.max_document_write_bytes, host.max_document_write_nodes
+                    ),
+                });
+            }
+            host.document_write_bytes = total;
+            return;
+        }
+        host.document_write_bytes = total;
         let _ = html::document_write(&mut host.document, &text);
     });
     Ok(JsValue::undefined())
@@ -5594,5 +5614,37 @@ fn node_remove_attribute_node(
     match old {
         Some(value) => attribute_item(context, &name, &value),
         None => Ok(JsValue::null()),
+    }
+}
+
+#[cfg(test)]
+mod document_write_budget_tests {
+    use super::*;
+
+    #[test]
+    fn document_write_stops_at_the_cumulative_budget() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime.host.borrow_mut().max_document_write_bytes = 4 * 1024;
+        runtime
+            .eval(
+                "var s = 'A'.repeat(1024);
+                 for (var i = 0; i < 6; i++) { document.write(s); }",
+                "write_budget.js",
+            )
+            .expect("document.write loop");
+        let console = runtime.take_console();
+        let document = runtime.take_document();
+        let body = document.body().expect("body");
+        assert_eq!(
+            document.text_content(body).len(),
+            4 * 1024,
+            "only the writes that fit the budget are parsed into the document"
+        );
+        assert!(
+            console.iter().any(|entry| {
+                entry.level == "warn" && entry.message.contains("document.write ignored")
+            }),
+            "the exceeded budget must be reported: {console:?}"
+        );
     }
 }

@@ -269,6 +269,12 @@ pub(crate) struct Host {
     pub timers: Vec<TimerEntry>,
     /// Next timer id (insertion order for `(due, id)` ordering).
     pub next_timer_id: u64,
+    /// Cumulative bytes written through `document.write` in this document (anti-DoS).
+    pub document_write_bytes: usize,
+    /// Maximum cumulative `document.write` payload (bytes).
+    pub max_document_write_bytes: usize,
+    /// Maximum node count for the document scripts write into.
+    pub max_document_write_nodes: usize,
     /// Real-clock origin.
     pub started_at: Instant,
     /// Virtual clock override (`Some(ms)` after `advance`/`run_until`).
@@ -341,6 +347,9 @@ impl Host {
             listeners: Vec::new(),
             timers: Vec::new(),
             next_timer_id: 1,
+            document_write_bytes: 0,
+            max_document_write_bytes: 8 * 1024 * 1024,
+            max_document_write_nodes: 1_000_000,
             started_at: Instant::now(),
             virtual_now_ms: None,
             dispatch: None,
