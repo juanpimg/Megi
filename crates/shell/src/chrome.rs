@@ -398,8 +398,9 @@ fn next_char_index(text: &str, index: usize) -> usize {
         .map_or(text.len(), |character| index + character.len_utf8())
 }
 
-/// Resolves address-bar text into a URL: absolute URLs are used as-is and everything else is
-/// resolved against `base` with [`net::Url::join`] (no search engine).
+/// Resolves address-bar text into a URL: absolute URLs are used as-is; bare hosts/domains
+/// without a scheme (e.g. `wikipedia.org`, `localhost:8080`) default to `https://` (or
+/// `http://` for loopback); explicit relative references (`/path`, `./page`) join `base`.
 pub fn resolve_address(input: &str, base: Option<&net::Url>) -> Result<net::Url, String> {
     let input = input.trim();
     if input.is_empty() {
@@ -407,6 +408,46 @@ pub fn resolve_address(input: &str, base: Option<&net::Url>) -> Result<net::Url,
     }
     if let Ok(url) = net::Url::parse(input) {
         return Ok(url);
+    }
+    if !input.starts_with('/')
+        && !input.starts_with("./")
+        && !input.starts_with("../")
+        && !input.starts_with('?')
+        && !input.starts_with('#')
+        && !input.contains(char::is_whitespace)
+    {
+        let authority = input.split(['/', '?', '#']).next().unwrap_or("");
+        let host = authority.split(':').next().unwrap_or("");
+        let is_loopback = host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1";
+        let looks_like_file_ext = base.is_some()
+            && !input.contains('/')
+            && host.rsplit_once('.').is_some_and(|(_, ext)| {
+                matches!(
+                    ext.to_ascii_lowercase().as_str(),
+                    "html"
+                        | "htm"
+                        | "xhtml"
+                        | "txt"
+                        | "xml"
+                        | "json"
+                        | "css"
+                        | "js"
+                        | "png"
+                        | "jpg"
+                        | "jpeg"
+                        | "gif"
+                        | "webp"
+                        | "svg"
+                        | "pdf"
+                )
+            });
+        if !looks_like_file_ext && (is_loopback || host.contains('.') || authority.starts_with('['))
+        {
+            let scheme = if is_loopback { "http://" } else { "https://" };
+            if let Ok(url) = net::Url::parse(&format!("{scheme}{input}")) {
+                return Ok(url);
+            }
+        }
     }
     match base {
         Some(base) => base
@@ -1546,10 +1587,14 @@ fn paint_address_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, wid
     } else {
         view.fallback_url
     };
+    let text_x = {
+        let nav = navigation_buttons(width);
+        nav.reload.x + nav.reload.width + 6.0
+    };
     draw_text(
         pixmap,
         text,
-        bar.x + 6.0,
+        text_x,
         bar.y + 8.0,
         scale,
         12.0,
@@ -1557,13 +1602,13 @@ fn paint_address_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, wid
     );
     if view.address.is_editing() {
         let before = &text[..view.address.caret().min(text.len())];
-        let caret_x = bar.x + 6.0 + before.chars().count() as f32 * 12.0 * 0.6;
+        let caret_x = text_x + measure_text_width(before, 12.0);
         pixmap.fill_rect(
             Rect::new(
-                caret_x * scale,
-                (bar.y + 5.0) * scale,
+                (caret_x * scale).round(),
+                ((bar.y + 5.0) * scale).round(),
                 scale.max(1.0),
-                (bar.height - 10.0) * scale,
+                ((bar.height - 10.0) * scale).round(),
             ),
             COLOR_CARET,
         );
@@ -1900,6 +1945,28 @@ fn scaled(rect: Rect, scale: f32) -> Rect {
     )
 }
 
+fn chrome_font_db() -> &'static fonts::FontDatabase {
+    static DB: std::sync::OnceLock<fonts::FontDatabase> = std::sync::OnceLock::new();
+    DB.get_or_init(fonts::FontDatabase::new_with_bundled_fonts)
+}
+
+fn measure_text_width(text: &str, font_size_css: f32) -> f32 {
+    if text.is_empty() {
+        return 0.0;
+    }
+    let db = chrome_font_db();
+    if let Ok(run) = db.shape(
+        &["sans-serif"],
+        400,
+        fonts::FontStyle::Normal,
+        font_size_css,
+        text,
+    ) {
+        return run.glyphs.iter().map(|glyph| glyph.x_advance).sum();
+    }
+    text.chars().count() as f32 * font_size_css * 0.6
+}
+
 fn draw_text(
     pixmap: &mut Pixmap,
     text: &str,
@@ -1912,12 +1979,21 @@ fn draw_text(
     if text.is_empty() {
         return;
     }
-    pixmap.draw_text(
+    let size = font_size_css * scale;
+    let rect = Rect::new(x_css * scale, y_css * scale, 0.0, 0.0);
+    if !pixmap.draw_text_shaped(
         text,
-        Rect::new(x_css * scale, y_css * scale, 0.0, 0.0),
+        rect,
         color,
-        font_size_css * scale,
-    );
+        size,
+        "sans-serif",
+        400,
+        false,
+        0.85 * size,
+        chrome_font_db(),
+    ) {
+        pixmap.draw_text(text, rect, color, size);
+    }
 }
 
 /// Paints the simple chrome band (tab strip + address bar) **directly over** an
@@ -2123,6 +2199,24 @@ mod tests {
         );
         assert!(resolve_address("", Some(&base)).is_err());
         assert!(resolve_address("https://[bad", Some(&base)).is_err());
+        assert_eq!(
+            resolve_address("wikipedia.org", Some(&base))
+                .expect("bare domain")
+                .as_str(),
+            "https://wikipedia.org/"
+        );
+        assert_eq!(
+            resolve_address("es.wikipedia.org/wiki/Rust", None)
+                .expect("bare domain with path")
+                .as_str(),
+            "https://es.wikipedia.org/wiki/Rust"
+        );
+        assert_eq!(
+            resolve_address("localhost:8080/test", None)
+                .expect("localhost")
+                .as_str(),
+            "http://localhost:8080/test"
+        );
     }
 
     #[test]
