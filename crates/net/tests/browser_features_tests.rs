@@ -548,6 +548,12 @@ fn byte_range_resolution() {
 
 #[test]
 fn content_range_parsing() {
+    assert_eq!(
+        ContentRange::parse("BYTES 0-2/10").map(|range| (range.start, range.end)),
+        Some((0, 2)),
+        "range units are case-insensitive"
+    );
+    assert!(ContentRange::parse("Bytes */10").is_some());
     let satisfied = ContentRange::parse("bytes 0-499/1234").expect("valid");
     assert_eq!(satisfied.start, 0);
     assert_eq!(satisfied.end, 499);

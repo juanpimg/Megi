@@ -256,33 +256,25 @@ fn explicit_cross(
     // Apply min/max clamping on the cross axis.
     let mut size = raw.max(0.0);
     if row {
-        if let Some(min) = crate::calc::length_optional(
-            style.min_height,
-            style.calc_lengths.min_height,
-            reference,
-        ) {
+        if let Some(min) =
+            crate::calc::length_optional(style.min_height, style.calc_lengths.min_height, reference)
+        {
             size = size.max(min);
         }
-        if let Some(max) = crate::calc::length_optional(
-            style.max_height,
-            style.calc_lengths.max_height,
-            reference,
-        ) {
+        if let Some(max) =
+            crate::calc::length_optional(style.max_height, style.calc_lengths.max_height, reference)
+        {
             size = size.min(max.max(0.0));
         }
     } else {
-        if let Some(min) = crate::calc::length_optional(
-            style.min_width,
-            style.calc_lengths.min_width,
-            reference,
-        ) {
+        if let Some(min) =
+            crate::calc::length_optional(style.min_width, style.calc_lengths.min_width, reference)
+        {
             size = size.max(min);
         }
-        if let Some(max) = crate::calc::length_optional(
-            style.max_width,
-            style.calc_lengths.max_width,
-            reference,
-        ) {
+        if let Some(max) =
+            crate::calc::length_optional(style.max_width, style.calc_lengths.max_width, reference)
+        {
             size = size.min(max.max(0.0));
         }
     }

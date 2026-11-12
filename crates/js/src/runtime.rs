@@ -5424,7 +5424,9 @@ impl ModuleLoader for MegiModuleLoader {
         // Consult the import map first (like resolve_module does).
         let import_map_result = {
             let host = host.borrow();
-            host.import_map.as_ref().and_then(|map| map.resolve(&specifier))
+            host.import_map
+                .as_ref()
+                .and_then(|map| map.resolve(&specifier))
         };
         if let Some(result) = import_map_result {
             match result {
@@ -5433,7 +5435,9 @@ impl ModuleLoader for MegiModuleLoader {
                     let source = {
                         let host = host.borrow();
                         match host.module_loader.as_ref() {
-                            Some(loader) => loader(&target).map_err(|error| js_error(error.to_string()))?,
+                            Some(loader) => {
+                                loader(&target).map_err(|error| js_error(error.to_string()))?
+                            }
                             None => return Err(js_error(format!("module not found: {target}"))),
                         }
                     };
@@ -5449,7 +5453,9 @@ impl ModuleLoader for MegiModuleLoader {
                     return Ok(module);
                 }
                 None => {
-                    return Err(js_error(format!("import map blocked: {specifier} (base {base})")));
+                    return Err(js_error(format!(
+                        "import map blocked: {specifier} (base {base})"
+                    )));
                 }
             }
         }
