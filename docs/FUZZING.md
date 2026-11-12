@@ -8,7 +8,7 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 
 > **Status**: the harness is wired into CI via
 > [`.github/workflows/fuzz-nightly.yml`](../.github/workflows/fuzz-nightly.yml) — a daily
-> run of **16 targets**: 10 minutes for the 9 critical parsers/decoders and 5 minutes for
+> run of **17 targets**: 10 minutes for the 9 critical parsers/decoders and 5 minutes for
 > the rest, plus `workflow_dispatch`. This closes the "fuzzing targets are not wired into
 > CI yet" item from `SECURITY.md`.
 
@@ -70,6 +70,12 @@ cargo +nightly fuzz build          # builds every [[bin]] target
 | `render_pipeline` | `render::render_url` with an inline `data:text/html;base64,…` document: HTML parse → charset/MIME → author CSS collection/cascade → layout (real fonts) → display list + hit regions → PNG | The integration glue is the surface a real page reaches. `no_network=true`, scripting disabled (the JS engine has its own target), viewport 96×96 and every budget capped (256 KiB document/CSS, 4 stylesheets/imports, 4 images, 128 KiB total image bytes) so one iteration stays cheap and bounded. |
 | `js_eval` | `js::JsRuntime::with_document` + `set_budget` + `eval`, `run_microtasks`, `run_tasks(64)`, `dispatch_event` (`Window`/`Document`/`Node`) | JavaScript source arrives from untrusted pages. Budget is 50k loop iterations / 128 recursion / 4 KiB VM stack, so infinite loops and runaway recursion end in a typed `JsError::Budget` instead of a hang. The fixture document exercises DOM queries, mutations (`textContent`, `innerHTML`, attributes, `style`, `classList`), listeners and timers; no network/FS is reachable. |
 | `svg_parse` | `svg::render_svg_with_limits` (XML parse + values + raster) | Inline/external SVG is untrusted. Strict `svg::Limits` (64 KiB input, depth 32, 512 elements, 4k path segments, 128 px / 16K pixels, `<use>` depth 4, 4k selector checks) and a 64×64 output bound the work per iteration. |
+<<<<<<< HEAD
+||||||| 2a70d69
+| `svg_parse` | `svg::render_svg_with_limits` (XML parse + values + raster) | Inline/external SVG is untrusted. Strict `svg::Limits` (64 KiB input, depth 32, 512 elements, 4k path segments, 128 px / 16K pixels, `<use>` depth 4) and a 64×64 output bound the work per iteration. |
+=======
+| `woff2_decode` | `fonts::decode_web_font` (header/directory validation + third-party WOFF2→sfnt) | `@font-face` bytes are untrusted and reach a converter that trusts the container: a crafted `totalSfntSize`/directory entry used to request gigabytes, and a bad length panicked on a slice range. Input ≤256 KiB; asserts a typed `FontError` and a decoded sfnt ≤64 MiB; seeds: the Open Sans fixture, a truncated prefix and a 55-byte font with a 4,000,000,000-byte directory entry. |
+>>>>>>> pr889
 | `image_decode` | `image::detect_format`, `image::decode_with_limits`, `image::exif::orientation` | `<img>`/background bytes are untrusted. Input ≤512 KiB and reduced `PngLimits` (1024 px/side, 512 Ki pixels, 128 KiB/chunk, 4 MiB IDAT) bound zlib/JPEG/GIF work per iteration. PNG (all color types/bit depths/Adam7/filters), baseline JPEG, GIF and WebP *sniffing* (WebP is detected-not-decoded → typed `UnsupportedFormat`) plus the APP1 EXIF path. |
 | `exif_parse` | `image::exif::orientation` on arbitrary JPEG-ish bytes | Dedicated campaign for the APP1/TIFF orientation parser (little/big endian IFD0, malformed segments must return `None`). Input ≤64 KiB; seeds are the `exif_o1..o8.jpg` fixtures. |
 | `hpack_decode` | `net::h2::hpack::Decoder::decode`, `net::h2::frame::FrameReader`/`Frame::{parse_settings, window_increment, parse_rst_stream, parse_goaway, data_payload, headers_payload}`, `frame::validate_frame` | HTTP/2 from the network is adversarial: full HPACK block decoding (static/dynamic tables, Huffman, literals, table-size updates), a raw frame stream (length/flag/stream-id validation, SETTINGS/WINDOW_UPDATE/PING/RST_STREAM/GOAWAY, HEADERS payloads decoded through a fresh HPACK table) and an arbitrary 9-byte frame header. Input ≤64 KiB, 16 KiB frame cap, ≤64 frames/iteration. |
@@ -121,8 +127,8 @@ prefer `-runs=100`/`-max_total_time=15` for a quick local smoke run. `js_eval` a
 good local guard. `js_module` also needs `-detect_leaks=0` for the same constant Boa
 one-time allocation as `js_eval`.
 
-The nightly workflow now runs **16 targets** (`fuzz-nightly.yml` matrix): 600 s for the 9
-critical parsers/decoders and 300 s for the rest, and the pull-request job builds all 16
+The nightly workflow now runs **17 targets** (`fuzz-nightly.yml` matrix): 600 s for the 9
+critical parsers/decoders and 300 s for the rest, and the pull-request job builds all 17
 without running libFuzzer. New in r27–r29: server push (`h2_push`), streaming request
 bodies (`body_stream`), WebP VP8 lossy sniff/lossless path (`webp_vp8`) and ES modules +
 import maps (`js_module`); R228 adds the focused VP8 keyframe decoder (`webp_lossy`) and
@@ -385,7 +391,7 @@ Campañas más largas, dos targets nuevos y corpus ampliado con los fixtures rec
   (`filter_blur.svg`) y SMIL (`smil.svg`), y CSS con `@layer`/`@container` extraído de
   los fixtures de render (más preludes de query para el evaluador).
 - **Coste local** (this environment, nightly + cargo-fuzz 0.13.2, release + ASan):
-  `cargo +nightly fuzz build` compila **16/16** targets (~2–4 min en caliente); un smoke
+  `cargo +nightly fuzz build` compila **17/17** targets (~2–4 min en caliente); un smoke
   de 200–400 ejecuciones por target desde el corpus tarda segundos por target y pico de
   RSS ~40–90 MB; las campañas de CI de 600 s/300 s son el coste relevante (~2 h de CPU
   en total si todos corren en paralelo por job).
