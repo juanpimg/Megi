@@ -291,13 +291,16 @@ pub(crate) fn parse_declarations(text: &str) -> Vec<Declaration> {
 fn parse_selector(raw: &str) -> Option<Selector> {
     let mut parts = Vec::new();
     // `>` is treated as a descendant combinator (documented approximation).
-    for compound in raw
+    let compounds: Vec<String> = raw
         .replace('>', " ")
         .split_ascii_whitespace()
-        .take(MAX_SELECTOR_PARTS)
         .map(str::to_owned)
-        .collect::<Vec<_>>()
-    {
+        .collect();
+    if compounds.len() > MAX_SELECTOR_PARTS {
+        // Fail closed: reject over-long selectors instead of silently truncating.
+        return None;
+    }
+    for compound in compounds {
         if compound.is_empty() {
             continue;
         }
