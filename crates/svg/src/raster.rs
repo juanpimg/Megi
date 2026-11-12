@@ -1171,10 +1171,17 @@ impl Canvas {
             max_x = max_x.max(px_space);
             max_y = max_y.max(py_space);
         }
-        let i0 = ((min_x - px) / width).floor() as i64 - 1;
-        let i1 = ((max_x - px) / width).ceil() as i64 + 1;
-        let j0 = ((min_y - py) / height).floor() as i64 - 1;
-        let j1 = ((max_y - py) / height).ceil() as i64 + 1;
+        // A large `patternTransform` can make these quotients exceed `i64`; clamp in f32
+        // (the tile budget below rejects anything this large anyway) and saturate the ±1.
+        let limit = MAX_PATTERN_TILES as f32;
+        let i0 = ((min_x - px) / width).floor().clamp(-limit, limit) as i64;
+        let i1 = ((max_x - px) / width).ceil().clamp(-limit, limit) as i64;
+        let j0 = ((min_y - py) / height).floor().clamp(-limit, limit) as i64;
+        let j1 = ((max_y - py) / height).ceil().clamp(-limit, limit) as i64;
+        let i0 = i0.saturating_sub(1);
+        let i1 = i1.saturating_add(1);
+        let j0 = j0.saturating_sub(1);
+        let j1 = j1.saturating_add(1);
         let columns = (i1 - i0 + 1).max(0) as u64;
         let rows = (j1 - j0 + 1).max(0) as u64;
         if columns.saturating_mul(rows) > MAX_PATTERN_TILES {
@@ -1746,9 +1753,11 @@ fn stamp_polygon(points: &[(f32, f32)], width: usize, height: usize, coverage: &
         max_y = max_y.max(y);
     }
     let first_x = (min_x.floor().max(0.0) as usize).min(width);
-    let last_x = ((max_x.ceil().max(0.0) as usize) + 1).min(width);
+    // A finite coordinate above `usize::MAX` saturates on the cast, and the following `+1`
+    // would then overflow (panic with overflow checks, wrap to 0 in release).
+    let last_x = ((max_x.ceil().max(0.0) as usize).saturating_add(1)).min(width);
     let first_y = (min_y.floor().max(0.0) as usize).min(height);
-    let last_y = ((max_y.ceil().max(0.0) as usize) + 1).min(height);
+    let last_y = ((max_y.ceil().max(0.0) as usize).saturating_add(1)).min(height);
     if first_x >= last_x || first_y >= last_y {
         return;
     }
@@ -1782,9 +1791,9 @@ fn stamp_disc(center: (f32, f32), radius: f32, width: usize, height: usize, cove
         return;
     }
     let first_x = ((center.0 - radius).floor().max(0.0) as usize).min(width);
-    let last_x = (((center.0 + radius).ceil().max(0.0) as usize) + 1).min(width);
+    let last_x = (((center.0 + radius).ceil().max(0.0) as usize).saturating_add(1)).min(width);
     let first_y = ((center.1 - radius).floor().max(0.0) as usize).min(height);
-    let last_y = (((center.1 + radius).ceil().max(0.0) as usize) + 1).min(height);
+    let last_y = (((center.1 + radius).ceil().max(0.0) as usize).saturating_add(1)).min(height);
     let samples = (STAMP_SAMPLES * STAMP_SAMPLES) as f32;
     let radius_squared = radius * radius;
     for pixel_y in first_y..last_y {
@@ -1853,6 +1862,19 @@ mod tests {
         assert!((row[1] - 0.25).abs() < 1e-6);
         assert!((row[2] - 0.1875).abs() < 1e-6);
         assert_eq!(row[3], 0.0);
+    }
+
+    #[test]
+    fn test_huge_coordinates_do_not_overflow_stamp_bounds() {
+        let mut coverage = vec![0.0f32; 16];
+        stamp_polygon(
+            &[(0.0, -1e38), (1.0, 0.0), (0.0, 1e38)],
+            4,
+            4,
+            &mut coverage,
+        );
+        stamp_disc((0.0, 0.0), 1e38, 4, 4, &mut coverage);
+        assert!(coverage.iter().all(|value| value.is_finite()));
     }
 
     #[test]

@@ -2,7 +2,9 @@
 //! viewBox/preserveAspectRatio, paths, strokes, opacity/AA, determinism, limits
 //! and robustness against malformed input.
 
-use svg::{Limits, SvgImage, SvgOptions, intrinsic_size, render_svg, render_svg_with_limits};
+use svg::{
+    Limits, SvgError, SvgImage, SvgOptions, intrinsic_size, render_svg, render_svg_with_limits,
+};
 
 fn render(source: &str, options: SvgOptions) -> SvgImage {
     render_svg(source.as_bytes(), &options).expect("valid SVG")
@@ -678,4 +680,18 @@ fn test_gradient_cycles_and_malformed_definitions_do_not_paint_or_panic() {
          <rect width='4' height='4' fill='url(#g)'/></svg>"
     );
     assert!(render_svg(source.as_bytes(), &SvgOptions::default()).is_ok());
+}
+
+#[test]
+fn test_huge_pattern_transform_is_rejected_without_panicking() {
+    // A large patternTransform makes the tile indices exceed i64; they are clamped and the
+    // tile budget rejects the pattern instead of overflowing (+1/-1 panics in debug).
+    let source = b"<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8'>\
+        <defs><pattern id='p' width='1' height='1' patternUnits='userSpaceOnUse' \
+        patternTransform='matrix(0.01 0 0 0.01 1e19 0)'><rect width='1' height='1' fill='red'/>\
+        </pattern></defs><rect width='8' height='8' fill='url(#p)'/></svg>";
+    match render_svg_with_limits(source, &SvgOptions::default(), &Limits::default()) {
+        Ok(_) => {}
+        Err(error) => assert!(matches!(error, SvgError::Limit(_)), "{error:?}"),
+    }
 }
