@@ -177,3 +177,21 @@ fn large_fixture_region_encoding_is_byte_identical() {
         assert_eq!(encoded, pixmap.to_png(), "large {pct}% dirty");
     }
 }
+
+#[test]
+fn dirty_rects_outside_the_pixmap_are_ignored() {
+    let pixmap = photo();
+    let expected = pixmap.to_png();
+    let rects = [
+        Rect::new(0.0, 120.0, 10.0, 10.0), // below the 48-row pixmap
+        Rect::new(0.0, 1e30, 10.0, 10.0),  // absurdly far below
+        Rect::new(0.0, -50.0, 10.0, 10.0), // above the pixmap
+        Rect::new(0.0, 40.0, 4.0, 100.0),  // starts inside, ends past the bottom
+    ];
+
+    assert_eq!(encode_png_regions(&pixmap, &rects), expected);
+
+    let mut encoder = PngRegionEncoder::new();
+    assert_eq!(encoder.encode_regions(&pixmap, &[]), expected);
+    assert_eq!(encoder.encode_regions(&pixmap, &rects), expected);
+}
