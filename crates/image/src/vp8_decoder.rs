@@ -297,19 +297,20 @@ pub(crate) fn decode_keyframe(payload: &[u8], limits: &PngLimits) -> Result<Rgba
         partition_sizes,
         token_start,
     };
+    if num_partitions == 0 {
+        return Err(ImageError::Truncated {
+            context: "VP8 token partitions",
+        });
+    }
     let mut token_bds = Vec::with_capacity(num_partitions);
     let mut position = header.token_start;
-    for (index, &partition_size) in header
+    // The header stores the sizes of the first `num_partitions - 1` partitions; the last one
+    // extends to the end of the payload (VP8 RFC 6386 §9.7).
+    for &size in header
         .partition_sizes
         .iter()
-        .enumerate()
-        .take(num_partitions)
+        .take(num_partitions.saturating_sub(1))
     {
-        let size = if index + 1 == num_partitions {
-            payload.len().saturating_sub(position)
-        } else {
-            partition_size
-        };
         let bytes = payload
             .get(position..position + size)
             .ok_or(ImageError::Truncated {
@@ -317,6 +318,18 @@ pub(crate) fn decode_keyframe(payload: &[u8], limits: &PngLimits) -> Result<Rgba
             })?;
         token_bds.push(BoolDecoder::new(bytes));
         position += size;
+    }
+    let last_size = payload.len().saturating_sub(position);
+    let bytes = payload
+        .get(position..position + last_size)
+        .ok_or(ImageError::Truncated {
+            context: "VP8 token partition",
+        })?;
+    token_bds.push(BoolDecoder::new(bytes));
+    if token_bds.len() != num_partitions {
+        return Err(ImageError::Truncated {
+            context: "VP8 token partition count",
+        });
     }
     decode_frame(&mut bd, &mut token_bds, &header)
 }

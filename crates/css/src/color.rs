@@ -267,13 +267,13 @@ fn parse_lab(inner: &str, polar: bool) -> Option<Color> {
         lightness
     };
     let (a_raw, a_percent) = number_or_percentage(&tokens[1])?;
-    let (b_raw, b_percent) = number_or_percentage(&tokens[2])?;
     let (a, b) = if polar {
         let chroma = if a_percent { a_raw * 150.0 } else { a_raw };
         let hue = parse_hue(&tokens[2])?;
         let radians = hue.to_radians();
         (chroma * radians.cos(), chroma * radians.sin())
     } else {
+        let (b_raw, b_percent) = number_or_percentage(&tokens[2])?;
         (
             if a_percent { a_raw * 125.0 } else { a_raw },
             if b_percent { b_raw * 125.0 } else { b_raw },
@@ -314,13 +314,13 @@ fn parse_oklab(inner: &str, polar: bool) -> Option<Color> {
         .unwrap_or(Some(1.0))?;
     let (lightness, _) = number_or_percentage(&tokens[0])?;
     let (a_raw, a_percent) = number_or_percentage(&tokens[1])?;
-    let (b_raw, b_percent) = number_or_percentage(&tokens[2])?;
     let (a, b) = if polar {
         let chroma = if a_percent { a_raw * 0.4 } else { a_raw };
         let hue = parse_hue(&tokens[2])?;
         let radians = hue.to_radians();
         (chroma * radians.cos(), chroma * radians.sin())
     } else {
+        let (b_raw, b_percent) = number_or_percentage(&tokens[2])?;
         (
             if a_percent { a_raw * 0.4 } else { a_raw },
             if b_percent { b_raw * 0.4 } else { b_raw },
