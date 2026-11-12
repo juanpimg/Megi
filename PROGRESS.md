@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `34a9e0d` (2026-11-12) · overall **99%** · **2,104** tests · conformance **PASS** · **14** crates · **161,086** lines of Rust
+**Snapshot** — commit `c197419` (2026-11-12) · overall **99%** · **2,086** tests · conformance **FAIL** · **14** crates · **164,180** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -158,12 +158,12 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `34a9e0d` (2026-11-12) |
+| Commit | `c197419` (2026-11-12) |
 | Crates in the workspace | 14 |
-| Lines of Rust (tracked `.rs`) | 161086 |
-| Tests (`cargo test --workspace -- --list`) | 2104 |
+| Lines of Rust (tracked `.rs`) | 164180 |
+| Tests (`cargo test --workspace -- --list`) | 2086 |
 | Crates with `#![forbid(unsafe_code)]` | 14 / 14 |
-| Conformance gate | **PASS** |
+| Conformance gate | **FAIL** |
 
 ## Conformance gate (4 suites)
 
@@ -174,7 +174,7 @@
 | HTML serializer | 230 / 230 |
 | CSS Syntax (vendored WPT) | 30 / 30 |
 
-Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crates/test_harness`).
+Gate status: **FAIL** (known failures allowlisted; see `tests/README` and `crates/test_harness`).
 
 ## Recent rounds
 

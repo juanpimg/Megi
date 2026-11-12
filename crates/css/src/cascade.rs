@@ -1464,6 +1464,7 @@ mod tests {
         assert_eq!(indexed.get(&div).expect("style").color, Color::BLUE);
     }
     #[test]
+<<<<<<< HEAD
     fn revert_layer_rolls_back_and_matches_the_unindexed_scan() {
         let mut doc = Document::new();
         let html = doc.create_element(Namespace::Html, "html", vec![]);
@@ -1504,5 +1505,23 @@ mod tests {
             "the winner rolls back to the base layer"
         );
         assert_eq!(style.width, Length::Px(10.0));
+||||||| 40f9e6e
+=======
+    fn uppercase_inline_property_names_apply() {
+        let mut doc = build_document();
+        let target = doc.get_element_by_id("target").expect("target");
+        doc.node_mut(target)
+            .as_element_mut()
+            .expect("element")
+            .set_attribute(Attribute::new("style", "COLOR: rgb(255, 0, 0)"), true);
+        let collection = collection_with("");
+        let styles = resolve_indexed(&doc, &collection);
+        let style = styles.get(&target).expect("computed style");
+        assert_eq!(
+            style.color,
+            Color::new(255, 0, 0, 255),
+            "COLOR is the color property"
+        );
+>>>>>>> pr908
     }
 }
