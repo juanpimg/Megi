@@ -135,24 +135,32 @@ pub struct Pixmap {
 impl Pixmap {
     /// Creates a new pixmap initialized with transparent pixels.
     ///
-    /// # Panics
-    ///
-    /// Panics if `width * height` exceeds [`MAX_PIXMAP_PIXELS`] or overflows.
+    /// Returns an empty pixmap when `width * height` exceeds [`MAX_PIXMAP_PIXELS`]
+    /// or overflows (issue #667), instead of panicking.
     pub fn new(width: u32, height: u32) -> Self {
         Self::with_background_unchecked(width, height, Color::TRANSPARENT)
     }
 
     /// Creates a new pixmap filled with a background color.
     ///
-    /// # Panics
-    ///
-    /// Panics if `width * height` exceeds [`MAX_PIXMAP_PIXELS`] or overflows.
+    /// Returns an empty pixmap when `width * height` exceeds [`MAX_PIXMAP_PIXELS`]
+    /// or overflows (issue #667), instead of panicking.
     pub fn new_with_background(width: u32, height: u32, bg: Color) -> Self {
         Self::with_background_unchecked(width, height, bg)
     }
 
     fn with_background_unchecked(width: u32, height: u32, bg: Color) -> Self {
-        let size = pixel_count(width, height);
+        // Library entry points must not panic on hostile-but-ordinary numeric input
+        // (issue #667): oversized or overflowing dimensions yield an empty pixmap,
+        // matching the encoder convention (encode_pixels returns an empty vector).
+        let Some(size) = pixel_count(width, height) else {
+            return Self {
+                width: 0,
+                height: 0,
+                pixels: Vec::new(),
+                clip_stack: Vec::new(),
+            };
+        };
         Self {
             width,
             height,
@@ -952,15 +960,12 @@ impl Pixmap {
 }
 
 /// Computes and validates the pixel count of a pixmap allocation.
-fn pixel_count(width: u32, height: u32) -> usize {
-    let size = (width as usize)
-        .checked_mul(height as usize)
-        .expect("pixmap dimensions overflow usize");
-    assert!(
-        size <= MAX_PIXMAP_PIXELS,
-        "pixmap {width}x{height} = {size} pixels exceeds MAX_PIXMAP_PIXELS ({MAX_PIXMAP_PIXELS})"
-    );
-    size
+fn pixel_count(width: u32, height: u32) -> Option<usize> {
+    let size = (width as usize).checked_mul(height as usize)?;
+    if size > MAX_PIXMAP_PIXELS {
+        return None;
+    }
+    Some(size)
 }
 
 /// 1-D coverage (0..=256, 256 = fully covered) of an overlap length.
