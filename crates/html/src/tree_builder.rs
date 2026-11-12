@@ -619,6 +619,9 @@ pub struct LimitViolations {
     /// Number of attributes dropped because
     /// [`ParseOptions::max_attributes_per_element`] was exceeded.
     pub attributes_dropped: u64,
+    /// Number of tokens discarded because the adjusted insertion location was the
+    /// document root (e.g. after a script detached the document element).
+    pub detached_insertions: u64,
 }
 
 impl LimitViolations {
@@ -628,12 +631,13 @@ impl LimitViolations {
             && self.depth_exceeded == 0
             && self.nodes_exceeded == 0
             && self.attributes_dropped == 0
+            && self.detached_insertions == 0
     }
 
     /// Total number of recorded violations (the input truncation counts as one).
     pub const fn total(&self) -> u64 {
         let truncated = self.input_truncated as u64;
-        truncated + self.depth_exceeded + self.nodes_exceeded + self.attributes_dropped
+        truncated + self.depth_exceeded + self.nodes_exceeded + self.attributes_dropped + self.detached_insertions
     }
 }
 
@@ -1277,6 +1281,7 @@ impl TreeBuilder {
         // tokens instead of creating a second document element (`scripted_foster01`); this
         // mirrors the pre-existing guard in `insert_character`/`insert_text_run`.
         if loc.parent == self.doc.root() && self.html_element_seen {
+            self.limit_violations.detached_insertions += 1;
             return;
         }
         if let Some(sib) = loc.insert_before_sibling {
@@ -1437,6 +1442,7 @@ impl TreeBuilder {
         }
         let loc = self.appropriate_place_for_inserting_node(None);
         if loc.parent == self.doc.root() {
+            self.limit_violations.detached_insertions += 1;
             return;
         }
         if let Some(sib) = loc.insert_before_sibling {
@@ -1499,6 +1505,7 @@ impl TreeBuilder {
         }
         let loc = self.appropriate_place_for_inserting_node(None);
         if loc.parent == self.doc.root() {
+            self.limit_violations.detached_insertions += 1;
             return;
         }
         if let Some(sib) = loc.insert_before_sibling {
