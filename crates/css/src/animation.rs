@@ -272,8 +272,36 @@ fn function_args<'a>(value: &'a str, name: &str) -> Option<&'a str> {
     Some(&value[name.len() + 1..value.len() - 1])
 }
 
+/// Splits a whitespace-separated component list at top level (space inside functions does
+/// not split, so `cubic-bezier(0.1, 0.2, 0.9, 1)` stays one component).
+pub(crate) fn split_top_level_components(value: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0usize;
+    let mut start: Option<usize> = None;
+    for (index, ch) in value.char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            ch if ch.is_whitespace() && depth == 0 => {
+                if let Some(begin) = start.take() {
+                    parts.push(&value[begin..index]);
+                }
+            }
+            _ => {
+                if start.is_none() {
+                    start = Some(index);
+                }
+            }
+        }
+    }
+    if let Some(begin) = start {
+        parts.push(&value[begin..]);
+    }
+    parts
+}
+
 /// Splits a comma-separated list at top level (commas inside functions do not split).
-fn split_top_level_commas(value: &str) -> Vec<&str> {
+pub(crate) fn split_top_level_commas(value: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut depth = 0usize;
     let mut start = 0usize;
