@@ -91,6 +91,7 @@ pub fn evaluate(value: &str, context: &CalcContext) -> Option<CalcValue> {
         input: inner.as_bytes(),
         position: 0,
         context: *context,
+        depth: 0,
     };
     let quantity = parser.expression()?;
     parser.skip_whitespace();
@@ -141,6 +142,7 @@ struct Parser<'a> {
     input: &'a [u8],
     position: usize,
     context: CalcContext,
+    depth: usize,
 }
 
 impl Parser<'_> {
@@ -230,8 +232,13 @@ impl Parser<'_> {
                 self.factor()
             }
             b'(' => {
+                if self.depth >= 64 {
+                    return None;
+                }
+                self.depth += 1;
                 self.position += 1;
                 let value = self.expression()?;
+                self.depth -= 1;
                 self.skip_whitespace();
                 (self.peek() == Some(b')')).then(|| {
                     self.position += 1;
