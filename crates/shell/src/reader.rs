@@ -94,7 +94,9 @@ pub fn extract(document: &Document) -> Option<Article> {
         if is_skipped(&element.local_name) || !CONTAINERS.contains(&element.local_name.as_str()) {
             continue;
         }
-        let length = *cache.entry(node).or_insert_with(|| visible_text(document, node).chars().count());
+        let length = *cache
+            .entry(node)
+            .or_insert_with(|| visible_text(document, node).chars().count());
         if length > best.map_or(0, |(_, best)| best) {
             best = Some((node, length));
         }
