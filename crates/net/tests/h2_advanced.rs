@@ -253,6 +253,32 @@ fn self_dependency_is_rejected() {
 }
 
 #[test]
+fn forward_dependency_does_not_fail_valid_batch() {
+    let authority = spawn_server(|stream| {
+        for _ in 0..2 {
+            let frame = read_client_request(stream);
+            response_headers(stream, frame.header.stream_id, true);
+        }
+    });
+    let requests = vec![
+        // Listed first, depends on an idle/future stream id (5) while second request opens stream 1.
+        H2Request::get("http", "example", "/first", &[]).with_priority(Priority {
+            depends_on: 5,
+            weight: 16,
+            exclusive: false,
+        }),
+        H2Request::get("http", "example", "/second", &[]).with_priority(Priority {
+            depends_on: 0,
+            weight: 16,
+            exclusive: false,
+        }),
+    ];
+    let results = run_client(requests, Limits::default(), &authority).expect("session");
+    assert_eq!(results.len(), 2);
+    assert!(results.iter().all(|result| result.is_ok()), "{results:?}");
+}
+
+#[test]
 fn incoming_priority_frame_is_accepted_and_ignored() {
     let authority = spawn_server(|stream| {
         let _ = read_client_request(stream);

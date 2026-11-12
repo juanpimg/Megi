@@ -24,8 +24,22 @@ fn database_loads_fixture_faces_and_reports_families() {
     assert_eq!(db.len(), 2, "two faces are loaded");
     assert!(!db.is_empty());
     assert!(db.has_family("DejaVu Sans"));
+    assert!(db.has_family("dejavu sans"));
+    assert!(db.has_family("DEJAVU SANS"));
     assert!(!db.has_family("Definitely Not Installed"));
     assert!(db.family_names().iter().any(|name| name == "DejaVu Sans"));
+}
+
+#[test]
+fn explicit_family_matching_is_case_insensitive() {
+    let db = fixture_db();
+    for variant in ["dejavu sans", "DEJAVU SANS", "DeJaVu SaNs"] {
+        assert!(db.has_family(variant), "has_family({variant}) must be true");
+        let font = db
+            .font(&[variant], 400, FontStyle::Normal)
+            .expect("case-insensitive explicit family must resolve");
+        assert_eq!(font.family_name(), "DejaVu Sans");
+    }
 }
 
 #[test]

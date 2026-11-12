@@ -917,15 +917,6 @@ impl<'a, S: Read + Write> Session<'a, S> {
                     self.fail_request(request_index, h2_error("stream priority depends on itself"));
                     return Ok(());
                 }
-                if priority.depends_on != 0
-                    && !self.opened_stream_ids.contains(&priority.depends_on)
-                {
-                    self.fail_request(
-                        request_index,
-                        h2_error("stream priority dependency is not an open stream"),
-                    );
-                    return Ok(());
-                }
                 Some(priority)
             }
             None => None,

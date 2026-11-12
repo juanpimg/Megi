@@ -466,3 +466,33 @@ fn rejects_non_ascii_hex_digits_without_panicking() {
     assert_eq!(Color::parse("#abc").expect("short hex").r, 0xaa);
     assert_eq!(Color::parse("#a1b2c3").expect("long hex").g, 0xb2);
 }
+
+#[test]
+fn modern_rgb_and_hsl_space_slash_and_case_insensitive() {
+    let c1 = Color::parse("rgb(255 0 0 / 50%)").expect("modern rgb slash pct");
+    assert_eq!((c1.r, c1.g, c1.b, c1.a), (255, 0, 0, 128));
+
+    let c2 = Color::parse("RGBA(0 128 0 / 0.5)").expect("uppercase rgba slash num");
+    assert_eq!((c2.r, c2.g, c2.b, c2.a), (0, 128, 0, 128));
+
+    let c3 = Color::parse("RGB(100%, 0%, 50%)").expect("uppercase legacy rgb");
+    assert_eq!((c3.r, c3.g, c3.b, c3.a), (255, 0, 128, 255));
+
+    // Reject trailing garbage or invalid slash syntax.
+    assert!(Color::parse("rgb(1, 2, 3, 0.5, 99)").is_none());
+    assert!(Color::parse("rgb(1 2 3 / 0.5 / 0.5)").is_none());
+    assert!(Color::parse("rgb(1 2 3 /)").is_none());
+    assert!(Color::parse("rgb(1, 2, 3 / 0.5)").is_none());
+
+    // hsl() and hsla() legacy and modern forms.
+    let h1 = Color::parse("hsl(120, 100%, 50%)").expect("legacy hsl green");
+    assert_eq!((h1.r, h1.g, h1.b, h1.a), (0, 255, 0, 255));
+
+    let h2 = Color::parse("HSL(240deg 100% 50% / 50%)").expect("modern hsl blue");
+    assert_eq!((h2.r, h2.g, h2.b, h2.a), (0, 0, 255, 128));
+
+    let h3 = Color::parse("hsla(0, 100%, 50%, 0.25)").expect("legacy hsla red");
+    assert_eq!((h3.r, h3.g, h3.b, h3.a), (255, 0, 0, 64));
+
+    assert!(Color::parse("hsl(0, 100%, 50%, 0.5, 1)").is_none());
+}

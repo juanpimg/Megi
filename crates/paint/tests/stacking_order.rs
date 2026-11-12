@@ -173,6 +173,37 @@ fn test_opacity_group_composites_the_subtree_once() {
 }
 
 #[test]
+fn test_replaced_image_respects_opacity() {
+    let (document, ids) = node_ids(3);
+    let mut root = empty_box(&document, ids[0], block_style(Color::WHITE));
+    set_rect(&mut root, 0.0, 0.0, 100.0, 100.0);
+
+    let mut inline = empty_box(&document, ids[1], style_with_transparent_background());
+    inline.box_type = layout::BoxType::InlineNode(ids[1]);
+    set_rect(&mut inline, 0.0, 0.0, 20.0, 20.0);
+
+    let mut img_box = empty_box(&document, ids[2], style_with_transparent_background());
+    img_box.box_type = layout::BoxType::Replaced(ids[2]);
+    set_rect(&mut img_box, 0.0, 0.0, 20.0, 20.0);
+    img_box.opacity = 0.5;
+    inline.children.push(img_box);
+    root.children.push(inline);
+
+    let mut images = std::collections::HashMap::new();
+    let red_pixel = vec![255, 0, 0, 255];
+    let image = std::sync::Arc::new(image::RgbaImage::new(1, 1, red_pixel).expect("valid image"));
+    images.insert(ids[2], image);
+
+    let viewport = Rect::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32);
+    let display_list = paint::build_display_list_with_images(&root, viewport, &images);
+    let pixmap = render(&display_list);
+
+    let pixel = pixmap.pixel(10, 10);
+    // 50 % red over white: r = 255, g = b = 127.
+    assert_eq!(pixel, Color::new(255, 127, 127, 255));
+}
+
+#[test]
 fn test_clip_from_overflow_rejects_overflowing_child() {
     let (document, ids) = node_ids(3);
     let mut root = empty_box(&document, ids[0], block_style(Color::WHITE));
