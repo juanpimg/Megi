@@ -126,13 +126,40 @@ pub fn percent_encode_segment(value: &str) -> String {
     out
 }
 
+/// Maximum directory entries rendered in a generated listing (anti-DoS: a directory with
+/// millions of files must not materialize a giant page/data URL).
+pub const MAX_LISTING_ENTRIES: usize = 1000;
+
+/// Maximum characters of a single entry name kept in a listing.
+pub const MAX_ENTRY_NAME_CHARS: usize = 256;
+
+/// Maximum size of the generated listing HTML before rows are dropped.
+pub const MAX_LISTING_BYTES: usize = 2 * 1024 * 1024;
+
+/// Truncates an over-long entry name to [`MAX_ENTRY_NAME_CHARS`] characters (`…` marker).
+fn truncate_name(name: String) -> String {
+    if name.chars().count() <= MAX_ENTRY_NAME_CHARS {
+        return name;
+    }
+    let mut truncated: String = name.chars().take(MAX_ENTRY_NAME_CHARS - 1).collect();
+    truncated.push('…');
+    truncated
+}
+
 /// Reads and sorts the entries of a directory (directories first, then case-insensitive
 /// name; unreadable entries are skipped, unreadable directories return the I/O error).
+///
+/// At most [`MAX_LISTING_ENTRIES`] entries are kept and each name is truncated to
+/// [`MAX_ENTRY_NAME_CHARS`].
 pub fn read_directory(path: &Path) -> io::Result<Vec<ListingEntry>> {
     let mut entries = Vec::new();
     for entry in std::fs::read_dir(path)? {
+        // Keep one extra entry so the renderer can tell "at the cap" from "truncated".
+        if entries.len() > MAX_LISTING_ENTRIES {
+            break;
+        }
         let Ok(entry) = entry else { continue };
-        let name = entry.file_name().to_string_lossy().into_owned();
+        let name = truncate_name(entry.file_name().to_string_lossy().into_owned());
         let Ok(file_type) = entry.file_type() else {
             continue;
         };
@@ -212,7 +239,12 @@ a:hover{{text-decoration:underline}}.size{{text-align:right;color:#555}}</style>
         html.push_str(&escape_html(&file_url(parent)));
         html.push_str("/\">..</a></td><td>Directory</td><td class=\"size\">—</td></tr>");
     }
-    for entry in entries {
+    let mut truncated = entries.len() > MAX_LISTING_ENTRIES;
+    for entry in entries.iter().take(MAX_LISTING_ENTRIES) {
+        if html.len() >= MAX_LISTING_BYTES {
+            truncated = true;
+            break;
+        }
         let href = format!(
             "{base}{}{}",
             percent_encode_segment(&entry.name),
@@ -225,6 +257,12 @@ a:hover{{text-decoration:underline}}.size{{text-align:right;color:#555}}</style>
             "<tr><td><a href=\"{}\">{}</a></td><td>{kind}</td><td class=\"size\">{size}</td></tr>",
             escape_html(&href),
             escape_html(&entry.name)
+        );
+    }
+    if truncated {
+        let _ = write!(
+            html,
+            "<tr><td colspan=\"3\">… listing truncated (at most {MAX_LISTING_ENTRIES} entries / {MAX_LISTING_BYTES} bytes)</td></tr>"
         );
     }
     html.push_str("</tbody></table></body></html>");
@@ -385,6 +423,36 @@ mod tests {
         assert!(html.contains("href=\"file:///tmp/dir/%3Cevil%3E%26.html\""));
         assert!(html.contains("2.0 KiB"));
         assert!(html.contains("Index of /tmp/dir"));
+    }
+
+    #[test]
+    fn listings_are_capped() {
+        let entries: Vec<ListingEntry> = (0..MAX_LISTING_ENTRIES + 50)
+            .map(|index| ListingEntry {
+                name: format!("file-{index}.txt"),
+                is_dir: false,
+                size: Some(1),
+            })
+            .collect();
+        let html = listing_html("file:///tmp/dir/", Path::new("/tmp/dir"), &entries);
+        assert!(
+            html.contains("listing truncated"),
+            "truncation marker present"
+        );
+        assert!(
+            html.len() <= MAX_LISTING_BYTES + 4096,
+            "listing stays near the byte cap: {}",
+            html.len()
+        );
+        let rows = html.matches("<tr><td><a href=").count();
+        assert!(
+            rows <= MAX_LISTING_ENTRIES + 1,
+            "at most one row per kept entry plus the parent row, got {rows}"
+        );
+        assert_eq!(
+            truncate_name("a".repeat(1000)).chars().count(),
+            MAX_ENTRY_NAME_CHARS
+        );
     }
 
     #[test]

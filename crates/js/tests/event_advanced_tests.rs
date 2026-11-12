@@ -331,3 +331,112 @@ fn inline_onclick_on_window() {
         "1"
     );
 }
+
+#[test]
+fn duplicate_listener_registration_is_a_no_op() {
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "globalThis.count = 0;
+             var el = document.createElement('div');
+             document.body.appendChild(el);
+             var cb = function () { count += 1; };
+             el.addEventListener('dup', cb);
+             el.addEventListener('dup', cb);
+             el.dispatchEvent(new Event('dup'));
+             el.addEventListener('dup', function () { count += 10; });
+             el.dispatchEvent(new Event('dup'));",
+            "dup.js",
+        )
+        .expect("duplicate listeners");
+    // First dispatch: one deduplicated callback (+1). Second: same callback plus the
+    // distinct one (+1 +10).
+    assert_eq!(runtime.eval("count", "dup.js").expect("count"), "12");
+}
+
+#[test]
+fn listener_removed_during_dispatch_does_not_run() {
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "globalThis.hits = 0;
+             var el = document.createElement('div');
+             document.body.appendChild(el);
+             var second = function () { hits += 100; };
+             el.addEventListener('rm', function () { el.removeEventListener('rm', second); });
+             el.addEventListener('rm', second);
+             el.dispatchEvent(new Event('rm'));",
+            "rm.js",
+        )
+        .expect("removal during dispatch");
+    assert_eq!(runtime.eval("hits", "rm.js").expect("hits"), "0");
+}
+
+#[test]
+fn at_target_runs_capture_then_bubble_listeners_in_phase_two() {
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "globalThis.phases = [];
+             var el = document.createElement('div');
+             document.body.appendChild(el);
+             el.addEventListener('phase', function (event) { phases.push(event.eventPhase); }, true);
+             el.addEventListener('phase', function (event) { phases.push(event.eventPhase); });
+             el.dispatchEvent(new Event('phase', { bubbles: true }));
+
+             globalThis.hits = [];
+             var inner = document.createElement('span');
+             document.body.appendChild(inner);
+             inner.addEventListener('stop', function (event) {
+                 event.stopPropagation();
+                 hits.push('cap');
+             }, true);
+             inner.addEventListener('stop', function () { hits.push('bubble'); });
+             document.body.addEventListener('stop', function () { hits.push('ancestor'); }, true);
+             inner.dispatchEvent(new Event('stop', { bubbles: true }));",
+            "attarget.js",
+        )
+        .expect("at-target phases");
+    assert_eq!(
+        runtime
+            .eval("phases.join(',')", "attarget.js")
+            .expect("phases"),
+        "2,2"
+    );
+    assert_eq!(
+        runtime.eval("hits.join(',')", "attarget.js").expect("hits"),
+        "ancestor,cap,bubble",
+        "stopPropagation at the target does not skip the target's own bubble listeners"
+    );
+}
+
+#[test]
+fn window_and_document_targets_use_the_at_target_phase() {
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "globalThis.windowPhases = [];
+             window.addEventListener('w', function (event) { windowPhases.push(event.eventPhase); }, true);
+             window.addEventListener('w', function (event) { windowPhases.push(event.eventPhase); });
+             window.dispatchEvent(new Event('w'));
+
+             globalThis.documentPhases = [];
+             document.addEventListener('d', function (event) { documentPhases.push(event.eventPhase); }, true);
+             document.addEventListener('d', function (event) { documentPhases.push(event.eventPhase); });
+             document.dispatchEvent(new Event('d'));",
+            "targets.js",
+        )
+        .expect("window/document targets");
+    assert_eq!(
+        runtime
+            .eval("windowPhases.join(',')", "targets.js")
+            .expect("window phases"),
+        "2,2"
+    );
+    assert_eq!(
+        runtime
+            .eval("documentPhases.join(',')", "targets.js")
+            .expect("document phases"),
+        "2,2"
+    );
+}

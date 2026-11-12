@@ -200,3 +200,30 @@ fn deeply_nested_json_is_rejected_without_overflowing_the_stack() {
     // A normal map still parses.
     assert!(ImportMap::from_json(r#"{"imports": {}}"#).is_ok());
 }
+
+#[test]
+fn non_ascii_specifiers_and_surrogate_escapes_parse() {
+    let map = ImportMap::from_json(
+        r#"{"imports":{"módulo":"file:///módulo.js","café/":"file:///café/","emoji":"file:///🚀.js","escaped":"file:///a\u00f1e.js","surrogate":"file:///\ud83d\ude80.js"}}"#,
+    )
+    .expect("parse");
+    assert_eq!(map.exact_len(), 4);
+    assert_eq!(map.prefix_len(), 1);
+    assert_eq!(
+        map.resolve("módulo"),
+        Some(Some("file:///módulo.js".to_string()))
+    );
+    assert_eq!(
+        map.resolve("emoji"),
+        Some(Some("file:///🚀.js".to_string()))
+    );
+    assert_eq!(
+        map.resolve("escaped"),
+        Some(Some("file:///añe.js".to_string()))
+    );
+    assert_eq!(
+        map.resolve("surrogate"),
+        Some(Some("file:///🚀.js".to_string())),
+        "a surrogate pair escape decodes to one character"
+    );
+}
