@@ -7,6 +7,7 @@
 //! panicking. The matching itself is implemented here against the XML tree; the
 //! CSS text is parsed by a small self-contained parser (no dependency cycle).
 
+use crate::SvgError;
 use crate::xml::{XmlElement, local_name};
 
 /// Maximum number of rules kept from one stylesheet.
@@ -17,6 +18,32 @@ pub(crate) const MAX_SELECTORS_PER_RULE: usize = 64;
 pub(crate) const MAX_SELECTOR_PARTS: usize = 16;
 /// Maximum stylesheet size (bytes) accepted from `<style>` elements.
 pub(crate) const MAX_STYLESHEET_BYTES: usize = 1024 * 1024;
+
+/// Document-wide budget for selector evaluations in the in-SVG stylesheet cascade.
+///
+/// The individual caps bound rules and selectors per rule, but their product times the
+/// number of elements is not bounded, so a small document could force billions of
+/// `matches` calls.
+pub(crate) struct SelectorBudget {
+    /// Evaluations used so far in the document.
+    pub used: usize,
+    /// Maximum allowed ([`crate::Limits::max_selector_checks`]).
+    pub max: usize,
+}
+
+impl SelectorBudget {
+    /// Charges one selector evaluation, failing once the budget is exhausted.
+    pub fn charge(&mut self) -> Result<(), SvgError> {
+        self.used = self.used.saturating_add(1);
+        if self.used > self.max {
+            return Err(SvgError::Limit(format!(
+                "stylesheet selector budget exceeded ({} checks)",
+                self.max
+            )));
+        }
+        Ok(())
+    }
+}
 
 /// One `name: value` declaration.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -49,9 +76,13 @@ impl SimpleSelector {
         }
         if !self.classes.is_empty() {
             let class_attribute = element.attribute("class").unwrap_or("");
-            let element_classes: Vec<&str> = class_attribute.split_ascii_whitespace().collect();
             for class in &self.classes {
-                if !element_classes.contains(&class.as_str()) {
+                // Iterator instead of a `Vec` per selector evaluation: the cascade runs this
+                // once per element per selector, so an allocation here is a remote DoS.
+                if !class_attribute
+                    .split_ascii_whitespace()
+                    .any(|candidate| candidate == class)
+                {
                     return false;
                 }
             }
@@ -208,11 +239,13 @@ pub(crate) fn matching_declarations(
     rules: &[StyleRule],
     element: &XmlElement,
     ancestors: &[&XmlElement],
-) -> Vec<MatchedDeclaration> {
+    budget: &mut SelectorBudget,
+) -> Result<Vec<MatchedDeclaration>, SvgError> {
     let mut matched = Vec::new();
     for rule in rules {
         let mut best_specificity: Option<u32> = None;
         for selector in &rule.selectors {
+            budget.charge()?;
             if selector.matches(element, ancestors) {
                 let specificity = selector.specificity();
                 best_specificity =
@@ -232,7 +265,7 @@ pub(crate) fn matching_declarations(
         }
     }
     matched.sort_by_key(|declaration| (declaration.specificity, declaration.order));
-    matched
+    Ok(matched)
 }
 
 /// Parses a `style="..."` attribute into declarations.
@@ -418,7 +451,16 @@ mod tests {
             _ => unreachable!(),
         };
         let ancestors = vec![&root];
-        let matched = matching_declarations(&rules, rect, &ancestors);
+        let matched = matching_declarations(
+            &rules,
+            rect,
+            &ancestors,
+            &mut SelectorBudget {
+                used: 0,
+                max: usize::MAX,
+            },
+        )
+        .expect("cascade");
         let colors: Vec<&str> = matched
             .iter()
             .map(|declaration| declaration.value.as_str())
@@ -439,13 +481,37 @@ mod tests {
             _ => unreachable!(),
         };
         let ancestors = vec![&root, group];
-        assert!(!matching_declarations(&rules, rect, &ancestors).is_empty());
+        assert!(
+            !matching_declarations(
+                &rules,
+                rect,
+                &ancestors,
+                &mut SelectorBudget {
+                    used: 0,
+                    max: usize::MAX,
+                },
+            )
+            .expect("cascade")
+            .is_empty()
+        );
         // Without the `g` ancestor the selector must not match.
         let root2 = element("<svg><rect class='a'/></svg>");
         let rect2 = match &root2.children[0] {
             crate::xml::XmlNode::Element(element) => element,
             _ => unreachable!(),
         };
-        assert!(matching_declarations(&rules, rect2, &[&root2]).is_empty());
+        assert!(
+            matching_declarations(
+                &rules,
+                rect2,
+                &[&root2],
+                &mut SelectorBudget {
+                    used: 0,
+                    max: usize::MAX,
+                },
+            )
+            .expect("cascade")
+            .is_empty()
+        );
     }
 }

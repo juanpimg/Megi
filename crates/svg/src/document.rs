@@ -9,7 +9,9 @@
 use std::collections::HashMap;
 
 use crate::color::{Color, parse_color};
-use crate::css::{StyleRule, matching_declarations, parse_declarations, parse_stylesheet};
+use crate::css::{
+    SelectorBudget, StyleRule, matching_declarations, parse_declarations, parse_stylesheet,
+};
 use crate::gradient::GradientSpec;
 use crate::path::{SubPath, parse_path_data};
 use crate::pattern::{PatternSpec, Units};
@@ -352,6 +354,10 @@ impl Document {
         let clip_ids = id_map(&clip_elements);
         let mask_ids = id_map(&mask_elements);
         let filter_ids = id_map(&filter_elements);
+        // One document-wide selector budget: the clip/mask/pattern builders below each use
+        // their own `Builder`, and without sharing the counter a page could stack thousands
+        // of them under one stylesheet.
+        let mut selector_checks = 0usize;
         let clip_paths = build_clip_paths(
             &defs,
             &rules,
@@ -359,6 +365,7 @@ impl Document {
             &pattern_ids,
             &clip_elements,
             limits,
+            &mut selector_checks,
         )?;
         let masks = build_masks(
             &defs,
@@ -367,6 +374,7 @@ impl Document {
             &pattern_ids,
             &mask_elements,
             limits,
+            &mut selector_checks,
         )?;
         let filters = build_filters(&filter_elements);
         let mut builder = Builder {
@@ -381,7 +389,12 @@ impl Document {
             masks: &masks,
             filters: &filters,
             limits,
+<<<<<<< HEAD
             segments_used: 0,
+||||||| 2a70d69
+=======
+            selector_checks_used: selector_checks,
+>>>>>>> pr880
             shapes: Vec::new(),
             texts: Vec::new(),
             use_stack: Vec::new(),
@@ -393,7 +406,15 @@ impl Document {
         let root_transform = Transform::IDENTITY;
         let mut ancestors: Vec<&XmlElement> = vec![root];
         builder.visit_children(root, &mut ancestors, root_transform, &style, 1.0, 0)?;
-        let patterns = build_patterns(&defs, &rules, &gradient_ids, &pattern_ids, limits)?;
+        selector_checks = builder.selector_checks_used;
+        let patterns = build_patterns(
+            &defs,
+            &rules,
+            &gradient_ids,
+            &pattern_ids,
+            limits,
+            &mut selector_checks,
+        )?;
         Ok(Self {
             width,
             height,
@@ -499,13 +520,14 @@ impl Style {
         ancestors: &[&XmlElement],
         gradients: &HashMap<String, u32>,
         patterns: &HashMap<String, u32>,
-    ) {
+        selector_budget: &mut SelectorBudget,
+    ) -> Result<(), SvgError> {
         for name in PRESENTATION_PROPERTIES {
             if let Some(value) = element.attribute(name) {
                 self.apply_declaration(name, value, gradients, patterns);
             }
         }
-        for declaration in matching_declarations(rules, element, ancestors) {
+        for declaration in matching_declarations(rules, element, ancestors, selector_budget)? {
             self.apply_declaration(&declaration.name, &declaration.value, gradients, patterns);
         }
         if let Some(inline) = element.attribute("style") {
@@ -513,6 +535,7 @@ impl Style {
                 self.apply_declaration(&declaration.name, &declaration.value, gradients, patterns);
             }
         }
+        Ok(())
     }
 
     /// Applies one presentation/CSS declaration to this style.
@@ -614,9 +637,15 @@ struct Builder<'a> {
     masks: &'a [MaskSpec],
     filters: &'a [FilterSpec],
     limits: &'a Limits,
+<<<<<<< HEAD
     /// Flattened segments charged so far, shared by every shape (and `<use>` re-visit) of
     /// the document: `Limits::max_path_segments` is documented as a document-wide budget.
     segments_used: usize,
+||||||| 2a70d69
+=======
+    /// Selector evaluations performed by the in-SVG stylesheet cascade.
+    selector_checks_used: usize,
+>>>>>>> pr880
     shapes: Vec<Shape>,
     texts: Vec<TextSpec>,
     use_stack: Vec<String>,
@@ -812,13 +841,19 @@ impl<'a> Builder<'a> {
         style.clip_path = None;
         style.mask = None;
         style.filter = None;
+        let mut selector_budget = SelectorBudget {
+            used: self.selector_checks_used,
+            max: self.limits.max_selector_checks,
+        };
         style.apply(
             element,
             self.rules,
             ancestors,
             self.gradient_ids,
             self.pattern_ids,
-        );
+            &mut selector_budget,
+        )?;
+        self.selector_checks_used = selector_budget.used;
         let local_transform = element
             .attribute("transform")
             .and_then(Transform::parse)
@@ -2044,6 +2079,7 @@ fn build_effect_shapes(
     pattern_ids: &HashMap<String, u32>,
     element: &XmlElement,
     limits: &Limits,
+    checks: &mut usize,
 ) -> Result<Vec<Shape>, SvgError> {
     let no_ids = HashMap::new();
     let no_clips: [ClipPathSpec; 0] = [];
@@ -2061,7 +2097,12 @@ fn build_effect_shapes(
         masks: &no_masks,
         filters: &no_filters,
         limits,
+<<<<<<< HEAD
         segments_used: 0,
+||||||| 2a70d69
+=======
+        selector_checks_used: *checks,
+>>>>>>> pr880
         shapes: Vec::new(),
         texts: Vec::new(),
         use_stack: Vec::new(),
@@ -2077,6 +2118,7 @@ fn build_effect_shapes(
     };
     let mut ancestors: Vec<&XmlElement> = vec![element];
     builder.visit_children(element, &mut ancestors, Transform::IDENTITY, &style, 1.0, 0)?;
+    *checks = builder.selector_checks_used;
     Ok(builder.shapes)
 }
 
@@ -2088,10 +2130,19 @@ fn build_clip_paths(
     pattern_ids: &HashMap<String, u32>,
     elements: &[(String, &XmlElement)],
     limits: &Limits,
+    checks: &mut usize,
 ) -> Result<Vec<ClipPathSpec>, SvgError> {
     let mut specs = Vec::new();
     for (_id, element) in elements {
-        let shapes = build_effect_shapes(defs, rules, gradient_ids, pattern_ids, element, limits)?;
+        let shapes = build_effect_shapes(
+            defs,
+            rules,
+            gradient_ids,
+            pattern_ids,
+            element,
+            limits,
+            checks,
+        )?;
         if shapes.len() > MAX_EFFECT_SHAPES {
             return Err(SvgError::Limit("too many shapes in clipPath".to_owned()));
         }
@@ -2120,10 +2171,19 @@ fn build_masks(
     pattern_ids: &HashMap<String, u32>,
     elements: &[(String, &XmlElement)],
     limits: &Limits,
+    checks: &mut usize,
 ) -> Result<Vec<MaskSpec>, SvgError> {
     let mut specs = Vec::new();
     for (_id, element) in elements {
-        let shapes = build_effect_shapes(defs, rules, gradient_ids, pattern_ids, element, limits)?;
+        let shapes = build_effect_shapes(
+            defs,
+            rules,
+            gradient_ids,
+            pattern_ids,
+            element,
+            limits,
+            checks,
+        )?;
         if shapes.len() > MAX_EFFECT_SHAPES {
             return Err(SvgError::Limit("too many shapes in mask".to_owned()));
         }
@@ -2360,6 +2420,7 @@ fn build_patterns(
     gradient_ids: &HashMap<String, u32>,
     pattern_ids: &HashMap<String, u32>,
     limits: &Limits,
+    checks: &mut usize,
 ) -> Result<Vec<PatternSpec>, SvgError> {
     let mut specs = Vec::new();
     for (_id, element) in collect_pattern_elements(defs) {
@@ -2379,6 +2440,7 @@ fn build_patterns(
             masks: &no_masks,
             filters: &no_filters,
             limits,
+            selector_checks_used: *checks,
             shapes: Vec::new(),
             texts: Vec::new(),
             use_stack: Vec::new(),
@@ -2389,8 +2451,21 @@ fn build_patterns(
         };
         let mut style = Style::default();
         let mut ancestors: Vec<&XmlElement> = vec![element];
-        style.apply(element, rules, &ancestors, gradient_ids, pattern_ids);
+        let mut selector_budget = SelectorBudget {
+            used: builder.selector_checks_used,
+            max: limits.max_selector_checks,
+        };
+        style.apply(
+            element,
+            rules,
+            &ancestors,
+            gradient_ids,
+            pattern_ids,
+            &mut selector_budget,
+        )?;
+        builder.selector_checks_used = selector_budget.used;
         builder.visit_children(element, &mut ancestors, Transform::IDENTITY, &style, 1.0, 0)?;
+        *checks = builder.selector_checks_used;
         specs.push(PatternSpec {
             x: first_number(element.attribute("x")),
             y: first_number(element.attribute("y")),
