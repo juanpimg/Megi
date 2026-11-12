@@ -959,6 +959,9 @@ pub fn execute_scripts(
     let _ = runtime.run_until(VIRTUAL_EPOCH_MS);
 
     let mut remaining_loops = limits.total_loop_iterations;
+    // Timers pumped while driving top-level `await` count against the page timer budget.
+    let mut module_tasks = 0usize;
+    let mut module_virtual_ms = 0u64;
     for script in scripts {
         let grant = limits.budget.loop_iterations.min(remaining_loops);
         if grant == 0 {
@@ -983,20 +986,45 @@ pub fn execute_scripts(
                 .unwrap_or_else(|| document_url.as_str());
             if script.text.contains("await") {
                 // Real top-level await: native Boa modules (live bindings included). The
-                // deterministic host loop drives its microtasks/timers to completion.
+                // deterministic host loop drives its microtasks/timers to completion, with
+                // the page's remaining timer budget so it cannot overshoot `max_tasks`.
+                let module_budget = js::ModuleAsyncBudget {
+                    timer_tasks: limits.max_tasks.saturating_sub(module_tasks),
+                    virtual_time_ms: limits.max_virtual_time_ms.saturating_sub(module_virtual_ms),
+                };
                 runtime
-                    .eval_module_async(&script.text, &script.source_name, &base, &budget)
-                    .map(|_| ())
+                    .eval_module_async_with_budget(
+                        &script.text,
+                        &script.source_name,
+                        &base,
+                        &budget,
+                        module_budget,
+                    )
+                    .map(Some)
             } else {
                 runtime
                     .eval_module(&script.text, &script.source_name, &base, &budget)
-                    .map(|_| ())
+                    .map(|_| None)
             }
         } else {
-            runtime.eval(&script.text, &script.source_name).map(|_| ())
+            runtime
+                .eval(&script.text, &script.source_name)
+                .map(|_| None)
         };
         match result {
-            Ok(()) => execution.executed += 1,
+            Ok(Some(evaluated)) => {
+                execution.executed += 1;
+                module_tasks = module_tasks.saturating_add(evaluated.timer_tasks);
+                module_virtual_ms = module_virtual_ms.saturating_add(evaluated.virtual_time_ms);
+                if evaluated.limited {
+                    execution.limited = true;
+                    warnings.push(
+                        "top-level await timer budget exhausted; module may be incomplete"
+                            .to_owned(),
+                    );
+                }
+            }
+            Ok(None) => execution.executed += 1,
             Err(error) => {
                 execution.failed += 1;
                 if matches!(error, js::JsError::Budget(_)) {
@@ -1020,7 +1048,9 @@ pub fn execute_scripts(
     });
 
     let mut loop_state = EventLoopState {
-        virtual_time_ms: VIRTUAL_EPOCH_MS,
+        // Timer callbacks already spent driving top-level `await` count against the budget.
+        tasks: module_tasks,
+        virtual_time_ms: VIRTUAL_EPOCH_MS.saturating_add(module_virtual_ms),
         ..EventLoopState::default()
     };
     drain_microtasks(&mut runtime, warnings);
@@ -1063,7 +1093,9 @@ pub fn execute_scripts(
     // then pump timers/microtasks scheduled by worker callbacks before the re-render.
     if host.enable_workers {
         match runtime.run_worker_tasks(limits.max_tasks) {
-            Ok(delivered) => execution.tasks_ran += delivered,
+            Ok(delivered) => {
+                loop_state.tasks = loop_state.tasks.saturating_add(delivered);
+            }
             Err(error) => warnings.push(format!("worker tasks failed: {error}")),
         }
         drain_microtasks(&mut runtime, warnings);
@@ -1157,7 +1189,7 @@ fn run_event_loop(
         // its delay has elapsed on the virtual timeline, making the number of
         // executed callbacks depend on machine speed (this was caught by CI:
         // the same render produced different task counts on different runs).
-        match runtime.run_until(state.virtual_time_ms) {
+        match runtime.run_until_with_budget(state.virtual_time_ms, remaining) {
             Ok(0) => {}
             Ok(ran) => {
                 state.tasks += ran;
@@ -1183,7 +1215,8 @@ fn run_event_loop(
             return;
         }
         let next = state.virtual_time_ms.saturating_add(VIRTUAL_TIME_STEP_MS);
-        match runtime.run_until(next) {
+        let remaining = limits.max_tasks.saturating_sub(state.tasks);
+        match runtime.run_until_with_budget(next, remaining) {
             Ok(ran) => {
                 state.tasks += ran;
                 state.iterations += 1;

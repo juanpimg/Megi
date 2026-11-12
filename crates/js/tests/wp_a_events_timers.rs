@@ -310,6 +310,22 @@ fn timer_can_schedule_another_timer() {
 }
 
 #[test]
+fn run_until_honours_a_callback_budget() {
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "window.__ran = 0;
+             for (var i = 0; i < 5; i++) setTimeout(function () { __ran++; }, 0);",
+            "t",
+        )
+        .expect("schedule timers");
+    let ran = runtime.run_until_with_budget(10, 2).expect("run");
+    assert_eq!(ran, 2, "the budget caps one batch");
+    assert_eq!(runtime.pending_timers(), 3);
+    assert_eq!(runtime.eval("__ran", "t").expect("ran"), "2");
+}
+
+#[test]
 fn completed_timers_release_their_callback_slots() {
     let mut runtime = runtime();
     runtime
