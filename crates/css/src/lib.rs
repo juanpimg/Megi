@@ -20,6 +20,7 @@
 #![forbid(unsafe_code)]
 
 pub mod animation;
+pub mod animation_runtime;
 pub mod calc;
 pub mod cascade;
 mod color;
