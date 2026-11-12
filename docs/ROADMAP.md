@@ -18,10 +18,27 @@ Fase 1: Tokenizador & Árbol HTML5   [██████████] 100% (COMP
 Fase 2: Motor CSS                    [██████████] 100% (COMPLETADA)
 Fase 3: Motor Layout (BFC & IFC)     [██████████] 100% (COMPLETADA)
 Fase 4: Paint, PNG & Tipografía      [██████████] 100% (conic/hints/OKLab, calc mixto, sticky/tipografía, grid avanzado, clipping+clip:text, decoraciones)
-Fase 5: Red, Render & Imágenes       [█████████░]  99% (HTTP/2 MVP, JPEG/GIF, SameSite/PSL/Referrer/Range)
-Fase 6: Integración JS & Bindings    [█████████░]  99% (workers HECHOS; pendientes TLA real/live bindings/fetch y conformance).
-Fase 7: Ventana OS & Shell           [█████████░]  90% (chrome + tabs + find-in-page + forms + zoom/refresh)
+Fase 5: Red, Render & Imágenes       [██████████] 100% (HTTP/2, JPEG/GIF/WebP, SameSite/PSL/Referrer/Range, RenderCache)
+Fase 6: Integración JS & Bindings    [██████████] 100% (Boa 0.22, ES modules, TLA, fetch, DOM/Storage/MutationObserver)
+Fase 7: Ventana OS & Shell           [█████████░]  98% (chrome con fuente real, tabs, find, forms, reader mode, session)
+```
 
+### Auditoría Pre-Alpha (`v0.1.0`) — Navegación en webs reales (2026-11-12)
+
+Tras publicar la Pre-Alpha `v0.1.0` (`2.300+` tests, gate `PASS`, `14/14` crates `#![forbid(unsafe_code)]`), se ejecutó una auditoría manual y con `render --json` sobre sitios reales:
+
+- **Qué funciona hoy**:
+  - `https://example.com`, `https://es.wikipedia.org/wiki/Rust` y `https://www.rust-lang.org` cargan por HTTPS/TLS, decodifican gzip/SVG/imágenes y permiten clic en enlaces y edición en la barra de direcciones (con esquema `https://` automático para dominios sin prefijo).
+- **Problemas reales detectados y registrados en GitHub**:
+  1. **`#1011` (`layout`)**: `https://news.ycombinator.com` colapsa a **`display_items: 0`** (página en blanco por maquetación `<center>` / `<table>`).
+  2. **`#1013` (`layout`)**: En `es.wikipedia.org/wiki/Rust`, pestañas/elementos de navegación Vector (`Artículo`/`Discusión`, `Leer`/`Editar`/`Ver historial`) se solapan, `<h1>` se alinea a la derecha y se pierde un espacio entre nodos inline (`a:Quinto`).
+  3. **`#1012` (`shell`)**: La barra de chrome (`58px`) tapa los primeros `58px` del contenido cuando `scroll_y == 0`.
+  4. **`#1010` (`render`)**: `<img>` sin `crossorigin` aplica validación CORS estricta y descarta imágenes cross-origin.
+  5. **`#1014` (`perf`)**: Latencia alta en webs reales (`2.55 s` en Wikipedia, `4.12 s` en HN): `styles_pre_script` ~695 ms y descarga secuencial de imágenes ~1.4 s.
+  6. **`#1015` (`fonts`) + `#987`**: Texto CJK/emoji muestra `[tofu]` sin fallback de fuentes del sistema, y el árabe carece de shaping contextual.
+  7. **Alpha pendiente**: Animaciones CSS `@keyframes`/`transition` en runtime (`#941`/`#942`), diálogo visual de descargas (`#988`), widgets nativos/accesibilidad/aislamiento por pestaña (`#989`/`#946`).
+
+**Pre-Alpha `v0.1.0`** (`96787a6` → `1e563ec`): `bidi` UAX #9 (`css`+`layout`), `RenderCache`, fuzz targets ampliados (`dom_tree`, `layout_tree`, `paint_display_list`, `fonts_shape`), fix `column flex` auto-height (`#696`), fix binario `megi` en `release.yml`, fuente bundled en `chrome.rs` + `https://` automático en barra de direcciones + prioridad de URL CLI sobre `session.json`.
 **Ronda 32**: **perf CSS** ancestor-class Bloom pruning + fast paths @container/`has_revert_layer` ⇒ resolve **28,58→14,14 ms (−50,5 %)**; **layout** **40,18→37,35 ms (−7,0 %)**; **PNG decode 6,739→2,536 ms (−62,4 %)** y **encode byte-safe −18 %/−22 %** con render-to-png **−27,7 %**; **render fast paths** backgrounds 7,0→0,8 ms e inline_svg 2,8→0,6 ms (hallazgo: fila pipeline del bench no usa render; CLI A/B −6,5 %); **TLA real + live bindings** con módulos nativos Boa (`eval_module_async`, await Promise/fetch/timer, let/var vivas, const inmutable, ciclos; js **168**/render **172**); **h1 streaming real + push prioritization** (status/headers incremental, redirects antes del body, CL/chunked/read-to-EOF; PADDED/PRIORITY, `ServerWeights|Fifo`, desalojo RST; net **325**). Total **1929 tests**; CI verde y repo sincronizado en `3e69968`.
 **Ronda 31**: **Cascade Layers** (`@layer` nombres/anónimas/anidadas/compuestas, orden por primera aparición, `!important` invierte, `revert-layer`, @media/@container dentro, fast path; css **260**; fixtures `ddeafab9…`/`5944fb8a…`); **PNG single-encode** (`RenderOptions.encode_png`/`ensure_png` perezoso byte-idéntico; shell `--chrome/--find/--chrome-menu` con encode_png=false + overlay + encode único ⇒ +8,57→+1,13 ms 640, +21,67→+1,75 1024, showcase +91,20→+2,32; shell **238**/render **170**); **fetch() subset** (Headers/Request/Response + provider, GET/POST, CORS same-origin, `--no-network`, fix HostScope; js **158**/render **170**); **proxies HTTP/HTTPS** (`ProxyConfig{http,https,no_proxy}`, env, matching host/sufijo/IP/host:port/`*`, absolute-form+Basic, CONNECT+TLS h1/h2, errores tipados; net **315**); **perf VP8** (allocs 25.305→9, A/B 13,96→**10,91 ms = −22,2 %**, bench 10,815 ms; image **90**). Total **1907 tests**; CI verde y repo sincronizado en `aba05f8`.
 **Ronda 30**: **decoder VP8 keyframe completo** para WebP lossy (boolean/segmentación/loop filters/particiones/intra+B_PRED/dequant/IDCT/IWHT/YUV420 fancy+BT.601; tolerancias vs PIL y decode 53,6 ms; image **90**/render **165**); **Container Queries** (`container-type/name`, `@container` min/max width/height/inline/block con and, ancestro compatible, fast path; css **241**/layout **224**; fixtures `c358c11f…`/`57b09283…`); **PSL real vendorizada** (MPL-2.0, reglas normal/wildcard/exception) y **request trailers** h2/h1 (net **299**); **Web Workers cooperativos deterministas** (realm sin DOM, FIFO JSON-safe, onerror, caps 8/256; js **147**/render **164**); **historial navegable** (HistoryLog cap 64/dedupe, about:history, Ctrl+H, ←/→/⟳) y **chrome fast path** (−89,5 % componente no-PNG, píxeles idénticos; shell **236**). Total **1853 tests**; CI verde y repo sincronizado en `f7dad8d`.
