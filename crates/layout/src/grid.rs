@@ -369,8 +369,8 @@ fn placement_request(
     // request a 4 GiB row and `grid-column-start: 2147483647` ~2e9 tracks.
     request.row_span = request.row_span.clamp(1, MAX_EXPANDED_TRACKS);
     request.column_span = request.column_span.clamp(1, MAX_EXPANDED_TRACKS);
-    // Clamp start + span together: `grid-column: 1024 / span 1024` would otherwise widen
-    // the grid to 2,047 tracks (the intended implicit-track cap is 1,024 total).
+    // Clamp start + span together: `grid-column: 1024 / span 1024` widens the grid to
+    // 2,047 tracks otherwise (the implicit-track cap is 1,024 total).
     let row_span = request.row_span;
     let column_span = request.column_span;
     request.row_start = request
@@ -399,23 +399,49 @@ fn span_from(start: &GridLine, end: &GridLine) -> usize {
     .max(1)
 }
 
-/// Grows the occupancy matrix to at least `rows` × `columns`.
-fn ensure_occupancy(grid: &mut Vec<Vec<bool>>, rows: usize, columns: usize) {
-    // The early return trusts the uniform-width invariant; keep it checked in debug builds.
-    debug_assert!(
-        grid.iter()
-            .all(|row| grid.first().is_none_or(|first| row.len() == first.len())),
-        "occupancy rows must share one width"
-    );
-    if grid.len() >= rows && grid.first().is_none_or(|row| row.len() >= columns) {
-        return;
+/// Bit-packed occupancy matrix: one bit per grid cell.
+///
+/// The placement code only needs one bit per cell, but `Vec<Vec<bool>>` uses one byte and
+/// the audit measured ~1 GiB for a pathological 1M-row × 1K-column grid; bits keep the same
+/// layout with 8× less memory and a constant-width invariant for every row.
+#[derive(Default)]
+struct Occupancy {
+    rows: Vec<Vec<u64>>,
+    width: usize,
+}
+
+impl Occupancy {
+    /// Grows the matrix to at least `rows` × `columns` (never shrinks).
+    fn ensure(&mut self, rows: usize, columns: usize) {
+        if self.width < columns {
+            self.width = columns;
+            let words = columns.div_ceil(64);
+            for row in &mut self.rows {
+                if row.len() < words {
+                    row.resize(words, 0);
+                }
+            }
+        }
+        let words = self.width.div_ceil(64);
+        while self.rows.len() < rows {
+            self.rows.push(vec![0; words]);
+        }
     }
-    while grid.len() < rows {
-        grid.push(vec![false; columns.max(grid.first().map_or(0, Vec::len))]);
+
+    /// Returns whether `(row, column)` is occupied (out-of-range cells are free).
+    fn get(&self, row: usize, column: usize) -> bool {
+        self.rows
+            .get(row)
+            .and_then(|bits| bits.get(column / 64))
+            .is_some_and(|word| word & (1u64 << (column % 64)) != 0)
     }
-    for row in grid.iter_mut() {
-        if row.len() < columns {
-            row.resize(columns, false);
+
+    /// Marks `(row, column)` as occupied (the caller ensured the bounds).
+    fn set(&mut self, row: usize, column: usize) {
+        if let Some(bits) = self.rows.get_mut(row)
+            && let Some(word) = bits.get_mut(column / 64)
+        {
+            *word |= 1u64 << (column % 64);
         }
     }
 }
@@ -424,7 +450,7 @@ fn ensure_occupancy(grid: &mut Vec<Vec<bool>>, rows: usize, columns: usize) {
 /// count; column flow scans column-major within a fixed row count. `limit ==
 /// usize::MAX` means that axis grows implicitly.
 fn find_free_spot_flow(
-    grid: &mut Vec<Vec<bool>>,
+    grid: &mut Occupancy,
     cursor: (usize, usize),
     row_span: usize,
     column_span: usize,
@@ -433,16 +459,15 @@ fn find_free_spot_flow(
     column_flow: bool,
 ) -> (usize, usize) {
     let (mut row, mut column) = cursor;
-    // Row flow: a span wider than the implicit track count must widen it; otherwise the
-    // `columns_exceeded` branch is invariant (row += 1 forever, one matrix row per step).
+    // Row flow: a span wider than the implicit track count must widen the limit; otherwise
+    // `columns_exceeded` is always true and the loop never reaches the free-spot check.
     let column_limit = if column_flow {
         column_limit
     } else {
         column_limit.max(column_span)
     };
     loop {
-        ensure_occupancy(
-            grid,
+        grid.ensure(
             (row + row_span).min(row_limit.max(row + row_span)),
             (column + column_span).min(column_limit.max(column + column_span)),
         );
@@ -458,7 +483,8 @@ fn find_free_spot_flow(
             row = 0;
             continue;
         }
-        let free = (0..row_span).all(|dr| (0..column_span).all(|dc| !grid[row + dr][column + dc]));
+        let free =
+            (0..row_span).all(|dr| (0..column_span).all(|dc| !grid.get(row + dr, column + dc)));
         if free {
             return (row, column);
         }
@@ -478,19 +504,14 @@ fn find_free_spot_flow(
     }
 }
 
-fn mark_occupied(grid: &mut Vec<Vec<bool>>, placement: Placement, columns: usize) {
-    ensure_occupancy(
-        grid,
+fn mark_occupied(grid: &mut Occupancy, placement: Placement, columns: usize) {
+    grid.ensure(
         placement.row + placement.row_span,
         columns.max(placement.column + placement.column_span),
     );
-    for row in grid.iter_mut().skip(placement.row).take(placement.row_span) {
-        for cell in row
-            .iter_mut()
-            .skip(placement.column)
-            .take(placement.column_span)
-        {
-            *cell = true;
+    for row in placement.row..placement.row + placement.row_span {
+        for column in placement.column..placement.column + placement.column_span {
+            grid.set(row, column);
         }
     }
 }
@@ -526,7 +547,7 @@ fn place_items(
             rows = rows.max(end);
         }
     }
-    let mut occupancy: Vec<Vec<bool>> = Vec::new();
+    let mut occupancy = Occupancy::default();
 
     // Explicitly placed items first (both axes or one axis with a fixed start).
     for (index, request) in requests.iter().enumerate() {
@@ -584,13 +605,10 @@ fn place_items(
             // Pinned column: scan rows for a free rectangle at that column.
             let mut row = 0usize;
             loop {
-                ensure_occupancy(
-                    &mut occupancy,
-                    row + row_span,
-                    columns.max(column_start + column_span),
-                );
-                let free = (0..row_span)
-                    .all(|dr| (0..column_span).all(|dc| !occupancy[row + dr][column_start + dc]));
+                occupancy.ensure(row + row_span, columns.max(column_start + column_span));
+                let free = (0..row_span).all(|dr| {
+                    (0..column_span).all(|dc| !occupancy.get(row + dr, column_start + dc))
+                });
                 columns = columns.max(column_start + column_span);
                 if free {
                     break (row, column_start);
@@ -601,9 +619,10 @@ fn place_items(
             // Pinned row: scan columns for a free rectangle at that row.
             let mut column = 0usize;
             loop {
-                ensure_occupancy(&mut occupancy, row_start + row_span, column + column_span);
-                let free = (0..row_span)
-                    .all(|dr| (0..column_span).all(|dc| !occupancy[row_start + dr][column + dc]));
+                occupancy.ensure(row_start + row_span, column + column_span);
+                let free = (0..row_span).all(|dr| {
+                    (0..column_span).all(|dc| !occupancy.get(row_start + dr, column + dc))
+                });
                 if free {
                     break (row_start, column);
                 }
@@ -1321,4 +1340,25 @@ fn layout_item(
     ));
     layout_box_contents(child, None, false, measurer, pos);
     item.content_height = child.dimensions.content.height;
+}
+
+#[cfg(test)]
+mod occupancy_tests {
+    use super::Occupancy;
+
+    #[test]
+    fn occupancy_bitset_tracks_cells_and_grows() {
+        let mut grid = Occupancy::default();
+        grid.ensure(2, 70);
+        assert!(!grid.get(1, 69));
+        grid.set(1, 69);
+        assert!(grid.get(1, 69));
+        assert!(!grid.get(1, 68));
+        // Growing keeps the existing cells and covers the new width.
+        grid.ensure(3, 130);
+        assert!(grid.get(1, 69), "growth preserves occupied cells");
+        assert!(!grid.get(2, 129));
+        grid.set(2, 129);
+        assert!(grid.get(2, 129));
+    }
 }

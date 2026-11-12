@@ -319,3 +319,25 @@ fn text_and_pattern_rendering_is_deterministic() {
     let second = render(&source, 64, 32);
     assert_eq!(first.data, second.data);
 }
+
+#[test]
+fn extreme_pattern_tiles_hit_the_budget_instead_of_overflowing() {
+    let source =
+        "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'>
+      <defs><pattern id='p' patternUnits='userSpaceOnUse' width='0.01' height='0.01'
+          transform='matrix(1e-18 0 0 5e4 0 0)'>
+        <rect width='0.01' height='0.01' fill='red'/></pattern></defs>
+      <rect width='32' height='32' fill='url(#p)'/></svg>";
+    let error = render_svg(
+        source.as_bytes(),
+        &SvgOptions {
+            width: Some(32),
+            height: Some(32),
+        },
+    )
+    .expect_err("tile budget");
+    assert!(
+        matches!(&error, SvgError::Limit(message) if message.contains("pattern tile")),
+        "{error:?}"
+    );
+}

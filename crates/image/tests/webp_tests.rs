@@ -340,3 +340,26 @@ fn compare_rgba(decoded: &[u8], oracle: &[u8]) -> (i32, f64) {
     let count = (decoded.len() / 4 * 3) as f64;
     (max, sum as f64 / count)
 }
+
+#[test]
+fn trailing_bytes_and_wrong_riff_size_are_rejected() {
+    let original = fixture("palette_transform.webp");
+    decode(&original).expect("the fixture decodes");
+    let mut padded = original.clone();
+    padded.extend_from_slice(b"trailing-bytes");
+    match decode(&padded) {
+        Err(ImageError::InvalidData { reason }) => {
+            assert!(reason.contains("RIFF size"), "{reason}");
+        }
+        other => panic!("expected trailing-bytes rejection, got {other:?}"),
+    }
+    let mut wrong_size = original.clone();
+    let size = u32::from_le_bytes(wrong_size[4..8].try_into().unwrap());
+    wrong_size[4..8].copy_from_slice(&(size + 1).to_le_bytes());
+    match decode(&wrong_size) {
+        Err(ImageError::InvalidData { reason }) => {
+            assert!(reason.contains("RIFF size"), "{reason}");
+        }
+        other => panic!("expected RIFF-size rejection, got {other:?}"),
+    }
+}
