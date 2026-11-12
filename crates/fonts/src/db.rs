@@ -122,8 +122,57 @@ pub const BUNDLED_FONTS: &[(&str, &[u8])] = &[
  pub fn parse_font_families(font_family: &str) -> Vec<String> {
     const MAX_FAMILIES: usize = 256;
     const MAX_ENTRY_LEN: usize = 256;
+    // Split on top-level commas, respecting quoted strings.
+    let mut parts: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+    for ch in font_family.chars() {
+        if escaped {
+            current.push(ch);
+            escaped = false;
+            continue;
+        }
+        if in_single {
+            current.push(ch);
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == '\'' {
+                in_single = false;
+            }
+            continue;
+        }
+        if in_double {
+            current.push(ch);
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_double = false;
+            }
+            continue;
+        }
+        match ch {
+            '\'' => {
+                in_single = true;
+                current.push(ch);
+            }
+            '"' => {
+                in_double = true;
+                current.push(ch);
+            }
+            ',' => {
+                parts.push(current.clone());
+                current.clear();
+            }
+            _ => current.push(ch),
+        }
+    }
+    if !current.trim().is_empty() {
+        parts.push(current);
+    }
     let mut families = Vec::new();
-    for part in font_family.split(',') {
+    for part in parts {
         if families.len() >= MAX_FAMILIES {
             break;
         }
