@@ -943,14 +943,17 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             warnings.extend(pre_warnings);
             (collection, summary, fonts)
         }
-        _ => collect_styles(
-            &document,
-            &base_url,
-            &mut loader,
-            options,
-            &media_context,
-            &mut warnings,
-        )?,
+        _ => {
+            warnings.append(&mut pre_warnings);
+            collect_styles(
+                &document,
+                &base_url,
+                &mut loader,
+                options,
+                &media_context,
+                &mut warnings,
+            )?
+        }
     };
     let styles =
         resolve_styles_with_state(&document, &stylesheet_collection, css::StateContext::new());
