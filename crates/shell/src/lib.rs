@@ -34,7 +34,7 @@
 //!   [`scroll::MAX_CONTENT_HEIGHT`], the render pipeline's 8192 px viewport
 //!   limit; taller pages are clipped with a `[recortado]` title marker). The
 //!   visible region is presented with [`present::present_region`].
-//! - **HiDPI**: the CSS viewport is `physical / scale_factor` ([`scale`]) and
+//! - **HiDPI/zoom**: the CSS viewport is `physical / (device scale × page zoom)` ([`scale`]) and
 //!   the CSS frame is upscaled to physical pixels with nearest-neighbour
 //!   sampling. Runtime scale changes (moving between monitors) trigger a
 //!   debounced re-render.

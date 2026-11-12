@@ -146,16 +146,17 @@ pub fn find_link_at(regions: &[LinkRegion], x: f32, y: f32) -> Option<&LinkRegio
 
 /// Converts a physical cursor position into page CSS coordinates.
 ///
-/// `scale_factor` is the window's HiDPI scale (`physical / CSS`); `scroll_offset` is the
-/// current vertical scroll offset in CSS px (added because layout regions are page-space).
+/// `scale` is the *effective* CSS scale (`physical / CSS`, i.e. device scale × page zoom);
+/// `scroll_offset` is the current vertical scroll offset in CSS px (added because layout
+/// regions are page-space).
 pub fn physical_to_page(
     physical_x: f64,
     physical_y: f64,
-    scale_factor: f64,
+    scale: f64,
     scroll_offset: u32,
 ) -> (f32, f32) {
-    let scale = if scale_factor.is_finite() && scale_factor > 0.0 {
-        scale_factor
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
     } else {
         1.0
     };
@@ -417,6 +418,19 @@ mod tests {
             link_url_at(Some(&page), &regions, 5.0, 5.0).unwrap(),
             None,
             "browser-style no-op for unparsable hrefs"
+        );
+    }
+
+    #[test]
+    fn zoomed_metrics_drive_page_coordinates() {
+        // Exercises the pure mapping with the effective scale (device scale × page zoom).
+        // The window call sites are covered by CI build/tests only; this pins the unit
+        // contract the fix relies on.
+        let metrics = crate::scale::window_metrics_zoomed(800, 600, 1.0, 2.0);
+        assert_eq!((metrics.css_width, metrics.css_height), (400, 300));
+        assert_eq!(
+            physical_to_page(100.0, 100.0, metrics.scale, 0),
+            (50.0, 50.0)
         );
     }
 

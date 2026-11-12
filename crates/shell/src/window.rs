@@ -573,7 +573,9 @@ impl WindowApp {
         physical_to_page(
             physical_x,
             physical_y,
-            self.scale_factor,
+            // The effective scale includes page zoom: `present_region` maps CSS pixels
+            // with device_scale * zoom, so hit-testing must use the same factor.
+            self.metrics.scale,
             self.scroll.offset(),
         )
     }
@@ -791,12 +793,7 @@ impl WindowApp {
             self.chrome_click(chrome_x, chrome_y);
             return;
         }
-        let (x, y) = physical_to_page(
-            physical_x,
-            physical_y,
-            self.scale_factor,
-            self.scroll.offset(),
-        );
+        let (x, y) = physical_to_page(physical_x, physical_y, scale, self.scroll.offset());
         if let Some(menu) = &self.overflow_menu {
             let titles: Vec<String> = self
                 .tabs
