@@ -465,8 +465,14 @@ impl PngRegionEncoder {
             {
                 continue;
             }
-            let y0 = rect.y.max(0.0).floor() as usize;
+            // Clamp both ends: a hint below the pixmap used to produce `y0 > y1` (or
+            // `y0 > height`) and panic on the slice, although the docs promise that any
+            // hint can only cost time.
+            let y0 = (rect.y.max(0.0).floor() as usize).min(height as usize);
             let y1 = ((rect.y + rect.height).ceil() as usize).min(height as usize);
+            if y0 >= y1 {
+                continue;
+            }
             dirty_rows[y0..y1].fill(true);
         }
 
