@@ -207,11 +207,16 @@ fn offset_for(align: AlignSelf, cell: f32, size: f32) -> f32 {
 fn line_boundary(line: &GridLine, track_count: usize) -> Option<usize> {
     match line {
         GridLine::Line(value) => {
-            if *value > 0 {
-                Some((*value - 1) as usize)
+            // Widen to i64 so i32::MIN inputs cannot overflow (issue #689).
+            let value = *value as i64;
+            if value > 0 {
+                // Clamp to the available tracks + 1 so a huge line number cannot
+                // allocate an oversized boundary.
+                let clamped = value.min(track_count as i64 + 1).max(1);
+                Some((clamped - 1) as usize)
             } else {
-                let index = track_count as i32 + 1 + *value;
-                (index >= 0).then_some(index as usize)
+                let index = track_count as i64 + 1 + value;
+                (index >= 0).then_some(index.min(track_count as i64 + 1) as usize)
             }
         }
         GridLine::Span(_) | GridLine::Auto | GridLine::Name(_) => None,
@@ -387,16 +392,18 @@ fn placement_request(
 }
 
 fn span_from(start: &GridLine, end: &GridLine) -> usize {
-    match end {
-        GridLine::Span(span) => (*span).max(1) as usize,
+    // Cap spans so a huge `span N` cannot drive oversized allocations (issue #689).
+    const MAX_SPAN: usize = 1024;
+    let span = match end {
+        GridLine::Span(span) => *span as usize,
         GridLine::Line(_) | GridLine::Name(_) => 1,
         // `grid-column: span N` (start only): the span belongs to the start line.
         GridLine::Auto => match start {
-            GridLine::Span(span) => (*span).max(1) as usize,
+            GridLine::Span(span) => *span as usize,
             _ => 1,
         },
-    }
-    .max(1)
+    };
+    span.clamp(1, MAX_SPAN)
 }
 
 /// Bit-packed occupancy matrix: one bit per grid cell.
