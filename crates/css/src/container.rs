@@ -158,6 +158,8 @@ fn is_custom_ident(value: &str) -> bool {
         && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
         && value != "none"
         && value != "and"
+        && value != "or"
+        && value != "not"
 }
 
 /// Query container size (content box).
