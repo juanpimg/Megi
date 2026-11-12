@@ -19,6 +19,12 @@ use crate::rule::Declaration;
 /// Maximum nested `var()` substitutions.
 pub const MAX_SUBSTITUTION_DEPTH: usize = 32;
 
+/// Maximum bytes a single `var()` expansion may produce (about 64× the input, clamped).
+///
+/// Every reference re-expands its variable, so a chain like `--aN: var(--aN-1) var(--aN-1)`
+/// is exponential: 31 doublings asked for ~4 GiB. The budget bounds the work and memory.
+pub const MAX_SUBSTITUTION_BYTES: usize = 1024 * 1024;
+
 /// Result of [`resolve_declarations`]: owned declarations + shared custom-property map.
 type ResolvedDeclarations = (
     Vec<(String, Declaration)>,
@@ -58,7 +64,20 @@ pub(crate) fn needs_resolution(cascaded: &HashMap<String, &Declaration>) -> bool
 /// as invalid at computed-value time (inherited property → parent value, otherwise initial).
 pub fn expand_variables(value: &str, custom: &HashMap<String, String>) -> Option<String> {
     let mut visiting = HashSet::new();
-    expand_inner(value, custom, 0, &mut visiting)
+    let mut budget = value
+        .len()
+        .saturating_mul(64)
+        .clamp(1024, MAX_SUBSTITUTION_BYTES);
+    expand_inner(value, custom, 0, &mut visiting, &mut budget)
+}
+
+/// Reserves `bytes` from the substitution budget (returns false when exhausted).
+fn spend(budget: &mut usize, bytes: usize) -> bool {
+    if bytes > *budget {
+        return false;
+    }
+    *budget -= bytes;
+    true
 }
 
 fn expand_inner(
@@ -66,6 +85,7 @@ fn expand_inner(
     custom: &HashMap<String, String>,
     depth: usize,
     visiting: &mut HashSet<String>,
+    budget: &mut usize,
 ) -> Option<String> {
     if depth > MAX_SUBSTITUTION_DEPTH {
         return None;
@@ -76,7 +96,11 @@ fn expand_inner(
     while index < value.len() {
         if let Some(relative) = lower[index..].find("var(") {
             let start = index + relative;
-            out.push_str(&value[index..start]);
+            let literal = &value[index..start];
+            if !spend(budget, literal.len()) {
+                return None;
+            }
+            out.push_str(literal);
             // Find the matching closing parenthesis (quotes and nesting aware).
             let mut cursor = start + 4;
             let mut depth_parens = 0usize;
@@ -112,32 +136,40 @@ fn expand_inner(
                 if let Some(raw) = custom.get(name) {
                     if visiting.contains(name) {
                         fallback.as_deref().and_then(|fallback| {
-                            expand_inner(fallback, custom, depth + 1, visiting)
+                            expand_inner(fallback, custom, depth + 1, visiting, budget)
                         })
                     } else {
                         visiting.insert(name.to_string());
-                        let result = expand_inner(raw, custom, depth + 1, visiting);
+                        let result = expand_inner(raw, custom, depth + 1, visiting, budget);
                         visiting.remove(name);
                         result.or_else(|| {
                             fallback.as_deref().and_then(|fallback| {
-                                expand_inner(fallback, custom, depth + 1, visiting)
+                                expand_inner(fallback, custom, depth + 1, visiting, budget)
                             })
                         })
                     }
                 } else {
-                    fallback
-                        .as_deref()
-                        .and_then(|fallback| expand_inner(fallback, custom, depth + 1, visiting))
+                    fallback.as_deref().and_then(|fallback| {
+                        expand_inner(fallback, custom, depth + 1, visiting, budget)
+                    })
                 }
             } else {
                 None
             };
-            out.push_str(&substituted?);
+            let substituted = substituted?;
+            if !spend(budget, substituted.len()) {
+                return None;
+            }
+            out.push_str(&substituted);
             index = end + 1;
             cursor = index;
             let _ = cursor;
         } else {
-            out.push_str(&value[index..]);
+            let tail = &value[index..];
+            if !spend(budget, tail.len()) {
+                return None;
+            }
+            out.push_str(tail);
             break;
         }
     }
@@ -269,4 +301,29 @@ pub(crate) fn resolve_declarations(
         None => inherited.cloned(),
     };
     (resolved, custom_properties)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn substitution_budget_stops_exponential_expansion() {
+        let mut custom = HashMap::new();
+        custom.insert("--a0".to_string(), "x".to_string());
+        for index in 1..=31 {
+            custom.insert(
+                format!("--a{index}"),
+                format!("var(--a{}) var(--a{})", index - 1, index - 1),
+            );
+        }
+        assert!(
+            expand_variables("var(--a31)", &custom).is_none(),
+            "exponential expansion is cut by the byte budget"
+        );
+        assert_eq!(
+            expand_variables("var(--a3)", &custom).as_deref(),
+            Some("x x x x x x x x")
+        );
+    }
 }
