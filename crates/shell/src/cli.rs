@@ -415,11 +415,17 @@ pub fn normalize_input(input: &str) -> Result<String, ShellError> {
             "cannot resolve `{input}` as a URL or local file: {error}"
         ))
     })?;
-    let path = path.display().to_string();
-    let url = format!("file://{path}");
+    // Escape `#`, `?`, `%` and spaces: a raw `file:///tmp/a#b.html` parses as path
+    // `/tmp/a` with fragment `b.html` and loads the wrong file.
+    let url = crate::pages::file_url(&path);
     net::Url::parse(&url)
         .map(|parsed| parsed.as_str())
-        .map_err(|error| ShellError::Usage(format!("cannot build file URL for {path}: {error}")))
+        .map_err(|error| {
+            ShellError::Usage(format!(
+                "cannot build file URL for {}: {error}",
+                path.display()
+            ))
+        })
 }
 
 #[cfg(test)]
@@ -620,5 +626,25 @@ mod unit_tests {
     #[test]
     fn missing_path_is_a_usage_error() {
         assert!(normalize_input("/definitely/not/a/file.html").is_err());
+    }
+    #[test]
+    fn local_paths_with_url_delimiters_are_escaped() {
+        let dir = std::env::temp_dir().join(format!("megi-cli-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("a#b?.html");
+        std::fs::write(&path, "<p>x</p>").expect("write");
+        let url = normalize_input(&path.display().to_string()).expect("normalize");
+        assert!(url.contains("%23"), "fragment delimiter escaped: {url}");
+        assert!(url.contains("%3F"), "query delimiter escaped: {url}");
+        let parsed = net::Url::parse(&url).expect("url");
+        assert!(
+            parsed.path().contains("%23") && parsed.path().contains("%3F"),
+            "delimiters stay inside the path: {}",
+            parsed.path()
+        );
+        assert!(parsed.query().is_none(), "no query component");
+        assert!(parsed.fragment().is_none(), "no fragment component");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
