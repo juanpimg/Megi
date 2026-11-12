@@ -876,6 +876,7 @@ impl Document {
     /// `child_id` is an ancestor of `parent_id`. This is enforced in release builds
     /// too, not just via `debug_assert!`.
     pub fn append_child(&mut self, parent_id: NodeId, child_id: NodeId) -> bool {
+        let parent_id = self.template_contents_target(parent_id);
         if parent_id == child_id {
             return false;
         }
@@ -978,6 +979,7 @@ impl Document {
     /// Appends text to `parent_id`, coalescing with `parent_id`'s `last_child` if it is
     /// already a `NodeKind::Text` node (per WHATWG HTML §13.2.6.1 "insert a character").
     pub fn append_text(&mut self, parent_id: NodeId, text: &str) -> NodeId {
+        let parent_id = self.template_contents_target(parent_id);
         if let Some(last_id) = self.node(parent_id).last_child
             && let NodeKind::Text(ref mut existing) = self.node_mut(last_id).kind
         {
@@ -1410,6 +1412,7 @@ impl Document {
     /// Iteration is safe against corrupted arenas: it stops (rather than panicking) if a
     /// sibling link stops resolving to a live handle.
     pub fn children(&self, parent_id: NodeId) -> ChildrenIter<'_> {
+        let parent_id = self.template_contents_target(parent_id);
         ChildrenIter {
             doc: self,
             next: self.try_node(parent_id).and_then(|node| node.first_child),
@@ -1864,6 +1867,7 @@ impl Document {
         parent_id: NodeId,
         child_id: NodeId,
     ) -> Result<NodeId, DomError> {
+        let parent_id = self.template_contents_target(parent_id);
         if self.slot_of(parent_id).is_none() {
             return Err(DomError::UnknownNode(parent_id));
         }
@@ -1892,6 +1896,7 @@ impl Document {
         new_child_id: NodeId,
         reference: Option<NodeId>,
     ) -> Result<NodeId, DomError> {
+        let parent_id = self.template_contents_target(parent_id);
         if self.slot_of(parent_id).is_none() {
             return Err(DomError::UnknownNode(parent_id));
         }
@@ -2068,6 +2073,7 @@ impl Document {
         parent_id: NodeId,
         new_children: &[NodeId],
     ) -> Result<(), DomError> {
+        let parent_id = self.template_contents_target(parent_id);
         if self.slot_of(parent_id).is_none() {
             return Err(DomError::UnknownNode(parent_id));
         }
