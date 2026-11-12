@@ -348,7 +348,12 @@ impl AddressBar {
         let needle = typed.to_ascii_lowercase();
         history
             .iter()
-            .find(|url| url.len() > self.text.len() && url.to_ascii_lowercase().contains(&needle))
+            .find(|url| {
+                // A completion must extend the typed text: `contains` matched in the middle
+                // ("exa" vs "https://example.com/") and `accept_completion` then selected
+                // garbage (`ps://example.com/`, leaving "httm").
+                url.len() > typed.len() && url.to_ascii_lowercase().starts_with(&needle)
+            })
             .cloned()
     }
 
@@ -2739,5 +2744,27 @@ mod tests {
             dest[start as usize..(start + 30) as usize].contains(&expected),
             "domain badge color painted"
         );
+    }
+    #[test]
+    fn autocomplete_requires_a_prefix_and_selects_only_the_suffix() {
+        let history = vec!["https://example.com/".to_string()];
+        let mut bar = AddressBar::new();
+        bar.open("");
+        bar.insert("exa");
+        assert_eq!(
+            bar.autocomplete(&history),
+            None,
+            "a middle substring is not a completion"
+        );
+        let mut bar = AddressBar::new();
+        bar.open("");
+        bar.insert("htt");
+        assert_eq!(
+            bar.autocomplete(&history).as_deref(),
+            Some("https://example.com/")
+        );
+        assert!(bar.accept_completion(&history));
+        assert_eq!(bar.text(), "https://example.com/");
+        assert_eq!(bar.selected_text(), Some("ps://example.com/"));
     }
 }
