@@ -122,7 +122,7 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
         "__megi_wrappers",
         "__megi_inline_handlers",
     ] {
-        let array = JsArray::new(context);
+        let array = JsArray::from_iter([], context);
         global_set(context, name, JsValue::from(array));
     }
     for (name, length, function) in window_methods() {
@@ -1157,7 +1157,7 @@ fn get_computed_style(
     let getter = accessor_fn(context, computed_get_property);
     let setter = accessor_fn(context, computed_set_property);
     let item = accessor_fn(context, computed_item);
-    let names = JsArray::new(context);
+    let names = JsArray::from_iter([], context);
     for (name, _value) in &pairs {
         let _ = names.push(js_string!(name.clone()), context);
     }
@@ -1309,7 +1309,7 @@ fn schedule_timer(
     .ok_or_else(|| js_error("no active JavaScript host"))?
     .map_err(js_error)?;
     array_put(context, "__megi_timer_callbacks", id, callback)?;
-    let args_array = JsArray::new(context);
+    let args_array = JsArray::from_iter([], context);
     for argument in args.iter().skip(2) {
         let _ = args_array.push(argument.clone(), context);
     }

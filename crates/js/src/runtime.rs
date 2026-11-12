@@ -532,6 +532,8 @@ fn classify_error(message: &str) -> JsError {
     let lower = message.to_ascii_lowercase();
     if lower.contains("loop iteration limit")
         || lower.contains("runtime limit")
+        || lower.contains("runtimelimiterror")
+        || lower.contains("iteration loops")
         || lower.contains("stack size")
         || lower.contains("maximum call stack")
         || lower.contains("recursion")
@@ -590,7 +592,7 @@ fn install_browser_features(context: &mut Context) -> Result<(), JsError> {
         "__megi_observer_callbacks",
         "__megi_observer_objects",
     ] {
-        let array = JsArray::new(context);
+        let array = JsArray::from_iter([], context);
         context
             .global_object()
             .set(js_string!(name), JsValue::from(array), false, context)
@@ -1203,7 +1205,7 @@ fn wrap_optional(context: &mut Context, node: Option<NodeId>) -> JsResult<JsValu
 }
 
 fn wrap_list(context: &mut Context, nodes: Vec<NodeId>) -> JsResult<JsValue> {
-    let array = boa_engine::object::builtins::JsArray::new(context);
+    let array = boa_engine::object::builtins::JsArray::from_iter([], context);
     for node in nodes {
         array
             .push(wrap_node(context, node)?, context)
@@ -2717,7 +2719,7 @@ fn root_array(context: &mut Context, name: &str, create: bool) -> JsResult<JsObj
     if let Some(array) = value.as_object() {
         return Ok(array.clone());
     }
-    let array = JsArray::new(context);
+    let array = JsArray::from_iter([], context);
     global
         .set(
             js_string!(name),
@@ -3362,7 +3364,7 @@ fn collect_observer_records(context: &mut Context, slot: u32, take: bool) -> JsR
     })
     .unwrap_or((None, Vec::new()));
     let _ = registration;
-    let array = JsArray::new(context);
+    let array = JsArray::from_iter([], context);
     for (index, record) in records.iter().enumerate() {
         let kind = match record.kind {
             MutationKind::ChildList => "childList",
@@ -5377,9 +5379,9 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
     if result.body.len() > MAX_FETCH_BODY {
         return Err(js_error("fetch response body limit exceeded"));
     }
-    let header_array = JsArray::new(context);
+    let header_array = JsArray::from_iter([], context);
     for (index, (name, value)) in result.headers.iter().enumerate() {
-        let pair = JsArray::new(context);
+        let pair = JsArray::from_iter([], context);
         pair.set(
             js_string!("0"),
             JsValue::from(js_string!(name.clone())),
@@ -5404,7 +5406,7 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
             .map_err(|error| js_error(error.to_string()))?;
     }
     let body_text = String::from_utf8_lossy(&result.body).to_string();
-    let body_bytes = JsArray::new(context);
+    let body_bytes = JsArray::from_iter([], context);
     for (index, byte) in result.body.iter().enumerate() {
         body_bytes
             .set(
@@ -5469,10 +5471,10 @@ impl ModuleLoader for MegiModuleLoader {
     async fn load_imported_module(
         self: Rc<Self>,
         referrer: Referrer,
-        specifier: boa_engine::JsString,
+        request: boa_engine::module::ModuleRequest,
         context: &RefCell<&mut Context>,
     ) -> JsResult<Module> {
-        let specifier = specifier.to_std_string_escaped();
+        let specifier = request.specifier().to_std_string_escaped();
         let base = referrer
             .path()
             .map(|path| path.to_string_lossy().to_string())
