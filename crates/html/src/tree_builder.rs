@@ -637,7 +637,11 @@ impl LimitViolations {
     /// Total number of recorded violations (the input truncation counts as one).
     pub const fn total(&self) -> u64 {
         let truncated = self.input_truncated as u64;
-        truncated + self.depth_exceeded + self.nodes_exceeded + self.attributes_dropped + self.detached_insertions
+        truncated
+            + self.depth_exceeded
+            + self.nodes_exceeded
+            + self.attributes_dropped
+            + self.detached_insertions
     }
 }
 
