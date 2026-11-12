@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `17699c4` (2026-11-12) · overall **99%** · **2,090** tests · conformance **PASS** · **14** crates · **160,680** lines of Rust
+**Snapshot** — commit `b1cd9f1` (2026-11-12) · overall **99%** · **2,139** tests · conformance **PASS** · **14** crates · **162,508** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -79,7 +79,7 @@
 
 **Pending**
 
-- SVG remaining SMIL/CSS animations and textPath side right
+- SVG remaining SMIL/CSS animations
 - Rasterizer/decoder performance budgets; backdrop blur/PNG entropy
 
 ### F5 — Networking & fetch (100%)
@@ -100,7 +100,6 @@
 
 **Pending**
 
-- HTTP/1.0 and proxy PAC/SOCKS/pooling
 - Image decode budgets on real pages
 
 ### F6 — JavaScript & DOM APIs (100%)
@@ -158,10 +157,10 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `17699c4` (2026-11-12) |
+| Commit | `b1cd9f1` (2026-11-12) |
 | Crates in the workspace | 14 |
-| Lines of Rust (tracked `.rs`) | 160680 |
-| Tests (`cargo test --workspace -- --list`) | 2090 |
+| Lines of Rust (tracked `.rs`) | 162508 |
+| Tests (`cargo test --workspace -- --list`) | 2139 |
 | Crates with `#![forbid(unsafe_code)]` | 14 / 14 |
 | Conformance gate | **PASS** |
 
@@ -211,4 +210,4 @@ python3 tools/update_progress.py --write --no-gate  # skip the conformance gate
 python3 tools/update_progress.py --check --no-gate --no-count  # CI freshness
 ```
 
-_Last manifest update by: docs (round 35 + PR merges). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
+_Last manifest update by: docs (round 36 + PR merges). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
