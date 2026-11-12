@@ -930,6 +930,11 @@ pub(crate) fn find_vp8_chunk(bytes: &[u8]) -> Result<&[u8], ImageError> {
     find_chunk(bytes, b"VP8 ")
 }
 
+/// Locates the optional `EXIF` metadata chunk in a WebP container.
+pub(crate) fn find_exif_chunk(bytes: &[u8]) -> Option<&[u8]> {
+    find_chunk(bytes, b"EXIF").ok()
+}
+
 /// Parsed `VP8X` extended-container header.
 struct Vp8xHeader {
     width: u32,

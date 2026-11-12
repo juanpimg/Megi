@@ -482,7 +482,10 @@ pub fn decode_with_limits(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
             let image = jpeg::decode_jpeg(bytes, limits)?;
             apply_orientation(image, exif::orientation(bytes))
         }
-        ImageFormat::WebP => webp::decode_webp(bytes, limits),
+        ImageFormat::WebP => {
+            let image = webp::decode_webp(bytes, limits)?;
+            apply_orientation(image, exif::orientation(bytes))
+        }
         ImageFormat::Unknown => Err(ImageError::InvalidSignature),
     }
 }

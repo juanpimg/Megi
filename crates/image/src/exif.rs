@@ -120,11 +120,16 @@ fn tiff_thumbnail(tiff: &[u8]) -> Option<&[u8]> {
     thumbnail.starts_with(&[0xFF, 0xD8]).then_some(thumbnail)
 }
 
-/// Returns the EXIF orientation (1–8) of a JPEG byte stream, if present.
+/// Returns the EXIF orientation (1–8) of a JPEG or WebP byte stream, if present.
 ///
-/// `None` means "no usable APP1/EXIF orientation"; callers treat it as 1
+/// `None` means "no usable EXIF orientation"; callers treat it as 1
 /// (no transformation). Values outside 1–8 are ignored as well.
 pub fn orientation(bytes: &[u8]) -> Option<u8> {
+    if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
+        let exif = crate::webp::find_exif_chunk(bytes)?;
+        let tiff = exif.strip_prefix(b"Exif\0\0").unwrap_or(exif);
+        return parse_tiff_orientation(tiff);
+    }
     if !bytes.starts_with(&[0xFF, 0xD8]) {
         return None;
     }
@@ -219,5 +224,33 @@ mod tests {
         assert_eq!(orientation(b"not a jpeg"), None);
         assert_eq!(orientation(&[0xFF, 0xD8, 0xFF, 0xD9]), None);
         assert_eq!(orientation(&[0xFF, 0xD8, 0xFF, 0xE1, 0x00]), None);
+    }
+
+    #[test]
+    fn reads_webp_exif_orientation_chunk() {
+        // Minimal TIFF little-endian IFD0 with orientation tag 0x0112 = 6 (Rotate 90 CW).
+        let mut tiff = Vec::new();
+        tiff.extend_from_slice(b"II");
+        tiff.extend_from_slice(&42u16.to_le_bytes());
+        tiff.extend_from_slice(&8u32.to_le_bytes());
+        tiff.extend_from_slice(&1u16.to_le_bytes()); // 1 IFD entry
+        tiff.extend_from_slice(&0x0112u16.to_le_bytes()); // Orientation
+        tiff.extend_from_slice(&3u16.to_le_bytes()); // SHORT
+        tiff.extend_from_slice(&1u32.to_le_bytes()); // count = 1
+        tiff.extend_from_slice(&6u16.to_le_bytes()); // value = 6
+        tiff.extend_from_slice(&0u16.to_le_bytes()); // padding
+
+        let mut webp = Vec::new();
+        webp.extend_from_slice(b"RIFF");
+        let riff_size = (4 + 8 + tiff.len() + (tiff.len() & 1)) as u32;
+        webp.extend_from_slice(&riff_size.to_le_bytes());
+        webp.extend_from_slice(b"WEBP");
+        webp.extend_from_slice(b"EXIF");
+        webp.extend_from_slice(&(tiff.len() as u32).to_le_bytes());
+        webp.extend_from_slice(&tiff);
+        if !tiff.len().is_multiple_of(2) {
+            webp.push(0);
+        }
+        assert_eq!(orientation(&webp), Some(6));
     }
 }
