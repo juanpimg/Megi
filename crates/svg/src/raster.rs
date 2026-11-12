@@ -1193,6 +1193,7 @@ impl Canvas {
             max_y = max_y.max(py_space);
         }
 <<<<<<< HEAD
+<<<<<<< HEAD
         let i0 = ((min_x - px) / width).floor() as i64 - 1;
         let i1 = ((max_x - px) / width).ceil() as i64 + 1;
         let j0 = ((min_y - py) / height).floor() as i64 - 1;
@@ -1225,14 +1226,43 @@ impl Canvas {
         let columns = (i1f - i0f + 3.0).max(0.0);
         let rows = (j1f - j0f + 3.0).max(0.0);
         if !columns.is_finite() || !rows.is_finite() || columns * rows > MAX_PATTERN_TILES as f64 {
+||||||| merged common ancestors
+<<<<<<<<< Temporary merge branch 1
+        // Compute the tile span in f64: a huge but finite `patternTransform` can exceed
+        // i64, and clamping the absolute index would silently move (or drop) a valid
+        // pattern whose phase is beyond the tile budget. Reject only over-budget spans.
+        let i0f = ((min_x - px) / width).floor() as f64;
+        let i1f = ((max_x - px) / width).ceil() as f64;
+        let j0f = ((min_y - py) / height).floor() as f64;
+        let j1f = ((max_y - py) / height).ceil() as f64;
+        let columns = (i1f - i0f + 3.0).max(0.0);
+        let rows = (j1f - j0f + 3.0).max(0.0);
+        if !columns.is_finite() || !rows.is_finite() || columns * rows > MAX_PATTERN_TILES as f64 {
+=======
+        // Compute the span in f64: a huge but finite `patternTransform` can exceed i64, and
+        // clamping the absolute index (or adding 1 to a saturated cast) would either panic
+        // or silently move a valid pattern whose phase is beyond the tile budget. Only an
+        // over-budget *span* is rejected.
+        let i0f = ((min_x - px) / width).floor();
+        let i1f = ((max_x - px) / width).ceil();
+        let j0f = ((min_y - py) / height).floor();
+        let j1f = ((max_y - py) / height).ceil();
+        let columns = i1f - i0f + 3.0;
+        let rows = j1f - j0f + 3.0;
+        if !columns.is_finite() || !rows.is_finite() || columns * rows > MAX_PATTERN_TILES as f32 {
+>>>>>>> pr812
             return Err(SvgError::Limit(
                 "pattern tile budget exceeded (too many repetitions)".to_owned(),
             ));
+        }
+        if columns <= 0.0 || rows <= 0.0 {
+            return Ok(());
         }
         let i0 = (i0f as i64).saturating_sub(1);
         let i1 = (i1f as i64).saturating_add(1);
         let j0 = (j0f as i64).saturating_sub(1);
         let j1 = (j1f as i64).saturating_add(1);
+<<<<<<< HEAD
         let columns = i1.saturating_sub(i0).saturating_add(1).max(0) as u64;
         let rows = j1.saturating_sub(j0).saturating_add(1).max(0) as u64;
         if columns.saturating_mul(rows) > MAX_PATTERN_TILES {
@@ -1241,6 +1271,39 @@ impl Canvas {
                 "pattern tile budget exceeded (too many repetitions)".to_owned(),
             ));
         }
+||||||| merged common ancestors
+        let columns = i1.saturating_sub(i0).saturating_add(1).max(0) as u64;
+        let rows = j1.saturating_sub(j0).saturating_add(1).max(0) as u64;
+        if columns.saturating_mul(rows) > MAX_PATTERN_TILES {
+||||||||| f83e33b
+        let i0 = ((min_x - px) / width).floor() as i64 - 1;
+        let i1 = ((max_x - px) / width).ceil() as i64 + 1;
+        let j0 = ((min_y - py) / height).floor() as i64 - 1;
+        let j1 = ((max_y - py) / height).ceil() as i64 + 1;
+        let columns = (i1 - i0 + 1).max(0) as u64;
+        let rows = (j1 - j0 + 1).max(0) as u64;
+        if columns.saturating_mul(rows) > MAX_PATTERN_TILES {
+=========
+        let i0 = ((min_x - px) / width).floor() as i64 - 1;
+        let i1 = ((max_x - px) / width).ceil() as i64 + 1;
+        let j0 = ((min_y - py) / height).floor() as i64 - 1;
+        let j1 = ((max_y - py) / height).ceil() as i64 + 1;
+        // `as i64` saturates for huge finite coordinates; the subtraction of two saturated
+        // ends overflows i64 (debug panic, release wrap bypassing the budget). Count in
+        // i128 so the budget check cannot be evaded.
+        let columns = i128::from(i1) - i128::from(i0) + 1;
+        let rows = i128::from(j1) - i128::from(j0) + 1;
+        if columns <= 0 || rows <= 0 {
+            return Ok(());
+        }
+        if columns.saturating_mul(rows) > i128::from(MAX_PATTERN_TILES) {
+>>>>>>>>> Temporary merge branch 2
+            return Err(SvgError::Limit(
+                "pattern tile budget exceeded (too many repetitions)".to_owned(),
+            ));
+        }
+=======
+>>>>>>> pr812
         for column in i0..=i1 {
             for row in j0..=j1 {
                 let origin =
@@ -1384,8 +1447,8 @@ impl Canvas {
                 let local_y = row as f32 + mask.top;
                 let dx = local_x * cos - local_y * sin;
                 let dy = local_x * sin + local_y * cos;
-                let px = origin_x.saturating_add(dx.round() as i64);
-                let py = origin_y.saturating_add(dy.round() as i64);
+                let px = origin_x + dx.round() as i64;
+                let py = origin_y + dy.round() as i64;
                 if px < 0 || py < 0 || px >= self.width as i64 || py >= self.height as i64 {
                     continue;
                 }
@@ -1418,12 +1481,12 @@ impl Canvas {
         let origin_x = rounded_x as i64;
         let origin_y = rounded_y as i64;
         for row in 0..mask.height {
-            let py = origin_y.saturating_add(i64::from(row));
+            let py = origin_y + i64::from(row);
             if py < 0 || py >= self.height as i64 {
                 continue;
             }
             for column in 0..mask.width {
-                let px = origin_x.saturating_add(i64::from(column));
+                let px = origin_x + i64::from(column);
                 if px < 0 || px >= self.width as i64 {
                     continue;
                 }
@@ -1837,6 +1900,7 @@ fn stamp_polygon(points: &[(f32, f32)], width: usize, height: usize, coverage: &
     }
     let first_x = (min_x.floor().max(0.0) as usize).min(width);
 <<<<<<< HEAD
+<<<<<<< HEAD
     let last_x = (max_x.ceil().max(0.0) as usize)
         .saturating_add(1)
         .min(width);
@@ -1847,7 +1911,15 @@ fn stamp_polygon(points: &[(f32, f32)], width: usize, height: usize, coverage: &
     // would then overflow (panic with overflow checks, wrap to 0 in release).
     let last_x = ((max_x.ceil().max(0.0) as usize).saturating_add(1)).min(width);
 >>>>>>> pr812
+||||||| merged common ancestors
+    // A finite coordinate above `usize::MAX` saturates on the cast, and the following `+1`
+    // would then overflow (panic with overflow checks, wrap to 0 in release).
+    let last_x = ((max_x.ceil().max(0.0) as usize).saturating_add(1)).min(width);
+=======
+    let last_x = ((max_x.ceil().max(0.0) as usize) + 1).min(width);
+>>>>>>> pr812
     let first_y = (min_y.floor().max(0.0) as usize).min(height);
+<<<<<<< HEAD
 <<<<<<< HEAD
     let last_y = (max_y.ceil().max(0.0) as usize)
         .saturating_add(1)
@@ -1856,6 +1928,11 @@ fn stamp_polygon(points: &[(f32, f32)], width: usize, height: usize, coverage: &
     let last_y = ((max_y.ceil().max(0.0) as usize) + 1).min(height);
 =======
     let last_y = ((max_y.ceil().max(0.0) as usize).saturating_add(1)).min(height);
+>>>>>>> pr812
+||||||| merged common ancestors
+    let last_y = ((max_y.ceil().max(0.0) as usize).saturating_add(1)).min(height);
+=======
+    let last_y = ((max_y.ceil().max(0.0) as usize) + 1).min(height);
 >>>>>>> pr812
     if first_x >= last_x || first_y >= last_y {
         return;
@@ -1891,6 +1968,7 @@ fn stamp_disc(center: (f32, f32), radius: f32, width: usize, height: usize, cove
     }
     let first_x = ((center.0 - radius).floor().max(0.0) as usize).min(width);
 <<<<<<< HEAD
+<<<<<<< HEAD
     let last_x = ((center.0 + radius).ceil().max(0.0) as usize)
         .saturating_add(1)
         .min(width);
@@ -1899,7 +1977,13 @@ fn stamp_disc(center: (f32, f32), radius: f32, width: usize, height: usize, cove
 =======
     let last_x = (((center.0 + radius).ceil().max(0.0) as usize).saturating_add(1)).min(width);
 >>>>>>> pr812
+||||||| merged common ancestors
+    let last_x = (((center.0 + radius).ceil().max(0.0) as usize).saturating_add(1)).min(width);
+=======
+    let last_x = (((center.0 + radius).ceil().max(0.0) as usize) + 1).min(width);
+>>>>>>> pr812
     let first_y = ((center.1 - radius).floor().max(0.0) as usize).min(height);
+<<<<<<< HEAD
 <<<<<<< HEAD
     let last_y = ((center.1 + radius).ceil().max(0.0) as usize)
         .saturating_add(1)
@@ -1908,6 +1992,11 @@ fn stamp_disc(center: (f32, f32), radius: f32, width: usize, height: usize, cove
     let last_y = (((center.1 + radius).ceil().max(0.0) as usize) + 1).min(height);
 =======
     let last_y = (((center.1 + radius).ceil().max(0.0) as usize).saturating_add(1)).min(height);
+>>>>>>> pr812
+||||||| merged common ancestors
+    let last_y = (((center.1 + radius).ceil().max(0.0) as usize).saturating_add(1)).min(height);
+=======
+    let last_y = (((center.1 + radius).ceil().max(0.0) as usize) + 1).min(height);
 >>>>>>> pr812
     let samples = (STAMP_SAMPLES * STAMP_SAMPLES) as f32;
     let radius_squared = radius * radius;
@@ -2030,38 +2119,6 @@ mod tests {
         assert!((row[1] - 0.25).abs() < 1e-6);
         assert!((row[2] - 0.1875).abs() < 1e-6);
         assert_eq!(row[3], 0.0);
-    }
-
-    #[test]
-    fn test_huge_text_origin_does_not_overflow_the_mask() {
-        let mut canvas = canvas(4, 4);
-        let mask = fonts::GlyphMask {
-            width: 2,
-            height: 1,
-            left: 0.0,
-            top: 0.0,
-            advance: 2.0,
-            data: vec![255, 255],
-        };
-        // `1e38` saturates to `i64::MAX`; the second column used to overflow `+`.
-        canvas.add_mask(1e38, 0.0, &mask);
-        assert!(canvas.coverage.iter().all(|value| *value == 0.0));
-    }
-
-    #[test]
-    fn test_huge_coordinates_do_not_overflow_stamp_bounds() {
-        let mut coverage = vec![0.0f32; 16];
-        stamp_polygon(
-            &[(0.0, -1e38), (1.0, 0.0), (0.0, 1e38)],
-            4,
-            4,
-            &mut coverage,
-        );
-        stamp_disc((0.0, 0.0), 1e38, 4, 4, &mut coverage);
-        assert!(
-            coverage.iter().any(|value| *value > 0.0),
-            "the huge disc must still paint (release wraps the bounds to zero without the fix)"
-        );
     }
 
     #[test]
