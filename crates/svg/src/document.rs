@@ -289,6 +289,7 @@ pub(crate) struct FilterSpec {
 /// Anti-DoS caps for masks/filters/clip paths and SMIL.
 pub(crate) const MAX_EFFECT_SHAPES: usize = 4096;
 pub(crate) const MAX_SMIL_ELEMENTS: usize = 1024;
+pub(crate) const MAX_SMIL_LIST_ENTRIES: usize = 1024;
 pub(crate) const MAX_FILTER_PRIMITIVES: usize = 16;
 pub(crate) const MAX_BLUR_RADIUS: u32 = 64;
 
@@ -1689,8 +1690,12 @@ fn calc_mode(element: &XmlElement) -> CalcMode {
 
 fn key_times(element: &XmlElement) -> Option<Vec<f32>> {
     let raw = element.attribute("keyTimes")?;
-    let times: Vec<f32> = raw
-        .split(';')
+    let parts: Vec<&str> = raw.split(';').collect();
+    if parts.len() > MAX_SMIL_LIST_ENTRIES {
+        return None;
+    }
+    let times: Vec<f32> = parts
+        .iter()
         .filter_map(|part| part.trim().parse::<f32>().ok())
         .filter(|value| value.is_finite() && *value >= 0.0 && *value <= 1.0)
         .collect();
@@ -1704,7 +1709,12 @@ fn key_splines(element: &XmlElement) -> Vec<[f32; 4]> {
     element
         .attribute("keySplines")
         .map(|raw| {
-            raw.split(';')
+            let parts: Vec<&str> = raw.split(';').collect();
+            if parts.len() > MAX_SMIL_LIST_ENTRIES {
+                return Vec::new();
+            }
+            parts
+                .iter()
                 .filter_map(|part| {
                     let values: Vec<f32> = part
                         .split([' ', ',', '\t'])
@@ -1823,9 +1833,13 @@ fn animated_value(
     let fraction = animation_fraction(element, time)?;
     let attribute = element.attribute("attributeName")?;
     if let Some(raw_values) = element.attribute("values") {
-        let values: Vec<&str> = raw_values
-            .split(';')
-            .map(str::trim)
+        let parts: Vec<&str> = raw_values.split(';').collect();
+        if parts.len() > MAX_SMIL_LIST_ENTRIES {
+            return None;
+        }
+        let values: Vec<&str> = parts
+            .iter()
+            .map(|v| v.trim())
             .filter(|value| !value.is_empty())
             .collect();
         if values.len() >= 2
@@ -1903,9 +1917,13 @@ fn apply_animate_transform(
         .unwrap_or_else(|| "translate".to_string());
     let mut value = Vec::new();
     if let Some(raw_values) = element.attribute("values") {
-        let values: Vec<Vec<f32>> = raw_values
-            .split(';')
-            .map(numbers)
+        let parts: Vec<&str> = raw_values.split(';').collect();
+        if parts.len() > MAX_SMIL_LIST_ENTRIES {
+            return;
+        }
+        let values: Vec<Vec<f32>> = parts
+            .iter()
+            .map(|v| numbers(v))
             .filter(|value| !value.is_empty())
             .collect();
         if values.len() >= 2
