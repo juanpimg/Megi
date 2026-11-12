@@ -528,9 +528,11 @@ fn failed_import_loads_count_against_the_stylesheet_cap() {
     )
     .expect("write document");
 
-    let mut options = RenderOptions::default();
-    options.viewport = Viewport::new(200, 100).expect("viewport");
-    options.max_stylesheets = 2;
+    let options = RenderOptions {
+        viewport: Viewport::new(200, 100).expect("viewport"),
+        max_stylesheets: 2,
+        ..RenderOptions::default()
+    };
     let output = render_url(&format!("file://{}", document.display()), &options).expect("render");
     let failed_imports = output
         .stats
