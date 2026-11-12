@@ -8,9 +8,11 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 
 > **Status**: the harness is wired into CI via
 > [`.github/workflows/fuzz-nightly.yml`](../.github/workflows/fuzz-nightly.yml) — a daily
-> run of **17 targets**: 10 minutes for the 9 critical parsers/decoders and 5 minutes for
-> the rest, plus `workflow_dispatch`. This closes the "fuzzing targets are not wired into
-> CI yet" item from `SECURITY.md`.
+> run of **17 targets** under the default libFuzzer **AddressSanitizer** build (10 minutes for
+> the 9 critical parsers/decoders and 5 minutes for the rest), plus a short
+> **UndefinedBehaviorSanitizer (UBSan)** smoke matrix on representative targets, and
+> `workflow_dispatch`. This closes the "fuzzing targets are not wired into CI yet" item from
+> `SECURITY.md`.
 
 ## Layout
 
@@ -245,6 +247,26 @@ When libFuzzer finds a crash it writes the reproducer to
    regression test in the owning crate (`crates/<crate>/tests/`), and prefer adding the
    minimised input to the corpus so future runs cover it.
 
+
+### Sanitizers
+
+- **ASan (AddressSanitizer):** enabled by default in the nightly scheduled matrix via
+  `cargo +nightly fuzz run` (libFuzzer/cargo-fuzz default sanitizer on supported hosts).
+  Memory-safety findings (use-after-free, heap overflow, etc.) are treated as
+  security-relevant per [`SECURITY.md`](../SECURITY.md).
+- **UBSan (UndefinedBehaviorSanitizer):** a dedicated `fuzz-ubsan` job runs a short smoke
+  campaign with `--sanitizer undefined` on representative parser/decoder targets
+  (excluding Boa-embedding JS targets that have known third-party leak/compat constraints).
+  Undefined-behavior findings should be triaged and fixed or reported with a minimized
+  reproducer like any other crash.
+- **LSan/leaks:** `js_eval` and `js_module` pass `-detect_leaks=0` due to a constant
+  third-party Boa one-time allocation (see target notes above); this does not suppress
+  ASan/UBSan signals for actual bugs.
+- **Triage:** sanitizer failures upload `fuzz/artifacts/` and corpus snapshots as workflow
+  artifacts. Reproduce locally with `cargo +nightly fuzz run <target> <artifact>` (add
+  `--sanitizer undefined` for UBSan reports), minimize with `cargo +nightly fuzz tmin`,
+  and follow the classification/recording steps in “Crashes and triage policy”.
+
 Fuzz work is **report-only** for crates outside its scope: do not fix `dom`, `html`,
 `css`, `layout`, `paint`, `fonts`, `net` from a fuzzing change set — file the minimised
 reproducer for the owning work package instead.
@@ -258,12 +280,13 @@ the 3 `xmlViolation` tokenizer failures are documented conformance gaps, not cra
 
 - triggers: `schedule` (daily, 03:17 UTC), `workflow_dispatch` and `pull_request` (only
   when `fuzz/**` or the workflow itself changes);
-- the scheduled/dispatch matrix builds **and runs** all **16 targets**: the 9 critical
+- the scheduled/dispatch matrices build **and run** all **17 targets** under ASan (the 9 critical
   ones (`html_parse`, `css_parse`, `selectors`, `net_url`, `render_pipeline`, `js_eval`,
   `svg_parse`, `image_decode`, `hpack_decode`) for **600 s** each, and `exif_parse`,
   `h2_push`, `body_stream`, `webp_vp8`, `js_module`, `webp_lossy`,
   `container_queries` for **300 s** (`-rss_limit_mb=2048 -timeout=25`). The job timeout
   is 30 minutes to fit the longer critical campaigns;
+- a `fuzz-ubsan` matrix runs short **UndefinedBehaviorSanitizer** smoke passes (`--sanitizer undefined`, 120 s) on representative targets;
 - pull requests run a cheap **build-only** job (`cargo +nightly fuzz build`, all targets)
   with a 20-minute job timeout. A stable-only build job is **not viable**: `cargo-fuzz`
   passes `-Zsanitizer=…` to rustc, so the build itself needs nightly;
@@ -284,8 +307,8 @@ fuzzing host or OSS-Fuzz) with a larger corpus and parallelism.
 - The render target feeds HTML through an inline `data:` document; external resource
   loading (HTTP/TLS/cache) is covered by the `net_url` target and the engine test suites,
   not by this harness.
-- libFuzzer + ASan require Linux/macOS nightly toolchains; the harness is not built on
-  stable or Windows CI.
+- libFuzzer + ASan/UBSan require Linux/macOS nightly toolchains; the harness is not built on
+  stable or Windows CI. UBSan CI coverage is a representative smoke pass, not a full-time campaign on every target.
 - `image_decode` covers PNG/JPEG/GIF/WebP sniffing plus EXIF; the dedicated
   `webp_vp8` (VP8/VP8L container + lossless) and `webp_lossy` (VP8 keyframe decoder)
   targets give WebP a focused campaign, and `exif_parse` owns the APP1/TIFF parser.

@@ -30,6 +30,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: fuzz-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -166,6 +170,73 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: fuzz-artifacts-${{ matrix.target }}
+          path: |
+            fuzz/artifacts/
+            fuzz/corpus/${{ matrix.target }}/
+          if-no-files-found: ignore
+          retention-days: 14
+
+
+  fuzz-ubsan:
+    name: fuzz-ubsan ${{ matrix.target }}
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Short UndefinedBehaviorSanitizer smoke runs on representative parsers/decoders.
+          # Excludes Boa-embedding targets (js_eval/js_module) which carry known third-party
+          # leak/compat constraints under sanitizers; they remain covered by the ASan matrix.
+          - target: html_parse
+            seconds: 120
+          - target: css_parse
+            seconds: 120
+          - target: selectors
+            seconds: 120
+          - target: net_url
+            seconds: 120
+          - target: image_decode
+            seconds: 120
+          - target: hpack_decode
+            seconds: 120
+          - target: svg_parse
+            seconds: 120
+          - target: webp_lossy
+            seconds: 120
+          - target: container_queries
+            seconds: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz -> target
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Build ${{ matrix.target }} (UBSan)
+        working-directory: fuzz
+        run: cargo +nightly fuzz build --sanitizer undefined ${{ matrix.target }}
+
+      - name: Run ${{ matrix.target }} (UBSan)
+        working-directory: fuzz
+        run: >-
+          cargo +nightly fuzz run --sanitizer undefined ${{ matrix.target }} --
+          -max_total_time=${{ matrix.seconds }}
+          -rss_limit_mb=2048
+          -timeout=25
+          -print_final_stats=1
+
+      - name: Upload UBSan crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-ubsan-artifacts-${{ matrix.target }}
           path: |
             fuzz/artifacts/
             fuzz/corpus/${{ matrix.target }}/

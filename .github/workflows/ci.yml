@@ -40,13 +40,15 @@ jobs:
       - name: Clippy (deny warnings)
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Workspace tests
-        run: cargo test --workspace --locked 2>&1 | tee /tmp/workspace-tests.log
+        run: cargo test --workspace --all-targets --locked 2>&1 | tee /tmp/workspace-tests.log
       # Checks that PROGRESS.md and docs/status/*.svg match the committed manifest plus the
       # real repository stats (git HEAD/date, crates, Rust lines, test count). The
       # conformance gate already runs in the `conformance` job, so it is not re-run here.
       - name: Status freshness (PROGRESS.md + docs/status)
         run: python3 tools/update_progress.py --check --no-gate
       - name: Documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
         run: cargo doc --workspace --no-deps --locked
       - name: Upload failure logs
         if: failure()
@@ -74,7 +76,7 @@ jobs:
             libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxcb-shm0-dev libxcb-randr0-dev
       - name: Closed-loop conformance summary (fails on unexpected regressions)
-        run: cargo run -p test_harness -- --summary 2>&1 | tee /tmp/conformance.log
+        run: cargo run --locked -p test_harness -- --summary 2>&1 | tee /tmp/conformance.log
       - name: Upload conformance log
         if: failure()
         uses: actions/upload-artifact@v7
@@ -87,6 +89,7 @@ jobs:
   msrv:
     name: MSRV (Rust 1.88)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.120
@@ -100,11 +103,12 @@ jobs:
             libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxcb-shm0-dev libxcb-randr0-dev
       - name: Check workspace against declared MSRV
-        run: cargo check --workspace --all-targets
+        run: cargo check --workspace --all-targets --locked
 
   minimal:
     name: JS-free build (--no-default-features)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
