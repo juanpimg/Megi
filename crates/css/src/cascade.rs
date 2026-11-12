@@ -1097,6 +1097,12 @@ pub fn resolve_document_styles_with_media(
     while let Some(node_id) = stack.pop() {
         if let Some(el) = doc.node(node_id).as_element() {
             let inline_decls = el.get_attribute("style").map(|style| {
+                // Cap inline style length to prevent DoS.
+                let style = if style.len() > 64 * 1024 {
+                    &style[..64 * 1024]
+                } else {
+                    style
+                };
                 let parsed = crate::parser::parse_list_of_declarations(style);
                 expand_declarations(&parsed)
             });

@@ -84,6 +84,9 @@ pub fn collect_image_sources(document: &Document) -> Vec<(NodeId, String)> {
     let mut sources = Vec::new();
     let mut stack = vec![document.root()];
     while let Some(node_id) = stack.pop() {
+        if sources.len() >= 1024 {
+            break;
+        }
         let node = document.node(node_id);
         if let Some(element) = node.as_element()
             && element.local_name.eq_ignore_ascii_case("img")

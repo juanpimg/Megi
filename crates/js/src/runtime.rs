@@ -4373,15 +4373,21 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
   var BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   define("btoa", function (input) {
     var value = String(input); var out = "";
+    for (var i = 0; i < value.length; i++) {
+      if (value.charCodeAt(i) > 255) { throw new DOMException("InvalidCharacterError", "InvalidCharacterError"); }
+    }
     for (var i = 0; i < value.length; i += 3) {
       var a = value.charCodeAt(i), b = value.charCodeAt(i + 1), c = value.charCodeAt(i + 2);
-      var triple = (a << 16) | ((b || 0) << 8) | (c || 0);
+      var triple = (a << 16) | ((isNaN(b) ? 0 : b) << 8) | (isNaN(c) ? 0 : c);
       out += BASE64.charAt((triple >> 18) & 63) + BASE64.charAt((triple >> 12) & 63) + (isNaN(b) ? "=" : BASE64.charAt((triple >> 6) & 63)) + (isNaN(c) ? "=" : BASE64.charAt(triple & 63));
     }
     return out;
   });
   define("atob", function (input) {
-    var value = String(input).replace(/[^A-Za-z0-9+/=]/g, ""); var out = "";
+    var value = String(input).replace(/\s/g, ""); var out = "";
+    for (var i = 0; i < value.length; i++) {
+      if (BASE64.indexOf(value.charAt(i)) < 0 && value.charAt(i) !== "=") { throw new DOMException("InvalidCharacterError", "InvalidCharacterError"); }
+    }
     for (var i = 0; i < value.length; i += 4) {
       var n = (BASE64.indexOf(value.charAt(i)) << 18) | (BASE64.indexOf(value.charAt(i + 1)) << 12) | ((value.charAt(i + 2) === "=" ? 0 : BASE64.indexOf(value.charAt(i + 2))) << 6) | (value.charAt(i + 3) === "=" ? 0 : BASE64.indexOf(value.charAt(i + 3)));
       out += String.fromCharCode((n >> 16) & 255);
@@ -4390,15 +4396,16 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     }
     return out;
   });
-  function clone(value, depth) {
-    if (depth > 100 || value === null || typeof value !== "object") { return value; }
+  function clone(value, seen) {
+    if (value === null || typeof value !== "object") { return value; }
+    if (seen.has(value)) { throw new DOMException("DataCloneError: cyclic object value", "DataCloneError"); }
     if (value instanceof Date) { return new Date(value.getTime()); }
-    if (value instanceof Map) { var map = new Map(); value.forEach(function (v, k) { map.set(clone(k, depth + 1), clone(v, depth + 1)); }); return map; }
-    if (value instanceof Set) { var set = new Set(); value.forEach(function (v) { set.add(clone(v, depth + 1)); }); return set; }
-    if (Array.isArray(value)) { return value.map(function (item) { return clone(item, depth + 1); }); }
-    var out = {}; for (var key in value) { if (Object.prototype.hasOwnProperty.call(value, key)) { out[key] = clone(value[key], depth + 1); } } return out;
+    if (value instanceof Map) { var map = new Map(); seen.add(value); value.forEach(function (v, k) { map.set(clone(k, seen), clone(v, seen)); }); seen.delete(value); return map; }
+    if (value instanceof Set) { var set = new Set(); seen.add(value); value.forEach(function (v) { set.add(clone(v, seen)); }); seen.delete(value); return set; }
+    if (Array.isArray(value)) { seen.add(value); var arr = value.map(function (item) { return clone(item, seen); }); seen.delete(value); return arr; }
+    seen.add(value); var out = {}; for (var key in value) { if (Object.prototype.hasOwnProperty.call(value, key)) { out[key] = clone(value[key], seen); } } seen.delete(value); return out;
   }
-  define("structuredClone", function (value) { return clone(value, 0); });
+  define("structuredClone", function (value) { return clone(value, new Set()); });
   if (typeof Promise !== "undefined") { define("queueMicrotask", function (callback) { Promise.resolve().then(callback); }); }
   else { define("queueMicrotask", function (callback) { setTimeout(callback, 0); }); }
   define("requestIdleCallback", function (callback) { return setTimeout(function () { callback({ didTimeout: false, timeRemaining: function () { return 50; } }); }, 0); });
@@ -4427,11 +4434,11 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     }
   }
   Headers.prototype._find = function (name) { var lower = String(name).toLowerCase(); for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { return i; } } return -1; };
-  Headers.prototype.get = function (name) { var i = this._find(name); return i < 0 ? null : this._h[i][1]; };
+  Headers.prototype.get = function (name) { var lower = String(name).toLowerCase(); var values = []; for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { values.push(this._h[i][1]); } } return values.length === 0 ? null : values.join(", "); };
   Headers.prototype.has = function (name) { return this._find(name) >= 0; };
   Headers.prototype.append = function (name, value) { this._h.push([String(name), String(value)]); };
-  Headers.prototype.set = function (name, value) { var i = this._find(name); if (i >= 0) { this._h[i][1] = String(value); } else { this.append(name, value); } };
-  Headers.prototype["delete"] = function (name) { var i = this._find(name); if (i >= 0) { this._h.splice(i, 1); } };
+  Headers.prototype.set = function (name, value) { var lower = String(name).toLowerCase(); var out = []; var found = false; for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { if (!found) { out.push([this._h[i][0], String(value)]); found = true; } } else { out.push(this._h[i]); } } if (!found) { out.push([String(name), String(value)]); } this._h = out; };
+  Headers.prototype["delete"] = function (name) { var lower = String(name).toLowerCase(); this._h = this._h.filter(function (pair) { return pair[0].toLowerCase() !== lower; }); };
   Headers.prototype.forEach = function (callback, thisArg) { for (var i = 0; i < this._h.length; i++) { callback.call(thisArg, this._h[i][1], this._h[i][0], this); } };
   Headers.prototype.entries = function () { return this._h.slice(); };
   define("Headers", Headers);
@@ -4539,16 +4546,17 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       this.url = input.url;
       this.method = String(init.method || input.method || "GET").toUpperCase();
       this.headers = new Headers(init.headers || input.headers);
-      this.body = init.body !== undefined ? String(init.body) : (input.body || null);
+      this.body = init.body !== undefined ? init.body : (input.body || null);
+      if (this.body !== null && (this.method === "GET" || this.method === "HEAD")) { throw new TypeError("Request with GET/HEAD method cannot have body"); }
       this.signal = init.signal || input.signal || null;
     } else {
       this.url = new URL(String(input), location.href).href;
       this.method = String(init.method || "GET").toUpperCase();
       this.headers = new Headers(init.headers);
-      this.body = init.body !== undefined && init.body !== null ? String(init.body) : null;
+      this.body = init.body !== undefined && init.body !== null ? init.body : null;
+      if (this.body !== null && (this.method === "GET" || this.method === "HEAD")) { throw new TypeError("Request with GET/HEAD method cannot have body"); }
       this.signal = init.signal || null;
     }
-    if (this.method === "GET" || this.method === "HEAD") { this.body = null; }
   }
   define("Request", Request);
   define("fetch", function (input, init) {
@@ -5413,6 +5421,44 @@ impl ModuleLoader for MegiModuleLoader {
             .borrow()
             .clone()
             .ok_or_else(|| js_error("no active JavaScript host"))?;
+        // Consult the import map first (like resolve_module does).
+        let import_map_result = {
+            let host = host.borrow();
+            host.import_map
+                .as_ref()
+                .and_then(|map| map.resolve(&specifier))
+        };
+        if let Some(result) = import_map_result {
+            match result {
+                Some(target) => {
+                    // Load from the import-map target.
+                    let source = {
+                        let host = host.borrow();
+                        match host.module_loader.as_ref() {
+                            Some(loader) => {
+                                loader(&target).map_err(|error| js_error(error.to_string()))?
+                            }
+                            None => return Err(js_error(format!("module not found: {target}"))),
+                        }
+                    };
+                    let mut context = context.borrow_mut();
+                    let module = Module::parse(
+                        Source::from_bytes(&source).with_path(Path::new(&target)),
+                        None,
+                        &mut context,
+                    )?;
+                    self.cache
+                        .borrow_mut()
+                        .insert((base, specifier), module.clone());
+                    return Ok(module);
+                }
+                None => {
+                    return Err(js_error(format!(
+                        "import map blocked: {specifier} (base {base})"
+                    )));
+                }
+            }
+        }
         let resolved = {
             let host = host.borrow();
             match host.module_resolver.as_ref() {

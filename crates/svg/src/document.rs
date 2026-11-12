@@ -1503,6 +1503,18 @@ pub(crate) fn parse_length(raw: Option<&str>, reference: f32) -> Option<f32> {
     let (number, suffix) = split_length(raw)?;
     let value = if suffix.is_empty() || suffix.eq_ignore_ascii_case("px") {
         number
+    } else if suffix.eq_ignore_ascii_case("pt") {
+        number * 96.0 / 72.0
+    } else if suffix.eq_ignore_ascii_case("pc") {
+        number * 15.0
+    } else if suffix.eq_ignore_ascii_case("in") {
+        number * 96.0
+    } else if suffix.eq_ignore_ascii_case("cm") {
+        number * 96.0 / 2.54
+    } else if suffix.eq_ignore_ascii_case("mm") {
+        number * 96.0 / 25.4
+    } else if suffix.eq_ignore_ascii_case("q") {
+        number * 96.0 / 25.4 / 4.0
     } else if suffix == "%" && reference > 0.0 {
         number / 100.0 * reference
     } else {
@@ -1738,6 +1750,7 @@ fn numbers(raw: &str) -> Vec<f32> {
     raw.split([' ', ',', '\t', '\n'])
         .filter_map(|part| part.trim().parse::<f32>().ok())
         .filter(|value| value.is_finite())
+        .take(1024)
         .collect()
 }
 

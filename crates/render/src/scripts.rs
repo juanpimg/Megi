@@ -389,6 +389,9 @@ fn is_module_script(type_attr: Option<&str>) -> bool {
 pub fn discover_scripts(document: &Document, _warnings: &mut Vec<String>) -> Vec<ScriptCandidate> {
     let mut candidates = Vec::new();
     for element in document.get_elements_by_tag_name("script") {
+        if candidates.len() >= 1024 {
+            break;
+        }
         let Some(data) = document.node(element).as_element() else {
             continue;
         };

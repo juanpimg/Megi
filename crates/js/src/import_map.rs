@@ -41,6 +41,12 @@ impl ImportMap {
             let imports = imports
                 .as_object()
                 .ok_or_else(|| JsError::ImportMap("`imports` is not an object".to_string()))?;
+            const MAX_IMPORTS: usize = 1024;
+            if imports.len() > MAX_IMPORTS {
+                return Err(JsError::ImportMap(format!(
+                    "too many import-map entries (max {MAX_IMPORTS})"
+                )));
+            }
             for (specifier, target) in imports {
                 let target = match target {
                     Json::Null => None,
@@ -237,6 +243,8 @@ impl Parser<'_> {
                     Some(b'"') => out.push(b'"'),
                     Some(b'\\') => out.push(b'\\'),
                     Some(b'/') => out.push(b'/'),
+                    Some(b'b') => out.push(0x08),
+                    Some(b'f') => out.push(0x0C),
                     Some(b'n') => out.push(b'\n'),
                     Some(b'r') => out.push(b'\r'),
                     Some(b't') => out.push(b'\t'),

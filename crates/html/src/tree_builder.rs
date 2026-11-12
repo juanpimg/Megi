@@ -4457,6 +4457,9 @@ fn drive_tokenizer(tok: &mut Tokenizer, tb: &mut TreeBuilder) {
                 // after the token that closed the script, before the remaining input).
                 if let Some(written) = tb.take_pending_written_html() {
                     tok.insert_input(&written);
+                    // The inserted bytes must be tokenized before we stop, even if
+                    // the triggering token was EOF.
+                    saw_eof = false;
                 }
                 refresh_cdata(tok, tb, &mut cdata_key);
             }

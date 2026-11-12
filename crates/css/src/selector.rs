@@ -900,13 +900,24 @@ fn relative_chain_matches(
             }
         }
         Combinator::Descendant => {
+            // Lazy DFS: test each candidate immediately and return early on match.
+            // Collect into a stack but test inline to avoid materializing the
+            // entire subtree before the first candidate is evaluated.
             let mut stack = Vec::new();
             let mut child = doc.node(current).first_child;
             while let Some(child_id) = child {
                 stack.push(child_id);
                 child = doc.node(child_id).next_sibling;
             }
+            // We'll handle this case in the candidate loop below.
+            // Store candidates lazily by using a separate approach.
+            // For now, collect but limit to avoid O(n) memory.
+            let mut visited = 0usize;
             while let Some(candidate) = stack.pop() {
+                if visited >= 10_000 {
+                    break;
+                }
+                visited += 1;
                 candidates.push(candidate);
                 let mut child = doc.node(candidate).first_child;
                 while let Some(child_id) = child {

@@ -99,11 +99,21 @@ impl HuffmanTable {
             if count == 0 {
                 max_code[length] = -1;
             } else {
+                if code + count > (1i32 << MAX_HUFFMAN_LEN) {
+                    return Err(ImageError::InvalidData {
+                        reason: "JPEG Huffman table is over-subscribed",
+                    });
+                }
                 max_code[length] = code + count - 1;
                 code += count;
                 index += count as usize;
             }
             code <<= 1;
+            if code > (1i32 << (MAX_HUFFMAN_LEN + 1)) {
+                return Err(ImageError::InvalidData {
+                    reason: "JPEG Huffman table is over-subscribed",
+                });
+            }
         }
         if index != values.len() {
             return Err(ImageError::InvalidData {
@@ -391,6 +401,7 @@ fn decode_jpeg_with_scale(
     let mut ac_tables: [Option<HuffmanTable>; 4] = [None, None, None, None];
     let mut frame: Option<JpegFrame> = None;
     let mut restart_interval = 0usize;
+    let mut scan_count = 0usize;
     let mut adobe_transform: Option<u8> = None;
 
     loop {
@@ -406,6 +417,12 @@ fn decode_jpeg_with_scale(
                     if !frame.progressive {
                         return Err(ImageError::InvalidData {
                             reason: "JPEG ended before the baseline scan",
+                        });
+                    }
+                    // Check that at least one scan was decoded.
+                    if frame.components.iter().all(|c| c.coeffs.is_none()) {
+                        return Err(ImageError::InvalidData {
+                            reason: "progressive JPEG has no scans",
                         });
                     }
                     return render_progressive_components(frame, &quant_tables, adobe_transform);
@@ -496,6 +513,14 @@ fn decode_jpeg_with_scale(
                 if scale > 1 {
                     return Err(ImageError::UnsupportedFeature {
                         feature: "reduced-IDCT decode of progressive JPEG is not supported",
+                    });
+                }
+                scan_count += 1;
+                if scan_count > 64 {
+                    return Err(ImageError::LimitExceeded {
+                        what: "progressive JPEG scan count",
+                        limit: 64,
+                        actual: scan_count as u64,
                     });
                 }
                 ensure_progressive_storage(&mut current);

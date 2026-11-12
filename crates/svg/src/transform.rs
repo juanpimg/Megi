@@ -220,7 +220,7 @@ impl Transform {
 
 /// Parses a list of SVG numbers (whitespace/comma separated, exponents allowed).
 pub(crate) fn parse_number_list(raw: &str) -> Option<Vec<f32>> {
-    parse_number_list_limited(raw, usize::MAX)
+    parse_number_list_limited(raw, 100_000)
 }
 
 /// [`parse_number_list`] with a maximum element count, checked before allocating more.

@@ -255,12 +255,14 @@ fn calculate_block_width(layout_box: &mut LayoutBox, cb_width: f32) {
         style.padding.left,
         style.calc_lengths.padding_left,
         cb_width,
-    );
+    )
+    .max(0.0);
     let padding_right = resolve_length(
         style.padding.right,
         style.calc_lengths.padding_right,
         cb_width,
-    );
+    )
+    .max(0.0);
     let border_left = style.border_width.left;
     let border_right = style.border_width.right;
     let edges_h = padding_left + padding_right + border_left + border_right;
@@ -356,6 +358,7 @@ fn solve_block_width(
 ) -> (f32, f32, f32) {
     match content_width {
         Some(width) => {
+            let width = width.max(0.0);
             let underflow = cb_width - (width + edges_h);
             let (margin_left, margin_right) = match (margin_left_auto, margin_right_auto) {
                 (true, true) => {
@@ -395,12 +398,13 @@ pub(crate) fn resolve_vertical_edges(layout_box: &mut LayoutBox, cb_width: f32) 
         return;
     };
     layout_box.dimensions.padding.top =
-        resolve_length(style.padding.top, style.calc_lengths.padding_top, cb_width);
+        resolve_length(style.padding.top, style.calc_lengths.padding_top, cb_width).max(0.0);
     layout_box.dimensions.padding.bottom = resolve_length(
         style.padding.bottom,
         style.calc_lengths.padding_bottom,
         cb_width,
-    );
+    )
+    .max(0.0);
     layout_box.dimensions.border.top = style.border_width.top;
     layout_box.dimensions.border.bottom = style.border_width.bottom;
     layout_box.dimensions.margin.top =
@@ -945,7 +949,7 @@ fn defined_content_height(layout_box: &LayoutBox, cb_height: Option<f32>) -> Opt
         }
     };
     match style.height {
-        Length::Px(px) => Some(to_content(px)),
+        Length::Px(px) => Some(to_content(px.max(0.0))),
         Length::Percent(pct) => cb_height.map(|height| to_content(height * (pct / 100.0))),
         Length::Auto => None,
     }
@@ -1392,7 +1396,7 @@ pub(crate) fn calculate_shrink_to_fit_width(
         }
     };
     let content_width = match width {
-        Length::Px(px) => to_content(px),
+        Length::Px(px) => to_content(px.max(0.0)),
         Length::Percent(pct) => to_content(cb_width * (pct / 100.0)),
         Length::Auto => {
             let usable = (available - margin_left - margin_right - edges_h).max(0.0);
@@ -1699,7 +1703,7 @@ pub(crate) fn replaced_content_size(
         Length::Px(px) => Some(if is_border_box {
             (px - edges_h).max(0.0)
         } else {
-            px
+            px.max(0.0)
         }),
         Length::Percent(pct) => {
             let border_box = cb_width * (pct / 100.0);
@@ -1715,7 +1719,7 @@ pub(crate) fn replaced_content_size(
         Length::Px(px) => Some(if is_border_box {
             (px - edges_v).max(0.0)
         } else {
-            px
+            px.max(0.0)
         }),
         Length::Percent(pct) => cb_height.map(|height| {
             let border_box = height * (pct / 100.0);
