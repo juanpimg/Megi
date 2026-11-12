@@ -353,6 +353,7 @@ pub const MAX_SHADOWS: usize = 32;
 
 /// Hard cap on the number of text runs used to build a `background-clip: text` mask.
 pub const MAX_TEXT_MASK_RUNS: usize = 4096;
+pub const MAX_TEXT_RUN_CHARS: usize = 4096;
 
 /// Hard cap on the pixel area of an offscreen rounded-clip group.
 ///
