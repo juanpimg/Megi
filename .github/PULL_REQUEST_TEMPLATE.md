@@ -14,6 +14,10 @@
 - [ ] Commit messages follow conventional format
 - [ ] Documentation updated (if applicable)
 
+## AI Assistance
+
+- [ ] This PR was written or assisted by AI (please disclose which tool/model)
+
 ## Testing
 
 <!-- How was this tested? -->
