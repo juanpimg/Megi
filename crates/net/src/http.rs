@@ -1798,9 +1798,13 @@ fn stream_response_body(
     let encoding = if options.accept_encoding == AcceptEncoding::Identity {
         None
     } else {
-        header_value(headers, "content-encoding")
-            .and_then(|value| ContentEncoding::parse(value).ok())
-            .filter(|encoding| *encoding != ContentEncoding::Identity)
+        // Propagate an unparsable encoding like the buffered path does, instead of
+        // silently streaming still-compressed bytes as identity (issue #458).
+        match header_value(headers, "content-encoding") {
+            Some(value) => Some(ContentEncoding::parse(value)?),
+            None => None,
+        }
+        .filter(|encoding| *encoding != ContentEncoding::Identity)
     };
     if let Some(encoding) = encoding {
         return stream_encoded_body(reader, headers, options, encoding, on_data);
