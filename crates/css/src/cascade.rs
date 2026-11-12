@@ -678,7 +678,7 @@ pub fn resolve_cascaded_properties<'a>(
         &candidates,
     );
     merge_container_rules(doc, node_id, collection, &mut best);
-    apply_revert_layer(doc, node_id, collection, &mut best);
+    apply_revert_layer(doc, node_id, collection, &candidates, &mut best);
     owned_declarations(best)
 }
 
@@ -854,6 +854,7 @@ fn apply_revert_layer<'a>(
     doc: &Document,
     node_id: NodeId,
     collection: &'a StyleCollection,
+    candidates: &[Candidate],
     best: &mut HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher>,
 ) {
     // `revert-layer` is rare: without any such declaration the per-element scan (which
@@ -873,31 +874,38 @@ fn apply_revert_layer<'a>(
             continue;
         };
         let important = is_important(winner.origin_importance);
-        let mut candidates: Vec<MatchedDeclaration<'a>> = Vec::new();
-        for rule in &collection.rules {
-            for selector in &rule.selectors.selectors {
-                if !selector.matches(doc, node_id) {
+        let mut matched: Vec<MatchedDeclaration<'a>> = Vec::new();
+        // Re-evaluate only the index's candidates (a superset of the matching selectors)
+        // instead of scanning every rule × selector of the collection: `revert-layer` used
+        // to disable the rule index for each affected property.
+        for candidate in candidates {
+            let Some(rule) = collection.rules.get(candidate.rule as usize) else {
+                continue;
+            };
+            let Some(selector) = rule.selectors.selectors.get(candidate.selector as usize) else {
+                continue;
+            };
+            if !selector.matches(doc, node_id) {
+                continue;
+            }
+            let specificity = selector.specificity();
+            for (declaration_order, declaration) in rule.declarations.iter().enumerate() {
+                if declaration.name != property {
                     continue;
                 }
-                let specificity = selector.specificity();
-                for (declaration_order, declaration) in rule.declarations.iter().enumerate() {
-                    if declaration.name != property {
-                        continue;
-                    }
-                    let origin_importance =
-                        CascadeOriginImportance::new(rule.origin, declaration.important);
-                    if origin_importance != winner.origin_importance {
-                        continue;
-                    }
-                    candidates.push(MatchedDeclaration {
-                        declaration,
-                        origin_importance,
-                        layer_rank: rule.layer_rank,
-                        specificity,
-                        source_order: rule.source_order,
-                        declaration_order: declaration_order as u32,
-                    });
+                let origin_importance =
+                    CascadeOriginImportance::new(rule.origin, declaration.important);
+                if origin_importance != winner.origin_importance {
+                    continue;
                 }
+                matched.push(MatchedDeclaration {
+                    declaration,
+                    origin_importance,
+                    layer_rank: rule.layer_rank,
+                    specificity,
+                    source_order: rule.source_order,
+                    declaration_order: declaration_order as u32,
+                });
             }
         }
         for container_rule in &collection.container_rules {
@@ -924,7 +932,7 @@ fn apply_revert_layer<'a>(
                     if origin_importance != winner.origin_importance {
                         continue;
                     }
-                    candidates.push(MatchedDeclaration {
+                    matched.push(MatchedDeclaration {
                         declaration,
                         origin_importance,
                         layer_rank: rule.layer_rank,
@@ -935,9 +943,9 @@ fn apply_revert_layer<'a>(
                 }
             }
         }
-        candidates.sort_by(|a, b| b.cmp(a));
+        matched.sort_by(|a, b| b.cmp(a));
         let mut replacement = None;
-        for candidate in candidates {
+        for candidate in matched {
             if candidate.layer_rank == winner.layer_rank {
                 continue;
             }
@@ -1097,7 +1105,7 @@ pub fn resolve_document_styles_with_media(
                 &candidates,
             );
             merge_container_rules(doc, node_id, &collection, &mut best);
-            apply_revert_layer(doc, node_id, &collection, &mut best);
+            apply_revert_layer(doc, node_id, &collection, &candidates, &mut best);
             let cascaded = owned_declarations(best);
 
             let parent_style = doc.node(node_id).parent.and_then(|p| styles.get(&p));
@@ -1452,5 +1460,27 @@ mod tests {
         assert_eq!(indexed, bruteforce);
         // The directly-appended rule has the highest source order and must win.
         assert_eq!(indexed.get(&div).expect("style").color, Color::BLUE);
+    }
+    #[test]
+    fn revert_layer_resolution_is_index_independent() {
+        let doc = build_document();
+        let collection = collection_with(
+            "@layer base { div.a { color: rgb(255, 0, 0); } }\n\
+             @layer over { div.a { color: revert-layer; } }",
+        );
+        let indexed = resolve_indexed(&doc, &collection);
+        let bruteforce = resolve_bruteforce(&doc, &collection);
+        assert_eq!(
+            indexed, bruteforce,
+            "revert-layer resolution must not depend on the rule index"
+        );
+        // The rule index is a superset of the matching selectors, so the candidate-based
+        // rollback sees exactly the declarations the unindexed scan saw.
+        assert!(
+            indexed
+                .values()
+                .any(|style| style.color != Color::new(0, 0, 0, 255)),
+            "the layered rules are resolved"
+        );
     }
 }
