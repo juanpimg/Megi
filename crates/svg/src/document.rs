@@ -9,7 +9,9 @@
 use std::collections::HashMap;
 
 use crate::color::{Color, parse_color};
-use crate::css::{StyleRule, matching_declarations, parse_declarations, parse_stylesheet};
+use crate::css::{
+    SelectorBudget, StyleRule, matching_declarations, parse_declarations, parse_stylesheet,
+};
 use crate::gradient::GradientSpec;
 use crate::path::{SubPath, parse_path_data};
 use crate::pattern::{PatternSpec, Units};
@@ -381,6 +383,7 @@ impl Document {
             masks: &masks,
             filters: &filters,
             limits,
+            selector_checks_used: 0,
             shapes: Vec::new(),
             texts: Vec::new(),
             use_stack: Vec::new(),
@@ -498,13 +501,14 @@ impl Style {
         ancestors: &[&XmlElement],
         gradients: &HashMap<String, u32>,
         patterns: &HashMap<String, u32>,
-    ) {
+        selector_budget: &mut SelectorBudget,
+    ) -> Result<(), SvgError> {
         for name in PRESENTATION_PROPERTIES {
             if let Some(value) = element.attribute(name) {
                 self.apply_declaration(name, value, gradients, patterns);
             }
         }
-        for declaration in matching_declarations(rules, element, ancestors) {
+        for declaration in matching_declarations(rules, element, ancestors, selector_budget)? {
             self.apply_declaration(&declaration.name, &declaration.value, gradients, patterns);
         }
         if let Some(inline) = element.attribute("style") {
@@ -512,6 +516,7 @@ impl Style {
                 self.apply_declaration(&declaration.name, &declaration.value, gradients, patterns);
             }
         }
+        Ok(())
     }
 
     /// Applies one presentation/CSS declaration to this style.
@@ -613,6 +618,8 @@ struct Builder<'a> {
     masks: &'a [MaskSpec],
     filters: &'a [FilterSpec],
     limits: &'a Limits,
+    /// Selector evaluations performed by the in-SVG stylesheet cascade.
+    selector_checks_used: usize,
     shapes: Vec<Shape>,
     texts: Vec<TextSpec>,
     use_stack: Vec<String>,
@@ -808,13 +815,19 @@ impl<'a> Builder<'a> {
         style.clip_path = None;
         style.mask = None;
         style.filter = None;
+        let mut selector_budget = SelectorBudget {
+            used: self.selector_checks_used,
+            max: self.limits.max_selector_checks,
+        };
         style.apply(
             element,
             self.rules,
             ancestors,
             self.gradient_ids,
             self.pattern_ids,
-        );
+            &mut selector_budget,
+        )?;
+        self.selector_checks_used = selector_budget.used;
         let local_transform = element
             .attribute("transform")
             .and_then(Transform::parse)
@@ -2018,6 +2031,7 @@ fn build_effect_shapes(
         masks: &no_masks,
         filters: &no_filters,
         limits,
+        selector_checks_used: 0,
         shapes: Vec::new(),
         texts: Vec::new(),
         use_stack: Vec::new(),
@@ -2335,6 +2349,7 @@ fn build_patterns(
             masks: &no_masks,
             filters: &no_filters,
             limits,
+            selector_checks_used: 0,
             shapes: Vec::new(),
             texts: Vec::new(),
             use_stack: Vec::new(),
@@ -2344,7 +2359,19 @@ fn build_patterns(
         };
         let mut style = Style::default();
         let mut ancestors: Vec<&XmlElement> = vec![element];
-        style.apply(element, rules, &ancestors, gradient_ids, pattern_ids);
+        let mut selector_budget = SelectorBudget {
+            used: builder.selector_checks_used,
+            max: limits.max_selector_checks,
+        };
+        style.apply(
+            element,
+            rules,
+            &ancestors,
+            gradient_ids,
+            pattern_ids,
+            &mut selector_budget,
+        )?;
+        builder.selector_checks_used = selector_budget.used;
         builder.visit_children(element, &mut ancestors, Transform::IDENTITY, &style, 1.0, 0)?;
         specs.push(PatternSpec {
             x: first_number(element.attribute("x")),
