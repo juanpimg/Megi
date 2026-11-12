@@ -2,9 +2,7 @@
 //! viewBox/preserveAspectRatio, paths, strokes, opacity/AA, determinism, limits
 //! and robustness against malformed input.
 
-use svg::{
-    Limits, SvgError, SvgImage, SvgOptions, intrinsic_size, render_svg, render_svg_with_limits,
-};
+use svg::{Limits, SvgImage, SvgOptions, intrinsic_size, render_svg, render_svg_with_limits};
 
 fn render(source: &str, options: SvgOptions) -> SvgImage {
     render_svg(source.as_bytes(), &options).expect("valid SVG")
@@ -683,15 +681,29 @@ fn test_gradient_cycles_and_malformed_definitions_do_not_paint_or_panic() {
 }
 
 #[test]
-fn test_huge_pattern_transform_is_rejected_without_panicking() {
-    // A large patternTransform makes the tile indices exceed i64; they are clamped and the
-    // tile budget rejects the pattern instead of overflowing (+1/-1 panics in debug).
+fn test_huge_pattern_phase_does_not_panic() {
+    // A 1e19 offset with 0.01 scale maps the canvas to ~1e21 pattern units: the absolute
+    // tile index exceeds i64 (saturating casts) but the span is tiny, so this is a valid
+    // pattern that renders (blank here, because the tiles are far off-canvas). It used to
+    // panic on the `as i64 - 1` underflow / `+1` overflow.
     let source = b"<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8'>\
         <defs><pattern id='p' width='1' height='1' patternUnits='userSpaceOnUse' \
         patternTransform='matrix(0.01 0 0 0.01 1e19 0)'><rect width='1' height='1' fill='red'/>\
         </pattern></defs><rect width='8' height='8' fill='url(#p)'/></svg>";
-    match render_svg_with_limits(source, &SvgOptions::default(), &Limits::default()) {
-        Ok(_) => {}
-        Err(error) => assert!(matches!(error, SvgError::Limit(_)), "{error:?}"),
-    }
+    let image = render_svg_with_limits(source, &SvgOptions::default(), &Limits::default())
+        .expect("a huge but valid pattern phase must not fail");
+    assert_eq!((image.width, image.height), (8, 8));
+}
+
+#[test]
+fn test_pattern_phase_beyond_the_tile_budget_still_renders() {
+    // A valid pattern translated by 20,000 pattern units: the *indices* are far beyond the
+    // 10,000-tile budget but the *span* is 11 columns, so it must still paint at device 0.
+    // (Clamping the absolute index used to move the tiles out of the canvas.)
+    let source = "<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8'>\
+        <defs><pattern id='p' width='1' height='1' patternUnits='userSpaceOnUse' \
+        patternTransform='matrix(1 0 0 1 20000 0)'><rect width='1' height='1' fill='red'/>\
+        </pattern></defs><rect width='8' height='8' fill='url(#p)'/></svg>";
+    let image = render_at(source, 8, 8);
+    assert_eq!(pixel(&image, 0, 0), [255, 0, 0, 255]);
 }
