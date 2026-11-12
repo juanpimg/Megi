@@ -368,6 +368,9 @@ impl ResourceLoader {
         // `data:` URLs are immutable inline payloads: decode on demand, no cache.
         if url.scheme() == Scheme::Data {
             let data = decode_data_url(url)?;
+            if data.bytes.len() > self.options.max_response_bytes {
+                return Err(LoadError::Fetch(FetchError::ResponseTooLarge));
+            }
             return Ok(Arc::new(Resource {
                 url: url.clone(),
                 bytes: data.bytes,

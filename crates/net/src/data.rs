@@ -144,6 +144,10 @@ pub fn base64_encode(input: &[u8]) -> String {
 /// Returns a descriptive error for invalid characters or impossible lengths, so
 /// malformed `data:` URLs produce [`FetchError::InvalidDataUrl`] instead of garbage.
 pub fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
+    const MAX_DATA_URL_BYTES: usize = 64 * 1024 * 1024;
+    if input.len() > MAX_DATA_URL_BYTES * 4 / 3 + 4 {
+        return Err("data: URL payload too large".to_owned());
+    }
     let mut sextets: Vec<u8> = Vec::with_capacity(input.len());
     let mut padding = 0usize;
     for byte in input.bytes() {
