@@ -706,4 +706,44 @@ fn test_pattern_phase_beyond_the_tile_budget_still_renders() {
         </pattern></defs><rect width='8' height='8' fill='url(#p)'/></svg>";
     let image = render_at(source, 8, 8);
     assert_eq!(pixel(&image, 0, 0), [255, 0, 0, 255]);
+
+    #[test]
+    fn huge_stroke_widths_are_clamped_instead_of_panicking() {
+        for shape in [
+            "<rect x='4' y='4' width='12' height='12' fill='none' stroke='#123456' stroke-width='1e20'/>",
+            "<circle cx='10' cy='10' r='5' fill='none' stroke='#123456' stroke-width='1e20'/>",
+            "<path d='M2 2 L18 18' fill='none' stroke='#123456' stroke-width='1e20'/>",
+        ] {
+            let source = format!(
+                "<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'>{shape}</svg>"
+            );
+            let image = render_svg(
+                source.as_bytes(),
+                &SvgOptions {
+                    width: Some(20),
+                    height: Some(20),
+                },
+            )
+            .expect("a clamped stroke still renders");
+            assert_eq!(image.width, 20);
+        }
+    }
+
+    #[test]
+    fn far_off_canvas_text_does_not_panic() {
+        for x in ["1e38", "-1e38"] {
+            let source = format!(
+                "<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10'><text x='{x}' y='20'>A</text></svg>"
+            );
+            let image = render_svg(
+                source.as_bytes(),
+                &SvgOptions {
+                    width: Some(16),
+                    height: Some(16),
+                },
+            )
+            .expect("far-off-canvas text still renders");
+            assert_eq!(image.width, 16);
+        }
+    }
 }
