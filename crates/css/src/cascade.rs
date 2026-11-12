@@ -1068,6 +1068,9 @@ pub fn resolve_document_styles_with_media(
     author_css: Option<&str>,
     media: MediaContext,
 ) -> HashMap<NodeId, crate::properties::ComputedStyle> {
+    // One sibling-index cache for the whole pass: `:nth-*` matching becomes O(1) per element
+    // instead of scanning the sibling chain.
+    let _sibling_scope = crate::selector::document_scope();
     let mut collection = crate::user_agent::create_user_agent_style_collection();
     collection.media = media;
     if let Some(css) = author_css {

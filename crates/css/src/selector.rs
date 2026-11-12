@@ -22,6 +22,7 @@
 //! over-matching (audit findings F13/F14/F15/F16).
 
 use dom::{Document, Namespace, NodeId, NodeKind};
+<<<<<<< HEAD
 use std::cell::Cell;
 
 /// Maximum selector-match steps for one element resolution (cascade) or one top-level
@@ -102,6 +103,11 @@ fn spend_match_step() -> bool {
         }
     })
 }
+||||||| 40f9e6e
+=======
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+>>>>>>> pr917
 
 /// Operator for attribute selectors (`[attr=value]`, `[attr~=value]`, etc.).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -406,8 +412,129 @@ fn same_element_type(doc: &Document, a: NodeId, b: NodeId) -> bool {
         }
 }
 
+thread_local! {
+    /// Active document-wide sibling-index cache (one style resolution pass).
+    static SIBLING_CACHE: RefCell<Option<SiblingCache>> = const { RefCell::new(None) };
+    /// Nesting depth of document scopes.
+    static SIBLING_SCOPE_DEPTH: Cell<u32> = const { Cell::new(0) };
+    /// Test-only: how many sibling tables were built.
+    #[cfg(test)]
+    static SIBLING_TABLES_BUILT: Cell<usize> = const { Cell::new(0) };
+}
+
+struct SiblingCache {
+    /// Address of the document the cache applies to (avoids cross-document id collisions).
+    document: usize,
+    tables: HashMap<NodeId, SiblingTable>,
+}
+
+struct SiblingTable {
+    /// For each element child: (index from start, index from end, same-type index from
+    /// start, same-type index from end); all 1-based.
+    entries: HashMap<NodeId, (usize, usize, usize, usize)>,
+}
+
+impl SiblingTable {
+    fn build(doc: &Document, parent: NodeId) -> Self {
+        #[cfg(test)]
+        SIBLING_TABLES_BUILT.with(|count| count.set(count.get() + 1));
+        let mut elements: Vec<(NodeId, (Namespace, String))> = Vec::new();
+        let mut totals: HashMap<(Namespace, String), usize> = HashMap::new();
+        for child in doc.children(parent) {
+            if let Some(element) = doc.node(child).as_element() {
+                let name = if element.namespace == Namespace::Html {
+                    element.local_name.to_ascii_lowercase()
+                } else {
+                    element.local_name.clone()
+                };
+                let key = (element.namespace, name);
+                *totals.entry(key.clone()).or_default() += 1;
+                elements.push((child, key));
+            }
+        }
+        let mut seen: HashMap<(Namespace, String), usize> = HashMap::new();
+        let mut entries = HashMap::with_capacity(elements.len());
+        let total = elements.len();
+        for (position, (node, key)) in elements.iter().enumerate() {
+            let count = seen.entry(key.clone()).or_default();
+            *count += 1;
+            let type_total = totals.get(key).copied().unwrap_or(0);
+            entries.insert(
+                *node,
+                (
+                    position + 1,
+                    total - position,
+                    *count,
+                    type_total - *count + 1,
+                ),
+            );
+        }
+        Self { entries }
+    }
+}
+
+/// Opens a document-wide sibling-index cache for one style resolution pass.
+///
+/// `:nth-child`/`:nth-of-type`/`:first-child`... used to scan the sibling chain for every
+/// element; the cache builds one table per parent on first use, making them O(1) afterwards.
+/// It is valid only while the DOM does not mutate (style resolution never does).
+pub(crate) struct DocumentScope;
+
+/// Opens a [`DocumentScope`]; drop it to end the scope.
+pub(crate) fn document_scope() -> DocumentScope {
+    let outermost = SIBLING_SCOPE_DEPTH.with(|depth| {
+        let current = depth.get();
+        depth.set(current + 1);
+        current == 0
+    });
+    if outermost {
+        SIBLING_CACHE.with(|cache| {
+            *cache.borrow_mut() = Some(SiblingCache {
+                document: 0,
+                tables: HashMap::new(),
+            })
+        });
+    }
+    DocumentScope
+}
+
+impl Drop for DocumentScope {
+    fn drop(&mut self) {
+        SIBLING_SCOPE_DEPTH.with(|depth| {
+            let current = depth.get().saturating_sub(1);
+            depth.set(current);
+            if current == 0 {
+                SIBLING_CACHE.with(|cache| *cache.borrow_mut() = None);
+            }
+        });
+    }
+}
+
+/// Cached indices for `node`, when a document scope is active for this document.
+fn cached_sibling_indices(doc: &Document, node: NodeId) -> Option<(usize, usize, usize, usize)> {
+    let parent = doc.node(node).parent?;
+    let document = std::ptr::from_ref(doc) as usize;
+    SIBLING_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        let cache = cache.as_mut()?;
+        if cache.document == 0 {
+            cache.document = document;
+        } else if cache.document != document {
+            return None;
+        }
+        let table = cache
+            .tables
+            .entry(parent)
+            .or_insert_with(|| SiblingTable::build(doc, parent));
+        table.entries.get(&node).copied()
+    })
+}
+
 /// 1-based index of `node_id` among the element children of its parent, from the start.
 fn element_index_from_start(doc: &Document, node_id: NodeId) -> Option<usize> {
+    if let Some((index, _, _, _)) = cached_sibling_indices(doc, node_id) {
+        return Some(index);
+    }
     let parent_id = doc.node(node_id).parent?;
     let mut index = 0;
     let mut curr = doc.node(parent_id).first_child;
@@ -425,6 +552,9 @@ fn element_index_from_start(doc: &Document, node_id: NodeId) -> Option<usize> {
 
 /// 1-based index of `node_id` among the element children of its parent, from the end.
 fn element_index_from_end(doc: &Document, node_id: NodeId) -> Option<usize> {
+    if let Some((_, index, _, _)) = cached_sibling_indices(doc, node_id) {
+        return Some(index);
+    }
     let parent_id = doc.node(node_id).parent?;
     let mut index = 0;
     let mut curr = doc.node(parent_id).last_child;
@@ -442,6 +572,9 @@ fn element_index_from_end(doc: &Document, node_id: NodeId) -> Option<usize> {
 
 /// 1-based index of `node_id` among its same-type element siblings, from the start.
 fn type_index_from_start(doc: &Document, node_id: NodeId) -> Option<usize> {
+    if let Some((_, _, index, _)) = cached_sibling_indices(doc, node_id) {
+        return Some(index);
+    }
     let parent_id = doc.node(node_id).parent?;
     let mut index = 0;
     let mut curr = doc.node(parent_id).first_child;
@@ -459,6 +592,9 @@ fn type_index_from_start(doc: &Document, node_id: NodeId) -> Option<usize> {
 
 /// 1-based index of `node_id` among its same-type element siblings, from the end.
 fn type_index_from_end(doc: &Document, node_id: NodeId) -> Option<usize> {
+    if let Some((_, _, _, index)) = cached_sibling_indices(doc, node_id) {
+        return Some(index);
+    }
     let parent_id = doc.node(node_id).parent?;
     let mut index = 0;
     let mut curr = doc.node(parent_id).last_child;
@@ -1482,6 +1618,7 @@ fn strip_attribute_value_quotes(value: &str) -> Option<String> {
 
 #[cfg(test)]
 <<<<<<< HEAD
+<<<<<<< HEAD
 mod budget_tests {
     use super::*;
     use dom::Attribute;
@@ -1589,5 +1726,32 @@ mod id_list_tests {
             Specificity::new(1, 0, 1)
         );
 >>>>>>> pr910
+||||||| 40f9e6e
+=======
+mod sibling_cache_tests {
+    use super::*;
+
+    #[test]
+    fn nth_of_type_reuses_one_sibling_table() {
+        let mut doc = Document::new();
+        let body = doc.create_element(Namespace::Html, "body", Vec::new());
+        doc.append_child(doc.root(), body);
+        for _ in 0..500 {
+            let item = doc.create_element(Namespace::Html, "li", Vec::new());
+            doc.append_child(body, item);
+        }
+        let selector = parse_selectors("li:nth-of-type(odd)");
+        let _scope = document_scope();
+        let matched = doc
+            .children(body)
+            .filter(|node| selector.matches(&doc, *node))
+            .count();
+        assert_eq!(matched, 250);
+        assert_eq!(
+            SIBLING_TABLES_BUILT.with(|count| count.get()),
+            1,
+            "one table for the parent, reused by every child"
+        );
+>>>>>>> pr917
     }
 }
