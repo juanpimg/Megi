@@ -210,7 +210,18 @@ fn plan_axis(
                     return (positioning_length / count.max(1.0), origins);
                 }
                 tile = positioning_length / count;
-                for index in 0..(count as usize).min(limit) {
+                // Start at the first tile that can reach the clip: truncating the first
+                // `limit` indices would drop every visible tile when the clip is far from
+                // the positioning origin (e.g. a large `background-attachment: fixed` area).
+                let total = count as usize;
+                let start = if tile > 0.0 {
+                    (((clip_origin - positioning_origin) / tile).floor().max(0.0) as usize)
+                        .min(total)
+                } else {
+                    0
+                };
+                let end = total.min(start.saturating_add(limit));
+                for index in start..end {
                     if origins.len() >= limit {
                         break;
                     }
@@ -232,7 +243,6 @@ fn plan_axis(
                     return (tile, origins);
                 }
                 let count = count as usize;
-                let iterations = count.min(limit);
                 if count == 1 {
                     let origin = positioning_origin + (positioning_length - tile) / 2.0;
                     if intersects_clip(origin, tile) {
@@ -243,7 +253,15 @@ fn plan_axis(
                     if !gap.is_finite() {
                         return (tile, origins);
                     }
-                    for index in 0..iterations {
+                    let step = tile + gap;
+                    let start = if step > 0.0 {
+                        (((clip_origin - positioning_origin) / step).floor().max(0.0) as usize)
+                            .min(count)
+                    } else {
+                        0
+                    };
+                    let end = count.min(start.saturating_add(limit));
+                    for index in start..end {
                         if origins.len() >= limit {
                             break;
                         }
@@ -454,6 +472,41 @@ mod tests {
             64,
         );
         assert!(origins.is_empty(), "a degenerate space tile paints nothing");
+    }
+
+    #[test]
+    fn test_round_truncation_starts_at_the_clip() {
+        // The clip is far from the positioning origin: the first `limit` tile indices do not
+        // intersect it, so the window must start at the first visible tile (index 4500).
+        let (tile, origins) = plan_axis(
+            0.0,
+            100.0,
+            90.0,
+            10.0,
+            Length::Px(0.0),
+            0.02,
+            BackgroundRepeatAxis::Round,
+            10,
+        );
+        assert!((tile - 0.02).abs() < 1e-6, "{tile}");
+        assert_eq!(origins.len(), 10);
+        assert!((origins[0] - 90.0).abs() < 1e-3, "{:?}", origins[0]);
+    }
+
+    #[test]
+    fn test_space_truncation_starts_at_the_clip() {
+        let (_, origins) = plan_axis(
+            0.0,
+            100.0,
+            90.0,
+            10.0,
+            Length::Px(0.0),
+            1.0,
+            BackgroundRepeatAxis::Space,
+            8,
+        );
+        assert!(!origins.is_empty(), "visible space tiles must be painted");
+        assert!(origins[0] >= 89.0, "{:?}", origins[0]);
     }
 
     #[test]
