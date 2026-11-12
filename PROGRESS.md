@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `44023e2` (2026-11-12) · overall **99%** · **2,085** tests · conformance **FAIL** · **14** crates · **162,569** lines of Rust
+**Snapshot** — commit `d4006f9` (2026-11-12) · overall **99%** · **2,133** tests · conformance **PASS** · **14** crates · **162,313** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -79,7 +79,7 @@
 
 **Pending**
 
-- SVG remaining SMIL/CSS animations and textPath side right
+- SVG remaining SMIL/CSS animations
 - Rasterizer/decoder performance budgets; backdrop blur/PNG entropy
 
 ### F5 — Networking & fetch (100%)
@@ -100,7 +100,6 @@
 
 **Pending**
 
-- HTTP/1.0 and proxy PAC/SOCKS/pooling
 - Image decode budgets on real pages
 
 ### F6 — JavaScript & DOM APIs (100%)
@@ -158,12 +157,12 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `44023e2` (2026-11-12) |
+| Commit | `d4006f9` (2026-11-12) |
 | Crates in the workspace | 14 |
-| Lines of Rust (tracked `.rs`) | 162569 |
-| Tests (`cargo test --workspace -- --list`) | 2085 |
+| Lines of Rust (tracked `.rs`) | 162313 |
+| Tests (`cargo test --workspace -- --list`) | 2133 |
 | Crates with `#![forbid(unsafe_code)]` | 14 / 14 |
-| Conformance gate | **FAIL** |
+| Conformance gate | **PASS** |
 
 ## Conformance gate (4 suites)
 
@@ -174,7 +173,7 @@
 | HTML serializer | 230 / 230 |
 | CSS Syntax (vendored WPT) | 30 / 30 |
 
-Gate status: **FAIL** (known failures allowlisted; see `tests/README` and `crates/test_harness`).
+Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crates/test_harness`).
 
 ## Recent rounds
 
@@ -211,4 +210,4 @@ python3 tools/update_progress.py --write --no-gate  # skip the conformance gate
 python3 tools/update_progress.py --check --no-gate --no-count  # CI freshness
 ```
 
-_Last manifest update by: docs (round 35 + PR merges). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
+_Last manifest update by: docs (round 36 + PR merges). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
