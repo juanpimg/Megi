@@ -3714,6 +3714,34 @@ mod composite_tests {
     }
 
     #[test]
+    fn test_composite_source_over_weights_a_translucent_backdrop() {
+        // The backdrop term must carry its own alpha and the result must be divided by the
+        // output alpha: (204, 0, 51, 160) instead of the old (128, 0, 127, 160).
+        let mut dest = Pixmap::new(1, 1);
+        dest.pixels[0] = Color::new(0, 0, 255, 64);
+        let mut src = Pixmap::new(1, 1);
+        src.pixels[0] = Color::new(255, 0, 0, 128);
+        composite_effect(&mut dest, &src, 0, 0, css::MixBlendMode::Normal);
+        let pixel = dest.pixels[0];
+        assert_eq!(
+            (pixel.r, pixel.g, pixel.b, pixel.a),
+            (204, 0, 51, 160),
+            "alpha-weighted source-over"
+        );
+    }
+
+    #[test]
+    fn test_composite_multiply_over_a_translucent_backdrop() {
+        let mut dest = Pixmap::new(1, 1);
+        dest.pixels[0] = Color::new(128, 128, 128, 128);
+        let mut src = Pixmap::new(1, 1);
+        src.pixels[0] = Color::new(255, 0, 0, 128);
+        composite_effect(&mut dest, &src, 0, 0, css::MixBlendMode::Multiply);
+        let pixel = dest.pixels[0];
+        assert_eq!((pixel.r, pixel.g, pixel.b, pixel.a), (170, 43, 43, 192));
+    }
+
+    #[test]
     fn test_composite_source_over_over_an_opaque_backdrop() {
         let mut dest = Pixmap::new(1, 1);
         dest.pixels[0] = Color::new(0, 0, 255, 255);
