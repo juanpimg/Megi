@@ -348,3 +348,24 @@ fn selectedcontent_cloning_respects_the_node_limit() {
         outcome.document.len()
     );
 }
+
+#[test]
+fn selectedcontent_budget_is_counted_once_across_selects() {
+    // The clone budget is document-wide: after the first select exhausts it the fixup must
+    // stop (not clear every later select's content and count the violation again).
+    let option = format!(
+        "<option selected><div>{}</div></option>",
+        "<span></span>".repeat(200)
+    );
+    let sc = "<selectedcontent></selectedcontent>".repeat(30);
+    let input = format!("<select>{option}{sc}</select><select>{option}{sc}</select>");
+    let options = ParseOptions {
+        max_nodes: 3_000,
+        ..ParseOptions::DEFAULT
+    };
+    let outcome = parse_document_with_options(&input, false, &options);
+    assert_eq!(
+        outcome.limit_violations.nodes_exceeded, 1,
+        "the node violation is recorded once, not per select"
+    );
+}

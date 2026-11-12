@@ -4005,7 +4005,13 @@ impl TreeBuilder {
         let mut selects = Vec::new();
         self.collect_descendants_within_select(root, "select", &mut selects);
 
+        // The clone budget is document-wide: once it is exhausted the fixup stops for every
+        // remaining `<select>` and the violation is recorded once.
+        let mut budget_exhausted = false;
         for select_id in selects {
+            if budget_exhausted {
+                break;
+            }
             let mut selectedcontents = Vec::new();
             self.collect_descendants_within_select(
                 select_id,
@@ -4034,9 +4040,15 @@ impl TreeBuilder {
                 })
                 .unwrap_or(options[0]);
 
-            let mut budget_exhausted = false;
             for sc_id in selectedcontents {
                 if budget_exhausted {
+                    break;
+                }
+                // Check before clearing: at the limit the authored content must be left
+                // untouched instead of being emptied by a fixup that then clones nothing.
+                if self.doc.len() >= self.parse_options.max_nodes {
+                    self.limit_violations.nodes_exceeded += 1;
+                    budget_exhausted = true;
                     break;
                 }
                 while let Some(child) = self.doc.node(sc_id).first_child {
@@ -4048,7 +4060,9 @@ impl TreeBuilder {
                     // M `<selectedcontent>` elements × K option children bypass `max_nodes`
                     // entirely (e.g. 20,000 × 5,000 ≈ 1e8 nodes from a <1 MB document).
                     if self.doc.len() >= self.parse_options.max_nodes {
-                        self.limit_violations.nodes_exceeded += 1;
+                        if !budget_exhausted {
+                            self.limit_violations.nodes_exceeded += 1;
+                        }
                         budget_exhausted = true;
                         break;
                     }
