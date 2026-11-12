@@ -408,6 +408,12 @@ fn decode_jpeg_with_scale(
                             reason: "JPEG ended before the baseline scan",
                         });
                     }
+                    // Check that at least one scan was decoded.
+                    if frame.components.iter().all(|c| c.coeffs.is_none()) {
+                        return Err(ImageError::InvalidData {
+                            reason: "progressive JPEG has no scans",
+                        });
+                    }
                     return render_progressive_components(frame, &quant_tables, adobe_transform);
                 }
                 break;
