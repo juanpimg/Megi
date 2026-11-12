@@ -1760,12 +1760,19 @@ impl Document {
             };
             child_a = parent;
         }
+        let mut child_b = b;
+        while self.try_node(child_b).and_then(|node| node.parent) != Some(*common) {
+            let Some(parent) = self.try_node(child_b).and_then(|node| node.parent) else {
+                return DISCONNECTED | IMPLEMENTATION_SPECIFIC;
+            };
+            child_b = parent;
+        }
         let mut current = self.try_node(*common).and_then(|node| node.first_child);
         while let Some(child) = current {
             if child == child_a {
                 return FOLLOWING;
             }
-            if child == b {
+            if child == child_b {
                 return PRECEDING;
             }
             current = self.try_node(child).and_then(|node| node.next_sibling);
