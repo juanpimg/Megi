@@ -384,6 +384,11 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
         Some(path) => LaunchMode::Screenshot(path),
         None => LaunchMode::Window,
     };
+    if raw.chrome_menu && !raw.chrome {
+        return Err(ShellError::Usage(
+            "--chrome-menu requires --chrome".to_string(),
+        ));
+    }
     let zoom = match raw.zoom {
         Some(zoom) => {
             if !crate::zoom::is_valid_cli_zoom(zoom) {
@@ -710,5 +715,12 @@ mod unit_tests {
         assert!(parsed.query().is_none(), "no query component");
         assert!(parsed.fragment().is_none(), "no fragment component");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn chrome_menu_requires_chrome_flag() {
+        let err = parse_cli(args(&["data:,x", "--chrome-menu"])).expect_err("must reject");
+        assert!(matches!(err, ShellError::Usage(_)));
+        assert!(parse_cli(args(&["data:,x", "--chrome", "--chrome-menu"])).is_ok());
     }
 }

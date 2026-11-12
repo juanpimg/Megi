@@ -306,13 +306,32 @@ pub fn data_url(html: &str) -> String {
 pub fn file_url(path: &Path) -> String {
     let text = path.to_string_lossy();
     let mut out = String::from("file://");
-    for character in text.chars() {
-        match character {
-            ' ' => out.push_str("%20"),
-            '%' => out.push_str("%25"),
-            '#' => out.push_str("%23"),
-            '?' => out.push_str("%3F"),
-            other => out.push(other),
+    for byte in text.as_bytes() {
+        match byte {
+            b'A'..=b'Z'
+            | b'a'..=b'z'
+            | b'0'..=b'9'
+            | b'-'
+            | b'.'
+            | b'_'
+            | b'~'
+            | b'/'
+            | b':'
+            | b'@'
+            | b'!'
+            | b'$'
+            | b'&'
+            | b'\''
+            | b'('
+            | b')'
+            | b'*'
+            | b'+'
+            | b','
+            | b';'
+            | b'=' => out.push(*byte as char),
+            other => {
+                let _ = write!(out, "%{other:02X}");
+            }
         }
     }
     out
