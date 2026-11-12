@@ -156,23 +156,8 @@ publica la **baseline de rendimiento vigente**.
 
 ### 5.2 Veredicto de presupuestos (sin subir)
 
-| Medida | r32 | Presupuesto | % | Margen | Veredicto |
-|---|---:|---:|---:|---:|---|
-| `pipeline/html-to-png` | **108,46 ms** | ≤140 | 77,5 % | 31,54 ms | ✅ |
-| `layout/realistic-1mb` | **36,45 ms** | ≤45 | 81,0 % | 8,55 ms | ✅ |
-| `css/resolve-styles-10k` | **13,47 ms** | ≤35 | 38,5 % | 21,53 ms | ✅ |
-| showcase render CLI | **25,37 ms** | ≤35 | 72,5 % | 9,63 ms | ✅ |
-| shell headless showcase | 26,28 ms | ≤35 | 75,1 % | 8,72 ms | ✅ |
-| `paint/render-to-png` | **6,89 ms** | ref ~8,5 | — | −1,61 ms | ✅ recuperado |
-| `paint/build-display-list` | **8,30 ms** | ≤25 | 33,2 % | 16,70 ms | ✅ |
-| `html/realistic-1mb` | 17,95 ms | ≤100 | 17,9 % | 82,05 ms | ✅ |
-| `image/decode-png` | **2,61 ms** | foco ≤6,6 | 39,6 % | **+3,99 ms** | ✅ **recuperado** |
-| `render/html-to-png` | **7,91 ms** | — | — | — | nuevo, informativo |
-
-**No se suben los presupuestos.** El foco decode-png queda holgadamente
-recuperado (2,61 vs 6,6) y render-to-png baja a 6,89 (ref ~8,5). El pipeline
-recupera margen (77,5 %) pese a la pasada pico; css/layout/display mejoran por
-el bloom y los cambios de layout. A/B en §12.
+Ver tabla completa en §11. Resumen: todos los presupuestos se cumplen con margen.
+`render/html-to-png` queda como informativo (~7,91 ms, presupuesto pendiente de asignar).
 
 ## 6. Coste de features r32
 
@@ -271,7 +256,7 @@ optimizaciones de PNG.
 | `paint/build-display-list` | **8,30 ms** | **≤25** | 33,2 % | 16,70 ms | ✅ |
 | `html/realistic-1mb` | 17,95 ms | ≤100 | 17,9 % | 82,05 ms | ✅ |
 | `image/decode-png` | **2,61 ms** | foco ≤6,6 | 39,6 % | +3,99 ms | ✅ recuperado |
-| `render/html-to-png` | **7,91 ms** | — | — | — | nuevo |
+| `render/html-to-png` | **7,91 ms** | ≤20 (propuesto) | 39,6 % | +12,09 ms | nuevo, informativo |
 
 **No se suben los presupuestos.** Todos con margen amplio; decode-png recuperado
 y render-to-png por debajo de referencia. Próximo foco: **asignar presupuesto a
