@@ -31,6 +31,8 @@ import sys
 import zlib
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+MAX_INPUT_BYTES = 64 * 1024 * 1024
+MAX_DECOMPRESSED_BYTES = 256 * 1024 * 1024
 
 # Channels per pixel for each PNG color type (bit depth independent).
 CHANNELS = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}
@@ -95,8 +97,8 @@ def parse_chunks(data: bytes) -> list[tuple[bytes, bytes]]:
     return chunks
 
 
-def validate_header(chunks: list[tuple[bytes, bytes]]) -> tuple[int, int, int, int]:
-    """Validates the chunk order and IHDR fields; returns (w, h, depth, color)."""
+def validate_header(chunks: list[tuple[bytes, bytes]]) -> tuple[int, int, int, int, int]:
+    """Validates the chunk order and IHDR fields; returns (w, h, depth, color, interlace)."""
     types = [chunk_type for chunk_type, _ in chunks]
     if types[0] != b"IHDR":
         raise PngError("IHDR is not the first chunk")
@@ -134,7 +136,29 @@ def validate_header(chunks: list[tuple[bytes, bytes]]) -> tuple[int, int, int, i
     if idat_positions != list(range(idat_positions[0], idat_positions[-1] + 1)):
         raise PngError("IDAT chunks are not contiguous")
 
-    return width, height, bit_depth, color_type
+    return width, height, bit_depth, color_type, interlace
+
+
+def adam7_expected_len(width: int, height: int, channels: int, bit_depth: int) -> int:
+    """Computes the expected inflated byte length for an Adam7-interlaced PNG."""
+    passes = (
+        (0, 0, 8, 8),
+        (4, 0, 8, 8),
+        (0, 4, 4, 8),
+        (2, 0, 4, 4),
+        (0, 2, 2, 4),
+        (1, 0, 2, 2),
+        (0, 1, 1, 2),
+    )
+    total = 0
+    for x0, y0, x_step, y_step in passes:
+        if width <= x0 or height <= y0:
+            continue
+        pw = (width - x0 + x_step - 1) // x_step
+        ph = (height - y0 + y_step - 1) // y_step
+        stride = (pw * channels * bit_depth + 7) // 8
+        total += ph * (stride + 1)
+    return total
 
 
 def paeth_predictor(left: int, up: int, up_left: int) -> int:
@@ -215,20 +239,37 @@ def describe_pixels(
 
 def check_file(path: str) -> None:
     with open(path, "rb") as handle:
-        data = handle.read()
+        data = handle.read(MAX_INPUT_BYTES + 1)
+    if len(data) > MAX_INPUT_BYTES:
+        raise PngError(f"input exceeds {MAX_INPUT_BYTES} byte limit")
 
     chunks = parse_chunks(data)
-    width, height, bit_depth, color_type = validate_header(chunks)
+    width, height, bit_depth, color_type, interlace = validate_header(chunks)
+
+    channels = CHANNELS[color_type]
+    if interlace == 1:
+        expected_len = adam7_expected_len(width, height, channels, bit_depth)
+    else:
+        stride = (width * channels * bit_depth + 7) // 8
+        expected_len = height * (stride + 1)
+
+    if expected_len > MAX_DECOMPRESSED_BYTES:
+        raise PngError(
+            f"declared image size ({expected_len} bytes) exceeds {MAX_DECOMPRESSED_BYTES} byte limit"
+        )
 
     idat = b"".join(payload for kind, payload in chunks if kind == b"IDAT")
     try:
-        raw = zlib.decompress(idat)
+        decomp = zlib.decompressobj()
+        raw = decomp.decompress(idat, expected_len + 1)
+        if not decomp.eof or len(raw) > expected_len or decomp.unconsumed_tail:
+            raise PngError(
+                f"inflated size exceeds expected {expected_len} bytes (possible zlib bomb)"
+            )
+        raw += decomp.flush()
     except zlib.error as error:
         raise PngError(f"IDAT is not a valid zlib stream: {error}") from error
 
-    channels = CHANNELS[color_type]
-    stride = (width * channels * bit_depth + 7) // 8
-    expected_len = height * (stride + 1)
     if len(raw) != expected_len:
         raise PngError(
             f"inflated size mismatch: expected {expected_len} bytes, got {len(raw)}"
@@ -238,12 +279,12 @@ def check_file(path: str) -> None:
     print(f"OK: {path}")
     print(
         f"  IHDR: {width}x{height}, bit_depth={bit_depth}, "
-        f"color_type={color_type} ({COLOR_TYPE_NAMES[color_type]})"
+        f"color_type={color_type} ({COLOR_TYPE_NAMES[color_type]}), interlace={interlace}"
     )
     print(f"  chunks: {chunk_names}")
     print(f"  IDAT: zlib ok, {len(idat)} compressed -> {len(raw)} raw bytes")
 
-    if bit_depth == 8:
+    if interlace == 0 and bit_depth == 8:
         rows = unfilter(raw, width, height, channels)
         distinct, transparent, white = describe_pixels(rows, bit_depth, color_type)
         total = width * height
@@ -252,8 +293,9 @@ def check_file(path: str) -> None:
             f"transparent={transparent} ({100.0 * transparent / total:.2f}%), "
             f"white={white} ({100.0 * white / total:.2f}%)"
         )
-    else:
-        print(f"  filters: {len({row[0] for row in raw[:: stride + 1]})} type(s)")
+    elif interlace == 0:
+        stride = (width * channels * bit_depth + 7) // 8
+        print(f"  filters: {len(set(raw[:: stride + 1]))} type(s)")
 
 
 def main(argv: list[str]) -> int:
