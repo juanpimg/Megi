@@ -1045,7 +1045,8 @@ fn dash_segments(start: f32, end: f32, dash: f32, gap: f32, origin: f32) -> Vec<
         phase += period;
     }
     let mut cursor = start - phase; // pattern segment start at or before `start`
-    while cursor < end {
+    const MAX_DASH_SEGMENTS: usize = 4096;
+    while cursor < end && segments.len() < MAX_DASH_SEGMENTS {
         let segment_start = cursor.max(start);
         let segment_end = (cursor + dash).min(end);
         if segment_end > segment_start {
