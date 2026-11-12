@@ -4034,12 +4034,24 @@ impl TreeBuilder {
                 })
                 .unwrap_or(options[0]);
 
+            let mut budget_exhausted = false;
             for sc_id in selectedcontents {
+                if budget_exhausted {
+                    break;
+                }
                 while let Some(child) = self.doc.node(sc_id).first_child {
                     self.doc.detach(child);
                 }
                 let mut curr = self.doc.node(selected_option).first_child;
                 while let Some(child_id) = curr {
+                    // The fixup runs after parsing and clones subtrees; without this check
+                    // M `<selectedcontent>` elements × K option children bypass `max_nodes`
+                    // entirely (e.g. 20,000 × 5,000 ≈ 1e8 nodes from a <1 MB document).
+                    if self.doc.len() >= self.parse_options.max_nodes {
+                        self.limit_violations.nodes_exceeded += 1;
+                        budget_exhausted = true;
+                        break;
+                    }
                     let next = self.doc.node(child_id).next_sibling;
                     let cloned = self.doc.clone_node(child_id, true);
                     self.doc.append_child(sc_id, cloned);
