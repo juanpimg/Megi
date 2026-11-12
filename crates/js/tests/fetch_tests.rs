@@ -38,6 +38,12 @@ fn headers_are_case_insensitive() {
         "application/json"
     );
     assert_eq!(runtime.eval("h.has('x-a')", "t").unwrap(), "true");
+<<<<<<< HEAD
+||||||| c6f3a82
+    assert_eq!(runtime.eval("h.get('X-A')", "t").unwrap(), "1");
+=======
+    // Fetch: `append` combines values with a comma-space separator (unlike `set`).
+>>>>>>> pr937
     assert_eq!(runtime.eval("h.get('X-A')", "t").unwrap(), "1, 2");
 }
 
