@@ -4434,11 +4434,11 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     }
   }
   Headers.prototype._find = function (name) { var lower = String(name).toLowerCase(); for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { return i; } } return -1; };
-  Headers.prototype.get = function (name) { var i = this._find(name); return i < 0 ? null : this._h[i][1]; };
+  Headers.prototype.get = function (name) { var lower = String(name).toLowerCase(); var values = []; for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { values.push(this._h[i][1]); } } return values.length === 0 ? null : values.join(", "); };
   Headers.prototype.has = function (name) { return this._find(name) >= 0; };
   Headers.prototype.append = function (name, value) { this._h.push([String(name), String(value)]); };
-  Headers.prototype.set = function (name, value) { var i = this._find(name); if (i >= 0) { this._h[i][1] = String(value); } else { this.append(name, value); } };
-  Headers.prototype["delete"] = function (name) { var i = this._find(name); if (i >= 0) { this._h.splice(i, 1); } };
+  Headers.prototype.set = function (name, value) { var lower = String(name).toLowerCase(); var out = []; var found = false; for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { if (!found) { out.push([this._h[i][0], String(value)]); found = true; } } else { out.push(this._h[i]); } } if (!found) { out.push([String(name), String(value)]); } this._h = out; };
+  Headers.prototype["delete"] = function (name) { var lower = String(name).toLowerCase(); this._h = this._h.filter(function (pair) { return pair[0].toLowerCase() !== lower; }); };
   Headers.prototype.forEach = function (callback, thisArg) { for (var i = 0; i < this._h.length; i++) { callback.call(thisArg, this._h[i][1], this._h[i][0], this); } };
   Headers.prototype.entries = function () { return this._h.slice(); };
   define("Headers", Headers);
@@ -4546,16 +4546,17 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       this.url = input.url;
       this.method = String(init.method || input.method || "GET").toUpperCase();
       this.headers = new Headers(init.headers || input.headers);
-      this.body = init.body !== undefined ? String(init.body) : (input.body || null);
+      this.body = init.body !== undefined ? init.body : (input.body || null);
+      if (this.body !== null && (this.method === "GET" || this.method === "HEAD")) { throw new TypeError("Request with GET/HEAD method cannot have body"); }
       this.signal = init.signal || input.signal || null;
     } else {
       this.url = new URL(String(input), location.href).href;
       this.method = String(init.method || "GET").toUpperCase();
       this.headers = new Headers(init.headers);
-      this.body = init.body !== undefined && init.body !== null ? String(init.body) : null;
+      this.body = init.body !== undefined && init.body !== null ? init.body : null;
+      if (this.body !== null && (this.method === "GET" || this.method === "HEAD")) { throw new TypeError("Request with GET/HEAD method cannot have body"); }
       this.signal = init.signal || null;
     }
-    if (this.method === "GET" || this.method === "HEAD") { this.body = null; }
   }
   define("Request", Request);
   define("fetch", function (input, init) {
