@@ -94,16 +94,29 @@ fn charset_from_meta(bytes: &[u8]) -> Option<String> {
     let window = &bytes[..bytes.len().min(META_PRESCAN_BYTES)];
     let lower: Vec<u8> = window.to_ascii_lowercase();
     let haystack = String::from_utf8_lossy(&lower);
-    let start = haystack.find("charset")?;
-    let rest = &haystack[start + "charset".len()..];
-    let rest = rest.trim_start();
-    let rest = rest.strip_prefix('=')?;
-    let rest = rest.trim_start_matches([' ', '"', '\'']);
-    let label: String = rest
-        .chars()
-        .take_while(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
-        .collect();
-    if label.is_empty() { None } else { Some(label) }
+    // Only scan inside <meta ...> tags.
+    let mut search_start = 0;
+    while let Some(meta_pos) = haystack[search_start..].find("<meta") {
+        let meta_start = search_start + meta_pos;
+        // Find the end of the meta tag.
+        let tag_end = haystack[meta_start..].find('>').map(|i| meta_start + i).unwrap_or(haystack.len());
+        let tag = &haystack[meta_start..tag_end + 1];
+        if let Some(charset_pos) = tag.find("charset") {
+            let rest = &tag[charset_pos + "charset".len()..];
+            let rest = rest.trim_start();
+            let rest = rest.strip_prefix('=')?;
+            let rest = rest.trim_start_matches([' ', '"', '\'']);
+            let label: String = rest
+                .chars()
+                .take_while(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
+                .collect();
+            if !label.is_empty() {
+                return Some(label);
+            }
+        }
+        search_start = tag_end + 1;
+    }
+    None
 }
 
 /// Windows-1252 decode table for the `0x80..=0x9F` range (the rest matches Latin-1).
