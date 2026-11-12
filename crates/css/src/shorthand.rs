@@ -546,7 +546,12 @@ fn expand_font(value: &str) -> Option<Vec<(String, String)>> {
     index += 1;
     if line_height.is_none() && index < components.len() {
         if components[index] == "/" {
-            line_height = components.get(index + 1).cloned();
+            // A dangling `/` means the `<line-height>` is missing: the shorthand is invalid
+            // (the old code advanced past the end and sliced `components[index..]`, panicking).
+            let Some(next) = components.get(index + 1).cloned() else {
+                return Some(Vec::new());
+            };
+            line_height = Some(next);
             index += 2;
         } else if let Some(rest) = components[index].strip_prefix('/') {
             line_height = Some(rest.to_string());
@@ -656,6 +661,13 @@ mod tests {
             );
             assert_eq!(get(&expanded, &format!("border-{side}-color")), Some("red"));
         }
+    }
+
+    #[test]
+    fn test_font_shorthand_rejects_a_dangling_slash() {
+        assert!(expand("font: 16px /").is_empty());
+        assert!(expand("font: 16px /;").is_empty());
+        assert!(!expand("font: bold 16px/1.5 sans-serif;").is_empty());
     }
 
     #[test]

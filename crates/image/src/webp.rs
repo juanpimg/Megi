@@ -798,7 +798,12 @@ impl Transform {
                             }
                             let index =
                                 ((packed >> (slot as u32 * bits_per_index)) & mask) as usize;
-                            out.push(palette.get(index).copied().unwrap_or(0));
+                            let Some(color) = palette.get(index).copied() else {
+                                return Err(ImageError::InvalidData {
+                                    reason: "VP8L palette index out of range",
+                                });
+                            };
+                            out.push(color);
                         }
                     }
                 }
@@ -882,6 +887,14 @@ fn decode_transform(
 fn find_chunk<'a>(bytes: &'a [u8], id: &[u8; 4]) -> Result<&'a [u8], ImageError> {
     if bytes.len() < RIFF_HEADER_LEN || !bytes.starts_with(b"RIFF") || &bytes[8..12] != b"WEBP" {
         return Err(ImageError::InvalidSignature);
+    }
+    let declared = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
+    if declared != bytes.len() - 8 {
+        // Trailing bytes after the container (or a lying size field) would otherwise be
+        // ignored silently, letting distinct files decode identically (issue #879).
+        return Err(ImageError::InvalidData {
+            reason: "WebP RIFF size does not match the file length",
+        });
     }
     let mut offset = RIFF_HEADER_LEN;
     while offset + 8 <= bytes.len() {
@@ -988,4 +1001,33 @@ pub(crate) fn decode_webp(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
         data.push((argb >> 24) as u8);
     }
     RgbaImage::new(orig_width as u32, height as u32, data)
+}
+
+#[cfg(test)]
+mod palette_tests {
+    use super::*;
+
+    #[test]
+    fn out_of_range_palette_indices_are_rejected() {
+        let palette = vec![0xFF00_00FFu32];
+        let valid = Transform::Indexing {
+            width: 1,
+            height: 1,
+            bits: 0,
+            palette: palette.clone(),
+        };
+        assert_eq!(valid.apply(vec![0]).expect("index 0"), vec![0xFF00_00FF]);
+        let invalid = Transform::Indexing {
+            width: 1,
+            height: 1,
+            bits: 0,
+            palette,
+        };
+        match invalid.apply(vec![1 << 8]) {
+            Err(ImageError::InvalidData { reason }) => {
+                assert!(reason.contains("palette index out of range"), "{reason}");
+            }
+            other => panic!("expected InvalidData, got {other:?}"),
+        }
+    }
 }

@@ -330,10 +330,10 @@ fn parse_media_query(tokens: &[CssToken]) -> Option<MediaQuery> {
                 return None;
             }
             parser.pos += 1;
-            Some(parse_condition(&mut parser)?)
+            Some(parse_condition(&mut parser, 0)?)
         }
     } else if parser.peek().is_some() {
-        Some(parse_condition(&mut parser)?)
+        Some(parse_condition(&mut parser, 0)?)
     } else {
         return None;
     };
@@ -349,21 +349,29 @@ fn parse_media_query(tokens: &[CssToken]) -> Option<MediaQuery> {
     })
 }
 
+/// Maximum nesting of parenthesized media conditions accepted from a raw string entry
+/// point (`<style media>`/`<link media>`/`matchMedia`), which bypasses the parser's
+/// component-nesting cap.
+pub const MAX_MEDIA_NESTING: usize = 32;
+
 /// Parses a `<media-condition>`: `not <group>` or `<group> (('and'|'or') <group>)*`.
-fn parse_condition(parser: &mut MediaParser<'_>) -> Option<MediaCondition> {
+fn parse_condition(parser: &mut MediaParser<'_>, depth: usize) -> Option<MediaCondition> {
+    if depth > MAX_MEDIA_NESTING {
+        return None;
+    }
     if parser.peek_ident_is("not") {
         parser.pos += 1;
-        let inner = parse_condition_group(parser)?;
+        let inner = parse_condition_group(parser, depth)?;
         return Some(MediaCondition::Not(Box::new(inner)));
     }
-    let first = parse_condition_group(parser)?;
+    let first = parse_condition_group(parser, depth)?;
     let using_and = parser.peek_ident_is("and");
     let using_or = parser.peek_ident_is("or");
     if using_and {
         let mut condition = first;
         while parser.peek_ident_is("and") {
             parser.pos += 1;
-            let right = parse_condition_group(parser)?;
+            let right = parse_condition_group(parser, depth)?;
             condition = MediaCondition::And(Box::new(condition), Box::new(right));
         }
         Some(condition)
@@ -371,7 +379,7 @@ fn parse_condition(parser: &mut MediaParser<'_>) -> Option<MediaCondition> {
         let mut condition = first;
         while parser.peek_ident_is("or") {
             parser.pos += 1;
-            let right = parse_condition_group(parser)?;
+            let right = parse_condition_group(parser, depth)?;
             condition = MediaCondition::Or(Box::new(condition), Box::new(right));
         }
         Some(condition)
@@ -381,14 +389,14 @@ fn parse_condition(parser: &mut MediaParser<'_>) -> Option<MediaCondition> {
 }
 
 /// Parses a parenthesized condition group or feature (`(...)`, `((...) and (...))`).
-fn parse_condition_group(parser: &mut MediaParser<'_>) -> Option<MediaCondition> {
+fn parse_condition_group(parser: &mut MediaParser<'_>, depth: usize) -> Option<MediaCondition> {
     if !matches!(parser.peek(), Some(CssToken::LeftParen)) {
         return None;
     }
     parser.pos += 1;
     let inner = if matches!(parser.peek(), Some(CssToken::LeftParen)) || parser.peek_ident_is("not")
     {
-        parse_condition(parser)?
+        parse_condition(parser, depth + 1)?
     } else {
         parse_feature(parser)?
     };
@@ -478,6 +486,14 @@ mod tests {
 
     fn screen(width: f32, height: f32) -> MediaContext {
         MediaContext::with_viewport(width, height)
+    }
+
+    #[test]
+    fn deeply_nested_string_media_queries_do_not_overflow() {
+        // `<style media>`/`matchMedia` parse raw strings without the parser's nesting cap.
+        let nested = "(".repeat(100_000);
+        let list = parse_media_query_list(&nested);
+        assert!(!evaluate(&list, &screen(800.0, 600.0)));
     }
 
     #[test]

@@ -41,6 +41,12 @@ pub struct FindMatch {
     pub range: Range<usize>,
 }
 
+/// Maximum matches/rects returned by [`search`]/[`highlight_rects`].
+///
+/// A one-character query over a large page can match millions of times; the overlay only
+/// needs the visible highlight count, so the scan stops at this documented cap.
+pub const MAX_FIND_MATCHES: usize = 10_000;
+
 /// Case-insensitive text search over every text node of `document`, in document order.
 ///
 /// Returns one [`FindMatch`] per occurrence (possibly several per text node). Empty queries
@@ -68,6 +74,9 @@ pub fn search(document: &Document, query: &str) -> Vec<FindMatch> {
                 node_id,
                 range: node_range,
             });
+            if matches.len() >= MAX_FIND_MATCHES {
+                return matches;
+            }
             from = end;
             if from >= lower.len() {
                 break;
@@ -96,13 +105,16 @@ pub fn highlight_rects(layout: &LayoutBox, query: &str) -> Vec<CssRect> {
     while let Some(layout_box) = stack.pop() {
         if let BoxType::TextNode(text) = &layout_box.box_type {
             let (lower, _) = lower_with_map(text);
-            let hits = lower.matches(&needle).count();
+            let hits = lower.matches(&needle).count().min(MAX_FIND_MATCHES);
             if hits > 0 {
                 let rect = layout_box.dimensions.border_box();
                 let css = CssRect::new(rect.x, rect.y, rect.width, rect.height);
                 if css.width > 0.0 && css.height > 0.0 {
                     for _ in 0..hits {
                         rects.push(css);
+                        if rects.len() >= MAX_FIND_MATCHES {
+                            return rects;
+                        }
                     }
                 }
             }
@@ -200,6 +212,19 @@ fn blend_rgb(base: (u8, u8, u8), rgb: (u8, u8, u8), alpha: f32) -> (u8, u8, u8) 
     (mix(base.0, rgb.0), mix(base.1, rgb.1), mix(base.2, rgb.2))
 }
 
+/// Dedupe key for a highlight rectangle (bit patterns, with ±0.0 normalized).
+fn rect_key(rect: &CssRect) -> (u32, u32, u32, u32) {
+    fn bits(value: f32) -> u32 {
+        if value == 0.0 { 0 } else { value.to_bits() }
+    }
+    (
+        bits(rect.x),
+        bits(rect.y),
+        bits(rect.width),
+        bits(rect.height),
+    )
+}
+
 /// Paints highlight rectangles directly into a CSS-resolution pixmap (`--find` screenshots).
 ///
 /// The pixmap is in page CSS coordinates (same as the layout), so rectangles map 1:1. The
@@ -211,13 +236,19 @@ pub fn overlay_highlights_pixmap(
     current: usize,
 ) -> usize {
     let mut painted = 0usize;
-    let mut seen: Vec<CssRect> = Vec::new();
-    for (index, rect) in rects.iter().enumerate() {
-        if seen.contains(rect) {
-            continue; // several hits in one layout fragment share a rectangle
+    // Several hits in one layout fragment share a rectangle; dedupe by bit pattern in a
+    // set instead of scanning the seen list (quadratic for many fragments).
+    let current_key = rects.get(current).map(rect_key);
+    let mut seen: std::collections::HashSet<(u32, u32, u32, u32)> =
+        std::collections::HashSet::new();
+    for rect in rects {
+        let key = rect_key(rect);
+        if !seen.insert(key) {
+            continue;
         }
-        seen.push(*rect);
-        let alpha = if index == current {
+        // Hits in one fragment share a rectangle: the current one must use the strong alpha
+        // even when its duplicate occurrence would be skipped by the dedupe.
+        let alpha = if Some(key) == current_key {
             HIGHLIGHT_CURRENT_ALPHA
         } else {
             HIGHLIGHT_ALPHA
@@ -266,13 +297,15 @@ pub fn overlay_highlights_dest(
         return 0;
     }
     let mut painted = 0usize;
-    let mut seen: Vec<CssRect> = Vec::new();
-    for (index, rect) in rects.iter().enumerate() {
-        if seen.contains(rect) {
+    let current_key = rects.get(current).map(rect_key);
+    let mut seen: std::collections::HashSet<(u32, u32, u32, u32)> =
+        std::collections::HashSet::new();
+    for rect in rects {
+        let key = rect_key(rect);
+        if !seen.insert(key) {
             continue;
         }
-        seen.push(*rect);
-        let alpha = if index == current {
+        let alpha = if Some(key) == current_key {
             HIGHLIGHT_CURRENT_ALPHA
         } else {
             HIGHLIGHT_ALPHA
@@ -622,5 +655,37 @@ mod tests {
             0
         );
         assert!(untouched.iter().all(|pixel| *pixel == 0x00FF_FFFF));
+    }
+    #[test]
+    fn search_stops_at_the_match_cap() {
+        let body = format!("<body><p>{}</p></body>", "a".repeat(MAX_FIND_MATCHES + 500));
+        let document = html::parse_document(&body, false);
+        let hits = search(&document, "a");
+        assert_eq!(hits.len(), MAX_FIND_MATCHES, "the scan stops at the cap");
+    }
+
+    #[test]
+    fn duplicate_overlay_rects_are_painted_once() {
+        // The initial pixel color is irrelevant: only the painted count is asserted.
+        let mut pixmap = paint::Pixmap::new(8, 8);
+        let rect = CssRect::new(1.0, 1.0, 2.0, 2.0);
+        let rects = vec![rect; 100];
+        let painted = overlay_highlights_pixmap(&mut pixmap, &rects, 0);
+        assert_eq!(painted, 4, "the duplicated rectangle is painted once");
+    }
+    #[test]
+    fn the_current_hit_uses_the_strong_alpha_when_its_duplicates_are_merged() {
+        // Two hits in one text fragment produce the same rectangle; the current hit is the
+        // second occurrence, whose duplicate the dedupe skips.
+        let mut pixmap = paint::Pixmap::new(8, 8);
+        let rect = CssRect::new(1.0, 1.0, 2.0, 2.0);
+        assert_eq!(overlay_highlights_pixmap(&mut pixmap, &[rect, rect], 1), 4);
+        let pixel = pixmap.pixels[8 + 1];
+        let (r, g, b) = blend_rgb((0, 0, 0), HIGHLIGHT_RGB, HIGHLIGHT_CURRENT_ALPHA);
+        assert_eq!(
+            (pixel.r, pixel.g, pixel.b),
+            (r, g, b),
+            "the merged rectangle uses the current-hit alpha"
+        );
     }
 }
