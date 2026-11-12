@@ -137,10 +137,10 @@ impl Font {
         let face = self.ttf_face()?;
         let upem = f32::from(face.units_per_em().max(1));
         let scale = size_px / upem;
-        let ascent = f32::from(face.ascender()) * scale;
+        let ascent = (f32::from(face.ascender()) * scale).max(0.0);
         // `descender` is negative in OpenType; expose the magnitude as positive.
-        let descent = -f32::from(face.descender()) * scale;
-        let line_gap = f32::from(face.line_gap()) * scale;
+        let descent = (-f32::from(face.descender()) * scale).max(0.0);
+        let line_gap = (f32::from(face.line_gap()) * scale).max(0.0);
         let x_height = face
             .x_height()
             .map(|v| f32::from(v) * scale)
