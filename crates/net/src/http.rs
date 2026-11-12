@@ -638,9 +638,10 @@ pub fn fetch_streaming(
             .map(|(_, value)| value.trim())
             .filter(|value| !value.is_empty())
             .ok_or(FetchError::RedirectWithoutLocation)?;
-        current = current
+        let next = current
             .join(location)
             .map_err(FetchError::InvalidRedirect)?;
+        current = next;
         redirects += 1;
     }
 }
@@ -762,6 +763,7 @@ pub fn fetch_with_request_body_and_trailers(
     let mut first_attempt = true;
     let mut current = url.clone();
     let mut redirects = 0usize;
+    let mut headers = extra_headers.to_vec();
     loop {
         let attempt_body = match body_state.as_ref() {
             Some(bytes_or_stream) => match bytes_or_stream.try_clone() {
@@ -780,7 +782,7 @@ pub fn fetch_with_request_body_and_trailers(
             &current,
             options,
             &method,
-            extra_headers,
+            &headers,
             attempt_body,
             true,
             trailers,
@@ -843,9 +845,22 @@ pub fn fetch_with_request_body_and_trailers(
             .map(|(_, value)| value.trim())
             .filter(|value| !value.is_empty())
             .ok_or(FetchError::RedirectWithoutLocation)?;
-        current = current
+        let next = current
             .join(location)
             .map_err(FetchError::InvalidRedirect)?;
+        // Strip sensitive caller headers on cross-origin redirects to prevent
+        // credential leakage (Authorization, etc.).
+        if next.scheme() != current.scheme()
+            || next.host() != current.host()
+            || next.port() != current.port()
+        {
+            headers.retain(|(name, _)| {
+                !name.eq_ignore_ascii_case("authorization")
+                    && !name.eq_ignore_ascii_case("proxy-authorization")
+                    && !name.eq_ignore_ascii_case("cookie")
+            });
+        }
+        current = next;
         redirects += 1;
     }
 }
