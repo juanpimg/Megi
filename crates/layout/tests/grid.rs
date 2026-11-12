@@ -2,7 +2,9 @@
 
 use std::collections::HashMap;
 
-use css::{AlignItems, AlignSelf, ComputedStyle, Display, GridTemplate, Length, TrackSize};
+use css::{
+    AlignItems, AlignSelf, ComputedStyle, Display, GridLine, GridTemplate, Length, TrackSize,
+};
 use dom::{Document, Namespace, NodeId};
 use layout::{BoxType, LayoutBox, Rect, layout_document};
 
@@ -830,4 +832,49 @@ fn test_content_distribution_end_and_space_evenly() {
     // leftover 180; share = 180 / 3 = 60 → x = 60 and 60+60+60 = 180.
     assert!((case.item(0).dimensions.content.x - 60.0).abs() < 0.01);
     assert!((case.item(1).dimensions.content.x - 180.0).abs() < 0.01);
+}
+
+#[test]
+fn test_auto_item_span_wider_than_the_implicit_columns_terminates() {
+    // One implicit column + `span 2`: the placement loop used to advance the row forever
+    // because the column limit never grew; it must widen the implicit grid instead.
+    let mut item = item_style(Length::Px(50.0), Length::Px(10.0));
+    item.grid_column_start = GridLine::Span(2);
+    let case = layout_case(
+        grid_container_style(Length::Px(200.0), Length::Auto),
+        vec![item],
+    );
+    let laid_out = case.item(0);
+    assert!(laid_out.dimensions.content.width.is_finite());
+}
+
+#[test]
+fn test_auto_item_with_a_huge_span_is_clamped() {
+    // `span 4294967295` used to ask `ensure_occupancy` for a 4e9-wide row.
+    let mut item = item_style(Length::Px(50.0), Length::Px(10.0));
+    item.grid_column_start = GridLine::Span(u32::MAX);
+    let case = layout_case(
+        grid_container_style(Length::Px(200.0), Length::Auto),
+        vec![item],
+    );
+    let laid_out = case.item(0);
+    assert!(laid_out.dimensions.content.width.is_finite());
+    assert!(laid_out.dimensions.content.width <= 200.001);
+}
+
+#[test]
+fn test_explicit_line_and_end_beyond_the_track_cap_terminate() {
+    // `grid-column-start: 2147483647` / `grid-column-end: 2147483647` used to request ~2e9
+    // tracks; both are clamped with the span so start + span <= MAX_EXPANDED_TRACKS.
+    for line in [GridLine::Line(i32::MAX), GridLine::Line(1_000_000)] {
+        let mut item = item_style(Length::Px(20.0), Length::Px(10.0));
+        item.grid_column_start = line;
+        item.grid_column_end = GridLine::Line(i32::MAX);
+        let case = layout_case(
+            grid_container_style(Length::Px(200.0), Length::Auto),
+            vec![item],
+        );
+        let laid_out = case.item(0);
+        assert!(laid_out.dimensions.content.width.is_finite());
+    }
 }

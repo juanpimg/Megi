@@ -3208,5 +3208,4 @@ mod fragment_insertion_tests {
         assert_eq!(doc.node(first).as_text(), Some("ab"));
         assert!(doc.validate_invariants().is_ok());
     }
-
 }

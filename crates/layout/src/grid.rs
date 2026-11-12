@@ -364,6 +364,25 @@ fn placement_request(
             request.column_span = column_end.saturating_sub(*column_start).max(1);
         }
     }
+    // Clamp line indices and spans: they come from CSS integers (u32) and feed the
+    // occupancy matrix and the implicit track list. `grid-column: span 4000000000` used to
+    // request a 4 GiB row and `grid-column-start: 2147483647` ~2e9 tracks.
+    request.row_span = request.row_span.clamp(1, MAX_EXPANDED_TRACKS);
+    request.column_span = request.column_span.clamp(1, MAX_EXPANDED_TRACKS);
+    // Clamp start + span together: `grid-column: 1024 / span 1024` widens the grid to
+    // 2,047 tracks otherwise (the implicit-track cap is 1,024 total).
+    let row_span = request.row_span;
+    let column_span = request.column_span;
+    request.row_start = request
+        .row_start
+        .map(|value| value.min(MAX_EXPANDED_TRACKS.saturating_sub(row_span)));
+    request.column_start = request
+        .column_start
+        .map(|value| value.min(MAX_EXPANDED_TRACKS.saturating_sub(column_span)));
+    request.row_end = request.row_end.map(|value| value.min(MAX_EXPANDED_TRACKS));
+    request.column_end = request
+        .column_end
+        .map(|value| value.min(MAX_EXPANDED_TRACKS));
     request
 }
 
@@ -440,6 +459,13 @@ fn find_free_spot_flow(
     column_flow: bool,
 ) -> (usize, usize) {
     let (mut row, mut column) = cursor;
+    // Row flow: a span wider than the implicit track count must widen the limit; otherwise
+    // `columns_exceeded` is always true and the loop never reaches the free-spot check.
+    let column_limit = if column_flow {
+        column_limit
+    } else {
+        column_limit.max(column_span)
+    };
     loop {
         grid.ensure(
             (row + row_span).min(row_limit.max(row + row_span)),
