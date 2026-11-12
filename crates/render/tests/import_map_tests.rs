@@ -119,3 +119,66 @@ fn invalid_import_maps_are_warnings_and_do_not_break_independent_modules() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+fn render_file(html: &str, dir: &std::path::Path, width: u32, height: u32) -> render::RenderOutput {
+    let document = dir.join("index.html");
+    std::fs::write(&document, html).expect("write document");
+    let options = RenderOptions {
+        viewport: Viewport::new(width, height).expect("viewport"),
+        scripting: ScriptingMode::Enabled,
+        ..RenderOptions::default()
+    };
+    render::render_url(&format!("file://{}", document.display()), &options).expect("render")
+}
+
+#[test]
+fn dynamic_import_from_a_file_document_loads_and_mutates_the_dom() {
+    let dir = fixture_dir("dynamic-file");
+    std::fs::write(
+        dir.join("dyn.js"),
+        "document.body.setAttribute('data-dynamic', 'loaded');\nexport const x = 1;\n",
+    )
+    .expect("write dyn");
+    let output = render_file(
+        "<!DOCTYPE html><body><script type=\"module\">import('./dyn.js');</script></body>",
+        &dir,
+        240,
+        160,
+    );
+    assert_eq!(
+        body_attribute(&output, "data-dynamic").as_deref(),
+        Some("loaded"),
+        "warnings: {:?}",
+        output.stats.warnings
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn duplicate_import_maps_warn_but_do_not_break_modules() {
+    let dir = fixture_dir("duplicate");
+    let module = dir.join("ok.js");
+    std::fs::write(
+        &module,
+        "document.body.setAttribute('data-ok', '1');\nexport const ok = true;\n",
+    )
+    .expect("write module");
+    let html = format!(
+        "<!DOCTYPE html><script type=\"importmap\">{{\"imports\":{{}}}}</script>\
+         <script type=\"importmap\">{{\"imports\":{{}}}}</script>\
+         <body><script type=\"module\" src=\"file://{}\"></script></body>",
+        module.display()
+    );
+    let output = render_file(&html, &dir, 240, 160);
+    assert_eq!(body_attribute(&output, "data-ok").as_deref(), Some("1"));
+    assert!(
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("import map")),
+        "duplicate map warning: {:?}",
+        output.stats.warnings
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
