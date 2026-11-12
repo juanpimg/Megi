@@ -1033,6 +1033,42 @@ pub fn resolve_document_styles_with_media_and_state(
     })
 }
 
+/// Applies embedded CSS animations to already-resolved computed styles at `time_ms`.
+///
+/// The base styles are used as the underlying values; animated styles are not
+/// re-inherited into descendants in this pass (animating an inherited property such as
+/// `font-size` affects the element's own box but not its children's inherited value).
+/// Callers that need live animation advance `time_ms` and re-run the pass.
+pub fn apply_animations_to_styles(
+    doc: &Document,
+    styles: &mut HashMap<NodeId, crate::properties::ComputedStyle>,
+    collection: &StyleCollection,
+    time_ms: f32,
+) {
+    if collection.keyframes.is_empty() || !time_ms.is_finite() {
+        return;
+    }
+    let mut animated: Vec<(NodeId, crate::properties::ComputedStyle)> = Vec::new();
+    for node_id in doc.descendants(doc.root()) {
+        let Some(base) = styles.get(&node_id) else {
+            continue;
+        };
+        if base.animations.is_empty() {
+            continue;
+        }
+        let style = crate::animation_runtime::apply_animations(
+            base,
+            &base.animations,
+            &collection.keyframes,
+            time_ms,
+        );
+        animated.push((node_id, style));
+    }
+    for (node_id, style) in animated {
+        styles.insert(node_id, style);
+    }
+}
+
 /// Resolves computed styles for all elements in the DOM document.
 ///
 /// Pre-loads the default WHATWG HTML User-Agent stylesheet, then compiles and cascades

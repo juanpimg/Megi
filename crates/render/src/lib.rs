@@ -375,6 +375,11 @@ pub struct RenderOptions {
     pub max_background_bytes: usize,
     /// Maximum total downloaded background-image bytes for the page.
     pub max_total_background_bytes: usize,
+    /// Time used to evaluate CSS animations/transitions, in milliseconds (`--time`).
+    ///
+    /// `0` (the initial state) is the default; a caller that wants a later animation frame
+    /// sets it and re-renders. The pipeline is deterministic for a given value.
+    pub time_ms: f64,
     /// Whether classic page scripts run and their DOM mutations are rendered.
     pub scripting: ScriptingMode,
     /// Script discovery/loading caps and execution budgets.
@@ -449,6 +454,7 @@ impl Default for RenderOptions {
             max_backgrounds: DEFAULT_MAX_BACKGROUNDS,
             max_background_bytes: DEFAULT_MAX_BACKGROUND_BYTES,
             max_total_background_bytes: DEFAULT_MAX_TOTAL_BACKGROUND_BYTES,
+            time_ms: 0.0,
             scripting: ScriptingMode::default(),
             scripting_limits: ScriptingLimits::default(),
             enable_workers: true,
@@ -809,6 +815,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
                 &document,
                 &collection,
                 css::StateContext::new(),
+                options.time_ms,
             )));
             reusable_stylesheets = Some((collection, summary, fonts, stylesheet_elements_before));
         }
@@ -955,8 +962,12 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             )?
         }
     };
-    let styles =
-        resolve_styles_with_state(&document, &stylesheet_collection, css::StateContext::new());
+    let styles = resolve_styles_with_state(
+        &document,
+        &stylesheet_collection,
+        css::StateContext::new(),
+        options.time_ms,
+    );
     let styles_time = styles_start.elapsed();
 
     let fonts_start = Instant::now();
@@ -1623,13 +1634,17 @@ fn resolve_styles_with_state(
     doc: &Document,
     collection: &css::StyleCollection,
     state: css::StateContext,
+    time_ms: f64,
 ) -> HashMap<NodeId, ComputedStyle> {
-    css::state::with_state(state, || resolve_styles_with_collection(doc, collection))
+    css::state::with_state(state, || {
+        resolve_styles_with_collection(doc, collection, time_ms)
+    })
 }
 
 fn resolve_styles_with_collection(
     doc: &Document,
     collection: &css::StyleCollection,
+    time_ms: f64,
 ) -> HashMap<NodeId, ComputedStyle> {
     let mut styles: HashMap<NodeId, ComputedStyle> = HashMap::new();
     let root = doc.root();
@@ -1664,6 +1679,7 @@ fn resolve_styles_with_collection(
             child = doc.node(child_id).prev_sibling;
         }
     }
+    css::cascade::apply_animations_to_styles(doc, &mut styles, collection, time_ms as f32);
     styles
 }
 
