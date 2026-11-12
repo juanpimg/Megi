@@ -339,7 +339,19 @@ impl WindowApp {
                     startup_notice = Some(format!("restored {} tab(s)", session.tabs.len()));
                     recent = crate::history::RecentHistory::from_entries(session.recent.clone());
                     site_zooms = session.site_zooms.clone();
-                    session.restore()
+                    let mut restored = session.restore();
+                    if !input.is_empty() && input != crate::tabs::BLANK_TAB_URL {
+                        if let Some(pos) = restored.tabs().iter().position(|tab| tab.url == input) {
+                            restored.activate(pos);
+                        } else if restored.active().url == crate::tabs::BLANK_TAB_URL {
+                            if let Some(replacement) = crate::tabs::Tab::new(input.clone()) {
+                                *restored.active_mut() = replacement;
+                            }
+                        } else {
+                            restored.open_tab(input.clone());
+                        }
+                    }
+                    restored
                 }
                 None => TabsState::from_urls(view.tabs.clone()),
             }
