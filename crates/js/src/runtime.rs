@@ -19,9 +19,11 @@
 //! [`JsError::Budget`]. There is no general memory accounting: the DOM parser and the
 //! handle side-table are capped separately ([`crate::host`]), `document.write` has a
 //! cumulative per-document budget (`Host::max_document_write_bytes`, 8 MiB, and
-//! `Host::max_document_write_nodes`, 1M; past it writes are ignored with a console
+//! `Host::max_document_write_nodes`, 1M; past it writes are ignored with a single console
 //! warning), and scripts cannot allocate network or filesystem resources (no such APIs are
-//! exposed).
+//! exposed). Scope note: the `innerHTML`/`outerHTML`/`insertAdjacentHTML` setters are not
+//! charged against the cumulative write budget; each call is bounded by the HTML parser's
+//! own 16 MiB input and 1M-node limits.
 //!
 //! ## Deliberate limits (this WP)
 //!
@@ -1860,7 +1862,8 @@ fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> J
         if total > host.max_document_write_bytes
             || host.document.len() >= host.max_document_write_nodes
         {
-            if host.document_write_bytes <= host.max_document_write_bytes {
+            if !host.document_write_warned {
+                host.document_write_warned = true;
                 host.console.push(ConsoleEntry {
                     level: "warn".to_string(),
                     message: format!(
@@ -1873,7 +1876,11 @@ fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> J
             return;
         }
         host.document_write_bytes = total;
-        let _ = html::document_write(&mut host.document, &text);
+        let options = html::ParseOptions {
+            max_nodes: host.max_document_write_nodes,
+            ..html::ParseOptions::default()
+        };
+        let _ = html::document_write_with_options(&mut host.document, &text, false, &options);
     });
     Ok(JsValue::undefined())
 }
@@ -5645,6 +5652,48 @@ mod document_write_budget_tests {
                 entry.level == "warn" && entry.message.contains("document.write ignored")
             }),
             "the exceeded budget must be reported: {console:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod document_write_node_budget_tests {
+    use super::*;
+
+    #[test]
+    fn document_write_node_budget_is_enforced_and_warned_once() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        // The parser must use the host's node cap, not the 1M default: 100 elements with a
+        // 64-node budget leave ~62 nodes.
+        runtime.host.borrow_mut().max_document_write_nodes = 64;
+        runtime
+            .eval("document.write('<i></i>'.repeat(100));", "nodes.js")
+            .expect("first write");
+        let after_first = runtime.document().len();
+        assert!(
+            after_first <= 64,
+            "the write parser stops at the host node cap: {after_first} nodes"
+        );
+        // Host-side rejection: a cap below the current size rejects every write; the
+        // warning must appear exactly once.
+        runtime.host.borrow_mut().max_document_write_nodes = 1;
+        runtime
+            .eval(
+                "for (var j = 0; j < 5; j++) { document.write('<b></b>'); }",
+                "nodes.js",
+            )
+            .expect("rejected writes");
+        let console = runtime.take_console();
+        let warnings = console
+            .iter()
+            .filter(|entry| entry.message.contains("document.write ignored"))
+            .count();
+        assert_eq!(warnings, 1, "the rejection is reported once: {console:?}");
+        let document = runtime.take_document();
+        assert_eq!(
+            document.len(),
+            after_first,
+            "rejected writes add nothing to the document"
         );
     }
 }

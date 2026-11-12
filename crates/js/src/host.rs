@@ -275,6 +275,8 @@ pub(crate) struct Host {
     pub max_document_write_bytes: usize,
     /// Maximum node count for the document scripts write into.
     pub max_document_write_nodes: usize,
+    /// Whether the `document.write` budget rejection was already reported.
+    pub document_write_warned: bool,
     /// Real-clock origin.
     pub started_at: Instant,
     /// Virtual clock override (`Some(ms)` after `advance`/`run_until`).
@@ -350,6 +352,7 @@ impl Host {
             document_write_bytes: 0,
             max_document_write_bytes: 8 * 1024 * 1024,
             max_document_write_nodes: 1_000_000,
+            document_write_warned: false,
             started_at: Instant::now(),
             virtual_now_ms: None,
             dispatch: None,
