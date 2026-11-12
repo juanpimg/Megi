@@ -119,13 +119,23 @@ pub const BUNDLED_FONTS: &[(&str, &[u8])] = &[
 /// Splits on commas, trims ASCII whitespace and strips single/double quotes
 /// around family names (CSS Fonts 3 §3.1). Returns `["sans-serif"]` when the
 /// value contains no usable family (CSS initial `font-family` is UA-defined).
-pub fn parse_font_families(font_family: &str) -> Vec<String> {
+ pub fn parse_font_families(font_family: &str) -> Vec<String> {
+    const MAX_FAMILIES: usize = 256;
+    const MAX_ENTRY_LEN: usize = 256;
     let mut families = Vec::new();
     for part in font_family.split(',') {
+        if families.len() >= MAX_FAMILIES {
+            break;
+        }
         let trimmed = part.trim().trim_matches(|ch| ch == '\'' || ch == '"');
         let trimmed = trimmed.trim();
         if !trimmed.is_empty() {
-            families.push(trimmed.to_string());
+            let name = if trimmed.len() > MAX_ENTRY_LEN {
+                &trimmed[..MAX_ENTRY_LEN]
+            } else {
+                trimmed
+            };
+            families.push(name.to_string());
         }
     }
     if families.is_empty() {
@@ -481,7 +491,7 @@ impl FontDatabase {
             };
         }
         Err(FontError::FontNotFound {
-            families: families.join(", "),
+            families: families.iter().take(8).cloned().collect::<Vec<_>>().join(", "),
         })
     }
 

@@ -116,7 +116,7 @@ impl RecentHistory {
     /// Records a visit and returns its logical timestamp.
     pub fn record(&mut self, title: &str, url: &str) -> u64 {
         let logical_time = self.next_time;
-        self.next_time += 1;
+        self.next_time = self.next_time.saturating_add(1);
         let title = if title.trim().is_empty() {
             url
         } else {
@@ -159,7 +159,7 @@ impl RecentHistory {
     pub fn from_entries(entries: Vec<HistoryEntry>) -> Self {
         let next_time = entries
             .iter()
-            .map(|entry| entry.logical_time + 1)
+            .map(|entry| entry.logical_time.saturating_add(1))
             .max()
             .unwrap_or(0);
         Self {
