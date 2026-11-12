@@ -794,3 +794,44 @@ fn test_adversarial_single_word_50000_chars_unbreakable() {
         elapsed
     );
 }
+
+#[test]
+fn test_adversarial_long_leading_soft_hyphen_run_terminates() {
+    // 100,000 leading U+00AD produce one zero-width run; removing them from the front of
+    // the token vector one by one moved ~160 GB (quadratic). Draining the run once is O(n).
+    let text = "\u{00AD}".repeat(100_000);
+    let mut p_style = make_block_style(Length::Px(400.0), Length::Auto);
+    p_style.font_family = "monospace".to_string();
+    p_style.font_size = 10.0;
+    let (doc, styles) = setup_simple_doc(&text, p_style);
+    let viewport = Rect::new(0.0, 0.0, 800.0, 600.0);
+    let tree = layout_document(&doc, &styles, viewport).expect("layout should succeed");
+    let p_box = &tree.children[0].children[0];
+    // Nothing visible: the soft hyphens are zero-width and produce no painted content.
+    assert!(
+        p_box
+            .children
+            .iter()
+            .all(|line| line.box_type == BoxType::LineBox)
+    );
+}
+
+#[test]
+fn test_adversarial_long_trailing_space_hyphen_runs_terminate() {
+    // `word` + (100 soft hyphens + space) × 5,000: trimming the trailing spaces one by one
+    // shifted the invisible suffix after each removal (~1e9 token moves). The O(n) retain
+    // pass keeps the cost linear.
+    let text = format!("word{}", ("\u{00AD}".repeat(100) + " ").repeat(5_000));
+    let mut p_style = make_block_style(Length::Px(400.0), Length::Auto);
+    p_style.font_family = "monospace".to_string();
+    p_style.font_size = 10.0;
+    let (doc, styles) = setup_simple_doc(&text, p_style);
+    let viewport = Rect::new(0.0, 0.0, 800.0, 600.0);
+    let tree = layout_document(&doc, &styles, viewport).expect("layout should succeed");
+    let p_box = &tree.children[0].children[0];
+    assert_eq!(
+        p_box.children.len(),
+        1,
+        "the trailing run stays on one line"
+    );
+}

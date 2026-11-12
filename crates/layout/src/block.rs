@@ -476,12 +476,42 @@ fn place_float(
     let side = child.float_side;
     let available = cb.width;
     calculate_shrink_to_fit_width(child, cb.width, available, measurer);
-    let margin_box_w = child.dimensions.margin_box().width;
-    let margin_box_h = child.dimensions.border_box().height
-        + child.dimensions.margin.top
-        + child.dimensions.margin.bottom;
+    // Styles built by callers (not only the CSS parser) can carry NaN/inf margins; a
+    // non-finite margin must not poison the float's position.
+    let margin_top = finite_or_zero(child.dimensions.margin.top);
+    let margin_bottom = finite_or_zero(child.dimensions.margin.bottom);
+    let margin_left = finite_or_zero(child.dimensions.margin.left);
+    let margin_right = finite_or_zero(child.dimensions.margin.right);
+    let margin_box_w =
+        finite_or_zero(child.dimensions.border_box().width) + margin_left + margin_right;
+    let margin_box_h = child.dimensions.border_box().height + margin_top + margin_bottom;
 
     let mut top = cb.y + flow_offset;
+    // A NaN-sized or over-wide float can never satisfy the fit test, so moving down cannot
+    // make progress: it used to loop until f32 rounding absorbed the step (~2^24 iterations
+    // for finite values, forever for NaN). Per CSS 2.2 §9.5.1 an over-wide float has no room
+    // next to any float, so it goes below every placed one; a NaN-sized float is placed at
+    // the flow position. Both overflow horizontally.
+    if margin_box_w > cb.width + 0.001 {
+        top = floats
+            .iter()
+            .map(|placed| placed.margin_box.y + placed.margin_box.height)
+            .fold(top, f32::max);
+        let x = if side == Float::Left {
+            cb.x
+        } else {
+            cb.x + cb.width - margin_box_w
+        };
+        return position_float(child, x, top, side, margin_box_w, measurer, pos);
+    }
+    if !margin_box_h.is_finite() {
+        let x = if side == Float::Left {
+            cb.x
+        } else {
+            cb.x + cb.width - margin_box_w
+        };
+        return position_float(child, x, top, side, margin_box_w, measurer, pos);
+    }
     // Move down until the float fits next to the floats already placed.
     loop {
         let left_limit = floats
@@ -505,29 +535,7 @@ fn place_float(
             right_limit - margin_box_w
         };
         if x >= cb.x && x + margin_box_w <= right_limit + 0.001 {
-            // Fits: position the float border box at the chosen margin box origin.
-            child.dimensions.content.x = x
-                + child.dimensions.margin.left
-                + child.dimensions.border.left
-                + child.dimensions.padding.left;
-            child.dimensions.content.y = top
-                + child.dimensions.margin.top
-                + child.dimensions.border.top
-                + child.dimensions.padding.top;
-            let child_pos = self_positioning_context(child, pos);
-            layout_box_contents(child, None, false, measurer, child_pos);
-            let margin_box = Rect::new(
-                x,
-                top,
-                margin_box_w,
-                child.dimensions.border_box().height
-                    + child.dimensions.margin.top
-                    + child.dimensions.margin.bottom,
-            );
-            return (
-                PlacedFloat { side, margin_box },
-                margin_box.y + margin_box.height,
-            );
+            return position_float(child, x, top, side, margin_box_w, measurer, pos);
         }
         // Does not fit: move below the floats blocking this side (and keep the height).
         let next_top = floats
@@ -535,17 +543,47 @@ fn place_float(
             .filter(|placed| placed.margin_box.y + placed.margin_box.height > top)
             .map(|placed| placed.margin_box.y + placed.margin_box.height)
             .fold(top + margin_box_h, f32::max);
-        if next_top <= top {
+        if next_top <= top || next_top.is_nan() {
             break;
         }
         top = next_top;
     }
+    position_float(child, cb.x, top, side, margin_box_w, measurer, pos)
+}
+
+/// Returns `value`, or `0.0` when it is not finite.
+fn finite_or_zero(value: f32) -> f32 {
+    if value.is_finite() { value } else { 0.0 }
+}
+
+/// Positions and lays out a float at `(x, top)` and returns its placed margin box.
+fn position_float(
+    child: &mut LayoutBox,
+    x: f32,
+    top: f32,
+    side: Float,
+    margin_box_w: f32,
+    measurer: &dyn TextMeasurer,
+    pos: PositioningContext,
+) -> (PlacedFloat, f32) {
+    let margin_top = finite_or_zero(child.dimensions.margin.top);
+    let margin_bottom = finite_or_zero(child.dimensions.margin.bottom);
+    let margin_left = finite_or_zero(child.dimensions.margin.left);
+    child.dimensions.content.x =
+        x + margin_left + child.dimensions.border.left + child.dimensions.padding.left;
+    child.dimensions.content.y =
+        top + margin_top + child.dimensions.border.top + child.dimensions.padding.top;
+    let child_pos = self_positioning_context(child, pos);
+    layout_box_contents(child, None, false, measurer, child_pos);
+    let margin_box = Rect::new(
+        x,
+        top,
+        margin_box_w,
+        child.dimensions.border_box().height + margin_top + margin_bottom,
+    );
     (
-        PlacedFloat {
-            side,
-            margin_box: Rect::new(cb.x, top, margin_box_w, margin_box_h),
-        },
-        top + margin_box_h,
+        PlacedFloat { side, margin_box },
+        margin_box.y + margin_box.height,
     )
 }
 

@@ -839,38 +839,55 @@ fn token_advance(token: &InlineToken, styles: &[Arc<ComputedStyle>], container_w
 
 fn trim_trailing_collapsible_spaces(line: &mut Vec<InlineToken>) {
     // Box ends and soft-hyphen markers are invisible and stay on the line; only
-    // collapsible spaces are removed.
-    let mut i = line.len();
-    while i > 0 {
-        match &line[i - 1] {
-            InlineToken::BoxEnd { .. } | InlineToken::HyphenationPoint { .. } => {
-                i -= 1;
-            }
-            InlineToken::Space {
-                collapsible: true, ..
-            } => {
-                line.remove(i - 1);
-                i -= 1;
-            }
-            _ => break,
-        }
-    }
+    // collapsible spaces are removed. Removing them from the back one by one shifted the
+    // invisible suffix after every removal (quadratic on `word + (shy^n + space)^m`); find
+    // the last visible token and drop the trailing spaces in one retain pass.
+    let last_visible = line.iter().rposition(|token| {
+        !matches!(
+            token,
+            InlineToken::BoxEnd { .. }
+                | InlineToken::HyphenationPoint { .. }
+                | InlineToken::Space {
+                    collapsible: true,
+                    ..
+                }
+        )
+    });
+    let start = last_visible.map_or(0, |index| index + 1);
+    let mut index = 0;
+    line.retain(|token| {
+        let keep = index < start
+            || !matches!(
+                token,
+                InlineToken::Space {
+                    collapsible: true,
+                    ..
+                }
+            );
+        index += 1;
+        keep
+    });
 }
 
 /// Trims leading and trailing collapsible spaces from a line before it is committed
 /// (CSS Text 3 §4.1: collapsible spaces at the start/end of a line are removed).
 fn finalize_line(mut line: Vec<InlineToken>) -> Vec<InlineToken> {
-    while matches!(
-        line.first(),
-        Some(
-            InlineToken::Space {
-                collapsible: true,
-                ..
-            } | InlineToken::HyphenationPoint { .. }
-        )
-    ) {
-        line.remove(0);
-    }
+    // Drain the leading run once instead of removing from the front one by one: a long
+    // run of soft hyphens (or collapsible spaces) is a single zero-width line, and the
+    // repeated `remove(0)` was quadratic.
+    let leading = line
+        .iter()
+        .take_while(|token| {
+            matches!(
+                token,
+                InlineToken::Space {
+                    collapsible: true,
+                    ..
+                } | InlineToken::HyphenationPoint { .. }
+            )
+        })
+        .count();
+    line.drain(..leading);
     trim_trailing_collapsible_spaces(&mut line);
     line
 }
