@@ -349,3 +349,22 @@ fn system_database_is_optional_and_never_panics() {
     let metrics = face.metrics(12.0).expect("system metrics");
     assert!(metrics.ascent > 0.0);
 }
+
+#[test]
+fn huge_font_size_rejects_masks_over_the_pixel_cap() {
+    let db = fixture_db();
+    // At 100,000 px the glyph's device mask would be billions of pixels; the cap must fail
+    // before the mask/rasterizer grids are allocated.
+    let error = db
+        .rasterize_char(&["DejaVu Sans"], 400, FontStyle::Normal, 100_000.0, 'A')
+        .expect_err("mask over the per-glyph cap");
+    assert!(
+        matches!(error, FontError::GlyphTooLarge { .. }),
+        "{error:?}"
+    );
+    // A normal size keeps working.
+    let mask = db
+        .rasterize_char(&["DejaVu Sans"], 400, FontStyle::Normal, 32.0, 'A')
+        .expect("normal glyph");
+    assert!(mask.width > 0 && mask.height > 0);
+}

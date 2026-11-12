@@ -27,6 +27,8 @@ pub enum FontError {
     MissingGlyph { glyph_id: u32, num_glyphs: u16 },
     /// A glyph id wider than `u16` cannot be represented by the rasterizer.
     UnsupportedGlyphId { glyph_id: u32 },
+    /// A glyph's device-space mask would exceed the per-glyph pixel cap.
+    GlyphTooLarge { width: u32, height: u32 },
 }
 
 impl fmt::Display for FontError {
@@ -48,6 +50,10 @@ impl fmt::Display for FontError {
             } => write!(
                 f,
                 "glyph id {glyph_id} is out of range (font has {num_glyphs} glyphs)"
+            ),
+            Self::GlyphTooLarge { width, height } => write!(
+                f,
+                "glyph mask {width}x{height} exceeds the per-glyph pixel cap"
             ),
             Self::UnsupportedGlyphId { glyph_id } => {
                 write!(f, "glyph id {glyph_id} exceeds the u16 range")
