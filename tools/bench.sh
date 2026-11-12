@@ -56,10 +56,10 @@ if [[ "${1:-}" == "--save-png-isolated" ]]; then
         local values=()
         for _ in $(seq 1 7); do
             local start end
-            start=$(date +%s%N)
+            start=$(python3 -c 'import time; print(int(time.time()*1000))')
             "$@" >/dev/null 2>&1 || true
-            end=$(date +%s%N)
-            values+=($(((end - start) / 1000000)))
+            end=$(python3 -c 'import time; print(int(time.time()*1000))')
+            values+=($((end - start)))
         done
         local median
         median=$(printf '%s\n' "${values[@]}" | sort -n | sed -n '4p')
@@ -89,7 +89,7 @@ set -e
 
 {
     echo "# Megi benchmark run metadata"
-    date --iso-8601=seconds
+    python3 -c 'import datetime; print(datetime.datetime.now().astimezone().isoformat())' 
     echo "commit: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
     echo "dirty:  $(git status --porcelain | wc -l) modified/untracked paths"
     echo "rustc:  $(rustc --version)"
@@ -99,6 +99,6 @@ set -e
 echo
 echo "Raw table : ${OUTPUT}"
 echo "Metadata  : ${METADATA}"
-echo "Reproduce : cargo run --release -p bench -- $*"
+echo "Reproduce : cargo run --release -p bench -- "$@""
 
 exit "${status}"
