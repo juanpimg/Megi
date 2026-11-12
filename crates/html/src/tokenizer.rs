@@ -809,7 +809,7 @@ impl Tokenizer {
 
         // Shift the remaining line starts, then merge the inserted text's own line starts.
         for start in &mut self.line_starts {
-            if *start > insert_at {
+            if *start >= insert_at {
                 *start += inserted_len;
             }
         }
@@ -822,7 +822,9 @@ impl Tokenizer {
         }
 
         self.input.splice(insert_at..insert_at, inserted);
-
+        if self.reconsume {
+            self.pos += inserted_len;
+        }
         // UTF-16 column prefix sums (html5lib `(line, UTF-16 column)` positions) only need
         // rebuilding when astral code points are involved.
         if self.wide_prefix.is_some() || inserted_has_wide {
