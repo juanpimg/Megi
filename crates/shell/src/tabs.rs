@@ -6,8 +6,10 @@
 //! activates a concrete tab.
 //!
 //! **Closing policy** (documented, deterministic): closing a tab that is not the last one
-//! activates the neighbour (the previous tab when the closed one was active; the same index
-//! when a tab before the active one was closed) and returns [`CloseOutcome::Closed`].
+//! keeps the active tab when the closed one was after it, shifts the active index down when
+//! the closed one was before it, and activates the tab that followed the closed one (same
+//! index, or the previous tab when the closed one was last) when it was active; it returns
+//! [`CloseOutcome::Closed`].
 //! Closing the **last remaining tab** does not close the window (the shell has no tab bar to
 //! show a "reopen" affordance): the tab is reset to a blank **New Tab** document
 //! ([`BLANK_TAB_URL`]) and [`CloseOutcome::ResetLast`] is returned.
@@ -456,5 +458,16 @@ mod tests {
         assert_eq!(state.window_title(), "[2/2] https://example.com/b");
         state.activate(0);
         assert_eq!(state.window_title(), "[1/2] Document");
+    }
+    #[test]
+    fn closing_the_active_middle_tab_activates_the_next_one() {
+        // Documented policy: the tab that followed the closed one takes its index.
+        let mut state = tab_state();
+        assert_eq!(state.len(), 3);
+        assert!(state.activate(1));
+        assert_eq!(state.close_active(), CloseOutcome::Closed);
+        assert_eq!(state.len(), 2);
+        assert_eq!(state.active_index(), 1);
+        assert_eq!(state.active().url, "https://example.com/c");
     }
 }

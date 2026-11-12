@@ -459,13 +459,12 @@ impl JsRuntime {
     /// excludes the JS heap allocated inside Boa itself (documented limitation).
     pub fn estimated_heap_bytes(&self) -> Option<usize> {
         let host = self.host.borrow();
-        fn count_nodes(document: &Document, node: NodeId) -> usize {
-            1 + document
-                .children(node)
-                .map(|child| count_nodes(document, child))
-                .sum::<usize>()
-        }
-        let node_count = count_nodes(&host.document, host.document.root());
+        // Iterative: the estimate is also used for arbitrarily deep documents.
+        let node_count = 1 + host
+            .document
+            .descendants(host.document.root())
+            .filter(|node| host.document.try_node(*node).is_some())
+            .count();
         let console_bytes: usize = host
             .console
             .iter()
@@ -1986,7 +1985,9 @@ fn document_create_element(
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    let name = arg_string(args, 0, context)?;
+    // DOM §4.5: `createElement` lowercases the name for an HTML document, so
+    // `createElement("TEMPLATE")` still creates a template with its content fragment.
+    let name = arg_string(args, 0, context)?.to_ascii_lowercase();
     let node = with_host(|host| {
         host.document
             .create_element(Namespace::Html, name.clone(), Vec::new())
@@ -2199,6 +2200,15 @@ fn node_insert_adjacent_html(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let target = this_node(this, context)?;
+    let is_element = with_host(|host| {
+        host.document
+            .try_node(target)
+            .is_some_and(|node| node.as_element().is_some())
+    })
+    .unwrap_or(false);
+    if !is_element {
+        return Err(js_error("insertAdjacentHTML is only supported on elements"));
+    }
     let position = arg_string(args, 0, context)?.to_ascii_lowercase();
     let html_text = arg_string(args, 1, context)?;
     with_host(|host| {
@@ -2231,6 +2241,15 @@ fn node_insert_adjacent_text(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let target = this_node(this, context)?;
+    let is_element = with_host(|host| {
+        host.document
+            .try_node(target)
+            .is_some_and(|node| node.as_element().is_some())
+    })
+    .unwrap_or(false);
+    if !is_element {
+        return Err(js_error("insertAdjacentText is only supported on elements"));
+    }
     let position = arg_string(args, 0, context)?.to_ascii_lowercase();
     let text = arg_string(args, 1, context)?;
     with_host(|host| {
