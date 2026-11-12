@@ -5262,6 +5262,57 @@ fn worker_self_post_message(
 const MAX_FETCH_HEADERS: usize = 64;
 const MAX_FETCH_BODY: usize = 8 * 1024 * 1024;
 
+/// Request headers the browser owns; page scripts must not set them through `fetch()`.
+const FORBIDDEN_FETCH_HEADERS: &[&str] = &[
+    "host",
+    "content-length",
+    "transfer-encoding",
+    "connection",
+    "cookie",
+    "origin",
+    "referer",
+    "user-agent",
+    "accept-encoding",
+    "expect",
+    "proxy-authorization",
+    "proxy-connection",
+    "te",
+    "trailer",
+    "upgrade",
+];
+
+/// RFC 9110 §5.1 header-name token grammar.
+fn is_valid_fetch_header_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(
+                    byte,
+                    b'!' | b'#'
+                        | b'$'
+                        | b'%'
+                        | b'&'
+                        | b'\''
+                        | b'*'
+                        | b'+'
+                        | b'-'
+                        | b'.'
+                        | b'^'
+                        | b'_'
+                        | b'`'
+                        | b'|'
+                        | b'~'
+                )
+        })
+}
+
+/// RFC 9110 §5.5 field-value: printable bytes and HTAB only; no CR/LF/NUL/CTL/DEL.
+fn is_valid_fetch_header_value(value: &str) -> bool {
+    !value
+        .bytes()
+        .any(|byte| byte == 0x7f || (byte < 0x20 && byte != b'\t'))
+}
+
 fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let url = arg_string(args, 0, context)?;
     let method = arg_string(args, 1, context)?.trim().to_ascii_uppercase();
@@ -5275,10 +5326,28 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
         let Some((name, value)) = line.split_once(':') else {
             continue;
         };
+        let name = name.trim();
+        let value = value.trim();
+        if !is_valid_fetch_header_name(name) {
+            return Err(js_error("fetch: invalid request header name"));
+        }
+        if FORBIDDEN_FETCH_HEADERS
+            .iter()
+            .any(|forbidden| name.eq_ignore_ascii_case(forbidden))
+        {
+            return Err(js_error(format!(
+                "fetch: forbidden request header `{name}`"
+            )));
+        }
+        if !is_valid_fetch_header_value(value) {
+            return Err(js_error(format!(
+                "fetch: invalid value for request header `{name}`"
+            )));
+        }
         if headers.len() >= MAX_FETCH_HEADERS {
             return Err(js_error("fetch headers limit exceeded"));
         }
-        headers.push((name.trim().to_string(), value.trim().to_string()));
+        headers.push((name.to_string(), value.to_string()));
     }
     if body_text.len() > MAX_FETCH_BODY {
         return Err(js_error("fetch body limit exceeded"));

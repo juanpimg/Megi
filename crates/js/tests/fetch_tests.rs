@@ -194,3 +194,81 @@ fn fetch_file_base_resolves_json_chain() {
     runtime.run_microtasks().expect("microtasks");
     assert_eq!(runtime.eval("__out", "t").unwrap(), "value=42");
 }
+
+#[test]
+fn fetch_rejects_forbidden_and_injected_headers() {
+    let (mut runtime, calls) = mock_runtime(ok_result());
+    runtime
+        .eval(
+            r#"window.__err = '';
+               fetch('data.json', {headers: {'X-Test': 'ok\r\nHost: evil.example'}})
+                 .then(function () { __err = 'resolved'; })
+                 .catch(function (error) { __err = String(error); });"#,
+            "t",
+        )
+        .expect("fetch");
+    runtime.run_microtasks().expect("microtasks");
+    let error = runtime.eval("__err", "t").unwrap();
+    assert!(
+        error.contains("forbidden request header `Host`"),
+        "unexpected result: {error}"
+    );
+    assert!(
+        calls.lock().expect("lock").is_empty(),
+        "provider must not run"
+    );
+}
+
+#[test]
+fn fetch_rejects_invalid_header_names_and_values() {
+    for headers in [
+        "{'Bad Name': 'x'}",
+        r#"{'X-Test': 'bad\rvalue'}"#,
+        r#"{'X-Test': 'bad\u0000value'}"#,
+        r#"{'X-Test': 'bad\u007fvalue'}"#,
+    ] {
+        let (mut runtime, calls) = mock_runtime(ok_result());
+        runtime
+            .eval(
+                &format!(
+                    "window.__err = ''; fetch('data.json', {{headers: {headers}}}).then(function () {{ __err = 'resolved'; }}).catch(function (error) {{ __err = String(error); }});"
+                ),
+                "t",
+            )
+            .expect("fetch");
+        runtime.run_microtasks().expect("microtasks");
+        let error = runtime.eval("__err", "t").unwrap();
+        assert!(
+            error.contains("invalid request header") || error.contains("invalid value"),
+            "{headers}: {error}"
+        );
+        assert!(calls.lock().expect("lock").is_empty(), "{headers}");
+    }
+}
+
+#[test]
+fn fetch_still_sends_valid_custom_headers() {
+    let (mut runtime, calls) = mock_runtime(ok_result());
+    runtime
+        .eval(
+            "window.__status = 0; fetch('data.json', {headers: {'X-Test': 'ok', 'X-Trace': 'abc'}}).then(function (r) { __status = r.status; });",
+            "t",
+        )
+        .expect("fetch");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(runtime.eval("__status", "t").unwrap(), "200");
+    let calls = calls.lock().expect("lock");
+    assert_eq!(calls.len(), 1);
+    assert!(
+        calls[0]
+            .headers
+            .iter()
+            .any(|(name, value)| name == "X-Test" && value == "ok")
+    );
+    assert!(
+        calls[0]
+            .headers
+            .iter()
+            .any(|(name, value)| name == "X-Trace" && value == "abc")
+    );
+}

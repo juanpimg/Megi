@@ -376,3 +376,25 @@ fn streaming_conflicting_content_length_is_rejected() {
     );
     let _ = server.join();
 }
+
+#[test]
+fn request_headers_are_validated_before_connecting() {
+    let url = Url::parse("http://127.0.0.1:9/").expect("url");
+    let options = options();
+    let cases = [
+        ("Host", "evil.example"),
+        ("X-Test", "ok\r\nHost: evil.example"),
+        ("X-Test", "ok\nX-Injected: yes"),
+        ("X Test", "ok"),
+        ("X-Test", "bad\u{0}value"),
+        ("X-Test", "bad\u{7f}value"),
+    ];
+    for (name, value) in cases {
+        let error = net::http::fetch_with_method(&url, &options, "GET", &[(name, value)], None)
+            .expect_err("header must be rejected before the connection");
+        assert!(
+            matches!(error, FetchError::InvalidRequestHeader(_)),
+            "{name:?}: {error}"
+        );
+    }
+}
