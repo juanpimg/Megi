@@ -861,3 +861,20 @@ fn test_auto_item_with_a_huge_span_is_clamped() {
     assert!(laid_out.dimensions.content.width.is_finite());
     assert!(laid_out.dimensions.content.width <= 200.001);
 }
+
+#[test]
+fn test_explicit_line_and_end_beyond_the_track_cap_terminate() {
+    // `grid-column-start: 2147483647` / `grid-column-end: 2147483647` used to request ~2e9
+    // tracks; both are clamped with the span so start + span <= MAX_EXPANDED_TRACKS.
+    for line in [GridLine::Line(i32::MAX), GridLine::Line(1_000_000)] {
+        let mut item = item_style(Length::Px(20.0), Length::Px(10.0));
+        item.grid_column_start = line;
+        item.grid_column_end = GridLine::Line(i32::MAX);
+        let case = layout_case(
+            grid_container_style(Length::Px(200.0), Length::Auto),
+            vec![item],
+        );
+        let laid_out = case.item(0);
+        assert!(laid_out.dimensions.content.width.is_finite());
+    }
+}

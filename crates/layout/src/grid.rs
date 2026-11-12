@@ -367,18 +367,22 @@ fn placement_request(
     // Clamp line indices and spans: they come from CSS integers (u32) and feed the
     // occupancy matrix and the implicit track list. `grid-column: span 4000000000` used to
     // request a 4 GiB row and `grid-column-start: 2147483647` ~2e9 tracks.
+    request.row_span = request.row_span.clamp(1, MAX_EXPANDED_TRACKS);
+    request.column_span = request.column_span.clamp(1, MAX_EXPANDED_TRACKS);
+    // Clamp start + span together: `grid-column: 1024 / span 1024` would otherwise widen
+    // the grid to 2,047 tracks (the intended implicit-track cap is 1,024 total).
+    let row_span = request.row_span;
+    let column_span = request.column_span;
     request.row_start = request
         .row_start
-        .map(|value| value.min(MAX_EXPANDED_TRACKS - 1));
+        .map(|value| value.min(MAX_EXPANDED_TRACKS.saturating_sub(row_span)));
     request.column_start = request
         .column_start
-        .map(|value| value.min(MAX_EXPANDED_TRACKS - 1));
+        .map(|value| value.min(MAX_EXPANDED_TRACKS.saturating_sub(column_span)));
     request.row_end = request.row_end.map(|value| value.min(MAX_EXPANDED_TRACKS));
     request.column_end = request
         .column_end
         .map(|value| value.min(MAX_EXPANDED_TRACKS));
-    request.row_span = request.row_span.clamp(1, MAX_EXPANDED_TRACKS);
-    request.column_span = request.column_span.clamp(1, MAX_EXPANDED_TRACKS);
     request
 }
 
@@ -397,6 +401,12 @@ fn span_from(start: &GridLine, end: &GridLine) -> usize {
 
 /// Grows the occupancy matrix to at least `rows` × `columns`.
 fn ensure_occupancy(grid: &mut Vec<Vec<bool>>, rows: usize, columns: usize) {
+    // The early return trusts the uniform-width invariant; keep it checked in debug builds.
+    debug_assert!(
+        grid.iter()
+            .all(|row| grid.first().is_none_or(|first| row.len() == first.len())),
+        "occupancy rows must share one width"
+    );
     if grid.len() >= rows && grid.first().is_none_or(|row| row.len() >= columns) {
         return;
     }
