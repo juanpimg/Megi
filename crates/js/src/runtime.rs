@@ -5420,6 +5420,38 @@ impl ModuleLoader for MegiModuleLoader {
             .borrow()
             .clone()
             .ok_or_else(|| js_error("no active JavaScript host"))?;
+        // Consult the import map first (like resolve_module does).
+        let import_map_result = {
+            let host = host.borrow();
+            host.import_map.as_ref().and_then(|map| map.resolve(&specifier))
+        };
+        if let Some(result) = import_map_result {
+            match result {
+                Some(target) => {
+                    // Load from the import-map target.
+                    let source = {
+                        let host = host.borrow();
+                        match host.module_loader.as_ref() {
+                            Some(loader) => loader(&target).map_err(|error| js_error(error.to_string()))?,
+                            None => return Err(js_error(format!("module not found: {target}"))),
+                        }
+                    };
+                    let mut context = context.borrow_mut();
+                    let module = Module::parse(
+                        Source::from_bytes(&source).with_path(Path::new(&target)),
+                        None,
+                        &mut context,
+                    )?;
+                    self.cache
+                        .borrow_mut()
+                        .insert((base, specifier), module.clone());
+                    return Ok(module);
+                }
+                None => {
+                    return Err(js_error(format!("import map blocked: {specifier} (base {base})")));
+                }
+            }
+        }
         let resolved = {
             let host = host.borrow();
             match host.module_resolver.as_ref() {
