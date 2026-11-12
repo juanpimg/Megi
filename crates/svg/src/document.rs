@@ -381,6 +381,7 @@ impl Document {
             masks: &masks,
             filters: &filters,
             limits,
+            segments_used: 0,
             shapes: Vec::new(),
             texts: Vec::new(),
             use_stack: Vec::new(),
@@ -613,6 +614,9 @@ struct Builder<'a> {
     masks: &'a [MaskSpec],
     filters: &'a [FilterSpec],
     limits: &'a Limits,
+    /// Flattened segments charged so far, shared by every shape (and `<use>` re-visit) of
+    /// the document: `Limits::max_path_segments` is documented as a document-wide budget.
+    segments_used: usize,
     shapes: Vec<Shape>,
     texts: Vec<TextSpec>,
     use_stack: Vec<String>,
@@ -923,7 +927,8 @@ impl<'a> Builder<'a> {
                 if let Some(path_element) = self.defs.get(id)
                     && let Some(data) = path_element.attribute("d")
                 {
-                    let subpaths = parse_path_data(data, self.limits)?;
+                    let limits = self.limits;
+                    let subpaths = parse_path_data(data, limits, &mut self.segments_used)?;
                     let raw = path_child.attribute("startOffset").unwrap_or("0").trim();
                     let (start_offset, percent) = match raw.strip_suffix('%') {
                         Some(value) => (value.trim().parse::<f32>().unwrap_or(0.0) / 100.0, true),
@@ -1021,19 +1026,42 @@ impl<'a> Builder<'a> {
         style: &Style,
         opacity: f32,
     ) -> Result<(), SvgError> {
+        let limits = self.limits;
         let mut subpaths = match name {
             "rect" => vec![rect_subpath(element)],
             "circle" => vec![ellipse_subpath(element, true)],
             "ellipse" => vec![ellipse_subpath(element, false)],
             "line" => vec![line_subpath(element)],
-            "polyline" => vec![polyline_subpath(element, false)],
-            "polygon" => vec![polyline_subpath(element, true)],
+            "polyline" => vec![polyline_subpath(
+                element,
+                false,
+                limits,
+                &mut self.segments_used,
+            )?],
+            "polygon" => vec![polyline_subpath(
+                element,
+                true,
+                limits,
+                &mut self.segments_used,
+            )?],
             "path" => match element.attribute("d") {
-                Some(data) => parse_path_data(data, self.limits)?,
+                Some(data) => parse_path_data(data, limits, &mut self.segments_used)?,
                 None => Vec::new(),
             },
             _ => return Ok(()),
         };
+        if !matches!(name, "path" | "polyline" | "polygon") {
+            // Basic shapes have a handful of points each, but thousands of them still have
+            // to count against the document-wide budget.
+            let points: usize = subpaths.iter().map(|subpath| subpath.points.len()).sum();
+            self.segments_used = self.segments_used.saturating_add(points);
+            if self.segments_used > limits.max_path_segments {
+                return Err(SvgError::Limit(format!(
+                    "document exceeds {} flattened segments",
+                    limits.max_path_segments
+                )));
+            }
+        }
         subpaths.retain(|subpath| subpath.points.len() >= 2);
         if subpaths.is_empty() {
             return Ok(());
@@ -1275,12 +1303,19 @@ fn line_subpath(element: &XmlElement) -> SubPath {
     }
 }
 
-fn polyline_subpath(element: &XmlElement, polygon: bool) -> SubPath {
+fn polyline_subpath(
+    element: &XmlElement,
+    polygon: bool,
+    limits: &Limits,
+    segments_used: &mut usize,
+) -> Result<SubPath, SvgError> {
     let text = element.attribute("points").unwrap_or_default();
     let numbers = parse_number_list(text).unwrap_or_default();
-    let mut points: Vec<(f32, f32)> = numbers
-        .as_chunks::<2>()
-        .0
+    let pairs = numbers.as_chunks::<2>().0;
+    // The documented segment budget also covers `<polygon>`/`<polyline>`: the rasterizer
+    // builds one edge per vertex and scans them per sub-row, so an unbounded `points`
+    // attribute is a remote CPU DoS.
+    let mut points: Vec<(f32, f32)> = pairs
         .iter()
         .map(|pair| (pair[0], pair[1]))
         .filter(|point| point.0.is_finite() && point.1.is_finite())
@@ -1292,10 +1327,18 @@ fn polyline_subpath(element: &XmlElement, polygon: bool) -> SubPath {
     {
         points.push(first);
     }
-    SubPath {
+    // Charge the document-wide budget (including the closure vertex appended above).
+    *segments_used = segments_used.saturating_add(points.len());
+    if *segments_used > limits.max_path_segments {
+        return Err(SvgError::Limit(format!(
+            "document exceeds {} flattened segments",
+            limits.max_path_segments
+        )));
+    }
+    Ok(SubPath {
         points,
         closed: polygon,
-    }
+    })
 }
 
 fn parse_paint(
@@ -2018,6 +2061,7 @@ fn build_effect_shapes(
         masks: &no_masks,
         filters: &no_filters,
         limits,
+        segments_used: 0,
         shapes: Vec::new(),
         texts: Vec::new(),
         use_stack: Vec::new(),
@@ -2340,6 +2384,7 @@ fn build_patterns(
             use_stack: Vec::new(),
             active_clips: Vec::new(),
             active_masks: Vec::new(),
+            segments_used: 0,
             active_filter: None,
         };
         let mut style = Style::default();
