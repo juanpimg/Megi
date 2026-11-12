@@ -1,0 +1,48 @@
+name: Feature Request
+description: Suggest a new feature for Megi
+title: "[area] Short description"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature. Please describe it below.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: "What feature do you want and why?"
+    validations:
+      required: true
+  - type: textarea
+    id: spec
+    attributes:
+      label: Spec reference
+      description: "WHATWG/W3C spec section (if applicable)"
+      placeholder: "e.g. WHATWG HTML §13.2.6.4.7"
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - html
+        - css
+        - layout
+        - paint
+        - fonts
+        - image
+        - net
+        - js
+        - svg
+        - render
+        - shell
+        - docs
+        - ci
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: "How do we know it's done?"

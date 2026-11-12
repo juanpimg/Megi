@@ -1,0 +1,31 @@
+# Megi CODEOWNERS
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner
+* @juanpimg
+
+# Crates
+/crates/dom/        @juanpimg
+/crates/html/       @juanpimg
+/crates/css/        @juanpimg
+/crates/layout/     @juanpimg
+/crates/fonts/      @juanpimg
+/crates/paint/      @juanpimg
+/crates/image/      @juanpimg
+/crates/net/        @juanpimg
+/crates/js/         @juanpimg
+/crates/svg/        @juanpimg
+/crates/render/     @juanpimg
+/crates/shell/      @juanpimg
+/crates/bench/      @juanpimg
+/crates/test_harness/ @juanpimg
+
+# Tooling
+/tools/             @juanpimg
+/fuzz/              @juanpimg
+
+# CI
+/.github/           @juanpimg
+
+# Docs
+/docs/              @juanpimg

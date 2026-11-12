@@ -188,3 +188,41 @@ after a fix is available.
   (bounded resource exhaustion under `ParseOptions`/response caps; the 6
   scripted html5lib tree failures and 3 `xmlViolation` tokenizer gaps).
 - Issues that only affect rendering fidelity without a security impact.
+
+## CVE process and disclosure timeline
+
+### Severity classification (CVSS 3.1)
+
+| Severity | Score | Response time | Fix timeline |
+|---|---|---|---|
+| Critical | 9.0-10.0 | 24 hours | 7 days |
+| High | 7.0-8.9 | 48 hours | 14 days |
+| Medium | 4.0-6.9 | 7 days | 30 days |
+| Low | 0.1-3.9 | 14 days | 90 days |
+
+### Disclosure timeline
+
+1. **Day 0**: Vulnerability reported privately
+2. **Day 1-7**: Acknowledgment and triage
+3. **Day 7-30**: Fix developed and tested
+4. **Day 30-90**: Coordinated disclosure
+5. **Day 90**: Public disclosure (if not fixed, disclose anyway)
+
+### Security contact
+
+- **GitHub Security Advisories**: https://github.com/juanpimg/Megi/security/advisories/new
+- **Email**: (see repository profile)
+
+### Security advisories workflow
+
+1. Reporter opens private security advisory on GitHub
+2. Maintainer triages and assigns severity
+3. Fix developed in private branch
+4. Fix merged to main with security advisory published
+5. CVE requested if applicable
+6. Public disclosure after fix is available
+
+### Bug bounty
+
+No formal bug bounty program exists yet. Security researchers are credited
+in the release notes and SECURITY.md.

@@ -1,0 +1,59 @@
+name: Bug Report
+description: Report a bug in Megi
+title: "[crate] Short description"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill in the details below.
+  - type: input
+    id: commit
+    attributes:
+      label: Affected commit / version
+      description: "git rev-parse --short HEAD"
+      placeholder: "e.g. a311b58"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: "Minimal HTML/CSS/JS input that triggers the issue"
+      placeholder: "<html>...</html>"
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: "What happens (crash, abort, hang, wrong output)"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: "What should happen per spec"
+    validations:
+      required: true
+  - type: dropdown
+    id: crate
+    attributes:
+      label: Affected crate
+      options:
+        - dom
+        - html
+        - css
+        - layout
+        - fonts
+        - paint
+        - image
+        - net
+        - js
+        - svg
+        - render
+        - shell
+        - other
+    validations:
+      required: true

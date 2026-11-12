@@ -9,10 +9,18 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     name: Quality gate (fmt, clippy, tests, docs)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -30,20 +38,21 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Clippy (deny warnings)
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Workspace tests
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
       # Checks that PROGRESS.md and docs/status/*.svg match the committed manifest plus the
       # real repository stats (git HEAD/date, crates, Rust lines, test count). The
       # conformance gate already runs in the `conformance` job, so it is not re-run here.
       - name: Status freshness (PROGRESS.md + docs/status)
         run: python3 tools/update_progress.py --check --no-gate
       - name: Documentation
-        run: cargo doc --workspace --no-deps
+        run: cargo doc --workspace --no-deps --locked
 
   conformance:
     name: HTML5 conformance gate
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -90,10 +99,10 @@ jobs:
       # `--no-default-features` still links Boa through `shell`/`test_harness`, so the
       # documented JS-free build is checked per crate (no system libraries needed here).
       - name: Clippy the renderer without the JavaScript engine
-        run: cargo clippy -p render --no-default-features --all-targets -- -D warnings
+        run: cargo clippy -p render --no-default-features --all-targets --locked -- -D warnings
       - name: Clippy the engine stub
-        run: cargo clippy -p js --no-default-features --all-targets -- -D warnings
+        run: cargo clippy -p js --no-default-features --all-targets --locked -- -D warnings
       - name: Test the engine stub
-        run: cargo test -p js --no-default-features
+        run: cargo test -p js --no-default-features --locked
       - name: Test the renderer without scripts
-        run: cargo test -p render --no-default-features
+        run: cargo test -p render --no-default-features --locked

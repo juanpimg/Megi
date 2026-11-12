@@ -1,0 +1,19 @@
+name: Security Report
+description: Report a security vulnerability (redirect to private advisory)
+title: "[security] Short description"
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not use this template for security vulnerabilities.**
+        Please report security issues privately via GitHub Security Advisories:
+        https://github.com/juanpimg/Megi/security/advisories/new
+        or email the maintainer.
+  - type: input
+    id: confirm
+    attributes:
+      label: I confirm this is NOT a security vulnerability
+      description: "Type 'yes' to proceed"
+    validations:
+      required: true
