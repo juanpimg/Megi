@@ -421,13 +421,19 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
     let strut_descent = strut_metrics.descent + strut_leading / 2.0;
 
     // 4. Construct LineBox layout boxes and resolve baseline / vertical-align
+    let bidi_active = container_style.direction == css::Direction::Rtl
+        || container_style.unicode_bidi != css::UnicodeBidi::Normal
+        || crate::bidi::contains_rtl_or_bidi(&text_pool);
     let mut line_boxes = Vec::with_capacity(lines.len());
     let mut current_line_y = container_y;
 
     // Track active inline boxes across line breaks for box splitting
     let mut persistent_active_boxes: Vec<ActiveBoxInfo> = Vec::new();
 
-    for line in lines {
+    for mut line in lines {
+        if bidi_active {
+            reorder_line_tokens_bidi(&mut line.tokens, &mut text_pool, &styles, &container_style);
+        }
         let ctx = LineContext {
             container_x,
             line_y: current_line_y,
@@ -453,6 +459,143 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
 
     layout_box.children = line_boxes;
     layout_box.style = Some(container_style);
+}
+
+/// Applies UAX #9 bidirectional reordering to a single line's tokens.
+fn reorder_line_tokens_bidi(
+    tokens: &mut Vec<InlineToken>,
+    text_pool: &mut String,
+    styles: &[Arc<ComputedStyle>],
+    container_style: &ComputedStyle,
+) {
+    use crate::bidi::{
+        BidiClass, paragraph_base_level, reorder_visual_indices, resolve_levels, word_bidi_class,
+        word_to_visual,
+    };
+
+    if tokens.is_empty() {
+        return;
+    }
+
+    // Group balanced `BoxStart .. BoxEnd` spans as single reorderable units so
+    // inline box nesting stays well-formed; flat tokens are singleton units.
+    let mut groups: Vec<Vec<InlineToken>> = Vec::with_capacity(tokens.len());
+    let mut depth = 0usize;
+    for tok in tokens.drain(..) {
+        match &tok {
+            InlineToken::BoxStart { .. } => {
+                if depth == 0 {
+                    groups.push(vec![tok]);
+                } else if let Some(last) = groups.last_mut() {
+                    last.push(tok);
+                }
+                depth += 1;
+            }
+            InlineToken::BoxEnd { .. } => {
+                if depth > 0 {
+                    depth -= 1;
+                    if let Some(last) = groups.last_mut() {
+                        last.push(tok);
+                    }
+                } else {
+                    groups.push(vec![tok]);
+                }
+            }
+            _ => {
+                if depth > 0 {
+                    if let Some(last) = groups.last_mut() {
+                        last.push(tok);
+                    }
+                } else {
+                    groups.push(vec![tok]);
+                }
+            }
+        }
+    }
+
+    let mut classes = Vec::with_capacity(groups.len());
+    let mut first_strong = None;
+    let override_dir = match container_style.unicode_bidi {
+        css::UnicodeBidi::BidiOverride | css::UnicodeBidi::IsolateOverride => {
+            Some(match container_style.direction {
+                css::Direction::Ltr => BidiClass::L,
+                css::Direction::Rtl => BidiClass::R,
+            })
+        }
+        _ => None,
+    };
+
+    for group in &groups {
+        let cls = if let Some(forced) = override_dir {
+            forced
+        } else {
+            let mut found = None;
+            for tok in group {
+                match tok {
+                    InlineToken::Word {
+                        start, end, style, ..
+                    } => {
+                        let st = &styles[*style as usize];
+                        if matches!(
+                            st.unicode_bidi,
+                            css::UnicodeBidi::BidiOverride | css::UnicodeBidi::IsolateOverride
+                        ) {
+                            found = Some(match st.direction {
+                                css::Direction::Ltr => BidiClass::L,
+                                css::Direction::Rtl => BidiClass::R,
+                            });
+                        } else {
+                            found = Some(word_bidi_class(&text_pool[*start..*end]));
+                        }
+                        break;
+                    }
+                    InlineToken::Space { .. } => {
+                        if found.is_none() {
+                            found = Some(BidiClass::WS);
+                        }
+                    }
+                    InlineToken::Atomic { .. } => {
+                        found = Some(BidiClass::ON);
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            found.unwrap_or(BidiClass::ON)
+        };
+        if first_strong.is_none() && matches!(cls, BidiClass::L | BidiClass::R | BidiClass::AL) {
+            first_strong = Some(cls);
+        }
+        classes.push(cls);
+    }
+
+    let base_level = paragraph_base_level(
+        container_style.direction,
+        container_style.unicode_bidi,
+        first_strong,
+    );
+    let levels = resolve_levels(&classes, base_level);
+    let order = reorder_visual_indices(&levels);
+
+    for idx in order {
+        let level = levels[idx];
+        for mut tok in std::mem::take(&mut groups[idx]) {
+            if let InlineToken::Word {
+                ref mut start,
+                ref mut end,
+                ..
+            } = tok
+                && level % 2 == 1
+            {
+                let visual = word_to_visual(&text_pool[*start..*end], level);
+                let new_start = text_pool.len();
+                text_pool.push_str(&visual);
+                *start = new_start;
+                *end = text_pool.len();
+            }
+            tokens.push(tok);
+        }
+    }
 }
 
 /// Recursively flattens inline boxes into [`InlineToken`]s.
