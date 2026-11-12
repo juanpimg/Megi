@@ -597,6 +597,30 @@ fn import_map_source(document: &dom::Document, warnings: &mut Vec<String>) -> Op
     }
 }
 
+/// Whether a `file://` fetch stays inside the document's directory.
+///
+/// Canonicalising both paths also rejects symlinks that escape the directory; a missing
+/// document or target path denies the request (the loader then surfaces its usual 404).
+#[cfg(feature = "js")]
+fn file_fetch_allowed(base: &Url, requested: &Url) -> bool {
+    let Ok(base_path) = net::file::path_from_file_url(base) else {
+        return false;
+    };
+    let Ok(requested_path) = net::file::path_from_file_url(requested) else {
+        return false;
+    };
+    let Some(directory) = base_path.parent() else {
+        return false;
+    };
+    let (Ok(directory), Ok(requested_path)) = (
+        std::fs::canonicalize(directory),
+        std::fs::canonicalize(&requested_path),
+    ) else {
+        return false;
+    };
+    requested_path.starts_with(&directory)
+}
+
 /// Resolves a Web Worker script for the host under the same local-file policy as every
 /// other subresource, bounded by the per-script byte cap.
 #[cfg(feature = "js")]
@@ -716,6 +740,8 @@ pub fn execute_scripts(
                             && base.host() == url.host()
                             && base.port_or_default() == url.port_or_default()
                     }
+                    // Same scheme; the directory confinement is enforced below with a
+                    // uniform 404 so out-of-directory and missing files are indistinguishable.
                     (Scheme::File, Scheme::File) => true,
                     _ => false,
                 };
@@ -723,6 +749,18 @@ pub fn execute_scripts(
                     return Err(js::JsError::Runtime(
                         "CORS: cross-origin fetch denied (same-origin only)".to_string(),
                     ));
+                }
+                // `file://` reads are confined to the document's directory. Answer any
+                // out-of-directory request with the same synthetic 404 as a missing file,
+                // so scripts cannot read (or probe the existence of) arbitrary local files.
+                if matches!(url.scheme(), Scheme::File) && !file_fetch_allowed(&base, &url) {
+                    return Ok(js::host::FetchResult {
+                        status: 404,
+                        status_text: "Not Found".to_string(),
+                        url: request.url,
+                        headers: Vec::new(),
+                        body: Vec::new(),
+                    });
                 }
                 if matches!(url.scheme(), Scheme::Http | Scheme::Https) {
                     let header_refs: Vec<(&str, &str)> = request
@@ -1348,5 +1386,27 @@ mod unit_tests {
                 .iter()
                 .any(|warning| warning.contains("--no-network"))
         );
+    }
+    #[test]
+    fn file_fetch_is_confined_to_the_document_directory() {
+        let root = std::env::temp_dir().join(format!("megi-file-fetch-{}", std::process::id()));
+        let site = root.join("site");
+        std::fs::create_dir_all(&site).expect("mkdir");
+        std::fs::write(site.join("index.html"), "x").expect("doc");
+        std::fs::write(site.join("data.txt"), "x").expect("inside");
+        std::fs::write(root.join("secret.txt"), "x").expect("outside");
+        let base = Url::parse(&format!("file://{}/index.html", site.display())).expect("base");
+        let inside = Url::parse(&format!("file://{}/data.txt", site.display())).expect("inside");
+        let outside =
+            Url::parse(&format!("file://{}/secret.txt", root.display())).expect("outside");
+        let system = Url::parse("file:///etc/passwd").expect("system");
+        assert!(file_fetch_allowed(&base, &inside));
+        assert!(!file_fetch_allowed(&base, &outside));
+        assert!(!file_fetch_allowed(&base, &system));
+        // A `..` traversal that resolves outside the directory is denied too.
+        let traversal = Url::parse(&format!("file://{}/site/../secret.txt", root.display()))
+            .expect("traversal");
+        assert!(!file_fetch_allowed(&base, &traversal));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

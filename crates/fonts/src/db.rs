@@ -119,7 +119,7 @@ pub const BUNDLED_FONTS: &[(&str, &[u8])] = &[
 /// Splits on commas, trims ASCII whitespace and strips single/double quotes
 /// around family names (CSS Fonts 3 §3.1). Returns `["sans-serif"]` when the
 /// value contains no usable family (CSS initial `font-family` is UA-defined).
- pub fn parse_font_families(font_family: &str) -> Vec<String> {
+pub fn parse_font_families(font_family: &str) -> Vec<String> {
     const MAX_FAMILIES: usize = 256;
     const MAX_ENTRY_LEN: usize = 256;
     let mut families = Vec::new();
@@ -395,8 +395,14 @@ impl FontDatabase {
                 "monospace" | "ui-monospace" => (Some(Family::Monospace), MONO_FALLBACKS),
                 "cursive" => (Some(Family::Cursive), CURSIVE_FALLBACKS),
                 "fantasy" => (Some(Family::Fantasy), FANTASY_FALLBACKS),
-                "emoji" => (Some(Family::SansSerif), &["Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji"] as &[&str]),
-                "math" => (Some(Family::Serif), &["STIX Two Math", "Cambria Math", "Latin Modern Math"] as &[&str]),
+                "emoji" => (
+                    Some(Family::SansSerif),
+                    &["Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji"] as &[&str],
+                ),
+                "math" => (
+                    Some(Family::Serif),
+                    &["STIX Two Math", "Cambria Math", "Latin Modern Math"] as &[&str],
+                ),
                 "fangsong" => (None, &["FangSong", "STFangsong"] as &[&str]),
                 _ => (None, &[] as &[&'static str]),
             };
@@ -494,7 +500,12 @@ impl FontDatabase {
             };
         }
         Err(FontError::FontNotFound {
-            families: families.iter().take(8).cloned().collect::<Vec<_>>().join(", "),
+            families: families
+                .iter()
+                .take(8)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", "),
         })
     }
 
