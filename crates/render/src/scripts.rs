@@ -597,6 +597,32 @@ fn import_map_source(document: &dom::Document, warnings: &mut Vec<String>) -> Op
     }
 }
 
+/// Resolves a Web Worker script for the host under the same local-file policy as every
+/// other subresource, bounded by the per-script byte cap.
+#[cfg(feature = "js")]
+fn load_worker_source(
+    url: &str,
+    allow_file: bool,
+    max_bytes: usize,
+) -> Result<String, js::JsError> {
+    let parsed = Url::parse(url)
+        .map_err(|error| js::JsError::Runtime(format!("worker script URL {url}: {error}")))?;
+    if parsed.scheme() != Scheme::File {
+        return Err(js::JsError::Runtime(format!(
+            "worker scripts only support file:// in render: {url}"
+        )));
+    }
+    if !allow_file {
+        return Err(js::JsError::Runtime(format!(
+            "worker script {url}: local file access is blocked for this document"
+        )));
+    }
+    let bytes = net::load_file_url_with_limit(&parsed, max_bytes)
+        .map_err(|error| js::JsError::Runtime(format!("worker script {url}: {error}")))?;
+    String::from_utf8(bytes)
+        .map_err(|error| js::JsError::Runtime(format!("worker script {url} is not UTF-8: {error}")))
+}
+
 #[cfg(feature = "js")]
 pub fn execute_scripts(
     document: Document,
@@ -720,7 +746,8 @@ pub fn execute_scripts(
                         body: response.body,
                     });
                 }
-                let mut loader = ResourceLoader::with_options(options.clone());
+                let mut loader =
+                    ResourceLoader::with_options(options.clone()).with_allow_file(base.is_file());
                 match loader.load_str(&request.url) {
                     Ok(resource) => {
                         let mut headers =
@@ -744,14 +771,10 @@ pub fn execute_scripts(
                 }
             }));
         }
-        runtime.set_worker_loader(Box::new(|url| {
-            let path = url.strip_prefix("file://").ok_or_else(|| {
-                js::JsError::Runtime(format!(
-                    "worker scripts only support file:// in render: {url}"
-                ))
-            })?;
-            std::fs::read_to_string(path)
-                .map_err(|error| js::JsError::Runtime(format!("worker script {url}: {error}")))
+        let worker_allow_file = document_url.is_file();
+        let max_worker_bytes = limits.max_script_bytes;
+        runtime.set_worker_loader(Box::new(move |url| {
+            load_worker_source(url, worker_allow_file, max_worker_bytes)
         }));
     }
     #[cfg(feature = "js")]
@@ -870,9 +893,10 @@ pub fn execute_scripts(
                     .map(|url| url.as_str().to_owned()))
             },
         ));
-        let module_loader = Arc::new(Mutex::new(ResourceLoader::with_options(
-            host.fetch_options.clone(),
-        )));
+        let module_loader = Arc::new(Mutex::new(
+            ResourceLoader::with_options(host.fetch_options.clone())
+                .with_allow_file(document_url.is_file()),
+        ));
         let no_network = host.no_network;
         let max_module_bytes = limits.max_script_bytes;
         let total_module_bytes = Arc::new(Mutex::new(0usize));
@@ -1247,6 +1271,21 @@ mod unit_tests {
             warnings.is_empty(),
             "module discovery is not a warning: {warnings:?}"
         );
+    }
+
+    #[cfg(feature = "js")]
+    #[test]
+    fn worker_loader_enforces_the_file_policy() {
+        let path = std::env::temp_dir().join(format!("megi-worker-{}.js", std::process::id()));
+        std::fs::write(&path, "self.onmessage = function () {};").expect("write worker");
+        let url = format!("file://{}", path.display());
+
+        let blocked = load_worker_source(&url, false, 4096).expect_err("blocked");
+        assert!(blocked.to_string().contains("blocked"), "{blocked}");
+        let source = load_worker_source(&url, true, 4096).expect("allowed");
+        assert!(source.contains("onmessage"), "{source}");
+        assert!(load_worker_source(&url, true, 4).is_err(), "cap");
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

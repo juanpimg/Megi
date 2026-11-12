@@ -706,6 +706,9 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     let mut subresource_fetch_options = document_fetch_options.clone();
     subresource_fetch_options.origin = subresource_origin;
     let mut loader = ResourceLoader::with_options(subresource_fetch_options);
+    // A remote (or data:) document must not read the local filesystem through a
+    // subresource; only file: documents may load file: URLs.
+    loader.set_allow_file(loaded.url.is_file());
     // Push promises received while fetching the document belong to the same load session:
     // transfer them to the subresource loader that serves images/stylesheets/scripts.
     loader.absorb_pushes_from(&mut document_loader);

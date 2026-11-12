@@ -54,7 +54,7 @@ fn import_map_remaps_a_bare_specifier_to_a_file_module() {
         "<!DOCTYPE html><body><script type=\"importmap\">{importmap}</script>\
          <script type=\"module\">import {{ value }} from 'dep';</script></body>"
     );
-    let output = render_html(&html, 240, 160);
+    let output = render_file(&html, &dir, 240, 160);
     assert_eq!(
         body_attribute(&output, "data-mapped").as_deref(),
         Some("yes")
@@ -106,7 +106,7 @@ fn invalid_import_maps_are_warnings_and_do_not_break_independent_modules() {
          <body><script type=\"module\" src=\"file://{}\"></script></body>",
         module.display()
     );
-    let output = render_html(&html, 240, 160);
+    let output = render_file(&html, &dir, 240, 160);
     assert_eq!(body_attribute(&output, "data-ok").as_deref(), Some("1"));
     assert!(
         output

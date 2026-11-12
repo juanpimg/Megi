@@ -160,6 +160,9 @@ pub struct ResourceLoader {
     pushed_bytes: usize,
     /// Per-origin idle HTTP/1.1 keep-alive connections (R185).
     h1_pool: crate::http::H1Pool,
+    /// Whether `file:` URLs may be loaded (default `true`; the renderer disables it for
+    /// documents that are not themselves `file:`).
+    allow_file: bool,
 }
 
 impl Default for ResourceLoader {
@@ -207,6 +210,7 @@ impl ResourceLoader {
             pushed_discarded: 0,
             pushed_bytes: 0,
             h1_pool,
+            allow_file: true,
         }
     }
 
@@ -223,7 +227,31 @@ impl ResourceLoader {
             pushed_discarded: 0,
             pushed_bytes: 0,
             h1_pool: crate::http::H1Pool::new(4, std::time::Duration::from_secs(30)),
+            allow_file: true,
         }
+    }
+
+    /// Allows or forbids loading `file:` URLs (allowed by default).
+    ///
+    /// The renderer disables it for documents that are not themselves `file:`, so a remote
+    /// page cannot read the local filesystem through an image, script, stylesheet or fetch.
+    pub fn set_allow_file(&mut self, allow: bool) -> &mut Self {
+        self.allow_file = allow;
+        self
+    }
+
+    /// Builder variant of [`Self::set_allow_file`].
+    pub fn with_allow_file(mut self, allow: bool) -> Self {
+        self.set_allow_file(allow);
+        self
+    }
+
+    /// Rejects `file:` URLs when local-file access is disabled.
+    fn check_file_access(&self, url: &Url) -> Result<(), LoadError> {
+        if url.scheme() == Scheme::File && !self.allow_file {
+            return Err(FetchError::FileAccessBlocked.into());
+        }
+        Ok(())
     }
 
     /// Enables or disables the cache; disabling it drops the cached entries.
@@ -336,6 +364,7 @@ impl ResourceLoader {
 
     /// Loads `url`, using the HTTP cache (fresh entry, revalidation or full fetch).
     pub fn load(&mut self, url: &Url) -> Result<Arc<Resource>, LoadError> {
+        self.check_file_access(url)?;
         // `data:` URLs are immutable inline payloads: decode on demand, no cache.
         if url.scheme() == Scheme::Data {
             let data = decode_data_url(url)?;
@@ -389,6 +418,7 @@ impl ResourceLoader {
         url: &Url,
         on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
     ) -> Result<Resource, LoadError> {
+        self.check_file_access(url)?;
         match url.scheme() {
             Scheme::Http | Scheme::Https => {
                 let response = crate::http::fetch_streaming(url, &self.options, on_data)?;
@@ -567,6 +597,7 @@ impl ResourceLoader {
         extra_headers: &[(&str, &str)],
         body: Option<crate::body::RequestBody>,
     ) -> Result<Arc<Resource>, LoadError> {
+        self.check_file_access(url)?;
         let streaming = matches!(body, Some(crate::body::RequestBody::Stream(_)));
         if method.eq_ignore_ascii_case("GET") && !streaming && body.is_none() {
             return self.load(url);
@@ -596,6 +627,7 @@ impl ResourceLoader {
         extra_headers: &[(&str, &str)],
         body: Option<&[u8]>,
     ) -> Result<Arc<Resource>, LoadError> {
+        self.check_file_access(url)?;
         if method.eq_ignore_ascii_case("GET") && body.is_none() {
             return self.load(url);
         }
@@ -624,6 +656,7 @@ impl ResourceLoader {
     /// [`crate::http::fetch`] when needed). `file:`/`data:` payloads are sliced locally.
     /// Invalid/unsatisfiable ranges are [`crate::FetchError::InvalidRange`].
     pub fn load_range(&mut self, url: &Url, range: ByteRange) -> Result<Resource, LoadError> {
+        self.check_file_access(url)?;
         match url.scheme() {
             Scheme::Http | Scheme::Https => {
                 let mut options = self.options.clone();

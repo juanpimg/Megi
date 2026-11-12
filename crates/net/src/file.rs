@@ -7,7 +7,8 @@
 //! Only the empty host and `localhost` are accepted; `file://server/share` returns
 //! [`FetchError::UnsupportedFileHost`].
 
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 
 use crate::error::FetchError;
 use crate::url::{Scheme, Url, percent_decode};
@@ -28,16 +29,43 @@ pub fn path_from_file_url(url: &Url) -> Result<PathBuf, FetchError> {
     Ok(PathBuf::from(percent_decode(url.path())))
 }
 
+/// Maximum bytes read from one `file:` URL.
+///
+/// The renderer applies tighter per-resource caps; this bound only stops a local file
+/// (`/dev/zero` included) from being read without limit before those caps are consulted.
+pub const MAX_FILE_BYTES: usize = 64 * 1024 * 1024;
+
 /// Reads the local file named by `url` (a `file:` URL) into memory.
+///
+/// Reads at most [`MAX_FILE_BYTES`]; larger files return
+/// [`FetchError::ResponseTooLarge`] (the same typed error the network path uses for its
+/// response cap).
 pub fn load_file_url(url: &Url) -> Result<Vec<u8>, FetchError> {
+    load_file_url_with_limit(url, MAX_FILE_BYTES)
+}
+
+/// [`load_file_url`] with an explicit size bound (at most `max_bytes + 1` is read).
+pub fn load_file_url_with_limit(url: &Url, max_bytes: usize) -> Result<Vec<u8>, FetchError> {
     let path = path_from_file_url(url)?;
-    match std::fs::read(&path) {
-        Ok(bytes) => Ok(bytes),
-        Err(error) => Err(match error.kind() {
-            std::io::ErrorKind::NotFound => FetchError::FileNotFound(path),
-            std::io::ErrorKind::PermissionDenied => FetchError::FilePermissionDenied(path),
-            _ => FetchError::FileIo(error),
-        }),
+    let file = std::fs::File::open(&path).map_err(|error| map_file_error(error, &path))?;
+    let mut bytes = Vec::new();
+    file.take(max_bytes.saturating_add(1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|error| map_file_error(error, &path))?;
+    if bytes.len() > max_bytes {
+        return Err(FetchError::ResponseTooLarge);
+    }
+    Ok(bytes)
+}
+
+/// Maps an I/O error for `path` to the typed file variants.
+fn map_file_error(error: std::io::Error, path: &Path) -> FetchError {
+    match error.kind() {
+        std::io::ErrorKind::NotFound => FetchError::FileNotFound(path.to_path_buf()),
+        std::io::ErrorKind::PermissionDenied => {
+            FetchError::FilePermissionDenied(path.to_path_buf())
+        }
+        _ => FetchError::FileIo(error),
     }
 }
 
@@ -52,6 +80,29 @@ mod unit_tests {
             path_from_file_url(&url).expect("local host"),
             PathBuf::from("/tmp/a b/c.txt")
         );
+    }
+
+    #[test]
+    fn file_reads_are_bounded() {
+        let path = std::env::temp_dir().join(format!(
+            "megi-file-cap-{}-{}.bin",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::write(&path, b"0123456789").expect("write temp file");
+        let url = Url::parse(&format!("file://{}", path.display())).expect("file URL");
+        assert_eq!(
+            load_file_url_with_limit(&url, 10).expect("exact fit").len(),
+            10
+        );
+        assert!(matches!(
+            load_file_url_with_limit(&url, 4),
+            Err(FetchError::ResponseTooLarge)
+        ));
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
