@@ -13,7 +13,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HTML5LIB_DIR = REPO_ROOT / "tests" / "html5lib-tests"
@@ -49,8 +49,8 @@ def parse_dat_file(dat_path: Path) -> List[Dict[str, Any]]:
     key: str = ""
 
     for line in lines:
-        if line.startswith("#") and line[1:].strip() in KNOWN_DAT_HEADINGS:
-            heading = line[1:].strip()
+        heading = line[1:] if line.startswith("#") else None
+        if heading in KNOWN_DAT_HEADINGS:
             if (heading == "data" and key != "description") or heading == "description":
                 if key:
                     if current_data.get(key, "").endswith("\n"):
@@ -101,7 +101,10 @@ def load_tokenizer_file(test_path: Path) -> List[Dict[str, Any]]:
         return data["tests"]
     if "xmlViolationTests" in data:
         return data["xmlViolationTests"]
-    return []
+    raise ValueError(
+        f"Unrecognized tokenizer schema in {test_path}: "
+        "expected 'tests' or 'xmlViolationTests' key"
+    )
 
 
 def cmd_summary(args: argparse.Namespace) -> int:
