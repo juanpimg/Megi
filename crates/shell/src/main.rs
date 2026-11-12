@@ -30,6 +30,7 @@ fn render_options(args: &CliArgs) -> render::RenderOptions {
     render::RenderOptions {
         cookie_jar,
         origin: args.origin.clone(),
+        time_ms: args.time_ms,
         ..render::RenderOptions::default()
     }
 }
