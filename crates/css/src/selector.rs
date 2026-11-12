@@ -448,6 +448,8 @@ pub struct CompoundSelector {
     pub classes: Vec<String>,
     pub attributes: Vec<AttributeSelector>,
     pub pseudo_classes: Vec<PseudoClass>,
+    /// `#a#b` with different ids can never match: an element has a single `id` attribute.
+    pub never_matches: bool,
 }
 
 impl CompoundSelector {
@@ -474,6 +476,9 @@ impl CompoundSelector {
     /// and universal selectors are no longer restricted to the HTML namespace, so styles now
     /// apply to SVG/MathML elements (F14).
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
+        if self.never_matches {
+            return false;
+        }
         let Some(el) = doc.node(node_id).as_element() else {
             return false;
         };
@@ -1034,7 +1039,14 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
                 if id.is_empty() {
                     return None;
                 }
-                compound.id = Some(id);
+                if let Some(existing) = &compound.id {
+                    // `#a#b` requires two different ids on one element, which is impossible.
+                    if existing != &id {
+                        compound.never_matches = true;
+                    }
+                } else {
+                    compound.id = Some(id);
+                }
             }
             '.' => {
                 let mut class = String::new();
@@ -1357,4 +1369,33 @@ fn strip_attribute_value_quotes(value: &str) -> Option<String> {
         return None;
     }
     Some(value.to_string())
+}
+
+#[cfg(test)]
+mod id_list_tests {
+    use super::*;
+    use dom::Attribute;
+
+    fn doc_with_id(id: &str) -> (Document, NodeId) {
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", Vec::new());
+        doc.append_child(doc.root(), html);
+        let div = doc.create_element(Namespace::Html, "div", vec![Attribute::new("id", id)]);
+        doc.append_child(html, div);
+        (doc, div)
+    }
+
+    #[test]
+    fn conflicting_ids_never_match() {
+        let (doc, node) = doc_with_id("a");
+        assert!(
+            !parse_selectors("#a#b").matches(&doc, node),
+            "an element has a single id attribute"
+        );
+        assert!(
+            parse_selectors("#a#a").matches(&doc, node),
+            "repeating the same id is redundant but matchable"
+        );
+        assert!(!parse_selectors("div#b#c").matches(&doc, node));
+    }
 }

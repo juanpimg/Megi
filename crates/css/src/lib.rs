@@ -104,6 +104,7 @@ impl SimpleSelector {
             classes: self.classes.clone(),
             attributes: Vec::new(),
             pseudo_classes: Vec::new(),
+            never_matches: false,
         };
         compound.matches(doc, node_id)
     }
