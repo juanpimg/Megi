@@ -2765,6 +2765,6 @@ mod tests {
         );
         assert!(bar.accept_completion(&history));
         assert_eq!(bar.text(), "https://example.com/");
-        assert_eq!(bar.selected_text(), Some("ps://example.com/"));
+        assert_eq!(bar.selected_text(), "ps://example.com/");
     }
 }
