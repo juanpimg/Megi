@@ -269,9 +269,14 @@ pub(crate) fn matching_declarations(
 }
 
 /// Parses a `style="..."` attribute into declarations.
+pub(crate) const MAX_DECLARATIONS_PER_RULE: usize = 256;
+
 pub(crate) fn parse_declarations(text: &str) -> Vec<Declaration> {
     let mut declarations = Vec::new();
     for raw in text.split(';') {
+        if declarations.len() >= MAX_DECLARATIONS_PER_RULE {
+            break;
+        }
         let Some((name, value)) = raw.split_once(':') else {
             continue;
         };
