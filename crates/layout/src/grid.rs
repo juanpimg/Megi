@@ -364,6 +364,21 @@ fn placement_request(
             request.column_span = column_end.saturating_sub(*column_start).max(1);
         }
     }
+    // Clamp line indices and spans: they come from CSS integers (u32) and feed the
+    // occupancy matrix and the implicit track list. `grid-column: span 4000000000` used to
+    // request a 4 GiB row and `grid-column-start: 2147483647` ~2e9 tracks.
+    request.row_start = request
+        .row_start
+        .map(|value| value.min(MAX_EXPANDED_TRACKS - 1));
+    request.column_start = request
+        .column_start
+        .map(|value| value.min(MAX_EXPANDED_TRACKS - 1));
+    request.row_end = request.row_end.map(|value| value.min(MAX_EXPANDED_TRACKS));
+    request.column_end = request
+        .column_end
+        .map(|value| value.min(MAX_EXPANDED_TRACKS));
+    request.row_span = request.row_span.clamp(1, MAX_EXPANDED_TRACKS);
+    request.column_span = request.column_span.clamp(1, MAX_EXPANDED_TRACKS);
     request
 }
 
@@ -382,6 +397,9 @@ fn span_from(start: &GridLine, end: &GridLine) -> usize {
 
 /// Grows the occupancy matrix to at least `rows` × `columns`.
 fn ensure_occupancy(grid: &mut Vec<Vec<bool>>, rows: usize, columns: usize) {
+    if grid.len() >= rows && grid.first().is_none_or(|row| row.len() >= columns) {
+        return;
+    }
     while grid.len() < rows {
         grid.push(vec![false; columns.max(grid.first().map_or(0, Vec::len))]);
     }
@@ -405,6 +423,13 @@ fn find_free_spot_flow(
     column_flow: bool,
 ) -> (usize, usize) {
     let (mut row, mut column) = cursor;
+    // Row flow: a span wider than the implicit track count must widen it; otherwise the
+    // `columns_exceeded` branch is invariant (row += 1 forever, one matrix row per step).
+    let column_limit = if column_flow {
+        column_limit
+    } else {
+        column_limit.max(column_span)
+    };
     loop {
         ensure_occupancy(
             grid,
