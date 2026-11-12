@@ -247,14 +247,27 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
             }
             "--refresh-ms" => {
                 // Optional value: use the next argument when it is a bare integer, otherwise
-                // fall back to the default interval without consuming it.
-                let interval = arguments
-                    .get(index)
-                    .and_then(|value| value.parse::<u64>().ok());
-                if interval.is_some() {
-                    index += 1;
+                // fall back to the default interval without consuming it. A present but
+                // unparseable value is an error (not silently swallowed).
+                if let Some(value) = arguments.get(index) {
+                    match value.parse::<u64>() {
+                        Ok(interval) => {
+                            index += 1;
+                            raw.refresh_ms = Some(interval);
+                        }
+                        Err(_) if value.starts_with('-') || value.contains("://") || value.starts_with("data:") => {
+                            // Looks like a flag or URL, not a value: use default.
+                            raw.refresh_ms = Some(crate::refresh::DEFAULT_REFRESH_MS);
+                        }
+                        Err(_) => {
+                            return Err(ShellError::Usage(format!(
+                                "invalid --refresh-ms value `{value}` (expected a number)"
+                            )));
+                        }
+                    }
+                } else {
+                    raw.refresh_ms = Some(crate::refresh::DEFAULT_REFRESH_MS);
                 }
-                raw.refresh_ms = Some(interval.unwrap_or(crate::refresh::DEFAULT_REFRESH_MS));
             }
             other if other.starts_with('-') => {
                 return Err(ShellError::Usage(format!("unknown option `{other}`")));
