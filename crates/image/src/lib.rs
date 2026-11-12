@@ -408,8 +408,14 @@ fn decode_jpeg_scaled(
     if scale > 1
         && let Some(thumbnail) = exif::thumbnail(bytes)
         && let Ok(decoded) = {
-            let limits = PngLimits::new(2048, 4 * 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024);
-            decode_with_limits(thumbnail, &limits)
+            // Derive thumbnail limits from caller limits (clamp to hardcoded caps).
+            let thumb_limits = PngLimits::new(
+                limits.max_dimension.min(2048),
+                limits.max_pixels.min(4 * 1024 * 1024),
+                limits.max_chunk_bytes.min(4 * 1024 * 1024),
+                limits.max_total_idat_bytes.min(16 * 1024 * 1024),
+            );
+            decode_with_limits(thumbnail, &thumb_limits)
         }
         && decoded.width.max(decoded.height) >= target_width.max(target_height)
     {
