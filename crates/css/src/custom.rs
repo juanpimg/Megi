@@ -67,7 +67,7 @@ pub fn expand_variables(value: &str, custom: &HashMap<String, String>) -> Option
     let mut budget = value
         .len()
         .saturating_mul(64)
-        .clamp(1024, MAX_SUBSTITUTION_BYTES);
+        .clamp(4096, MAX_SUBSTITUTION_BYTES);
     expand_inner(value, custom, 0, &mut visiting, &mut budget)
 }
 
@@ -88,6 +88,11 @@ fn expand_inner(
     budget: &mut usize,
 ) -> Option<String> {
     if depth > MAX_SUBSTITUTION_DEPTH {
+        return None;
+    }
+    // Charge the work itself, not only the emitted bytes: a chain that expands to the empty
+    // string (e.g. `var(--missing,)`) used to cost zero and recursed ~2^30 times.
+    if !spend(budget, 1) {
         return None;
     }
     let lower = value.to_ascii_lowercase();
@@ -157,9 +162,8 @@ fn expand_inner(
                 None
             };
             let substituted = substituted?;
-            if !spend(budget, substituted.len()) {
-                return None;
-            }
+            // The recursive expansion already charged the substituted bytes; charging them
+            // again here rejected legitimate values larger than half the budget.
             out.push_str(&substituted);
             index = end + 1;
             cursor = index;
@@ -324,6 +328,38 @@ mod tests {
         assert_eq!(
             expand_variables("var(--a3)", &custom).as_deref(),
             Some("x x x x x x x x")
+        );
+    }
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use super::*;
+
+    #[test]
+    fn empty_output_recursion_is_bounded() {
+        let mut custom = HashMap::new();
+        custom.insert("--a0".to_string(), "var(--missing,)".to_string());
+        for index in 1..=30 {
+            custom.insert(
+                format!("--a{index}"),
+                format!("var(--a{})var(--a{})", index - 1, index - 1),
+            );
+        }
+        assert!(
+            expand_variables("var(--a30)", &custom).is_none(),
+            "an empty-output doubling chain must stop at the byte budget"
+        );
+    }
+
+    #[test]
+    fn a_single_large_custom_value_still_expands() {
+        let mut custom = HashMap::new();
+        let value = "g".repeat(600);
+        custom.insert("--long".to_string(), value.clone());
+        assert_eq!(
+            expand_variables("var(--long)", &custom).as_deref(),
+            Some(value.as_str())
         );
     }
 }
