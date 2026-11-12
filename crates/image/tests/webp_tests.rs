@@ -259,28 +259,70 @@ fn decodes_1024x768_lossy_within_time_budget() {
 }
 
 #[test]
-fn vp8x_extended_containers_are_unsupported() {
-    // VP8X adds a canvas, alpha and animation: decoding only the inner VP8/VP8L chunk
-    // would silently drop them, so the extended container is a typed unsupported error
-    // (never wrong pixels).
+fn vp8x_animated_containers_are_unsupported() {
+    // Animated VP8X (ANIM/ANMF) is still out of scope: decoding only the first frame
+    // would silently drop the rest, so the extended container is a typed unsupported
+    // error (never wrong pixels).
     let plain = fixture("photo_lossy_q75.webp");
     let vp8 = vp8_payload(&plain);
     let mut vp8x = [0u8; 10];
-    vp8x[4] = 63; // canvas width - 1 = 64
-    vp8x[7] = 47; // canvas height - 1 = 48
-    for extra in [None, Some(*b"ALPH"), Some(*b"ANIM")] {
-        let mut chunks: Vec<(&[u8; 4], &[u8])> = vec![(b"VP8X", &vp8x)];
-        if let Some(id) = extra.as_ref() {
-            chunks.push((id, &[0u8; 4]));
-        }
-        chunks.push((b"VP8 ", vp8));
-        let bytes = riff_container(&chunks);
-        let error = decode(&bytes).expect_err("VP8X must be rejected");
-        assert!(
-            matches!(error, ImageError::UnsupportedFeature { .. }),
-            "{extra:?}: {error:?}"
-        );
-    }
+    // flags: bit 1 = animation
+    vp8x[0] = 0x02;
+    let chunks: Vec<(&[u8; 4], &[u8])> =
+        vec![(b"VP8X", &vp8x), (b"ANIM", &[0u8; 6]), (b"VP8 ", vp8)];
+    let bytes = riff_container(&chunks);
+    let error = decode(&bytes).expect_err("animated VP8X must be rejected");
+    assert!(
+        matches!(error, ImageError::UnsupportedFeature { .. }),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn vp8x_static_container_decodes() {
+    // A static VP8X (no animation) with a matching canvas decodes the inner VP8 frame.
+    let plain = fixture("photo_lossy_q75.webp");
+    let vp8 = vp8_payload(&plain);
+    let original = decode(&plain).expect("plain decode");
+    let mut vp8x = [0u8; 10];
+    let w = original.width - 1;
+    let h = original.height - 1;
+    vp8x[4] = (w & 0xff) as u8;
+    vp8x[5] = ((w >> 8) & 0xff) as u8;
+    vp8x[6] = ((w >> 16) & 0xff) as u8;
+    vp8x[7] = (h & 0xff) as u8;
+    vp8x[8] = ((h >> 8) & 0xff) as u8;
+    vp8x[9] = ((h >> 16) & 0xff) as u8;
+    let chunks: Vec<(&[u8; 4], &[u8])> = vec![(b"VP8X", &vp8x), (b"VP8 ", vp8)];
+    let bytes = riff_container(&chunks);
+    let decoded = decode(&bytes).expect("static VP8X decodes");
+    assert_eq!(decoded.width, original.width);
+    assert_eq!(decoded.height, original.height);
+}
+
+#[test]
+fn vp8x_alpha_plane_is_applied() {
+    // An uncompressed ALPH chunk replaces the alpha channel of the decoded frame.
+    let plain = fixture("photo_lossy_q75.webp");
+    let vp8 = vp8_payload(&plain);
+    let original = decode(&plain).expect("plain decode");
+    let mut vp8x = [0u8; 10];
+    let w = original.width - 1;
+    let h = original.height - 1;
+    vp8x[0] = 0x10; // alpha flag
+    vp8x[4] = (w & 0xff) as u8;
+    vp8x[5] = ((w >> 8) & 0xff) as u8;
+    vp8x[6] = ((w >> 16) & 0xff) as u8;
+    vp8x[7] = (h & 0xff) as u8;
+    vp8x[8] = ((h >> 8) & 0xff) as u8;
+    vp8x[9] = ((h >> 16) & 0xff) as u8;
+    let alpha = vec![128u8; (original.width * original.height) as usize];
+    let mut alph = vec![0u8]; // compression 0, filtering 0
+    alph.extend_from_slice(&alpha);
+    let chunks: Vec<(&[u8; 4], &[u8])> = vec![(b"VP8X", &vp8x), (b"ALPH", &alph), (b"VP8 ", vp8)];
+    let bytes = riff_container(&chunks);
+    let decoded = decode(&bytes).expect("VP8X with alpha decodes");
+    assert_eq!(decoded.data[3], 128);
 }
 
 /// Extracts the `VP8 ` chunk payload from a RIFF/WEBP container.

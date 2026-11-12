@@ -21,7 +21,9 @@
 //! VP8 lossy (`VP8 ` chunk) is decoded by the internal `vp8_decoder` module (boolean entropy
 //! decoder, segmentation, loop filter, token partitions, intra prediction, IDCT and
 //! YUV420→RGB); `image::decode` returns its pixels and corrupt payloads keep typed
-//! errors. Animation/alpha-only WebP variants (VP8X) are out of scope.
+//! errors. Static extended containers (`VP8X` + `VP8 `/`VP8L`) are supported, including
+//! uncompressed `ALPH` alpha planes; animated containers (`ANIM`/`ANMF`) and compressed
+//! alpha (`ALPH` method 1) stay typed `UnsupportedFeature` errors for now.
 
 use crate::RgbaImage;
 use crate::error::ImageError;
@@ -928,16 +930,111 @@ pub(crate) fn find_vp8_chunk(bytes: &[u8]) -> Result<&[u8], ImageError> {
     find_chunk(bytes, b"VP8 ")
 }
 
-/// Decodes a VP8L (lossless) or VP8 (lossy keyframe) WebP image into RGBA8.
-pub(crate) fn decode_webp(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageError> {
-    // The extended container (VP8X: canvas, alpha, animation) is out of scope: decoding
-    // only the inner VP8/VP8L chunk would silently drop alpha/offsets, so reject it with
-    // a typed error instead of returning wrong pixels.
-    if find_chunk(bytes, b"VP8X").is_ok() {
-        return Err(ImageError::UnsupportedFeature {
-            feature: "WebP extended container (VP8X alpha/animation)",
+/// Parsed `VP8X` extended-container header.
+struct Vp8xHeader {
+    width: u32,
+    height: u32,
+    alpha: bool,
+    animation: bool,
+}
+
+/// Parses the `VP8X` header when present (WebP container §"Extended WebP file header").
+fn parse_vp8x_header(bytes: &[u8]) -> Result<Option<Vp8xHeader>, ImageError> {
+    let Ok(payload) = find_chunk(bytes, b"VP8X") else {
+        return Ok(None);
+    };
+    if payload.len() < 10 {
+        return Err(ImageError::Truncated {
+            context: "WebP VP8X header",
         });
     }
+    let flags = payload[0];
+    let width =
+        1 + (u32::from(payload[4]) | (u32::from(payload[5]) << 8) | (u32::from(payload[6]) << 16));
+    let height =
+        1 + (u32::from(payload[7]) | (u32::from(payload[8]) << 8) | (u32::from(payload[9]) << 16));
+    Ok(Some(Vp8xHeader {
+        width,
+        height,
+        alpha: flags & 0x10 != 0,
+        animation: flags & 0x02 != 0,
+    }))
+}
+
+/// Applies an uncompressed `ALPH` alpha plane to a decoded lossy image.
+fn apply_alpha_plane(image: &mut RgbaImage, payload: &[u8]) -> Result<(), ImageError> {
+    let (&header, data) = payload.split_first().ok_or(ImageError::Truncated {
+        context: "WebP ALPH header",
+    })?;
+    let compression = header & 0x03;
+    let filtering = (header >> 2) & 0x03;
+    if compression != 0 {
+        return Err(ImageError::UnsupportedFeature {
+            feature: "WebP ALPH compression (VP8L lossless)",
+        });
+    }
+    let pixel_count = (image.width as usize).saturating_mul(image.height as usize);
+    let Some(raw) = data.get(..pixel_count) else {
+        return Err(ImageError::Truncated {
+            context: "WebP ALPH data",
+        });
+    };
+    let mut alpha = raw.to_vec();
+    match filtering {
+        0 => {}
+        1 => {
+            let width = image.width as usize;
+            for row in alpha.chunks_mut(width.max(1)) {
+                let mut previous = 0u8;
+                for value in row {
+                    let reconstructed = value.wrapping_add(previous);
+                    *value = reconstructed;
+                    previous = reconstructed;
+                }
+            }
+        }
+        _ => {
+            return Err(ImageError::UnsupportedFeature {
+                feature: "WebP ALPH filtering method",
+            });
+        }
+    }
+    for (index, alpha) in alpha.iter().enumerate() {
+        if let Some(slot) = image.data.get_mut(index * 4 + 3) {
+            *slot = *alpha;
+        }
+    }
+    Ok(())
+}
+
+/// Decodes a VP8L (lossless) or VP8 (lossy keyframe) WebP image into RGBA8.
+pub(crate) fn decode_webp(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageError> {
+    if let Some(header) = parse_vp8x_header(bytes)? {
+        if header.animation {
+            return Err(ImageError::UnsupportedFeature {
+                feature: "WebP animation (ANIM/ANMF)",
+            });
+        }
+        let mut image = decode_still_image(bytes, limits)?;
+        if image.width != header.width || image.height != header.height {
+            return Err(ImageError::InvalidData {
+                reason: "WebP VP8X canvas does not match the decoded image",
+            });
+        }
+        if let Ok(alph) = find_chunk(bytes, b"ALPH") {
+            apply_alpha_plane(&mut image, alph)?;
+        } else if header.alpha {
+            return Err(ImageError::InvalidData {
+                reason: "WebP VP8X declares alpha but the ALPH chunk is missing",
+            });
+        }
+        return Ok(image);
+    }
+    decode_still_image(bytes, limits)
+}
+
+/// Decodes the inner `VP8 `/`VP8L` payload of a (possibly extended) WebP image.
+fn decode_still_image(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageError> {
     // WebP lossy (`VP8 `) is a single VP8 keyframe: decode it instead of trying VP8L.
     if let Ok(payload) = find_vp8_chunk(bytes) {
         return crate::vp8_decoder::decode_keyframe(payload, limits);
