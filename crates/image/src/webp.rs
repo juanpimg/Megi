@@ -888,6 +888,14 @@ fn find_chunk<'a>(bytes: &'a [u8], id: &[u8; 4]) -> Result<&'a [u8], ImageError>
     if bytes.len() < RIFF_HEADER_LEN || !bytes.starts_with(b"RIFF") || &bytes[8..12] != b"WEBP" {
         return Err(ImageError::InvalidSignature);
     }
+    let declared = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
+    if declared != bytes.len() - 8 {
+        // Trailing bytes after the container (or a lying size field) would otherwise be
+        // ignored silently, letting distinct files decode identically (issue #879).
+        return Err(ImageError::InvalidData {
+            reason: "WebP RIFF size does not match the file length",
+        });
+    }
     let mut offset = RIFF_HEADER_LEN;
     while offset + 8 <= bytes.len() {
         let chunk_id = &bytes[offset..offset + 4];
