@@ -192,11 +192,13 @@ pub struct AnPlusB {
 impl AnPlusB {
     pub fn matches(&self, index_1_based: i32) -> bool {
         if self.a == 0 {
-            index_1_based == self.b
-        } else {
-            let diff = index_1_based - self.b;
-            diff % self.a == 0 && diff / self.a >= 0
+            return index_1_based == self.b;
         }
+        // Widen to i64 so neither the subtraction nor the division can overflow or panic
+        // (issue #674: `:nth-child(-1n-2147483648)` previously panicked in debug).
+        let diff = index_1_based as i64 - self.b as i64;
+        let a = self.a as i64;
+        diff % a == 0 && diff / a >= 0
     }
 }
 
@@ -1690,5 +1692,20 @@ mod specificity_overflow_tests {
         let mut sum = Specificity::new(u32::MAX - 1, 0, 0);
         sum += Specificity::new(2, 0, 0);
         assert_eq!(sum, Specificity::new(u32::MAX, 0, 0));
+    }
+}
+
+#[cfg(test)]
+mod anplusb_tests {
+    use super::*;
+
+    #[test]
+    fn anplusb_matches_does_not_overflow() {
+        let formula = AnPlusB { a: -1, b: i32::MIN };
+        // Must not panic; treat as no match rather than aborting.
+        let _ = formula.matches(1);
+        let _ = formula.matches(i32::MAX);
+        let formula = AnPlusB { a: 1, b: i32::MIN };
+        let _ = formula.matches(i32::MIN);
     }
 }

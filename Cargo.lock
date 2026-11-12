@@ -2368,6 +2368,7 @@ name = "shell"
 version = "0.1.0"
 dependencies = [
  "dom",
+ "fonts",
  "html",
  "image",
  "layout",
