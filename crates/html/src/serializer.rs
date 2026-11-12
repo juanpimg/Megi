@@ -330,6 +330,9 @@ pub fn serialize_fragment_with_options(
     root: NodeId,
     options: HtmlSerializeOptions,
 ) -> String {
+    if !doc.owns(root) {
+        return String::new();
+    }
     let mut out = String::new();
     serialize_children(doc, root, options, &mut out);
     out
@@ -405,6 +408,9 @@ pub fn serialize_outer_html_with_options(
     node_id: NodeId,
     options: HtmlSerializeOptions,
 ) -> String {
+    if !doc.owns(node_id) {
+        return String::new();
+    }
     let mut out = String::new();
     run_serialization(
         doc,
