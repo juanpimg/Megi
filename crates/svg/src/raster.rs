@@ -1179,9 +1179,15 @@ impl Canvas {
         let i1 = ((max_x - px) / width).ceil() as i64 + 1;
         let j0 = ((min_y - py) / height).floor() as i64 - 1;
         let j1 = ((max_y - py) / height).ceil() as i64 + 1;
-        let columns = (i1 - i0 + 1).max(0) as u64;
-        let rows = (j1 - j0 + 1).max(0) as u64;
-        if columns.saturating_mul(rows) > MAX_PATTERN_TILES {
+        // `as i64` saturates for huge finite coordinates; the subtraction of two saturated
+        // ends overflows i64 (debug panic, release wrap bypassing the budget). Count in
+        // i128 so the budget check cannot be evaded.
+        let columns = i128::from(i1) - i128::from(i0) + 1;
+        let rows = i128::from(j1) - i128::from(j0) + 1;
+        if columns <= 0 || rows <= 0 {
+            return Ok(());
+        }
+        if columns.saturating_mul(rows) > i128::from(MAX_PATTERN_TILES) {
             return Err(SvgError::Limit(
                 "pattern tile budget exceeded (too many repetitions)".to_owned(),
             ));
