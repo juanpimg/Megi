@@ -65,9 +65,21 @@
 //! - **Wrapper identity cache**: one JS object per `(realm, NodeId)`, so
 //!   `el === document.getElementById(id)` and `querySelector(...) === el` hold.
 //!
-//! Limits: NodeLists are snapshots (not live), `getComputedStyle` values depend entirely on
-//! the injected provider (no style resolution inside `js`), and computed declarations are
-//! read-only (`setProperty` throws a `TypeError`).
+//! Limits (audited by the WPT-like `wpt_conformance_r233*` suites; marked as explicit
+//! `documented_gap_*` tests so they cannot pass silently):
+//!
+//! - NodeLists/HTMLCollections are snapshots (not live); `Element.getElementsByTagName`/
+//!   `getElementsByClassName` are not exposed (the `Document` variants return snapshots).
+//! - `dataset` reads `data-*` attributes but is a snapshot object: writes/deletes do not
+//!   reflect back to attributes (use `setAttribute`/`removeAttribute`).
+//! - `getAttributeNode`/`removeAttributeNode` are supported for `Attr` objects (plain
+//!   `{name, value}` objects, not live NamedNodeMap entries); `a.href`/`img.src` return
+//!   the raw attribute, not absolute URLs.
+//! - `getComputedStyle` named properties return `""` when absent (matching the spec) and
+//!   depend entirely on the injected provider; declarations are read-only
+//!   (`setProperty` throws a `TypeError`).
+//! - Hierarchy violations (e.g. `appendChild(self)`) throw a `TypeError` instead of the
+//!   spec `HierarchyRequestError` `DOMException`.
 //!
 //! ## Browser APIs (R95)
 //!

@@ -1182,7 +1182,11 @@ fn computed_get_property(
         .as_object()
         .ok_or_else(|| js_error("invalid computed style receiver"))?;
     let value = prop(&object, &name, context).unwrap_or_else(|_| JsValue::from(js_string!("")));
-    Ok(value)
+    if value.is_undefined() {
+        Ok(JsValue::from(js_string!("")))
+    } else {
+        Ok(value)
+    }
 }
 
 fn computed_set_property(
