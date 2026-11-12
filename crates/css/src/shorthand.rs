@@ -101,6 +101,8 @@ fn expand_properties(declaration: &Declaration) -> Option<Vec<(String, String)>>
         "background" => Some(expand_background(value).unwrap_or_default()),
         "border-radius" => Some(expand_border_radius(value).unwrap_or_default()),
         "font" => Some(expand_font(value).unwrap_or_default()),
+        "animation" => Some(expand_animation(value).unwrap_or_default()),
+        "transition" => Some(expand_transition(value).unwrap_or_default()),
         "list-style" => Some(expand_list_style(value).unwrap_or_default()),
         _ => None,
     }
@@ -360,6 +362,172 @@ fn expand_border_radius(value: &str) -> Option<Vec<(String, String)>> {
         declarations.push((name.to_string(), value));
     }
     Some(declarations)
+}
+
+/// Maximum comma-separated entries accepted in an `animation`/`transition` shorthand.
+const MAX_TIMELINE_ENTRIES: usize = 64;
+
+/// Expands the `animation` shorthand into its longhands (CSS Animations 1 §4).
+///
+/// Grammar per entry: `[ <time> || <easing> || <time> || <iteration-count> ||
+/// <direction> || <fill-mode> || <play-state> || <name> ]`, comma-separated. Each longhand
+/// list is emitted with one value per entry (defaults for omitted components).
+fn expand_animation(value: &str) -> Option<Vec<(String, String)>> {
+    use crate::animation::{
+        parse_direction, parse_fill_mode, parse_iteration_count, parse_play_state, parse_time_ms,
+        parse_timing_function, split_top_level_commas, split_top_level_components,
+    };
+    let entries = split_top_level_commas(value);
+    if entries.is_empty() || entries.len() > MAX_TIMELINE_ENTRIES {
+        return None;
+    }
+    let mut names = Vec::with_capacity(entries.len());
+    let mut durations = Vec::with_capacity(entries.len());
+    let mut timings = Vec::with_capacity(entries.len());
+    let mut delays = Vec::with_capacity(entries.len());
+    let mut iterations = Vec::with_capacity(entries.len());
+    let mut directions = Vec::with_capacity(entries.len());
+    let mut fills = Vec::with_capacity(entries.len());
+    let mut plays = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            return None;
+        }
+        let mut name = None;
+        let mut duration = None;
+        let mut delay = None;
+        let mut timing = None;
+        let mut iteration = None;
+        let mut direction = None;
+        let mut fill = None;
+        let mut play = None;
+        for component in split_top_level_components(entry) {
+            let component = component.trim();
+            if component.is_empty() {
+                continue;
+            }
+            if parse_time_ms(component).is_some() {
+                if duration.is_none() {
+                    duration = Some(component.to_string());
+                } else if delay.is_none() {
+                    delay = Some(component.to_string());
+                } else {
+                    return None;
+                }
+                continue;
+            }
+            if timing.is_none() && parse_timing_function(component).is_some() {
+                timing = Some(component.to_string());
+                continue;
+            }
+            if iteration.is_none() && parse_iteration_count(component).is_some() {
+                iteration = Some(component.to_string());
+                continue;
+            }
+            let lower = component.to_ascii_lowercase();
+            if direction.is_none() && parse_direction(component).is_some() {
+                direction = Some(lower.clone());
+                continue;
+            }
+            if fill.is_none() && parse_fill_mode(component).is_some() {
+                fill = Some(lower.clone());
+                continue;
+            }
+            if play.is_none() && parse_play_state(component).is_some() {
+                play = Some(lower.clone());
+                continue;
+            }
+            if name.is_none() {
+                name = Some(component.to_string());
+                continue;
+            }
+            return None;
+        }
+        names.push(name.unwrap_or_else(|| "none".to_string()));
+        durations.push(duration.unwrap_or_else(|| "0s".to_string()));
+        timings.push(timing.unwrap_or_else(|| "ease".to_string()));
+        delays.push(delay.unwrap_or_else(|| "0s".to_string()));
+        iterations.push(iteration.unwrap_or_else(|| "1".to_string()));
+        directions.push(direction.unwrap_or_else(|| "normal".to_string()));
+        fills.push(fill.unwrap_or_else(|| "none".to_string()));
+        plays.push(play.unwrap_or_else(|| "running".to_string()));
+    }
+    Some(vec![
+        ("animation-name".to_string(), names.join(", ")),
+        ("animation-duration".to_string(), durations.join(", ")),
+        ("animation-timing-function".to_string(), timings.join(", ")),
+        ("animation-delay".to_string(), delays.join(", ")),
+        (
+            "animation-iteration-count".to_string(),
+            iterations.join(", "),
+        ),
+        ("animation-direction".to_string(), directions.join(", ")),
+        ("animation-fill-mode".to_string(), fills.join(", ")),
+        ("animation-play-state".to_string(), plays.join(", ")),
+    ])
+}
+
+/// Expands the `transition` shorthand (CSS Transitions 1 §2).
+///
+/// Grammar per entry: `[ <property> || <time> || <easing> || <time> ]`, comma-separated.
+fn expand_transition(value: &str) -> Option<Vec<(String, String)>> {
+    use crate::animation::{
+        parse_time_ms, parse_timing_function, split_top_level_commas, split_top_level_components,
+    };
+    let entries = split_top_level_commas(value);
+    if entries.is_empty() || entries.len() > MAX_TIMELINE_ENTRIES {
+        return None;
+    }
+    let mut properties = Vec::with_capacity(entries.len());
+    let mut durations = Vec::with_capacity(entries.len());
+    let mut timings = Vec::with_capacity(entries.len());
+    let mut delays = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            return None;
+        }
+        let mut property = None;
+        let mut duration = None;
+        let mut delay = None;
+        let mut timing = None;
+        for component in split_top_level_components(entry) {
+            let component = component.trim();
+            if component.is_empty() {
+                continue;
+            }
+            if parse_time_ms(component).is_some() {
+                if duration.is_none() {
+                    duration = Some(component.to_string());
+                } else if delay.is_none() {
+                    delay = Some(component.to_string());
+                } else {
+                    return None;
+                }
+                continue;
+            }
+            if timing.is_none() && parse_timing_function(component).is_some() {
+                timing = Some(component.to_string());
+                continue;
+            }
+            if property.is_none() {
+                property = Some(component.to_string());
+                continue;
+            }
+            return None;
+        }
+        properties.push(property.unwrap_or_else(|| "all".to_string()));
+        durations.push(duration.unwrap_or_else(|| "0s".to_string()));
+        timings.push(timing.unwrap_or_else(|| "ease".to_string()));
+        delays.push(delay.unwrap_or_else(|| "0s".to_string()));
+    }
+    Some(vec![
+        ("transition-property".to_string(), properties.join(", ")),
+        ("transition-duration".to_string(), durations.join(", ")),
+        ("transition-timing-function".to_string(), timings.join(", ")),
+        ("transition-delay".to_string(), delays.join(", ")),
+    ])
 }
 
 /// Expands `background` to the modelled longhands for **all layers**
@@ -747,5 +915,52 @@ mod tests {
         let expanded = expand("list-style: url(bullet.png) square;");
         assert_eq!(get(&expanded, "list-style-type"), Some("square"));
         assert_eq!(get(&expanded, "list-style-image"), Some("url(bullet.png)"));
+    }
+    #[test]
+    fn animation_shorthand_expands_to_cycles_and_defaults() {
+        let expanded = expand("animation: 2s linear 1s infinite alternate fade, 1s ease-in slide;");
+        assert_eq!(get(&expanded, "animation-name"), Some("fade, slide"));
+        assert_eq!(get(&expanded, "animation-duration"), Some("2s, 1s"));
+        assert_eq!(
+            get(&expanded, "animation-timing-function"),
+            Some("linear, ease-in")
+        );
+        assert_eq!(get(&expanded, "animation-delay"), Some("1s, 0s"));
+        assert_eq!(
+            get(&expanded, "animation-iteration-count"),
+            Some("infinite, 1")
+        );
+        assert_eq!(
+            get(&expanded, "animation-direction"),
+            Some("alternate, normal")
+        );
+        assert_eq!(get(&expanded, "animation-fill-mode"), Some("none, none"));
+        assert_eq!(
+            get(&expanded, "animation-play-state"),
+            Some("running, running")
+        );
+    }
+
+    #[test]
+    fn transition_shorthand_expands_with_defaults() {
+        let expanded = expand("transition: opacity 300ms ease-out 50ms, transform 200ms;");
+        assert_eq!(
+            get(&expanded, "transition-property"),
+            Some("opacity, transform")
+        );
+        assert_eq!(get(&expanded, "transition-duration"), Some("300ms, 200ms"));
+        assert_eq!(
+            get(&expanded, "transition-timing-function"),
+            Some("ease-out, ease")
+        );
+        assert_eq!(get(&expanded, "transition-delay"), Some("50ms, 0s"));
+    }
+
+    #[test]
+    fn invalid_timeline_shorthands_are_dropped() {
+        // Three times in one entry is invalid grammar.
+        assert!(expand("animation: 1s 2s 3s fade;").is_empty());
+        // An unknown component cannot be both name and property.
+        assert!(expand("transition: opacity transform 1s;").is_empty());
     }
 }
