@@ -734,3 +734,46 @@ fn test_pattern_phase_beyond_the_tile_budget_still_renders() {
     let image = render_at(source, 8, 8);
     assert_eq!(pixel(&image, 0, 0), [255, 0, 0, 255]);
 }
+
+fn text_ink(source: &str) -> usize {
+    let image = render_at(source, 64, 40);
+    let mut count = 0;
+    for y in 0..image.height {
+        for x in 0..image.width {
+            if pixel(&image, x, y)[3] > 0 {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+#[test]
+fn stylesheet_and_inline_font_properties_apply_to_text() {
+    let wrap = |text: &str| {
+        format!("<svg xmlns='http://www.w3.org/2000/svg' width='64' height='40'>{text}</svg>")
+    };
+    let small = text_ink(&wrap(
+        "<style>text{font-size:8px}</style><text x='2' y='30'>Megi</text>",
+    ));
+    let stylesheet_large = text_ink(&wrap(
+        "<style>text{font-size:32px}</style><text x='2' y='30'>Megi</text>",
+    ));
+    let inline_large = text_ink(&wrap(
+        "<text x='2' y='30' style='font-size:32px'>Megi</text>",
+    ));
+    let attribute_large = text_ink(&wrap("<text x='2' y='30' font-size='32'>Megi</text>"));
+    assert!(small > 0, "the 8px text renders");
+    assert!(
+        stylesheet_large > small * 3,
+        "a stylesheet font-size must reach <text> (small={small}, large={stylesheet_large})"
+    );
+    assert!(
+        inline_large > small * 3,
+        "an inline style font-size must reach <text> (small={small}, inline={inline_large})"
+    );
+    assert!(
+        attribute_large > small * 3,
+        "the presentation attribute still works (small={small}, attribute={attribute_large})"
+    );
+}

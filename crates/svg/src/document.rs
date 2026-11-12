@@ -474,6 +474,14 @@ struct Style {
     clip_path: Option<String>,
     mask: Option<String>,
     filter: Option<String>,
+    /// Typography from the cascade (`font-*`, `letter-spacing`, `text-anchor`), so
+    /// stylesheet and inline-style declarations reach `<text>` like presentation attributes.
+    font_family: Option<String>,
+    font_size: Option<f32>,
+    font_weight: Option<u16>,
+    font_italic: Option<bool>,
+    letter_spacing: Option<f32>,
+    text_anchor: Option<TextAnchor>,
 }
 
 /// A paint value: solid colour, gradient reference (index into
@@ -501,6 +509,12 @@ impl Default for Style {
             clip_path: None,
             mask: None,
             filter: None,
+            font_family: None,
+            font_size: None,
+            font_weight: None,
+            font_italic: None,
+            letter_spacing: None,
+            text_anchor: None,
         }
     }
 }
@@ -592,6 +606,38 @@ impl Style {
                     FillRule::NonZero
                 };
             }
+            "font-family" => self.font_family = Some(value.to_owned()),
+            "font-size" => {
+                if let Some(size) = parse_length(Some(value), 0.0)
+                    && size.is_finite()
+                    && size > 0.0
+                {
+                    self.font_size = Some(size);
+                }
+            }
+            "font-weight" => {
+                let weight = match value.trim().to_ascii_lowercase().as_str() {
+                    "bold" => Some(700),
+                    "normal" => Some(400),
+                    other => other.parse::<u16>().ok().filter(|weight| *weight > 0),
+                };
+                if weight.is_some() {
+                    self.font_weight = weight;
+                }
+            }
+            "font-style" => {
+                self.font_italic = Some(
+                    value.eq_ignore_ascii_case("italic") || value.eq_ignore_ascii_case("oblique"),
+                );
+            }
+            "letter-spacing" => {
+                if let Some(spacing) = parse_length(Some(value), 0.0)
+                    && spacing.is_finite()
+                {
+                    self.letter_spacing = Some(spacing);
+                }
+            }
+            "text-anchor" => self.text_anchor = Some(TextAnchor::parse(Some(value))),
             "clip-path" | "mask" | "filter" => {
                 let reference = parse_url_reference(value);
                 match name {
@@ -616,6 +662,12 @@ const PRESENTATION_PROPERTIES: &[&str] = &[
     "stroke-linejoin",
     "stroke-miterlimit",
     "fill-rule",
+    "font-family",
+    "font-size",
+    "font-weight",
+    "font-style",
+    "letter-spacing",
+    "text-anchor",
     "clip-path",
     "mask",
     "filter",
@@ -987,28 +1039,40 @@ impl<'a> Builder<'a> {
         let y = first_number(element.attribute("y"));
         let dx = first_number(element.attribute("dx"));
         let dy = first_number(element.attribute("dy"));
-        let anchor = TextAnchor::parse(element.attribute("text-anchor"));
-        let font_family = element
-            .attribute("font-family")
-            .map(str::to_owned)
+        let anchor = style
+            .text_anchor
+            .unwrap_or_else(|| TextAnchor::parse(element.attribute("text-anchor")));
+        let font_family = style
+            .font_family
+            .clone()
+            .or_else(|| element.attribute("font-family").map(str::to_owned))
             .unwrap_or_else(|| "sans-serif".to_owned());
-        let font_size = parse_length(element.attribute("font-size"), 16.0)
+        let font_size = style
+            .font_size
+            .or_else(|| parse_length(element.attribute("font-size"), 16.0))
             .filter(|size| size.is_finite() && *size > 0.0)
             .unwrap_or(16.0);
-        let font_weight = match element
-            .attribute("font-weight")
-            .map(|value| value.trim().to_ascii_lowercase())
-            .as_deref()
-        {
-            Some("bold") => 700,
-            Some("normal") => 400,
-            Some(value) => value.parse::<u16>().unwrap_or(400),
-            None => 400,
-        };
-        let italic = element.attribute("font-style").is_some_and(|value| {
-            value.eq_ignore_ascii_case("italic") || value.eq_ignore_ascii_case("oblique")
+        let font_weight = style.font_weight.unwrap_or_else(|| {
+            match element
+                .attribute("font-weight")
+                .map(|value| value.trim().to_ascii_lowercase())
+                .as_deref()
+            {
+                Some("bold") => 700,
+                Some("normal") => 400,
+                Some(value) => value.parse::<u16>().unwrap_or(400),
+                None => 400,
+            }
         });
-        let letter_spacing = parse_length(element.attribute("letter-spacing"), 0.0).unwrap_or(0.0);
+        let italic = style.font_italic.unwrap_or_else(|| {
+            element.attribute("font-style").is_some_and(|value| {
+                value.eq_ignore_ascii_case("italic") || value.eq_ignore_ascii_case("oblique")
+            })
+        });
+        let letter_spacing = style
+            .letter_spacing
+            .or_else(|| parse_length(element.attribute("letter-spacing"), 0.0))
+            .unwrap_or(0.0);
         let text_length = parse_length(element.attribute("textLength"), 0.0)
             .filter(|value| value.is_finite() && *value >= 0.0);
         let spacing_and_glyphs = element
