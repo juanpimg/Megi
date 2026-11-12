@@ -439,15 +439,19 @@ fn apply_filter(
     }
     let mut results: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
     let mut previous = source.clone();
+    // Filter Effects: a reference to a result that does not exist (typo, forward reference)
+    // resolves to transparent black, not to the source graphic.
+    let transparent = vec![0u8; source.len()];
     for primitive in &spec.primitives {
         let input = |reference: &FilterInput| -> Vec<u8> {
             match reference {
                 FilterInput::SourceGraphic => source.clone(),
                 FilterInput::SourceAlpha => source_alpha.clone(),
                 FilterInput::Previous => previous.clone(),
-                FilterInput::Named(name) => {
-                    results.get(name).cloned().unwrap_or_else(|| source.clone())
-                }
+                FilterInput::Named(name) => results
+                    .get(name)
+                    .cloned()
+                    .unwrap_or_else(|| transparent.clone()),
             }
         };
         let (pixels, result) = match primitive {
