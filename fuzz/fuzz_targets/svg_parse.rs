@@ -25,6 +25,7 @@ fuzz_target!(|data: &[u8]| {
         max_height: 128,
         max_pixels: 128 * 128,
         max_use_depth: 4,
+        max_selector_checks: 4_096,
     };
     let options = svg::SvgOptions {
         width: Some(64),

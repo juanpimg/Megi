@@ -135,6 +135,9 @@ pub struct Limits {
     /// Maximum `<use>` expansion depth (cycle guard).
     pub max_use_depth: usize,
     /// Maximum selector evaluations across the document (rules × selectors × elements).
+    ///
+    /// The default allows ~100 evaluations per element at [`Limits::max_elements`]; a
+    /// stylesheet/element combination past it fails with [`SvgError::Limit`].
     pub max_selector_checks: usize,
 }
 
@@ -150,7 +153,7 @@ impl Default for Limits {
             max_height: 16_384,
             max_pixels: 64 * 1024 * 1024,
             max_use_depth: 16,
-            max_selector_checks: 1_000_000,
+            max_selector_checks: 10_000_000,
         }
     }
 }
