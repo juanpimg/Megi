@@ -423,8 +423,20 @@ pub fn save(path: &Path, session: &Session) -> io::Result<()> {
     {
         fs::create_dir_all(parent)?;
     }
+    let json = session.to_json();
+    if json.len() as u64 > MAX_SESSION_BYTES {
+        // `load` rejects files over the cap: writing one would make the next start discard
+        // the session and overwrite the previous file.
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "session is {} bytes, larger than the {MAX_SESSION_BYTES}-byte read cap",
+                json.len()
+            ),
+        ));
+    }
     let temporary = path.with_extension("json.tmp");
-    fs::write(&temporary, session.to_json())?;
+    fs::write(&temporary, json)?;
     fs::rename(&temporary, path)?;
     Ok(())
 }
@@ -1183,5 +1195,60 @@ mod tests {
             "{:?}",
             loaded.warning
         );
+    }
+    #[test]
+    fn capture_slides_the_window_when_the_current_entry_is_late() {
+        let mut tabs = crate::tabs::TabsState::new("data:text/html,0");
+        for index in 1..256 {
+            let url = net::Url::parse(&format!("data:text/html,{index}")).expect("url");
+            tabs.active_mut().navigation.navigate_to(url);
+        }
+        let current = tabs
+            .active()
+            .navigation
+            .current()
+            .expect("current")
+            .as_str();
+        let session = Session::capture(&tabs);
+        let tab = &session.tabs[0];
+        assert_eq!(tab.history.len(), MAX_HISTORY_PER_TAB);
+        assert_eq!(tab.index, MAX_HISTORY_PER_TAB - 1);
+        assert_eq!(tab.history[tab.index], current);
+    }
+
+    #[test]
+    fn normalize_moves_the_index_off_an_invalid_url() {
+        let json = r#"{"version":1,"active":0,"tabs":[{"url":"https://b/","history":["https://a/","not a url","https://b/"],"index":1,"zoom":1.0,"scroll":0}]}"#;
+        let session = Session::from_json(json).expect("parse");
+        let tab = &session.tabs[0];
+        assert_eq!(tab.history.len(), 2);
+        assert_eq!(tab.index, 0, "the index falls back to the predecessor");
+        assert_eq!(tab.history[tab.index], "https://a/");
+    }
+
+    #[test]
+    fn json_roundtrip_preserves_four_byte_scalars() {
+        let mut session = sample();
+        session.recent.push(crate::history::HistoryEntry {
+            title: "emoji 🚀 fin".to_string(),
+            url: "https://example.com/".to_string(),
+            logical_time: 2,
+        });
+        let parsed = Session::from_json(&session.to_json()).expect("parse");
+        assert_eq!(parsed.recent[0].title, "emoji 🚀 fin");
+    }
+
+    #[test]
+    fn saving_an_oversized_session_is_rejected_instead_of_written() {
+        let dir = std::env::temp_dir().join(format!("megi-session-over-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("session.json");
+        let mut session = sample();
+        session.tabs[0].url = format!("data:text/html,{}", "x".repeat(MAX_SESSION_BYTES as usize));
+        let error = save(&path, &session).expect_err("session exceeds the read cap");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(!path.exists(), "nothing is written");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
