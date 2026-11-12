@@ -1341,19 +1341,8 @@ fn node_children(this: &JsValue, _args: &[JsValue], context: &mut Context) -> Js
 
 fn node_parent_node(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let parent = with_host(|host| {
-        let parent = host.document.try_node(node_id)?.parent?;
-        let is_document = matches!(host.document.node(parent).kind, dom::NodeKind::Document);
-        Some((parent, is_document))
-    })
-    .flatten();
-    match parent {
-        // DOM §4.4: the document element's parent is the document itself, not a wrapper for
-        // the inert arena root (which JS must not be able to reparent).
-        Some((_, true)) => context.global_object().get(js_string!("document"), context),
-        Some((parent, false)) => wrap_optional(context, Some(parent)),
-        None => Ok(JsValue::null()),
-    }
+    let parent = with_host(|host| host.document.try_node(node_id).and_then(|node| node.parent));
+    wrap_optional(context, parent.flatten())
 }
 
 fn node_first_child(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {

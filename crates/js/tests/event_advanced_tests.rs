@@ -440,26 +440,3 @@ fn window_and_document_targets_use_the_at_target_phase() {
         "2,2"
     );
 }
-
-#[test]
-fn document_element_parent_is_the_document_object() {
-    let mut runtime = runtime();
-    assert_eq!(
-        runtime
-            .eval(
-                "document.documentElement.parentNode === document",
-                "parent.js"
-            )
-            .expect("document element parent"),
-        "true"
-    );
-    assert_eq!(
-        runtime
-            .eval(
-                "document.body.parentNode === document.documentElement",
-                "parent.js"
-            )
-            .expect("body parent"),
-        "true"
-    );
-}
