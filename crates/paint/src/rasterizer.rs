@@ -2133,7 +2133,12 @@ fn rounded_rect_coverage(rect: Rect, radii: BorderRadii, px: f32, py: f32) -> f3
     rounded_rect_coverage_with_corners(rect, &corners, px, py)
 }
 
-fn rounded_rect_coverage_with_corners(rect: Rect, corners: &[(f32, f32); 4], px: f32, py: f32) -> f32 {
+fn rounded_rect_coverage_with_corners(
+    rect: Rect,
+    corners: &[(f32, f32); 4],
+    px: f32,
+    py: f32,
+) -> f32 {
     if rect.width <= 0.0 || rect.height <= 0.0 {
         return 0.0;
     }
@@ -2320,7 +2325,12 @@ impl Pixmap {
             .min(self.height as f32) as i64;
         for y in y0..y1 {
             for x in x0..x1 {
-                let coverage = rounded_rect_coverage_with_corners(rect, &corners, x as f32 + 0.5, y as f32 + 0.5);
+                let coverage = rounded_rect_coverage_with_corners(
+                    rect,
+                    &corners,
+                    x as f32 + 0.5,
+                    y as f32 + 0.5,
+                );
                 self.blend_coverage(x, y, color, coverage);
             }
         }

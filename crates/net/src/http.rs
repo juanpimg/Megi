@@ -447,9 +447,7 @@ pub fn fetch_pooled(
     for attempt in 0..2 {
         let stream = match pool.take(&origin) {
             Some(stream) => stream,
-            None => {
-                connect_tcp(&connect_host, connect_port, options)?
-            }
+            None => connect_tcp(&connect_host, connect_port, options)?,
         };
         stream.set_read_timeout(Some(options.read_timeout)).ok();
         stream.set_write_timeout(Some(options.read_timeout)).ok();
