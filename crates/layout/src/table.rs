@@ -196,10 +196,9 @@ fn layout_table_advanced(
     let mut occupancy: Vec<Vec<Option<usize>>> = vec![Vec::new(); row_count];
     let mut cells: Vec<GridCell> = Vec::new();
     for row_index in 0..row_count {
-        let row_cell_count = rows[row_index].cells.len();
         let mut column = 0usize;
-        for cell_slot in 0..row_cell_count {
-            let flat = rows[row_index].cells[cell_slot];
+        let row_cells = &rows[row_index].cells;
+        for &flat in row_cells {
             let Some(cell_box) = flat_cells[flat].as_ref() else {
                 continue;
             };
