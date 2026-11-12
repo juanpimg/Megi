@@ -202,6 +202,7 @@
 pub mod backgrounds;
 #[cfg(feature = "js")]
 mod browser_host;
+pub mod cache;
 pub mod charset;
 pub mod error;
 pub mod images;
@@ -223,6 +224,7 @@ use images::{
     DEFAULT_MAX_IMAGE_BYTES, DEFAULT_MAX_IMAGES, DEFAULT_MAX_TOTAL_IMAGE_BYTES, ImageLimits,
 };
 
+pub use cache::{RenderCache, RenderCacheStats};
 pub use error::RenderError;
 pub use scripts::{ConsoleMessage, RenderStorage, ScriptBudget, ScriptingLimits};
 
@@ -600,6 +602,8 @@ pub struct RenderStats {
     pub referrer_policy: Option<String>,
     /// HTML parser anti-DoS limits that fired (should be empty for normal pages).
     pub limit_violations: html::LimitViolations,
+    /// `true` when [`render_url_cached`] reused a cached [`layout::LayoutBox`].
+    pub cache_layout_hit: bool,
     /// Per-stage timings.
     pub timings: RenderTimings,
     /// Non-fatal warnings (missing stylesheet, invalid base, skipped media, ...).
@@ -679,6 +683,23 @@ impl std::fmt::Debug for RenderOutput {
 
 /// Loads `input` (an absolute URL: `http(s)://`, `file://` or `data:`) and renders it.
 pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, RenderError> {
+    render_url_inner(input, options, None)
+}
+
+/// Like [`render_url`], but reuses a caller-owned [`RenderCache`] for layout trees.
+pub fn render_url_cached(
+    input: &str,
+    options: &RenderOptions,
+    cache: &mut RenderCache,
+) -> Result<RenderOutput, RenderError> {
+    render_url_inner(input, options, Some(cache))
+}
+
+fn render_url_inner(
+    input: &str,
+    options: &RenderOptions,
+    cache: Option<&mut RenderCache>,
+) -> Result<RenderOutput, RenderError> {
     let total_start = Instant::now();
     let url = Url::parse(input)?;
     stylesheets::ensure_supported_scheme(&url)?;
@@ -1016,14 +1037,28 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         options.viewport.width as f32,
         options.viewport.height as f32,
     );
-    let layout_root = layout::layout_document_with_measurer_and_replaced_sizes(
-        &document,
-        &styles,
-        viewport,
-        &measurer,
-        Some(&loaded_images.sizes),
-    )
-    .ok_or(RenderError::LayoutFailed)?;
+    let (layout_root, cache_layout_hit) = if let Some(cache) = cache {
+        cache
+            .get_or_compute_layout(
+                &document,
+                &styles,
+                viewport,
+                &measurer,
+                &loaded_images.sizes,
+                loaded_webfonts.loaded,
+            )
+            .ok_or(RenderError::LayoutFailed)?
+    } else {
+        let root = layout::layout_document_with_measurer_and_replaced_sizes(
+            &document,
+            &styles,
+            viewport,
+            &measurer,
+            Some(&loaded_images.sizes),
+        )
+        .ok_or(RenderError::LayoutFailed)?;
+        (root, false)
+    };
     let layout_time = layout_start.elapsed();
 
     let paint_start = Instant::now();
@@ -1130,6 +1165,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             content_encoding,
             referrer_policy: referrer_policy_name,
             limit_violations: parse.limit_violations,
+            cache_layout_hit,
             timings: RenderTimings {
                 fetch: fetch_time,
                 decode_parse: decode_parse_time,

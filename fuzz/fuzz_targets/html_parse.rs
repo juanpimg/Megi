@@ -21,9 +21,14 @@ fuzz_target!(|data: &[u8]| {
     // lone-surrogate/replacement-character handling is exercised too.
     let text = String::from_utf8_lossy(data);
 
-    let options = html::ParseOptions::default();
-    let document = html::parse_document_with_options(&text, false, &options);
+    let scripting = data.first().is_some_and(|b| b & 1 != 0);
+    let mut options = html::ParseOptions::default();
+    if let Some(&b) = data.get(1) {
+        options.max_depth = (b as usize % 64).max(4);
+    }
+    let document = html::parse_document_with_options(&text, scripting, &options);
     let _ = html::serialize_dom_for_test(&document.document);
+    let _ = html::serialize_html(&document.document);
 
     // Fragment parsing with a context derived from the first byte(s): this covers the
     // insertion-mode reset and foreign-content paths that full documents rarely reach.

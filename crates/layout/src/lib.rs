@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod bidi;
 pub mod block;
 pub mod box_tree;
 mod calc;

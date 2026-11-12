@@ -528,11 +528,67 @@ pub enum TextAlign {
 
 impl TextAlign {
     pub fn parse(s: &str) -> Option<Self> {
+        Self::parse_for_direction(s, Direction::Ltr)
+    }
+
+    pub fn parse_for_direction(s: &str, direction: Direction) -> Option<Self> {
         match s.trim().to_ascii_lowercase().as_str() {
-            "left" | "start" => Some(Self::Left),
-            "right" | "end" => Some(Self::Right),
+            "left" => Some(Self::Left),
+            "right" => Some(Self::Right),
+            "start" => Some(match direction {
+                Direction::Ltr => Self::Left,
+                Direction::Rtl => Self::Right,
+            }),
+            "end" => Some(match direction {
+                Direction::Ltr => Self::Right,
+                Direction::Rtl => Self::Left,
+            }),
             "center" => Some(Self::Center),
             "justify" => Some(Self::Justify),
+            _ => None,
+        }
+    }
+}
+
+/// CSS `direction` property (CSS Writing Modes §2.1, inherited).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Direction {
+    #[default]
+    Ltr,
+    Rtl,
+}
+
+impl Direction {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "ltr" => Some(Self::Ltr),
+            "rtl" => Some(Self::Rtl),
+            _ => None,
+        }
+    }
+}
+
+/// CSS `unicode-bidi` property (CSS Writing Modes §2.2, not inherited).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum UnicodeBidi {
+    #[default]
+    Normal,
+    Embed,
+    BidiOverride,
+    Isolate,
+    IsolateOverride,
+    Plaintext,
+}
+
+impl UnicodeBidi {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "normal" => Some(Self::Normal),
+            "embed" => Some(Self::Embed),
+            "bidi-override" => Some(Self::BidiOverride),
+            "isolate" => Some(Self::Isolate),
+            "isolate-override" => Some(Self::IsolateOverride),
+            "plaintext" => Some(Self::Plaintext),
             _ => None,
         }
     }
@@ -1934,6 +1990,8 @@ pub struct ComputedStyle {
     /// required by CSS 2.2 §10.8.1 when a numeric `line-height` is inherited.
     pub line_height_factor: Option<f32>,
     pub text_align: TextAlign,
+    pub direction: Direction,
+    pub unicode_bidi: UnicodeBidi,
     pub white_space: WhiteSpace,
     pub vertical_align: VerticalAlign,
     pub text_decoration: TextDecoration,
@@ -2085,6 +2143,8 @@ impl ComputedStyle {
             line_height: None,
             line_height_factor: None,
             text_align: TextAlign::Left,
+            direction: Direction::Ltr,
+            unicode_bidi: UnicodeBidi::Normal,
             white_space: WhiteSpace::Normal,
             vertical_align: VerticalAlign::Baseline,
             text_decoration: TextDecoration::NONE,
@@ -2143,6 +2203,8 @@ impl ComputedStyle {
         mix(&mut hash, self.box_sizing as u64);
         mix(&mut hash, self.overflow as u64);
         mix(&mut hash, self.visibility as u64);
+        mix(&mut hash, self.direction as u64);
+        mix(&mut hash, self.unicode_bidi as u64);
         mix_len(&mut hash, self.width);
         mix_len(&mut hash, self.height);
         mix_len(&mut hash, self.min_width);
@@ -2328,11 +2390,47 @@ impl ComputedStyle {
             parent.map_or_else(|| "sans-serif".to_string(), |p| p.font_family.clone())
         };
 
-        let text_align = if let Some(decl) = find_declaration(&entries, "text-align") {
-            TextAlign::parse(&decl.raw_value)
-                .unwrap_or_else(|| parent.map_or(TextAlign::Left, |p| p.text_align))
+        let direction = if let Some(decl) = find_declaration(&entries, "direction") {
+            Direction::parse(&decl.raw_value)
+                .unwrap_or_else(|| parent.map_or(Direction::Ltr, |p| p.direction))
         } else {
-            parent.map_or(TextAlign::Left, |p| p.text_align)
+            parent.map_or(Direction::Ltr, |p| p.direction)
+        };
+
+        let unicode_bidi = if let Some(decl) = find_declaration(&entries, "unicode-bidi") {
+            UnicodeBidi::parse(&decl.raw_value).unwrap_or(UnicodeBidi::Normal)
+        } else {
+            UnicodeBidi::Normal
+        };
+
+        let default_align = match direction {
+            Direction::Ltr => TextAlign::Left,
+            Direction::Rtl => TextAlign::Right,
+        };
+        let text_align = if let Some(decl) = find_declaration(&entries, "text-align") {
+            TextAlign::parse_for_direction(&decl.raw_value, direction).unwrap_or_else(|| {
+                parent.map_or(default_align, |p| {
+                    if p.direction != direction
+                        && ((p.direction == Direction::Ltr && p.text_align == TextAlign::Left)
+                            || (p.direction == Direction::Rtl && p.text_align == TextAlign::Right))
+                    {
+                        default_align
+                    } else {
+                        p.text_align
+                    }
+                })
+            })
+        } else {
+            parent.map_or(default_align, |p| {
+                if p.direction != direction
+                    && ((p.direction == Direction::Ltr && p.text_align == TextAlign::Left)
+                        || (p.direction == Direction::Rtl && p.text_align == TextAlign::Right))
+                {
+                    default_align
+                } else {
+                    p.text_align
+                }
+            })
         };
 
         let (line_height, line_height_factor) =
@@ -2660,6 +2758,8 @@ impl ComputedStyle {
             line_height,
             line_height_factor,
             text_align,
+            direction,
+            unicode_bidi,
             white_space,
             vertical_align,
             text_decoration,
