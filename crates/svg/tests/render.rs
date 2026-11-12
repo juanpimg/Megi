@@ -679,3 +679,21 @@ fn test_gradient_cycles_and_malformed_definitions_do_not_paint_or_panic() {
     );
     assert!(render_svg(source.as_bytes(), &SvgOptions::default()).is_ok());
 }
+
+#[test]
+fn far_off_canvas_text_does_not_panic() {
+    for x in ["1e38", "-1e38"] {
+        let source = format!(
+            "<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10'><text x='{x}' y='20'>A</text></svg>"
+        );
+        let image = render_svg(
+            source.as_bytes(),
+            &SvgOptions {
+                width: Some(16),
+                height: Some(16),
+            },
+        )
+        .expect("far-off-canvas text still renders");
+        assert_eq!(image.width, 16);
+    }
+}
