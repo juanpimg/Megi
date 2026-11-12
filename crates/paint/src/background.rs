@@ -177,9 +177,11 @@ fn plan_axis(
         BackgroundRepeatAxis::Repeat => {
             let base = positioning_origin + resolve_position(position, positioning_length, tile);
             if tile > 0.0 {
-                let start = ((clip_origin - base - tile) / tile).floor() as i64 - 1;
-                let end = ((clip_end - base) / tile).ceil() as i64 + 1;
-                let count = ((end - start).max(0) as usize).min(limit);
+                // Huge offsets saturate the float→int casts; `±1` must not overflow.
+                let start = (((clip_origin - base - tile) / tile).floor() as i64).saturating_sub(1);
+                let end = (((clip_end - base) / tile).ceil() as i64).saturating_add(1);
+                // Huge quotients saturate the casts; `end - start` can then overflow.
+                let count = (end.saturating_sub(start).max(0) as usize).min(limit);
                 for step in 0..count as i64 {
                     let origin = base + (start + step) as f32 * tile;
                     if intersects_clip(origin, tile) {
@@ -200,8 +202,26 @@ fn plan_axis(
             // Scale the tile so a whole number of copies fits the positioning area.
             if tile > 0.0 && positioning_length > 0.0 {
                 let count = (positioning_length / tile).round().max(1.0);
+                // A sub-pixel `background-size` makes `count` infinite (or ~1e19) and the
+                // rescaled tile 0: iterating `0..count` used to loop ~1e19 times because the
+                // zero-size tiles never intersect the clip. Bound the iteration at the tile
+                // cap instead (a finite `count > limit` is an ordinary, paintable pattern).
+                if !count.is_finite() {
+                    return (positioning_length / count.max(1.0), origins);
+                }
                 tile = positioning_length / count;
-                for index in 0..count as usize {
+                // Start at the first tile that can reach the clip: truncating the first
+                // `limit` indices would drop every visible tile when the clip is far from
+                // the positioning origin (e.g. a large `background-attachment: fixed` area).
+                let total = count as usize;
+                let start = if tile > 0.0 {
+                    (((clip_origin - positioning_origin) / tile).floor().max(0.0) as usize)
+                        .min(total)
+                } else {
+                    0
+                };
+                let end = total.min(start.saturating_add(limit));
+                for index in start..end {
                     if origins.len() >= limit {
                         break;
                     }
@@ -219,6 +239,9 @@ fn plan_axis(
             // centred and a too-large tile behaves like `no-repeat` (CSS Backgrounds 3 §2.3).
             if tile > 0.0 && positioning_length >= tile {
                 let count = (positioning_length / tile).floor().max(1.0);
+                if !count.is_finite() {
+                    return (tile, origins);
+                }
                 let count = count as usize;
                 if count == 1 {
                     let origin = positioning_origin + (positioning_length - tile) / 2.0;
@@ -227,7 +250,18 @@ fn plan_axis(
                     }
                 } else {
                     let gap = (positioning_length - count as f32 * tile) / (count - 1) as f32;
-                    for index in 0..count {
+                    if !gap.is_finite() {
+                        return (tile, origins);
+                    }
+                    let step = tile + gap;
+                    let start = if step > 0.0 {
+                        (((clip_origin - positioning_origin) / step).floor().max(0.0) as usize)
+                            .min(count)
+                    } else {
+                        0
+                    };
+                    let end = count.min(start.saturating_add(limit));
+                    for index in start..end {
                         if origins.len() >= limit {
                             break;
                         }
@@ -403,6 +437,128 @@ mod tests {
 
     fn padding(width: f32, height: f32) -> Rect {
         Rect::new(0.0, 0.0, width, height)
+    }
+
+    #[test]
+    fn test_round_with_a_sub_pixel_tile_terminates() {
+        // `positioning_length / tile` is infinite for a 1e-38 px tile; the repeat count
+        // used to saturate `usize` and the zero-size tiles never intersected the clip.
+        let (tile, origins) = plan_axis(
+            0.0,
+            100.0,
+            0.0,
+            100.0,
+            Length::Px(0.0),
+            1e-38,
+            BackgroundRepeatAxis::Round,
+            64,
+        );
+        assert!(tile.is_finite(), "{tile}");
+        assert!(origins.len() <= 64);
+    }
+
+    #[test]
+    fn test_space_with_a_sub_pixel_tile_terminates() {
+        // The origin is far outside the clip on purpose: with an intersecting origin the old
+        // loop stopped at `origins.len() == limit`, so it did not expose the `count` hang.
+        let (_, origins) = plan_axis(
+            1e6,
+            100.0,
+            0.0,
+            100.0,
+            Length::Px(0.0),
+            1e-38,
+            BackgroundRepeatAxis::Space,
+            64,
+        );
+        assert!(origins.is_empty(), "a degenerate space tile paints nothing");
+    }
+
+    #[test]
+    fn test_round_truncation_starts_at_the_clip() {
+        // The clip is far from the positioning origin: the first `limit` tile indices do not
+        // intersect it, so the window must start at the first visible tile (index 4500).
+        let (tile, origins) = plan_axis(
+            0.0,
+            100.0,
+            90.0,
+            10.0,
+            Length::Px(0.0),
+            0.02,
+            BackgroundRepeatAxis::Round,
+            10,
+        );
+        assert!((tile - 0.02).abs() < 1e-6, "{tile}");
+        assert_eq!(origins.len(), 10);
+        assert!((origins[0] - 90.0).abs() < 1e-3, "{:?}", origins[0]);
+    }
+
+    #[test]
+    fn test_space_truncation_starts_at_the_clip() {
+        let (_, origins) = plan_axis(
+            0.0,
+            100.0,
+            90.0,
+            10.0,
+            Length::Px(0.0),
+            1.0,
+            BackgroundRepeatAxis::Space,
+            8,
+        );
+        assert!(!origins.is_empty(), "visible space tiles must be painted");
+        assert!(origins[0] >= 89.0, "{:?}", origins[0]);
+    }
+
+    #[test]
+    fn test_round_with_a_finite_count_over_the_limit_still_paints() {
+        // 100 / 0.02 = 5,000 tiles > limit: the tiles that fit the cap must still be
+        // emitted (an earlier guard dropped every tile whenever count > limit).
+        let (tile, origins) = plan_axis(
+            0.0,
+            100.0,
+            0.0,
+            100.0,
+            Length::Px(0.0),
+            0.02,
+            BackgroundRepeatAxis::Round,
+            10,
+        );
+        assert!((tile - 0.02).abs() < 1e-6, "{tile}");
+        assert_eq!(origins.len(), 10);
+    }
+
+    #[test]
+    fn test_round_on_the_second_axis_keeps_tiles_after_the_first_consumes_the_budget() {
+        // 800×600 with a 10×10 image: x uses 80 tiles, leaving a y limit of 51 of its 60
+        // tiles. The y axis must still paint 51 rows (it used to return none).
+        let repeat = BackgroundRepeat {
+            x: BackgroundRepeatAxis::Round,
+            y: BackgroundRepeatAxis::Round,
+        };
+        let tiles = background_tiles(
+            padding(800.0, 600.0),
+            (10, 10),
+            repeat,
+            BackgroundSize::Auto,
+            BackgroundPosition::parse("0 0", 10.0, 10.0).unwrap(),
+        );
+        assert_eq!(tiles.len(), 80 * 51);
+    }
+
+    #[test]
+    fn test_repeat_with_huge_offsets_does_not_overflow() {
+        let (tile, origins) = plan_axis(
+            1e38,
+            100.0,
+            0.0,
+            100.0,
+            Length::Px(1e38),
+            1.0,
+            BackgroundRepeatAxis::Repeat,
+            64,
+        );
+        assert!(tile.is_finite());
+        assert!(origins.len() <= 64);
     }
 
     #[test]
