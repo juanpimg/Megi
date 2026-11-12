@@ -73,12 +73,12 @@ impl ByteRange {
     /// Parses a `Range` request header value (`bytes=...`).
     pub fn parse(header: &str) -> Result<Self, RangeError> {
         let header = header.trim();
-        let Some(rest) = header
-            .strip_prefix("bytes=")
-            .or_else(|| header.strip_prefix("Bytes="))
-        else {
+        let lower = header.to_ascii_lowercase();
+        let Some(rest) = lower.strip_prefix("bytes=") else {
             return Err(RangeError::UnsupportedUnit(header.to_owned()));
         };
+        // Use the original casing for the rest (offsets are numeric anyway).
+        let rest = &header[header.len() - rest.len()..];
         let rest = rest.trim();
         if rest.is_empty() {
             return Err(RangeError::Empty);
@@ -220,7 +220,7 @@ impl ContentRange {
         if self.unsatisfied {
             0
         } else {
-            self.end - self.start + 1
+            self.end.saturating_sub(self.start).saturating_add(1)
         }
     }
 }
