@@ -12,7 +12,7 @@
 
 ---
 
-## 🖼️ Megi Browser Shell
+## Megi Browser Shell
 
 ![Megi Desktop Browser Showcase](docs/images/showcase.png)
 *Navegador interactivo Megi (`crates/shell`): chrome nativo con barra de navegación, pestañas, motor tipográfico y renderizado determinista de HTML/CSS de extremo a extremo. Para más ejemplos y capturas de renderizado, consulta la [Galería de Renders](docs/SHOWCASE.md).*
@@ -31,23 +31,23 @@
 
 ---
 
-## ✨ Características Principales
+##  Características Principales
 
-- 🎯 **Conformidad Estricta con Estándares**:
+-  **Conformidad Estricta con Estándares**:
   - **HTML5 100 %**: Tokenizador (7.050/7.050), árbol DOM (3.904/3.904) y serializador (230/230) verificados contra `html5lib-tests`.
   - **CSS Syntax & Selectors**: CSS Syntax WPT (30/30), Selectors L4 con poda por filtros Bloom de ancestros, Cascade Layers (`@layer`) y Container Queries (`@container`).
-- ⚡ **Rendimiento y Ligereza**:
+-  **Rendimiento y Ligereza**:
   - Arena DOM contigua con identificadores `NodeId` generacionales (4 bytes) y resolución de ciclo seguro.
   - Motor de rasterizado CPU optimizado y codificador/decodificador PNG propio con compresión adaptativa.
   - Pipeline de render determinista de bajo consumo de memoria.
-- 🌐 **Red y Protocolos Modernos (`crates/net`)**:
+-  **Red y Protocolos Modernos (`crates/net`)**:
   - Soporte completo HTTP/1.1 y HTTP/2 multiplexado con control de flujo por ventana y priorización de push.
   - Cifrado seguro con TLS 1.2/1.3 en Rust puro (`rustls` + `webpki-roots`).
   - Caché HTTP (RFC 9111), gestión de Cookies (RFC 6265) y soporte para proxies HTTP/HTTPS.
-- 🧠 **Ejecución de JavaScript (`crates/js`)**:
+-  **Ejecución de JavaScript (`crates/js`)**:
   - Integración nativa con el motor ECMAScript **Boa 0.21.x**.
   - Bindings completos para manipulación del DOM, eventos, temporizadores y Web Workers cooperativos.
-- 🖥️ **Shell de Escritorio Usable (`crates/shell`)**:
+-  **Shell de Escritorio Usable (`crates/shell`)**:
   - Ventana interactiva nativa (X11/Wayland vía `winit`), soporte para múltiples pestañas, zoom dinámico, historial navegable y modo screenshot *headless* para CI.
 
 ---
@@ -93,7 +93,7 @@ cargo run --release -p render -- tests/fixtures/render/basic.html /tmp/render.pn
 
 ---
 
-## 🏗️ Arquitectura del Workspace
+##  Arquitectura del Workspace
 
 El proyecto está diseñado como un Grafo Acíclico Dirigido (DAG) desacoplado en 14 crates especializados:
 
@@ -136,15 +136,15 @@ graph TD
 
 ## 📖 Documentación
 
-- 🏛️ [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Arquitectura detallada, modelo de memoria del DOM y política de dependencias.
-- 🖼️ [`docs/SHOWCASE.md`](docs/SHOWCASE.md): Galería de capturas, fixtures y pruebas visuales de render.
-- 🗺️ [`docs/ROADMAP.md`](docs/ROADMAP.md): Plan de fases (`WP-*`) y estado del desarrollo a largo plazo.
-- 📈 [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md): Metodología de benchmarks y mediciones de rendimiento.
-- 🛡️ [`docs/FUZZING.md`](docs/FUZZING.md): Targets de fuzzing continuo y política de triaje de fallos.
-- 🔐 [`SECURITY.md`](SECURITY.md): Modelo de seguridad de memoria, límites anti-DoS y políticas de reporte.
-- 🤝 [`CONTRIBUTING.md`](CONTRIBUTING.md): Guía de contribución, convenciones de código y workflows de CI.
-- 📝 [`CHANGELOG.md`](CHANGELOG.md): Registro histórico de versiones, hitos y optimizaciones por ronda.
-- 🏆 [`docs/MILESTONES.md`](docs/MILESTONES.md): Histórico exhaustivo de micro-hitos, benchmarks y optimizaciones (rondas 1–32).
+-  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Arquitectura detallada, modelo de memoria del DOM y política de dependencias.
+-  [`docs/SHOWCASE.md`](docs/SHOWCASE.md): Galería de capturas, fixtures y pruebas visuales de render.
+-  [`docs/ROADMAP.md`](docs/ROADMAP.md): Plan de fases (`WP-*`) y estado del desarrollo a largo plazo.
+-  [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md): Metodología de benchmarks y mediciones de rendimiento.
+-  [`docs/FUZZING.md`](docs/FUZZING.md): Targets de fuzzing continuo y política de triaje de fallos.
+-  [`SECURITY.md`](SECURITY.md): Modelo de seguridad de memoria, límites anti-DoS y políticas de reporte.
+-  [`CONTRIBUTING.md`](CONTRIBUTING.md): Guía de contribución, convenciones de código y workflows de CI.
+-  [`CHANGELOG.md`](CHANGELOG.md): Registro histórico de versiones, hitos y optimizaciones por ronda.
+-  [`docs/MILESTONES.md`](docs/MILESTONES.md): Histórico exhaustivo de micro-hitos, benchmarks y optimizaciones (rondas 1–32).
 
 ---
 
