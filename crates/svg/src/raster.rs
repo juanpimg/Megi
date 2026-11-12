@@ -149,7 +149,11 @@ fn draw_shape(
         );
         canvas.composite_paint(&filled, shape.fill_opacity * shape.opacity, context)?;
     }
-    let width = shape.stroke_width * viewport_scale;
+    // A hostile `stroke-width` (huge but finite) would build canvas-spanning quads/discs
+    // evaluated with 16 samples per pixel for every stroked shape; clamp it relative to the
+    // viewport (any wider stroke already covers the canvas).
+    let stroke_cap = 4.0 * (canvas.width + canvas.height).max(1) as f32;
+    let width = (shape.stroke_width * viewport_scale).min(stroke_cap);
     if width > 0.0
         && width.is_finite()
         && shape.stroke_opacity > 0.0
@@ -1746,9 +1750,13 @@ fn stamp_polygon(points: &[(f32, f32)], width: usize, height: usize, coverage: &
         max_y = max_y.max(y);
     }
     let first_x = (min_x.floor().max(0.0) as usize).min(width);
-    let last_x = ((max_x.ceil().max(0.0) as usize) + 1).min(width);
+    let last_x = (max_x.ceil().max(0.0) as usize)
+        .saturating_add(1)
+        .min(width);
     let first_y = (min_y.floor().max(0.0) as usize).min(height);
-    let last_y = ((max_y.ceil().max(0.0) as usize) + 1).min(height);
+    let last_y = (max_y.ceil().max(0.0) as usize)
+        .saturating_add(1)
+        .min(height);
     if first_x >= last_x || first_y >= last_y {
         return;
     }
@@ -1782,9 +1790,13 @@ fn stamp_disc(center: (f32, f32), radius: f32, width: usize, height: usize, cove
         return;
     }
     let first_x = ((center.0 - radius).floor().max(0.0) as usize).min(width);
-    let last_x = (((center.0 + radius).ceil().max(0.0) as usize) + 1).min(width);
+    let last_x = ((center.0 + radius).ceil().max(0.0) as usize)
+        .saturating_add(1)
+        .min(width);
     let first_y = ((center.1 - radius).floor().max(0.0) as usize).min(height);
-    let last_y = (((center.1 + radius).ceil().max(0.0) as usize) + 1).min(height);
+    let last_y = ((center.1 + radius).ceil().max(0.0) as usize)
+        .saturating_add(1)
+        .min(height);
     let samples = (STAMP_SAMPLES * STAMP_SAMPLES) as f32;
     let radius_squared = radius * radius;
     for pixel_y in first_y..last_y {
