@@ -883,6 +883,14 @@ impl Document {
         if parent_id == child_id {
             return false;
         }
+        // Reject children under non-container nodes (Text, Comment, Doctype, PI)
+        // and reject reparenting the document root.
+        if !self.can_have_children(parent_id) {
+            return false;
+        }
+        if child_id == self.root() {
+            return false;
+        }
         if matches!(self.node(child_id).kind, NodeKind::Document) {
             return false; // the document node cannot become a child
         }
@@ -935,6 +943,10 @@ impl Document {
         if matches!(self.node(new_node_id).kind, NodeKind::Document) {
             return false; // the document node cannot be a child
         }
+        // Reject children under non-container nodes.
+        if !self.can_have_children(parent_id) {
+            return false;
+        }
         if self.node(new_node_id).first_child.is_some()
             && self.is_self_or_ancestor_of(new_node_id, parent_id)
         {
@@ -983,6 +995,9 @@ impl Document {
     /// already a `NodeKind::Text` node (per WHATWG HTML §13.2.6.1 "insert a character").
     pub fn append_text(&mut self, parent_id: NodeId, text: &str) -> NodeId {
         let parent_id = self.template_contents_target(parent_id);
+        if !self.can_have_children(parent_id) {
+            return self.create_text_node(text);
+        }
         if let Some(last_id) = self.node(parent_id).last_child
             && let NodeKind::Text(ref mut existing) = self.node_mut(last_id).kind
         {
