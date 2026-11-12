@@ -61,6 +61,54 @@ pub fn expand_variables(value: &str, custom: &HashMap<String, String>) -> Option
     expand_inner(value, custom, 0, &mut visiting)
 }
 
+/// Returns the byte index of the next `var(` function token outside strings and comments.
+///
+/// The scan is token-aware: `"var(--x)"` inside a string and `myvar(--x)` (a different
+/// function) are not substitutions (CSS Syntax: strings are opaque and function names are
+/// whole idents).
+fn next_var_function(value: &str, from: usize) -> Option<usize> {
+    let bytes = value.as_bytes();
+    let mut index = from;
+    let mut quote: Option<u8> = None;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        match quote {
+            Some(active) => {
+                if byte == b'\\' {
+                    index += 2;
+                    continue;
+                }
+                if byte == active {
+                    quote = None;
+                }
+                index += 1;
+            }
+            None => {
+                if byte == b'\'' || byte == b'"' {
+                    quote = Some(byte);
+                    index += 1;
+                    continue;
+                }
+                let boundary = index == 0 || !is_ident_byte(bytes[index - 1]);
+                if boundary
+                    && index + 3 < bytes.len()
+                    && bytes[index..index + 3].eq_ignore_ascii_case(b"var")
+                    && bytes[index + 3] == b'('
+                {
+                    return Some(index);
+                }
+                index += 1;
+            }
+        }
+    }
+    None
+}
+
+/// Whether `byte` can be part of a CSS identifier (so `myvar(` is not `var(`).
+fn is_ident_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-' || byte >= 0x80
+}
+
 fn expand_inner(
     value: &str,
     custom: &HashMap<String, String>,
@@ -70,12 +118,10 @@ fn expand_inner(
     if depth > MAX_SUBSTITUTION_DEPTH {
         return None;
     }
-    let lower = value.to_ascii_lowercase();
     let mut out = String::with_capacity(value.len());
     let mut index = 0usize;
     while index < value.len() {
-        if let Some(relative) = lower[index..].find("var(") {
-            let start = index + relative;
+        if let Some(start) = next_var_function(value, index) {
             out.push_str(&value[index..start]);
             // Find the matching closing parenthesis (quotes and nesting aware).
             let mut cursor = start + 4;
@@ -269,4 +315,31 @@ pub(crate) fn resolve_declarations(
         None => inherited.cloned(),
     };
     (resolved, custom_properties)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn var_substitution_skips_strings_and_other_functions() {
+        let mut custom = HashMap::new();
+        custom.insert("--x".to_string(), "1".to_string());
+        let value = r#"myvar(--x) "var(--x)" 'var(--x)' var(--x)"#;
+        assert_eq!(
+            expand_variables(value, &custom).as_deref(),
+            Some(r#"myvar(--x) "var(--x)" 'var(--x)' 1"#)
+        );
+    }
+
+    #[test]
+    fn escaped_quotes_do_not_leak_string_state() {
+        let mut custom = HashMap::new();
+        custom.insert("--x".to_string(), "1".to_string());
+        let value = r#""a\" var(--x)" var(--x)"#;
+        assert_eq!(
+            expand_variables(value, &custom).as_deref(),
+            Some(r#""a\" var(--x)" 1"#)
+        );
+    }
 }
