@@ -644,6 +644,7 @@ pub fn parse_list_of_declarations(input: &str) -> Vec<Declaration> {
 }
 
 #[cfg(test)]
+<<<<<<< HEAD
 mod tests {
     use super::*;
 
@@ -656,5 +657,15 @@ mod tests {
             declarations[2].name, "--Foo",
             "custom property names are case-sensitive"
         );
+||||||| 40f9e6e
+=======
+mod serialization_tests {
+    use super::*;
+
+    #[test]
+    fn string_serialization_keeps_escapes_inside_the_string() {
+        let declarations = parse_list_of_declarations(r#"content: "a\"b";"#);
+        assert_eq!(declarations[0].raw_value, r#""a\"b""#);
+>>>>>>> pr909
     }
 }

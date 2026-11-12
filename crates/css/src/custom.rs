@@ -80,6 +80,124 @@ fn spend(budget: &mut usize, bytes: usize) -> bool {
     true
 }
 
+/// Returns the byte index of the next `var(` function token outside strings and comments.
+///
+/// The scan is token-aware: `"var(--x)"` inside a string and `myvar(--x)` (a different
+/// function) are not substitutions (CSS Syntax: strings are opaque and function names are
+/// whole idents).
+fn next_var_function(value: &str, from: usize) -> Option<usize> {
+    let bytes = value.as_bytes();
+    let mut index = from;
+    let mut quote: Option<u8> = None;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        match quote {
+            Some(active) => {
+                if byte == b'\\' {
+                    index += 2;
+                    continue;
+                }
+                if byte == active {
+                    quote = None;
+                }
+                index += 1;
+            }
+            None => {
+                if byte == b'\'' || byte == b'"' {
+                    quote = Some(byte);
+                    index += 1;
+                    continue;
+                }
+                if bytes[index..].starts_with(b"/*") {
+                    let Some(offset) = value[index + 2..].find("*/") else {
+                        return None; // unterminated comment: no function token after it
+                    };
+                    index += 2 + offset + 2;
+                    continue;
+                }
+                if is_ident_byte(byte) {
+                    let start = index;
+                    while index < bytes.len() && is_ident_byte(bytes[index]) {
+                        index += 1;
+                    }
+                    let name = &value[start..index];
+                    if bytes.get(index) == Some(&b'(') {
+                        if name.eq_ignore_ascii_case("url") {
+                            // A URL token swallows its body: `url(var(--x))` is one token.
+                            index = skip_function(value, index)?;
+                            continue;
+                        }
+                        if name.eq_ignore_ascii_case("var")
+                            && (start == 0 || !is_ident_byte(bytes[start - 1]))
+                        {
+                            return Some(start);
+                        }
+                    }
+                    continue;
+                }
+                if byte == b'#' || byte == b'@' {
+                    // `#var(`/`@var(` are hash/at-keyword tokens followed by a block, not
+                    // Function tokens.
+                    index += 1;
+                    while index < bytes.len() && is_ident_byte(bytes[index]) {
+                        index += 1;
+                    }
+                    continue;
+                }
+                index += 1;
+            }
+        }
+    }
+    None
+}
+
+/// Whether `byte` can be part of a CSS identifier (so `myvar(` is not `var(`).
+fn is_ident_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-' || byte >= 0x80
+}
+
+/// Skips a balanced function body starting at the `(` byte; returns the index after `)`.
+fn skip_function(value: &str, open: usize) -> Option<usize> {
+    let bytes = value.as_bytes();
+    let mut index = open + 1;
+    let mut depth = 1usize;
+    let mut quote: Option<u8> = None;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        match quote {
+            Some(active) => {
+                if byte == b'\\' {
+                    index += 2;
+                    continue;
+                }
+                if byte == active {
+                    quote = None;
+                }
+                index += 1;
+            }
+            None => match byte {
+                b'\'' | b'"' => {
+                    quote = Some(byte);
+                    index += 1;
+                }
+                b'(' => {
+                    depth += 1;
+                    index += 1;
+                }
+                b')' => {
+                    depth -= 1;
+                    index += 1;
+                    if depth == 0 {
+                        return Some(index);
+                    }
+                }
+                _ => index += 1,
+            },
+        }
+    }
+    None
+}
+
 fn expand_inner(
     value: &str,
     custom: &HashMap<String, String>,
@@ -90,15 +208,21 @@ fn expand_inner(
     if depth > MAX_SUBSTITUTION_DEPTH {
         return None;
     }
+<<<<<<< HEAD
     // Charge the work itself, not only the emitted bytes: a chain that expands to the empty
     // string (e.g. `var(--missing,)`) used to cost zero and recursed ~2^30 times.
     if !spend(budget, 1) {
         return None;
     }
     let lower = value.to_ascii_lowercase();
+||||||| 40f9e6e
+    let lower = value.to_ascii_lowercase();
+=======
+>>>>>>> pr909
     let mut out = String::with_capacity(value.len());
     let mut index = 0usize;
     while index < value.len() {
+<<<<<<< HEAD
         if let Some(relative) = lower[index..].find("var(") {
             let start = index + relative;
             let literal = &value[index..start];
@@ -106,6 +230,14 @@ fn expand_inner(
                 return None;
             }
             out.push_str(literal);
+||||||| 40f9e6e
+        if let Some(relative) = lower[index..].find("var(") {
+            let start = index + relative;
+            out.push_str(&value[index..start]);
+=======
+        if let Some(start) = next_var_function(value, index) {
+            out.push_str(&value[index..start]);
+>>>>>>> pr909
             // Find the matching closing parenthesis (quotes and nesting aware).
             let mut cursor = start + 4;
             let mut depth_parens = 0usize;
@@ -312,6 +444,7 @@ mod tests {
     use super::*;
 
     #[test]
+<<<<<<< HEAD
     fn substitution_budget_stops_exponential_expansion() {
         let mut custom = HashMap::new();
         custom.insert("--a0".to_string(), "x".to_string());
@@ -360,6 +493,60 @@ mod budget_tests {
         assert_eq!(
             expand_variables("var(--long)", &custom).as_deref(),
             Some(value.as_str())
+||||||| 40f9e6e
+=======
+    fn var_substitution_skips_strings_and_other_functions() {
+        let mut custom = HashMap::new();
+        custom.insert("--x".to_string(), "1".to_string());
+        let value = r#"myvar(--x) "var(--x)" 'var(--x)' var(--x)"#;
+        assert_eq!(
+            expand_variables(value, &custom).as_deref(),
+            Some(r#"myvar(--x) "var(--x)" 'var(--x)' 1"#)
+        );
+    }
+
+    #[test]
+    fn escaped_quotes_do_not_leak_string_state() {
+        let mut custom = HashMap::new();
+        custom.insert("--x".to_string(), "1".to_string());
+        let value = r#""a\" var(--x)" var(--x)"#;
+        assert_eq!(
+            expand_variables(value, &custom).as_deref(),
+            Some(r#""a\" var(--x)" 1"#)
+        );
+    }
+}
+
+#[cfg(test)]
+mod token_tests {
+    use super::*;
+
+    #[test]
+    fn var_substitution_skips_hash_at_keyword_url_and_comments() {
+        let mut custom = HashMap::new();
+        custom.insert("--x".to_string(), "1".to_string());
+        let value = r#"#var(--x) @var(--x) url(var(--x)) /* var(--x) */ var(--x)"#;
+        assert_eq!(
+            expand_variables(value, &custom).as_deref(),
+            Some(r#"#var(--x) @var(--x) url(var(--x)) /* var(--x) */ 1"#)
+        );
+    }
+
+    #[test]
+    fn parsed_strings_stay_opaque_to_substitution() {
+        let declarations = crate::parser::parse_list_of_declarations(
+            "--x: 1; content: \"a\\\" var(--x)\" var(--x);",
+        );
+        let custom: HashMap<String, String> = declarations
+            .iter()
+            .filter(|declaration| declaration.name == "--x")
+            .map(|declaration| ("--x".to_string(), declaration.raw_value.clone()))
+            .collect();
+        let value = &declarations[1].raw_value;
+        assert_eq!(
+            expand_variables(value, &custom).as_deref(),
+            Some(r#""a\" var(--x)" 1"#)
+>>>>>>> pr909
         );
     }
 }
