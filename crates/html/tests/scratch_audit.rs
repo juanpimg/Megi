@@ -30,5 +30,8 @@ fn scratch_executor_innerhtml_midparse_panics() {
         )
     }));
     println!("executor-innerhtml-midparse panicked: {}", r.is_err());
-    assert!(r.is_err(), "expected parser panic after innerHTML wiped open elements");
+    assert!(
+        r.is_err(),
+        "expected parser panic after innerHTML wiped open elements"
+    );
 }
