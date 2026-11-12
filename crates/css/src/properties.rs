@@ -216,20 +216,20 @@ impl Length {
             }
             return Some(Self::Px(px));
         }
-        if let Some(val) = s.strip_suffix("em") {
-            let em: f32 = val.trim().parse().ok()?;
-            if !em.is_finite() || em.abs() > 1e6 {
-                return None;
-            }
-            let px = em * font_size;
-            return px.is_finite().then_some(Self::Px(px));
-        }
         if let Some(val) = s.strip_suffix("rem") {
             let rem: f32 = val.trim().parse().ok()?;
             if !rem.is_finite() || rem.abs() > 1e6 {
                 return None;
             }
             let px = rem * root_font_size;
+            return px.is_finite().then_some(Self::Px(px));
+        }
+        if let Some(val) = s.strip_suffix("em") {
+            let em: f32 = val.trim().parse().ok()?;
+            if !em.is_finite() || em.abs() > 1e6 {
+                return None;
+            }
+            let px = em * font_size;
             return px.is_finite().then_some(Self::Px(px));
         }
         if let Some(val) = s.strip_suffix("pt") {
@@ -248,12 +248,12 @@ impl Length {
             return Some(Self::Percent(pct));
         }
 
-        // Raw number without unit treated as px
+        // Raw number without unit: only 0 is valid per CSS Values 3/4.
         if let Ok(px) = s.parse::<f32>() {
-            if !px.is_finite() || px.abs() > 1e6 {
-                return None;
+            if px == 0.0 {
+                return Some(Self::Px(0.0));
             }
-            return Some(Self::Px(px));
+            return None;
         }
 
         None
