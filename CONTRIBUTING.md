@@ -239,44 +239,85 @@ Si `./tools/dev.sh all` reporta `==> All checks passed!`, tu código está listo
 
 ## 5. Convenciones de Código y Commits
 
-### 5.1 Convención de Commits (Conventional Commits)
-Utilizamos commits atómicos, descriptivos y en formato semántico:
+### 5.1 Mensajes de commit (Conventional Commits)
+Usa commits atómicos, descriptivos y en formato semántico:
 
+```
+<type>(<scope>): <summary>
+```
+
+Tipos comunes: `feat`, `fix`, `perf`, `docs`, `test`, `refactor`, `chore`, `ci`, `build`.
+
+Ejemplos:
 - `feat(layout): implement inline formatting context line breaking`
-- `feat(css): implement functional Selectors L4 (:is/:where/:not/:has)`
-- `feat(net): bootstrap Phase 5 with URL, HTTP/1.1, file and resource loading`
-- `feat(render,image): browser pipeline and dependency-free PNG decoding`
-- `feat(shell): first browser window with winit, softbuffer and headless screenshots`
-- `feat(render): recursive @import, real media evaluation and a showcase golden`
-- `feat(paint): DEFLATE PNG compression and fully iterative painter`
-- `fix(html): pop implied end tags when encountering hr inside select scope`
-- `test(test_harness): add WPT selector matching suite runner`
+- `fix(image): accept VP8X+VP8L alpha carried in bitstream (#984)`
+- `perf(css): bloom-prune descendant selectors`
 - `docs: update ROADMAP.md with Phase 3 completion`
 
-### 5.2 Estilo de Código en Rust
-- Respeta la Edición 2024 de Rust y las sugerencias de Clippy.
-- Prefiere nombres explícitos y acordes a los términos normativos de la especificación (por ejemplo, `generate_implied_end_tags`, `foster_parenting`, `compute_edges`).
-- Cita siempre la referencia de la especificación:
+Incluye el issue cuando aplique (p. ej. `(#123)`). Mantén el resumen en imperativo y en inglés.
+
+### 5.2 DCO (Developer Certificate of Origin)
+Al contribuir aceptas el [DCO](https://developercertificate.org/). Firma cada commit con:
+
+```bash
+git commit -s -m "feat(css): add container query support"
+```
+
+Esto añade `Signed-off-by: Nombre <email>` al mensaje. Si olvidas firmar:
+
+```bash
+git commit --amend -s
+```
+
+### 5.3 Estilo de código (Rust)
+- Edición 2024, MSRV declarada en `Cargo.toml`/`rust-toolchain.toml` (no subir MSRV sin necesidad).
+- Formato canónico: `cargo fmt --all`.
+- Lints: `cargo clippy --workspace --all-targets -- -D warnings`.
+- **`unsafe`**: evita código inseguro; si es imprescindible, cada bloque debe llevar `// SAFETY:` explicando invariantes, precondiciones y por qué es correcto. Respeta `#![forbid(unsafe_code)]` donde aplique.
+- Prefiere nombres explícitos alineados con la especificación (`generate_implied_end_tags`, `foster_parenting`, etc.).
+- Cita la referencia normativa en el código:
   ```rust
-  // WHATWG HTML §13.2.6.4.7: When an end tag whose tag name is "p" is received:
-  // If the stack of open elements does not have a p element in button scope,
-  // this is a parse error; act as if a start tag with tag name "p" had been seen.
+  // WHATWG HTML §13.2.6.4.7: When an end tag whose tag name is "p" is received...
   ```
+- Sin reformateos ni refactors ajenos al cambio.
+
+### 5.4 Convención de ramas
+Trabaja en una rama dedicada (desde `main` o tu fork):
+
+- `feat/<descripcion-corta>` o `feat/issue-123`
+- `fix/<descripcion-corta>` o `fix/issue-123`
+- `docs/<tema>`, `perf/<tema>`, `test/<tema>`, `chore/<tema>`
 
 ---
 
-## 6. Proceso de Pull Request (PR)
+## 6. Pruebas requeridas
 
-1. **Crea una rama descriptiva**:
-   ```bash
-   git checkout -b feat/inline-formatting-context
-   ```
-2. **Haz commits atómicos y claros** vinculando tus cambios al paquete de trabajo correspondiente.
-3. **Verifica que `./tools/dev.sh all` pase al 100%** (incluye el gate de conformidad) y que la MSRV siga verde con `cargo +1.88 check --workspace --all-targets`.
-4. **Abre el Pull Request en GitHub** detallando:
-   - Resumen del cambio y motivación.
-   - Enlace a la sección de la especificación WHATWG o W3C implementada.
-   - Comando de prueba que valida la funcionalidad (`cargo test -p ...`).
+Antes de abrir o actualizar un PR, ejecuta y verifica:
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo run -p test_harness -- --summary   # gate de conformidad: PASS
+```
+
+Cuando aplique: `cargo doc --workspace --no-deps`, regenerar `PROGRESS.md`/`docs/status/*` con `python3 tools/update_progress.py --write` si cambian métricas/fases, y comprobar goldens/benchmarks afectados.
+
+---
+
+## 7. Proceso de Pull Request (PR)
+
+1. **Rama y commits**: rama descriptiva, commits atómicos y firmados con DCO.
+2. **Verificación local**: `./tools/dev.sh all` en verde y `cargo +1.88 check --workspace --all-targets` si aplica a MSRV.
+3. **Abre el PR** con:
+   - Resumen del cambio y motivación (y enlace al issue).
+   - Sección/ancla de la especificación WHATWG/W3C implementada o corregida.
+   - Comandos de prueba y resultados relevantes.
+4. **Revisión**:
+   - Cambios de seguridad o sensibles: se recomienda **2 aprobaciones**.
+   - Resto de features/fixes/docs: al menos **1 aprobación**.
+   - Atiende comentarios, mantén el PR enfocado y evita mezclar cambios no relacionados.
+5. **Merge**: el mantenedor integra cuando CI y revisiones estén en verde.
 
 ## 7. Licencias
 
