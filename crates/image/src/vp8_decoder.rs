@@ -299,11 +299,16 @@ pub(crate) fn decode_keyframe(payload: &[u8], limits: &PngLimits) -> Result<Rgba
     };
     let mut token_bds = Vec::with_capacity(num_partitions);
     let mut position = header.token_start;
-    for index in 0..num_partitions {
+    for (index, &partition_size) in header
+        .partition_sizes
+        .iter()
+        .enumerate()
+        .take(num_partitions)
+    {
         let size = if index + 1 == num_partitions {
-            payload.len() - position
+            payload.len().saturating_sub(position)
         } else {
-            header.partition_sizes[index]
+            partition_size
         };
         let bytes = payload
             .get(position..position + size)
@@ -351,11 +356,11 @@ fn parse_segment(bd: &mut BoolDecoder<'_>) -> SegmentHeader {
     segment.update_data = bd.read_bool(0x80);
     if segment.update_data {
         segment.abs_delta = bd.read_bool(0x80);
-        for feature in 0..2 {
-            for seg in 0..MAX_MB_SEGMENTS {
+        for (feature, row) in segment.feature.iter_mut().enumerate() {
+            for cell in row.iter_mut() {
                 if bd.read_bool(0x80) {
                     let bits = if feature == 0 { 7 } else { 6 };
-                    segment.feature[feature][seg] = bd.read_signed_literal(bits);
+                    *cell = bd.read_signed_literal(bits);
                 }
             }
         }
