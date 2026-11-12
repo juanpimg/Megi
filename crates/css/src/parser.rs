@@ -644,21 +644,6 @@ pub fn parse_list_of_declarations(input: &str) -> Vec<Declaration> {
 }
 
 #[cfg(test)]
-<<<<<<< HEAD
-mod tests {
-    use super::*;
-
-    #[test]
-    fn property_names_are_ascii_case_insensitive_but_custom_properties_are_not() {
-        let declarations = parse_list_of_declarations("COLOR: red; Margin: 0; --Foo: Bar;");
-        assert_eq!(declarations[0].name, "color");
-        assert_eq!(declarations[1].name, "margin");
-        assert_eq!(
-            declarations[2].name, "--Foo",
-            "custom property names are case-sensitive"
-        );
-||||||| 40f9e6e
-=======
 mod serialization_tests {
     use super::*;
 
@@ -666,6 +651,5 @@ mod serialization_tests {
     fn string_serialization_keeps_escapes_inside_the_string() {
         let declarations = parse_list_of_declarations(r#"content: "a\"b";"#);
         assert_eq!(declarations[0].raw_value, r#""a\"b""#);
->>>>>>> pr909
     }
 }

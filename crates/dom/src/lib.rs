@@ -3143,7 +3143,6 @@ mod fragment_insertion_tests {
         ));
     }
     #[test]
-<<<<<<< HEAD
     fn insert_before_moving_the_previous_sibling_keeps_the_chain() {
         let mut doc = Document::new();
         let body = doc.create_element(Namespace::Html, "body", vec![]);
@@ -3153,16 +3152,10 @@ mod fragment_insertion_tests {
         doc.append_child(body, a);
         doc.append_child(body, b);
 
-        // `b` is the reference `a`'s previous sibling: detaching it changed `a.prev` and
-        // the old code then wrote a self-link into `b` and dropped `a` from the chain.
         assert!(doc.insert_before(a, b));
         let children: Vec<NodeId> = doc.children(body).collect();
         assert_eq!(children, vec![b, a], "no cycle and both children present");
-        assert!(
-            doc.validate_invariants().is_ok(),
-            "{:?}",
-            doc.validate_invariants()
-        );
+        assert!(doc.validate_invariants().is_ok());
 
         assert!(doc.insert_before(b, a));
         let children: Vec<NodeId> = doc.children(body).collect();
@@ -3182,7 +3175,6 @@ mod fragment_insertion_tests {
 
     #[test]
     fn normalize_handles_a_very_deep_chain_iteratively() {
-        // The recursive version overflowed the native stack around a few thousand levels.
         let mut doc = Document::new();
         let body = doc.create_element(Namespace::Html, "body", vec![]);
         doc.append_child(doc.root(), body);
@@ -3192,13 +3184,14 @@ mod fragment_insertion_tests {
             doc.append_child(parent, child);
             parent = child;
         }
-        // Text normalization at the leaf and empty decorations along the chain.
         let text = doc.create_text_node("hello");
         doc.append_child(parent, text);
         let removed = doc.normalize(body);
         assert_eq!(removed, 0);
-||||||| 40f9e6e
-=======
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
     fn normalize_keeps_removed_text_nodes_alive() {
         let mut doc = Document::new();
         let body = doc.create_element(Namespace::Html, "body", vec![]);
@@ -3210,14 +3203,10 @@ mod fragment_insertion_tests {
         doc.append_child(paragraph, first);
         doc.append_child(paragraph, second);
         assert_eq!(doc.normalize(paragraph), 1, "one text node merged");
-        assert_eq!(
-            doc.node(second).as_text(),
-            Some("b"),
-            "the merged text node stays usable (detached, not freed)"
-        );
+        assert_eq!(doc.node(second).as_text(), Some("b"));
         assert_eq!(doc.node(second).parent, None);
         assert_eq!(doc.node(first).as_text(), Some("ab"));
->>>>>>> pr916
         assert!(doc.validate_invariants().is_ok());
     }
+
 }

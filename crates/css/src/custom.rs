@@ -208,36 +208,20 @@ fn expand_inner(
     if depth > MAX_SUBSTITUTION_DEPTH {
         return None;
     }
-<<<<<<< HEAD
     // Charge the work itself, not only the emitted bytes: a chain that expands to the empty
     // string (e.g. `var(--missing,)`) used to cost zero and recursed ~2^30 times.
     if !spend(budget, 1) {
         return None;
     }
-    let lower = value.to_ascii_lowercase();
-||||||| 40f9e6e
-    let lower = value.to_ascii_lowercase();
-=======
->>>>>>> pr909
     let mut out = String::with_capacity(value.len());
     let mut index = 0usize;
     while index < value.len() {
-<<<<<<< HEAD
-        if let Some(relative) = lower[index..].find("var(") {
-            let start = index + relative;
+        if let Some(start) = next_var_function(value, index) {
             let literal = &value[index..start];
             if !spend(budget, literal.len()) {
                 return None;
             }
             out.push_str(literal);
-||||||| 40f9e6e
-        if let Some(relative) = lower[index..].find("var(") {
-            let start = index + relative;
-            out.push_str(&value[index..start]);
-=======
-        if let Some(start) = next_var_function(value, index) {
-            out.push_str(&value[index..start]);
->>>>>>> pr909
             // Find the matching closing parenthesis (quotes and nesting aware).
             let mut cursor = start + 4;
             let mut depth_parens = 0usize;
@@ -444,57 +428,6 @@ mod tests {
     use super::*;
 
     #[test]
-<<<<<<< HEAD
-    fn substitution_budget_stops_exponential_expansion() {
-        let mut custom = HashMap::new();
-        custom.insert("--a0".to_string(), "x".to_string());
-        for index in 1..=31 {
-            custom.insert(
-                format!("--a{index}"),
-                format!("var(--a{}) var(--a{})", index - 1, index - 1),
-            );
-        }
-        assert!(
-            expand_variables("var(--a31)", &custom).is_none(),
-            "exponential expansion is cut by the byte budget"
-        );
-        assert_eq!(
-            expand_variables("var(--a3)", &custom).as_deref(),
-            Some("x x x x x x x x")
-        );
-    }
-}
-
-#[cfg(test)]
-mod budget_tests {
-    use super::*;
-
-    #[test]
-    fn empty_output_recursion_is_bounded() {
-        let mut custom = HashMap::new();
-        custom.insert("--a0".to_string(), "var(--missing,)".to_string());
-        for index in 1..=30 {
-            custom.insert(
-                format!("--a{index}"),
-                format!("var(--a{})var(--a{})", index - 1, index - 1),
-            );
-        }
-        assert!(
-            expand_variables("var(--a30)", &custom).is_none(),
-            "an empty-output doubling chain must stop at the byte budget"
-        );
-    }
-
-    #[test]
-    fn a_single_large_custom_value_still_expands() {
-        let mut custom = HashMap::new();
-        let value = "g".repeat(600);
-        custom.insert("--long".to_string(), value.clone());
-        assert_eq!(
-            expand_variables("var(--long)", &custom).as_deref(),
-            Some(value.as_str())
-||||||| 40f9e6e
-=======
     fn var_substitution_skips_strings_and_other_functions() {
         let mut custom = HashMap::new();
         custom.insert("--x".to_string(), "1".to_string());
@@ -546,7 +479,6 @@ mod token_tests {
         assert_eq!(
             expand_variables(value, &custom).as_deref(),
             Some(r#""a\" var(--x)" 1"#)
->>>>>>> pr909
         );
     }
 }

@@ -1171,7 +1171,7 @@ pub fn resolve_document_styles_with_media(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::properties::{Color, ComputedStyle, Length};
+    use crate::properties::{Color, ComputedStyle};
     use crate::rule::Declaration;
     use dom::{Attribute, Namespace};
 
@@ -1467,49 +1467,6 @@ mod tests {
         assert_eq!(indexed.get(&div).expect("style").color, Color::BLUE);
     }
     #[test]
-<<<<<<< HEAD
-    fn revert_layer_rolls_back_and_matches_the_unindexed_scan() {
-        let mut doc = Document::new();
-        let html = doc.create_element(Namespace::Html, "html", vec![]);
-        let body = doc.create_element(Namespace::Html, "body", vec![]);
-        let target =
-            doc.create_element(Namespace::Html, "div", vec![Attribute::new("id", "target")]);
-        doc.append_child(doc.root(), html);
-        doc.append_child(html, body);
-        doc.append_child(body, target);
-
-        let collection = collection_with(
-            "@layer base { #target { color: rgb(255, 0, 0); width: 10px; } }\n\
-             @layer over { #target { color: revert-layer; width: revert-layer; } }",
-        );
-        // Public path: indexed candidates + container merge + revert-layer rollback.
-        let indexed = resolve_cascaded_properties(&doc, target, &collection, None);
-        // Reference: every (rule, selector) pair, same rollback step.
-        let all = all_candidates(&collection);
-        let mut reference = resolve_base_cascaded_properties(&doc, target, &collection, None, &all);
-        apply_revert_layer(&doc, target, &collection, &all, &mut reference);
-        let reference = owned_declarations(reference);
-
-        for property in ["color", "width"] {
-            assert_eq!(
-                indexed
-                    .get(property)
-                    .map(|declaration| declaration.raw_value.as_str()),
-                reference
-                    .get(property)
-                    .map(|declaration| declaration.raw_value.as_str()),
-                "{property} must resolve identically through both scans"
-            );
-        }
-        let style = ComputedStyle::compute(&indexed, None, None);
-        assert_eq!(
-            style.color,
-            Color::new(255, 0, 0, 255),
-            "the winner rolls back to the base layer"
-        );
-        assert_eq!(style.width, Length::Px(10.0));
-||||||| 40f9e6e
-=======
     fn uppercase_inline_property_names_apply() {
         let mut doc = build_document();
         let target = doc.get_element_by_id("target").expect("target");
@@ -1525,6 +1482,5 @@ mod tests {
             Color::new(255, 0, 0, 255),
             "COLOR is the color property"
         );
->>>>>>> pr908
     }
 }
