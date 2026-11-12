@@ -228,36 +228,67 @@ impl Parser<'_> {
         if self.next() != Some(b'"') {
             return Err("expected string".to_string());
         }
-        let mut out = String::new();
+        let mut out: Vec<u8> = Vec::new();
         loop {
             match self.next() {
                 None => return Err("unterminated string".to_string()),
                 Some(b'"') => break,
                 Some(b'\\') => match self.next() {
-                    Some(b'"') => out.push('"'),
-                    Some(b'\\') => out.push('\\'),
-                    Some(b'/') => out.push('/'),
-                    Some(b'n') => out.push('\n'),
-                    Some(b'r') => out.push('\r'),
-                    Some(b't') => out.push('\t'),
+                    Some(b'"') => out.push(b'"'),
+                    Some(b'\\') => out.push(b'\\'),
+                    Some(b'/') => out.push(b'/'),
+                    Some(b'n') => out.push(b'\n'),
+                    Some(b'r') => out.push(b'\r'),
+                    Some(b't') => out.push(b'\t'),
                     Some(b'u') => {
-                        let hex = std::str::from_utf8(
-                            self.bytes
-                                .get(self.position..self.position + 4)
-                                .ok_or("truncated \\u")?,
-                        )
-                        .map_err(|_| "invalid \\u".to_string())?;
-                        let code =
-                            u32::from_str_radix(hex, 16).map_err(|_| "invalid \\u".to_string())?;
-                        self.position += 4;
-                        out.push(char::from_u32(code).unwrap_or('\u{FFFD}'));
+                        let mut code = self.read_hex4()?;
+                        let mut character = '\u{FFFD}';
+                        if (0xD800..=0xDBFF).contains(&code) {
+                            // High surrogate: combine it with a following low surrogate.
+                            if self.bytes.get(self.position..self.position + 2) == Some(b"\\u") {
+                                let saved = self.position;
+                                self.position += 2;
+                                let low = self.read_hex4()?;
+                                if (0xDC00..=0xDFFF).contains(&low) {
+                                    code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+                                    character = char::from_u32(code).unwrap_or('\u{FFFD}');
+                                } else {
+                                    self.position = saved;
+                                }
+                            }
+                        } else {
+                            character = char::from_u32(code).unwrap_or('\u{FFFD}');
+                        }
+                        let mut buffer = [0u8; 4];
+                        out.extend_from_slice(character.encode_utf8(&mut buffer).as_bytes());
                     }
                     _ => return Err("invalid escape".to_string()),
                 },
-                Some(byte) => out.push(byte as char),
+                // Raw bytes are UTF-8: keep them and decode the complete string at the end.
+                Some(byte) => out.push(byte),
             }
         }
-        Ok(out)
+        String::from_utf8(out).map_err(|_| "invalid UTF-8 in string".to_string())
+    }
+
+    /// Reads exactly four hex digits of a `\uXXXX` escape.
+    fn read_hex4(&mut self) -> Result<u32, String> {
+        let bytes = self
+            .bytes
+            .get(self.position..self.position + 4)
+            .ok_or("truncated \\u".to_string())?;
+        let mut code = 0u32;
+        for byte in bytes {
+            let digit = match byte {
+                b'0'..=b'9' => u32::from(byte - b'0'),
+                b'a'..=b'f' => u32::from(byte - b'a') + 10,
+                b'A'..=b'F' => u32::from(byte - b'A') + 10,
+                _ => return Err("invalid \\u".to_string()),
+            };
+            code = code * 16 + digit;
+        }
+        self.position += 4;
+        Ok(code)
     }
 
     fn number(&mut self) -> Result<Json, String> {
