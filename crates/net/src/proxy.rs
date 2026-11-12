@@ -156,7 +156,13 @@ impl ProxyConfig {
 
     /// Whether the `no_proxy` list bypasses `host` (and `port`, when an entry names one).
     pub fn bypasses(&self, host: &str, port: Option<u16>) -> bool {
-        let host = host.trim_matches(['[', ']']).to_ascii_lowercase();
+        // A trailing root dot is the same absolute DNS name (`internal.corp.` ==
+        // `internal.corp`), but `Url` preserves it while the PSL normalizer strips it:
+        // normalize both sides so `no_proxy` cannot be bypassed with a dotted host.
+        let host = host
+            .trim_matches(['[', ']'])
+            .trim_end_matches('.')
+            .to_ascii_lowercase();
         self.no_proxy
             .iter()
             .any(|entry| no_proxy_entry_matches(entry, &host, port))
@@ -204,7 +210,7 @@ fn no_proxy_entry_matches(entry: &str, host: &str, port: Option<u16>) -> bool {
     {
         return false;
     }
-    let entry_host = entry_host.trim_matches(['[', ']']);
+    let entry_host = entry_host.trim_matches(['[', ']']).trim_end_matches('.');
     if entry_host.is_empty() {
         return false;
     }

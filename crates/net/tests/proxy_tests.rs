@@ -469,3 +469,22 @@ fn https_proxy_url_can_forward_http_targets() {
     );
     handle.join().expect("TLS proxy thread");
 }
+
+#[test]
+fn no_proxy_matches_a_host_with_a_trailing_root_dot() {
+    let config = ProxyConfig {
+        http: Some(Url::parse("http://proxy.test:8080/").expect("proxy URL")),
+        https: None,
+        no_proxy: vec!["internal.corp".to_owned()],
+        socks: None,
+        pac_url: None,
+    };
+    assert!(config.bypasses("internal.corp.", Some(80)));
+    assert!(config.bypasses("sub.internal.corp.", Some(80)));
+    assert!(config.bypasses("internal.corp", Some(80)));
+    let dotted = Url::parse("http://internal.corp./x").expect("URL");
+    assert!(
+        config.proxy_for(&dotted).is_none(),
+        "the trailing root dot must not send an internal host through the proxy"
+    );
+}
