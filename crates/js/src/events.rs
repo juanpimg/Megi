@@ -1300,7 +1300,7 @@ fn schedule_timer(
         let now = host.now_ms();
         host.timers.push(TimerEntry {
             id,
-            due_ms: now + delay,
+            due_ms: now.saturating_add(delay),
             interval_ms: repeat.then_some(delay.max(1)),
             animation,
         });
