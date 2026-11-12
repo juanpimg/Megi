@@ -146,6 +146,15 @@ graph TD
 
 ---
 
+## 🔒 Seguridad
+
+Para reportar vulnerabilidades, **no abras un issue público**. Usa un aviso de seguridad privado en GitHub o contacta al mantenedor:
+
+- **GitHub Security Advisories**: [Abrir aviso privado](https://github.com/juanpimg/Megi/security/advisories/new)
+- **Política, severidad (CVSS 3.1) y plazos de divulgación**: consulta [`SECURITY.md`](SECURITY.md)
+
+---
+
 ## 📄 Licencia
 
 Megi se distribuye bajo doble licencia, a tu elección:

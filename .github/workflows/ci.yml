@@ -135,3 +135,24 @@ jobs:
       # requirements) without building the packages.
       - name: cargo package (no verify)
         run: cargo package --workspace --locked --allow-dirty --no-verify
+
+  security:
+    name: Dependency security (audit/deny)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: cargo audit
+        run: cargo audit
+      - name: cargo deny check
+        run: cargo deny check
