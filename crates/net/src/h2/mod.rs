@@ -47,7 +47,7 @@
 //!   complete after the main response are cancelled. No response streaming (responses are
 //!   buffered), no push prioritization, no h1 server push and no cross-connection preload
 //!   cache (the loader cache lives for one load session). Request bodies *can* stream
-//!   incrementally with backpressure ([`client::RequestBody`]/`request_many_owned`; no
+//!   incrementally with backpressure (\[`client::RequestBody`\]/`request_many_owned`; no
 //!   request trailers or `sendfile`).
 //! - Header blocks are returned lowercased (HPACK requires lowercase names); the
 //!   HTTP/1.1 path keeps original casing.
