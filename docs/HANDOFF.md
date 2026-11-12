@@ -1,3 +1,39 @@
+# Handoff de continuación — Post-Auditoría `v0.1.0` (2026-11-13)
+
+**Fecha**: 2026-11-13 (Europe/Madrid)  
+**Rama**: `main` (último commit de código: `9f44916`, estado/badges: `7ab03bc`)  
+**Binario interactivo**: `./target/release/megi` (compilado con `cargo build --release --locked -p shell -p render -p test_harness -p bench`)
+
+## Qué se completó y cerró en la sesión actual
+
+| Commit | Alcance | Issues cerrados |
+|---|---|---|
+| `4b9eeab` | `<img>` sin `crossorigin` usa modo `no-cors`; `shell` presenta el viewport desplazado bajo el chrome (`58px`). | `#1010`, `#1012` |
+| `e29e201` | CSS UA `<center>` / `table` y layout de `BlockNode`/`Table` dentro de `InlineNode` (Hacker News visible). | `#1011` |
+| `467a6ba` | `collect_intrinsic_widths` en `flex-direction: row`, inline y `white-space: nowrap/pre` (tabs de Wikipedia sin solape). | `#1013` |
+| `f9e1b83` | `H1Pool` keep-alive HTTPS/HTTP1.1 y `ResourceLoader::load_many` paralelo acotado para imágenes. | `#1014` |
+| `352dfd1`, `9f44916` | Fallback de fuentes del sistema bajo demanda (`SYSTEM_FALLBACK_DB` con `OnceLock`) preservando determinismo golden en fuentes empaquetadas. | `#1015` |
+| `d1da78f` | Runtime de transiciones CSS (`ANIMATABLE_PROPERTIES`, `transition_progress`, `apply_transitions`). | `#941`, `#942` |
+| `7ab03bc` | Actualización de `PROGRESS.md` y badges en `docs/status/`. | — |
+
+## Verificación del estado actual en `main`
+
+- `cargo fmt --all -- --check`: **PASS**
+- `cargo clippy --workspace --all-targets -- -D warnings`: **PASS**
+- `cargo test --workspace --locked`: **PASS** (incluyendo los 13 tests de `import_media_tests` y 15+10 de `fonts`)
+- `cargo run --release --locked -p test_harness -- --summary`: **PASS** (tokenizer `7050/7050`, árbol `3904/3904`, serializer `230/230`, CSS syntax `30/30`)
+
+## Pendiente prioritario para la próxima sesión de coding
+
+1. **Scroll bloqueado en páginas reales (`#1021`)**:
+   - **Síntoma**: Al navegar en `./target/release/megi` (p. ej. `https://es.wikipedia.org/wiki/Rust`), la rueda del ratón y las teclas de desplazamiento no hacen scroll.
+   - **Causa raíz detectada**: En `crates/shell/src/worker.rs` (`render_document_with_options`), `scroll::content_height(probe.layout.dimensions.margin_box().height)` usa únicamente la altura del `margin_box` del nodo raíz, que puede quedarse acotada al viewport (`request.css_height`) aunque los hijos desborden verticalmente. Eso deja `ScrollState::max_offset() == 0` en `crates/shell/src/window.rs`.
+   - **Siguiente paso**: Calcular el *scrollable overflow height* real recorriendo los descendientes visibles del árbol de layout (`max(y + height)`), verificar `MouseWheel`/`ArrowDown`/`PageDown` y añadir test de regresión en `crates/shell`.
+2. **Fidelidad visual en webs reales**:
+   - Seguir cerrando brechas de layout/CSS/pintado detectadas al probar sitios reales en `megi` (posicionamiento, anchos `auto`/flex/grid complejos, centrado, SVG/imágenes y estilos modernos).
+
+---
+
 # Handoff de sesión — Pre-Alpha `v0.1.0` (2026-11-12)
 
 **Fecha**: 2026-11-12 (Europe/Madrid)
