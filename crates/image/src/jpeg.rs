@@ -99,11 +99,21 @@ impl HuffmanTable {
             if count == 0 {
                 max_code[length] = -1;
             } else {
+                if code + count > (1i32 << MAX_HUFFMAN_LEN) {
+                    return Err(ImageError::InvalidData {
+                        reason: "JPEG Huffman table is over-subscribed",
+                    });
+                }
                 max_code[length] = code + count - 1;
                 code += count;
                 index += count as usize;
             }
             code <<= 1;
+            if code > (1i32 << (MAX_HUFFMAN_LEN + 1)) {
+                return Err(ImageError::InvalidData {
+                    reason: "JPEG Huffman table is over-subscribed",
+                });
+            }
         }
         if index != values.len() {
             return Err(ImageError::InvalidData {
