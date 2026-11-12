@@ -46,6 +46,9 @@ pub const MAX_INLINE_SVG_BYTES: usize = 1024 * 1024;
 pub const MAX_TOTAL_INLINE_SVG_BYTES: usize = 8 * 1024 * 1024;
 /// Maximum nested DOM depth of one inline SVG subtree.
 pub const MAX_INLINE_SVG_DEPTH: usize = 256;
+/// Maximum number of DOM nodes in one inline SVG subtree (breadth bomb guard: the byte cap
+/// alone is checked after serialization, which would allocate the whole string first).
+pub const MAX_INLINE_SVG_NODES: usize = 4096;
 
 /// Outcome of the inline-SVG pre-processing pass.
 #[derive(Default)]
@@ -108,6 +111,14 @@ pub fn replace_inline_svgs(document: &mut Document) -> InlineSvgReport {
             ));
             continue;
         }
+        if inline_svg_node_count(document, node_id) > MAX_INLINE_SVG_NODES {
+            report.skipped += 1;
+            report.warnings.push(format!(
+                "inline <svg> #{} left untouched: subtree exceeds {MAX_INLINE_SVG_NODES} nodes",
+                index + 1
+            ));
+            continue;
+        }
         let markup = svg_markup(document, node_id);
         if markup.len() > MAX_INLINE_SVG_BYTES {
             report.skipped += 1;
@@ -166,6 +177,26 @@ fn collect_inline_svgs(document: &Document) -> Vec<NodeId> {
         }
     }
     candidates
+}
+
+/// Number of DOM nodes in the subtree rooted at `root_id`, stopping one past the cap.
+fn inline_svg_node_count(document: &Document, root_id: NodeId) -> usize {
+    let mut count = 0usize;
+    let mut stack = vec![root_id];
+    while let Some(node_id) = stack.pop() {
+        count += 1;
+        if count > MAX_INLINE_SVG_NODES {
+            break;
+        }
+        let mut child = document.try_node(node_id).and_then(|node| node.first_child);
+        while let Some(child_id) = child {
+            stack.push(child_id);
+            child = document
+                .try_node(child_id)
+                .and_then(|node| node.next_sibling);
+        }
+    }
+    count
 }
 
 /// Iterative maximum nesting depth of the subtree rooted at `root_id`.

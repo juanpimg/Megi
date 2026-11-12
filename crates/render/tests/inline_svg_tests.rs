@@ -231,3 +231,38 @@ fn inline_svg_limits_are_non_fatal_warnings() {
 fn fixture_path_from_path(path: &Path) -> String {
     format!("file://{}", path.display())
 }
+
+#[test]
+fn inline_svg_breadth_bomb_is_skipped_before_serialization() {
+    // A shallow but very wide <svg>: the 1 MiB byte cap is only checked after serializing,
+    // so a node-count cap must reject it first (issue #466).
+    let mut page = String::from(
+        "<!doctype html><html><head><style>html,body{margin:0}         .ok{width:32px;height:32px;background:#ff00ff}</style></head><body>",
+    );
+    page.push_str("<svg width=\"10\" height=\"10\">");
+    for _ in 0..5000 {
+        page.push_str("<circle cx=\"1\" cy=\"1\" r=\"1\" fill=\"#ff0000\"/>");
+    }
+    page.push_str("</svg><div class=\"ok\"></div></body></html>");
+    let path = std::env::temp_dir().join(format!(
+        "megi-render-inline-svg-breadth-{}.html",
+        std::process::id()
+    ));
+    std::fs::write(&path, page).expect("write temp page");
+    let output = render_url(&fixture_path_from_path(&path), &options()).expect("breadth render");
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(
+        output.stats.inline_svgs, 0,
+        "the breadth bomb must not be replaced"
+    );
+    assert!(
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("exceeds 4096 nodes")),
+        "node-count warning: {:?}",
+        output.stats.warnings
+    );
+    assert!(count_color(&output.pixmap, MAGENTA) > 500);
+}
