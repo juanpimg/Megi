@@ -362,7 +362,11 @@ impl AddressBar {
         let Some(candidate) = self.autocomplete(history) else {
             return false;
         };
-        let typed = self.text.len();
+        // `autocomplete` compares the *trimmed* text with the candidate prefix, so the
+        // selection anchor must use that trimmed length: with leading/trailing spaces the
+        // raw length could exceed the caret and `selected_text` then panicked on a
+        // non-boundary/out-of-range slice.
+        let typed = self.text.trim().len().min(candidate.len());
         self.text = candidate;
         self.anchor = typed;
         self.caret = self.text.len();
@@ -2768,5 +2772,19 @@ mod tests {
         assert!(bar.accept_completion(&history));
         assert_eq!(bar.text(), "https://example.com/");
         assert_eq!(bar.selected_text(), "ps://example.com/");
+    }
+    #[test]
+    fn accepting_a_completion_with_surrounding_spaces_keeps_a_valid_selection() {
+        let history = vec!["https://example.com/".to_string()];
+        let mut bar = AddressBar::new();
+        bar.open("");
+        bar.insert("  ht  ");
+        assert!(bar.accept_completion(&history));
+        assert_eq!(bar.text(), "https://example.com/");
+        assert_eq!(bar.selected_text(), "tps://example.com/");
+        let range = bar.selection_range();
+        assert!(range.end <= bar.text().len(), "{range:?}");
+        bar.delete_selection();
+        assert_eq!(bar.text(), "ht");
     }
 }
