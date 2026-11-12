@@ -1240,6 +1240,7 @@ mod unit_tests {
         );
     }
 
+    #[cfg(feature = "js")]
     #[test]
     fn worker_loader_enforces_the_file_policy() {
         let path = std::env::temp_dir().join(format!("megi-worker-{}.js", std::process::id()));
