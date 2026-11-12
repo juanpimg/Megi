@@ -729,7 +729,10 @@ impl Document {
         local_name: impl Into<String>,
         attributes: Vec<Attribute>,
     ) -> NodeId {
-        let local_name = local_name.into();
+        let mut local_name = local_name.into();
+        if namespace == Namespace::Html {
+            local_name = local_name.to_ascii_lowercase();
+        }
         let template_contents = if namespace == Namespace::Html && local_name == "template" {
             Some(self.create_node(NodeKind::DocumentFragment))
         } else {
@@ -1517,7 +1520,7 @@ impl Document {
         self.children(parent).find(|&child| {
             self.try_node(child).is_some_and(|node| {
                 node.as_element().is_some_and(|element| {
-                    element.namespace == Namespace::Html && element.local_name == local_name
+                    element.namespace == Namespace::Html && element.local_name.eq_ignore_ascii_case(local_name)
                 })
             })
         })
@@ -1849,7 +1852,7 @@ impl Document {
             .and_then(|node| node.as_element())
             .and_then(|element| {
                 (element.namespace == Namespace::Html
-                    && element.local_name == "template"
+                    && element.local_name.eq_ignore_ascii_case("template")
                     && element.template_contents.is_some())
                 .then_some(element.template_contents)
                 .flatten()
