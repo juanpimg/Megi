@@ -234,3 +234,19 @@ fn no_animation_is_byte_identical() {
     .expect("base");
     assert_eq!(base.data, timed.data);
 }
+
+#[test]
+fn unknown_filter_inputs_are_transparent_black() {
+    let svg =
+        br##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+      <defs><filter id="f" x="0" y="0" width="1" height="1">
+        <feComposite in="bogus" in2="SourceGraphic" operator="in"/>
+      </filter></defs>
+      <rect width="20" height="20" fill="#ff0000" filter="url(#f)"/></svg>"##;
+    let image = render(svg);
+    let [_, _, _, alpha] = pixel_at(&image, 10, 10);
+    assert_eq!(
+        alpha, 0,
+        "an unknown filter input must be transparent black"
+    );
+}
