@@ -120,3 +120,56 @@ fn rejects_an_oversized_total_sfnt_size_without_allocating() {
     // The untouched fixture still decodes.
     assert!(decode_web_font(WOFF2).is_ok());
 }
+
+fn crafted_woff2(num_tables: u16, total_sfnt: u32, directory: &[u8], compressed: &[u8]) -> Vec<u8> {
+    let total = 48 + directory.len() + compressed.len();
+    let mut bytes = Vec::with_capacity(total);
+    bytes.extend_from_slice(b"wOF2");
+    bytes.extend_from_slice(&0x0001_0000u32.to_be_bytes()); // TrueType flavor
+    bytes.extend_from_slice(&(total as u32).to_be_bytes()); // length
+    bytes.extend_from_slice(&num_tables.to_be_bytes());
+    bytes.extend_from_slice(&0u16.to_be_bytes()); // reserved
+    bytes.extend_from_slice(&total_sfnt.to_be_bytes());
+    bytes.extend_from_slice(&(compressed.len() as u32).to_be_bytes());
+    bytes.extend_from_slice(&[0u8; 24]); // version, meta and private fields
+    bytes.extend_from_slice(directory);
+    bytes.extend_from_slice(compressed);
+    bytes
+}
+
+#[test]
+fn rejects_a_table_directory_length_larger_than_the_sfnt_cap() {
+    // 55 bytes: one `cmap` entry whose base-128 origLength is 4,000,000,000. It passed the
+    // scalar header checks and used to reach `Vec::with_capacity(4_000_000_000)`.
+    let directory = [0x00, 0x8e, 0xf3, 0xac, 0xd0, 0x00];
+    let bytes = crafted_woff2(1, 65_536, &directory, &[0x00]);
+    let error = decode_web_font(&bytes).expect_err("huge directory length");
+    assert!(
+        matches!(error, FontError::InvalidWebFont { .. }),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn rejects_a_directory_that_overruns_the_input() {
+    // `numTables = 1` but the file ends before the directory entry.
+    let bytes = crafted_woff2(1, 65_536, &[], &[0x00]);
+    let error = decode_web_font(&bytes).expect_err("truncated directory");
+    assert!(
+        matches!(error, FontError::InvalidWebFont { .. }),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn rejects_compressed_data_longer_than_the_input() {
+    // A valid-looking directory, but `totalCompressedSize` exceeds the remaining bytes.
+    let directory = [0x00, 0x01]; // cmap, origLength 1
+    let mut bytes = crafted_woff2(1, 65_536, &directory, &[0x00]);
+    bytes[20..24].copy_from_slice(&3u32.to_be_bytes());
+    let error = decode_web_font(&bytes).expect_err("compressed data past EOF");
+    assert!(
+        matches!(error, FontError::InvalidWebFont { .. }),
+        "{error:?}"
+    );
+}

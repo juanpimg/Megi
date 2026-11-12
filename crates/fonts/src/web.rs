@@ -14,11 +14,14 @@
 //! # Limits
 //!
 //! - WOFF1 is **not** decoded (only WOFF2; TTF/OTF pass through unchanged).
-//! - The header fields that size the decoder's allocations (`totalSfntSize`,
-//!   `totalCompressedSize`, `numTables`, file length) are validated before handing the
-//!   bytes over, the reconstructed sfnt is capped at [`MAX_SFNT_BYTES`], and the
-//!   third-party conversion runs under `catch_unwind`: malformed input returns
+//! - The header and the whole table directory are validated before handing the bytes over
+//!   (`totalSfntSize`, `totalCompressedSize`, `numTables`, file length and every declared
+//!   table/transform length), the reconstructed sfnt is capped at [`MAX_SFNT_BYTES`], and
+//!   the third-party conversion runs under `catch_unwind`: malformed input returns
 //!   [`FontError::InvalidWebFont`] and never panics.
+//! - Residual: the dependency decompresses Brotli into an unbounded `Vec`, so a stream that
+//!   inflates past the validated lengths is not stopped before allocation. Bounding it
+//!   requires patching or vendoring the decoder.
 //! - No subsetting, color-font (`COLR`/`CBDT`) or variation-specific handling beyond
 //!   what the WOFF2 container itself requires.
 
@@ -43,12 +46,32 @@ fn be_u32(bytes: &[u8], offset: usize) -> u32 {
     ])
 }
 
-/// Validates the WOFF2 header fields that size the decoder's allocations.
+/// Reads a WOFF2 `UIntBase128` (1-5 bytes, no leading zero padding).
+fn read_base128(bytes: &[u8], position: &mut usize) -> Option<u32> {
+    let mut value: u32 = 0;
+    for index in 0..5 {
+        let byte = *bytes.get(*position)?;
+        *position += 1;
+        if index == 0 && byte == 0x80 {
+            return None;
+        }
+        value = value
+            .checked_mul(128)?
+            .checked_add(u32::from(byte & 0x7F))?;
+        if byte & 0x80 == 0 {
+            return Some(value);
+        }
+    }
+    None
+}
+
+/// Validates the WOFF2 header and table directory before the decoder allocates.
 ///
 /// `woff2-patched` 0.4 trusts `totalSfntSize`, `totalCompressedSize` and the table
-/// directory: a crafted header requested a 4 GiB allocation and a directory length one byte
-/// past the compressed stream panicked on a slice range. Reject what can be checked cheaply
-/// before the bytes reach it.
+/// directory: a crafted header requested a 4 GiB allocation, a single directory
+/// `origLength` of 4,000,000,000 reached `Vec::with_capacity(Σ src_length)` despite a
+/// 64 KiB `totalSfntSize`, and a directory length one byte past the compressed stream
+/// panicked on a slice range. Parse the directory and bound every declared length here.
 fn validate_woff2_header(bytes: &[u8]) -> Result<(), FontError> {
     let invalid = |reason: &str| FontError::InvalidWebFont {
         reason: reason.to_string(),
@@ -74,6 +97,56 @@ fn validate_woff2_header(bytes: &[u8]) -> Result<(), FontError> {
     if total_compressed == 0 || total_compressed > bytes.len() {
         return Err(invalid("WOFF2 totalCompressedSize exceeds the input"));
     }
+    // Table directory: sum the declared lengths (the decoder reserves Σ src_length and
+    // grows the output by orig_length), so a per-entry value cannot bypass the header caps.
+    let mut position = WOFF2_HEADER_LEN;
+    let mut source_total = 0usize;
+    let mut original_total = 0usize;
+    for _ in 0..num_tables {
+        let flags = *bytes
+            .get(position)
+            .ok_or_else(|| invalid("truncated WOFF2 table directory"))?;
+        position += 1;
+        let table_ref = flags & 0x3F;
+        let version = flags & 0xC0;
+        let tag: [u8; 4] = if table_ref == 0x3F {
+            let tag = bytes
+                .get(position..position + 4)
+                .ok_or_else(|| invalid("truncated WOFF2 table tag"))?;
+            position += 4;
+            [tag[0], tag[1], tag[2], tag[3]]
+        } else {
+            match table_ref {
+                10 => *b"glyf",
+                11 => *b"loca",
+                _ => [0; 4],
+            }
+        };
+        let orig_length = read_base128(bytes, &mut position)
+            .ok_or_else(|| invalid("invalid WOFF2 table length"))?
+            as usize;
+        // Mirrors the dependency's transform rule: glyf/loca use version 0xC0 for the
+        // null transform, every other table version 0x00.
+        let null_transform = if &tag == b"glyf" || &tag == b"loca" {
+            version == 0xC0
+        } else {
+            version == 0x00
+        };
+        let source_length = if null_transform {
+            orig_length
+        } else {
+            read_base128(bytes, &mut position)
+                .ok_or_else(|| invalid("invalid WOFF2 transform length"))? as usize
+        };
+        source_total = source_total.saturating_add(source_length);
+        original_total = original_total.saturating_add(orig_length);
+        if source_total > MAX_SFNT_BYTES || original_total > MAX_SFNT_BYTES {
+            return Err(invalid("WOFF2 table directory lengths exceed the cap"));
+        }
+    }
+    if position.saturating_add(total_compressed) > bytes.len() {
+        return Err(invalid("WOFF2 compressed data exceeds the input"));
+    }
     Ok(())
 }
 
@@ -97,9 +170,10 @@ pub fn decode_web_font(bytes: &[u8]) -> Result<Vec<u8>, FontError> {
     }
     validate_woff2_header(bytes)?;
     let mut cursor = std::io::Cursor::new(bytes);
-    // The third-party decoder has unchecked slice ranges and allocation sizes (see the
-    // module limits); a panic on hostile input must become a typed error rather than unwind
-    // through the renderer. Out-of-memory aborts are prevented by the header validation.
+    // The third-party decoder has unchecked slice ranges and trusts the header sizes (see
+    // the module limits); a panic on hostile input must become a typed error rather than
+    // unwind through the renderer. The header/directory validation bounds the declared
+    // allocations; a Brotli stream that inflates past them is a documented residual.
     let converted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         woff2::convert_woff2_to_ttf(&mut cursor)
     }))
