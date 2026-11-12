@@ -1,7 +1,7 @@
 name: Fuzz (nightly)
 
 # Nightly libFuzzer runs over every parser/renderer surface that consumes untrusted
-# input (16 targets): the 9 critical parsers/decoders run 10 minutes each, the remaining
+# input (17 targets): the 9 critical parsers/decoders run 10 minutes each, the remaining
 # targets 5 minutes. Pull requests get a fast "build every target" job instead.
 # Not a substitute for a long-running fuzzing farm: the scheduled job is a daily
 # regression gate that keeps the harnesses compiling and catches shallow crashes.
@@ -88,6 +88,11 @@ jobs:
             extra: "-detect_leaks=0"
           - target: svg_parse
             seconds: 600
+            extra: ""
+          # Web fonts (@font-face WOFF2) decode untrusted bytes through a third-party
+          # converter; header/directory parsing is the hardened surface.
+          - target: woff2_decode
+            seconds: 300
             extra: ""
           # Round 24 (R151): image decoders/EXIF and HTTP/2 HPACK + framing.
           - target: image_decode

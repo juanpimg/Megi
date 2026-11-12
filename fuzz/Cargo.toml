@@ -16,6 +16,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 dom = { path = "../crates/dom" }
+fonts = { path = "../crates/fonts" }
 html = { path = "../crates/html" }
 css = { path = "../crates/css" }
 net = { path = "../crates/net" }
@@ -70,6 +71,11 @@ bench = false
 [[bin]]
 name = "svg_parse"
 path = "fuzz_targets/svg_parse.rs"
+test = false
+
+[[bin]]
+name = "woff2_decode"
+path = "fuzz_targets/woff2_decode.rs"
 test = false
 doc = false
 bench = false
