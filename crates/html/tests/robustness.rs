@@ -321,3 +321,51 @@ fn fragment_parser_honours_parse_options() {
     assert!(outcome.limit_violations.depth_exceeded > 0);
     assert!(outcome.document.len() < 32);
 }
+
+#[test]
+fn selectedcontent_cloning_respects_the_node_limit() {
+    // The post-parse `<selectedcontent>` fixup clones the selected option's children with
+    // no node check: 200 selectedcontents × 500 spans used to add ~100,000 nodes past a
+    // 5,000-node limit and leave `nodes_exceeded` at zero.
+    let option = format!(
+        "<option selected><div>{}</div></option>",
+        "<span></span>".repeat(500)
+    );
+    let selectedcontents = "<selectedcontent></selectedcontent>".repeat(200);
+    let input = format!("<select>{option}{selectedcontents}</select>");
+    let options = ParseOptions {
+        max_nodes: 5_000,
+        ..ParseOptions::DEFAULT
+    };
+    let outcome = parse_document_with_options(&input, false, &options);
+    assert!(
+        outcome.limit_violations.nodes_exceeded > 0,
+        "the cloning fixup must report the node limit"
+    );
+    assert!(
+        outcome.document.len() <= 5_000 + 501,
+        "clones may overshoot one subtree at most: {} nodes",
+        outcome.document.len()
+    );
+}
+
+#[test]
+fn selectedcontent_budget_is_counted_once_across_selects() {
+    // The clone budget is document-wide: after the first select exhausts it the fixup must
+    // stop (not clear every later select's content and count the violation again).
+    let option = format!(
+        "<option selected><div>{}</div></option>",
+        "<span></span>".repeat(200)
+    );
+    let sc = "<selectedcontent></selectedcontent>".repeat(30);
+    let input = format!("<select>{option}{sc}</select><select>{option}{sc}</select>");
+    let options = ParseOptions {
+        max_nodes: 3_000,
+        ..ParseOptions::DEFAULT
+    };
+    let outcome = parse_document_with_options(&input, false, &options);
+    assert_eq!(
+        outcome.limit_violations.nodes_exceeded, 1,
+        "the node violation is recorded once, not per select"
+    );
+}
