@@ -13,10 +13,17 @@ pub const PIXEL_FORMAT: &str = "0RGB";
 /// Opaque white pixel in `0RGB` format (used for blank/error frames).
 pub const WHITE_0RGB: u32 = 0x00FF_FFFF;
 
+/// Largest framebuffer accepted by [`expected_buffer_len`]: the renderer's maximum viewport
+/// dimension squared (8K-class surfaces stay accepted; hostile u32 dimensions do not).
+pub const MAX_FRAMEBUFFER_PIXELS: usize =
+    (render::MAX_VIEWPORT_DIMENSION as usize) * (render::MAX_VIEWPORT_DIMENSION as usize);
+
 /// Number of `u32` pixels required for a `width * height` framebuffer, or `None` on
-/// overflow (hostile resize values must not panic).
+/// overflow **or** beyond [`MAX_FRAMEBUFFER_PIXELS`] (hostile resize values must not panic or
+/// attempt a multi-gigabyte allocation).
 pub fn expected_buffer_len(width: u32, height: u32) -> Option<usize> {
-    (width as usize).checked_mul(height as usize)
+    let len = (width as usize).checked_mul(height as usize)?;
+    (len <= MAX_FRAMEBUFFER_PIXELS).then_some(len)
 }
 
 /// Converts every RGBA pixel of `pixmap` into a `0RGB` framebuffer word.
@@ -65,16 +72,16 @@ mod unit_tests {
     #[test]
     fn buffer_lengths_are_checked() {
         assert_eq!(expected_buffer_len(800, 600), Some(480_000));
-        // On 64-bit hosts the u32 square still fits in usize; the checked path exists
-        // for 32-bit targets (and for future callers passing usize sizes).
-        if cfg!(target_pointer_width = "64") {
-            assert_eq!(
-                expected_buffer_len(u32::MAX, u32::MAX),
-                Some((u32::MAX as usize) * (u32::MAX as usize))
-            );
-        } else {
-            assert_eq!(expected_buffer_len(u32::MAX, u32::MAX), None);
-        }
+        let max = render::MAX_VIEWPORT_DIMENSION;
+        assert_eq!(
+            expected_buffer_len(max, max),
+            Some((max as usize) * (max as usize)),
+            "the renderer's maximum surface is accepted"
+        );
+        // Hostile resize values must not reach `blank_frame` as a multi-gigabyte length.
+        assert_eq!(expected_buffer_len(u32::MAX, u32::MAX), None);
+        assert_eq!(expected_buffer_len(u32::MAX, 2), None);
+        assert_eq!(expected_buffer_len(max, max + 1), None);
         assert_eq!(blank_frame(3), vec![WHITE_0RGB; 3]);
     }
 
