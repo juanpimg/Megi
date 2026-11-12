@@ -2105,7 +2105,10 @@ impl Document {
     /// (`Element` or `DocumentFragment`).
     fn can_have_children(&self, node_id: NodeId) -> bool {
         self.try_node(node_id).is_some_and(|node| {
-            matches!(node.kind, NodeKind::Element(_) | NodeKind::DocumentFragment)
+            matches!(
+                node.kind,
+                NodeKind::Document | NodeKind::Element(_) | NodeKind::DocumentFragment
+            )
         })
     }
 
