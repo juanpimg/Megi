@@ -403,3 +403,43 @@ fn test_order_reorders_flex_items_stably() {
     assert_eq!(case.item(2).dimensions.content.x, 50.0);
     assert_eq!(case.item(0).dimensions.content.x, 100.0);
 }
+
+#[test]
+fn test_column_flex_auto_height_measures_items_and_vertical_edges() {
+    let (mut doc, mut styles, html) = setup();
+    let mut container = flex_container_style(Length::Px(300.0), Length::Auto);
+    container.flex_direction = FlexDirection::Column;
+    let container_id = add_element(&mut doc, html, &mut styles, container);
+
+    let mut first_style = item_style(Length::Auto, Length::Auto);
+    first_style.padding.top = Length::Px(4.0);
+    first_style.padding.bottom = Length::Px(6.0);
+    first_style.margin.bottom = Length::Px(10.0);
+    let first = add_element(&mut doc, container_id, &mut styles, first_style);
+    let text1 = doc.create_text_node("hello column flex");
+    assert!(doc.append_child(first, text1));
+
+    let second_style = item_style(Length::Auto, Length::Auto);
+    let second = add_element(&mut doc, container_id, &mut styles, second_style);
+    let text2 = doc.create_text_node("second item");
+    assert!(doc.append_child(second, text2));
+
+    let root = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)).expect("layout");
+    let container_box = find_box(&root, container_id);
+    let first_box = find_box(&root, first);
+    let second_box = find_box(&root, second);
+
+    assert!(first_box.dimensions.content.height > 0.0);
+    assert!(second_box.dimensions.content.height > 0.0);
+    let expected_second_y = first_box.dimensions.content.y
+        + first_box.dimensions.content.height
+        + first_box.dimensions.padding.bottom
+        + first_box.dimensions.margin.bottom;
+    assert!((second_box.dimensions.content.y - expected_second_y).abs() < 0.01);
+    let expected_container_height = first_box.dimensions.content.height
+        + 4.0
+        + 6.0
+        + 10.0
+        + second_box.dimensions.content.height;
+    assert!((container_box.dimensions.content.height - expected_container_height).abs() < 0.01);
+}

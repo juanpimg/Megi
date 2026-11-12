@@ -25,9 +25,10 @@
 
 [![Progress map](docs/status/progress.svg)](PROGRESS.md)
 
-**Overall 99 %** · **2.243 tests** (0 fallos) · conformidad **PASS** (100 %) · **14 crates** · **168.585 líneas de Rust** · **12/14** crates con `#![forbid(unsafe_code)]`.
+**Pre-Alpha `v0.1.0`** · **2.300+ tests** (0 fallos) · conformidad **PASS** (100 %) · **14 crates** · **171.000+ líneas de Rust** · **14/14** crates con `#![forbid(unsafe_code)]`.
 
-> Las métricas se actualizan automáticamente en **[`PROGRESS.md`](PROGRESS.md)** mediante herramientas de medición continua. Para consultar el historial de optimizaciones y micro-hitos, revisa el **[`CHANGELOG.md`](CHANGELOG.md)**.
+> **Estado Pre-Alpha (`v0.1.0`)**: Megi ya es compilable y ejecutable como navegador de escritorio (`megi`) y pipeline CLI (`render`), con HTML5, CSS3 (Flexbox/Grid/Container Queries/Layers/bidi), JS (Boa 0.22 + ES modules + `fetch`), SVG/SMIL e imágenes (PNG/JPEG/GIF/WebP). Aún en fase Pre-Alpha: animaciones CSS `@keyframes`/`transition` en runtime, shaping de scripts complejos (árabe/hebreo/tailandés/CJK) y aislamiento multiproceso por pestaña llegarán en la fase Alpha.
+> Las métricas exactas se actualizan automáticamente en **[`PROGRESS.md`](PROGRESS.md)**. Para consultar el historial de versiones, revisa el **[`CHANGELOG.md`](CHANGELOG.md)**.
 
 ---
 
@@ -45,7 +46,7 @@
   - Cifrado seguro con TLS 1.2/1.3 en Rust puro (`rustls` + `webpki-roots`).
   - Caché HTTP (RFC 9111), gestión de Cookies (RFC 6265) y soporte para proxies HTTP/HTTPS.
 -  **Ejecución de JavaScript (`crates/js`)**:
-  - Integración nativa con el motor ECMAScript **Boa 0.21.x**.
+  - Integración nativa con el motor ECMAScript **Boa 0.22**.
   - Bindings completos para manipulación del DOM, eventos, temporizadores y Web Workers cooperativos.
 -  **Shell de Escritorio Usable (`crates/shell`)**:
   - Ventana interactiva nativa (X11/Wayland vía `winit`), soporte para múltiples pestañas, zoom dinámico, historial navegable y modo screenshot *headless* para CI.

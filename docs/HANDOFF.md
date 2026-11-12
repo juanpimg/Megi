@@ -1,9 +1,9 @@
-# Handoff de sesión — ronda 32 (perf CSS/layout/PNG, TLA/live bindings, h1 streaming y push priority)
+# Handoff de sesión — Pre-Alpha `v0.1.0` (2026-11-12)
 
-**Fecha**: 2026-11-11 (Europe/Madrid)
-**Rama**: `sprint/robustez-fase4` — HEAD `3e69968`
-**Estado**: **1929 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; **F4/F5/F6 ≈100 %**, **F7 ≈98 %**. Manifiesto `docs/status/progress.toml` actualizado (F5/F6 + `next_up`); `PROGRESS.md`/SVG se regeneran con `python3 tools/update_progress.py --write`.
-**CI/Repo**: GitHub Actions en verde, con **Status freshness**; `main` y `sprint/robustez-fase4` sincronizadas en `3e69968`; fuzz PR build-only (14 targets); suite determinista.
+**Fecha**: 2026-11-12 (Europe/Madrid)
+**Rama**: `main` — Pre-Alpha `v0.1.0`
+**Estado**: **2300 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; **14/14 crates con `#![forbid(unsafe_code)]`**. Manifiesto `docs/status/progress.toml` actualizado; `PROGRESS.md`/SVG se regeneran con `python3 tools/update_progress.py --write`.
+**CI/Repo**: GitHub Actions y workflow de release (`v*.*.*`) actualizados para empaquetar `megi`, `render`, `test_harness` y `bench` en Linux, macOS y Windows.
 **Estado de fases**: fuente editable [`docs/status/progress.toml`](status/progress.toml), página generada [`PROGRESS.md`](../PROGRESS.md); **no editar a mano** los artefactos generados.
 
 ## Qué se hizo en la ronda 32 (6 commits + status)

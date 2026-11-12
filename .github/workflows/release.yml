@@ -59,7 +59,7 @@ jobs:
           set -euo pipefail
           DIST="dist/megi-${{ github.ref_name }}-${{ matrix.target }}"
           mkdir -p "$DIST"
-          for bin in shell render test_harness bench; do
+          for bin in megi render test_harness bench; do
             if [ -f "target/${{ matrix.target }}/release/$bin" ]; then
               cp "target/${{ matrix.target }}/release/$bin" "$DIST/"
             fi
@@ -72,7 +72,7 @@ jobs:
         run: |
           $dist = "dist/megi-${{ github.ref_name }}-${{ matrix.target }}"
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
-          foreach ($bin in @("shell","render","test_harness","bench")) {
+          foreach ($bin in @("megi","render","test_harness","bench")) {
             $p = "target/${{ matrix.target }}/release/$bin.exe"
             if (Test-Path $p) { Copy-Item $p "$dist/" }
           }
