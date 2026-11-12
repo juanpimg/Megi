@@ -244,7 +244,7 @@ pub struct Response {
     /// [`FetchOptions::accept_push`] is enabled and the server pushed resources).
     pub pushed: Vec<PushedResponse>,
     /// Internal: idle connection to return to the loader pool (never exposed meaningfully).
-    pooled_stream: Option<(String, TcpStream)>,
+    pooled_stream: Option<(String, Transport)>,
 }
 
 impl Clone for Response {
@@ -312,7 +312,7 @@ pub struct H1Pool {
 
 #[derive(Debug)]
 struct PooledH1 {
-    stream: TcpStream,
+    stream: Transport,
     last_used: Instant,
 }
 
@@ -326,7 +326,7 @@ impl H1Pool {
         }
     }
 
-    fn take(&mut self, origin: &str) -> Option<TcpStream> {
+    fn take(&mut self, origin: &str) -> Option<Transport> {
         let now = Instant::now();
         let entries = self.entries.get_mut(origin)?;
         while let Some(pooled) = entries.pop() {
@@ -337,7 +337,7 @@ impl H1Pool {
         None
     }
 
-    fn put(&mut self, origin: String, stream: TcpStream) {
+    fn put(&mut self, origin: String, stream: Transport) {
         let entries = self.entries.entry(origin).or_default();
         if entries.len() >= self.max_per_origin {
             entries.remove(0);
@@ -394,18 +394,17 @@ pub fn fetch_pooled(
         .proxy
         .as_deref()
         .is_some_and(|config| config.socks_for(url).is_some());
-    if url.scheme() != Scheme::Http
+    let is_https = url.scheme() == Scheme::Https;
+    if !(url.scheme() == Scheme::Http
+        || (is_https && cfg!(feature = "tls") && pool_proxy.is_none()))
         || socks_configured
         || options
             .proxy
             .as_deref()
             .is_some_and(|config| config.proxy_for_url(url).is_some() && pool_proxy.is_none())
         || !options.reuse_connections
-        || options.cookie_jar.is_some()
-        || options.origin.is_some()
+        || options.accept_push
         || options.range.is_some()
-        || options.referrer.is_some()
-        || options.accept_encoding != AcceptEncoding::Identity
     {
         return fetch(url, options);
     }
@@ -430,8 +429,9 @@ pub fn fetch_pooled(
             (proxy.host_for_dns().to_owned(), proxy_port, origin, target)
         }
         None => (
-            url.host().to_owned(),
-            url.port_or_default().unwrap_or(80),
+            url.host_for_dns().to_owned(),
+            url.port_or_default()
+                .unwrap_or(if is_https { 443 } else { 80 }),
             origin_key(url),
             url.request_target(),
         ),
@@ -445,38 +445,56 @@ pub fn fetch_pooled(
         .and_then(crate::proxy::proxy_authorization);
     let mut last_error = None;
     for attempt in 0..2 {
-        let stream = match pool.take(&origin) {
-            Some(stream) => stream,
-            None => connect_tcp(&connect_host, connect_port, options)?,
+        let (transport, from_pool) = match pool.take(&origin) {
+            Some(transport) => (transport, true),
+            None => {
+                let tcp = connect_tcp(&connect_host, connect_port, options)?;
+                tcp.set_read_timeout(Some(options.read_timeout)).ok();
+                tcp.set_write_timeout(Some(options.read_timeout)).ok();
+                if is_https {
+                    let (tls, _) = connect_tls(url.host(), tcp, options, false)?;
+                    (tls, false)
+                } else {
+                    (Transport::Plain(tcp), false)
+                }
+            }
         };
-        stream.set_read_timeout(Some(options.read_timeout)).ok();
-        stream.set_write_timeout(Some(options.read_timeout)).ok();
-        let mut reader = ConnReader::new(Transport::Plain(stream));
+        let mut reader = ConnReader::new(transport);
         let http_version = if options.force_http10 { "1.0" } else { "1.1" };
-        let keep_alive_header = if options.force_http10 {
-            "Connection: keep-alive\r\n"
-        } else {
-            ""
-        };
         let mut request = format!(
-            "GET {request_target} HTTP/{http_version}\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\n{}{keep_alive_header}\r\n",
+            "GET {request_target} HTTP/{http_version}\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\n",
             options.user_agent,
-            proxy_auth
-                .as_ref()
-                .map(|auth| format!("Proxy-Authorization: {auth}\r\n"))
-                .unwrap_or_default()
         );
-        if options.accept_encoding != AcceptEncoding::Identity {
-            request = format!(
-                "GET {request_target} HTTP/{http_version}\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\nAccept-Encoding: {}\r\n{}{keep_alive_header}\r\n",
-                options.user_agent,
-                options.accept_encoding.header_value().unwrap_or("identity"),
-                proxy_auth
-                    .as_ref()
-                    .map(|auth| format!("Proxy-Authorization: {auth}\r\n"))
-                    .unwrap_or_default()
-            );
+        if let Some(value) = options.accept_encoding.header_value() {
+            request.push_str(&format!("Accept-Encoding: {value}\r\n"));
         }
+        if let Some(origin_header) = options.origin.as_deref() {
+            request.push_str(&format!("Origin: {origin_header}\r\n"));
+        }
+        let request_site = if options.request_site != RequestSite::SameSite {
+            options.request_site
+        } else if let Some(referrer) = &options.referrer {
+            RequestSite::classify(&referrer.source, url, false)
+        } else {
+            RequestSite::SameSite
+        };
+        if let Some(jar) = &options.cookie_jar
+            && let Some(cookie_header) = lock_jar(jar).header_for_url_with_site(url, request_site)
+        {
+            request.push_str(&format!("Cookie: {cookie_header}\r\n"));
+        }
+        if let Some(referrer) = &options.referrer
+            && let Some(referer) = referrer.referer_for(url)
+        {
+            request.push_str(&format!("Referer: {referer}\r\n"));
+        }
+        if let Some(auth) = proxy_auth.as_ref() {
+            request.push_str(&format!("Proxy-Authorization: {auth}\r\n"));
+        }
+        if options.force_http10 {
+            request.push_str("Connection: keep-alive\r\n");
+        }
+        request.push_str("\r\n");
         let result = (|| -> Result<Response, FetchError> {
             reader
                 .stream
@@ -485,29 +503,32 @@ pub fn fetch_pooled(
             reader.stream.flush().map_err(map_io_error)?;
             let head = reader.read_head(options.max_header_bytes)?;
             let (version, status, reason, headers) = parse_head_verbose(&head)?;
-            if (300..400).contains(&status) {
+            if is_redirect(status) {
                 return Err(FetchError::InvalidResponse(
                     "redirect in pooled fetch".to_owned(),
-                ));
-            }
-            if headers.iter().any(|(name, _)| {
-                name.eq_ignore_ascii_case("content-encoding")
-                    || name.eq_ignore_ascii_case("transfer-encoding")
-            }) {
-                return Err(FetchError::InvalidResponse(
-                    "encoded pooled response".to_owned(),
                 ));
             }
             let has_length = headers
                 .iter()
                 .any(|(name, _)| name.eq_ignore_ascii_case("content-length"));
+            let is_chunked = headers.iter().any(|(name, value)| {
+                name.eq_ignore_ascii_case("transfer-encoding")
+                    && value.to_ascii_lowercase().contains("chunked")
+            });
             let connection_close = headers.iter().any(|(name, value)| {
                 name.eq_ignore_ascii_case("connection")
                     && value
                         .split(',')
                         .any(|token| token.trim().eq_ignore_ascii_case("close"))
             });
-            let (body, trailers) = read_body(&mut reader, status, &headers, options)?;
+            let (raw_body, trailers) = read_body(&mut reader, status, &headers, options)?;
+            let body = decode_response_body(&headers, raw_body, options)?;
+            if let Some(jar) = &options.cookie_jar {
+                lock_jar(jar).store_from_response(url, &headers);
+            }
+            if let Some(req_origin) = options.origin.as_deref() {
+                cors::validate_response(url, req_origin, &headers, options.cookie_jar.is_some())?;
+            }
             let connection_keep_alive = headers.iter().any(|(name, value)| {
                 name.eq_ignore_ascii_case("connection")
                     && value
@@ -515,19 +536,13 @@ pub fn fetch_pooled(
                         .any(|token| token.trim().eq_ignore_ascii_case("keep-alive"))
             });
             let mut keep_alive = if version == (1, 0) {
-                // HTTP/1.0 keeps the connection alive only when explicitly requested.
-                has_length && connection_keep_alive && !connection_close
+                (has_length || is_chunked) && connection_keep_alive && !connection_close
             } else {
-                has_length && !connection_close
+                (has_length || is_chunked) && !connection_close
             };
             if reader.position < reader.buffer.len() {
                 keep_alive = false; // unexpected pipelined bytes: do not reuse
             }
-            let stream = match reader.stream {
-                Transport::Plain(stream) => Some(stream),
-                #[cfg(feature = "tls")]
-                Transport::Tls(_) => None,
-            };
             Ok(Response {
                 status,
                 reason,
@@ -538,9 +553,7 @@ pub fn fetch_pooled(
                 accept_ranges: false,
                 trailers,
                 pushed: Vec::new(),
-                pooled_stream: stream
-                    .filter(|_| keep_alive)
-                    .map(|stream| (origin.clone(), stream)),
+                pooled_stream: keep_alive.then_some((origin.clone(), reader.stream)),
             })
         })();
         match result {
@@ -550,11 +563,13 @@ pub fn fetch_pooled(
                 }
                 return Ok(response);
             }
+            Err(error @ FetchError::Cors(_)) => return Err(error),
             Err(error) => {
                 last_error = Some(error);
-                if attempt == 0 {
+                if attempt == 0 && from_pool {
                     continue;
                 }
+                break;
             }
         }
     }
@@ -1622,6 +1637,7 @@ fn build_default_tls_config() -> Result<Arc<rustls::ClientConfig>, rustls::Error
 }
 
 /// Byte-stream transport for one HTTP request: plain TCP or a rustls session.
+#[derive(Debug)]
 enum Transport {
     Plain(TcpStream),
     #[cfg(feature = "tls")]

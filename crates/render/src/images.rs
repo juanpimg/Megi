@@ -139,6 +139,7 @@ pub fn load_images(
         ));
     }
 
+    let mut resolved = Vec::new();
     for (node_id, src) in sources.into_iter().take(limits.max_images) {
         let url = match base_url.join(&src) {
             Ok(url) => url,
@@ -150,13 +151,6 @@ pub fn load_images(
                 continue;
             }
         };
-        let cache_key = url.to_string();
-        if let Some((size, bitmap)) = cache.get(&cache_key) {
-            result.sizes.insert(node_id, *size);
-            result.store.insert(node_id, Arc::clone(bitmap));
-            result.loaded += 1;
-            continue;
-        }
         if no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
             result.failed += 1;
             result
@@ -168,11 +162,24 @@ pub fn load_images(
             .node(node_id)
             .as_element()
             .is_some_and(|element| element.get_attribute("crossorigin").is_some());
-        let resource = match if use_cors {
-            loader.load(&url)
-        } else {
-            loader.load_no_cors(&url)
-        } {
+        resolved.push((node_id, url, use_cors));
+    }
+
+    let requests: Vec<(&Url, bool)> = resolved
+        .iter()
+        .map(|(_, url, use_cors)| (url, *use_cors))
+        .collect();
+    let loaded_resources = loader.load_many(&requests);
+
+    for ((node_id, url, _use_cors), loaded_res) in resolved.into_iter().zip(loaded_resources) {
+        let cache_key = url.to_string();
+        if let Some((size, bitmap)) = cache.get(&cache_key) {
+            result.sizes.insert(node_id, *size);
+            result.store.insert(node_id, Arc::clone(bitmap));
+            result.loaded += 1;
+            continue;
+        }
+        let resource = match loaded_res {
             Ok(resource) => resource,
             Err(error) => {
                 result.failed += 1;
