@@ -21,7 +21,7 @@
 //! at most [`MAX_SESSION_TABS`] tabs and [`MAX_HISTORY_PER_TAB`] history entries per tab.
 
 use std::fs;
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use crate::navigation::NavigationState;
@@ -89,11 +89,18 @@ impl Session {
                 .iter()
                 .map(|url| url.as_str())
                 .collect();
+            // Keep a window that contains the current entry: dropping the oldest entries
+            // without remapping pointed the restored back/forward stack at the wrong URL.
+            let mut index = tab.navigation.index();
             if history.len() > MAX_HISTORY_PER_TAB {
-                let start = history.len() - MAX_HISTORY_PER_TAB;
+                let start = index
+                    .saturating_sub(MAX_HISTORY_PER_TAB - 1)
+                    .min(history.len() - MAX_HISTORY_PER_TAB);
                 history.drain(..start);
+                index = index.saturating_sub(start);
+                history.truncate(MAX_HISTORY_PER_TAB);
             }
-            let index = tab.navigation.index().min(history.len().saturating_sub(1));
+            let index = index.min(history.len().saturating_sub(1));
             let mut url = tab.url.clone();
             if url.is_empty()
                 && let Some(current) = tab.navigation.current()
@@ -131,11 +138,28 @@ impl Session {
             .retain(|tab| tab.zoom.is_finite() && tab.zoom > 0.0);
         self.tabs.truncate(MAX_SESSION_TABS);
         for tab in &mut self.tabs {
-            tab.history.retain(|url| net::Url::parse(url).is_ok());
+            // Remap the index while dropping unusable URLs so it keeps pointing at the same
+            // entry (retaining a url before it shifted every later index).
+            let mut new_index = tab.index;
+            let mut kept = 0usize;
+            tab.history.retain(|url| {
+                let usable = net::Url::parse(url).is_ok();
+                if usable {
+                    kept += 1;
+                } else if kept <= new_index {
+                    new_index = new_index.saturating_sub(1);
+                }
+                usable
+            });
+            tab.index = new_index;
             if tab.history.len() > MAX_HISTORY_PER_TAB {
-                let start = tab.history.len() - MAX_HISTORY_PER_TAB;
+                let start = tab
+                    .index
+                    .saturating_sub(MAX_HISTORY_PER_TAB - 1)
+                    .min(tab.history.len() - MAX_HISTORY_PER_TAB);
                 tab.history.drain(..start);
                 tab.index = tab.index.saturating_sub(start);
+                tab.history.truncate(MAX_HISTORY_PER_TAB);
             }
             tab.index = tab.index.min(tab.history.len().saturating_sub(1));
             tab.zoom = tab.zoom.clamp(0.5, 3.0);
@@ -330,6 +354,12 @@ impl Session {
     }
 }
 
+/// Maximum size of a session file accepted from disk (bytes).
+///
+/// `fs::read_to_string` on an unbounded path (`/dev/zero`, a huge file or a FIFO) would
+/// read until OOM; the cap also bounds the parsed JSON tree before `normalize` truncates.
+pub const MAX_SESSION_BYTES: u64 = 4 * 1024 * 1024;
+
 /// Result of loading a session file.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LoadedSession {
@@ -342,8 +372,24 @@ pub struct LoadedSession {
 /// Loads a session file. A missing file is a fresh session without a warning; any
 /// corrupt/unsupported content returns `session = None` plus a warning (never panics).
 pub fn load(path: &Path) -> LoadedSession {
-    match fs::read_to_string(path) {
-        Ok(text) => match Session::from_json(&text) {
+    let mut bytes = Vec::new();
+    let read = fs::File::open(path).and_then(|file| {
+        let mut reader = file.take(MAX_SESSION_BYTES + 1);
+        reader.read_to_end(&mut bytes)
+    });
+    match read {
+        Ok(_) if bytes.len() as u64 > MAX_SESSION_BYTES => LoadedSession {
+            session: None,
+            warning: Some(format!(
+                "ignoring session file {} larger than {} bytes",
+                path.display(),
+                MAX_SESSION_BYTES
+            )),
+        },
+        Ok(_) => match String::from_utf8(bytes)
+            .map_err(|error| error.utf8_error().to_string())
+            .and_then(|text| Session::from_json(&text))
+        {
             Ok(session) => LoadedSession {
                 session: Some(session),
                 warning: None,
@@ -672,8 +718,17 @@ impl<'a> JsonParser<'a> {
                     return Err("control character in JSON string".to_string());
                 }
                 Some(byte) => {
-                    // UTF-8 bytes are copied through; the source was a &str so it is valid.
-                    out.push(byte as char);
+                    // Decode the whole UTF-8 scalar: pushing each byte as a `char` turned
+                    // every non-ASCII literal into Latin-1 mojibake ("café" -> "cafÃ©").
+                    let start = self.position - 1;
+                    let width = utf8_width(byte);
+                    if width == 0 || start + width > self.bytes.len() {
+                        return Err("invalid UTF-8 in JSON string".to_string());
+                    }
+                    let text = std::str::from_utf8(&self.bytes[start..start + width])
+                        .map_err(|_| "invalid UTF-8 in JSON string".to_string())?;
+                    out.push_str(text);
+                    self.position = start + width;
                 }
             }
         }
@@ -744,6 +799,17 @@ impl<'a> JsonParser<'a> {
             .ok_or_else(|| "truncated JSON".to_string())?;
         self.position += count;
         String::from_utf8(slice.to_vec()).map_err(|_| "invalid UTF-8 escape".to_string())
+    }
+}
+
+/// Length of the UTF-8 scalar starting with `byte` (0 for a continuation/invalid lead).
+fn utf8_width(byte: u8) -> usize {
+    match byte {
+        0x00..=0x7F => 1,
+        0xC2..=0xDF => 2,
+        0xE0..=0xEF => 3,
+        0xF0..=0xF4 => 4,
+        _ => 0,
     }
 }
 
@@ -1018,6 +1084,99 @@ mod tests {
             crate::history::domain_badge(&parsed.recent[1].url)
                 .0
                 .is_ascii_uppercase()
+        );
+    }
+    #[test]
+    fn capture_remaps_the_history_index_and_keeps_the_current_entry() {
+        let mut tabs = crate::tabs::TabsState::new("data:text/html,0");
+        for index in 1..100 {
+            let url = net::Url::parse(&format!("data:text/html,{index}")).expect("url");
+            tabs.active_mut().navigation.navigate_to(url);
+        }
+        for _ in 0..90 {
+            assert!(tabs.active_mut().navigation.back().is_some());
+        }
+        let current = tabs
+            .active()
+            .navigation
+            .current()
+            .expect("current")
+            .as_str()
+            .to_owned();
+        let session = Session::capture(&tabs);
+        let tab = &session.tabs[0];
+        assert_eq!(tab.history.len(), MAX_HISTORY_PER_TAB);
+        assert!(tab.index < tab.history.len());
+        assert_eq!(
+            tab.history[tab.index], current,
+            "the saved index must point at the current URL"
+        );
+    }
+
+    #[test]
+    fn normalize_remaps_the_index_after_dropping_invalid_urls() {
+        let json = r#"{"version":1,"active":0,"tabs":[{"url":"https://a/","history":["not a url","https://a/","https://b/"],"index":1,"zoom":1.0,"scroll":0}]}"#;
+        let session = Session::from_json(json).expect("parse");
+        let tab = &session.tabs[0];
+        assert_eq!(tab.index, 0);
+        assert_eq!(tab.history[tab.index], "https://a/");
+        let restored = session.restore();
+        assert_eq!(
+            restored.active().navigation.current().map(net::Url::as_str),
+            Some("https://a/")
+        );
+    }
+
+    #[test]
+    fn json_roundtrip_preserves_non_ascii_strings() {
+        let mut session = sample();
+        session.recent.push(crate::history::HistoryEntry {
+            title: "café".to_string(),
+            url: "https://example.com/".to_string(),
+            logical_time: 1,
+        });
+        let json = session.to_json();
+        let parsed = Session::from_json(&json).expect("parse");
+        assert_eq!(parsed.recent[0].title, "café");
+        assert_eq!(parsed, session);
+    }
+
+    #[test]
+    fn oversized_session_files_are_rejected() {
+        let path =
+            std::env::temp_dir().join(format!("megi-session-big-{}.json", std::process::id()));
+        let mut json = String::from("{\"version\":1,\"tabs\":[],\"pad\":\"");
+        json.push_str(&"x".repeat(MAX_SESSION_BYTES as usize));
+        json.push_str("\"}");
+        std::fs::write(&path, json).expect("write");
+        let loaded = load(&path);
+        assert!(loaded.session.is_none());
+        assert!(
+            loaded
+                .warning
+                .as_deref()
+                .is_some_and(|warning| warning.contains("larger than")),
+            "{:?}",
+            loaded.warning
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn special_files_are_read_with_the_cap() {
+        if !Path::new("/dev/zero").exists() {
+            return;
+        }
+        let loaded = load(Path::new("/dev/zero"));
+        assert!(loaded.session.is_none());
+        assert!(
+            loaded
+                .warning
+                .as_deref()
+                .is_some_and(|warning| warning.contains("larger than")),
+            "{:?}",
+            loaded.warning
         );
     }
 }
