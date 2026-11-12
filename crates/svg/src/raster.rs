@@ -871,14 +871,38 @@ fn offset_pixels(pixels: &mut [u8], width: usize, height: usize, dx: i32, dy: i3
 /// `text-anchor`, `letter-spacing`, font size/weight/style and fill/stroke.
 type TextPathSegment = (f32, (f32, f32), (f32, f32));
 
-fn segment_at(segments: &[TextPathSegment], distance: f32) -> Option<TextPathSegment> {
-    for &(start, from, to) in segments {
-        let length = ((to.0 - from.0).powi(2) + (to.1 - from.1).powi(2)).sqrt();
-        if distance >= start && distance <= start + length {
-            return Some((start, from, to));
+fn segment_at(
+    segments: &[TextPathSegment],
+    ends: &[f32],
+    distance: f32,
+) -> Option<TextPathSegment> {
+    // Segments are contiguous and sorted by `start`, so the first one whose end reaches
+    // `distance` is the only candidate. A linear scan restarted per glyph made a
+    // 10k-glyph textPath over a 1M-segment path ~5e9 iterations (each with a sqrt).
+    debug_assert_eq!(segments.len(), ends.len());
+    let index = ends.partition_point(|end| *end < distance);
+    let &(start, from, to) = segments.get(index)?;
+    (distance >= start && distance <= *ends.get(index)?).then_some((start, from, to))
+}
+
+/// Flattens a `textPath`'s sub-paths into contiguous segments and their cumulative ends.
+fn text_path_segments(subpaths: &[SubPath]) -> (Vec<TextPathSegment>, Vec<f32>) {
+    let mut segments: Vec<TextPathSegment> = Vec::new();
+    let mut ends: Vec<f32> = Vec::new();
+    let mut total = 0.0f32;
+    for subpath in subpaths {
+        for window in subpath.points.windows(2) {
+            let (x0, y0) = window[0];
+            let (x1, y1) = window[1];
+            let length = ((x1 - x0).powi(2) + (y1 - y0).powi(2)).sqrt();
+            if length.is_finite() && length > 0.0 {
+                segments.push((total, (x0, y0), (x1, y1)));
+                total += length;
+                ends.push(total);
+            }
         }
     }
-    None
+    (segments, ends)
 }
 
 fn draw_text(
@@ -926,19 +950,8 @@ fn draw_text(
         // Glyph advance along the flattened path with auto-rotation (tangent angle, flipped
         // when the text would be upside down), optional textLength adjustment and
         // side="right" baseline offset (approximate normal offset, documented subset).
-        let mut lengths: Vec<TextPathSegment> = Vec::new();
-        let mut total_length = 0.0f32;
-        for subpath in &text_path.subpaths {
-            for window in subpath.points.windows(2) {
-                let (x0, y0) = window[0];
-                let (x1, y1) = window[1];
-                let length = ((x1 - x0).powi(2) + (y1 - y0).powi(2)).sqrt();
-                if length.is_finite() && length > 0.0 {
-                    lengths.push((total_length, (x0, y0), (x1, y1)));
-                    total_length += length;
-                }
-            }
-        }
+        let (lengths, ends) = text_path_segments(&text_path.subpaths);
+        let total_length = ends.last().copied().unwrap_or(0.0);
         if total_length > 0.0 {
             let offset = if text_path.percent {
                 text_path.start_offset * total_length
@@ -971,7 +984,7 @@ fn draw_text(
             };
             let mut distance = (offset - anchor_shift).clamp(0.0, total_length);
             for character in spec.text.chars() {
-                let Some((start, from, to)) = segment_at(&lengths, distance) else {
+                let Some((start, from, to)) = segment_at(&lengths, &ends, distance) else {
                     break;
                 };
                 let length = ((to.0 - from.0).powi(2) + (to.1 - from.1).powi(2)).sqrt();
@@ -1953,6 +1966,59 @@ mod tests {
             height,
             pixels: vec![0; width * height * 4],
             coverage: vec![0.0; width * height],
+        }
+    }
+
+    #[test]
+    fn test_textpath_segment_construction_and_lookup() {
+        // Production construction (the same helper `draw_text` uses) must produce
+        // contiguous segments and cumulative ends.
+        let subpaths = vec![SubPath {
+            points: vec![(0.0, 0.0), (3.0, 0.0), (3.0, 4.0)],
+            closed: false,
+        }];
+        let (segments, ends) = text_path_segments(&subpaths);
+        assert_eq!(segments.len(), 2);
+        assert_eq!(ends, vec![3.0, 7.0]);
+        assert_eq!(segment_at(&segments, &ends, 0.0), Some(segments[0]));
+        assert_eq!(segment_at(&segments, &ends, 3.0), Some(segments[0]));
+        assert_eq!(segment_at(&segments, &ends, 3.5), Some(segments[1]));
+        assert_eq!(segment_at(&segments, &ends, 7.0), Some(segments[1]));
+
+        // Out-of-range and non-finite distances never match.
+        for distance in [-1.0, 7.5, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(segment_at(&segments, &ends, distance), None, "{distance}");
+        }
+
+        // Differential check against the original linear scan, including distances that
+        // decrease (negative letter spacing / anchors) and exact boundaries.
+        let mut many: Vec<TextPathSegment> = Vec::new();
+        let mut many_ends: Vec<f32> = Vec::new();
+        let mut start = 0.0f32;
+        for index in 0..1_000 {
+            let length = 1.0 + (index % 3) as f32;
+            many.push((start, (index as f32, 0.0), (index as f32 + length, 0.0)));
+            start += length;
+            many_ends.push(start);
+        }
+        for step in 0..4_000 {
+            let distance = if step % 2 == 0 {
+                step as f32 * 0.75
+            } else {
+                1_999.0 - step as f32 * 0.9
+            };
+            let expected = many
+                .iter()
+                .find(|(segment_start, from, to)| {
+                    let length = ((to.0 - from.0).powi(2) + (to.1 - from.1).powi(2)).sqrt();
+                    distance >= *segment_start && distance <= *segment_start + length
+                })
+                .copied();
+            assert_eq!(
+                segment_at(&many, &many_ends, distance),
+                expected,
+                "{distance}"
+            );
         }
     }
 
