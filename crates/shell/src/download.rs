@@ -102,7 +102,11 @@ pub fn sanitize_host(url: &net::Url) -> String {
 /// Naming is deterministic: it starts at 1 and increments while the candidate exists.
 pub fn next_download_path(dir: &Path, url: &net::Url, extension: &str) -> PathBuf {
     let host = sanitize_host(url);
-    for number in 1..=u32::MAX {
+    // Reject extensions that could escape the download directory.
+    if extension.contains('/') || extension.contains('\\') || extension.contains("..") {
+        return dir.join(format!("{DOWNLOAD_PREFIX}-{host}-1.png"));
+    }
+    for number in 1..=1024u32 {
         let candidate = dir.join(format!("{DOWNLOAD_PREFIX}-{host}-{number}.{extension}"));
         if !candidate.exists() {
             return candidate;

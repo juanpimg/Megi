@@ -1336,14 +1336,10 @@ fn paint_replaced_element(
                     image: std::sync::Arc::clone(image),
                 });
             }
-            // A translucent element (flat-opacity fallback) darkens the image
-            // through a normal-alpha fill when needed.
-            if alpha_scale < 1.0 {
-                list.push(DisplayItem::SolidColor {
-                    rect,
-                    color: Color::new(0, 0, 0, 0),
-                });
-            }
+            // A translucent ancestor applies opacity through an OpacityGroup.
+            // The transparent-fill fallback was a no-op; instead, wrap the image
+            // in an opacity group when needed (handled by the caller's opacity).
+            let _ = alpha_scale;
         }
         _ => {
             list.push(DisplayItem::SolidColor {
