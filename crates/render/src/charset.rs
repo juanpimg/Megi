@@ -73,19 +73,66 @@ fn normalize_charset_label(label: &str) -> Result<String, RenderError> {
 }
 
 /// Extracts the `charset` parameter from a `Content-Type` header value.
+///
+/// Parameter names are matched case-insensitively and RFC 9110 optional whitespace (BWS)
+/// around `=` is accepted (`charset = "utf-8"`); only an exact `charset` parameter counts,
+/// so strings such as `xcharset=utf-8` do not match.
 pub fn charset_from_content_type(content_type: &str) -> Option<String> {
-    let lower = content_type.to_ascii_lowercase();
-    let index = lower.find("charset=")?;
-    let value = &content_type[index + "charset=".len()..];
-    let value = value
-        .trim_start_matches([' ', '"', '\''])
-        .split([';', ' ', '"', '\''])
-        .next()
-        .unwrap_or("");
-    if value.is_empty() {
-        None
-    } else {
-        Some(value.to_owned())
+    for parameter in content_type.split(';') {
+        let Some((name, value)) = parameter.split_once('=') else {
+            continue;
+        };
+        if !name.trim().eq_ignore_ascii_case("charset") {
+            continue;
+        }
+        let value = value.trim().trim_start_matches(['"', '\'']);
+        let value = value
+            .split([';', ' ', '\t', '"', '\'', ','])
+            .next()
+            .unwrap_or("")
+            .trim();
+        if !value.is_empty() {
+            return Some(value.to_owned());
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::charset_from_content_type;
+
+    #[test]
+    fn parses_charset_parameter_with_optional_whitespace() {
+        assert_eq!(
+            charset_from_content_type("text/html; charset=utf-8").as_deref(),
+            Some("utf-8")
+        );
+        assert_eq!(
+            charset_from_content_type("text/html;charset = UTF-8").as_deref(),
+            Some("UTF-8"),
+            "RFC 9110 BWS around '=' is allowed"
+        );
+        assert_eq!(
+            charset_from_content_type("text/html; charset =\twindows-1252").as_deref(),
+            Some("windows-1252")
+        );
+        assert_eq!(
+            charset_from_content_type("text/html; charset=\"iso-8859-1\"").as_deref(),
+            Some("iso-8859-1")
+        );
+        assert_eq!(
+            charset_from_content_type("text/html; foo=bar; charset=windows-1252; q=1").as_deref(),
+            Some("windows-1252")
+        );
+    }
+
+    #[test]
+    fn ignores_missing_or_lookalike_charset_parameters() {
+        assert_eq!(charset_from_content_type("text/html"), None);
+        assert_eq!(charset_from_content_type("text/html; xcharset=utf-8"), None);
+        assert_eq!(charset_from_content_type("text/html; charset="), None);
+        assert_eq!(charset_from_content_type("text/html; charset = "), None);
     }
 }
 
