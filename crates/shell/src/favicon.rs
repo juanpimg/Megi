@@ -159,6 +159,15 @@ pub fn color_for(key: &str) -> [u8; 3] {
 /// Decodes image bytes and nearest-neighbour resizes them to 16x16 RGBA8.
 pub fn decode_icon(bytes: &[u8]) -> Option<[u8; (ICON_SIZE * ICON_SIZE * 4) as usize]> {
     let image = image::decode(bytes).ok()?;
+    if image.width == 0 || image.height == 0 {
+        return None;
+    }
+    let expected = (image.width as usize)
+        .checked_mul(image.height as usize)?
+        .checked_mul(4)?;
+    if image.data.len() < expected {
+        return None;
+    }
     let mut pixels = [0u8; (ICON_SIZE * ICON_SIZE * 4) as usize];
     for y in 0..ICON_SIZE {
         let source_y = (y as u64 * image.height as u64 / ICON_SIZE as u64) as u32;
@@ -167,6 +176,9 @@ pub fn decode_icon(bytes: &[u8]) -> Option<[u8; (ICON_SIZE * ICON_SIZE * 4) as u
             let source_x = (x as u64 * image.width as u64 / ICON_SIZE as u64) as u32;
             let source_x = source_x.min(image.width.saturating_sub(1));
             let offset = ((source_y as usize) * (image.width as usize) + source_x as usize) * 4;
+            if offset + 4 > image.data.len() {
+                return None;
+            }
             let target = ((y as usize) * (ICON_SIZE as usize) + x as usize) * 4;
             pixels[target..target + 4].copy_from_slice(&image.data[offset..offset + 4]);
         }
@@ -174,10 +186,14 @@ pub fn decode_icon(bytes: &[u8]) -> Option<[u8; (ICON_SIZE * ICON_SIZE * 4) as u
     Some(pixels)
 }
 
+/// Maximum number of cached favicons.
+const MAX_FAVICON_CACHE_ENTRIES: usize = 64;
+
 /// In-memory favicon cache keyed by [`origin_key`].
 #[derive(Clone, Debug, Default)]
 pub struct FaviconCache {
     entries: std::collections::HashMap<String, Favicon>,
+    order: std::collections::VecDeque<String>,
 }
 
 impl FaviconCache {
@@ -201,8 +217,15 @@ impl FaviconCache {
         self.entries.get(key).copied()
     }
 
-    /// Inserts a favicon, returning the previous value.
+    /// Inserts a favicon, evicting the oldest entry when the cap is reached.
     pub fn insert(&mut self, key: String, favicon: Favicon) -> Option<Favicon> {
+        if self.entries.len() >= MAX_FAVICON_CACHE_ENTRIES
+            && !self.entries.contains_key(&key)
+            && let Some(oldest) = self.order.pop_front()
+        {
+            self.entries.remove(&oldest);
+        }
+        self.order.push_back(key.clone());
         self.entries.insert(key, favicon)
     }
 
@@ -212,7 +235,7 @@ impl FaviconCache {
             return *cached;
         }
         let favicon = load();
-        self.entries.insert(key.to_owned(), favicon);
+        self.insert(key.to_owned(), favicon);
         favicon
     }
 }
