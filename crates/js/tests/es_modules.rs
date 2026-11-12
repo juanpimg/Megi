@@ -347,3 +347,30 @@ fn side_effect_import_executes_dependency() {
         .expect("side effect");
     assert_eq!(runtime.eval("window.__side", "t").unwrap(), "1");
 }
+
+#[test]
+fn module_graph_depth_is_bounded() {
+    // A loader can serve an arbitrary chain of static imports; each level is one Rust stack
+    // frame, so the graph depth must be capped instead of overflowing the native stack.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime.set_module_resolver(Box::new(|_specifier: &str, base: &str| {
+        let next = base
+            .strip_prefix("m")
+            .and_then(|digits| digits.parse::<usize>().ok())
+            .unwrap_or(0)
+            + 1;
+        Ok(Some(format!("m{next}")))
+    }));
+    runtime.set_module_loader(Box::new(|_url: &str| {
+        Ok::<String, JsError>("import './dep'; export const marker = 1;".to_string())
+    }));
+    let error = runtime
+        .eval_module(
+            "import './dep';",
+            "m0",
+            "http://example.test/",
+            &Budget::default(),
+        )
+        .expect_err("the module graph depth is capped");
+    assert!(matches!(error, JsError::ModuleDepth(_)), "{error:?}");
+}

@@ -410,6 +410,7 @@ fn script_load_attempts_are_capped_even_when_every_load_fails() {
     let mut options = options();
     options.scripting_limits = ScriptingLimits {
         max_scripts: 2,
+        max_script_attempts: 2,
         ..ScriptingLimits::default()
     };
     let output = render_url(&file_url(&document), &options).expect("render");
@@ -427,6 +428,86 @@ fn script_load_attempts_are_capped_even_when_every_load_fails() {
             .iter()
             .any(|warning| warning.contains("attempted more than 2 script loads")),
         "the cap must be reported: {:?}",
+        output.stats.warnings
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn failed_script_attempts_do_not_starve_a_valid_one() {
+    // `max_scripts` bounds executions and `max_script_attempts` bounds fetches: two failing
+    // URLs followed by a valid script must still execute it (a single shared counter with
+    // max_scripts = 1 used to stop after the first failure).
+    let dir = std::env::temp_dir().join(format!("megi-script-starve-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    std::fs::write(
+        dir.join("ok.js"),
+        "document.body.setAttribute('data-ok', '1');",
+    )
+    .expect("write js");
+    let document = dir.join("index.html");
+    std::fs::write(
+        &document,
+        "<!DOCTYPE html><body>\
+         <script src='missing-a.js'></script>\
+         <script src='missing-b.js'></script>\
+         <script src='ok.js'></script></body>",
+    )
+    .expect("write document");
+
+    let mut options = options();
+    options.scripting_limits = ScriptingLimits {
+        max_scripts: 1,
+        max_script_attempts: 8,
+        ..ScriptingLimits::default()
+    };
+    let output = render_url(&file_url(&document), &options).expect("render");
+    assert_eq!(
+        output.stats.scripts_executed, 1,
+        "the valid script must run after the two failures: {:?}",
+        output.stats.warnings
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn module_graph_fetches_are_capped() {
+    // Static imports are fetched by the JS module loader, outside load_scripts: three
+    // missing imports with max_module_fetches = 2 must stop after two fetches.
+    let dir = std::env::temp_dir().join(format!("megi-module-cap-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    for name in ["m1.js", "m2.js", "m3.js"] {
+        std::fs::write(dir.join(name), "export const marker = 1;\n").expect("module");
+    }
+    let document = dir.join("index.html");
+    std::fs::write(
+        &document,
+        "<!DOCTYPE html><body><script type=\"module\">\n\
+         import './m1.js';\n\
+         import './m2.js';\n\
+         import './m3.js';\n\
+         </script></body>",
+    )
+    .expect("write document");
+
+    let options = RenderOptions {
+        viewport: Viewport::new(200, 100).expect("viewport"),
+        scripting_limits: ScriptingLimits {
+            max_module_fetches: 2,
+            ..ScriptingLimits::default()
+        },
+        ..RenderOptions::default()
+    };
+    let output = render_url(&file_url(&document), &options).expect("render");
+    assert!(
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("max_module_fetches")),
+        "the third module fetch must be blocked and reported: {:?}",
         output.stats.warnings
     );
     let _ = std::fs::remove_dir_all(&dir);

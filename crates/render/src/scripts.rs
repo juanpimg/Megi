@@ -88,6 +88,10 @@ pub const DEFAULT_MAX_SCRIPT_BYTES: usize = 8 * 1024 * 1024;
 pub const DEFAULT_MAX_TOTAL_SCRIPT_BYTES: usize = 32 * 1024 * 1024;
 /// Default maximum number of scripts executed per page.
 pub const DEFAULT_MAX_SCRIPTS: usize = 64;
+/// Maximum script fetch attempts (successful or not) per page.
+const DEFAULT_MAX_SCRIPT_ATTEMPTS: usize = 256;
+/// Maximum module-graph fetches (including nested imports) per page.
+const DEFAULT_MAX_MODULE_FETCHES: usize = 256;
 /// Default total loop-iteration budget across all scripts of the page.
 pub const DEFAULT_MAX_TOTAL_LOOP_ITERATIONS: u64 = 1_000_000;
 /// Default maximum number of timer callbacks pumped after the scripts.
@@ -138,6 +142,10 @@ impl Default for ScriptBudget {
 pub struct ScriptingLimits {
     /// Maximum number of scripts executed.
     pub max_scripts: usize,
+    /// Maximum number of script fetch attempts (successful or not).
+    pub max_script_attempts: usize,
+    /// Maximum number of module-graph fetches (including nested imports).
+    pub max_module_fetches: usize,
     /// Maximum size of one script source (bytes).
     pub max_script_bytes: usize,
     /// Maximum total script bytes per page (inline + external, bytes).
@@ -157,6 +165,8 @@ impl Default for ScriptingLimits {
     fn default() -> Self {
         Self {
             max_scripts: DEFAULT_MAX_SCRIPTS,
+            max_script_attempts: DEFAULT_MAX_SCRIPT_ATTEMPTS,
+            max_module_fetches: DEFAULT_MAX_MODULE_FETCHES,
             max_script_bytes: DEFAULT_MAX_SCRIPT_BYTES,
             max_total_bytes: DEFAULT_MAX_TOTAL_SCRIPT_BYTES,
             budget: ScriptBudget::default(),
@@ -429,8 +439,8 @@ pub fn load_scripts(
 ) -> ScriptLoadReport {
     let mut report = ScriptLoadReport::default();
     let mut seen_urls: HashSet<String> = HashSet::new();
-    // `max_scripts` bounds the scripts that execute; without an attempt counter a page could
-    // still trigger one fetch per `<script src>` (bounded only by the element count).
+    // `max_scripts` bounds the scripts that execute; `max_script_attempts` bounds the
+    // fetches independently so failing URLs cannot starve later valid scripts.
     let mut attempts = 0usize;
     for (index, candidate) in candidates.iter().enumerate() {
         if report.scripts.len() >= limits.max_scripts {
@@ -464,11 +474,11 @@ pub fn load_scripts(
                 warnings.push(format!("skipping duplicate script {url} (already loaded)"));
                 continue;
             }
-            if attempts >= limits.max_scripts {
+            if attempts >= limits.max_script_attempts {
                 report.skipped += 1;
                 warnings.push(format!(
                     "page attempted more than {} script loads; the remaining scripts are not fetched (cap)",
-                    limits.max_scripts
+                    limits.max_script_attempts
                 ));
                 break;
             }
@@ -867,8 +877,19 @@ pub fn execute_scripts(
         let max_module_bytes = limits.max_script_bytes;
         let total_module_bytes = Arc::new(Mutex::new(0usize));
         let max_total_module_bytes = limits.max_total_bytes;
+        // The module graph is fetched by the JS module loader, outside `load_scripts`: an
+        // unbounded graph of tiny/empty modules would otherwise bypass the attempt cap.
+        let module_fetches = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let max_module_fetches = limits.max_module_fetches;
         runtime.set_module_loader(Box::new(
             move |url_str: &str| -> Result<String, js::JsError> {
+                if module_fetches.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    >= max_module_fetches
+                {
+                    return Err(js::JsError::ModuleNotFound(format!(
+                        "module graph exceeded max_module_fetches={max_module_fetches}"
+                    )));
+                }
                 let url = Url::parse(url_str).map_err(|error| {
                     js::JsError::ModuleNotFound(format!("invalid module URL {url_str}: {error}"))
                 })?;

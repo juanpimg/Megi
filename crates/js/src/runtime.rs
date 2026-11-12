@@ -3633,6 +3633,9 @@ fn apply_budget(context: &mut Context, budget: &Budget) {
         .set_stack_size_limit(budget.stack_size_limit);
 }
 
+/// Maximum nesting of the static module graph (each level is one Rust stack frame).
+const MAX_MODULE_DEPTH: usize = 128;
+
 fn eval_module_graph(
     context: &mut Context,
     host: &Rc<RefCell<Host>>,
@@ -3647,6 +3650,11 @@ fn eval_module_graph(
     }
     if visiting.iter().any(|visited| visited == url) {
         return Err(JsError::ModuleCycle(url.to_string()));
+    }
+    // Static imports recurse through this function: an unbounded chain (a loader can serve
+    // any depth) would overflow the native stack.
+    if visiting.len() >= MAX_MODULE_DEPTH {
+        return Err(JsError::ModuleDepth(url.to_string()));
     }
     visiting.push(url.to_string());
     let parsed = transform_module(source, url)?;

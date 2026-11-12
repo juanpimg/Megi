@@ -26,6 +26,8 @@ pub enum JsError {
     ModuleExport(String),
     /// Circular ES module dependency (documented limitation).
     ModuleCycle(String),
+    /// The static module graph nests deeper than the supported maximum.
+    ModuleDepth(String),
     /// Invalid import map (JSON syntax or unsupported shape).
     ImportMap(String),
     /// The import map explicitly maps the specifier to `null` (blocked in browsers).
@@ -52,6 +54,7 @@ impl fmt::Display for JsError {
             Self::ModuleSyntax(message) => write!(f, "module syntax error: {message}"),
             Self::ModuleExport(message) => write!(f, "module export missing: {message}"),
             Self::ModuleCycle(message) => write!(f, "circular module dependency: {message}"),
+            Self::ModuleDepth(message) => write!(f, "module graph too deep: {message}"),
             Self::ImportMap(message) => write!(f, "import map error: {message}"),
             Self::ImportMapBlocked(message) => write!(f, "import map blocked: {message}"),
             Self::DynamicImport(message) => write!(f, "dynamic import error: {message}"),
