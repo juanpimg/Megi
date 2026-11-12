@@ -1312,6 +1312,7 @@ fn paint_replaced_element(
     );
     match resources.images.get(&node_id) {
         Some(image) if !image.is_empty() => {
+            let start = list.len();
             let drawn =
                 object_fit_rect(rect, image.width as f32, image.height as f32, fit, position);
             // `object-fit: fill` is the historical stretched image: emit the item
@@ -1336,10 +1337,15 @@ fn paint_replaced_element(
                     image: std::sync::Arc::clone(image),
                 });
             }
-            // A translucent ancestor applies opacity through an OpacityGroup.
-            // The transparent-fill fallback was a no-op; instead, wrap the image
-            // in an opacity group when needed (handled by the caller's opacity).
-            let _ = alpha_scale;
+            if alpha_scale < 1.0 && list.len() > start {
+                let items: Vec<DisplayItem> = list.items.drain(start..).collect();
+                let group_rect = items_bounds(&items).unwrap_or(rect);
+                list.push(DisplayItem::OpacityGroup {
+                    rect: group_rect,
+                    opacity: alpha_scale,
+                    items,
+                });
+            }
         }
         _ => {
             list.push(DisplayItem::SolidColor {
