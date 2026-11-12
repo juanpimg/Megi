@@ -78,11 +78,25 @@ impl Origin {
         };
         let (host, port) = match rest.rsplit_once(':') {
             Some((host, port)) if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) => {
+                if host.contains(':') {
+                    // Non-bracketed host with extra colon: reject.
+                    return None;
+                }
                 (host, port.parse::<u16>().ok()?)
             }
-            _ => (rest, default_port),
+            Some(_) => {
+                // Non-numeric port: reject instead of absorbing into host.
+                return None;
+            }
+            None => (rest, default_port),
         };
-        if host.is_empty() || host.contains('/') {
+        if host.is_empty()
+            || host.contains('/')
+            || host.contains('?')
+            || host.contains('#')
+            || host.contains('@')
+            || host.contains(' ')
+        {
             return None;
         }
         Some(Self {

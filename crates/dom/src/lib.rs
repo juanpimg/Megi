@@ -729,7 +729,10 @@ impl Document {
         local_name: impl Into<String>,
         attributes: Vec<Attribute>,
     ) -> NodeId {
-        let local_name = local_name.into();
+        let mut local_name = local_name.into();
+        if namespace == Namespace::Html {
+            local_name = local_name.to_ascii_lowercase();
+        }
         let template_contents = if namespace == Namespace::Html && local_name == "template" {
             Some(self.create_node(NodeKind::DocumentFragment))
         } else {
@@ -876,7 +879,16 @@ impl Document {
     /// `child_id` is an ancestor of `parent_id`. This is enforced in release builds
     /// too, not just via `debug_assert!`.
     pub fn append_child(&mut self, parent_id: NodeId, child_id: NodeId) -> bool {
+        let parent_id = self.template_contents_target(parent_id);
         if parent_id == child_id {
+            return false;
+        }
+        // Reject children under non-container nodes (Text, Comment, Doctype, PI)
+        // and reject reparenting the document root.
+        if !self.can_have_children(parent_id) {
+            return false;
+        }
+        if child_id == self.root() {
             return false;
         }
         if matches!(self.node(child_id).kind, NodeKind::Document) {
@@ -931,6 +943,10 @@ impl Document {
         if matches!(self.node(new_node_id).kind, NodeKind::Document) {
             return false; // the document node cannot be a child
         }
+        // Reject children under non-container nodes.
+        if !self.can_have_children(parent_id) {
+            return false;
+        }
         if self.node(new_node_id).first_child.is_some()
             && self.is_self_or_ancestor_of(new_node_id, parent_id)
         {
@@ -978,6 +994,10 @@ impl Document {
     /// Appends text to `parent_id`, coalescing with `parent_id`'s `last_child` if it is
     /// already a `NodeKind::Text` node (per WHATWG HTML §13.2.6.1 "insert a character").
     pub fn append_text(&mut self, parent_id: NodeId, text: &str) -> NodeId {
+        let parent_id = self.template_contents_target(parent_id);
+        if !self.can_have_children(parent_id) {
+            return self.create_text_node(text);
+        }
         if let Some(last_id) = self.node(parent_id).last_child
             && let NodeKind::Text(ref mut existing) = self.node_mut(last_id).kind
         {
@@ -1000,7 +1020,11 @@ impl Document {
             return prev_id;
         }
         let text_id = self.create_node(NodeKind::Text(text.to_owned()));
-        self.insert_before(reference_sibling_id, text_id);
+        if !self.insert_before(reference_sibling_id, text_id) {
+            // Insertion failed (e.g. detached reference): free the orphaned text node.
+            self.remove_subtree(text_id);
+            return reference_sibling_id;
+        }
         text_id
     }
 
@@ -1514,7 +1538,8 @@ impl Document {
         self.children(parent).find(|&child| {
             self.try_node(child).is_some_and(|node| {
                 node.as_element().is_some_and(|element| {
-                    element.namespace == Namespace::Html && element.local_name == local_name
+                    element.namespace == Namespace::Html
+                        && element.local_name.eq_ignore_ascii_case(local_name)
                 })
             })
         })
@@ -1735,12 +1760,19 @@ impl Document {
             };
             child_a = parent;
         }
+        let mut child_b = b;
+        while self.try_node(child_b).and_then(|node| node.parent) != Some(*common) {
+            let Some(parent) = self.try_node(child_b).and_then(|node| node.parent) else {
+                return DISCONNECTED | IMPLEMENTATION_SPECIFIC;
+            };
+            child_b = parent;
+        }
         let mut current = self.try_node(*common).and_then(|node| node.first_child);
         while let Some(child) = current {
             if child == child_a {
                 return FOLLOWING;
             }
-            if child == b {
+            if child == child_b {
                 return PRECEDING;
             }
             current = self.try_node(child).and_then(|node| node.next_sibling);
@@ -1846,7 +1878,7 @@ impl Document {
             .and_then(|node| node.as_element())
             .and_then(|element| {
                 (element.namespace == Namespace::Html
-                    && element.local_name == "template"
+                    && element.local_name.eq_ignore_ascii_case("template")
                     && element.template_contents.is_some())
                 .then_some(element.template_contents)
                 .flatten()
@@ -1864,6 +1896,7 @@ impl Document {
         parent_id: NodeId,
         child_id: NodeId,
     ) -> Result<NodeId, DomError> {
+        let parent_id = self.template_contents_target(parent_id);
         if self.slot_of(parent_id).is_none() {
             return Err(DomError::UnknownNode(parent_id));
         }
@@ -1892,6 +1925,7 @@ impl Document {
         new_child_id: NodeId,
         reference: Option<NodeId>,
     ) -> Result<NodeId, DomError> {
+        let parent_id = self.template_contents_target(parent_id);
         if self.slot_of(parent_id).is_none() {
             return Err(DomError::UnknownNode(parent_id));
         }
@@ -2068,6 +2102,7 @@ impl Document {
         parent_id: NodeId,
         new_children: &[NodeId],
     ) -> Result<(), DomError> {
+        let parent_id = self.template_contents_target(parent_id);
         if self.slot_of(parent_id).is_none() {
             return Err(DomError::UnknownNode(parent_id));
         }
@@ -2096,7 +2131,10 @@ impl Document {
     /// (`Element` or `DocumentFragment`).
     fn can_have_children(&self, node_id: NodeId) -> bool {
         self.try_node(node_id).is_some_and(|node| {
-            matches!(node.kind, NodeKind::Element(_) | NodeKind::DocumentFragment)
+            matches!(
+                node.kind,
+                NodeKind::Document | NodeKind::Element(_) | NodeKind::DocumentFragment
+            )
         })
     }
 

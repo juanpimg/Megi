@@ -1721,7 +1721,10 @@ fn paint_text_run(
         alpha_scale,
     );
     list.push(DisplayItem::Text {
-        text: text.to_string(),
+        text: text
+            .chars()
+            .take(crate::display_list::MAX_TEXT_RUN_CHARS)
+            .collect(),
         rect: layout_box.dimensions.content,
         color: scaled(color, alpha_scale),
         font_size,

@@ -19,6 +19,9 @@ use crate::url::Url;
 
 const CACHE_TTL: Duration = Duration::from_secs(300);
 
+const MAX_PAC_CACHE_ENTRIES: usize = 256;
+const MAX_PAC_SCRIPT_BYTES: usize = 64 * 1024;
+
 type Cache = Mutex<HashMap<(String, String), (Instant, Option<Url>)>>;
 
 fn cache() -> &'static Cache {
@@ -48,6 +51,14 @@ pub fn resolve(target: &Url, pac_url: &Url) -> Result<Option<Url>, String> {
     let mut cache = cache()
         .lock()
         .map_err(|_| "PAC cache poisoned".to_owned())?;
+    // Evict expired entries first.
+    cache.retain(|_, (when, _)| when.elapsed() < CACHE_TTL);
+    if cache.len() >= MAX_PAC_CACHE_ENTRIES {
+        // Remove the oldest entry.
+        if let Some(oldest_key) = cache.keys().next().cloned() {
+            cache.remove(&oldest_key);
+        }
+    }
     cache.insert(key, (Instant::now(), value.clone()));
     Ok(value)
 }
@@ -57,10 +68,15 @@ fn fetch_script(pac_url: &Url) -> Result<String, String> {
         proxy: None,
         ..crate::http::FetchOptions::default()
     };
+    let mut options = options;
+    options.max_response_bytes = MAX_PAC_SCRIPT_BYTES;
     let response = crate::http::fetch(pac_url, &options)
         .map_err(|error| format!("fetching PAC script: {error}"))?;
     if !(200..300).contains(&response.status) {
         return Err(format!("PAC script returned status {}", response.status));
+    }
+    if response.body.len() > MAX_PAC_SCRIPT_BYTES {
+        return Err("PAC script too large".to_owned());
     }
     String::from_utf8(response.body).map_err(|_| "PAC script is not UTF-8".to_owned())
 }

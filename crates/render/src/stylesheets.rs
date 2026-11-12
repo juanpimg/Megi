@@ -86,6 +86,9 @@ fn nodes_in_document_order(doc: &Document) -> Vec<NodeId> {
         stack.push(node_id);
     }
     while let Some(node_id) = stack.pop() {
+        if order.len() >= 1024 {
+            break;
+        }
         order.push(node_id);
         let mut children = Vec::new();
         let mut child = doc.node(node_id).first_child;

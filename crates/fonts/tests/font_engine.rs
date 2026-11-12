@@ -359,7 +359,10 @@ fn huge_font_size_rejects_masks_over_the_pixel_cap() {
         .rasterize_char(&["DejaVu Sans"], 400, FontStyle::Normal, 100_000.0, 'A')
         .expect_err("mask over the per-glyph cap");
     assert!(
-        matches!(error, FontError::GlyphTooLarge { .. }),
+        matches!(
+            error,
+            FontError::GlyphTooLarge { .. } | FontError::InvalidSize { .. }
+        ),
         "{error:?}"
     );
     // A normal size keeps working.

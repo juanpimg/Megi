@@ -222,6 +222,9 @@ fn expand_inner(
                 return None;
             }
             out.push_str(literal);
+            if out.len() > MAX_SUBSTITUTION_BYTES {
+                return None;
+            }
             // Find the matching closing parenthesis (quotes and nesting aware).
             let mut cursor = start + 4;
             let mut depth_parens = 0usize;
@@ -281,6 +284,9 @@ fn expand_inner(
             // The recursive expansion already charged the substituted bytes; charging them
             // again here rejected legitimate values larger than half the budget.
             out.push_str(&substituted);
+            if out.len() > MAX_SUBSTITUTION_BYTES {
+                return None;
+            }
             index = end + 1;
             cursor = index;
             let _ = cursor;
@@ -290,6 +296,9 @@ fn expand_inner(
                 return None;
             }
             out.push_str(tail);
+            if out.len() > MAX_SUBSTITUTION_BYTES {
+                return None;
+            }
             break;
         }
     }
