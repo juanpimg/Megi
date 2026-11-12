@@ -992,6 +992,17 @@ pub(crate) fn decode_webp(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
             reason: "VP8L decoded pixel count mismatch",
         });
     }
+    // Validate trailing bytes: only padding zeros allowed.
+    let remaining_bits = reader.data.len() * 8 - reader.bit;
+    for i in 0..remaining_bits {
+        let byte = reader.data.get((reader.bit + i) / 8).copied().unwrap_or(0);
+        let bit = (byte >> ((reader.bit + i) % 8)) & 1;
+        if bit != 0 {
+            return Err(ImageError::InvalidData {
+                reason: "VP8L trailing non-zero bits",
+            });
+        }
+    }
     let mut data = Vec::with_capacity(pixels.len() * 4);
     for argb in pixels {
         data.push((argb >> 16) as u8);
