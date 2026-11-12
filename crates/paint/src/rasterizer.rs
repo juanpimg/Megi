@@ -3172,6 +3172,10 @@ impl Pixmap {
         {
             return;
         }
+        let area = (rect.width * rect.height) as usize;
+        if area > 16_777_216 {
+            return;
+        }
         let stops = &gradient.stops[..gradient.stops.len().min(MAX_GRADIENT_STOPS)];
         let (linear_axis, radial, conic) = match &gradient.kind {
             css::GradientKind::Linear(linear) => (
