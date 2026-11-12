@@ -1026,8 +1026,8 @@ impl<'a> Builder<'a> {
             "circle" => vec![ellipse_subpath(element, true)],
             "ellipse" => vec![ellipse_subpath(element, false)],
             "line" => vec![line_subpath(element)],
-            "polyline" => vec![polyline_subpath(element, false)],
-            "polygon" => vec![polyline_subpath(element, true)],
+            "polyline" => vec![polyline_subpath(element, false, self.limits)?],
+            "polygon" => vec![polyline_subpath(element, true, self.limits)?],
             "path" => match element.attribute("d") {
                 Some(data) => parse_path_data(data, self.limits)?,
                 None => Vec::new(),
@@ -1275,12 +1275,24 @@ fn line_subpath(element: &XmlElement) -> SubPath {
     }
 }
 
-fn polyline_subpath(element: &XmlElement, polygon: bool) -> SubPath {
+fn polyline_subpath(
+    element: &XmlElement,
+    polygon: bool,
+    limits: &Limits,
+) -> Result<SubPath, SvgError> {
     let text = element.attribute("points").unwrap_or_default();
     let numbers = parse_number_list(text).unwrap_or_default();
-    let mut points: Vec<(f32, f32)> = numbers
-        .as_chunks::<2>()
-        .0
+    let pairs = numbers.as_chunks::<2>().0;
+    // The documented segment budget also covers `<polygon>`/`<polyline>`: the rasterizer
+    // builds one edge per vertex and scans them per sub-row, so an unbounded `points`
+    // attribute is a remote CPU DoS.
+    if pairs.len() > limits.max_path_segments {
+        return Err(SvgError::Limit(format!(
+            "points attribute exceeds {} segments",
+            limits.max_path_segments
+        )));
+    }
+    let mut points: Vec<(f32, f32)> = pairs
         .iter()
         .map(|pair| (pair[0], pair[1]))
         .filter(|point| point.0.is_finite() && point.1.is_finite())
@@ -1292,10 +1304,10 @@ fn polyline_subpath(element: &XmlElement, polygon: bool) -> SubPath {
     {
         points.push(first);
     }
-    SubPath {
+    Ok(SubPath {
         points,
         closed: polygon,
-    }
+    })
 }
 
 fn parse_paint(

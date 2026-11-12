@@ -254,6 +254,15 @@ pub(crate) fn parse_path_data(raw: &str, limits: &Limits) -> Result<Vec<SubPath>
                 return Err(SvgError::Invalid(format!("unknown path command {other:?}")));
             }
         }
+        // Enforce the budget as points accumulate: checking only when a sub-path is
+        // flushed lets one `d` attribute grow unbounded (a single cubic can flatten to
+        // 4,097 points, so a few hundred curves would allocate gigabytes before the check).
+        if total_points.saturating_add(current.len()) > limits.max_path_segments {
+            return Err(SvgError::Limit(format!(
+                "path data exceeds {} flattened segments",
+                limits.max_path_segments
+            )));
+        }
         last_command = Some(command);
     }
 
