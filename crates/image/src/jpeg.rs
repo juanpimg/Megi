@@ -10,7 +10,7 @@
 //!   one component) return a clear [`ImageError::UnsupportedFeature`]; grayscale
 //!   progressive (including refinement) and colour DC/AC-first scans decode fully;
 //! - Huffman entropy coding (`DHT`/`SOS`);
-//! - quantization tables (`DQT`, 8- and 16-bit precision), 1-4 components;
+//! - quantization tables (`DQT`, 8-bit precision; 16-bit/12-bit tables are rejected), 1-4 components;
 //! - sampling factors **4:4:4, 4:2:2 and 4:2:0** (any `H/V` 1-4 within the MCU limits);
 //! - restart intervals (`DRI` + `RSTn` markers, DC predictor reset);
 //! - grayscale (`1` component) and `YCbCr` (3 components); Adobe `APP14` transform `0`
@@ -762,13 +762,21 @@ fn parse_dqt(
                 reason: "JPEG quantization table id out of range",
             });
         }
-        if precision != 0 {
-            // 16-bit quantization tables only exist for 12-bit sample precision (T.81
-            // B.2.4.1), which this decoder rejects; accepting them here would let
-            // `dequantize` multiply past `i32::MAX`.
-            return Err(ImageError::UnsupportedFeature {
-                feature: "16-bit JPEG quantization tables (12-bit sample precision)",
-            });
+        match precision {
+            0 => {}
+            1 => {
+                // 16-bit quantization tables only exist for 12-bit sample precision
+                // (T.81 B.2.4.1), which this decoder rejects; accepting them here would
+                // let `dequantize` multiply past `i32::MAX`.
+                return Err(ImageError::UnsupportedFeature {
+                    feature: "16-bit JPEG quantization tables (12-bit sample precision)",
+                });
+            }
+            _ => {
+                return Err(ImageError::InvalidData {
+                    reason: "invalid JPEG quantization precision",
+                });
+            }
         }
         let mut values = [0u16; BLOCK_LEN];
         for value in &mut values {
@@ -1658,4 +1666,21 @@ fn render_progressive_components(
         ..
     } = frame;
     render_components(width, height, &components, max_h, max_v, adobe_transform)
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+
+    #[test]
+    fn dequantize_saturates_instead_of_overflowing() {
+        let mut coefficients = [i32::MAX; BLOCK_LEN];
+        coefficients[1] = i32::MIN;
+        let quant = QuantTable {
+            values: [255; BLOCK_LEN],
+        };
+        dequantize(&mut coefficients, &quant);
+        assert_eq!(coefficients[0], i32::MAX);
+        assert_eq!(coefficients[1], i32::MIN);
+    }
 }
