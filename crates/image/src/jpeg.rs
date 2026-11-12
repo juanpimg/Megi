@@ -391,6 +391,7 @@ fn decode_jpeg_with_scale(
     let mut ac_tables: [Option<HuffmanTable>; 4] = [None, None, None, None];
     let mut frame: Option<JpegFrame> = None;
     let mut restart_interval = 0usize;
+    let mut scan_count = 0usize;
     let mut adobe_transform: Option<u8> = None;
 
     loop {
@@ -502,6 +503,14 @@ fn decode_jpeg_with_scale(
                 if scale > 1 {
                     return Err(ImageError::UnsupportedFeature {
                         feature: "reduced-IDCT decode of progressive JPEG is not supported",
+                    });
+                }
+                scan_count += 1;
+                if scan_count > 64 {
+                    return Err(ImageError::LimitExceeded {
+                        what: "progressive JPEG scan count",
+                        limit: 64,
+                        actual: scan_count as u64,
                     });
                 }
                 ensure_progressive_storage(&mut current);
