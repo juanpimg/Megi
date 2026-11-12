@@ -18,6 +18,8 @@ fuzz_target!(|data: &[u8]| {
     let text = String::from_utf8_lossy(data);
 
     let _ = net::url::percent_decode(&text);
+    let _ = net::Origin::parse(&text);
+    let _ = net::ContentRange::parse(&text);
 
     if let Ok(url) = net::Url::parse(&text) {
         let serialized = url.as_str();

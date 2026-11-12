@@ -24,6 +24,8 @@ image = { path = "../crates/image" }
 render = { path = "../crates/render" }
 js = { path = "../crates/js" }
 svg = { path = "../crates/svg" }
+layout = { path = "../crates/layout" }
+paint = { path = "../crates/paint" }
 
 [[bin]]
 name = "html_parse"
@@ -143,6 +145,35 @@ bench = false
 [[bin]]
 name = "container_queries"
 path = "fuzz_targets/container_queries.rs"
+test = false
+doc = false
+bench = false
+
+# Direct core-crate harnesses (#834, #716).
+[[bin]]
+name = "dom_tree"
+path = "fuzz_targets/dom_tree.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "layout_tree"
+path = "fuzz_targets/layout_tree.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "paint_display_list"
+path = "fuzz_targets/paint_display_list.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fonts_shape"
+path = "fuzz_targets/fonts_shape.rs"
 test = false
 doc = false
 bench = false
