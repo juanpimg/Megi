@@ -144,8 +144,20 @@ pub fn serialize_component_values(values: &[ComponentValue]) -> String {
                     out.push_str(value);
                 }
                 CssToken::String(s) => {
+                    // The token value is already escape-decoded: re-escape it so the
+                    // serialized form parses back to the same string (quotes, backslashes
+                    // and control characters must not leak out of the string context).
                     out.push('"');
-                    out.push_str(s);
+                    for ch in s.chars() {
+                        match ch {
+                            '\\' => out.push_str("\\\\"),
+                            '"' => out.push_str("\\\""),
+                            '\n' => out.push_str("\\A "),
+                            '\r' => out.push_str("\\D "),
+                            '\u{c}' => out.push_str("\\C "),
+                            ch => out.push(ch),
+                        }
+                    }
                     out.push('"');
                 }
                 CssToken::BadString => out.push_str("\"\""),
