@@ -194,9 +194,38 @@ impl AnPlusB {
         if self.a == 0 {
             index_1_based == self.b
         } else {
-            let diff = index_1_based - self.b;
-            diff % self.a == 0 && diff / self.a >= 0
+            // Guard against overflow: hostile `AnPlusB` values (e.g. `:nth-child(-1n-2147483648)`)
+            // must not panic or wrap the arithmetic.
+            let diff = match index_1_based.checked_sub(self.b) {
+                Some(diff) => diff,
+                None => return false,
+            };
+            match (diff % self.a, diff / self.a) {
+                (0, quotient) => quotient >= 0,
+                _ => false,
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod an_plus_b_overflow_tests {
+    use super::*;
+
+    #[test]
+    fn matches_does_not_overflow() {
+        let formula = AnPlusB { a: -1, b: i32::MIN };
+        assert!(!formula.matches(1));
+        assert!(!formula.matches(i32::MAX));
+        // Normal cases still work.
+        let even = AnPlusB { a: 2, b: 0 };
+        assert!(even.matches(2));
+        assert!(even.matches(4));
+        assert!(!even.matches(3));
+        // a == 0 branch.
+        let fixed = AnPlusB { a: 0, b: 5 };
+        assert!(fixed.matches(5));
+        assert!(!fixed.matches(4));
     }
 }
 
