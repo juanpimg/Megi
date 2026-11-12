@@ -532,12 +532,16 @@ pub struct CompoundSelector {
     pub classes: Vec<String>,
     pub attributes: Vec<AttributeSelector>,
     pub pseudo_classes: Vec<PseudoClass>,
+    /// `#a#b` with different ids can never match: an element has a single `id` attribute.
+    pub never_matches: bool,
+    /// Number of `#id` simple selectors in the compound (specificity counts every one).
+    pub id_count: u32,
 }
 
 impl CompoundSelector {
     /// Calculates the specificity of this compound selector according to Selectors Level 4 §16.
     pub fn specificity(&self) -> Specificity {
-        let a = if self.id.is_some() { 1 } else { 0 };
+        let a = self.id_count.max(u32::from(self.id.is_some()));
         let b = (self.classes.len() + self.attributes.len()) as u32;
         let c = if self.tag_name.as_deref().is_some_and(|t| t != "*") {
             1
@@ -558,6 +562,9 @@ impl CompoundSelector {
     /// and universal selectors are no longer restricted to the HTML namespace, so styles now
     /// apply to SVG/MathML elements (F14).
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
+        if self.never_matches {
+            return false;
+        }
         let Some(el) = doc.node(node_id).as_element() else {
             return false;
         };
@@ -1140,7 +1147,15 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
                 if id.is_empty() {
                     return None;
                 }
-                compound.id = Some(id);
+                compound.id_count = compound.id_count.saturating_add(1);
+                if let Some(existing) = &compound.id {
+                    // `#a#b` requires two different ids on one element, which is impossible.
+                    if existing != &id {
+                        compound.never_matches = true;
+                    }
+                } else {
+                    compound.id = Some(id);
+                }
             }
             '.' => {
                 let mut class = String::new();
@@ -1466,6 +1481,7 @@ fn strip_attribute_value_quotes(value: &str) -> Option<String> {
 }
 
 #[cfg(test)]
+<<<<<<< HEAD
 mod budget_tests {
     use super::*;
     use dom::Attribute;
@@ -1531,5 +1547,47 @@ mod budget_tests {
         let leaf = doc.create_element(Namespace::Html, "p", vec![Attribute::new("class", "t")]);
         doc.append_child(parent, leaf);
         assert!(parse_selectors("div.a .t").matches(&doc, leaf));
+||||||| 40f9e6e
+=======
+mod id_list_tests {
+    use super::*;
+    use dom::Attribute;
+
+    fn doc_with_id(id: &str) -> (Document, NodeId) {
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", Vec::new());
+        doc.append_child(doc.root(), html);
+        let div = doc.create_element(Namespace::Html, "div", vec![Attribute::new("id", id)]);
+        doc.append_child(html, div);
+        (doc, div)
+    }
+
+    #[test]
+    fn conflicting_ids_never_match() {
+        let (doc, node) = doc_with_id("a");
+        assert!(
+            !parse_selectors("#a#b").matches(&doc, node),
+            "an element has a single id attribute"
+        );
+        assert!(
+            parse_selectors("#a#a").matches(&doc, node),
+            "repeating the same id is redundant but matchable"
+        );
+        assert!(!parse_selectors("div#b#c").matches(&doc, node));
+    }
+
+    #[test]
+    fn every_id_counts_for_specificity() {
+        let list = parse_selectors("#a#b");
+        assert_eq!(list.max_specificity(), Specificity::new(2, 0, 0));
+        assert_eq!(
+            parse_selectors("#a#a").max_specificity(),
+            Specificity::new(2, 0, 0)
+        );
+        assert_eq!(
+            parse_selectors("div#a").max_specificity(),
+            Specificity::new(1, 0, 1)
+        );
+>>>>>>> pr910
     }
 }
