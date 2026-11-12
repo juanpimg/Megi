@@ -1020,7 +1020,11 @@ impl Document {
             return prev_id;
         }
         let text_id = self.create_node(NodeKind::Text(text.to_owned()));
-        self.insert_before(reference_sibling_id, text_id);
+        if !self.insert_before(reference_sibling_id, text_id) {
+            // Insertion failed (e.g. detached reference): free the orphaned text node.
+            self.remove_subtree(text_id);
+            return reference_sibling_id;
+        }
         text_id
     }
 
