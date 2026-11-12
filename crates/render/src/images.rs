@@ -126,6 +126,10 @@ pub fn load_images(
         svgs_rendered: 0,
         warnings: Vec::new(),
     };
+    // Identical URLs are fetched and decoded once: the decoded bitmap is shared through an
+    // `Arc` across every `<img>` that references it (backgrounds already deduplicate this
+    // way). A page repeating one large image no longer pays N decodes or N bitmaps.
+    let mut cache: HashMap<String, ((f32, f32), Arc<image::RgbaImage>)> = HashMap::new();
     let sources = collect_image_sources(document);
     if sources.len() > limits.max_images {
         warnings.push(format!(
@@ -146,6 +150,13 @@ pub fn load_images(
                 continue;
             }
         };
+        let cache_key = url.to_string();
+        if let Some((size, bitmap)) = cache.get(&cache_key) {
+            result.sizes.insert(node_id, *size);
+            result.store.insert(node_id, Arc::clone(bitmap));
+            result.loaded += 1;
+            continue;
+        }
         if no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
             result.failed += 1;
             result
@@ -195,8 +206,11 @@ pub fn load_images(
                 Ok(decoded) => {
                     result.downloaded_bytes += resource.bytes.len();
                     let (width, height) = decoded.dimensions();
-                    result.sizes.insert(node_id, (width as f32, height as f32));
-                    result.store.insert(node_id, Arc::new(decoded));
+                    let size = (width as f32, height as f32);
+                    let bitmap = Arc::new(decoded);
+                    result.sizes.insert(node_id, size);
+                    result.store.insert(node_id, Arc::clone(&bitmap));
+                    cache.insert(cache_key.clone(), (size, bitmap));
                     result.loaded += 1;
                 }
                 Err(error) => {
@@ -221,8 +235,10 @@ pub fn load_images(
             match svg_assets::render(&resource.bytes) {
                 Ok(rendered) => {
                     result.downloaded_bytes += resource.bytes.len();
+                    let bitmap = Arc::new(rendered.raster);
                     result.sizes.insert(node_id, rendered.intrinsic);
-                    result.store.insert(node_id, Arc::new(rendered.raster));
+                    result.store.insert(node_id, Arc::clone(&bitmap));
+                    cache.insert(cache_key.clone(), (rendered.intrinsic, bitmap));
                     result.loaded += 1;
                     result.svgs_rendered += 1;
                 }
@@ -244,4 +260,47 @@ pub fn load_images(
 
     warnings.append(&mut result.warnings);
     result
+}
+
+#[cfg(test)]
+mod dedup_tests {
+    use super::*;
+    use net::FetchOptions;
+
+    #[test]
+    fn identical_image_urls_share_one_decode() {
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/render/layout_aspect_ratio.png");
+        let fixture = fixture.canonicalize().expect("image fixture");
+        let directory = fixture.parent().expect("fixture dir");
+        let source = format!(
+            "<body><img src='{}'><img src='{}'></body>",
+            fixture.display(),
+            fixture.display()
+        );
+        let document = html::parse_document(&source, false);
+        let base = net::Url::parse(&format!("file://{}/page.html", directory.display()))
+            .expect("base URL");
+        let mut loader = ResourceLoader::with_options(FetchOptions::default());
+        let loaded = load_images(
+            &document,
+            &base,
+            &mut loader,
+            false,
+            ImageLimits::default(),
+            &mut Vec::new(),
+        );
+        assert_eq!(loaded.loaded, 2, "both <img> elements resolve");
+        assert_eq!(
+            loaded.downloaded_bytes,
+            std::fs::metadata(&fixture).expect("metadata").len() as usize,
+            "the image is downloaded once"
+        );
+        let bitmaps: Vec<_> = loaded.store.values().collect();
+        assert_eq!(bitmaps.len(), 2);
+        assert!(
+            std::sync::Arc::ptr_eq(bitmaps[0], bitmaps[1]),
+            "the decoded bitmap is shared"
+        );
+    }
 }
