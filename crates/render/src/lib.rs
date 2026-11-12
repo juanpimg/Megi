@@ -1464,11 +1464,12 @@ fn walk_imports(
     font_faces: &mut Vec<webfonts::LocatedFontFace>,
 ) -> Result<(), RenderError> {
     for import in &sheet.imports {
-        if depth >= walk.options.max_import_depth {
+        let effective_depth = walk.options.max_import_depth.min(32);
+        if depth >= effective_depth {
             walk.skipped += 1;
             walk.warnings.push(format!(
                 "skipping @import \"{}\" at depth {depth}: max_import_depth={} exceeded",
-                import.url, walk.options.max_import_depth
+                import.url, effective_depth
             ));
             continue;
         }
@@ -1669,15 +1670,24 @@ fn collect_layout_rects(
     layout_box: &layout::LayoutBox,
     rects: &mut std::collections::HashMap<NodeId, js::host::LayoutRect>,
 ) {
-    if let Some(node_id) = layout_box.node_id() {
-        let border = layout_box.dimensions.border_box();
-        let content = layout_box.dimensions.content;
-        rects.entry(node_id).or_insert(js::host::LayoutRect {
-            border_box: (border.x, border.y, border.width, border.height),
-            content_box: (content.x, content.y, content.width, content.height),
-        });
-    }
-    for child in &layout_box.children {
-        collect_layout_rects(child, rects);
+    // Iterative traversal to avoid stack overflow on deep trees.
+    let mut stack = vec![layout_box];
+    let mut visited = 0usize;
+    while let Some(current) = stack.pop() {
+        if visited >= 100_000 {
+            break;
+        }
+        visited += 1;
+        if let Some(node_id) = current.node_id() {
+            let border = current.dimensions.border_box();
+            let content = current.dimensions.content;
+            rects.entry(node_id).or_insert(js::host::LayoutRect {
+                border_box: (border.x, border.y, border.width, border.height),
+                content_box: (content.x, content.y, content.width, content.height),
+            });
+        }
+        for child in current.children.iter().rev() {
+            stack.push(child);
+        }
     }
 }
