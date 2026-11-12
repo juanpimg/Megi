@@ -67,3 +67,18 @@ fn compare_document_position_ancestor_chain() {
     assert_eq!(document.compare_document_position(outer, leaf), 20); // CONTAINED_BY|FOLLOWING
     assert_eq!(document.compare_document_position(leaf, outer), 10); // CONTAINS|PRECEDING
 }
+
+#[test]
+fn insert_node_before_itself_is_a_noop() {
+    let mut document = Document::new();
+    let root = document.root();
+    let parent = el(&mut document, "div", vec![]);
+    assert!(document.append_child(root, parent));
+    let a = el(&mut document, "a", vec![]);
+    assert!(document.append_child(parent, a));
+    let inserted = document
+        .insert_node(parent, a, Some(a))
+        .expect("self insertion is a no-op, not an error");
+    assert!(inserted.is_empty());
+    assert_eq!(document.children_ids(parent).count(), 1);
+}
