@@ -1257,6 +1257,10 @@ fn computed_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
 // Timers
 // ---------------------------------------------------------------------------
 
+/// Maximum pending timers and animation frames (anti-DoS cap; browsers also bound them
+/// indirectly through nesting/frequency limits).
+pub(crate) const MAX_PENDING_TIMERS: usize = 4096;
+
 pub(crate) fn timer_globals() -> [(&'static str, usize, NativeFn); 4] {
     [
         ("setTimeout", 2, set_timeout),
@@ -1288,6 +1292,9 @@ fn schedule_timer(
             .max(0.0) as u64
     };
     let id = with_host(|host| {
+        if host.timers.len() >= MAX_PENDING_TIMERS {
+            return Err("too many pending timers");
+        }
         let id = host.next_timer_id;
         host.next_timer_id += 1;
         let now = host.now_ms();
@@ -1297,9 +1304,10 @@ fn schedule_timer(
             interval_ms: repeat.then_some(delay.max(1)),
             animation,
         });
-        id
+        Ok(id)
     })
-    .ok_or_else(|| js_error("no active JavaScript host"))?;
+    .ok_or_else(|| js_error("no active JavaScript host"))?
+    .map_err(js_error)?;
     array_put(context, "__megi_timer_callbacks", id, callback)?;
     let args_array = JsArray::new(context);
     for argument in args.iter().skip(2) {
@@ -1330,21 +1338,30 @@ fn request_animation_frame(
 fn cancel_animation_frame(
     _this: &JsValue,
     args: &[JsValue],
-    _context: &mut Context,
+    context: &mut Context,
 ) -> JsResult<JsValue> {
     if let Some(id) = args.first().and_then(JsValue::as_number) {
         let id = id.max(0.0) as u64;
         let _ = with_host(|host| host.timers.retain(|timer| timer.id != id));
+        release_timer_slots(context, id);
     }
     Ok(JsValue::undefined())
 }
 
-fn clear_timer(_this: &JsValue, args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+fn clear_timer(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if let Some(id) = args.first().and_then(JsValue::as_number) {
         let id = id.max(0.0) as u64;
         let _ = with_host(|host| host.timers.retain(|timer| timer.id != id));
+        release_timer_slots(context, id);
     }
     Ok(JsValue::undefined())
+}
+
+/// Drops the rooted callback/arguments of a timer so completed/cancelled timers do not keep
+/// their closures alive in the `__megi_timer_*` arrays.
+fn release_timer_slots(context: &mut Context, id: u64) {
+    let _ = array_put(context, "__megi_timer_callbacks", id, JsValue::undefined());
+    let _ = array_put(context, "__megi_timer_args", id, JsValue::undefined());
 }
 
 /// Runs due timers up to `deadline_ms` in `(due, id)` order; returns how many ran.
@@ -1410,9 +1427,13 @@ pub(crate) fn run_due_timers(
                     })
                     .unwrap_or_default()
             };
-            callback
-                .call(&JsValue::undefined(), &arguments, context)
-                .map_err(|error| CrateJsError::Runtime(error.to_string()))?;
+            let call_result = callback.call(&JsValue::undefined(), &arguments, context);
+            if interval.is_none() {
+                release_timer_slots(context, id);
+            }
+            call_result.map_err(|error| CrateJsError::Runtime(error.to_string()))?;
+        } else if interval.is_none() {
+            release_timer_slots(context, id);
         }
         executed += 1;
     }
