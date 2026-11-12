@@ -41,22 +41,34 @@ fn is_skipped(name: &str) -> bool {
     SKIPPED.contains(&name)
 }
 
+const MAX_READER_NODES: usize = 100_000;
+
 fn collect_text(document: &Document, node: NodeId, out: &mut String) {
-    let Some(data) = document.try_node(node) else {
-        return;
-    };
-    if let Some(element) = data.as_element()
-        && is_skipped(&element.local_name)
-    {
-        return;
-    }
-    if let Some(text) = data.as_text() {
-        out.push_str(text);
-        out.push(' ');
-        return;
-    }
-    for child in document.children(node) {
-        collect_text(document, child, out);
+    // Iterative traversal with a visit budget to avoid stack overflow on deeply
+    // nested documents.
+    let mut stack = vec![node];
+    let mut node_count = 0usize;
+    while let Some(current) = stack.pop() {
+        if node_count >= MAX_READER_NODES {
+            break;
+        }
+        node_count += 1;
+        let Some(data) = document.try_node(current) else {
+            continue;
+        };
+        if let Some(element) = data.as_element()
+            && is_skipped(&element.local_name)
+        {
+            continue;
+        }
+        if let Some(text) = data.as_text() {
+            out.push_str(text);
+            out.push(' ');
+            continue;
+        }
+        for child in document.children(current) {
+            stack.push(child);
+        }
     }
 }
 
@@ -70,14 +82,19 @@ fn visible_text(document: &Document, node: NodeId) -> String {
 pub fn extract(document: &Document) -> Option<Article> {
     let body = document.body()?;
     let mut best: Option<(NodeId, usize)> = None;
-    for node in document.descendants(body) {
+    // Memoize visible text lengths to avoid O(N^2) re-walks of nested containers.
+    let mut cache: std::collections::HashMap<NodeId, usize> = std::collections::HashMap::new();
+    for (node_count, node) in document.descendants(body).enumerate() {
+        if node_count >= MAX_READER_NODES {
+            break;
+        }
         let Some(element) = document.try_node(node).and_then(|node| node.as_element()) else {
             continue;
         };
         if is_skipped(&element.local_name) || !CONTAINERS.contains(&element.local_name.as_str()) {
             continue;
         }
-        let length = visible_text(document, node).chars().count();
+        let length = *cache.entry(node).or_insert_with(|| visible_text(document, node).chars().count());
         if length > best.map_or(0, |(_, best)| best) {
             best = Some((node, length));
         }
