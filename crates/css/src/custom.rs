@@ -19,6 +19,12 @@ use crate::rule::Declaration;
 /// Maximum nested `var()` substitutions.
 pub const MAX_SUBSTITUTION_DEPTH: usize = 32;
 
+/// Maximum bytes a single `var()` expansion may produce (about 64× the input, clamped).
+///
+/// Every reference re-expands its variable, so a chain like `--aN: var(--aN-1) var(--aN-1)`
+/// is exponential: 31 doublings asked for ~4 GiB. The budget bounds the work and memory.
+pub const MAX_SUBSTITUTION_BYTES: usize = 1024 * 1024;
+
 /// Result of [`resolve_declarations`]: owned declarations + shared custom-property map.
 type ResolvedDeclarations = (
     Vec<(String, Declaration)>,
@@ -58,7 +64,138 @@ pub(crate) fn needs_resolution(cascaded: &HashMap<String, &Declaration>) -> bool
 /// as invalid at computed-value time (inherited property → parent value, otherwise initial).
 pub fn expand_variables(value: &str, custom: &HashMap<String, String>) -> Option<String> {
     let mut visiting = HashSet::new();
-    expand_inner(value, custom, 0, &mut visiting)
+    let mut budget = value
+        .len()
+        .saturating_mul(64)
+        .clamp(4096, MAX_SUBSTITUTION_BYTES);
+    expand_inner(value, custom, 0, &mut visiting, &mut budget)
+}
+
+/// Reserves `bytes` from the substitution budget (returns false when exhausted).
+fn spend(budget: &mut usize, bytes: usize) -> bool {
+    if bytes > *budget {
+        return false;
+    }
+    *budget -= bytes;
+    true
+}
+
+/// Returns the byte index of the next `var(` function token outside strings and comments.
+///
+/// The scan is token-aware: `"var(--x)"` inside a string and `myvar(--x)` (a different
+/// function) are not substitutions (CSS Syntax: strings are opaque and function names are
+/// whole idents).
+fn next_var_function(value: &str, from: usize) -> Option<usize> {
+    let bytes = value.as_bytes();
+    let mut index = from;
+    let mut quote: Option<u8> = None;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        match quote {
+            Some(active) => {
+                if byte == b'\\' {
+                    index += 2;
+                    continue;
+                }
+                if byte == active {
+                    quote = None;
+                }
+                index += 1;
+            }
+            None => {
+                if byte == b'\'' || byte == b'"' {
+                    quote = Some(byte);
+                    index += 1;
+                    continue;
+                }
+                if bytes[index..].starts_with(b"/*") {
+                    let Some(offset) = value[index + 2..].find("*/") else {
+                        return None; // unterminated comment: no function token after it
+                    };
+                    index += 2 + offset + 2;
+                    continue;
+                }
+                if is_ident_byte(byte) {
+                    let start = index;
+                    while index < bytes.len() && is_ident_byte(bytes[index]) {
+                        index += 1;
+                    }
+                    let name = &value[start..index];
+                    if bytes.get(index) == Some(&b'(') {
+                        if name.eq_ignore_ascii_case("url") {
+                            // A URL token swallows its body: `url(var(--x))` is one token.
+                            index = skip_function(value, index)?;
+                            continue;
+                        }
+                        if name.eq_ignore_ascii_case("var")
+                            && (start == 0 || !is_ident_byte(bytes[start - 1]))
+                        {
+                            return Some(start);
+                        }
+                    }
+                    continue;
+                }
+                if byte == b'#' || byte == b'@' {
+                    // `#var(`/`@var(` are hash/at-keyword tokens followed by a block, not
+                    // Function tokens.
+                    index += 1;
+                    while index < bytes.len() && is_ident_byte(bytes[index]) {
+                        index += 1;
+                    }
+                    continue;
+                }
+                index += 1;
+            }
+        }
+    }
+    None
+}
+
+/// Whether `byte` can be part of a CSS identifier (so `myvar(` is not `var(`).
+fn is_ident_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-' || byte >= 0x80
+}
+
+/// Skips a balanced function body starting at the `(` byte; returns the index after `)`.
+fn skip_function(value: &str, open: usize) -> Option<usize> {
+    let bytes = value.as_bytes();
+    let mut index = open + 1;
+    let mut depth = 1usize;
+    let mut quote: Option<u8> = None;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        match quote {
+            Some(active) => {
+                if byte == b'\\' {
+                    index += 2;
+                    continue;
+                }
+                if byte == active {
+                    quote = None;
+                }
+                index += 1;
+            }
+            None => match byte {
+                b'\'' | b'"' => {
+                    quote = Some(byte);
+                    index += 1;
+                }
+                b'(' => {
+                    depth += 1;
+                    index += 1;
+                }
+                b')' => {
+                    depth -= 1;
+                    index += 1;
+                    if depth == 0 {
+                        return Some(index);
+                    }
+                }
+                _ => index += 1,
+            },
+        }
+    }
+    None
 }
 
 fn expand_inner(
@@ -66,17 +203,25 @@ fn expand_inner(
     custom: &HashMap<String, String>,
     depth: usize,
     visiting: &mut HashSet<String>,
+    budget: &mut usize,
 ) -> Option<String> {
     if depth > MAX_SUBSTITUTION_DEPTH {
         return None;
     }
-    let lower = value.to_ascii_lowercase();
+    // Charge the work itself, not only the emitted bytes: a chain that expands to the empty
+    // string (e.g. `var(--missing,)`) used to cost zero and recursed ~2^30 times.
+    if !spend(budget, 1) {
+        return None;
+    }
     let mut out = String::with_capacity(value.len());
     let mut index = 0usize;
     while index < value.len() {
-        if let Some(relative) = lower[index..].find("var(") {
-            let start = index + relative;
-            out.push_str(&value[index..start]);
+        if let Some(start) = next_var_function(value, index) {
+            let literal = &value[index..start];
+            if !spend(budget, literal.len()) {
+                return None;
+            }
+            out.push_str(literal);
             // Find the matching closing parenthesis (quotes and nesting aware).
             let mut cursor = start + 4;
             let mut depth_parens = 0usize;
@@ -112,32 +257,39 @@ fn expand_inner(
                 if let Some(raw) = custom.get(name) {
                     if visiting.contains(name) {
                         fallback.as_deref().and_then(|fallback| {
-                            expand_inner(fallback, custom, depth + 1, visiting)
+                            expand_inner(fallback, custom, depth + 1, visiting, budget)
                         })
                     } else {
                         visiting.insert(name.to_string());
-                        let result = expand_inner(raw, custom, depth + 1, visiting);
+                        let result = expand_inner(raw, custom, depth + 1, visiting, budget);
                         visiting.remove(name);
                         result.or_else(|| {
                             fallback.as_deref().and_then(|fallback| {
-                                expand_inner(fallback, custom, depth + 1, visiting)
+                                expand_inner(fallback, custom, depth + 1, visiting, budget)
                             })
                         })
                     }
                 } else {
-                    fallback
-                        .as_deref()
-                        .and_then(|fallback| expand_inner(fallback, custom, depth + 1, visiting))
+                    fallback.as_deref().and_then(|fallback| {
+                        expand_inner(fallback, custom, depth + 1, visiting, budget)
+                    })
                 }
             } else {
                 None
             };
-            out.push_str(&substituted?);
+            let substituted = substituted?;
+            // The recursive expansion already charged the substituted bytes; charging them
+            // again here rejected legitimate values larger than half the budget.
+            out.push_str(&substituted);
             index = end + 1;
             cursor = index;
             let _ = cursor;
         } else {
-            out.push_str(&value[index..]);
+            let tail = &value[index..];
+            if !spend(budget, tail.len()) {
+                return None;
+            }
+            out.push_str(tail);
             break;
         }
     }
@@ -269,4 +421,64 @@ pub(crate) fn resolve_declarations(
         None => inherited.cloned(),
     };
     (resolved, custom_properties)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn var_substitution_skips_strings_and_other_functions() {
+        let mut custom = HashMap::new();
+        custom.insert("--x".to_string(), "1".to_string());
+        let value = r#"myvar(--x) "var(--x)" 'var(--x)' var(--x)"#;
+        assert_eq!(
+            expand_variables(value, &custom).as_deref(),
+            Some(r#"myvar(--x) "var(--x)" 'var(--x)' 1"#)
+        );
+    }
+
+    #[test]
+    fn escaped_quotes_do_not_leak_string_state() {
+        let mut custom = HashMap::new();
+        custom.insert("--x".to_string(), "1".to_string());
+        let value = r#""a\" var(--x)" var(--x)"#;
+        assert_eq!(
+            expand_variables(value, &custom).as_deref(),
+            Some(r#""a\" var(--x)" 1"#)
+        );
+    }
+}
+
+#[cfg(test)]
+mod token_tests {
+    use super::*;
+
+    #[test]
+    fn var_substitution_skips_hash_at_keyword_url_and_comments() {
+        let mut custom = HashMap::new();
+        custom.insert("--x".to_string(), "1".to_string());
+        let value = r#"#var(--x) @var(--x) url(var(--x)) /* var(--x) */ var(--x)"#;
+        assert_eq!(
+            expand_variables(value, &custom).as_deref(),
+            Some(r#"#var(--x) @var(--x) url(var(--x)) /* var(--x) */ 1"#)
+        );
+    }
+
+    #[test]
+    fn parsed_strings_stay_opaque_to_substitution() {
+        let declarations = crate::parser::parse_list_of_declarations(
+            "--x: 1; content: \"a\\\" var(--x)\" var(--x);",
+        );
+        let custom: HashMap<String, String> = declarations
+            .iter()
+            .filter(|declaration| declaration.name == "--x")
+            .map(|declaration| ("--x".to_string(), declaration.raw_value.clone()))
+            .collect();
+        let value = &declarations[1].raw_value;
+        assert_eq!(
+            expand_variables(value, &custom).as_deref(),
+            Some(r#""a\" var(--x)" 1"#)
+        );
+    }
 }
