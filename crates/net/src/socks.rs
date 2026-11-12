@@ -143,16 +143,26 @@ pub fn connect(
 
     let mut request = Vec::with_capacity(7 + target_host.len());
     request.extend_from_slice(&[0x05, 0x01, 0x00]);
-    // Domain names are sent as ATYP=3; the proxy resolves them (socks5h semantics, which
-    // is also the only option for hosts without a local IP literal available here).
-    if target_host.len() > 255 {
-        return Err(FetchError::ProxyConnect(
-            "SOCKS5 target host longer than 255 bytes".to_owned(),
-        ));
+    // Strip brackets from IPv6 literals (e.g. "[::1]" -> "::1").
+    let host = target_host.trim_start_matches('[').trim_end_matches(']');
+    // Try to parse as an IP literal first.
+    if let Ok(ipv4) = host.parse::<std::net::Ipv4Addr>() {
+        request.push(0x01);
+        request.extend_from_slice(&ipv4.octets());
+    } else if let Ok(ipv6) = host.parse::<std::net::Ipv6Addr>() {
+        request.push(0x04);
+        request.extend_from_slice(&ipv6.octets());
+    } else {
+        // Domain name: ATYP=3, proxy resolves (socks5h semantics).
+        if host.len() > 255 {
+            return Err(FetchError::ProxyConnect(
+                "SOCKS5 target host longer than 255 bytes".to_owned(),
+            ));
+        }
+        request.push(0x03);
+        request.push(host.len() as u8);
+        request.extend_from_slice(host.as_bytes());
     }
-    request.push(0x03);
-    request.push(target_host.len() as u8);
-    request.extend_from_slice(target_host.as_bytes());
     request.extend_from_slice(&target_port.to_be_bytes());
     stream
         .write_all(&request)
