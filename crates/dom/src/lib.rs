@@ -1663,7 +1663,9 @@ impl Document {
                 continue;
             };
             if text.is_empty() {
-                self.remove_node(child);
+                // DOM: removal keeps the node alive for existing references; freeing the
+                // slot would make a JS handle resolve to a different/freed node.
+                self.detach(child);
                 removed += 1;
                 continue;
             }
@@ -1673,7 +1675,7 @@ impl Document {
                 {
                     existing.push_str(&text);
                 }
-                self.remove_node(child);
+                self.detach(child);
                 removed += 1;
             } else {
                 previous_text = Some(child);
@@ -3141,6 +3143,7 @@ mod fragment_insertion_tests {
         ));
     }
     #[test]
+<<<<<<< HEAD
     fn insert_before_moving_the_previous_sibling_keeps_the_chain() {
         let mut doc = Document::new();
         let body = doc.create_element(Namespace::Html, "body", vec![]);
@@ -3194,6 +3197,27 @@ mod fragment_insertion_tests {
         doc.append_child(parent, text);
         let removed = doc.normalize(body);
         assert_eq!(removed, 0);
+||||||| 40f9e6e
+=======
+    fn normalize_keeps_removed_text_nodes_alive() {
+        let mut doc = Document::new();
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        doc.append_child(doc.root(), body);
+        let paragraph = doc.create_element(Namespace::Html, "p", vec![]);
+        doc.append_child(body, paragraph);
+        let first = doc.create_text_node("a");
+        let second = doc.create_text_node("b");
+        doc.append_child(paragraph, first);
+        doc.append_child(paragraph, second);
+        assert_eq!(doc.normalize(paragraph), 1, "one text node merged");
+        assert_eq!(
+            doc.node(second).as_text(),
+            Some("b"),
+            "the merged text node stays usable (detached, not freed)"
+        );
+        assert_eq!(doc.node(second).parent, None);
+        assert_eq!(doc.node(first).as_text(), Some("ab"));
+>>>>>>> pr916
         assert!(doc.validate_invariants().is_ok());
     }
 }
