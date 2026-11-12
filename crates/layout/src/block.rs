@@ -179,17 +179,17 @@ pub(crate) fn self_positioning_context(
     }
 }
 
-/// Lays out the contents of a block container and computes its used height.
-///
-/// `cb_height` is the definite height of the box's containing block (used by percentage
-/// sizes); `is_root` disables margin collapsing with the box's own children, because the
-/// root element's margins never collapse (CSS 2.2 §8.3.1).
 thread_local! {
     static LAYOUT_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 const MAX_LAYOUT_DEPTH: usize = 256;
 
+/// Lays out the contents of a block container and computes its used height.
+///
+/// `cb_height` is the definite height of the box's containing block (used by percentage
+/// sizes); `is_root` disables margin collapsing with the box's own children, because the
+/// root element's margins never collapse (CSS 2.2 §8.3.1).
 pub(crate) fn layout_box_contents(
     layout_box: &mut LayoutBox,
     cb_height: Option<f32>,
