@@ -64,9 +64,11 @@ pub fn render_target_with_options(
             let code = crate::pages::error_code(&error);
             let page =
                 crate::pages::data_url(&crate::pages::error_html(input, code, &error.to_string()));
-            // Single render of the error page; surface the original failure.
-            let _ = render::render_url(&page, &effective);
-            Err(ShellError::from(error))
+            // Render the error page once; if it also fails, surface the original error.
+            match render::render_url(&page, &effective) {
+                Ok(output) => Ok(output),
+                Err(_) => Err(ShellError::from(error)),
+            }
         }
     }
 }
@@ -305,14 +307,6 @@ pub fn save_screenshot(
     path: impl AsRef<Path>,
 ) -> Result<ScreenshotInfo, ShellError> {
     let path = path.as_ref().to_path_buf();
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        std::fs::create_dir_all(parent).map_err(|error| ShellError::Io {
-            path: path.display().to_string(),
-            reason: error.to_string(),
-        })?;
-    }
     let temporary = path.with_file_name(format!(
         ".{}.tmp",
         path.file_name()
@@ -379,14 +373,6 @@ pub fn error_frame(width: u32, height: u32) -> Vec<u32> {
 
 /// Writes raw bytes to a path, mapping I/O errors to [`ShellError::Io`].
 pub fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), ShellError> {
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        std::fs::create_dir_all(parent).map_err(|error| ShellError::Io {
-            path: path.display().to_string(),
-            reason: error.to_string(),
-        })?;
-    }
     let temporary = path.with_file_name(format!(
         ".{}.tmp",
         path.file_name()
