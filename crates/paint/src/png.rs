@@ -139,6 +139,15 @@ fn paeth_predictor(left: u8, above: u8, upper_left: u8) -> u8 {
 /// Builds the filtered PNG image data (one filter byte + filtered row per
 /// scanline), choosing the cheapest of the five standard PNG filters per row.
 pub fn filter_scanlines(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
+    let Some(expected_len) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+    else {
+        return Vec::new();
+    };
+    if width == 0 || height == 0 || rgba.len() != expected_len {
+        return Vec::new();
+    }
     let stride = width as usize * 4;
     let mut filtered = Vec::with_capacity(height as usize * (stride + 1));
     let mut previous = vec![0u8; stride];
