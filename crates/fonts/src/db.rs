@@ -191,6 +191,24 @@ impl FontDatabase {
     /// Loads one font file (TTF/OTF/TTC) from disk.
     pub fn load_font_file(&mut self, path: impl AsRef<Path>) -> Result<(), FontError> {
         let path = path.as_ref();
+        // Reject non-regular files (devices, FIFOs, ...) and cap the read size.
+        let metadata = std::fs::metadata(path).map_err(|err| FontError::Io {
+            path: path.display().to_string(),
+            reason: err.to_string(),
+        })?;
+        if !metadata.is_file() {
+            return Err(FontError::Io {
+                path: path.display().to_string(),
+                reason: "not a regular file".to_string(),
+            });
+        }
+        const MAX_FONT_FILE_BYTES: u64 = 64 * 1024 * 1024;
+        if metadata.len() > MAX_FONT_FILE_BYTES {
+            return Err(FontError::Io {
+                path: path.display().to_string(),
+                reason: format!("font file too large ({} bytes)", metadata.len()),
+            });
+        }
         let bytes = std::fs::read(path).map_err(|err| FontError::Io {
             path: path.display().to_string(),
             reason: err.to_string(),
