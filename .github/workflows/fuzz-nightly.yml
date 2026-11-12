@@ -20,6 +20,12 @@ on:
     paths:
       - "fuzz/**"
       - ".github/workflows/fuzz-nightly.yml"
+      # The targets link the engine crates: a public API change (e.g. a new field on
+      # `svg::Limits` or `image::Limits`) breaks `cargo fuzz build` without touching
+      # `fuzz/**`, and the nightly job would only notice a day later.
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
 
 permissions:
   contents: read
