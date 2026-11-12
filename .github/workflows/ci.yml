@@ -156,3 +156,34 @@ jobs:
         run: cargo audit
       - name: cargo deny check
         run: cargo deny check
+
+  unsafe-audit:
+    name: Unsafe audit (cargo-geiger)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev \
+            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxcb-shm0-dev libxcb-randr0-dev
+      - name: Install cargo-geiger
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-geiger
+      - name: cargo geiger (forbid-only check)
+        run: cargo geiger --all-features --all-targets --forbid-only --output-format Json > /tmp/geiger.json || (cat /tmp/geiger.json 2>/dev/null || true; exit 1)
+      - name: Upload geiger report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-geiger-report
+          path: /tmp/geiger.json
+          retention-days: 7
+          if-no-files-found: ignore
