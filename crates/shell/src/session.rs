@@ -12,16 +12,16 @@
 //!
 //! Loading is deliberately tolerant: a missing file is a fresh session (no warning), a
 //! corrupt/unsupported file produces a warning and a fresh session (never a panic), unknown
-//! fields are ignored and out-of-range values are clamped. Saves are atomic
-//! (`session.json.tmp` + rename) and best-effort locked with a sidecar `.lock` file so two
-//! shell instances do not interleave writes; the lock is advisory and stale files are
-//! ignored (documented limitation).
+//! fields are ignored and out-of-range values are clamped. Saves write a unique
+//! per-process temporary file and rename it atomically, so a crash leaves the previous
+//! session intact and two instances cannot tear each other's JSON (last writer wins); the
+//! advisory [`SessionLock`] sidecar is available but not wired into [`save`].
 //!
 //! Limits: URLs/history/zoom/scroll only (no cookies, passwords, form state or find state),
 //! at most [`MAX_SESSION_TABS`] tabs and [`MAX_HISTORY_PER_TAB`] history entries per tab.
 
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use crate::navigation::NavigationState;
@@ -416,7 +416,7 @@ pub fn load(path: &Path) -> LoadedSession {
     }
 }
 
-/// Saves the session atomically (`<path>.tmp` + rename), creating parent directories.
+/// Saves the session atomically (unique temporary + rename), creating parent directories.
 pub fn save(path: &Path, session: &Session) -> io::Result<()> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
@@ -435,10 +435,54 @@ pub fn save(path: &Path, session: &Session) -> io::Result<()> {
             ),
         ));
     }
-    let temporary = path.with_extension("json.tmp");
-    fs::write(&temporary, json)?;
-    fs::rename(&temporary, path)?;
-    Ok(())
+    let temporary = write_temporary(path, json.as_bytes())?;
+    let result = fs::rename(&temporary, path);
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+/// Creates a fresh temporary next to `path` and writes `contents` into it.
+///
+/// `create_new` prevents following a symlink or truncating a pre-existing file planted at a
+/// predictable name; an `AlreadyExists` collision advances the sequence and retries.
+fn write_temporary(path: &Path, contents: &[u8]) -> io::Result<PathBuf> {
+    for _ in 0..16 {
+        let candidate = unique_temporary_path(path);
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(mut file) => {
+                file.write_all(contents)?;
+                return Ok(candidate);
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        "cannot create a unique session temporary",
+    ))
+}
+
+/// Returns a per-process, per-call temporary path next to `path` (same filesystem, so the
+/// final rename is atomic).
+///
+/// A fixed `session.json.tmp` let two shell instances write and rename the same temporary,
+/// producing a torn session file.
+fn unique_temporary_path(path: &Path) -> PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "session.json".to_string());
+    let sequence = SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    path.with_file_name(format!(".{name}.{}.{sequence}.tmp", std::process::id()))
 }
 
 /// Resolves the default session path from environment-like inputs (pure; tested).
@@ -499,7 +543,6 @@ impl SessionLock {
             .open(&path)
         {
             Ok(mut file) => {
-                use std::io::Write;
                 let _ = writeln!(file, "{}", std::process::id());
                 Ok(Some(Self { path }))
             }
@@ -1249,6 +1292,66 @@ mod tests {
         let error = save(&path, &session).expect_err("session exceeds the read cap");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
         assert!(!path.exists(), "nothing is written");
-        let _ = std::fs::remove_dir_all(&dir);
+
+        #[test]
+        fn temporaries_are_unique_and_exclusive() {
+            let dir = std::env::temp_dir().join(format!("megi-session-tmp-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("mkdir");
+            let path = dir.join("session.json");
+            let first = write_temporary(&path, b"{}").expect("first temporary");
+            let second = write_temporary(&path, b"{}").expect("second temporary");
+            assert_ne!(first, second, "each call gets its own temporary");
+            assert!(first.is_file() && second.is_file());
+            let _ = std::fs::remove_file(&first);
+            let _ = std::fs::remove_file(&second);
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        #[test]
+        fn failed_saves_clean_up_their_temporary() {
+            let dir =
+                std::env::temp_dir().join(format!("megi-session-fail-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("mkdir");
+            // Renaming onto a directory fails; the temporary must not be left behind.
+            let target = dir.join("session.json");
+            std::fs::create_dir(&target).expect("target dir");
+            assert!(save(&target, &sample()).is_err());
+            let leftovers: Vec<String> = std::fs::read_dir(&dir)
+                .expect("read dir")
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .filter(|name| name.ends_with(".tmp"))
+                .collect();
+            assert!(leftovers.is_empty(), "no temporary left: {leftovers:?}");
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        #[test]
+        fn saves_use_a_unique_temporary_and_leave_no_files() {
+            let dir =
+                std::env::temp_dir().join(format!("megi-session-save-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("mkdir");
+            let path = dir.join("session.json");
+            let session = sample();
+            save(&path, &session).expect("save");
+            assert!(path.is_file(), "the session was renamed into place");
+            let leftovers: Vec<String> = std::fs::read_dir(&dir)
+                .expect("read dir")
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .filter(|name| name.ends_with(".tmp"))
+                .collect();
+            assert!(
+                leftovers.is_empty(),
+                "no temporary files left: {leftovers:?}"
+            );
+            let parsed = Session::from_json(&std::fs::read_to_string(&path).expect("read"))
+                .expect("parse saved session");
+            assert_eq!(parsed, session);
+            let _ = std::fs::remove_dir_all(&dir);
+        }
     }
 }

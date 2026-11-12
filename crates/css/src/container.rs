@@ -29,6 +29,7 @@
 
 use crate::properties::{ComputedStyle, ContainerType, Length};
 use dom::{Document, NodeId};
+use std::collections::HashMap;
 
 /// One parsed `@container` condition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -207,27 +208,54 @@ pub fn evaluate(query: &ContainerQuery, size: &ContainerSize, style: &ComputedSt
     })
 }
 
-/// Returns the base computed style of `node` (without applying `@container` rules, so size
-/// prediction cannot recurse through container queries).
-pub(crate) fn base_style(
-    doc: &Document,
-    node: NodeId,
-    collection: &crate::StyleCollection,
-) -> ComputedStyle {
-    let inline = doc.node(node).as_element().and_then(|element| {
-        element
-            .get_attribute("style")
-            .map(|style| crate::expand_declarations(&crate::parse_list_of_declarations(style)))
-    });
-    let cascaded =
-        crate::cascade::resolve_cascaded_properties_base(doc, node, collection, inline.as_deref());
-    let parent = doc
-        .node(node)
-        .parent
-        .filter(|parent| doc.node(*parent).as_element().is_some())
-        .map(|parent| base_style(doc, parent, collection));
-    let root_style = None;
-    ComputedStyle::compute(&cascaded, parent.as_ref(), root_style)
+/// Memoized base-style resolver for one container-matching walk.
+///
+/// Recursive base-style resolution recomputes the whole ancestor chain per node;
+/// `matching_size` called it for every ancestor and the size predictions repeated it per
+/// chain node, which made a deep document cubic (O(depth³) when every element matches a
+/// container rule). One cache per walk computes each node's base style once.
+struct BaseStyles<'a> {
+    doc: &'a Document,
+    collection: &'a crate::StyleCollection,
+    cache: HashMap<NodeId, ComputedStyle>,
+}
+
+impl<'a> BaseStyles<'a> {
+    fn new(doc: &'a Document, collection: &'a crate::StyleCollection) -> Self {
+        Self {
+            doc,
+            collection,
+            cache: HashMap::new(),
+        }
+    }
+
+    fn base(&mut self, node: NodeId) -> ComputedStyle {
+        if let Some(style) = self.cache.get(&node) {
+            return style.clone();
+        }
+        let style = if let Some(element) = self.doc.node(node).as_element() {
+            let inline = element
+                .get_attribute("style")
+                .map(|style| crate::expand_declarations(&crate::parse_list_of_declarations(style)));
+            let cascaded = crate::cascade::resolve_cascaded_properties_base(
+                self.doc,
+                node,
+                self.collection,
+                inline.as_deref(),
+            );
+            let parent = self
+                .doc
+                .node(node)
+                .parent
+                .filter(|parent| self.doc.node(*parent).as_element().is_some());
+            let parent_style = parent.map(|parent| self.base(parent));
+            ComputedStyle::compute(&cascaded, parent_style.as_ref(), None)
+        } else {
+            ComputedStyle::initial()
+        };
+        self.cache.insert(node, style.clone());
+        style
+    }
 }
 
 fn edges(style: &ComputedStyle, width: f32) -> (f32, f32) {
@@ -260,6 +288,7 @@ fn predicted_inline_size(
     doc: &Document,
     node: NodeId,
     collection: &crate::StyleCollection,
+    cache: &mut BaseStyles<'_>,
 ) -> Option<f32> {
     let viewport_width = collection.media.viewport.map(|(width, _)| width)?;
     let mut chain = Vec::new();
@@ -273,7 +302,7 @@ fn predicted_inline_size(
     chain.reverse();
     let mut parent_width = viewport_width;
     for id in chain {
-        let style = base_style(doc, id, collection);
+        let style = cache.base(id);
         let border_box = match style.width {
             Length::Px(px) => px,
             Length::Percent(pct) => parent_width * pct / 100.0,
@@ -290,18 +319,14 @@ fn predicted_inline_size(
 /// Predicts the content-box block size of `node` when it is definite (explicit height, or
 /// percentage of a definite ancestor height). Auto heights are content-dependent and are
 /// therefore not predicted (documented limit).
-fn predicted_block_size(
-    doc: &Document,
-    node: NodeId,
-    collection: &crate::StyleCollection,
-) -> Option<f32> {
-    let style = base_style(doc, node, collection);
+fn predicted_block_size(doc: &Document, node: NodeId, cache: &mut BaseStyles<'_>) -> Option<f32> {
+    let style = cache.base(node);
     match style.height {
         Length::Px(px) => Some(px.max(0.0)),
         Length::Percent(pct) => {
             let parent = doc.node(node).parent?;
             let parent_height = if doc.node(parent).as_element().is_some() {
-                predicted_block_size(doc, parent, collection)
+                predicted_block_size(doc, parent, cache)
             } else {
                 None
             };
@@ -322,10 +347,11 @@ pub fn matching_size(
         .conditions
         .iter()
         .any(|(feature, _)| feature.is_block_axis());
+    let mut cache = BaseStyles::new(doc, collection);
     let mut current = doc.node(node).parent;
     while let Some(id) = current {
         if doc.node(id).as_element().is_some() {
-            let style = base_style(doc, id, collection);
+            let style = cache.base(id);
             let eligible = style.container_type.is_inline_queryable()
                 && (!needs_block || style.container_type.is_block_queryable())
                 && query.name.as_ref().is_none_or(|name| {
@@ -335,9 +361,9 @@ pub fn matching_size(
                         .any(|candidate| candidate == name)
                 });
             if eligible && style.container_type != ContainerType::Normal {
-                let inline_size = predicted_inline_size(doc, id, collection);
+                let inline_size = predicted_inline_size(doc, id, collection, &mut cache);
                 let block_size = if style.container_type.is_block_queryable() {
-                    predicted_block_size(doc, id, collection)
+                    predicted_block_size(doc, id, &mut cache)
                 } else {
                     None
                 };
