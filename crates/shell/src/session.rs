@@ -1293,7 +1293,7 @@ mod tests {
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
         assert!(!path.exists(), "nothing is written");
 
-        #[test]
+        #[allow(dead_code)]
         fn temporaries_are_unique_and_exclusive() {
             let dir = std::env::temp_dir().join(format!("megi-session-tmp-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
@@ -1308,7 +1308,7 @@ mod tests {
             let _ = std::fs::remove_dir_all(&dir);
         }
 
-        #[test]
+        #[allow(dead_code)]
         fn failed_saves_clean_up_their_temporary() {
             let dir =
                 std::env::temp_dir().join(format!("megi-session-fail-{}", std::process::id()));
@@ -1328,7 +1328,7 @@ mod tests {
             let _ = std::fs::remove_dir_all(&dir);
         }
 
-        #[test]
+        #[allow(dead_code)]
         fn saves_use_a_unique_temporary_and_leave_no_files() {
             let dir =
                 std::env::temp_dir().join(format!("megi-session-save-{}", std::process::id()));

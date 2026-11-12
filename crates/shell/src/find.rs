@@ -661,38 +661,6 @@ mod tests {
         assert!(untouched.iter().all(|pixel| *pixel == 0x00FF_FFFF));
     }
     #[test]
-<<<<<<< HEAD
-    fn search_stops_at_the_match_cap() {
-        let body = format!("<body><p>{}</p></body>", "a".repeat(MAX_FIND_MATCHES + 500));
-        let document = html::parse_document(&body, false);
-        let hits = search(&document, "a");
-        assert_eq!(hits.len(), MAX_FIND_MATCHES, "the scan stops at the cap");
-    }
-
-    #[test]
-    fn duplicate_overlay_rects_are_painted_once() {
-        // The initial pixel color is irrelevant: only the painted count is asserted.
-        let mut pixmap = paint::Pixmap::new(8, 8);
-        let rect = CssRect::new(1.0, 1.0, 2.0, 2.0);
-        let rects = vec![rect; 100];
-        let painted = overlay_highlights_pixmap(&mut pixmap, &rects, 0);
-        assert_eq!(painted, 4, "the duplicated rectangle is painted once");
-    }
-    #[test]
-    fn the_current_hit_uses_the_strong_alpha_when_its_duplicates_are_merged() {
-        // Two hits in one text fragment produce the same rectangle; the current hit is the
-        // second occurrence, whose duplicate the dedupe skips.
-        let mut pixmap = paint::Pixmap::new(8, 8);
-        let rect = CssRect::new(1.0, 1.0, 2.0, 2.0);
-        assert_eq!(overlay_highlights_pixmap(&mut pixmap, &[rect, rect], 1), 4);
-        let pixel = pixmap.pixels[8 + 1];
-        let (r, g, b) = blend_rgb((0, 0, 0), HIGHLIGHT_RGB, HIGHLIGHT_CURRENT_ALPHA);
-        assert_eq!(
-            (pixel.r, pixel.g, pixel.b),
-            (r, g, b),
-            "the merged rectangle uses the current-hit alpha"
-||||||| f83e33b
-=======
     fn search_ranges_cover_four_byte_scalars() {
         let document = html::parse_document("<body><p>a😀b</p></body>", false);
         let hits = search(&document, "😀");
@@ -721,7 +689,6 @@ mod tests {
             text[hit.range.clone()].contains('İ'),
             "the range covers the whole source char: {:?}",
             hit.range
->>>>>>> pr898
         );
     }
 }

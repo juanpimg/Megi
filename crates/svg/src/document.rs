@@ -389,18 +389,14 @@ impl Document {
             masks: &masks,
             filters: &filters,
             limits,
-<<<<<<< HEAD
-            segments_used: 0,
-||||||| 2a70d69
-=======
             selector_checks_used: selector_checks,
->>>>>>> pr880
             shapes: Vec::new(),
             texts: Vec::new(),
             use_stack: Vec::new(),
             active_clips: Vec::new(),
             active_masks: Vec::new(),
             active_filter: None,
+            segments_used: 0,
         };
         let style = Style::default();
         let root_transform = Transform::IDENTITY;
@@ -637,15 +633,10 @@ struct Builder<'a> {
     masks: &'a [MaskSpec],
     filters: &'a [FilterSpec],
     limits: &'a Limits,
-<<<<<<< HEAD
-    /// Flattened segments charged so far, shared by every shape (and `<use>` re-visit) of
-    /// the document: `Limits::max_path_segments` is documented as a document-wide budget.
-    segments_used: usize,
-||||||| 2a70d69
-=======
     /// Selector evaluations performed by the in-SVG stylesheet cascade.
     selector_checks_used: usize,
->>>>>>> pr880
+    /// Path segments budget tracker.
+    segments_used: usize,
     shapes: Vec<Shape>,
     texts: Vec<TextSpec>,
     use_stack: Vec<String>,
@@ -2097,18 +2088,14 @@ fn build_effect_shapes(
         masks: &no_masks,
         filters: &no_filters,
         limits,
-<<<<<<< HEAD
-        segments_used: 0,
-||||||| 2a70d69
-=======
         selector_checks_used: *checks,
->>>>>>> pr880
         shapes: Vec::new(),
         texts: Vec::new(),
         use_stack: Vec::new(),
         active_clips: Vec::new(),
         active_masks: Vec::new(),
         active_filter: None,
+        segments_used: 0,
     };
     let style = Style {
         clip_path: None,

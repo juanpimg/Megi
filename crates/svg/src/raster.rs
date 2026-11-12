@@ -1192,53 +1192,9 @@ impl Canvas {
             max_x = max_x.max(px_space);
             max_y = max_y.max(py_space);
         }
-<<<<<<< HEAD
-<<<<<<< HEAD
-        let i0 = ((min_x - px) / width).floor() as i64 - 1;
-        let i1 = ((max_x - px) / width).ceil() as i64 + 1;
-        let j0 = ((min_y - py) / height).floor() as i64 - 1;
-        let j1 = ((max_y - py) / height).ceil() as i64 + 1;
-        // `as i64` saturates for huge finite coordinates; the subtraction of two saturated
-        // ends overflows i64 (debug panic, release wrap bypassing the budget). Count in
-        // i128 so the budget check cannot be evaded.
-        let columns = i128::from(i1) - i128::from(i0) + 1;
-        let rows = i128::from(j1) - i128::from(j0) + 1;
-        if columns <= 0 || rows <= 0 {
-            return Ok(());
-        }
-        if columns.saturating_mul(rows) > i128::from(MAX_PATTERN_TILES) {
-||||||| f83e33b
-        let i0 = ((min_x - px) / width).floor() as i64 - 1;
-        let i1 = ((max_x - px) / width).ceil() as i64 + 1;
-        let j0 = ((min_y - py) / height).floor() as i64 - 1;
-        let j1 = ((max_y - py) / height).ceil() as i64 + 1;
-        let columns = (i1 - i0 + 1).max(0) as u64;
-        let rows = (j1 - j0 + 1).max(0) as u64;
-        if columns.saturating_mul(rows) > MAX_PATTERN_TILES {
-=======
         // Compute the tile span in f64: a huge but finite `patternTransform` can exceed
         // i64, and clamping the absolute index would silently move (or drop) a valid
         // pattern whose phase is beyond the tile budget. Reject only over-budget spans.
-        let i0f = ((min_x - px) / width).floor() as f64;
-        let i1f = ((max_x - px) / width).ceil() as f64;
-        let j0f = ((min_y - py) / height).floor() as f64;
-        let j1f = ((max_y - py) / height).ceil() as f64;
-        let columns = (i1f - i0f + 3.0).max(0.0);
-        let rows = (j1f - j0f + 3.0).max(0.0);
-        if !columns.is_finite() || !rows.is_finite() || columns * rows > MAX_PATTERN_TILES as f64 {
-||||||| merged common ancestors
-<<<<<<<<< Temporary merge branch 1
-        // Compute the tile span in f64: a huge but finite `patternTransform` can exceed
-        // i64, and clamping the absolute index would silently move (or drop) a valid
-        // pattern whose phase is beyond the tile budget. Reject only over-budget spans.
-        let i0f = ((min_x - px) / width).floor() as f64;
-        let i1f = ((max_x - px) / width).ceil() as f64;
-        let j0f = ((min_y - py) / height).floor() as f64;
-        let j1f = ((max_y - py) / height).ceil() as f64;
-        let columns = (i1f - i0f + 3.0).max(0.0);
-        let rows = (j1f - j0f + 3.0).max(0.0);
-        if !columns.is_finite() || !rows.is_finite() || columns * rows > MAX_PATTERN_TILES as f64 {
-=======
         // Compute the span in f64: a huge but finite `patternTransform` can exceed i64, and
         // clamping the absolute index (or adding 1 to a saturated cast) would either panic
         // or silently move a valid pattern whose phase is beyond the tile budget. Only an
@@ -1250,7 +1206,6 @@ impl Canvas {
         let columns = i1f - i0f + 3.0;
         let rows = j1f - j0f + 3.0;
         if !columns.is_finite() || !rows.is_finite() || columns * rows > MAX_PATTERN_TILES as f32 {
->>>>>>> pr812
             return Err(SvgError::Limit(
                 "pattern tile budget exceeded (too many repetitions)".to_owned(),
             ));
@@ -1262,48 +1217,6 @@ impl Canvas {
         let i1 = (i1f as i64).saturating_add(1);
         let j0 = (j0f as i64).saturating_sub(1);
         let j1 = (j1f as i64).saturating_add(1);
-<<<<<<< HEAD
-        let columns = i1.saturating_sub(i0).saturating_add(1).max(0) as u64;
-        let rows = j1.saturating_sub(j0).saturating_add(1).max(0) as u64;
-        if columns.saturating_mul(rows) > MAX_PATTERN_TILES {
->>>>>>> pr812
-            return Err(SvgError::Limit(
-                "pattern tile budget exceeded (too many repetitions)".to_owned(),
-            ));
-        }
-||||||| merged common ancestors
-        let columns = i1.saturating_sub(i0).saturating_add(1).max(0) as u64;
-        let rows = j1.saturating_sub(j0).saturating_add(1).max(0) as u64;
-        if columns.saturating_mul(rows) > MAX_PATTERN_TILES {
-||||||||| f83e33b
-        let i0 = ((min_x - px) / width).floor() as i64 - 1;
-        let i1 = ((max_x - px) / width).ceil() as i64 + 1;
-        let j0 = ((min_y - py) / height).floor() as i64 - 1;
-        let j1 = ((max_y - py) / height).ceil() as i64 + 1;
-        let columns = (i1 - i0 + 1).max(0) as u64;
-        let rows = (j1 - j0 + 1).max(0) as u64;
-        if columns.saturating_mul(rows) > MAX_PATTERN_TILES {
-=========
-        let i0 = ((min_x - px) / width).floor() as i64 - 1;
-        let i1 = ((max_x - px) / width).ceil() as i64 + 1;
-        let j0 = ((min_y - py) / height).floor() as i64 - 1;
-        let j1 = ((max_y - py) / height).ceil() as i64 + 1;
-        // `as i64` saturates for huge finite coordinates; the subtraction of two saturated
-        // ends overflows i64 (debug panic, release wrap bypassing the budget). Count in
-        // i128 so the budget check cannot be evaded.
-        let columns = i128::from(i1) - i128::from(i0) + 1;
-        let rows = i128::from(j1) - i128::from(j0) + 1;
-        if columns <= 0 || rows <= 0 {
-            return Ok(());
-        }
-        if columns.saturating_mul(rows) > i128::from(MAX_PATTERN_TILES) {
->>>>>>>>> Temporary merge branch 2
-            return Err(SvgError::Limit(
-                "pattern tile budget exceeded (too many repetitions)".to_owned(),
-            ));
-        }
-=======
->>>>>>> pr812
         for column in i0..=i1 {
             for row in j0..=j1 {
                 let origin =
@@ -1899,41 +1812,11 @@ fn stamp_polygon(points: &[(f32, f32)], width: usize, height: usize, coverage: &
         max_y = max_y.max(y);
     }
     let first_x = (min_x.floor().max(0.0) as usize).min(width);
-<<<<<<< HEAD
-<<<<<<< HEAD
-    let last_x = (max_x.ceil().max(0.0) as usize)
-        .saturating_add(1)
-        .min(width);
-||||||| f83e33b
-    let last_x = ((max_x.ceil().max(0.0) as usize) + 1).min(width);
-=======
     // A finite coordinate above `usize::MAX` saturates on the cast, and the following `+1`
     // would then overflow (panic with overflow checks, wrap to 0 in release).
     let last_x = ((max_x.ceil().max(0.0) as usize).saturating_add(1)).min(width);
->>>>>>> pr812
-||||||| merged common ancestors
-    // A finite coordinate above `usize::MAX` saturates on the cast, and the following `+1`
-    // would then overflow (panic with overflow checks, wrap to 0 in release).
-    let last_x = ((max_x.ceil().max(0.0) as usize).saturating_add(1)).min(width);
-=======
-    let last_x = ((max_x.ceil().max(0.0) as usize) + 1).min(width);
->>>>>>> pr812
     let first_y = (min_y.floor().max(0.0) as usize).min(height);
-<<<<<<< HEAD
-<<<<<<< HEAD
-    let last_y = (max_y.ceil().max(0.0) as usize)
-        .saturating_add(1)
-        .min(height);
-||||||| f83e33b
-    let last_y = ((max_y.ceil().max(0.0) as usize) + 1).min(height);
-=======
     let last_y = ((max_y.ceil().max(0.0) as usize).saturating_add(1)).min(height);
->>>>>>> pr812
-||||||| merged common ancestors
-    let last_y = ((max_y.ceil().max(0.0) as usize).saturating_add(1)).min(height);
-=======
-    let last_y = ((max_y.ceil().max(0.0) as usize) + 1).min(height);
->>>>>>> pr812
     if first_x >= last_x || first_y >= last_y {
         return;
     }
@@ -1967,37 +1850,9 @@ fn stamp_disc(center: (f32, f32), radius: f32, width: usize, height: usize, cove
         return;
     }
     let first_x = ((center.0 - radius).floor().max(0.0) as usize).min(width);
-<<<<<<< HEAD
-<<<<<<< HEAD
-    let last_x = ((center.0 + radius).ceil().max(0.0) as usize)
-        .saturating_add(1)
-        .min(width);
-||||||| f83e33b
-    let last_x = (((center.0 + radius).ceil().max(0.0) as usize) + 1).min(width);
-=======
     let last_x = (((center.0 + radius).ceil().max(0.0) as usize).saturating_add(1)).min(width);
->>>>>>> pr812
-||||||| merged common ancestors
-    let last_x = (((center.0 + radius).ceil().max(0.0) as usize).saturating_add(1)).min(width);
-=======
-    let last_x = (((center.0 + radius).ceil().max(0.0) as usize) + 1).min(width);
->>>>>>> pr812
     let first_y = ((center.1 - radius).floor().max(0.0) as usize).min(height);
-<<<<<<< HEAD
-<<<<<<< HEAD
-    let last_y = ((center.1 + radius).ceil().max(0.0) as usize)
-        .saturating_add(1)
-        .min(height);
-||||||| f83e33b
-    let last_y = (((center.1 + radius).ceil().max(0.0) as usize) + 1).min(height);
-=======
     let last_y = (((center.1 + radius).ceil().max(0.0) as usize).saturating_add(1)).min(height);
->>>>>>> pr812
-||||||| merged common ancestors
-    let last_y = (((center.1 + radius).ceil().max(0.0) as usize).saturating_add(1)).min(height);
-=======
-    let last_y = (((center.1 + radius).ceil().max(0.0) as usize) + 1).min(height);
->>>>>>> pr812
     let samples = (STAMP_SAMPLES * STAMP_SAMPLES) as f32;
     let radius_squared = radius * radius;
     for pixel_y in first_y..last_y {

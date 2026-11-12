@@ -681,7 +681,6 @@ fn test_gradient_cycles_and_malformed_definitions_do_not_paint_or_panic() {
 }
 
 #[test]
-<<<<<<< HEAD
 fn huge_stroke_widths_are_clamped_instead_of_panicking() {
     for shape in [
         "<rect x='4' y='4' width='12' height='12' fill='none' stroke='#123456' stroke-width='1e20'/>",
@@ -719,17 +718,11 @@ fn far_off_canvas_text_does_not_panic() {
         .expect("far-off-canvas text still renders");
         assert_eq!(image.width, 16);
     }
-||||||| f83e33b
-=======
+}
+
+#[test]
 fn test_huge_pattern_phase_does_not_panic() {
-    // A 1e19 offset with 0.01 scale maps the canvas to ~1e21 pattern units: the absolute
-    // tile index exceeds i64 (saturating casts) but the span is tiny, so this is a valid
-    // pattern that renders (blank here, because the tiles are far off-canvas). It used to
-    // panic on the `as i64 - 1` underflow / `+1` overflow.
-    let source = b"<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8'>\
-        <defs><pattern id='p' width='1' height='1' patternUnits='userSpaceOnUse' \
-        patternTransform='matrix(0.01 0 0 0.01 1e19 0)'><rect width='1' height='1' fill='red'/>\
-        </pattern></defs><rect width='8' height='8' fill='url(#p)'/></svg>";
+    let source = b"<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8'>        <defs><pattern id='p' width='1' height='1' patternUnits='userSpaceOnUse'         patternTransform='matrix(0.01 0 0 0.01 1e19 0)'><rect width='1' height='1' fill='red'/>        </pattern></defs><rect width='8' height='8' fill='url(#p)'/></svg>";
     let image = render_svg_with_limits(source, &SvgOptions::default(), &Limits::default())
         .expect("a huge but valid pattern phase must not fail");
     assert_eq!((image.width, image.height), (8, 8));
@@ -737,14 +730,7 @@ fn test_huge_pattern_phase_does_not_panic() {
 
 #[test]
 fn test_pattern_phase_beyond_the_tile_budget_still_renders() {
-    // A valid pattern translated by 20,000 pattern units: the *indices* are far beyond the
-    // 10,000-tile budget but the *span* is 11 columns, so it must still paint at device 0.
-    // (Clamping the absolute index used to move the tiles out of the canvas.)
-    let source = "<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8'>\
-        <defs><pattern id='p' width='1' height='1' patternUnits='userSpaceOnUse' \
-        patternTransform='matrix(1 0 0 1 20000 0)'><rect width='1' height='1' fill='red'/>\
-        </pattern></defs><rect width='8' height='8' fill='url(#p)'/></svg>";
+    let source = "<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8'>        <defs><pattern id='p' width='1' height='1' patternUnits='userSpaceOnUse'         patternTransform='matrix(1 0 0 1 20000 0)'><rect width='1' height='1' fill='red'/>        </pattern></defs><rect width='8' height='8' fill='url(#p)'/></svg>";
     let image = render_at(source, 8, 8);
     assert_eq!(pixel(&image, 0, 0), [255, 0, 0, 255]);
->>>>>>> pr812
 }

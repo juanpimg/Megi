@@ -3854,7 +3854,6 @@ fn paint_backdrop_filter(pixmap: &mut Pixmap, rect: Rect, filters: &[css::Filter
 }
 
 #[cfg(test)]
-<<<<<<< HEAD
 mod composite_tests {
     use super::*;
 
@@ -3912,9 +3911,11 @@ mod composite_tests {
         assert_eq!(pixel.r, 128);
         assert_eq!(pixel.g, 0);
         assert_eq!(pixel.b, 127);
-||||||| 2a70d69
-=======
+    }
+}
+
 mod paint_budget_tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
@@ -3925,17 +3926,14 @@ mod paint_budget_tests {
             flatten: false,
             flatten_depth: 0,
         };
-        // Two 64×64 buffers: charged twice, released twice.
         assert!(budget.enter_buffers(64, 64, 2));
         assert_eq!(budget.depth, 1);
         assert_eq!(budget.pixels, 2 * 64 * 64);
         budget.leave_buffers(64, 64, 2);
         assert_eq!(budget.depth, 0);
         assert_eq!(budget.pixels, 0);
-        // 4096×4096 is exactly the per-buffer cap; two of them fit the live-pixel cap.
         assert!(budget.enter_buffers(4096, 4096, 2));
         budget.leave_buffers(4096, 4096, 2);
-        // One pixel over the per-buffer cap is refused even though the total would fit.
         assert!(!budget.enter_buffers(4097, 4096, 1));
     }
 
@@ -3953,7 +3951,6 @@ mod paint_budget_tests {
         assert!(!budget.enter(64, 64), "nesting depth cap");
         budget.leave(64, 64);
         assert!(budget.enter(64, 64));
-        // A single buffer over the per-group cap is refused even at depth 0.
         let mut fresh = PaintBudget {
             depth: 0,
             pixels: 0,
@@ -3961,16 +3958,12 @@ mod paint_budget_tests {
             flatten_depth: 0,
         };
         assert!(!fresh.enter(16_384, 16_384));
-        // The live-pixel cap accumulates across nested buffers.
         assert!(fresh.enter(4096, 4096));
         assert!(fresh.enter(4096, 4096));
         assert!(fresh.enter(4096, 4096));
-        // Exactly `MAX_OFFSCREEN_PIXELS` is still allowed; the next one is not.
         assert!(fresh.enter(4096, 4096));
         assert!(!fresh.enter(64, 64), "live-pixel cap");
-        // Releasing a buffer makes room again.
         fresh.leave(4096, 4096);
         assert!(fresh.enter(4096, 4096));
->>>>>>> pr886
     }
 }
