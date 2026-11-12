@@ -863,14 +863,17 @@ fn offset_pixels(pixels: &mut [u8], width: usize, height: usize, dx: i32, dy: i3
 /// `text-anchor`, `letter-spacing`, font size/weight/style and fill/stroke.
 type TextPathSegment = (f32, (f32, f32), (f32, f32));
 
-fn segment_at(segments: &[TextPathSegment], distance: f32) -> Option<TextPathSegment> {
-    for &(start, from, to) in segments {
-        let length = ((to.0 - from.0).powi(2) + (to.1 - from.1).powi(2)).sqrt();
-        if distance >= start && distance <= start + length {
-            return Some((start, from, to));
-        }
-    }
-    None
+fn segment_at(
+    segments: &[TextPathSegment],
+    ends: &[f32],
+    distance: f32,
+) -> Option<TextPathSegment> {
+    // Segments are contiguous and sorted by `start`, so the first one whose end reaches
+    // `distance` is the only candidate. A linear scan restarted per glyph made a
+    // 10k-glyph textPath over a 1M-segment path ~5e9 iterations (each with a sqrt).
+    let index = ends.partition_point(|end| *end < distance);
+    let &(start, from, to) = segments.get(index)?;
+    (distance >= start && distance <= ends[index]).then_some((start, from, to))
 }
 
 fn draw_text(
@@ -919,6 +922,7 @@ fn draw_text(
         // when the text would be upside down), optional textLength adjustment and
         // side="right" baseline offset (approximate normal offset, documented subset).
         let mut lengths: Vec<TextPathSegment> = Vec::new();
+        let mut ends: Vec<f32> = Vec::new();
         let mut total_length = 0.0f32;
         for subpath in &text_path.subpaths {
             for window in subpath.points.windows(2) {
@@ -928,6 +932,7 @@ fn draw_text(
                 if length.is_finite() && length > 0.0 {
                     lengths.push((total_length, (x0, y0), (x1, y1)));
                     total_length += length;
+                    ends.push(total_length);
                 }
             }
         }
@@ -963,7 +968,7 @@ fn draw_text(
             };
             let mut distance = (offset - anchor_shift).clamp(0.0, total_length);
             for character in spec.text.chars() {
-                let Some((start, from, to)) = segment_at(&lengths, distance) else {
+                let Some((start, from, to)) = segment_at(&lengths, &ends, distance) else {
                     break;
                 };
                 let length = ((to.0 - from.0).powi(2) + (to.1 - from.1).powi(2)).sqrt();
@@ -1842,6 +1847,34 @@ mod tests {
             height,
             pixels: vec![0; width * height * 4],
             coverage: vec![0.0; width * height],
+        }
+    }
+
+    #[test]
+    fn test_textpath_segment_lookup_matches_a_linear_scan() {
+        let mut segments: Vec<TextPathSegment> = Vec::new();
+        let mut ends: Vec<f32> = Vec::new();
+        let mut start = 0.0f32;
+        for index in 0..1_000 {
+            let length = 1.0 + (index % 3) as f32;
+            segments.push((start, (index as f32, 0.0), (index as f32 + length, 0.0)));
+            start += length;
+            ends.push(start);
+        }
+        for step in 0..2_000 {
+            let distance = step as f32 * 0.75;
+            let expected = segments
+                .iter()
+                .find(|(segment_start, from, to)| {
+                    let length = ((to.0 - from.0).powi(2) + (to.1 - from.1).powi(2)).sqrt();
+                    distance >= *segment_start && distance <= *segment_start + length
+                })
+                .copied();
+            assert_eq!(
+                segment_at(&segments, &ends, distance),
+                expected,
+                "{distance}"
+            );
         }
     }
 
