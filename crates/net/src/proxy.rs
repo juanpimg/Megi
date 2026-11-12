@@ -156,11 +156,20 @@ impl ProxyConfig {
 
     /// Whether the `no_proxy` list bypasses `host` (and `port`, when an entry names one).
     pub fn bypasses(&self, host: &str, port: Option<u16>) -> bool {
-        let host = host.trim_matches(['[', ']']).to_ascii_lowercase();
+        let host = normalize_host(host);
         self.no_proxy
             .iter()
             .any(|entry| no_proxy_entry_matches(entry, &host, port))
     }
+}
+
+/// Normalizes a host for `no_proxy` matching: strips IPv6 brackets and the DNS root dot,
+/// then lowercases. `internal.corp.` and `internal.corp` are the same absolute name, but
+/// `Url` preserves the dot while the PSL normalizer strips it.
+fn normalize_host(host: &str) -> String {
+    host.trim_matches(['[', ']'])
+        .trim_end_matches('.')
+        .to_ascii_lowercase()
 }
 
 /// Parses a proxy URL, accepting only `http:`/`https:` proxies.
@@ -204,7 +213,7 @@ fn no_proxy_entry_matches(entry: &str, host: &str, port: Option<u16>) -> bool {
     {
         return false;
     }
-    let entry_host = entry_host.trim_matches(['[', ']']);
+    let entry_host = normalize_host(&entry_host);
     if entry_host.is_empty() {
         return false;
     }
@@ -212,7 +221,7 @@ fn no_proxy_entry_matches(entry: &str, host: &str, port: Option<u16>) -> bool {
     if is_ip {
         return entry_host == host;
     }
-    let entry_host = entry_host.strip_prefix('.').unwrap_or(entry_host);
+    let entry_host = entry_host.strip_prefix('.').unwrap_or(&entry_host);
     host == entry_host
         || host
             .strip_suffix(entry_host)

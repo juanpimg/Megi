@@ -469,3 +469,49 @@ fn https_proxy_url_can_forward_http_targets() {
     );
     handle.join().expect("TLS proxy thread");
 }
+
+#[test]
+fn no_proxy_matches_a_host_with_a_trailing_root_dot() {
+    let config = ProxyConfig {
+        http: Some(Url::parse("http://proxy.test:8080/").expect("proxy URL")),
+        https: None,
+        no_proxy: vec!["internal.corp".to_owned()],
+        socks: None,
+        pac_url: None,
+    };
+    assert!(config.bypasses("internal.corp.", Some(80)));
+    assert!(config.bypasses("sub.internal.corp.", Some(80)));
+    assert!(config.bypasses("internal.corp", Some(80)));
+    let dotted = Url::parse("http://internal.corp./x").expect("URL");
+    assert!(
+        config.proxy_for(&dotted).is_none(),
+        "the trailing root dot must not send an internal host through the proxy"
+    );
+}
+
+#[test]
+fn no_proxy_matches_dotted_and_bracketed_entries() {
+    let config = |entries: Vec<String>| ProxyConfig {
+        http: Some(Url::parse("http://proxy.test:8080/").expect("proxy URL")),
+        https: None,
+        no_proxy: entries,
+        socks: None,
+        pac_url: None,
+    };
+
+    let dotted_entries = config(vec!["internal.corp.".to_owned(), "[::1]".to_owned()]);
+    assert!(dotted_entries.bypasses("internal.corp", Some(80)));
+    assert!(dotted_entries.bypasses("internal.corp.", Some(80)));
+    assert!(dotted_entries.bypasses("sub.internal.corp.", Some(80)));
+    assert!(dotted_entries.bypasses("::1", Some(80)));
+    assert!(dotted_entries.bypasses("[::1]", Some(80)));
+    assert!(!dotted_entries.bypasses("example.com", Some(80)));
+
+    let port_entry = config(vec!["internal.corp.:443".to_owned()]);
+    assert!(port_entry.bypasses("internal.corp", Some(443)));
+    assert!(!port_entry.bypasses("internal.corp.", Some(80)));
+
+    let wildcard = config(vec!["*".to_owned()]);
+    assert!(wildcard.bypasses("example.com", Some(80)));
+    assert!(!config(Vec::new()).bypasses("internal.corp.", Some(80)));
+}
