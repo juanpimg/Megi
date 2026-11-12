@@ -4,7 +4,6 @@
 //! [`render::render_url`] with the requested viewport and writes the deterministic PNG.
 //! It is pure library code so the CLI can be tested in fully headless environments.
 
-use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::error::ShellError;
@@ -65,7 +64,9 @@ pub fn render_target_with_options(
             let code = crate::pages::error_code(&error);
             let page =
                 crate::pages::data_url(&crate::pages::error_html(input, code, &error.to_string()));
-            render::render_url(&page, &effective).map_err(|_| ShellError::from(error))
+            // Single render of the error page; surface the original failure.
+            let _ = render::render_url(&page, &effective);
+            Err(ShellError::from(error))
         }
     }
 }
@@ -304,9 +305,28 @@ pub fn save_screenshot(
     path: impl AsRef<Path>,
 ) -> Result<ScreenshotInfo, ShellError> {
     let path = path.as_ref().to_path_buf();
-    std::fs::write(&path, &output.png).map_err(|error| ShellError::Io {
-        path: path.display().to_string(),
-        reason: error.to_string(),
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).map_err(|error| ShellError::Io {
+            path: path.display().to_string(),
+            reason: error.to_string(),
+        })?;
+    }
+    let temporary = path.with_file_name(format!(".{}.tmp", path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "screenshot".to_string())));
+    if let Err(error) = std::fs::write(&temporary, &output.png) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(ShellError::Io {
+            path: path.display().to_string(),
+            reason: error.to_string(),
+        });
+    }
+    std::fs::rename(&temporary, &path).map_err(|error| {
+        let _ = std::fs::remove_file(&temporary);
+        ShellError::Io {
+            path: path.display().to_string(),
+            reason: error.to_string(),
+        }
     })?;
     Ok(ScreenshotInfo {
         path,
@@ -354,8 +374,27 @@ pub fn error_frame(width: u32, height: u32) -> Vec<u32> {
 
 /// Writes raw bytes to a path, mapping I/O errors to [`ShellError::Io`].
 pub fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), ShellError> {
-    std::fs::write(path, bytes).map_err(|error: io::Error| ShellError::Io {
-        path: path.display().to_string(),
-        reason: error.to_string(),
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).map_err(|error| ShellError::Io {
+            path: path.display().to_string(),
+            reason: error.to_string(),
+        })?;
+    }
+    let temporary = path.with_file_name(format!(".{}.tmp", path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "download".to_string())));
+    if let Err(error) = std::fs::write(&temporary, bytes) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(ShellError::Io {
+            path: path.display().to_string(),
+            reason: error.to_string(),
+        });
+    }
+    std::fs::rename(&temporary, path).map_err(|error| {
+        let _ = std::fs::remove_file(&temporary);
+        ShellError::Io {
+            path: path.display().to_string(),
+            reason: error.to_string(),
+        }
     })
 }
