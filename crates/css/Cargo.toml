@@ -10,3 +10,6 @@ description = "Megi Engine — W3C CSS Syntax Module Level 3 & Selectors Level 4
 
 [dependencies]
 dom.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

@@ -10,3 +10,6 @@ description = "Megi Engine — WHATWG HTML Living Standard (§13.2) Input Stream
 
 [dependencies]
 dom.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

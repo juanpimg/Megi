@@ -61,3 +61,6 @@ ab_glyph = "0.2"
 fontdb = "0.24"
 rustybuzz = "0.20"
 ttf-parser = "0.25"
+
+# Property-based testing dev-dependency (#961).
+proptest = "1"
