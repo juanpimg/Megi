@@ -1454,6 +1454,7 @@ pub fn rasterize_display_list_with_font_database_and_stats(
         depth: 0,
         pixels: 0,
         flatten: false,
+        flatten_depth: 0,
     };
     paint_items(
         &mut pixmap,
@@ -1697,8 +1698,13 @@ fn paint_items(
             DisplayItem::BackdropFilter { rect, filters } => {
                 paint_backdrop_filter(pixmap, shift(*rect, dx, dy), filters);
             }
-            DisplayItem::EffectGroup { .. } if budget.flatten => {
-                // Past the depth cap the layer is dropped rather than recursing forever.
+            DisplayItem::EffectGroup { items, .. } if budget.flatten => {
+                // The contents are embedded: paint them (bounded) instead of dropping pixels.
+                if budget.flatten_depth < MAX_FLATTEN_DEPTH {
+                    budget.flatten_depth += 1;
+                    paint_items(pixmap, items, cache, font_database, dx, dy, budget);
+                    budget.flatten_depth -= 1;
+                }
                 index += 1;
                 continue;
             }
@@ -1721,7 +1727,12 @@ fn paint_items(
                     budget,
                 );
             }
-            DisplayItem::OpacityGroup { .. } if budget.flatten => {
+            DisplayItem::OpacityGroup { items, .. } if budget.flatten => {
+                if budget.flatten_depth < MAX_FLATTEN_DEPTH {
+                    budget.flatten_depth += 1;
+                    paint_items(pixmap, items, cache, font_database, dx, dy, budget);
+                    budget.flatten_depth -= 1;
+                }
                 index += 1;
                 continue;
             }
@@ -1764,12 +1775,22 @@ struct PaintBudget {
     /// Past the caps: paint group contents in place and skip nested groups instead of
     /// recursing into them (a flat paint per nesting level would overflow the stack).
     flatten: bool,
+    /// Flattened `EffectGroup`/`OpacityGroup` nesting already entered (their contents are
+    /// embedded, so they cannot be skipped without losing pixels).
+    flatten_depth: usize,
 }
 
 impl PaintBudget {
-    /// Reserves a `width × height` offscreen buffer, or refuses when a cap is reached.
+    /// Reserves one `width × height` offscreen buffer, or refuses when a cap is reached.
     fn enter(&mut self, width: u32, height: u32) -> bool {
-        let pixels = (width as usize).saturating_mul(height as usize);
+        self.enter_buffers(width, height, 1)
+    }
+
+    /// Reserves `buffers` offscreen buffers of `width × height` each.
+    fn enter_buffers(&mut self, width: u32, height: u32, buffers: usize) -> bool {
+        let pixels = (width as usize)
+            .saturating_mul(height as usize)
+            .saturating_mul(buffers.max(1));
         if pixels > MAX_ROUNDED_GROUP_PIXELS
             || self.depth >= MAX_OFFSCREEN_GROUP_DEPTH
             || self.pixels.saturating_add(pixels) > MAX_OFFSCREEN_PIXELS
@@ -1791,17 +1812,30 @@ impl PaintBudget {
 
     /// Releases a buffer reserved by [`PaintBudget::enter`].
     fn leave(&mut self, width: u32, height: u32) {
+        self.leave_buffers(width, height, 1);
+    }
+
+    /// Releases `buffers` buffers reserved by [`PaintBudget::enter_buffers`].
+    fn leave_buffers(&mut self, width: u32, height: u32, buffers: usize) {
         self.depth = self.depth.saturating_sub(1);
-        self.pixels = self
-            .pixels
-            .saturating_sub((width as usize).saturating_mul(height as usize));
+        self.pixels = self.pixels.saturating_sub(
+            (width as usize)
+                .saturating_mul(height as usize)
+                .saturating_mul(buffers.max(1)),
+        );
     }
 }
 
 /// Maximum nesting of offscreen groups in one paint pass.
 const MAX_OFFSCREEN_GROUP_DEPTH: usize = 32;
 /// Maximum live offscreen pixels in one paint pass (256 MiB at 4 B/px).
+///
+/// This bounds the group buffers; filter scratch (`blur_rgba`, text shadows) is not
+/// charged and stays a documented residual.
 const MAX_OFFSCREEN_PIXELS: usize = 64 * 1024 * 1024;
+/// Flattened nesting of embedded-content groups (`EffectGroup`/`OpacityGroup`) before
+/// their contents are dropped; a flat recursion per level would overflow the stack.
+const MAX_FLATTEN_DEPTH: usize = 8;
 
 /// Returns `rect` translated by `(dx, dy)`.
 fn shift(rect: Rect, dx: f32, dy: f32) -> Rect {
@@ -1886,6 +1920,7 @@ fn paint_opacity_group(
                 blend_over(dst, with_alpha(src, u32::from(alpha)));
         }
     }
+    budget.leave(width, height);
 }
 
 /// Bilinear RGB(A) sample of `image` at image-space position `(u, v)`.
@@ -2658,7 +2693,8 @@ fn paint_text_mask_group(
     }
     let width = (x1 - x0) as u32;
     let height = (y1 - y0) as u32;
-    if !budget.enter(width, height) {
+    // The buffer is painted and then masked, so two full-size buffers are live at once.
+    if !budget.enter_buffers(width, height, 2) {
         // Depth/total-pixel cap: paint the background without the glyph mask (documented).
         budget.with_flattened(|budget| {
             paint_items(pixmap, items, cache, font_database, dx, dy, budget)
@@ -2723,6 +2759,7 @@ fn paint_text_mask_group(
             );
         }
     }
+    budget.leave_buffers(width, height, 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -3708,6 +3745,7 @@ fn paint_effect_group(
         apply_filter(&mut buffer, filter);
     }
     composite_effect(pixmap, &buffer, x0, y0, blend);
+    budget.leave(width, height);
 }
 
 // ---------------------------------------------------------------------------
@@ -3815,6 +3853,7 @@ mod paint_budget_tests {
             depth: 0,
             pixels: 0,
             flatten: false,
+            flatten_depth: 0,
         };
         for _ in 0..MAX_OFFSCREEN_GROUP_DEPTH {
             assert!(budget.enter(64, 64));
@@ -3827,6 +3866,7 @@ mod paint_budget_tests {
             depth: 0,
             pixels: 0,
             flatten: false,
+            flatten_depth: 0,
         };
         assert!(!fresh.enter(16_384, 16_384));
         // The live-pixel cap accumulates across nested buffers.
