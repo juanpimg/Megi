@@ -182,6 +182,12 @@ pub(crate) fn self_positioning_context(
     }
 }
 
+thread_local! {
+    static LAYOUT_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+const MAX_LAYOUT_DEPTH: usize = 256;
+
 /// Lays out the contents of a block container and computes its used height.
 ///
 /// `cb_height` is the definite height of the box's containing block (used by percentage
@@ -194,6 +200,34 @@ pub(crate) fn layout_box_contents(
     measurer: &dyn TextMeasurer,
     pos: PositioningContext,
 ) {
+    // Guard against pathological nesting (issue #692): the HTML parser allows up to
+    // 4096-deep trees, but every layout pass recurses per level. Cap the effective
+    // layout depth so a deep page degrades gracefully instead of overflowing the
+    // stack (SIGABRT).
+    let depth = LAYOUT_DEPTH.with(|cell| {
+        let current = cell.get();
+        if current >= MAX_LAYOUT_DEPTH {
+            return None;
+        }
+        cell.set(current + 1);
+        Some(current + 1)
+    });
+    if depth.is_none() {
+        return;
+    }
+    struct DepthGuard;
+    impl Drop for DepthGuard {
+        fn drop(&mut self) {
+            LAYOUT_DEPTH.with(|cell| {
+                let current = cell.get();
+                if current > 0 {
+                    cell.set(current - 1);
+                }
+            });
+        }
+    }
+    let _guard = DepthGuard;
+
     // CSS 2.1 §17: table boxes use the table layout algorithm instead of the block
     // formatting context.
     if matches!(
