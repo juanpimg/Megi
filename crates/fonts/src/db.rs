@@ -395,6 +395,9 @@ impl FontDatabase {
                 "monospace" | "ui-monospace" => (Some(Family::Monospace), MONO_FALLBACKS),
                 "cursive" => (Some(Family::Cursive), CURSIVE_FALLBACKS),
                 "fantasy" => (Some(Family::Fantasy), FANTASY_FALLBACKS),
+                "emoji" => (Some(Family::SansSerif), &["Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji"] as &[&str]),
+                "math" => (Some(Family::Serif), &["STIX Two Math", "Cambria Math", "Latin Modern Math"] as &[&str]),
+                "fangsong" => (None, &["FangSong", "STFangsong"] as &[&str]),
                 _ => (None, &[] as &[&'static str]),
             };
             if let Some(generic) = generic {
