@@ -2090,7 +2090,9 @@ mod tests {
             "https://example.com/help".to_string(),
         ];
         assert_eq!(bar.autocomplete(&history), None, "min 2 chars");
-        bar.insert("e");
+        // Completion extends the typed text, so type the beginning of the URL.
+        bar.insert("t");
+        bar.insert("t");
         assert_eq!(
             bar.autocomplete(&history).as_deref(),
             Some("https://example.com/hello")
