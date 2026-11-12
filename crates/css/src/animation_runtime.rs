@@ -12,6 +12,7 @@
 
 use crate::animation::{
     AnimationDirection, AnimationSpec, FillMode, IterationCount, StepPosition, TimingFunction,
+    TransitionProperty, TransitionSpec,
 };
 use crate::properties::{Color, ComputedStyle, Length};
 use crate::rule::{Keyframe, KeyframesRule};
@@ -247,38 +248,97 @@ fn apply_keyframes(
 }
 
 /// Whether the property participates in the animation interpolation.
+const ANIMATABLE_PROPERTIES: &[&str] = &[
+    "opacity",
+    "color",
+    "background-color",
+    "width",
+    "height",
+    "min-width",
+    "max-width",
+    "min-height",
+    "max-height",
+    "top",
+    "right",
+    "bottom",
+    "left",
+    "margin-top",
+    "margin-right",
+    "margin-bottom",
+    "margin-left",
+    "padding-top",
+    "padding-right",
+    "padding-bottom",
+    "padding-left",
+    "border-top-width",
+    "border-right-width",
+    "border-bottom-width",
+    "border-left-width",
+    "font-size",
+    "letter-spacing",
+    "word-spacing",
+];
+
+/// Returns `true` when `property` is one of the supported animatable properties.
 fn is_animatable(property: &str) -> bool {
-    matches!(
-        property,
-        "opacity"
-            | "color"
-            | "background-color"
-            | "width"
-            | "height"
-            | "min-width"
-            | "max-width"
-            | "min-height"
-            | "max-height"
-            | "top"
-            | "right"
-            | "bottom"
-            | "left"
-            | "margin-top"
-            | "margin-right"
-            | "margin-bottom"
-            | "margin-left"
-            | "padding-top"
-            | "padding-right"
-            | "padding-bottom"
-            | "padding-left"
-            | "border-top-width"
-            | "border-right-width"
-            | "border-bottom-width"
-            | "border-left-width"
-            | "font-size"
-            | "letter-spacing"
-            | "word-spacing"
-    )
+    ANIMATABLE_PROPERTIES.contains(&property)
+}
+
+/// Evaluates a transition's eased progress (`0..=1`) at `elapsed_ms`, or `None` when the
+/// transition is inactive (zero duration) or already finished (`elapsed >= delay + duration`).
+pub fn transition_progress(spec: &TransitionSpec, elapsed_ms: f32) -> Option<(f32, f32)> {
+    if !elapsed_ms.is_finite() || spec.duration_ms <= 0.0 || !spec.duration_ms.is_finite() {
+        return None;
+    }
+    let local = elapsed_ms - spec.delay_ms;
+    if local < 0.0 {
+        return Some((0.0, 0.0));
+    }
+    if local >= spec.duration_ms {
+        return None;
+    }
+    let linear = (local / spec.duration_ms).clamp(0.0, 1.0);
+    Some((evaluate_timing_function(&spec.timing, linear), linear))
+}
+
+/// Interpolates CSS transitions between `from` and `to` at `elapsed_ms`.
+pub fn apply_transitions(
+    from: &ComputedStyle,
+    to: &ComputedStyle,
+    elapsed_ms: f32,
+) -> ComputedStyle {
+    let mut style = to.clone();
+    if to.transitions.is_empty() || !elapsed_ms.is_finite() {
+        return style;
+    }
+    for spec in &to.transitions {
+        let Some((eased, local)) = transition_progress(spec, elapsed_ms) else {
+            continue;
+        };
+        match &spec.property {
+            TransitionProperty::None => continue,
+            TransitionProperty::All => {
+                for &prop in ANIMATABLE_PROPERTIES {
+                    if let (Some(a), Some(b)) =
+                        (base_animatable(prop, from), base_animatable(prop, to))
+                        && a != b
+                    {
+                        interpolate_animatable(&mut style, prop, a, b, eased, local);
+                    }
+                }
+            }
+            TransitionProperty::Property(prop) => {
+                if is_animatable(prop)
+                    && let (Some(a), Some(b)) =
+                        (base_animatable(prop, from), base_animatable(prop, to))
+                    && a != b
+                {
+                    interpolate_animatable(&mut style, prop, a, b, eased, local);
+                }
+            }
+        }
+    }
+    style
 }
 
 /// A value that can be interpolated for the supported properties.
@@ -370,6 +430,17 @@ fn interpolate_property(
     let (Some(from), Some(to)) = (from, to) else {
         return;
     };
+    interpolate_animatable(style, property, from, to, eased, local);
+}
+
+fn interpolate_animatable(
+    style: &mut ComputedStyle,
+    property: &str,
+    from: AnimatableValue,
+    to: AnimatableValue,
+    eased: f32,
+    local: f32,
+) {
     let value = match (from, to) {
         (AnimatableValue::Number(a), AnimatableValue::Number(b)) => {
             AnimatableValue::Number(a + (b - a) * eased)
@@ -595,5 +666,47 @@ mod tests {
         let unknown = animation("missing", 1000.0);
         let style = apply_animations(&base, &[unknown], &rules, 500.0);
         assert_eq!(style.opacity, 1.0);
+    }
+
+    #[test]
+    fn transitions_interpolate_explicit_and_all_properties() {
+        let mut from = ComputedStyle::initial();
+        from.opacity = 0.0;
+        from.width = Length::Px(100.0);
+
+        let mut to = ComputedStyle::initial();
+        to.opacity = 1.0;
+        to.width = Length::Px(200.0);
+        to.transitions = vec![TransitionSpec {
+            property: TransitionProperty::All,
+            duration_ms: 1000.0,
+            delay_ms: 0.0,
+            timing: TimingFunction::Linear,
+        }];
+
+        let half = apply_transitions(&from, &to, 500.0);
+        assert!((half.opacity - 0.5).abs() < 1e-4);
+        assert_eq!(half.width, Length::Px(150.0));
+    }
+
+    #[test]
+    fn transitions_honor_delay_and_completion() {
+        let mut from = ComputedStyle::initial();
+        from.opacity = 0.0;
+        let mut to = ComputedStyle::initial();
+        to.opacity = 1.0;
+        to.transitions = vec![TransitionSpec {
+            property: TransitionProperty::Property("opacity".to_owned()),
+            duration_ms: 1000.0,
+            delay_ms: 200.0,
+            timing: TimingFunction::Linear,
+        }];
+
+        let before = apply_transitions(&from, &to, 100.0);
+        assert!((before.opacity - 0.0).abs() < 1e-4);
+        let mid = apply_transitions(&from, &to, 700.0);
+        assert!((mid.opacity - 0.5).abs() < 1e-4);
+        let done = apply_transitions(&from, &to, 1200.0);
+        assert!((done.opacity - 1.0).abs() < 1e-4);
     }
 }
