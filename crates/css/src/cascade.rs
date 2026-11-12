@@ -389,6 +389,9 @@ pub struct StyleCollection {
     /// Compiled `@container` rules (added in source order; evaluated per node during the
     /// cascade against the nearest ancestor query container).
     pub container_rules: Vec<ContainerRule>,
+    /// `@keyframes` rules in source order (the animation engine resolves them by name;
+    /// later definitions win, as in the cascade).
+    pub keyframes: Vec<crate::rule::KeyframesRule>,
     /// Declared cascade layers in first-appearance order (each path is relative: `["a","b"]`
     /// for `@layer a.b`). Anonymous layers get a unique `"<anonymous N>"` path segment.
     pub layers: Vec<Vec<String>>,
@@ -436,6 +439,22 @@ impl StyleCollection {
     /// (`@import`, `@supports`, `@font-face`, ...) are still ignored.
     pub fn add_stylesheet(&mut self, stylesheet: &Stylesheet, origin: Origin) {
         self.add_rules(&stylesheet.rules, origin, &[], UNLAYERED_LAYER);
+        for rule in &stylesheet.keyframes {
+            match self
+                .keyframes
+                .iter_mut()
+                .find(|existing| existing.name == rule.name)
+            {
+                // Later definitions of the same name replace earlier ones (source order).
+                Some(existing) => *existing = rule.clone(),
+                None => self.keyframes.push(rule.clone()),
+            }
+        }
+    }
+
+    /// Returns the `@keyframes` rule for `name` (CSS animation names are case-sensitive).
+    pub fn keyframes(&self, name: &str) -> Option<&crate::rule::KeyframesRule> {
+        self.keyframes.iter().find(|rule| rule.name == name)
     }
 
     /// Registers a layer path (first appearance wins the rank) and returns its rank.
@@ -1488,5 +1507,21 @@ mod tests {
             Color::new(255, 0, 0, 255),
             "COLOR is the color property"
         );
+    }
+    #[test]
+    fn keyframes_are_collected_and_last_definition_wins() {
+        let collection = collection_with(
+            "@keyframes pulse { from { opacity: 0 } to { opacity: 1 } } \
+             @keyframes pulse { from { opacity: 0.2 } to { opacity: 1 } } \
+             @keyframes other { from { opacity: 0 } to { opacity: 1 } }",
+        );
+        let rule = collection.keyframes("pulse").expect("pulse keyframes");
+        assert_eq!(rule.frames.len(), 2);
+        assert_eq!(rule.frames[0].declarations[0].raw_value, "0.2");
+        assert!(
+            collection.keyframes("Pulse").is_none(),
+            "animation names are case-sensitive"
+        );
+        assert!(collection.keyframes("other").is_some());
     }
 }
