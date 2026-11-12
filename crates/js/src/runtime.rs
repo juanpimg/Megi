@@ -4373,15 +4373,21 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
   var BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   define("btoa", function (input) {
     var value = String(input); var out = "";
+    for (var i = 0; i < value.length; i++) {
+      if (value.charCodeAt(i) > 255) { throw new DOMException("InvalidCharacterError", "InvalidCharacterError"); }
+    }
     for (var i = 0; i < value.length; i += 3) {
       var a = value.charCodeAt(i), b = value.charCodeAt(i + 1), c = value.charCodeAt(i + 2);
-      var triple = (a << 16) | ((b || 0) << 8) | (c || 0);
+      var triple = (a << 16) | ((isNaN(b) ? 0 : b) << 8) | (isNaN(c) ? 0 : c);
       out += BASE64.charAt((triple >> 18) & 63) + BASE64.charAt((triple >> 12) & 63) + (isNaN(b) ? "=" : BASE64.charAt((triple >> 6) & 63)) + (isNaN(c) ? "=" : BASE64.charAt(triple & 63));
     }
     return out;
   });
   define("atob", function (input) {
-    var value = String(input).replace(/[^A-Za-z0-9+/=]/g, ""); var out = "";
+    var value = String(input).replace(/\s/g, ""); var out = "";
+    for (var i = 0; i < value.length; i++) {
+      if (BASE64.indexOf(value.charAt(i)) < 0 && value.charAt(i) !== "=") { throw new DOMException("InvalidCharacterError", "InvalidCharacterError"); }
+    }
     for (var i = 0; i < value.length; i += 4) {
       var n = (BASE64.indexOf(value.charAt(i)) << 18) | (BASE64.indexOf(value.charAt(i + 1)) << 12) | ((value.charAt(i + 2) === "=" ? 0 : BASE64.indexOf(value.charAt(i + 2))) << 6) | (value.charAt(i + 3) === "=" ? 0 : BASE64.indexOf(value.charAt(i + 3)));
       out += String.fromCharCode((n >> 16) & 255);
