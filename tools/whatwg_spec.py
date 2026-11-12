@@ -18,7 +18,11 @@ import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import lxml.html
+try:
+    import lxml.html
+except ImportError:
+    print("Missing dependency: lxml. Install with: pip install lxml", file=sys.stderr)
+    sys.exit(1)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CACHE_DIR = REPO_ROOT / ".cache" / "specs"
@@ -40,6 +44,8 @@ DEFAULT_FETCH_TARGETS = [
 ]
 
 
+MAX_SPEC_BYTES = 50 * 1024 * 1024  # 50 MiB cap
+
 def ensure_cached(filename: str, force: bool = False) -> Path:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     target = CACHE_DIR / filename
@@ -52,9 +58,17 @@ def ensure_cached(filename: str, force: bool = False) -> Path:
         url,
         headers={"User-Agent": "MegiBrowserEngine-SpecTool/0.1 (+https://github.com/juanpimg/Megi)"},
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        data = resp.read()
-    target.write_bytes(data)
+    tmp = target.with_suffix(target.suffix + ".tmp")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read(MAX_SPEC_BYTES + 1)
+        if len(data) > MAX_SPEC_BYTES:
+            raise ValueError(f"Spec download exceeds {MAX_SPEC_BYTES} bytes")
+        tmp.write_bytes(data)
+        tmp.replace(target)
+    finally:
+        if tmp.exists():
+            tmp.unlink(missing_ok=True)
     return target
 
 
@@ -120,11 +134,11 @@ def extract_section_text(heading_el: lxml.html.HtmlElement) -> str:
             text = " ".join(curr.text_content().split())
             if text:
                 if curr.tag in ("ol", "ul"):
-                    for idx, li in enumerate(curr.xpath("./li"), start=1):
+                    for idx, li in enumerate(curr.xpath(".//li"), start=1):
                         li_text = " ".join(li.text_content().split())
                         lines.append(f"  {idx}. {li_text}")
                 elif curr.tag == "dl":
-                    for child in curr:
+                    for child in curr.iterdescendants():
                         if not isinstance(child.tag, str):
                             continue
                         c_text = " ".join(child.text_content().split())
