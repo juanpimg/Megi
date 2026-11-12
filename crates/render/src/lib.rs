@@ -1275,6 +1275,10 @@ struct ImportWalk<'a> {
     warnings: &'a mut Vec<String>,
     visited: std::collections::HashSet<String>,
     loaded: usize,
+    /// Loads attempted (successful or not), bounded by `max_stylesheets`.
+    attempts: usize,
+    /// Whether the attempt-cap warning was already pushed (one per walk).
+    cap_warned: bool,
     skipped: usize,
     max_depth: usize,
     css_bytes: usize,
@@ -1366,6 +1370,8 @@ fn build_author_stylesheet_collection(
         warnings,
         visited: std::collections::HashSet::new(),
         loaded: 0,
+        attempts: 0,
+        cap_warned: false,
         skipped: 0,
         max_depth: 0,
         css_bytes: 0,
@@ -1489,12 +1495,26 @@ fn walk_imports(
             walk.skipped += 1;
             continue;
         }
+        // Successful imports keep the hard error (the documented `max_stylesheets` bound).
         if walk.loaded + 1 > max_total_sheets {
             return Err(RenderError::TooManyStylesheets {
                 count: walk.loaded + 1,
                 max: max_total_sheets,
             });
         }
+        // `loaded` only counts successes: failed imports would otherwise fetch without
+        // limit (one request per unique URL in the stylesheet). Report the cap once.
+        if walk.attempts >= max_total_sheets {
+            walk.skipped += 1;
+            if !walk.cap_warned {
+                walk.cap_warned = true;
+                walk.warnings.push(format!(
+                    "skipping further @imports: more than {max_total_sheets} stylesheet loads attempted (cap)"
+                ));
+            }
+            continue;
+        }
+        walk.attempts += 1;
         let Some(text) =
             load_stylesheet_text(&url, &mut *walk.loader, walk.options, &mut *walk.warnings)?
         else {

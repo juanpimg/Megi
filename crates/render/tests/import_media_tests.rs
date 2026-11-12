@@ -509,3 +509,80 @@ fn showcase_render_is_deterministic() {
     assert_eq!(first.png, second.png);
     assert_eq!(first.stats.display_items, second.stats.display_items);
 }
+
+#[test]
+fn failed_import_loads_count_against_the_stylesheet_cap() {
+    // `max_stylesheets` used to bound successful imports only: missing sheets were fetched
+    // once per unique URL with no limit.
+    let dir = std::env::temp_dir().join(format!("megi-import-attempts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let document = dir.join("index.html");
+    std::fs::write(
+        &document,
+        "<!DOCTYPE html><style>\
+         @import url('file:///nonexistent-a.css');\
+         @import url('file:///nonexistent-b.css');\
+         @import url('file:///nonexistent-c.css');\
+         </style><body></body>",
+    )
+    .expect("write document");
+
+    let options = RenderOptions {
+        viewport: Viewport::new(200, 100).expect("viewport"),
+        max_stylesheets: 2,
+        ..RenderOptions::default()
+    };
+    let output = render_url(&format!("file://{}", document.display()), &options).expect("render");
+    let failed_imports = output
+        .stats
+        .warnings
+        .iter()
+        .filter(|warning| warning.contains("skipping stylesheet file:///nonexistent"))
+        .count();
+    assert_eq!(failed_imports, 2, "only two fetches may reach the loader");
+    let cap_warnings = output
+        .stats
+        .warnings
+        .iter()
+        .filter(|warning| warning.contains("stylesheet loads attempted"))
+        .count();
+    assert_eq!(
+        cap_warnings, 1,
+        "the cap is reported once, not per skipped import: {:?}",
+        output.stats.warnings
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn exceeding_the_stylesheet_cap_on_successful_imports_is_an_error() {
+    // Successful imports keep the documented hard error; only failed attempts are skipped
+    // with a warning.
+    let dir = std::env::temp_dir().join(format!("megi-import-error-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    for name in ["a.css", "b.css", "c.css"] {
+        std::fs::write(dir.join(name), "p { color: rgb(255, 0, 0) }").expect("css");
+    }
+    let document = dir.join("index.html");
+    std::fs::write(
+        &document,
+        "<!DOCTYPE html><style>\
+         @import url('a.css'); @import url('b.css'); @import url('c.css');\
+         </style><body></body>",
+    )
+    .expect("write document");
+
+    let options = RenderOptions {
+        viewport: Viewport::new(200, 100).expect("viewport"),
+        max_stylesheets: 2,
+        ..RenderOptions::default()
+    };
+    let result = render_url(&format!("file://{}", document.display()), &options);
+    assert!(
+        matches!(result, Err(render::RenderError::TooManyStylesheets { .. })),
+        "expected TooManyStylesheets, got {result:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
