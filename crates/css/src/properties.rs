@@ -69,10 +69,10 @@ impl Color {
             return Self::from_hex(hex);
         }
 
-        if s.starts_with("rgb(") && s.ends_with(')') {
+        if s.len() >= 5 && s[..4].eq_ignore_ascii_case("rgb(") && s.ends_with(')') {
             return Self::from_rgb_fn(&s[4..s.len() - 1]);
         }
-        if s.starts_with("rgba(") && s.ends_with(')') {
+        if s.len() >= 6 && s[..5].eq_ignore_ascii_case("rgba(") && s.ends_with(')') {
             return Self::from_rgb_fn(&s[5..s.len() - 1]);
         }
 
@@ -121,37 +121,66 @@ impl Color {
     }
 
     fn from_rgb_fn(inner: &str) -> Option<Self> {
-        let parts: Vec<&str> = if inner.contains(',') {
-            inner.split(',').map(|p| p.trim()).collect()
+        let (rgb_parts, alpha_part): (Vec<&str>, Option<&str>) = if inner.contains(',') {
+            if inner.contains('/') {
+                return None;
+            }
+            let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
+            match parts.len() {
+                3 => (parts, None),
+                4 => (parts[..3].to_vec(), Some(parts[3])),
+                _ => return None,
+            }
+        } else if let Some((left, right)) = inner.split_once('/') {
+            if right.contains('/') {
+                return None;
+            }
+            let rgb: Vec<&str> = left.split_ascii_whitespace().collect();
+            let alpha: Vec<&str> = right.split_ascii_whitespace().collect();
+            if rgb.len() != 3 || alpha.len() != 1 {
+                return None;
+            }
+            (rgb, Some(alpha[0]))
         } else {
-            inner.split_ascii_whitespace().collect()
+            let rgb: Vec<&str> = inner.split_ascii_whitespace().collect();
+            if rgb.len() != 3 {
+                return None;
+            }
+            (rgb, None)
         };
-
-        if parts.len() < 3 {
-            return None;
-        }
 
         let parse_channel = |p: &str| -> Option<u8> {
             if let Some(pct) = p.strip_suffix('%') {
                 let val: f32 = pct.trim().parse().ok()?;
+                if !val.is_finite() {
+                    return None;
+                }
                 Some((val.clamp(0.0, 100.0) / 100.0 * 255.0).round() as u8)
             } else {
                 let val: f32 = p.parse().ok()?;
+                if !val.is_finite() {
+                    return None;
+                }
                 Some(val.clamp(0.0, 255.0).round() as u8)
             }
         };
 
-        let r = parse_channel(parts[0])?;
-        let g = parse_channel(parts[1])?;
-        let b = parse_channel(parts[2])?;
+        let r = parse_channel(rgb_parts[0])?;
+        let g = parse_channel(rgb_parts[1])?;
+        let b = parse_channel(rgb_parts[2])?;
 
-        let a = if parts.len() >= 4 {
-            let p = parts[3];
+        let a = if let Some(p) = alpha_part {
             if let Some(pct) = p.strip_suffix('%') {
                 let val: f32 = pct.trim().parse().ok()?;
+                if !val.is_finite() {
+                    return None;
+                }
                 (val.clamp(0.0, 100.0) / 100.0 * 255.0).round() as u8
             } else {
                 let val: f32 = p.parse().ok()?;
+                if !val.is_finite() {
+                    return None;
+                }
                 (val.clamp(0.0, 1.0) * 255.0).round() as u8
             }
         } else {

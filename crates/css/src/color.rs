@@ -47,6 +47,10 @@ pub(crate) fn parse_modern(input: &str) -> Option<Color> {
         ("oklch", &s[6..])
     } else if lower.starts_with("hwb(") {
         ("hwb", &s[4..])
+    } else if lower.starts_with("hsl(") {
+        ("hsl", &s[4..])
+    } else if lower.starts_with("hsla(") {
+        ("hsl", &s[5..])
     } else {
         return None;
     };
@@ -58,6 +62,7 @@ pub(crate) fn parse_modern(input: &str) -> Option<Color> {
         "oklab" => parse_oklab(inner, false),
         "oklch" => parse_oklab(inner, true),
         "hwb" => parse_hwb(inner),
+        "hsl" => parse_hsl(inner),
         "color-mix" => parse_color_mix(inner),
         _ => None,
     }
@@ -417,6 +422,51 @@ fn parse_hwb(inner: &str) -> Option<Color> {
         clamp_channel(base[0] * (1.0 - w - b) + w),
         clamp_channel(base[1] * (1.0 - w - b) + w),
         clamp_channel(base[2] * (1.0 - w - b) + w),
+        clamp_channel(alpha),
+    ))
+}
+
+fn parse_hsl(inner: &str) -> Option<Color> {
+    let (tokens, alpha): (Vec<String>, f32) = if inner.contains(',') {
+        if inner.contains('/') {
+            return None;
+        }
+        let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
+        if parts.len() != 3 && parts.len() != 4 {
+            return None;
+        }
+        let alpha = if parts.len() == 4 {
+            parse_alpha(parts[3])?
+        } else {
+            1.0
+        };
+        (parts[..3].iter().map(|s| (*s).to_string()).collect(), alpha)
+    } else {
+        let (channels_text, alpha_text) = split_at_slash(inner);
+        let tokens = split_components(&channels_text);
+        if tokens.len() != 3 {
+            return None;
+        }
+        let alpha = alpha_text
+            .as_deref()
+            .map(parse_alpha)
+            .unwrap_or(Some(1.0))?;
+        (tokens, alpha)
+    };
+    let hue = parse_hue(&tokens[0])?.rem_euclid(360.0);
+    let (s_val, s_pct) = number_or_percentage(&tokens[1])?;
+    let (l_val, l_pct) = number_or_percentage(&tokens[2])?;
+    let sat = (if s_pct { s_val } else { s_val / 100.0 }).clamp(0.0, 1.0);
+    let light = (if l_pct { l_val } else { l_val / 100.0 }).clamp(0.0, 1.0);
+    let f = |n: f32| -> f32 {
+        let k = (n + hue / 30.0) % 12.0;
+        let a = sat * light.min(1.0 - light);
+        light - a * (-1.0_f32).max((k - 3.0).min(9.0 - k).min(1.0))
+    };
+    Some(Color::new(
+        clamp_channel(f(0.0)),
+        clamp_channel(f(8.0)),
+        clamp_channel(f(4.0)),
         clamp_channel(alpha),
     ))
 }
