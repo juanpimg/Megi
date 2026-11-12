@@ -1248,29 +1248,98 @@ pub(crate) fn layout_grid_children(
         let h_edges = horizontal_edges(&item.style, container_width);
         let v_edges = vertical_edges(&item.style, container_width);
         let used_width = match justify {
-            AlignSelf::Stretch | AlignSelf::Auto | AlignSelf::Baseline => definite_length(
-                item.style.width,
-                item.style.calc_lengths.width,
-                Some(container_width),
-            )
-            .map(|width| width.min((cell_width - h_edges).max(0.0)))
-            .unwrap_or((cell_width - h_edges).max(0.0)),
-            _ => item.content_width,
+            AlignSelf::Stretch | AlignSelf::Auto | AlignSelf::Baseline => {
+                let mut width = definite_length(
+                    item.style.width,
+                    item.style.calc_lengths.width,
+                    Some(container_width),
+                )
+                .map(|w| w.min((cell_width - h_edges).max(0.0)))
+                .unwrap_or((cell_width - h_edges).max(0.0));
+                // Apply min/max.
+                if let Some(min) = crate::calc::length_optional(
+                    item.style.min_width,
+                    item.style.calc_lengths.min_width,
+                    Some(container_width),
+                ) {
+                    width = width.max(min);
+                }
+                if let Some(max) = crate::calc::length_optional(
+                    item.style.max_width,
+                    item.style.calc_lengths.max_width,
+                    Some(container_width),
+                ) {
+                    width = width.min(max.max(0.0));
+                }
+                width
+            }
+            _ => {
+                let mut width = item.content_width;
+                if let Some(min) = crate::calc::length_optional(
+                    item.style.min_width,
+                    item.style.calc_lengths.min_width,
+                    Some(container_width),
+                ) {
+                    width = width.max(min);
+                }
+                if let Some(max) = crate::calc::length_optional(
+                    item.style.max_width,
+                    item.style.calc_lengths.max_width,
+                    Some(container_width),
+                ) {
+                    width = width.min(max.max(0.0));
+                }
+                width
+            }
         };
         let used_height = match align {
-            AlignSelf::Stretch | AlignSelf::Auto | AlignSelf::Baseline => definite_length(
-                item.style.height,
-                item.style.calc_lengths.height,
-                definite_height,
-            )
-            .map(|height| height.min((cell_height - v_edges).max(0.0)))
-            .unwrap_or((cell_height - v_edges).max(0.0)),
-            _ => definite_length(
-                item.style.height,
-                item.style.calc_lengths.height,
-                definite_height,
-            )
-            .unwrap_or(item.content_height),
+            AlignSelf::Stretch | AlignSelf::Auto | AlignSelf::Baseline => {
+                let mut height = definite_length(
+                    item.style.height,
+                    item.style.calc_lengths.height,
+                    definite_height,
+                )
+                .map(|h| h.min((cell_height - v_edges).max(0.0)))
+                .unwrap_or((cell_height - v_edges).max(0.0));
+                if let Some(min) = crate::calc::length_optional(
+                    item.style.min_height,
+                    item.style.calc_lengths.min_height,
+                    definite_height,
+                ) {
+                    height = height.max(min);
+                }
+                if let Some(max) = crate::calc::length_optional(
+                    item.style.max_height,
+                    item.style.calc_lengths.max_height,
+                    definite_height,
+                ) {
+                    height = height.min(max.max(0.0));
+                }
+                height
+            }
+            _ => {
+                let mut height = definite_length(
+                    item.style.height,
+                    item.style.calc_lengths.height,
+                    definite_height,
+                )
+                .unwrap_or(item.content_height);
+                if let Some(min) = crate::calc::length_optional(
+                    item.style.min_height,
+                    item.style.calc_lengths.min_height,
+                    definite_height,
+                ) {
+                    height = height.max(min);
+                }
+                if let Some(max) = crate::calc::length_optional(
+                    item.style.max_height,
+                    item.style.calc_lengths.max_height,
+                    definite_height,
+                ) {
+                    height = height.min(max.max(0.0));
+                }
+                height
+            }
         };
         let padding = resolve_padding(&item.style, container_width);
         let x_offset = offset_for(justify, cell_width, used_width + h_edges);

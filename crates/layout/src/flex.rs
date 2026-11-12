@@ -242,15 +242,51 @@ fn explicit_cross(
     container_width: f32,
 ) -> Option<f32> {
     let value = if row { style.height } else { style.width };
-    definite_length(
-        value,
-        None,
-        if row {
-            container_height
-        } else {
-            Some(container_width)
-        },
-    )
+    let calc = if row {
+        style.calc_lengths.height
+    } else {
+        style.calc_lengths.width
+    };
+    let reference = if row {
+        container_height
+    } else {
+        Some(container_width)
+    };
+    let raw = crate::calc::length_optional(value, calc, reference)?;
+    // Apply min/max clamping on the cross axis.
+    let mut size = raw.max(0.0);
+    if row {
+        if let Some(min) = crate::calc::length_optional(
+            style.min_height,
+            style.calc_lengths.min_height,
+            reference,
+        ) {
+            size = size.max(min);
+        }
+        if let Some(max) = crate::calc::length_optional(
+            style.max_height,
+            style.calc_lengths.max_height,
+            reference,
+        ) {
+            size = size.min(max.max(0.0));
+        }
+    } else {
+        if let Some(min) = crate::calc::length_optional(
+            style.min_width,
+            style.calc_lengths.min_width,
+            reference,
+        ) {
+            size = size.max(min);
+        }
+        if let Some(max) = crate::calc::length_optional(
+            style.max_width,
+            style.calc_lengths.max_width,
+            reference,
+        ) {
+            size = size.min(max.max(0.0));
+        }
+    }
+    Some(size)
 }
 
 /// Distributes the free main-axis space of one line (grow or shrink).
@@ -547,7 +583,39 @@ pub(crate) fn layout_flex_children(
             }
             if align == AlignSelf::Stretch {
                 let edges_cross = items[*index].edges_cross(row);
-                let target = (cross_size - edges_cross).max(0.0);
+                let mut target = (cross_size - edges_cross).max(0.0);
+                // Apply min/max on the cross axis.
+                if row {
+                    if let Some(min) = crate::calc::length_optional(
+                        items[*index].style.min_height,
+                        items[*index].style.calc_lengths.min_height,
+                        Some(cross_size),
+                    ) {
+                        target = target.max(min);
+                    }
+                    if let Some(max) = crate::calc::length_optional(
+                        items[*index].style.max_height,
+                        items[*index].style.calc_lengths.max_height,
+                        Some(cross_size),
+                    ) {
+                        target = target.min(max.max(0.0));
+                    }
+                } else {
+                    if let Some(min) = crate::calc::length_optional(
+                        items[*index].style.min_width,
+                        items[*index].style.calc_lengths.min_width,
+                        Some(cross_size),
+                    ) {
+                        target = target.max(min);
+                    }
+                    if let Some(max) = crate::calc::length_optional(
+                        items[*index].style.max_width,
+                        items[*index].style.calc_lengths.max_width,
+                        Some(cross_size),
+                    ) {
+                        target = target.min(max.max(0.0));
+                    }
+                }
                 items[*index].used_cross = target;
                 set_cross(items[*index].child, row, target);
             }
