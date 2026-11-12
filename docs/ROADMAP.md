@@ -553,3 +553,140 @@ Limitaciones actuales: sin pestañas/descargas ni widgets nativos/select dropdow
 ### Fuera del alcance inicial de Fase 7
 
 GPU/compositor, pestañas, extensiones, descargas, impresión, sandbox de procesos por sitio (se diseñará con la Fase 6) y accesibilidad completa.
+
+---
+
+## 🗺️ Plan hacia la primera versión Pre-Alpha
+
+### Estado actual (HEAD `e454d5c`, 2026-11-12)
+
+- **Tests**: 2.213 pasando, 0 fallos
+- **Gate**: PASS (tokenizer 7.050/7.050, tree 3.904/3.904, serializer 230/230, CSS 30/30)
+- **Clippy/fmt**: limpios
+- **PRs abiertos**: 0 (35 PRs de seguridad fusionados)
+- **Issues abiertos**: 30 (fuzz/tooling/docs/CI)
+- **Binario**: `megi` (26 MB, ELF x86-64) — renderiza páginas HTML/CSS a PNG headless
+
+### Fases de ejecución hacia Pre-Alpha
+
+#### Fase A: Seguridad (1-2 semanas) — PRIORIDAD 0
+
+| # | Tarea | Área | Esfuerzo | Issue |
+|---|-------|------|----------|-------|
+| A1 | cargo audit + cargo deny en CI | CI/Security | Bajo | #951 |
+| A2 | SBOM (Software Bill of Materials) | Security | Medio | #952 |
+| A3 | ASan/UBSan en fuzz jobs | Fuzz/Security | Medio | #953 |
+| A4 | cargo geiger para unsafe audit | Security | Bajo | #954 |
+| A5 | Dependabot para actualizaciones automáticas | Security | Bajo | #955 |
+| A6 | SECURITY.md con proceso CVE y timeline | Security | Bajo | #956 |
+
+#### Fase B: Colaboración (1 semana) — PRIORIDAD 0
+
+| # | Tarea | Área | Esfuerzo | Issue |
+|---|-------|------|----------|-------|
+| B1 | Templates de issues y PRs | Colaboración | Bajo | #957 |
+| B2 | CODEOWNERS por crate | Colaboración | Bajo | #958 |
+| B3 | Labels estandarizados y milestones | Colaboración | Bajo | #959 |
+| B4 | CONTRIBUTING.md con guía de commits/DCO | Colaboración | Bajo | #960 |
+| B5 | GitHub Projects board | Colaboración | Bajo | #970 |
+| B6 | good-first-issue labels | Colaboración | Bajo | #970 |
+
+#### Fase C: Compatibilidad web crítica (2-4 semanas) — PRIORIDAD 1
+
+| # | Tarea | Área | Esfuerzo | Issue |
+|---|-------|------|----------|-------|
+| C1 | CSS animations (@keyframes, transition) | CSS/Render/Paint | 2-3 semanas | #942, #980, #981, #983 |
+| C2 | WebP animado (VP8X/ALPH/ANIM) | Image/Render | 1-2 semanas | #943, #984, #985 |
+| C3 | Fuentes internacionales (bidi, CJK) | Fonts/Layout/Paint | 2-3 semanas | #944, #986, #987 |
+
+#### Fase D: UX y polish (2-3 semanas) — PRIORIDAD 1
+
+| # | Tarea | Área | Esfuerzo | Issue |
+|---|-------|------|----------|-------|
+| D1 | Save-as/prompt visual, descargas, cookies/passwords | Shell/Net | 1-2 semanas | #945, #988 |
+| D2 | Multi-select, native widgets, accessibility | Shell/DOM | 1-2 semanas | #946, #989 |
+| D3 | Per-tab process isolation | Shell | 2 semanas | #946 |
+
+#### Fase E: Optimización y testing (2-3 semanas) — PRIORIDAD 2
+
+| # | Tarea | Área | Esfuerzo | Issue |
+|---|-------|------|----------|-------|
+| E1 | Fingerprint cache en layout | Layout | 2-3 días | #947, #990 |
+| E2 | Cache de parseo HTML/CSS | HTML/CSS | 1 semana | #947, #990 |
+| E3 | Fuzz campaigns largas (600s por target) | Fuzz/CI | 1-2 días | #948, #991 |
+| E4 | WPT completo | Test harness | 1-2 semanas | #948, #991 |
+| E5 | Bench real-page E2E | Bench | 3-5 días | #948, #991 |
+
+#### Fase F: Documentación y release (1-2 semanas) — PRIORIDAD 3
+
+| # | Tarea | Área | Esfuerzo | Issue |
+|---|-------|------|----------|-------|
+| F1 | Actualizar todos los docs | Docs | 2-3 días | #949, #992 |
+| F2 | Rustdoc en GitHub Pages | Docs | 1 día | #968 |
+| F3 | Getting started guide | Docs | 1 día | #969 |
+| F4 | Semantic versioning + release process | Release | 1 semana | #965, #966, #967 |
+| F5 | Changelog automatizado | Release | 1 día | #966 |
+
+### Métricas de éxito para Pre-Alpha
+
+| Métrica | Actual | Objetivo Pre-Alpha |
+|---|---|---|
+| Tests | 2.213 | 2.500+ |
+| Issues abiertos | 30 | < 20 |
+| Fuzz targets | 16 | 20+ |
+| Bench filas | 19 | 25+ |
+| Fases completas | F1-F4 (100%), F5-F7 (98-100%) | Todas al 100% |
+| Presupuestos | Todos cumplidos | Todos cumplidos con margen |
+| Gate conformidad | 100% | 100% |
+| Goldens | Byte-idénticos | Byte-idénticos |
+| CI jobs | 2 (quality, conformance) | 6+ |
+| Security scans | 0 | cargo audit + deny + geiger |
+| Release process | Ninguno | Semántico con artifacts |
+| Docs publicadas | No | GitHub Pages |
+
+### Riesgos y mitigaciones
+
+| Riesgo | Mitigación |
+|---|---|
+| CSS animations complejas | Empezar con transition, luego @keyframes |
+| WebP animado requiere timer | Usar reloj virtual del render |
+| Bidi/CJK requiere fuentes | Priorizar shaping, luego bidi |
+| Fuzz campaigns largas | Ejecutar en CI (600s por target) |
+| Conflictos en merges | Resolver manualmente, verificar build |
+| Cargo audit encuentra vulnerabilidades | Triaje rápido, fix o documentar |
+| Coverage threshold demasiado alto | Empezar en 60%, subir gradualmente |
+
+### Asignación de agentes sugerida
+
+| Agente | Área | Tareas |
+|---|---|---|
+| paint-pipeline | Paint/Bench | Backdrop blur, PNG regions, rasterizer budgets |
+| css-foundations | CSS/Net | CSS animations, HTTP/2 pooling, container queries |
+| core-engine-auditor | JS/DOM | fetch streaming, import maps, conformance |
+| core-robustness | HTML/DOM | Security fixes, assign_form_ids, collect_text |
+| harness-integrity | Shell | Save-as, multi-select, accessibility, form ids |
+| conformance-auditor | Fuzz/CI | Campañas largas, targets nuevos, corpus |
+| paint-layout-auditor | Layout/Paint | Fingerprint cache, grid spans, layout bounds |
+
+### Issues creados para colaboración
+
+Los siguientes issues están abiertos en GitHub para que la comunidad colabore:
+
+**Seguridad (P0)**: #951, #952, #953, #954, #955, #956
+**Colaboración (P0)**: #957, #958, #959, #960, #970
+**Robustez (P1)**: #961, #962, #963, #964
+**Release (P2)**: #965, #966, #967
+**Documentación (P3)**: #968, #969
+
+**Pre-Alpha específicos**: #942, #943, #944, #945, #946, #947, #948, #949, #980, #981, #983, #984, #985, #986, #987, #988, #989, #990, #991, #992
+
+### Conclusión
+
+El proyecto Megi está en un estado muy avanzado (2.213 tests, gate PASS, todas las áreas principales cubiertas). Lo que falta para un pre-alpha funcional es:
+
+1. **Compatibilidad web**: CSS animations, WebP animado, fuentes internacionales
+2. **UX**: Save-as visual, multi-select, accessibility
+3. **Infraestructura**: seguridad, colaboración, release process
+4. **Testing**: fuzz campaigns, WPT completo, bench real-page
+
+Con 4-6 semanas de trabajo enfocado, se puede tener un pre-alpha funcional. La prioridad debe ser compatibilidad (animaciones, WebP) → UX (save-as, cookies) → infraestructura (seguridad, colaboración) → testing (fuzz, WPT).
