@@ -79,6 +79,9 @@ pub enum FetchError {
     RequestBodyTooLarge,
     /// Request-body producer / streaming failure (aborts the upload).
     RequestBody(String),
+    /// A caller-supplied request header is malformed or owned by the browser (for example
+    /// `Host`, `Content-Length` or a value containing CR/LF). The request is not sent.
+    InvalidRequestHeader(String),
     /// The response headers exceeded [`crate::http::FetchOptions::max_header_bytes`].
     HeadersTooLarge,
     /// The response body exceeded [`crate::http::FetchOptions::max_response_bytes`].
@@ -157,6 +160,9 @@ impl fmt::Display for FetchError {
             Self::Http2(reason) => write!(f, "HTTP/2 error: {reason}"),
             Self::RequestBodyTooLarge => write!(f, "request body too large"),
             Self::RequestBody(reason) => write!(f, "request body failed: {reason}"),
+            Self::InvalidRequestHeader(reason) => {
+                write!(f, "invalid request header: {reason}")
+            }
             Self::HeadersTooLarge => write!(f, "HTTP response headers are too large"),
             Self::ResponseTooLarge => write!(f, "HTTP response body is too large"),
             Self::BodyIncomplete => write!(f, "HTTP response body ended prematurely"),
