@@ -1700,6 +1700,8 @@ fn paint_items(
             }
             DisplayItem::EffectGroup { items, .. } if budget.flatten => {
                 // The contents are embedded: paint them (bounded) instead of dropping pixels.
+                // The flat path uses the destination clip; the display list puts the group's
+                // items inside its rect (the buffered paths additionally clip to the rect).
                 if budget.flatten_depth < MAX_FLATTEN_DEPTH {
                     budget.flatten_depth += 1;
                     paint_items(pixmap, items, cache, font_database, dx, dy, budget);
@@ -1788,10 +1790,11 @@ impl PaintBudget {
 
     /// Reserves `buffers` offscreen buffers of `width × height` each.
     fn enter_buffers(&mut self, width: u32, height: u32, buffers: usize) -> bool {
-        let pixels = (width as usize)
-            .saturating_mul(height as usize)
-            .saturating_mul(buffers.max(1));
-        if pixels > MAX_ROUNDED_GROUP_PIXELS
+        let per_buffer = (width as usize).saturating_mul(height as usize);
+        let pixels = per_buffer.saturating_mul(buffers.max(1));
+        // The per-group cap applies to each buffer; the live-pixel cap to their sum
+        // (a text-mask group charges two buffers of the same size).
+        if per_buffer > MAX_ROUNDED_GROUP_PIXELS
             || self.depth >= MAX_OFFSCREEN_GROUP_DEPTH
             || self.pixels.saturating_add(pixels) > MAX_OFFSCREEN_PIXELS
         {
@@ -3846,6 +3849,28 @@ fn paint_backdrop_filter(pixmap: &mut Pixmap, rect: Rect, filters: &[css::Filter
 #[cfg(test)]
 mod paint_budget_tests {
     use super::*;
+
+    #[test]
+    fn test_paint_budget_counts_buffers_separately_from_the_per_buffer_cap() {
+        let mut budget = PaintBudget {
+            depth: 0,
+            pixels: 0,
+            flatten: false,
+            flatten_depth: 0,
+        };
+        // Two 64×64 buffers: charged twice, released twice.
+        assert!(budget.enter_buffers(64, 64, 2));
+        assert_eq!(budget.depth, 1);
+        assert_eq!(budget.pixels, 2 * 64 * 64);
+        budget.leave_buffers(64, 64, 2);
+        assert_eq!(budget.depth, 0);
+        assert_eq!(budget.pixels, 0);
+        // 4096×4096 is exactly the per-buffer cap; two of them fit the live-pixel cap.
+        assert!(budget.enter_buffers(4096, 4096, 2));
+        budget.leave_buffers(4096, 4096, 2);
+        // One pixel over the per-buffer cap is refused even though the total would fit.
+        assert!(!budget.enter_buffers(4097, 4096, 1));
+    }
 
     #[test]
     fn test_paint_budget_bounds_depth_and_live_pixels() {

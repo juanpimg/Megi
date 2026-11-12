@@ -79,7 +79,7 @@ fn sibling_opacity_groups_release_their_budget() {
 }
 
 #[test]
-fn flatten_mode_keeps_embedded_effect_content() {
+fn flatten_mode_keeps_embedded_opacity_content() {
     // 32 rounded groups fill the depth budget; the 33rd flattens. The opacity group inside
     // is embedded content: it must still paint (flatten mode used to drop it entirely).
     let rect = Rect::new(0.0, 0.0, 4.0, 4.0);
