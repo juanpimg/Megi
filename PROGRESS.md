@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `b28a21c` (2026-11-12) · overall **99%** · **2,083** tests · conformance **PASS** · **14** crates · **159,706** lines of Rust
+**Snapshot** — commit `5d65162` (2026-11-12) · overall **99%** · **2,082** tests · conformance **PASS** · **14** crates · **160,349** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -158,10 +158,10 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `b28a21c` (2026-11-12) |
+| Commit | `5d65162` (2026-11-12) |
 | Crates in the workspace | 14 |
-| Lines of Rust (tracked `.rs`) | 159706 |
-| Tests (`cargo test --workspace -- --list`) | 2083 |
+| Lines of Rust (tracked `.rs`) | 160349 |
+| Tests (`cargo test --workspace -- --list`) | 2082 |
 | Crates with `#![forbid(unsafe_code)]` | 14 / 14 |
 | Conformance gate | **PASS** |
 
@@ -211,4 +211,4 @@ python3 tools/update_progress.py --write --no-gate  # skip the conformance gate
 python3 tools/update_progress.py --check --no-gate --no-count  # CI freshness
 ```
 
-_Last manifest update by: docs (round 34 + PR merges). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._
+_Last manifest update by: docs (round 35 + PR merges). Generated artifacts: `PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._

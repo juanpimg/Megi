@@ -915,7 +915,8 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 27] = [
+    let accessors: [(&str, AccessorKind); 33] = [
+        ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
         ("className", AccessorKind::ClassName),
@@ -943,6 +944,11 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("offsetHeight", AccessorKind::OffsetHeight),
         ("clientWidth", AccessorKind::ClientWidth),
         ("clientHeight", AccessorKind::ClientHeight),
+        ("title", AccessorKind::Title),
+        ("lang", AccessorKind::Lang),
+        ("href", AccessorKind::Href),
+        ("src", AccessorKind::Src),
+        ("selectedIndex", AccessorKind::SelectedIndex),
     ];
     type Prepared<'a> = (
         &'a str,
@@ -986,6 +992,8 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
             node_set_attribute as fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>,
         ),
         ("getAttribute", 1, node_get_attribute),
+        ("getAttributeNode", 1, node_get_attribute_node),
+        ("removeAttributeNode", 1, node_remove_attribute_node),
         ("removeAttribute", 1, node_remove_attribute),
         ("hasAttribute", 1, node_has_attribute),
         ("appendChild", 1, node_append_child),
@@ -1023,6 +1031,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
 
 #[derive(Clone, Copy)]
 enum AccessorKind {
+    NodeType,
     TagName,
     Id,
     ClassName,
@@ -1050,10 +1059,16 @@ enum AccessorKind {
     OffsetHeight,
     ClientWidth,
     ClientHeight,
+    Title,
+    Lang,
+    Href,
+    Src,
+    SelectedIndex,
 }
 
 fn accessor_functions(kind: AccessorKind) -> AccessorPair {
     match kind {
+        AccessorKind::NodeType => (node_node_type, None),
         AccessorKind::TagName => (node_tag_name, None),
         AccessorKind::Id => (node_id_get, Some(node_id_set)),
         AccessorKind::ClassName => (node_class_get, Some(node_class_set)),
@@ -1081,6 +1096,11 @@ fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::OffsetHeight => (node_offset_height, None),
         AccessorKind::ClientWidth => (node_client_width, None),
         AccessorKind::ClientHeight => (node_client_height, None),
+        AccessorKind::Title => (node_title_get, Some(node_title_set)),
+        AccessorKind::Lang => (node_lang_get, Some(node_lang_set)),
+        AccessorKind::Href => (node_href_get, Some(node_href_set)),
+        AccessorKind::Src => (node_src_get, Some(node_src_set)),
+        AccessorKind::SelectedIndex => (node_selected_index_get, Some(node_selected_index_set)),
     }
 }
 
@@ -1453,9 +1473,27 @@ fn node_value_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
                 if let Some(value) = option.get_attribute("value") {
                     return Some(value.to_string());
                 }
-                return Some(document.text_content(node_id));
+                if let Some(option_id) = document.descendants(node_id).find(|child| {
+                    document
+                        .try_node(*child)
+                        .and_then(|node| node.as_element())
+                        .is_some_and(|candidate| {
+                            candidate.local_name == "option"
+                                && candidate.get_attribute("selected").is_some()
+                        })
+                }) {
+                    return Some(document.text_content(option_id));
+                }
             }
             return Some(String::new());
+        }
+        if element.local_name == "option" {
+            return Some(
+                element
+                    .get_attribute("value")
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| document.text_content(node_id)),
+            );
         }
         Some(element.get_attribute("value").unwrap_or("").to_string())
     })
@@ -1742,6 +1780,10 @@ fn node_insert_before(
         Some(value) if !value.is_null_or_undefined() => Some(argument_node(args, 1, context)?),
         _ => None,
     };
+    if reference == Some(new_node) {
+        // DOM spec: inserting a node before itself is a no-op.
+        return wrap_node(context, new_node);
+    }
     let inserted = with_host(|host| {
         host.document
             .insert_node(parent, new_node, reference)
@@ -2433,6 +2475,7 @@ fn class_list_object(context: &mut Context, handle: u32) -> JsValue {
         ("contains", 1, class_contains),
         ("toggle", 1, class_toggle),
         ("toString", 0, class_to_string),
+        ("item", 1, class_item),
     ] {
         init.function(native(function), js_string!(name), length);
     }
@@ -4174,6 +4217,7 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
   SearchParams.prototype.has = function (key) { return this.get(key) !== null; };
   SearchParams.prototype.set = function (key, value) { var found = false; var out = []; this._list.forEach(function (pair) { if (pair[0] === String(key)) { if (!found) { out.push([String(key), String(value)]); found = true; } } else { out.push(pair); } }); if (!found) { out.push([String(key), String(value)]); } this._list = out; };
   SearchParams.prototype.toString = function () { return this._list.map(function (pair) { return encodeURIComponent(pair[0]) + "=" + encodeURIComponent(pair[1]); }).join("&"); };
+  SearchParams.prototype.sort = function () { this._list.sort(function (a, b) { return a[0] < b[0] ? -1 : (a[0] > b[0] ? 1 : 0); }); };
   SearchParams.prototype.forEach = function (callback, thisArg) { this._list.forEach(function (pair) { callback.call(thisArg, pair[1], pair[0], this); }, this); };
   define("URLSearchParams", SearchParams);
   function URL(input, base) {
@@ -5348,5 +5392,207 @@ impl JsRuntime {
             url: base_url.to_string(),
             exports: values,
         })
+    }
+}
+
+fn node_node_type(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let kind = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .map(|node| match &node.kind {
+                dom::NodeKind::Element(_) => 1.0,
+                dom::NodeKind::Text(_) => 3.0,
+                dom::NodeKind::Comment(_) => 8.0,
+                dom::NodeKind::Document => 9.0,
+                dom::NodeKind::DocumentFragment => 11.0,
+                dom::NodeKind::Doctype { .. } => 10.0,
+                dom::NodeKind::ProcessingInstruction { .. } => 7.0,
+            })
+    })
+    .flatten()
+    .unwrap_or(0.0);
+    Ok(JsValue::from(kind))
+}
+
+fn string_attribute_get(this: &JsValue, name: &str, context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let value = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute(name).map(str::to_owned))
+    })
+    .flatten();
+    Ok(value.map_or_else(JsValue::null, |value| JsValue::from(js_string!(value))))
+}
+
+fn string_attribute_set(
+    this: &JsValue,
+    name: &str,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let value = arg_string(args, 0, context)?;
+    with_host(|host| {
+        if let Some(element) = host
+            .document
+            .try_node_mut(node_id)
+            .and_then(|node| node.as_element_mut())
+        {
+            element.set_attribute(dom::Attribute::new(name.to_string(), value), true);
+        }
+    });
+    Ok(JsValue::undefined())
+}
+
+fn node_title_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    string_attribute_get(this, "title", c)
+}
+fn node_title_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    string_attribute_set(this, "title", a, c)
+}
+fn node_lang_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    string_attribute_get(this, "lang", c)
+}
+fn node_lang_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    string_attribute_set(this, "lang", a, c)
+}
+fn node_href_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    string_attribute_get(this, "href", c)
+}
+fn node_href_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    string_attribute_set(this, "href", a, c)
+}
+fn node_src_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    string_attribute_get(this, "src", c)
+}
+fn node_src_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    string_attribute_set(this, "src", a, c)
+}
+
+fn option_ids(document: &dom::Document, select: NodeId) -> Vec<NodeId> {
+    document
+        .descendants(select)
+        .filter(|id| {
+            document
+                .try_node(*id)
+                .and_then(|node| node.as_element())
+                .is_some_and(|element| element.local_name == "option")
+        })
+        .collect()
+}
+
+fn node_selected_index_get(
+    this: &JsValue,
+    _a: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let index = with_host(|host| {
+        option_ids(&host.document, node_id)
+            .iter()
+            .position(|id| {
+                host.document
+                    .try_node(*id)
+                    .and_then(|node| node.as_element())
+                    .is_some_and(|element| element.get_attribute("selected").is_some())
+            })
+            .map(|value| value as f64)
+            .unwrap_or(-1.0)
+    })
+    .unwrap_or(-1.0);
+    Ok(JsValue::from(index))
+}
+
+fn node_selected_index_set(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let index = args
+        .first()
+        .and_then(|value| value.to_number(context).ok())
+        .unwrap_or(-1.0) as i64;
+    with_host(|host| {
+        let options = option_ids(&host.document, node_id);
+        for (position, option) in options.iter().enumerate() {
+            if let Some(element) = host
+                .document
+                .try_node_mut(*option)
+                .and_then(|node| node.as_element_mut())
+            {
+                if position as i64 == index {
+                    element.set_attribute(dom::Attribute::new("selected", String::new()), true);
+                } else {
+                    element
+                        .attributes
+                        .retain(|attribute| attribute.local_name != "selected");
+                }
+            }
+        }
+    });
+    Ok(JsValue::undefined())
+}
+
+fn class_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let (_, classes) = classes_of(this, context)?;
+    let index = args
+        .first()
+        .and_then(|value| value.to_number(context).ok())
+        .unwrap_or(0.0) as usize;
+    Ok(classes.get(index).map_or_else(JsValue::null, |value| {
+        JsValue::from(js_string!(value.clone()))
+    }))
+}
+
+fn node_get_attribute_node(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let name = arg_string(args, 0, context)?;
+    let value = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute(&name).map(str::to_owned))
+    })
+    .flatten();
+    match value {
+        Some(value) => attribute_item(context, &name, &value),
+        None => Ok(JsValue::null()),
+    }
+}
+
+fn node_remove_attribute_node(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let item = args
+        .first()
+        .and_then(|value| value.as_object())
+        .ok_or_else(|| js_error("removeAttributeNode expects an Attr"))?;
+    let name = item
+        .get(js_string!("name"), context)
+        .map_err(|error| js_error(error.to_string()))?
+        .to_string(context)
+        .map(|value| value.to_std_string_escaped())
+        .unwrap_or_default();
+    let old = with_host(|host| {
+        host.document
+            .try_node_mut(node_id)
+            .and_then(|node| node.as_element_mut())
+            .and_then(|element| element.remove_attribute(&name))
+    })
+    .flatten();
+    match old {
+        Some(value) => attribute_item(context, &name, &value),
+        None => Ok(JsValue::null()),
     }
 }
