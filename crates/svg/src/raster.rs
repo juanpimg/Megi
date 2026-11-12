@@ -1179,6 +1179,7 @@ impl Canvas {
             max_x = max_x.max(px_space);
             max_y = max_y.max(py_space);
         }
+<<<<<<< HEAD
         let i0 = ((min_x - px) / width).floor() as i64 - 1;
         let i1 = ((max_x - px) / width).ceil() as i64 + 1;
         let j0 = ((min_y - py) / height).floor() as i64 - 1;
@@ -1192,6 +1193,37 @@ impl Canvas {
             return Ok(());
         }
         if columns.saturating_mul(rows) > i128::from(MAX_PATTERN_TILES) {
+||||||| f83e33b
+        let i0 = ((min_x - px) / width).floor() as i64 - 1;
+        let i1 = ((max_x - px) / width).ceil() as i64 + 1;
+        let j0 = ((min_y - py) / height).floor() as i64 - 1;
+        let j1 = ((max_y - py) / height).ceil() as i64 + 1;
+        let columns = (i1 - i0 + 1).max(0) as u64;
+        let rows = (j1 - j0 + 1).max(0) as u64;
+        if columns.saturating_mul(rows) > MAX_PATTERN_TILES {
+=======
+        // Compute the tile span in f64: a huge but finite `patternTransform` can exceed
+        // i64, and clamping the absolute index would silently move (or drop) a valid
+        // pattern whose phase is beyond the tile budget. Reject only over-budget spans.
+        let i0f = ((min_x - px) / width).floor() as f64;
+        let i1f = ((max_x - px) / width).ceil() as f64;
+        let j0f = ((min_y - py) / height).floor() as f64;
+        let j1f = ((max_y - py) / height).ceil() as f64;
+        let columns = (i1f - i0f + 3.0).max(0.0);
+        let rows = (j1f - j0f + 3.0).max(0.0);
+        if !columns.is_finite() || !rows.is_finite() || columns * rows > MAX_PATTERN_TILES as f64 {
+            return Err(SvgError::Limit(
+                "pattern tile budget exceeded (too many repetitions)".to_owned(),
+            ));
+        }
+        let i0 = (i0f as i64).saturating_sub(1);
+        let i1 = (i1f as i64).saturating_add(1);
+        let j0 = (j0f as i64).saturating_sub(1);
+        let j1 = (j1f as i64).saturating_add(1);
+        let columns = i1.saturating_sub(i0).saturating_add(1).max(0) as u64;
+        let rows = j1.saturating_sub(j0).saturating_add(1).max(0) as u64;
+        if columns.saturating_mul(rows) > MAX_PATTERN_TILES {
+>>>>>>> pr812
             return Err(SvgError::Limit(
                 "pattern tile budget exceeded (too many repetitions)".to_owned(),
             ));
@@ -1791,13 +1823,27 @@ fn stamp_polygon(points: &[(f32, f32)], width: usize, height: usize, coverage: &
         max_y = max_y.max(y);
     }
     let first_x = (min_x.floor().max(0.0) as usize).min(width);
+<<<<<<< HEAD
     let last_x = (max_x.ceil().max(0.0) as usize)
         .saturating_add(1)
         .min(width);
+||||||| f83e33b
+    let last_x = ((max_x.ceil().max(0.0) as usize) + 1).min(width);
+=======
+    // A finite coordinate above `usize::MAX` saturates on the cast, and the following `+1`
+    // would then overflow (panic with overflow checks, wrap to 0 in release).
+    let last_x = ((max_x.ceil().max(0.0) as usize).saturating_add(1)).min(width);
+>>>>>>> pr812
     let first_y = (min_y.floor().max(0.0) as usize).min(height);
+<<<<<<< HEAD
     let last_y = (max_y.ceil().max(0.0) as usize)
         .saturating_add(1)
         .min(height);
+||||||| f83e33b
+    let last_y = ((max_y.ceil().max(0.0) as usize) + 1).min(height);
+=======
+    let last_y = ((max_y.ceil().max(0.0) as usize).saturating_add(1)).min(height);
+>>>>>>> pr812
     if first_x >= last_x || first_y >= last_y {
         return;
     }
@@ -1831,13 +1877,25 @@ fn stamp_disc(center: (f32, f32), radius: f32, width: usize, height: usize, cove
         return;
     }
     let first_x = ((center.0 - radius).floor().max(0.0) as usize).min(width);
+<<<<<<< HEAD
     let last_x = ((center.0 + radius).ceil().max(0.0) as usize)
         .saturating_add(1)
         .min(width);
+||||||| f83e33b
+    let last_x = (((center.0 + radius).ceil().max(0.0) as usize) + 1).min(width);
+=======
+    let last_x = (((center.0 + radius).ceil().max(0.0) as usize).saturating_add(1)).min(width);
+>>>>>>> pr812
     let first_y = ((center.1 - radius).floor().max(0.0) as usize).min(height);
+<<<<<<< HEAD
     let last_y = ((center.1 + radius).ceil().max(0.0) as usize)
         .saturating_add(1)
         .min(height);
+||||||| f83e33b
+    let last_y = (((center.1 + radius).ceil().max(0.0) as usize) + 1).min(height);
+=======
+    let last_y = (((center.1 + radius).ceil().max(0.0) as usize).saturating_add(1)).min(height);
+>>>>>>> pr812
     let samples = (STAMP_SAMPLES * STAMP_SAMPLES) as f32;
     let radius_squared = radius * radius;
     for pixel_y in first_y..last_y {
@@ -1906,6 +1964,38 @@ mod tests {
         assert!((row[1] - 0.25).abs() < 1e-6);
         assert!((row[2] - 0.1875).abs() < 1e-6);
         assert_eq!(row[3], 0.0);
+    }
+
+    #[test]
+    fn test_huge_text_origin_does_not_overflow_the_mask() {
+        let mut canvas = canvas(4, 4);
+        let mask = fonts::GlyphMask {
+            width: 2,
+            height: 1,
+            left: 0.0,
+            top: 0.0,
+            advance: 2.0,
+            data: vec![255, 255],
+        };
+        // `1e38` saturates to `i64::MAX`; the second column used to overflow `+`.
+        canvas.add_mask(1e38, 0.0, &mask);
+        assert!(canvas.coverage.iter().all(|value| *value == 0.0));
+    }
+
+    #[test]
+    fn test_huge_coordinates_do_not_overflow_stamp_bounds() {
+        let mut coverage = vec![0.0f32; 16];
+        stamp_polygon(
+            &[(0.0, -1e38), (1.0, 0.0), (0.0, 1e38)],
+            4,
+            4,
+            &mut coverage,
+        );
+        stamp_disc((0.0, 0.0), 1e38, 4, 4, &mut coverage);
+        assert!(
+            coverage.iter().any(|value| *value > 0.0),
+            "the huge disc must still paint (release wraps the bounds to zero without the fix)"
+        );
     }
 
     #[test]
