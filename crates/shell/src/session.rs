@@ -134,10 +134,11 @@ impl Session {
     /// Normalizes a decoded session: caps counts, clamps fields and drops unusable tabs.
     pub fn normalize(&mut self) {
         self.version = SCHEMA_VERSION;
-        self.tabs
-            .retain(|tab| tab.zoom.is_finite() && tab.zoom > 0.0);
         self.tabs.truncate(MAX_SESSION_TABS);
         for tab in &mut self.tabs {
+            if !tab.zoom.is_finite() || tab.zoom <= 0.0 {
+                tab.zoom = 1.0;
+            }
             // Remap the index while dropping unusable URLs so it keeps pointing at the same
             // entry (retaining a url before it shifted every later index).
             let mut new_index = tab.index;
@@ -181,7 +182,7 @@ impl Session {
             let url = if session_tab.url.is_empty() {
                 match history.get(session_tab.index) {
                     Some(url) => url.as_str(),
-                    None => break,
+                    None => continue,
                 }
             } else {
                 session_tab.url.clone()
@@ -1353,5 +1354,32 @@ mod tests {
             assert_eq!(parsed, session);
             let _ = std::fs::remove_dir_all(&dir);
         }
+    }
+
+    #[test]
+    fn normalize_and_restore_preserve_valid_tabs_across_corrupt_entries() {
+        let mut session = sample();
+        session.tabs.push(SessionTab {
+            url: String::new(),
+            history: vec![],
+            index: 99,
+            scroll: 0,
+            zoom: f64::NAN,
+        });
+        session.tabs.push(SessionTab {
+            url: "https://example.org/".to_string(),
+            history: vec!["https://example.org/".to_string()],
+            index: 0,
+            scroll: 0,
+            zoom: -5.0,
+        });
+        session.normalize();
+        assert_eq!(session.tabs.len(), 4);
+        assert_eq!(session.tabs[2].zoom, 1.0);
+        assert_eq!(session.tabs[3].zoom, 1.0);
+
+        let restored = session.restore();
+        assert_eq!(restored.len(), 3);
+        assert_eq!(restored.tabs()[2].url, "https://example.org/");
     }
 }
