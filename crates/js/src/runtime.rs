@@ -4390,15 +4390,16 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     }
     return out;
   });
-  function clone(value, depth) {
-    if (depth > 100 || value === null || typeof value !== "object") { return value; }
+  function clone(value, seen) {
+    if (value === null || typeof value !== "object") { return value; }
+    if (seen.has(value)) { throw new DOMException("DataCloneError: cyclic object value", "DataCloneError"); }
     if (value instanceof Date) { return new Date(value.getTime()); }
-    if (value instanceof Map) { var map = new Map(); value.forEach(function (v, k) { map.set(clone(k, depth + 1), clone(v, depth + 1)); }); return map; }
-    if (value instanceof Set) { var set = new Set(); value.forEach(function (v) { set.add(clone(v, depth + 1)); }); return set; }
-    if (Array.isArray(value)) { return value.map(function (item) { return clone(item, depth + 1); }); }
-    var out = {}; for (var key in value) { if (Object.prototype.hasOwnProperty.call(value, key)) { out[key] = clone(value[key], depth + 1); } } return out;
+    if (value instanceof Map) { var map = new Map(); seen.add(value); value.forEach(function (v, k) { map.set(clone(k, seen), clone(v, seen)); }); seen.delete(value); return map; }
+    if (value instanceof Set) { var set = new Set(); seen.add(value); value.forEach(function (v) { set.add(clone(v, seen)); }); seen.delete(value); return set; }
+    if (Array.isArray(value)) { seen.add(value); var arr = value.map(function (item) { return clone(item, seen); }); seen.delete(value); return arr; }
+    seen.add(value); var out = {}; for (var key in value) { if (Object.prototype.hasOwnProperty.call(value, key)) { out[key] = clone(value[key], seen); } } seen.delete(value); return out;
   }
-  define("structuredClone", function (value) { return clone(value, 0); });
+  define("structuredClone", function (value) { return clone(value, new Set()); });
   if (typeof Promise !== "undefined") { define("queueMicrotask", function (callback) { Promise.resolve().then(callback); }); }
   else { define("queueMicrotask", function (callback) { setTimeout(callback, 0); }); }
   define("requestIdleCallback", function (callback) { return setTimeout(function () { callback({ didTimeout: false, timeRemaining: function () { return 50; } }); }, 0); });
