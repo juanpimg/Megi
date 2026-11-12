@@ -1538,7 +1538,8 @@ impl Document {
         self.children(parent).find(|&child| {
             self.try_node(child).is_some_and(|node| {
                 node.as_element().is_some_and(|element| {
-                    element.namespace == Namespace::Html && element.local_name.eq_ignore_ascii_case(local_name)
+                    element.namespace == Namespace::Html
+                        && element.local_name.eq_ignore_ascii_case(local_name)
                 })
             })
         })

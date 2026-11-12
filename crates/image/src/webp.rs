@@ -511,7 +511,6 @@ fn decode_pixels(
     Ok(data)
 }
 
-
 /// Meta Huffman image: groups a `VP8L` block to its prefix-code group.
 struct MetaImage {
     width: usize,

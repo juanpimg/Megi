@@ -255,7 +255,11 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
                             index += 1;
                             raw.refresh_ms = Some(interval);
                         }
-                        Err(_) if value.starts_with('-') || value.contains("://") || value.starts_with("data:") => {
+                        Err(_)
+                            if value.starts_with('-')
+                                || value.contains("://")
+                                || value.starts_with("data:") =>
+                        {
                             // Looks like a flag or URL, not a value: use default.
                             raw.refresh_ms = Some(crate::refresh::DEFAULT_REFRESH_MS);
                         }
@@ -325,19 +329,25 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
     let mut extra_tabs = Vec::with_capacity(raw.tabs.len());
     for tab in &raw.tabs {
         if tab.len() > MAX_INPUT_BYTES {
-            return Err(ShellError::Usage(format!("input too long (max {MAX_INPUT_BYTES} bytes)")));
+            return Err(ShellError::Usage(format!(
+                "input too long (max {MAX_INPUT_BYTES} bytes)"
+            )));
         }
         extra_tabs.push(normalize_input(tab)?);
     }
     if let Some(ref find) = raw.find
         && find.len() > MAX_INPUT_BYTES
     {
-        return Err(ShellError::Usage(format!("--find value too long (max {MAX_INPUT_BYTES} bytes)")));
+        return Err(ShellError::Usage(format!(
+            "--find value too long (max {MAX_INPUT_BYTES} bytes)"
+        )));
     }
     if let Some(ref input) = raw.input
         && input.len() > MAX_INPUT_BYTES
     {
-        return Err(ShellError::Usage(format!("input too long (max {MAX_INPUT_BYTES} bytes)")));
+        return Err(ShellError::Usage(format!(
+            "input too long (max {MAX_INPUT_BYTES} bytes)"
+        )));
     }
     let (input, tabs) = match raw.input {
         Some(input) => {

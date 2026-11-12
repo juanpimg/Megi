@@ -313,7 +313,12 @@ pub fn save_screenshot(
             reason: error.to_string(),
         })?;
     }
-    let temporary = path.with_file_name(format!(".{}.tmp", path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "screenshot".to_string())));
+    let temporary = path.with_file_name(format!(
+        ".{}.tmp",
+        path.file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "screenshot".to_string())
+    ));
     if let Err(error) = std::fs::write(&temporary, &output.png) {
         let _ = std::fs::remove_file(&temporary);
         return Err(ShellError::Io {
@@ -382,7 +387,12 @@ pub fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), ShellError> {
             reason: error.to_string(),
         })?;
     }
-    let temporary = path.with_file_name(format!(".{}.tmp", path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "download".to_string())));
+    let temporary = path.with_file_name(format!(
+        ".{}.tmp",
+        path.file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "download".to_string())
+    ));
     if let Err(error) = std::fs::write(&temporary, bytes) {
         let _ = std::fs::remove_file(&temporary);
         return Err(ShellError::Io {

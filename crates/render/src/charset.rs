@@ -99,7 +99,10 @@ fn charset_from_meta(bytes: &[u8]) -> Option<String> {
     while let Some(meta_pos) = haystack[search_start..].find("<meta") {
         let meta_start = search_start + meta_pos;
         // Find the end of the meta tag.
-        let tag_end = haystack[meta_start..].find('>').map(|i| meta_start + i).unwrap_or(haystack.len());
+        let tag_end = haystack[meta_start..]
+            .find('>')
+            .map(|i| meta_start + i)
+            .unwrap_or(haystack.len());
         let tag = &haystack[meta_start..tag_end + 1];
         if let Some(charset_pos) = tag.find("charset") {
             let rest = &tag[charset_pos + "charset".len()..];

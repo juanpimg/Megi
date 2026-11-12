@@ -305,7 +305,10 @@ impl Font {
         };
         let bounds = outlined.px_bounds();
         if !bounds.width().is_finite() || !bounds.height().is_finite() {
-            return Err(FontError::GlyphTooLarge { width: 0, height: 0 });
+            return Err(FontError::GlyphTooLarge {
+                width: 0,
+                height: 0,
+            });
         }
         let width = bounds.width().ceil() as u32;
         let height = bounds.height().ceil() as u32;
