@@ -1450,7 +1450,21 @@ pub fn rasterize_display_list_with_font_database_and_stats(
         Pixmap::new_with_background(width, height, config.background)
     };
     let mut cache = TextCache::default();
-    paint_items(&mut pixmap, &dl.items, &mut cache, font_database, 0.0, 0.0);
+    let mut budget = PaintBudget {
+        depth: 0,
+        pixels: 0,
+        flatten: false,
+        flatten_depth: 0,
+    };
+    paint_items(
+        &mut pixmap,
+        &dl.items,
+        &mut cache,
+        font_database,
+        0.0,
+        0.0,
+        &mut budget,
+    );
     (pixmap, cache.stats)
 }
 
@@ -1467,6 +1481,7 @@ fn paint_items(
     font_database: &FontDatabase,
     dx: f32,
     dy: f32,
+    budget: &mut PaintBudget,
 ) {
     let mut index = 0usize;
     while index < items.len() {
@@ -1485,6 +1500,11 @@ fn paint_items(
                 continue;
             }
             DisplayItem::PushRoundedGroup { rect, radii } => {
+                if budget.flatten {
+                    // The enclosing group already hit the cap: paint the contents inline.
+                    index += 1;
+                    continue;
+                }
                 // Find the matching PopRoundedGroup (supports nesting).
                 let mut depth = 1usize;
                 let mut end = index + 1;
@@ -1510,6 +1530,7 @@ fn paint_items(
                     font_database,
                     dx,
                     dy,
+                    budget,
                 );
                 index = end + 1;
                 continue;
@@ -1520,6 +1541,10 @@ fn paint_items(
                 continue;
             }
             DisplayItem::PushTextMaskGroup { rect, runs } => {
+                if budget.flatten {
+                    index += 1;
+                    continue;
+                }
                 let mut depth = 1usize;
                 let mut end = index + 1;
                 while end < items.len() {
@@ -1544,6 +1569,7 @@ fn paint_items(
                     font_database,
                     dx,
                     dy,
+                    budget,
                 );
                 index = end + 1;
                 continue;
@@ -1672,6 +1698,18 @@ fn paint_items(
             DisplayItem::BackdropFilter { rect, filters } => {
                 paint_backdrop_filter(pixmap, shift(*rect, dx, dy), filters);
             }
+            DisplayItem::EffectGroup { items, .. } if budget.flatten => {
+                // The contents are embedded: paint them (bounded) instead of dropping pixels.
+                // The flat path uses the destination clip; the display list puts the group's
+                // items inside its rect (the buffered paths additionally clip to the rect).
+                if budget.flatten_depth < MAX_FLATTEN_DEPTH {
+                    budget.flatten_depth += 1;
+                    paint_items(pixmap, items, cache, font_database, dx, dy, budget);
+                    budget.flatten_depth -= 1;
+                }
+                index += 1;
+                continue;
+            }
             DisplayItem::EffectGroup {
                 rect,
                 filters,
@@ -1688,14 +1726,34 @@ fn paint_items(
                     font_database,
                     dx,
                     dy,
+                    budget,
                 );
+            }
+            DisplayItem::OpacityGroup { items, .. } if budget.flatten => {
+                if budget.flatten_depth < MAX_FLATTEN_DEPTH {
+                    budget.flatten_depth += 1;
+                    paint_items(pixmap, items, cache, font_database, dx, dy, budget);
+                    budget.flatten_depth -= 1;
+                }
+                index += 1;
+                continue;
             }
             DisplayItem::OpacityGroup {
                 rect,
                 opacity,
                 items,
             } => {
-                paint_opacity_group(pixmap, *rect, *opacity, items, cache, font_database, dx, dy);
+                paint_opacity_group(
+                    pixmap,
+                    *rect,
+                    *opacity,
+                    items,
+                    cache,
+                    font_database,
+                    dx,
+                    dy,
+                    budget,
+                );
             }
             DisplayItem::PushClip { .. }
             | DisplayItem::PopClip
@@ -1707,6 +1765,80 @@ fn paint_items(
         index += 1;
     }
 }
+
+/// Offscreen-group budget shared by one paint pass.
+///
+/// Rounded/text-mask/effect/opacity groups allocate a full-size buffer per nesting level;
+/// the per-group pixel cap alone does not bound the total (2,048 nested `border-radius`
+/// groups of 800×600 held ≈3.9 GB). Bound both the nesting depth and the live pixels.
+struct PaintBudget {
+    depth: usize,
+    pixels: usize,
+    /// Past the caps: paint group contents in place and skip nested groups instead of
+    /// recursing into them (a flat paint per nesting level would overflow the stack).
+    flatten: bool,
+    /// Flattened `EffectGroup`/`OpacityGroup` nesting already entered (their contents are
+    /// embedded, so they cannot be skipped without losing pixels).
+    flatten_depth: usize,
+}
+
+impl PaintBudget {
+    /// Reserves one `width × height` offscreen buffer, or refuses when a cap is reached.
+    fn enter(&mut self, width: u32, height: u32) -> bool {
+        self.enter_buffers(width, height, 1)
+    }
+
+    /// Reserves `buffers` offscreen buffers of `width × height` each.
+    fn enter_buffers(&mut self, width: u32, height: u32, buffers: usize) -> bool {
+        let per_buffer = (width as usize).saturating_mul(height as usize);
+        let pixels = per_buffer.saturating_mul(buffers.max(1));
+        // The per-group cap applies to each buffer; the live-pixel cap to their sum
+        // (a text-mask group charges two buffers of the same size).
+        if per_buffer > MAX_ROUNDED_GROUP_PIXELS
+            || self.depth >= MAX_OFFSCREEN_GROUP_DEPTH
+            || self.pixels.saturating_add(pixels) > MAX_OFFSCREEN_PIXELS
+        {
+            return false;
+        }
+        self.depth += 1;
+        self.pixels += pixels;
+        true
+    }
+
+    /// Runs `paint` in flattened mode, restoring the previous mode afterwards.
+    fn with_flattened<R>(&mut self, paint: impl FnOnce(&mut Self) -> R) -> R {
+        let previous = std::mem::replace(&mut self.flatten, true);
+        let result = paint(self);
+        self.flatten = previous;
+        result
+    }
+
+    /// Releases a buffer reserved by [`PaintBudget::enter`].
+    fn leave(&mut self, width: u32, height: u32) {
+        self.leave_buffers(width, height, 1);
+    }
+
+    /// Releases `buffers` buffers reserved by [`PaintBudget::enter_buffers`].
+    fn leave_buffers(&mut self, width: u32, height: u32, buffers: usize) {
+        self.depth = self.depth.saturating_sub(1);
+        self.pixels = self.pixels.saturating_sub(
+            (width as usize)
+                .saturating_mul(height as usize)
+                .saturating_mul(buffers.max(1)),
+        );
+    }
+}
+
+/// Maximum nesting of offscreen groups in one paint pass.
+const MAX_OFFSCREEN_GROUP_DEPTH: usize = 32;
+/// Maximum live offscreen pixels in one paint pass (256 MiB at 4 B/px).
+///
+/// This bounds the group buffers; filter scratch (`blur_rgba`, text shadows) is not
+/// charged and stays a documented residual.
+const MAX_OFFSCREEN_PIXELS: usize = 64 * 1024 * 1024;
+/// Flattened nesting of embedded-content groups (`EffectGroup`/`OpacityGroup`) before
+/// their contents are dropped; a flat recursion per level would overflow the stack.
+const MAX_FLATTEN_DEPTH: usize = 8;
 
 /// Returns `rect` translated by `(dx, dy)`.
 fn shift(rect: Rect, dx: f32, dy: f32) -> Rect {
@@ -1724,6 +1856,7 @@ fn paint_opacity_group(
     font_database: &FontDatabase,
     dx: f32,
     dy: f32,
+    budget: &mut PaintBudget,
 ) {
     let opacity = opacity.clamp(0.0, 1.0);
     if opacity <= 0.0 || items.is_empty() {
@@ -1748,6 +1881,13 @@ fn paint_opacity_group(
     }
     let (bx0, by0) = (x0 as i32, y0 as i32);
     let (width, height) = ((x1 - x0) as u32, (y1 - y0) as u32);
+    if !budget.enter(width, height) {
+        // Depth/total-pixel cap: paint the layer flat (opacity is lost, documented).
+        budget.with_flattened(|budget| {
+            paint_items(pixmap, items, cache, font_database, dx, dy, budget)
+        });
+        return;
+    }
 
     // Transparent offscreen buffer; the group contents are translated so that
     // (bx0, by0) becomes (0, 0). The group's own clip is not inherited: the
@@ -1760,6 +1900,7 @@ fn paint_opacity_group(
         font_database,
         dx - bx0 as f32,
         dy - by0 as f32,
+        budget,
     );
 
     // Composite the layer with the extra opacity factor.
@@ -1782,6 +1923,7 @@ fn paint_opacity_group(
                 blend_over(dst, with_alpha(src, u32::from(alpha)));
         }
     }
+    budget.leave(width, height);
 }
 
 /// Bilinear RGB(A) sample of `image` at image-space position `(u, v)`.
@@ -2395,6 +2537,7 @@ fn paint_rounded_group(
     font_database: &FontDatabase,
     dx: f32,
     dy: f32,
+    budget: &mut PaintBudget,
 ) {
     let Some(clip) = pixmap.clip_rect() else {
         return;
@@ -2412,9 +2555,11 @@ fn paint_rounded_group(
     }
     let width = (x1 - x0) as u32;
     let height = (y1 - y0) as u32;
-    if (width as usize).saturating_mul(height as usize) > MAX_ROUNDED_GROUP_PIXELS {
-        // Defensive cap: fall back to unmasked painting (documented).
-        paint_items(pixmap, items, cache, font_database, dx, dy);
+    if !budget.enter(width, height) {
+        // Depth/total-pixel cap: fall back to unmasked painting (documented).
+        budget.with_flattened(|budget| {
+            paint_items(pixmap, items, cache, font_database, dx, dy, budget)
+        });
         return;
     }
     let mut buffer = Pixmap::new(width, height);
@@ -2426,8 +2571,10 @@ fn paint_rounded_group(
         font_database,
         dx - x0 as f32,
         dy - y0 as f32,
+        budget,
     );
     pixmap.composite_rounded_group(rect, radii, &buffer, x0, y0);
+    budget.leave(width, height);
 }
 
 /// Paints one `text-shadow` layer: glyph coverage offscreen + deterministic blur.
@@ -2531,6 +2678,7 @@ fn paint_text_mask_group(
     font_database: &FontDatabase,
     dx: f32,
     dy: f32,
+    budget: &mut PaintBudget,
 ) {
     let Some(clip) = pixmap.clip_rect() else {
         return;
@@ -2548,9 +2696,12 @@ fn paint_text_mask_group(
     }
     let width = (x1 - x0) as u32;
     let height = (y1 - y0) as u32;
-    if (width as usize).saturating_mul(height as usize) > MAX_ROUNDED_GROUP_PIXELS {
-        // Defensive cap: paint the background without the glyph mask (documented).
-        paint_items(pixmap, items, cache, font_database, dx, dy);
+    // The buffer is painted and then masked, so two full-size buffers are live at once.
+    if !budget.enter_buffers(width, height, 2) {
+        // Depth/total-pixel cap: paint the background without the glyph mask (documented).
+        budget.with_flattened(|budget| {
+            paint_items(pixmap, items, cache, font_database, dx, dy, budget)
+        });
         return;
     }
     let mut buffer = Pixmap::new(width, height);
@@ -2562,6 +2713,7 @@ fn paint_text_mask_group(
         font_database,
         dx - x0 as f32,
         dy - y0 as f32,
+        budget,
     );
     // Build the glyph coverage mask.
     let mut mask = Pixmap::new(width, height);
@@ -2610,6 +2762,7 @@ fn paint_text_mask_group(
             );
         }
     }
+    budget.leave_buffers(width, height, 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -3552,6 +3705,7 @@ fn paint_effect_group(
     font_database: &FontDatabase,
     dx: f32,
     dy: f32,
+    budget: &mut PaintBudget,
 ) {
     if items.is_empty() {
         return;
@@ -3575,9 +3729,11 @@ fn paint_effect_group(
     }
     let width = (x1 - x0) as u32;
     let height = (y1 - y0) as u32;
-    if (width as usize).saturating_mul(height as usize) > MAX_ROUNDED_GROUP_PIXELS {
-        // Cap: paint the contents unfiltered (documented DoS bound).
-        paint_items(pixmap, items, cache, font_database, dx, dy);
+    if !budget.enter(width, height) {
+        // Depth/total-pixel cap: paint the contents unfiltered (documented DoS bound).
+        budget.with_flattened(|budget| {
+            paint_items(pixmap, items, cache, font_database, dx, dy, budget)
+        });
         return;
     }
     let mut buffer = Pixmap::new(width, height);
@@ -3588,6 +3744,7 @@ fn paint_effect_group(
         font_database,
         dx - x0 as f32,
         dy - y0 as f32,
+        budget,
     );
     let filters: Vec<css::FilterFunction> = filters
         .iter()
@@ -3598,6 +3755,7 @@ fn paint_effect_group(
         apply_filter(&mut buffer, filter);
     }
     composite_effect(pixmap, &buffer, x0, y0, blend);
+    budget.leave(width, height);
 }
 
 // ---------------------------------------------------------------------------
@@ -3696,6 +3854,7 @@ fn paint_backdrop_filter(pixmap: &mut Pixmap, rect: Rect, filters: &[css::Filter
 }
 
 #[cfg(test)]
+<<<<<<< HEAD
 mod composite_tests {
     use super::*;
 
@@ -3753,5 +3912,65 @@ mod composite_tests {
         assert_eq!(pixel.r, 128);
         assert_eq!(pixel.g, 0);
         assert_eq!(pixel.b, 127);
+||||||| 2a70d69
+=======
+mod paint_budget_tests {
+    use super::*;
+
+    #[test]
+    fn test_paint_budget_counts_buffers_separately_from_the_per_buffer_cap() {
+        let mut budget = PaintBudget {
+            depth: 0,
+            pixels: 0,
+            flatten: false,
+            flatten_depth: 0,
+        };
+        // Two 64×64 buffers: charged twice, released twice.
+        assert!(budget.enter_buffers(64, 64, 2));
+        assert_eq!(budget.depth, 1);
+        assert_eq!(budget.pixels, 2 * 64 * 64);
+        budget.leave_buffers(64, 64, 2);
+        assert_eq!(budget.depth, 0);
+        assert_eq!(budget.pixels, 0);
+        // 4096×4096 is exactly the per-buffer cap; two of them fit the live-pixel cap.
+        assert!(budget.enter_buffers(4096, 4096, 2));
+        budget.leave_buffers(4096, 4096, 2);
+        // One pixel over the per-buffer cap is refused even though the total would fit.
+        assert!(!budget.enter_buffers(4097, 4096, 1));
+    }
+
+    #[test]
+    fn test_paint_budget_bounds_depth_and_live_pixels() {
+        let mut budget = PaintBudget {
+            depth: 0,
+            pixels: 0,
+            flatten: false,
+            flatten_depth: 0,
+        };
+        for _ in 0..MAX_OFFSCREEN_GROUP_DEPTH {
+            assert!(budget.enter(64, 64));
+        }
+        assert!(!budget.enter(64, 64), "nesting depth cap");
+        budget.leave(64, 64);
+        assert!(budget.enter(64, 64));
+        // A single buffer over the per-group cap is refused even at depth 0.
+        let mut fresh = PaintBudget {
+            depth: 0,
+            pixels: 0,
+            flatten: false,
+            flatten_depth: 0,
+        };
+        assert!(!fresh.enter(16_384, 16_384));
+        // The live-pixel cap accumulates across nested buffers.
+        assert!(fresh.enter(4096, 4096));
+        assert!(fresh.enter(4096, 4096));
+        assert!(fresh.enter(4096, 4096));
+        // Exactly `MAX_OFFSCREEN_PIXELS` is still allowed; the next one is not.
+        assert!(fresh.enter(4096, 4096));
+        assert!(!fresh.enter(64, 64), "live-pixel cap");
+        // Releasing a buffer makes room again.
+        fresh.leave(4096, 4096);
+        assert!(fresh.enter(4096, 4096));
+>>>>>>> pr886
     }
 }
