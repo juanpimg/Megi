@@ -215,6 +215,15 @@ impl FontDatabase {
         Self::load_bundled().unwrap_or_else(|_| Self::new())
     }
 
+    /// Loads the deterministic bundled fonts first (preserving bundled DejaVu priority
+    /// for Latin and CSS generic families), then loads installed system fonts so
+    /// per-glyph fallback can render CJK, Arabic, Hebrew, and emoji scripts.
+    pub fn new_with_bundled_and_system_fonts() -> Self {
+        let mut db = Self::new_with_bundled_fonts();
+        db.load_system_fonts();
+        db
+    }
+
     /// Creates an empty database (no system fonts, no loaded bytes).
     pub fn new() -> Self {
         Self {
@@ -617,7 +626,7 @@ impl FontDatabase {
     ) -> Result<f32, FontError> {
         Font::validate_size(size_px)?;
         let primary = self.font(families, weight, style)?;
-        let chain = self.fallback_chain(families, weight, style, primary);
+        let mut chain = self.fallback_chain(families, weight, style, primary);
         let mut memo: HashMap<char, (usize, Option<u16>)> = HashMap::new();
         let mut width = 0.0f32;
         for ch in text.chars() {
@@ -626,6 +635,13 @@ impl FontDatabase {
                     if let Some(glyph_id) = font.glyph_id(ch) {
                         return (index, Some(glyph_id));
                     }
+                }
+                if let Some((font, glyph_id)) =
+                    self.find_fallback_face_for_char(ch, &chain, weight, style)
+                {
+                    let index = chain.len();
+                    chain.push(font);
+                    return (index, Some(glyph_id));
                 }
                 (0, None)
             });
@@ -655,8 +671,8 @@ impl FontDatabase {
         Font::validate_size(size_px)?;
         let primary = self.font(families, weight, style)?;
         let metrics = primary.metrics(size_px)?;
-        let chain = self.fallback_chain(families, weight, style, primary);
-        let fonts: Vec<FontRefInfo> = chain.iter().map(|font| font.info().clone()).collect();
+        let mut chain = self.fallback_chain(families, weight, style, primary);
+        let mut fonts: Vec<FontRefInfo> = chain.iter().map(|font| font.info().clone()).collect();
 
         if text.is_empty() {
             return Ok(ShapedRun {
@@ -678,6 +694,13 @@ impl FontDatabase {
                     if font.has_glyph(ch) {
                         return index;
                     }
+                }
+                if let Some((font, _)) = self.find_fallback_face_for_char(ch, &chain, weight, style)
+                {
+                    let index = chain.len();
+                    fonts.push(font.info().clone());
+                    chain.push(font);
+                    return index;
                 }
                 0
             });
@@ -750,8 +773,47 @@ impl FontDatabase {
                 return font.rasterize_glyph(size_px, glyph_id);
             }
         }
+        if let Some((font, glyph_id)) = self.find_fallback_face_for_char(ch, &chain, weight, style)
+        {
+            return font.rasterize_glyph(size_px, glyph_id);
+        }
         // No face has the glyph: render the primary face's .notdef box.
         chain[0].rasterize_glyph(size_px, 0)
+    }
+
+    /// Scans all loaded faces (not yet in `chain`) for a glyph matching `ch`, invoked
+    /// only when the initial fallback chain lacks `ch` (e.g. CJK, Arabic, emoji).
+    fn find_fallback_face_for_char(
+        &self,
+        ch: char,
+        chain: &[Font],
+        weight: u16,
+        style: FontStyle,
+    ) -> Option<(Font, u16)> {
+        let wanted_style = DbStyle::from(style);
+        let mut candidates: Vec<(u32, fontdb::ID)> = self
+            .db
+            .faces()
+            .filter(|face| {
+                !chain
+                    .iter()
+                    .any(|f| f.info().post_script_name == face.post_script_name)
+            })
+            .map(|face| {
+                let style_penalty = if face.style == wanted_style { 0 } else { 1000 };
+                let weight_distance = (face.weight.0 as i32 - weight as i32).unsigned_abs();
+                (style_penalty + weight_distance, face.id)
+            })
+            .collect();
+        candidates.sort_by_key(|(score, _)| *score);
+        for (_, id) in candidates {
+            if let Ok(font) = self.build_font(id)
+                && let Some(glyph_id) = font.glyph_id(ch)
+            {
+                return Some((font, glyph_id));
+            }
+        }
+        None
     }
 
     /// Builds the ordered fallback chain (primary first) for per-glyph fallback.
