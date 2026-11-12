@@ -783,7 +783,29 @@ impl FontDatabase {
 
     /// Scans all loaded faces (not yet in `chain`) for a glyph matching `ch`, invoked
     /// only when the initial fallback chain lacks `ch` (e.g. CJK, Arabic, emoji).
+    /// When `self` only loaded bundled/web fonts, falls back to a cached system font DB
+    /// so missing scripts render without altering primary `serif`/`sans-serif`/`monospace`
+    /// resolution for bundled fonts.
     fn find_fallback_face_for_char(
+        &self,
+        ch: char,
+        chain: &[Font],
+        weight: u16,
+        style: FontStyle,
+    ) -> Option<(Font, u16)> {
+        if let Some(found) = self.scan_faces_for_char(ch, chain, weight, style) {
+            return Some(found);
+        }
+        if !self.system_loaded {
+            static SYSTEM_FALLBACK_DB: std::sync::OnceLock<FontDatabase> =
+                std::sync::OnceLock::new();
+            let sys_db = SYSTEM_FALLBACK_DB.get_or_init(FontDatabase::from_system);
+            return sys_db.scan_faces_for_char(ch, chain, weight, style);
+        }
+        None
+    }
+
+    fn scan_faces_for_char(
         &self,
         ch: char,
         chain: &[Font],
