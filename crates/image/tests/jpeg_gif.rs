@@ -149,4 +149,35 @@ fn rejects_16_bit_quantization_tables() {
         matches!(error, ImageError::UnsupportedFeature { .. }),
         "unexpected error: {error:?}"
     );
+
+fn gif_with_frame(width: u16, height: u16) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(b"GIF89a");
+    bytes.extend_from_slice(&[1, 0, 1, 0, 0x00, 0, 0]); // 1x1 screen, no global table
+    bytes.push(0x2C); // image descriptor
+    bytes.extend_from_slice(&[0, 0, 0, 0]);
+    bytes.extend_from_slice(&width.to_le_bytes());
+    bytes.extend_from_slice(&height.to_le_bytes());
+    bytes.push(0x80); // local colour table, 2 entries
+    bytes.extend_from_slice(&[0, 0, 0, 255, 255, 255]);
+    bytes.push(2); // LZW minimum code size
+    bytes.push(0); // empty data sub-block terminator
+    bytes
+}
+
+#[test]
+fn gif_frame_dimensions_obey_the_limits() {
+    // A 1x1 screen with a huge frame must be rejected before LZW allocation.
+    match decode(&gif_with_frame(5000, 5000)) {
+        Err(ImageError::LimitExceeded { what, .. }) => {
+            assert!(what.contains("GIF frame"), "{what}");
+        }
+        other => panic!("expected LimitExceeded, got {other:?}"),
+    }
+    match decode(&gif_with_frame(20000, 1)) {
+        Err(ImageError::LimitExceeded { what, .. }) => {
+            assert!(what.contains("GIF frame dimension"), "{what}");
+        }
+        other => panic!("expected dimension LimitExceeded, got {other:?}"),
+    }
 }

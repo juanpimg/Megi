@@ -116,6 +116,15 @@ pub(crate) fn decode_gif(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, 
                         height: frame_height,
                     });
                 }
+                // The frame is decoded in full before clipping to the screen, so it must
+                // obey the same dimension/pixel budgets as the screen (issue #874).
+                if frame_width > limits.max_dimension || frame_height > limits.max_dimension {
+                    return Err(ImageError::LimitExceeded {
+                        what: "GIF frame dimension",
+                        limit: u64::from(limits.max_dimension),
+                        actual: u64::from(frame_width.max(frame_height)),
+                    });
+                }
                 let local_table = if frame_packed & 0x80 != 0 {
                     let entries = 1usize << ((frame_packed & 0x07) + 1);
                     Some(read_palette(bytes, &mut index, entries)?)
@@ -143,6 +152,13 @@ pub(crate) fn decode_gif(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, 
                         limit: limits.max_pixels,
                         actual: pixels,
                     })?;
+                if frame_pixels as u64 > limits.max_pixels {
+                    return Err(ImageError::LimitExceeded {
+                        what: "GIF frame pixel count",
+                        limit: limits.max_pixels,
+                        actual: frame_pixels as u64,
+                    });
+                }
                 let indices = lzw_decode(min_code_size, &data, frame_pixels)?;
                 let row_order = if interlaced {
                     interlaced_rows(frame_height as usize)
