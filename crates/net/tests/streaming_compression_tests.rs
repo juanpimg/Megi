@@ -291,3 +291,34 @@ fn normal_fetch_still_returns_the_decoded_body() {
     server.join().expect("server");
     assert_eq!(response.body, expected);
 }
+
+#[test]
+fn unsupported_content_encoding_is_a_typed_streaming_error() {
+    for declared in ["br", "gzip, br", "nonsense"] {
+        let (port, handle) = spawn_server(move |mut tcp| {
+            read_request_head(&mut tcp);
+            let body = b"still-compressed".to_vec();
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Encoding: {declared}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = tcp.write_all(response.as_bytes());
+            let _ = tcp.write_all(&body);
+        });
+        let mut delivered: Vec<Vec<u8>> = Vec::new();
+        let error = fetch_streaming(&target(port), &options(), &mut |data: &[u8]| {
+            delivered.push(data.to_vec());
+            Ok(())
+        })
+        .expect_err("unsupported Content-Encoding must be a typed error");
+        handle.join().ok();
+        assert!(
+            matches!(&error, FetchError::ContentEncoding(reason) if !reason.is_empty()),
+            "unexpected error for {declared:?}: {error:?}"
+        );
+        assert!(
+            delivered.is_empty(),
+            "no still-compressed bytes may be delivered for {declared:?}"
+        );
+    }
+}
