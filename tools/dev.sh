@@ -4,6 +4,11 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+if [ "$#" -gt 1 ]; then
+    echo "Usage: $0 {check|test|lint|doc|report|all}" >&2
+    exit 1
+fi
+
 cmd="${1:-all}"
 
 case "$cmd" in

@@ -44,16 +44,26 @@ DEFAULT_FETCH_TARGETS = [
 ]
 
 
-MAX_SPEC_BYTES = 50 * 1024 * 1024  # 50 MiB cap
+import time
 
-def ensure_cached(filename: str, force: bool = False) -> Path:
+MAX_SPEC_BYTES = 50 * 1024 * 1024  # 50 MiB cap
+DEFAULT_CACHE_TTL_SECONDS = 7 * 24 * 3600  # 7 days
+
+def ensure_cached(
+    filename: str,
+    force: bool = False,
+    ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS,
+) -> Path:
+    if filename not in SPEC_URLS:
+        known = ", ".join(sorted(SPEC_URLS))
+        raise ValueError(f"Unknown spec target '{filename}'. Known targets: {known}")
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     target = CACHE_DIR / filename
     if target.exists() and target.stat().st_size > 0 and not force:
-        return target
-    url = SPEC_URLS.get(filename)
-    if not url:
-        raise ValueError(f"Unknown spec target: {filename}")
+        age = time.time() - target.stat().st_mtime
+        if ttl_seconds <= 0 or age < ttl_seconds:
+            return target
+    url = SPEC_URLS[filename]
     req = urllib.request.Request(
         url,
         headers={"User-Agent": "MegiBrowserEngine-SpecTool/0.1 (+https://github.com/juanpimg/Megi)"},
@@ -260,7 +270,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    return args.func(args)
+    try:
+        return args.func(args)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
