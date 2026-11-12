@@ -26,18 +26,18 @@ authors = ["Megi Engine Contributors"]
 repository = "https://github.com/juanpimg/Megi"
 
 [workspace.dependencies]
-dom = { path = "crates/dom" }
-html = { path = "crates/html" }
-css = { path = "crates/css" }
-layout = { path = "crates/layout" }
-fonts = { path = "crates/fonts" }
-image = { path = "crates/image" }
-paint = { path = "crates/paint" }
-net = { path = "crates/net" }
-render = { path = "crates/render" }
-shell = { path = "crates/shell" }
-js = { path = "crates/js" }
-svg = { path = "crates/svg" }
+dom = { path = "crates/dom", version = "0.1.0" }
+html = { path = "crates/html", version = "0.1.0" }
+css = { path = "crates/css", version = "0.1.0" }
+layout = { path = "crates/layout", version = "0.1.0" }
+fonts = { path = "crates/fonts", version = "0.1.0" }
+image = { path = "crates/image", version = "0.1.0" }
+paint = { path = "crates/paint", version = "0.1.0" }
+net = { path = "crates/net", version = "0.1.0" }
+render = { path = "crates/render", version = "0.1.0" }
+shell = { path = "crates/shell", version = "0.1.0" }
+js = { path = "crates/js", version = "0.1.0" }
+svg = { path = "crates/svg", version = "0.1.0" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 

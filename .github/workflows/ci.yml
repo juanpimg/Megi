@@ -40,7 +40,7 @@ jobs:
       - name: Clippy (deny warnings)
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Workspace tests
-        run: cargo test --workspace --locked
+        run: cargo test --workspace --locked 2>&1 | tee /tmp/workspace-tests.log
       # Checks that PROGRESS.md and docs/status/*.svg match the committed manifest plus the
       # real repository stats (git HEAD/date, crates, Rust lines, test count). The
       # conformance gate already runs in the `conformance` job, so it is not re-run here.
@@ -48,6 +48,14 @@ jobs:
         run: python3 tools/update_progress.py --check --no-gate
       - name: Documentation
         run: cargo doc --workspace --no-deps --locked
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: workspace-test-logs
+          path: /tmp/workspace-tests.log
+          retention-days: 7
+          if-no-files-found: ignore
 
   conformance:
     name: HTML5 conformance gate
@@ -66,7 +74,15 @@ jobs:
             libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxcb-shm0-dev libxcb-randr0-dev
       - name: Closed-loop conformance summary (fails on unexpected regressions)
-        run: cargo run -p test_harness -- --summary
+        run: cargo run -p test_harness -- --summary 2>&1 | tee /tmp/conformance.log
+      - name: Upload conformance log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: conformance-log
+          path: /tmp/conformance.log
+          retention-days: 7
+          if-no-files-found: ignore
 
   msrv:
     name: MSRV (Rust 1.88)
@@ -106,3 +122,16 @@ jobs:
         run: cargo test -p js --no-default-features --locked
       - name: Test the renderer without scripts
         run: cargo test -p render --no-default-features --locked
+
+  package:
+    name: Packaging dry-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Verifies every workspace crate can be packaged (manifest/path-dependency
+      # requirements) without building the packages.
+      - name: cargo package (no verify)
+        run: cargo package --workspace --locked --allow-dirty --no-verify
