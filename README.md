@@ -54,10 +54,12 @@
 
 ## 🚀 Inicio Rápido
 
+> Guía detallada: [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md)
+
 ### Requisitos
 
 - **Rust**: Edición 2024 (MSRV 1.88 o superior).
-- *(Opcional para ventana gráfica)*: Servidor gráfico X11 o Wayland en Linux.
+- *(Opcional para ventana gráfica)*: Servidor gráfico X11 o Wayland en Linux (ver dependencias en la guía).
 
 ### 1. Compilar y Ejecutar el Navegador
 
@@ -72,7 +74,7 @@ cargo run --release -p shell -- https://example.com --screenshot output.png --wi
 ### 2. Ejecutar la Suite de Conformidad y Tests
 
 ```bash
-# Ejecutar los 2.243 tests del workspace
+# Ejecutar los tests del workspace
 cargo test --workspace
 
 # Ejecutar el gate oficial de conformidad (HTML5 + CSS)
