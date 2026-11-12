@@ -518,6 +518,24 @@ fn add_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
                 .unwrap_or(false);
         }
     }
+    // DOM §2.7 step 2: adding the same callback with the same capture flag is a no-op.
+    let existing: Vec<u32> = with_host(|host| {
+        host.listeners
+            .iter()
+            .filter(|listener| {
+                listener.target == target
+                    && listener.event_type == event_type
+                    && listener.capture == capture
+            })
+            .map(|listener| listener.slot)
+            .collect()
+    })
+    .unwrap_or_default();
+    for slot in existing {
+        if array_get(context, "__megi_listeners", u64::from(slot))?.strict_equals(&callback) {
+            return Ok(JsValue::undefined());
+        }
+    }
     let slot = array_push(context, "__megi_listeners", callback)?;
     let _ = with_host(|host| {
         host.listeners.push(Listener {
@@ -650,21 +668,16 @@ fn is_budget_message(message: &str) -> bool {
 }
 
 fn propagation_path(target: TargetKey, bubbles: bool) -> Vec<(PropPhase, TargetKey)> {
-    // Dispatch on `window`: document listeners still see the capture phase (the harness
-    // relies on this for DOMContentLoaded), and window listeners run once as the target.
+    // Dispatch on `window`: the window is the target (`AT_TARGET`, phase 2), with capture
+    // and bubble listeners both running there; there are no ancestors above it.
     if target == TargetKey::Window {
-        return vec![
-            (PropPhase::Capture, TargetKey::Window),
-            (PropPhase::Capture, TargetKey::Document),
-            (PropPhase::Target, TargetKey::Window),
-        ];
+        return vec![(PropPhase::Target, TargetKey::Window)];
     }
-    // Dispatch on `document`: capture from window, target document, then a single bubble
-    // leg to window when requested.
+    // Dispatch on `document`: window is the only capture ancestor; document listeners run
+    // at the target (phase 2), then a single bubble leg to window when requested.
     if target == TargetKey::Document {
         let mut path = vec![
             (PropPhase::Capture, TargetKey::Window),
-            (PropPhase::Capture, TargetKey::Document),
             (PropPhase::Target, TargetKey::Document),
         ];
         if bubbles {
@@ -695,19 +708,28 @@ fn propagation_path(target: TargetKey, bubbles: bool) -> Vec<(PropPhase, TargetK
         }
     }
     let mut path = Vec::new();
-    path.push((PropPhase::Capture, TargetKey::Window));
-    path.push((PropPhase::Capture, TargetKey::Document));
+    // Capture ancestors above the target, top-down. The target itself appears exactly once:
+    // at-target listeners run in the AT_TARGET phase regardless of their capture flag.
+    if !matches!(target, TargetKey::Window) {
+        path.push((PropPhase::Capture, TargetKey::Window));
+        if !matches!(target, TargetKey::Document) {
+            path.push((PropPhase::Capture, TargetKey::Document));
+        }
+    }
     for ancestor in ancestors.iter().rev() {
         path.push((PropPhase::Capture, *ancestor));
     }
-    path.push((PropPhase::Capture, target));
     path.push((PropPhase::Target, target));
     if bubbles {
         for ancestor in &ancestors {
             path.push((PropPhase::Bubble, *ancestor));
         }
-        path.push((PropPhase::Bubble, TargetKey::Document));
-        path.push((PropPhase::Bubble, TargetKey::Window));
+        if !matches!(target, TargetKey::Document) {
+            path.push((PropPhase::Bubble, TargetKey::Document));
+        }
+        if !matches!(target, TargetKey::Window) {
+            path.push((PropPhase::Bubble, TargetKey::Window));
+        }
     }
     path
 }
@@ -785,17 +807,25 @@ fn deliver(
         false,
         context,
     );
-    let capture_phase = phase == PropPhase::Capture;
+    let at_target = phase == PropPhase::Target;
     let listeners: Vec<(u32, bool, bool)> = with_host(|host| {
-        host.listeners
+        let mut matching: Vec<(u32, bool, bool)> = host
+            .listeners
             .iter()
-            .filter(|listener| {
-                listener.target == target
-                    && listener.event_type == event_type
-                    && listener.capture == capture_phase
-            })
+            .filter(|listener| listener.target == target && listener.event_type == event_type)
+            .filter(|listener| at_target || listener.capture == (phase == PropPhase::Capture))
             .map(|listener| (listener.slot, listener.once, listener.passive))
-            .collect()
+            .collect();
+        if at_target {
+            // AT_TARGET: capture listeners first, then bubble listeners (same phase).
+            matching.sort_by_key(|(slot, _, _)| {
+                !host
+                    .listeners
+                    .iter()
+                    .any(|listener| listener.slot == *slot && listener.capture)
+            });
+        }
+        matching
     })
     .unwrap_or_default();
     for (slot, once, passive) in listeners {
@@ -804,6 +834,13 @@ fn deliver(
             .unwrap_or(false);
         if immediate {
             return Ok(());
+        }
+        // A listener removed by an earlier callback in this dispatch must not run.
+        let registered =
+            with_host(|host| host.listeners.iter().any(|listener| listener.slot == slot))
+                .unwrap_or(false);
+        if !registered {
+            continue;
         }
         let callback = array_get(context, "__megi_listeners", u64::from(slot))?;
         if let Some(callback) = callback.as_object() {
