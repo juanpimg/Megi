@@ -65,6 +65,7 @@ use crate::url::{Scheme, Url};
 /// Browsers use a fraction of the time since `Last-Modified`; this loader keeps the
 /// previous memoization semantics with a conservative fixed five-minute window.
 pub const HEURISTIC_FRESHNESS: Duration = Duration::from_secs(300);
+const MAX_CACHE_ENTRIES: usize = 256;
 
 /// A successfully loaded resource.
 #[derive(Clone, Debug)]
@@ -573,6 +574,14 @@ impl ResourceLoader {
         } else {
             None
         };
+        // Evict oldest entries when the cap is reached.
+        if cache.len() >= MAX_CACHE_ENTRIES {
+            // Remove the first entry (oldest insertion order in HashMap is arbitrary,
+            // but this bounds memory).
+            if let Some(oldest_key) = cache.keys().next().cloned() {
+                cache.remove(&oldest_key);
+            }
+        }
         cache.insert(
             cache_key,
             CachedEntry {
