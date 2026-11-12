@@ -6,6 +6,7 @@
 //! used by the rest of Megi.
 
 use std::collections::{BTreeSet, HashMap};
+use std::io::Read;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -61,6 +62,9 @@ const FANTASY_FALLBACKS: &[&str] = &["Impact", "DejaVu Sans"];
 /// Maximum number of same-weight faces added to the per-glyph fallback chain
 /// when the requested family list has a single entry.
 const MAX_EXTRA_FALLBACKS: usize = 8;
+
+/// Maximum bytes read from one font file (64 MiB, matching the WOFF2 sfnt cap).
+const MAX_FONT_FILE_BYTES: u64 = 64 * 1024 * 1024;
 
 /// A database of system and explicitly loaded font faces.
 ///
@@ -189,12 +193,50 @@ impl FontDatabase {
     }
 
     /// Loads one font file (TTF/OTF/TTC) from disk.
+    ///
+    /// Rejects non-regular files (FIFOs, device nodes such as `/dev/zero`, directories) and
+    /// files larger than [`MAX_FONT_FILE_BYTES`] before reading anything, then reads at most
+    /// one byte past the cap so a file that grows between `metadata` and `read` is rejected
+    /// instead of being fully allocated.
     pub fn load_font_file(&mut self, path: impl AsRef<Path>) -> Result<(), FontError> {
         let path = path.as_ref();
-        let bytes = std::fs::read(path).map_err(|err| FontError::Io {
-            path: path.display().to_string(),
+        let display = path.display().to_string();
+        let metadata = std::fs::metadata(path).map_err(|err| FontError::Io {
+            path: display.clone(),
             reason: err.to_string(),
         })?;
+        if !metadata.file_type().is_file() {
+            return Err(FontError::RejectedFile {
+                path: display,
+                reason: "not a regular file".to_string(),
+            });
+        }
+        if metadata.len() > MAX_FONT_FILE_BYTES {
+            return Err(FontError::RejectedFile {
+                path: display,
+                reason: format!(
+                    "{}-byte file exceeds the {MAX_FONT_FILE_BYTES}-byte cap",
+                    metadata.len()
+                ),
+            });
+        }
+        let file = std::fs::File::open(path).map_err(|err| FontError::Io {
+            path: display.clone(),
+            reason: err.to_string(),
+        })?;
+        let mut bytes = Vec::new();
+        file.take(MAX_FONT_FILE_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|err| FontError::Io {
+                path: display.clone(),
+                reason: err.to_string(),
+            })?;
+        if bytes.len() as u64 > MAX_FONT_FILE_BYTES {
+            return Err(FontError::RejectedFile {
+                path: display,
+                reason: format!("file grew beyond the {MAX_FONT_FILE_BYTES}-byte cap"),
+            });
+        }
         self.load_font_data(bytes)
     }
 

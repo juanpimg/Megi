@@ -349,3 +349,35 @@ fn system_database_is_optional_and_never_panics() {
     let metrics = face.metrics(12.0).expect("system metrics");
     assert!(metrics.ascent > 0.0);
 }
+
+#[test]
+fn font_files_must_be_regular_and_bounded() {
+    let mut db = FontDatabase::new();
+    let dir = std::env::temp_dir().join(format!("megi-fonts-cap-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+
+    // Directories (and FIFOs/devices) are rejected before reading.
+    match db.load_font_file(&dir) {
+        Err(FontError::RejectedFile { reason, .. }) => {
+            assert!(reason.contains("regular"), "{reason}");
+        }
+        other => panic!("expected a non-regular-file rejection, got {other:?}"),
+    }
+
+    // A sparse file above the 64 MiB cap is rejected from metadata alone.
+    let huge = dir.join("huge.ttf");
+    let file = std::fs::File::create(&huge).expect("create");
+    file.set_len(64 * 1024 * 1024 + 1).expect("set_len");
+    match db.load_font_file(&huge) {
+        Err(FontError::RejectedFile { reason, .. }) => {
+            assert!(reason.contains("exceeds"), "{reason}");
+        }
+        other => panic!("expected a size rejection, got {other:?}"),
+    }
+
+    // A regular, valid font still loads.
+    let valid = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/DejaVuSans.ttf");
+    db.load_font_file(&valid).expect("a valid font still loads");
+    let _ = std::fs::remove_dir_all(&dir);
+}
