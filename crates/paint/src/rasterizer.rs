@@ -3850,6 +3850,10 @@ fn paint_backdrop_filter(pixmap: &mut Pixmap, rect: Rect, filters: &[css::Filter
             };
         }
     }
+    // Shrink the stashed buffer if it is much larger than the current region.
+    if buffer.pixels.capacity() > (width * height * 4) as usize * 4 {
+        buffer.pixels.shrink_to((width * height * 4) as usize);
+    }
     BACKDROP_BUFFER.with(|slot| *slot.borrow_mut() = Some(buffer));
 }
 
