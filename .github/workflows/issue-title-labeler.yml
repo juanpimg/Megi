@@ -1,0 +1,51 @@
+name: Issue title labeler
+
+on:
+  issues:
+    types: [opened, edited]
+  pull_request_target:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  label-by-prefix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label by title prefix
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = (context.payload.issue?.title || context.payload.pull_request?.title || '').toLowerCase();
+            const labels = new Set();
+            const add = (l) => labels.add(l);
+            if (title.startsWith('[security]') || title.includes('security')) add('security');
+            if (title.startsWith('[docs]') || title.includes('documentation')) add('docs');
+            if (title.startsWith('[perf]') || title.startsWith('[performance]') || title.includes('performance')) add('performance');
+            if (title.startsWith('[collab]')) add('help wanted');
+            if (title.startsWith('[fuzz]')) add('fuzz');
+            if (title.startsWith('[html]')) add('html');
+            if (title.startsWith('[css]')) add('css');
+            if (title.startsWith('[dom]')) add('dom');
+            if (title.startsWith('[layout]')) add('layout');
+            if (title.startsWith('[paint]')) add('paint');
+            if (title.startsWith('[net]')) add('net');
+            if (title.startsWith('[js]')) add('js');
+            if (title.startsWith('[svg]')) add('svg');
+            if (title.startsWith('[image]')) add('image');
+            if (title.startsWith('[fonts]')) add('fonts');
+            if (title.startsWith('[render]')) add('render');
+            if (title.startsWith('[shell]')) add('shell');
+            if (title.startsWith('[ci]')) add('ci');
+            if (title.startsWith('[tools]')) add('tools');
+            if (title.startsWith('[test]') || title.startsWith('[tests]')) add('enhancement');
+            if (labels.size === 0) return;
+            const number = context.payload.issue?.number || context.payload.pull_request?.number;
+            await github.rest.issues.addLabels({
+              ...context.repo,
+              issue_number: number,
+              labels: [...labels],
+            });
