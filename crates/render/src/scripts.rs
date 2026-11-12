@@ -569,7 +569,11 @@ pub fn load_scripts(
 /// for duplicates or unparsable maps. Import maps must appear before module scripts; this
 /// helper scans the document once up front (the executor runs scripts after parsing).
 #[cfg(feature = "js")]
-fn import_map_source(document: &dom::Document, warnings: &mut Vec<String>) -> Option<String> {
+fn import_map_source(
+    document: &dom::Document,
+    max_bytes: usize,
+    warnings: &mut Vec<String>,
+) -> Option<String> {
     let mut maps = Vec::new();
     for node in document.descendants(document.root()) {
         let Some(element) = document.try_node(node).and_then(|node| node.as_element()) else {
@@ -591,6 +595,15 @@ fn import_map_source(document: &dom::Document, warnings: &mut Vec<String>) -> Op
         ));
     }
     let source = maps.into_iter().next()?;
+    if source.len() > max_bytes {
+        // Import maps bypassed the classic/inline script caps: reject an oversized map
+        // before parsing it (issue #465).
+        warnings.push(format!(
+            "import map is {} bytes, larger than the {max_bytes}-byte script cap; ignored",
+            source.len()
+        ));
+        return None;
+    }
     match js::ImportMap::from_json(&source) {
         Ok(_) => Some(source),
         Err(error) => {
@@ -680,7 +693,7 @@ pub fn execute_scripts(
 
     // Import maps are installed before any module is evaluated (R187). Only the first
     // `<script type="importmap">` is used; duplicates/invalid JSON are non-fatal warnings.
-    let import_map_json = import_map_source(&execution.document, warnings);
+    let import_map_json = import_map_source(&execution.document, limits.max_script_bytes, warnings);
 
     // Keep the original document so a runtime-construction failure is not fatal.
     let mut runtime = match js::JsRuntime::with_document(
@@ -1322,6 +1335,25 @@ mod unit_tests {
             crate::ScriptingMode::default(),
             crate::ScriptingMode::Disabled
         );
+    }
+
+    #[cfg(feature = "js")]
+    #[test]
+    fn oversized_import_maps_are_ignored() {
+        let document = document_with(
+            "<body><script type='importmap'>{\"imports\":{\"a\":\"b\"}}</script></body>",
+        );
+        let mut warnings = Vec::new();
+        assert!(import_map_source(&document, 8, &mut warnings).is_none());
+        assert!(
+            warnings
+                .iter()
+                .any(|warning| warning.contains("import map is")),
+            "{warnings:?}"
+        );
+        let mut warnings = Vec::new();
+        assert!(import_map_source(&document, 1024, &mut warnings).is_some());
+        assert!(warnings.is_empty(), "{warnings:?}");
     }
 
     #[test]
