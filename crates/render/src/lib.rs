@@ -1573,7 +1573,13 @@ fn load_stylesheet_text(
                     max: options.max_css_bytes_per_sheet,
                 });
             }
-            Ok(Some(String::from_utf8_lossy(&resource.bytes).into_owned()))
+            {
+                let text = String::from_utf8_lossy(&resource.bytes);
+                if text.contains('\u{FFFD}') {
+                    warnings.push(format!("stylesheet {url}: non-UTF-8 bytes replaced"));
+                }
+                Ok(Some(text.into_owned()))
+            }
         }
         Err(error) => {
             warnings.push(format!("skipping stylesheet {url}: {error}"));
