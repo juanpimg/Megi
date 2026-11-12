@@ -8,7 +8,7 @@
 //! [`FetchError::UnsupportedFileHost`].
 
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::error::FetchError;
 use crate::url::{Scheme, Url, percent_decode};
@@ -36,6 +36,10 @@ pub fn path_from_file_url(url: &Url) -> Result<PathBuf, FetchError> {
 pub const MAX_FILE_BYTES: usize = 64 * 1024 * 1024;
 
 /// Reads the local file named by `url` (a `file:` URL) into memory.
+///
+/// Reads at most [`MAX_FILE_BYTES`]; larger files return
+/// [`FetchError::ResponseTooLarge`] (the same typed error the network path uses for its
+/// response cap).
 pub fn load_file_url(url: &Url) -> Result<Vec<u8>, FetchError> {
     load_file_url_with_limit(url, MAX_FILE_BYTES)
 }
@@ -43,19 +47,26 @@ pub fn load_file_url(url: &Url) -> Result<Vec<u8>, FetchError> {
 /// [`load_file_url`] with an explicit size bound (at most `max_bytes + 1` is read).
 pub fn load_file_url_with_limit(url: &Url, max_bytes: usize) -> Result<Vec<u8>, FetchError> {
     let path = path_from_file_url(url)?;
-    let file = std::fs::File::open(&path).map_err(|error| match error.kind() {
-        std::io::ErrorKind::NotFound => FetchError::FileNotFound(path.clone()),
-        std::io::ErrorKind::PermissionDenied => FetchError::FilePermissionDenied(path.clone()),
-        _ => FetchError::FileIo(error),
-    })?;
+    let file = std::fs::File::open(&path).map_err(|error| map_file_error(error, &path))?;
     let mut bytes = Vec::new();
     file.take(max_bytes.saturating_add(1) as u64)
         .read_to_end(&mut bytes)
-        .map_err(FetchError::FileIo)?;
+        .map_err(|error| map_file_error(error, &path))?;
     if bytes.len() > max_bytes {
         return Err(FetchError::ResponseTooLarge);
     }
     Ok(bytes)
+}
+
+/// Maps an I/O error for `path` to the typed file variants.
+fn map_file_error(error: std::io::Error, path: &Path) -> FetchError {
+    match error.kind() {
+        std::io::ErrorKind::NotFound => FetchError::FileNotFound(path.to_path_buf()),
+        std::io::ErrorKind::PermissionDenied => {
+            FetchError::FilePermissionDenied(path.to_path_buf())
+        }
+        _ => FetchError::FileIo(error),
+    }
 }
 
 #[cfg(test)]

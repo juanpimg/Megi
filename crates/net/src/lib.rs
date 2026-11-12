@@ -163,7 +163,7 @@ pub use cookies::{
 pub use cors::{Origin, requires_preflight, validate_preflight_response, validate_response};
 pub use data::{DataUrl, base64_decode, base64_encode, decode_data_url};
 pub use error::{FetchError, LoadError, UrlError};
-pub use file::load_file_url;
+pub use file::{MAX_FILE_BYTES, load_file_url, load_file_url_with_limit};
 pub use http::{FetchOptions, Response, fetch, fetch_streaming, fetch_with_headers, preflight};
 pub use loader::{HEURISTIC_FRESHNESS, Resource, ResourceLoader};
 pub use mime::{MimeHint, resolve_content_type, sniff};

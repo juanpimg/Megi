@@ -597,6 +597,7 @@ impl ResourceLoader {
         extra_headers: &[(&str, &str)],
         body: Option<crate::body::RequestBody>,
     ) -> Result<Arc<Resource>, LoadError> {
+        self.check_file_access(url)?;
         let streaming = matches!(body, Some(crate::body::RequestBody::Stream(_)));
         if method.eq_ignore_ascii_case("GET") && !streaming && body.is_none() {
             return self.load(url);
@@ -626,6 +627,7 @@ impl ResourceLoader {
         extra_headers: &[(&str, &str)],
         body: Option<&[u8]>,
     ) -> Result<Arc<Resource>, LoadError> {
+        self.check_file_access(url)?;
         if method.eq_ignore_ascii_case("GET") && body.is_none() {
             return self.load(url);
         }
