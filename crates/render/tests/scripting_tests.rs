@@ -389,3 +389,45 @@ fn no_network_blocks_remote_scripts() {
     );
     assert!(!output.png.is_empty());
 }
+
+#[test]
+fn script_load_attempts_are_capped_even_when_every_load_fails() {
+    // `max_scripts` used to count successful scripts only: every failing `<script src>` was
+    // still fetched. Three missing files with `max_scripts = 2` must stop after two loads.
+    let dir = std::env::temp_dir().join(format!("megi-script-attempts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let document = dir.join("index.html");
+    std::fs::write(
+        &document,
+        "<!DOCTYPE html><body>\
+         <script src='file:///nonexistent-a.js'></script>\
+         <script src='file:///nonexistent-b.js'></script>\
+         <script src='file:///nonexistent-c.js'></script></body>",
+    )
+    .expect("write document");
+
+    let mut options = options();
+    options.scripting_limits = ScriptingLimits {
+        max_scripts: 2,
+        ..ScriptingLimits::default()
+    };
+    let output = render_url(&file_url(&document), &options).expect("render");
+    let failed_loads = output
+        .stats
+        .warnings
+        .iter()
+        .filter(|warning| warning.contains("skipping script file:///nonexistent"))
+        .count();
+    assert_eq!(failed_loads, 2, "only two fetches may reach the loader");
+    assert!(
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("attempted more than 2 script loads")),
+        "the cap must be reported: {:?}",
+        output.stats.warnings
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

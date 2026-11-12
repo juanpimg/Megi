@@ -429,6 +429,9 @@ pub fn load_scripts(
 ) -> ScriptLoadReport {
     let mut report = ScriptLoadReport::default();
     let mut seen_urls: HashSet<String> = HashSet::new();
+    // `max_scripts` bounds the scripts that execute; without an attempt counter a page could
+    // still trigger one fetch per `<script src>` (bounded only by the element count).
+    let mut attempts = 0usize;
     for (index, candidate) in candidates.iter().enumerate() {
         if report.scripts.len() >= limits.max_scripts {
             report.skipped += 1;
@@ -461,6 +464,15 @@ pub fn load_scripts(
                 warnings.push(format!("skipping duplicate script {url} (already loaded)"));
                 continue;
             }
+            if attempts >= limits.max_scripts {
+                report.skipped += 1;
+                warnings.push(format!(
+                    "page attempted more than {} script loads; the remaining scripts are not fetched (cap)",
+                    limits.max_scripts
+                ));
+                break;
+            }
+            attempts += 1;
             let resource = match loader.load(&url) {
                 Ok(resource) => resource,
                 Err(error) => {
