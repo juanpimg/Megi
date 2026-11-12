@@ -297,3 +297,51 @@ fn test_hit_regions_are_deterministic_and_do_not_change_display_list() {
     let plain = paint::build_display_list(&root, VIEWPORT);
     assert_eq!(plain.items, list_with.items);
 }
+
+#[test]
+fn test_rounded_overflow_clip_clips_child_hit_regions() {
+    let (_document, ids) = node_ids(3);
+    let mut root = transparent_root(ids[0]);
+
+    let mut parent_style = block_style();
+    parent_style.overflow = css::Overflow::Hidden;
+    for corner in [
+        &mut parent_style.border_radius.top_left,
+        &mut parent_style.border_radius.top_right,
+        &mut parent_style.border_radius.bottom_right,
+        &mut parent_style.border_radius.bottom_left,
+    ] {
+        corner.x = css::Length::Px(8.0);
+        corner.y = css::Length::Px(8.0);
+    }
+    let mut parent = box_with_rect(ids[1], parent_style, Rect::new(0.0, 0.0, 50.0, 50.0));
+
+    let mut child_style = block_style();
+    child_style.background_color = Color::RED;
+    let child = box_with_rect(ids[2], child_style, Rect::new(0.0, 0.0, 120.0, 40.0));
+    parent.children.push(child);
+    root.children.push(parent);
+
+    let (_list, regions) = build_display_list_and_hit_regions(&root, VIEWPORT);
+    assert_eq!(hit_test(&regions, 25.0, 20.0), Some(ids[2]));
+    assert_ne!(
+        hit_test(&regions, 90.0, 20.0),
+        Some(ids[2]),
+        "child extending outside rounded overflow:hidden clip must not hit"
+    );
+}
+
+#[test]
+fn test_zero_alpha_text_does_not_record_hit_region() {
+    let (_document, _list, regions) = html_regions(
+        "<!doctype html><html><body style=\"margin:0\">\
+         <div id=\"under\" style=\"width:100px;height:40px;background:red\">\
+           <span id=\"zero-txt\" style=\"color:rgba(0,0,0,0)\">hidden</span>\
+         </div>\
+         </body></html>",
+    );
+    assert!(
+        !regions.iter().any(|r| r.kind == HitKind::Text),
+        "fully transparent text must not record HitKind::Text"
+    );
+}

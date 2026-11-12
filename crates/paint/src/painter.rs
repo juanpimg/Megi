@@ -167,6 +167,42 @@ fn pop_clip_item(list: &mut DisplayList, resources: &PaintResources<'_>) {
     resources.pop_clip();
 }
 
+/// Emits a `PushRoundedGroup` display item and mirrors its bounding rect into
+/// the hit-region clip stack.
+fn push_rounded_group(
+    list: &mut DisplayList,
+    resources: &PaintResources<'_>,
+    rect: Rect,
+    radii: css::BorderRadii,
+) {
+    list.push(DisplayItem::PushRoundedGroup { rect, radii });
+    resources.push_clip(rect);
+}
+
+/// Emits a `PopRoundedGroup` display item and pops its mirrored clip.
+fn pop_rounded_group(list: &mut DisplayList, resources: &PaintResources<'_>) {
+    list.push(DisplayItem::PopRoundedGroup);
+    resources.pop_clip();
+}
+
+/// Emits a `PushTextMaskGroup` display item and mirrors its bounding rect into
+/// the hit-region clip stack.
+fn push_text_mask_group(
+    list: &mut DisplayList,
+    resources: &PaintResources<'_>,
+    rect: Rect,
+    runs: Vec<TextMaskRun>,
+) {
+    list.push(DisplayItem::PushTextMaskGroup { rect, runs });
+    resources.push_clip(rect);
+}
+
+/// Emits a `PopTextMaskGroup` display item and pops its mirrored clip.
+fn pop_text_mask_group(list: &mut DisplayList, resources: &PaintResources<'_>) {
+    list.push(DisplayItem::PopTextMaskGroup);
+    resources.pop_clip();
+}
+
 /// Appendix E phase a box belongs to inside its nearest stacking context.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Phase {
@@ -684,7 +720,7 @@ fn paint_stacking_context(
         overflow_rounded_clip(layout_box)
     };
     if let Some((rect, radii)) = overflow_clip {
-        list.push(DisplayItem::PushRoundedGroup { rect, radii });
+        push_rounded_group(list, resources, rect, radii);
     }
 
     let clip = layout_box.clip;
@@ -710,7 +746,7 @@ fn paint_stacking_context(
             pop_clip_item(list, resources);
         }
         if overflow_clip.is_some() {
-            list.push(DisplayItem::PopRoundedGroup);
+            pop_rounded_group(list, resources);
         }
         return;
     }
@@ -761,7 +797,7 @@ fn paint_stacking_context(
         pop_clip_item(list, resources);
     }
     if overflow_clip.is_some() {
-        list.push(DisplayItem::PopRoundedGroup);
+        pop_rounded_group(list, resources);
     }
 
     // Filter / blend group: the whole subtree is rasterized offscreen, the
@@ -869,7 +905,7 @@ fn paint_block_backgrounds(
     while let Some(task) = stack.pop() {
         match task {
             BlockTask::PopClip => pop_clip_item(list, resources),
-            BlockTask::PopRoundedGroup => list.push(DisplayItem::PopRoundedGroup),
+            BlockTask::PopRoundedGroup => pop_rounded_group(list, resources),
             BlockTask::Visit {
                 layout_box: child,
                 inherited_hidden,
@@ -886,7 +922,7 @@ fn paint_block_backgrounds(
                 }
                 // `overflow: hidden` + radius clips the descendant subtree.
                 if !hidden && let Some((rect, radii)) = overflow_rounded_clip(child) {
-                    list.push(DisplayItem::PushRoundedGroup { rect, radii });
+                    push_rounded_group(list, resources, rect, radii);
                     stack.push(BlockTask::PopRoundedGroup);
                 }
                 push_block_children(child, hidden, alpha, &mut stack, resources.effects_present);
@@ -977,7 +1013,7 @@ fn paint_float(
         overflow_rounded_clip(layout_box)
     };
     if let Some((rect, radii)) = overflow_clip {
-        list.push(DisplayItem::PushRoundedGroup { rect, radii });
+        push_rounded_group(list, resources, rect, radii);
     }
     paint_block_backgrounds(layout_box, list, skip, resources, hidden, alpha);
     if depth < MAX_FLOAT_DEPTH {
@@ -993,7 +1029,7 @@ fn paint_float(
         alpha,
     );
     if overflow_clip.is_some() {
-        list.push(DisplayItem::PopRoundedGroup);
+        pop_rounded_group(list, resources);
     }
     if clipped.is_some() {
         pop_clip_item(list, resources);
@@ -1043,7 +1079,7 @@ fn paint_inline_content(
     while let Some(task) = stack.pop() {
         match task {
             InlineTask::PopClip => pop_clip_item(list, resources),
-            InlineTask::PopRoundedGroup => list.push(DisplayItem::PopRoundedGroup),
+            InlineTask::PopRoundedGroup => pop_rounded_group(list, resources),
             InlineTask::Visit {
                 layout_box: child,
                 inherited_hidden,
@@ -1095,12 +1131,14 @@ fn paint_inline_content(
                             if let Some(radii) = replaced_radius {
                                 // Replaced content is clipped by `border-radius`
                                 // (CSS Backgrounds 3 §5.5).
-                                list.push(DisplayItem::PushRoundedGroup {
-                                    rect: child.dimensions.content,
+                                push_rounded_group(
+                                    list,
+                                    resources,
+                                    child.dimensions.content,
                                     radii,
-                                });
+                                );
                                 paint_replaced_element(child, *node_id, list, resources, alpha);
-                                list.push(DisplayItem::PopRoundedGroup);
+                                pop_rounded_group(list, resources);
                             } else {
                                 paint_replaced_element(child, *node_id, list, resources, alpha);
                             }
@@ -1111,7 +1149,7 @@ fn paint_inline_content(
                             paint_background_border(child, list, skip, resources, false, alpha);
                         }
                         if !hidden && let Some((rect, radii)) = overflow_rounded_clip(child) {
-                            list.push(DisplayItem::PushRoundedGroup { rect, radii });
+                            push_rounded_group(list, resources, rect, radii);
                             stack.push(InlineTask::PopRoundedGroup);
                         }
                         push_inline_children(
@@ -1129,7 +1167,7 @@ fn paint_inline_content(
                             paint_marker(child, ordinal, list, resources, alpha);
                         }
                         if !hidden && let Some((rect, radii)) = overflow_rounded_clip(child) {
-                            list.push(DisplayItem::PushRoundedGroup { rect, radii });
+                            push_rounded_group(list, resources, rect, radii);
                             stack.push(InlineTask::PopRoundedGroup);
                         }
                         push_inline_children(
@@ -1157,7 +1195,7 @@ fn paint_inline_content(
                     | BoxType::AnonymousTableRow
                     | BoxType::AnonymousTableCell => {
                         if !hidden && let Some((rect, radii)) = overflow_rounded_clip(child) {
-                            list.push(DisplayItem::PushRoundedGroup { rect, radii });
+                            push_rounded_group(list, resources, rect, radii);
                             stack.push(InlineTask::PopRoundedGroup);
                         }
                         push_inline_children(
@@ -1375,7 +1413,9 @@ fn paint_background_border(
 
     let node_id = layout_box.node_id();
     let border_box = layout_box.dimensions.border_box();
-    resources.record(border_box, node_id, HitKind::Background);
+    if alpha_scale > 0.0 {
+        resources.record(border_box, node_id, HitKind::Background);
+    }
     // `backdrop-filter` filters the already-painted backdrop inside the box
     // before this element paints its own background/border/content (R149).
     if !style.backdrop_filter.is_empty() {
@@ -1432,10 +1472,7 @@ fn paint_background_border(
         None
     };
     if let Some(runs) = &text_mask_runs {
-        list.push(DisplayItem::PushTextMaskGroup {
-            rect: border_box,
-            runs: runs.clone(),
-        });
+        push_text_mask_group(list, resources, border_box, runs.clone());
     }
 
     // Outer `box-shadow` layers are painted behind the background, last shadow
@@ -1459,10 +1496,7 @@ fn paint_background_border(
         }
     }
     if rounded_group {
-        list.push(DisplayItem::PushRoundedGroup {
-            rect: border_box,
-            radii,
-        });
+        push_rounded_group(list, resources, border_box, radii);
     }
     if !background_is_propagated && style.background_color.a > 0 {
         if has_radius {
@@ -1586,10 +1620,10 @@ fn paint_background_border(
     }
 
     if rounded_group {
-        list.push(DisplayItem::PopRoundedGroup);
+        pop_rounded_group(list, resources);
     }
     if text_mask_runs.is_some() {
-        list.push(DisplayItem::PopTextMaskGroup);
+        pop_text_mask_group(list, resources);
     }
 
     // Inset shadows are painted above the background but below the border and content.
@@ -1708,7 +1742,10 @@ fn paint_text_run(
         )
     });
 
-    resources.record(layout_box.dimensions.content, owner, HitKind::Text);
+    let color = scaled(color, alpha_scale);
+    if color.a > 0 {
+        resources.record(layout_box.dimensions.content, owner, HitKind::Text);
+    }
     push_text_shadows(
         style.map(|style| style.as_ref()),
         list,
