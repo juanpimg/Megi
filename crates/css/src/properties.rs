@@ -2883,6 +2883,8 @@ impl ComputedStyle {
                     .collect()
             })
             .unwrap_or_default();
+        const MAX_BACKGROUND_LAYERS: usize = 32;
+        let image_values: Vec<_> = image_values.into_iter().take(MAX_BACKGROUND_LAYERS).collect();
         let layers_count = image_values.len().max(1);
         // The `background` shorthand is expanded before the cascade; this fallback
         // keeps direct `ComputedStyle::compute` callers working (single layer).
