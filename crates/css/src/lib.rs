@@ -105,6 +105,7 @@ impl SimpleSelector {
             attributes: Vec::new(),
             pseudo_classes: Vec::new(),
             never_matches: false,
+            id_count: u32::from(self.id.is_some()),
         };
         compound.matches(doc, node_id)
     }

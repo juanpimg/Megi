@@ -450,12 +450,14 @@ pub struct CompoundSelector {
     pub pseudo_classes: Vec<PseudoClass>,
     /// `#a#b` with different ids can never match: an element has a single `id` attribute.
     pub never_matches: bool,
+    /// Number of `#id` simple selectors in the compound (specificity counts every one).
+    pub id_count: u32,
 }
 
 impl CompoundSelector {
     /// Calculates the specificity of this compound selector according to Selectors Level 4 §16.
     pub fn specificity(&self) -> Specificity {
-        let a = if self.id.is_some() { 1 } else { 0 };
+        let a = self.id_count.max(u32::from(self.id.is_some()));
         let b = (self.classes.len() + self.attributes.len()) as u32;
         let c = if self.tag_name.as_deref().is_some_and(|t| t != "*") {
             1
@@ -1039,6 +1041,7 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
                 if id.is_empty() {
                     return None;
                 }
+                compound.id_count = compound.id_count.saturating_add(1);
                 if let Some(existing) = &compound.id {
                     // `#a#b` requires two different ids on one element, which is impossible.
                     if existing != &id {
@@ -1397,5 +1400,19 @@ mod id_list_tests {
             "repeating the same id is redundant but matchable"
         );
         assert!(!parse_selectors("div#b#c").matches(&doc, node));
+    }
+
+    #[test]
+    fn every_id_counts_for_specificity() {
+        let list = parse_selectors("#a#b");
+        assert_eq!(list.max_specificity(), Specificity::new(2, 0, 0));
+        assert_eq!(
+            parse_selectors("#a#a").max_specificity(),
+            Specificity::new(2, 0, 0)
+        );
+        assert_eq!(
+            parse_selectors("div#a").max_specificity(),
+            Specificity::new(1, 0, 1)
+        );
     }
 }
