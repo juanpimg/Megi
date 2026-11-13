@@ -1173,6 +1173,23 @@ impl GlyphMaskEntry {
     }
 }
 
+/// Maximum distinct glyph masks cached per pass (issue #656).
+///
+/// Keys are attacker-influenced (face, glyph id, font-size bits), so an
+/// unbounded map lets a display list with many distinct text items pin memory.
+/// When the cap is reached the mask map is cleared and refilled: drawing never
+/// degrades, it only loses cache hits.
+const MAX_TEXT_CACHE_ENTRIES: usize = 1024;
+
+/// Maximum distinct shaped runs cached per pass (issue #656).
+const MAX_SHAPED_RUNS: usize = 512;
+
+/// Maximum distinct parsed font-family lists cached per pass (issue #656).
+const MAX_FAMILY_LISTS: usize = 256;
+
+/// Maximum font faces resolved per pass (issue #656).
+const MAX_FACES: usize = 64;
+
 /// Per-pass text cache: shaped runs, faces and antialiased glyph masks.
 #[derive(Default)]
 struct TextCache {
@@ -1191,6 +1208,18 @@ impl TextCache {
     fn face_index(&mut self, database: &FontDatabase, info: &fonts::FontRefInfo) -> Option<u32> {
         if let Some(&index) = self.face_ids.get(&info.post_script_name) {
             return (index != u32::MAX).then_some(index);
+        }
+        // Bound both maps (issue #656). Face indices are pre-resolved per run
+        // and reused for every glyph, so the face list must never be cleared
+        // mid-pass; instead new faces are refused once the cap is reached and
+        // the failure is cached so the font database is not re-queried.
+        if self.face_ids.len() >= MAX_FACES {
+            return None;
+        }
+        if self.faces.len() >= MAX_FACES {
+            self.face_ids
+                .insert(info.post_script_name.clone(), u32::MAX);
+            return None;
         }
         let resolved = match database.font_by_ref(info) {
             Ok(font) => {
@@ -1227,6 +1256,11 @@ impl TextCache {
             return Some(Arc::clone(run));
         }
 
+        if self.families.len() >= MAX_FAMILY_LISTS {
+            // Family lists are cheap to re-parse; drop the cache instead of
+            // letting distinct family strings grow without bound (#656).
+            self.families.clear();
+        }
         let families = self
             .families
             .entry(font_family.to_string())
@@ -1243,6 +1277,11 @@ impl TextCache {
             .ok()?;
         let run = Arc::new(run);
         self.stats.shaped_runs += 1;
+        if self.shaped.len() >= MAX_SHAPED_RUNS {
+            // Returned runs are `Arc`s, so clearing only drops the cache hits
+            // for already-rendered text (issue #656).
+            self.shaped.clear();
+        }
         self.shaped.insert(key, Arc::clone(&run));
         Some(run)
     }
@@ -1265,9 +1304,13 @@ impl TextCache {
             } else {
                 self.stats.glyph_masks_rasterized += 1;
             }
-            if self.masks.len() < MAX_TEXT_CACHE_ENTRIES {
-                self.masks.insert(key, entry);
+            if self.masks.len() >= MAX_TEXT_CACHE_ENTRIES {
+                // Clear instead of skipping the insert: a missing mask would
+                // make `draw_text_cached` silently drop the glyph, so the cap
+                // must cost cache hits, never ink (issue #656).
+                self.masks.clear();
             }
+            self.masks.insert(key, entry);
         } else {
             self.stats.glyph_mask_hits += 1;
         }
@@ -3965,6 +4008,87 @@ mod composite_tests {
         assert_eq!(pixel.r, 128);
         assert_eq!(pixel.g, 0);
         assert_eq!(pixel.b, 127);
+    }
+}
+
+#[cfg(test)]
+mod text_cache_cap_tests {
+    use super::*;
+
+    /// Draws `text` at `size` through the production cache path and returns the
+    /// number of non-blank glyphs actually inked.
+    fn ink(cache: &mut TextCache, database: &FontDatabase, text: &str, size: f32) -> usize {
+        let Some(run) = cache.shape(database, text, "sans-serif", 400, false, size) else {
+            return 0;
+        };
+        let faces: Vec<Option<u32>> = run
+            .fonts
+            .iter()
+            .map(|info| cache.face_index(database, info))
+            .collect();
+        let size_bits = size.to_bits();
+        let mut inked = 0;
+        for glyph in &run.glyphs {
+            let Some(face_index) = faces.get(glyph.font).copied().flatten() else {
+                continue;
+            };
+            let Ok(glyph_id) = u16::try_from(glyph.glyph_id) else {
+                continue;
+            };
+            if let Some(entry) = cache.mask(face_index, glyph_id, size_bits, size)
+                && !entry.is_blank()
+            {
+                inked += 1;
+            }
+        }
+        inked
+    }
+
+    #[test]
+    fn glyph_mask_cache_stays_bounded_and_keeps_inking_glyphs() {
+        let database = crate::bundled_font_database();
+        let mut cache = TextCache::default();
+        // Vary the sub-pixel size so every step produces a fresh
+        // `(face, glyph, size_bits)` key, well past the cap.
+        let steps = MAX_TEXT_CACHE_ENTRIES + 64;
+        let mut inked_total = 0usize;
+        let mut inked_after_cap = 0usize;
+        for step in 0..steps {
+            let size = 12.0 + step as f32 * 0.01;
+            let inked = ink(&mut cache, database, "A", size);
+            inked_total += inked;
+            if step >= MAX_TEXT_CACHE_ENTRIES {
+                inked_after_cap += inked;
+            }
+            assert!(
+                cache.masks.len() <= MAX_TEXT_CACHE_ENTRIES,
+                "mask cache grew past its cap: {} > {}",
+                cache.masks.len(),
+                MAX_TEXT_CACHE_ENTRIES
+            );
+        }
+        assert!(inked_total > 0, "glyphs must rasterize with bundled fonts");
+        assert!(
+            inked_after_cap > 0,
+            "the cap must cost cache hits, never ink: {} glyphs after the cap",
+            inked_after_cap
+        );
+    }
+
+    #[test]
+    fn shaped_run_cache_stays_bounded() {
+        let database = crate::bundled_font_database();
+        let mut cache = TextCache::default();
+        for step in 0..(MAX_SHAPED_RUNS + 32) {
+            let size = 10.0 + step as f32 * 0.01;
+            let _ = cache.shape(database, "bounded", "sans-serif", 400, false, size);
+            assert!(
+                cache.shaped.len() <= MAX_SHAPED_RUNS,
+                "shaped cache grew past its cap: {} > {}",
+                cache.shaped.len(),
+                MAX_SHAPED_RUNS
+            );
+        }
     }
 }
 
