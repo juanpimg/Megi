@@ -1348,6 +1348,9 @@ struct ImportWalk<'a> {
     cap_warned: bool,
     /// Whether the CSS byte-budget warning was already pushed (one per walk, #654).
     budget_warned: bool,
+    /// Total @import entries processed (including skipped), bounded to prevent
+    /// unbounded CPU on trivial imports (#524).
+    total_imports: usize,
     skipped: usize,
     max_depth: usize,
     css_bytes: &'a mut usize,
@@ -1443,6 +1446,7 @@ fn build_author_stylesheet_collection(
         attempts: 0,
         cap_warned: false,
         budget_warned: false,
+        total_imports: 0,
         skipped: 0,
         max_depth: 0,
         css_bytes: &mut summary.css_bytes,
@@ -1554,7 +1558,20 @@ fn walk_imports(
     walk: &mut ImportWalk<'_>,
     font_faces: &mut Vec<webfonts::LocatedFontFace>,
 ) -> Result<(), RenderError> {
-    for import in &sheet.imports {
+    'imports: for import in &sheet.imports {
+        // Bound total import entries (including skipped) to prevent unbounded
+        // CPU on a sheet with thousands of trivial @imports (#524).
+        const MAX_TOTAL_IMPORTS: usize = 10_000;
+        if walk.total_imports >= MAX_TOTAL_IMPORTS {
+            if !walk.cap_warned {
+                walk.cap_warned = true;
+                walk.warnings.push(format!(
+                    "import cap reached ({MAX_TOTAL_IMPORTS}); further @imports are skipped"
+                ));
+            }
+            break 'imports;
+        }
+        walk.total_imports += 1;
         let effective_depth = walk.options.max_import_depth.min(32);
         if depth >= effective_depth {
             walk.skipped += 1;
