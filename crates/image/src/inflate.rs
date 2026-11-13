@@ -824,28 +824,34 @@ impl StreamingInflater {
         if matches!(self.state, StreamState::Done) {
             return Ok(());
         }
-        // Drive once more with no new input; any remaining NeedMore is truncation.
+        // Drive until done or truncated; loop instead of recursing (#505).
         let mut scratch = Vec::new();
-        match drive(
-            &self.input,
-            &mut self.position,
-            &mut self.state,
-            self.mode,
-            &mut self.checksum,
-            &mut scratch,
-            &mut self.window,
-            self.limits,
-            &mut self.total_output,
-        ) {
-            Ok(true) => self.finish(),
-            Ok(false) => {
-                let error = InflateError::TruncatedInput;
-                self.failed = Some(error);
-                Err(error)
-            }
-            Err(error) => {
-                self.failed = Some(error);
-                Err(error)
+        loop {
+            match drive(
+                &self.input,
+                &mut self.position,
+                &mut self.state,
+                self.mode,
+                &mut self.checksum,
+                &mut scratch,
+                &mut self.window,
+                self.limits,
+                &mut self.total_output,
+            ) {
+                Ok(true) => {
+                    if matches!(self.state, StreamState::Done) {
+                        return Ok(());
+                    }
+                }
+                Ok(false) => {
+                    let error = InflateError::TruncatedInput;
+                    self.failed = Some(error);
+                    return Err(error);
+                }
+                Err(err) => {
+                    self.failed = Some(err);
+                    return Err(err);
+                }
             }
         }
     }
