@@ -44,6 +44,7 @@ DEFAULT_FETCH_TARGETS = [
 ]
 
 
+import os
 import time
 
 MAX_SPEC_BYTES = 50 * 1024 * 1024  # 50 MiB cap
@@ -71,14 +72,25 @@ def ensure_cached(
     tmp = target.with_suffix(target.suffix + ".tmp")
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            data = resp.read(MAX_SPEC_BYTES + 1)
-        if len(data) > MAX_SPEC_BYTES:
-            raise ValueError(f"Spec download exceeds {MAX_SPEC_BYTES} bytes")
+            # Stream with a byte cap so a compromised mirror or an HTML error page
+            # looped by a proxy cannot exhaust memory (#611).
+            data = bytearray()
+            while True:
+                chunk = resp.read(64 * 1024)
+                if not chunk:
+                    break
+                data.extend(chunk)
+                if len(data) > MAX_SPEC_BYTES:
+                    raise ValueError(f"Spec download exceeds {MAX_SPEC_BYTES} bytes")
         tmp.write_bytes(data)
-        tmp.replace(target)
+        # Atomic replace so a concurrent fetch cannot leave a half-written cache file.
+        os.replace(tmp, target)
     finally:
         if tmp.exists():
             tmp.unlink(missing_ok=True)
+    # Revalidate the cached file before returning it.
+    if not target.exists() or target.stat().st_size == 0 or target.stat().st_size > MAX_SPEC_BYTES:
+        raise ValueError(f"Cached spec {target} failed size validation")
     return target
 
 
