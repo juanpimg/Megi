@@ -584,3 +584,30 @@ fn token_values_are_capped_to_the_per_token_budget() {
         );
     }
 }
+
+#[test]
+fn active_formatting_list_is_bounded() {
+    // #643: the Noah's Ark clause only removes a fourth *identical* entry, so distinct
+    // `(tag, attributes)` pairs grew the list without bound and every character run then
+    // cloned the whole thing in `reconstruct_active_formatting_elements`.
+    use html::{ParseOptions, parse_document_with_options};
+
+    let mut input = String::new();
+    for index in 0..20_000 {
+        write!(input, "<b id={index}>").unwrap();
+    }
+    input.push_str("text");
+
+    let started = std::time::Instant::now();
+    let outcome = parse_document_with_options(&input, false, &ParseOptions::DEFAULT);
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < std::time::Duration::from_secs(3),
+        "20k distinct formatting elements took {elapsed:?}"
+    );
+    assert!(
+        outcome.limit_violations.formatting_dropped > 0,
+        "the overflow must be counted, got {:?}",
+        outcome.limit_violations
+    );
+}

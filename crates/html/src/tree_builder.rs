@@ -590,6 +590,11 @@ pub struct ParseOptions {
     /// single text node, so the node budget alone does not bound a document made of one huge
     /// text run; excess bytes are dropped and counted (#642).
     pub max_text_bytes: usize,
+    /// Maximum number of entries in the active formatting list. The Noah's Ark clause only
+    /// removes a fourth *identical* entry, so crafters grow the list with distinct
+    /// `(tag, attributes)` pairs and then pay for `reconstruct_active_formatting_elements`
+    /// on every character run (#643).
+    pub max_active_formatting: usize,
 }
 
 impl ParseOptions {
@@ -603,6 +608,7 @@ impl ParseOptions {
         max_attributes_per_element: 4096,
         max_input_bytes: 16 * 1024 * 1024,
         max_text_bytes: 16 * 1024 * 1024,
+        max_active_formatting: 256,
     };
 }
 
@@ -629,6 +635,9 @@ pub struct LimitViolations {
     pub detached_insertions: u64,
     /// Text bytes dropped because [`ParseOptions::max_text_bytes`] was reached (#642).
     pub text_bytes_dropped: u64,
+    /// Formatting entries dropped because [`ParseOptions::max_active_formatting`] was
+    /// reached (#643).
+    pub formatting_dropped: u64,
 }
 
 impl LimitViolations {
@@ -1613,6 +1622,15 @@ impl TreeBuilder {
     }
 
     fn push_active_formatting(&mut self, node_id: NodeId, name: &str, attrs: &[(String, String)]) {
+        // A hostile document can grow the list with distinct `(tag, attributes)` pairs, which
+        // the Noah's Ark clause never removes; reconstruction then clones every entry on each
+        // character run (#643). Past the cap the element still enters the tree — only the
+        // formatting bookkeeping is dropped.
+        if self.active_formatting.len() >= self.parse_options.max_active_formatting {
+            self.limit_violations.formatting_dropped =
+                self.limit_violations.formatting_dropped.saturating_add(1);
+            return;
+        }
         // Noah's Ark clause: at most 3 identical elements after the last marker. Only the
         // earliest of the matches is removed when a fourth appears, so a forward scan that
         // keeps the first match and stops at the third is equivalent to the old reverse
