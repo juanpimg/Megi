@@ -284,6 +284,9 @@ impl Attribute {
 
 /// Payload specific to `NodeKind::Element`.
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub const MAX_ATTRIBUTES_PER_ELEMENT: usize = 256;
+pub const MAX_ATTRIBUTE_VALUE_BYTES: usize = 64 * 1024;
+
 pub struct ElementData {
     pub namespace: Namespace,
     pub prefix: Option<String>,
@@ -395,6 +398,12 @@ impl ElementData {
                 false
             }
             None => {
+                if self.attributes.len() >= MAX_ATTRIBUTES_PER_ELEMENT {
+                    return false;
+                }
+                if attr.value.len() > MAX_ATTRIBUTE_VALUE_BYTES {
+                    return false;
+                }
                 self.attributes.push(attr);
                 true
             }
