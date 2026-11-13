@@ -611,3 +611,51 @@ fn active_formatting_list_is_bounded() {
         outcome.limit_violations
     );
 }
+
+#[test]
+fn self_writing_script_loops_are_fuelled() {
+    // #639: a parser-inserted script can `document.write` another `<script>`, which executes in
+    // turn and may write again — without a fuel cap the parse never finishes. Each execution and
+    // each written byte must be budgeted.
+    use dom::Document;
+    use html::scripting::{ScriptExecution, ScriptExecutor};
+    use html::{ParseOptions, parse_document_with_options_and_executor};
+
+    struct LoopExecutor {
+        runs: usize,
+    }
+
+    impl ScriptExecutor for LoopExecutor {
+        fn execute(
+            &mut self,
+            _document: &mut Document,
+            _script_text: &str,
+            _source_name: &str,
+        ) -> ScriptExecution {
+            self.runs += 1;
+            ScriptExecution {
+                written_html: "<script>x</script>".to_string(),
+                error: None,
+            }
+        }
+    }
+
+    let started = std::time::Instant::now();
+    let outcome = parse_document_with_options_and_executor(
+        "<script>x</script>",
+        true,
+        &ParseOptions::DEFAULT,
+        Some(Box::new(LoopExecutor { runs: 0 })),
+    );
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < std::time::Duration::from_secs(5),
+        "a self-writing script must be fuelled, took {elapsed:?}"
+    );
+    assert!(
+        outcome.limit_violations.scripts_skipped > 0
+            || outcome.limit_violations.written_bytes_dropped > 0,
+        "the fuel cap must be reported, got {:?}",
+        outcome.limit_violations
+    );
+}
