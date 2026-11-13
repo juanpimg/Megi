@@ -191,7 +191,7 @@ pub use crate::media::MediaContext;
 enum RuleKey {
     /// `#id` — the most selective key (ids are unique in a document).
     Id(String),
-    /// `.class` — stored ASCII-lowercased because class matching is ASCII case-insensitive.
+    /// `.class` — stored verbatim: class matching is case-sensitive (#682).
     Class(String),
     /// `tag` — stored ASCII-lowercased; element lookups try the exact name first and the
     /// folded name second, keeping foreign (SVG/MathML) case-sensitive matching a superset.
@@ -216,8 +216,9 @@ struct Candidate {
 
 /// One bit of the ancestor-class Bloom filter for `class`.
 ///
-/// Class matching is ASCII case-insensitive, so the hash folds ASCII case; false positives
-/// are harmless because the mask only prunes candidates that would fail to match anyway.
+/// The hash deliberately folds ASCII case even though class matching is case-sensitive
+/// (#682): both sides of the comparison fold the same way, so the mask can only produce a
+/// false positive, never prune a selector that would have matched.
 fn class_hash_bit(class: &str) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325u64;
     for byte in class.bytes() {
@@ -318,16 +319,11 @@ impl RuleIndex {
         }
 
         if let Some(class_attribute) = element.get_attribute("class") {
+            // Bucket keys keep the selector's own spelling, so the lookup is exact: folding
+            // here would route `.Foo` to elements whose class is `foo` (#682).
             for class in class_attribute.split_ascii_whitespace() {
                 if let Some(rules) = self.by_class.get(class) {
                     out.extend_from_slice(rules);
-                } else if class.bytes().any(|byte| byte.is_ascii_uppercase()) {
-                    // Bucket keys are ASCII-lowercased; plain class names (the common case)
-                    // avoid this allocation.
-                    let folded = class.to_ascii_lowercase();
-                    if let Some(rules) = self.by_class.get(&folded) {
-                        out.extend_from_slice(rules);
-                    }
                 }
             }
         }
@@ -366,7 +362,7 @@ fn selector_key(selector: &ComplexSelector) -> Option<RuleKey> {
     // Any required class is a safe key; use the last one (typically the modifier class and
     // the most selective in author stylesheets).
     if let Some(class) = compound.classes.last() {
-        return Some(RuleKey::Class(class.to_ascii_lowercase()));
+        return Some(RuleKey::Class(class.clone()));
     }
     if let Some(tag) = &compound.tag_name
         && tag != "*"

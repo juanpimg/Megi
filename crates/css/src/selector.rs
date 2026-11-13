@@ -710,11 +710,10 @@ impl CompoundSelector {
             let Some(class_attr) = el.get_attribute("class") else {
                 return false;
             };
+            // Class names are case-sensitive, HTML included (Selectors 4 §6.6): only
+            // type selectors get the ASCII-insensitive treatment for HTML elements (#682).
             for c in &self.classes {
-                if !class_attr
-                    .split_ascii_whitespace()
-                    .any(|ec| ec.eq_ignore_ascii_case(c))
-                {
+                if !class_attr.split_ascii_whitespace().any(|ec| ec == c) {
                     return false;
                 }
             }
