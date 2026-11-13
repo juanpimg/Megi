@@ -1,6 +1,6 @@
 # Megi Web Engine 🌐
 
-[![Rust](https://img.shields.io/badge/Rust-Edition%202024%20(MSRV%201.88%2B)-orange.svg?logo=rust)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Rust-Edition%202024%20(MSRV%201.91%2B)-orange.svg?logo=rust)](https://www.rust-lang.org/)
 [![CI](https://github.com/juanpimg/Megi/actions/workflows/ci.yml/badge.svg)](https://github.com/juanpimg/Megi/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 [![Tests](docs/status/badge-tests.svg)](PROGRESS.md)
@@ -59,7 +59,7 @@
 
 ### Requisitos
 
-- **Rust**: Edición 2024 (MSRV 1.88 o superior).
+- **Rust**: Edición 2024 (MSRV 1.91 o superior; lo exige `boa_engine` 0.22).
 - *(Opcional para ventana gráfica)*: Servidor gráfico X11 o Wayland en Linux (ver dependencias en la guía).
 
 ### 1. Compilar y Ejecutar el Navegador

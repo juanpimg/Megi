@@ -254,19 +254,19 @@ cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/megi-sh
 
 El golden del showcase compara byte a byte (1024×768, **80.220 B**, `md5 c95c7eff…`) y los tests de render lo verifican tanto por `file://` como por HTTP local. En la ronda 8 se regeneró tras el **fix del texto de celdas de tabla** (paint) y el soporte de **`background-image`/`list-style-image`** E2E (WP-5.9): ahora se ven el texto y las cabeceras en negrita de la tabla, el patrón de fondo de la cabecera/escenario y los marcadores con imagen. Limitaciones visibles restantes: `background-repeat`/`size`/`position`, colores de `border-collapse` y block-in-inline.
 
-### 2.14 `crates/js` — Runtime JavaScript Boa (Fase 6, WP-6.1)
+### 2.14 `crates/js` — Runtime JavaScript Boa (Fase 6)
 
-`crates/js` embebe **Boa 0.21.1** detrás de la feature `js`, **ON por defecto**; con `--no-default-features` queda un stub std-only (sin Boa) para CI y auditoría. Expone `JsRuntime::eval` sobre un realm persistente, `console.*` capturado, bindings DOM (`document.write`, `getElementById`, `querySelector(All)`, `innerHTML`, `style`, `classList`, árbol/atributos) y un scheduler base (`setTimeout`/microtasks). Anti-DoS: `Budget` mapeado a Boa `RuntimeLimits` (5.000.000 iteraciones de bucle, recursión 512, pila VM 20.480; `Budget::SMALL` para páginas/tests) y side-table `NodeId↔handle` capada a 1.000.000; sin APIs de red/FS. Aún **no integrado en `render`**.
+`crates/js` embebe **Boa 0.21.x** detrás de la feature `js`, **ON por defecto**; con `--no-default-features` queda un stub std-only (sin Boa) para CI y auditoría. Expone `JsRuntime::eval`/`eval_module`/`eval_module_async` sobre un realm persistente, `console.*` capturado, bindings DOM (`document.write`, `getElementById`, `querySelector(All)`, `innerHTML`, `style`, `classList`, árbol/atributos), módulos ES, import maps, TLA real, Web Workers cooperativos y `fetch()` completo (`AbortController`, `ReadableStream`), además de eventos/timers/rAF/Storage/History/geometría. Anti-DoS: `Budget` mapeado a Boa `RuntimeLimits` y side-table `NodeId↔handle` capada. Integrado en `render` y `test_harness`.
 
 **Eventos avanzados (ronda 12)**: `currentTarget`/`eventPhase` (1/2/3) reales, `once`/`passive`, `removeEventListener` por identidad, handlers inline `onclick`/`onload`/`onerror`, `document.close()`, `estimated_heap_bytes()` y excepciones de listeners capturadas. **WP-B (ronda 11)**: `CSSStyleDeclaration` completa, `getComputedStyle` con provider inyectable, `NodeList`, `matches`/`closest`, `insertAdjacentHTML/Text`, identidad de wrappers y `document` como `EventTarget`. **WP-A (ronda 10)**: `EventTarget` con captura+burbuja (`Event`/`CustomEvent`) y **timers con reloj inyectable** (`setTimeout`/`setInterval`/clear, `advance`/`run_until`/`now_ms`/`pending_timers`; `run_tasks` solo vencidos por reloj real).
 
-`render` integra el runtime (WP-6.2 host): descubre los `<script>` clásicos (inline/`src`, en orden; módulos avisados y saltados), los ejecuta con `JsRuntime::with_document` bajo `ScriptingLimits`/`ScriptBudget` (budget por script + total), drena microtasks y hasta 10.000 timers, captura `console` (`scripts_executed/failed/bytes/console`, `timings.scripting`) y **re-renderiza estilos→layout→paint sobre el DOM mutado** (mutaciones visibles en el PNG). Caps: 8 MiB/script, 32 MiB total, 64 scripts; `--no-scripting` desactiva todo y `--no-network` bloquea `src` externos.
+`render` integra el runtime (WP-6.2 host): descubre los `<script>` clásicos y `<script type="module">` (inline/`src`, en orden), los ejecuta con `JsRuntime::with_document` bajo `ScriptingLimits`/`ScriptBudget` (budget por script + total), drena microtasks y hasta 10.000 timers, captura `console` (`scripts_executed/failed/bytes/console`, `timings.scripting`) y **re-renderiza estilos→layout→paint sobre el DOM mutado** (mutaciones visibles en el PNG). Caps: 8 MiB/script, 32 MiB total, 64 scripts; `--no-scripting` desactiva todo y `--no-network` bloquea `src` externos.
 
 ```bash
-cargo test -p js                        # 58 tests (feature js por defecto; eventos avanzados)
+cargo test -p js                        # 178+ tests (feature js por defecto; módulos/TLA/fetch/workers)
 cargo test -p js --no-default-features  # stub mínimo sin Boa (CI)
 
-# JS del documento ejecutado de extremo a extremo (7 fixtures js_*)
+# JS del documento ejecutado de extremo a extremo (fixtures js_*)
 cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_on.png
 cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
 md5sum /tmp/js_on.png /tmp/js_off.png   # e1da51d4… (15.876 B) vs 53f67e77… (15.499 B)
@@ -282,12 +282,12 @@ cargo run -p render -- https://example.com/ /tmp/page.png --cookies --origin htt
 cargo run -p shell -- tests/fixtures/render/showcase/index.html --cookies --origin https://localhost
 ```
 
-### 2.15 `crates/net` — cookies, CORS y compresión (Fase 5, WP-5.9)
+### 2.15 `crates/net` — HTTP/1.1, HTTP/2, TLS, cookies, CORS y streaming (Fase 5)
 
-Además de URL/HTTP/TLS/caché: **cookies RFC 6265** (`CookieJar`, cap 4.096, `FetchOptions.cookie_jar`), **CORS básico** (`Origin`, `validate_response`/`validate_preflight_response`, credentials) y **gzip/deflate** (`Accept-Encoding: gzip` por defecto, CRC32/ISIZE, `CompressionLimits`: 64 MiB descomprimidos y ratio máximo 1000:1). Límites: sin SameSite/PSL, CORS parcial (sin caché de preflight), sin `br`/HTTP2/streaming.
+Además de URL/HTTP/TLS/caché: **HTTP/1.1** (`H1Pool` keep-alive, streaming real de respuestas/uploads, trailers), **HTTP/2 completo** (HPACK, framing, ALPN `h2`+`h2c`, flow control, multiplexado, `PUSH_PROMISE` y priorización), **cookies RFC 6265** (`CookieJar`, cap 4.096, `SameSite` + **PSL real vendorizada** MPL-2.0), **CORS**, **Referrer-Policy**, **Range/206**, **proxies HTTP/HTTPS** (`CONNECT` + `no_proxy`) y **streaming inflater** gzip/deflate (`StreamingInflater`, CRC32/ISIZE, `CompressionLimits`: 64 MiB descomprimidos y ratio máximo 1000:1).
 
 ```bash
-cargo test -p net        # 180 tests offline (listeners en 127.0.0.1)
+cargo test -p net        # 331+ tests offline (listeners en 127.0.0.1)
 ```
 
 ### 2.16 Fixtures de `background-image`/`list-style-image` (E2E, ronda 8)
@@ -424,7 +424,7 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 1107 tests, doc y gate de conformidad
+./tools/dev.sh all                     # fmt, clippy, 2,300+ tests, doc y gate de conformidad
 cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0 (árbol 3904/3904, 100 %)
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 

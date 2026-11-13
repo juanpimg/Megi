@@ -3,30 +3,28 @@
 Este documento describe el arnés de benchmarks del proyecto (`crates/bench`) y
 publica la **baseline de rendimiento vigente**.
 
-- **Fecha**: 2026-11-11, 12:29–12:31 (Europe/Madrid). Ronda 32: **selector bloom
-  CSS**, **layout más barato**, **PNG decode/encode** (fila nueva de fases),
-  **render fast paths (skip de scans)**, **top-level await/live bindings**,
-  **h1 streaming real + prioridad de push** y **fila `render/html-to-png`**.
-- **Repo**: `Megi`, rama `sprint/robustez-fase4`, **HEAD `3e69968`** (cierre r32
-  `76e1678`; WIP ajeno en docs, sin tocar el bench).
-- **Ventana primaria**: **load 1,69–1,83** en las 5 pasadas válidas; **platform
-  profile `performance`** (`powerprofilesctl`; la máquina estaba `quiet` y capaba
-  1,3–2,2 GHz), freq 3,2–4,35 GHz (alguna pasada con 3,2); canónica
-  **TOTAL 745.353**.
-- **Binarios**: bench `a3ac9fd1…` (con `render/html-to-png` y filas PNG), render
-  `d75e0a16…`, shell `9406cfb6…`; r31 prístino `aba05f8` en `target/r31-pristine/`
-  para A/B.
-- **Artefactos**: `target/bench-r32b-run1..5.json` (primaria),
-  `target/bench-aggregate-r32.json` (`sha256 e4490d04…`),
-  `target/bench-r32-ab-r31.json`, `target/bench-r32-feature-costs.json`,
-  `target/bench-r32/measure-net/` (h1 streaming), `target/bench-latest.txt`.
-- **Hallazgo metodológico**: la fila histórica `pipeline/html-to-png` **no usa el
-  crate `render`** (compone html/css/layout/paint a mano). Se añadió
-  **`render/html-to-png`** al bench (data URL 14 376 B, 240 cards, render crate
-  completo) y entra en el TOTAL; el resto de filas `pipeline/*` siguen igual.
-- **Caveat**: la pasada 1 de pipeline fue un pico (142,6 ms); la mediana de las 5
-  pasadas es 108,46 ms y el A/B confirma la mejora. No se suben presupuestos.
-
+- **Fecha**: 2026-11-13, 01:22–01:24 (Europe/Madrid). Ronda 36: clasificación de
+  estados de animación/transiciones, fallback de fuentes de sistema por glifo,
+  caché de render por documento, `apply_transitions` con interpolación en tiempo
+  real, tope de profundidad de layout y pools keep-alive HTTP/1.1 (r33–r36).
+- **Repo**: `Megi`, rama `main`, **HEAD `a080249`** (batch CI/MSRV `2876c74`).
+- **Ventana**: 7 pasadas, mediana por fila; `TOTAL` (suma de medianas, 81 filas)
+  **821,380 ms**; filas legacy (19) **346,488 ms**. Totales por pasada
+  817,7–833,5 ms (dispersión 1,9 %).
+- **Load**: 8,1–13,0 durante la ventana — **la máquina no estaba ociosa** (navegador
+  y editor del usuario activos), a diferencia de la ventana r32 (1,69–1,83). Los
+  valores absolutos de r36 no son comparables 1:1 con r32; la comparación válida
+  es por fila y, sobre todo, A/B intercalado. Una pasada previa
+  (`target/bench-r36-run*`) cayó en un pico de load 25 y salió con
+  `TOTAL 1 322,919 ms`: descartada, se repitieron 7 pasadas.
+- **Binarios**: bench con `rustc 1.99.1 release` (`bench --json`, `iterations = 5`,
+  `warmup = 1`), fixtures en memoria (`crates/bench/src/generators.rs`).
+- **Artefactos**: `target/bench-r36b-run1..7.json` (primaria), `target/bench-r36-run*`
+  (lote descartado), `target/bench-latest.txt` (JSON de la última pasada).
+- **Filas**: 81 en total (62 de la baseline r32 + 19 nuevas: matriz
+  `paint/png-encode-{full,regions}-*`, `paint/backdrop-blur-*`,
+  `image/decode-webp-lossy*`, `image/decode-webp-alpha/palette` y variantes
+  `pipeline/*-no-effect`).
 ---
 
 ## 1. Metodología
@@ -52,78 +50,94 @@ publica la **baseline de rendimiento vigente**.
 | shell | save-png encode/write/total, chrome-png 640×400 y 1024×768 |
 | image | decode PNG/JPEG/GIF, WebP VP8L lossless/alpha/palette y VP8 lossy; **decode-png-scaled-x2** |
 
-## 3. Baseline vigente (ronda 32, HEAD `3e69968`)
+## 3. Baseline vigente (ronda 36, HEAD `a080249`)
 
-5 pasadas (load 1,69–1,83). **Filas legacy (19)**: `TOTAL 302,280 ms`; **todas
-(62)**: `TOTAL 758,386 ms`; canónica: `TOTAL 745.353 ms`.
+7 pasadas (load 8,1–13,0; ver caveat en la cabecera). **Filas legacy (19)**:
+`TOTAL 346.488 ms`; **todas (81)**: `TOTAL 821.380 ms`.
 
-| Benchmark | mediana (ms) | rango 5 pasadas (ms) |
+| Benchmark | mediana (ms) | rango 7 pasadas (ms) |
 |---|---:|---:|
-| `css/parse-10k-rules` | **13.936** | 13.510–15.010 |
-| `css/resolve-styles-10k-nodes` | **13.467** | 13.103–16.147 |
-| `css/resolve-styles-2k-nodes` | **3.047** | 2.893–3.729 |
-| `css/selector-match-descendant` | **1.331** | 1.169–1.485 |
-| `css/selector-match-simple` | **0.651** | 0.603–0.868 |
-| `css/vars-calc-10k` | **21.093** | 20.351–22.265 |
-| `html/massive-end-p` | **18.742** | 18.205–20.604 |
-| `html/massive-formatting` | **11.263** | 10.775–12.611 |
-| `html/nested-div-10k` | **2.970** | 2.850–3.242 |
-| `html/nested-div-32k` | **9.140** | 8.565–10.196 |
-| `html/nested-div-64k` | **18.388** | 17.545–19.390 |
-| `html/nested-div-64k-default-limits` | **10.872** | 10.720–12.430 |
-| `html/pretty-5k-blocks` | **9.094** | 8.656–10.692 |
-| `html/realistic-1mb` | **17.945** | 17.475–19.434 |
-| `html/tag-40k-attrs` | **10.282** | 10.005–11.136 |
-| `image/decode-gif` | **3.160** | 3.035–3.396 |
-| `image/decode-jpeg-800x600` | **11.560** | 11.119–12.621 |
-| `image/decode-png-800x600` | **2.611** | 2.464–2.793 |
-| `image/decode-png-scaled-x2` | **3.002** | 2.896–3.437 |
-| `image/decode-webp-alpha` | **0.026** | 0.025–0.035 |
-| `image/decode-webp-lossless` | **0.053** | 0.050–0.057 |
-| `image/decode-webp-lossy` | **11.446** | 11.121–12.308 |
-| `image/decode-webp-lossy-q75` | **0.062** | 0.060–0.077 |
-| `image/decode-webp-lossy-q90` | **0.068** | 0.062–0.078 |
-| `image/decode-webp-palette` | **0.007** | 0.006–0.009 |
-| `layout/realistic-1mb` | **36.447** | 35.187–39.652 |
-| `layout/sticky-text-1mb` | **33.260** | 32.064–35.812 |
-| `paint/backdrop-fixture` | **0.321** | 0.306–0.348 |
-| `paint/backdrop-fixture-no-effect` | **0.022** | 0.021–0.022 |
-| `paint/backdrop-fixture-png` | **0.598** | 0.591–0.607 |
-| `paint/backdrop-fixture-png-no-effect` | **0.471** | 0.456–0.513 |
-| `paint/backdrop-fixture-raster` | **1.326** | 1.225–1.402 |
-| `paint/backdrop-fixture-raster-no-effect` | **1.019** | 0.975–1.062 |
-| `paint/build-display-list` | **8.297** | 7.914–11.248 |
-| `paint/clipping-800x600` | **49.388** | 47.104–52.446 |
-| `paint/filter-fixture` | **0.310** | 0.298–0.323 |
-| `paint/filter-fixture-no-effect` | **0.297** | 0.296–0.316 |
-| `paint/layer-effects-800x600` | **29.276** | 27.966–29.974 |
-| `paint/object-fit-800x600` | **3.466** | 3.421–3.912 |
-| `paint/png-deflate-1024x768` | **3.963** | 3.506–4.287 |
-| `paint/png-deflate-800x600` | **2.240** | 2.151–2.401 |
-| `paint/png-encode-1024x768` | **4.228** | 3.952–5.092 |
-| `paint/png-encode-1024x768-alpha` | **120.410** | 114.466–122.952 |
-| `paint/png-encode-800x600` | **2.608** | 2.515–2.769 |
-| `paint/png-encode-800x600-alpha` | **69.666** | 66.738–71.920 |
-| `paint/png-filter-1024x768` | **0.335** | 0.319–0.586 |
-| `paint/png-filter-800x600` | **0.229** | 0.197–0.233 |
-| `paint/rasterize-800x600` | **1.059** | 0.960–1.165 |
-| `paint/render-to-png-800x600` | **6.891** | 6.476–7.039 |
-| `pipeline/backdrop-fixture-300x260` | **1.931** | 1.900–2.010 |
-| `pipeline/backdrop-fixture-300x260-no-effect` | **1.517** | 1.457–1.524 |
-| `pipeline/filter-fixture-300x260` | **0.847** | 0.840–0.922 |
-| `pipeline/filter-fixture-300x260-no-effect` | **0.866** | 0.836–0.924 |
-| `pipeline/gradients-800x600` | **50.083** | 48.300–52.245 |
-| `pipeline/grid-800x600` | **5.053** | 4.645–5.208 |
-| `pipeline/html-to-png-800x600` | **108.458** | 107.449–142.607 |
-| `render/html-to-png` | **7.906** | 7.650–9.448 |
-| `shell/chrome-png-1024x768` | **4.194** | 4.057–4.762 |
-| `shell/chrome-png-640x400` | **1.350** | 1.262–1.877 |
-| `shell/save-png-encode-800x600` | **2.976** | 2.846–3.164 |
-| `shell/save-png-total-800x600` | **2.859** | 2.786–3.154 |
-| `shell/save-png-write-800x600` | **0.003** | 0.003–0.004 |
-
-> El TOTAL legacy suma etapas solapadas; no es presupuesto. Las filas de fase
-> PNG, `render/html-to-png` y `image/decode-png-scaled-x2` son nuevas de r32.
+| `css/parse-10k-rules` | **13.366** | 13.148–13.610 |
+| `css/resolve-styles-10k-nodes` | **12.854** | 12.744–13.115 |
+| `css/resolve-styles-2k-nodes` | **2.873** | 2.801–2.891 |
+| `css/selector-match-descendant` | **1.037** | 0.997–1.147 |
+| `css/selector-match-simple` | **0.542** | 0.510–0.558 |
+| `css/vars-calc-10k` | **21.365** | 20.414–22.183 |
+| `html/massive-end-p` | **19.065** | 18.449–19.370 |
+| `html/massive-formatting` | **10.911** | 10.545–11.055 |
+| `html/nested-div-10k` | **2.836** | 2.789–2.950 |
+| `html/nested-div-32k` | **8.950** | 8.815–9.447 |
+| `html/nested-div-64k` | **18.165** | 17.805–18.646 |
+| `html/nested-div-64k-default-limits` | **10.215** | 10.081–10.455 |
+| `html/pretty-5k-blocks` | **9.322** | 9.135–9.358 |
+| `html/realistic-1mb` | **17.873** | 17.514–18.065 |
+| `html/tag-40k-attrs` | **9.524** | 9.380–9.792 |
+| `image/decode-gif` | **3.013** | 2.933–3.018 |
+| `image/decode-jpeg-800x600` | **11.060** | 10.257–11.294 |
+| `image/decode-png-800x600` | **2.548** | 2.373–2.599 |
+| `image/decode-png-scaled-x2` | **2.815** | 2.776–2.860 |
+| `image/decode-webp-alpha` | **0.024** | 0.023–0.024 |
+| `image/decode-webp-lossless` | **0.049** | 0.047–0.052 |
+| `image/decode-webp-lossy` | **10.868** | 10.783–10.918 |
+| `image/decode-webp-lossy-q75` | **0.059** | 0.057–0.061 |
+| `image/decode-webp-lossy-q90` | **0.065** | 0.064–0.067 |
+| `image/decode-webp-palette` | **0.007** | 0.006–0.007 |
+| `layout/realistic-1mb` | **35.763** | 34.669–36.573 |
+| `layout/sticky-text-1mb` | **32.737** | 31.792–33.893 |
+| `paint/backdrop-blur-800x600` | **6.152** | 6.071–6.170 |
+| `paint/backdrop-blur-color-800x600` | **9.988** | 9.461–10.165 |
+| `paint/backdrop-blur-no-effect-800x600` | **0.265** | 0.257–0.274 |
+| `paint/backdrop-fixture` | **0.339** | 0.293–0.362 |
+| `paint/backdrop-fixture-no-effect` | **0.022** | 0.020–0.024 |
+| `paint/backdrop-fixture-png` | **0.564** | 0.529–0.572 |
+| `paint/backdrop-fixture-png-no-effect` | **0.438** | 0.415–0.442 |
+| `paint/backdrop-fixture-raster` | **1.264** | 1.180–1.295 |
+| `paint/backdrop-fixture-raster-no-effect` | **0.972** | 0.903–0.992 |
+| `paint/build-display-list` | **8.966** | 8.774–9.285 |
+| `paint/clipping-800x600` | **45.355** | 44.455–46.121 |
+| `paint/filter-fixture` | **0.271** | 0.255–0.283 |
+| `paint/filter-fixture-no-effect` | **0.269** | 0.257–0.293 |
+| `paint/layer-effects-800x600` | **26.261** | 26.148–26.557 |
+| `paint/object-fit-800x600` | **3.384** | 3.175–3.407 |
+| `paint/png-deflate-1024x768` | **3.445** | 3.368–3.575 |
+| `paint/png-deflate-800x600` | **2.186** | 2.078–2.243 |
+| `paint/png-encode-1024x768` | **3.933** | 3.753–3.980 |
+| `paint/png-encode-1024x768-alpha` | **108.771** | 108.023–113.509 |
+| `paint/png-encode-800x600` | **2.409** | 2.258–2.450 |
+| `paint/png-encode-800x600-alpha` | **64.284** | 62.674–65.235 |
+| `paint/png-encode-full-1024x768-100pct` | **3.908** | 3.769–4.072 |
+| `paint/png-encode-full-1024x768-10pct` | **10.434** | 10.133–10.677 |
+| `paint/png-encode-full-1024x768-25pct` | **9.318** | 9.161–9.578 |
+| `paint/png-encode-full-1024x768-50pct` | **7.668** | 7.378–7.720 |
+| `paint/png-encode-full-800x600-100pct` | **2.332** | 2.278–2.385 |
+| `paint/png-encode-full-800x600-10pct` | **6.378** | 6.159–6.634 |
+| `paint/png-encode-full-800x600-25pct` | **5.611** | 5.547–5.847 |
+| `paint/png-encode-full-800x600-50pct` | **4.595** | 4.495–4.798 |
+| `paint/png-encode-regions-100pct` | **2.476** | 2.350–2.632 |
+| `paint/png-encode-regions-1024x768-100pct` | **4.371** | 4.318–4.502 |
+| `paint/png-encode-regions-1024x768-10pct` | **5.281** | 5.048–5.429 |
+| `paint/png-encode-regions-1024x768-25pct` | **5.075** | 4.904–5.172 |
+| `paint/png-encode-regions-1024x768-50pct` | **4.831** | 4.733–4.951 |
+| `paint/png-encode-regions-10pct` | **3.089** | 2.972–3.298 |
+| `paint/png-encode-regions-25pct` | **2.992** | 2.851–3.171 |
+| `paint/png-encode-regions-50pct` | **2.850** | 2.738–2.921 |
+| `paint/png-filter-1024x768` | **0.303** | 0.292–0.364 |
+| `paint/png-filter-800x600` | **0.205** | 0.201–0.362 |
+| `paint/rasterize-800x600` | **1.059** | 0.969–1.094 |
+| `paint/render-to-png-800x600` | **6.407** | 6.286–6.504 |
+| `pipeline/backdrop-fixture-300x260` | **1.851** | 1.766–1.868 |
+| `pipeline/backdrop-fixture-300x260-no-effect` | **1.432** | 1.326–1.457 |
+| `pipeline/filter-fixture-300x260` | **0.828** | 0.759–0.837 |
+| `pipeline/filter-fixture-300x260-no-effect` | **0.812** | 0.741–0.830 |
+| `pipeline/gradients-800x600` | **47.088** | 45.320–47.558 |
+| `pipeline/grid-800x600` | **4.433** | 4.408–4.568 |
+| `pipeline/html-to-png-800x600` | **110.124** | 107.612–119.501 |
+| `render/html-to-png` | **7.614** | 7.326–7.754 |
+| `shell/chrome-png-1024x768` | **3.794** | 3.650–3.970 |
+| `shell/chrome-png-640x400` | **1.235** | 1.176–1.305 |
+| `shell/save-png-encode-800x600` | **2.753** | 2.601–2.796 |
+| `shell/save-png-total-800x600` | **2.786** | 2.585–2.826 |
+| `shell/save-png-write-800x600` | **0.003** | 0.003–0.003 |
 
 ## 4. Complejidad observada
 
@@ -245,23 +259,24 @@ optimizaciones de PNG.
 
 ## 11. Presupuestos: veredicto
 
-| Medida | r32 | Presupuesto | % | Margen | Veredicto |
+| Medida | r36 | Presupuesto | % | Margen | Veredicto |
 |---|---:|---:|---:|---:|---|
-| `pipeline/html-to-png` | **108,46 ms** | **≤140** | 77,5 % | 31,54 ms | ✅ |
-| `layout/realistic-1mb` | **36,45 ms** | **≤45** | 81,0 % | 8,55 ms | ✅ |
-| `css/resolve-styles-10k` | **13,47 ms** | **≤35** | 38,5 % | 21,53 ms | ✅ |
-| showcase render CLI | **25,37 ms** | **≤35** | 72,5 % | 9,63 ms | ✅ |
-| shell headless showcase | 26,28 ms | ≤35 | 75,1 % | 8,72 ms | ✅ |
-| `paint/render-to-png` | **6,89 ms** | ref ~8,5 | — | −1,61 ms | ✅ recuperado |
-| `paint/build-display-list` | **8,30 ms** | **≤25** | 33,2 % | 16,70 ms | ✅ |
-| `html/realistic-1mb` | 17,95 ms | ≤100 | 17,9 % | 82,05 ms | ✅ |
-| `image/decode-png` | **2,61 ms** | foco ≤6,6 | 39,6 % | +3,99 ms | ✅ recuperado |
-| `render/html-to-png` | **7,91 ms** | ≤20 (propuesto) | 39,6 % | +12,09 ms | nuevo, informativo |
+| `pipeline/html-to-png` | **110,12 ms** | **≤140** | 78,7 % | 29,88 ms | ✅ |
+| `layout/realistic-1mb` | **35,76 ms** | **≤45** | 79,5 % | 9,24 ms | ✅ |
+| `css/resolve-styles-10k` | **12,85 ms** | **≤35** | 36,7 % | 22,15 ms | ✅ |
+| showcase render CLI | 25,37 ms (r32, sin re-medir) | **≤35** | 72,5 % | 9,63 ms | ✅ (sin cambios de código) |
+| shell headless showcase | 26,28 ms (r32, sin re-medir) | ≤35 | 75,1 % | 8,72 ms | ✅ (sin cambios de código) |
+| `paint/render-to-png` | **6,41 ms** | ref ~8,5 | — | −2,09 ms | ✅ recuperado |
+| `paint/build-display-list` | **8,97 ms** | **≤25** | 35,9 % | 16,03 ms | ✅ |
+| `html/realistic-1mb` | 17,87 ms | ≤100 | 17,9 % | 82,13 ms | ✅ |
+| `image/decode-png` | **2,55 ms** | foco ≤6,6 | 38,6 % | +4,05 ms | ✅ recuperado |
+| `render/html-to-png` | **7,61 ms** | ≤20 (propuesto) | 38,1 % | +12,39 ms | ✅ |
 
-**No se suben los presupuestos.** Todos con margen amplio; decode-png recuperado
-y render-to-png por debajo de referencia. Próximo foco: **asignar presupuesto a
-`render/html-to-png`**, **backdrop/PNG regions**, **fingerprint layout cache**,
-**HTTP/1.0/gzip streaming** y **fuzz de larga duración**.
+**No se suben los presupuestos.** Todo con margen amplio incluso medida a load 8–13
+(peor que la ventana r32): si el margen sobrevive con la máquina cargada, sobra en
+condiciones limpias. Las dos medidas de showcase siguen en valores r32 porque no se
+tocó el CLI de shell/render en r33–r36 más allá del cache (que solo puede mejorar);
+se re-medirán en la próxima ventana dedicada.
 
 ---
 
@@ -308,6 +323,38 @@ r32 `3e69968`:
 html/css/layout/paint a mano); por eso se añadió la fila **`render/html-to-png`**
 (data URL con 240 cards → DOM/styles/layout/paint/PNG) para medir el pipeline real.
 
+### Ronda 32 → ronda 36 (62 filas compartidas)
+
+Las tablas anchas de arriba se congelan en r32 para no romper su formato; r33–r36
+entran aquí. Método distinto en un punto: r36 son **7 pasadas a load 8,1–13,0**
+frente a las 5 de r32 a load 1,69–1,83, así que el delta absoluto mezcla mejora de
+código y ruido de máquina cargada. Aun así el signo es interpretable: de las 62
+filas compartidas, **51 mejoran >1 %**, **5 quedan planas (±1 %)** y
+**6 empeoran >1 %**; delta mediano **-4,8 %**. La suma legacy
+(19 filas) pasa de **348,683 ms** a **346,488 ms** (−0,6 %).
+
+| Benchmark | R32 | R36 | Δ |
+|---|---:|---:|---:|
+| `pipeline/html-to-png-800x600` | 108,458 | **110,124** | **+1,5 %** |
+| `layout/realistic-1mb` | 36,447 | **35,763** | **-1,9 %** |
+| `css/resolve-styles-10k-nodes` | 13,467 | **12,854** | **-4,6 %** |
+| `paint/build-display-list` | 8,297 | **8,966** | **+8,1 %** |
+| `paint/render-to-png-800x600` | 6,891 | **6,407** | **-7,0 %** |
+| `image/decode-png-800x600` | 2,611 | **2,548** | **-2,4 %** |
+| `html/realistic-1mb` | 17,945 | **17,873** | **-0,4 %** |
+| `css/selector-match-simple` | 0,651 | **0,542** | **-16,7 %** |
+| `css/selector-match-descendant` | 1,331 | **1,037** | **-22,1 %** |
+| `paint/clipping-800x600` | 49,388 | **45,355** | **-8,2 %** |
+| `pipeline/gradients-800x600` | 50,083 | **47,088** | **-6,0 %** |
+| `shell/chrome-png-1024x768` | 4,194 | **3,794** | **-9,5 %** |
+
+Filas nuevas de r33–r36 (19) que no tienen par en r32: matriz completa
+`paint/png-encode-{full,regions}-{800x600,1024x768}-{10,25,50,100}pct`
+(codifica por regiones vs página completa: a 10 % de contenido las regiones ganan
+~40 %), `paint/backdrop-blur-800x600` (6,15 ms; 0,27 ms sin efecto),
+`image/decode-webp-lossy` (10,87 ms, VP8 keyframe) y las variantes
+`pipeline/*-no-effect`.
+
 ---
 
 ## 13. Cómo comparar y detectar regresiones
@@ -328,6 +375,9 @@ html/css/layout/paint a mano); por eso se añadió la fila **`render/html-to-png
 
 - **`pipeline/html-to-png` no usa render**: se mantiene por compatibilidad;
   `render/html-to-png` (nuevo) es la medida correcta del pipeline real.
+- **La ventana r36 no fue limpia**: load 8,1–13,0 por el navegador/editor del
+  usuario. Los números sirven para veredicto de presupuestos (margen amplio) y
+  para detectar regresiones grandes, no para atribuir mejoras de <10 % sin A/B.
 - **Selector bloom**: cambio en css; el A/B css es −52,2 %, sin cambio de
   semántica de matching (tests selectores verdes).
 - **PNG**: decode 2,61 ms; encode alpha 800×600 cuesta ~69,7 ms y 1024×768

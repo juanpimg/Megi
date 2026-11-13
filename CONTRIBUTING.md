@@ -38,10 +38,19 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 - El proyecto mantiene una política estricta de **cero advertencias**:
   - `cargo fmt --check`: Formateo canónico con `rustfmt`.
   - `cargo clippy --workspace --all-targets -- -D warnings`: Cero advertencias de linter permitidas.
-  - `cargo +1.88 check --workspace --all-targets`: verificación contra la MSRV declarada (`rust-version = "1.88"`).
+  - `cargo +1.91 check --workspace --all-targets`: verificación contra la MSRV declarada (`rust-version = "1.91"`).
   - `./tools/dev.sh all`: script integral (fmt, clippy, tests, doc y **gate de conformidad**) que debe pasar al 100% verde antes de cualquier commit o Pull Request.
 - **Progress status generado**: si tocas docs, tests, fases o `docs/status/progress.toml`, regenera el snapshot antes de commitear con `python3 tools/update_progress.py --write` (CI ejecuta el check de frescura); **no edites a mano** `PROGRESS.md` ni `docs/status/`.
-  - `cd fuzz && cargo +nightly fuzz build`: compila los 7 targets de fuzz (nightly; también lo hace un job build-only en PRs que tocan `fuzz/**`).
+  - `cd fuzz && cargo +nightly fuzz build`: compila los 21 targets de fuzz (nightly; también lo hace un job build-only en PRs que tocan `fuzz/**`).
+
+### 1.6 Política de MSRV
+
+- La MSRV vive **solo** en `Cargo.toml` (`rust-version`); los crates la heredan con `rust-version.workspace = true`. No se declara una MSRV distinta por crate.
+- Hoy es **1.91**, y no es una elección libre: `boa_engine` 0.22 exige 1.91 (`cargo +1.88 check` falla con *"rustc 1.88.0 is not supported"*). Si se sube Boa, la MSRV sube con él.
+- El job `msrv` de CI instala un toolchain **fijado** (`1.91.0`, no `stable`) y ejecuta `cargo check --workspace --all-targets --locked` **y** el build sin JS (`-p js`, `-p render` con `--no-default-features`).
+- Se usa `--locked` a propósito: la MSRV se valida contra el lockfile versionado, que es exactamente lo que compilan los contribuyentes y los usuarios de `cargo install --locked`.
+- **No** se ejecuta `-Z minimal-versions` en CI: exigiría un árbol de dependencias mínimo irreal y produce rojos que nadie reproduce. La política es la contraria: el lockfile es la fuente de verdad y, si una actualización de dependencia rompe la MSRV, el propio job falla con el nombre del crate culpable; se resuelve fijando la versión anterior o subiendo `rust-version` de forma explícita (con su nota en `CHANGELOG.md`).
+- El toolchain de desarrollo puede ser más nuevo (`stable`); el job semanal `toolchain-drift` compila con el `stable` más reciente para detectar lints/novedades que rompan la build antes de que lo haga un usuario.
 
 ---
 
@@ -127,10 +136,10 @@ La matriz de soporte por propiedad CSS, el estado de cada paquete de Fase 4 y el
 git clone https://github.com/juanpimg/Megi.git
 cd Megi
 
-# Verificar que tu entorno de Rust cumple la MSRV declarada (Edition 2024 / Rust 1.88+)
-rustup toolchain install 1.88
+# Verificar que tu entorno de Rust cumple la MSRV declarada (Edition 2024 / Rust 1.91+)
+rustup toolchain install 1.91
 rustc --version
-cargo +1.88 check --workspace --all-targets
+cargo +1.91 check --workspace --all-targets
 ```
 
 #### Dependencias del sistema (Linux)
@@ -177,7 +186,7 @@ cargo fmt
 cargo test --workspace                         # 1986 tests (con JS por defecto)
 cargo test -p js --no-default-features         # stub del motor sin Boa (CI)
 cargo test -p render --no-default-features     # render sin scripts (CI)
-cargo +1.88 check --workspace --all-targets
+cargo +1.91 check --workspace --all-targets
 cargo run -p test_harness -- --summary          # gate 4 suites: PASS, exit 0
 cargo run -p test_harness -- --summary --strict # exit 1 si hay fallos no aceptados
 
@@ -232,7 +241,7 @@ cargo install cargo-fuzz --locked
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Si `./tools/dev.sh all` reporta `==> All checks passed!`, tu código está listo para ser revisado. La CI remota (`.github/workflows/ci.yml`) ejecuta los mismos pasos: `quality` (fmt, clippy, tests, doc), `conformance` (gate `--summary`), `msrv` (`cargo check` con Rust 1.88) y `minimal` (clippy y tests de `js`/`render` con `--no-default-features`). El build sin JS se comprueba **por crate**: `shell` y `test_harness` enlazan Boa aunque se pase `--no-default-features` al workspace, así que ese comando no produce un build sin motor.
+Si `./tools/dev.sh all` reporta `==> All checks passed!`, tu código está listo para ser revisado. La CI remota (`.github/workflows/ci.yml`) ejecuta los mismos pasos: `quality` (fmt, clippy, tests, doc), `conformance` (gate `--summary`), `msrv` (`cargo check` con Rust 1.91 en el build por defecto y en el JS-free) y `minimal` (clippy y tests de `js`/`render` con `--no-default-features`). El build sin JS se comprueba **por crate**: `shell` y `test_harness` enlazan Boa aunque se pase `--no-default-features` al workspace, así que ese comando no produce un build sin motor.
 - **CI (ronda 12)**: los jobs instalan en el runner los paquetes de sistema Wayland/X11/xcb (`libwayland-dev`, `libxkbcommon*`, `libx11*`, `libxcb*`) que necesitan `winit`/`softbuffer`; los 3 jobs están en verde y `main`/`feature` sincronizadas.
 
 ---
@@ -308,7 +317,7 @@ Cuando aplique: `cargo doc --workspace --no-deps`, regenerar `PROGRESS.md`/`docs
 ## 7. Proceso de Pull Request (PR)
 
 1. **Rama y commits**: rama descriptiva, commits atómicos y firmados con DCO.
-2. **Verificación local**: `./tools/dev.sh all` en verde y `cargo +1.88 check --workspace --all-targets` si aplica a MSRV.
+2. **Verificación local**: `./tools/dev.sh all` en verde y `cargo +1.91 check --workspace --all-targets` si aplica a MSRV.
 3. **Abre el PR** con:
    - Resumen del cambio y motivación (y enlace al issue).
    - Sección/ancla de la especificación WHATWG/W3C implementada o corregida.

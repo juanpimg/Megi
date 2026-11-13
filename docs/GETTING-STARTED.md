@@ -4,7 +4,7 @@ This guide helps you build, test, and run Megi locally.
 
 ## Prerequisites
 
-- **Rust** 1.88+ (Edition 2024). Install via [rustup](https://rustup.rs/):
+- **Rust** 1.91+ (Edition 2024). Install via [rustup](https://rustup.rs/):
   ```bash
   rustup toolchain install stable
   rustup default stable

@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Merge-queue pushes fire `merge_group`, not `push`/`pull_request`; without this
+  # trigger a queued merge lands with no CI run at all (issue #697).
+  merge_group:
+  workflow_dispatch:
+  schedule:
+    # Weekly toolchain drift gate: the pinned jobs below keep `main` reproducible,
+    # this run is the only one that floats and reports new rustc breakage (#698).
+    - cron: "23 5 * * 1"
 
 env:
   CARGO_TERM_COLOR: always
@@ -19,22 +27,17 @@ concurrency:
 jobs:
   quality:
     name: Quality gate (fmt, clippy, tests, docs)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
+          # Pinned so a new rustc cannot break `clippy -D warnings` without a PR (#698).
+          toolchain: 1.99.1
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      - name: Install shell system dependencies (winit/softbuffer)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev \
-            libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev \
-            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxcb-shm0-dev libxcb-randr0-dev
+      - uses: ./.github/actions/install-system-deps
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Clippy (deny warnings)
@@ -61,20 +64,15 @@ jobs:
 
   conformance:
     name: HTML5 conformance gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      - name: Install shell system dependencies (winit/softbuffer)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev \
-            libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev \
-            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxcb-shm0-dev libxcb-randr0-dev
+      - uses: ./.github/actions/install-system-deps
       - name: Closed-loop conformance summary (fails on unexpected regressions)
         run: cargo run --locked -p test_harness -- --summary 2>&1 | tee /tmp/conformance.log
       - name: Upload conformance log
@@ -87,32 +85,34 @@ jobs:
           if-no-files-found: ignore
 
   msrv:
-    name: MSRV (Rust 1.88)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@9bd08f027b2fe39fa33325f9c2d201979b1cc076 # 1.120
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      - name: Install shell system dependencies (winit/softbuffer)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev \
-            libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev \
-            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxcb-shm0-dev libxcb-randr0-dev
-      - name: Check workspace against declared MSRV
-        run: cargo check --workspace --all-targets --locked
-
-  minimal:
-    name: JS-free build (--no-default-features)
-    runs-on: ubuntu-latest
+    name: MSRV (Rust 1.91)
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
+          toolchain: 1.91.0
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: ./.github/actions/install-system-deps
+      - name: Check workspace against declared MSRV
+        run: cargo check --workspace --all-targets --locked
+      # The MSRV gate must also cover the documented JS-free build, not just the
+      # default one (#52).
+      - name: Check the JS-free configuration against the MSRV
+        run: |
+          cargo check -p js --no-default-features --all-targets --locked
+          cargo check -p render --no-default-features --all-targets --locked
+
+  minimal:
+    name: JS-free build (--no-default-features)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
           components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       # `js` and `render` are the only crates with a `js` feature, and a workspace-wide
@@ -129,11 +129,13 @@ jobs:
 
   package:
     name: Packaging dry-run
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       # Verifies every workspace crate can be packaged (manifest/path-dependency
       # requirements) without building the packages.
@@ -142,11 +144,13 @@ jobs:
 
   security:
     name: Dependency security (audit/deny)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - name: Install cargo-audit
         uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2
@@ -163,20 +167,15 @@ jobs:
 
   unsafe-audit:
     name: Unsafe audit (cargo-geiger)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev \
-            libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev \
-            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxcb-shm0-dev libxcb-randr0-dev
+      - uses: ./.github/actions/install-system-deps
       - name: Install cargo-geiger
         uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2
         with:
@@ -191,3 +190,51 @@ jobs:
           path: /tmp/geiger.json
           retention-days: 7
           if-no-files-found: ignore
+
+  workflow-lint:
+    name: Workflow and shell lint (actionlint, shellcheck)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Release tarballs pinned by version *and* checksum: the lint gate itself must
+      # not reintroduce the floating-installer problem it is meant to catch (#713/#828).
+      - name: Install actionlint 1.7.12
+        run: |
+          curl -sSfL -o /tmp/actionlint.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  /tmp/actionlint.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
+          sudo install -m 0755 /tmp/actionlint /usr/local/bin/actionlint
+      - name: actionlint (workflows)
+        run: actionlint -color
+      - name: Install shellcheck 0.11.0
+        run: |
+          curl -sSfL -o /tmp/shellcheck.tar.xz \
+            https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz
+          echo "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  /tmp/shellcheck.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/shellcheck.tar.xz -C /tmp
+          sudo install -m 0755 /tmp/shellcheck-v0.11.0/shellcheck /usr/local/bin/shellcheck
+      - name: shellcheck (tools/*.sh)
+        run: shellcheck -S warning tools/*.sh
+
+  toolchain-drift:
+    name: Toolchain drift (newest stable)
+    # The only job that deliberately floats: everything else is pinned, so this
+    # weekly run is what reports a new rustc breaking `clippy -D warnings` (#698).
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: ./.github/actions/install-system-deps
+      - name: fmt, clippy and tests on the floating stable
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --all-targets --locked

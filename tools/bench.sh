@@ -99,6 +99,8 @@ set -e
 echo
 echo "Raw table : ${OUTPUT}"
 echo "Metadata  : ${METADATA}"
-echo "Reproduce : cargo run --release -p bench -- "$@""
+printf 'Reproduce : cargo run --release -p bench --'
+printf ' %q' "$@"
+echo
 
 exit "${status}"

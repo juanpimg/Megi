@@ -15,6 +15,8 @@
 | `352dfd1`, `9f44916` | Fallback de fuentes del sistema bajo demanda (`SYSTEM_FALLBACK_DB` con `OnceLock`) preservando determinismo golden en fuentes empaquetadas. | `#1015` |
 | `d1da78f` | Runtime de transiciones CSS (`ANIMATABLE_PROPERTIES`, `transition_progress`, `apply_transitions`). | `#941`, `#942` |
 | `7ab03bc` | Actualización de `PROGRESS.md` y badges en `docs/status/`. | — |
+| `905d869`, `4663ca2`, `62c41e9`, `8eef306` | Pixmap vacío en dimensiones desbordadas, clip stack O(1) acotado, `scrollable_overflow_height` en `shell::worker` y límites en `TextCache` (`crates/paint`). | `#667`, `#651`, `#1021`, `#656` |
+| *(actual)* | Actualización de `ARCHITECTURE.md`, `TOOLING.md`, `PHASE4-SUPPORT.md`, `JAVASCRIPT-STRATEGY.md`, `SECURITY.md` y `PROGRESS.md`/badges. | `#718`, `#721`, `#731`, `#825`, `#829`, `#830` |
 
 ## Verificación del estado actual en `main`
 
@@ -25,12 +27,10 @@
 
 ## Pendiente prioritario para la próxima sesión de coding
 
-1. **Scroll bloqueado en páginas reales (`#1021`)**:
-   - **Síntoma**: Al navegar en `./target/release/megi` (p. ej. `https://es.wikipedia.org/wiki/Rust`), la rueda del ratón y las teclas de desplazamiento no hacen scroll.
-   - **Causa raíz detectada**: En `crates/shell/src/worker.rs` (`render_document_with_options`), `scroll::content_height(probe.layout.dimensions.margin_box().height)` usa únicamente la altura del `margin_box` del nodo raíz, que puede quedarse acotada al viewport (`request.css_height`) aunque los hijos desborden verticalmente. Eso deja `ScrollState::max_offset() == 0` en `crates/shell/src/window.rs`.
-   - **Siguiente paso**: Calcular el *scrollable overflow height* real recorriendo los descendientes visibles del árbol de layout (`max(y + height)`), verificar `MouseWheel`/`ArrowDown`/`PageDown` y añadir test de regresión en `crates/shell`.
-2. **Fidelidad visual en webs reales**:
+1. **Fidelidad visual en webs reales**:
    - Seguir cerrando brechas de layout/CSS/pintado detectadas al probar sitios reales en `megi` (posicionamiento, anchos `auto`/flex/grid complejos, centrado, SVG/imágenes y estilos modernos).
+2. **Revisión de PRs y CI**:
+   - Revisar/mergear PR `#1020` (`fix/paint-rasterize-panic` para `#667`) y atender los checks de CI (`MSRV 1.88`, `cargo-audit`/`deny`, `cargo-geiger`).
 
 ---
 
@@ -70,7 +70,7 @@
 cargo test --workspace                              # 1929 tests (JS por defecto)
 cargo run -p test_harness -- --summary              # gate: 3904/3904 árbol, PASS, exit 0
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo doc --workspace --no-deps
-cargo +1.88 check --workspace --all-targets         # MSRV
+cargo +1.91 check --workspace --all-targets         # MSRV
 
 # Ronda 32
 cargo run --release -p bench -- --filter css/resolve-styles
