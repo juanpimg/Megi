@@ -454,7 +454,13 @@ impl Pixmap {
     /// CSS 2.2 §8.5.2: if the sum of two opposing border widths exceeds the
     /// border box dimension, both are reduced proportionally.
     pub fn draw_border(&mut self, rect: Rect, sides: [BorderSide; 4]) {
-        if rect.width <= 0.0 || rect.height <= 0.0 {
+        if rect.width <= 0.0
+            || rect.height <= 0.0
+            || !rect.x.is_finite()
+            || !rect.y.is_finite()
+            || !rect.width.is_finite()
+            || !rect.height.is_finite()
+        {
             return;
         }
 
