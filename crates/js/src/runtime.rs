@@ -1189,6 +1189,32 @@ fn js_error(message: impl Into<String>) -> BoaError {
     JsNativeError::typ().with_message(message.into()).into()
 }
 
+/// `SyntaxError` for the DOM APIs that validate an enumerated string argument (#653).
+fn syntax_error(message: impl Into<String>) -> BoaError {
+    JsNativeError::syntax().with_message(message.into()).into()
+}
+
+/// The four `insertAdjacent*` positions, after ASCII-lowercasing (#653).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AdjacentPosition {
+    BeforeBegin,
+    AfterBegin,
+    BeforeEnd,
+    AfterEnd,
+}
+
+impl AdjacentPosition {
+    fn parse(position: &str) -> Option<Self> {
+        match position {
+            "beforebegin" => Some(Self::BeforeBegin),
+            "afterbegin" => Some(Self::AfterBegin),
+            "beforeend" => Some(Self::BeforeEnd),
+            "afterend" => Some(Self::AfterEnd),
+            _ => None,
+        }
+    }
+}
+
 fn arg_string(args: &[JsValue], index: usize, context: &mut Context) -> JsResult<String> {
     let value = args.get(index).cloned().unwrap_or_else(JsValue::undefined);
     value
@@ -2207,9 +2233,14 @@ fn node_closest(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     Ok(JsValue::null())
 }
 
-fn insert_relative(host: &mut crate::host::Host, target: NodeId, node: NodeId, position: &str) {
+fn insert_relative(
+    host: &mut crate::host::Host,
+    target: NodeId,
+    node: NodeId,
+    position: AdjacentPosition,
+) {
     match position {
-        "beforebegin" => {
+        AdjacentPosition::BeforeBegin => {
             let parent = host.document.try_node(target).and_then(|node| node.parent);
             if let Some(parent) = parent {
                 let _ = host
@@ -2217,17 +2248,17 @@ fn insert_relative(host: &mut crate::host::Host, target: NodeId, node: NodeId, p
                     .insert_before_child(parent, node, Some(target));
             }
         }
-        "afterbegin" => {
+        AdjacentPosition::AfterBegin => {
             let first = host
                 .document
                 .try_node(target)
                 .and_then(|node| node.first_child);
             let _ = host.document.insert_before_child(target, node, first);
         }
-        "beforeend" => {
+        AdjacentPosition::BeforeEnd => {
             host.document.append_child(target, node);
         }
-        "afterend" => {
+        AdjacentPosition::AfterEnd => {
             let parent = host.document.try_node(target).and_then(|node| node.parent);
             if let Some(parent) = parent {
                 let next = host
@@ -2237,8 +2268,19 @@ fn insert_relative(host: &mut crate::host::Host, target: NodeId, node: NodeId, p
                 let _ = host.document.insert_before_child(parent, node, next);
             }
         }
-        _ => {}
     }
+}
+
+/// Validates the `position` argument of `insertAdjacent*`, throwing `SyntaxError` for
+/// anything outside the four defined values (#653).
+fn adjacent_position(args: &[JsValue], context: &mut Context) -> JsResult<AdjacentPosition> {
+    let raw = arg_string(args, 0, context)?;
+    let lowered = raw.to_ascii_lowercase();
+    AdjacentPosition::parse(&lowered).ok_or_else(|| {
+        syntax_error(format!(
+            "insertAdjacent*: unknown position `{raw}` (expected beforebegin, afterbegin, beforeend or afterend)"
+        ))
+    })
 }
 
 fn node_insert_adjacent_html(
@@ -2256,7 +2298,7 @@ fn node_insert_adjacent_html(
     if !is_element {
         return Err(js_error("insertAdjacentHTML is only supported on elements"));
     }
-    let position = arg_string(args, 0, context)?.to_ascii_lowercase();
+    let position = adjacent_position(args, context)?;
     let html_text = arg_string(args, 1, context)?;
     with_host(|host| {
         if !charge_document_parse(host, html_text.len(), "insertAdjacentHTML") {
@@ -2276,7 +2318,7 @@ fn node_insert_adjacent_html(
         }
         let children: Vec<NodeId> = host.document.children(temp).collect();
         for child in children {
-            insert_relative(host, target, child, &position);
+            insert_relative(host, target, child, position);
         }
     });
     Ok(JsValue::undefined())
@@ -2297,11 +2339,11 @@ fn node_insert_adjacent_text(
     if !is_element {
         return Err(js_error("insertAdjacentText is only supported on elements"));
     }
-    let position = arg_string(args, 0, context)?.to_ascii_lowercase();
+    let position = adjacent_position(args, context)?;
     let text = arg_string(args, 1, context)?;
     with_host(|host| {
         let node = host.document.create_text_node(&text);
-        insert_relative(host, target, node, &position);
+        insert_relative(host, target, node, position);
     });
     Ok(JsValue::undefined())
 }
