@@ -49,7 +49,7 @@ use boa_engine::{
 };
 use dom::{Attribute as DomAttribute, Document, Namespace, NodeId};
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -3867,35 +3867,43 @@ fn apply_budget(context: &mut Context, budget: &Budget) {
 
 /// Maximum nesting of the static module graph (each level is one Rust stack frame).
 const MAX_MODULE_DEPTH: usize = 128;
+const MAX_MODULE_COUNT: usize = 1024;
 
+#[allow(clippy::too_many_arguments)]
 fn eval_module_graph(
     context: &mut Context,
     host: &Rc<RefCell<Host>>,
     url: &str,
     source: &str,
     budget: &Budget,
-    visiting: &mut Vec<String>,
+    visiting: &mut HashSet<String>,
+    depth: usize,
     done: &mut HashMap<String, JsObject>,
 ) -> Result<JsObject, JsError> {
     if let Some(object) = done.get(url) {
         return Ok(object.clone());
     }
-    if visiting.iter().any(|visited| visited == url) {
+    if !visiting.insert(url.to_string()) {
         return Err(JsError::ModuleCycle(url.to_string()));
     }
     // Static imports recurse through this function: an unbounded chain (a loader can serve
     // any depth) would overflow the native stack.
-    if visiting.len() >= MAX_MODULE_DEPTH {
+    if depth >= MAX_MODULE_DEPTH {
+        visiting.remove(url);
         return Err(JsError::ModuleDepth(url.to_string()));
     }
-    visiting.push(url.to_string());
+    // Cap total module count to prevent memory blowup from wide graphs.
+    if done.len() + visiting.len() > MAX_MODULE_COUNT {
+        visiting.remove(url);
+        return Err(JsError::ModuleBudget(url.to_string()));
+    }
     let parsed = transform_module(source, url)?;
     let mut namespaces = Vec::with_capacity(parsed.imports.len());
     for import in &parsed.imports {
         let dep_url = resolve_module(host, &import.specifier, url)?;
         let dep_source = load_module(host, &dep_url)?;
         let namespace =
-            eval_module_graph(context, host, &dep_url, &dep_source, budget, visiting, done)?;
+            eval_module_graph(context, host, &dep_url, &dep_source, budget, visiting, depth + 1, done)?;
         namespaces.push(namespace);
     }
     let mut prelude = String::new();
@@ -3954,7 +3962,7 @@ fn eval_module_graph(
         let dep_url = resolve_module(host, specifier, url)?;
         let dep_source = load_module(host, &dep_url)?;
         let namespace =
-            eval_module_graph(context, host, &dep_url, &dep_source, budget, visiting, done)?;
+            eval_module_graph(context, host, &dep_url, &dep_source, budget, visiting, depth + 1, done)?;
         context
             .global_object()
             .set(
@@ -4004,7 +4012,7 @@ fn eval_module_graph(
         .as_object()
         .ok_or_else(|| JsError::Internal("module evaluation returned no namespace".to_string()))?
         .clone();
-    visiting.pop();
+    visiting.remove(url);
     done.insert(url.to_string(), object.clone());
     Ok(object)
 }
@@ -4065,7 +4073,7 @@ impl JsRuntime {
             return Err(JsError::Budget("module source exceeds byte cap".to_owned()));
         }
         apply_budget(&mut self.context, budget);
-        let mut visiting = Vec::new();
+        let mut visiting = HashSet::new();
         let mut done = HashMap::new();
         let namespace = eval_module_graph(
             &mut self.context,
@@ -4074,6 +4082,7 @@ impl JsRuntime {
             source,
             budget,
             &mut visiting,
+            0,
             &mut done,
         )?;
         let mut values = Vec::new();
