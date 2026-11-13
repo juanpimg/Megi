@@ -1328,11 +1328,11 @@ fn alpha_lut(color_alpha: u8) -> [u8; 256] {
     lut
 }
 
-/// Paints one shaped text run using (and filling) the per-pass cache.
-#[allow(clippy::too_many_arguments)]
 /// Upper bound for a rasterized glyph size, mirroring the painter's ceiling (#672).
 const MAX_RASTERIZED_FONT_SIZE: f32 = 1024.0;
 
+/// Paints one shaped text run using (and filling) the per-pass cache.
+#[allow(clippy::too_many_arguments)]
 fn draw_text_cached(
     pixmap: &mut Pixmap,
     cache: &mut TextCache,
