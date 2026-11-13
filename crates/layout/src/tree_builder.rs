@@ -366,7 +366,7 @@ fn build_box_for_node(
                     element
                         .and_then(|el| el.get_attribute(name))
                         .and_then(|value| value.trim().trim_end_matches("px").parse::<f32>().ok())
-                        .filter(|value| value.is_finite() && *value >= 0.0)
+                        .filter(|value| value.is_finite() && *value >= 0.0 && *value <= 10000.0)
                 };
                 let attribute_width = attribute_number("width");
                 let attribute_height = attribute_number("height");
