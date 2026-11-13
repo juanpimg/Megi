@@ -736,13 +736,41 @@ impl FontDatabase {
                 font_index,
             )?);
         }
+        // Only emit faces that actually shaped at least one glyph, remapping the
+        // glyph.font indices so unused fallback faces do not travel with the run
+        // (issue #610).
+        let mut used: Vec<bool> = vec![false; fonts.len()];
+        for glyph in &glyphs {
+            if let Some(slot) = used.get_mut(glyph.font) {
+                *slot = true;
+            }
+        }
+        // The primary face (index 0) is always retained so an empty run still
+        // carries its metrics face.
+        if let Some(slot) = used.first_mut() {
+            *slot = true;
+        }
+        let mut remap: Vec<usize> = vec![0; fonts.len()];
+        let mut compact: Vec<FontRefInfo> = Vec::new();
+        for (index, info) in fonts.into_iter().enumerate() {
+            if used[index] {
+                remap[index] = compact.len();
+                compact.push(info);
+            }
+        }
+        for glyph in &mut glyphs {
+            glyph.font = remap
+                .get(glyph.font)
+                .copied()
+                .unwrap_or(0);
+        }
         let width = glyphs.iter().map(|glyph| glyph.x_advance).sum();
         Ok(ShapedRun {
             glyphs,
             width,
             ascent: metrics.ascent,
             descent: metrics.descent,
-            fonts,
+            fonts: compact,
         })
     }
 
