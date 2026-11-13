@@ -221,7 +221,8 @@ use dom::{Document, NodeId};
 use net::{FetchOptions, ResourceLoader, Scheme, Url};
 
 use images::{
-    DEFAULT_MAX_IMAGE_BYTES, DEFAULT_MAX_IMAGES, DEFAULT_MAX_TOTAL_IMAGE_BYTES, ImageLimits,
+    DEFAULT_MAX_IMAGE_BYTES, DEFAULT_MAX_IMAGES, DEFAULT_MAX_TOTAL_DECODED_PIXELS,
+    DEFAULT_MAX_TOTAL_IMAGE_BYTES, ImageLimits,
 };
 
 pub use cache::{RenderCache, RenderCacheStats};
@@ -254,6 +255,12 @@ pub const DEFAULT_MAX_BACKGROUND_BYTES: usize = backgrounds::DEFAULT_MAX_BACKGRO
 /// Default total background-image byte budget per page (16 MiB).
 pub const DEFAULT_MAX_TOTAL_BACKGROUND_BYTES: usize =
     backgrounds::DEFAULT_MAX_TOTAL_BACKGROUND_BYTES;
+/// Default maximum number of `@font-face` web fonts attempted per render (#531).
+pub const DEFAULT_MAX_WEB_FONTS: usize = webfonts::MAX_WEB_FONTS;
+/// Default maximum encoded bytes accepted for a single web font (#531).
+pub const DEFAULT_MAX_WEB_FONT_BYTES: usize = webfonts::MAX_WEB_FONT_BYTES;
+/// Default maximum encoded bytes accepted for all web fonts per render (#531).
+pub const DEFAULT_MAX_TOTAL_WEB_FONT_BYTES: usize = webfonts::MAX_WEB_FONT_TOTAL_BYTES;
 
 /// Output viewport in CSS pixels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -387,6 +394,14 @@ pub struct RenderOptions {
     pub max_background_bytes: usize,
     /// Maximum total downloaded background-image bytes for the page.
     pub max_total_background_bytes: usize,
+    /// Maximum total decoded pixels across `<img>` and background bitmaps (#517).
+    pub max_total_decoded_pixels: u64,
+    /// Maximum number of `@font-face` web fonts attempted per render (#531).
+    pub max_web_fonts: usize,
+    /// Maximum encoded bytes accepted for a single web font (#531).
+    pub max_web_font_bytes: usize,
+    /// Maximum encoded bytes accepted for all web fonts per render (#531).
+    pub max_total_web_font_bytes: usize,
     /// Time used to evaluate CSS animations/transitions, in milliseconds (`--time`).
     ///
     /// `0` (the initial state) is the default; a caller that wants a later animation frame
@@ -466,6 +481,10 @@ impl Default for RenderOptions {
             max_backgrounds: DEFAULT_MAX_BACKGROUNDS,
             max_background_bytes: DEFAULT_MAX_BACKGROUND_BYTES,
             max_total_background_bytes: DEFAULT_MAX_TOTAL_BACKGROUND_BYTES,
+            max_total_decoded_pixels: DEFAULT_MAX_TOTAL_DECODED_PIXELS,
+            max_web_fonts: DEFAULT_MAX_WEB_FONTS,
+            max_web_font_bytes: DEFAULT_MAX_WEB_FONT_BYTES,
+            max_total_web_font_bytes: DEFAULT_MAX_TOTAL_WEB_FONT_BYTES,
             time_ms: 0.0,
             scripting: ScriptingMode::default(),
             scripting_limits: ScriptingLimits::default(),
@@ -883,19 +902,23 @@ fn render_url_inner(
         );
         #[cfg(feature = "js")]
         {
-            if let Some(styles) = pre_script_styles.as_ref() {
+            if let Some(styles) = pre_script_styles.clone() {
                 let pre_layout_viewport = layout::Rect::new(
                     0.0,
                     0.0,
                     options.viewport.width as f32,
                     options.viewport.height as f32,
                 );
-                let layout_root = layout::layout_document(&document, styles, pre_layout_viewport);
-                if let Some(layout_root) = layout_root {
+                let doc_snapshot = document.clone();
+                host_context.layout_provider = Some(Arc::new(move || {
                     let mut rects = std::collections::HashMap::new();
-                    collect_layout_rects(&layout_root, &mut rects);
-                    host_context.layout = Some(std::sync::Arc::new(rects));
-                }
+                    if let Some(layout_root) =
+                        layout::layout_document(&doc_snapshot, &styles, pre_layout_viewport)
+                    {
+                        collect_layout_rects(&layout_root, &mut rects);
+                    }
+                    rects
+                }));
             }
         }
         host_context.storage = options.storage.clone();
@@ -1004,8 +1027,17 @@ fn render_url_inner(
     let styles_time = styles_start.elapsed();
 
     let fonts_start = Instant::now();
-    let loaded_webfonts =
-        webfonts::load_webfonts(&font_faces, &mut loader, options.no_network, &mut warnings);
+    let loaded_webfonts = webfonts::load_webfonts_with_limits(
+        &font_faces,
+        &mut loader,
+        options.no_network,
+        webfonts::WebFontLimits {
+            max_web_fonts: options.max_web_fonts,
+            max_web_font_bytes: options.max_web_font_bytes,
+            max_total_web_font_bytes: options.max_total_web_font_bytes,
+        },
+        &mut warnings,
+    );
     let fonts_time = fonts_start.elapsed();
 
     let images_start = Instant::now();
@@ -1018,6 +1050,7 @@ fn render_url_inner(
             max_images: options.max_images,
             max_image_bytes: options.max_image_bytes,
             max_total_bytes: options.max_total_image_bytes,
+            max_total_decoded_pixels: options.max_total_decoded_pixels,
             max_image_dim: options.max_image_dim,
         },
         &mut warnings,
@@ -1025,6 +1058,9 @@ fn render_url_inner(
     let images_time = images_start.elapsed();
 
     let backgrounds_start = Instant::now();
+    let remaining_decoded_pixels = options
+        .max_total_decoded_pixels
+        .saturating_sub(loaded_images.decoded_pixels);
     let loaded_backgrounds = backgrounds::load_backgrounds(
         &document,
         &styles,
@@ -1035,6 +1071,7 @@ fn render_url_inner(
             max_backgrounds: options.max_backgrounds,
             max_background_bytes: options.max_background_bytes,
             max_total_bytes: options.max_total_background_bytes,
+            max_total_decoded_pixels: remaining_decoded_pixels,
             max_image_dim: options.max_image_dim,
         },
         &mut warnings,
@@ -1213,30 +1250,177 @@ fn render_svg_document(
     fetch_time: Duration,
     total_start: Instant,
 ) -> Result<RenderOutput, RenderError> {
-    let svg_data_url = format!(
-        "data:image/svg+xml;base64,{}",
-        net::base64_encode(&loaded.bytes)
+    let parse = html::parse_document_with_options(
+        "<!doctype html><html><head><style>html,body{margin:0;padding:0;background-color:#ffffff}img{display:block}</style></head><body><img alt=\"\"></body></html>",
+        false,
+        &options.parse_options,
     );
-    let page = format!(
-        "<!doctype html><html><head><style>html,body{{margin:0;padding:0;background-color:#ffffff}}img{{display:block}}</style></head><body><img src=\"{svg_data_url}\" alt=\"\"></body></html>"
+    let document = parse.document;
+    let img_node = document.get_elements_by_tag_name("img").into_iter().next();
+
+    let media_context = css::MediaContext::with_viewport(
+        options.viewport.width as f32,
+        options.viewport.height as f32,
     );
-    let wrapper_url = format!(
-        "data:text/html;base64,{}",
-        net::base64_encode(page.as_bytes())
+    let mut warnings = Vec::new();
+    let mut loader = ResourceLoader::with_options(options.fetch_options.clone());
+    let (stylesheet_collection, style_summary, _font_faces) = collect_styles(
+        &document,
+        &loaded.url,
+        &mut loader,
+        options,
+        &media_context,
+        &mut warnings,
+    )?;
+    let styles = resolve_styles_with_state(
+        &document,
+        &stylesheet_collection,
+        css::StateContext::new(),
+        options.time_ms,
     );
-    let mut output = render_url(&wrapper_url, options)?;
-    output.document_url = loaded.url.clone();
-    output.stats.document_bytes = loaded.bytes.len();
-    output.stats.status = loaded.status;
-    output.stats.referrer_policy = Some(
-        net::ReferrerPolicy::from_headers(&loaded.headers)
-            .unwrap_or_default()
-            .as_str()
-            .to_owned(),
+
+    let mut image_store = paint::ImageStore::new();
+    let mut image_sizes: HashMap<NodeId, (f32, f32)> = HashMap::new();
+    let (mut images_loaded, mut images_failed, mut svgs_rendered) = (0usize, 0usize, 0usize);
+    if let Some(node_id) = img_node {
+        match svg_assets::render(&loaded.bytes) {
+            Ok(rendered) => {
+                let (width, height) = rendered.raster.dimensions();
+                let pixels = u64::from(width).saturating_mul(u64::from(height));
+                if pixels > options.max_total_decoded_pixels {
+                    images_failed = 1;
+                    warnings.push(format!(
+                        "skipping image {}: decoded pixel budget exhausted ({pixels} > {} pixels)",
+                        loaded.url, options.max_total_decoded_pixels
+                    ));
+                } else {
+                    image_sizes.insert(node_id, rendered.intrinsic);
+                    image_store.insert(node_id, Arc::new(rendered.raster));
+                    images_loaded = 1;
+                    svgs_rendered = 1;
+                }
+            }
+            Err(error) => {
+                images_failed = 1;
+                warnings.push(format!(
+                    "skipping image {}: SVG render failed ({error})",
+                    loaded.url
+                ));
+            }
+        }
+    }
+
+    let font_db = fonts::FontDatabase::new_with_bundled_fonts();
+    let measurer = layout::FontTextMeasurer::from_database(font_db);
+    let viewport = layout::Rect::new(
+        0.0,
+        0.0,
+        options.viewport.width as f32,
+        options.viewport.height as f32,
     );
-    output.stats.timings.fetch = fetch_time;
-    output.stats.timings.total = total_start.elapsed();
-    Ok(output)
+    let layout_root = layout::layout_document_with_measurer_and_replaced_sizes(
+        &document,
+        &styles,
+        viewport,
+        &measurer,
+        Some(&image_sizes),
+    )
+    .ok_or(RenderError::LayoutFailed)?;
+
+    let empty_backgrounds = paint::BackgroundImages::new();
+    let (display_list, hit_regions) = paint::build_display_list_with_hit_regions(
+        &layout_root,
+        viewport,
+        &image_store,
+        &empty_backgrounds,
+    );
+    let display_items = display_list.items.len();
+    let hit_region_count = hit_regions.len();
+
+    let pixmap = paint::rasterize_display_list_with_font_database(
+        &display_list,
+        options.viewport.width,
+        options.viewport.height,
+        paint::RenderConfig::default(),
+        measurer.database(),
+    );
+    let png = if options.encode_png {
+        let png = pixmap.to_png();
+        if png.is_empty() {
+            return Err(RenderError::LayoutFailed);
+        }
+        png
+    } else {
+        Vec::new()
+    };
+
+    Ok(RenderOutput {
+        png,
+        pixmap,
+        document,
+        styles,
+        layout: layout_root,
+        display_list,
+        hit_regions,
+        document_url: loaded.url.clone(),
+        location_actions: Vec::new(),
+        history_actions: Vec::new(),
+        stats: RenderStats {
+            document_bytes: loaded.bytes.len(),
+            charset: "utf-8".to_owned(),
+            status: loaded.status,
+            external_stylesheets: style_summary.external_stylesheets,
+            inline_stylesheets: style_summary.inline_stylesheets,
+            css_bytes: style_summary.css_bytes,
+            imports_loaded: style_summary.imports_loaded,
+            imports_skipped: style_summary.imports_skipped,
+            max_import_depth: style_summary.max_import_depth,
+            media_skipped: style_summary.media_skipped,
+            images_loaded,
+            images_failed,
+            image_bytes: 0,
+            background_images_loaded: 0,
+            background_images_failed: 0,
+            background_bytes: 0,
+            svgs_rendered,
+            inline_svgs: 0,
+            fonts_loaded: 0,
+            fonts_failed: 0,
+            font_bytes: 0,
+            scripts_executed: 0,
+            scripts_failed: 0,
+            script_bytes: 0,
+            console: Vec::new(),
+            console_errors: 0,
+            script_tasks: 0,
+            script_loop_iterations: 0,
+            script_virtual_time_ms: 0,
+            script_events: 0,
+            script_timers_pending: 0,
+            location_actions: 0,
+            history_actions: 0,
+            pushed_used: 0,
+            pushed_discarded: 0,
+            display_items,
+            hit_regions: hit_region_count,
+            cookies_stored: 0,
+            content_encoding: loaded.content_encoding.clone(),
+            referrer_policy: Some(
+                net::ReferrerPolicy::from_headers(&loaded.headers)
+                    .unwrap_or_default()
+                    .as_str()
+                    .to_owned(),
+            ),
+            limit_violations: parse.limit_violations,
+            cache_layout_hit: false,
+            timings: RenderTimings {
+                fetch: fetch_time,
+                total: total_start.elapsed(),
+                ..RenderTimings::default()
+            },
+            warnings,
+        },
+    })
 }
 
 /// Main document loaded by [`render_url`], before decoding.

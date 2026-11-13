@@ -36,6 +36,8 @@ pub const DEFAULT_MAX_IMAGES: usize = 64;
 pub const DEFAULT_MAX_IMAGE_BYTES: usize = 8 * 1024 * 1024;
 /// Default maximum total downloaded image bytes per page (32 MiB).
 pub const DEFAULT_MAX_TOTAL_IMAGE_BYTES: usize = 32 * 1024 * 1024;
+/// Default maximum total decoded pixels across `<img>` and CSS background images (64 Mpx ≈ 256 MiB RGBA).
+pub const DEFAULT_MAX_TOTAL_DECODED_PIXELS: u64 = 64 * 1024 * 1024;
 
 /// Defensive caps applied while loading images.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,6 +48,8 @@ pub struct ImageLimits {
     pub max_image_bytes: usize,
     /// Maximum total downloaded image bytes for the page.
     pub max_total_bytes: usize,
+    /// Maximum total decoded pixels across all distinct `<img>` bitmaps.
+    pub max_total_decoded_pixels: u64,
     /// Optional decode downscale cap (`RenderOptions::max_image_dim`).
     pub max_image_dim: Option<u32>,
 }
@@ -56,6 +60,7 @@ impl Default for ImageLimits {
             max_images: DEFAULT_MAX_IMAGES,
             max_image_bytes: DEFAULT_MAX_IMAGE_BYTES,
             max_total_bytes: DEFAULT_MAX_TOTAL_IMAGE_BYTES,
+            max_total_decoded_pixels: DEFAULT_MAX_TOTAL_DECODED_PIXELS,
             max_image_dim: None,
         }
     }
@@ -73,6 +78,8 @@ pub struct LoadedImages {
     pub failed: usize,
     /// Downloaded (compressed) image bytes actually accepted.
     pub downloaded_bytes: usize,
+    /// Total decoded pixels (`width * height`) across distinct decoded bitmaps.
+    pub decoded_pixels: u64,
     /// `<img>` images that were SVGs rasterized through the `svg` crate.
     pub svgs_rendered: usize,
     /// Non-fatal warnings produced by this stage.
@@ -123,6 +130,7 @@ pub fn load_images(
         loaded: 0,
         failed: 0,
         downloaded_bytes: 0,
+        decoded_pixels: 0,
         svgs_rendered: 0,
         warnings: Vec::new(),
     };
@@ -219,8 +227,20 @@ pub fn load_images(
             };
             match decoded {
                 Ok(decoded) => {
-                    result.downloaded_bytes += resource.bytes.len();
                     let (width, height) = decoded.dimensions();
+                    let pixels = u64::from(width).saturating_mul(u64::from(height));
+                    if result.decoded_pixels.saturating_add(pixels)
+                        > limits.max_total_decoded_pixels
+                    {
+                        result.failed += 1;
+                        result.warnings.push(format!(
+                            "skipping image {url}: decoded pixel budget exhausted ({} + {} > {} pixels)",
+                            result.decoded_pixels, pixels, limits.max_total_decoded_pixels
+                        ));
+                        continue;
+                    }
+                    result.decoded_pixels = result.decoded_pixels.saturating_add(pixels);
+                    result.downloaded_bytes += resource.bytes.len();
                     let size = (width as f32, height as f32);
                     let bitmap = Arc::new(decoded);
                     result.sizes.insert(node_id, size);
@@ -249,6 +269,19 @@ pub fn load_images(
         } else if svg_assets::looks_like_svg(&resource.content_type, &resource.bytes) {
             match svg_assets::render(&resource.bytes) {
                 Ok(rendered) => {
+                    let (width, height) = rendered.raster.dimensions();
+                    let pixels = u64::from(width).saturating_mul(u64::from(height));
+                    if result.decoded_pixels.saturating_add(pixels)
+                        > limits.max_total_decoded_pixels
+                    {
+                        result.failed += 1;
+                        result.warnings.push(format!(
+                            "skipping image {url}: decoded pixel budget exhausted ({} + {} > {} pixels)",
+                            result.decoded_pixels, pixels, limits.max_total_decoded_pixels
+                        ));
+                        continue;
+                    }
+                    result.decoded_pixels = result.decoded_pixels.saturating_add(pixels);
                     result.downloaded_bytes += resource.bytes.len();
                     let bitmap = Arc::new(rendered.raster);
                     result.sizes.insert(node_id, rendered.intrinsic);

@@ -32,6 +32,27 @@ pub const MAX_WEB_FONT_BYTES: usize = 8 * 1024 * 1024;
 /// Maximum encoded bytes accepted for all web fonts in one render.
 pub const MAX_WEB_FONT_TOTAL_BYTES: usize = 32 * 1024 * 1024;
 
+/// Defensive caps applied while loading `@font-face` web fonts (#531).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WebFontLimits {
+    /// Maximum number of `@font-face` sources attempted per render.
+    pub max_web_fonts: usize,
+    /// Maximum encoded bytes accepted for a single web font.
+    pub max_web_font_bytes: usize,
+    /// Maximum encoded bytes accepted for all web fonts in one render.
+    pub max_total_web_font_bytes: usize,
+}
+
+impl Default for WebFontLimits {
+    fn default() -> Self {
+        Self {
+            max_web_fonts: MAX_WEB_FONTS,
+            max_web_font_bytes: MAX_WEB_FONT_BYTES,
+            max_total_web_font_bytes: MAX_WEB_FONT_TOTAL_BYTES,
+        }
+    }
+}
+
 /// Result of the web-font stage.
 pub struct LoadedWebFonts {
     /// Bundled faces plus every successfully decoded `@font-face` alias.
@@ -78,16 +99,33 @@ fn face_sources(face: &FontFaceRule) -> Vec<&str> {
     woff2.chain(rest).collect()
 }
 
-/// Fetches, decodes and registers every usable `@font-face` source.
-///
-/// Faces are independent: one face that fails (bad URL, rejected by `--no-network`, oversized,
-/// undecodable) no longer starves the faces declared after it. Only sources that actually reach
-/// the loader count toward [`MAX_WEB_FONTS`], and each face contributes one entry to
-/// [`LoadedWebFonts::failed`] when none of its candidates worked (#665).
+/// Fetches, decodes and registers every usable `@font-face` source using default [`WebFontLimits`].
 pub fn load_webfonts(
     faces: &[LocatedFontFace],
     loader: &mut ResourceLoader,
     no_network: bool,
+    warnings: &mut Vec<String>,
+) -> LoadedWebFonts {
+    load_webfonts_with_limits(
+        faces,
+        loader,
+        no_network,
+        WebFontLimits::default(),
+        warnings,
+    )
+}
+
+/// Fetches, decodes and registers every usable `@font-face` source under explicit [`WebFontLimits`].
+///
+/// Faces are independent: one face that fails (bad URL, rejected by `--no-network`, oversized,
+/// undecodable) no longer starves the faces declared after it. Only sources that actually reach
+/// the loader count toward [`WebFontLimits::max_web_fonts`], and each face contributes one entry to
+/// [`LoadedWebFonts::failed`] when none of its candidates worked (#665, #531).
+pub fn load_webfonts_with_limits(
+    faces: &[LocatedFontFace],
+    loader: &mut ResourceLoader,
+    no_network: bool,
+    limits: WebFontLimits,
     warnings: &mut Vec<String>,
 ) -> LoadedWebFonts {
     let mut database = FontDatabase::new_with_bundled_fonts();
@@ -97,11 +135,13 @@ pub fn load_webfonts(
     let mut bytes = 0usize;
     let mut attempts = 0usize;
 
-    'faces: for (base_url, face) in faces {
-        if attempts >= MAX_WEB_FONTS {
+    'faces: for (index, (base_url, face)) in faces.iter().enumerate() {
+        if attempts >= limits.max_web_fonts {
+            let remaining = faces.len() - index;
+            failed += remaining;
             warnings.push(format!(
-                "skipping @font-face \"{}\": max web fonts per render ({MAX_WEB_FONTS}) reached",
-                face.family
+                "skipping @font-face \"{}\": max web fonts per render ({}) reached",
+                face.family, limits.max_web_fonts
             ));
             break;
         }
@@ -145,6 +185,13 @@ pub fn load_webfonts(
                 ));
                 continue;
             }
+            if attempts >= limits.max_web_fonts {
+                last_warning = Some(format!(
+                    "skipping @font-face \"{}\": max web fonts per render ({}) reached",
+                    face.family, limits.max_web_fonts
+                ));
+                break;
+            }
             attempts += 1;
             let resource = match loader.load(&url) {
                 Ok(resource) => resource,
@@ -156,16 +203,18 @@ pub fn load_webfonts(
                     continue;
                 }
             };
-            if resource.bytes.len() > MAX_WEB_FONT_BYTES {
+            if resource.bytes.len() > limits.max_web_font_bytes {
                 last_warning = Some(format!(
-                    "web font {url} is too large ({} bytes > {MAX_WEB_FONT_BYTES})",
-                    resource.bytes.len()
+                    "web font {url} is too large ({} bytes > {})",
+                    resource.bytes.len(),
+                    limits.max_web_font_bytes
                 ));
                 continue;
             }
-            if bytes + resource.bytes.len() > MAX_WEB_FONT_TOTAL_BYTES {
+            if bytes + resource.bytes.len() > limits.max_total_web_font_bytes {
                 last_warning = Some(format!(
-                    "web font {url} exceeds the total budget ({MAX_WEB_FONT_TOTAL_BYTES} bytes)"
+                    "web font {url} exceeds the total budget ({} bytes)",
+                    limits.max_total_web_font_bytes
                 ));
                 continue;
             }

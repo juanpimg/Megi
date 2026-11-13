@@ -277,6 +277,11 @@ pub struct ScriptingHostContext {
     #[cfg(feature = "js")]
     pub layout:
         Option<std::sync::Arc<std::collections::HashMap<dom::NodeId, js::host::LayoutRect>>>,
+    /// Lazy pre-script layout resolver invoked only if a script queries geometry (#534).
+    #[cfg(feature = "js")]
+    pub layout_provider: Option<
+        Arc<dyn Fn() -> std::collections::HashMap<dom::NodeId, js::host::LayoutRect> + Send + Sync>,
+    >,
 }
 
 impl ScriptingHostContext {
@@ -297,6 +302,8 @@ impl ScriptingHostContext {
             enable_workers: true,
             #[cfg(feature = "js")]
             layout: None,
+            #[cfg(feature = "js")]
+            layout_provider: None,
         }
     }
 
@@ -314,6 +321,8 @@ impl ScriptingHostContext {
             enable_workers: true,
             #[cfg(feature = "js")]
             layout: None,
+            #[cfg(feature = "js")]
+            layout_provider: None,
         }
     }
 }
@@ -870,6 +879,14 @@ pub fn execute_scripts(
     #[cfg(feature = "js")]
     if let Some(layout) = host.layout.clone() {
         runtime.set_layout_provider(Box::new(move |node_id| layout.get(&node_id).copied()));
+    } else if let Some(provider) = host.layout_provider.clone() {
+        let cached: std::sync::OnceLock<
+            std::collections::HashMap<dom::NodeId, js::host::LayoutRect>,
+        > = std::sync::OnceLock::new();
+        runtime.set_layout_provider(Box::new(move |node_id| {
+            let rects = cached.get_or_init(|| provider());
+            rects.get(&node_id).copied()
+        }));
     }
 
     // Browser-facing host providers (R155): History/location actions are queued for the

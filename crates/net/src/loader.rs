@@ -66,6 +66,7 @@ use crate::url::{Scheme, Url};
 /// previous memoization semantics with a conservative fixed five-minute window.
 pub const HEURISTIC_FRESHNESS: Duration = Duration::from_secs(300);
 const MAX_CACHE_ENTRIES: usize = 256;
+const MAX_CACHE_BYTES: usize = 64 * 1024 * 1024;
 
 /// A successfully loaded resource.
 #[derive(Clone, Debug)]
@@ -148,6 +149,7 @@ impl CachedEntry {
 pub struct ResourceLoader {
     options: FetchOptions,
     cache: Option<HashMap<String, CachedEntry>>,
+    cache_bytes: usize,
     cache_hits: u64,
     cache_misses: u64,
     cache_revalidations: u64,
@@ -203,6 +205,7 @@ impl ResourceLoader {
         Self {
             options,
             cache: Some(HashMap::new()),
+            cache_bytes: 0,
             cache_hits: 0,
             cache_misses: 0,
             cache_revalidations: 0,
@@ -220,6 +223,7 @@ impl ResourceLoader {
         Self {
             options: FetchOptions::default(),
             cache: None,
+            cache_bytes: 0,
             cache_hits: 0,
             cache_misses: 0,
             cache_revalidations: 0,
@@ -725,14 +729,29 @@ impl ResourceLoader {
         } else {
             None
         };
-        // Evict oldest entries when the cap is reached.
-        if cache.len() >= MAX_CACHE_ENTRIES {
-            // Remove the first entry (oldest insertion order in HashMap is arbitrary,
-            // but this bounds memory).
-            if let Some(oldest_key) = cache.keys().next().cloned() {
-                cache.remove(&oldest_key);
+        let entry_bytes = resource.bytes.len();
+        if entry_bytes > MAX_CACHE_BYTES {
+            return;
+        }
+        if let Some(previous) = cache.remove(&cache_key) {
+            self.cache_bytes = self
+                .cache_bytes
+                .saturating_sub(previous.resource.bytes.len());
+        }
+        // Evict entries when the entry count or aggregate byte cap is reached (#455).
+        while cache.len() >= MAX_CACHE_ENTRIES
+            || self.cache_bytes.saturating_add(entry_bytes) > MAX_CACHE_BYTES
+        {
+            let Some(oldest_key) = cache.keys().next().cloned() else {
+                break;
+            };
+            if let Some(removed) = cache.remove(&oldest_key) {
+                self.cache_bytes = self
+                    .cache_bytes
+                    .saturating_sub(removed.resource.bytes.len());
             }
         }
+        self.cache_bytes = self.cache_bytes.saturating_add(entry_bytes);
         cache.insert(
             cache_key,
             CachedEntry {
@@ -867,6 +886,7 @@ impl ResourceLoader {
         if let Some(cache) = &mut self.cache {
             cache.clear();
         }
+        self.cache_bytes = 0;
     }
 
     /// Number of cached resources (one per URL).

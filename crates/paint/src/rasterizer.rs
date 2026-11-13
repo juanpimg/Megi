@@ -2338,6 +2338,10 @@ fn blur_mask_pass(mask: &mut [f32], width: usize, height: usize, horizontal: boo
     output.resize(mask.len(), 0.0);
     blur_pass_into(mask, &mut output, width, height, horizontal, radius);
     mask.copy_from_slice(&output);
+    const MAX_RETAINED_F32S: usize = 1024 * 1024;
+    if output.capacity() > MAX_RETAINED_F32S {
+        output = Vec::new();
+    }
     BLUR_OUTPUT.with(|slot| *slot.borrow_mut() = output);
 }
 
@@ -3715,6 +3719,10 @@ fn blur_rgba(buf: &mut Pixmap, blur: f32) {
                 blur_pass_into(&scratch, plane, width, height, false, radius);
             }
         }
+        const MAX_RETAINED_F32S: usize = 1024 * 1024;
+        if scratch.capacity() > MAX_RETAINED_F32S {
+            scratch = Vec::new();
+        }
         BLUR_OUTPUT.with(|slot| *slot.borrow_mut() = scratch);
         for (index, pixel) in buf.pixels.iter_mut().enumerate() {
             pixel.r = planes[0][index].round().clamp(0.0, 255.0) as u8;
@@ -3724,6 +3732,11 @@ fn blur_rgba(buf: &mut Pixmap, blur: f32) {
                 pixel.a = alpha;
             } else {
                 pixel.a = planes[3][index].round().clamp(0.0, 255.0) as u8;
+            }
+        }
+        for plane in planes.iter_mut() {
+            if plane.capacity() > MAX_RETAINED_F32S {
+                *plane = Vec::new();
             }
         }
     });
@@ -3767,6 +3780,10 @@ fn apply_drop_shadow(buf: &mut Pixmap, offset_x: f32, offset_y: f32, blur: f32, 
         }
         let shadow = Color::new(color.r, color.g, color.b, shadow_alpha);
         *pixel = blend_over(shadow, *pixel);
+    }
+    const MAX_RETAINED_F32S: usize = 1024 * 1024;
+    if mask.capacity() > MAX_RETAINED_F32S {
+        mask = Vec::new();
     }
     DROP_SHADOW_MASK.with(|slot| *slot.borrow_mut() = mask);
 }

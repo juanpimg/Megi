@@ -62,6 +62,59 @@ const FANTASY_FALLBACKS: &[&str] = &["Impact", "DejaVu Sans"];
 /// when the requested family list has a single entry.
 const MAX_EXTRA_FALLBACKS: usize = 8;
 
+/// Maximum number of faces loaded via `load_font_data` / `load_font_data_family` (#497).
+const MAX_LOADED_FONT_FACES: usize = 256;
+
+/// Maximum aggregate bytes loaded via `load_font_data` / `load_font_data_family` (#497).
+const MAX_LOADED_FONT_BYTES: usize = 64 * 1024 * 1024;
+
+fn fnv1a_64(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    for &byte in bytes {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    hash
+}
+
+fn style_cache_key(style: FontStyle) -> u8 {
+    match style {
+        FontStyle::Normal => 0,
+        FontStyle::Italic => 1,
+        FontStyle::Oblique => 2,
+    }
+}
+
+fn is_combining_mark(ch: char) -> bool {
+    matches!(
+        ch as u32,
+        0x0300..=0x036F
+            | 0x0483..=0x0489
+            | 0x0591..=0x05BD
+            | 0x05BF
+            | 0x05C1..=0x05C2
+            | 0x05C4..=0x05C5
+            | 0x05C7
+            | 0x0610..=0x061A
+            | 0x064B..=0x065F
+            | 0x0670
+            | 0x06D6..=0x06DC
+            | 0x06DF..=0x06E4
+            | 0x06E7..=0x06E8
+            | 0x06EA..=0x06ED
+            | 0x0900..=0x0903
+            | 0x093A..=0x094F
+            | 0x0951..=0x0957
+            | 0x0962..=0x0963
+            | 0x1AB0..=0x1AFF
+            | 0x1DC0..=0x1DFF
+            | 0x20D0..=0x20FF
+            | 0xFE00..=0xFE0F
+            | 0xFE20..=0xFE2F
+            | 0xE0100..=0xE01EF
+    )
+}
+
 /// A database of system and explicitly loaded font faces.
 ///
 /// # Selection contract
@@ -78,13 +131,21 @@ const MAX_EXTRA_FALLBACKS: usize = 8;
 ///   order.
 ///
 /// The database is `Send + Sync`; the internal byte cache is behind a `Mutex`.
+type FallbackChainKey = (Vec<String>, u16, u8);
+type FallbackChainMap = HashMap<FallbackChainKey, Arc<Vec<Font>>>;
+
 pub struct FontDatabase {
     db: Database,
     cache: Mutex<HashMap<fontdb::ID, Arc<Vec<u8>>>>,
+    fallback_cache: Mutex<FallbackChainMap>,
     order: Vec<fontdb::ID>,
     /// CSS `@font-face` family aliases (lowercased) → faces registered under that name,
     /// regardless of the families in the font's own `name` table.
     aliases: HashMap<String, Vec<fontdb::ID>>,
+    /// Content-dedup map: `(byte_len, fnv1a_64)` → registered `fontdb::ID` lists (#497).
+    loaded_hashes: HashMap<(usize, u64), Vec<Vec<fontdb::ID>>>,
+    loaded_bytes: usize,
+    loaded_faces: usize,
     system_loaded: bool,
 }
 
@@ -254,8 +315,12 @@ impl FontDatabase {
         Self {
             db: Database::new(),
             cache: Mutex::new(HashMap::new()),
+            fallback_cache: Mutex::new(HashMap::new()),
             order: Vec::new(),
             aliases: HashMap::new(),
+            loaded_hashes: HashMap::new(),
+            loaded_bytes: 0,
+            loaded_faces: 0,
             system_loaded: false,
         }
     }
@@ -279,6 +344,7 @@ impl FontDatabase {
         self.db.load_system_fonts();
         self.system_loaded = true;
         self.refresh_order();
+        self.fallback_cache_lock().clear();
     }
 
     /// Loads one font file (TTF/OTF/TTC) from disk.
@@ -309,14 +375,32 @@ impl FontDatabase {
         self.load_font_data(bytes)
     }
 
-    /// Loads font bytes (a single face or a font collection) into the database.
-    ///
-    /// The data is validated with `ttf-parser` before being registered; malformed
-    /// input returns [`FontError::InvalidFont`] and leaves the database unchanged.
-    pub fn load_font_data(&mut self, data: Vec<u8>) -> Result<(), FontError> {
+    fn load_font_data_inner(&mut self, data: Vec<u8>) -> Result<Vec<fontdb::ID>, FontError> {
         if data.is_empty() {
             return Err(FontError::InvalidFont {
                 reason: "empty font data".to_string(),
+            });
+        }
+        let key = (data.len(), fnv1a_64(&data));
+        if let Some(buckets) = self.loaded_hashes.get(&key) {
+            let cache = self.cache_lock();
+            for existing_ids in buckets {
+                if let Some(first_id) = existing_ids.first()
+                    && let Some(cached) = cache.get(first_id)
+                    && cached.as_slice() == data.as_slice()
+                {
+                    return Ok(existing_ids.clone());
+                }
+            }
+        }
+        if self.loaded_faces >= MAX_LOADED_FONT_FACES {
+            return Err(FontError::InvalidFont {
+                reason: format!("font face limit reached ({MAX_LOADED_FONT_FACES})"),
+            });
+        }
+        if self.loaded_bytes.saturating_add(data.len()) > MAX_LOADED_FONT_BYTES {
+            return Err(FontError::InvalidFont {
+                reason: format!("total loaded font bytes exceed {MAX_LOADED_FONT_BYTES} byte cap"),
             });
         }
         if let Err(err) = ttf_parser::Face::parse(&data, 0) {
@@ -324,10 +408,14 @@ impl FontDatabase {
                 reason: err.to_string(),
             });
         }
+        let byte_len = data.len();
         let shared: Arc<Vec<u8>> = Arc::new(data);
-        let ids = self.db.load_font_source(Source::Binary(
-            shared.clone() as Arc<dyn AsRef<[u8]> + Send + Sync>
-        ));
+        let ids: Vec<fontdb::ID> = self
+            .db
+            .load_font_source(Source::Binary(
+                shared.clone() as Arc<dyn AsRef<[u8]> + Send + Sync>
+            ))
+            .to_vec();
         if ids.is_empty() {
             return Err(FontError::InvalidFont {
                 reason: "fontdb registered no face for the supplied data".to_string(),
@@ -340,7 +428,19 @@ impl FontDatabase {
             }
         }
         self.order.extend(ids.iter().copied());
-        Ok(())
+        self.loaded_bytes = self.loaded_bytes.saturating_add(byte_len);
+        self.loaded_faces = self.loaded_faces.saturating_add(ids.len());
+        self.loaded_hashes.entry(key).or_default().push(ids.clone());
+        self.fallback_cache_lock().clear();
+        Ok(ids)
+    }
+
+    /// Loads font bytes (a single face or a font collection) into the database.
+    ///
+    /// The data is validated with `ttf-parser` before being registered; malformed
+    /// input returns [`FontError::InvalidFont`] and leaves the database unchanged.
+    pub fn load_font_data(&mut self, data: Vec<u8>) -> Result<(), FontError> {
+        self.load_font_data_inner(data).map(|_| ())
     }
 
     /// Loads raw sfnt (TTF/OTF) bytes under a CSS family **alias**.
@@ -364,9 +464,7 @@ impl FontDatabase {
                 reason: "empty @font-face family alias".to_string(),
             });
         }
-        let first_new = self.order.len();
-        self.load_font_data(bytes_ttf)?;
-        let ids: Vec<fontdb::ID> = self.order[first_new..].to_vec();
+        let ids = self.load_font_data_inner(bytes_ttf)?;
         if ids.is_empty() {
             return Err(FontError::InvalidFont {
                 reason: "fontdb registered no face for the supplied @font-face data".to_string(),
@@ -376,6 +474,7 @@ impl FontDatabase {
             .entry(alias.to_ascii_lowercase())
             .or_default()
             .extend(ids);
+        self.fallback_cache_lock().clear();
         Ok(())
     }
 
@@ -431,6 +530,13 @@ impl FontDatabase {
             Ok(guard) => guard,
             // A poisoned lock only means another thread panicked while holding it;
             // the cache itself is still consistent, so reuse the data.
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+
+    fn fallback_cache_lock(&self) -> std::sync::MutexGuard<'_, FallbackChainMap> {
+        match self.fallback_cache.lock() {
+            Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         }
     }
@@ -728,21 +834,29 @@ impl FontDatabase {
         // Current segment: (font index in `chain`, byte start, segment text).
         let mut segment: Option<(usize, usize, String)> = None;
         for (byte_index, ch) in text.char_indices() {
-            let font_index = *memo.entry(ch).or_insert_with(|| {
-                for (index, font) in chain.iter().enumerate() {
-                    if font.has_glyph(ch) {
+            let font_index = if is_combining_mark(ch)
+                && let Some((current, _, _)) = &segment
+                && chain[*current].has_glyph(ch)
+            {
+                *current
+            } else {
+                *memo.entry(ch).or_insert_with(|| {
+                    for (index, font) in chain.iter().enumerate() {
+                        if font.has_glyph(ch) {
+                            return index;
+                        }
+                    }
+                    if let Some((font, _)) =
+                        self.find_fallback_face_for_char(ch, &chain, weight, style)
+                    {
+                        let index = chain.len();
+                        fonts.push(font.info().clone());
+                        chain.push(font);
                         return index;
                     }
-                }
-                if let Some((font, _)) = self.find_fallback_face_for_char(ch, &chain, weight, style)
-                {
-                    let index = chain.len();
-                    fonts.push(font.info().clone());
-                    chain.push(font);
-                    return index;
-                }
-                0
-            });
+                    0
+                })
+            };
             match &mut segment {
                 Some((current, _start, buffer)) if *current == font_index => buffer.push(ch),
                 Some((current, start, buffer)) => {
@@ -915,6 +1029,17 @@ impl FontDatabase {
         style: FontStyle,
         primary: Font,
     ) -> Vec<Font> {
+        let cache_key = (
+            families
+                .iter()
+                .map(|family| family.to_ascii_lowercase())
+                .collect::<Vec<_>>(),
+            weight,
+            style_cache_key(style),
+        );
+        if let Some(cached) = self.fallback_cache_lock().get(&cache_key).cloned() {
+            return (*cached).clone();
+        }
         let mut chain: Vec<Font> = vec![primary];
         // Dedup by the underlying face bytes instead of the PostScript name:
         // distinct subset faces can share a PS name and must not be dropped (#612).
@@ -964,6 +1089,8 @@ impl FontDatabase {
                 }
             }
         }
+        self.fallback_cache_lock()
+            .insert(cache_key, Arc::new(chain.clone()));
         chain
     }
 }

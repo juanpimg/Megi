@@ -1477,26 +1477,24 @@ fn paint_background_border(
     let has_radius = !radii.is_zero();
     let rounded_group = !background_is_propagated && has_radius;
     // `background-clip: text`: the background color/images are composited through
-    // the glyph mask of the box's text descendants.
+    // the glyph mask of the box's text descendants, scoped strictly to the
+    // layers whose `background-clip` is `text` (#446).
     let text_mask_runs = if !background_is_propagated && background_clips_to_text(style) {
         // Bound the number of collecting boxes per pass (#658): once the cap is reached,
         // skip collection so a hostile tree cannot turn one render into O(N * subtree).
         let count = TEXT_MASK_COLLECTORS.fetch_add(1, Ordering::Relaxed);
         if count < MAX_TEXT_MASK_COLLECTORS {
-            Some(collect_text_mask_runs(layout_box))
+            Some(std::sync::Arc::new(collect_text_mask_runs(layout_box)))
         } else {
             None
         }
     } else {
         None
     };
-    let has_text_mask = text_mask_runs.is_some();
-    if let Some(runs) = text_mask_runs {
-        push_text_mask_group(list, resources, border_box, std::sync::Arc::new(runs));
-    }
 
     // Outer `box-shadow` layers are painted behind the background, last shadow
     // first so the first authored shadow ends up on top (CSS Backgrounds 3 §6).
+    // They are never clipped to `background-clip: text` (#446).
     if !background_is_propagated {
         for shadow in style
             .box_shadows
@@ -1518,7 +1516,19 @@ fn paint_background_border(
     if rounded_group {
         push_rounded_group(list, resources, border_box, radii);
     }
+    let mut text_mask_active = false;
+    let color_clips_to_text = style
+        .background_layers
+        .last()
+        .is_some_and(|layer| layer.clip == css::BackgroundClip::Text);
     if !background_is_propagated && style.background_color.a > 0 {
+        if color_clips_to_text
+            && let Some(runs) = text_mask_runs.as_ref()
+            && !text_mask_active
+        {
+            push_text_mask_group(list, resources, border_box, std::sync::Arc::clone(runs));
+            text_mask_active = true;
+        }
         if has_radius {
             list.push(DisplayItem::RoundedRect {
                 rect: border_box,
@@ -1559,6 +1569,21 @@ fn paint_background_border(
             for layer in layers.iter().rev() {
                 if layer.image.is_none() && layer.gradient.is_none() {
                     continue;
+                }
+                let layer_clips_to_text = layer.clip == css::BackgroundClip::Text;
+                if layer_clips_to_text && !text_mask_active {
+                    if let Some(runs) = text_mask_runs.as_ref() {
+                        push_text_mask_group(
+                            list,
+                            resources,
+                            border_box,
+                            std::sync::Arc::clone(runs),
+                        );
+                        text_mask_active = true;
+                    }
+                } else if !layer_clips_to_text && text_mask_active {
+                    pop_text_mask_group(list, resources);
+                    text_mask_active = false;
                 }
                 let positioning_area =
                     if crate::background::uses_viewport_positioning(layer.attachment) {
@@ -1628,6 +1653,10 @@ fn paint_background_border(
             && let Some(image) = resources.backgrounds.get(url)
             && !image.is_empty()
         {
+            if text_mask_active {
+                pop_text_mask_group(list, resources);
+                text_mask_active = false;
+            }
             // Legacy compatibility: documents that only set `background-image`
             // (all Phase 4/5/6 golden fixtures) keep the historical behaviour of
             // stretching the bitmap over the whole padding box. Authored
@@ -1639,11 +1668,11 @@ fn paint_background_border(
         }
     }
 
+    if text_mask_active {
+        pop_text_mask_group(list, resources);
+    }
     if rounded_group {
         pop_rounded_group(list, resources);
-    }
-    if has_text_mask {
-        pop_text_mask_group(list, resources);
     }
 
     // Inset shadows are painted above the background but below the border and content.

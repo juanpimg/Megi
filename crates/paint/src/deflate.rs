@@ -412,6 +412,10 @@ fn deflate_fixed(data: &[u8]) -> Vec<u8> {
         write_fixed_literal(&mut writer, 256);
         writer.finish()
     };
+    const MAX_RETAINED_HASHES: usize = 2 * 1024 * 1024;
+    if scratch.hashes.capacity() > MAX_RETAINED_HASHES {
+        scratch.hashes = Vec::new();
+    }
     DEFLATE_SCRATCH.with(|slot| *slot.borrow_mut() = scratch);
     output
 }

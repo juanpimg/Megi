@@ -172,3 +172,13 @@ fn a_face_falls_back_to_the_next_source() {
     );
     assert!(!text_advances_for(&output, "Multi Source").is_empty());
 }
+
+#[test]
+fn max_web_fonts_option_caps_and_counts_failures() {
+    let mut opts = options(420, 160);
+    opts.max_web_fonts = 0;
+    let url = format!("file://{}", fixture("webfont.html").display());
+    let output = render_url(&url, &opts).expect("render with 0 web font cap");
+    assert_eq!(output.stats.fonts_loaded, 0);
+    assert!(output.stats.fonts_failed >= 1);
+}

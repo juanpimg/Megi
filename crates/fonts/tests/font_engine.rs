@@ -385,3 +385,61 @@ fn huge_font_size_rejects_masks_over_the_pixel_cap() {
         .expect("normal glyph");
     assert!(mask.width > 0 && mask.height > 0);
 }
+
+#[test]
+fn duplicate_font_bytes_are_deduplicated_and_aliased() {
+    let mut db = FontDatabase::new();
+    let bytes = DEJAVU_SANS.to_vec();
+    db.load_font_data(bytes.clone()).expect("first load");
+    let count_after_first = db.len();
+    // Loading identical bytes again must deduplicate without adding a second face (#497).
+    db.load_font_data(bytes.clone()).expect("second load");
+    assert_eq!(db.len(), count_after_first);
+    // Loading identical bytes under a @font-face alias reuses the face while binding the alias.
+    db.load_font_data_family("CustomAlias", bytes)
+        .expect("alias load");
+    assert_eq!(db.len(), count_after_first);
+    assert!(db.has_alias("CustomAlias"));
+}
+
+#[test]
+fn combining_mark_stays_attached_to_base_font() {
+    let db = fixture_db();
+    // "e\u{0301}" (e + combining acute accent) must shape in a single font segment
+    // when the base font supports both glyphs (#494).
+    let run = db
+        .shape(&["DejaVu Sans"], 400, FontStyle::Normal, 16.0, "e\u{0301}")
+        .expect("shape combining mark");
+    assert_eq!(
+        run.fonts.len(),
+        1,
+        "expected single font segment: {:?}",
+        run.fonts
+    );
+    assert!(!run.glyphs.is_empty());
+    assert!(run.glyphs.iter().all(|g| g.font == 0));
+}
+
+#[test]
+fn repeated_fallback_queries_are_consistent() {
+    let db = fixture_db();
+    let w1 = db
+        .measure_text(
+            &["DejaVu Sans", "sans-serif"],
+            400,
+            FontStyle::Normal,
+            16.0,
+            "Hello",
+        )
+        .expect("first measure");
+    let w2 = db
+        .measure_text(
+            &["DejaVu Sans", "sans-serif"],
+            400,
+            FontStyle::Normal,
+            16.0,
+            "Hello",
+        )
+        .expect("cached measure");
+    assert!((w1 - w2).abs() < f32::EPSILON);
+}
