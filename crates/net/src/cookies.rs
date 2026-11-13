@@ -323,16 +323,16 @@ pub fn parse_set_cookie(
                 // RFC 6265 §5.3: invalid Max-Age is ignored (fall back to Expires).
                 // Reject leading '+' (grammar forbids it).
                 let trimmed = raw_attribute_value.trim();
-                if !trimmed.starts_with('+') {
-                    if let Ok(seconds) = trimmed.parse::<i64>() {
-                        // `Max-Age` is relative to the current clock; 0 or negative means "now".
-                        let delta = Duration::from_secs(seconds.unsigned_abs());
-                        max_age = Some(if seconds > 0 {
-                            now.checked_add(delta).unwrap_or(now)
-                        } else {
-                            now
-                        });
-                    }
+                if !trimmed.starts_with('+')
+                    && let Ok(seconds) = trimmed.parse::<i64>()
+                {
+                    // `Max-Age` is relative to the current clock; 0 or negative means "now".
+                    let delta = Duration::from_secs(seconds.unsigned_abs());
+                    max_age = Some(if seconds > 0 {
+                        now.checked_add(delta).unwrap_or(now)
+                    } else {
+                        now
+                    });
                 }
             }
             "domain" => {

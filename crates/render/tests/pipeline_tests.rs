@@ -350,10 +350,15 @@ fn max_external_stylesheets_is_enforced() {
     let server = TestServer::spawn(routes, 3);
     let mut options = options(160, 80);
     options.max_stylesheets = 2;
-    let error = render_url(&server.url("/many.html"), &options).expect_err("too many sheets");
+    let output = render_url(&server.url("/many.html"), &options).expect("render with sheet cap");
     assert!(
-        matches!(error, RenderError::TooManyStylesheets { count: 3, max: 2 }),
-        "{error:?}"
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|w| w.contains("stylesheet cap reached")),
+        "expected a stylesheet-cap warning, got {:?}",
+        output.stats.warnings
     );
     server.join();
 }
@@ -372,10 +377,16 @@ fn oversized_stylesheet_is_rejected() {
     let server = TestServer::spawn(routes, 2);
     let mut options = options(120, 60);
     options.max_css_bytes_per_sheet = 64;
-    let error = render_url(&server.url("/big.html"), &options).expect_err("stylesheet too large");
+    let output =
+        render_url(&server.url("/big.html"), &options).expect("render with oversized sheet");
     assert!(
-        matches!(error, RenderError::StylesheetTooLarge { max: 64, .. }),
-        "{error:?}"
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|w| w.contains("exceeds the 64 byte cap")),
+        "expected an oversized-sheet warning, got {:?}",
+        output.stats.warnings
     );
     server.join();
 }
