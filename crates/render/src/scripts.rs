@@ -1171,7 +1171,14 @@ pub fn execute_scripts(
     // 4. Host-dispatched events (e.g. `hashchange`/`popstate` after a shell navigation).
     // Listeners run on `window`, may mutate the DOM and schedule timers; microtasks and the
     // timer queue are pumped again so the final re-render sees their effects.
-    for event in &host.host_events {
+    const MAX_HOST_EVENTS: usize = 16;
+    const MAX_HOST_EVENT_NAME: usize = 256;
+    for event in host.host_events.iter().take(MAX_HOST_EVENTS) {
+        let event = if event.len() > MAX_HOST_EVENT_NAME {
+            &event[..MAX_HOST_EVENT_NAME]
+        } else {
+            event.as_str()
+        };
         match runtime.dispatch_event(js::JsEventTarget::Window, event, false) {
             Ok(_) => execution.events_dispatched += 1,
             Err(error) => warnings.push(format!("dispatching host event {event} failed: {error}")),
