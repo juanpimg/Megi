@@ -716,6 +716,11 @@ impl Transform {
                         } else {
                             let mode_index = (y >> bits) * tiles + (x >> bits);
                             let mode = (data[mode_index] >> 8) & 0xf;
+                            if mode >= 14 {
+                                return Err(ImageError::InvalidData {
+                                    reason: "invalid VP8L predictor mode",
+                                });
+                            }
                             let left = out[y * width + x - 1];
                             let top = out[(y - 1) * width + x];
                             let top_left = out[(y - 1) * width + x - 1];
