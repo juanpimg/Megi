@@ -305,7 +305,18 @@ def check_file(path: str) -> None:
         )
     elif interlace == 0:
         stride = (width * channels * bit_depth + 7) // 8
-        print(f"  filters: {len(set(raw[:: stride + 1]))} type(s)")
+        row_stride = stride + 1
+        filters = []
+        for i in range(height):
+            off = i * row_stride
+            if off >= len(raw):
+                break
+            filters.append(raw[off])
+        # Validate every filter byte is in the PNG filter range 0..=4.
+        bad = [f for f in filters if f > 4]
+        if bad:
+            raise ValueError(f"invalid PNG filter byte(s): {sorted(set(bad))}")
+        print(f"  filters: {len(set(filters))} type(s)")
 
 
 def main(argv: list[str]) -> int:
