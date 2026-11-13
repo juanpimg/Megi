@@ -333,3 +333,48 @@ fn flex_item_width_calc_mixed() {
     let dims = dimensions(find_box(&root, item));
     assert!((dims.width - 140.0).abs() < 0.01, "{dims:?}");
 }
+
+/// Hostile lengths must not reach box geometry as `inf`/`NaN` (#693).
+#[test]
+fn infinite_and_nan_lengths_are_clamped_to_finite_geometry() {
+    for (width, height, padding) in [
+        (Length::Px(f32::INFINITY), Length::Px(f32::INFINITY), 0.0),
+        (
+            Length::Px(f32::NEG_INFINITY),
+            Length::Px(f32::NAN),
+            f32::NAN,
+        ),
+        (Length::Px(1.0e30), Length::Px(-1.0e30), 1.0e30),
+        (Length::Percent(1.0e30), Length::Percent(f32::INFINITY), 0.0),
+    ] {
+        let (mut doc, mut styles, html) = setup();
+        let mut hostile = block(width, height);
+        hostile.padding.top = Length::Px(padding);
+        hostile.padding.left = Length::Px(padding);
+        let div = add(&mut doc, html, &mut styles, hostile);
+        let tree =
+            layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)).expect("layout");
+        let div_box = find_box(&tree, div);
+        for rect in [
+            div_box.dimensions.content,
+            div_box.dimensions.padding_box(),
+            div_box.dimensions.border_box(),
+            div_box.dimensions.margin_box(),
+        ] {
+            assert!(
+                rect.x.is_finite()
+                    && rect.y.is_finite()
+                    && rect.width.is_finite()
+                    && rect.height.is_finite(),
+                "hostile length reached geometry: {rect:?}"
+            );
+            // Each edge is clamped to 1e8, so a box can reach roughly 3x that once the
+            // padding/border/margin layers are added on both sides — still finite and far
+            // below the `f32 -> i32` overflow that used to fire in paint.
+            assert!(
+                rect.width.abs() <= 4.0e8 && rect.height.abs() <= 4.0e8,
+                "hostile length was not bounded: {rect:?}"
+            );
+        }
+    }
+}

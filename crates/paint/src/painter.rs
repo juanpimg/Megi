@@ -1727,6 +1727,13 @@ fn paint_text_run(
         (Color::BLACK, 16.0, "serif".to_string())
     };
 
+    let font_size = clamp_font_size(font_size);
+    if font_size == 0.0 {
+        // A zero/non-finite size would rasterize nothing anyway; skip the shadows and the
+        // run instead of emitting items the rasterizer has to defend against.
+        return;
+    }
+
     let char_count = text.chars().count();
     let measured_width = layout_box.dimensions.content.width;
     let advance = if char_count > 0 && measured_width > 0.0 {
@@ -1773,6 +1780,24 @@ fn paint_text_run(
         advance,
         baseline: layout_box.baseline,
     });
+}
+
+/// Defensive ceiling for the size that reaches shaping and the glyph rasterizer (#672).
+///
+/// CSS does not bound `font-size`, and the rasterizer allocates a mask per glyph, so one
+/// hostile value (`inf`, `NaN`, `1e30` from a `calc()` chain or a hand-built display list)
+/// would ask the font backend for an enormous bitmap. 1024 CSS px is far past any real page
+/// — large display type included — while keeping the mask bounded.
+const MAX_RASTERIZED_FONT_SIZE: f32 = 1024.0;
+
+/// Clamps a `font-size` to something the rasterizer can survive; non-positive or non-finite
+/// sizes collapse to `0.0` so the caller can skip the run entirely.
+fn clamp_font_size(font_size: f32) -> f32 {
+    if !font_size.is_finite() || font_size <= 0.0 {
+        0.0
+    } else {
+        font_size.min(MAX_RASTERIZED_FONT_SIZE)
+    }
 }
 
 /// Emits the decoration lines for one text run (CSS 2.2 §16.3.1).
@@ -1871,7 +1896,10 @@ fn paint_marker(
     let Some(style) = layout_box.style.as_ref() else {
         return;
     };
-    let font_size = style.font_size;
+    let font_size = clamp_font_size(style.font_size);
+    if font_size == 0.0 {
+        return;
+    }
     let baseline = first_text_baseline(layout_box)
         .unwrap_or(layout_box.dimensions.content.y + font_size * 0.8);
     let right = layout_box.dimensions.content.x - font_size * 0.5;

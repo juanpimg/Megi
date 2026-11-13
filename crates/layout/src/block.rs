@@ -1264,8 +1264,10 @@ fn resolve_min_height(
         return Some(crate::calc::resolve(calc, Some(cb_height.unwrap_or(0.0))));
     }
     match length {
-        Length::Px(px) => Some(px),
-        Length::Percent(pct) => Some(cb_height.unwrap_or(0.0) * (pct / 100.0)),
+        Length::Px(px) => Some(crate::calc::sanitize(px)),
+        Length::Percent(pct) => Some(crate::calc::sanitize(
+            cb_height.unwrap_or(0.0) * (pct / 100.0),
+        )),
         Length::Auto => None,
     }
 }
@@ -1281,8 +1283,10 @@ fn resolve_max_height(
         return Some(crate::calc::resolve(calc, cb_height));
     }
     match length {
-        Length::Px(px) => Some(px),
-        Length::Percent(pct) => cb_height.map(|height| height * (pct / 100.0)),
+        Length::Px(px) => Some(crate::calc::sanitize(px)),
+        Length::Percent(pct) => {
+            cb_height.map(|height| crate::calc::sanitize(height * (pct / 100.0)))
+        }
         Length::Auto => None,
     }
 }
@@ -1294,8 +1298,8 @@ fn specified_width(style: &ComputedStyle, cb_width: f32) -> Option<f32> {
         return Some(crate::calc::resolve(calc, Some(cb_width)));
     }
     match style.width {
-        Length::Px(px) => Some(px),
-        Length::Percent(pct) => Some(cb_width * (pct / 100.0)),
+        Length::Px(px) => Some(crate::calc::sanitize(px)),
+        Length::Percent(pct) => Some(crate::calc::sanitize(cb_width * (pct / 100.0))),
         Length::Auto => None,
     }
 }
@@ -1307,8 +1311,10 @@ fn specified_height(style: &ComputedStyle, cb_height: Option<f32>) -> Option<f32
         return Some(crate::calc::resolve(calc, cb_height));
     }
     match style.height {
-        Length::Px(px) => Some(px),
-        Length::Percent(pct) => cb_height.map(|height| height * (pct / 100.0)),
+        Length::Px(px) => Some(crate::calc::sanitize(px)),
+        Length::Percent(pct) => {
+            cb_height.map(|height| crate::calc::sanitize(height * (pct / 100.0)))
+        }
         Length::Auto => None,
     }
 }
@@ -1372,8 +1378,8 @@ fn resolve_offset(length: Length, calc: Option<CalcValue>, reference: Option<f32
         return Some(crate::calc::resolve(calc, reference));
     }
     match length {
-        Length::Px(px) => Some(px),
-        Length::Percent(pct) => reference.map(|value| value * (pct / 100.0)),
+        Length::Px(px) => Some(crate::calc::sanitize(px)),
+        Length::Percent(pct) => reference.map(|value| crate::calc::sanitize(value * (pct / 100.0))),
         Length::Auto => None,
     }
 }
@@ -1433,8 +1439,8 @@ pub(crate) fn calculate_shrink_to_fit_width(
         }
     };
     let content_width = match width {
-        Length::Px(px) => to_content(px.max(0.0)),
-        Length::Percent(pct) => to_content(cb_width * (pct / 100.0)),
+        Length::Px(px) => to_content(crate::calc::sanitize(px).max(0.0)),
+        Length::Percent(pct) => to_content(crate::calc::sanitize(cb_width * (pct / 100.0))),
         Length::Auto => {
             let usable = (available - margin_left - margin_right - edges_h).max(0.0);
             shrink_to_fit_content_width(layout_box, usable, cb_width, measurer)

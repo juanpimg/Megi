@@ -202,7 +202,8 @@ fn layout_table_advanced(
             let Some(cell_box) = flat_cells[flat].as_ref() else {
                 continue;
             };
-            let colspan = usize::from(cell_box.colspan.max(1));
+            let colspan = usize::from(cell_box.colspan.max(1))
+                .min(MAX_TABLE_COLUMNS.saturating_sub(column).max(1));
             let rowspan = usize::from(cell_box.rowspan.max(1)).min(row_count - row_index);
             while occupancy[row_index]
                 .get(column)
@@ -1033,6 +1034,15 @@ fn layout_absolutely_positioned_table_children(
     }
 }
 
+/// Upper bound on the column tracks one table may allocate (#690).
+///
+/// `colspan` is clamped to 1000 per cell when the box tree is built, but a table's column
+/// count is the sum over its cells: one row of N `colspan=1000` cells would allocate N*1000
+/// track slots, and the per-cell offset sums are quadratic on top of that. 512 columns is far
+/// past any real table (the biggest published ones use a few dozen), so the cap only bites
+/// hostile documents.
+const MAX_TABLE_COLUMNS: usize = 512;
+
 /// Min/max content widths of a cell, including its own horizontal decoration.
 fn cell_intrinsic_widths(
     cell: &LayoutBox,
@@ -1042,7 +1052,10 @@ fn cell_intrinsic_widths(
 ) -> (f32, f32) {
     let (minimum, maximum) = intrinsic_content_widths(cell, available_width, measurer);
     let _ = collapse;
-    (minimum.max(1.0), maximum.max(1.0))
+    // No `max(1.0)` floor (#695): CSS 2.1 §17.5.2 makes an empty cell contribute zero, and
+    // every consumer already tolerates a zero-width track (the growth-share paths guard it),
+    // so flooring here only inflated those columns by a pixel each.
+    (minimum.max(0.0), maximum.max(0.0))
 }
 
 /// Fast path for plain tables: `border-collapse: separate`, `table-layout: auto` and
@@ -1053,6 +1066,9 @@ fn cell_intrinsic_widths(
 /// border conflict pass and without rebuilding the cell/row tree. It produces exactly
 /// the same geometry as the advanced path for this subset.
 mod legacy {
+    /// Mirror of the parent module's cap: the legacy engine counts columns itself (#690).
+    use super::MAX_TABLE_COLUMNS;
+
     use crate::block::{
         PositioningContext, intrinsic_content_widths, layout_box_contents,
         resolve_horizontal_edges, resolve_vertical_edges, translate_box,
@@ -1296,7 +1312,8 @@ mod legacy {
             if !is_cell(cell) {
                 continue;
             }
-            let colspan = usize::from(cell.colspan.max(1));
+            let colspan = usize::from(cell.colspan.max(1))
+                .min(MAX_TABLE_COLUMNS.saturating_sub(next_column).max(1));
             let (min_width, max_width) = cell_intrinsic_widths(cell, available_width, measurer);
             cells.push(CellMetrics {
                 column: next_column,
@@ -1304,7 +1321,9 @@ mod legacy {
                 min_width,
                 max_width,
             });
-            *column_count = (*column_count).max(next_column + colspan);
+            *column_count = (*column_count)
+                .max(next_column + colspan)
+                .min(MAX_TABLE_COLUMNS);
             next_column += colspan;
         }
     }
@@ -1572,6 +1591,7 @@ mod legacy {
     ) -> (f32, f32) {
         resolve_horizontal_edges(cell, available_width);
         let (minimum, maximum) = intrinsic_content_widths(cell, available_width, measurer);
-        (minimum.max(1.0), maximum.max(1.0))
+        // See the advanced path: an empty cell's intrinsic width is zero (#695).
+        (minimum.max(0.0), maximum.max(0.0))
     }
 }

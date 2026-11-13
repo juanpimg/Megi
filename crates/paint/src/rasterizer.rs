@@ -1328,6 +1328,9 @@ fn alpha_lut(color_alpha: u8) -> [u8; 256] {
     lut
 }
 
+/// Upper bound for a rasterized glyph size, mirroring the painter's ceiling (#672).
+const MAX_RASTERIZED_FONT_SIZE: f32 = 1024.0;
+
 /// Paints one shaped text run using (and filling) the per-pass cache.
 #[allow(clippy::too_many_arguments)]
 fn draw_text_cached(
@@ -1346,6 +1349,12 @@ fn draw_text_cached(
     if color.a == 0 || text.is_empty() {
         return true;
     }
+    // Defence in depth (#672): the painter clamps at the item boundary, but a hand-built
+    // display list can still hand this a hostile size, and a mask is allocated per glyph.
+    if !font_size.is_finite() || font_size <= 0.0 {
+        return true;
+    }
+    let font_size = font_size.min(MAX_RASTERIZED_FONT_SIZE);
 
     let Some(clip) = pixmap.clip_pixel_bounds() else {
         return true;
