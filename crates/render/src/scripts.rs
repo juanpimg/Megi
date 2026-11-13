@@ -92,6 +92,10 @@ pub const DEFAULT_MAX_SCRIPTS: usize = 64;
 const DEFAULT_MAX_SCRIPT_ATTEMPTS: usize = 256;
 /// Maximum module-graph fetches (including nested imports) per page.
 const DEFAULT_MAX_MODULE_FETCHES: usize = 256;
+/// Maximum number of `fetch()` calls a page's scripts may make (successful or not).
+const DEFAULT_MAX_FETCH_CALLS: usize = 64;
+/// Maximum total bytes a page's scripts may pull through `fetch()` (#660).
+const DEFAULT_MAX_FETCH_BYTES: usize = 32 * 1024 * 1024;
 /// Default total loop-iteration budget across all scripts of the page.
 pub const DEFAULT_MAX_TOTAL_LOOP_ITERATIONS: u64 = 1_000_000;
 /// Default maximum number of timer callbacks pumped after the scripts.
@@ -146,6 +150,11 @@ pub struct ScriptingLimits {
     pub max_script_attempts: usize,
     /// Maximum number of module-graph fetches (including nested imports).
     pub max_module_fetches: usize,
+    /// Maximum number of `fetch()` calls a page's scripts may make (#660). The per-call loader
+    /// caps bound one response, but nothing bounded the number of calls.
+    pub max_fetch_calls: usize,
+    /// Maximum total bytes fetched through `fetch()` per page (#660).
+    pub max_fetch_bytes: usize,
     /// Maximum size of one script source (bytes).
     pub max_script_bytes: usize,
     /// Maximum total script bytes per page (inline + external, bytes).
@@ -167,6 +176,8 @@ impl Default for ScriptingLimits {
             max_scripts: DEFAULT_MAX_SCRIPTS,
             max_script_attempts: DEFAULT_MAX_SCRIPT_ATTEMPTS,
             max_module_fetches: DEFAULT_MAX_MODULE_FETCHES,
+            max_fetch_calls: DEFAULT_MAX_FETCH_CALLS,
+            max_fetch_bytes: DEFAULT_MAX_FETCH_BYTES,
             max_script_bytes: DEFAULT_MAX_SCRIPT_BYTES,
             max_total_bytes: DEFAULT_MAX_TOTAL_SCRIPT_BYTES,
             budget: ScriptBudget::default(),
@@ -742,7 +753,30 @@ pub fn execute_scripts(
             let base = document_url.clone();
             let options = host.fetch_options.clone();
             let no_network = host.no_network;
+            // `fetch` volume is budgeted per page: the per-call loader caps bound one response,
+            // but a script could still issue thousands of calls (#660).
+            let fetch_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let fetch_bytes = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let max_fetch_calls = limits.max_fetch_calls;
+            let max_fetch_bytes = limits.max_fetch_bytes;
             runtime.set_fetch_provider(Box::new(move |request| {
+                let calls = fetch_calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                if calls > max_fetch_calls {
+                    return Err(js::JsError::Runtime(format!(
+                        "fetch budget exhausted ({max_fetch_calls} calls per page)"
+                    )));
+                }
+                let charge = |body: &[u8]| -> Result<(), js::JsError> {
+                    let total = fetch_bytes
+                        .fetch_add(body.len(), std::sync::atomic::Ordering::Relaxed)
+                        + body.len();
+                    if total > max_fetch_bytes {
+                        return Err(js::JsError::Runtime(format!(
+                            "fetch budget exhausted ({max_fetch_bytes} bytes per page)"
+                        )));
+                    }
+                    Ok(())
+                };
                 let url = Url::parse(&request.url)
                     .map_err(|error| js::JsError::Runtime(format!("fetch URL: {error}")))?;
                 if matches!(url.scheme(), Scheme::Http | Scheme::Https) && no_network {
@@ -792,6 +826,7 @@ pub fn execute_scripts(
                         request.body.as_deref(),
                     )
                     .map_err(|error| js::JsError::Runtime(format!("network: {error}")))?;
+                    charge(&response.body)?;
                     return Ok(js::host::FetchResult {
                         status: response.status,
                         status_text: response.reason,
@@ -804,6 +839,7 @@ pub fn execute_scripts(
                     ResourceLoader::with_options(options.clone()).with_allow_file(base.is_file());
                 match loader.load_str(&request.url) {
                     Ok(resource) => {
+                        charge(&resource.bytes)?;
                         let mut headers =
                             vec![("content-type".to_string(), resource.content_type.clone())];
                         headers.truncate(64);

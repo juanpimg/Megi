@@ -1330,6 +1330,8 @@ struct StyleSummary {
     imports_skipped: usize,
     max_import_depth: usize,
     media_skipped: usize,
+    /// The `max_stylesheets` cap was hit and the warning already pushed (#654).
+    sheets_capped: bool,
 }
 
 /// Mutable state shared by the recursive `@import` walk.
@@ -1344,6 +1346,8 @@ struct ImportWalk<'a> {
     attempts: usize,
     /// Whether the attempt-cap warning was already pushed (one per walk).
     cap_warned: bool,
+    /// Whether the CSS byte-budget warning was already pushed (one per walk, #654).
+    budget_warned: bool,
     skipped: usize,
     max_depth: usize,
     css_bytes: usize,
@@ -1427,6 +1431,7 @@ fn build_author_stylesheet_collection(
         imports_skipped: 0,
         max_import_depth: 0,
         media_skipped: collected.media_skipped,
+        sheets_capped: false,
     };
     let mut walk = ImportWalk {
         loader,
@@ -1437,6 +1442,7 @@ fn build_author_stylesheet_collection(
         loaded: 0,
         attempts: 0,
         cap_warned: false,
+        budget_warned: false,
         skipped: 0,
         max_depth: 0,
         css_bytes: 0,
@@ -1446,7 +1452,16 @@ fn build_author_stylesheet_collection(
         match source {
             stylesheets::CssSource::Inline { text, .. } => {
                 summary.inline_stylesheets += 1;
-                account_css_bytes(&mut summary.css_bytes, text.len(), options)?;
+                if !account_css_bytes(&mut summary.css_bytes, text.len(), options) {
+                    if !summary.sheets_capped {
+                        summary.sheets_capped = true;
+                        walk.warnings.push(format!(
+                            "CSS byte budget reached ({}); further sheets are skipped",
+                            options.max_total_css_bytes
+                        ));
+                    }
+                    continue;
+                }
                 let sheet = css::parse_stylesheet(text);
                 font_faces.extend(
                     sheet
@@ -1470,17 +1485,31 @@ fn build_author_stylesheet_collection(
                 summary.external_stylesheets += 1;
                 let total_sheets = summary.external_stylesheets + walk.loaded;
                 if total_sheets > options.max_stylesheets {
-                    return Err(RenderError::TooManyStylesheets {
-                        count: total_sheets,
-                        max: options.max_stylesheets,
-                    });
+                    // #654: degrade instead of failing the whole render.
+                    if !summary.sheets_capped {
+                        summary.sheets_capped = true;
+                        walk.warnings.push(format!(
+                            "stylesheet cap reached ({}); further sheets are skipped",
+                            options.max_stylesheets
+                        ));
+                    }
+                    continue;
                 }
                 let Some(text) =
                     load_stylesheet_text(url, &mut *walk.loader, options, &mut *walk.warnings)?
                 else {
                     continue;
                 };
-                account_css_bytes(&mut summary.css_bytes, text.len(), options)?;
+                if !account_css_bytes(&mut summary.css_bytes, text.len(), options) {
+                    if !summary.sheets_capped {
+                        summary.sheets_capped = true;
+                        walk.warnings.push(format!(
+                            "CSS byte budget reached ({}); further sheets are skipped",
+                            options.max_total_css_bytes
+                        ));
+                    }
+                    continue;
+                }
                 // Register the top-level URL so an import cycle back to it is detected.
                 walk.visited.insert(url.cache_key());
                 let sheet = css::parse_stylesheet(&text);
@@ -1561,12 +1590,16 @@ fn walk_imports(
             walk.skipped += 1;
             continue;
         }
-        // Successful imports keep the hard error (the documented `max_stylesheets` bound).
+        // #654: the sheet cap skips further imports instead of failing the render.
         if walk.loaded + 1 > max_total_sheets {
-            return Err(RenderError::TooManyStylesheets {
-                count: walk.loaded + 1,
-                max: max_total_sheets,
-            });
+            walk.skipped += 1;
+            if !walk.cap_warned {
+                walk.cap_warned = true;
+                walk.warnings.push(format!(
+                    "stylesheet cap reached ({max_total_sheets}); further imports are skipped"
+                ));
+            }
+            continue;
         }
         // `loaded` only counts successes: failed imports would otherwise fetch without
         // limit (one request per unique URL in the stylesheet). Report the cap once.
@@ -1586,7 +1619,17 @@ fn walk_imports(
         else {
             continue;
         };
-        account_css_bytes(&mut walk.css_bytes, text.len(), walk.options)?;
+        if !account_css_bytes(&mut walk.css_bytes, text.len(), walk.options) {
+            walk.skipped += 1;
+            if !walk.budget_warned {
+                walk.budget_warned = true;
+                walk.warnings.push(format!(
+                    "CSS byte budget reached ({}); further imports are skipped",
+                    walk.options.max_total_css_bytes
+                ));
+            }
+            continue;
+        }
         let imported = css::parse_stylesheet(&text);
         walk.loaded += 1;
         walk.max_depth = walk.max_depth.max(depth + 1);
@@ -1630,11 +1673,13 @@ fn load_stylesheet_text(
     match loader.load(url) {
         Ok(resource) => {
             if resource.bytes.len() > options.max_css_bytes_per_sheet {
-                return Err(RenderError::StylesheetTooLarge {
-                    url: url.as_str(),
-                    bytes: resource.bytes.len(),
-                    max: options.max_css_bytes_per_sheet,
-                });
+                // #654: skip the sheet with a warning instead of failing the render.
+                warnings.push(format!(
+                    "skipping stylesheet {url}: {} bytes exceeds the {} byte cap",
+                    resource.bytes.len(),
+                    options.max_css_bytes_per_sheet
+                ));
+                return Ok(None);
             }
             {
                 let text = String::from_utf8_lossy(&resource.bytes);
@@ -1651,20 +1696,19 @@ fn load_stylesheet_text(
     }
 }
 
-/// Adds `additional` bytes to the author CSS budget, failing on overflow.
-fn account_css_bytes(
-    total: &mut usize,
-    additional: usize,
-    options: &RenderOptions,
-) -> Result<(), RenderError> {
-    *total += additional;
-    if *total > options.max_total_css_bytes {
-        return Err(RenderError::CssBudgetExceeded {
-            bytes: *total,
-            max: options.max_total_css_bytes,
-        });
+/// Adds `additional` bytes to the author CSS budget.
+///
+/// Exceeding the budget is **not** fatal (#654): the sheet that crosses the limit is skipped, the
+/// limit is reported once as a warning, and rendering continues with the CSS collected so far —
+/// which is what browsers do and what every other capped resource (images, backgrounds, fonts,
+/// scripts) already did. Returns `false` when the budget is exhausted.
+fn account_css_bytes(total: &mut usize, additional: usize, options: &RenderOptions) -> bool {
+    let attempted = total.saturating_add(additional);
+    if attempted > options.max_total_css_bytes {
+        return false;
     }
-    Ok(())
+    *total = attempted;
+    true
 }
 
 /// Resolves computed styles for every element with a prebuilt [`css::StyleCollection`].

@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use render::{RenderError, RenderOptions, RenderOutput, Viewport, render_url};
+use render::{RenderOptions, RenderOutput, Viewport, render_url};
 
 #[derive(Clone, Debug)]
 struct RouteResponse {
@@ -308,7 +308,7 @@ fn import_depth_limit_skips_deeper_sheets() {
 }
 
 #[test]
-fn total_css_budget_applies_to_imported_sheets() {
+fn total_css_budget_degrades_to_a_warning_on_imported_sheets() {
     let mut routes = HashMap::new();
     routes.insert(
         "/page.html".to_string(),
@@ -327,11 +327,19 @@ fn total_css_budget_applies_to_imported_sheets() {
     let server = TestServer::spawn(routes, 3);
     let mut options = options(200, 100);
     options.max_total_css_bytes = 128;
-    let error = render_url(&server.url("/page.html"), &options).expect_err("budget");
+    // #654: exceeding the byte budget skips the offending sheet with a warning; the render
+    // still produces output.
+    let output = render_url(&server.url("/page.html"), &options).expect("render must degrade");
     assert!(
-        matches!(error, RenderError::CssBudgetExceeded { max: 128, .. }),
-        "{error:?}"
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("CSS byte budget")),
+        "expected a byte-budget warning, got {:?}",
+        output.stats.warnings
     );
+    assert!(output.stats.imports_skipped >= 1);
     server.join();
 }
 
@@ -556,9 +564,9 @@ fn failed_import_loads_count_against_the_stylesheet_cap() {
 }
 
 #[test]
-fn exceeding_the_stylesheet_cap_on_successful_imports_is_an_error() {
-    // Successful imports keep the documented hard error; only failed attempts are skipped
-    // with a warning.
+fn exceeding_the_stylesheet_cap_on_successful_imports_degrades_to_a_warning() {
+    // #654: the sheet cap skips further imports with a single warning instead of failing the
+    // whole render.
     let dir = std::env::temp_dir().join(format!("megi-import-error-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("mkdir");
@@ -579,10 +587,17 @@ fn exceeding_the_stylesheet_cap_on_successful_imports_is_an_error() {
         max_stylesheets: 2,
         ..RenderOptions::default()
     };
-    let result = render_url(&format!("file://{}", document.display()), &options);
+    let output = render_url(&format!("file://{}", document.display()), &options)
+        .expect("the cap must not fail the render");
     assert!(
-        matches!(result, Err(render::RenderError::TooManyStylesheets { .. })),
-        "expected TooManyStylesheets, got {result:?}"
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("stylesheet cap reached")),
+        "expected a cap warning, got {:?}",
+        output.stats.warnings
     );
+    assert!(output.stats.imports_skipped >= 1);
     let _ = std::fs::remove_dir_all(&dir);
 }

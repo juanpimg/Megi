@@ -1847,6 +1847,37 @@ fn argument_node(args: &[JsValue], index: usize, context: &mut Context) -> JsRes
 fn node_clone_node(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let deep = args.first().and_then(JsValue::as_boolean).unwrap_or(false);
+    // `cloneNode(true)` doubles the arena in one call, so the subtree size is charged before
+    // the clone is allocated (#657).
+    let allowed = with_host(|host| {
+        let extra = if deep {
+            host.document.descendants(node_id).count().max(1)
+        } else {
+            1
+        };
+        let total = host.document.len().saturating_add(extra);
+        if total > host.max_dom_nodes {
+            if !host.dom_budget_warned {
+                host.dom_budget_warned = true;
+                host.console.push(ConsoleEntry {
+                    level: "warn".to_string(),
+                    message: format!(
+                        "cloneNode rejected: the DOM node budget ({} nodes) is exhausted",
+                        host.max_dom_nodes
+                    ),
+                });
+            }
+            return false;
+        }
+        true
+    })
+    .unwrap_or(false);
+    if !allowed {
+        return Err(js_error(format!(
+            "QuotaExceededError: DOM node budget exceeded ({} nodes)",
+            with_host(|host| host.max_dom_nodes).unwrap_or(0)
+        )));
+    }
     let clone = with_host(|host| host.document.clone_node(node_id, deep))
         .ok_or_else(|| js_error("no active JavaScript host"))?;
     wrap_node(context, clone)
@@ -4821,6 +4852,14 @@ const MAX_WORKERS: usize = 8;
 const MAX_WORKER_MESSAGES: usize = 256;
 
 impl JsRuntime {
+    /// Sets the maximum number of live DOM nodes a script may grow the document to (#657).
+    ///
+    /// Script-driven arena growth (`cloneNode(true)` in a loop, parsed HTML setters) is rejected
+    /// with a `QuotaExceededError` once the document reaches the budget.
+    pub fn set_max_dom_nodes(&mut self, max_nodes: usize) {
+        self.host.borrow_mut().max_dom_nodes = max_nodes;
+    }
+
     /// Installs the `fetch()` provider (the host owns all network/filesystem I/O).
     /// Without a provider `fetch()` rejects with a typed error (documented).
     pub fn set_fetch_provider(&mut self, provider: crate::host::FetchProvider) {

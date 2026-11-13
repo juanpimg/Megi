@@ -192,3 +192,26 @@ fn region_encoder_tolerates_rects_outside_the_pixmap() {
     // A second call with a rect that starts exactly at the height must not panic either.
     let _ = encoder.encode_regions(&pixmap, &[Rect::new(0.0, 6.0, 8.0, 1.0)]);
 }
+
+#[test]
+fn hostile_style_text_is_capped_before_the_css_parser() {
+    // #662: `<style>` text descendants were concatenated with no byte cap, so one inline sheet
+    // dictated peak memory before the CSS parser ever saw it.
+    use dom::{Document, Namespace};
+    use paint::style::{MAX_STYLE_TEXT_BYTES, collect_style_text};
+
+    let mut document = Document::new();
+    let root = document.root();
+    let style = document.create_element(Namespace::Html, "style", Vec::new());
+    assert!(document.append_child(root, style));
+    let text = "a{color:red}".repeat(MAX_STYLE_TEXT_BYTES / 12 + 1_000);
+    let text_node = document.create_text_node(&text);
+    assert!(document.append_child(style, text_node));
+
+    let css = collect_style_text(&document);
+    assert!(
+        css.len() <= MAX_STYLE_TEXT_BYTES + 1,
+        "collected {} bytes, cap is {MAX_STYLE_TEXT_BYTES}",
+        css.len()
+    );
+}
