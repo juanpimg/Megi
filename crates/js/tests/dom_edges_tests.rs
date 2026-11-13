@@ -130,3 +130,29 @@ fn insert_adjacent_accepts_positions_case_insensitively() {
     assert!(out.contains("end"), "beforeend must append: {out}");
     assert!(out.contains("start"), "afterbegin must prepend: {out}");
 }
+
+#[test]
+fn clone_node_respects_the_dom_node_budget() {
+    // #657: `cloneNode(true)` doubled the arena without any accounting; the per-eval loop
+    // budget does not bound allocation.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime.set_max_dom_nodes(64);
+
+    runtime
+        .eval(
+            "window.__err = '';\n\
+             var root = document.documentElement;\n\
+             try {\n\
+               for (var i = 0; i < 20; i++) { root.appendChild(root.cloneNode(true)); }\n\
+             } catch (error) { __err = String(error); }\n\
+             __err",
+            "t",
+        )
+        .map(|_| ())
+        .expect("the script itself must not fail the eval after catching");
+    let error = runtime.eval("__err", "t").expect("eval");
+    assert!(
+        error.contains("node budget"),
+        "expected a node-budget rejection, got {error:?}"
+    );
+}

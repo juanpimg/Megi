@@ -275,6 +275,13 @@ pub(crate) struct Host {
     pub max_document_write_bytes: usize,
     /// Maximum node count for the document scripts write into.
     pub max_document_write_nodes: usize,
+    /// Maximum live nodes a script may grow the document to through DOM mutations
+    /// (`cloneNode`, parsed HTML setters, …). Distinct from the `document.write` byte budget:
+    /// this one bounds *arena* growth, which a few lines of `appendChild(cloneNode(true))`
+    /// can otherwise double without limit (#657).
+    pub max_dom_nodes: usize,
+    /// Whether the DOM node-budget rejection was already reported.
+    pub dom_budget_warned: bool,
     /// Whether the `document.write` budget rejection was already reported.
     pub document_write_warned: bool,
     /// Real-clock origin.
@@ -352,6 +359,8 @@ impl Host {
             document_write_bytes: 0,
             max_document_write_bytes: 8 * 1024 * 1024,
             max_document_write_nodes: 1_000_000,
+            max_dom_nodes: 1_000_000,
+            dom_budget_warned: false,
             document_write_warned: false,
             started_at: Instant::now(),
             virtual_now_ms: None,
