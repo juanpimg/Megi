@@ -468,7 +468,7 @@ impl Host {
 
     /// Advances the virtual clock by `delta`; returns the new time.
     pub fn advance_clock(&mut self, delta: Duration) -> u64 {
-        let now = self.now_ms() + delta.as_millis() as u64;
+        let now = self.now_ms().saturating_add(delta.as_millis() as u64);
         self.virtual_now_ms = Some(now);
         now
     }

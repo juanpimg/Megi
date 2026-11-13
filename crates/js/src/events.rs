@@ -1396,7 +1396,7 @@ pub(crate) fn run_due_timers(
         let _ = with_host(|host| {
             if let Some(interval) = interval {
                 if let Some(timer) = host.timers.get_mut(index) {
-                    timer.due_ms = due_ms + interval;
+                    timer.due_ms = due_ms.saturating_add(interval);
                 }
             } else {
                 host.timers.remove(index);
