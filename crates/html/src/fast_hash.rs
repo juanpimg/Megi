@@ -13,8 +13,7 @@ use std::hash::{BuildHasherDefault, Hasher};
 // Randomized per-process seed to defeat hash-flooding on attacker-controlled
 // tag-name keys (#561). Initialized lazily from the system clock; the value is
 // not secret, only non-deterministic across runs.
-static SEED: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
+static SEED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 fn seed() -> u64 {
     use std::sync::atomic::Ordering;

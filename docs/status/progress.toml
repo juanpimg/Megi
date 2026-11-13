@@ -36,7 +36,7 @@ tests = 2363
 tests_commit = "0381f89"
 tests_date = "2026-11-13"
 crates = 14
-rust_lines = 176942
+rust_lines = 177016
 unsafe_forbidden_crates = 14
 
 [gate]
@@ -150,15 +150,11 @@ items = [
   "fetch() subset backed by a host provider (Headers/Request/Response, CORS same-origin)",
   "Real top-level await and live module bindings via Boa native modules",
   "fetch() with AbortController, methods and Response.body ReadableStream",
-  "Deterministic cooperative Web Workers (postMessage/onerror/terminate, render loop)",
-  "Import maps, dynamic import() and typed top-level-await gap",
-  "Layout geometry provider (getBoundingClientRect/offset/client) wired from render",
 ]
 pending = [
   "fetch streaming/abort/signal and workers with DOM",
   "JS/DOM conformance testing and memory accounting",
   "Import-map scopes/integrity and non-literal dynamic import",
-  "fetch streaming/abort/signal (partially done)",
 ]
 
 [[phase]]
@@ -177,9 +173,6 @@ items = [
   "Navigable history (about:history/Ctrl+H/back-forward) and chrome fast path (-89.5 % non-PNG)",
   "Single-encode PNG overlays for chrome/find/menu (+1.13/+1.75/+2.32 ms) with byte-identical goldens",
   "Download progress indicator, reader mode (about:reader) and zoom per site",
-  "Context menu, link hover status and Ctrl+click/middle-click new tabs",
-  "file:// directory listings, browser error pages and favicon/dot per tab",
-  "Navigable history (about:history/Ctrl+H/back-forward) and chrome fast path",
 ]
 pending = [
   "Visual save-as/prompt, resource downloads, cookies/passwords",

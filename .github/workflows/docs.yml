@@ -39,6 +39,7 @@ jobs:
           path: target/doc
 
   deploy:
+    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_GITHUB_PAGES == 'true'
     needs: build
     runs-on: ubuntu-latest
     environment:

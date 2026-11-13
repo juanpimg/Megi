@@ -7,6 +7,10 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 unmaintained = "workspace"
 unsound = "all"
 yanked = "warn"
+ignore = [
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser marked unmaintained; tracked for migration to skrifa/harfrust" },
+    { id = "RUSTSEC-2026-0206", reason = "rustybuzz marked unmaintained; tracked for migration to skrifa/harfrust" },
+]
 
 [licenses]
 allow = [
@@ -20,6 +24,7 @@ allow = [
     "MPL-2.0",
     "Unicode-3.0",
     "CC0-1.0",
+    "CDLA-Permissive-2.0",
     "Unlicense",
 ]
 confidence-threshold = 0.8

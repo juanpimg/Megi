@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `62c440c` (2026-11-13) · overall **99%** · **2,363** tests · conformance **PASS** · **14** crates · **176,942** lines of Rust
+**Snapshot** — commit `30afc64` (2026-11-13) · overall **99%** · **2,363** tests · conformance **PASS** · **14** crates · **177,016** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -118,16 +118,12 @@
 - fetch() subset backed by a host provider (Headers/Request/Response, CORS same-origin)
 - Real top-level await and live module bindings via Boa native modules
 - fetch() with AbortController, methods and Response.body ReadableStream
-- Deterministic cooperative Web Workers (postMessage/onerror/terminate, render loop)
-- Import maps, dynamic import() and typed top-level-await gap
-- Layout geometry provider (getBoundingClientRect/offset/client) wired from render
 
 **Pending**
 
 - fetch streaming/abort/signal and workers with DOM
 - JS/DOM conformance testing and memory accounting
 - Import-map scopes/integrity and non-literal dynamic import
-- fetch streaming/abort/signal (partially done)
 
 ### F7 — Desktop shell (browser UI) (99%)
 
@@ -144,9 +140,6 @@
 - Navigable history (about:history/Ctrl+H/back-forward) and chrome fast path (-89.5 % non-PNG)
 - Single-encode PNG overlays for chrome/find/menu (+1.13/+1.75/+2.32 ms) with byte-identical goldens
 - Download progress indicator, reader mode (about:reader) and zoom per site
-- Context menu, link hover status and Ctrl+click/middle-click new tabs
-- file:// directory listings, browser error pages and favicon/dot per tab
-- Navigable history (about:history/Ctrl+H/back-forward) and chrome fast path
 
 **Pending**
 
@@ -157,9 +150,9 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `62c440c` (2026-11-13) |
+| Commit | `30afc64` (2026-11-13) |
 | Crates in the workspace | 14 |
-| Lines of Rust (tracked `.rs`) | 176942 |
+| Lines of Rust (tracked `.rs`) | 177016 |
 | Tests (`cargo test --workspace -- --list`) | 2363 |
 | Crates with `#![forbid(unsafe_code)]` | 14 / 14 |
 | Conformance gate | **PASS** |

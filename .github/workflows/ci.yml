@@ -186,7 +186,7 @@ jobs:
           : > /tmp/geiger.json
           for pkg in dom html css layout fonts image paint net render shell js svg test_harness bench; do
             echo "=== cargo geiger --manifest-path crates/$pkg/Cargo.toml ==="
-            cargo geiger --manifest-path "crates/$pkg/Cargo.toml" --all-features --all-targets --forbid-only --output-format Json >> /tmp/geiger.json
+            cargo geiger --manifest-path "$PWD/crates/$pkg/Cargo.toml" --all-features --all-targets --forbid-only --output-format Json >> /tmp/geiger.json
           done
       - name: Upload geiger report
         if: always()
@@ -275,6 +275,24 @@ jobs:
           cargo clippy --workspace --all-targets --locked -- -D warnings
           cargo test --workspace --all-targets --locked
 
+  release:
+    name: Release tests (conformance & overflow checks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: ./.github/actions/install-system-deps
+      - name: Release-profile tests (core crates)
+        run: |
+          cargo test --release --locked --lib \
+            -p dom -p html -p css -p layout -p fonts -p image -p paint -p net -p svg -p js
+      - name: Release conformance summary
+        run: cargo run --release --locked -p test_harness -- --summary
+
   # Umbrella job for branch protection: a single required check that aggregates
   # every gate above (#577). Branch protection can require just `check`.
   check:
@@ -283,6 +301,7 @@ jobs:
     needs:
       - quality
       - conformance
+      - release
       - msrv
       - minimal
       - package
@@ -295,7 +314,17 @@ jobs:
     steps:
       - name: Verify all required gates succeeded
         run: |
-          if [ "${{ needs.quality.result }}" != "success" ] ||              [ "${{ needs.conformance.result }}" != "success" ] ||              [ "${{ needs.msrv.result }}" != "success" ] ||              [ "${{ needs.minimal.result }}" != "success" ] ||              [ "${{ needs.package.result }}" != "success" ] ||              [ "${{ needs.security.result }}" != "success" ] ||              [ "${{ needs.unsafe-audit.result }}" != "success" ] ||              [ "${{ needs.workflow-lint.result }}" != "success" ] ||              [ "${{ needs.secret-scan.result }}" != "success" ] ||              [ "${{ needs.docs-links.result }}" != "success" ]; then
+          if [ "${{ needs.quality.result }}" != "success" ] || \
+             [ "${{ needs.conformance.result }}" != "success" ] || \
+             [ "${{ needs.release.result }}" != "success" ] || \
+             [ "${{ needs.msrv.result }}" != "success" ] || \
+             [ "${{ needs.minimal.result }}" != "success" ] || \
+             [ "${{ needs.package.result }}" != "success" ] || \
+             [ "${{ needs.security.result }}" != "success" ] || \
+             [ "${{ needs.unsafe-audit.result }}" != "success" ] || \
+             [ "${{ needs.workflow-lint.result }}" != "success" ] || \
+             [ "${{ needs.secret-scan.result }}" != "success" ] || \
+             [ "${{ needs.docs-links.result }}" != "success" ]; then
             echo "One or more required gates failed." >&2
             exit 1
           fi
