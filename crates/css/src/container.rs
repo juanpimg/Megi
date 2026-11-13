@@ -235,28 +235,45 @@ impl<'a> BaseStyles<'a> {
         if let Some(style) = self.cache.get(&node) {
             return style.clone();
         }
-        let style = if let Some(element) = self.doc.node(node).as_element() {
+        // Iterative: collect the ancestor chain of elements (root -> node) so we never
+        // recurse per depth (issue #554).
+        let mut chain = Vec::new();
+        let mut current = Some(node);
+        while let Some(id) = current {
+            if self.doc.node(id).as_element().is_some() {
+                chain.push(id);
+            }
+            current = self.doc.node(id).parent;
+        }
+        chain.reverse();
+        let mut parent_style: Option<ComputedStyle> = None;
+        let mut result = ComputedStyle::initial();
+        for id in chain {
+            if let Some(cached) = self.cache.get(&id) {
+                parent_style = Some(cached.clone());
+                result = cached.clone();
+                continue;
+            }
+            let element = self.doc.node(id).as_element().unwrap();
             let inline = element
                 .get_attribute("style")
                 .map(|style| crate::expand_declarations(&crate::parse_list_of_declarations(style)));
             let cascaded = crate::cascade::resolve_cascaded_properties_base(
                 self.doc,
-                node,
+                id,
                 self.collection,
                 inline.as_deref(),
             );
-            let parent = self
-                .doc
-                .node(node)
-                .parent
-                .filter(|parent| self.doc.node(*parent).as_element().is_some());
-            let parent_style = parent.map(|parent| self.base(parent));
-            ComputedStyle::compute(&cascaded, parent_style.as_ref(), None)
-        } else {
-            ComputedStyle::initial()
-        };
-        self.cache.insert(node, style.clone());
-        style
+            let style = ComputedStyle::compute(&cascaded, parent_style.as_ref(), None);
+            self.cache.insert(id, style.clone());
+            parent_style = Some(style.clone());
+            result = style;
+        }
+        // If node itself wasn't an element, return initial.
+        if self.doc.node(node).as_element().is_none() {
+            return ComputedStyle::initial();
+        }
+        result
     }
 }
 
@@ -322,19 +339,38 @@ fn predicted_inline_size(
 /// percentage of a definite ancestor height). Auto heights are content-dependent and are
 /// therefore not predicted (documented limit).
 fn predicted_block_size(doc: &Document, node: NodeId, cache: &mut BaseStyles<'_>) -> Option<f32> {
-    let style = cache.base(node);
-    match style.height {
-        Length::Px(px) => Some(px.max(0.0)),
-        Length::Percent(pct) => {
-            let parent = doc.node(node).parent?;
-            let parent_height = if doc.node(parent).as_element().is_some() {
-                predicted_block_size(doc, parent, cache)
-            } else {
-                None
-            };
-            parent_height.map(|height| (height * pct / 100.0).max(0.0))
+    // Iterative walk up the ancestor chain to find a definite height.
+    let mut current = Some(node);
+    let mut pct_chain: Vec<f32> = Vec::new();
+    loop {
+        let id = current?;
+        if doc.node(id).as_element().is_none() {
+            // Non-element ancestor: stop.
+            if pct_chain.is_empty() {
+                return None;
+            }
+            // Shouldn't reach here with pending percents; bail.
+            return None;
         }
-        Length::Auto => None,
+        let style = cache.base(id);
+        match style.height {
+            Length::Px(px) => {
+                // Resolve accumulated percentages from this definite height.
+                let mut h = px.max(0.0);
+                for pct in pct_chain.iter().rev() {
+                    h = (h * pct / 100.0).max(0.0);
+                }
+                return Some(h);
+            }
+            Length::Percent(pct) => {
+                pct_chain.push(pct);
+                current = doc.node(id).parent;
+            }
+            Length::Auto => {
+                // Auto breaks the chain for percentage resolution.
+                return None;
+            }
+        }
     }
 }
 
