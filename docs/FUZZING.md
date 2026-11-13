@@ -41,6 +41,8 @@ fuzz/
 │   ├── webp_lossy.rs         # VP8 lossy keyframe decoder under anti-DoS caps
 │   ├── webp_vp8.rs           # WebP sniffing + VP8/VP8L container validation path
 │   └── woff2_decode.rs       # WOFF2/@font-face decode/validation path
+├── src/lib.rs          # shared helpers (`megi_fuzz`): RIFF/WebP envelope, lossy
+│                       #   char-boundary-safe text, length-prefixed part framing
 └── corpus/<target>/    # versioned seed inputs (small, hand-written where present)
 ```
 
@@ -72,21 +74,21 @@ cargo +nightly fuzz build          # builds every [[bin]] target
 |---|---|---|
 | `html_parse` | `html::parse_document_with_options`, `html::parse_fragment_with_options`, serializer | Main attack surface; tokenizer, insertion modes, foreign content, templates. Default `ParseOptions` limits are used. |
 | `css_parse` | `css::parse_stylesheet`, `css::parse_list_of_declarations`, `css::tokenize` | Recursive-descent component-value parsing and tokenizer escape/URL handling. |
-| `selectors` | `css::parse_selectors`, matching/specificity, `css::resolve_document_styles` | Selector matching is adversarial; uses a small deterministic DOM generated from input. |
+| `selectors` | `css::parse_selectors`, matching/specificity, `query_selector`/`query_selector_all`, `try_*` variants, `matches_with_state`/`try_matches_with_state`, `css::resolve_document_styles` | Selector matching is adversarial; small deterministic DOM from input. Document-order querying (`document.querySelector`) and the `StateContext` interaction layer are fuzzed too (#700). |
 | `net_url` | `net::Url::parse`, URL helpers, percent-decode/join paths | URL strings arrive from untrusted markup; must never panic. Never opens sockets. |
-| `render_pipeline` | `render::render_url` with inline `data:` HTML (parse→CSS→layout→paint→PNG) | Integration glue reached by real pages. Network/scripting disabled; tight budgets/caps. |
+| `render_pipeline` | `render::render_url` with inline `data:` HTML (parse→CSS→layout→paint→PNG) | Integration glue reached by real pages. Viewport (`32..=256`), cap profile (tight vs `RenderOptions::default`), `no_network` and scripting are input-derived; scripting only for documents ≤32 KiB (#842). |
 | `js_eval` | `js::JsRuntime` eval, microtasks, tasks, event dispatch under `js::Budget` | Untrusted JS; bounded loops/recursion/stack/timers/events so hangs become typed budget errors. |
-| `svg_parse` | `svg::render_svg_with_limits` (XML parse + values + raster) | Untrusted inline/external SVG under strict anti-DoS limits. |
+| `svg_parse` | `svg::render_svg_with_limits`, `svg::intrinsic_size_with_limits` (XML parse + values + raster) | Untrusted inline/external SVG. Four `SvgOptions` (absent/zero/derived/`u32::MAX`) × two `Limits` profiles (128 px tight, 1024 px roomy) so the caps are exercised on both sides of the boundary (#705). |
 | `woff2_decode` | `fonts::decode_web_font` / WOFF2 container handling | `@font-face` bytes are untrusted; bounded decode/validation path. |
-| `image_decode` | `image::detect_format`, `image::decode_with_limits`, EXIF orientation | Untrusted `<img>`/background bytes across PNG/JPEG/GIF/WebP sniffing with caps. |
+| `image_decode` | `detect_format`, `decode_with_limits` (tight + input-derived roomy profile), `decode`, `decode_scaled`, `decode_scaled_with_limits`, `decode_animated`, `decode_animated_with_limits`, `png::decode_png`, `exif::orientation` | Every public decode entry point, not just one capped call: default caps, scaled decode and the animated (ANIM/ANMF) path were unfuzzed before (#853). |
 | `exif_parse` | `image::exif::orientation` | Dedicated APP1/TIFF orientation parser campaign. |
 | `hpack_decode` | `net::h2::hpack`, `net::h2::frame` parsing/validation helpers | Adversarial HTTP/2 HPACK blocks and frame streams (bounded). |
-| `h2_push` | HTTP/2 PUSH_PROMISE/HEADERS/DATA parsing/reassembly helpers | Untrusted server-push/control/data frames under caps. |
+| `h2_push` | HTTP/2 PUSH_PROMISE/HEADERS/DATA parsing/reassembly helpers | Untrusted server-push/control/data frames under caps. `FrameReader`/`validate_frame` run against every legal max frame size (`64`, `DEFAULT_MAX_FRAME_SIZE`, `MAX_FRAME_SIZE`, `MAX_FRAME_SIZE_LIMIT`), and promised stream id `0` (protocol error) is exercised (#702). |
 | `body_stream` | `net::{RequestBody, BodyProducer, FetchError}` streaming contract | Bounded pull-based producer/backpressure/error behavior (no socket). |
-| `webp_vp8` | WebP RIFF/VP8/VP8L sniff/container validation paths | WebP container arithmetic and lossless/container handling under caps. |
-| `js_module` | `js` module/import-map resolve/load/eval APIs with budgets | Untrusted module/import-map inputs; bounded resolver/loader calls and no network/FS. |
-| `webp_lossy` | VP8 lossy keyframe decode path via image decode APIs | Focused lossy WebP decoder campaign with anti-DoS caps. |
-| `container_queries` | `css` parse/tokenize + `css::container` query parse/evaluate | `@container`/`@layer` and query evaluation without DOM/layout. |
+| `webp_vp8` | WebP RIFF/VP8/VP8L sniff/container validation paths | WebP container arithmetic and lossless/container handling under caps; the RIFF envelope comes from `megi_fuzz::riff_webp`, shared with `webp_lossy` so the two cannot drift (#859). |
+| `js_module` | `js` module/import-map resolve/load/eval APIs with budgets | Untrusted module/import-map inputs; bounded resolver/loader calls and no network/FS. Parts are **length-prefixed** (`[u16 LE len][bytes]…`) and truncated on char boundaries, so JSON strings and module sources keep embedded NULs/high bytes instead of being clipped (#701). |
+| `webp_lossy` | VP8 lossy keyframe decode path via image decode APIs | Focused lossy WebP decoder campaign with anti-DoS caps: RIFF inputs decoded as-is and truncated, plus payloads re-wrapped as `VP8 ` **and** `VP8L`, under a 2048 px and a 64 px cap profile (#859). |
+| `container_queries` | `css` parse/tokenize + `css::container` query parse/evaluate | `@container`/`@layer` without DOM/layout. Container sizes are input-derived and include the degenerate set (`NaN`, `±∞`, negative, `0`, `f32::MAX`, missing axis), and style queries run against a `ComputedStyle` carrying input-derived custom properties (#710). |
 | `dom_tree` | DOM construction/mutation-oriented parse paths | Exercises DOM tree building/mutation surfaces from fuzzer input. |
 | `fonts_shape` | Font/shaping input paths | Exercises font parsing/shaping-related surfaces. |
 | `layout_tree` | Layout tree construction paths | Exercises layout-tree building from parser/style inputs. |
@@ -231,7 +233,7 @@ Notes:
 
 - Daily runs only scratch the surface; no coverage-guided corpus merging with OSS-Fuzz and
   no differential testing against other engines.
-- `render_pipeline` runs with scripting disabled and `js_eval`/`js_module` use fixed/bounded
+- `render_pipeline` enables scripting only for documents ≤32 KiB and `js_eval`/`js_module` use fixed/bounded
   budgets and limited event/reuse variation.
 - The render target feeds HTML through inline `data:` documents; external HTTP/TLS/cache
   loading is not fuzzed by this harness.

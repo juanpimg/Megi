@@ -113,6 +113,13 @@ test = false
 doc = false
 bench = false
 
+[lib]
+name = "megi_fuzz"
+path = "src/lib.rs"
+test = false
+doc = false
+bench = false
+
 [[bin]]
 name = "body_stream"
 path = "fuzz_targets/body_stream.rs"
