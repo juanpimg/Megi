@@ -2565,7 +2565,10 @@ fn build_patterns(
             height: parse_length(element.attribute("height"), 0.0)
                 .filter(|height| height.is_finite() && *height > 0.0)
                 .unwrap_or(0.0),
-            pattern_units: Units::parse(element.attribute("patternUnits")),
+            pattern_units: match element.attribute("patternUnits") {
+                Some(raw) => Units::parse(Some(raw)),
+                None => Units::ObjectBoundingBox,
+            },
             content_units: Units::parse(element.attribute("patternContentUnits")),
             transform: element
                 .attribute("patternTransform")
