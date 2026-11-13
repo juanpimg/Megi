@@ -237,6 +237,37 @@ Notes:
 - Daily 10-minute critical / 5-minute secondary runs are a regression gate, not a coverage
   guarantee. Longer campaigns should run outside CI.
 
+## Soak campaigns
+
+The nightly matrix gives each harness a handful of minutes, which finds shallow
+bugs; the deep ones need hours in the same target with a grown corpus. Two ways to
+get that:
+
+* **CI**: `.github/workflows/fuzz-soak.yml` runs every Saturday at 02:11 UTC and on
+  demand (`hours` and `targets` inputs), rotating through all harnesses for the
+  requested wall-clock budget. Hosted runners cap a job at six hours, so the
+  schedule asks for 5 h; `hours: 24` needs a self-hosted runner
+  (`runs-on: [self-hosted, soak]`). The corpus is cached between runs
+  (`fuzz-corpus-soak-*`), so each week starts where the previous one stopped, and
+  logs plus crash artifacts are uploaded even when the campaign fails.
+* **Locally**: `tools/soak_fuzz.sh --hours 24` runs the same rotation on this
+  machine. Useful flags: `--slice-seconds 600` (time per target per rotation, default
+  900), `--targets "html_parse css_parse"`, `--out target/soak`. It keeps
+  `fuzz/corpus/<target>` between rotations, mirrors any libFuzzer artifact into
+  `target/soak/crashes/<target>/`, and exits non-zero if a target run failed.
+  `js_eval`/`js_module` run with `-detect_leaks=0` for the Boa reason above.
+
+Memory/runtime signals during a soak: libFuzzer already aborts on
+`-rss_limit_mb=4096` and `-timeout=25`, so a runaway allocation or an infinite loop
+shows up as a normal artifact to triage. Leak detection stays on for the non-Boa
+targets; `valgrind`/`heaptrack` on a single reproducer is the next step when an
+artifact looks like a leak rather than a crash:
+
+```bash
+cargo +nightly fuzz run html_parse fuzz/artifacts/html_parse/crash-<hash> -- -runs=1
+valgrind --leak-check=full target/x86_64-unknown-linux-gnu/release/html_parse fuzz/artifacts/html_parse/crash-<hash>
+```
+
 ## Limitations
 
 - Daily runs only scratch the surface; no coverage-guided corpus merging with OSS-Fuzz and

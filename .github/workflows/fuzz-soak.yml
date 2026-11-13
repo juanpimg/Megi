@@ -1,0 +1,87 @@
+# Weekly soak campaign (#964).
+#
+# The nightly matrix gives each target 5-10 minutes; that finds shallow bugs but
+# not the deep ones that need hours in the same target with a grown corpus. This
+# job rotates through every harness for a wall-clock budget instead, keeping the
+# corpus on disk between runs via the cache, and uploads whatever it finds.
+#
+# GitHub-hosted runners are capped at six hours per job, so the scheduled run asks
+# for 5 h. A full 24 h campaign is a `workflow_dispatch` away with `hours: 24` on a
+# self-hosted runner (`runs-on: [self-hosted, soak]`), or locally:
+#     tools/soak_fuzz.sh --hours 24
+name: fuzz-soak
+
+on:
+  schedule:
+    - cron: "11 2 * * 6" # Saturdays, after the nightly matrix
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: "Campaign length in hours (bounded by the runner's 6 h limit on hosted runners)"
+        required: false
+        default: "5"
+      targets:
+        description: "Space-separated target subset (empty = all harnesses)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-soak-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  soak:
+    name: Soak campaign
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: ./.github/actions/install-system-deps
+
+      - uses: dtolnay/rust-toolchain@2c76c034f9e32a5d6e2c104dc4df23a22476db04 # nightly
+        with:
+          toolchain: nightly-2026-10-19
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          key: fuzz-soak
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
+
+      # Corpus persistence: a soak run is only valuable if the corpus it grows
+      # survives to the next week. Keyed on the run id so each week saves a fresh
+      # cache while still restoring the most recent one.
+      - name: Restore fuzz corpus
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: fuzz/corpus
+          key: fuzz-corpus-soak-${{ github.run_id }}
+          restore-keys: |
+            fuzz-corpus-soak-
+
+      - name: Run the campaign
+        env:
+          HOURS: ${{ github.event.inputs.hours || '5' }}
+          TARGETS: ${{ github.event.inputs.targets }}
+        run: |
+          set -euo pipefail
+          args=(--hours "$HOURS")
+          if [[ -n "${TARGETS// /}" ]]; then
+            args+=(--targets "$TARGETS")
+          fi
+          tools/soak_fuzz.sh "${args[@]}"
+
+      - name: Upload campaign logs and crashes
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: soak-campaign
+          path: |
+            target/soak/logs
+            target/soak/crashes
+          if-no-files-found: warn
