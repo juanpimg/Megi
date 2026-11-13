@@ -629,29 +629,33 @@ fn position_float(
 }
 
 /// Returns the horizontal space taken by floats at `y` inside `cb`.
-fn float_exclusions(floats: &[PlacedFloat], cb: Rect, y: f32) -> (f32, f32) {
-    // Documents without floats (the common case) skip the two filter/fold chains per child.
-    if floats.is_empty() {
+///
+/// One pass over the placed floats instead of two `filter`/`fold` chains (#691): the common
+/// case is a handful of floats, but a document can put thousands of them in one formatting
+/// context and this runs once per in-flow child.
+fn float_exclusions(floats: &[PlacedFloat], cb: Rect, y: f32, max_bottom: f32) -> (f32, f32) {
+    // Documents without floats (the common case) skip the loop per child, and so does any
+    // child that sits below every float already placed.
+    if floats.is_empty() || y >= max_bottom {
         return (0.0, 0.0);
     }
-    let left = floats
-        .iter()
-        .filter(|placed| {
-            placed.side == Float::Left
-                && placed.margin_box.y + placed.margin_box.height > y
-                && placed.margin_box.y < y + 1.0
-        })
-        .map(|placed| (placed.margin_box.x + placed.margin_box.width - cb.x).max(0.0))
-        .fold(0.0, f32::max);
-    let right = floats
-        .iter()
-        .filter(|placed| {
-            placed.side == Float::Right
-                && placed.margin_box.y + placed.margin_box.height > y
-                && placed.margin_box.y < y + 1.0
-        })
-        .map(|placed| (cb.x + cb.width - placed.margin_box.x).max(0.0))
-        .fold(0.0, f32::max);
+    let mut left = 0.0_f32;
+    let mut right = 0.0_f32;
+    for placed in floats {
+        if placed.margin_box.y >= y + 1.0 || placed.margin_box.y + placed.margin_box.height <= y {
+            continue;
+        }
+        match placed.side {
+            Float::Left => {
+                left = left.max((placed.margin_box.x + placed.margin_box.width - cb.x).max(0.0));
+            }
+            Float::Right => {
+                right = right.max((cb.x + cb.width - placed.margin_box.x).max(0.0));
+            }
+            // A placed float is always left or right; treat anything else as no exclusion.
+            Float::None => {}
+        }
+    }
     (left, right)
 }
 
@@ -685,6 +689,9 @@ fn layout_block_children(
     let mut flow = 0.0_f32;
     let mut previous_bottom_margin: Option<f32> = None;
     let mut floats: Vec<PlacedFloat> = Vec::new();
+    // Lowest bottom edge of any placed float; once the flow passes it, no float can exclude
+    // anything and the per-child scan is skipped entirely (#691).
+    let mut floats_bottom = f32::NEG_INFINITY;
 
     for (index, child) in layout_box.children.iter_mut().enumerate() {
         let position = child
@@ -711,8 +718,9 @@ fn layout_block_children(
 
         // Floats are out of flow: they do not advance the block flow.
         if child.is_float {
-            let (placed, _bottom) = place_float(child, cb, flow, &floats, measurer, pos);
+            let (placed, bottom) = place_float(child, cb, flow, &floats, measurer, pos);
             floats.push(placed);
+            floats_bottom = floats_bottom.max(bottom);
             result.float_extent = Some(
                 result
                     .float_extent
@@ -756,7 +764,8 @@ fn layout_block_children(
 
         // In-flow block boxes are narrowed to the float edges they overlap
         // (CSS 2.2 §9.5: "line boxes next to a float are shortened").
-        let (left_exclusion, right_exclusion) = float_exclusions(&floats, cb, cb.y + flow);
+        let (left_exclusion, right_exclusion) =
+            float_exclusions(&floats, cb, cb.y + flow, floats_bottom);
         let child_cb = Rect::new(
             cb.x + left_exclusion,
             cb.y,
