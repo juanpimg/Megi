@@ -854,8 +854,15 @@ impl VerticalAlign {
             "text-bottom" => Some(Self::TextBottom),
             other => {
                 if let Some(val) = other.strip_suffix("px") {
-                    val.trim().parse::<f32>().ok().map(Self::Length)
+                    let val: f32 = val.trim().parse().ok()?;
+                    if !val.is_finite() {
+                        return None;
+                    }
+                    Some(Self::Length(val))
                 } else if let Ok(val) = other.parse::<f32>() {
+                    if !val.is_finite() {
+                        return None;
+                    }
                     Some(Self::Length(val))
                 } else {
                     None
