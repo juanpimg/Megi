@@ -125,17 +125,21 @@ def unsafe_forbidden_crates(root: Path) -> list[str]:
     Binary-only crates (`bench`) carry the attribute in `main.rs`, so both roots are
     checked; the first file that exists wins.
     """
-    pattern = re.compile(r"#!\s*\[\s*forbid\s*\(\s*unsafe_code\s*\)\s*\]")
+    # Accept forbid(unsafe_code) alone or as one term among several (e.g.
+    # forbid(unsafe_code, warnings)) (#601).
+    pattern = re.compile(r"#!\s*\[\s*forbid\s*\([^)]*unsafe_code[^)]*\)\s*\]")
     crates = []
     for cargo in sorted((root / "crates").glob("*/Cargo.toml")):
+        forbidden = False
         for root_module in ("lib.rs", "main.rs"):
             module = cargo.parent / "src" / root_module
             if not module.is_file():
                 continue
             text = module.read_text(encoding="utf-8", errors="ignore")
             if pattern.search(text):
-                crates.append(cargo.parent.name)
-            break
+                forbidden = True
+        if forbidden:
+            crates.append(cargo.parent.name)
     return crates
 
 
