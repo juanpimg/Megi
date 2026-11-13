@@ -152,7 +152,7 @@ fn draw_shape(
     // A hostile `stroke-width` (huge but finite) would build canvas-spanning quads/discs
     // evaluated with 16 samples per pixel for every stroked shape; clamp it relative to the
     // viewport (any wider stroke already covers the canvas).
-    let stroke_cap = 4.0 * (canvas.width + canvas.height).max(1) as f32;
+    let stroke_cap = ((canvas.width as f32).powi(2) + (canvas.height as f32).powi(2)).sqrt().max(1.0);
     let width = (shape.stroke_width * viewport_scale).min(stroke_cap);
     if width > 0.0
         && width.is_finite()
