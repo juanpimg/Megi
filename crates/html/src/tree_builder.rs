@@ -1823,7 +1823,10 @@ impl TreeBuilder {
             }
 
             let new_element = self.create_html_element(&fmt_name, &fmt_attrs);
-            self.doc.reparent_children(furthest_block_id, new_element);
+            // A rejected move (cycle) is a tree-construction bug rather than user input, and
+            // the DOM layer now reports it instead of half-moving (#683).
+            let moved = self.doc.reparent_children(furthest_block_id, new_element);
+            debug_assert!(moved, "adoption agency reparent must not create a cycle");
             self.doc.append_child(furthest_block_id, new_element);
 
             if let Some(old_pos) = self.active_formatting.iter().rposition(|e| {
@@ -4358,7 +4361,8 @@ fn run_fragment_parser(
     // Move children of the synthetic `<html>` root directly under `doc.root()` so callers
     // can pick them up as "the new children appended after the previous last child".
     let root = tb.doc.root();
-    tb.doc.reparent_children(html_root, root);
+    let moved = tb.doc.reparent_children(html_root, root);
+    debug_assert!(moved, "root reparent must not create a cycle");
     tb.doc.detach(html_root);
     // The synthetic `<html>` root and the fragment context element are parser scaffolding:
     // free their slots so repeated in-place fragment parses (`innerHTML`) do not leak arena

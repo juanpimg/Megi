@@ -1018,16 +1018,43 @@ impl Document {
 
     /// Moves all children from `old_parent_id` to the end of `new_parent_id`.
     /// Executes in `O(degree)` to update `parent` pointers and `O(1)` to splice sibling chains.
-    pub fn reparent_children(&mut self, old_parent_id: NodeId, new_parent_id: NodeId) {
+    pub fn reparent_children(&mut self, old_parent_id: NodeId, new_parent_id: NodeId) -> bool {
         if old_parent_id == new_parent_id {
-            return;
+            return true;
         }
-        let mut curr = self.node(old_parent_id).first_child;
-        while let Some(child_id) = curr {
-            let next = self.node(child_id).next_sibling;
-            self.append_child(new_parent_id, child_id);
-            curr = next;
+        if self.slot_of(old_parent_id).is_none() || self.slot_of(new_parent_id).is_none() {
+            return false;
         }
+        let children: Vec<NodeId> = self.children_ids(old_parent_id).collect();
+        // Pre-validate every move so a cycle rejects the whole operation instead of leaving a
+        // partial move behind (#683): moving a child under itself, or under one of its own
+        // descendants, is impossible.
+        if children
+            .iter()
+            .any(|&child| child == new_parent_id || self.is_ancestor_of(child, new_parent_id))
+        {
+            return false;
+        }
+        for child_id in children {
+            if !self.append_child(new_parent_id, child_id) {
+                // The checks above make this unreachable, but never report success after a
+                // rejected move.
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Returns `true` when `ancestor_id` is an ancestor of `node_id`.
+    fn is_ancestor_of(&self, ancestor_id: NodeId, node_id: NodeId) -> bool {
+        let mut current = self.try_node(node_id).and_then(|node| node.parent);
+        while let Some(parent) = current {
+            if parent == ancestor_id {
+                return true;
+            }
+            current = self.try_node(parent).and_then(|node| node.parent);
+        }
+        false
     }
 
     /// Appends text to `parent_id`, coalescing with `parent_id`'s `last_child` if it is
@@ -2051,6 +2078,41 @@ impl Document {
     /// Unlike [`Self::insert_before_child`] this also accepts a `Document` parent (needed by
     /// `document.appendChild`, used by the html5lib scripted tree tests); the html parser
     /// keeps using `append_child`/`insert_before` directly.
+    /// Validates the parts of an insertion that do not depend on the node being moved:
+    /// the parent exists and accepts children, and `reference` is one of its children.
+    ///
+    /// Fragment expansion uses it to reject the whole expansion before moving anything (#685).
+    fn precheck_insert(
+        &self,
+        parent_id: NodeId,
+        reference: Option<NodeId>,
+    ) -> Result<(), DomError> {
+        if self.slot_of(parent_id).is_none() {
+            return Err(DomError::UnknownNode(parent_id));
+        }
+        let parent_kind_ok = self.try_node(parent_id).is_some_and(|node| {
+            matches!(
+                node.kind,
+                NodeKind::Document | NodeKind::DocumentFragment | NodeKind::Element(_)
+            )
+        });
+        if !parent_kind_ok {
+            return Err(DomError::CannotHaveChildren(parent_id));
+        }
+        if let Some(reference_id) = reference {
+            if self.slot_of(reference_id).is_none() {
+                return Err(DomError::UnknownNode(reference_id));
+            }
+            if self.node(reference_id).parent != Some(parent_id) {
+                return Err(DomError::NotAChild {
+                    parent: parent_id,
+                    child: reference_id,
+                });
+            }
+        }
+        Ok(())
+    }
+
     fn insert_one(
         &mut self,
         parent_id: NodeId,
@@ -2122,6 +2184,18 @@ impl Document {
             return Ok(vec![node_id]);
         }
         let children: Vec<NodeId> = self.children(node_id).collect();
+        // Validate the whole expansion before touching the tree (#685): if any child cannot
+        // move (cycle through the new parent), the fragment must stay untouched instead of
+        // being split between the source and the destination.
+        self.precheck_insert(parent_id, reference)?;
+        for &child in &children {
+            if child == parent_id || self.is_ancestor_of(child, parent_id) {
+                return Err(DomError::HierarchyRequest {
+                    parent: parent_id,
+                    child,
+                });
+            }
+        }
         let mut inserted = Vec::with_capacity(children.len());
         for child in children {
             // Re-inserting each child before the same reference preserves fragment order.
@@ -2459,6 +2533,79 @@ mod tests {
             .and_then(|el| el.template_contents)
             .expect("HTML <template> must have template_contents DocumentFragment");
         assert_eq!(doc.node(frag_id).kind, NodeKind::DocumentFragment);
+    }
+
+    #[test]
+    fn reparent_children_rejects_cycles_without_partial_moves() {
+        // #683: moving a parent's children under a target that sits inside the moved set used
+        // to move part of them and report success (the API returned `()`).
+        let mut doc = Document::new();
+        let root = doc.root();
+        let a = doc.create_element(Namespace::Html, "div", vec![]);
+        let b = doc.create_element(Namespace::Html, "div", vec![]);
+        let d = doc.create_element(Namespace::Html, "div", vec![]);
+        let c = doc.create_element(Namespace::Html, "div", vec![]);
+        doc.append_child(root, a);
+        doc.append_child(a, b);
+        doc.append_child(a, c);
+        doc.append_child(b, d);
+
+        assert!(
+            !doc.reparent_children(a, d),
+            "moving A's children under a descendant of A must be rejected"
+        );
+        assert_eq!(doc.node(a).first_child, Some(b), "A must keep its children");
+        assert_eq!(doc.node(b).first_child, Some(d));
+        assert_eq!(
+            doc.node(d).first_child,
+            None,
+            "nothing may be moved under D"
+        );
+
+        // The trivial variant: the target is a direct child, so the move is impossible too.
+        assert!(!doc.reparent_children(a, b));
+        assert_eq!(doc.node(a).first_child, Some(b));
+        assert_eq!(doc.node(b).first_child, Some(d));
+
+        // A legal move still works and reports success.
+        let target = doc.create_element(Namespace::Html, "section", vec![]);
+        doc.append_child(root, target);
+        assert!(doc.reparent_children(a, target));
+        assert_eq!(doc.node(a).first_child, None);
+        assert_eq!(doc.node(target).first_child, Some(b));
+        assert_eq!(doc.node(target).last_child, Some(c));
+        assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn insert_node_fragment_expansion_is_all_or_nothing() {
+        // #685: a fragment whose second child cannot move must leave both the fragment and the
+        // destination untouched instead of splitting the fragment.
+        let mut doc = Document::new();
+        let root = doc.root();
+        let anc = doc.create_element(Namespace::Html, "div", vec![]);
+        let p = doc.create_element(Namespace::Html, "p", vec![]);
+        doc.append_child(root, anc);
+        doc.append_child(anc, p);
+
+        let fragment = doc.create_document_fragment();
+        let x = doc.create_element(Namespace::Html, "span", vec![]);
+        doc.append_child(fragment, x);
+        doc.append_child(fragment, anc);
+
+        let err = doc
+            .insert_node(p, fragment, None)
+            .expect_err("the fragment holds an ancestor of the destination");
+        assert!(matches!(err, DomError::HierarchyRequest { .. }), "{err:?}");
+        assert_eq!(
+            doc.node(fragment).first_child,
+            Some(x),
+            "the first child must not be moved when a later one fails"
+        );
+        assert_eq!(doc.node(x).parent, Some(fragment));
+        assert_eq!(doc.node(p).first_child, None);
+        assert_eq!(doc.node(anc).parent, Some(fragment));
+        assert!(doc.validate_invariants().is_ok());
     }
 
     #[test]
