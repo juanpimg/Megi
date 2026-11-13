@@ -123,7 +123,7 @@ fn pattern_tile_budget_is_enforced() {
     let source = svg_doc(
         100.0,
         100.0,
-        "<defs><pattern id='p' width='0.02' height='0.02'>\
+        "<defs><pattern id='p' patternUnits='userSpaceOnUse' width='0.02' height='0.02'>\
          <rect width='0.02' height='0.02' fill='red'/></pattern></defs>\
          <rect width='100' height='100' fill='url(#p)'/>",
     );
