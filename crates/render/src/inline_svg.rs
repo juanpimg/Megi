@@ -77,7 +77,13 @@ const COPIED_ATTRIBUTES: [&str; 9] = [
 ];
 
 /// Replaces every top-level inline SVG of `document` with a synthetic `<img>` data URL.
-pub fn replace_inline_svgs(document: &mut Document) -> InlineSvgReport {
+/// Replaces inline `<svg>` elements with synthetic `<img>` data URLs.
+///
+/// `image_budget` is how many images the loader will actually fetch (`RenderOptions::max_images`),
+/// so replacements beyond it would be serialized and then dropped by the image stage (#670).
+/// The effective cap is `min(MAX_INLINE_SVGS, image_budget)`, and the elements beyond it are
+/// counted as `skipped` with one warning instead of being reported as replaced.
+pub fn replace_inline_svgs(document: &mut Document, image_budget: usize) -> InlineSvgReport {
     let mut report = InlineSvgReport {
         replaced: 0,
         skipped: 0,
@@ -86,14 +92,15 @@ pub fn replace_inline_svgs(document: &mut Document) -> InlineSvgReport {
     };
     let candidates = collect_inline_svgs(document);
     let candidate_count = candidates.len();
+    let cap = MAX_INLINE_SVGS.min(image_budget);
     let mut total_bytes = 0usize;
     let mut limit_warned = false;
     for (index, node_id) in candidates.into_iter().enumerate() {
-        if report.replaced >= MAX_INLINE_SVGS {
+        if report.replaced >= cap {
             report.skipped += 1;
             if !limit_warned {
                 report.warnings.push(format!(
-                    "page has more than {MAX_INLINE_SVGS} inline <svg> elements; the remaining ones are left untouched (cap)"
+                    "page has more than {cap} inline <svg> elements that can be loaded (cap); the remaining ones are left untouched"
                 ));
                 limit_warned = true;
             }

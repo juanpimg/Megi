@@ -203,16 +203,18 @@ fn inline_svg_limits_are_non_fatal_warnings() {
     std::fs::write(&path, page).expect("write temp page");
     let output = render_url(&fixture_path_from_path(&path), &options()).expect("limits render");
     let _ = std::fs::remove_file(&path);
+    // The effective cap is the tighter of MAX_INLINE_SVGS and the image budget (#670), so
+    // with default options it is DEFAULT_MAX_IMAGES = 64.
     assert_eq!(
-        output.stats.inline_svgs, 256,
-        "count cap must limit replacements"
+        output.stats.inline_svgs, 64,
+        "replacement cap must match what the image loader will fetch"
     );
     assert!(
         output
             .stats
             .warnings
             .iter()
-            .any(|warning| warning.contains("more than 256")),
+            .any(|warning| warning.contains("more than 64")),
         "cap warning: {:?}",
         output.stats.warnings
     );
@@ -265,4 +267,69 @@ fn inline_svg_breadth_bomb_is_skipped_before_serialization() {
         output.stats.warnings
     );
     assert!(count_color(&output.pixmap, MAGENTA) > 500);
+}
+
+/// Inline-SVG replacement is bounded by the image loader's budget (#670): replacing more than
+/// the loader will fetch only wastes serialization work and misreports the stats.
+#[test]
+fn inline_svg_replacements_respect_the_image_budget() {
+    let mut body = String::new();
+    for index in 0..6 {
+        body.push_str(&format!(
+            "<svg width=\"8\" height=\"8\"><rect width=\"8\" height=\"8\" fill=\"#{index}0{index}0{index}0\"/></svg>"
+        ));
+    }
+    let source = format!("<!doctype html><html><body>{body}</body></html>");
+    let mut limited = options();
+    limited.max_images = 2;
+    let url = format!(
+        "data:text/html;base64,{}",
+        data_url_base64(source.as_bytes())
+    );
+
+    let output = render::render_url(&url, &limited).expect("render");
+    assert_eq!(
+        output.stats.inline_svgs, 2,
+        "only as many inline SVGs as the image budget allows may be replaced"
+    );
+    assert!(
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("can be loaded")),
+        "the cap warning must name the effective limit: {:?}",
+        output.stats.warnings
+    );
+
+    // With the default budget all six fit.
+    let output = render::render_url(&url, &options()).expect("render");
+    assert_eq!(output.stats.inline_svgs, 6);
+}
+
+/// Minimal base64 for the data URL above (tests only; no external dependency).
+fn data_url_base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let b = [
+            chunk[0],
+            chunk.get(1).copied().unwrap_or(0),
+            chunk.get(2).copied().unwrap_or(0),
+        ];
+        let value = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+        out.push(ALPHABET[(value >> 18) as usize & 63] as char);
+        out.push(ALPHABET[(value >> 12) as usize & 63] as char);
+        out.push(if chunk.len() > 1 {
+            ALPHABET[(value >> 6) as usize & 63] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            ALPHABET[value as usize & 63] as char
+        } else {
+            '='
+        });
+    }
+    out
 }

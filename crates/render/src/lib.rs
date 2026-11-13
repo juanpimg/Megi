@@ -959,7 +959,9 @@ fn render_url_inner(
     let inline_svg_report = if scripts_executed == 0 && !source_mentions_svg {
         inline_svg::InlineSvgReport::default()
     } else {
-        inline_svg::replace_inline_svgs(&mut document)
+        // Only replace as many inline SVGs as the image loader will actually fetch, so a
+        // document cannot pay serialization cost for placeholders (#670).
+        inline_svg::replace_inline_svgs(&mut document, options.max_images)
     };
     warnings.extend(inline_svg_report.warnings.iter().cloned());
 
