@@ -220,6 +220,7 @@ pub(crate) struct MutationRecord {
     pub kind: MutationKind,
     pub target: NodeId,
     pub name: Option<String>,
+    #[allow(dead_code)]
     pub old_value: Option<String>,
 }
 
@@ -236,6 +237,7 @@ pub(crate) struct ObserverRegistration {
     pub callback_slot: u32,
     pub object_slot: u32,
     pub targets: Vec<ObserverTarget>,
+    pub records: Vec<MutationRecord>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -318,9 +320,8 @@ pub(crate) struct Host {
     pub local_storage: HashMap<String, String>,
     pub session_storage: HashMap<String, String>,
     pub storage_provider: Option<StorageProvider>,
-    /// MutationObserver registrations and pending records.
+    /// MutationObserver registrations and per-observer pending records.
     pub observers: Vec<ObserverRegistration>,
-    pub mutations: Vec<MutationRecord>,
     /// Currently focused element (best-effort `focus()`/`blur()` bookkeeping).
     pub active_element: Option<NodeId>,
     /// Injected layout geometry provider (`getBoundingClientRect`/offset/client metrics).
@@ -383,7 +384,6 @@ impl Host {
             session_storage: HashMap::new(),
             storage_provider: None,
             observers: Vec::new(),
-            mutations: Vec::new(),
             active_element: None,
             layout_provider: None,
             worker_loader: None,
@@ -413,10 +413,17 @@ impl Host {
         u32::try_from(index).map_err(|_| "node handle table overflow".to_string())
     }
 
-    /// Adds a MutationObserver record (bounded, see MAX_PENDING_MUTATIONS).
+    /// Adds a MutationObserver record to each matching observer's queue (bounded per observer).
     pub fn record_mutation(&mut self, record: MutationRecord) {
-        if self.mutations.len() < 4096 {
-            self.mutations.push(record);
+        if self.observers.is_empty() {
+            return;
+        }
+        let document = &self.document;
+        for observer in &mut self.observers {
+            if record_matches_document(document, observer, &record) && observer.records.len() < 4096
+            {
+                observer.records.push(record.clone());
+            }
         }
     }
 
@@ -528,6 +535,43 @@ impl Drop for HostScope {
             *cell.borrow_mut() = self.0.take();
         });
     }
+}
+
+pub(crate) fn record_matches_document(
+    document: &Document,
+    observer: &ObserverRegistration,
+    record: &MutationRecord,
+) -> bool {
+    observer.targets.iter().any(|target| {
+        let kind_enabled = match record.kind {
+            MutationKind::ChildList => target.child_list,
+            MutationKind::Attributes => target.attributes,
+            MutationKind::CharacterData => target.character_data,
+        };
+        if !kind_enabled {
+            return false;
+        }
+        if target.node == record.target {
+            return true;
+        }
+        if !target.subtree {
+            return false;
+        }
+        let mut current = match document.try_node(record.target) {
+            Some(node) => node.parent,
+            None => return false,
+        };
+        while let Some(node) = current {
+            if node == target.node {
+                return true;
+            }
+            let Some(parent) = document.try_node(node) else {
+                return false;
+            };
+            current = parent.parent;
+        }
+        false
+    })
 }
 
 /// Returns a clone of the current thread's host, if a runtime is evaluating.

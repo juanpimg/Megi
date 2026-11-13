@@ -521,8 +521,9 @@ impl FontDatabase {
                 };
                 let style_penalty = match (face.style, wanted_style) {
                     (a, b) if a == b => 0u32,
-                    (DbStyle::Italic, DbStyle::Oblique)
-                    | (DbStyle::Oblique, DbStyle::Italic) => 100,
+                    (DbStyle::Italic, DbStyle::Oblique) | (DbStyle::Oblique, DbStyle::Italic) => {
+                        100
+                    }
                     _ => 1000,
                 };
                 let weight_penalty = i32::from(face.weight.0.abs_diff(weight));
@@ -574,11 +575,10 @@ impl FontDatabase {
         let mut best: Option<(i32, fontdb::ID)> = None;
         for face in self.db.faces() {
             let style_penalty = match (face.style, wanted_style) {
-                    (a, b) if a == b => 0u32,
-                    (DbStyle::Italic, DbStyle::Oblique)
-                    | (DbStyle::Oblique, DbStyle::Italic) => 100,
-                    _ => 1000,
-                };
+                (a, b) if a == b => 0u32,
+                (DbStyle::Italic, DbStyle::Oblique) | (DbStyle::Oblique, DbStyle::Italic) => 100,
+                _ => 1000,
+            };
             let weight_penalty = i32::from(face.weight.0.abs_diff(weight));
             let score = style_penalty as i32 + weight_penalty;
             if best.is_none_or(|(best_score, _)| score < best_score) {
@@ -788,10 +788,7 @@ impl FontDatabase {
             }
         }
         for glyph in &mut glyphs {
-            glyph.font = remap
-                .get(glyph.font)
-                .copied()
-                .unwrap_or(0);
+            glyph.font = remap.get(glyph.font).copied().unwrap_or(0);
         }
         let width = glyphs.iter().map(|glyph| glyph.x_advance).sum();
         Ok(ShapedRun {
@@ -880,25 +877,25 @@ impl FontDatabase {
         style: FontStyle,
     ) -> Option<(Font, u16)> {
         let wanted_style = DbStyle::from(style);
-        let mut candidates: Vec<(u32, fontdb::ID)> = self
-            .db
-            .faces()
-            .filter(|face| {
-                !chain
-                    .iter()
-                    .any(|f| f.info().post_script_name == face.post_script_name)
-            })
-            .map(|face| {
-                let style_penalty = match (face.style, wanted_style) {
-                    (a, b) if a == b => 0u32,
-                    (DbStyle::Italic, DbStyle::Oblique)
-                    | (DbStyle::Oblique, DbStyle::Italic) => 100,
-                    _ => 1000,
-                };
-                let weight_distance = (face.weight.0 as i32 - weight as i32).unsigned_abs();
-                (style_penalty + weight_distance, face.id)
-            })
-            .collect();
+        let mut candidates: Vec<(u32, fontdb::ID)> =
+            self.db
+                .faces()
+                .filter(|face| {
+                    !chain
+                        .iter()
+                        .any(|f| f.info().post_script_name == face.post_script_name)
+                })
+                .map(|face| {
+                    let style_penalty = match (face.style, wanted_style) {
+                        (a, b) if a == b => 0u32,
+                        (DbStyle::Italic, DbStyle::Oblique)
+                        | (DbStyle::Oblique, DbStyle::Italic) => 100,
+                        _ => 1000,
+                    };
+                    let weight_distance = (face.weight.0 as i32 - weight as i32).unsigned_abs();
+                    (style_penalty + weight_distance, face.id)
+                })
+                .collect();
         candidates.sort_by_key(|(score, _)| *score);
         for (_, id) in candidates {
             if let Ok(font) = self.build_font(id)
@@ -948,8 +945,9 @@ impl FontDatabase {
                 // (#616).
                 let style_penalty = match (face.style, wanted_style) {
                     (a, b) if a == b => 0u32,
-                    (DbStyle::Italic, DbStyle::Oblique)
-                    | (DbStyle::Oblique, DbStyle::Italic) => 100,
+                    (DbStyle::Italic, DbStyle::Oblique) | (DbStyle::Oblique, DbStyle::Italic) => {
+                        100
+                    }
                     _ => 1000,
                 };
                 let weight_distance = (face.weight.0 as i32 - weight as i32).unsigned_abs();

@@ -1381,7 +1381,14 @@ fn node_inner_html_set(
             ..html::ParseOptions::default()
         };
         html::set_inner_html_with_options(&mut host.document, node_id, &html_text, &options)
-            .map(|_| ())
+            .map(|_| {
+                host.record_mutation(MutationRecord {
+                    kind: MutationKind::ChildList,
+                    target: node_id,
+                    name: None,
+                    old_value: None,
+                });
+            })
             .map_err(|error| error.to_string())
     });
     match result {
@@ -1413,12 +1420,22 @@ fn node_outer_html_set(
         if !charge_document_parse(host, html_text.len(), "outerHTML assignment") {
             return Ok(());
         }
+        let parent = host.document.try_node(node_id).and_then(|node| node.parent);
         let options = html::ParseOptions {
             max_nodes: host.max_document_write_nodes,
             ..html::ParseOptions::default()
         };
         html::set_outer_html_with_options(&mut host.document, node_id, &html_text, &options)
-            .map(|_| ())
+            .map(|_| {
+                if let Some(parent) = parent {
+                    host.record_mutation(MutationRecord {
+                        kind: MutationKind::ChildList,
+                        target: parent,
+                        name: None,
+                        old_value: None,
+                    });
+                }
+            })
             .map_err(|error| error.to_string())
     });
     match result {
@@ -2025,6 +2042,17 @@ fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> J
             ..html::ParseOptions::default()
         };
         let _ = html::document_write_with_options(&mut host.document, &text, false, &options);
+        let target = host
+            .document
+            .body()
+            .or_else(|| host.document.document_element())
+            .unwrap_or_else(|| host.document.root());
+        host.record_mutation(MutationRecord {
+            kind: MutationKind::ChildList,
+            target,
+            name: None,
+            old_value: None,
+        });
     });
     Ok(JsValue::undefined())
 }
@@ -2277,7 +2305,7 @@ fn insert_relative(
     node: NodeId,
     position: AdjacentPosition,
 ) {
-    match position {
+    let container = match position {
         AdjacentPosition::BeforeBegin => {
             let parent = host.document.try_node(target).and_then(|node| node.parent);
             if let Some(parent) = parent {
@@ -2285,6 +2313,7 @@ fn insert_relative(
                     .document
                     .insert_before_child(parent, node, Some(target));
             }
+            parent
         }
         AdjacentPosition::AfterBegin => {
             let first = host
@@ -2292,9 +2321,11 @@ fn insert_relative(
                 .try_node(target)
                 .and_then(|node| node.first_child);
             let _ = host.document.insert_before_child(target, node, first);
+            Some(target)
         }
         AdjacentPosition::BeforeEnd => {
             host.document.append_child(target, node);
+            Some(target)
         }
         AdjacentPosition::AfterEnd => {
             let parent = host.document.try_node(target).and_then(|node| node.parent);
@@ -2305,7 +2336,16 @@ fn insert_relative(
                     .and_then(|node| node.next_sibling);
                 let _ = host.document.insert_before_child(parent, node, next);
             }
+            parent
         }
+    };
+    if let Some(container) = container {
+        host.record_mutation(MutationRecord {
+            kind: MutationKind::ChildList,
+            target: container,
+            name: None,
+            old_value: None,
+        });
     }
 }
 
@@ -2799,7 +2839,11 @@ fn root_array(context: &mut Context, name: &str, create: bool) -> JsResult<JsObj
     // Defensively type-check: a script may have replaced the rooted table with a
     // non-array value. Treat that as "missing" and recreate it (#644).
     if let Some(array) = value.as_object()
-        && array.get(js_string!("length"), context).ok().and_then(|v| v.as_number()).is_some()
+        && array
+            .get(js_string!("length"), context)
+            .ok()
+            .and_then(|v| v.as_number())
+            .is_some()
     {
         return Ok(array.clone());
     }
@@ -3322,6 +3366,7 @@ fn mutation_observer_constructor(
             callback_slot,
             object_slot,
             targets: Vec::new(),
+            records: Vec::new(),
         });
     });
     Ok(JsValue::from(observer))
@@ -3393,73 +3438,25 @@ fn note_mutation(
     });
 }
 
-fn record_matches(host: &Host, observer: &ObserverRegistration, record: &MutationRecord) -> bool {
-    observer.targets.iter().any(|target| {
-        let kind_enabled = match record.kind {
-            MutationKind::ChildList => target.child_list,
-            MutationKind::Attributes => target.attributes,
-            MutationKind::CharacterData => target.character_data,
-        };
-        if !kind_enabled {
-            return false;
-        }
-        if target.node == record.target {
-            return true;
-        }
-        if !target.subtree {
-            return false;
-        }
-        // The target (or an ancestor) may have been removed between the mutation and the
-        // records being drained (`outerHTML`, `innerHTML`, `textContent` free the old
-        // subtree). A freed slot must simply not match, instead of panicking on a stale
-        // `NodeId`.
-        let mut current = match host.document.try_node(record.target) {
-            Some(node) => node.parent,
-            None => return false,
-        };
-        while let Some(node) = current {
-            if node == target.node {
-                return true;
-            }
-            let Some(parent) = host.document.try_node(node) else {
-                return false;
-            };
-            current = parent.parent;
-        }
-        false
-    })
-}
-
 fn collect_observer_records(context: &mut Context, slot: u32, take: bool) -> JsResult<JsArray> {
-    let (registration, records) = with_host(|host| {
-        let registration = host
-            .observers
-            .iter()
-            .find(|r| r.object_slot == slot)
-            .cloned();
-        let records = match &registration {
-            Some(registration) => host
-                .mutations
-                .iter()
-                .filter(|record| record_matches(host, registration, record))
-                .cloned()
-                .collect::<Vec<_>>(),
-            None => Vec::new(),
+    let records = with_host(|host| {
+        let taken = {
+            let Some(registration) = host.observers.iter_mut().find(|r| r.object_slot == slot)
+            else {
+                return Vec::new();
+            };
+            if take {
+                std::mem::take(&mut registration.records)
+            } else {
+                registration.records.clone()
+            }
         };
-        if take {
-            host.mutations.retain(|record| {
-                !records.iter().any(|taken| {
-                    taken.kind == record.kind
-                        && taken.target == record.target
-                        && taken.name == record.name
-                        && taken.old_value == record.old_value
-                })
-            });
-        }
-        (registration, records)
+        taken
+            .into_iter()
+            .filter(|record| host.document.try_node(record.target).is_some())
+            .collect::<Vec<_>>()
     })
-    .unwrap_or((None, Vec::new()));
-    let _ = registration;
+    .unwrap_or_default();
     let array = JsArray::from_iter([], context);
     for (index, record) in records.iter().enumerate() {
         let kind = match record.kind {
@@ -3496,9 +3493,16 @@ fn collect_observer_records(context: &mut Context, slot: u32, take: bool) -> JsR
 }
 
 fn deliver_mutation_records(context: &mut Context) -> Result<(), JsError> {
-    let registrations = with_host(|host| host.observers.clone()).unwrap_or_default();
-    for registration in registrations {
-        let records = collect_observer_records(context, registration.object_slot, true)
+    let registrations: Vec<(u32, u32)> = with_host(|host| {
+        host.observers
+            .iter()
+            .filter(|r| !r.records.is_empty())
+            .map(|r| (r.object_slot, r.callback_slot))
+            .collect()
+    })
+    .unwrap_or_default();
+    for (object_slot, callback_slot) in registrations {
+        let records = collect_observer_records(context, object_slot, true)
             .map_err(|error| JsError::Runtime(error.to_string()))?;
         if records.length(context).unwrap_or(0) == 0 {
             continue;
@@ -3506,15 +3510,11 @@ fn deliver_mutation_records(context: &mut Context) -> Result<(), JsError> {
         let callback = root_get(
             context,
             "__megi_observer_callbacks",
-            u64::from(registration.callback_slot),
+            u64::from(callback_slot),
         )
         .map_err(|error| JsError::Runtime(error.to_string()))?;
-        let object = root_get(
-            context,
-            "__megi_observer_objects",
-            u64::from(registration.object_slot),
-        )
-        .map_err(|error| JsError::Runtime(error.to_string()))?;
+        let object = root_get(context, "__megi_observer_objects", u64::from(object_slot))
+            .map_err(|error| JsError::Runtime(error.to_string()))?;
         let Some(callback) = callback.as_object() else {
             continue;
         };
@@ -4320,7 +4320,19 @@ fn attributes_remove_named(
 
 fn node_normalize(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let removed = with_host(|host| host.document.normalize(node_id)).unwrap_or(0);
+    let removed = with_host(|host| {
+        let removed = host.document.normalize(node_id);
+        if removed > 0 {
+            host.record_mutation(MutationRecord {
+                kind: MutationKind::ChildList,
+                target: node_id,
+                name: None,
+                old_value: None,
+            });
+        }
+        removed
+    })
+    .unwrap_or(0);
     Ok(JsValue::from(removed as f64))
 }
 
@@ -4374,7 +4386,19 @@ fn document_normalize(
 ) -> JsResult<JsValue> {
     let removed = with_host(|host| {
         let root = host.document.document_element();
-        root.map(|root| host.document.normalize(root)).unwrap_or(0)
+        root.map(|root| {
+            let removed = host.document.normalize(root);
+            if removed > 0 {
+                host.record_mutation(MutationRecord {
+                    kind: MutationKind::ChildList,
+                    target: root,
+                    name: None,
+                    old_value: None,
+                });
+            }
+            removed
+        })
+        .unwrap_or(0)
     })
     .unwrap_or(0);
     Ok(JsValue::from(removed as f64))
@@ -6242,5 +6266,81 @@ mod markup_parse_budget_tests {
             .filter(|entry| entry.message.contains("innerHTML assignment ignored"))
             .count();
         assert_eq!(warnings, 1, "reported once: {console:?}");
+    }
+}
+
+#[cfg(test)]
+mod mutation_observer_delivery_tests {
+    use super::*;
+
+    #[test]
+    fn mutation_observer_records_markup_insert_normalize_and_does_not_starve_siblings() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                var box = document.createElement('div');
+                document.body.appendChild(box);
+                var seenA = 0;
+                var seenB = 0;
+                var obsA = new MutationObserver(function(records) { seenA += records.length; });
+                var obsB = new MutationObserver(function(records) { seenB += records.length; });
+                obsA.observe(document.body, { childList: true, subtree: true });
+                obsB.observe(document.body, { childList: true, subtree: true });
+
+                box.innerHTML = '<span>hi</span>';
+                box.firstChild.outerHTML = '<b>there</b>';
+                box.insertAdjacentHTML('beforeend', '<i>!</i>');
+                box.insertAdjacentText('afterbegin', 'pre');
+                box.appendChild(document.createTextNode('a'));
+                box.appendChild(document.createTextNode('b'));
+                box.normalize();
+                document.write('<p>written</p>');
+
+                var takenA = obsA.takeRecords();
+                var takenB = obsB.takeRecords();
+                console.log('counts:' + takenA.length + ':' + takenB.length + ':' + seenA + ':' + seenB);
+                "#,
+                "observer.js",
+            )
+            .expect("eval observer script");
+        let console = runtime.take_console();
+        let line = console
+            .iter()
+            .find(|entry| entry.message.starts_with("counts:"))
+            .expect("counts log");
+        // All 7 mutations (innerHTML, outerHTML, insertAdjacentHTML, insertAdjacentText,
+        // 2x appendChild, normalize, document.write = 8 mutations) must be seen by BOTH observers.
+        assert_eq!(
+            line.message, "counts:8:8:0:0",
+            "both sibling observers must receive all 8 records without starvation: {console:?}"
+        );
+    }
+
+    #[test]
+    fn document_normalize_emits_child_list_record_when_nodes_are_merged() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                var count = 0;
+                var obs = new MutationObserver(function(records) { count += records.length; });
+                obs.observe(document.documentElement, { childList: true, subtree: true });
+                document.body.appendChild(document.createTextNode('x'));
+                document.body.appendChild(document.createTextNode('y'));
+                obs.takeRecords();
+                document.normalize();
+                var after = obs.takeRecords().length;
+                console.log('norm:' + after + ':' + count);
+                "#,
+                "norm.js",
+            )
+            .expect("eval normalize script");
+        let console = runtime.take_console();
+        let line = console
+            .iter()
+            .find(|entry| entry.message.starts_with("norm:"))
+            .expect("norm log");
+        assert_eq!(line.message, "norm:1:0");
     }
 }
