@@ -61,7 +61,7 @@
 - **Perf**: css resolve −50,5 %, layout −7,0 %, PNG decode −62,4 %, encode −18/−22 %, render-to-png −27,7 %, CLI render −6,5 % con PNG byte-idéntico.
 - **Goldens**: básicos/showcase/phase4 intactos; PNG raw md5 idéntico a PIL; TLA E2E 2/2.
 - **Status**: `docs/status/progress.toml` es la fuente editable; `python3 tools/update_progress.py --write` regenera `PROGRESS.md` + `docs/status/*`; CI ejecuta `--check --no-gate --no-count`.
-- **Fuzz**: 14 targets, corpus 37, CI 300 s + PR build-only.
+- **Fuzz**: 22 targets, corpus 37, CI 300 s + PR build-only.
 
 ## Comandos de verificación
 
@@ -100,7 +100,7 @@ python3 tools/update_progress.py --check --no-gate --no-count
 | `render` | Pipeline URL→PNG + imágenes + module scripts/importmap + scaled decode + providers JS + streaming/keep-alive + workers + encode_png/fetch + **TLA + fast paths** | **172** |
 | `shell` | F7 + chrome contextual + pages/favicons + historial + chrome fast path + PNG single-encode + sesión/save-png | **238** |
 | `bench` / `test_harness` | Tooling (PNG/decode/VP8/chrome rows) / gate 4 suites | 10 / 11 |
-| `fuzz` (workspace aparte) | 14 targets + corpus 37 + PR build-only | build 14/14 |
+| `fuzz` (workspace aparte) | 22 targets + corpus 37 + PR build-only | build 22/22 |
 
 ## Deuda priorizada
 
