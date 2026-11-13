@@ -627,7 +627,11 @@ impl FontDatabase {
             .order
             .iter()
             .filter_map(|id| self.db.face(*id))
-            .find(|face| face.post_script_name == info.post_script_name)
+            .find(|face| {
+                face.post_script_name == info.post_script_name
+                    && face.weight.0 == info.weight
+                    && face.style == DbStyle::from(info.style)
+            })
             .map(|face| face.id)
             .ok_or_else(|| FontError::FontNotFound {
                 families: info.family.clone(),
