@@ -1028,10 +1028,12 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         .map(|(name, get, set)| (name, accessor_fn(context, get), accessor_fn(context, set)))
         .collect();
     let mut init = ObjectInitializer::new(context);
+    // `__megi_node` is the Rust side-table handle; it must never be writable, enumerable or
+    // configurable from script, otherwise a forged value repoints the wrapper (#644).
     init.property(
         js_string!("__megi_node"),
         f64::from(handle),
-        Attribute::all(),
+        Attribute::default(),
     );
     for (name, get, set) in prepared {
         init.accessor(js_string!(name), Some(get), set, Attribute::all());
