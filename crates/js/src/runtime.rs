@@ -2831,6 +2831,12 @@ fn history_push_state(
 ) -> JsResult<JsValue> {
     let state = args.first().cloned().unwrap_or_else(JsValue::undefined);
     let json = json_state(&state, context);
+    if json.len() > MAX_HISTORY_STATE_BYTES {
+        return Err(js_error(format!(
+            "QuotaExceededError: history state limit of 1 MiB exceeded ({} bytes)",
+            json.len()
+        )));
+    }
     let url = args.get(2).and_then(|value| {
         value
             .to_string(context)
@@ -2874,6 +2880,12 @@ fn history_replace_state(
 ) -> JsResult<JsValue> {
     let state = args.first().cloned().unwrap_or_else(JsValue::undefined);
     let json = json_state(&state, context);
+    if json.len() > MAX_HISTORY_STATE_BYTES {
+        return Err(js_error(format!(
+            "QuotaExceededError: history state limit of 1 MiB exceeded ({} bytes)",
+            json.len()
+        )));
+    }
     let url = args.get(2).and_then(|value| {
         value
             .to_string(context)
@@ -4477,11 +4489,25 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       else { for (var key in init) { if (Object.prototype.hasOwnProperty.call(init, key)) { this.append(key, init[key]); } } }
     }
   }
+  // Header names/values are serialized as `name:value\n` lines for the native side, so a CR,
+  // LF or NUL inside either field would forge extra headers (or a colon inside the name would
+  // re-split it). Validate at the boundary, like the fetch spec's header-name/header-value
+  // grammar (#664).
+  function headerName(value) {
+    var name = String(value);
+    if (/[\r\n\0:]/.test(name)) { throw new TypeError("invalid header name"); }
+    return name;
+  }
+  function headerValue(value) {
+    var text = String(value);
+    if (/[\r\n\0]/.test(text)) { throw new TypeError("invalid header value"); }
+    return text;
+  }
   Headers.prototype._find = function (name) { var lower = String(name).toLowerCase(); for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { return i; } } return -1; };
   Headers.prototype.get = function (name) { var lower = String(name).toLowerCase(); var values = []; for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { values.push(this._h[i][1]); } } return values.length === 0 ? null : values.join(", "); };
   Headers.prototype.has = function (name) { return this._find(name) >= 0; };
-  Headers.prototype.append = function (name, value) { this._h.push([String(name), String(value)]); };
-  Headers.prototype.set = function (name, value) { var lower = String(name).toLowerCase(); var out = []; var found = false; for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { if (!found) { out.push([this._h[i][0], String(value)]); found = true; } } else { out.push(this._h[i]); } } if (!found) { out.push([String(name), String(value)]); } this._h = out; };
+  Headers.prototype.append = function (name, value) { this._h.push([headerName(name), headerValue(value)]); };
+  Headers.prototype.set = function (name, value) { var lower = headerName(name).toLowerCase(); var out = []; var found = false; for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { if (!found) { out.push([this._h[i][0], headerValue(value)]); found = true; } } else { out.push(this._h[i]); } } if (!found) { out.push([headerName(name), headerValue(value)]); } this._h = out; };
   Headers.prototype["delete"] = function (name) { var lower = String(name).toLowerCase(); this._h = this._h.filter(function (pair) { return pair[0].toLowerCase() !== lower; }); };
   Headers.prototype.forEach = function (callback, thisArg) { for (var i = 0; i < this._h.length; i++) { callback.call(thisArg, this._h[i][1], this._h[i][0], this); } };
   Headers.prototype.entries = function () { return this._h.slice(); };
@@ -5304,6 +5330,11 @@ fn worker_self_post_message(
 // ---------------------------------------------------------------------------
 
 const MAX_FETCH_HEADERS: usize = 64;
+
+/// Per-entry cap for `history.pushState`/`replaceState` state, matching the Web Storage quota.
+/// The JSON snapshot is kept in Rust (`host.history_state`), rooted as a JS value and copied to
+/// the host provider, so an unbounded state is unbounded retention (#663).
+const MAX_HISTORY_STATE_BYTES: usize = 1024 * 1024;
 const MAX_FETCH_BODY: usize = 8 * 1024 * 1024;
 
 /// Request headers the browser owns; page scripts must not set them through `fetch()`.
