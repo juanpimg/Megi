@@ -84,15 +84,16 @@ pub fn sniff(bytes: &[u8]) -> MimeHint {
     if bytes.is_empty() {
         return MimeHint::Text;
     }
-    if let Some(image) = image_signature(bytes) {
+    // Strip BOM/whitespace once so image/PDF signatures behind padding are still
+    // detected (issue #523).
+    let start = skip_bom_and_whitespace(bytes, 1024);
+    let head = &start[..start.len().min(1024)];
+    if let Some(image) = image_signature(head) {
         return image;
     }
     if is_html(bytes) {
         return MimeHint::Html;
     }
-
-    let start = skip_bom_and_whitespace(bytes, 1024);
-    let head = &start[..start.len().min(1024)];
     if starts_with_ignore_ascii_case(head, b"<?xml") {
         if contains_ignore_ascii_case(head, b"<svg") {
             return MimeHint::Svg;
