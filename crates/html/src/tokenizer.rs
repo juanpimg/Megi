@@ -860,34 +860,54 @@ impl Tokenizer {
         .min(self.input.len());
         let inserted_len = inserted.len();
 
-        // Shift the remaining line starts, then merge the inserted text's own line starts.
-        for start in &mut self.line_starts {
-            if *start >= insert_at {
-                *start += inserted_len;
-            }
-        }
-        for start in inserted_line_starts.iter().skip(1) {
-            let absolute = insert_at + start;
-            let index = self
-                .line_starts
-                .partition_point(|&existing| existing < absolute);
-            self.line_starts.insert(index, absolute);
-        }
+        // Merge the inserted text's line starts in one pass. Shifting every existing entry and
+        // then inserting `partition_point`-located entries is O(lines) inserts of O(n) memmoves
+        // per call — quadratic for the normal `document.write` pattern of many small writes
+        // (#639).
+        let split = self.line_starts.partition_point(|&start| start < insert_at);
+        let mut merged = Vec::with_capacity(self.line_starts.len() + inserted_line_starts.len());
+        merged.extend_from_slice(&self.line_starts[..split]);
+        merged.extend(
+            inserted_line_starts
+                .iter()
+                .skip(1)
+                .map(|start| insert_at + start),
+        );
+        merged.extend(
+            self.line_starts[split..]
+                .iter()
+                .map(|start| start + inserted_len),
+        );
+        self.line_starts = merged;
 
         self.input.splice(insert_at..insert_at, inserted);
         if self.reconsume {
             self.pos += inserted_len;
         }
         // UTF-16 column prefix sums (html5lib `(line, UTF-16 column)` positions) only need
-        // rebuilding when astral code points are involved.
+        // rebuilding when astral code points are involved. Appending at the end (the common
+        // `document.write` case) extends the existing table instead of rebuilding it.
         if self.wide_prefix.is_some() || inserted_has_wide {
-            let mut prefix = Vec::with_capacity(self.input.len() + 1);
-            prefix.push(0u32);
-            for cp in &self.input {
-                let previous = *prefix.last().expect("prefix starts with 0");
-                prefix.push(previous + u32::from(*cp > 0xFFFF));
+            let appended = insert_at + inserted_len == self.input.len();
+            match self.wide_prefix.take() {
+                Some(mut prefix) if appended && prefix.len() == insert_at + 1 => {
+                    prefix.reserve(inserted_len);
+                    for &cp in &self.input[insert_at..] {
+                        let previous = *prefix.last().expect("prefix starts with 0");
+                        prefix.push(previous + u32::from(cp > 0xFFFF));
+                    }
+                    self.wide_prefix = Some(prefix);
+                }
+                _ => {
+                    let mut prefix = Vec::with_capacity(self.input.len() + 1);
+                    prefix.push(0u32);
+                    for cp in &self.input {
+                        let previous = *prefix.last().expect("prefix starts with 0");
+                        prefix.push(previous + u32::from(*cp > 0xFFFF));
+                    }
+                    self.wide_prefix = Some(prefix);
+                }
             }
-            self.wide_prefix = Some(prefix);
         }
     }
 

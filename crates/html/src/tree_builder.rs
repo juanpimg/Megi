@@ -596,6 +596,10 @@ pub struct ParseOptions {
     pub max_written_bytes: usize,
     /// Maximum number of parser-inserted script executions in one parse (#639).
     pub max_script_executions: usize,
+    /// Maximum number of bytes of script source handed to the executor in one script (#639).
+    /// The text is the concatenation of the script element's text children, and the executor
+    /// is a host callback that may copy it.
+    pub max_script_text_bytes: usize,
     /// Maximum number of entries in the active formatting list. The Noah's Ark clause only
     /// removes a fourth *identical* entry, so crafters grow the list with distinct
     /// `(tag, attributes)` pairs and then pay for `reconstruct_active_formatting_elements`
@@ -617,6 +621,7 @@ impl ParseOptions {
         max_active_formatting: 256,
         max_written_bytes: 4 * 1024 * 1024,
         max_script_executions: 1024,
+        max_script_text_bytes: 4 * 1024 * 1024,
     };
 }
 
@@ -1296,11 +1301,23 @@ impl TreeBuilder {
         }
         self.script_executions += 1;
         // §13.2.6.4.7 inserted the script data as text children of the script element.
+        // The tree stores text as separate children, so this concatenation can exceed any single
+        // text node; cap it before handing the source to the host executor (#639).
+        let limit = self.parse_options.max_script_text_bytes;
         let mut script_text = String::new();
         let mut child = self.doc.node(script_id).first_child;
         while let Some(child_id) = child {
-            if let Some(data) = self.doc.node(child_id).as_text() {
+            if let Some(data) = self.doc.node(child_id).as_text()
+                && script_text.len() < limit
+            {
                 script_text.push_str(data);
+                if script_text.len() > limit {
+                    let mut end = limit;
+                    while end > 0 && !script_text.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    script_text.truncate(end);
+                }
             }
             child = self.doc.node(child_id).next_sibling;
         }
