@@ -590,6 +590,21 @@ pub struct ParseOptions {
     /// single text node, so the node budget alone does not bound a document made of one huge
     /// text run; excess bytes are dropped and counted (#642).
     pub max_text_bytes: usize,
+    /// Maximum number of bytes a single parse may receive through `document.write`
+    /// (parser-inserted scripts). Each written chunk is re-tokenized at the current position
+    /// and may write again, so without a budget a self-reproducing script loops forever (#639).
+    pub max_written_bytes: usize,
+    /// Maximum number of parser-inserted script executions in one parse (#639).
+    pub max_script_executions: usize,
+    /// Maximum number of bytes of script source handed to the executor in one script (#639).
+    /// The text is the concatenation of the script element's text children, and the executor
+    /// is a host callback that may copy it.
+    pub max_script_text_bytes: usize,
+    /// Maximum number of entries in the active formatting list. The Noah's Ark clause only
+    /// removes a fourth *identical* entry, so crafters grow the list with distinct
+    /// `(tag, attributes)` pairs and then pay for `reconstruct_active_formatting_elements`
+    /// on every character run (#643).
+    pub max_active_formatting: usize,
 }
 
 impl ParseOptions {
@@ -603,6 +618,10 @@ impl ParseOptions {
         max_attributes_per_element: 4096,
         max_input_bytes: 16 * 1024 * 1024,
         max_text_bytes: 16 * 1024 * 1024,
+        max_active_formatting: 256,
+        max_written_bytes: 4 * 1024 * 1024,
+        max_script_executions: 1024,
+        max_script_text_bytes: 4 * 1024 * 1024,
     };
 }
 
@@ -629,6 +648,14 @@ pub struct LimitViolations {
     pub detached_insertions: u64,
     /// Text bytes dropped because [`ParseOptions::max_text_bytes`] was reached (#642).
     pub text_bytes_dropped: u64,
+    /// Formatting entries dropped because [`ParseOptions::max_active_formatting`] was
+    /// reached (#643).
+    pub formatting_dropped: u64,
+    /// Bytes refused because [`ParseOptions::max_written_bytes`] was reached (#639).
+    pub written_bytes_dropped: u64,
+    /// Script executions skipped because [`ParseOptions::max_script_executions`] was
+    /// reached (#639).
+    pub scripts_skipped: u64,
 }
 
 impl LimitViolations {
@@ -709,6 +736,10 @@ pub struct TreeBuilder {
     /// HTML written through `document.write` by the script processed in the current token.
     /// The tokenizer driver moves it into the tokenizer right after the token is handled.
     pending_written_html: String,
+    /// Bytes accepted through `document.write` during this parse (#639).
+    written_bytes: usize,
+    /// Parser-inserted scripts executed during this parse (#639).
+    script_executions: usize,
     /// Non-fatal parser-inserted script errors, exposed through [`ParseOutcome::script_errors`].
     script_errors: Vec<String>,
     /// Whether this parse ever created an `<html>` element. A script may detach it
@@ -764,6 +795,8 @@ impl TreeBuilder {
             open_foreign_count: 0,
             script_executor: None,
             pending_written_html: String::new(),
+            written_bytes: 0,
+            script_executions: 0,
             script_errors: Vec::new(),
             html_element_seen: false,
         }
@@ -1259,12 +1292,32 @@ impl TreeBuilder {
         if has_src {
             return;
         }
+        // A self-reproducing script (one whose handler returns another `<script>`) re-enters
+        // this path forever; the execution count is the fuel (#639).
+        if self.script_executions >= self.parse_options.max_script_executions {
+            self.limit_violations.scripts_skipped =
+                self.limit_violations.scripts_skipped.saturating_add(1);
+            return;
+        }
+        self.script_executions += 1;
         // §13.2.6.4.7 inserted the script data as text children of the script element.
+        // The tree stores text as separate children, so this concatenation can exceed any single
+        // text node; cap it before handing the source to the host executor (#639).
+        let limit = self.parse_options.max_script_text_bytes;
         let mut script_text = String::new();
         let mut child = self.doc.node(script_id).first_child;
         while let Some(child_id) = child {
-            if let Some(data) = self.doc.node(child_id).as_text() {
+            if let Some(data) = self.doc.node(child_id).as_text()
+                && script_text.len() < limit
+            {
                 script_text.push_str(data);
+                if script_text.len() > limit {
+                    let mut end = limit;
+                    while end > 0 && !script_text.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    script_text.truncate(end);
+                }
             }
             child = self.doc.node(child_id).next_sibling;
         }
@@ -1283,7 +1336,29 @@ impl TreeBuilder {
             error,
         } = executor.execute(doc, &script_text, "<script>");
         if !written_html.is_empty() {
-            pending_written_html.push_str(&written_html);
+            // `document.write` is re-tokenized in place and may write again, so the total is
+            // capped per parse; excess output is dropped and counted (#639).
+            let remaining = self
+                .parse_options
+                .max_written_bytes
+                .saturating_sub(self.written_bytes);
+            if written_html.len() > remaining {
+                let mut end = remaining;
+                while end > 0 && !written_html.is_char_boundary(end) {
+                    end -= 1;
+                }
+                self.limit_violations.written_bytes_dropped = self
+                    .limit_violations
+                    .written_bytes_dropped
+                    .saturating_add((written_html.len() - end) as u64);
+                self.written_bytes = self.parse_options.max_written_bytes;
+                if end > 0 {
+                    pending_written_html.push_str(&written_html[..end]);
+                }
+            } else {
+                self.written_bytes += written_html.len();
+                pending_written_html.push_str(&written_html);
+            }
         }
         if let Some(error) = error {
             script_errors.push(error);
@@ -1613,6 +1688,15 @@ impl TreeBuilder {
     }
 
     fn push_active_formatting(&mut self, node_id: NodeId, name: &str, attrs: &[(String, String)]) {
+        // A hostile document can grow the list with distinct `(tag, attributes)` pairs, which
+        // the Noah's Ark clause never removes; reconstruction then clones every entry on each
+        // character run (#643). Past the cap the element still enters the tree — only the
+        // formatting bookkeeping is dropped.
+        if self.active_formatting.len() >= self.parse_options.max_active_formatting {
+            self.limit_violations.formatting_dropped =
+                self.limit_violations.formatting_dropped.saturating_add(1);
+            return;
+        }
         // Noah's Ark clause: at most 3 identical elements after the last marker. Only the
         // earliest of the matches is removed when a fourth appears, so a forward scan that
         // keeps the first match and stops at the third is equivalent to the old reverse

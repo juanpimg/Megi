@@ -481,3 +481,235 @@ fn collect_text_bytes(doc: &dom::Document, node: dom::NodeId, total: &mut usize,
         child = doc.node(id).next_sibling;
     }
 }
+
+/// Text of the first `<p>` in a parsed document (`text_content` on the root does not descend).
+fn paragraph_text(document: &dom::Document) -> String {
+    document
+        .get_elements_by_tag_name("p")
+        .first()
+        .map(|node| document.text_content(*node))
+        .unwrap_or_default()
+}
+
+#[test]
+fn huge_numeric_character_reference_runs_stay_linear_and_out_of_range() {
+    // #638: every digit of a numeric character reference ran a saturating multiply/add, so
+    // `&#` + millions of digits burned one arithmetic step per digit. The accumulator now stops
+    // after eight significant digits (still consuming the run to find the terminator) and
+    // reports the out-of-range error once.
+    use html::{ParseOptions, parse_document_with_options};
+
+    let run = "9".repeat(200_000);
+    let input = format!("<p>&#{run};</p>");
+    let started = std::time::Instant::now();
+    let outcome = parse_document_with_options(&input, false, &ParseOptions::default());
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < std::time::Duration::from_secs(2),
+        "a 200k-digit character reference took {elapsed:?}"
+    );
+    let text = paragraph_text(&outcome.document);
+    assert_eq!(text, "\u{FFFD}", "an out-of-range reference becomes U+FFFD");
+
+    // Leading zeros do not consume the significant-digit budget.
+    let outcome = parse_document_with_options(
+        &format!("<p>&#x{}41;</p>", "0".repeat(50)),
+        false,
+        &ParseOptions::default(),
+    );
+    let text = paragraph_text(&outcome.document);
+    assert_eq!(
+        text, "A",
+        "leading zeros must not make `&#x0…041;` overflow"
+    );
+}
+
+#[test]
+fn token_values_are_capped_to_the_per_token_budget() {
+    // #636: `max_input_bytes` bounds the document, not a single value. One unterminated
+    // comment, doctype id, quoted attribute value or script/RCDATA run used to grow a single
+    // buffer to input size, which the tree builder/DOM/serializer then copied.
+    use html::tokenizer::{MAX_TOKEN_BYTES, Token, Tokenizer, TokenizerConfig};
+
+    let big = "x".repeat(MAX_TOKEN_BYTES + 4096);
+
+    let mut tok = Tokenizer::from_str_input(&format!("<!--{big}-->"), TokenizerConfig::default());
+    tok.run();
+    let comment = tok
+        .tokens
+        .iter()
+        .find_map(|token| match token {
+            Token::Comment(data) => Some(data.clone()),
+            _ => None,
+        })
+        .expect("a comment token");
+    assert_eq!(comment.len(), MAX_TOKEN_BYTES, "comment must be capped");
+    assert!(
+        tok.token_bytes_dropped > 0,
+        "the truncation must be counted"
+    );
+
+    let mut tok =
+        Tokenizer::from_str_input(&format!("<a href=\"{big}\">"), TokenizerConfig::default());
+    tok.run();
+    let value_len = tok
+        .tokens
+        .iter()
+        .find_map(|token| match token {
+            Token::StartTag { attributes, .. } => attributes
+                .iter()
+                .find(|(name, _)| name == "href")
+                .map(|(_, value)| value.len()),
+            _ => None,
+        })
+        .expect("an href attribute");
+    assert_eq!(value_len, MAX_TOKEN_BYTES, "attribute value must be capped");
+
+    // A processing instruction target accumulates while the tokenizer scans for the data,
+    // so one `<?` + a long run grows `pending_pi_target` to input size.
+    let mut tok = Tokenizer::from_str_input(
+        &format!("<?{}", "x".repeat(MAX_TOKEN_BYTES + 4096)),
+        TokenizerConfig::default(),
+    );
+    tok.run();
+    let target_len = tok.tokens.iter().find_map(|token| match token {
+        Token::ProcessingInstruction { target, .. } => Some(target.len()),
+        _ => None,
+    });
+    if let Some(len) = target_len {
+        assert_eq!(len, MAX_TOKEN_BYTES, "PI target must be capped");
+        assert!(
+            tok.token_bytes_dropped > 0,
+            "the truncation must be counted"
+        );
+    }
+}
+
+#[test]
+fn active_formatting_list_is_bounded() {
+    // #643: the Noah's Ark clause only removes a fourth *identical* entry, so distinct
+    // `(tag, attributes)` pairs grew the list without bound and every character run then
+    // cloned the whole thing in `reconstruct_active_formatting_elements`.
+    use html::{ParseOptions, parse_document_with_options};
+
+    let mut input = String::new();
+    for index in 0..20_000 {
+        write!(input, "<b id={index}>").unwrap();
+    }
+    input.push_str("text");
+
+    let started = std::time::Instant::now();
+    let outcome = parse_document_with_options(&input, false, &ParseOptions::DEFAULT);
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < std::time::Duration::from_secs(3),
+        "20k distinct formatting elements took {elapsed:?}"
+    );
+    assert!(
+        outcome.limit_violations.formatting_dropped > 0,
+        "the overflow must be counted, got {:?}",
+        outcome.limit_violations
+    );
+}
+
+#[test]
+fn self_writing_script_loops_are_fuelled() {
+    // #639: a parser-inserted script can `document.write` another `<script>`, which executes in
+    // turn and may write again — without a fuel cap the parse never finishes. Each execution and
+    // each written byte must be budgeted.
+    use dom::Document;
+    use html::scripting::{ScriptExecution, ScriptExecutor};
+    use html::{ParseOptions, parse_document_with_options_and_executor};
+
+    struct LoopExecutor {
+        runs: usize,
+    }
+
+    impl ScriptExecutor for LoopExecutor {
+        fn execute(
+            &mut self,
+            _document: &mut Document,
+            _script_text: &str,
+            _source_name: &str,
+        ) -> ScriptExecution {
+            self.runs += 1;
+            ScriptExecution {
+                written_html: "<script>x</script>".to_string(),
+                error: None,
+            }
+        }
+    }
+
+    let started = std::time::Instant::now();
+    let outcome = parse_document_with_options_and_executor(
+        "<script>x</script>",
+        true,
+        &ParseOptions::DEFAULT,
+        Some(Box::new(LoopExecutor { runs: 0 })),
+    );
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < std::time::Duration::from_secs(5),
+        "a self-writing script must be fuelled, took {elapsed:?}"
+    );
+    assert!(
+        outcome.limit_violations.scripts_skipped > 0
+            || outcome.limit_violations.written_bytes_dropped > 0,
+        "the fuel cap must be reported, got {:?}",
+        outcome.limit_violations
+    );
+}
+
+#[test]
+fn many_small_document_writes_stay_linear() {
+    // #639: every `document.write` re-inserted through `Tokenizer::insert_input`, which shifted
+    // every line start and rebuilt the UTF-16 prefix table from scratch — quadratic in the
+    // number of writes, which is exactly the normal `document.write` pattern.
+    use dom::Document;
+    use html::scripting::{ScriptExecution, ScriptExecutor};
+    use html::{ParseOptions, parse_document_with_options_and_executor};
+
+    struct SmallWrites {
+        remaining: usize,
+    }
+
+    impl ScriptExecutor for SmallWrites {
+        fn execute(
+            &mut self,
+            _document: &mut Document,
+            _script_text: &str,
+            _source_name: &str,
+        ) -> ScriptExecution {
+            if self.remaining == 0 {
+                return ScriptExecution {
+                    written_html: String::new(),
+                    error: None,
+                };
+            }
+            self.remaining -= 1;
+            // A short write with a line break, repeated: the pathological shape for the old
+            // per-write line-table shift.
+            ScriptExecution {
+                written_html: "<script>x</script>\n<p>y</p>\n".to_string(),
+                error: None,
+            }
+        }
+    }
+
+    let started = std::time::Instant::now();
+    let outcome = parse_document_with_options_and_executor(
+        "<script>x</script>",
+        true,
+        &ParseOptions::DEFAULT,
+        Some(Box::new(SmallWrites { remaining: 2_000 })),
+    );
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < std::time::Duration::from_secs(5),
+        "2 000 small writes took {elapsed:?}"
+    );
+    assert!(
+        outcome.limit_violations.scripts_skipped > 0
+            || outcome.limit_violations.written_bytes_dropped > 0
+    );
+}

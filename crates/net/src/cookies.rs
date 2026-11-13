@@ -123,6 +123,13 @@ impl RequestSite {
 /// Maximum number of cookies kept in a jar before eviction.
 pub const MAX_COOKIES: usize = 4096;
 
+/// Per-domain cap, enforced in addition to [`MAX_COOKIES`].
+///
+/// The global cap alone lets one origin `Set-Cookie` thousands of junk cookies for its own
+/// domain and evict every other site's cookies (cross-site jar squatting, session DoS).
+/// Browsers keep roughly 150-180 cookies per host/E-TLD+1; 180 matches the upper end (#649).
+pub const MAX_COOKIES_PER_DOMAIN: usize = 180;
+
 /// A stored cookie (RFC 6265 §5.3 state).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cookie {
@@ -553,11 +560,40 @@ impl CookieJar {
         match existing {
             Some(index) => self.cookies[index] = cookie,
             None => {
+                let stored_domain = cookie.domain.clone();
                 self.cookies.push(cookie);
+                self.enforce_domain_capacity(&stored_domain);
                 self.enforce_capacity(now);
             }
         }
         true
+    }
+
+    /// Evicts the oldest cookies of `domain` until it is within [`MAX_COOKIES_PER_DOMAIN`].
+    ///
+    /// Only cookies of the domain that just stored a new one are considered, so a hostile
+    /// origin can displace its own cookies but never another site's (#649).
+    fn enforce_domain_capacity(&mut self, domain: &str) {
+        let mut count = self
+            .cookies
+            .iter()
+            .filter(|cookie| cookie.domain == domain)
+            .count();
+        while count > MAX_COOKIES_PER_DOMAIN {
+            let victim = self
+                .cookies
+                .iter()
+                .enumerate()
+                .filter(|(_, cookie)| cookie.domain == domain)
+                .min_by_key(|(_, cookie)| {
+                    // Session cookies go first, then the oldest, mirroring the global policy.
+                    (cookie.expires.is_some(), cookie.created)
+                })
+                .map(|(index, _)| index);
+            let Some(victim) = victim else { break };
+            self.cookies.remove(victim);
+            count -= 1;
+        }
     }
 
     fn enforce_capacity(&mut self, now: SystemTime) {
@@ -1009,6 +1045,40 @@ mod tests {
         jar.store_from_response(&origin, &headers(&[("Set-Cookie", "a=2")]));
         assert_eq!(jar.len(), 1);
         assert_eq!(jar.header_for_url(&origin), Some("a=2".to_owned()));
+    }
+
+    #[test]
+    fn one_domain_cannot_evict_other_sites_cookies() {
+        // #649: the global cap alone let one origin flood its own domain and push every other
+        // site's cookies out of the jar.
+        let mut jar = CookieJar::new();
+        let victim_origin = url("https://victim.test/");
+        jar.store_from_response(
+            &victim_origin,
+            &headers(&[("Set-Cookie", "session=secret")]),
+        );
+
+        let hostile = url("https://hostile.test/");
+        for index in 0..(MAX_COOKIES_PER_DOMAIN + 40) {
+            jar.store_from_response(
+                &hostile,
+                &headers(&[("Set-Cookie", &format!("junk{index}=1"))]),
+            );
+        }
+
+        let hostile_count = jar
+            .iter()
+            .filter(|cookie| cookie.domain == "hostile.test")
+            .count();
+        assert_eq!(
+            hostile_count, MAX_COOKIES_PER_DOMAIN,
+            "the hostile domain must be capped"
+        );
+        assert!(
+            jar.iter()
+                .any(|cookie| cookie.domain == "victim.test" && cookie.name == "session"),
+            "another site's cookie must survive"
+        );
     }
 
     #[test]
