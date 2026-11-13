@@ -27,6 +27,10 @@ fn render_fixture(name: &str) -> RenderOutput {
 }
 
 fn text_advances(output: &RenderOutput) -> Vec<f32> {
+    text_advances_for(output, "Open Sans")
+}
+
+fn text_advances_for(output: &RenderOutput, family: &str) -> Vec<f32> {
     output
         .display_list
         .items
@@ -36,7 +40,7 @@ fn text_advances(output: &RenderOutput) -> Vec<f32> {
                 advance,
                 font_family,
                 ..
-            } if font_family.contains("Open Sans") => Some(*advance),
+            } if font_family.contains(family) => Some(*advance),
             _ => None,
         })
         .collect()
@@ -131,4 +135,40 @@ fn webfont_rendering_is_deterministic() {
     assert_eq!(first.png, second.png, "PNG bytes must be deterministic");
     assert_eq!(first.stats.fonts_loaded, second.stats.fonts_loaded);
     assert_eq!(first.stats.font_bytes, second.stats.font_bytes);
+}
+
+#[test]
+fn unusable_faces_do_not_starve_later_valid_faces() {
+    // #665: eight rules with no usable source used to consume the eight face slots and stop
+    // the loop, so the valid rule declared after them never loaded.
+    let output = render_fixture("webfont-starvation.html");
+    assert_eq!(
+        output.stats.fonts_loaded, 1,
+        "the valid face must still load: warnings={:?}",
+        output.stats.warnings
+    );
+    let rescued = text_advances_for(&output, "Rescued Web");
+    assert!(
+        !rescued.is_empty(),
+        "the rescued face must shape the text: {:?}",
+        output.stats.warnings
+    );
+}
+
+#[test]
+fn a_face_falls_back_to_the_next_source() {
+    // #665: only one source per face was tried, so a corrupt WOFF2 lost the whole face even
+    // with a valid candidate declared right after it.
+    let output = render_fixture("webfont-multisource.html");
+    assert_eq!(
+        output.stats.fonts_loaded, 1,
+        "warnings={:?}",
+        output.stats.warnings
+    );
+    assert_eq!(
+        output.stats.fonts_failed, 0,
+        "warnings={:?}",
+        output.stats.warnings
+    );
+    assert!(!text_advances_for(&output, "Multi Source").is_empty());
 }

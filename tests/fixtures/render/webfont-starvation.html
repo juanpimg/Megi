@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  /* Eight @font-face rules with no usable source. Before #665 each of them consumed one of
+     the eight face slots and stopped the loop, so the valid rule below never loaded. */
+  @font-face { font-family: "Broken 1"; src: url("placeholder.woff") format("woff"); }
+  @font-face { font-family: "Broken 2"; src: url("placeholder.woff") format("woff"); }
+  @font-face { font-family: "Broken 3"; src: url("placeholder.woff") format("woff"); }
+  @font-face { font-family: "Broken 4"; src: url("placeholder.woff") format("woff"); }
+  @font-face { font-family: "Broken 5"; src: url("placeholder.woff") format("woff"); }
+  @font-face { font-family: "Broken 6"; src: url("placeholder.woff") format("woff"); }
+  @font-face { font-family: "Broken 7"; src: url("placeholder.woff") format("woff"); }
+  @font-face { font-family: "Broken 8"; src: url("placeholder.woff") format("woff"); }
+  @font-face {
+    font-family: "Rescued Web";
+    src: url("OpenSans-Regular-latin.woff2") format("woff2");
+  }
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  body { font-size: 28px; line-height: 1.3; }
+  #rescued { font-family: "Rescued Web", "DejaVu Sans", sans-serif; color: #102030; }
+</style>
+</head>
+<body>
+  <div id="rescued">Rescued webfont: WWW @font-face</div>
+</body>
+</html>

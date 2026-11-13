@@ -49,23 +49,41 @@ pub type LocatedFontFace = (Url, FontFaceRule);
 
 /// Collects `@font-face` rules from all author sheets (including `@import`ed ones).
 /// Returns them in cascade order, paired with the base URL used to resolve `src` URLs.
-fn face_source(face: &FontFaceRule) -> Option<&str> {
-    // Prefer WOFF2, then any declared source (TTF/OTF fallbacks are accepted).
-    face.woff2_source().or_else(|| {
-        face.sources
-            .iter()
-            .find(|(_, format)| {
-                format.is_empty()
-                    || format.eq_ignore_ascii_case("truetype")
-                    || format.eq_ignore_ascii_case("opentype")
-                    || format.eq_ignore_ascii_case("ttf")
-                    || format.eq_ignore_ascii_case("otf")
-            })
-            .map(|(url, _)| url.as_str())
-    })
+/// Supported `format()` values; an absent `format()` is accepted (the decoder sniffs).
+fn is_supported_format(format: &str) -> bool {
+    format.is_empty()
+        || format.eq_ignore_ascii_case("woff2")
+        || format.eq_ignore_ascii_case("truetype")
+        || format.eq_ignore_ascii_case("opentype")
+        || format.eq_ignore_ascii_case("ttf")
+        || format.eq_ignore_ascii_case("otf")
+}
+
+/// Candidate sources for one `@font-face`, in the order they must be tried.
+///
+/// WOFF2 comes first (smallest transfer), then the remaining supported formats in authored
+/// order. Trying the alternatives matters: a broken or rejected WOFF2 used to kill the whole
+/// face even when a `truetype` fallback was declared right after it (#665).
+fn face_sources(face: &FontFaceRule) -> Vec<&str> {
+    let woff2 = face
+        .sources
+        .iter()
+        .filter(|(_, format)| format.eq_ignore_ascii_case("woff2"))
+        .map(|(url, _)| url.as_str());
+    let rest = face
+        .sources
+        .iter()
+        .filter(|(_, format)| !format.eq_ignore_ascii_case("woff2") && is_supported_format(format))
+        .map(|(url, _)| url.as_str());
+    woff2.chain(rest).collect()
 }
 
 /// Fetches, decodes and registers every usable `@font-face` source.
+///
+/// Faces are independent: one face that fails (bad URL, rejected by `--no-network`, oversized,
+/// undecodable) no longer starves the faces declared after it. Only sources that actually reach
+/// the loader count toward [`MAX_WEB_FONTS`], and each face contributes one entry to
+/// [`LoadedWebFonts::failed`] when none of its candidates worked (#665).
 pub fn load_webfonts(
     faces: &[LocatedFontFace],
     loader: &mut ResourceLoader,
@@ -77,94 +95,107 @@ pub fn load_webfonts(
     let mut loaded = 0usize;
     let mut failed = 0usize;
     let mut bytes = 0usize;
+    let mut attempts = 0usize;
 
-    for (base_url, face) in faces {
-        if loaded + failed >= MAX_WEB_FONTS {
+    'faces: for (base_url, face) in faces {
+        if attempts >= MAX_WEB_FONTS {
             warnings.push(format!(
                 "skipping @font-face \"{}\": max web fonts per render ({MAX_WEB_FONTS}) reached",
                 face.family
             ));
             break;
         }
-        let Some(source) = face_source(face) else {
+        let candidates = face_sources(face);
+        if candidates.is_empty() {
             failed += 1;
             warnings.push(format!(
                 "skipping @font-face \"{}\": no supported src",
                 face.family
             ));
             continue;
-        };
-        let url = match base_url.join(source) {
-            Ok(url) => url,
-            Err(error) => {
-                failed += 1;
-                warnings.push(format!(
-                    "skipping @font-face \"{}\" source {source}: {error}",
+        }
+        let mut last_warning: Option<String> = None;
+        for source in candidates {
+            let url = match base_url.join(source) {
+                Ok(url) => url,
+                Err(error) => {
+                    last_warning = Some(format!(
+                        "skipping @font-face \"{}\" source {source}: {error}",
+                        face.family
+                    ));
+                    continue;
+                }
+            };
+            // Two rules may point at the same file for different descriptors (a common
+            // unicode-range / weight split), so the key keeps the descriptor triple (#665).
+            let key = format!(
+                "{}|{}|{}|{}",
+                url.cache_key(),
+                face.family,
+                face.weight,
+                face.style
+            );
+            if !seen.insert(key) {
+                continue;
+            }
+            if no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
+                last_warning = Some(format!(
+                    "skipping web font {url} for \"{}\" (--no-network is set)",
                     face.family
                 ));
                 continue;
             }
-        };
-        if !seen.insert(url.cache_key()) {
-            continue;
-        }
-        if no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
-            failed += 1;
-            warnings.push(format!(
-                "skipping web font {url} for \"{}\" (--no-network is set)",
-                face.family
-            ));
-            continue;
-        }
-        let resource = match loader.load(&url) {
-            Ok(resource) => resource,
-            Err(error) => {
-                failed += 1;
-                warnings.push(format!(
-                    "cannot load web font {url} for \"{}\": {error}",
-                    face.family
+            attempts += 1;
+            let resource = match loader.load(&url) {
+                Ok(resource) => resource,
+                Err(error) => {
+                    last_warning = Some(format!(
+                        "cannot load web font {url} for \"{}\": {error}",
+                        face.family
+                    ));
+                    continue;
+                }
+            };
+            if resource.bytes.len() > MAX_WEB_FONT_BYTES {
+                last_warning = Some(format!(
+                    "web font {url} is too large ({} bytes > {MAX_WEB_FONT_BYTES})",
+                    resource.bytes.len()
                 ));
                 continue;
             }
-        };
-        if resource.bytes.len() > MAX_WEB_FONT_BYTES {
-            failed += 1;
-            warnings.push(format!(
-                "web font {url} is too large ({} bytes > {MAX_WEB_FONT_BYTES})",
-                resource.bytes.len()
-            ));
-            continue;
-        }
-        if bytes + resource.bytes.len() > MAX_WEB_FONT_TOTAL_BYTES {
-            failed += 1;
-            warnings.push(format!(
-                "web font {url} exceeds the total budget ({MAX_WEB_FONT_TOTAL_BYTES} bytes)"
-            ));
-            continue;
-        }
-        let sfnt = match fonts::decode_web_font(&resource.bytes) {
-            Ok(sfnt) => sfnt,
-            Err(error) => {
-                failed += 1;
-                warnings.push(format!(
-                    "cannot decode web font {url} for \"{}\": {error}",
-                    face.family
+            if bytes + resource.bytes.len() > MAX_WEB_FONT_TOTAL_BYTES {
+                last_warning = Some(format!(
+                    "web font {url} exceeds the total budget ({MAX_WEB_FONT_TOTAL_BYTES} bytes)"
                 ));
                 continue;
             }
-        };
-        match database.load_font_data_family(&face.family, sfnt) {
-            Ok(()) => {
-                loaded += 1;
-                bytes += resource.bytes.len();
+            let sfnt = match fonts::decode_web_font(&resource.bytes) {
+                Ok(sfnt) => sfnt,
+                Err(error) => {
+                    last_warning = Some(format!(
+                        "cannot decode web font {url} for \"{}\": {error}",
+                        face.family
+                    ));
+                    continue;
+                }
+            };
+            match database.load_font_data_family(&face.family, sfnt) {
+                Ok(()) => {
+                    loaded += 1;
+                    bytes += resource.bytes.len();
+                    continue 'faces;
+                }
+                Err(error) => {
+                    last_warning = Some(format!(
+                        "cannot register web font {url} for \"{}\": {error}",
+                        face.family
+                    ));
+                }
             }
-            Err(error) => {
-                failed += 1;
-                warnings.push(format!(
-                    "cannot register web font {url} for \"{}\": {error}",
-                    face.family
-                ));
-            }
+        }
+        failed += 1;
+        if let Some(warning) = last_warning {
+            warnings.push(warning);
         }
     }
 
