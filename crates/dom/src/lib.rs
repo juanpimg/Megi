@@ -1905,6 +1905,7 @@ impl Document {
         PRECEDING
     }
 
+    const MAX_TEXT_CONTENT_BYTES: usize = 16 * 1024 * 1024;
     pub fn text_content(&self, node_id: NodeId) -> String {
         let Some(node) = self.try_node(node_id) else {
             return String::new();
@@ -1937,7 +1938,19 @@ impl Document {
                 continue;
             };
             match &current_node.kind {
-                NodeKind::Text(data) => text.push_str(data),
+                NodeKind::Text(data) => {
+                    if text.len() + data.len() > MAX_TEXT_CONTENT_BYTES {
+                        // Truncate and stop collecting.
+                        let remaining = MAX_TEXT_CONTENT_BYTES.saturating_sub(text.len());
+                        if remaining > 0 {
+                            text.push_str(&data[..remaining.min(data.len())]);
+                        }
+                        // Mark by clearing pending (best effort).
+                        pending.clear();
+                    } else {
+                        text.push_str(data);
+                    }
+                }
                 NodeKind::Element(_) | NodeKind::DocumentFragment => {
                     let mut children = Vec::new();
                     let mut child = current_node.first_child;
