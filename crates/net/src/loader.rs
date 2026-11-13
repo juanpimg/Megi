@@ -399,6 +399,9 @@ impl ResourceLoader {
 
         // Server-pushed preloads are consumed before any cache/network work (per session).
         if let Some(resource) = self.push_cache.remove(&url.cache_key()) {
+            // The pushed entry is now consumed: release its bytes so a later push is not
+            // rejected by a stale accounting total (#640).
+            self.pushed_bytes = self.pushed_bytes.saturating_sub(resource.bytes.len());
             self.pushed_used += 1;
             return Ok(resource);
         }
@@ -934,6 +937,32 @@ fn updated_entry(mut entry: CachedEntry, policy: &CachePolicy, user_agent: Strin
 #[cfg(test)]
 mod unit_tests {
     use super::*;
+
+    #[test]
+    fn consumed_push_releases_its_bytes() {
+        // #640: `store_pushed` adds `bytes` to `pushed_bytes`, but `load()` used to leave the
+        // total accounting untouched on consume, so it grew monotonically and eventually every
+        // later push was rejected by `max_pushed_total`.
+        use crate::http::PushedResponse;
+
+        let options = FetchOptions::default();
+        let mut loader = ResourceLoader::with_options(options);
+        let url = Url::parse("https://example.test/consumed.css").expect("url");
+        loader.absorb_pushed(vec![PushedResponse {
+            url: url.clone(),
+            headers: vec![("content-type".to_owned(), "text/css".to_owned())],
+            body: vec![0u8; 64],
+        }]);
+
+        assert_eq!(loader.pushed_bytes, 64, "the push must be accounted for");
+        let resource = loader.load(&url).expect("the consumed push must be served");
+        assert_eq!(resource.bytes.len(), 64);
+        assert_eq!(
+            loader.pushed_bytes, 0,
+            "consuming a push must release its bytes"
+        );
+        assert_eq!(loader.pushed_used(), 1);
+    }
 
     #[test]
     fn loader_starts_with_empty_cache() {
