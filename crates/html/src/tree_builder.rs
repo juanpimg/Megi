@@ -4449,6 +4449,18 @@ fn run_fragment_parser(
     scripting_enabled: bool,
     options: &ParseOptions,
 ) -> TreeBuilder {
+    // Cap and validate the context tag name (issue #558): reject empty/whitespace/control
+    // names and bound length to prevent unbounded allocation from a huge name.
+    const MAX_CONTEXT_NAME_BYTES: usize = 256;
+    let trimmed = context_local_name.trim();
+    let context_local_name =
+        if trimmed.is_empty() || trimmed.chars().any(|c| c.is_control() || c.is_whitespace()) {
+            "div"
+        } else if trimmed.len() > MAX_CONTEXT_NAME_BYTES {
+            &trimmed[..MAX_CONTEXT_NAME_BYTES]
+        } else {
+            trimmed
+        };
     let context_local_name = if context_namespace == Namespace::Html {
         context_local_name.to_ascii_lowercase()
     } else {
