@@ -86,6 +86,7 @@ jobs:
 
   msrv:
     name: MSRV (Rust 1.91)
+    needs: quality
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -268,3 +269,29 @@ jobs:
           cargo fmt --all -- --check
           cargo clippy --workspace --all-targets --locked -- -D warnings
           cargo test --workspace --all-targets --locked
+
+  # Umbrella job for branch protection: a single required check that aggregates
+  # every gate above (#577). Branch protection can require just `check`.
+  check:
+    name: CI umbrella (all gates)
+    runs-on: ubuntu-24.04
+    needs:
+      - quality
+      - conformance
+      - msrv
+      - minimal
+      - package
+      - security
+      - unsafe-audit
+      - workflow-lint
+      - secret-scan
+      - docs-links
+    if: always()
+    steps:
+      - name: Verify all required gates succeeded
+        run: |
+          if [ "${{ needs.quality.result }}" != "success" ] ||              [ "${{ needs.conformance.result }}" != "success" ] ||              [ "${{ needs.msrv.result }}" != "success" ] ||              [ "${{ needs.minimal.result }}" != "success" ] ||              [ "${{ needs.package.result }}" != "success" ] ||              [ "${{ needs.security.result }}" != "success" ] ||              [ "${{ needs.unsafe-audit.result }}" != "success" ] ||              [ "${{ needs.workflow-lint.result }}" != "success" ] ||              [ "${{ needs.secret-scan.result }}" != "success" ] ||              [ "${{ needs.docs-links.result }}" != "success" ]; then
+            echo "One or more required gates failed." >&2
+            exit 1
+          fi
+          echo "All required gates succeeded."
