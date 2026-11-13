@@ -42,9 +42,9 @@
   - Motor de rasterizado CPU optimizado y codificador/decodificador PNG propio con compresión adaptativa.
   - Pipeline de render determinista de bajo consumo de memoria.
 -  **Red y Protocolos Modernos (`crates/net`)**:
-  - Soporte completo HTTP/1.1 y HTTP/2 multiplexado con control de flujo por ventana y priorización de push.
+  - Soporte completo HTTP/1.0/1.1 y HTTP/2 multiplexado con control de flujo por ventana y priorización de push.
   - Cifrado seguro con TLS 1.2/1.3 en Rust puro (`rustls` + `webpki-roots`).
-  - Caché HTTP (RFC 9111), gestión de Cookies (RFC 6265) y soporte para proxies HTTP/HTTPS.
+  - Caché HTTP (RFC 9111), gestión de Cookies (RFC 6265), CORS, Referrer-Policy, Range y soporte para proxies HTTP/HTTPS/SOCKS5/PAC.
 -  **Ejecución de JavaScript (`crates/js`)**:
   - Integración nativa con el motor ECMAScript **Boa 0.22**.
   - Bindings completos para manipulación del DOM, eventos, temporizadores y Web Workers cooperativos.
