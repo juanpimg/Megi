@@ -330,6 +330,24 @@ impl ResourceLoader {
     /// later real request still goes to the network.
     fn store_pushed(&mut self, pushed: Vec<crate::http::PushedResponse>) {
         for pushed in pushed {
+            // Pushed responses are real responses: their `Set-Cookie` must land in the jar and
+            // a cross-origin push must pass the same CORS check as a normal fetch — otherwise a
+            // hostile h2 server plants entries in `push_cache` that `load()` serves without any
+            // gate ever running (#652).
+            if let Some(jar) = &self.options.cookie_jar {
+                jar.lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .store_from_response(&pushed.url, &pushed.headers);
+            }
+            if let Some(origin) = self.options.origin.as_deref()
+                // A push is a preload candidate, not a credentialed response: it is only served
+                // to a same-origin/CORS-approved consumer, so the credential flag stays false.
+                && crate::cors::validate_response(&pushed.url, origin, &pushed.headers, false)
+                    .is_err()
+            {
+                self.pushed_discarded += 1;
+                continue;
+            }
             let bytes = pushed.body.len();
             if pushed.body.len() > self.options.max_pushed_body
                 || self.push_cache.len() >= self.options.max_pushed_resources
@@ -935,5 +953,57 @@ mod unit_tests {
         assert_eq!(loader.cache_len(), 0);
         loader.set_cache_enabled(true);
         assert!(loader.is_cache_enabled());
+    }
+
+    #[test]
+    fn pushed_responses_respect_cors_and_store_cookies() {
+        // #652: pushes were inserted into `push_cache` and served by `load()` without ever
+        // passing the cookie jar or the CORS gate.
+        use crate::cookies::CookieJar;
+        use crate::http::PushedResponse;
+        use std::sync::Mutex;
+
+        let jar = Arc::new(Mutex::new(CookieJar::new()));
+        let options = FetchOptions {
+            origin: Some("https://app.test".to_owned()),
+            cookie_jar: Some(Arc::clone(&jar)),
+            ..FetchOptions::default()
+        };
+        let mut loader = ResourceLoader::with_options(options);
+
+        let allowed = PushedResponse {
+            url: Url::parse("https://cdn.test/allowed.css").expect("url"),
+            headers: vec![
+                (
+                    "access-control-allow-origin".to_owned(),
+                    "https://app.test".to_owned(),
+                ),
+                ("set-cookie".to_owned(), "pushed=1; Path=/".to_owned()),
+            ],
+            body: b"body{}".to_vec(),
+        };
+        let blocked = PushedResponse {
+            url: Url::parse("https://evil.test/blocked.css").expect("url"),
+            headers: vec![("content-type".to_owned(), "text/css".to_owned())],
+            body: b"body{}".to_vec(),
+        };
+        let allowed_key = allowed.url.clone();
+        let blocked_key = blocked.url.clone();
+        loader.absorb_pushed(vec![allowed, blocked]);
+
+        assert!(
+            loader.cache_key_is_preloaded(&allowed_key),
+            "a CORS-approved push must be served"
+        );
+        assert!(
+            !loader.cache_key_is_preloaded(&blocked_key),
+            "a cross-origin push without ACAO must be dropped"
+        );
+        assert_eq!(loader.pushed_discarded(), 1);
+        let jar = jar.lock().expect("jar");
+        assert!(
+            jar.iter().any(|cookie| cookie.name == "pushed"),
+            "Set-Cookie from a push must reach the jar"
+        );
     }
 }
