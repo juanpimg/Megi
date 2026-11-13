@@ -14,6 +14,10 @@ fn serialized(input: &str) -> String {
     parse(input).as_str()
 }
 
+fn parse_err(input: &str) -> Option<UrlError> {
+    Url::parse(input).err()
+}
+
 #[test]
 fn parses_absolute_http_and_https_urls() {
     let url = parse("https://example.com");
@@ -86,6 +90,40 @@ fn parses_ipv4_and_bracketed_ipv6_hosts() {
     let url = parse("http://[2001:db8::1]/");
     assert_eq!(url.host(), "[2001:db8::1]");
     assert_eq!(url.host_for_dns(), "2001:db8::1");
+}
+
+#[test]
+fn rejects_structurally_invalid_ipv6_literals() {
+    // #645: the bracketed-host check used to be "every char is hex/:/." — that accepted
+    // these, which then went out to DNS/SNI/TLS as if they were real addresses.
+    for bad in [
+        "http://[::::]/",
+        "http://[12345]/",
+        "http://[1.2.3.4.5]/",
+        "http://[2001:db8::1::2]/",
+        "http://[fe80::1%eth0]/",
+        "http://[gggg::1]/",
+    ] {
+        assert!(parse_err(bad).is_some(), "{bad} must be rejected");
+    }
+    // Valid forms keep working, including compressed groups and an IPv4 tail.
+    for good in [
+        "http://[::]/",
+        "http://[::1]/",
+        "http://[2001:db8::1]/",
+        "http://[::ffff:192.0.2.1]/",
+        "http://[2001:DB8::1]/",
+    ] {
+        assert!(parse_err(good).is_none(), "{good} must parse");
+    }
+}
+
+#[test]
+fn rejects_bare_ipv6_authority_without_brackets() {
+    // `::1` and `::1:8080` are ambiguous with `host:port`; the standard requires brackets.
+    for bad in ["http://::1/", "http://::1:8080/", "http://2001:db8::1/"] {
+        assert!(parse_err(bad).is_some(), "{bad} must be rejected");
+    }
 }
 
 #[test]

@@ -527,6 +527,12 @@ fn split_host_port(input: &str) -> Result<(&str, Option<&str>), UrlError> {
         };
         return Ok((host, Some(port)));
     }
+    // A bare IPv6 literal is not a valid authority: `::1` and `::1:8080` are ambiguous with
+    // `host:port`, so the standard requires brackets. Reject them instead of mis-splitting
+    // (#645).
+    if input.matches(':').count() > 1 {
+        return Err(UrlError::InvalidHost(input.to_owned()));
+    }
     match input.rfind(':') {
         Some(index) => Ok((&input[..index], Some(&input[index + 1..]))),
         None => Ok((input, None)),
@@ -547,10 +553,12 @@ fn normalize_host(scheme: Scheme, raw: &str) -> Result<String, UrlError> {
             return Err(UrlError::InvalidHost(raw.to_owned()));
         }
         let inner = &raw[1..raw.len() - 1];
-        let valid = inner
-            .chars()
-            .all(|ch| ch.is_ascii_hexdigit() || matches!(ch, ':' | '.'));
-        if !valid {
+        // A bracketed host is an IPv6 literal, so validate it as one instead of checking that
+        // the characters merely look hexadecimal (#645): `[::::]`, `[12345]` and
+        // `[1.2.3.4.5]` used to be accepted and then sent to DNS/SNI/TLS as if valid.
+        // `Ipv6Addr` accepts the compressed forms and an embedded IPv4 tail; a link-local
+        // zone id (`fe80::1%eth0`) is not part of the host syntax and stays rejected.
+        if inner.parse::<std::net::Ipv6Addr>().is_err() {
             return Err(UrlError::InvalidHost(raw.to_owned()));
         }
         return Ok(format!("[{}]", inner.to_ascii_lowercase()));
