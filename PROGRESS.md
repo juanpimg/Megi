@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `f262aef` (2026-11-13) · overall **99%** · **2,359** tests · conformance **PASS** · **14** crates · **176,244** lines of Rust
+**Snapshot** — commit `15ad4a9` (2026-11-13) · overall **99%** · **2,362** tests · conformance **FAIL** · **14** crates · **176,367** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -157,23 +157,23 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `f262aef` (2026-11-13) |
+| Commit | `15ad4a9` (2026-11-13) |
 | Crates in the workspace | 14 |
-| Lines of Rust (tracked `.rs`) | 176244 |
-| Tests (`cargo test --workspace -- --list`) | 2359 |
+| Lines of Rust (tracked `.rs`) | 176367 |
+| Tests (`cargo test --workspace -- --list`) | 2362 |
 | Crates with `#![forbid(unsafe_code)]` | 14 / 14 |
-| Conformance gate | **PASS** |
+| Conformance gate | **FAIL** |
 
 ## Conformance gate (4 suites)
 
 | Suite | Result |
 |---|---|
 | HTML tokenizer | 7050 / 7050 |
-| HTML tree construction | 3904 / 3904 |
+| HTML tree construction | 2523 / 3904 |
 | HTML serializer | 230 / 230 |
 | CSS Syntax (vendored WPT) | 30 / 30 |
 
-Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crates/test_harness`).
+Gate status: **FAIL** (known failures allowlisted; see `tests/README` and `crates/test_harness`).
 
 ## Recent rounds
 
