@@ -156,3 +156,156 @@ fn clone_node_respects_the_dom_node_budget() {
         "expected a node-budget rejection, got {error:?}"
     );
 }
+
+#[test]
+fn listener_slot_reuse_bounds_internal_array_across_churn() {
+    let mut runtime = runtime();
+    let len = runtime
+        .eval(
+            "var div = document.createElement('div');
+             for (var i = 0; i < 200; i++) {
+               var fn = function() {};
+               div.addEventListener('click', fn);
+               div.removeEventListener('click', fn);
+             }
+             for (var j = 0; j < 50; j++) {
+               div.addEventListener('ping', function() {}, { once: true });
+               div.dispatchEvent(new Event('ping'));
+             }
+             __megi_listeners.length",
+            "listeners.js",
+        )
+        .expect("eval");
+    assert_eq!(
+        len, "1",
+        "freed listener slots must be reused, got len={len}"
+    );
+}
+
+#[test]
+fn insert_adjacent_html_frees_temp_and_propagates_hierarchy_error() {
+    let mut runtime = runtime();
+    let before = runtime.document().len();
+    runtime
+        .eval(
+            "var host = document.createElement('div');
+             document.body.appendChild(host);
+             for (var i = 0; i < 20; i++) {
+               host.insertAdjacentHTML('beforeend', '');
+             }
+             var err = '';
+             try {
+               document.documentElement.insertAdjacentHTML('afterbegin', '<b>x</b>');
+             } catch (e) { err = String(e); }
+             globalThis.__err = err;",
+            "adj.js",
+        )
+        .expect("eval");
+    let after = runtime.document().len();
+    assert!(
+        after <= before + 4,
+        "temp containers must not leak in arena: before={before}, after={after}"
+    );
+}
+
+#[test]
+fn class_list_rejects_empty_and_whitespace_tokens() {
+    let mut runtime = runtime();
+    let res = runtime
+        .eval(
+            "var d = document.createElement('div');
+             var errs = [];
+             try { d.classList.add(''); } catch (e) { errs.push(e.name || String(e)); }
+             try { d.classList.add('a b'); } catch (e) { errs.push(String(e)); }
+             try { d.classList.remove(''); } catch (e) { errs.push(e.name || String(e)); }
+             try { d.classList.toggle('a\\tb'); } catch (e) { errs.push(String(e)); }
+             errs.length + ':' + errs[0].indexOf('SyntaxError') + ':' + (errs[1].indexOf('InvalidCharacterError') >= 0)",
+            "classlist.js",
+        )
+        .expect("eval");
+    assert_eq!(res, "4:0:true", "unexpected classList error output: {res}");
+}
+
+#[test]
+fn get_computed_style_does_not_leak_prototype_and_handles_negative_item() {
+    let mut runtime = runtime();
+    let res = runtime
+        .eval(
+            "var d = document.createElement('div');
+             d.setAttribute('style', 'color: red;');
+             var cs = getComputedStyle(d);
+             [
+               cs.getPropertyValue('color'),
+               cs.getPropertyValue('toString'),
+               cs.getPropertyValue('getPropertyValue'),
+               cs.getPropertyValue('length'),
+               cs.item(-1),
+               cs.item(0),
+               cs.item(99)
+             ].join('|')",
+            "cs.js",
+        )
+        .expect("eval");
+    assert_eq!(res, "red|||||color|", "unexpected getComputedStyle: {res}");
+}
+
+#[test]
+fn create_element_rejects_invalid_tag_names() {
+    let mut runtime = runtime();
+    let res = runtime
+        .eval(
+            "var errs = 0;
+             for (var name of ['', '1div', '<bad>', 'a b']) {
+               try { document.createElement(name); } catch (e) { errs++; }
+             }
+             errs + ':' + document.createElement('DIV').tagName",
+            "create.js",
+        )
+        .expect("eval");
+    assert_eq!(res, "4:DIV");
+}
+
+#[test]
+fn select_value_returns_selected_option_text_only() {
+    let mut runtime = runtime();
+    let res = runtime
+        .eval(
+            "var s = document.createElement('select');
+             s.innerHTML = '<option>One</option><option selected>Two</option><option>Three</option>';
+             s.value",
+            "select.js",
+        )
+        .expect("eval");
+    assert_eq!(res, "Two");
+}
+
+#[test]
+fn webidl_coercions_and_storage_key_order() {
+    let mut runtime = runtime();
+    let res = runtime
+        .eval(
+            "var cb = document.createElement('input');
+             cb.checked = 1;
+             var c1 = cb.checked;
+             cb.checked = 0;
+             var c0 = cb.checked;
+             var d = document.createElement('div');
+             var t1 = d.classList.toggle('x', 1);
+             var t0 = d.classList.toggle('x', 0);
+             var ev = new Event('x', { bubbles: 1, cancelable: 0 });
+             localStorage.setItem('b', '2');
+             localStorage.setItem('a', '1');
+             localStorage.setItem('c', '3');
+             var keys = [localStorage.key(0), localStorage.key(1), localStorage.key(2), String(localStorage.key(-1))].join(',');
+             var nl = document.body.childNodes.item(-1);
+             var st = d.style.item(-1);
+             var at = d.attributes.item(-1);
+             [c1, c0, t1, t0, ev.bubbles, ev.cancelable, keys, String(nl), st, String(at)].join('|')",
+            "webidl.js",
+        )
+        .expect("eval");
+    assert_eq!(
+        res,
+        "true|false|true|false|true|false|b,a,c,null|null||null"
+    );
+}

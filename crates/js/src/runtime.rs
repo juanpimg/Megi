@@ -164,6 +164,14 @@ impl JsRuntime {
 
     /// Creates a runtime around an existing document (single realm).
     pub fn with_document(document: Document, url: String) -> Result<Self, JsError> {
+        Self::with_document_realm(document, url, false)
+    }
+
+    fn with_document_realm(
+        document: Document,
+        url: String,
+        is_worker: bool,
+    ) -> Result<Self, JsError> {
         let host_slot: Rc<RefCell<Option<Rc<RefCell<Host>>>>> = Rc::new(RefCell::new(None));
         let module_loader = Rc::new(MegiModuleLoader {
             host: Rc::clone(&host_slot),
@@ -176,7 +184,11 @@ impl JsRuntime {
             .map_err(|error| JsError::Internal(error.to_string()))?;
         let host = Rc::new(RefCell::new(Host::new(document, url)));
         *host_slot.borrow_mut() = Some(Rc::clone(&host));
-        install_globals(&mut context, &host)?;
+        if is_worker {
+            install_bare_worker_globals(&mut context)?;
+        } else {
+            install_globals(&mut context, &host)?;
+        }
         Ok(Self {
             context,
             host,
@@ -564,6 +576,30 @@ fn accessor_fn(
     f: fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>,
 ) -> boa_engine::object::builtins::JsFunction {
     FunctionObjectBuilder::new(context.realm(), native(f)).build()
+}
+
+/// Installs only non-DOM worker globals (`console` and timers).
+fn install_bare_worker_globals(context: &mut Context) -> Result<(), JsError> {
+    let global = context.global_object();
+    let console = build_console(context);
+    global
+        .set(
+            js_string!("console"),
+            JsValue::from(console),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
+    for (name, length, function) in crate::events::timer_globals() {
+        let builtin = FunctionObjectBuilder::new(context.realm(), native(function))
+            .name(js_string!(name))
+            .length(length)
+            .build();
+        global
+            .set(js_string!(name), JsValue::from(builtin), false, context)
+            .map_err(|error| JsError::Internal(error.to_string()))?;
+    }
+    Ok(())
 }
 
 /// Installs `window`, `console`, `document`, `setTimeout`/`setInterval` and helpers.
@@ -1673,7 +1709,7 @@ fn boolean_attribute_set(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let enabled = args.first().and_then(JsValue::as_boolean).unwrap_or(false);
+    let enabled = args.first().is_some_and(JsValue::to_boolean);
     let result = with_host(|host| {
         let element = host
             .document
@@ -2119,14 +2155,32 @@ fn document_create_document_fragment(
     wrap_node(context, fragment)
 }
 
+fn is_valid_element_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    let valid_start = first.is_ascii_alphabetic() || first == '_' || first == ':';
+    if !valid_start {
+        return false;
+    }
+    chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '.' | '_' | ':'))
+}
+
 fn document_create_element(
     _this: &JsValue,
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
+    let raw_name = arg_string(args, 0, context)?;
+    if !is_valid_element_name(&raw_name) {
+        return Err(js_error(format!(
+            "InvalidCharacterError: `{raw_name}` is not a valid element name"
+        )));
+    }
     // DOM §4.5: `createElement` lowercases the name for an HTML document, so
     // `createElement("TEMPLATE")` still creates a template with its content fragment.
-    let name = arg_string(args, 0, context)?.to_ascii_lowercase();
+    let name = raw_name.to_ascii_lowercase();
     let node = with_host(|host| {
         host.document
             .create_element(Namespace::Html, name.clone(), Vec::new())
@@ -2226,17 +2280,18 @@ fn node_list(context: &mut Context, nodes: Vec<NodeId>) -> JsResult<JsValue> {
 }
 
 fn node_list_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    let index = args
-        .first()
-        .and_then(JsValue::as_number)
-        .unwrap_or(0.0)
-        .max(0.0) as u64;
+    let index = crate::events::webidl_uint32_index(args, context);
     let object = this
         .as_object()
         .ok_or_else(|| js_error("invalid NodeList receiver"))?;
-    object
+    let value = object
         .get(js_string!(index.to_string()), context)
-        .map_err(|error| js_error(error.to_string()))
+        .map_err(|error| js_error(error.to_string()))?;
+    if value.is_undefined() {
+        Ok(JsValue::null())
+    } else {
+        Ok(value)
+    }
 }
 
 fn node_list_for_each(
@@ -2304,14 +2359,14 @@ fn insert_relative(
     target: NodeId,
     node: NodeId,
     position: AdjacentPosition,
-) {
+) -> Result<(), String> {
     let container = match position {
         AdjacentPosition::BeforeBegin => {
             let parent = host.document.try_node(target).and_then(|node| node.parent);
             if let Some(parent) = parent {
-                let _ = host
-                    .document
-                    .insert_before_child(parent, node, Some(target));
+                host.document
+                    .insert_before_child(parent, node, Some(target))
+                    .map_err(|err| err.to_string())?;
             }
             parent
         }
@@ -2320,11 +2375,15 @@ fn insert_relative(
                 .document
                 .try_node(target)
                 .and_then(|node| node.first_child);
-            let _ = host.document.insert_before_child(target, node, first);
+            host.document
+                .insert_before_child(target, node, first)
+                .map_err(|err| err.to_string())?;
             Some(target)
         }
         AdjacentPosition::BeforeEnd => {
-            host.document.append_child(target, node);
+            host.document
+                .insert_before_child(target, node, None)
+                .map_err(|err| err.to_string())?;
             Some(target)
         }
         AdjacentPosition::AfterEnd => {
@@ -2334,7 +2393,9 @@ fn insert_relative(
                     .document
                     .try_node(target)
                     .and_then(|node| node.next_sibling);
-                let _ = host.document.insert_before_child(parent, node, next);
+                host.document
+                    .insert_before_child(parent, node, next)
+                    .map_err(|err| err.to_string())?;
             }
             parent
         }
@@ -2347,6 +2408,7 @@ fn insert_relative(
             old_value: None,
         });
     }
+    Ok(())
 }
 
 /// Validates the `position` argument of `insertAdjacent*`, throwing `SyntaxError` for
@@ -2378,9 +2440,9 @@ fn node_insert_adjacent_html(
     }
     let position = adjacent_position(args, context)?;
     let html_text = arg_string(args, 1, context)?;
-    with_host(|host| {
+    let result = with_host(|host| {
         if !charge_document_parse(host, html_text.len(), "insertAdjacentHTML") {
-            return;
+            return Ok(());
         }
         let temp = host
             .document
@@ -2389,16 +2451,28 @@ fn node_insert_adjacent_html(
             max_nodes: host.max_document_write_nodes,
             ..html::ParseOptions::default()
         };
-        if html::set_inner_html_with_options(&mut host.document, temp, &html_text, &options)
-            .is_err()
-        {
-            return;
+        let parsed =
+            html::set_inner_html_with_options(&mut host.document, temp, &html_text, &options);
+        if let Err(err) = parsed {
+            host.document.remove_subtree(temp);
+            return Err(err.to_string());
         }
         let children: Vec<NodeId> = host.document.children(temp).collect();
+        let mut insert_err = None;
         for child in children {
-            insert_relative(host, target, child, position);
+            if let Err(err) = insert_relative(host, target, child, position) {
+                insert_err = Some(err);
+                break;
+            }
         }
-    });
+        host.document.remove_subtree(temp);
+        match insert_err {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
+    })
+    .unwrap_or(Ok(()));
+    result.map_err(js_error)?;
     Ok(JsValue::undefined())
 }
 
@@ -2419,10 +2493,16 @@ fn node_insert_adjacent_text(
     }
     let position = adjacent_position(args, context)?;
     let text = arg_string(args, 1, context)?;
-    with_host(|host| {
+    let result = with_host(|host| {
         let node = host.document.create_text_node(&text);
-        insert_relative(host, target, node, position);
-    });
+        if let Err(err) = insert_relative(host, target, node, position) {
+            host.document.remove_subtree(node);
+            return Err(err);
+        }
+        Ok(())
+    })
+    .unwrap_or(Ok(()));
+    result.map_err(js_error)?;
     Ok(JsValue::undefined())
 }
 
@@ -2652,11 +2732,7 @@ fn style_remove_property(
 
 fn style_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node = style_node(this, context)?;
-    let index = args
-        .first()
-        .and_then(JsValue::as_number)
-        .unwrap_or(0.0)
-        .max(0.0) as usize;
+    let index = crate::events::webidl_uint32_index(args, context);
     let name = with_host(|host| {
         inline_declarations(&host.document, node)
             .into_iter()
@@ -2767,11 +2843,28 @@ fn write_classes(node_id: NodeId, classes: &[String]) {
     });
 }
 
+fn validate_class_token(token: &str) -> JsResult<()> {
+    if token.is_empty() {
+        return Err(syntax_error("The token provided must not be empty."));
+    }
+    if token.chars().any(|ch| ch.is_ascii_whitespace()) {
+        return Err(js_error(
+            "InvalidCharacterError: The token provided contains HTML space characters.",
+        ));
+    }
+    Ok(())
+}
+
 fn class_add(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let (node_id, mut classes) = classes_of(this, context)?;
+    let mut parsed = Vec::with_capacity(args.len());
     for index in 0..args.len() {
         let class = arg_string(args, index, context)?;
-        if !class.is_empty() && !classes.contains(&class) {
+        validate_class_token(&class)?;
+        parsed.push(class);
+    }
+    for class in parsed {
+        if !classes.contains(&class) {
             classes.push(class);
         }
     }
@@ -2781,8 +2874,13 @@ fn class_add(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResul
 
 fn class_remove(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let (node_id, mut classes) = classes_of(this, context)?;
+    let mut parsed = Vec::with_capacity(args.len());
     for index in 0..args.len() {
         let class = arg_string(args, index, context)?;
+        validate_class_token(&class)?;
+        parsed.push(class);
+    }
+    for class in parsed {
         classes.retain(|existing| *existing != class);
     }
     write_classes(node_id, &classes);
@@ -2798,9 +2896,10 @@ fn class_contains(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
 fn class_toggle(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let (node_id, mut classes) = classes_of(this, context)?;
     let class = arg_string(args, 0, context)?;
+    validate_class_token(&class)?;
     let contains = classes.contains(&class);
     let add = match args.get(1) {
-        Some(force) if force.is_boolean() => force.to_boolean(),
+        Some(force) if !force.is_undefined() => force.to_boolean(),
         _ => !contains,
     };
     if add {
@@ -3197,11 +3296,11 @@ fn storage_kind(this: &JsValue, context: &mut Context) -> JsResult<StorageKind> 
     })
 }
 
-fn storage_read<F: Fn(&Host) -> &HashMap<String, String>>(
+fn storage_read<F: Fn(&Host) -> &crate::host::StorageMap>(
     this: &JsValue,
     context: &mut Context,
     f: F,
-) -> JsResult<HashMap<String, String>> {
+) -> JsResult<crate::host::StorageMap> {
     let kind = storage_kind(this, context)?;
     let map = with_host(|host| match kind {
         StorageKind::Local => host.local_storage.clone(),
@@ -3289,11 +3388,7 @@ fn storage_clear(this: &JsValue, _args: &[JsValue], context: &mut Context) -> Js
 }
 
 fn storage_key(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    let index = args
-        .first()
-        .and_then(|value| value.to_number(context).ok())
-        .map(|number| number as usize)
-        .unwrap_or(0);
+    let index = crate::events::webidl_uint32_index(args, context);
     let map = storage_read(this, context, |_| unreachable!())?;
     Ok(map
         .keys()
@@ -4270,10 +4365,7 @@ fn attributes_handle(this: &JsValue, context: &mut Context) -> JsResult<u32> {
 
 fn attributes_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let handle = attributes_handle(this, context)?;
-    let index = args
-        .first()
-        .and_then(|value| value.as_number())
-        .unwrap_or(0.0) as usize;
+    let index = crate::events::webidl_uint32_index(args, context);
     let node_id = with_host(|host| host.node_for_handle(handle))
         .ok_or_else(|| js_error("no active JavaScript host"))?
         .map_err(js_error)?;
@@ -5051,7 +5143,7 @@ impl JsRuntime {
         id: u32,
         outbox: Rc<RefCell<VecDeque<String>>>,
     ) -> Result<Self, JsError> {
-        let runtime = Self::new()?;
+        let runtime = Self::with_document_realm(Document::new(), "about:blank".to_string(), true)?;
         {
             let mut host = runtime.host.borrow_mut();
             host.worker_parent = Some(parent);
@@ -6130,10 +6222,7 @@ fn node_selected_index_set(
 
 fn class_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let (_, classes) = classes_of(this, context)?;
-    let index = args
-        .first()
-        .and_then(|value| value.to_number(context).ok())
-        .unwrap_or(0.0) as usize;
+    let index = crate::events::webidl_uint32_index(args, context);
     Ok(classes.get(index).map_or_else(JsValue::null, |value| {
         JsValue::from(js_string!(value.clone()))
     }))

@@ -680,7 +680,8 @@ fn auto_column_widths(
     let sum_max: f32 = columns.iter().map(|column| column.1).sum::<f32>() + outer_spacing;
     // Explicit `width` fixes the table width; otherwise auto width is
     // min(max(minimum, available), preferred) (CSS 2.1 §17.5.2).
-    let specified_width = matches!(style.width, Length::Px(_) | Length::Percent(_));
+    let specified_width = matches!(style.width, Length::Px(_) | Length::Percent(_))
+        || style.calc_lengths.width.is_some();
     let table_width = if specified_width {
         available_width
     } else {
@@ -736,11 +737,11 @@ fn fixed_column_widths(
         let Some(cell_style) = cell_box.style.as_ref() else {
             continue;
         };
-        let width = match cell_style.width {
-            Length::Px(px) => Some(px),
-            Length::Percent(pct) => Some(available_width * pct / 100.0),
-            Length::Auto => None,
-        };
+        let width = crate::calc::length_optional(
+            cell_style.width,
+            cell_style.calc_lengths.width,
+            Some(available_width),
+        );
         let Some(width) = width else {
             continue;
         };
@@ -757,7 +758,8 @@ fn fixed_column_widths(
     let outer_spacing = spacing_h * (column_count + 1) as f32;
     let explicit_sum: f32 = columns.iter().filter_map(|column| *column).sum();
     let unspecified = columns.iter().filter(|column| column.is_none()).count();
-    let specified_width = matches!(style.width, Length::Px(_) | Length::Percent(_));
+    let specified_width = matches!(style.width, Length::Px(_) | Length::Percent(_))
+        || style.calc_lengths.width.is_some();
     let mut table_width = if specified_width {
         available_width
     } else {
@@ -933,10 +935,12 @@ fn collect_col_widths(table: &LayoutBox, available_width: f32) -> Vec<Option<f32
         if !matches!(child.box_type, BoxType::TableColumn(_)) {
             continue;
         }
-        let width = child.style.as_ref().and_then(|style| match style.width {
-            Length::Px(px) => Some(px),
-            Length::Percent(pct) => Some(available_width * pct / 100.0),
-            Length::Auto => None,
+        let width = child.style.as_ref().and_then(|style| {
+            crate::calc::length_optional(
+                style.width,
+                style.calc_lengths.width,
+                Some(available_width),
+            )
         });
         widths.push(width.map(|width| width.max(0.0)));
     }
@@ -1127,7 +1131,8 @@ mod legacy {
                         vertical,
                         style.border_collapse,
                         style.caption_side,
-                        matches!(style.width, Length::Px(_) | Length::Percent(_)),
+                        matches!(style.width, Length::Px(_) | Length::Percent(_))
+                            || style.calc_lengths.width.is_some(),
                     )
                 }
                 None => {

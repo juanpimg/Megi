@@ -1135,7 +1135,14 @@ pub(crate) fn layout_grid_children(
             }
         };
         item.content_width = width.max(0.0);
-        layout_item(item, content.x, content.y, container_width, measurer);
+        layout_item(
+            item,
+            content.x,
+            content.y,
+            container_width,
+            definite_height,
+            measurer,
+        );
     }
 
     // 5. Row track sizes: explicit template tracks first, implicit rows next.
@@ -1390,6 +1397,7 @@ fn layout_item(
     origin_x: f32,
     origin_y: f32,
     container_width: f32,
+    definite_height: Option<f32>,
     measurer: &dyn TextMeasurer,
 ) {
     let padding = resolve_padding(&item.style, container_width);
@@ -1414,7 +1422,7 @@ fn layout_item(
         item.content_width.max(0.0),
         0.0,
     ));
-    layout_box_contents(child, None, false, measurer, pos);
+    layout_box_contents(child, definite_height, false, measurer, pos);
     item.content_height = child.dimensions.content.height;
 }
 

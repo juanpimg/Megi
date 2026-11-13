@@ -383,7 +383,7 @@ fn event_constructor(
         .and_then(|options| {
             prop(options, "bubbles", context)
                 .ok()
-                .and_then(|v| v.as_boolean())
+                .map(|v| v.to_boolean())
         })
         .unwrap_or(false);
     let cancelable = options
@@ -391,7 +391,7 @@ fn event_constructor(
         .and_then(|options| {
             prop(options, "cancelable", context)
                 .ok()
-                .and_then(|v| v.as_boolean())
+                .map(|v| v.to_boolean())
         })
         .unwrap_or(false);
     Ok(build_event(
@@ -419,7 +419,7 @@ fn custom_event_constructor(
         .and_then(|options| {
             prop(options, "bubbles", context)
                 .ok()
-                .and_then(|v| v.as_boolean())
+                .map(|v| v.to_boolean())
         })
         .unwrap_or(false);
     Ok(build_event(context, &event_type, bubbles, true, detail))
@@ -500,27 +500,30 @@ fn add_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     let mut capture = false;
     let mut once = false;
     let mut passive = false;
+    const MAX_EVENT_LISTENERS: usize = 16_384;
+
     if let Some(value) = args.get(2) {
-        if let Some(flag) = value.as_boolean() {
-            capture = flag;
-        } else if let Some(options) = value.as_object() {
+        if let Some(options) = value.as_object() {
             capture = prop(&options, "capture", context)
                 .ok()
-                .and_then(|value| value.as_boolean())
+                .map(|value| value.to_boolean())
                 .unwrap_or(false);
             once = prop(&options, "once", context)
                 .ok()
-                .and_then(|value| value.as_boolean())
+                .map(|value| value.to_boolean())
                 .unwrap_or(false);
             passive = prop(&options, "passive", context)
                 .ok()
-                .and_then(|value| value.as_boolean())
+                .map(|value| value.to_boolean())
                 .unwrap_or(false);
+        } else if !value.is_undefined() {
+            capture = value.to_boolean();
         }
     }
     // DOM §2.7 step 2: adding the same callback with the same capture flag is a no-op.
-    let existing: Vec<u32> = with_host(|host| {
-        host.listeners
+    let (existing, at_cap): (Vec<u32>, bool) = with_host(|host| {
+        let slots = host
+            .listeners
             .iter()
             .filter(|listener| {
                 listener.target == target
@@ -528,7 +531,8 @@ fn add_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
                     && listener.capture == capture
             })
             .map(|listener| listener.slot)
-            .collect()
+            .collect();
+        (slots, host.listeners.len() >= MAX_EVENT_LISTENERS)
     })
     .unwrap_or_default();
     for slot in existing {
@@ -536,7 +540,17 @@ fn add_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
             return Ok(JsValue::undefined());
         }
     }
-    let slot = array_push(context, "__megi_listeners", callback)?;
+    if at_cap {
+        return Err(js_error("event listener limit exceeded"));
+    }
+    let reused_slot = with_host(|host| host.free_listener_slots.pop()).flatten();
+    let slot = match reused_slot {
+        Some(slot) => {
+            array_put(context, "__megi_listeners", u64::from(slot), callback)?;
+            slot
+        }
+        None => array_push(context, "__megi_listeners", callback)?,
+    };
     let _ = with_host(|host| {
         host.listeners.push(Listener {
             target,
@@ -556,7 +570,20 @@ fn remove_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> J
     let Some(callback) = args.get(1).cloned() else {
         return Ok(JsValue::undefined());
     };
-    let capture_filter = args.get(2).and_then(|value| value.as_boolean());
+    let capture_filter = args.get(2).and_then(|value| {
+        if value.is_undefined() {
+            None
+        } else if let Some(options) = value.as_object() {
+            Some(
+                prop(&options, "capture", context)
+                    .ok()
+                    .map(|v| v.to_boolean())
+                    .unwrap_or(false),
+            )
+        } else {
+            Some(value.to_boolean())
+        }
+    });
     let candidates: Vec<(usize, u32, bool)> = with_host(|host| {
         host.listeners
             .iter()
@@ -580,11 +607,24 @@ fn remove_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> J
         }
     }
     if let Some(index) = remove_index {
-        let _ = with_host(|host| {
+        let freed_slot = with_host(|host| {
             if index < host.listeners.len() {
-                host.listeners.remove(index);
+                let slot = host.listeners.remove(index).slot;
+                host.free_listener_slots.push(slot);
+                Some(slot)
+            } else {
+                None
             }
-        });
+        })
+        .flatten();
+        if let Some(slot) = freed_slot {
+            let _ = array_put(
+                context,
+                "__megi_listeners",
+                u64::from(slot),
+                JsValue::undefined(),
+            );
+        }
     }
     Ok(JsValue::undefined())
 }
@@ -768,7 +808,25 @@ fn call_listener(
         }
     });
     if once {
-        let _ = with_host(|host| host.listeners.retain(|listener| listener.slot != slot));
+        let removed = with_host(|host| {
+            let before = host.listeners.len();
+            host.listeners.retain(|listener| listener.slot != slot);
+            if host.listeners.len() < before {
+                host.free_listener_slots.push(slot);
+                true
+            } else {
+                false
+            }
+        })
+        .unwrap_or(false);
+        if removed {
+            let _ = array_put(
+                context,
+                "__megi_listeners",
+                u64::from(slot),
+                JsValue::undefined(),
+            );
+        }
     }
     match result {
         Ok(_) => Ok(()),
@@ -1222,11 +1280,29 @@ fn computed_get_property(
     let object = this
         .as_object()
         .ok_or_else(|| js_error("invalid computed style receiver"))?;
+    if matches!(
+        name.as_str(),
+        "__megi_computed"
+            | "__megi_computed_names"
+            | "length"
+            | "getPropertyValue"
+            | "setProperty"
+            | "item"
+            | "cssText"
+    ) {
+        return Ok(JsValue::from(js_string!("")));
+    }
+    let has_own = object
+        .has_own_property(js_string!(name.clone()), context)
+        .unwrap_or(false);
+    if !has_own {
+        return Ok(JsValue::from(js_string!("")));
+    }
     let value = prop(&object, &name, context).unwrap_or_else(|_| JsValue::from(js_string!("")));
-    if value.is_undefined() {
-        Ok(JsValue::from(js_string!("")))
+    if let Some(s) = value.as_string() {
+        Ok(JsValue::from(s.clone()))
     } else {
-        Ok(value)
+        Ok(JsValue::from(js_string!("")))
     }
 }
 
@@ -1238,12 +1314,24 @@ fn computed_set_property(
     Err(js_error("computed styles are read-only"))
 }
 
+pub(crate) fn webidl_uint32_index(args: &[JsValue], context: &mut Context) -> usize {
+    let Some(arg) = args.first() else {
+        return 0;
+    };
+    if arg.is_undefined() {
+        return 0;
+    }
+    let Some(num) = arg.to_number(context).ok() else {
+        return 0;
+    };
+    if !num.is_finite() || num == 0.0 {
+        return 0;
+    }
+    num.trunc().rem_euclid(4_294_967_296.0) as u32 as usize
+}
+
 fn computed_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    let index = args
-        .first()
-        .and_then(JsValue::as_number)
-        .unwrap_or(0.0)
-        .max(0.0) as u64;
+    let index = webidl_uint32_index(args, context);
     let object = this
         .as_object()
         .ok_or_else(|| js_error("invalid computed style receiver"))?;
@@ -1254,7 +1342,11 @@ fn computed_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
     let name = names
         .get(js_string!(index.to_string()), context)
         .map_err(|error| js_error(error.to_string()))?;
-    Ok(name)
+    if name.is_undefined() {
+        Ok(JsValue::from(js_string!("")))
+    } else {
+        Ok(name)
+    }
 }
 
 // ---------------------------------------------------------------------------

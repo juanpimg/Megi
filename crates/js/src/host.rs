@@ -249,6 +249,73 @@ pub(crate) struct ObserverTarget {
     pub subtree: bool,
 }
 
+/// Insertion-order-preserving key-value map for Web Storage (`localStorage`/`sessionStorage`)
+/// so `storage.key(index)` is deterministic (#571).
+#[derive(Clone, Debug, Default)]
+pub struct StorageMap {
+    entries: Vec<(String, String)>,
+}
+
+impl StorageMap {
+    /// Returns the value for `key`, if present.
+    pub fn get(&self, key: &str) -> Option<&String> {
+        self.entries.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+    }
+
+    /// Inserts or updates `key` with `value`, preserving insertion order for existing keys.
+    pub fn insert(&mut self, key: String, value: String) -> Option<String> {
+        if let Some((_, existing)) = self.entries.iter_mut().find(|(k, _)| k == &key) {
+            return Some(std::mem::replace(existing, value));
+        }
+        self.entries.push((key, value));
+        None
+    }
+
+    /// Removes `key`, returning its value if present.
+    pub fn remove(&mut self, key: &str) -> Option<String> {
+        if let Some(pos) = self.entries.iter().position(|(k, _)| k == key) {
+            Some(self.entries.remove(pos).1)
+        } else {
+            None
+        }
+    }
+
+    /// Clears all entries.
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    /// Returns the number of entries.
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Returns `true` when there are no entries.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Iterates keys in insertion order.
+    pub fn keys(&self) -> impl Iterator<Item = &String> {
+        self.entries.iter().map(|(k, _)| k)
+    }
+
+    /// Iterates `(key, value)` pairs in insertion order.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
+        self.entries.iter().map(|(k, v)| (k, v))
+    }
+}
+
+impl FromIterator<(String, String)> for StorageMap {
+    fn from_iter<T: IntoIterator<Item = (String, String)>>(iter: T) -> Self {
+        let mut map = Self::default();
+        for (k, v) in iter {
+            map.insert(k, v);
+        }
+        map
+    }
+}
+
 /// Shared, mutable host state.
 pub const MAX_CONSOLE_ENTRIES: usize = 4096;
 
@@ -261,7 +328,7 @@ pub(crate) struct Host {
     pub title: String,
     /// `document.URL` value.
     pub url: String,
-    /// JS handle → generation-checked node handle (side table).
+    /// Live `NodeId` table referenced by JS handles (`__megi_node`).
     pub nodes: Vec<NodeId>,
     /// Raw packed id → handle index, to avoid one entry per wrapper creation.
     node_index: HashMap<u32, usize>,
@@ -269,6 +336,8 @@ pub(crate) struct Host {
     pub max_handles: usize,
     /// Registered event listeners.
     pub listeners: Vec<Listener>,
+    /// Reusable slots in the JS `__megi_listeners` array freed by `removeEventListener` / `once` (#567).
+    pub free_listener_slots: Vec<u32>,
     /// Scheduled timers.
     pub timers: Vec<TimerEntry>,
     /// Next timer id (insertion order for `(due, id)` ordering).
@@ -317,8 +386,8 @@ pub(crate) struct Host {
     /// `location` navigation provider.
     pub location_provider: Option<LocationProvider>,
     /// Web Storage maps (per realm) and optional persistence provider.
-    pub local_storage: HashMap<String, String>,
-    pub session_storage: HashMap<String, String>,
+    pub local_storage: StorageMap,
+    pub session_storage: StorageMap,
     pub storage_provider: Option<StorageProvider>,
     /// MutationObserver registrations and per-observer pending records.
     pub observers: Vec<ObserverRegistration>,
@@ -357,6 +426,7 @@ impl Host {
             node_index: HashMap::new(),
             max_handles: 1_000_000,
             listeners: Vec::new(),
+            free_listener_slots: Vec::new(),
             timers: Vec::new(),
             next_timer_id: 1,
             document_write_bytes: 0,
@@ -380,8 +450,8 @@ impl Host {
             history_length: 1,
             history_state: "null".to_string(),
             location_provider: None,
-            local_storage: HashMap::new(),
-            session_storage: HashMap::new(),
+            local_storage: StorageMap::default(),
+            session_storage: StorageMap::default(),
             storage_provider: None,
             observers: Vec::new(),
             active_element: None,

@@ -123,11 +123,7 @@ fn measure_styled(measurer: &dyn TextMeasurer, text: &str, style: &ComputedStyle
 /// lengths, but the parser stores a [`Length`]); `auto`/`normal` are zero.
 #[inline]
 fn spacing_px(length: Length, font_size: f32) -> f32 {
-    match length {
-        Length::Px(px) => px,
-        Length::Percent(pct) => font_size * pct / 100.0,
-        Length::Auto => 0.0,
-    }
+    crate::calc::length(length, None, font_size)
 }
 
 /// Applies the computed `text-transform` to a text run (CSS Text 3 §2.1).
@@ -327,13 +323,9 @@ fn push_style(styles: &mut Vec<Arc<ComputedStyle>>, style: Arc<ComputedStyle>) -
     id
 }
 
-/// Resolves a CSS [`Length`] into pixels relative to containing block width.
-fn resolve_length(len: Length, cb_width: f32) -> f32 {
-    crate::calc::sanitize(match len {
-        Length::Px(px) => px,
-        Length::Percent(pct) => cb_width * (pct / 100.0),
-        Length::Auto => 0.0,
-    })
+/// Resolves a CSS [`Length`] (and optional `calc()` value) into pixels relative to containing block width.
+fn resolve_length(len: Length, calc: Option<css::calc::CalcValue>, cb_width: f32) -> f32 {
+    crate::calc::length(len, calc, cb_width)
 }
 
 /// Lays out inline children inside a block container using [`DefaultTextMeasurer`].
@@ -349,13 +341,14 @@ pub fn layout_inline_formatting_context_with_measurer(
 ) {
     let pos =
         crate::block::PositioningContext::from_containing_block(layout_box.dimensions.content);
-    layout_inline_formatting_context_with_measurer_and_pos(layout_box, measurer, pos);
+    layout_inline_formatting_context_with_measurer_and_pos(layout_box, None, measurer, pos);
 }
 
 /// IFC layout with the inherited positioning context (needed to lay out atomic
 /// inline-level boxes and their absolutely positioned descendants).
 pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
     layout_box: &mut LayoutBox,
+    definite_height: Option<f32>,
     measurer: &dyn TextMeasurer,
     pos: crate::block::PositioningContext,
 ) {
@@ -396,6 +389,7 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
         &mut styles,
         &mut tokens,
         container_width,
+        definite_height,
         pos,
     );
 
@@ -603,6 +597,7 @@ fn reorder_line_tokens_bidi(
 /// Atomic inline-level boxes (`inline-block`, replaced elements) are laid out eagerly
 /// at a provisional origin and emitted as [`InlineToken::Atomic`]: the line breaker
 /// treats them as unbreakable units with a known margin box and baseline.
+#[allow(clippy::too_many_arguments)]
 fn collect_inline_tokens(
     boxes: &mut [LayoutBox],
     measurer: &dyn TextMeasurer,
@@ -610,6 +605,7 @@ fn collect_inline_tokens(
     styles: &mut Vec<Arc<ComputedStyle>>,
     tokens: &mut Vec<InlineToken>,
     container_width: f32,
+    definite_height: Option<f32>,
     pos: crate::block::PositioningContext,
 ) {
     for child in boxes.iter_mut() {
@@ -634,6 +630,7 @@ fn collect_inline_tokens(
                     styles,
                     tokens,
                     container_width,
+                    definite_height,
                     pos,
                 );
                 tokens.push(InlineToken::BoxEnd {
@@ -670,7 +667,7 @@ fn collect_inline_tokens(
                 let atomic = crate::block::layout_atomic_inline(
                     std::mem::replace(child, LayoutBox::new(BoxType::LineBreak, None)),
                     container_width,
-                    None,
+                    definite_height,
                     measurer,
                     pos,
                 );
@@ -970,15 +967,29 @@ fn token_advance(token: &InlineToken, styles: &[Arc<ComputedStyle>], container_w
         | InlineToken::Atomic { width, .. } => *width,
         InlineToken::BoxStart { style, .. } => {
             let style = &styles[*style as usize];
-            resolve_length(style.margin.left, container_width)
-                + style.border_width.left
-                + resolve_length(style.padding.left, container_width)
+            resolve_length(
+                style.margin.left,
+                style.calc_lengths.margin_left,
+                container_width,
+            ) + style.border_width.left
+                + resolve_length(
+                    style.padding.left,
+                    style.calc_lengths.padding_left,
+                    container_width,
+                )
         }
         InlineToken::BoxEnd { style, .. } => {
             let style = &styles[*style as usize];
-            resolve_length(style.margin.right, container_width)
-                + style.border_width.right
-                + resolve_length(style.padding.right, container_width)
+            resolve_length(
+                style.margin.right,
+                style.calc_lengths.margin_right,
+                container_width,
+            ) + style.border_width.right
+                + resolve_length(
+                    style.padding.right,
+                    style.calc_lengths.padding_right,
+                    container_width,
+                )
         }
         InlineToken::HyphenationPoint { .. } | InlineToken::ForcedBreak => 0.0,
     }
@@ -1048,7 +1059,7 @@ fn finalize_line(mut line: Vec<InlineToken>) -> Vec<InlineToken> {
 /// (word or atomic box), maintained incrementally by [`break_into_lines`], so the
 /// visible-content check is O(1) instead of rescanning the line prefix.
 fn last_soft_wrap(
-    current: &[InlineToken],
+    current: &std::collections::VecDeque<InlineToken>,
     first_visible: Option<usize>,
 ) -> Option<(usize, SoftWrapKind)> {
     for index in (0..current.len()).rev() {
@@ -1074,7 +1085,7 @@ fn last_soft_wrap(
 }
 
 /// Returns the index of the first visible token in `line`.
-fn first_visible_token(line: &[InlineToken]) -> Option<usize> {
+fn first_visible_token(line: &std::collections::VecDeque<InlineToken>) -> Option<usize> {
     line.iter().position(|token| match token {
         InlineToken::Word { start, end, .. } => end > start,
         InlineToken::Atomic { .. } => true,
@@ -1110,14 +1121,15 @@ fn break_into_lines(
         return lines;
     }
 
-    let mut current: Vec<InlineToken> = Vec::with_capacity(32);
+    let mut current: std::collections::VecDeque<InlineToken> =
+        std::collections::VecDeque::with_capacity(32);
     let mut current_width = 0.0_f32;
     let mut first_visible: Option<usize> = None;
 
     for token in tokens {
         // A forced break always ends the current line, even if it overflows.
         if matches!(token, InlineToken::ForcedBreak) {
-            let line_tokens = finalize_line(std::mem::take(&mut current));
+            let line_tokens = finalize_line(std::mem::take(&mut current).into());
             lines.push(Line {
                 tokens: line_tokens,
                 justified: false,
@@ -1136,7 +1148,7 @@ fn break_into_lines(
             first_visible = Some(current.len());
         }
         current_width += token_advance(&token, styles, container_width);
-        current.push(token);
+        current.push_back(token);
 
         // Wrap greedily at the last valid soft wrap opportunity when the line overflows.
         while current_width > container_width {
@@ -1145,11 +1157,15 @@ fn break_into_lines(
             };
             let mut line_tokens: Vec<InlineToken> = Vec::with_capacity(break_index + 1);
             let mut removed_width = 0.0_f32;
-            for removed in current.drain(..break_index) {
-                removed_width += token_advance(&removed, styles, container_width);
-                line_tokens.push(removed);
+            for _ in 0..break_index {
+                if let Some(removed) = current.pop_front() {
+                    removed_width += token_advance(&removed, styles, container_width);
+                    line_tokens.push(removed);
+                }
             }
-            let opportunity = current.remove(0);
+            let Some(opportunity) = current.pop_front() else {
+                break;
+            };
             removed_width += token_advance(&opportunity, styles, container_width);
             if kind == SoftWrapKind::AtSoftHyphen {
                 // Materialize the soft hyphen as a rendered '-' at the end of the line.
@@ -1209,7 +1225,7 @@ fn break_into_lines(
     // collapses to nothing (e.g. a text node made only of spaces) generates no line box
     // (CSS 2.2 §9.4.2).
     if !current.is_empty() {
-        let line_tokens = finalize_line(current);
+        let line_tokens = finalize_line(current.into());
         if !line_tokens.is_empty() {
             lines.push(Line {
                 tokens: line_tokens,
@@ -1624,9 +1640,17 @@ fn format_line(
             InlineToken::BoxStart { node_id, style } => {
                 let style_arc = styles[style as usize].clone();
                 let style = style_arc.as_ref();
-                let left_margin = resolve_length(style.margin.left, container_width);
+                let left_margin = resolve_length(
+                    style.margin.left,
+                    style.calc_lengths.margin_left,
+                    container_width,
+                );
                 let left_border = style.border_width.left;
-                let left_padding = resolve_length(style.padding.left, container_width);
+                let left_padding = resolve_length(
+                    style.padding.left,
+                    style.calc_lengths.padding_left,
+                    container_width,
+                );
                 let left_edges = left_margin + left_border + left_padding;
                 let start_x = curr_x;
                 curr_x += left_edges;
@@ -1659,13 +1683,25 @@ fn format_line(
             InlineToken::BoxEnd { node_id, .. } => {
                 if let Some(pos) = active_stack.iter().rposition(|b| b.node_id == node_id) {
                     let frame = active_stack.remove(pos);
-                    let right_padding = resolve_length(frame.style.padding.right, container_width);
+                    let right_padding = resolve_length(
+                        frame.style.padding.right,
+                        frame.style.calc_lengths.padding_right,
+                        container_width,
+                    );
                     let right_border = frame.style.border_width.right;
-                    let right_margin = resolve_length(frame.style.margin.right, container_width);
+                    let right_margin = resolve_length(
+                        frame.style.margin.right,
+                        frame.style.calc_lengths.margin_right,
+                        container_width,
+                    );
                     let right_edges = right_padding + right_border + right_margin;
 
                     let left_margin = if frame.is_first_fragment {
-                        resolve_length(frame.style.margin.left, container_width)
+                        resolve_length(
+                            frame.style.margin.left,
+                            frame.style.calc_lengths.margin_left,
+                            container_width,
+                        )
                     } else {
                         0.0
                     };
@@ -1675,7 +1711,11 @@ fn format_line(
                         0.0
                     };
                     let left_padding = if frame.is_first_fragment {
-                        resolve_length(frame.style.padding.left, container_width)
+                        resolve_length(
+                            frame.style.padding.left,
+                            frame.style.calc_lengths.padding_left,
+                            container_width,
+                        )
                     } else {
                         0.0
                     };
@@ -1837,7 +1877,11 @@ fn format_line(
     let mut outgoing_active = Vec::new();
     while let Some(frame) = active_stack.pop() {
         let left_margin = if frame.is_first_fragment {
-            resolve_length(frame.style.margin.left, container_width)
+            resolve_length(
+                frame.style.margin.left,
+                frame.style.calc_lengths.margin_left,
+                container_width,
+            )
         } else {
             0.0
         };
@@ -1847,7 +1891,11 @@ fn format_line(
             0.0
         };
         let left_padding = if frame.is_first_fragment {
-            resolve_length(frame.style.padding.left, container_width)
+            resolve_length(
+                frame.style.padding.left,
+                frame.style.calc_lengths.padding_left,
+                container_width,
+            )
         } else {
             0.0
         };
