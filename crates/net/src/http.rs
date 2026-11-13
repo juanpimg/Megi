@@ -1178,7 +1178,7 @@ fn fetch_once(
         (Some(socks), _) => {
             let tcp_stream = connect_tcp(&socks.host, socks.port, options)?;
             let mut tunnel = tcp_stream;
-            crate::socks::connect(&mut tunnel, &socks, url.host(), port)?;
+            crate::socks::connect(&mut tunnel, &socks, url.host_for_dns(), port)?;
             match url.scheme() {
                 Scheme::Http => (Transport::Plain(tunnel), false),
                 Scheme::Https => {
