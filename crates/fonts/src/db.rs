@@ -862,13 +862,14 @@ impl FontDatabase {
         primary: Font,
     ) -> Vec<Font> {
         let mut chain: Vec<Font> = vec![primary];
+        // Dedup by the underlying face bytes instead of the PostScript name:
+        // distinct subset faces can share a PS name and must not be dropped (#612).
         let mut seen = std::collections::HashSet::new();
-        seen.insert(chain[0].info().post_script_name.clone());
+        seen.insert(std::sync::Arc::as_ptr(&chain[0].data) as usize);
 
         for family in families {
             if let Ok(font) = self.font(&[*family], weight, style) {
-                let name = font.info().post_script_name.clone();
-                if seen.insert(name) {
+                if seen.insert(std::sync::Arc::as_ptr(&font.data) as usize) {
                     chain.push(font);
                 }
             }
@@ -898,13 +899,13 @@ impl FontDatabase {
                 if weight_distance + style_penalty > 1300 {
                     continue;
                 }
-                if seen.contains(&face.post_script_name) {
-                    continue;
-                }
                 if let Ok(font) = self.build_font(face.id) {
-                    seen.insert(font.info().post_script_name.clone());
-                    chain.push(font);
-                    extra += 1;
+                    // Dedup by the underlying face bytes instead of the PostScript
+                    // name so distinct subset faces sharing a PS name survive (#612).
+                    if seen.insert(std::sync::Arc::as_ptr(&font.data) as usize) {
+                        chain.push(font);
+                        extra += 1;
+                    }
                 }
             }
         }
