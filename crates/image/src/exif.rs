@@ -200,10 +200,17 @@ fn parse_tiff_orientation(tiff: &[u8]) -> Option<u8> {
         }
         let kind = read_u16(offset + 2)?;
         let quantity = read_u32(offset + 4)?;
-        let value = read_u16(offset + 8)?;
-        // SHORT (3), one value; LONG (4) with count 1 is also accepted for robustness.
-        if kind == 3 && quantity >= 1 {
-            return (1..=8).contains(&value).then_some(value as u8);
+        // SHORT (3): values are inline only when count*2 <= 4 (count 1-2). For
+        // count >= 3 the value field is an offset to the data (TIFF-6.0).
+        if kind == 3 {
+            if (1..=2).contains(&quantity) {
+                let value = read_u16(offset + 8)?;
+                return (1..=8).contains(&value).then_some(value as u8);
+            } else if quantity >= 3 {
+                let data_offset = read_u32(offset + 8)? as usize;
+                let value = read_u16(data_offset)?;
+                return (1..=8).contains(&value).then_some(value as u8);
+            }
         }
         if kind == 4 && quantity == 1 {
             let long = read_u32(offset + 8)?;
@@ -217,13 +224,54 @@ fn parse_tiff_orientation(tiff: &[u8]) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::orientation;
+    use super::{orientation, parse_tiff_orientation};
 
     #[test]
     fn rejects_non_jpeg_and_missing_exif() {
         assert_eq!(orientation(b"not a jpeg"), None);
         assert_eq!(orientation(&[0xFF, 0xD8, 0xFF, 0xD9]), None);
         assert_eq!(orientation(&[0xFF, 0xD8, 0xFF, 0xE1, 0x00]), None);
+    }
+
+    #[test]
+    fn exif_orientation_count3_follows_offset() {
+        // IFD0 entry tag=0x0112 kind=3 count=3 value-field=6 (offset) pointing
+        // at bytes [42, 0] → invalid orientation → None.
+        let mut tiff = Vec::new();
+        tiff.extend_from_slice(b"II");
+        tiff.extend_from_slice(&42u16.to_le_bytes());
+        // IFD offset = 8
+        tiff.extend_from_slice(&8u32.to_le_bytes());
+        tiff.extend_from_slice(&1u16.to_le_bytes()); // 1 IFD entry
+        tiff.extend_from_slice(&0x0112u16.to_le_bytes()); // Orientation
+        tiff.extend_from_slice(&3u16.to_le_bytes()); // SHORT
+        tiff.extend_from_slice(&3u32.to_le_bytes()); // count = 3
+        // value field = 26 (offset to data), pointing at bytes after IFD
+        tiff.extend_from_slice(&26u32.to_le_bytes());
+        // padding to offset 26
+        while tiff.len() < 26 {
+            tiff.push(0);
+        }
+        tiff.extend_from_slice(&42u16.to_le_bytes()); // invalid orientation
+        tiff.extend_from_slice(&0u16.to_le_bytes());
+        tiff.extend_from_slice(&7u16.to_le_bytes());
+        assert_eq!(parse_tiff_orientation(&tiff), None);
+    }
+
+    #[test]
+    fn exif_orientation_count1_inline() {
+        // count=1 value=6 → Some(6)
+        let mut tiff = Vec::new();
+        tiff.extend_from_slice(b"II");
+        tiff.extend_from_slice(&42u16.to_le_bytes());
+        tiff.extend_from_slice(&8u32.to_le_bytes());
+        tiff.extend_from_slice(&1u16.to_le_bytes());
+        tiff.extend_from_slice(&0x0112u16.to_le_bytes());
+        tiff.extend_from_slice(&3u16.to_le_bytes());
+        tiff.extend_from_slice(&1u32.to_le_bytes());
+        tiff.extend_from_slice(&6u16.to_le_bytes());
+        tiff.extend_from_slice(&0u16.to_le_bytes());
+        assert_eq!(parse_tiff_orientation(&tiff), Some(6));
     }
 
     #[test]
