@@ -177,6 +177,13 @@ impl Font {
     pub fn glyph_advance(&self, glyph_id: u16, size_px: f32) -> Result<f32, FontError> {
         Self::validate_size(size_px)?;
         let face = self.ttf_face()?;
+        let num_glyphs = self.num_glyphs();
+        if glyph_id >= num_glyphs {
+            return Err(FontError::MissingGlyph {
+                glyph_id: u32::from(glyph_id),
+                num_glyphs,
+            });
+        }
         let scale = size_px / f32::from(self.units_per_em.max(1));
         let advance = face
             .glyph_hor_advance(ttf_parser::GlyphId(glyph_id))
