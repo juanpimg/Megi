@@ -218,6 +218,36 @@ jobs:
       - name: shellcheck (tools/*.sh)
         run: shellcheck -S warning tools/*.sh
 
+  secret-scan:
+    name: Secret scanning (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # scan the full history on push, not just the last commit
+      # Pinned by version and checksum, like the other third-party tools in CI.
+      - name: Install gitleaks 8.30.1
+        run: |
+          curl -sSfL -o /tmp/gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+      - name: gitleaks (tracked content and history)
+        run: gitleaks detect --no-banner --redact --config .gitleaks.toml --log-level warn
+
+  docs-links:
+    name: Documentation links (offline)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Offline by design: the repository controls its own relative links and
+      # anchors, while third-party spec URLs are noisy and need network (#725).
+      - name: Check relative links and anchors in the docs
+        run: python3 tools/check_docs_links.py
+
   toolchain-drift:
     name: Toolchain drift (newest stable)
     # The only job that deliberately floats: everything else is pinned, so this

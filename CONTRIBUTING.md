@@ -241,7 +241,7 @@ cargo install cargo-fuzz --locked
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Si `./tools/dev.sh all` reporta `==> All checks passed!`, tu código está listo para ser revisado. La CI remota (`.github/workflows/ci.yml`) ejecuta los mismos pasos: `quality` (fmt, clippy, tests, doc), `conformance` (gate `--summary`), `msrv` (`cargo check` con Rust 1.91 en el build por defecto y en el JS-free) y `minimal` (clippy y tests de `js`/`render` con `--no-default-features`). El build sin JS se comprueba **por crate**: `shell` y `test_harness` enlazan Boa aunque se pase `--no-default-features` al workspace, así que ese comando no produce un build sin motor.
+Si `./tools/dev.sh all` reporta `==> All checks passed!`, tu código está listo para ser revisado. La CI remota (`.github/workflows/ci.yml`) ejecuta los mismos pasos: `quality` (fmt, clippy, tests, doc), `conformance` (gate `--summary`), `msrv` (`cargo check` con Rust 1.91 en el build por defecto y en el JS-free) `minimal` (clippy y tests de `js`/`render` con `--no-default-features`), `workflow-lint` (actionlint + shellcheck), `secret-scan` (gitleaks con `.gitleaks.toml`) y `docs-links` (`python3 tools/check_docs_links.py`). El build sin JS se comprueba **por crate**: `shell` y `test_harness` enlazan Boa aunque se pase `--no-default-features` al workspace, así que ese comando no produce un build sin motor.
 - **CI (ronda 12)**: los jobs instalan en el runner los paquetes de sistema Wayland/X11/xcb (`libwayland-dev`, `libxkbcommon*`, `libx11*`, `libxcb*`) que necesitan `winit`/`softbuffer`; los 3 jobs están en verde y `main`/`feature` sincronizadas.
 
 ---

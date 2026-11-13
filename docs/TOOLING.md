@@ -421,6 +421,13 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 
 ---
 
+**`tools/check_docs_links.py`** (#725): verificador offline de enlaces Markdown. Comprueba que
+cada enlace relativo de `docs/**/*.md`, `README.md`, `CONTRIBUTING.md`, `SECURITY.md` y
+`CHANGELOG.md` apunta a un fichero/directorio existente y que cada `#ancla` coincide con un
+encabezado del documento destino (slug estilo GitHub). Los enlaces `http(s)://` externos se
+ignoran a propósito (necesitan red y son ruidosos); la CI lo ejecuta en el job `docs-links`.
+Los secretos se revisan con `gitleaks` (job `secret-scan`, configuración `.gitleaks.toml`).
+
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
