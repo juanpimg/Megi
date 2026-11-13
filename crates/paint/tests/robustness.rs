@@ -135,3 +135,38 @@ fn test_deep_stacking_context_chain_is_depth_capped() {
     assert!(!display_list.is_empty());
     assert!(display_list.len() <= MAX_DISPLAY_LIST_ITEMS);
 }
+
+#[test]
+fn hostile_text_size_is_clamped_before_shaping() {
+    // #672: `font-size` is unbounded in CSS, and the rasterizer allocates a mask per
+    // glyph. A non-finite or gigantic size must be clamped at the painter boundary
+    // instead of reaching shaping.
+    let (_document, ids) = node_ids(2);
+
+    for hostile in [
+        f32::INFINITY,
+        f32::NEG_INFINITY,
+        f32::NAN,
+        1.0e30,
+        0.0,
+        -12.0,
+    ] {
+        let mut style = block_style();
+        style.font_size = hostile;
+        let mut box_ = LayoutBox::new(BoxType::TextNode("hostile".to_string()), Some(style));
+        box_.dimensions.content = Rect::new(0.0, 0.0, 400.0, 200.0);
+        let mut root = LayoutBox::new(BoxType::BlockNode(ids[0]), Some(block_style()));
+        root.dimensions.content = Rect::new(0.0, 0.0, 800.0, 600.0);
+        root.children.push(box_);
+
+        let display_list = build_display_list(&root, VIEWPORT);
+        for item in display_list.iter() {
+            if let paint::DisplayItem::Text { font_size, .. } = item {
+                assert!(
+                    font_size.is_finite() && *font_size > 0.0 && *font_size <= 1024.0,
+                    "font size {hostile} must not reach shaping (got {font_size})"
+                );
+            }
+        }
+    }
+}
