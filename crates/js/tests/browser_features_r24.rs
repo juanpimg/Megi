@@ -331,3 +331,29 @@ fn mutation_observer_ignores_a_target_freed_before_delivery() {
         "only the live mutation is delivered"
     );
 }
+
+#[test]
+fn history_state_is_capped_like_storage() {
+    // #663: `history.pushState` retained an arbitrarily large state in Rust, rooted it as a JS
+    // value and copied it to the provider, with no quota at all.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let error = runtime
+        .eval(
+            "window.__err = ''; try { history.pushState({big: 'x'.repeat(2 * 1024 * 1024)}, '', '/big'); } catch (error) { __err = String(error); } __err",
+            "t",
+        )
+        .expect("eval");
+    assert!(
+        error.contains("QuotaExceededError"),
+        "an oversized state must be refused: {error}"
+    );
+    // The rejected call must not change the current entry.
+    assert_eq!(runtime.eval("history.state", "t").unwrap(), "null");
+    // A state under the limit still works.
+    runtime
+        .eval(
+            "history.pushState({ok: 'x'.repeat(1024 * 1024 - 64)}, '', '/ok')",
+            "t",
+        )
+        .expect("a state under the quota is accepted");
+}

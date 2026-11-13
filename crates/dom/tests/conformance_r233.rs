@@ -82,3 +82,53 @@ fn insert_node_before_itself_is_a_noop() {
     assert!(inserted.is_empty());
     assert_eq!(document.children_ids(parent).count(), 1);
 }
+
+#[test]
+fn compare_document_position_is_linear_on_deep_branches() {
+    // #681: the common-ancestor search was `a_ancestors.iter().find(|a| b_ancestors.contains(a))`,
+    // i.e. O(depth^2) NodeId comparisons (12k deep took ~1.4 s). Two branches that share only the
+    // root are the worst case for that search.
+    let mut document = Document::new();
+    let root = document.root();
+    let left = el(&mut document, "div", vec![]);
+    assert!(document.append_child(root, left));
+    let right = el(&mut document, "div", vec![]);
+    assert!(document.append_child(root, right));
+    let mut leaf_left = left;
+    let mut leaf_right = right;
+    const DEPTH: usize = 20_000;
+    for _ in 0..DEPTH {
+        let node = el(&mut document, "span", vec![]);
+        assert!(document.append_child(leaf_left, node));
+        leaf_left = node;
+        let node = el(&mut document, "span", vec![]);
+        assert!(document.append_child(leaf_right, node));
+        leaf_right = node;
+    }
+    let started = std::time::Instant::now();
+    let position = document.compare_document_position(leaf_left, leaf_right);
+    let elapsed = started.elapsed();
+    // Both branches hang from the root, so they are connected: the left leaf precedes.
+    assert_eq!(position, 4, "a precedes b in document order");
+    assert_eq!(
+        document.compare_document_position(leaf_right, leaf_left),
+        2,
+        "and the reversed call reports PRECEDING"
+    );
+    assert!(
+        elapsed < std::time::Duration::from_millis(500),
+        "compare_document_position took {elapsed:?} on two {DEPTH}-deep branches"
+    );
+
+    // Ancestor/descendant flags still work on a deep chain.
+    assert_eq!(
+        document.compare_document_position(left, leaf_left),
+        20,
+        "ancestor must be CONTAINED_BY | FOLLOWING of its descendant"
+    );
+    assert_eq!(
+        document.compare_document_position(leaf_left, left),
+        10,
+        "descendant must be CONTAINS | PRECEDING of its ancestor"
+    );
+}

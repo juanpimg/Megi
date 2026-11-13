@@ -750,6 +750,35 @@ pub fn fetch_with_request_body(
 /// Like [`fetch_with_request_body`] but also sends **request trailers** after the body.
 ///
 /// HTTP/2: a final HEADERS block with END_STREAM after the DATA (requires a body).
+/// Validates the final request header list right before it is written to the wire.
+///
+/// Request **trailers** were already validated, but the header path concatenates
+/// `name: value\r\n` verbatim: a value with CR/LF (or a name with CR/LF/`:`) lets a caller —
+/// `user_agent`, `origin` or `extra_headers` — inject extra headers or a second message onto a
+/// pooled connection (#635).
+fn validate_request_headers(
+    headers: &[(String, String)],
+    max_bytes: usize,
+) -> Result<(), FetchError> {
+    let mut total = 0usize;
+    for (name, value) in headers {
+        let bad_name = name.is_empty() || !name.bytes().all(is_token_byte);
+        let bad_value = value
+            .bytes()
+            .any(|byte| matches!(byte, b'\r' | b'\n' | 0) || (byte < 0x20 && byte != b'\t'));
+        if bad_name || bad_value {
+            return Err(FetchError::InvalidRequestHeader(
+                "invalid request header name/value".to_owned(),
+            ));
+        }
+        total = total.saturating_add(name.len() + value.len() + 4);
+    }
+    if total > max_bytes {
+        return Err(FetchError::HeadersTooLarge);
+    }
+    Ok(())
+}
+
 /// HTTP/1.1: chunked trailers after the `0\r\n` terminator (forces
 /// `Transfer-Encoding: chunked`). Trailer names/values are validated (no pseudo-headers,
 /// no control characters) and total size is capped by `max_header_bytes`.
@@ -1078,6 +1107,12 @@ fn fetch_once(
     trailers: &[(String, String)],
     mut on_data: Option<StreamCallback<'_>>,
 ) -> Result<RawResponse, FetchError> {
+    // `extra_headers` are validated below; the user agent and the Origin value are framed
+    // verbatim too, so they get the same treatment before the connection is opened (#635).
+    validate_request_header("User-Agent", &options.user_agent)?;
+    if let Some(origin) = options.origin.as_deref() {
+        validate_request_header("Origin", origin)?;
+    }
     // Every caller-supplied header is validated before the request is framed. `net` is the
     // last trusted decision point: the JS layer's `fetch()` also validates, but a future
     // embedder must not be able to inject framing through `extra_headers`.
@@ -1368,6 +1403,7 @@ fn fetch_once(
         ));
     }
     let mut head = format!("{method} {h1_target} HTTP/{http_version}\r\nHost: {host_header}\r\n",);
+    validate_request_headers(&request_headers, options.max_header_bytes)?;
     for (name, value) in &request_headers {
         head.push_str(name);
         head.push_str(": ");

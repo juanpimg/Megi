@@ -208,6 +208,27 @@ fn fetch_rejects_forbidden_and_injected_headers() {
         )
         .expect("fetch");
     runtime.run_microtasks().expect("microtasks");
+    // The CRLF is rejected before the headers are serialized, so the injected line never
+    // becomes a `Host` header at all (#664). The forbidden-list path is exercised separately
+    // below with a real `Host` header.
+    let error = runtime.eval("__err", "t").unwrap();
+    assert!(
+        error.contains("TypeError") && error.contains("header"),
+        "a CRLF in a value must be rejected up front: {error}"
+    );
+    assert!(
+        calls.lock().expect("lock").is_empty(),
+        "provider must not run"
+    );
+
+    let (mut runtime, calls) = mock_runtime(ok_result());
+    runtime
+        .eval(
+            "window.__err = ''; fetch('data.json', {headers: {'Host': 'evil.example'}}).then(function () { __err = 'resolved'; }).catch(function (error) { __err = String(error); });",
+            "t",
+        )
+        .expect("fetch");
+    runtime.run_microtasks().expect("microtasks");
     let error = runtime.eval("__err", "t").unwrap();
     assert!(
         error.contains("forbidden request header `Host`"),
@@ -238,8 +259,11 @@ fn fetch_rejects_invalid_header_names_and_values() {
             .expect("fetch");
         runtime.run_microtasks().expect("microtasks");
         let error = runtime.eval("__err", "t").unwrap();
+        // The prelude now rejects the value before it is serialized (#664), so the error can
+        // be the prelude's TypeError instead of the native "invalid request header" path.
         assert!(
-            error.contains("invalid request header") || error.contains("invalid value"),
+            (error.contains("invalid") && error.contains("header"))
+                || error.contains("invalid value"),
             "{headers}: {error}"
         );
         assert!(calls.lock().expect("lock").is_empty(), "{headers}");
@@ -271,4 +295,43 @@ fn fetch_still_sends_valid_custom_headers() {
             .iter()
             .any(|(name, value)| name == "X-Trace" && value == "abc")
     );
+}
+
+#[test]
+fn header_values_reject_newline_injection() {
+    // #664: the prelude serialized headers as `name:value\n`, so a value containing a newline
+    // forged an extra header on the native side.
+    let (mut runtime, calls) = mock_runtime(ok_result());
+    let rejected = runtime
+        .eval(
+            "try { new Headers({'X-A': 'a\\nX-B: injected'}); 'accepted' } catch (e) { e.name }",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(rejected, "TypeError", "a newline in a value must throw");
+
+    let rejected_set = runtime
+        .eval(
+            "var h = new Headers(); try { h.set('X-A', 'a\\r\\nX-B: injected'); 'accepted' } catch (e) { e.name }",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(rejected_set, "TypeError", "CRLF in a value must throw");
+
+    let bad_name = runtime
+        .eval(
+            "try { new Headers([['X-A: X-B', 'v']]); 'accepted' } catch (e) { e.name }",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(bad_name, "TypeError", "a colon in a name must throw");
+
+    // The happy path still reaches the provider with exactly one header.
+    runtime
+        .eval("fetch('data.json', { headers: { 'X-A': 'ok' } });", "t")
+        .expect("fetch");
+    runtime.run_microtasks().expect("microtasks");
+    let seen = calls.lock().expect("lock");
+    let request = seen.last().expect("a request reached the provider");
+    assert_eq!(request.headers, vec![("X-A".to_string(), "ok".to_string())]);
 }
