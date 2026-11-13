@@ -180,6 +180,14 @@ bench = false
 [[bin]]
 name = "layout_tree"
 path = "fuzz_targets/layout_tree.rs"
+
+[[bin]]
+name = "layout_resolve"
+path = "fuzz_targets/layout_resolve.rs"
+
+[[bin]]
+name = "layout_resolve"
+path = "fuzz_targets/layout_resolve.rs"
 test = false
 doc = false
 bench = false

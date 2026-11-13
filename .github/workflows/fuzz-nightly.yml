@@ -92,6 +92,9 @@ jobs:
           - target: net_surface
             seconds: 300
             extra: ""
+          - target: layout_resolve
+            seconds: 300
+            extra: ""
           - target: dom_mutate
             seconds: 300
             extra: ""
