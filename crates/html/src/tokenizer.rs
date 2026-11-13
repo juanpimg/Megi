@@ -640,6 +640,8 @@ const NUMERIC_REPLACEMENT_TABLE: [(u32, u32); 27] = [
 pub const MAX_PARSE_ERRORS: usize = 1024;
 /// Maximum attributes materialized per tag in the tokenizer (anti-DoS).
 pub const MAX_TOKENIZER_ATTRIBUTES: usize = 4096;
+/// Maximum bytes accumulated in a single processing-instruction data buffer (#557).
+pub const MAX_PI_DATA_BYTES: usize = 1024 * 1024;
 
 /// Maximum digits folded into `char_ref_code` while scanning `&#…;` / `&#x…;` (#638).
 ///
@@ -3230,7 +3232,9 @@ impl Tokenizer {
                     self.tokens.push(Token::Eof);
                 }
                 Some(cp) => {
-                    Self::push_cp_to_string(&mut self.pending_pi_data, cp);
+                    if self.pending_pi_data.len() < MAX_PI_DATA_BYTES {
+                        Self::push_cp_to_string(&mut self.pending_pi_data, cp);
+                    }
                 }
             },
 
