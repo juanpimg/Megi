@@ -4392,38 +4392,143 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
             .define_property_or_throw(js_string!(name), descriptor, context)
             .map_err(|error| JsError::Internal(error.to_string()))?;
     }
-    const PRELUDE: &str = r#"
+    const PRELUDE: &str = r####"
 (function () {
   function define(name, value) { window[name] = value; }
+  function urlNormalizePath(path) {
+    var segments = String(path).split("/");
+    var out = [];
+    for (var i = 0; i < segments.length; i++) {
+      var segment = segments[i];
+      var last = i === segments.length - 1;
+      if (segment === ".") { if (last) { out.push(""); } continue; }
+      if (segment === "..") {
+        if (out.length > 1 || (out.length === 1 && out[0] !== "")) { out.pop(); }
+        if (last) { out.push(""); }
+        continue;
+      }
+      out.push(segment);
+    }
+    var result = out.join("/");
+    if (result === "") { return "/"; }
+    if (result.charAt(0) !== "/") { result = "/" + result; }
+    return result;
+  }
+  function urlSplitAuthority(authority) {
+    var out = { userinfo: "", host: "", hostname: "", port: "" };
+    if (!authority) { return out; }
+    var hostport = authority;
+    var at = authority.lastIndexOf("@");
+    if (at >= 0) { out.userinfo = authority.substring(0, at); hostport = authority.substring(at + 1); }
+    var hostname = hostport;
+    var port = "";
+    if (hostport.charAt(0) === "[") {
+      var close = hostport.indexOf("]");
+      if (close > 0) {
+        hostname = hostport.substring(0, close + 1);
+        var rest = hostport.substring(close + 1);
+        if (rest.charAt(0) === ":") { port = rest.substring(1); }
+      }
+    } else {
+      var colon = hostport.indexOf(":");
+      if (colon >= 0) { hostname = hostport.substring(0, colon); port = hostport.substring(colon + 1); }
+    }
+    out.hostname = hostname;
+    out.port = port;
+    out.host = port ? hostname + ":" + port : hostname;
+    return out;
+  }
+  function urlBuild(protocol, userinfo, hostname, port, path, search, hash) {
+    var hasAuthority = hostname !== "";
+    var pathname = path === "" ? (hasAuthority ? "/" : "") : path;
+    if (hasAuthority || pathname.charAt(0) === "/") { pathname = urlNormalizePath(pathname); }
+    var searchText = search || "";
+    if (searchText !== "" && searchText.charAt(0) !== "?") { searchText = "?" + searchText; }
+    var hashText = hash || "";
+    if (hashText !== "" && hashText.charAt(0) !== "#") { hashText = "#" + hashText; }
+    var authority = hasAuthority
+      ? "//" + (userinfo ? userinfo + "@" : "") + hostname + (port ? ":" + port : "")
+      : "";
+    var host = hasAuthority ? (port ? hostname + ":" + port : hostname) : "";
+    var credentials = userinfo ? userinfo.split(":") : [];
+    var result = {
+      href: protocol + authority + pathname + searchText + hashText,
+      protocol: protocol,
+      username: credentials.length > 0 ? credentials[0] : "",
+      password: credentials.length > 1 ? credentials.slice(1).join(":") : "",
+      host: host,
+      hostname: hostname,
+      port: port,
+      pathname: pathname,
+      search: searchText,
+      hash: hashText,
+      origin: hasAuthority ? protocol + "//" + host : "null"
+    };
+    result.searchParams = null;
+    return result;
+  }
   function urlParse(input, base) {
     var value = String(input);
-    var match = /^([A-Za-z][A-Za-z0-9+.-]*:)(\/\/[^\/?#]*)?([^?#]*)(\?[^#]*)?(#.*)?$/.exec(value);
-    if (!match && base) {
-      var baseMatch = /^([A-Za-z][A-Za-z0-9+.-]*:)(\/\/[^\/?#]*)?([^?#]*)(\?[^#]*)?(#.*)?$/.exec(String(base));
-      if (baseMatch) {
-        var origin = baseMatch[1] + (baseMatch[2] || "");
-        var path = baseMatch[3] || "/";
-        if (value.charAt(0) === "/") { path = value; }
-        else { path = path.substring(0, path.lastIndexOf("/") + 1) + value; }
-        match = /^([A-Za-z][A-Za-z0-9+.-]*:)(\/\/[^\/?#]*)?([^?#]*)(\?[^#]*)?(#.*)?$/.exec(origin + path);
-      }
+    var baseString = base === undefined || base === null ? "" : String(base);
+    var scheme = /^([A-Za-z][A-Za-z0-9+.-]*:)/.exec(value);
+    var protocolRelative = false;
+    if (!scheme && value.substring(0, 2) === "//") {
+      // Protocol-relative: inherit the base scheme but not its authority.
+      var baseScheme = /^([A-Za-z][A-Za-z0-9+.-]*:)/.exec(baseString);
+      if (!baseScheme) { throw new TypeError("Invalid URL: " + value); }
+      scheme = baseScheme;
+      protocolRelative = true;
     }
-    if (!match) { throw new TypeError("Invalid URL: " + value); }
-    var protocol = match[1];
-    var hostPart = match[2] || "";
-    var pathname = match[3] || "/";
-    var search = match[4] || "";
-    var hash = match[5] || "";
-    var hostname = hostPart.replace(/^\/\//, "");
-    var port = "";
-    var colon = hostname.lastIndexOf(":");
-    if (colon > 0) { port = hostname.substring(colon + 1); hostname = hostname.substring(0, colon); }
-    return {
-      href: protocol + hostPart + pathname + search + hash,
-      protocol: protocol, host: hostPart.replace(/^\/\//, ""), hostname: hostname, port: port,
-      pathname: pathname, search: search, hash: hash,
-      origin: protocol + hostPart
-    };
+    if (!scheme) {
+      if (!baseString) { throw new TypeError("Invalid URL: " + value); }
+      var resolvedBase = urlParse(baseString, null);
+      var path = resolvedBase.pathname;
+      var search = resolvedBase.search;
+      var hash = "";
+      var local = value;
+      var hashIndex = local.indexOf("#");
+      if (hashIndex >= 0) { hash = local.substring(hashIndex); local = local.substring(0, hashIndex); }
+      var localQuery = "";
+      var queryIndex = local.indexOf("?");
+      if (queryIndex >= 0) { localQuery = local.substring(queryIndex); local = local.substring(0, queryIndex); }
+      if (local === "") {
+        if (queryIndex >= 0) { search = localQuery; } else if (hashIndex < 0) { search = resolvedBase.search; }
+      } else if (local.charAt(0) === "/") {
+        path = local;
+        search = localQuery;
+      } else {
+        var slash = path.lastIndexOf("/");
+        path = (slash >= 0 ? path.substring(0, slash + 1) : "/") + local;
+        search = localQuery;
+      }
+      var baseUserinfo = resolvedBase.username
+        ? (resolvedBase.password ? resolvedBase.username + ":" + resolvedBase.password : resolvedBase.username)
+        : "";
+      return urlBuild(
+        resolvedBase.protocol, baseUserinfo, resolvedBase.hostname, resolvedBase.port, path, search, hash
+      );
+    }
+    var protocol = scheme[1];
+    var rest = protocolRelative ? value : value.substring(protocol.length);
+    var hashIndex2 = rest.indexOf("#");
+    var hash2 = "";
+    if (hashIndex2 >= 0) { hash2 = rest.substring(hashIndex2); rest = rest.substring(0, hashIndex2); }
+    var search2 = "";
+    var queryIndex2 = rest.indexOf("?");
+    if (queryIndex2 >= 0) { search2 = rest.substring(queryIndex2); rest = rest.substring(0, queryIndex2); }
+    var authority2 = "";
+    var path2 = rest;
+    if (rest.substring(0, 2) === "//") {
+      var afterSlashes = rest.substring(2);
+      var end = afterSlashes.length;
+      for (var i = 0; i < afterSlashes.length; i++) {
+        if (afterSlashes.charAt(i) === "/") { end = i; break; }
+      }
+      authority2 = afterSlashes.substring(0, end);
+      path2 = afterSlashes.substring(end);
+    }
+    var parts = urlSplitAuthority(authority2);
+    return urlBuild(protocol, parts.userinfo, parts.hostname, parts.port, path2, search2, hash2);
   }
   function SearchParams(init) {
     this._list = [];
@@ -4689,7 +4794,7 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     });
   });
 })();
-"#;
+"####;
     let fetch_fn = FunctionObjectBuilder::new(context.realm(), native(fetch_native))
         .name(js_string!("__megi_fetch_native"))
         .length(4)
