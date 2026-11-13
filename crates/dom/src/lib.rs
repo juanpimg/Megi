@@ -2308,15 +2308,29 @@ impl Document {
         if !self.can_have_children(parent_id) {
             return Err(DomError::CannotHaveChildren(parent_id));
         }
-        let old_children: Vec<NodeId> = self.children_ids(parent_id).collect();
-        for child in old_children {
-            self.detach(child);
-        }
+        // Validate all new children up front so a later failure cannot leave the
+        // tree half-mutated (#537).
         for &child in new_children {
             if self.slot_of(child).is_none() {
                 return Err(DomError::UnknownNode(child));
             }
+            if parent_id == child || self.is_self_or_ancestor_of(child, parent_id) {
+                return Err(DomError::HierarchyRequest {
+                    parent: parent_id,
+                    child,
+                });
+            }
+        }
+        let old_children: Vec<NodeId> = self.children_ids(parent_id).collect();
+        for child in old_children.iter().copied() {
+            self.detach(child);
+        }
+        for &child in new_children {
             if !self.append_child(parent_id, child) {
+                // Roll back: re-attach the previously detached children.
+                for child in old_children.iter().copied() {
+                    self.append_child(parent_id, child);
+                }
                 return Err(DomError::HierarchyRequest {
                     parent: parent_id,
                     child,
