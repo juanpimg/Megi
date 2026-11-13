@@ -1910,6 +1910,9 @@ fn paint_marker(
     if let Some(url) = style.list_style_image.as_deref()
         && let Some(image) = resources.backgrounds.get(url)
         && !image.is_empty()
+        && font_size.is_finite()
+        && font_size > 0.0
+        && font_size <= 1e4
     {
         let size = font_size.max(1.0);
         let center_y = baseline - font_size * 0.35;
