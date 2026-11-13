@@ -1507,6 +1507,10 @@ fn composite_pixel(pixels: &mut [u8], offset: usize, color: Color, src_a: f32) {
 }
 
 /// Scanline fill with 4 vertical sub-rows and analytic horizontal coverage.
+/// Maximum total scanline work (edges × rows × sub-rows) before fill_scanline bails
+/// out (issue #627): prevents CPU DoS from huge paths.
+const MAX_SCANLINE_WORK: usize = 1 << 24;
+
 fn fill_scanline(
     subpaths: &[SubPath],
     rule: FillRule,
@@ -1532,6 +1536,10 @@ fn fill_scanline(
         }
     }
     if edges.is_empty() {
+        return;
+    }
+    // Bound total work to avoid CPU DoS (issue #627).
+    if edges.len().saturating_mul(height).saturating_mul(4) > MAX_SCANLINE_WORK {
         return;
     }
     let mut crossings: Vec<(f32, i32)> = Vec::new();
