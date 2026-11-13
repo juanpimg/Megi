@@ -134,6 +134,12 @@ pub struct Limits {
     pub max_pixels: u64,
     /// Maximum `<use>` expansion depth (cycle guard).
     pub max_use_depth: usize,
+    /// Maximum number of `<use>` expansions across the document (DoS guard
+    /// against exponential fan-out).
+    pub max_use_expansions: usize,
+    /// Maximum number of flattened shapes in the document (DoS guard against
+    /// exponential `<use>` fan-out).
+    pub max_shapes: usize,
     /// Maximum selector evaluations across the document (rules × selectors × elements).
     ///
     /// The default allows ~100 evaluations per element at [`Limits::max_elements`]; a
@@ -153,6 +159,8 @@ impl Default for Limits {
             max_height: 16_384,
             max_pixels: 64 * 1024 * 1024,
             max_use_depth: 16,
+            max_use_expansions: 1024,
+            max_shapes: 100_000,
             max_selector_checks: 10_000_000,
         }
     }

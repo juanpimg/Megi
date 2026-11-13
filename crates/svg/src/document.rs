@@ -394,6 +394,7 @@ impl Document {
             shapes: Vec::new(),
             texts: Vec::new(),
             use_stack: Vec::new(),
+            use_expansions: 0,
             active_clips: Vec::new(),
             active_masks: Vec::new(),
             active_filter: None,
@@ -691,6 +692,7 @@ struct Builder<'a> {
     shapes: Vec<Shape>,
     texts: Vec<TextSpec>,
     use_stack: Vec<String>,
+    use_expansions: usize,
     active_clips: Vec<EffectRef>,
     active_masks: Vec<EffectRef>,
     active_filter: Option<EffectRef>,
@@ -876,6 +878,9 @@ impl<'a> Builder<'a> {
         if depth > self.limits.max_depth {
             return Err(SvgError::Limit("SVG element nesting too deep".to_owned()));
         }
+        if self.shapes.len() >= self.limits.max_shapes {
+            return Err(SvgError::Limit("too many SVG shapes".to_owned()));
+        }
         let name = element.local_name_lower();
         let mut style = parent_style.clone();
         // `clip-path`/`mask`/`filter` are not inherited: descendants only see them through
@@ -954,6 +959,11 @@ impl<'a> Builder<'a> {
                         "nested <use> expansion too deep".to_owned(),
                     ));
                 }
+                if self.use_expansions >= self.limits.max_use_expansions {
+                    ancestors.pop();
+                    return Err(SvgError::Limit("too many <use> expansions".to_owned()));
+                }
+                self.use_expansions += 1;
                 let x = parse_length(element.attribute("x"), 0.0).unwrap_or(0.0);
                 let y = parse_length(element.attribute("y"), 0.0).unwrap_or(0.0);
                 let use_transform = transform.then(Transform::translate(x, y));
@@ -2195,6 +2205,7 @@ fn build_effect_shapes(
         shapes: Vec::new(),
         texts: Vec::new(),
         use_stack: Vec::new(),
+        use_expansions: 0,
         active_clips: Vec::new(),
         active_masks: Vec::new(),
         active_filter: None,
@@ -2534,6 +2545,7 @@ fn build_patterns(
             shapes: Vec::new(),
             texts: Vec::new(),
             use_stack: Vec::new(),
+            use_expansions: 0,
             active_clips: Vec::new(),
             active_masks: Vec::new(),
             segments_used: 0,
