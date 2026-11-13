@@ -266,6 +266,14 @@ pub fn apply_orientation(
     let mut data = vec![0u8; (dst_width as usize) * (dst_height as usize) * 4];
     for y in 0..dst_height {
         for x in 0..dst_width {
+            let orientation = match orientation {
+                1..=8 => orientation,
+                _ => {
+                    return Err(ImageError::InvalidData {
+                        reason: "invalid EXIF orientation value",
+                    });
+                }
+            };
             let (sx, sy) = match orientation {
                 2 => (width - 1 - x, y),
                 3 => (width - 1 - x, height - 1 - y),
@@ -276,7 +284,7 @@ pub fn apply_orientation(
                 8 => (width - 1 - y, x),
                 _ => (x, y),
             };
-            let rgba = pixel(sx.min(width - 1), sy.min(height - 1));
+            let rgba = pixel(sx, sy);
             let offset = ((y as usize) * (dst_width as usize) + (x as usize)) * 4;
             data[offset..offset + 4].copy_from_slice(&rgba);
         }
