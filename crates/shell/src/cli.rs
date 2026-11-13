@@ -261,10 +261,17 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
             "--refresh-ms" => {
                 // Optional value: use the next argument when it is a bare integer, otherwise
                 // fall back to the default interval without consuming it. A present but
-                // unparseable value is an error (not silently swallowed).
+                // unparseable value is an error (not silently swallowed). Values are
+                // bounded to [16, 60000] ms to avoid overflow in Instant addition
+                // (issue #594).
                 if let Some(value) = arguments.get(index) {
                     match value.parse::<u64>() {
                         Ok(interval) => {
+                            if interval != 0 && !(16..=60000).contains(&interval) {
+                                return Err(ShellError::Usage(format!(
+                                    "invalid --refresh-ms value `{value}` (expected 0 or 16..=60000)"
+                                )));
+                            }
                             index += 1;
                             raw.refresh_ms = Some(interval);
                         }
