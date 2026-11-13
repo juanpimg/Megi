@@ -320,17 +320,20 @@ pub fn parse_set_cookie(
                 }
             }
             "max-age" => {
-                let seconds: i64 = raw_attribute_value
-                    .parse()
-                    .map_err(|_| SetCookieError::InvalidMaxAge(raw_attribute_value.to_owned()))?;
-                // `Max-Age` is relative to the current clock; 0 or negative means "now"
-                // (immediate expiry / deletion).
-                let delta = Duration::from_secs(seconds.unsigned_abs());
-                max_age = Some(if seconds > 0 {
-                    now.checked_add(delta).unwrap_or(now)
-                } else {
-                    now
-                });
+                // RFC 6265 §5.3: invalid Max-Age is ignored (fall back to Expires).
+                // Reject leading '+' (grammar forbids it).
+                let trimmed = raw_attribute_value.trim();
+                if !trimmed.starts_with('+') {
+                    if let Ok(seconds) = trimmed.parse::<i64>() {
+                        // `Max-Age` is relative to the current clock; 0 or negative means "now".
+                        let delta = Duration::from_secs(seconds.unsigned_abs());
+                        max_age = Some(if seconds > 0 {
+                            now.checked_add(delta).unwrap_or(now)
+                        } else {
+                            now
+                        });
+                    }
+                }
             }
             "domain" => {
                 let domain = raw_attribute_value
@@ -844,10 +847,8 @@ mod tests {
             parse_set_cookie("bad name=value", &base, UNIX_EPOCH),
             Err(SetCookieError::InvalidName(_))
         ));
-        assert!(matches!(
-            parse_set_cookie("a=b; Max-Age=soon", &base, UNIX_EPOCH),
-            Err(SetCookieError::InvalidMaxAge(_))
-        ));
+        // Invalid Max-Age is ignored (RFC 6265 §5.3), cookie still parses.
+        assert!(parse_set_cookie("a=b; Max-Age=soon", &base, UNIX_EPOCH).is_ok());
         assert!(matches!(
             parse_set_cookie("a=b; Domain=.other.test", &base, UNIX_EPOCH),
             Err(SetCookieError::InvalidDomain(_))
@@ -1097,11 +1098,7 @@ mod tests {
         assert_eq!(
             jar.store_from_response(
                 &origin,
-                &headers(&[
-                    ("Set-Cookie", ""),
-                    ("Set-Cookie", "=x"),
-                    ("Set-Cookie", "a=b; Max-Age=oops"),
-                ])
+                &headers(&[("Set-Cookie", ""), ("Set-Cookie", "=x"),])
             ),
             0
         );
