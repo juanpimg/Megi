@@ -1350,7 +1350,7 @@ struct ImportWalk<'a> {
     budget_warned: bool,
     skipped: usize,
     max_depth: usize,
-    css_bytes: usize,
+    css_bytes: &'a mut usize,
 }
 
 /// Builds the author [`css::StyleCollection`] in cascade order, resolving `@import`
@@ -1445,14 +1445,14 @@ fn build_author_stylesheet_collection(
         budget_warned: false,
         skipped: 0,
         max_depth: 0,
-        css_bytes: 0,
+        css_bytes: &mut summary.css_bytes,
     };
 
     for source in &collected.sources {
         match source {
             stylesheets::CssSource::Inline { text, .. } => {
                 summary.inline_stylesheets += 1;
-                if !account_css_bytes(&mut summary.css_bytes, text.len(), options) {
+                if !account_css_bytes(walk.css_bytes, text.len(), options) {
                     if !summary.sheets_capped {
                         summary.sheets_capped = true;
                         walk.warnings.push(format!(
@@ -1500,7 +1500,7 @@ fn build_author_stylesheet_collection(
                 else {
                     continue;
                 };
-                if !account_css_bytes(&mut summary.css_bytes, text.len(), options) {
+                if !account_css_bytes(walk.css_bytes, text.len(), options) {
                     if !summary.sheets_capped {
                         summary.sheets_capped = true;
                         walk.warnings.push(format!(
@@ -1533,7 +1533,7 @@ fn build_author_stylesheet_collection(
             }
         }
     }
-    summary.css_bytes += walk.css_bytes;
+    // css_bytes is shared with walk.
     summary.imports_loaded = walk.loaded;
     summary.imports_skipped = walk.skipped;
     summary.max_import_depth = walk.max_depth;
@@ -1619,7 +1619,7 @@ fn walk_imports(
         else {
             continue;
         };
-        if !account_css_bytes(&mut walk.css_bytes, text.len(), walk.options) {
+        if !account_css_bytes(walk.css_bytes, text.len(), walk.options) {
             walk.skipped += 1;
             if !walk.budget_warned {
                 walk.budget_warned = true;

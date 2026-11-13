@@ -29,6 +29,11 @@ const GENEROUS_PARSE: ParseOptions = ParseOptions {
     max_nodes: usize::MAX,
     max_attributes_per_element: usize::MAX,
     max_input_bytes: usize::MAX,
+    max_text_bytes: usize::MAX,
+    max_written_bytes: usize::MAX,
+    max_script_executions: usize::MAX,
+    max_script_text_bytes: usize::MAX,
+    max_active_formatting: usize::MAX,
 };
 
 const VIEWPORT_WIDTH: u32 = 800;

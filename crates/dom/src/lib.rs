@@ -283,10 +283,11 @@ impl Attribute {
 }
 
 /// Payload specific to `NodeKind::Element`.
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub const MAX_ATTRIBUTES_PER_ELEMENT: usize = 256;
 pub const MAX_ATTRIBUTE_VALUE_BYTES: usize = 64 * 1024;
 
+/// Payload specific to `NodeKind::Element`.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ElementData {
     pub namespace: Namespace,
     pub prefix: Option<String>,
@@ -1954,9 +1955,9 @@ impl Document {
             };
             match &current_node.kind {
                 NodeKind::Text(data) => {
-                    if text.len() + data.len() > MAX_TEXT_CONTENT_BYTES {
+                    if text.len() + data.len() > Self::MAX_TEXT_CONTENT_BYTES {
                         // Truncate and stop collecting.
-                        let remaining = MAX_TEXT_CONTENT_BYTES.saturating_sub(text.len());
+                        let remaining = Self::MAX_TEXT_CONTENT_BYTES.saturating_sub(text.len());
                         if remaining > 0 {
                             text.push_str(&data[..remaining.min(data.len())]);
                         }

@@ -225,7 +225,7 @@ impl JsRuntime {
     /// `source_name` is used for stack traces only (bounded to avoid huge source URLs).
     pub fn eval(&mut self, script: &str, source_name: &str) -> Result<String, JsError> {
         if script.len() > MAX_JS_SOURCE_BYTES {
-            return Err(JsError::new("script source exceeds byte cap"));
+            return Err(JsError::Budget("script source exceeds byte cap".to_owned()));
         }
         self.context
             .runtime_limits_mut()
@@ -4026,7 +4026,9 @@ impl JsRuntime {
     /// mapping blocks the specifier with [`JsError::ImportMapBlocked`].
     pub fn set_import_map_json(&mut self, source: &str) -> Result<(), JsError> {
         if source.len() > MAX_JS_SOURCE_BYTES {
-            return Err(JsError::new("import map source exceeds byte cap"));
+            return Err(JsError::Budget(
+                "import map source exceeds byte cap".to_owned(),
+            ));
         }
         let map = crate::ImportMap::from_json(source)?;
         self.host.borrow_mut().import_map = Some(map);
@@ -4054,7 +4056,7 @@ impl JsRuntime {
         budget: &Budget,
     ) -> Result<ModuleOutcome, JsError> {
         if source.len() > MAX_JS_SOURCE_BYTES {
-            return Err(JsError::new("module source exceeds byte cap"));
+            return Err(JsError::Budget("module source exceeds byte cap".to_owned()));
         }
         apply_budget(&mut self.context, budget);
         let mut visiting = Vec::new();
