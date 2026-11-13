@@ -1,0 +1,74 @@
+# Benchmark regression detection (#963).
+#
+# Runs the bench suite on a schedule and on demand, then compares every row against
+# the committed baseline (`docs/status/bench-baseline.json`, round 36) with
+# `tools/bench_compare.py`. The gate is deliberately loose about absolute noise:
+# CI runners are slower and noisier than the machine the baseline came from, so a
+# row only fails when it grows beyond 20 % *and* beyond 0.5 ms. Results are uploaded
+# as artifacts so a red run can be compared by hand without re-running it.
+name: bench
+
+on:
+  schedule:
+    - cron: "41 4 * * 1" # Mondays, after the toolchain-drift job
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    name: Benchmark regression check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          key: bench-regression
+
+      # Three passes: `bench_compare.py` takes the median of medians per row, which
+      # keeps a single noisy pass from failing the gate.
+      - name: Run three bench passes
+        run: |
+          set -euo pipefail
+          for pass in 1 2 3; do
+            ./tools/bench.sh --json
+            cp target/bench-latest.txt "target/bench-ci-${pass}.json"
+          done
+
+      - name: Compare against the committed baseline
+        run: |
+          python3 tools/bench_compare.py target/bench-ci-1.json target/bench-ci-2.json target/bench-ci-3.json \
+            --threshold 20 --min-ms 0.5
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: bench-results
+          path: |
+            target/bench-ci-*.json
+            target/bench-latest-meta.txt
+          if-no-files-found: warn
+
+      - name: Summarise the comparison in the job summary
+        if: always()
+        run: |
+          {
+            echo '### Benchmark regression check (#963)'
+            echo
+            echo '```'
+            python3 tools/bench_compare.py target/bench-ci-1.json target/bench-ci-2.json target/bench-ci-3.json \
+              --threshold 20 --min-ms 0.5 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

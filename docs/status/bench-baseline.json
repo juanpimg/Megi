@@ -1,0 +1,417 @@
+{
+  "schema": "megi-bench-baseline-v1",
+  "round": 36,
+  "commit": "a080249",
+  "date": "2026-11-13",
+  "method": "7 consecutive passes of ./tools/bench.sh --json; per-row median of the 7 runs",
+  "machine": "12th Gen Intel i7-12700H, 20 threads, Linux 7.x, rustc 1.99.1",
+  "load_note": "load average 8.1-13.0 during the window (shared machine)",
+  "artifacts": "target/bench-r36b-run1..7.json (not committed; see docs/PERFORMANCE.md)",
+  "rows": [
+    {
+      "name": "css/parse-10k-rules",
+      "group": "css",
+      "median_ms": 13.366
+    },
+    {
+      "name": "css/resolve-styles-10k-nodes",
+      "group": "css",
+      "median_ms": 12.854
+    },
+    {
+      "name": "css/resolve-styles-2k-nodes",
+      "group": "css",
+      "median_ms": 2.873
+    },
+    {
+      "name": "css/selector-match-descendant",
+      "group": "css",
+      "median_ms": 1.037
+    },
+    {
+      "name": "css/selector-match-simple",
+      "group": "css",
+      "median_ms": 0.542
+    },
+    {
+      "name": "css/vars-calc-10k",
+      "group": "css",
+      "median_ms": 21.365
+    },
+    {
+      "name": "html/massive-end-p",
+      "group": "html",
+      "median_ms": 19.065
+    },
+    {
+      "name": "html/massive-formatting",
+      "group": "html",
+      "median_ms": 10.911
+    },
+    {
+      "name": "html/nested-div-10k",
+      "group": "html",
+      "median_ms": 2.836
+    },
+    {
+      "name": "html/nested-div-32k",
+      "group": "html",
+      "median_ms": 8.95
+    },
+    {
+      "name": "html/nested-div-64k",
+      "group": "html",
+      "median_ms": 18.165
+    },
+    {
+      "name": "html/nested-div-64k-default-limits",
+      "group": "html",
+      "median_ms": 10.215
+    },
+    {
+      "name": "html/pretty-5k-blocks",
+      "group": "html",
+      "median_ms": 9.322
+    },
+    {
+      "name": "html/realistic-1mb",
+      "group": "html",
+      "median_ms": 17.873
+    },
+    {
+      "name": "html/tag-40k-attrs",
+      "group": "html",
+      "median_ms": 9.524
+    },
+    {
+      "name": "image/decode-gif",
+      "group": "image",
+      "median_ms": 3.013
+    },
+    {
+      "name": "image/decode-jpeg-800x600",
+      "group": "image",
+      "median_ms": 11.06
+    },
+    {
+      "name": "image/decode-png-800x600",
+      "group": "image",
+      "median_ms": 2.548
+    },
+    {
+      "name": "image/decode-png-scaled-x2",
+      "group": "image",
+      "median_ms": 2.815
+    },
+    {
+      "name": "image/decode-webp-alpha",
+      "group": "image",
+      "median_ms": 0.024
+    },
+    {
+      "name": "image/decode-webp-lossless",
+      "group": "image",
+      "median_ms": 0.049
+    },
+    {
+      "name": "image/decode-webp-lossy",
+      "group": "image",
+      "median_ms": 10.868
+    },
+    {
+      "name": "image/decode-webp-lossy-q75",
+      "group": "image",
+      "median_ms": 0.059
+    },
+    {
+      "name": "image/decode-webp-lossy-q90",
+      "group": "image",
+      "median_ms": 0.065
+    },
+    {
+      "name": "image/decode-webp-palette",
+      "group": "image",
+      "median_ms": 0.007
+    },
+    {
+      "name": "layout/realistic-1mb",
+      "group": "layout",
+      "median_ms": 35.763
+    },
+    {
+      "name": "layout/sticky-text-1mb",
+      "group": "layout",
+      "median_ms": 32.737
+    },
+    {
+      "name": "paint/backdrop-blur-800x600",
+      "group": "paint",
+      "median_ms": 6.152
+    },
+    {
+      "name": "paint/backdrop-blur-color-800x600",
+      "group": "paint",
+      "median_ms": 9.988
+    },
+    {
+      "name": "paint/backdrop-blur-no-effect-800x600",
+      "group": "paint",
+      "median_ms": 0.265
+    },
+    {
+      "name": "paint/backdrop-fixture",
+      "group": "paint",
+      "median_ms": 0.339
+    },
+    {
+      "name": "paint/backdrop-fixture-no-effect",
+      "group": "paint",
+      "median_ms": 0.022
+    },
+    {
+      "name": "paint/backdrop-fixture-png",
+      "group": "paint",
+      "median_ms": 0.564
+    },
+    {
+      "name": "paint/backdrop-fixture-png-no-effect",
+      "group": "paint",
+      "median_ms": 0.438
+    },
+    {
+      "name": "paint/backdrop-fixture-raster",
+      "group": "paint",
+      "median_ms": 1.264
+    },
+    {
+      "name": "paint/backdrop-fixture-raster-no-effect",
+      "group": "paint",
+      "median_ms": 0.972
+    },
+    {
+      "name": "paint/build-display-list",
+      "group": "paint",
+      "median_ms": 8.966
+    },
+    {
+      "name": "paint/clipping-800x600",
+      "group": "pipeline",
+      "median_ms": 45.355
+    },
+    {
+      "name": "paint/filter-fixture",
+      "group": "paint",
+      "median_ms": 0.271
+    },
+    {
+      "name": "paint/filter-fixture-no-effect",
+      "group": "paint",
+      "median_ms": 0.269
+    },
+    {
+      "name": "paint/layer-effects-800x600",
+      "group": "paint",
+      "median_ms": 26.261
+    },
+    {
+      "name": "paint/object-fit-800x600",
+      "group": "paint",
+      "median_ms": 3.384
+    },
+    {
+      "name": "paint/png-deflate-1024x768",
+      "group": "paint",
+      "median_ms": 3.445
+    },
+    {
+      "name": "paint/png-deflate-800x600",
+      "group": "paint",
+      "median_ms": 2.186
+    },
+    {
+      "name": "paint/png-encode-1024x768",
+      "group": "paint",
+      "median_ms": 3.933
+    },
+    {
+      "name": "paint/png-encode-1024x768-alpha",
+      "group": "paint",
+      "median_ms": 108.771
+    },
+    {
+      "name": "paint/png-encode-800x600",
+      "group": "paint",
+      "median_ms": 2.409
+    },
+    {
+      "name": "paint/png-encode-800x600-alpha",
+      "group": "paint",
+      "median_ms": 64.284
+    },
+    {
+      "name": "paint/png-encode-full-1024x768-100pct",
+      "group": "paint",
+      "median_ms": 3.908
+    },
+    {
+      "name": "paint/png-encode-full-1024x768-10pct",
+      "group": "paint",
+      "median_ms": 10.434
+    },
+    {
+      "name": "paint/png-encode-full-1024x768-25pct",
+      "group": "paint",
+      "median_ms": 9.318
+    },
+    {
+      "name": "paint/png-encode-full-1024x768-50pct",
+      "group": "paint",
+      "median_ms": 7.668
+    },
+    {
+      "name": "paint/png-encode-full-800x600-100pct",
+      "group": "paint",
+      "median_ms": 2.332
+    },
+    {
+      "name": "paint/png-encode-full-800x600-10pct",
+      "group": "paint",
+      "median_ms": 6.378
+    },
+    {
+      "name": "paint/png-encode-full-800x600-25pct",
+      "group": "paint",
+      "median_ms": 5.611
+    },
+    {
+      "name": "paint/png-encode-full-800x600-50pct",
+      "group": "paint",
+      "median_ms": 4.595
+    },
+    {
+      "name": "paint/png-encode-regions-100pct",
+      "group": "paint",
+      "median_ms": 2.476
+    },
+    {
+      "name": "paint/png-encode-regions-1024x768-100pct",
+      "group": "paint",
+      "median_ms": 4.371
+    },
+    {
+      "name": "paint/png-encode-regions-1024x768-10pct",
+      "group": "paint",
+      "median_ms": 5.281
+    },
+    {
+      "name": "paint/png-encode-regions-1024x768-25pct",
+      "group": "paint",
+      "median_ms": 5.075
+    },
+    {
+      "name": "paint/png-encode-regions-1024x768-50pct",
+      "group": "paint",
+      "median_ms": 4.831
+    },
+    {
+      "name": "paint/png-encode-regions-10pct",
+      "group": "paint",
+      "median_ms": 3.089
+    },
+    {
+      "name": "paint/png-encode-regions-25pct",
+      "group": "paint",
+      "median_ms": 2.992
+    },
+    {
+      "name": "paint/png-encode-regions-50pct",
+      "group": "paint",
+      "median_ms": 2.85
+    },
+    {
+      "name": "paint/png-filter-1024x768",
+      "group": "paint",
+      "median_ms": 0.303
+    },
+    {
+      "name": "paint/png-filter-800x600",
+      "group": "paint",
+      "median_ms": 0.205
+    },
+    {
+      "name": "paint/rasterize-800x600",
+      "group": "paint",
+      "median_ms": 1.059
+    },
+    {
+      "name": "paint/render-to-png-800x600",
+      "group": "paint",
+      "median_ms": 6.407
+    },
+    {
+      "name": "pipeline/backdrop-fixture-300x260",
+      "group": "pipeline",
+      "median_ms": 1.851
+    },
+    {
+      "name": "pipeline/backdrop-fixture-300x260-no-effect",
+      "group": "pipeline",
+      "median_ms": 1.432
+    },
+    {
+      "name": "pipeline/filter-fixture-300x260",
+      "group": "pipeline",
+      "median_ms": 0.828
+    },
+    {
+      "name": "pipeline/filter-fixture-300x260-no-effect",
+      "group": "pipeline",
+      "median_ms": 0.812
+    },
+    {
+      "name": "pipeline/gradients-800x600",
+      "group": "pipeline",
+      "median_ms": 47.088
+    },
+    {
+      "name": "pipeline/grid-800x600",
+      "group": "pipeline",
+      "median_ms": 4.433
+    },
+    {
+      "name": "pipeline/html-to-png-800x600",
+      "group": "pipeline",
+      "median_ms": 110.124
+    },
+    {
+      "name": "render/html-to-png",
+      "group": "render",
+      "median_ms": 7.614
+    },
+    {
+      "name": "shell/chrome-png-1024x768",
+      "group": "shell",
+      "median_ms": 3.794
+    },
+    {
+      "name": "shell/chrome-png-640x400",
+      "group": "shell",
+      "median_ms": 1.235
+    },
+    {
+      "name": "shell/save-png-encode-800x600",
+      "group": "shell",
+      "median_ms": 2.753
+    },
+    {
+      "name": "shell/save-png-total-800x600",
+      "group": "shell",
+      "median_ms": 2.786
+    },
+    {
+      "name": "shell/save-png-write-800x600",
+      "group": "shell",
+      "median_ms": 0.003
+    }
+  ]
+}

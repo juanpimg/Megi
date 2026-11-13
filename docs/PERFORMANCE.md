@@ -370,6 +370,20 @@ Filas nuevas de r33–r36 (19) que no tienen par en r32: matriz completa
    `9e957177…` 42 853 B; `basic.rgba` `60f8984e…`.
 5. `render/html-to-png` mide el crate render; no lo sustituyas por `pipeline/*`
    (composición manual).
+6. **Comparación automática** (#963): `docs/status/bench-baseline.json` guarda la
+   mediana por fila de la ronda 36 (81 filas, commit `a080249`). Para comparar una
+   medición nueva:
+
+   ```bash
+   ./tools/bench.sh --json            # escribe target/bench-latest.txt
+   python3 tools/bench_compare.py target/bench-latest.txt
+   ```
+
+   `bench_compare.py` acepta varias pasadas (toma la mediana de medianas), marca
+   `REGRESSION` cuando una fila crece >20 % **y** >0,5 ms, imprime `noise` para las
+   filas por debajo del suelo absoluto y sale con código 1 si hay regresión. El
+   workflow `bench` (lunes 04:41 UTC y `workflow_dispatch`) ejecuta tres pasadas y
+   aplica el mismo criterio en CI.
 
 ## 14. Limitaciones
 
