@@ -197,16 +197,35 @@ fn no_proxy_entry_matches(entry: &str, host: &str, port: Option<u16>) -> bool {
     // Split an optional `:port` from the host (IPv6 literals keep their brackets).
     let (entry_host, entry_port) = if let Some(rest) = entry.strip_prefix('[') {
         match rest.split_once(']') {
-            Some((host, tail)) => (
-                host.to_owned(),
-                tail.strip_prefix(':')
-                    .and_then(|value| value.parse::<u16>().ok()),
-            ),
+            Some((host, tail)) => {
+                let port = if tail.is_empty() {
+                    None
+                } else if let Some(value) = tail.strip_prefix(':') {
+                    // An explicit but unparseable port must not silently drop the
+                    // constraint (#514): treat the entry as non-matching.
+                    match value.parse::<u16>() {
+                        Ok(p) => Some(p),
+                        Err(_) => return false,
+                    }
+                } else {
+                    None
+                };
+                (host.to_owned(), port)
+            }
             None => (rest.to_owned(), None),
         }
     } else if entry.matches(':').count() == 1 {
         match entry.split_once(':') {
-            Some((host, tail)) => (host.to_owned(), tail.parse::<u16>().ok()),
+            Some((host, tail)) => {
+                if tail.is_empty() {
+                    (host.to_owned(), None)
+                } else {
+                    match tail.parse::<u16>() {
+                        Ok(p) => (host.to_owned(), Some(p)),
+                        Err(_) => return false,
+                    }
+                }
+            }
             None => (entry, None),
         }
     } else {
