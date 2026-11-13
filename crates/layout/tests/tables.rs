@@ -329,7 +329,10 @@ fn test_rowspan_distributes_row_heights() {
         1,
         "rowspan cell belongs to row 0 only"
     );
-    assert_eq!(rows[1].children[0].dimensions.content.x, 96.5);
+    // Column 0 holds only the empty rowspan cell, so its intrinsic width is 0 rather than
+    // the old 1px floor (#695): the 200px table splits the free space evenly (88 + 100)
+    // and the second column now starts at 96 instead of 96.5.
+    assert_eq!(rows[1].children[0].dimensions.content.x, 96.0);
     let tall_box = &rows[0].children[0];
     let expected_height = 3.0 * 33.3333 + 2.0 * 4.0;
     assert!(
@@ -779,4 +782,48 @@ fn test_table_inside_inline_is_laid_out() {
     collect_text_boxes(&tree, &mut texts);
     assert_eq!(texts.len(), 1, "table inside inline must expose its text");
     assert!(texts[0].1.width > 0.0 && texts[0].1.height > 0.0);
+}
+
+/// CSS 2.1 §17.5.2: an empty cell contributes zero intrinsic width, so a table whose cells
+/// hold nothing must not grow past its borders/spacing (#695).
+#[test]
+fn empty_cells_contribute_no_intrinsic_width_floor() {
+    let (mut doc, mut styles, body) = setup();
+    let table = mk(&mut doc, body, "table");
+    styles.insert(table, table_style(Length::Auto));
+    let row = mk(&mut doc, table, "tr");
+    styles.insert(row, row_style());
+    for _ in 0..2 {
+        let cell = mk(&mut doc, row, "td");
+        styles.insert(cell, cell_style());
+    }
+    let tree = layout_tree(&doc, &styles);
+    let table_box = &tree.children[0].children[0];
+    // border-spacing separate: 4px left + 4px gap + 4px right = 12px of spacing, and each
+    // empty cell used to add its own 1px floor on top of that.
+    let width = table_box.dimensions.border_box().width;
+    assert!(
+        width <= 12.5,
+        "empty cells must not add a 1px floor per column, got {width}"
+    );
+}
+
+#[test]
+fn a_single_character_still_gives_the_column_a_width() {
+    // Guard against over-correcting: real content must still produce a track.
+    let (mut doc, mut styles, body) = setup();
+    let table = mk(&mut doc, body, "table");
+    styles.insert(table, table_style(Length::Auto));
+    let row = mk(&mut doc, table, "tr");
+    styles.insert(row, row_style());
+    let cell = mk(&mut doc, row, "td");
+    styles.insert(cell, cell_style());
+    doc.append_text(cell, "x");
+    let tree = layout_tree(&doc, &styles);
+    let table_box = &tree.children[0].children[0];
+    let cell_box = &table_box.children[0].children[0];
+    assert!(
+        cell_box.dimensions.content.width > 0.0,
+        "a cell with text keeps a non-zero width"
+    );
 }

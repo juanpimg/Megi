@@ -1042,7 +1042,10 @@ fn cell_intrinsic_widths(
 ) -> (f32, f32) {
     let (minimum, maximum) = intrinsic_content_widths(cell, available_width, measurer);
     let _ = collapse;
-    (minimum.max(1.0), maximum.max(1.0))
+    // No `max(1.0)` floor (#695): CSS 2.1 §17.5.2 makes an empty cell contribute zero, and
+    // every consumer already tolerates a zero-width track (the growth-share paths guard it),
+    // so flooring here only inflated those columns by a pixel each.
+    (minimum.max(0.0), maximum.max(0.0))
 }
 
 /// Fast path for plain tables: `border-collapse: separate`, `table-layout: auto` and
@@ -1572,6 +1575,7 @@ mod legacy {
     ) -> (f32, f32) {
         resolve_horizontal_edges(cell, available_width);
         let (minimum, maximum) = intrinsic_content_widths(cell, available_width, measurer);
-        (minimum.max(1.0), maximum.max(1.0))
+        // See the advanced path: an empty cell's intrinsic width is zero (#695).
+        (minimum.max(0.0), maximum.max(0.0))
     }
 }
