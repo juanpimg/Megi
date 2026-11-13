@@ -586,6 +586,10 @@ pub struct ParseOptions {
     /// Maximum number of input bytes tokenized. The input is truncated on a UTF-8
     /// character boundary; a violation is recorded in the outcome.
     pub max_input_bytes: usize,
+    /// Maximum number of text bytes inserted into the tree. Character data coalesces into a
+    /// single text node, so the node budget alone does not bound a document made of one huge
+    /// text run; excess bytes are dropped and counted (#642).
+    pub max_text_bytes: usize,
 }
 
 impl ParseOptions {
@@ -598,6 +602,7 @@ impl ParseOptions {
         max_nodes: 1_000_000,
         max_attributes_per_element: 4096,
         max_input_bytes: 16 * 1024 * 1024,
+        max_text_bytes: 16 * 1024 * 1024,
     };
 }
 
@@ -622,6 +627,8 @@ pub struct LimitViolations {
     /// Number of tokens discarded because the adjusted insertion location was the
     /// document root (e.g. after a script detached the document element).
     pub detached_insertions: u64,
+    /// Text bytes dropped because [`ParseOptions::max_text_bytes`] was reached (#642).
+    pub text_bytes_dropped: u64,
 }
 
 impl LimitViolations {
@@ -630,6 +637,7 @@ impl LimitViolations {
         !self.input_truncated
             && self.depth_exceeded == 0
             && self.nodes_exceeded == 0
+            && self.text_bytes_dropped == 0
             && self.attributes_dropped == 0
             && self.detached_insertions == 0
     }
@@ -678,6 +686,9 @@ pub struct TreeBuilder {
     pub parse_options: ParseOptions,
     /// Limits that have been exceeded so far.
     pub limit_violations: LimitViolations,
+    /// Text bytes already inserted into the tree (bounded by
+    /// [`ParseOptions::max_text_bytes`], see #642).
+    text_bytes: usize,
     /// Whether any HTML `<select>` element was inserted; lets the end-of-parse
     /// `<selectedcontent>` fixup (which walks the whole tree) be skipped entirely for
     /// the overwhelmingly common documents without a `<select>`.
@@ -746,6 +757,7 @@ impl TreeBuilder {
             pending_table_characters: Vec::new(),
             parse_options,
             limit_violations: LimitViolations::default(),
+            text_bytes: 0,
             has_select_element: false,
             open_html_counts: FastMap::default(),
             open_ids: FastSet::default(),
@@ -1424,12 +1436,40 @@ impl TreeBuilder {
         self.insert_node_at_adjusted_location(pi_id);
     }
 
+    /// Returns how many bytes of `text` still fit in the text budget, truncating the slice on a
+    /// character boundary; records the dropped bytes when the budget is exhausted (#642).
+    fn take_text_budget<'a>(&mut self, text: &'a str) -> Option<&'a str> {
+        let remaining = self
+            .parse_options
+            .max_text_bytes
+            .saturating_sub(self.text_bytes);
+        if text.len() <= remaining {
+            self.text_bytes += text.len();
+            return Some(text);
+        }
+        let mut cut = remaining.min(text.len());
+        while cut > 0 && !text.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        self.limit_violations.text_bytes_dropped += (text.len() - cut) as u64;
+        if cut == 0 {
+            return None;
+        }
+        self.text_bytes += cut;
+        Some(&text[..cut])
+    }
+
     fn insert_character(&mut self, cp: u32) {
         let Some(ch) = char::from_u32(cp) else {
             return;
         };
         let mut buf = [0u8; 4];
         let s = ch.encode_utf8(&mut buf);
+        let Some(s) = self.take_text_budget(s) else {
+            return;
+        };
+        let s = s.to_owned();
+        let s = s.as_str();
         // Fast path: outside foster-parenting the appropriate insertion location is simply
         // the current node, unless it is an HTML `<template>` (whose characters are
         // redirected into its inert contents fragment). Avoids the full location
@@ -1497,6 +1537,11 @@ impl TreeBuilder {
     /// Inserts `text` at the appropriate insertion location (the multi-character version
     /// of [`TreeBuilder::insert_character`]).
     fn insert_text_run(&mut self, text: &str) {
+        let Some(text) = self.take_text_budget(text) else {
+            return;
+        };
+        let text = text.to_owned();
+        let text = text.as_str();
         if !self.foster_parenting
             && let Some(current) = self.current_node()
             && let Some(element) = self.doc.node(current).as_element()
@@ -3519,6 +3564,14 @@ impl TreeBuilder {
         match token {
             Token::Character(0x00) => None,
             Token::Character(ch) => {
+                // Characters buffered while in "in table text" are re-dispatched later, so a
+                // long table text run lives in a `Vec<char>` (4 B each) until the next
+                // non-character token. Bound it by the text budget instead of the input cap
+                // (#642).
+                if self.pending_table_characters.len() >= self.parse_options.max_text_bytes {
+                    self.limit_violations.text_bytes_dropped += 1;
+                    return None;
+                }
                 self.pending_table_characters
                     .push(char::from_u32(ch).unwrap_or('\u{FFFD}'));
                 None

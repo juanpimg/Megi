@@ -429,3 +429,55 @@ fn deep_serialization_does_not_allocate_per_node_indent() {
         "the tree dump must respect its byte ceiling"
     );
 }
+
+#[test]
+fn text_byte_budget_bounds_a_single_huge_text_node() {
+    // #642: the node budget counts nodes, so a pure-text document is one text node no matter how
+    // long it is. The text budget caps the bytes actually stored.
+    let input = "x".repeat(200_000);
+    let options = ParseOptions {
+        max_text_bytes: 4_096,
+        ..ParseOptions::default()
+    };
+    let outcome = parse_document_with_options(&input, false, &options);
+    let mut total = 0usize;
+    collect_text_bytes(&outcome.document, outcome.document.root(), &mut total, 0);
+    assert!(
+        total <= 4_096,
+        "stored text must respect max_text_bytes (got {total})"
+    );
+    assert!(
+        outcome.limit_violations.text_bytes_dropped > 0,
+        "dropping text must be reported"
+    );
+}
+
+#[test]
+fn table_text_buffer_is_bounded_by_the_text_budget() {
+    // While in "in table text" the characters are buffered in a Vec<char> and re-dispatched
+    // later; a long run used to hold the whole input at 4 B per char.
+    let input = format!("<table>{}</table>", "y".repeat(50_000));
+    let options = ParseOptions {
+        max_text_bytes: 2_048,
+        ..ParseOptions::default()
+    };
+    let outcome = parse_document_with_options(&input, false, &options);
+    assert!(
+        outcome.limit_violations.text_bytes_dropped > 0,
+        "the buffered table text must be bounded"
+    );
+}
+
+fn collect_text_bytes(doc: &dom::Document, node: dom::NodeId, total: &mut usize, depth: usize) {
+    if depth > 64 {
+        return;
+    }
+    if let dom::NodeKind::Text(text) = &doc.node(node).kind {
+        *total += text.len();
+    }
+    let mut child = doc.node(node).first_child;
+    while let Some(id) = child {
+        collect_text_bytes(doc, id, total, depth + 1);
+        child = doc.node(id).next_sibling;
+    }
+}
