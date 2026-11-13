@@ -70,7 +70,7 @@
 cargo test --workspace                              # 1929 tests (JS por defecto)
 cargo run -p test_harness -- --summary              # gate: 3904/3904 árbol, PASS, exit 0
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo doc --workspace --no-deps
-cargo +1.88 check --workspace --all-targets         # MSRV
+cargo +1.91 check --workspace --all-targets         # MSRV
 
 # Ronda 32
 cargo run --release -p bench -- --filter css/resolve-styles
