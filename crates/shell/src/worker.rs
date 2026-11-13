@@ -37,6 +37,9 @@ use crate::links::{LinkRegion, collect_link_regions};
 use crate::scroll;
 use crate::title::document_title;
 
+use css::{Overflow, Position};
+use layout::LayoutBox;
+
 /// Coalescing window for resize/scale-triggered renders.
 pub const RENDER_DEBOUNCE: Duration = Duration::from_millis(120);
 
@@ -380,8 +383,9 @@ pub fn render_document_with_options(
     base_options: &render::RenderOptions,
 ) -> Result<RenderFrame, String> {
     let probe = render_view(request, request.css_height, base_options)?;
-    let (content_height, capped) =
-        scroll::content_height(probe.layout.dimensions.margin_box().height);
+    let layout_height =
+        scrollable_content_height(&probe.layout).max(probe.layout.dimensions.margin_box().height);
+    let (content_height, capped) = scroll::content_height(layout_height);
     let target_height = content_height.clamp(1, scroll::MAX_CONTENT_HEIGHT);
     let output = if target_height > probe.pixmap.height {
         render_view(request, target_height, base_options)?
@@ -447,6 +451,42 @@ pub fn render_document_with_options(
         find_matches,
         find_rects,
     })
+}
+
+/// Computes the scrollable overflow height of a laid-out document.
+///
+/// Walks the layout tree and returns the maximum bottom edge (`y + height`) of
+/// every margin box in CSS pixels. Descendants of boxes whose computed
+/// `overflow` is not `visible` are not traversed for page-scroll extent,
+/// because `hidden`/`clip` clip their overflow and `scroll`/`auto` establish an
+/// inner scroll container (issue #1021). The root margin box is still included.
+fn scrollable_content_height(root: &LayoutBox) -> f32 {
+    fn walk(node: &LayoutBox, max_bottom: &mut f32) {
+        // `position: fixed` boxes are viewport-relative and do not participate in
+        // document scrolling, so a fixed footer/header must not inflate the page
+        // scroll height.
+        if matches!(node.position, Position::Fixed) {
+            return;
+        }
+        let margin = node.dimensions.margin_box();
+        let bottom = margin.y + margin.height;
+        if bottom.is_finite() {
+            *max_bottom = max_bottom.max(bottom);
+        }
+        let clips_overflow = node
+            .style()
+            .is_some_and(|style| !matches!(style.overflow, Overflow::Visible));
+        if clips_overflow {
+            return;
+        }
+        for child in &node.children {
+            walk(child, max_bottom);
+        }
+    }
+
+    let mut max_bottom = 0.0f32;
+    walk(root, &mut max_bottom);
+    max_bottom.max(0.0)
 }
 
 /// Runs one `render` pass at `css_width x height`, applying `base_options`.
@@ -617,5 +657,42 @@ mod unit_tests {
         assert_eq!(store.error(), Some("fail 1"));
         drop(sender);
         handle.join().expect("join");
+    }
+
+    #[test]
+    fn render_document_uses_overflow_extent_for_scroll_height() {
+        let html = "data:text/html,\
+            <html><body style=\"margin:0;height:120px;overflow:visible\">\
+            <div style=\"height:900px;width:50px\"></div>\
+            </body></html>";
+        let request = RenderRequest {
+            generation: 1,
+            input: html.to_string(),
+            css_width: 320,
+            css_height: 200,
+            base_override: None,
+            scripting: false,
+            find_query: None,
+        };
+        let frame = render_document(&request).expect("render");
+        // Before the fix the probe's root margin box (≈body height) reported a
+        // scroll height equal to the viewport, so `max_offset()` stayed 0 and
+        // wheel/keyboard scrolling did nothing. The scrollable overflow extent
+        // must now include the 900 px child.
+        assert!(
+            frame.content_height > request.css_height,
+            "content_height={} must exceed the viewport height={} when children overflow",
+            frame.content_height,
+            request.css_height
+        );
+        assert!(
+            frame.content_height >= 800,
+            "content_height={} should include the overflowing child extent",
+            frame.content_height
+        );
+        assert_eq!(
+            frame.content_height, frame.height,
+            "the full-page render must cover the scrollable extent"
+        );
     }
 }
