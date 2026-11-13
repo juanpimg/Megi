@@ -849,6 +849,10 @@ impl Document {
     /// Detaches `node_id` from its current parent and siblings in `O(1)` time.
     /// Does not deallocate the node from the arena (preserving its children and `NodeId`).
     pub fn detach(&mut self, node_id: NodeId) {
+        // Guard against stale/foreign handles (issue #676).
+        if self.try_node(node_id).is_none() {
+            return;
+        }
         let (parent, prev, next) = {
             let n = self.node(node_id);
             (n.parent, n.prev_sibling, n.next_sibling)
@@ -883,6 +887,10 @@ impl Document {
     /// `child_id` is an ancestor of `parent_id`. This is enforced in release builds
     /// too, not just via `debug_assert!`.
     pub fn append_child(&mut self, parent_id: NodeId, child_id: NodeId) -> bool {
+        // Guard against stale/foreign handles (issue #676).
+        if self.try_node(parent_id).is_none() || self.try_node(child_id).is_none() {
+            return false;
+        }
         let parent_id = self.template_contents_target(parent_id);
         if parent_id == child_id {
             return false;
@@ -932,6 +940,10 @@ impl Document {
     /// depend on the old `expect("reference_sibling must have a parent")` invariant
     /// should check the boolean result.
     pub fn insert_before(&mut self, reference_sibling_id: NodeId, new_node_id: NodeId) -> bool {
+        // Guard against stale/foreign handles (issue #676).
+        if self.try_node(reference_sibling_id).is_none() || self.try_node(new_node_id).is_none() {
+            return false;
+        }
         if reference_sibling_id == new_node_id {
             return false;
         }
@@ -998,6 +1010,10 @@ impl Document {
     /// Appends text to `parent_id`, coalescing with `parent_id`'s `last_child` if it is
     /// already a `NodeKind::Text` node (per WHATWG HTML §13.2.6.1 "insert a character").
     pub fn append_text(&mut self, parent_id: NodeId, text: &str) -> NodeId {
+        // Guard against stale/foreign handles (issue #676).
+        if self.try_node(parent_id).is_none() {
+            return self.create_text_node(text);
+        }
         let parent_id = self.template_contents_target(parent_id);
         if !self.can_have_children(parent_id) {
             return self.create_text_node(text);
@@ -1017,6 +1033,10 @@ impl Document {
     /// node immediately preceding `reference_sibling_id` if it is already `NodeKind::Text`
     /// (per WHATWG HTML §13.2.6.1 foster-parented character insertion).
     pub fn insert_text_before(&mut self, reference_sibling_id: NodeId, text: &str) -> NodeId {
+        // Guard against stale/foreign handles (issue #676).
+        if self.try_node(reference_sibling_id).is_none() {
+            return self.create_text_node(text);
+        }
         if let Some(prev_id) = self.node(reference_sibling_id).prev_sibling
             && let NodeKind::Text(ref mut existing) = self.node_mut(prev_id).kind
         {
@@ -1068,6 +1088,10 @@ impl Document {
     /// The traversal uses an explicit heap stack, so deep trees cannot overflow the
     /// call stack.
     pub fn clone_node(&mut self, node_id: NodeId, deep: bool) -> NodeId {
+        // Guard against stale/foreign handles (issue #676).
+        if self.try_node(node_id).is_none() {
+            return node_id;
+        }
         // Bound clone amplification (issue #678): if the subtree is too large to
         // safely clone, fall back to a shallow clone instead of risking arena
         // exhaustion / panic.
