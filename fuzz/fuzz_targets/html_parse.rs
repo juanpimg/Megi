@@ -25,6 +25,9 @@ fuzz_target!(|data: &[u8]| {
     let mut options = html::ParseOptions::default();
     if let Some(&b) = data.get(1) {
         options.max_depth = (b as usize % 64).max(4);
+        options.max_nodes = ((b as usize % 8) + 1) * 4096;
+        options.max_attributes_per_element = (b as usize % 16) + 1;
+        options.max_input_bytes = (b as usize % 4 + 1) * 256 * 1024;
     }
     let document = html::parse_document_with_options(&text, scripting, &options);
     let _ = html::serialize_dom_for_test(&document.document);

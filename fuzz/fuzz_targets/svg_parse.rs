@@ -37,6 +37,8 @@ fuzz_target!(|data: &[u8]| {
         max_height: 128,
         max_pixels: 128 * 128,
         max_use_depth: 4,
+        max_use_expansions: 16,
+        max_shapes: 4_096,
         max_selector_checks: 4_096,
     };
     // Roomier profile: same order of magnitude as a page-embedded SVG, still bounded.
@@ -50,6 +52,8 @@ fuzz_target!(|data: &[u8]| {
         max_height: 1_024,
         max_pixels: 1_024 * 1_024,
         max_use_depth: 12,
+        max_use_expansions: 256,
+        max_shapes: 65_536,
         max_selector_checks: 65_536,
     };
 
