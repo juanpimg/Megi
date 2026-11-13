@@ -57,7 +57,10 @@ if [[ "${1:-}" == "--save-png-isolated" ]]; then
         for _ in $(seq 1 7); do
             local start end
             start=$(python3 -c 'import time; print(int(time.time()*1000))')
-            "$@" >/dev/null 2>&1 || true
+            if ! "$@" >/dev/null 2>&1; then
+                echo "error: benchmark command failed: $*" >&2
+                exit 1
+            fi
             end=$(python3 -c 'import time; print(int(time.time()*1000))')
             values+=($((end - start)))
         done

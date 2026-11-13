@@ -39,7 +39,7 @@ Megi ha cerrado funcionalmente la Fase 4 (renderizado) y tiene un pipeline de na
 
 **Estado real verificado en la decisión (ronda 7)**: **602 tests, 0 fallos**; gate de 4 suites PASS (tokenizer 7.050/7.050, árbol 3.898/3.904, serializador 230/230, CSS 30/30); Fase 6 con **decisión ACEPTADA el 2026-11-10**, implementación arrancando por `WP-6.1`.
 
-**Estado a ronda 32 (HEAD `3e69968`)**: **1929 tests, 0 fallos**; gate PASS; **168 tests js**; **TLA real y live bindings HECHOS** con el sistema nativo de módulos de Boa 0.21: `eval_module_async` con `ModuleLoader` sobre resolver/loader del host (file/http/data, `import.meta.url`), await Promise/fetch/timer, orden topológico, rechazos tipados, let/var vivas sin re-eval, const inmutable y ciclos nativos; render usa async para módulos con await y mantiene el preprocesado para import maps. Pendientes F6: fetch streaming/abort/signal, conformance/memoria y workers con DOM. Todos los crates con `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+**Estado actual (`main`, post-v0.1.0)**: **2.383 tests, 0 fallos**; gate PASS; **175+ tests js**; **Boa 0.22** embebido con **TLA real y live bindings** (`eval_module_async` con `ModuleLoader`, await Promise/fetch/timer, orden topológico, ciclos nativos), **`fetch()` + `AbortController`/`AbortSignal`**, **Web Workers cooperativos deterministas** (`with_document_realm(..., is_worker)` con realm aislado sin DOM), **`localStorage`/`sessionStorage`** (orden de inserción + WebIDL index/boolean conformance), `MutationObserver` y reutilización acotada de slots de listeners (`MAX_EVENT_LISTENERS = 16_384`). Todos los crates con `#![forbid(unsafe_code)]`; MSRV Rust 1.88+.
 
 ---
 

@@ -72,6 +72,9 @@ def ensure_cached(
     tmp = target.with_suffix(target.suffix + ".tmp")
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
+            status = getattr(resp, "status", 200)
+            if not (200 <= status < 300):
+                raise ValueError(f"Unexpected HTTP status {status} for {url}")
             # Stream with a byte cap so a compromised mirror or an HTML error page
             # looped by a proxy cannot exhaust memory (#611).
             data = bytearray()

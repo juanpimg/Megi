@@ -21,6 +21,8 @@ case "$cmd" in
     lint)
         cargo fmt --all -- --check
         cargo clippy --workspace --all-targets -- -D warnings
+        python3 tools/check_docs_links.py
+        python3 tools/update_progress.py --check --no-gate --no-count
         ;;
     doc)
         cargo doc --workspace --no-deps
@@ -33,6 +35,8 @@ case "$cmd" in
         cargo fmt --all -- --check
         echo "==> [2/5] Running clippy across workspace..."
         cargo clippy --workspace --all-targets -- -D warnings
+        python3 tools/check_docs_links.py
+        python3 tools/update_progress.py --check --no-gate --no-count
         echo "==> [3/5] Running closed-loop workspace tests..."
         cargo test --workspace
         echo "==> [4/5] Building workspace documentation..."
@@ -40,6 +44,10 @@ case "$cmd" in
         echo "==> [5/5] Running conformance gate (test_harness --summary)..."
         cargo run -p test_harness -- --summary
         echo "==> All checks passed!"
+        ;;
+    -h|--help)
+        echo "Usage: $0 {check|test|lint|doc|report|all}"
+        exit 0
         ;;
     *)
         echo "Usage: $0 {check|test|lint|doc|report|all}" >&2

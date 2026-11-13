@@ -19,20 +19,24 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 ```text
 fuzz/
 ├── Cargo.toml          # standalone workspace (`[workspace]`), NOT part of the root workspace
-├── fuzz_targets/       # 23 libFuzzer harnesses
+├── fuzz_targets/       # 26 libFuzzer harnesses
 │   ├── body_stream.rs        # RequestBody/BodyProducer streaming contract
 │   ├── container_queries.rs  # CSS @container/@layer parsing + query evaluation
 │   ├── css_parse.rs          # CSS Syntax L3 tokenizer, stylesheets and declaration lists
+│   ├── dom_mutate.rs         # DOM arena mutation & invariant checks
 │   ├── dom_tree.rs           # DOM construction/mutation paths from parser-like input
 │   ├── exif_parse.rs         # APP1/TIFF EXIF orientation parser
+│   ├── font_decode.rs        # Direct SFNT/WOFF2 font decoding & table validation
 │   ├── fonts_shape.rs        # Font parsing/shaping inputs
 │   ├── h2_push.rs            # PUSH_PROMISE/HEADERS/DATA server push (capped)
 │   ├── hpack_decode.rs       # HPACK header blocks + HTTP/2 framing
 │   ├── html_parse.rs         # WHATWG HTML tokenizer + tree builder + canonical serializer
-│   ├── image_decode.rs       # PNG/JPEG/GIF/WebP sniffing + EXIF orientation (capped)
+│   ├── image_decode.rs       # Full PNG/JPEG/GIF/WebP (VP8/VP8L) decode + EXIF orientation (capped)
 │   ├── js_eval.rs            # JavaScript evaluation + DOM/event/timer host bridge (budgeted)
 │   ├── js_module.rs          # ES modules + import maps (resolver/loader, budgeted)
+│   ├── layout_resolve.rs     # Style/layout calc() & constraint resolution paths
 │   ├── layout_tree.rs        # Layout tree construction paths
+│   ├── net_surface.rs        # URL, header, cookie, range, and HTTP parser surfaces
 │   ├── net_url.rs            # WHATWG URL subset parser + relative resolution
 │   ├── paint_display_list.rs # Paint/display-list generation paths
 │   ├── render_pipeline.rs    # Full render pipeline: data: HTML -> styles/layout/paint/PNG
@@ -91,9 +95,13 @@ cargo +nightly fuzz build          # builds every [[bin]] target
 | `js_module` | `js` module/import-map resolve/load/eval APIs with budgets | Untrusted module/import-map inputs; bounded resolver/loader calls and no network/FS. Parts are **length-prefixed** (`[u16 LE len][bytes]…`) and truncated on char boundaries, so JSON strings and module sources keep embedded NULs/high bytes instead of being clipped (#701). |
 | `webp_lossy` | VP8 lossy keyframe decode path via image decode APIs | Focused lossy WebP decoder campaign with anti-DoS caps: RIFF inputs decoded as-is and truncated, plus payloads re-wrapped as `VP8 ` **and** `VP8L`, under a 2048 px and a 64 px cap profile (#859). |
 | `container_queries` | `css` parse/tokenize + `css::container` query parse/evaluate | `@container`/`@layer` without DOM/layout. Container sizes are input-derived and include the degenerate set (`NaN`, `±∞`, negative, `0`, `f32::MAX`, missing axis), and style queries run against a `ComputedStyle` carrying input-derived custom properties (#710). |
+| `dom_mutate` | `dom::Document` arena mutations + `validate_invariants()` | Exercises DOM insert/remove/reparent/text-coalesce invariants on arbitrary mutation sequences. |
 | `dom_tree` | DOM construction/mutation-oriented parse paths | Exercises DOM tree building/mutation surfaces from fuzzer input. |
+| `font_decode` | `fonts` SFNT/WOFF2 table parsing & decoding | Exercises direct font decoding paths against malformed font tables. |
 | `fonts_shape` | Font/shaping input paths | Exercises font parsing/shaping-related surfaces. |
+| `layout_resolve` | `layout` `calc()` & constraint resolution paths | Exercises layout length/constraint resolution under adversarial inputs. |
 | `layout_tree` | Layout tree construction paths | Exercises layout-tree building from parser/style inputs. |
+| `net_surface` | `net` URL/header/cookie/range/HTTP parser surfaces | Exercises network header, cookie, range, and HTTP parsing boundaries. |
 | `paint_display_list` | Paint/display-list generation paths | Exercises display-list/paint command generation. |
 
 All targets run on **public** APIs with release-like defaults; they look for panics, aborts
@@ -211,8 +219,7 @@ Fuzz work is **report-only** for crates outside its scope: do not fix `dom`, `ht
 `layout`, `paint`, `fonts`, `net` from a fuzzing-only change set — file the minimised
 reproducer for the owning work package instead.
 
-Known non-crashes (do not report): the 6 scripted html5lib tree-construction failures and
-the 3 `xmlViolation` tokenizer failures are documented conformance gaps, not crashes.
+Known non-crashes (do not report): the 3 `xmlViolation` tokenizer failures are documented conformance gaps, not crashes (all 3,904 tree-construction tests pass).
 
 ## CI
 
@@ -231,9 +238,10 @@ the 3 `xmlViolation` tokenizer failures are documented conformance gaps, not cra
 - on failure uploads `fuzz/artifacts/` and corpus snapshots as workflow artifacts (14 days).
 
 Notes:
-- 22 harnesses exist in `fuzz/fuzz_targets/`; 4 (`dom_tree`, `fonts_shape`, `layout_tree`,
-  `paint_display_list`) are built in PRs but not yet in the scheduled ASan/UBSan matrices.
-  Add them to nightly matrices when their corpus/runtime budgets are validated.
+- 26 harnesses exist in `fuzz/fuzz_targets/`; `dom_tree`, `dom_mutate`, `font_decode`,
+  `fonts_shape`, `layout_resolve`, `layout_tree`, `net_surface`, and `paint_display_list`
+  are built in PRs and can be promoted to scheduled ASan/UBSan matrices when their
+  corpus/runtime budgets are validated.
 - Daily 10-minute critical / 5-minute secondary runs are a regression gate, not a coverage
   guarantee. Longer campaigns should run outside CI.
 
