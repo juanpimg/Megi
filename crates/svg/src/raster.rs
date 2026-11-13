@@ -1360,8 +1360,8 @@ impl Canvas {
                 let local_y = row as f32 + mask.top;
                 let dx = local_x * cos - local_y * sin;
                 let dy = local_x * sin + local_y * cos;
-                let px = origin_x + dx.round() as i64;
-                let py = origin_y + dy.round() as i64;
+                let px = origin_x.saturating_add(dx.round() as i64);
+                let py = origin_y.saturating_add(dy.round() as i64);
                 if px < 0 || py < 0 || px >= self.width as i64 || py >= self.height as i64 {
                     continue;
                 }
@@ -1431,8 +1431,8 @@ impl Canvas {
                 let mut best = source[index];
                 for dy in -radius..=radius {
                     for dx in -radius..=radius {
-                        let sx = x as i64 + i64::from(dx);
-                        let sy = y as i64 + i64::from(dy);
+                        let sx = (x as i64).saturating_add(i64::from(dx));
+                        let sy = (y as i64).saturating_add(i64::from(dy));
                         if sx < 0 || sy < 0 || sx >= self.width as i64 || sy >= self.height as i64 {
                             continue;
                         }
