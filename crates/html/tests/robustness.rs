@@ -523,3 +523,64 @@ fn huge_numeric_character_reference_runs_stay_linear_and_out_of_range() {
         "leading zeros must not make `&#x0…041;` overflow"
     );
 }
+
+#[test]
+fn token_values_are_capped_to_the_per_token_budget() {
+    // #636: `max_input_bytes` bounds the document, not a single value. One unterminated
+    // comment, doctype id, quoted attribute value or script/RCDATA run used to grow a single
+    // buffer to input size, which the tree builder/DOM/serializer then copied.
+    use html::tokenizer::{MAX_TOKEN_BYTES, Token, Tokenizer, TokenizerConfig};
+
+    let big = "x".repeat(MAX_TOKEN_BYTES + 4096);
+
+    let mut tok = Tokenizer::from_str_input(&format!("<!--{big}-->"), TokenizerConfig::default());
+    tok.run();
+    let comment = tok
+        .tokens
+        .iter()
+        .find_map(|token| match token {
+            Token::Comment(data) => Some(data.clone()),
+            _ => None,
+        })
+        .expect("a comment token");
+    assert_eq!(comment.len(), MAX_TOKEN_BYTES, "comment must be capped");
+    assert!(
+        tok.token_bytes_dropped > 0,
+        "the truncation must be counted"
+    );
+
+    let mut tok =
+        Tokenizer::from_str_input(&format!("<a href=\"{big}\">"), TokenizerConfig::default());
+    tok.run();
+    let value_len = tok
+        .tokens
+        .iter()
+        .find_map(|token| match token {
+            Token::StartTag { attributes, .. } => attributes
+                .iter()
+                .find(|(name, _)| name == "href")
+                .map(|(_, value)| value.len()),
+            _ => None,
+        })
+        .expect("an href attribute");
+    assert_eq!(value_len, MAX_TOKEN_BYTES, "attribute value must be capped");
+
+    // A processing instruction target accumulates while the tokenizer scans for the data,
+    // so one `<?` + a long run grows `pending_pi_target` to input size.
+    let mut tok = Tokenizer::from_str_input(
+        &format!("<?{}", "x".repeat(MAX_TOKEN_BYTES + 4096)),
+        TokenizerConfig::default(),
+    );
+    tok.run();
+    let target_len = tok.tokens.iter().find_map(|token| match token {
+        Token::ProcessingInstruction { target, .. } => Some(target.len()),
+        _ => None,
+    });
+    if let Some(len) = target_len {
+        assert_eq!(len, MAX_TOKEN_BYTES, "PI target must be capped");
+        assert!(
+            tok.token_bytes_dropped > 0,
+            "the truncation must be counted"
+        );
+    }
+}

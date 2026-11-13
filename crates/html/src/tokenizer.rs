@@ -645,6 +645,15 @@ pub const MAX_PARSE_ERRORS: usize = 1024;
 /// is recorded once and reported as a single out-of-range error.
 const MAX_CHAR_REF_DIGITS: u32 = 8;
 
+/// Per-value byte cap for the tokenizer's token buffers (#636).
+///
+/// `max_input_bytes` bounds the whole document, but a single unterminated `<!--`, `<!DOCTYPE `,
+/// quoted attribute value or RCDATA/RAWTEXT run grows one buffer to input size before the token
+/// is emitted, and the tree builder/DOM/serializer then copy it. Each value is therefore capped:
+/// the tokenizer keeps scanning (states must stay in sync) but stops appending, and the
+/// truncation is counted once per token in [`Tokenizer::token_bytes_dropped`].
+pub const MAX_TOKEN_BYTES: usize = 1024 * 1024;
+
 pub struct Tokenizer {
     input: Vec<u32>,
     pos: usize,
@@ -664,6 +673,10 @@ pub struct Tokenizer {
     char_ref_digits: u32,
     /// Set when a numeric character reference had more digits than the accumulator can use.
     char_ref_overflowed: bool,
+    /// Per-value byte cap applied to every token buffer ([`MAX_TOKEN_BYTES`]).
+    pub max_token_bytes: usize,
+    /// Bytes dropped by the per-value cap, so callers can report the truncation (#636).
+    pub token_bytes_dropped: u64,
     pub allow_cdata: bool,
     pub tokens: Vec<Token>,
     /// Maximum number of parse errors retained by a single tokenization pass
@@ -748,6 +761,8 @@ impl Tokenizer {
             char_ref_code: 0,
             char_ref_digits: 0,
             char_ref_overflowed: false,
+            max_token_bytes: MAX_TOKEN_BYTES,
+            token_bytes_dropped: 0,
             allow_cdata: false,
             tokens: Vec::new(),
             errors,
@@ -1017,9 +1032,43 @@ impl Tokenizer {
         }
     }
 
+    /// Appends to `temp_buffer` while enforcing [`Tokenizer::max_token_bytes`] (#636).
+    fn push_temp(&mut self, cp: u32) {
+        if self.temp_buffer.len() < self.max_token_bytes {
+            self.temp_buffer.push(cp);
+        } else {
+            self.token_bytes_dropped = self.token_bytes_dropped.saturating_add(1);
+        }
+    }
+
+    /// Truncates a finished token value to [`Tokenizer::max_token_bytes`] on a char boundary.
+    fn truncate_token_value(&mut self, value: &mut String) {
+        let limit = self.max_token_bytes;
+        if value.len() <= limit {
+            return;
+        }
+        let mut end = limit;
+        while end > 0 && !value.is_char_boundary(end) {
+            end -= 1;
+        }
+        self.token_bytes_dropped = self
+            .token_bytes_dropped
+            .saturating_add((value.len() - end) as u64);
+        value.truncate(end);
+    }
+
     fn emit_current_tag(&mut self) {
         if let Some(mut tag) = self.pending_tag.take() {
             tag.finish_attribute(&mut self.errors);
+            // A hostile unterminated `<a href="…"` grows the buffers to input size; cap each
+            // value once, here, so the token (and every DOM copy) stays bounded (#636).
+            let mut name = std::mem::take(&mut tag.name);
+            self.truncate_token_value(&mut name);
+            tag.name = name;
+            for (attr_name, attr_value) in &mut tag.attributes {
+                self.truncate_token_value(attr_name);
+                self.truncate_token_value(attr_value);
+            }
             if tag.is_end_tag {
                 if !tag.attributes.is_empty() {
                     self.record_error(ParseErrorCode::EndTagWithAttributes);
@@ -1052,7 +1101,8 @@ impl Tokenizer {
     }
 
     fn emit_current_comment(&mut self) {
-        let data = std::mem::take(&mut self.pending_comment);
+        let mut data = std::mem::take(&mut self.pending_comment);
+        self.truncate_token_value(&mut data);
         let data = if self.xml_coercion {
             xml_coerce_comment(&data)
         } else {
@@ -1062,7 +1112,16 @@ impl Tokenizer {
     }
 
     fn emit_current_doctype(&mut self) {
-        if let Some(dt) = self.pending_doctype.take() {
+        if let Some(mut dt) = self.pending_doctype.take() {
+            if let Some(name) = dt.name.as_mut() {
+                self.truncate_token_value(name);
+            }
+            if let Some(public_id) = dt.public_id.as_mut() {
+                self.truncate_token_value(public_id);
+            }
+            if let Some(system_id) = dt.system_id.as_mut() {
+                self.truncate_token_value(system_id);
+            }
             self.tokens.push(Token::Doctype {
                 name: dt.name,
                 public_id: dt.public_id,
@@ -1073,8 +1132,11 @@ impl Tokenizer {
     }
 
     fn emit_current_pi(&mut self) {
-        let target = std::mem::take(&mut self.pending_pi_target);
-        let data = std::mem::take(&mut self.pending_pi_data);
+        let mut target = std::mem::take(&mut self.pending_pi_target);
+        let mut data = std::mem::take(&mut self.pending_pi_data);
+        // One `<?` + a long run grows both buffers to input size (#636).
+        self.truncate_token_value(&mut target);
+        self.truncate_token_value(&mut data);
         self.tokens
             .push(Token::ProcessingInstruction { target, data });
     }
@@ -1547,7 +1609,7 @@ impl Tokenizer {
                     if let Some(ref mut tag) = self.pending_tag {
                         tag.name.push(lower);
                     }
-                    self.temp_buffer.push(cp);
+                    self.push_temp(cp);
                 }
                 _ => self.flush_temp_buffer_as_end_tag_fallback(TokenizerState::Rcdata),
             },
@@ -1597,7 +1659,7 @@ impl Tokenizer {
                     if let Some(ref mut tag) = self.pending_tag {
                         tag.name.push(lower);
                     }
-                    self.temp_buffer.push(cp);
+                    self.push_temp(cp);
                 }
                 _ => self.flush_temp_buffer_as_end_tag_fallback(TokenizerState::Rawtext),
             },
@@ -1652,7 +1714,7 @@ impl Tokenizer {
                     if let Some(ref mut tag) = self.pending_tag {
                         tag.name.push(lower);
                     }
-                    self.temp_buffer.push(cp);
+                    self.push_temp(cp);
                 }
                 _ => self.flush_temp_buffer_as_end_tag_fallback(TokenizerState::ScriptData),
             },
@@ -1803,7 +1865,7 @@ impl Tokenizer {
                     if let Some(ref mut tag) = self.pending_tag {
                         tag.name.push(lower);
                     }
-                    self.temp_buffer.push(cp);
+                    self.push_temp(cp);
                 }
                 _ => self.flush_temp_buffer_as_end_tag_fallback(TokenizerState::ScriptDataEscaped),
             },
@@ -3106,7 +3168,7 @@ impl Tokenizer {
                         || cp == 0x2D
                         || cp == 0x5F =>
                 {
-                    self.temp_buffer.push(cp);
+                    self.push_temp(cp);
                 }
                 None => {
                     self.record_error(ParseErrorCode::EofInProcessingInstruction);
@@ -3269,7 +3331,7 @@ impl Tokenizer {
                 self.char_ref_overflowed = false;
                 match self.consume_next() {
                     Some(cp @ (0x78 | 0x58)) => {
-                        self.temp_buffer.push(cp);
+                        self.push_temp(cp);
                         self.state = TokenizerState::HexadecimalCharacterReferenceStart;
                     }
                     _ => {
@@ -3336,7 +3398,7 @@ impl Tokenizer {
                 if self.temp_buffer.len() == 2 && self.char_ref_code == 0 {
                     match self.consume_next() {
                         Some(cp @ 0x30..=0x39) => {
-                            self.temp_buffer.push(cp);
+                            self.push_temp(cp);
                             self.char_ref_code = cp - 0x30;
                         }
                         None => {
