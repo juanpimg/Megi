@@ -58,6 +58,14 @@ bench = false
 [[bin]]
 name = "net_url"
 path = "fuzz_targets/net_url.rs"
+
+[[bin]]
+name = "net_surface"
+path = "fuzz_targets/net_surface.rs"
+
+[[bin]]
+name = "net_surface"
+path = "fuzz_targets/net_surface.rs"
 test = false
 doc = false
 bench = false

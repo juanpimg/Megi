@@ -19,7 +19,7 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 ```text
 fuzz/
 ├── Cargo.toml          # standalone workspace (`[workspace]`), NOT part of the root workspace
-├── fuzz_targets/       # 22 libFuzzer harnesses
+├── fuzz_targets/       # 23 libFuzzer harnesses
 │   ├── body_stream.rs        # RequestBody/BodyProducer streaming contract
 │   ├── container_queries.rs  # CSS @container/@layer parsing + query evaluation
 │   ├── css_parse.rs          # CSS Syntax L3 tokenizer, stylesheets and declaration lists
