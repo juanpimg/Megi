@@ -917,7 +917,7 @@ impl<'a> Builder<'a> {
                 self.apply_group_bbox(start, &clips, &masks, filter.as_ref());
                 result
             }
-            "g" => {
+            "g" | "a" | "switch" => {
                 let (clips, masks, filter) = self.own_effects(&style, transform, None, true);
                 let start = self.shapes.len();
                 let previous = self.push_effects(&clips, &masks, filter.as_ref());
