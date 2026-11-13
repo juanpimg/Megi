@@ -827,3 +827,45 @@ fn a_single_character_still_gives_the_column_a_width() {
         "a cell with text keeps a non-zero width"
     );
 }
+
+/// `colspan` amplification (#690): the effective span is capped, so a `colspan=1000` cell and
+/// a `colspan=512` cell lay out identically instead of allocating 1000 tracks.
+fn layout_single_colspan(colspan: &str) -> (f32, f32, f32) {
+    let (mut doc, mut styles, body) = setup();
+    let table = mk(&mut doc, body, "table");
+    styles.insert(table, table_style(Length::Auto));
+    let row = mk(&mut doc, table, "tr");
+    styles.insert(row, row_style());
+    let cell = doc.create_element(
+        Namespace::Html,
+        "td",
+        vec![Attribute::new("colspan", colspan)],
+    );
+    doc.append_child(row, cell);
+    styles.insert(cell, cell_style());
+    doc.append_text(cell, "x");
+    let tree = layout_tree(&doc, &styles);
+    let table_box = &tree.children[0].children[0];
+    let cell_box = &table_box.children[0].children[0];
+    (
+        table_box.dimensions.border_box().width,
+        cell_box.dimensions.border_box().width,
+        cell_box.dimensions.border_box().x,
+    )
+}
+
+#[test]
+fn huge_colspans_are_capped_to_a_bounded_column_count() {
+    let huge = layout_single_colspan("1000");
+    let capped = layout_single_colspan("512");
+    assert_eq!(
+        huge, capped,
+        "colspan=1000 must clamp to the 512-column cap, not allocate 1000 tracks"
+    );
+    // Sanity: a span that fits under the cap is honoured as-is.
+    let small = layout_single_colspan("3");
+    assert!(
+        small.0 > 0.0 && small.1 > 0.0 && small.1.is_finite(),
+        "ordinary colspans keep their geometry: {small:?}"
+    );
+}
