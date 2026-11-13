@@ -777,7 +777,7 @@ fn call_listener(
             }
             let _ = with_host(|host| {
                 host.last_event_error = Some(message.clone());
-                host.console.push(crate::host::ConsoleEntry {
+                host.push_console(crate::host::ConsoleEntry {
                     level: "error".to_string(),
                     message,
                 });

@@ -813,7 +813,7 @@ fn console_assert(_this: &JsValue, args: &[JsValue], context: &mut Context) -> J
     }
     let message = parts.join(" ");
     let _ = with_host(|host| {
-        host.console.push(ConsoleEntry {
+        host.push_console(ConsoleEntry {
             level: "assert".to_string(),
             message,
         })
@@ -837,7 +837,7 @@ fn record_console(
     }
     let message = parts.join(" ");
     let level = level.to_string();
-    let _ = with_host(|host| host.console.push(ConsoleEntry { level, message }));
+    let _ = with_host(|host| host.push_console(ConsoleEntry { level, message }));
     Ok(JsValue::undefined())
 }
 
@@ -1864,7 +1864,7 @@ fn node_clone_node(this: &JsValue, args: &[JsValue], context: &mut Context) -> J
         if total > host.max_dom_nodes {
             if !host.dom_budget_warned {
                 host.dom_budget_warned = true;
-                host.console.push(ConsoleEntry {
+                host.push_console(ConsoleEntry {
                     level: "warn".to_string(),
                     message: format!(
                         "cloneNode rejected: the DOM node budget ({} nodes) is exhausted",
