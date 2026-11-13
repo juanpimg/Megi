@@ -117,7 +117,10 @@ pub fn set_outer_html_with_options(
     // document without <html>/<head>/<body> and corrupt downstream stages (#562).
     if matches!(local_name.as_str(), "html" | "head" | "body") {
         return Err(DomError::HierarchyRequest {
-            parent: doc.try_node(element).and_then(|n| n.parent).unwrap_or(element),
+            parent: doc
+                .try_node(element)
+                .and_then(|n| n.parent)
+                .unwrap_or(element),
             child: element,
         });
     }

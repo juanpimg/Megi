@@ -57,7 +57,7 @@ impl fmt::Display for JsError {
             Self::ModuleExport(message) => write!(f, "module export missing: {message}"),
             Self::ModuleCycle(message) => write!(f, "circular module dependency: {message}"),
             Self::ModuleDepth(message) => write!(f, "module graph too deep: {message}"),
-    Self::ModuleBudget(message) => write!(f, "module graph too large: {message}"),
+            Self::ModuleBudget(message) => write!(f, "module graph too large: {message}"),
             Self::ImportMap(message) => write!(f, "import map error: {message}"),
             Self::ImportMapBlocked(message) => write!(f, "import map blocked: {message}"),
             Self::DynamicImport(message) => write!(f, "dynamic import error: {message}"),

@@ -3902,8 +3902,16 @@ fn eval_module_graph(
     for import in &parsed.imports {
         let dep_url = resolve_module(host, &import.specifier, url)?;
         let dep_source = load_module(host, &dep_url)?;
-        let namespace =
-            eval_module_graph(context, host, &dep_url, &dep_source, budget, visiting, depth + 1, done)?;
+        let namespace = eval_module_graph(
+            context,
+            host,
+            &dep_url,
+            &dep_source,
+            budget,
+            visiting,
+            depth + 1,
+            done,
+        )?;
         namespaces.push(namespace);
     }
     let mut prelude = String::new();
@@ -3961,8 +3969,16 @@ fn eval_module_graph(
     for (index, specifier) in parsed.dynamic_imports.iter().enumerate() {
         let dep_url = resolve_module(host, specifier, url)?;
         let dep_source = load_module(host, &dep_url)?;
-        let namespace =
-            eval_module_graph(context, host, &dep_url, &dep_source, budget, visiting, depth + 1, done)?;
+        let namespace = eval_module_graph(
+            context,
+            host,
+            &dep_url,
+            &dep_source,
+            budget,
+            visiting,
+            depth + 1,
+            done,
+        )?;
         context
             .global_object()
             .set(

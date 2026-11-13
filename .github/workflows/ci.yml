@@ -185,8 +185,8 @@ jobs:
         run: |
           : > /tmp/geiger.json
           for pkg in dom html css layout fonts image paint net render shell js svg test_harness bench; do
-            echo "=== cargo geiger -p $pkg ==="
-            cargo geiger -p "$pkg" --all-features --all-targets --forbid-only --output-format Json >> /tmp/geiger.json
+            echo "=== cargo geiger --manifest-path crates/$pkg/Cargo.toml ==="
+            cargo geiger --manifest-path "crates/$pkg/Cargo.toml" --all-features --all-targets --forbid-only --output-format Json >> /tmp/geiger.json
           done
       - name: Upload geiger report
         if: always()

@@ -22,10 +22,6 @@ allow = [
     "CC0-1.0",
     "Unlicense",
 ]
-deny = []
-copyleft = "warn"
-allow-osi-fsf-free = "both"
-default = "deny"
 confidence-threshold = 0.8
 
 [bans]
