@@ -52,7 +52,7 @@ use std::time::{Duration, Instant, SystemTime};
 use crate::cache::{self, CachePolicy};
 use crate::data::decode_data_url;
 use crate::error::{FetchError, LoadError};
-use crate::file::load_file_url;
+use crate::file::load_file_url_with_limit;
 use crate::http::{FetchOptions, Headers, Response, fetch, fetch_with_headers};
 use crate::mime::{self, MimeHint};
 use crate::range::ByteRange;
@@ -622,7 +622,7 @@ impl ResourceLoader {
                 Ok((resource_from_response(response), Some(headers)))
             }
             Scheme::File => {
-                let bytes = load_file_url(url)?;
+                let bytes = load_file_url_with_limit(url, self.options.max_response_bytes)?;
                 Ok((
                     Resource {
                         url: url.clone(),
@@ -711,7 +711,14 @@ impl ResourceLoader {
                 (policy, freshness)
             }
             // `file://` (and synthetic) resources: heuristic freshness, no validators.
-            None => (CachePolicy::default(), HEURISTIC_FRESHNESS),
+            // Refuse to cache a body above the response cap so a single large file cannot
+            // pin an unbounded amount of memory in the cache HashMap (#637).
+            None => {
+                if resource.bytes.len() > self.options.max_response_bytes {
+                    return;
+                }
+                (CachePolicy::default(), HEURISTIC_FRESHNESS)
+            }
         };
         let vary_user_agent = if policy.vary.user_agent {
             Some(self.options.user_agent.clone())
@@ -828,7 +835,7 @@ impl ResourceLoader {
                 })
             }
             Scheme::File => {
-                let bytes = load_file_url(url)?;
+                let bytes = load_file_url_with_limit(url, self.options.max_response_bytes)?;
                 let slice = slice_bytes(&bytes, range)?;
                 Ok(Resource {
                     url: url.clone(),
