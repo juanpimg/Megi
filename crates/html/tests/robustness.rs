@@ -174,7 +174,10 @@ fn tokenizer_handles_many_attributes_in_linear_time() {
             _ => None,
         })
         .expect("start tag must be emitted");
-    assert_eq!(attribute_count, 50_000);
+    // The tokenizer caps attributes at MAX_TOKENIZER_ATTRIBUTES (4096) to bound
+    // peak memory (#560); the performance regression test still covers the
+    // linear-time path up to the cap.
+    assert_eq!(attribute_count, 4096);
     assert!(tok.errors.is_empty());
     assert!(
         elapsed < Duration::from_secs(10),
