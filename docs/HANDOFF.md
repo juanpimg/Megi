@@ -15,7 +15,8 @@
 | `352dfd1`, `9f44916` | Fallback de fuentes del sistema bajo demanda (`SYSTEM_FALLBACK_DB` con `OnceLock`) preservando determinismo golden en fuentes empaquetadas. | `#1015` |
 | `d1da78f` | Runtime de transiciones CSS (`ANIMATABLE_PROPERTIES`, `transition_progress`, `apply_transitions`). | `#941`, `#942` |
 | `7ab03bc` | Actualización de `PROGRESS.md` y badges en `docs/status/`. | — |
-| *(actual)* | `layout::scrollable_overflow_height` en `crates/shell/src/worker.rs` para calcular la altura real de scroll respetando `clip` y `position: fixed`; actualización de `ARCHITECTURE.md`, `TOOLING.md`, `PHASE4-SUPPORT.md` y `JAVASCRIPT-STRATEGY.md`. | `#1021`, `#718`, `#721`, `#825`, `#829`, `#830` |
+| `905d869`, `4663ca2`, `62c41e9`, `8eef306` | Pixmap vacío en dimensiones desbordadas, clip stack O(1) acotado, `scrollable_overflow_height` en `shell::worker` y límites en `TextCache` (`crates/paint`). | `#667`, `#651`, `#1021`, `#656` |
+| *(actual)* | Actualización de `ARCHITECTURE.md`, `TOOLING.md`, `PHASE4-SUPPORT.md`, `JAVASCRIPT-STRATEGY.md`, `SECURITY.md` y `PROGRESS.md`/badges. | `#718`, `#721`, `#731`, `#825`, `#829`, `#830` |
 
 ## Verificación del estado actual en `main`
 
