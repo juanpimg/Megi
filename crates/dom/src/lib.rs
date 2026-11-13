@@ -935,8 +935,11 @@ impl Document {
         if child_id == self.root() {
             return false;
         }
-        if matches!(self.node(child_id).kind, NodeKind::Document) {
-            return false; // the document node cannot become a child
+        if matches!(
+            self.node(child_id).kind,
+            NodeKind::Document | NodeKind::Doctype { .. } | NodeKind::DocumentFragment
+        ) {
+            return false; // these nodes cannot become children of an element
         }
         // A node with no children cannot be an ancestor of another node, which keeps
         // the overwhelmingly common parser append path branch-free of the walk.
@@ -988,8 +991,11 @@ impl Document {
             return false;
         }
 
-        if matches!(self.node(new_node_id).kind, NodeKind::Document) {
-            return false; // the document node cannot be a child
+        if matches!(
+            self.node(new_node_id).kind,
+            NodeKind::Document | NodeKind::Doctype { .. } | NodeKind::DocumentFragment
+        ) {
+            return false; // these nodes cannot become children of an element
         }
         // Reject children under non-container nodes.
         if !self.can_have_children(parent_id) {
