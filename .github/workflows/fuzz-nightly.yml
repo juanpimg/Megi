@@ -92,6 +92,9 @@ jobs:
           - target: net_surface
             seconds: 300
             extra: ""
+          - target: dom_mutate
+            seconds: 300
+            extra: ""
           # Round 18 (R105): render pipeline, JavaScript host and SVG.
           - target: render_pipeline
             seconds: 600

@@ -62,12 +62,6 @@ path = "fuzz_targets/net_url.rs"
 [[bin]]
 name = "net_surface"
 path = "fuzz_targets/net_surface.rs"
-
-[[bin]]
-name = "net_surface"
-path = "fuzz_targets/net_surface.rs"
-test = false
-doc = false
 bench = false
 
 # Round 18 (R105): new surfaces.
@@ -175,6 +169,10 @@ bench = false
 [[bin]]
 name = "dom_tree"
 path = "fuzz_targets/dom_tree.rs"
+
+[[bin]]
+name = "dom_mutate"
+path = "fuzz_targets/dom_mutate.rs"
 test = false
 doc = false
 bench = false
