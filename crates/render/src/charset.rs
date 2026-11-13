@@ -78,22 +78,21 @@ fn normalize_charset_label(label: &str) -> Result<String, RenderError> {
 /// around `=` is accepted (`charset = "utf-8"`); only an exact `charset` parameter counts,
 /// so strings such as `xcharset=utf-8` do not match.
 pub fn charset_from_content_type(content_type: &str) -> Option<String> {
-    for parameter in content_type.split(';') {
-        let Some((name, value)) = parameter.split_once('=') else {
+    // Parse parameters properly (RFC 9110 §5.6): split on ';', trim OWS around
+    // name '=' value, handle quoted values.
+    for part in content_type.split(';').skip(1) {
+        let part = part.trim();
+        let Some((name, value)) = part.split_once('=') else {
             continue;
         };
         if !name.trim().eq_ignore_ascii_case("charset") {
             continue;
         }
-        let value = value.trim().trim_start_matches(['"', '\'']);
-        let value = value
-            .split([';', ' ', '\t', '"', '\'', ','])
-            .next()
-            .unwrap_or("")
-            .trim();
-        if !value.is_empty() {
-            return Some(value.to_owned());
+        let value = value.trim().trim_matches(['"', '\'']);
+        if value.is_empty() {
+            continue;
         }
+        return Some(value.to_owned());
     }
     None
 }
