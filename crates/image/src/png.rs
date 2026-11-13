@@ -258,6 +258,9 @@ fn decode_png_impl(
                     return Err(invalid_chunk(kind, "IEND must be empty"));
                 }
                 seen_iend = true;
+                if position < bytes.len() {
+                    return Err(invalid_chunk(kind, "trailing data after IEND"));
+                }
                 break;
             }
             _ => {
