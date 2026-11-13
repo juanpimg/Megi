@@ -1834,54 +1834,65 @@ impl Document {
         if a == b {
             return 0;
         }
-        let ancestor = |mut node: NodeId, target: NodeId| -> bool {
-            while let Some(parent) = self.try_node(node).and_then(|item| item.parent) {
-                if parent == target {
-                    return true;
-                }
-                node = parent;
-            }
-            false
-        };
-        if ancestor(b, a) {
+        // One walk per node, capped by the arena size: a corrupted parent link can no longer
+        // make this loop forever (the sibling APIs already cap their walks the same way).
+        let max_steps = self.nodes.len() + 1;
+        let mut a_chain: Vec<NodeId> = Vec::new();
+        let mut node = a;
+        for _ in 0..max_steps {
+            let Some(parent) = self.try_node(node).and_then(|item| item.parent) else {
+                break;
+            };
+            a_chain.push(parent);
+            node = parent;
+        }
+        let mut b_chain: Vec<NodeId> = Vec::new();
+        let mut node = b;
+        for _ in 0..max_steps {
+            let Some(parent) = self.try_node(node).and_then(|item| item.parent) else {
+                break;
+            };
+            b_chain.push(parent);
+            node = parent;
+        }
+        // `a` is an ancestor of `b`: `b` is contained by it and follows it.
+        if b_chain.contains(&a) {
             return CONTAINED_BY | FOLLOWING;
         }
-        if ancestor(a, b) {
+        if a_chain.contains(&b) {
             return CONTAINS | PRECEDING;
         }
-        let mut a_ancestors = Vec::new();
-        let mut node = a;
-        while let Some(parent) = self.try_node(node).and_then(|item| item.parent) {
-            a_ancestors.push(parent);
-            node = parent;
+        // Both chains run leaf -> root, so the shared ancestors form a suffix: walk them from
+        // the root end and keep the last node that matches. O(depth_a + depth_b), versus the
+        // O(depth^2) `iter().find(|a| b.contains(a))` this used to do (#681).
+        let mut index_a = a_chain.len();
+        let mut index_b = b_chain.len();
+        let mut common: Option<NodeId> = None;
+        while index_a > 0 && index_b > 0 {
+            let candidate = a_chain[index_a - 1];
+            if candidate != b_chain[index_b - 1] {
+                break;
+            }
+            common = Some(candidate);
+            index_a -= 1;
+            index_b -= 1;
         }
-        let mut b_ancestors = Vec::new();
-        let mut node = b;
-        while let Some(parent) = self.try_node(node).and_then(|item| item.parent) {
-            b_ancestors.push(parent);
-            node = parent;
-        }
-        let common = a_ancestors
-            .iter()
-            .find(|ancestor| b_ancestors.contains(ancestor));
         let Some(common) = common else {
             return DISCONNECTED | IMPLEMENTATION_SPECIFIC;
         };
-        let mut child_a = a;
-        while self.try_node(child_a).and_then(|node| node.parent) != Some(*common) {
-            let Some(parent) = self.try_node(child_a).and_then(|node| node.parent) else {
-                return DISCONNECTED | IMPLEMENTATION_SPECIFIC;
-            };
-            child_a = parent;
-        }
-        let mut child_b = b;
-        while self.try_node(child_b).and_then(|node| node.parent) != Some(*common) {
-            let Some(parent) = self.try_node(child_b).and_then(|node| node.parent) else {
-                return DISCONNECTED | IMPLEMENTATION_SPECIFIC;
-            };
-            child_b = parent;
-        }
-        let mut current = self.try_node(*common).and_then(|node| node.first_child);
+        // The child of `common` on each path: the chain entry just below it, or the node
+        // itself when it *is* a direct child of `common`.
+        let child_a = if index_a == 0 {
+            a
+        } else {
+            a_chain[index_a - 1]
+        };
+        let child_b = if index_b == 0 {
+            b
+        } else {
+            b_chain[index_b - 1]
+        };
+        let mut current = self.try_node(common).and_then(|node| node.first_child);
         while let Some(child) = current {
             if child == child_a {
                 return FOLLOWING;
