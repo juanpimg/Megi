@@ -186,13 +186,6 @@ name = "layout_resolve"
 path = "fuzz_targets/layout_resolve.rs"
 
 [[bin]]
-name = "layout_resolve"
-path = "fuzz_targets/layout_resolve.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
 name = "paint_display_list"
 path = "fuzz_targets/paint_display_list.rs"
 test = false
@@ -202,6 +195,14 @@ bench = false
 [[bin]]
 name = "fonts_shape"
 path = "fuzz_targets/fonts_shape.rs"
+
+[[bin]]
+name = "font_decode"
+path = "fuzz_targets/font_decode.rs"
+
+[[bin]]
+name = "font_decode"
+path = "fuzz_targets/font_decode.rs"
 test = false
 doc = false
 bench = false
