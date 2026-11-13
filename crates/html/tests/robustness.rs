@@ -481,3 +481,45 @@ fn collect_text_bytes(doc: &dom::Document, node: dom::NodeId, total: &mut usize,
         child = doc.node(id).next_sibling;
     }
 }
+
+/// Text of the first `<p>` in a parsed document (`text_content` on the root does not descend).
+fn paragraph_text(document: &dom::Document) -> String {
+    document
+        .get_elements_by_tag_name("p")
+        .first()
+        .map(|node| document.text_content(*node))
+        .unwrap_or_default()
+}
+
+#[test]
+fn huge_numeric_character_reference_runs_stay_linear_and_out_of_range() {
+    // #638: every digit of a numeric character reference ran a saturating multiply/add, so
+    // `&#` + millions of digits burned one arithmetic step per digit. The accumulator now stops
+    // after eight significant digits (still consuming the run to find the terminator) and
+    // reports the out-of-range error once.
+    use html::{ParseOptions, parse_document_with_options};
+
+    let run = "9".repeat(200_000);
+    let input = format!("<p>&#{run};</p>");
+    let started = std::time::Instant::now();
+    let outcome = parse_document_with_options(&input, false, &ParseOptions::default());
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < std::time::Duration::from_secs(2),
+        "a 200k-digit character reference took {elapsed:?}"
+    );
+    let text = paragraph_text(&outcome.document);
+    assert_eq!(text, "\u{FFFD}", "an out-of-range reference becomes U+FFFD");
+
+    // Leading zeros do not consume the significant-digit budget.
+    let outcome = parse_document_with_options(
+        &format!("<p>&#x{}41;</p>", "0".repeat(50)),
+        false,
+        &ParseOptions::default(),
+    );
+    let text = paragraph_text(&outcome.document);
+    assert_eq!(
+        text, "A",
+        "leading zeros must not make `&#x0…041;` overflow"
+    );
+}

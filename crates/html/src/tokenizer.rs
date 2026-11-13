@@ -636,6 +636,15 @@ const NUMERIC_REPLACEMENT_TABLE: [(u32, u32); 27] = [
 /// WHATWG HTML §13.2.5 Tokenizer state machine.
 pub const MAX_PARSE_ERRORS: usize = 1024;
 
+/// Maximum digits folded into `char_ref_code` while scanning `&#…;` / `&#x…;` (#638).
+///
+/// Eight hexadecimal digits already cover `0xFFFF_FFFF` and eight decimal digits saturate a
+/// `u32`, so further digits cannot change the clamped value. They are still consumed (the
+/// tokenizer has to find the `;` to stay in spec) but no longer multiplied, which keeps a
+/// hostile `&#999…9;` run linear-in-input instead of doing arithmetic per digit. The overflow
+/// is recorded once and reported as a single out-of-range error.
+const MAX_CHAR_REF_DIGITS: u32 = 8;
+
 pub struct Tokenizer {
     input: Vec<u32>,
     pos: usize,
@@ -651,6 +660,10 @@ pub struct Tokenizer {
     pending_pi_target: String,
     pending_pi_data: String,
     char_ref_code: u32,
+    /// Digits folded into `char_ref_code` so far (capped at [`MAX_CHAR_REF_DIGITS`]).
+    char_ref_digits: u32,
+    /// Set when a numeric character reference had more digits than the accumulator can use.
+    char_ref_overflowed: bool,
     pub allow_cdata: bool,
     pub tokens: Vec<Token>,
     /// Maximum number of parse errors retained by a single tokenization pass
@@ -673,6 +686,24 @@ pub struct Tokenizer {
 }
 
 impl Tokenizer {
+    /// Folds one digit into `char_ref_code`, ignoring digits past [`MAX_CHAR_REF_DIGITS`] (#638).
+    fn accumulate_char_ref_digit(&mut self, radix: u32, digit: u32) {
+        // Leading zeros do not change the value, so they must not consume the budget either:
+        // `&#x00000000000000041;` is three significant digits, not seventeen.
+        if self.char_ref_code == 0 && digit == 0 {
+            return;
+        }
+        if self.char_ref_digits >= MAX_CHAR_REF_DIGITS {
+            self.char_ref_overflowed = true;
+            return;
+        }
+        self.char_ref_digits += 1;
+        self.char_ref_code = self
+            .char_ref_code
+            .saturating_mul(radix)
+            .saturating_add(digit);
+    }
+
     /// Creates a new `Tokenizer` from raw code points (which are preprocessed via §13.2.3.5).
     pub fn new(raw_code_points: &[u32], config: TokenizerConfig) -> Self {
         let (input, errors, line_starts, has_wide) =
@@ -715,6 +746,8 @@ impl Tokenizer {
             pending_pi_target: String::new(),
             pending_pi_data: String::new(),
             char_ref_code: 0,
+            char_ref_digits: 0,
+            char_ref_overflowed: false,
             allow_cdata: false,
             tokens: Vec::new(),
             errors,
@@ -3232,6 +3265,8 @@ impl Tokenizer {
             // 13.2.5.80 Numeric character reference state
             TokenizerState::NumericCharacterReference => {
                 self.char_ref_code = 0;
+                self.char_ref_digits = 0;
+                self.char_ref_overflowed = false;
                 match self.consume_next() {
                     Some(cp @ (0x78 | 0x58)) => {
                         self.temp_buffer.push(cp);
@@ -3270,24 +3305,9 @@ impl Tokenizer {
 
             // 13.2.5.82 Hexadecimal character reference state
             TokenizerState::HexadecimalCharacterReference => match self.consume_next() {
-                Some(cp @ 0x30..=0x39) => {
-                    self.char_ref_code = self
-                        .char_ref_code
-                        .saturating_mul(16)
-                        .saturating_add(cp - 0x30);
-                }
-                Some(cp @ 0x41..=0x46) => {
-                    self.char_ref_code = self
-                        .char_ref_code
-                        .saturating_mul(16)
-                        .saturating_add(cp - 0x37);
-                }
-                Some(cp @ 0x61..=0x66) => {
-                    self.char_ref_code = self
-                        .char_ref_code
-                        .saturating_mul(16)
-                        .saturating_add(cp - 0x57);
-                }
+                Some(cp @ 0x30..=0x39) => self.accumulate_char_ref_digit(16, cp - 0x30),
+                Some(cp @ 0x41..=0x46) => self.accumulate_char_ref_digit(16, cp - 0x37),
+                Some(cp @ 0x61..=0x66) => self.accumulate_char_ref_digit(16, cp - 0x57),
                 Some(0x3B) => {
                     self.numeric_end_mode = ErrorPositionMode::Next;
                     self.state = TokenizerState::NumericCharacterReferenceEnd;
@@ -3340,12 +3360,7 @@ impl Tokenizer {
                 }
 
                 match self.consume_next() {
-                    Some(cp @ 0x30..=0x39) => {
-                        self.char_ref_code = self
-                            .char_ref_code
-                            .saturating_mul(10)
-                            .saturating_add(cp - 0x30);
-                    }
+                    Some(cp @ 0x30..=0x39) => self.accumulate_char_ref_digit(10, cp - 0x30),
                     Some(0x3B) => {
                         self.numeric_end_mode = ErrorPositionMode::Next;
                         self.state = TokenizerState::NumericCharacterReferenceEnd;
@@ -3372,7 +3387,14 @@ impl Tokenizer {
             // 13.2.5.84 Numeric character reference end state
             TokenizerState::NumericCharacterReferenceEnd => {
                 let mut code = self.char_ref_code;
-                if code == 0x00 {
+                if self.char_ref_overflowed {
+                    // Too many digits to fit the accumulator: the value is necessarily outside
+                    // the Unicode range (the smallest such run is > 0x110_000).
+                    self.record_error_in_numeric_end(
+                        ParseErrorCode::CharacterReferenceOutsideUnicodeRange,
+                    );
+                    code = 0xFFFD;
+                } else if code == 0x00 {
                     self.record_error_in_numeric_end(ParseErrorCode::NullCharacterReference);
                     code = 0xFFFD;
                 } else if code > 0x10FFFF {
