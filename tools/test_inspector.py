@@ -97,10 +97,15 @@ def parse_dat_file(dat_path: Path) -> List[Dict[str, Any]]:
 
 def load_tokenizer_file(test_path: Path) -> List[Dict[str, Any]]:
     data = json.loads(test_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"Malformed tokenizer JSON in {test_path}: top level must be an object, "
+            f"got {type(data).__name__}"
+        )
     if "tests" in data:
-        return data["tests"]
+        return data["tests"] or []
     if "xmlViolationTests" in data:
-        return data["xmlViolationTests"]
+        return data["xmlViolationTests"] or []
     raise ValueError(
         f"Unrecognized tokenizer schema in {test_path}: "
         "expected 'tests' or 'xmlViolationTests' key"
@@ -112,9 +117,14 @@ def cmd_summary(args: argparse.Namespace) -> int:
     tok_files = sorted(TOKENIZER_DIR.glob("*.test")) if TOKENIZER_DIR.exists() else []
     tok_total = 0
     for tf in tok_files:
-        cases = load_tokenizer_file(tf)
+        try:
+            cases = load_tokenizer_file(tf)
+        except (ValueError, json.JSONDecodeError) as error:
+            print(f"  {tf.name:<34} ERROR: {error}")
+            continue
         tok_total += len(cases)
-        print(f"  {tf.name:<34} {len(cases):5d} tests")
+        flag = "  (empty)" if not cases else ""
+        print(f"  {tf.name:<34} {len(cases):5d} tests{flag}")
     print(f"Total tokenizer test files: {len(tok_files)} ({tok_total} test objects)\n")
 
     print("=== Tree Construction Suites (tests/html5lib-tests/tree-construction/*.dat) ===")
