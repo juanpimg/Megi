@@ -1635,8 +1635,27 @@ fn parse_preserve_aspect_ratio(raw: Option<&str>) -> PreserveAspectRatio {
 /// are linearly interpolated; non-numeric values switch from `from` to `to` at half the
 /// duration. `animateTransform` appends the animated transform after the element's own
 /// transform (documented approximation).
+fn has_smil(element: &XmlElement) -> bool {
+    for child in &element.children {
+        if let XmlNode::Element(child_element) = child {
+            let name = child_element.local_name_lower();
+            if matches!(name.as_str(), "animate" | "set" | "animatetransform") {
+                return true;
+            }
+            if has_smil(child_element) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn apply_smil(root: &XmlElement, svg_time: f32) -> Result<Option<XmlElement>, SvgError> {
     if !svg_time.is_finite() {
+        return Ok(None);
+    }
+    // Skip the full tree clone when there are no animation elements (#629).
+    if !has_smil(root) {
         return Ok(None);
     }
     let mut count = 0usize;
