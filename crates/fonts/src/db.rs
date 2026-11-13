@@ -176,13 +176,38 @@ pub fn parse_font_families(font_family: &str) -> Vec<String> {
         if families.len() >= MAX_FAMILIES {
             break;
         }
-        let trimmed = part.trim().trim_matches(|ch| ch == '\'' || ch == '"');
+        let trimmed = part.trim();
+        // Strip at most one matched quote pair (CSS Fonts 3); mismatched quotes
+        // are kept literal instead of being trimmed away (#605).
+        let trimmed = if trimmed.len() >= 2
+            && ((trimmed.starts_with('\'') && trimmed.ends_with('\''))
+                || (trimmed.starts_with('"') && trimmed.ends_with('"')))
+        {
+            &trimmed[1..trimmed.len() - 1]
+        } else {
+            trimmed
+        };
         let trimmed = trimmed.trim();
         if !trimmed.is_empty() {
-            let name = if trimmed.len() > MAX_ENTRY_LEN {
-                &trimmed[..MAX_ENTRY_LEN]
+            // Unescape CSS backslash sequences (e.g. \" -> ").
+            let mut unescaped = String::with_capacity(trimmed.len());
+            let mut chars = trimmed.chars();
+            while let Some(ch) = chars.next() {
+                if ch == '\\' {
+                    if let Some(next) = chars.next() {
+                        unescaped.push(next);
+                    } else {
+                        // Trailing backslash: keep it.
+                        unescaped.push(ch);
+                    }
+                } else {
+                    unescaped.push(ch);
+                }
+            }
+            let name = if unescaped.len() > MAX_ENTRY_LEN {
+                &unescaped[..MAX_ENTRY_LEN]
             } else {
-                trimmed
+                &unescaped
             };
             families.push(name.to_string());
         }
