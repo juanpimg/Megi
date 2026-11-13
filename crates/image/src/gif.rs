@@ -64,6 +64,8 @@ pub(crate) fn decode_gif(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, 
 
     let mut transparent_index: Option<u8> = None;
     let mut canvas = vec![0u8; (screen_width as usize) * (screen_height as usize) * 4];
+    let mut metadata_bytes: usize = 0;
+    const MAX_GIF_METADATA_BYTES: usize = 16 * 1024 * 1024;
     loop {
         let block = *bytes.get(index).ok_or(ImageError::Truncated {
             context: "GIF block",
@@ -72,6 +74,13 @@ pub(crate) fn decode_gif(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, 
         match block {
             0x21 => {
                 // Extension introducer: label + sub-blocks.
+                if metadata_bytes > MAX_GIF_METADATA_BYTES {
+                    return Err(ImageError::LimitExceeded {
+                        what: "GIF metadata",
+                        limit: MAX_GIF_METADATA_BYTES as u64,
+                        actual: metadata_bytes as u64,
+                    });
+                }
                 let label = *bytes.get(index).ok_or(ImageError::Truncated {
                     context: "GIF extension",
                 })?;
@@ -94,9 +103,11 @@ pub(crate) fn decode_gif(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, 
                     if block[0] & 0x01 != 0 {
                         transparent_index = Some(block[3]);
                     }
-                    skip_sub_blocks(bytes, &mut index)?;
+                    let skipped = skip_sub_blocks(bytes, &mut index)?;
+                    metadata_bytes = metadata_bytes.saturating_add(skipped);
                 } else {
-                    skip_sub_blocks(bytes, &mut index)?;
+                    let skipped = skip_sub_blocks(bytes, &mut index)?;
+                    metadata_bytes = metadata_bytes.saturating_add(skipped);
                 }
             }
             0x2C => {
@@ -237,14 +248,15 @@ fn read_palette(
     Ok(raw.chunks(3).map(|rgb| [rgb[0], rgb[1], rgb[2]]).collect())
 }
 
-fn skip_sub_blocks(bytes: &[u8], index: &mut usize) -> Result<(), ImageError> {
+fn skip_sub_blocks(bytes: &[u8], index: &mut usize) -> Result<usize, ImageError> {
+    let mut total = 0usize;
     loop {
         let size = *bytes.get(*index).ok_or(ImageError::Truncated {
             context: "GIF data sub-block",
         })? as usize;
         *index += 1;
         if size == 0 {
-            return Ok(());
+            return Ok(total);
         }
         *index += size;
         if *index > bytes.len() {
@@ -252,6 +264,7 @@ fn skip_sub_blocks(bytes: &[u8], index: &mut usize) -> Result<(), ImageError> {
                 context: "GIF data sub-block",
             });
         }
+        total = total.saturating_add(size);
     }
 }
 
