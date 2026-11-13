@@ -1114,6 +1114,11 @@ fn decode_block(
         let size = u32::from(symbol & 0x0F);
         if size == 0 {
             if run == 15 {
+                if position + 16 > BLOCK_LEN {
+                    return Err(ImageError::InvalidData {
+                        reason: "JPEG ZRL run exceeds the block",
+                    });
+                }
                 position += 16;
                 continue;
             }
