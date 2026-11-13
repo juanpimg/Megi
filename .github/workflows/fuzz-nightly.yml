@@ -184,6 +184,14 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --version 0.13.2 --locked
 
+      - name: Restore corpus
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: |
+            fuzz-corpus-${{ matrix.target }}-
+
       - name: Build ${{ matrix.target }}
         working-directory: fuzz
         run: cargo +nightly fuzz build ${{ matrix.target }}
