@@ -586,6 +586,9 @@ impl PendingTag {
                 line: self.name_end_line,
                 col: self.name_end_col,
             });
+        } else if self.attributes.len() >= MAX_TOKENIZER_ATTRIBUTES {
+            // Drop the attribute to keep peak memory bounded; the tree builder's
+            // cap would reject it anyway (#560).
         } else {
             self.attributes.push((name, value));
         }
@@ -635,6 +638,8 @@ const NUMERIC_REPLACEMENT_TABLE: [(u32, u32); 27] = [
 
 /// WHATWG HTML §13.2.5 Tokenizer state machine.
 pub const MAX_PARSE_ERRORS: usize = 1024;
+/// Maximum attributes materialized per tag in the tokenizer (anti-DoS).
+pub const MAX_TOKENIZER_ATTRIBUTES: usize = 4096;
 
 /// Maximum digits folded into `char_ref_code` while scanning `&#…;` / `&#x…;` (#638).
 ///
