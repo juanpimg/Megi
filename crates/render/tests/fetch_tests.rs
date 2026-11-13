@@ -57,3 +57,24 @@ fn fetch_no_network_rejects_typed() {
     assert!(value.starts_with("rejected:"), "{value}");
     assert!(value.contains("network disabled"), "{value}");
 }
+
+#[test]
+fn fetch_volume_is_budgeted_per_page() {
+    // #660: only per-call loader caps existed, so a script could issue thousands of fetch()
+    // calls in one render (each one a file read / HTTP request plus a body copy).
+    let mut limited = options(false);
+    limited.scripting_limits = render::ScriptingLimits {
+        max_fetch_calls: 4,
+        ..render::ScriptingLimits::default()
+    };
+    let output = render_url(&fixture_path("js_fetch_budget.html"), &limited)
+        .expect("the render must not fail when scripts exhaust the fetch budget");
+    let value = text(&output, "out");
+    let (done, failed) = value
+        .strip_prefix("done=")
+        .and_then(|rest| rest.split_once(",failed="))
+        .map(|(done, failed)| (done.parse::<u32>().unwrap(), failed.parse::<u32>().unwrap()))
+        .unwrap_or_else(|| panic!("unexpected output: {value}"));
+    assert_eq!(done, 4, "exactly the budgeted calls may succeed: {value}");
+    assert!(failed > 0, "later calls must be rejected: {value}");
+}
