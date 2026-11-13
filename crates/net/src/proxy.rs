@@ -175,6 +175,10 @@ fn normalize_host(host: &str) -> String {
 /// Parses a proxy URL, accepting only `http:`/`https:` proxies.
 fn parse_proxy_url(value: &str) -> Option<Url> {
     let url = Url::parse(value.trim()).ok()?;
+    // Reject proxy URLs with non-empty path/query/fragment (fail-closed).
+    if url.path() != "/" || url.query().is_some() || url.fragment().is_some() {
+        return None;
+    }
     matches!(url.scheme(), Scheme::Http | Scheme::Https).then_some(url)
 }
 

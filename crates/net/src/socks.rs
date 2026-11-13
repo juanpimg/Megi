@@ -27,10 +27,11 @@ impl SocksProxy {
             .strip_prefix("socks5://")
             .or_else(|| value.strip_prefix("socks5h://"))
             .or_else(|| value.strip_prefix("socks://"))?;
-        let (authority, _path) = match rest.split_once('/') {
-            Some((authority, _)) => (authority, ()),
-            None => (rest, ()),
-        };
+        // Reject non-empty path/query/fragment (fail-closed).
+        if rest.contains('/') || rest.contains('?') || rest.contains('#') {
+            return None;
+        }
+        let authority = rest;
         let (userinfo, host_port) = match authority.rsplit_once('@') {
             Some((userinfo, host_port)) => (Some(userinfo), host_port),
             None => (None, authority),
