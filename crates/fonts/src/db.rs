@@ -494,9 +494,14 @@ impl FontDatabase {
                 let Some(face) = self.db.face(*id) else {
                     continue;
                 };
-                let style_penalty = if face.style == wanted_style { 0 } else { 1000 };
+                let style_penalty = match (face.style, wanted_style) {
+                    (a, b) if a == b => 0u32,
+                    (DbStyle::Italic, DbStyle::Oblique)
+                    | (DbStyle::Oblique, DbStyle::Italic) => 100,
+                    _ => 1000,
+                };
                 let weight_penalty = i32::from(face.weight.0.abs_diff(weight));
-                let score = style_penalty + weight_penalty;
+                let score = style_penalty as i32 + weight_penalty;
                 if best.is_none_or(|(best_score, _)| score < best_score) {
                     best = Some((score, *id));
                 }
@@ -543,9 +548,14 @@ impl FontDatabase {
         let wanted_style = DbStyle::from(style);
         let mut best: Option<(i32, fontdb::ID)> = None;
         for face in self.db.faces() {
-            let style_penalty = if face.style == wanted_style { 0 } else { 1000 };
+            let style_penalty = match (face.style, wanted_style) {
+                    (a, b) if a == b => 0u32,
+                    (DbStyle::Italic, DbStyle::Oblique)
+                    | (DbStyle::Oblique, DbStyle::Italic) => 100,
+                    _ => 1000,
+                };
             let weight_penalty = i32::from(face.weight.0.abs_diff(weight));
-            let score = style_penalty + weight_penalty;
+            let score = style_penalty as i32 + weight_penalty;
             if best.is_none_or(|(best_score, _)| score < best_score) {
                 best = Some((score, face.id));
             }
@@ -822,7 +832,12 @@ impl FontDatabase {
                     .any(|f| f.info().post_script_name == face.post_script_name)
             })
             .map(|face| {
-                let style_penalty = if face.style == wanted_style { 0 } else { 1000 };
+                let style_penalty = match (face.style, wanted_style) {
+                    (a, b) if a == b => 0u32,
+                    (DbStyle::Italic, DbStyle::Oblique)
+                    | (DbStyle::Oblique, DbStyle::Italic) => 100,
+                    _ => 1000,
+                };
                 let weight_distance = (face.weight.0 as i32 - weight as i32).unsigned_abs();
                 (style_penalty + weight_distance, face.id)
             })
@@ -868,10 +883,19 @@ impl FontDatabase {
                 }
                 // Score by weight distance and style proximity instead of requiring
                 // an exact match: a family with only a regular face should still
-                // provide fallback glyphs for a bold request.
-                let style_match = face.style == wanted_style;
+                // provide fallback glyphs for a bold request. Italic and oblique are
+                // close cousins (small penalty) so an italic request can still fall
+                // back to an oblique face (and vice versa) before reaching a
+                // normal face, instead of treating every mismatch as equally distant
+                // (#616).
+                let style_penalty = match (face.style, wanted_style) {
+                    (a, b) if a == b => 0u32,
+                    (DbStyle::Italic, DbStyle::Oblique)
+                    | (DbStyle::Oblique, DbStyle::Italic) => 100,
+                    _ => 1000,
+                };
                 let weight_distance = (face.weight.0 as i32 - weight as i32).unsigned_abs();
-                if weight_distance > 300 && !style_match {
+                if weight_distance + style_penalty > 1300 {
                     continue;
                 }
                 if seen.contains(&face.post_script_name) {
