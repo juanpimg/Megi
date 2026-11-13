@@ -634,6 +634,8 @@ const NUMERIC_REPLACEMENT_TABLE: [(u32, u32); 27] = [
 ];
 
 /// WHATWG HTML §13.2.5 Tokenizer state machine.
+pub const MAX_PARSE_ERRORS: usize = 1024;
+
 pub struct Tokenizer {
     input: Vec<u32>,
     pos: usize,
@@ -651,6 +653,9 @@ pub struct Tokenizer {
     char_ref_code: u32,
     pub allow_cdata: bool,
     pub tokens: Vec<Token>,
+    /// Maximum number of parse errors retained by a single tokenization pass
+    /// (issue #634): prevents a run of NUL/control bytes from producing millions
+    /// of `ParseError` entries.
     pub errors: Vec<ParseError>,
     /// 0-based indices of the first code point of each line (used for error positions).
     line_starts: Vec<usize>,
@@ -918,12 +923,18 @@ impl Tokenizer {
     /// Records a parse error at the position of the most recently consumed character, overriding
     /// the code's default position mode (used by the numeric-character-reference parsing states).
     fn record_error_at_current(&mut self, code: ParseErrorCode) {
+        if self.errors.len() >= MAX_PARSE_ERRORS {
+            return;
+        }
         let (line, col) = self.current_position();
         self.errors.push(ParseError { code, line, col });
     }
 
     /// Records a parse error at the position of the next input character (EOF position at EOF).
     fn record_error_at_next(&mut self, code: ParseErrorCode) {
+        if self.errors.len() >= MAX_PARSE_ERRORS {
+            return;
+        }
         let (line, col) = self.next_position();
         self.errors.push(ParseError { code, line, col });
     }
@@ -931,6 +942,9 @@ impl Tokenizer {
     /// Records an error raised in the numeric-character-reference end state, whose html5lib-tests
     /// position depends on how the state was entered (`;`/EOF vs. a non-`;` terminating character).
     fn record_error_in_numeric_end(&mut self, code: ParseErrorCode) {
+        if self.errors.len() >= MAX_PARSE_ERRORS {
+            return;
+        }
         let (line, col) = match self.numeric_end_mode {
             ErrorPositionMode::Current => self.current_position(),
             ErrorPositionMode::Next => self.next_position(),
@@ -948,7 +962,9 @@ impl Tokenizer {
                 ErrorPositionMode::Next => self.next_position(),
             }
         };
-        self.errors.push(ParseError { code, line, col });
+        if self.errors.len() < MAX_PARSE_ERRORS {
+            self.errors.push(ParseError { code, line, col });
+        }
     }
 
     fn emit_char(&mut self, cp: u32) {
