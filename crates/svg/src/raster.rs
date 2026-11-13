@@ -886,12 +886,19 @@ fn segment_at(
 }
 
 /// Flattens a `textPath`'s sub-paths into contiguous segments and their cumulative ends.
+/// Cap on flattened segments per textPath: a pathological path with millions of
+/// micro-segments must not turn glyph placement into an O(chars * segments) scan.
+const MAX_TEXT_PATH_SEGMENTS: usize = 65_536;
+
 fn text_path_segments(subpaths: &[SubPath]) -> (Vec<TextPathSegment>, Vec<f32>) {
     let mut segments: Vec<TextPathSegment> = Vec::new();
     let mut ends: Vec<f32> = Vec::new();
     let mut total = 0.0f32;
-    for subpath in subpaths {
+    'outer: for subpath in subpaths {
         for window in subpath.points.windows(2) {
+            if segments.len() >= MAX_TEXT_PATH_SEGMENTS {
+                break 'outer;
+            }
             let (x0, y0) = window[0];
             let (x1, y1) = window[1];
             let length = ((x1 - x0).powi(2) + (y1 - y0).powi(2)).sqrt();
