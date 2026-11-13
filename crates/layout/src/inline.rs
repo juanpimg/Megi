@@ -329,11 +329,11 @@ fn push_style(styles: &mut Vec<Arc<ComputedStyle>>, style: Arc<ComputedStyle>) -
 
 /// Resolves a CSS [`Length`] into pixels relative to containing block width.
 fn resolve_length(len: Length, cb_width: f32) -> f32 {
-    match len {
+    crate::calc::sanitize(match len {
         Length::Px(px) => px,
         Length::Percent(pct) => cb_width * (pct / 100.0),
         Length::Auto => 0.0,
-    }
+    })
 }
 
 /// Lays out inline children inside a block container using [`DefaultTextMeasurer`].
