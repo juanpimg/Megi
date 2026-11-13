@@ -62,6 +62,10 @@ const GENERATION_MASK: u32 = (1 << (32 - SLOT_BITS)) - 1;
 /// Maximum number of arena slots (index space) in one [`Document`].
 pub const MAX_SLOTS: usize = SLOT_MASK as usize;
 
+/// Maximum number of nodes a single `clone_node(deep=true)` may allocate
+/// (issue #678): prevents a near-full arena from being doubled by one call.
+pub const MAX_CLONE_NODES: usize = 1 << 16;
+
 /// Compact 32-bit handle into a [`Document`]'s contiguous node arena.
 ///
 /// # Layout and semantics
@@ -1028,6 +1032,32 @@ impl Document {
         text_id
     }
 
+    /// Counts the nodes in the subtree rooted at `node_id` (including itself).
+    fn subtree_size(&self, node_id: NodeId) -> usize {
+        let mut count = 0usize;
+        let mut stack = vec![node_id];
+        while let Some(id) = stack.pop() {
+            count = count.saturating_add(1);
+            if count > MAX_CLONE_NODES {
+                return count;
+            }
+            let mut child = self.node(id).first_child;
+            while let Some(child_id) = child {
+                stack.push(child_id);
+                child = self.node(child_id).next_sibling;
+            }
+            // Template contents are part of the cloned subtree.
+            if let Some(contents) = self
+                .node(id)
+                .as_element()
+                .and_then(|el| el.template_contents)
+            {
+                stack.push(contents);
+            }
+        }
+        count
+    }
+
     /// Clones `node_id`. If `deep` is true, iteratively clones all descendant subtrees.
     ///
     /// `<template>` elements are special-cased per the DOM Standard: the clone always
@@ -1038,6 +1068,10 @@ impl Document {
     /// The traversal uses an explicit heap stack, so deep trees cannot overflow the
     /// call stack.
     pub fn clone_node(&mut self, node_id: NodeId, deep: bool) -> NodeId {
+        // Bound clone amplification (issue #678): if the subtree is too large to
+        // safely clone, fall back to a shallow clone instead of risking arena
+        // exhaustion / panic.
+        let deep = deep && self.subtree_size(node_id) <= MAX_CLONE_NODES;
         let cloned_root = self.clone_node_shallow(node_id);
 
         // Work stack of `(source, clone, deep)` frames; template contents are always deep.
