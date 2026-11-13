@@ -2796,7 +2796,11 @@ fn root_array(context: &mut Context, name: &str, create: bool) -> JsResult<JsObj
     let value = global
         .get(js_string!(name), context)
         .map_err(|error| js_error(error.to_string()))?;
-    if let Some(array) = value.as_object() {
+    // Defensively type-check: a script may have replaced the rooted table with a
+    // non-array value. Treat that as "missing" and recreate it (#644).
+    if let Some(array) = value.as_object()
+        && array.get(js_string!("length"), context).ok().and_then(|v| v.as_number()).is_some()
+    {
         return Ok(array.clone());
     }
     let array = JsArray::from_iter([], context);
