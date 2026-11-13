@@ -119,12 +119,14 @@ fn parse_pac_result(result: &str) -> Result<Option<Url>, String> {
     }
     for directive in result.split(';') {
         let directive = directive.trim();
-        let Some(rest) = directive
-            .strip_prefix("PROXY ")
-            .or_else(|| directive.strip_prefix("proxy "))
-        else {
+        // Split on any ASCII whitespace; match the token case-insensitively
+        // (PAC return values are case-insensitive per convention).
+        let mut parts = directive.split_whitespace();
+        let token = parts.next().unwrap_or("");
+        if !token.eq_ignore_ascii_case("PROXY") {
             continue;
-        };
+        }
+        let rest = parts.collect::<Vec<_>>().join(" ");
         let rest = rest.trim();
         let proxy = Url::parse(&format!("http://{rest}/"))
             .map_err(|error| format!("invalid PAC proxy `{rest}`: {error}"))?;
