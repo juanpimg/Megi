@@ -75,7 +75,9 @@ fi
 
 features_args=()
 if [[ -n "${BENCH_FEATURES:-}" ]]; then
-    features_args=(--features "${BENCH_FEATURES}")
+    # Word-split the env var so multi-word values work (e.g. BENCH_FEATURES="fonts extra").
+    read -ra _bench_features <<< "${BENCH_FEATURES}"
+    features_args=(--features "${_bench_features[@]}")
 fi
 
 echo "==> Building release benchmark binary (cargo build --release -p bench ${features_args[*]:-})"
