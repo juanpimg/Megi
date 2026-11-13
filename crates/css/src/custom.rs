@@ -236,15 +236,25 @@ fn expand_inner(
             let mut cursor = start + 4;
             let mut depth_parens = 0usize;
             let mut quote: Option<char> = None;
+            // A backslash consumes the next code point (CSS Syntax 3 §4.3.7), so an escaped
+            // quote or parenthesis must not change the state (#684).
+            let mut escaped = false;
             let mut end = None;
             for (offset, ch) in value[cursor..].char_indices() {
+                if escaped {
+                    escaped = false;
+                    continue;
+                }
                 match quote {
                     Some(active) => {
-                        if ch == active {
+                        if ch == '\\' {
+                            escaped = true;
+                        } else if ch == active {
                             quote = None;
                         }
                     }
                     None => match ch {
+                        '\\' => escaped = true,
                         '\'' | '"' => quote = Some(ch),
                         '(' => depth_parens += 1,
                         ')' if depth_parens == 0 => {
@@ -316,14 +326,22 @@ fn expand_inner(
 fn split_first_comma(inner: &str) -> (String, Option<String>) {
     let mut depth = 0usize;
     let mut quote: Option<char> = None;
+    let mut escaped = false;
     for (offset, ch) in inner.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
         match quote {
             Some(active) => {
-                if ch == active {
+                if ch == '\\' {
+                    escaped = true;
+                } else if ch == active {
                     quote = None;
                 }
             }
             None => match ch {
+                '\\' => escaped = true,
                 '\'' | '"' => quote = Some(ch),
                 '(' => depth += 1,
                 ')' => depth = depth.saturating_sub(1),
@@ -456,6 +474,46 @@ mod tests {
         assert_eq!(
             expand_variables(value, &custom).as_deref(),
             Some(r#"myvar(--x) "var(--x)" 'var(--x)' 1"#)
+        );
+    }
+
+    #[test]
+    fn escaped_quote_inside_a_fallback_keeps_the_comma_split_intact() {
+        // #684: the fallback string contains an escaped quote, so the quoting state must
+        // not close early — otherwise the comma lands inside the string and the whole
+        // declaration is dropped as invalid.
+        let mut custom = HashMap::new();
+        custom.insert("--x".to_string(), "1".to_string());
+        let double = r#"var(--missing, "a\"b,c")"#;
+        assert_eq!(
+            expand_variables(double, &custom)
+                .map(|value| value.trim().to_string())
+                .as_deref(),
+            Some(r#""a\"b,c""#),
+            "escaped double quote must not split the fallback"
+        );
+        let single = r#"var(--missing, 'a\'b,c')"#;
+        assert_eq!(
+            expand_variables(single, &custom)
+                .map(|value| value.trim().to_string())
+                .as_deref(),
+            Some(r#"'a\'b,c'"#),
+            "escaped single quote must not split the fallback"
+        );
+    }
+
+    #[test]
+    fn escaped_paren_inside_a_fallback_does_not_end_the_var_function() {
+        // The parenthesis scan has the same escape rule: `\)` is literal text, not the
+        // closing paren of `var(`.
+        let mut custom = HashMap::new();
+        custom.insert("--x".to_string(), "1".to_string());
+        let value = r#"var(--missing, "a\)b") var(--x)"#;
+        assert_eq!(
+            expand_variables(value, &custom)
+                .map(|value| value.trim().to_string())
+                .as_deref(),
+            Some(r#""a\)b" 1"#)
         );
     }
 
