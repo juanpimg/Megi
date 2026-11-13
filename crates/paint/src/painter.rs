@@ -85,6 +85,7 @@ use dom::NodeId;
 use layout::{BoxType, LayoutBox, Rect};
 
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::display_list::{
     BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MAX_SHADOWS,
@@ -191,7 +192,7 @@ fn push_text_mask_group(
     list: &mut DisplayList,
     resources: &PaintResources<'_>,
     rect: Rect,
-    runs: Vec<TextMaskRun>,
+    runs: std::sync::Arc<Vec<TextMaskRun>>,
 ) {
     list.push(DisplayItem::PushTextMaskGroup { rect, runs });
     resources.push_clip(rect);
@@ -253,6 +254,8 @@ pub const IMAGE_PLACEHOLDER: Color = Color::new(0xD9, 0xD9, 0xD9, 255);
 /// [`MAX_FLOAT_DEPTH`]; beyond the caps the subtree is painted as flat in-flow
 /// content. The resulting list is bounded by
 /// [`MAX_DISPLAY_LIST_ITEMS`](crate::MAX_DISPLAY_LIST_ITEMS).
+static TEXT_MASK_COLLECTORS: AtomicUsize = AtomicUsize::new(0);
+
 pub fn build_display_list(root: &LayoutBox, viewport: Rect) -> DisplayList {
     build_display_list_with_images(root, viewport, &ImageStore::new())
 }
@@ -345,6 +348,8 @@ fn build_display_list_inner(
     // Reserve a modest starting capacity: the painter emits roughly one item per
     // text run plus one per painted box, and `DisplayItem` is a large enum, so a
     // few reallocations are expensive on text-heavy pages (R129).
+    // Reset the per-pass counter for `background-clip: text` collectors (#658).
+    TEXT_MASK_COLLECTORS.store(0, std::sync::atomic::Ordering::Relaxed);
     let mut list = DisplayList::with_capacity(20480);
 
     match canvas {
@@ -566,6 +571,13 @@ fn background_clips_to_text(style: &css::ComputedStyle) -> bool {
         .iter()
         .any(|layer| layer.clip == css::BackgroundClip::Text)
 }
+
+/// Per-pass cap on how many boxes may collect a `background-clip: text` mask.
+///
+/// Each collecting box walks its entire descendant subtree and retains the glyph runs
+/// (including their owned text strings), so an unbounded number of collecting boxes
+/// turns a single render into O(N * subtree) work and retained memory (#658).
+const MAX_TEXT_MASK_COLLECTORS: usize = 32;
 
 /// Collects the glyph runs of a box's subtree for a `background-clip: text` mask.
 ///
@@ -1467,12 +1479,20 @@ fn paint_background_border(
     // `background-clip: text`: the background color/images are composited through
     // the glyph mask of the box's text descendants.
     let text_mask_runs = if !background_is_propagated && background_clips_to_text(style) {
-        Some(collect_text_mask_runs(layout_box))
+        // Bound the number of collecting boxes per pass (#658): once the cap is reached,
+        // skip collection so a hostile tree cannot turn one render into O(N * subtree).
+        let count = TEXT_MASK_COLLECTORS.fetch_add(1, Ordering::Relaxed);
+        if count < MAX_TEXT_MASK_COLLECTORS {
+            Some(collect_text_mask_runs(layout_box))
+        } else {
+            None
+        }
     } else {
         None
     };
-    if let Some(runs) = &text_mask_runs {
-        push_text_mask_group(list, resources, border_box, runs.clone());
+    let has_text_mask = text_mask_runs.is_some();
+    if let Some(runs) = text_mask_runs {
+        push_text_mask_group(list, resources, border_box, std::sync::Arc::new(runs));
     }
 
     // Outer `box-shadow` layers are painted behind the background, last shadow
@@ -1622,7 +1642,7 @@ fn paint_background_border(
     if rounded_group {
         pop_rounded_group(list, resources);
     }
-    if text_mask_runs.is_some() {
+    if has_text_mask {
         pop_text_mask_group(list, resources);
     }
 

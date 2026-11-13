@@ -270,7 +270,10 @@ pub enum DisplayItem {
     /// so the background shows only inside the text ink. The glyphs themselves
     /// are still painted later by their [`Text`](Self::Text) items (typically with
     /// `color: transparent`, the common "gradient text" pattern).
-    PushTextMaskGroup { rect: Rect, runs: Vec<TextMaskRun> },
+    PushTextMaskGroup {
+        rect: Rect,
+        runs: std::sync::Arc<Vec<TextMaskRun>>,
+    },
     /// Closes and composites the topmost text-mask group.
     PopTextMaskGroup,
     /// Pushes a rectangular clipping boundary onto the clip stack.
