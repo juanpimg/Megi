@@ -27,8 +27,8 @@ pub fn viewport_slice(
     view_height: u32,
 ) -> Vec<u32> {
     let len = match (view_width as usize).checked_mul(view_height as usize) {
-        Some(len) => len,
-        None => return Vec::new(),
+        Some(len) if len <= crate::convert::MAX_FRAMEBUFFER_PIXELS => len,
+        _ => return Vec::new(),
     };
     let mut out = vec![WHITE_0RGB; len];
     for row in 0..view_height {
