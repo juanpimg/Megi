@@ -315,7 +315,11 @@ impl Pixmap {
         if image.is_empty() || rect.width <= 0.0 || rect.height <= 0.0 {
             return;
         }
-        if !rect.x.is_finite() || !rect.y.is_finite() {
+        if !rect.x.is_finite()
+            || !rect.y.is_finite()
+            || !rect.width.is_finite()
+            || !rect.height.is_finite()
+        {
             return;
         }
         let Some(clip) = self.clip_rect() else {
@@ -383,6 +387,13 @@ impl Pixmap {
     /// 4×4 supersampled coverage, clipped and antialiased.
     fn draw_marker(&mut self, rect: Rect, color: Color, kind: MarkerKind) {
         if color.a == 0 || rect.width <= 0.0 || rect.height <= 0.0 {
+            return;
+        }
+        if !rect.x.is_finite()
+            || !rect.y.is_finite()
+            || !rect.width.is_finite()
+            || !rect.height.is_finite()
+        {
             return;
         }
         let Some(clip) = self.clip_rect() else {
@@ -2381,6 +2392,13 @@ impl Pixmap {
         if color.a == 0 || rect.width <= 0.0 || rect.height <= 0.0 {
             return;
         }
+        if !rect.x.is_finite()
+            || !rect.y.is_finite()
+            || !rect.width.is_finite()
+            || !rect.height.is_finite()
+        {
+            return;
+        }
         let area = (rect.width * rect.height) as usize;
         if area > 16_777_216 {
             return;
@@ -2414,6 +2432,15 @@ impl Pixmap {
     pub fn draw_rounded_border(&mut self, rect: Rect, sides: [BorderSide; 4], radii: BorderRadii) {
         let visible = sides.iter().filter(|side| side.is_visible()).count();
         if visible == 0 {
+            return;
+        }
+        if rect.width <= 0.0
+            || rect.height <= 0.0
+            || !rect.x.is_finite()
+            || !rect.y.is_finite()
+            || !rect.width.is_finite()
+            || !rect.height.is_finite()
+        {
             return;
         }
         let area = (rect.width * rect.height) as usize;
@@ -3254,6 +3281,8 @@ impl Pixmap {
             || rect.height <= 0.0
             || !rect.x.is_finite()
             || !rect.y.is_finite()
+            || !rect.width.is_finite()
+            || !rect.height.is_finite()
         {
             return;
         }
