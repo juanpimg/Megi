@@ -421,6 +421,16 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 
 ---
 
+**`tools/coverage_report.py`** (#962): lee el tracefile lcov de `cargo llvm-cov`, resume líneas y
+funciones cubiertas y, con `--write`, regenera `docs/status/badge-coverage.svg` (sólo si el
+porcentaje redondeado cambia). `--min N` hace que el comando falle por debajo del umbral, que es
+cómo el workflow `coverage` (lunes 03:17 UTC y `workflow_dispatch`) evita que la cobertura caiga
+sin que nadie lo note; el informe HTML y el `lcov.info` se suben como artefacto.
+
+**`tools/bench_compare.py`** (#963): compara una o varias salidas `megi-bench-v1` contra
+`docs/status/bench-baseline.json` (mediana de medianas) y marca `REGRESSION` sólo si una fila
+crece >20 % **y** >0,5 ms; el workflow `bench` lo ejecuta los lunes.
+
 **`tools/check_docs_links.py`** (#725): verificador offline de enlaces Markdown. Comprueba que
 cada enlace relativo de `docs/**/*.md`, `README.md`, `CONTRIBUTING.md`, `SECURITY.md` y
 `CHANGELOG.md` apunta a un fichero/directorio existente y que cada `#ancla` coincide con un

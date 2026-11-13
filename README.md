@@ -21,7 +21,7 @@
 
 ## 📈 Estado del Proyecto
 
-[![Tests](docs/status/badge-tests.svg)](PROGRESS.md) [![Conformance](docs/status/badge-conformance.svg)](PROGRESS.md) [![Crates](docs/status/badge-crates.svg)](PROGRESS.md) [![unsafe](docs/status/badge-unsafe.svg)](PROGRESS.md)
+[![Tests](docs/status/badge-tests.svg)](PROGRESS.md) [![Conformance](docs/status/badge-conformance.svg)](PROGRESS.md) [![Crates](docs/status/badge-crates.svg)](PROGRESS.md) [![unsafe](docs/status/badge-unsafe.svg)](PROGRESS.md) [![coverage](docs/status/badge-coverage.svg)](.github/workflows/coverage.yml)
 
 [![Progress map](docs/status/progress.svg)](PROGRESS.md)
 
