@@ -10,8 +10,8 @@ use css::{Color, ComputedStyle, Display, Position};
 use dom::{Document, Namespace};
 use layout::{BoxType, LayoutBox, Rect};
 use paint::{
-    DisplayList, MAX_DISPLAY_LIST_ITEMS, MAX_FLOAT_DEPTH, MAX_STACKING_CONTEXT_DEPTH,
-    build_display_list,
+    DisplayList, MAX_DISPLAY_LIST_ITEMS, MAX_FLOAT_DEPTH, MAX_STACKING_CONTEXT_DEPTH, Pixmap,
+    build_display_list, png::PngRegionEncoder,
 };
 
 const CHAIN_DEPTH: usize = 20_000;
@@ -169,4 +169,26 @@ fn hostile_text_size_is_clamped_before_shaping() {
             }
         }
     }
+}
+
+/// Dirty-rect hints must never panic, whatever their geometry (#650).
+#[test]
+fn region_encoder_tolerates_rects_outside_the_pixmap() {
+    let mut pixmap = Pixmap::new(8, 6);
+    pixmap.fill_rect(Rect::new(0.0, 0.0, 8.0, 6.0), Color::WHITE);
+    let mut encoder = PngRegionEncoder::new();
+    let hints = [
+        Rect::new(0.0, 100.0, 10.0, 10.0), // entirely below the pixmap
+        Rect::new(-50.0, -50.0, 4.0, 4.0), // above/left
+        Rect::new(0.0, 5.5, 8.0, 0.5),     // straddles the last row
+        Rect::new(1000.0, 0.0, 5.0, 5.0),  // to the right
+        Rect::new(0.0, 0.0, 0.0, 0.0),     // empty
+    ];
+    let png = encoder.encode_regions(&pixmap, &hints);
+    assert!(
+        png.starts_with(b"\x89PNG\r\n\x1a\n"),
+        "encoder must still emit a PNG"
+    );
+    // A second call with a rect that starts exactly at the height must not panic either.
+    let _ = encoder.encode_regions(&pixmap, &[Rect::new(0.0, 6.0, 8.0, 1.0)]);
 }
