@@ -230,6 +230,13 @@ pub use scripts::{ConsoleMessage, RenderStorage, ScriptBudget, ScriptingLimits};
 
 /// Largest accepted viewport dimension for a single render.
 pub const MAX_VIEWPORT_DIMENSION: u32 = 8192;
+/// Maximum viewport area in CSS pixels (16 Mi pixels ≈ 4096x4096, 64 MiB of RGBA).
+///
+/// The per-side cap alone allows 8192x8192, whose pixmap is 256 MiB before any image
+/// budget applies — one render request could exhaust a modest host (#671). 16 Mi pixels is
+/// still past any real display (a 5K screen is ~15 Mi device pixels at DPR 1) while keeping
+/// the canvas allocation bounded.
+pub const MAX_VIEWPORT_AREA: u64 = 16 * 1024 * 1024;
 /// Default maximum document size (16 MiB, aligned with the `net` fetch cap).
 pub const DEFAULT_MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 /// Default maximum number of external stylesheets per page.
@@ -263,6 +270,9 @@ impl Viewport {
         if !(1..=MAX_VIEWPORT_DIMENSION).contains(&width)
             || !(1..=MAX_VIEWPORT_DIMENSION).contains(&height)
         {
+            return Err(RenderError::InvalidViewport { width, height });
+        }
+        if u64::from(width) * u64::from(height) > MAX_VIEWPORT_AREA {
             return Err(RenderError::InvalidViewport { width, height });
         }
         Ok(Self { width, height })

@@ -333,3 +333,17 @@ fn data_url_base64(bytes: &[u8]) -> String {
     }
     out
 }
+
+/// The viewport cap bounds the canvas allocation, not just each side (#671).
+#[test]
+fn viewport_area_is_bounded() {
+    // 8192x8192 is 256 MiB of RGBA; the area cap must reject it.
+    assert!(Viewport::new(8192, 8192).is_err());
+    // Each side still validates on its own.
+    assert!(Viewport::new(8193, 100).is_err());
+    assert!(Viewport::new(0, 100).is_err());
+    // Real displays stay inside the area budget: 4096x4096 is exactly the cap.
+    assert!(Viewport::new(4096, 4096).is_ok());
+    assert!(Viewport::new(2560, 1440).is_ok());
+    assert!(Viewport::new(5120, 2880).is_ok());
+}
