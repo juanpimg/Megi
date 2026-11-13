@@ -398,3 +398,50 @@ fn request_headers_are_validated_before_connecting() {
         );
     }
 }
+
+#[test]
+fn request_headers_with_crlf_are_rejected_before_the_wire() {
+    // #635: `user_agent`, `origin` and `extra_headers` were concatenated into the request head
+    // verbatim, so a CRLF in any of them injected extra headers (or a second request).
+    use net::http::fetch_with_headers;
+    let (base, server) = spawn_server(vec![]);
+    let url = base_url(&format!("{base}/split"));
+
+    let options = FetchOptions {
+        user_agent: "Megi/0.1\r\nX-Injected: yes".to_string(),
+        ..FetchOptions::default()
+    };
+    let error = fetch(&url, &options).expect_err("a CRLF in the user agent must be refused");
+    assert!(
+        matches!(error, FetchError::InvalidRequestHeader(_)),
+        "unexpected error: {error:?}"
+    );
+
+    let options = FetchOptions {
+        origin: Some("https://a.test\r\nX-Injected: yes".to_string()),
+        ..FetchOptions::default()
+    };
+    let error = fetch(&url, &options).expect_err("a CRLF in Origin must be refused");
+    assert!(
+        matches!(error, FetchError::InvalidRequestHeader(_)),
+        "{error:?}"
+    );
+
+    let options = FetchOptions::default();
+    let error = fetch_with_headers(&url, &options, &[("X-Bad", "v\r\nX-Injected: yes")])
+        .expect_err("a CRLF in an extra header value must be refused");
+    assert!(
+        matches!(error, FetchError::InvalidRequestHeader(_)),
+        "{error:?}"
+    );
+
+    let error = fetch_with_headers(&url, &options, &[("X-Bad: X-Injected", "v")])
+        .expect_err("a colon in a header name must be refused");
+    assert!(
+        matches!(error, FetchError::InvalidRequestHeader(_)),
+        "{error:?}"
+    );
+
+    // Nothing was written: the server never accepted a connection (its listener is closed).
+    drop(server);
+}
