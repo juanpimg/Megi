@@ -339,42 +339,65 @@ impl ElementData {
             .collect()
     }
 
+    /// Compares an attribute name against `name` the way the DOM does (#686).
+    ///
+    /// HTML elements treat attribute names ASCII case-insensitively for every operation
+    /// (get/set/has/remove); foreign elements compare exactly.
+    fn attribute_name_matches(&self, attribute_name: &str, name: &str) -> bool {
+        if self.namespace == Namespace::Html {
+            attribute_name.eq_ignore_ascii_case(name)
+        } else {
+            attribute_name == name
+        }
+    }
+
     /// Finds the position of the attribute called `name` (see [`ElementData::has_attribute`]).
     fn attribute_position(&self, name: &str) -> Option<usize> {
-        let html = self.namespace == Namespace::Html;
         self.attributes.iter().position(|attribute| {
             attribute.namespace == Namespace::None
-                && if html {
-                    attribute.local_name.eq_ignore_ascii_case(name)
-                } else {
-                    attribute.local_name == name
-                }
+                && self.attribute_name_matches(&attribute.local_name, name)
         })
     }
 
     /// Looks up an attribute value by local name (in `Namespace::None`).
+    ///
+    /// HTML elements match the name ASCII case-insensitively, like `has_attribute`,
+    /// `remove_attribute` and `set_attribute` (#686).
     pub fn get_attribute(&self, local_name: &str) -> Option<&str> {
         self.attributes
             .iter()
-            .find(|a| a.namespace == Namespace::None && a.local_name == local_name)
+            .find(|a| {
+                a.namespace == Namespace::None
+                    && self.attribute_name_matches(&a.local_name, local_name)
+            })
             .map(|a| a.value.as_str())
     }
 
     /// Sets an attribute if not already present (per HTML parser duplicate-attribute rules)
     /// or overwrites if `overwrite` is true.
+    ///
+    /// The "already present" test uses the same case rules as lookup, so `set_attribute("ID")`
+    /// overwrites an existing `id` instead of introducing a duplicate (#686).
     pub fn set_attribute(&mut self, attr: Attribute, overwrite: bool) -> bool {
-        if let Some(existing) = self
-            .attributes
-            .iter_mut()
-            .find(|a| a.namespace == attr.namespace && a.local_name == attr.local_name)
-        {
-            if overwrite {
-                existing.value = attr.value;
+        let position = self.attributes.iter().position(|existing| {
+            existing.namespace == attr.namespace
+                && if attr.namespace == Namespace::None {
+                    self.attribute_name_matches(&existing.local_name, &attr.local_name)
+                } else {
+                    existing.local_name == attr.local_name
+                }
+        });
+        match position {
+            Some(position) => {
+                if overwrite {
+                    self.attributes[position].value = attr.value;
+                }
+                false
             }
-            false
-        } else {
-            self.attributes.push(attr);
-            true
+            None => {
+                self.attributes.push(attr);
+                true
+            }
         }
     }
 }
@@ -2886,6 +2909,30 @@ mod tests {
             doc.get_elements_by_tag_name("nope*").is_empty(),
             "only the exact wildcard matches everything"
         );
+        // Attribute names are ASCII case-insensitive on HTML elements for every operation
+        // (#686): get/has/remove/set must agree, and set must not create duplicates.
+        let nav_element = doc.node(nav).as_element().expect("nav element");
+        assert_eq!(nav_element.get_attribute("ID"), Some("main-nav"));
+        assert!(nav_element.has_attribute("Id"));
+        assert_eq!(nav_element.get_attribute("class"), Some("top primary"));
+        let mut probe = ElementData::new(Namespace::Html, "div");
+        probe.attributes.push(Attribute::new("id", "lower"));
+        // `set_attribute` returns true when it inserted, false when it overwrote.
+        assert!(!probe.set_attribute(Attribute::new("id", "lower"), true));
+        assert!(
+            !probe.set_attribute(Attribute::new("ID", "upper"), true),
+            "setAttribute with a different case must reuse the existing slot"
+        );
+        assert_eq!(
+            probe.attribute_names(),
+            vec!["id".to_string()],
+            "setAttribute must not duplicate an attribute that differs only in case"
+        );
+        assert_eq!(probe.get_attribute("id"), Some("upper"));
+        assert_eq!(probe.get_attribute("Id"), Some("upper"));
+        assert_eq!(probe.remove_attribute("iD"), Some("upper".to_string()));
+        assert_eq!(probe.get_attribute("id"), None);
+
         assert_eq!(doc.get_elements_by_class_name("primary"), vec![nav]);
         assert_eq!(doc.get_elements_by_class_name("top primary"), vec![nav]);
         assert!(doc.get_elements_by_class_name("top missing").is_empty());
