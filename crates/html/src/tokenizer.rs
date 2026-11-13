@@ -3158,7 +3158,17 @@ impl Tokenizer {
                 let start_pos = self.pos;
                 let mut best_match: Option<(&str, &[u32])> = None;
 
+                // First-byte dispatch (issue #633): only consider entities whose first
+                // byte matches the input's first byte after `&`, avoiding a full
+                // 2.2k-entry scan on every miss.
+                let first_byte = self.input.get(self.pos).copied();
                 for &(name, cps) in NAMED_ENTITIES {
+                    if let Some(fb) = first_byte
+                        && !name.is_empty()
+                        && name.as_bytes()[0] != fb as u8
+                    {
+                        continue;
+                    }
                     if self.peek_slice_ascii_eq(name, false)
                         && best_match.is_none_or(|(prev_name, _)| name.len() > prev_name.len())
                     {
