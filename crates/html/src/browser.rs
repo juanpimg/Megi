@@ -59,12 +59,6 @@ pub fn set_inner_html_with_options(
     let (namespace, local_name) = fragment_context(doc, element)?;
     let target = content_target(doc, element);
 
-    // Free the previous children: their handles become stale by design (documented).
-    let old_children: Vec<NodeId> = doc.children(target).collect();
-    for child in old_children {
-        doc.remove_subtree(child);
-    }
-
     let marker = doc.try_node(doc.root()).and_then(|root| root.last_child);
     let violations = parse_fragment_into(
         doc,
@@ -75,6 +69,25 @@ pub fn set_inner_html_with_options(
         options,
     );
     let new_children = new_root_children(doc, marker);
+
+    // A parser that hit a limit produced a partial tree. Replacing the element with it would
+    // lose the original content with nothing to roll back to (#646), so the write is refused:
+    // the freshly parsed nodes are dropped, the element keeps its children and the caller gets
+    // the violations back.
+    if !violations.is_empty() {
+        for child in new_children {
+            doc.remove_subtree(child);
+        }
+        return Ok(violations);
+    }
+
+    // Frees the previous children *after* the parse but *before* the move: the parse can reuse
+    // the slots only once they are released, and it runs before this point, so the arenas of
+    // repeated `innerHTML` writes stay flat (see `inner_html_is_idempotent_and_reuses_arena_slots`).
+    let old_children: Vec<NodeId> = doc.children(target).collect();
+    for child in old_children {
+        doc.remove_subtree(child);
+    }
     move_children_under(doc, target, new_children)?;
     Ok(violations)
 }
@@ -115,10 +128,17 @@ pub fn set_outer_html_with_options(
         options,
     );
     let new_children = new_root_children(doc, marker);
+    // Insert into a buffered list first and roll back on rejection: inserting one by one
+    // straight into the tree left it half-mutated when a later child was rejected (#646).
+    let mut inserted: Vec<NodeId> = Vec::new();
     for child in new_children {
         if !doc.insert_before(element, child) {
+            for done in inserted.into_iter().rev() {
+                doc.remove_subtree(done);
+            }
             return Err(DomError::HierarchyRequest { parent, child });
         }
+        inserted.push(child);
     }
     // Free the replaced element and its subtree.
     doc.remove_subtree(element);

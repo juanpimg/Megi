@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use html::{
     ParseErrorCode, ParseOptions, Token, Tokenizer, TokenizerConfig, parse_document,
-    parse_document_with_options, parse_fragment_with_options, serialize_dom_for_test,
+    parse_document_with_options, parse_fragment_with_options,
 };
 
 const SMALL_STACK: usize = 512 * 1024;
@@ -133,7 +133,12 @@ fn serializer_handles_deep_dom_iteratively() {
     let (line_count, starts_with_html, ends_with_span) =
         in_thread_with_stack(SMALL_STACK, move || {
             let outcome = parse_document_with_options(&input, false, &options);
-            let dump = serialize_dom_for_test(&outcome.document);
+            // Lift the byte ceiling: this test is about stack safety on a 16 MB dump, not
+            // about the truncation behaviour (covered by the budget tests below).
+            let dump = html::serializer::serialize_dom_for_test_with_limit(
+                &outcome.document,
+                64 * 1024 * 1024,
+            );
             (
                 dump.lines().count(),
                 dump.starts_with("| <html>"),
@@ -368,4 +373,111 @@ fn selectedcontent_budget_is_counted_once_across_selects() {
         outcome.limit_violations.nodes_exceeded, 1,
         "the node violation is recorded once, not per select"
     );
+}
+
+#[test]
+fn serialization_has_an_output_budget_and_reports_truncation() {
+    // #647: `out: String` grew without bound, so a hostile DOM (one huge text node or a deep
+    // chain) OOMed the caller with no error path.
+    let mut doc = dom::Document::new();
+    let root = doc.root();
+    let body = doc.create_element(dom::Namespace::Html, "body", Vec::new());
+    doc.append_child(root, body);
+    let div = doc.create_element(dom::Namespace::Html, "div", Vec::new());
+    doc.append_child(body, div);
+    let text = doc.create_text_node(&"x".repeat(64 * 1024));
+    doc.append_child(div, text);
+
+    let options = html::serializer::HtmlSerializeOptions::scripting_disabled()
+        .with_max_output_bytes(4 * 1024);
+    let out = html::serialize_html_with_options(&doc, options);
+    assert!(
+        out.len() <= 4 * 1024 + 32,
+        "the serializer must respect the ceiling (got {} bytes)",
+        out.len()
+    );
+    assert!(
+        out.ends_with("<!-- output truncated -->"),
+        "truncation must be visible in the output: {:?}",
+        &out[out.len().saturating_sub(48)..]
+    );
+
+    // The default ceiling is high enough that ordinary documents are untouched.
+    let small = html::serialize_html(&doc);
+    assert!(small.contains("<div>"));
+    assert!(!small.contains("truncated"));
+}
+
+#[test]
+fn deep_serialization_does_not_allocate_per_node_indent() {
+    // The canonical tree dump used `"  ".repeat(depth)` per node (O(n·depth) bytes). A 4k-deep
+    // chain must still serialize, quickly, and mark truncation at the byte cap.
+    let mut doc = dom::Document::new();
+    let root = doc.root();
+    let body = doc.create_element(dom::Namespace::Html, "body", Vec::new());
+    doc.append_child(root, body);
+    let mut parent = body;
+    for _ in 0..4_000 {
+        let child = doc.create_element(dom::Namespace::Html, "div", Vec::new());
+        doc.append_child(parent, child);
+        parent = child;
+    }
+    let out = html::serializer::serialize_dom_for_test(&doc);
+    assert!(!out.is_empty());
+    assert!(
+        out.len() <= html::serializer::MAX_SERIALIZED_BYTES + 64,
+        "the tree dump must respect its byte ceiling"
+    );
+}
+
+#[test]
+fn text_byte_budget_bounds_a_single_huge_text_node() {
+    // #642: the node budget counts nodes, so a pure-text document is one text node no matter how
+    // long it is. The text budget caps the bytes actually stored.
+    let input = "x".repeat(200_000);
+    let options = ParseOptions {
+        max_text_bytes: 4_096,
+        ..ParseOptions::default()
+    };
+    let outcome = parse_document_with_options(&input, false, &options);
+    let mut total = 0usize;
+    collect_text_bytes(&outcome.document, outcome.document.root(), &mut total, 0);
+    assert!(
+        total <= 4_096,
+        "stored text must respect max_text_bytes (got {total})"
+    );
+    assert!(
+        outcome.limit_violations.text_bytes_dropped > 0,
+        "dropping text must be reported"
+    );
+}
+
+#[test]
+fn table_text_buffer_is_bounded_by_the_text_budget() {
+    // While in "in table text" the characters are buffered in a Vec<char> and re-dispatched
+    // later; a long run used to hold the whole input at 4 B per char.
+    let input = format!("<table>{}</table>", "y".repeat(50_000));
+    let options = ParseOptions {
+        max_text_bytes: 2_048,
+        ..ParseOptions::default()
+    };
+    let outcome = parse_document_with_options(&input, false, &options);
+    assert!(
+        outcome.limit_violations.text_bytes_dropped > 0,
+        "the buffered table text must be bounded"
+    );
+}
+
+fn collect_text_bytes(doc: &dom::Document, node: dom::NodeId, total: &mut usize, depth: usize) {
+    if depth > 64 {
+        return;
+    }
+    if let dom::NodeKind::Text(text) = &doc.node(node).kind {
+        *total += text.len();
+    }
+    let mut child = doc.node(node).first_child;
+    while let Some(id) = child {
+        collect_text_bytes(doc, id, total, depth + 1);
+        child = doc.node(id).next_sibling;
+    }
 }

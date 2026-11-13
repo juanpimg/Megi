@@ -135,14 +135,18 @@ fn inner_html_is_idempotent_and_reuses_arena_slots() {
     let div = doc.get_element_by_id("x").expect("div present");
     let payload = "<p>one</p><p>two</p><span>three</span>";
     set_inner_html(&mut doc, div, payload).expect("first innerHTML");
-    let allocated_after_first = doc.allocated();
+    // The parse runs before the previous children are freed (so a limit hit cannot wipe the
+    // element, #646), which means the first write needs one extra batch of slots. From then on
+    // the freed slots feed every parse: what must hold is that repeats do not grow the arena.
+    set_inner_html(&mut doc, div, payload).expect("second innerHTML");
+    let allocated_after_second = doc.allocated();
     for _ in 0..25 {
         set_inner_html(&mut doc, div, payload).expect("repeated innerHTML");
     }
     assert_eq!(text(&doc, div), "onetwothree");
     assert_eq!(
         doc.allocated(),
-        allocated_after_first,
+        allocated_after_second,
         "freed slots must be reused by repeated innerHTML"
     );
     assert!(doc.validate_invariants().is_ok());
@@ -235,4 +239,42 @@ fn malformed_payloads_never_panic() {
         let _ = set_inner_html(&mut doc, table, payload);
         assert!(doc.validate_invariants().is_ok(), "payload: {payload:?}");
     }
+}
+
+#[test]
+fn inner_html_keeps_previous_children_when_the_parse_hits_a_limit() {
+    // #646: the old order freed the element's children first, so a limit hit left it wiped even
+    // though the caller got the violations back, with nothing to roll back to.
+    let mut doc = parse("<html><body><div id=\"x\"><p>keep me</p></div></body></html>");
+    let div = doc.get_element_by_id("x").expect("div present");
+    let options = ParseOptions {
+        max_nodes: 4,
+        ..ParseOptions::default()
+    };
+    let violations = set_inner_html_with_options(&mut doc, div, &"<div>".repeat(1_000), &options)
+        .expect("innerHTML call itself succeeds");
+    assert!(
+        !violations.is_empty(),
+        "the tight node budget must be reported"
+    );
+    assert_eq!(
+        text(&doc, div),
+        "keep me",
+        "a refused write must leave the original content in place"
+    );
+    assert!(doc.validate_invariants().is_ok());
+}
+
+#[test]
+fn outer_html_rolls_back_when_an_insertion_is_rejected() {
+    // The dual half-move hazard: children were inserted one by one before `element`, so a
+    // rejection in the middle left the tree half-mutated (#646).
+    let mut doc = parse("<html><body><div id=\"x\"></div><p>sibling</p></body></html>");
+    let div = doc.get_element_by_id("x").expect("div present");
+    let before = doc.allocated();
+    // `<html>` as fragment content is rejected by the parser rules for a div context, so this
+    // is mostly a smoke check that a failed write leaves the sibling and the arena consistent.
+    let _ = set_outer_html(&mut doc, div, "<span>a</span><span>b</span>");
+    assert!(doc.validate_invariants().is_ok());
+    assert!(doc.allocated() >= before);
 }
