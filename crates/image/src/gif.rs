@@ -144,7 +144,6 @@ pub(crate) fn decode_gif(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, 
                     context: "GIF LZW minimum code size",
                 })?;
                 index += 1;
-                let data = read_sub_blocks(bytes, &mut index)?;
                 let frame_pixels = (frame_width as usize)
                     .checked_mul(frame_height as usize)
                     .ok_or(ImageError::LimitExceeded {
@@ -159,6 +158,14 @@ pub(crate) fn decode_gif(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, 
                         actual: frame_pixels as u64,
                     });
                 }
+                // Cap buffered LZW data against a multiple of the frame pixel
+                // count so a 1-pixel frame cannot carry megabytes of payload
+                // (#618). LZW data is never larger than a few bytes per pixel.
+                let max_image_data = frame_pixels
+                    .saturating_mul(4)
+                    .saturating_add(65_536)
+                    .min(limits.max_total_idat_bytes);
+                let data = read_sub_blocks(bytes, &mut index, max_image_data)?;
                 let indices = lzw_decode(min_code_size, &data, frame_pixels)?;
                 let row_order = if interlaced {
                     interlaced_rows(frame_height as usize)
@@ -248,7 +255,11 @@ fn skip_sub_blocks(bytes: &[u8], index: &mut usize) -> Result<(), ImageError> {
     }
 }
 
-fn read_sub_blocks(bytes: &[u8], index: &mut usize) -> Result<Vec<u8>, ImageError> {
+fn read_sub_blocks(
+    bytes: &[u8],
+    index: &mut usize,
+    max_bytes: usize,
+) -> Result<Vec<u8>, ImageError> {
     let mut data = Vec::new();
     loop {
         let size = *bytes.get(*index).ok_or(ImageError::Truncated {
@@ -257,6 +268,13 @@ fn read_sub_blocks(bytes: &[u8], index: &mut usize) -> Result<Vec<u8>, ImageErro
         *index += 1;
         if size == 0 {
             return Ok(data);
+        }
+        if data.len().saturating_add(size) > max_bytes {
+            return Err(ImageError::LimitExceeded {
+                what: "GIF image data",
+                limit: max_bytes as u64,
+                actual: data.len().saturating_add(size) as u64,
+            });
         }
         let block = bytes
             .get(*index..*index + size)
