@@ -169,6 +169,15 @@ fn plan_axis(
     limit: usize,
 ) -> (f32, Vec<f32>) {
     let mut tile = tile;
+    // Early-return on non-finite inputs (issue #538).
+    if !positioning_origin.is_finite()
+        || !positioning_length.is_finite()
+        || !clip_origin.is_finite()
+        || !clip_length.is_finite()
+        || !tile.is_finite()
+    {
+        return (positioning_length, origins);
+    }
     let clip_end = clip_origin + clip_length;
     let intersects_clip = |origin: f32, tile: f32| origin < clip_end && origin + tile > clip_origin;
     let mut origins = Vec::new();
