@@ -629,17 +629,16 @@ def build_artifacts(root: Path, no_count: bool, no_gate: bool) -> dict[str, byte
         manifest_path.read_text(encoding="utf-8"), stats, gate
     ).encode("utf-8")
     data["stats"]["rust_lines"] = comma(stats["rust_lines"])  # only for logging
-    return artifacts
+    return artifacts, stats, gate
 
 
-def print_stats(root: Path, artifacts: dict[str, bytes]) -> None:
-    manifest = tomllib.loads((root / STATUS_DIR / "progress.toml").read_text(encoding="utf-8"))
+def print_stats(root: Path, artifacts: dict[str, bytes], stats: dict, gate: dict) -> None:
     print(
         f"progress: commit {git_short_head(root)} ({git_commit_date(root)}) · "
-        f"tests {manifest['stats']['tests']} · gate {manifest['gate']['status']} · "
-        f"crates {manifest['stats']['crates']} · "
-        f"unsafe-forbidden {manifest['stats']['unsafe_forbidden_crates']}/{manifest['stats']['crates']} · "
-        f"Rust lines {manifest['stats']['rust_lines']}"
+        f"tests {stats['tests']} · gate {gate['status']} · "
+        f"crates {stats['crates']} · "
+        f"unsafe-forbidden {stats['unsafe_forbidden']}/{stats['crates']} · "
+        f"Rust lines {stats['rust_lines']}"
     )
 
 
@@ -655,7 +654,7 @@ def main(argv: list[str]) -> int:
         parser.error("--write and --check are mutually exclusive")
 
     root = Path(args.root).resolve() if args.root else Path(__file__).resolve().parent.parent
-    artifacts = build_artifacts(root, no_count=args.no_count, no_gate=args.no_gate)
+    artifacts, stats, gate = build_artifacts(root, no_count=args.no_count, no_gate=args.no_gate)
 
     if args.check:
         stale: list[str] = []
@@ -692,7 +691,7 @@ def main(argv: list[str]) -> int:
         if not path.is_file() or path.read_bytes() != content:
             path.write_bytes(content)
             written.append(relative)
-    print_stats(root, artifacts)
+    print_stats(root, artifacts, stats, gate)
     if written:
         print(f"wrote {len(written)} file(s): {', '.join(written)}")
     else:
