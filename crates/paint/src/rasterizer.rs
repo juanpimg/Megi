@@ -129,7 +129,7 @@ pub struct Pixmap {
     pub width: u32,
     pub height: u32,
     pub pixels: Vec<Color>,
-    clip_stack: Vec<Rect>,
+    clip_stack: Vec<(Rect, Rect)>,
 }
 
 impl Pixmap {
@@ -847,16 +847,15 @@ impl Pixmap {
     /// Intersection of the clip stack with the pixmap bounds, in px, or `None`
     /// when the visible area is empty.
     fn clip_rect(&self) -> Option<Rect> {
-        let mut x0 = 0.0f32;
-        let mut y0 = 0.0f32;
-        let mut x1 = self.width as f32;
-        let mut y1 = self.height as f32;
-        for clip in &self.clip_stack {
-            x0 = x0.max(clip.x);
-            y0 = y0.max(clip.y);
-            x1 = x1.min(clip.x + clip.width);
-            y1 = y1.min(clip.y + clip.height);
-        }
+        // Running intersection is maintained on push (issue #651), so this is O(1).
+        let running = match self.clip_stack.last() {
+            Some((_, running)) => *running,
+            None => Rect::new(0.0, 0.0, self.width as f32, self.height as f32),
+        };
+        let x0 = running.x;
+        let y0 = running.y;
+        let x1 = running.x + running.width;
+        let y1 = running.y + running.height;
         if x0 >= x1 || y0 >= y1 {
             None
         } else {
@@ -887,9 +886,25 @@ impl Pixmap {
         })
     }
 
-    /// Pushes a clipping boundary onto the stack.
+    /// Maximum clip-stack depth (issue #651): beyond this, pushes are ignored.
+    const MAX_CLIP_DEPTH: usize = 256;
+
+    /// Pushes a clipping boundary onto the stack, maintaining the running
+    /// intersection incrementally (O(1) per push).
     pub fn push_clip(&mut self, rect: Rect) {
-        self.clip_stack.push(rect);
+        if self.clip_stack.len() >= Self::MAX_CLIP_DEPTH {
+            return;
+        }
+        let current = match self.clip_stack.last() {
+            Some((_, running)) => *running,
+            None => Rect::new(0.0, 0.0, self.width as f32, self.height as f32),
+        };
+        let x0 = current.x.max(rect.x);
+        let y0 = current.y.max(rect.y);
+        let x1 = (current.x + current.width).min(rect.x + rect.width);
+        let y1 = (current.y + current.height).min(rect.y + rect.height);
+        let running = Rect::new(x0, y0, (x1 - x0).max(0.0), (y1 - y0).max(0.0));
+        self.clip_stack.push((rect, running));
     }
 
     /// Pops the top clipping boundary; popping an empty stack is a safe no-op.
