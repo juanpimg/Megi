@@ -3,7 +3,8 @@
 use std::collections::HashMap;
 
 use css::{
-    BorderCollapse, BorderStyle, ComputedStyle, Display, Length, TableLayout, VerticalAlign,
+    BorderCollapse, BorderStyle, ComputedStyle, Display, Length, Position, TableLayout,
+    VerticalAlign,
 };
 use dom::{Attribute, Document, Namespace, NodeId};
 use layout::{BoxType, LayoutBox, Rect, layout_document};
@@ -868,4 +869,73 @@ fn huge_colspans_are_capped_to_a_bounded_column_count() {
         small.0 > 0.0 && small.1 > 0.0 && small.1.is_finite(),
         "ordinary colspans keep their geometry: {small:?}"
     );
+}
+
+/// An absolutely positioned child of a table must be laid out, not left at its provisional
+/// zero size with an unlaid subtree (#694).
+#[test]
+fn absolutely_positioned_table_child_is_laid_out() {
+    let (mut doc, mut styles, body) = setup();
+    let table = mk(&mut doc, body, "table");
+    styles.insert(table, table_style(Length::Px(200.0)));
+    let row = mk(&mut doc, table, "tr");
+    styles.insert(row, row_style());
+    let cell = mk(&mut doc, row, "td");
+    styles.insert(cell, cell_style());
+    doc.append_text(cell, "cell");
+
+    let overlay = doc.create_element(Namespace::Html, "div", vec![]);
+    doc.append_child(table, overlay);
+    let mut overlay_style = block_style(Length::Auto);
+    overlay_style.position = Position::Absolute;
+    overlay_style.width = Length::Px(60.0);
+    overlay_style.height = Length::Px(30.0);
+    styles.insert(overlay, overlay_style.clone());
+    let inner = mk(&mut doc, overlay, "div");
+    let mut inner_style = block_style(Length::Auto);
+    inner_style.width = Length::Px(20.0);
+    inner_style.height = Length::Px(10.0);
+    styles.insert(inner, inner_style);
+
+    let tree = layout_tree(&doc, &styles);
+    let table_box = &tree.children[0].children[0];
+    let overlay_box = find_box(table_box, overlay);
+    assert_eq!(
+        overlay_box.dimensions.content.width, 60.0,
+        "abspos table child must get its used width"
+    );
+    assert_eq!(overlay_box.dimensions.content.height, 30.0);
+    let inner_box = find_box(overlay_box, inner);
+    assert_eq!(
+        inner_box.dimensions.content.width, 20.0,
+        "the abspos subtree must be laid out, not just positioned"
+    );
+    assert_eq!(inner_box.dimensions.content.height, 10.0);
+}
+
+fn find_box(root: &LayoutBox, id: NodeId) -> &LayoutBox {
+    if matches!(
+        root.box_type,
+        BoxType::BlockNode(node) | BoxType::InlineBlock(node) if node == id
+    ) {
+        return root;
+    }
+    for child in &root.children {
+        if let Some(found) = find_box_opt(child, id) {
+            return found;
+        }
+    }
+    panic!("box {id:?} not found");
+}
+
+fn find_box_opt(root: &LayoutBox, id: NodeId) -> Option<&LayoutBox> {
+    if matches!(
+        root.box_type,
+        BoxType::BlockNode(node) | BoxType::InlineBlock(node) if node == id
+    ) {
+        return Some(root);
+    }
+    root.children
+        .iter()
+        .find_map(|child| find_box_opt(child, id))
 }

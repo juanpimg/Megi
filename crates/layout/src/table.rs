@@ -1025,11 +1025,16 @@ fn layout_absolutely_positioned_table_children(
             )
         })
         .collect();
+    // An abspos child of a table is still a real box: route it through the same two-phase
+    // path the block engine uses, with the table's content box as containing block,
+    // instead of only copying the origin and leaving its subtree unlaid-out (#694).
+    let cb = table.dimensions.content;
+    let cb_height = Some(cb.height);
     for &(index, static_x, static_y) in &static_positions {
         if let Some(child) = table.children.get_mut(index) {
-            child.dimensions.content.x = static_x;
-            child.dimensions.content.y = static_y;
-            let _ = (measurer, pos);
+            crate::block::layout_absolutely_positioned(
+                child, cb, cb_height, static_x, static_y, pos, measurer,
+            );
         }
     }
 }
@@ -1540,14 +1545,15 @@ mod legacy {
                 )
             })
             .collect();
+        // Same two-phase path as the advanced engine: an abspos table child is a real box and
+        // must have its subtree laid out (#694).
+        let cb = table.dimensions.content;
+        let cb_height = Some(cb.height);
         for &(index, static_x, static_y) in &static_positions {
             if let Some(child) = table.children.get_mut(index) {
-                child.dimensions.content.x = static_x;
-                child.dimensions.content.y = static_y;
-                let _ = measurer;
-                let _ = pos;
-                // Absolute table children are rare; they keep their static position until
-                // nested positioned tables are supported.
+                crate::block::layout_absolutely_positioned(
+                    child, cb, cb_height, static_x, static_y, pos, measurer,
+                );
             }
         }
     }

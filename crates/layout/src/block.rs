@@ -804,7 +804,7 @@ fn layout_out_of_flow_children(
 }
 
 /// Lays out one absolutely (or fixed) positioned box (CSS 2.2 §9.6, §10.3.7, §10.6.4).
-fn layout_absolutely_positioned(
+pub(crate) fn layout_absolutely_positioned(
     child: &mut LayoutBox,
     cb: Rect,
     cb_height: Option<f32>,
