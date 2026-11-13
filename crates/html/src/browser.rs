@@ -113,6 +113,14 @@ pub fn set_outer_html_with_options(
     options: &ParseOptions,
 ) -> Result<LimitViolations, DomError> {
     let (namespace, local_name) = fragment_context(doc, element)?;
+    // Reject replacing document-skeleton elements: doing so would leave the
+    // document without <html>/<head>/<body> and corrupt downstream stages (#562).
+    if matches!(local_name.as_str(), "html" | "head" | "body") {
+        return Err(DomError::HierarchyRequest {
+            parent: doc.try_node(element).and_then(|n| n.parent).unwrap_or(element),
+            child: element,
+        });
+    }
     let parent = doc
         .try_node(element)
         .and_then(|node| node.parent)
