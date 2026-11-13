@@ -8,7 +8,7 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 
 > **Status**: the harness is wired into CI via
 > [`.github/workflows/fuzz-nightly.yml`](../.github/workflows/fuzz-nightly.yml). The
-> scheduled/dispatch run executes **17 targets** under the default libFuzzer
+> scheduled/dispatch run executes **18 targets** under the default libFuzzer
 > **AddressSanitizer** build (10 minutes for 9 critical parsers/decoders and 5 minutes for
 > the remaining 8 scheduled targets), plus a short **UndefinedBehaviorSanitizer (UBSan)**
 > smoke matrix on 9 representative targets. Pull requests run a build-only job that compiles
@@ -19,7 +19,7 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 ```text
 fuzz/
 ├── Cargo.toml          # standalone workspace (`[workspace]`), NOT part of the root workspace
-├── fuzz_targets/       # 21 libFuzzer harnesses
+├── fuzz_targets/       # 22 libFuzzer harnesses
 │   ├── body_stream.rs        # RequestBody/BodyProducer streaming contract
 │   ├── container_queries.rs  # CSS @container/@layer parsing + query evaluation
 │   ├── css_parse.rs          # CSS Syntax L3 tokenizer, stylesheets and declaration lists
@@ -38,6 +38,7 @@ fuzz/
 │   ├── render_pipeline.rs    # Full render pipeline: data: HTML -> styles/layout/paint/PNG
 │   ├── selectors.rs          # Selectors L4 parser/matcher + cascade over a synthetic DOM
 │   ├── svg_parse.rs          # SVG XML parse + rasterization under strict anti-DoS limits
+│   ├── text_boundary.rs      # byte -> code-point preprocessor (raw surrogates, >U+10FFFF)
 │   ├── webp_lossy.rs         # VP8 lossy keyframe decoder under anti-DoS caps
 │   ├── webp_vp8.rs           # WebP sniffing + VP8/VP8L container validation path
 │   └── woff2_decode.rs       # WOFF2/@font-face decode/validation path
@@ -73,11 +74,12 @@ cargo +nightly fuzz build          # builds every [[bin]] target
 | Target | Public API / surface exercised | Why it matters |
 |---|---|---|
 | `html_parse` | `html::parse_document_with_options`, `html::parse_fragment_with_options`, serializer | Main attack surface; tokenizer, insertion modes, foreign content, templates. Default `ParseOptions` limits are used. |
+| `text_boundary` | `html::input_stream::preprocess_code_points` (raw `u32` code points) and `preprocess_str`, then the tokenizer over the normalized stream | Bytes-native: the input is read as 4-byte LE code points, so lone surrogates, values above U+10FFFF, CR/CRLF and control characters reach the preprocessor as raw code points instead of being normalised to U+FFFD by `from_utf8_lossy` first (#711). |
 | `css_parse` | `css::parse_stylesheet`, `css::parse_list_of_declarations`, `css::tokenize` | Recursive-descent component-value parsing and tokenizer escape/URL handling. |
 | `selectors` | `css::parse_selectors`, matching/specificity, `query_selector`/`query_selector_all`, `try_*` variants, `matches_with_state`/`try_matches_with_state`, `css::resolve_document_styles` | Selector matching is adversarial; small deterministic DOM from input. Document-order querying (`document.querySelector`) and the `StateContext` interaction layer are fuzzed too (#700). |
 | `net_url` | `net::Url::parse`, URL helpers, percent-decode/join paths | URL strings arrive from untrusted markup; must never panic. Never opens sockets. |
 | `render_pipeline` | `render::render_url` with inline `data:` HTML (parse→CSS→layout→paint→PNG) | Integration glue reached by real pages. Viewport (`32..=256`), cap profile (tight vs `RenderOptions::default`), `no_network` and scripting are input-derived; scripting only for documents ≤32 KiB (#842). |
-| `js_eval` | `js::JsRuntime` eval, microtasks, tasks, event dispatch under `js::Budget` | Untrusted JS; bounded loops/recursion/stack/timers/events so hangs become typed budget errors. |
+| `js_eval` | `js::JsRuntime` eval, microtasks, tasks, event dispatch under `js::Budget`, with a hostile host-provider bundle installed (fetch/storage/layout/viewport/media/history/location/computed-style/worker) | Untrusted JS plus attacker-shaped provider glue (#704): providers return typed errors, `status: 0`, conflicting `content-length`, CRLF header values, NUL storage keys, `NaN`/`±∞` layout rects and viewports, and a worker loader capped at two calls. Bounded loops/recursion/stack/timers/events turn hangs into typed budget errors. |
 | `svg_parse` | `svg::render_svg_with_limits`, `svg::intrinsic_size_with_limits` (XML parse + values + raster) | Untrusted inline/external SVG. Four `SvgOptions` (absent/zero/derived/`u32::MAX`) × two `Limits` profiles (128 px tight, 1024 px roomy) so the caps are exercised on both sides of the boundary (#705). |
 | `woff2_decode` | `fonts::decode_web_font` / WOFF2 container handling | `@font-face` bytes are untrusted; bounded decode/validation path. |
 | `image_decode` | `detect_format`, `decode_with_limits` (tight + input-derived roomy profile), `decode`, `decode_scaled`, `decode_scaled_with_limits`, `decode_animated`, `decode_animated_with_limits`, `png::decode_png`, `exif::orientation` | Every public decode entry point, not just one capped call: default caps, scaled decode and the animated (ANIM/ANMF) path were unfuzzed before (#853). |
@@ -104,7 +106,7 @@ Short smoke run (30 s per target):
 ```bash
 cd fuzz
 for t in \
-  html_parse css_parse selectors net_url render_pipeline js_eval svg_parse \
+  html_parse text_boundary css_parse selectors net_url render_pipeline js_eval svg_parse \
   woff2_decode image_decode exif_parse hpack_decode h2_push body_stream \
   webp_vp8 js_module webp_lossy container_queries dom_tree fonts_shape \
   layout_tree paint_display_list; do
@@ -146,7 +148,7 @@ committing large growth).
   ```bash
   cd fuzz
   for t in \
-    html_parse css_parse selectors net_url render_pipeline js_eval svg_parse \
+    html_parse text_boundary css_parse selectors net_url render_pipeline js_eval svg_parse \
     woff2_decode image_decode exif_parse hpack_decode h2_push body_stream \
     webp_vp8 js_module webp_lossy container_queries dom_tree fonts_shape \
     layout_tree paint_display_list; do
@@ -192,6 +194,12 @@ When libFuzzer finds a crash it writes the reproducer to
   (`html_parse, css_parse, selectors, net_url, image_decode, hpack_decode, svg_parse,
   webp_lossy, container_queries`), excluding Boa-embedding JS targets with known
   third-party leak/compat constraints under sanitizers.
+- **UTF-8-valid-only text targets:** `html_parse`, `css_parse`, `selectors`, `container_queries`,
+  `net_url`, `js_eval` and `js_module` decode with `String::from_utf8_lossy` by design — their
+  parsers take `&str`. The raw byte → code-point layer (lone surrogates encoded as `u32`,
+  values above U+10FFFF, CR/CRLF, control characters) is covered instead by the bytes-native
+  `text_boundary` target (#711), so a fix in `html::input_stream` cannot hide behind lossy
+  decoding.
 - **LSan/leaks:** `js_eval` and `js_module` pass `-detect_leaks=0` for the constant Boa
   one-time allocation noted above; this does not suppress ASan/UBSan bug signals.
 - **Triage:** sanitizer failures upload `fuzz/artifacts/` and corpus snapshots as workflow
@@ -212,7 +220,7 @@ the 3 `xmlViolation` tokenizer failures are documented conformance gaps, not cra
 
 - triggers: `schedule` (daily, 03:17 UTC), `workflow_dispatch`, and `pull_request` when
   `fuzz/**`, `.github/workflows/fuzz-nightly.yml`, engine crates, or root manifests change;
-- **ASan matrix** (`fuzz`, 17 targets): 600 s for `html_parse, css_parse, selectors, net_url,
+- **ASan matrix** (`fuzz`, 18 targets): 600 s for `html_parse, css_parse, selectors, net_url,
   render_pipeline, js_eval, svg_parse, image_decode, hpack_decode`; 300 s for
   `woff2_decode, exif_parse, h2_push, body_stream, webp_vp8, js_module, webp_lossy,
   container_queries` (`-rss_limit_mb=2048 -timeout=25`, `-detect_leaks=0` for Boa targets);
@@ -223,7 +231,7 @@ the 3 `xmlViolation` tokenizer failures are documented conformance gaps, not cra
 - on failure uploads `fuzz/artifacts/` and corpus snapshots as workflow artifacts (14 days).
 
 Notes:
-- 21 harnesses exist in `fuzz/fuzz_targets/`; 4 (`dom_tree`, `fonts_shape`, `layout_tree`,
+- 22 harnesses exist in `fuzz/fuzz_targets/`; 4 (`dom_tree`, `fonts_shape`, `layout_tree`,
   `paint_display_list`) are built in PRs but not yet in the scheduled ASan/UBSan matrices.
   Add them to nightly matrices when their corpus/runtime budgets are validated.
 - Daily 10-minute critical / 5-minute secondary runs are a regression gate, not a coverage

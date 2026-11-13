@@ -35,6 +35,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "text_boundary"
+path = "fuzz_targets/text_boundary.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "css_parse"
 path = "fuzz_targets/css_parse.rs"
 test = false
