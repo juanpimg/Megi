@@ -610,12 +610,41 @@ fn parse_ipv4(host: &str) -> Result<String, UrlError> {
     ))
 }
 
+/// Decodes `%2E` (case-insensitive) to `.` so that dot-segment resolution sees an escaped
+/// `..` as traversal. `%2F` is deliberately left encoded: WHATWG keeps it opaque, and
+/// decoding it would let `%2f` split a path segment after the fact (#641).
+fn decode_dot_escapes(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(input.len());
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if bytes[index] == b'%'
+            && index + 2 < bytes.len()
+            && hex_value(bytes[index + 1]).is_some()
+            && hex_value(bytes[index + 2]) == Some(0xE)
+        {
+            out.push('.');
+            index += 3;
+            continue;
+        }
+        let ch = input[index..]
+            .chars()
+            .next()
+            .expect("index on char boundary");
+        out.push(ch);
+        index += ch.len_utf8();
+    }
+    out
+}
+
 /// Normalizes the path per the WHATWG "path state": resolves `.` and `..` segments and
 /// preserves empty segments (repeated slashes). `input` is already percent-encoded.
 fn normalize_path(input: &str) -> String {
     if !input.starts_with('/') {
         return format!("/{}", input.trim_start_matches('/'));
     }
+    let decoded = decode_dot_escapes(input);
+    let input = decoded.as_str();
     let trailing_slash =
         input.ends_with('/') || input.ends_with("/.") || input.ends_with("/..") || input == ".";
     let mut segments: Vec<&str> = Vec::new();
@@ -697,8 +726,40 @@ fn userinfo_requires_encoding(byte: u8) -> bool {
         )
 }
 
+/// Rewrites `%XX` escapes to uppercase and encodes a `%` that does not start a valid escape as
+/// `%25`, so an invalid escape can never reach the wire or a cache key (#641).
+fn normalize_escapes(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(input.len());
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let high = bytes.get(index + 1).copied().and_then(hex_value);
+            let low = bytes.get(index + 2).copied().and_then(hex_value);
+            match (high, low) {
+                (Some(high), Some(low)) => {
+                    push_encoded_byte(&mut out, (high << 4) | low);
+                    index += 3;
+                }
+                _ => {
+                    push_encoded_byte(&mut out, b'%');
+                    index += 1;
+                }
+            }
+            continue;
+        }
+        let ch = input[index..]
+            .chars()
+            .next()
+            .expect("index on char boundary");
+        out.push(ch);
+        index += ch.len_utf8();
+    }
+    out
+}
+
 fn encode_path(input: &str) -> String {
-    encode_with(input, path_requires_encoding)
+    encode_with(&normalize_escapes(input), path_requires_encoding)
 }
 
 fn encode_query(input: &str) -> String {

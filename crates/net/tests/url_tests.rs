@@ -314,3 +314,31 @@ fn backslashes_are_separators_only_in_the_path_section() {
         "http://a/d"
     );
 }
+
+#[test]
+fn invalid_percent_escapes_are_encoded_before_reaching_the_wire() {
+    // #641: `%zz`/`%2` were preserved verbatim and sent on the wire; a lone `%` must be
+    // encoded as `%25`, and existing escapes are normalised to uppercase.
+    let url = Url::parse("http://example.com/%zz%2").expect("parse");
+    assert_eq!(url.path(), "/%25zz%252");
+    assert_eq!(url.request_target(), "/%25zz%252");
+    let ok = Url::parse("http://example.com/a%20b%2fc").expect("parse");
+    assert_eq!(ok.path(), "/a%20b%2Fc", "valid escapes are uppercased");
+}
+
+#[test]
+fn decoded_dot_segments_cannot_bypass_path_normalization() {
+    // #641: `normalize_path` ran on the encoded form, so `/%2e%2e/x` stayed encoded and the
+    // cache key disagreed with what a server would resolve.
+    for input in [
+        "http://example.com/a/%2e%2e/b",
+        "http://example.com/a/%2E%2E/b",
+        "http://example.com/a/../b",
+    ] {
+        let url = Url::parse(input).expect("parse");
+        assert_eq!(url.path(), "/b", "input {input} must collapse to /b");
+    }
+    // `%2F` stays opaque: decoding it would split a segment after the fact.
+    let slash = Url::parse("http://example.com/a%2fb").expect("parse");
+    assert_eq!(slash.path(), "/a%2Fb");
+}
