@@ -9,6 +9,14 @@
 
 use dom::{Attribute, Document, Namespace, NodeId, NodeKind};
 
+/// Hard ceiling for one serialization pass (#647).
+///
+/// A hostile DOM can hold a 16 MiB text node or millions of attributes; without a ceiling the
+/// `String` grows until the caller is OOM-killed, with no error path. 8 MiB is far above any
+/// real document produced by this engine (the parser itself caps input at 8 MiB) and the
+/// output is explicitly marked when it is cut.
+pub const MAX_SERIALIZED_BYTES: usize = 8 * 1024 * 1024;
+
 /// One unit of pending serialization work.
 enum Work {
     /// Emit the line(s) for `node_id` at `depth`, then schedule its children.
@@ -39,10 +47,10 @@ fn serialize_node(
     doc: &Document,
     node_id: NodeId,
     depth: usize,
+    indent: &str,
     out: &mut String,
     stack: &mut Vec<Work>,
 ) {
-    let indent = "  ".repeat(depth);
     let node = doc.node(node_id);
 
     match &node.kind {
@@ -79,7 +87,7 @@ fn serialize_node(
             };
             out.push_str(&format!("| {indent}<{tag_str}>\n"));
 
-            let attr_indent = "  ".repeat(depth + 1);
+            let attr_indent = format!("{indent}  ");
             let mut sorted_attrs: Vec<(String, &str)> = el
                 .attributes
                 .iter()
@@ -107,13 +115,38 @@ fn serialize_node(
     }
 }
 
+/// Cuts `out` down to at most `limit` bytes on a character boundary (#647).
+fn truncate_to_limit(out: &mut String, limit: usize) {
+    if out.len() <= limit {
+        return;
+    }
+    let mut cut = limit;
+    while cut > 0 && !out.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    out.truncate(cut);
+}
+
 /// Serializes `doc` into the canonical `#document` tree dump string (without trailing newline).
 pub fn serialize_dom_for_test(doc: &Document) -> String {
+    serialize_dom_for_test_with_limit(doc, MAX_SERIALIZED_BYTES)
+}
+
+/// [`serialize_dom_for_test`] with an explicit output ceiling.
+pub fn serialize_dom_for_test_with_limit(doc: &Document, max_output_bytes: usize) -> String {
     let mut out = String::new();
     let mut stack: Vec<Work> = Vec::new();
     push_child_list(&mut stack, doc.node(doc.root()).first_child, 0);
+    // Indentation is grown and truncated in place: `"  ".repeat(depth)` per node allocated
+    // O(depth) bytes for every node, i.e. O(n·depth) on a deep chain (#647).
+    let mut indent = String::new();
 
     while let Some(work) = stack.pop() {
+        if out.len() >= max_output_bytes {
+            truncate_to_limit(&mut out, max_output_bytes);
+            out.push_str("| <!-- output truncated -->\n");
+            break;
+        }
         match work {
             Work::ChildList { next: None, .. } => {}
             Work::ChildList {
@@ -127,7 +160,14 @@ pub fn serialize_dom_for_test(doc: &Document) -> String {
                 stack.push(Work::Node { node_id: id, depth });
             }
             Work::Node { node_id, depth } => {
-                serialize_node(doc, node_id, depth, &mut out, &mut stack);
+                let wanted = depth.saturating_mul(2);
+                while indent.len() < wanted {
+                    indent.push_str("  ");
+                }
+                while indent.len() > wanted {
+                    indent.truncate(indent.len() - 2);
+                }
+                serialize_node(doc, node_id, depth, &indent, &mut out, &mut stack);
             }
         }
     }
@@ -173,6 +213,9 @@ pub struct HtmlSerializeOptions {
     /// Whether scripting is enabled (HTML §13.3: `<noscript>` content is serialized as raw text
     /// when scripting is enabled).
     pub scripting_enabled: bool,
+    /// Ceiling for the produced string ([`MAX_SERIALIZED_BYTES`] by default). Past it the
+    /// serializer appends `<!-- output truncated -->` and stops (#647).
+    pub max_output_bytes: usize,
 }
 
 impl HtmlSerializeOptions {
@@ -180,13 +223,21 @@ impl HtmlSerializeOptions {
     pub const fn scripting_disabled() -> Self {
         Self {
             scripting_enabled: false,
+            max_output_bytes: MAX_SERIALIZED_BYTES,
         }
+    }
+
+    /// Returns these options with a different output ceiling.
+    pub const fn with_max_output_bytes(mut self, limit: usize) -> Self {
+        self.max_output_bytes = limit;
+        self
     }
 
     /// Options matching a page with scripting enabled.
     pub const fn scripting_enabled() -> Self {
         Self {
             scripting_enabled: true,
+            max_output_bytes: MAX_SERIALIZED_BYTES,
         }
     }
 }
@@ -354,6 +405,11 @@ fn run_serialization(
     out: &mut String,
 ) {
     while let Some(work) = stack.pop() {
+        if out.len() >= options.max_output_bytes {
+            truncate_to_limit(out, options.max_output_bytes);
+            out.push_str("<!-- output truncated -->");
+            return;
+        }
         match work {
             HtmlSerializeWork::ChildList { next: None, .. } => {}
             HtmlSerializeWork::ChildList {

@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use html::{
     ParseErrorCode, ParseOptions, Token, Tokenizer, TokenizerConfig, parse_document,
-    parse_document_with_options, parse_fragment_with_options, serialize_dom_for_test,
+    parse_document_with_options, parse_fragment_with_options,
 };
 
 const SMALL_STACK: usize = 512 * 1024;
@@ -133,7 +133,12 @@ fn serializer_handles_deep_dom_iteratively() {
     let (line_count, starts_with_html, ends_with_span) =
         in_thread_with_stack(SMALL_STACK, move || {
             let outcome = parse_document_with_options(&input, false, &options);
-            let dump = serialize_dom_for_test(&outcome.document);
+            // Lift the byte ceiling: this test is about stack safety on a 16 MB dump, not
+            // about the truncation behaviour (covered by the budget tests below).
+            let dump = html::serializer::serialize_dom_for_test_with_limit(
+                &outcome.document,
+                64 * 1024 * 1024,
+            );
             (
                 dump.lines().count(),
                 dump.starts_with("| <html>"),
@@ -367,5 +372,60 @@ fn selectedcontent_budget_is_counted_once_across_selects() {
     assert_eq!(
         outcome.limit_violations.nodes_exceeded, 1,
         "the node violation is recorded once, not per select"
+    );
+}
+
+#[test]
+fn serialization_has_an_output_budget_and_reports_truncation() {
+    // #647: `out: String` grew without bound, so a hostile DOM (one huge text node or a deep
+    // chain) OOMed the caller with no error path.
+    let mut doc = dom::Document::new();
+    let root = doc.root();
+    let body = doc.create_element(dom::Namespace::Html, "body", Vec::new());
+    doc.append_child(root, body);
+    let div = doc.create_element(dom::Namespace::Html, "div", Vec::new());
+    doc.append_child(body, div);
+    let text = doc.create_text_node(&"x".repeat(64 * 1024));
+    doc.append_child(div, text);
+
+    let options = html::serializer::HtmlSerializeOptions::scripting_disabled()
+        .with_max_output_bytes(4 * 1024);
+    let out = html::serialize_html_with_options(&doc, options);
+    assert!(
+        out.len() <= 4 * 1024 + 32,
+        "the serializer must respect the ceiling (got {} bytes)",
+        out.len()
+    );
+    assert!(
+        out.ends_with("<!-- output truncated -->"),
+        "truncation must be visible in the output: {:?}",
+        &out[out.len().saturating_sub(48)..]
+    );
+
+    // The default ceiling is high enough that ordinary documents are untouched.
+    let small = html::serialize_html(&doc);
+    assert!(small.contains("<div>"));
+    assert!(!small.contains("truncated"));
+}
+
+#[test]
+fn deep_serialization_does_not_allocate_per_node_indent() {
+    // The canonical tree dump used `"  ".repeat(depth)` per node (O(n·depth) bytes). A 4k-deep
+    // chain must still serialize, quickly, and mark truncation at the byte cap.
+    let mut doc = dom::Document::new();
+    let root = doc.root();
+    let body = doc.create_element(dom::Namespace::Html, "body", Vec::new());
+    doc.append_child(root, body);
+    let mut parent = body;
+    for _ in 0..4_000 {
+        let child = doc.create_element(dom::Namespace::Html, "div", Vec::new());
+        doc.append_child(parent, child);
+        parent = child;
+    }
+    let out = html::serializer::serialize_dom_for_test(&doc);
+    assert!(!out.is_empty());
+    assert!(
+        out.len() <= html::serializer::MAX_SERIALIZED_BYTES + 64,
+        "the tree dump must respect its byte ceiling"
     );
 }
