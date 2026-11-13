@@ -248,6 +248,8 @@ pub(crate) struct ObserverTarget {
 }
 
 /// Shared, mutable host state.
+pub const MAX_CONSOLE_ENTRIES: usize = 4096;
+
 pub(crate) struct Host {
     /// The document scripts operate on.
     pub document: Document,
@@ -465,6 +467,17 @@ impl Host {
             ));
         }
         Ok(node_id)
+    }
+
+    /// Pushes a console entry, dropping oldest when the cap is exceeded (issue #566).
+    pub fn push_console(&mut self, entry: ConsoleEntry) {
+        if self.console.len() >= MAX_CONSOLE_ENTRIES {
+            // Drop oldest to make room.
+            if !self.console.is_empty() {
+                self.console.remove(0);
+            }
+        }
+        self.console.push(entry);
     }
 
     /// Current scheduler time in milliseconds (virtual clock or real elapsed).
