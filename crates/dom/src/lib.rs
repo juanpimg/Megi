@@ -1598,13 +1598,17 @@ impl Document {
     /// Returns all elements whose `tagName` matches `tag_name` in document order.
     ///
     /// HTML elements match ASCII case-insensitively (DOM behaviour); foreign elements match
-    /// exactly. Cost: `O(live nodes)`.
+    /// exactly. `"*"` matches every element in any namespace, as the DOM specification
+    /// requires for `getElementsByTagName("*")`. Cost: `O(live nodes)`.
     pub fn get_elements_by_tag_name(&self, tag_name: &str) -> Vec<NodeId> {
+        let wildcard = tag_name == "*";
         self.descendants(self.root)
             .filter(|&node_id| {
                 self.try_node(node_id).is_some_and(|node| {
                     node.as_element().is_some_and(|element| {
-                        if element.namespace == Namespace::Html {
+                        if wildcard {
+                            true
+                        } else if element.namespace == Namespace::Html {
                             element.local_name.eq_ignore_ascii_case(tag_name)
                         } else {
                             element.local_name == tag_name
@@ -2847,6 +2851,16 @@ mod tests {
             doc.get_elements_by_tag_name("circle"),
             vec![svg],
             "foreign tags match exactly"
+        );
+        // `"*"` matches every element in any namespace, in document order (#688).
+        assert_eq!(
+            doc.get_elements_by_tag_name("*"),
+            vec![html, head, body, nav, p, svg],
+            "wildcard enumerates every element, HTML and foreign alike"
+        );
+        assert!(
+            doc.get_elements_by_tag_name("nope*").is_empty(),
+            "only the exact wildcard matches everything"
         );
         assert_eq!(doc.get_elements_by_class_name("primary"), vec![nav]);
         assert_eq!(doc.get_elements_by_class_name("top primary"), vec![nav]);
