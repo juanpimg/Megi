@@ -868,10 +868,10 @@ impl FontDatabase {
         seen.insert(std::sync::Arc::as_ptr(&chain[0].data) as usize);
 
         for family in families {
-            if let Ok(font) = self.font(&[*family], weight, style) {
-                if seen.insert(std::sync::Arc::as_ptr(&font.data) as usize) {
-                    chain.push(font);
-                }
+            if let Ok(font) = self.font(&[*family], weight, style)
+                && seen.insert(std::sync::Arc::as_ptr(&font.data) as usize)
+            {
+                chain.push(font);
             }
         }
 
