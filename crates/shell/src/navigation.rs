@@ -142,8 +142,12 @@ impl NavigationState {
     }
 
     /// Rebuilds a history from persisted URLs, clamping the current index and the cap.
-    pub fn from_history(mut history: Vec<Url>, index: usize) -> Self {
-        history.truncate(MAX_HISTORY);
+    pub fn from_history(mut history: Vec<Url>, mut index: usize) -> Self {
+        if history.len() > MAX_HISTORY {
+            let excess = history.len() - MAX_HISTORY;
+            history.drain(..excess);
+            index = index.saturating_sub(excess);
+        }
         let index = if history.is_empty() {
             0
         } else {
@@ -364,6 +368,24 @@ mod tests {
         assert_eq!(
             state.current_url().as_deref(),
             Some("https://example.com/a")
+        );
+    }
+
+    #[test]
+    fn from_history_drops_oldest_and_adjusts_index() {
+        let urls: Vec<Url> = (0..(MAX_HISTORY + 10))
+            .map(|i| url(&format!("https://example.com/{i}")))
+            .collect();
+        let state = NavigationState::from_history(urls, MAX_HISTORY + 9);
+        assert_eq!(state.len(), MAX_HISTORY);
+        assert_eq!(state.index(), MAX_HISTORY - 1);
+        assert_eq!(
+            state.current_url().as_deref(),
+            Some(format!("https://example.com/{}", MAX_HISTORY + 9).as_str())
+        );
+        assert_eq!(
+            state.home_target().map(Url::as_str).as_deref(),
+            Some("https://example.com/10")
         );
     }
 }

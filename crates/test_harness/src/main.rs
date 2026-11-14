@@ -93,7 +93,7 @@ fn main() {
         let failed = runs.len() - passed;
         let allowed = allowed_failures(KNOWN_TOKENIZER_FAILURES, fname);
         known_failures_total += failed.min(allowed);
-        if failed > allowed {
+        if failed > allowed || (filter.is_none() && failed != allowed) {
             gate_failed = true;
             unknown_failures.push(format!(
                 "tokenizer {fname}: {failed} failures (allowlisted: {allowed})"
@@ -175,7 +175,8 @@ fn main() {
              {tok_error_expected_total}"
         ));
     }
-    if xml_violation_unannotated_errors != XML_VIOLATION_UNANNOTATED_ERRORS {
+    let xml_violation_ran = filter.is_none_or(|f| "xmlViolation.test".contains(f));
+    if xml_violation_ran && xml_violation_unannotated_errors != XML_VIOLATION_UNANNOTATED_ERRORS {
         gate_failed = true;
         unknown_failures.push(format!(
             "xmlViolation.test: {xml_violation_unannotated_errors} unannotated error(s), documented \
@@ -219,7 +220,7 @@ fn main() {
         let failed = runs.len() - passed;
         let allowed = allowed_failures(KNOWN_TREE_FAILURES, fname);
         known_failures_total += failed.min(allowed);
-        if failed > allowed {
+        if failed > allowed || (filter.is_none() && failed != allowed) {
             gate_failed = true;
             unknown_failures.push(format!(
                 "tree {fname}: {failed} failures (allowlisted: {allowed})"
@@ -291,7 +292,7 @@ fn main() {
         serializer_tests_total += results.len();
         serializer_xhtml_ignored += results.iter().filter(|r| r.has_xhtml).count();
         let allowed = allowed_failures(KNOWN_SERIALIZER_FAILURES, fname);
-        if failed > allowed {
+        if failed > allowed || (filter.is_none() && failed != allowed) {
             gate_failed = true;
             unknown_failures.push(format!(
                 "serializer {fname}: {failed} failures (allowlisted: {allowed})"
@@ -361,6 +362,9 @@ fn main() {
         results.extend(run_wpt_declarations_trim_whitespace(&wpt_css_dir)?);
         results.extend(run_wpt_input_preprocessing(&wpt_css_dir)?);
         results.extend(run_wpt_anb_parsing(&wpt_css_dir)?);
+        if let Some(f) = filter {
+            results.retain(|r| r.name.contains(f) || "css-syntax".contains(f));
+        }
         Ok(results)
     })();
     match css_results {
@@ -383,7 +387,7 @@ fn main() {
             }
             let css_total = results.len();
             println!("CSS Syntax Total: {css_passed} / {css_total} tests passed\n");
-            if css_total != CSS_EXPECTED_RESULTS {
+            if filter.is_none() && css_total != CSS_EXPECTED_RESULTS {
                 gate_failed = true;
                 unknown_failures.push(format!(
                     "css: expected {CSS_EXPECTED_RESULTS} results, got {css_total}"

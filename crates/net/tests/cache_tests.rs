@@ -276,3 +276,61 @@ fn not_modified_without_cached_entry_is_a_typed_error() {
     );
     server.join().expect("server thread");
 }
+
+#[test]
+fn non_200_error_responses_are_not_cached() {
+    let (base, server) = spawn_server(vec![
+        response(
+            "404 Not Found",
+            &[("Cache-Control", "max-age=3600")],
+            b"missing",
+        ),
+        response("200 OK", &[("Cache-Control", "max-age=3600")], b"recovered"),
+    ]);
+    let url = url_for(&base, "/transient");
+    let mut loader = ResourceLoader::with_options(short_options());
+    let first = loader.load(&url).expect("404 response returned");
+    assert_eq!(first.bytes, b"missing");
+    assert_eq!(loader.cache_len(), 0, "404 response must not be cached");
+
+    let second = loader.load(&url).expect("second load hits server");
+    assert_eq!(second.bytes, b"recovered");
+    assert_eq!(loader.cache_len(), 1);
+    assert_eq!(server.join().expect("server thread").len(), 2);
+}
+
+#[test]
+fn cors_cache_is_partitioned_by_request_origin() {
+    let (base, server) = spawn_server(vec![
+        response(
+            "200 OK",
+            &[
+                ("Cache-Control", "max-age=3600"),
+                ("Access-Control-Allow-Origin", "https://allowed.example"),
+            ],
+            b"cors-body",
+        ),
+        response(
+            "200 OK",
+            &[
+                ("Cache-Control", "max-age=3600"),
+                ("Access-Control-Allow-Origin", "https://allowed.example"),
+            ],
+            b"cors-body",
+        ),
+    ]);
+    let url = url_for(&base, "/data.json");
+    let mut opts = short_options();
+    opts.origin = Some("https://allowed.example".to_string());
+    let mut loader = ResourceLoader::with_options(opts);
+    loader.load(&url).expect("allowed origin loads and caches");
+    assert_eq!(loader.cache_len(), 1);
+
+    // Switching to another origin must miss the cache and perform CORS validation on a new fetch.
+    loader.fetch_options_mut().origin = Some("https://evil.example".to_string());
+    let err = loader
+        .load(&url)
+        .expect_err("different origin must not reuse cached entry");
+    assert!(matches!(err, LoadError::Fetch(FetchError::Cors(_))));
+    assert_eq!(server.join().expect("server thread").len(), 2);
+}

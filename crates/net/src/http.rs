@@ -302,6 +302,9 @@ impl Response {
     }
 }
 
+/// Maximum number of distinct origins retained in the HTTP/1.1 keep-alive pool (#104).
+const MAX_POOLED_ORIGINS: usize = 64;
+
 /// Per-origin idle keep-alive pool for plain HTTP/1.1 GET connections (R185).
 #[derive(Debug, Default)]
 pub struct H1Pool {
@@ -328,16 +331,34 @@ impl H1Pool {
 
     fn take(&mut self, origin: &str) -> Option<Transport> {
         let now = Instant::now();
+        let timeout = self.idle_timeout;
         let entries = self.entries.get_mut(origin)?;
+        let mut selected = None;
         while let Some(pooled) = entries.pop() {
-            if now.duration_since(pooled.last_used) < self.idle_timeout {
-                return Some(pooled.stream);
+            if now.duration_since(pooled.last_used) < timeout {
+                selected = Some(pooled.stream);
+                break;
             }
         }
-        None
+        if entries.is_empty() {
+            self.entries.remove(origin);
+        }
+        selected
     }
 
     fn put(&mut self, origin: String, stream: Transport) {
+        self.prune_expired();
+        if !self.entries.contains_key(&origin) && self.entries.len() >= MAX_POOLED_ORIGINS {
+            // Evict the origin whose oldest connection has been idle the longest.
+            if let Some(oldest_origin) = self
+                .entries
+                .iter()
+                .min_by_key(|(_, list)| list.first().map(|p| p.last_used))
+                .map(|(k, _)| k.clone())
+            {
+                self.entries.remove(&oldest_origin);
+            }
+        }
         let entries = self.entries.entry(origin).or_default();
         if entries.len() >= self.max_per_origin {
             entries.remove(0);

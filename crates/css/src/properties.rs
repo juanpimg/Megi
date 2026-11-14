@@ -3051,12 +3051,12 @@ impl ComputedStyle {
             }
         }
         let box_shadows = find_declaration(entries, "box-shadow")
-            .map(|decl| {
+            .and_then(|decl| {
                 parse_box_shadows(&decl.raw_value, font_size, root_font_size, current_color)
             })
             .unwrap_or_default();
         let text_shadows = find_declaration(entries, "text-shadow")
-            .map(|decl| {
+            .and_then(|decl| {
                 parse_text_shadows(&decl.raw_value, font_size, root_font_size, current_color)
             })
             .unwrap_or_else(|| inherited_text_shadows.to_vec());
@@ -3461,102 +3461,242 @@ fn parse_shadow_length(value: &str, font_size: f32, root_font_size: f32) -> Opti
 }
 
 /// Parses `box-shadow` (`none` or a comma-separated list of shadows).
+///
+/// Per CSS Backgrounds 3 §6.1, if any comma-separated shadow layer is invalid (or if
+/// `none` is combined with other layers), the entire declaration is invalid and returns
+/// `None` (#383).
 fn parse_box_shadows(
     value: &str,
     font_size: f32,
     root_font_size: f32,
     current_color: Color,
-) -> Vec<BoxShadow> {
-    let lower = value.trim().to_ascii_lowercase();
-    if lower == "none" {
-        return Vec::new();
+) -> Option<Vec<BoxShadow>> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
     }
-    let mut shadows = Vec::new();
-    for layer in split_top_level_commas(value) {
-        let layer_lower = layer.trim().to_ascii_lowercase();
-        if layer_lower == "none" {
-            continue;
+    if trimmed.eq_ignore_ascii_case("none") {
+        return Some(Vec::new());
+    }
+    if trimmed.starts_with(',') || trimmed.ends_with(',') {
+        return None;
+    }
+    let raw_layers = split_top_level_commas_strict(trimmed)?;
+    let mut shadows = Vec::with_capacity(raw_layers.len().min(MAX_BOX_SHADOWS));
+    for layer in raw_layers {
+        if layer.eq_ignore_ascii_case("none") {
+            return None;
         }
         let mut inset = false;
+        let mut has_color = false;
         let mut color = None;
-        let mut lengths = Vec::with_capacity(4);
-        for component in split_components(&layer) {
-            let component_lower = component.trim().to_ascii_lowercase();
-            if component_lower == "inset" {
+        let mut lengths: Vec<f32> = Vec::with_capacity(4);
+        let mut in_lengths = false;
+        let mut lengths_done = false;
+        let components = split_components(&layer);
+        if components.is_empty() {
+            return None;
+        }
+        for component in components {
+            let component_trimmed = component.trim();
+            if component_trimmed.eq_ignore_ascii_case("inset") {
+                if inset {
+                    return None;
+                }
+                if in_lengths {
+                    lengths_done = true;
+                }
                 inset = true;
                 continue;
             }
-            if color.is_none()
-                && (Color::parse(&component).is_some()
-                    || component_lower.eq_ignore_ascii_case("currentcolor"))
+            if !has_color
+                && (Color::parse(component_trimmed).is_some()
+                    || component_trimmed.eq_ignore_ascii_case("currentcolor"))
             {
-                color = Color::parse(&component);
+                if in_lengths {
+                    lengths_done = true;
+                }
+                has_color = true;
+                color = Color::parse(component_trimmed);
                 continue;
             }
-            if lengths.len() < 4
-                && let Some(length) = parse_shadow_length(&component, font_size, root_font_size)
+            if !lengths_done
+                && lengths.len() < 4
+                && let Some(length) =
+                    parse_shadow_length(component_trimmed, font_size, root_font_size)
             {
+                in_lengths = true;
                 lengths.push(length);
+                continue;
             }
+            return None;
         }
         if lengths.len() < 2 {
-            continue;
+            return None;
         }
-        shadows.push(BoxShadow {
-            offset_x: lengths[0],
-            offset_y: lengths[1],
-            blur: lengths.get(2).copied().unwrap_or(0.0).max(0.0),
-            spread: lengths.get(3).copied().unwrap_or(0.0),
-            color: color.unwrap_or(current_color),
-            inset,
-        });
-        if shadows.len() >= MAX_BOX_SHADOWS {
-            break;
+        if let Some(&blur) = lengths.get(2)
+            && blur < 0.0
+        {
+            return None;
+        }
+        if shadows.len() < MAX_BOX_SHADOWS {
+            shadows.push(BoxShadow {
+                offset_x: lengths[0],
+                offset_y: lengths[1],
+                blur: lengths.get(2).copied().unwrap_or(0.0).max(0.0),
+                spread: lengths.get(3).copied().unwrap_or(0.0),
+                color: color.unwrap_or(current_color),
+                inset,
+            });
         }
     }
-    shadows
+    if shadows.is_empty() {
+        return None;
+    }
+    Some(shadows)
 }
 
 /// Parses `text-shadow` (`none` or a comma-separated list of shadows).
+///
+/// Per CSS Text Decoration 3 §4, if any layer is invalid or `none` is mixed in a list,
+/// the entire declaration is invalid and returns `None` (#383).
 fn parse_text_shadows(
     value: &str,
     font_size: f32,
     root_font_size: f32,
     current_color: Color,
-) -> Vec<TextShadow> {
-    let lower = value.trim().to_ascii_lowercase();
-    if lower == "none" {
-        return Vec::new();
+) -> Option<Vec<TextShadow>> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
     }
-    let mut shadows = Vec::new();
-    for layer in split_top_level_commas(value) {
+    if trimmed.eq_ignore_ascii_case("none") {
+        return Some(Vec::new());
+    }
+    if trimmed.starts_with(',') || trimmed.ends_with(',') {
+        return None;
+    }
+    let raw_layers = split_top_level_commas_strict(trimmed)?;
+    let mut shadows = Vec::with_capacity(raw_layers.len().min(MAX_TEXT_SHADOWS));
+    for layer in raw_layers {
+        if layer.eq_ignore_ascii_case("none") {
+            return None;
+        }
+        let mut has_color = false;
         let mut color = None;
-        let mut lengths = Vec::with_capacity(3);
-        for component in split_components(&layer) {
-            if color.is_none() && Color::parse(&component).is_some() {
-                color = Color::parse(&component);
+        let mut lengths: Vec<f32> = Vec::with_capacity(3);
+        let mut in_lengths = false;
+        let mut lengths_done = false;
+        let components = split_components(&layer);
+        if components.is_empty() {
+            return None;
+        }
+        for component in components {
+            let component_trimmed = component.trim();
+            if !has_color
+                && (Color::parse(component_trimmed).is_some()
+                    || component_trimmed.eq_ignore_ascii_case("currentcolor"))
+            {
+                if in_lengths {
+                    lengths_done = true;
+                }
+                has_color = true;
+                color = Color::parse(component_trimmed);
                 continue;
             }
-            if lengths.len() < 3
-                && let Some(length) = parse_shadow_length(&component, font_size, root_font_size)
+            if !lengths_done
+                && lengths.len() < 3
+                && let Some(length) =
+                    parse_shadow_length(component_trimmed, font_size, root_font_size)
             {
+                in_lengths = true;
                 lengths.push(length);
+                continue;
             }
+            return None;
         }
         if lengths.len() < 2 {
-            continue;
+            return None;
         }
-        shadows.push(TextShadow {
-            offset_x: lengths[0],
-            offset_y: lengths[1],
-            blur: lengths.get(2).copied().unwrap_or(0.0).max(0.0),
-            color: color.unwrap_or(current_color),
-        });
-        if shadows.len() >= MAX_TEXT_SHADOWS {
-            break;
+        if let Some(&blur) = lengths.get(2)
+            && blur < 0.0
+        {
+            return None;
+        }
+        if shadows.len() < MAX_TEXT_SHADOWS {
+            shadows.push(TextShadow {
+                offset_x: lengths[0],
+                offset_y: lengths[1],
+                blur: lengths.get(2).copied().unwrap_or(0.0).max(0.0),
+                color: color.unwrap_or(current_color),
+            });
         }
     }
-    shadows
+    if shadows.is_empty() {
+        return None;
+    }
+    Some(shadows)
+}
+
+/// Splits a comma-separated CSS list at top level, returning `None` if any comma-delimited
+/// segment is empty (e.g. `1px 1px, , 2px 2px`).
+fn split_top_level_commas_strict(value: &str) -> Option<Vec<String>> {
+    let mut components = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    for ch in value.chars() {
+        if escaped {
+            current.push(ch);
+            escaped = false;
+            continue;
+        }
+        if let Some(q) = quote {
+            current.push(ch);
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == q {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '"' | '\'' => {
+                quote = Some(ch);
+                current.push(ch);
+            }
+            '(' | '[' => {
+                depth += 1;
+                current.push(ch);
+            }
+            ')' | ']' => {
+                if depth == 0 {
+                    return None;
+                }
+                depth -= 1;
+                current.push(ch);
+            }
+            ',' if depth == 0 => {
+                let trimmed = current.trim();
+                if trimmed.is_empty() {
+                    return None;
+                }
+                components.push(trimmed.to_string());
+                current.clear();
+            }
+            _ => current.push(ch),
+        }
+    }
+    if depth != 0 || quote.is_some() {
+        return None;
+    }
+    let trimmed = current.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    components.push(trimmed.to_string());
+    Some(components)
 }
 
 /// Splits a comma-separated CSS list at top level (parentheses/quotes aware).

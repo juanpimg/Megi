@@ -105,6 +105,9 @@ struct CachedEntry {
     last_modified: Option<String>,
     /// `Vary: User-Agent` value at store time (None when the response does not vary).
     vary_user_agent: Option<String>,
+    /// Request `Origin` at store time (`None` for no-CORS/same-origin requests) so a cached
+    /// entry validated for one origin or in `no-cors` mode is never served to another (#99).
+    origin: Option<String>,
 }
 
 impl CachedEntry {
@@ -112,10 +115,12 @@ impl CachedEntry {
         !self.no_cache && !self.must_revalidate && self.stored_at.elapsed() < self.freshness
     }
 
-    fn matches_request(&self, user_agent: &str) -> bool {
-        self.vary_user_agent
-            .as_deref()
-            .is_none_or(|stored| stored == user_agent)
+    fn matches_request(&self, user_agent: &str, origin: Option<&str>) -> bool {
+        self.origin.as_deref() == origin
+            && self
+                .vary_user_agent
+                .as_deref()
+                .is_none_or(|stored| stored == user_agent)
     }
 
     fn can_revalidate(&self) -> bool {
@@ -418,8 +423,8 @@ impl ResourceLoader {
             .cloned();
 
         if let Some(entry) = stored {
-            if !entry.matches_request(&self.options.user_agent) {
-                // Another `Vary` variant: treat as a miss and refetch.
+            if !entry.matches_request(&self.options.user_agent, self.options.origin.as_deref()) {
+                // Another `Vary` or `Origin` variant: treat as a miss and refetch.
             } else if entry.is_fresh() {
                 self.cache_hits += 1;
                 return Ok(entry.resource);
@@ -429,9 +434,17 @@ impl ResourceLoader {
         }
 
         self.cache_misses += 1;
-        let (resource, headers) = self.fetch_resource(url)?;
+        let (resource, headers, status) = self.fetch_resource(url)?;
         let resource = Arc::new(resource);
-        self.store(url, cache_key, Arc::clone(&resource), headers.as_ref());
+        if status.is_none_or(|code| code == 200) {
+            self.store(
+                url,
+                cache_key,
+                Arc::clone(&resource),
+                headers.as_ref(),
+                self.options.origin.clone(),
+            );
+        }
         Ok(resource)
     }
 
@@ -570,7 +583,12 @@ impl ResourceLoader {
         });
 
         for (cache_key, indices, resp) in fetched {
-            let first_url = &requests[indices[0]].0;
+            let (first_url, use_cors) = requests[indices[0]];
+            let effective_origin = if use_cors {
+                self.options.origin.clone()
+            } else {
+                None
+            };
             match resp {
                 Ok(mut response) => {
                     if response.status == 304 {
@@ -579,11 +597,20 @@ impl ResourceLoader {
                                 Some(Err(LoadError::from(FetchError::UnconditionalNotModified)));
                         }
                     } else {
+                        let status = response.status;
                         self.store_pushed(std::mem::take(&mut response.pushed));
                         let headers = response.headers.clone();
                         let resource = Arc::new(resource_from_response(response));
                         self.cache_misses += 1;
-                        self.store(first_url, cache_key, Arc::clone(&resource), Some(&headers));
+                        if status == 200 {
+                            self.store(
+                                first_url,
+                                cache_key,
+                                Arc::clone(&resource),
+                                Some(&headers),
+                                effective_origin,
+                            );
+                        }
                         for idx in indices {
                             results[idx] = Some(Ok(Arc::clone(&resource)));
                         }
@@ -609,9 +636,12 @@ impl ResourceLoader {
 
     /// Fetches without consulting the cache (still stores the result when allowed).
     ///
-    /// Returns the response headers (when fetched over HTTP) so the caller can apply
-    /// `Cache-Control`/validators to the stored entry.
-    fn fetch_resource(&mut self, url: &Url) -> Result<(Resource, Option<Headers>), FetchError> {
+    /// Returns the response headers and status code (when fetched over HTTP) so the caller
+    /// can apply `Cache-Control`/validators and only cache `200` responses (#91).
+    fn fetch_resource(
+        &mut self,
+        url: &Url,
+    ) -> Result<(Resource, Option<Headers>, Option<u16>), FetchError> {
         match url.scheme() {
             Scheme::Http | Scheme::Https => {
                 let mut response =
@@ -621,9 +651,14 @@ impl ResourceLoader {
                     // representation): a server bug must be a typed error.
                     return Err(FetchError::UnconditionalNotModified);
                 }
+                let status = response.status;
                 self.store_pushed(std::mem::take(&mut response.pushed));
                 let headers = response.headers.clone();
-                Ok((resource_from_response(response), Some(headers)))
+                Ok((
+                    resource_from_response(response),
+                    Some(headers),
+                    Some(status),
+                ))
             }
             Scheme::File => {
                 let bytes = load_file_url_with_limit(url, self.options.max_response_bytes)?;
@@ -633,6 +668,7 @@ impl ResourceLoader {
                         content_type: mime::sniff(&bytes).mime_type().to_owned(),
                         bytes,
                     },
+                    None,
                     None,
                 ))
             }
@@ -645,6 +681,7 @@ impl ResourceLoader {
                         bytes: data.bytes,
                         content_type: data.mime_type,
                     },
+                    None,
                     None,
                 ))
             }
@@ -661,9 +698,15 @@ impl ResourceLoader {
         if !matches!(url.scheme(), Scheme::Http | Scheme::Https) {
             // `file://` has no conditional requests: refetch normally.
             self.cache_misses += 1;
-            let (resource, headers) = self.fetch_resource(url)?;
+            let (resource, headers, _) = self.fetch_resource(url)?;
             let resource = Arc::new(resource);
-            self.store(url, cache_key, Arc::clone(&resource), headers.as_ref());
+            self.store(
+                url,
+                cache_key,
+                Arc::clone(&resource),
+                headers.as_ref(),
+                self.options.origin.clone(),
+            );
             return Ok(resource);
         }
         let headers = entry.conditional_headers();
@@ -684,10 +727,25 @@ impl ResourceLoader {
         }
         self.cache_misses += 1;
         let mut response = response;
+        let status = response.status;
         self.store_pushed(std::mem::take(&mut response.pushed));
         let headers = response.headers.clone();
         let resource = Arc::new(resource_from_response(response));
-        self.store(url, cache_key, Arc::clone(&resource), Some(&headers));
+        if status == 200 {
+            self.store(
+                url,
+                cache_key,
+                Arc::clone(&resource),
+                Some(&headers),
+                self.options.origin.clone(),
+            );
+        } else if let Some(cache) = &mut self.cache
+            && let Some(removed) = cache.remove(&cache_key)
+        {
+            self.cache_bytes = self
+                .cache_bytes
+                .saturating_sub(removed.resource.bytes.len());
+        }
         Ok(resource)
     }
 
@@ -698,6 +756,7 @@ impl ResourceLoader {
         cache_key: String,
         resource: Arc<Resource>,
         response_headers: Option<&Headers>,
+        origin: Option<String>,
     ) {
         let Some(cache) = &mut self.cache else {
             return;
@@ -763,6 +822,7 @@ impl ResourceLoader {
                 etag: policy.etag,
                 last_modified: policy.last_modified,
                 vary_user_agent,
+                origin,
             },
         );
     }

@@ -496,3 +496,57 @@ fn modern_rgb_and_hsl_space_slash_and_case_insensitive() {
 
     assert!(Color::parse("hsl(0, 100%, 50%, 0.5, 1)").is_none());
 }
+
+#[test]
+fn shadow_list_rejects_entire_declaration_when_any_layer_is_invalid() {
+    use dom::{Attribute, Document, Namespace};
+
+    let check = |style_attr: &str| -> css::ComputedStyle {
+        let mut document = Document::new();
+        let body = document.create_element(Namespace::Html, "body", vec![]);
+        let element = document.create_element(
+            Namespace::Html,
+            "div",
+            vec![Attribute::new("style", style_attr)],
+        );
+        document.append_child(document.root(), body);
+        document.append_child(body, element);
+        let styles = css::resolve_document_styles(&document, None);
+        styles.get(&element).cloned().expect("style")
+    };
+
+    let valid = check(
+        "box-shadow: 2px 4px 6px red, inset 1px 2px blue; text-shadow: 1px 2px red, 3px 4px 5px blue;",
+    );
+    assert_eq!(valid.box_shadows.len(), 2);
+    assert_eq!(valid.text_shadows.len(), 2);
+
+    for invalid_box in [
+        "box-shadow: 2px 4px red, none;",
+        "box-shadow: 2px 4px red, 5px;",
+        "box-shadow: 2px 4px red, 1px 2px -3px blue;",
+        "box-shadow: 2px 4px red, 1px 2px unknowntoken;",
+        "box-shadow: 2px 4px red, ;",
+    ] {
+        let style = check(invalid_box);
+        assert!(
+            style.box_shadows.is_empty(),
+            "expected empty box_shadows for `{invalid_box}`, got {:?}",
+            style.box_shadows
+        );
+    }
+
+    for invalid_text in [
+        "text-shadow: 1px 2px red, none;",
+        "text-shadow: 1px 2px red, 3px;",
+        "text-shadow: 1px 2px red, 1px 2px -1px blue;",
+        "text-shadow: 1px 2px red, inset 1px 2px blue;",
+    ] {
+        let style = check(invalid_text);
+        assert!(
+            style.text_shadows.is_empty(),
+            "expected empty text_shadows for `{invalid_text}`, got {:?}",
+            style.text_shadows
+        );
+    }
+}
