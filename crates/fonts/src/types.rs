@@ -59,6 +59,9 @@ pub struct FontRefInfo {
     pub weight: u16,
     /// CSS font style.
     pub style: FontStyle,
+    /// CSS font stretch (fontdb Stretch enum). Threaded through selection so
+    /// condensed/expanded faces can be picked (#493).
+    pub stretch: fontdb::Stretch,
     /// True when every advance is the same (`fontdb` metadata).
     pub monospaced: bool,
 }

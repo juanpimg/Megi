@@ -1487,13 +1487,13 @@ fn register_fonts(suite: &mut Suite, scale: f64) {
         suite.skip("fonts/shape-1k-words", reason);
         return;
     }
-    let Ok(measure_font) = database.font(&["DejaVu Sans"], 400, FontStyle::Normal) else {
+    let Ok(measure_font) = database.font(&["DejaVu Sans"], 400, FontStyle::Normal, fontdb::Stretch::Normal) else {
         let reason = "DejaVu Sans no resuelve".to_string();
         suite.skip("fonts/measure-1k-words", reason.clone());
         suite.skip("fonts/shape-1k-words", reason);
         return;
     };
-    let Ok(shape_font) = database.font(&["DejaVu Sans"], 400, FontStyle::Normal) else {
+    let Ok(shape_font) = database.font(&["DejaVu Sans"], 400, FontStyle::Normal, fontdb::Stretch::Normal) else {
         let reason = "DejaVu Sans no resuelve".to_string();
         suite.skip("fonts/measure-1k-words", reason.clone());
         suite.skip("fonts/shape-1k-words", reason);

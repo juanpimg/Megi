@@ -568,6 +568,7 @@ impl FontDatabase {
             post_script_name: face.post_script_name.clone(),
             weight: face.weight.0,
             style: face.style.into(),
+            stretch: face.stretch,
             monospaced: face.monospaced,
         };
         let index = face.index;
@@ -614,7 +615,7 @@ impl FontDatabase {
     }
 
     /// Resolves an `@font-face` alias list to the best matching registered face.
-    fn alias_face(&self, families: &[&str], weight: u16, style: FontStyle) -> Option<fontdb::ID> {
+    fn alias_face(&self, families: &[&str], weight: u16, style: FontStyle, stretch: Stretch) -> Option<fontdb::ID> {
         let wanted_style = DbStyle::from(style);
         for family in families {
             let Some(ids) = self.aliases.get(&family.to_ascii_lowercase()) else {
@@ -633,7 +634,8 @@ impl FontDatabase {
                     _ => 1000,
                 };
                 let weight_penalty = i32::from(face.weight.0.abs_diff(weight));
-                let score = style_penalty as i32 + weight_penalty;
+                let stretch_penalty = if face.stretch == stretch { 0i32 } else { 100 };
+                let score = style_penalty as i32 + weight_penalty + stretch_penalty;
                 if best.is_none_or(|(best_score, _)| score < best_score) {
                     best = Some((score, *id));
                 }
@@ -655,8 +657,8 @@ impl FontDatabase {
             .unwrap_or(name)
     }
 
-    fn query_face(&self, families: &[&str], weight: u16, style: FontStyle) -> Option<fontdb::ID> {
-        if let Some(id) = self.alias_face(families, weight, style) {
+    fn query_face(&self, families: &[&str], weight: u16, style: FontStyle, stretch: Stretch) -> Option<fontdb::ID> {
+        if let Some(id) = self.alias_face(families, weight, style, stretch) {
             return Some(id);
         }
         let mut expanded = Self::expand_families(families);
@@ -671,12 +673,12 @@ impl FontDatabase {
         self.db.query(&Query {
             families: &expanded,
             weight: Weight(weight),
-            stretch: Stretch::Normal,
+            stretch: stretch,
             style: DbStyle::from(style),
         })
     }
 
-    fn last_resort_face(&self, weight: u16, style: FontStyle) -> Option<fontdb::ID> {
+    fn last_resort_face(&self, weight: u16, style: FontStyle, stretch: Stretch) -> Option<fontdb::ID> {
         let wanted_style = DbStyle::from(style);
         let mut best: Option<(i32, fontdb::ID)> = None;
         for face in self.db.faces() {
@@ -686,7 +688,8 @@ impl FontDatabase {
                 _ => 1000,
             };
             let weight_penalty = i32::from(face.weight.0.abs_diff(weight));
-            let score = style_penalty as i32 + weight_penalty;
+            let stretch_penalty = if face.stretch == stretch { 0i32 } else { 100 };
+            let score = style_penalty as i32 + weight_penalty + stretch_penalty;
             if best.is_none_or(|(best_score, _)| score < best_score) {
                 best = Some((score, face.id));
             }
@@ -704,15 +707,18 @@ impl FontDatabase {
         families: &[&str],
         weight: u16,
         style: FontStyle,
+        stretch: Stretch,
     ) -> Result<Font, FontError> {
-        if let Some(id) = self.query_face(families, weight, style) {
+        debug_assert!(weight >= 1 && weight <= 1000, "font weight {weight} out of CSS range [1, 1000]");
+        let weight = weight.clamp(1, 1000);
+        if let Some(id) = self.query_face(families, weight, style, stretch) {
             return self.build_font(id);
         }
         let uses_generic = families
             .iter()
             .any(|family| GENERIC_FAMILIES.contains(&family.to_ascii_lowercase().as_str()));
         if families.is_empty() || uses_generic {
-            return match self.last_resort_face(weight, style) {
+            return match self.last_resort_face(weight, style, stretch) {
                 Some(id) => self.build_font(id),
                 None => Err(FontError::NoFontAvailable),
             };
@@ -737,6 +743,7 @@ impl FontDatabase {
                 face.post_script_name == info.post_script_name
                     && face.weight.0 == info.weight
                     && face.style == DbStyle::from(info.style)
+                    && face.stretch == info.stretch
             })
             .map(|face| face.id)
             .ok_or_else(|| FontError::FontNotFound {
@@ -753,7 +760,7 @@ impl FontDatabase {
         style: FontStyle,
         size_px: f32,
     ) -> Result<FontMetrics, FontError> {
-        self.font(families, weight, style)?.metrics(size_px)
+        self.font(families, weight, style, Stretch::Normal)?.metrics(size_px)
     }
 
     /// Fallback-aware, unshaped text width in px at `size_px`.
@@ -770,7 +777,7 @@ impl FontDatabase {
         text: &str,
     ) -> Result<f32, FontError> {
         Font::validate_size(size_px)?;
-        let primary = self.font(families, weight, style)?;
+        let primary = self.font(families, weight, style, Stretch::Normal)?;
         let mut chain = self.fallback_chain(families, weight, style, primary);
         let mut memo: HashMap<char, (usize, Option<u16>)> = HashMap::new();
         let mut width = 0.0f32;
@@ -814,7 +821,7 @@ impl FontDatabase {
         text: &str,
     ) -> Result<ShapedRun, FontError> {
         Font::validate_size(size_px)?;
-        let primary = self.font(families, weight, style)?;
+        let primary = self.font(families, weight, style, Stretch::Normal)?;
         let metrics = primary.metrics(size_px)?;
         let mut chain = self.fallback_chain(families, weight, style, primary);
         let mut fonts: Vec<FontRefInfo> = chain.iter().map(|font| font.info().clone()).collect();
@@ -927,7 +934,7 @@ impl FontDatabase {
         size_px: f32,
         glyph_id: u16,
     ) -> Result<GlyphMask, FontError> {
-        self.font(families, weight, style)?
+        self.font(families, weight, style, Stretch::Normal)?
             .rasterize_glyph(size_px, glyph_id)
     }
 
@@ -941,7 +948,7 @@ impl FontDatabase {
         ch: char,
     ) -> Result<GlyphMask, FontError> {
         Font::validate_size(size_px)?;
-        let primary = self.font(families, weight, style)?;
+        let primary = self.font(families, weight, style, Stretch::Normal)?;
         if let Some(glyph_id) = primary.glyph_id(ch) {
             return primary.rasterize_glyph(size_px, glyph_id);
         }
@@ -1047,7 +1054,7 @@ impl FontDatabase {
         seen.insert(std::sync::Arc::as_ptr(&chain[0].data) as usize);
 
         for family in families {
-            if let Ok(font) = self.font(&[*family], weight, style)
+            if let Ok(font) = self.font(&[*family], weight, style, Stretch::Normal)
                 && seen.insert(std::sync::Arc::as_ptr(&font.data) as usize)
             {
                 chain.push(font);
@@ -1103,6 +1110,6 @@ impl FontDatabase {
         weight: u16,
         style: FontStyle,
     ) -> Result<Font, FontError> {
-        self.font(families, weight, style)
+        self.font(families, weight, style, Stretch::Normal)
     }
 }
