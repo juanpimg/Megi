@@ -13,7 +13,7 @@ if [[ ! "${snapshot}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
     exit 1
 fi
 url="https://publicsuffix.org/list/public_suffix_list.dat"
-tmp="$(mktemp)"
+tmp="$(mktemp -t psl.XXXXXX)"
 trap 'rm -f "${tmp}"' EXIT
 
 echo "downloading ${url}"
@@ -35,7 +35,7 @@ fi
 
 # Build the new vendored file in a temp path and install it atomically, keeping a
 # backup of the previous version so a failure never leaves a corrupt PSL in place.
-out="$(mktemp)"
+out="$(mktemp -t psl.XXXXXX)"
 trap 'rm -f "${tmp}" "${out}"' EXIT
 {
     printf '// Megi vendored snapshot: %s (publicsuffix.org/list/public_suffix_list.dat)\n' "${snapshot}"

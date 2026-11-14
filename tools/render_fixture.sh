@@ -12,7 +12,7 @@ if [ -n "${1:-}" ]; then
     outdir="$1"
     mkdir -p "$outdir"
 else
-    outdir="$(mktemp -d)"
+    outdir="$(mktemp -d -t render_fixture.XXXXXX)"
     cleanup_outdir=1
 fi
 trap 'if [ "$cleanup_outdir" -eq 1 ]; then rm -rf "$outdir"; fi' EXIT
