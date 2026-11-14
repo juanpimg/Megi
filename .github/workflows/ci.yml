@@ -47,6 +47,9 @@ jobs:
       # Checks that PROGRESS.md and docs/status/*.svg match the committed manifest plus the
       # real repository stats (git HEAD/date, crates, Rust lines, test count). The
       # conformance gate already runs in the `conformance` job, so it is not re-run here.
+      - uses: actions/setup-python@0a5c615913736833115f8704b586a2322d4534a2 # v5
+        with:
+          python-version: '3.11'
       - name: Status freshness (PROGRESS.md + docs/status)
         run: python3 tools/update_progress.py --check --no-gate
       - name: Documentation
