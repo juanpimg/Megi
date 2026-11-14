@@ -96,7 +96,10 @@ def parse_dat_file(dat_path: Path) -> List[Dict[str, Any]]:
 
 
 def load_tokenizer_file(test_path: Path) -> List[Dict[str, Any]]:
-    data = json.loads(test_path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(test_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as error:
+        raise ValueError(f"Malformed tokenizer JSON in {test_path}: {error}") from error
     if not isinstance(data, dict):
         raise ValueError(
             f"Malformed tokenizer JSON in {test_path}: top level must be an object, "
@@ -141,39 +144,61 @@ def cmd_summary(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_fixture_path(raw: str) -> Path | None:
+    """Resolve a fixture path, confining bare names to the three fixture dirs."""
+    candidate = Path(raw)
+    # Reject absolute paths and parent traversal outside the repo.
+    if candidate.is_absolute():
+        return None
+    if ".." in candidate.parts:
+        return None
+    if candidate.exists():
+        return candidate
+    for d in (TOKENIZER_DIR, TREE_DAT_DIR, TREE_JSON_DIR):
+        cand = d / raw
+        if cand.exists():
+            return cand
+    return None
+
+
 def cmd_show(args: argparse.Namespace) -> int:
-    target = Path(args.file)
-    if not target.exists():
-        for d in (TOKENIZER_DIR, TREE_DAT_DIR, TREE_JSON_DIR):
-            cand = d / args.file
-            if cand.exists():
-                target = cand
-                break
-    if not target.exists():
+    target = _resolve_fixture_path(args.file)
+    if target is None:
         print(f"Error: fixture file '{args.file}' not found.", file=sys.stderr)
         return 1
 
-    if target.suffix == ".test":
-        cases = load_tokenizer_file(target)
-        if args.index < 0 or args.index >= len(cases):
-            print(f"Error: index {args.index} out of range (0..{len(cases) - 1}).", file=sys.stderr)
+    try:
+        if target.suffix == ".test":
+            cases = load_tokenizer_file(target)
+            if args.index < 0 or args.index >= len(cases):
+                print(f"Error: index {args.index} out of range (0..{len(cases) - 1}).", file=sys.stderr)
+                return 1
+            print(json.dumps(cases[args.index], indent=2, ensure_ascii=False))
+        elif target.suffix == ".dat":
+            cases = parse_dat_file(target)
+            if args.index < 0 or args.index >= len(cases):
+                print(f"Error: index {args.index} out of range (0..{len(cases) - 1}).", file=sys.stderr)
+                return 1
+            print(json.dumps(cases[args.index], indent=2, ensure_ascii=False))
+        elif target.suffix == ".json":
+            try:
+                data = json.loads(target.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as error:
+                print(f"Error: {error}", file=sys.stderr)
+                return 1
+            if not isinstance(data, dict):
+                print(f"Error: top level must be an object, got {type(data).__name__}", file=sys.stderr)
+                return 1
+            cases = data.get("tests", [])
+            if args.index < 0 or args.index >= len(cases):
+                print(f"Error: index {args.index} out of range (0..{len(cases) - 1}).", file=sys.stderr)
+                return 1
+            print(json.dumps(cases[args.index], indent=2, ensure_ascii=False))
+        else:
+            print(f"Unsupported fixture extension: {target.suffix}", file=sys.stderr)
             return 1
-        print(json.dumps(cases[args.index], indent=2, ensure_ascii=False))
-    elif target.suffix == ".dat":
-        cases = parse_dat_file(target)
-        if args.index < 0 or args.index >= len(cases):
-            print(f"Error: index {args.index} out of range (0..{len(cases) - 1}).", file=sys.stderr)
-            return 1
-        print(json.dumps(cases[args.index], indent=2, ensure_ascii=False))
-    elif target.suffix == ".json":
-        data = json.loads(target.read_text(encoding="utf-8"))
-        cases = data.get("tests", [])
-        if args.index < 0 or args.index >= len(cases):
-            print(f"Error: index {args.index} out of range (0..{len(cases) - 1}).", file=sys.stderr)
-            return 1
-        print(json.dumps(cases[args.index], indent=2, ensure_ascii=False))
-    else:
-        print(f"Unsupported fixture extension: {target.suffix}", file=sys.stderr)
+    except (ValueError, json.JSONDecodeError) as error:
+        print(f"Error: {error}", file=sys.stderr)
         return 1
     return 0
 
