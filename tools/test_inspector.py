@@ -217,19 +217,32 @@ def sanitize_surrogates(s: Optional[str]) -> Optional[str]:
     return "".join(out)
 
 
+def _sanitize_value(value: Any) -> Any:
+    """Recursively sanitize surrogate code points in all string fields."""
+    if isinstance(value, str):
+        return sanitize_surrogates(value)
+    if isinstance(value, dict):
+        return {k: _sanitize_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_value(v) for v in value]
+    return value
+
+
 def cmd_export_json(args: argparse.Namespace) -> int:
     if not TREE_DAT_DIR.exists():
         print(f"Error: {TREE_DAT_DIR} does not exist.", file=sys.stderr)
         return 1
     TREE_JSON_DIR.mkdir(parents=True, exist_ok=True)
     dat_files = sorted(TREE_DAT_DIR.glob("*.dat"))
+    expected = {f"{df.stem}.json" for df in dat_files}
+    # Prune stale outputs whose source .dat was removed.
+    for stale in TREE_JSON_DIR.glob("*.json"):
+        if stale.name not in expected:
+            stale.unlink()
     total_cases = 0
     for df in dat_files:
         cases = parse_dat_file(df)
-        for c in cases:
-            c["data"] = sanitize_surrogates(c["data"])
-            c["document"] = sanitize_surrogates(c["document"])
-            c["description"] = sanitize_surrogates(c["description"])
+        cases = [_sanitize_value(c) for c in cases]
         total_cases += len(cases)
         out_path = TREE_JSON_DIR / f"{df.stem}.json"
         payload = {
