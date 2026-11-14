@@ -110,9 +110,13 @@ pub(crate) fn build_layout_tree_internal(
         replaced_sizes,
         &mut has_overflow_clip,
         &mut style_cache,
+        0,
     )?;
     Some((root, has_overflow_clip))
 }
+
+/// Maximum DOM nesting depth traversed when constructing the layout box tree (#417).
+const MAX_TREE_BUILD_DEPTH: usize = 256;
 
 /// Returns `true` if the node is an HTML `<br>` element.
 fn is_html_br(node: &dom::Node) -> bool {
@@ -122,6 +126,7 @@ fn is_html_br(node: &dom::Node) -> bool {
 }
 
 /// Recursively builds a layout box for a DOM node.
+#[allow(clippy::too_many_arguments)]
 fn build_box_for_node(
     doc: &Document,
     node_id: NodeId,
@@ -132,7 +137,11 @@ fn build_box_for_node(
     replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
     has_overflow_clip: &mut bool,
     style_cache: &mut StyleCache,
+    depth: usize,
 ) -> Option<LayoutBox> {
+    if depth >= MAX_TREE_BUILD_DEPTH {
+        return None;
+    }
     let node = doc.node(node_id);
     match &node.kind {
         NodeKind::Element(_) => {
@@ -207,10 +216,23 @@ fn build_box_for_node(
                     | "embed"
                     | "object"
             );
-            let box_type = if let Some(role) = display_role {
-                role
-            } else if is_replaced && !blockified {
+            let is_explicit_table = matches!(
+                style.display,
+                Display::Table
+                    | Display::InlineTable
+                    | Display::TableRowGroup
+                    | Display::TableHeaderGroup
+                    | Display::TableFooterGroup
+                    | Display::TableRow
+                    | Display::TableCell
+                    | Display::TableCaption
+                    | Display::TableColumn
+                    | Display::TableColumnGroup
+            );
+            let box_type = if is_replaced && !blockified && !is_explicit_table {
                 BoxType::Replaced(node_id)
+            } else if let Some(role) = display_role {
+                role
             } else if let Some(role) = tag_role {
                 role
             } else if blockified {
@@ -266,6 +288,7 @@ fn build_box_for_node(
                     replaced_sizes,
                     has_overflow_clip,
                     style_cache,
+                    depth + 1,
                 ) {
                     raw_children.push(child_box);
                 }
@@ -360,7 +383,11 @@ fn build_box_for_node(
                 }
             }
             if matches!(box_type, BoxType::Replaced(_)) {
-                let from_api = replaced_sizes.and_then(|sizes| sizes.get(&node_id).copied());
+                let from_api = replaced_sizes.and_then(|sizes| {
+                    sizes.get(&node_id).copied().filter(|&(w, h)| {
+                        (0.0..=10000.0).contains(&w) && (0.0..=10000.0).contains(&h)
+                    })
+                });
                 let element = node.as_element();
                 let attribute_number = |name: &str| -> Option<f32> {
                     element

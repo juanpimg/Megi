@@ -1121,7 +1121,7 @@ pub(crate) fn layout_grid_children(
             item.style.calc_lengths.width,
             Some(container_width),
         );
-        let width = match justify {
+        let mut width = match justify {
             AlignSelf::Stretch | AlignSelf::Auto | AlignSelf::Baseline => explicit
                 .map(|width| width.min(available))
                 .unwrap_or(available),
@@ -1134,6 +1134,20 @@ pub(crate) fn layout_grid_children(
                 }
             }
         };
+        if let Some(max) = crate::calc::length_optional(
+            item.style.max_width,
+            item.style.calc_lengths.max_width,
+            Some(container_width),
+        ) {
+            width = width.min(max.max(0.0));
+        }
+        if let Some(min) = crate::calc::length_optional(
+            item.style.min_width,
+            item.style.calc_lengths.min_width,
+            Some(container_width),
+        ) {
+            width = width.max(min.max(0.0));
+        }
         item.content_width = width.max(0.0);
         layout_item(
             item,
@@ -1270,38 +1284,38 @@ pub(crate) fn layout_grid_children(
                 )
                 .map(|w| w.min((cell_width - h_edges).max(0.0)))
                 .unwrap_or((cell_width - h_edges).max(0.0));
-                // Apply min/max.
-                if let Some(min) = crate::calc::length_optional(
-                    item.style.min_width,
-                    item.style.calc_lengths.min_width,
-                    Some(container_width),
-                ) {
-                    width = width.max(min);
-                }
+                // Apply min/max (CSS §10.4: min wins over max).
                 if let Some(max) = crate::calc::length_optional(
                     item.style.max_width,
                     item.style.calc_lengths.max_width,
                     Some(container_width),
                 ) {
                     width = width.min(max.max(0.0));
+                }
+                if let Some(min) = crate::calc::length_optional(
+                    item.style.min_width,
+                    item.style.calc_lengths.min_width,
+                    Some(container_width),
+                ) {
+                    width = width.max(min.max(0.0));
                 }
                 width
             }
             _ => {
                 let mut width = item.content_width;
-                if let Some(min) = crate::calc::length_optional(
-                    item.style.min_width,
-                    item.style.calc_lengths.min_width,
-                    Some(container_width),
-                ) {
-                    width = width.max(min);
-                }
                 if let Some(max) = crate::calc::length_optional(
                     item.style.max_width,
                     item.style.calc_lengths.max_width,
                     Some(container_width),
                 ) {
                     width = width.min(max.max(0.0));
+                }
+                if let Some(min) = crate::calc::length_optional(
+                    item.style.min_width,
+                    item.style.calc_lengths.min_width,
+                    Some(container_width),
+                ) {
+                    width = width.max(min.max(0.0));
                 }
                 width
             }
@@ -1315,19 +1329,19 @@ pub(crate) fn layout_grid_children(
                 )
                 .map(|h| h.min((cell_height - v_edges).max(0.0)))
                 .unwrap_or((cell_height - v_edges).max(0.0));
-                if let Some(min) = crate::calc::length_optional(
-                    item.style.min_height,
-                    item.style.calc_lengths.min_height,
-                    definite_height,
-                ) {
-                    height = height.max(min);
-                }
                 if let Some(max) = crate::calc::length_optional(
                     item.style.max_height,
                     item.style.calc_lengths.max_height,
                     definite_height,
                 ) {
                     height = height.min(max.max(0.0));
+                }
+                if let Some(min) = crate::calc::length_optional(
+                    item.style.min_height,
+                    item.style.calc_lengths.min_height,
+                    definite_height,
+                ) {
+                    height = height.max(min.max(0.0));
                 }
                 height
             }
@@ -1338,19 +1352,19 @@ pub(crate) fn layout_grid_children(
                     definite_height,
                 )
                 .unwrap_or(item.content_height);
-                if let Some(min) = crate::calc::length_optional(
-                    item.style.min_height,
-                    item.style.calc_lengths.min_height,
-                    definite_height,
-                ) {
-                    height = height.max(min);
-                }
                 if let Some(max) = crate::calc::length_optional(
                     item.style.max_height,
                     item.style.calc_lengths.max_height,
                     definite_height,
                 ) {
                     height = height.min(max.max(0.0));
+                }
+                if let Some(min) = crate::calc::length_optional(
+                    item.style.min_height,
+                    item.style.calc_lengths.min_height,
+                    definite_height,
+                ) {
+                    height = height.max(min.max(0.0));
                 }
                 height
             }

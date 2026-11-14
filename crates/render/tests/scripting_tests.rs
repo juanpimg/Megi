@@ -512,3 +512,31 @@ fn module_graph_fetches_are_capped() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn script_mutating_existing_style_element_invalidates_stylesheet_cache() {
+    let dir = std::env::temp_dir().join(format!("megi-style-mutate-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let document = dir.join("index.html");
+    std::fs::write(
+        &document,
+        "<!DOCTYPE html><html><head>\
+         <style id='s'>div { width: 120px; height: 80px; background: rgb(255, 0, 0); }</style>\
+         </head><body><div></div>\
+         <script>document.getElementById('s').textContent = 'div { width: 120px; height: 80px; background: rgb(0, 255, 0); }';</script>\
+         </body></html>",
+    )
+    .expect("write document");
+
+    let output = render_url(&file_url(&document), &options()).expect("render");
+    assert_eq!(output.stats.scripts_executed, 1);
+    assert!(
+        count_color(&output.pixmap, GREEN) > 5_000,
+        "mutated <style> must turn box green, got {} green / {} red",
+        count_color(&output.pixmap, GREEN),
+        count_color(&output.pixmap, RED)
+    );
+    assert_eq!(count_color(&output.pixmap, RED), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}

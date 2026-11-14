@@ -45,6 +45,12 @@ pub struct FontTextMeasurer {
 
 /// Maximum total text bytes kept in the advance cache before it is cleared.
 const MAX_ADVANCE_CACHE_BYTES: usize = 4 * 1024 * 1024;
+/// Maximum parsed CSS font-family strings retained in the measurer cache (#416).
+const MAX_FAMILY_CACHE_ENTRIES: usize = 512;
+/// Maximum distinct font-family metrics buckets retained in the measurer cache (#416).
+const MAX_METRICS_CACHE_ENTRIES: usize = 1024;
+/// Maximum style signatures kept per font-family key in the metrics cache (#416).
+const MAX_METRICS_ENTRIES_PER_FAMILY: usize = 32;
 
 /// One cached font-metrics result (keyed by the CSS style fields that affect it).
 #[derive(Clone, Copy)]
@@ -150,6 +156,9 @@ impl TextMeasurer for FontTextMeasurer {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if !cache.families.contains_key(font_family) {
+            if cache.families.len() >= MAX_FAMILY_CACHE_ENTRIES {
+                cache.families.clear();
+            }
             let parsed = Self::families(font_family);
             cache.families.insert(font_family.to_owned(), parsed);
         }
@@ -221,6 +230,9 @@ impl TextMeasurer for FontTextMeasurer {
             return entry.metrics;
         }
         if !cache.families.contains_key(font_family) {
+            if cache.families.len() >= MAX_FAMILY_CACHE_ENTRIES {
+                cache.families.clear();
+            }
             let parsed = Self::families(font_family);
             cache.families.insert(font_family.to_owned(), parsed);
         }
@@ -247,11 +259,16 @@ impl TextMeasurer for FontTextMeasurer {
             italic: font_italic,
             metrics,
         };
-        cache
-            .metrics
-            .entry(font_family.to_owned())
-            .or_default()
-            .push(entry);
+        if !cache.metrics.contains_key(font_family)
+            && cache.metrics.len() >= MAX_METRICS_CACHE_ENTRIES
+        {
+            cache.metrics.clear();
+        }
+        let bucket = cache.metrics.entry(font_family.to_owned()).or_default();
+        if bucket.len() >= MAX_METRICS_ENTRIES_PER_FAMILY {
+            bucket.clear();
+        }
+        bucket.push(entry);
         metrics
     }
 }
@@ -261,5 +278,33 @@ impl std::fmt::Debug for FontTextMeasurer {
         f.debug_struct("FontTextMeasurer")
             .field("faces", &self.database.len())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn caches_stay_bounded_across_many_families_and_sizes() {
+        let measurer = FontTextMeasurer::bundled().expect("bundled fonts");
+        for i in 0..(MAX_METRICS_CACHE_ENTRIES + 64) {
+            let fam = format!("MissingFamily{i}, sans-serif");
+            let _ = measurer.font_metrics(&fam, 16.0, None);
+            let _ = measurer.measure_text("x", &fam, 16.0);
+        }
+        for i in 0..(MAX_METRICS_ENTRIES_PER_FAMILY + 16) {
+            let _ = measurer.font_metrics("sans-serif", 10.0 + i as f32, None);
+        }
+
+        let cache = measurer.cache.lock().expect("lock cache");
+        assert!(cache.families.len() <= MAX_FAMILY_CACHE_ENTRIES);
+        assert!(cache.metrics.len() <= MAX_METRICS_CACHE_ENTRIES);
+        assert!(
+            cache
+                .metrics
+                .values()
+                .all(|bucket| bucket.len() <= MAX_METRICS_ENTRIES_PER_FAMILY)
+        );
     }
 }

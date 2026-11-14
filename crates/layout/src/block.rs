@@ -1414,10 +1414,13 @@ fn apply_relative_offset(layout_box: &mut LayoutBox, cb_width: f32, cb_height: O
 
 /// Translates a box and its whole subtree by `(dx, dy)` in absolute coordinates.
 pub(crate) fn translate_box(layout_box: &mut LayoutBox, dx: f32, dy: f32) {
-    layout_box.dimensions.content.x += dx;
-    layout_box.dimensions.content.y += dy;
-    for child in &mut layout_box.children {
-        translate_box(child, dx, dy);
+    let mut stack = vec![layout_box];
+    while let Some(current) = stack.pop() {
+        current.dimensions.content.x += dx;
+        current.dimensions.content.y += dy;
+        for child in current.children.iter_mut().rev() {
+            stack.push(child);
+        }
     }
 }
 

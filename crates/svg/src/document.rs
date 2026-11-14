@@ -538,7 +538,7 @@ impl Style {
             }
         }
         for declaration in matching_declarations(rules, element, ancestors, selector_budget)? {
-            self.apply_declaration(&declaration.name, &declaration.value, gradients, patterns);
+            self.apply_declaration(declaration.name, declaration.value, gradients, patterns);
         }
         if let Some(inline) = element.attribute("style") {
             for declaration in parse_declarations(inline) {

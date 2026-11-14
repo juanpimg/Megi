@@ -847,12 +847,12 @@ fn render_url_inner(
         css::StyleCollection,
         StyleSummary,
         Vec<webfonts::LocatedFontFace>,
-        usize,
+        u64,
     )> = None;
     let mut pre_warnings = Vec::new();
     if !script_candidates.is_empty() {
         let pre_start = Instant::now();
-        let stylesheet_elements_before = count_stylesheet_elements(&document);
+        let stylesheet_signature_before = stylesheet_signature(&document);
         if let Ok((collection, summary, fonts)) = collect_styles(
             &document,
             &base_url,
@@ -867,7 +867,7 @@ fn render_url_inner(
                 css::StateContext::new(),
                 options.time_ms,
             )));
-            reusable_stylesheets = Some((collection, summary, fonts, stylesheet_elements_before));
+            reusable_stylesheets = Some((collection, summary, fonts, stylesheet_signature_before));
         }
         styles_pre_script = pre_start.elapsed();
     }
@@ -1000,8 +1000,8 @@ fn render_url_inner(
 
     let styles_start = Instant::now();
     let (stylesheet_collection, style_summary, font_faces) = match reusable_stylesheets {
-        Some((collection, summary, fonts, stylesheet_elements_before))
-            if count_stylesheet_elements(&document) == stylesheet_elements_before =>
+        Some((collection, summary, fonts, stylesheet_signature_before))
+            if stylesheet_signature(&document) == stylesheet_signature_before =>
         {
             warnings.extend(pre_warnings);
             (collection, summary, fonts)
@@ -1566,12 +1566,24 @@ fn collect_styles(
     build_author_stylesheet_collection(&collected, base_url, loader, options, media, warnings)
 }
 
-/// Counts stylesheet-producing elements (`<style>` and `<link rel=stylesheet>`).
+/// Computes a content-and-attribute signature of stylesheet-producing elements (`<base>`,
+/// `<style>`, and `<link>`).
 ///
-/// The post-script style pass can reuse the pre-script collection when scripts did not
-/// change the stylesheet set; only an added/removed `<style>`/`<link>` forces a recollect.
-fn count_stylesheet_elements(document: &Document) -> usize {
-    let mut count = 0usize;
+/// The post-script style pass can reuse the pre-script collection only when scripts did
+/// not add, remove, reorder, or mutate any `<style>`, `<link>`, or `<base>` element,
+/// including `<style>` text content and `<link>`/`<base>` attributes (#462).
+fn stylesheet_signature(document: &Document) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let mix = |hash: &mut u64, bytes: &[u8]| {
+        for &byte in bytes {
+            *hash ^= u64::from(byte);
+            *hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        // Record delimiter so adjacent fields cannot collide.
+        *hash ^= 0xff;
+        *hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    };
+
     for node_id in document.descendants(document.root()) {
         let Some(element) = document.node(node_id).as_element() else {
             continue;
@@ -1579,17 +1591,36 @@ fn count_stylesheet_elements(document: &Document) -> usize {
         if element.namespace != dom::Namespace::Html {
             continue;
         }
-        let is_style = element.local_name == "style";
-        let is_stylesheet_link = element.local_name == "link"
-            && element.get_attribute("rel").is_some_and(|rel| {
-                rel.split_ascii_whitespace()
-                    .any(|token| token.eq_ignore_ascii_case("stylesheet"))
-            });
-        if is_style || is_stylesheet_link {
-            count += 1;
+        let local = element.local_name.as_str();
+        if local.eq_ignore_ascii_case("base") {
+            mix(&mut hash, b"B");
+            if let Some(href) = element.get_attribute("href") {
+                mix(&mut hash, href.as_bytes());
+            }
+        } else if local.eq_ignore_ascii_case("style") {
+            mix(&mut hash, b"S");
+            for attr_name in ["media", "type", "disabled"] {
+                if let Some(val) = element.get_attribute(attr_name) {
+                    mix(&mut hash, attr_name.as_bytes());
+                    mix(&mut hash, val.as_bytes());
+                }
+            }
+            for desc_id in document.descendants(node_id) {
+                if let dom::NodeKind::Text(text) = &document.node(desc_id).kind {
+                    mix(&mut hash, text.as_bytes());
+                }
+            }
+        } else if local.eq_ignore_ascii_case("link") {
+            mix(&mut hash, b"L");
+            for attr_name in ["rel", "href", "media", "type", "disabled"] {
+                if let Some(val) = element.get_attribute(attr_name) {
+                    mix(&mut hash, attr_name.as_bytes());
+                    mix(&mut hash, val.as_bytes());
+                }
+            }
         }
     }
-    count
+    hash
 }
 
 fn build_author_stylesheet_collection(
