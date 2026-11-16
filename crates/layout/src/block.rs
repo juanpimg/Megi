@@ -1706,10 +1706,12 @@ fn collect_intrinsic_widths(
                     }
                 }
                 if is_flex_row && flex_items > 1 {
-                    let gap = match style.column_gap {
-                        Length::Px(px) => px.max(0.0),
-                        _ => 0.0,
-                    };
+                    let gap = crate::calc::sanitize(resolve_length(
+                        style.column_gap,
+                        style.calc_lengths.column_gap,
+                        cb_width,
+                    ))
+                    .max(0.0);
                     let total_gap = gap * (flex_items - 1) as f32;
                     inner_max += total_gap;
                     if flex_nowrap {
