@@ -33,7 +33,7 @@ next_up = [
 # ---------------------------------------------------------------------------------------
 [stats]
 tests = 2422
-tests_commit = "4a5ad8f"
+tests_commit = "6d0971f"
 tests_date = "2026-11-17"
 crates = 14
 rust_lines = 180708
