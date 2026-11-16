@@ -10,6 +10,30 @@
 /// 4–16 KiB; this bounds the work/allocation a hostile file can request).
 pub const MAX_THUMBNAIL_BYTES: usize = 64 * 1024;
 
+/// Reads a little/big-endian `u16` from `tiff` at `offset`.
+///
+/// Offsets come from the file, so the addition is checked: a hostile TIFF can point an entry
+/// at `u32::MAX`, which on a 32-bit `usize` would otherwise wrap (or panic in debug builds) in
+/// `offset + 2` instead of returning `None` (#359).
+fn read_u16(tiff: &[u8], offset: usize, little: bool) -> Option<u16> {
+    let raw = tiff.get(offset..offset.checked_add(2)?)?;
+    Some(if little {
+        u16::from_le_bytes([raw[0], raw[1]])
+    } else {
+        u16::from_be_bytes([raw[0], raw[1]])
+    })
+}
+
+/// Reads a little/big-endian `u32` from `tiff` at `offset`; see [`read_u16`].
+fn read_u32(tiff: &[u8], offset: usize, little: bool) -> Option<u32> {
+    let raw = tiff.get(offset..offset.checked_add(4)?)?;
+    Some(if little {
+        u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]])
+    } else {
+        u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]])
+    })
+}
+
 /// Returns the embedded EXIF (IFD1) JPEG thumbnail bytes, if present.
 ///
 /// Only the first `APP1`/`Exif\0\0` segment before `SOS` is considered; the TIFF
@@ -56,22 +80,8 @@ fn tiff_thumbnail(tiff: &[u8]) -> Option<&[u8]> {
         b"MM" => false,
         _ => return None,
     };
-    let read_u16 = |offset: usize| -> Option<u16> {
-        let raw = tiff.get(offset..offset + 2)?;
-        Some(if little {
-            u16::from_le_bytes([raw[0], raw[1]])
-        } else {
-            u16::from_be_bytes([raw[0], raw[1]])
-        })
-    };
-    let read_u32 = |offset: usize| -> Option<u32> {
-        let raw = tiff.get(offset..offset + 4)?;
-        Some(if little {
-            u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]])
-        } else {
-            u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]])
-        })
-    };
+    let read_u16 = |offset: usize| read_u16(tiff, offset, little);
+    let read_u32 = |offset: usize| read_u32(tiff, offset, little);
     if read_u16(2)? != 42 {
         return None;
     }
@@ -95,15 +105,15 @@ fn tiff_thumbnail(tiff: &[u8]) -> Option<&[u8]> {
     for entry in 0..count1 {
         let offset = ifd1.checked_add(2 + entry.checked_mul(12)?)?;
         let tag = read_u16(offset)?;
-        let kind = read_u16(offset + 2)?;
-        let quantity = read_u32(offset + 4)?;
+        let kind = read_u16(offset.checked_add(2)?)?;
+        let quantity = read_u32(offset.checked_add(4)?)?;
         if quantity != 1 {
             continue;
         }
         if kind != 4 {
             continue;
         }
-        let value = read_u32(offset + 8)? as usize;
+        let value = read_u32(offset.checked_add(8)?)? as usize;
         match tag {
             0x0201 => thumbnail_offset = Some(value),
             0x0202 => thumbnail_length = Some(value),
@@ -168,22 +178,8 @@ fn parse_tiff_orientation(tiff: &[u8]) -> Option<u8> {
         b"MM" => false,
         _ => return None,
     };
-    let read_u16 = |offset: usize| -> Option<u16> {
-        let raw = tiff.get(offset..offset + 2)?;
-        Some(if little {
-            u16::from_le_bytes([raw[0], raw[1]])
-        } else {
-            u16::from_be_bytes([raw[0], raw[1]])
-        })
-    };
-    let read_u32 = |offset: usize| -> Option<u32> {
-        let raw = tiff.get(offset..offset + 4)?;
-        Some(if little {
-            u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]])
-        } else {
-            u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]])
-        })
-    };
+    let read_u16 = |offset: usize| read_u16(tiff, offset, little);
+    let read_u32 = |offset: usize| read_u32(tiff, offset, little);
     if read_u16(2)? != 42 {
         return None;
     }
@@ -198,22 +194,22 @@ fn parse_tiff_orientation(tiff: &[u8]) -> Option<u8> {
         if tag != 0x0112 {
             continue;
         }
-        let kind = read_u16(offset + 2)?;
-        let quantity = read_u32(offset + 4)?;
+        let kind = read_u16(offset.checked_add(2)?)?;
+        let quantity = read_u32(offset.checked_add(4)?)?;
         // SHORT (3): values are inline only when count*2 <= 4 (count 1-2). For
         // count >= 3 the value field is an offset to the data (TIFF-6.0).
         if kind == 3 {
             if (1..=2).contains(&quantity) {
-                let value = read_u16(offset + 8)?;
+                let value = read_u16(offset.checked_add(8)?)?;
                 return (1..=8).contains(&value).then_some(value as u8);
             } else if quantity >= 3 {
-                let data_offset = read_u32(offset + 8)? as usize;
+                let data_offset = read_u32(offset.checked_add(8)?)? as usize;
                 let value = read_u16(data_offset)?;
                 return (1..=8).contains(&value).then_some(value as u8);
             }
         }
         if kind == 4 && quantity == 1 {
-            let long = read_u32(offset + 8)?;
+            let long = read_u32(offset.checked_add(8)?)?;
             return u8::try_from(long)
                 .ok()
                 .filter(|value| (1..=8).contains(value));
@@ -224,7 +220,7 @@ fn parse_tiff_orientation(tiff: &[u8]) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::{orientation, parse_tiff_orientation};
+    use super::{orientation, parse_tiff_orientation, read_u16, read_u32};
 
     #[test]
     fn rejects_non_jpeg_and_missing_exif() {
@@ -272,6 +268,37 @@ mod tests {
         tiff.extend_from_slice(&6u16.to_le_bytes());
         tiff.extend_from_slice(&0u16.to_le_bytes());
         assert_eq!(parse_tiff_orientation(&tiff), Some(6));
+    }
+
+    #[test]
+    fn hostile_offsets_never_panic() {
+        // Offsets come from the file: on a 32-bit `usize` `u32::MAX + 4` used to wrap (and
+        // panic in debug builds) before the range was checked (#359).
+        let tiff = b"II*\0\x08\0\0\0";
+        assert_eq!(read_u16(tiff, usize::MAX - 1, true), None);
+        assert_eq!(read_u16(tiff, usize::MAX, true), None);
+        assert_eq!(read_u32(tiff, usize::MAX - 3, true), None);
+        assert_eq!(read_u32(tiff, usize::MAX, true), None);
+        // Bounds still behave for offsets around the end of the buffer.
+        assert_eq!(read_u16(tiff, tiff.len(), true), None);
+        assert_eq!(read_u16(tiff, tiff.len() - 1, true), None);
+        assert_eq!(read_u16(tiff, tiff.len() - 2, true), Some(0));
+    }
+
+    #[test]
+    fn hostile_data_offset_yields_none() {
+        // IFD0 entry asks for a SHORT array (count 3, so the value field is an offset) whose
+        // offset is `u32::MAX`: reading it must return `None`, not panic.
+        let mut tiff = Vec::new();
+        tiff.extend_from_slice(b"II");
+        tiff.extend_from_slice(&42u16.to_le_bytes());
+        tiff.extend_from_slice(&8u32.to_le_bytes());
+        tiff.extend_from_slice(&1u16.to_le_bytes());
+        tiff.extend_from_slice(&0x0112u16.to_le_bytes());
+        tiff.extend_from_slice(&3u16.to_le_bytes());
+        tiff.extend_from_slice(&3u32.to_le_bytes());
+        tiff.extend_from_slice(&u32::MAX.to_le_bytes());
+        assert_eq!(parse_tiff_orientation(&tiff), None);
     }
 
     #[test]
