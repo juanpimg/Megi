@@ -1310,7 +1310,7 @@ fn render_svg_document(
         }
     }
 
-    let font_db = fonts::FontDatabase::new_with_bundled_fonts();
+    let font_db = fonts::FontDatabase::new_with_bundled_and_system_fonts();
     let measurer = layout::FontTextMeasurer::from_database(font_db);
     let viewport = layout::Rect::new(
         0.0,

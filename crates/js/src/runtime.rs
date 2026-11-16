@@ -44,7 +44,7 @@ use boa_engine::{
     module::{Module, ModuleLoader, Referrer},
     object::FunctionObjectBuilder,
     object::ObjectInitializer,
-    object::builtins::JsArray,
+    object::builtins::{AlignedVec, JsArray, JsArrayBuffer, JsUint8Array},
     property::{Attribute, PropertyDescriptor},
 };
 use dom::{Attribute as DomAttribute, Document, Namespace, NodeId};
@@ -177,6 +177,7 @@ impl JsRuntime {
             host: Rc::clone(&host_slot),
             base_url: url.clone(),
             cache: RefCell::new(HashMap::new()),
+            max_cache_entries: 256,
         });
         let mut context = Context::builder()
             .module_loader(module_loader)
@@ -1215,7 +1216,7 @@ fn this_handle(this: &JsValue, context: &mut Context) -> JsResult<u32> {
         .map_err(|error| js_error(error.to_string()))?;
     value
         .as_number()
-        .filter(|number| *number >= 0.0 && number.fract() == 0.0)
+        .filter(|number| *number >= 0.0 && *number <= u32::MAX as f64 && number.fract() == 0.0)
         .map(|number| number as u32)
         .ok_or_else(|| js_error("invalid DOM node handle"))
 }
@@ -1939,7 +1940,8 @@ fn node_clone_node(this: &JsValue, args: &[JsValue], context: &mut Context) -> J
         )));
     }
     let clone = with_host(|host| host.document.clone_node(node_id, deep))
-        .ok_or_else(|| js_error("no active JavaScript host"))?;
+        .ok_or_else(|| js_error("no active JavaScript host"))?
+        .ok_or_else(|| js_error("NotFoundError: node not found"))?;
     wrap_node(context, clone)
 }
 
@@ -2052,7 +2054,7 @@ fn charge_document_parse(host: &mut Host, bytes: usize, sink: &str) -> bool {
     {
         if !host.document_write_warned {
             host.document_write_warned = true;
-            host.console.push(ConsoleEntry {
+            host.console.push_back(ConsoleEntry {
                 level: "warn".to_string(),
                 message: format!(
                     "{sink} ignored: the cumulative document budget ({} bytes / {} nodes) is exhausted",
@@ -2068,7 +2070,14 @@ fn charge_document_parse(host: &mut Host, bytes: usize, sink: &str) -> bool {
 }
 
 fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    const MAX_DOCUMENT_WRITE_INPUT: usize = 16 * 1024 * 1024;
     let text = arg_string(args, 0, context)?;
+    if text.len() > MAX_DOCUMENT_WRITE_INPUT {
+        return Err(js_error(format!(
+            "document.write input exceeds the per-call limit of {} bytes",
+            MAX_DOCUMENT_WRITE_INPUT
+        )));
+    }
     with_host(|host| {
         if !charge_document_parse(host, text.len(), "document.write") {
             return;
@@ -2077,7 +2086,21 @@ fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> J
             max_nodes: host.max_document_write_nodes,
             ..html::ParseOptions::default()
         };
-        let _ = html::document_write_with_options(&mut host.document, &text, false, &options);
+        let violations =
+            html::document_write_with_options(&mut host.document, &text, false, &options);
+        // Surface parser truncation to script instead of silently discarding it (#431).
+        if !violations.is_empty() {
+            host.console.push_back(ConsoleEntry {
+                level: "warn".to_string(),
+                message: format!(
+                    "document.write: {} parse limit violation(s) ({} node(s), {} depth, {} text bytes)",
+                    violations.total(),
+                    violations.nodes_exceeded,
+                    violations.depth_exceeded,
+                    violations.text_bytes_dropped,
+                ),
+            });
+        }
         let target = host
             .document
             .body()
@@ -3428,6 +3451,12 @@ fn mutation_observer_constructor(
     let Some(callback) = args.first().filter(|value| value.is_callable()) else {
         return Err(js_error("MutationObserver callback must be a function"));
     };
+    // Cap registrations before rooting anything (issue #1134): a script must not be
+    // able to create millions of observers that are all visited on every mutation.
+    let has_room = with_host(|host| host.observers.len() < MAX_OBSERVERS).unwrap_or(false);
+    if !has_room {
+        return Err(js_error("MutationObserver limit exceeded"));
+    }
     let callback_slot = root_push(context, "__megi_observer_callbacks", callback.clone())?;
     let object_slot = {
         let array = root_array(context, "__megi_observer_objects", true)?;
@@ -3522,7 +3551,15 @@ fn observer_disconnect(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let slot = observer_slot(this, context)?;
-    with_host(|host| host.observers.retain(|r| r.object_slot != slot));
+    // Per DOM §4.3.1, disconnect() only stops delivering future records: the observer
+    // stays registered so a later observe() can re-arm it. Removing the registration
+    // made observe() silently no-op forever (#1135).
+    with_host(|host| {
+        if let Some(registration) = host.observers.iter_mut().find(|r| r.object_slot == slot) {
+            registration.targets.clear();
+            registration.records.clear();
+        }
+    });
     Ok(JsValue::undefined())
 }
 
@@ -3636,7 +3673,14 @@ fn deliver_mutation_records(context: &mut Context) -> Result<(), JsError> {
         };
         let args = [JsValue::from(records), object];
         if let Err(error) = callback.call(&JsValue::undefined(), &args, context) {
-            return Err(JsError::Runtime(error.to_string()));
+            // A throwing callback must be reported, but must not abort delivery to
+            // the remaining observers (#1136).
+            let _ = with_host(|host| {
+                host.push_console(ConsoleEntry {
+                    level: "error".to_string(),
+                    message: error.to_string(),
+                })
+            });
         }
     }
     Ok(())
@@ -3681,6 +3725,12 @@ fn module_quote(value: &str) -> String {
             '"' => out.push_str("\\\""),
             '\n' => out.push_str("\\n"),
             '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{2028}' => out.push_str("\\u2028"),
+            '\u{2029}' => out.push_str("\\u2029"),
+            c if (c as u32) < 0x20 => {
+                out.push_str(&format!("\\u{:04x}", c as u32));
+            }
             _ => out.push(ch),
         }
     }
@@ -5195,9 +5245,8 @@ impl JsRuntime {
                     continue;
                 };
                 if worker.terminated {
-                    worker.to_worker.clear();
-                    worker.to_main.borrow_mut().clear();
-                    self.host.borrow_mut().workers[*id] = Some(worker);
+                    // Free the slot so a new worker can reuse it (#1138).
+                    self.host.borrow_mut().workers[*id] = None;
                     continue;
                 }
                 while let Some(json) = worker.to_worker.pop_front() {
@@ -5223,7 +5272,11 @@ impl JsRuntime {
                 if let Some(json) = reply {
                     progressed = true;
                     delivered += 1;
-                    self.deliver_worker_reply(*id as u32, &json)?;
+                    // One worker's failing delivery must not starve the remaining
+                    // workers in this pass (#1140).
+                    if let Err(error) = self.deliver_worker_reply(*id as u32, &json) {
+                        self.report_worker_delivery_error(error, "<worker message>");
+                    }
                 }
                 let error = self.host.borrow_mut().workers[*id]
                     .as_mut()
@@ -5231,7 +5284,9 @@ impl JsRuntime {
                 if let Some(message) = error {
                     progressed = true;
                     delivered += 1;
-                    self.deliver_worker_error(*id as u32, &message)?;
+                    if let Err(error) = self.deliver_worker_error(*id as u32, &message) {
+                        self.report_worker_delivery_error(error, "<worker error>");
+                    }
                 }
             }
             if !progressed {
@@ -5239,6 +5294,14 @@ impl JsRuntime {
             }
         }
         Ok(delivered)
+    }
+
+    /// Reports a worker-delivery failure like any other uncaught error so the pump can
+    /// continue with the other workers (#1140).
+    fn report_worker_delivery_error(&mut self, error: JsError, source: &str) {
+        let message = error.to_string();
+        let _scope = HostScope::enter(&self.host);
+        let _ = crate::events::report_uncaught(&mut self.context, &message, source);
     }
 
     fn deliver_worker_reply(&mut self, id: u32, json: &str) -> Result<(), JsError> {
@@ -5484,11 +5547,8 @@ fn worker_post_message(
 fn worker_terminate(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let id = worker_handle(this, context)?;
     with_host(|host| {
-        if let Some(Some(worker)) = host.workers.get_mut(id as usize) {
-            worker.terminated = true;
-            worker.to_worker.clear();
-            worker.to_main.borrow_mut().clear();
-        }
+        // Free the slot so a new worker can reuse it (#1138).
+        host.workers[id as usize] = None;
     });
     Ok(JsValue::undefined())
 }
@@ -5615,7 +5675,7 @@ impl JsRuntime {
             .map_err(|error| JsError::Internal(error.to_string()))?;
         let prelude = r#"
 var __megi_worker_listeners = [];
-function addEventListener(type, callback) { if (type === "message" && typeof callback === "function") { __megi_worker_listeners.push(callback); } }
+function addEventListener(type, callback) { if (type === "message" && typeof callback === "function" && __megi_worker_listeners.length < 64) { __megi_worker_listeners.push(callback); } }
 function removeEventListener() {}
 "#;
         self.context
@@ -5666,6 +5726,12 @@ const MAX_FETCH_BODY: usize = 8 * 1024 * 1024;
 /// this only bounds distinct targets; the microtask drain walks the ancestor chain once per
 /// target per record, so an unbounded list is both unbounded retention and quadratic CPU.
 const MAX_OBSERVER_TARGETS: usize = 1024;
+
+/// Live `MutationObserver` registrations (#1134). Each observer roots a callback and an
+/// object and is visited on every DOM mutation, so an unbounded count is both unbounded
+/// retention and quadratic dispatch. Registrations are kept after `disconnect()` so a
+/// later `observe()` can re-arm the observer, so this also caps the total ever created.
+const MAX_OBSERVERS: usize = 1024;
 
 /// Request headers the browser owns; page scripts must not set them through `fetch()`.
 const FORBIDDEN_FETCH_HEADERS: &[&str] = &[
@@ -5809,17 +5875,14 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
             .map_err(|error| js_error(error.to_string()))?;
     }
     let body_text = String::from_utf8_lossy(&result.body).to_string();
-    let body_bytes = JsArray::from_iter([], context);
-    for (index, byte) in result.body.iter().enumerate() {
-        body_bytes
-            .set(
-                js_string!(index.to_string()),
-                JsValue::from(f64::from(*byte)),
-                false,
-                context,
-            )
-            .map_err(|error| js_error(error.to_string()))?;
-    }
+    // Expose the body as a packed Uint8Array backed by a single byte block. The old
+    // per-byte JsArray allocated ~8M JsValues and did 8M property sets at the
+    // MAX_FETCH_BODY cap, from untrusted network input (#1143).
+    let block = AlignedVec::from_iter(0, result.body.iter().copied());
+    let buffer = JsArrayBuffer::from_byte_block(block, context)
+        .map_err(|error| js_error(error.to_string()))?;
+    let body_bytes = JsUint8Array::from_array_buffer(buffer, context)
+        .map_err(|error| js_error(error.to_string()))?;
     let mut init = ObjectInitializer::new(context);
     init.property(
         js_string!("status"),
@@ -5868,6 +5931,7 @@ struct MegiModuleLoader {
     host: Rc<RefCell<Option<Rc<RefCell<Host>>>>>,
     base_url: String,
     cache: RefCell<HashMap<(String, String), Module>>,
+    max_cache_entries: usize,
 }
 
 impl ModuleLoader for MegiModuleLoader {
@@ -5921,9 +5985,13 @@ impl ModuleLoader for MegiModuleLoader {
                         None,
                         &mut context,
                     )?;
-                    self.cache
-                        .borrow_mut()
-                        .insert((base, specifier), module.clone());
+                    {
+                        let mut cache = self.cache.borrow_mut();
+                        if cache.len() >= self.max_cache_entries {
+                            cache.clear();
+                        }
+                        cache.insert((base, specifier), module.clone());
+                    }
                     return Ok(module);
                 }
                 None => {
@@ -5957,9 +6025,13 @@ impl ModuleLoader for MegiModuleLoader {
             None,
             &mut context,
         )?;
-        self.cache
-            .borrow_mut()
-            .insert((base, specifier), module.clone());
+        {
+            let mut cache = self.cache.borrow_mut();
+            if cache.len() >= self.max_cache_entries {
+                cache.clear();
+            }
+            cache.insert((base, specifier), module.clone());
+        }
         Ok(module)
     }
 
@@ -6298,7 +6370,17 @@ fn node_remove_attribute_node(
     })
     .flatten();
     match old {
-        Some(value) => attribute_item(context, &name, &value),
+        Some(value) => {
+            // The other attribute-removal paths record a mutation; removeAttributeNode
+            // must too, otherwise observers watching `attributes` miss the removal (#1137).
+            note_mutation(
+                MutationKind::Attributes,
+                node_id,
+                Some(name.clone()),
+                Some(value.clone()),
+            );
+            attribute_item(context, &name, &value)
+        }
         None => Ok(JsValue::null()),
     }
 }
@@ -6331,6 +6413,24 @@ mod document_write_budget_tests {
                 entry.level == "warn" && entry.message.contains("document.write ignored")
             }),
             "the exceeded budget must be reported: {console:?}"
+        );
+    }
+
+    #[test]
+    fn document_write_reports_parser_limit_violations() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime.host.borrow_mut().max_document_write_nodes = 64;
+        runtime
+            .eval("document.write('<i></i>'.repeat(100));", "nodes_violation.js")
+            .expect("write");
+        let console = runtime.take_console();
+        assert!(
+            console.iter().any(|entry| {
+                entry.level == "warn"
+                    && entry.message.contains("parse limit violation")
+                    && entry.message.contains("node(s)")
+            }),
+            "parser truncation must be visible to script: {console:?}"
         );
     }
 }
@@ -6482,5 +6582,174 @@ mod mutation_observer_delivery_tests {
             .find(|entry| entry.message.starts_with("norm:"))
             .expect("norm log");
         assert_eq!(line.message, "norm:1:0");
+    }
+
+    #[test]
+    fn mutation_observer_can_be_rearmed_after_disconnect() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                var target = document.createElement('div');
+                document.body.appendChild(target);
+                var obs = new MutationObserver(function() {});
+                obs.observe(target, { attributes: true });
+                target.setAttribute('a', '1');
+                var before = obs.takeRecords().length;
+                obs.disconnect();
+                target.setAttribute('a', '2');
+                var while_disconnected = obs.takeRecords().length;
+                obs.observe(target, { attributes: true });
+                target.setAttribute('a', '3');
+                var after = obs.takeRecords().length;
+                console.log('rearm:' + before + ':' + while_disconnected + ':' + after);
+                "#,
+                "observer_rearm.js",
+            )
+            .expect("eval observer rearm script");
+        let console = runtime.take_console();
+        let line = console
+            .iter()
+            .find(|entry| entry.message.starts_with("rearm:"))
+            .expect("rearm log");
+        assert_eq!(
+            line.message, "rearm:1:0:1",
+            "disconnect() must drop pending records and leave the observer re-armable (#1135): {console:?}"
+        );
+    }
+
+    #[test]
+    fn remove_attribute_node_records_an_attributes_mutation() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                var el = document.createElement('div');
+                document.body.appendChild(el);
+                el.setAttribute('data-x', '1');
+                var attr = el.getAttributeNode('data-x');
+                var obs = new MutationObserver(function() {});
+                obs.observe(el, { attributes: true });
+                el.removeAttributeNode(attr);
+                var records = obs.takeRecords();
+                console.log('attrnode:' + records.length + ':' + (records.length ? records[0].attributeName : '-'));
+                "#,
+                "observer_attrnode.js",
+            )
+            .expect("eval removeAttributeNode script");
+        let console = runtime.take_console();
+        let line = console
+            .iter()
+            .find(|entry| entry.message.starts_with("attrnode:"))
+            .expect("attrnode log");
+        assert_eq!(
+            line.message, "attrnode:1:data-x",
+            "removeAttributeNode must deliver an attributes record with its name (#1137): {console:?}"
+        );
+    }
+
+    #[test]
+    fn failing_worker_reply_does_not_starve_other_workers() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime.set_worker_loader(Box::new(|url| {
+            if url.ends_with("worker.js") {
+                Ok("onmessage = function(e) { postMessage(e.data); };".to_string())
+            } else {
+                Err(crate::JsError::Runtime("not found".to_string()))
+            }
+        }));
+        runtime
+            .eval(
+                "window.__a = null; window.__b = null;
+                 var wa = new Worker('worker.js'); wa.onmessage = function(e) { __a = e.data; };
+                 var wb = new Worker('worker.js'); wb.onmessage = function(e) { __b = e.data; };
+                 wa.postMessage(1); wb.postMessage(2);",
+                "workers.js",
+            )
+            .expect("eval workers script");
+        // Make worker A's queued reply undeliverable (malformed JSON).
+        {
+            let host = runtime.host.borrow();
+            let worker_a = host.workers[0].as_ref().expect("worker A");
+            worker_a
+                .to_main
+                .borrow_mut()
+                .push_front("not json".to_string());
+        }
+        // Before the fix this aborted on worker A, so worker B never received its reply.
+        runtime.run_worker_tasks(16).expect("worker pump must not abort");
+        assert_eq!(runtime.eval("__b", "check.js").unwrap(), "2");
+        assert!(
+            runtime
+                .take_console()
+                .iter()
+                .any(|entry| entry.level == "error"),
+            "the failed delivery must be reported"
+        );
+    }
+
+    #[test]
+    fn mutation_observer_registrations_are_capped() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        let script = format!(
+            r#"
+            for (var i = 0; i < {MAX_OBSERVERS}; i++) {{
+                new MutationObserver(function() {{}});
+            }}
+            console.log('cap-ok');
+            try {{
+                new MutationObserver(function() {{}});
+                console.log('cap-fail');
+            }} catch (e) {{
+                console.log('cap-caught');
+            }}
+            "#
+        );
+        runtime.eval(&script, "observer_cap.js").expect("eval cap script");
+        let console = runtime.take_console();
+        let messages: Vec<&str> = console.iter().map(|entry| entry.message.as_str()).collect();
+        assert!(messages.contains(&"cap-ok"), "{console:?}");
+        assert!(messages.contains(&"cap-caught"), "{console:?}");
+        assert!(!messages.contains(&"cap-fail"), "{console:?}");
+    }
+
+    #[test]
+    fn throwing_observer_callback_does_not_starve_other_observers() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                var el = document.createElement('div');
+                document.body.appendChild(el);
+                var seen = 0;
+                var bad = new MutationObserver(function() { throw new Error('boom'); });
+                var good = new MutationObserver(function(records) { seen += records.length; });
+                bad.observe(el, { childList: true });
+                good.observe(el, { childList: true });
+                el.appendChild(document.createTextNode('x'));
+                "#,
+                "observer_throw.js",
+            )
+            .expect("eval observer throw script");
+        // A callback throwing must be reported, not abort the delivery pass.
+        runtime.run_microtasks().expect("microtask delivery");
+        runtime
+            .eval("console.log('throwisolate:' + seen);", "observer_throw_check.js")
+            .expect("eval check script");
+        let console = runtime.take_console();
+        let line = console
+            .iter()
+            .find(|entry| entry.message.starts_with("throwisolate:"))
+            .expect("throwisolate log");
+        assert_eq!(
+            line.message, "throwisolate:1",
+            "the healthy observer must still receive its records (#1136): {console:?}"
+        );
+        assert!(
+            console
+                .iter()
+                .any(|entry| entry.level == "error" && entry.message.contains("boom")),
+            "the thrown exception must be reported as uncaught: {console:?}"
+        );
     }
 }

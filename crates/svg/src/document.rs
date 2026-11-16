@@ -398,6 +398,7 @@ impl Document {
             active_clips: Vec::new(),
             active_masks: Vec::new(),
             active_filter: None,
+            group_bbox_stack: Vec::new(),
             segments_used: 0,
         };
         let style = Style::default();
@@ -696,6 +697,18 @@ struct Builder<'a> {
     active_clips: Vec<EffectRef>,
     active_masks: Vec<EffectRef>,
     active_filter: Option<EffectRef>,
+    /// Incremental `objectBoundingBox` accumulators for the currently open
+    /// groups. Each shape is folded into every *active* frame once, instead of
+    /// rescanning the whole emitted subtree when each group closes (#442).
+    group_bbox_stack: Vec<GroupBboxFrame>,
+}
+
+/// Accumulator for one open group's descendant bounding box.
+struct GroupBboxFrame {
+    /// Running union of the transformed descendant points, if any.
+    bbox: Option<(f32, f32, f32, f32)>,
+    /// False for groups without effects, where no bbox is ever needed.
+    active: bool,
 }
 
 impl<'a> Builder<'a> {
@@ -792,41 +805,95 @@ impl<'a> Builder<'a> {
         self.active_filter = previous.2;
     }
 
-    /// Computes the union bbox (root user space) of shapes emitted since `start` and copies
-    /// it into the group's `objectBoundingBox` effect refs (group effects are inherited by
-    /// all descendants, so every matching ref is updated).
-    fn apply_group_bbox(
-        &mut self,
-        start: usize,
-        clips: &[EffectRef],
-        masks: &[EffectRef],
-        filter: Option<&EffectRef>,
-    ) {
+    /// Folds the most recently emitted shape into every open group's running bbox.
+    /// Called once from `push_shape`, so a leaf shape is visited once instead of
+    /// once per ancestor group (#442).
+    fn record_shape_bbox(&mut self) {
+        if self.group_bbox_stack.iter().all(|frame| !frame.active) {
+            return;
+        }
+        let Some(shape) = self.shapes.last() else {
+            return;
+        };
         let mut min_x = f32::INFINITY;
         let mut min_y = f32::INFINITY;
         let mut max_x = f32::NEG_INFINITY;
         let mut max_y = f32::NEG_INFINITY;
-        for shape in &self.shapes[start..] {
-            for subpath in &shape.subpaths {
-                for point in &subpath.points {
-                    if point.0.is_finite() && point.1.is_finite() {
-                        min_x = min_x.min(point.0);
-                        min_y = min_y.min(point.1);
-                        max_x = max_x.max(point.0);
-                        max_y = max_y.max(point.1);
-                    }
+        for subpath in &shape.subpaths {
+            for point in &subpath.points {
+                if point.0.is_finite() && point.1.is_finite() {
+                    min_x = min_x.min(point.0);
+                    min_y = min_y.min(point.1);
+                    max_x = max_x.max(point.0);
+                    max_y = max_y.max(point.1);
                 }
             }
         }
         if !min_x.is_finite() || !min_y.is_finite() {
             return;
         }
-        let bbox = (
-            min_x,
-            min_y,
-            (max_x - min_x).max(0.0),
-            (max_y - min_y).max(0.0),
-        );
+        for frame in &mut self.group_bbox_stack {
+            if !frame.active {
+                continue;
+            }
+            frame.bbox = Some(match frame.bbox {
+                None => (min_x, min_y, max_x - min_x, max_y - min_y),
+                Some((x, y, w, h)) => (
+                    x.min(min_x),
+                    y.min(min_y),
+                    (x + w).max(max_x) - x.min(min_x),
+                    (y + h).max(max_y) - y.min(min_y),
+                ),
+            });
+        }
+    }
+
+    /// Copies the group's descendant bbox (root user space) into its
+    /// `objectBoundingBox` effect refs. Group effects are inherited by all
+    /// descendants, so every matching ref is updated. `bbox` is the incremental
+    /// accumulator built while the group was open; the scan is only a fallback
+    /// for shapes inserted through a path that does not call `record_shape_bbox`.
+    fn apply_group_bbox(
+        &mut self,
+        start: usize,
+        clips: &[EffectRef],
+        masks: &[EffectRef],
+        filter: Option<&EffectRef>,
+        bbox: Option<(f32, f32, f32, f32)>,
+    ) {
+        // Plain groups used to rescan their entire subtree for nothing (#442).
+        if clips.is_empty() && masks.is_empty() && filter.is_none() {
+            return;
+        }
+        let bbox = bbox.or_else(|| {
+            let mut min_x = f32::INFINITY;
+            let mut min_y = f32::INFINITY;
+            let mut max_x = f32::NEG_INFINITY;
+            let mut max_y = f32::NEG_INFINITY;
+            for shape in &self.shapes[start..] {
+                for subpath in &shape.subpaths {
+                    for point in &subpath.points {
+                        if point.0.is_finite() && point.1.is_finite() {
+                            min_x = min_x.min(point.0);
+                            min_y = min_y.min(point.1);
+                            max_x = max_x.max(point.0);
+                            max_y = max_y.max(point.1);
+                        }
+                    }
+                }
+            }
+            (min_x.is_finite() && min_y.is_finite()).then(|| {
+                (
+                    min_x,
+                    min_y,
+                    (max_x - min_x).max(0.0),
+                    (max_y - min_y).max(0.0),
+                )
+            })
+        });
+        let Some(bbox) = bbox else {
+            return;
+        };
         let matches = |reference: &EffectRef, candidate: &EffectRef| {
             reference.index == candidate.index && reference.transform == candidate.transform
         };
@@ -915,21 +982,33 @@ impl<'a> Builder<'a> {
                 let transform = transform.then(viewport);
                 let (clips, masks, filter) = self.own_effects(&style, transform, None, true);
                 let start = self.shapes.len();
+                let active = !clips.is_empty() || !masks.is_empty() || filter.is_some();
+                self.group_bbox_stack
+                    .push(GroupBboxFrame { bbox: None, active });
                 let previous = self.push_effects(&clips, &masks, filter.as_ref());
                 let result =
                     self.visit_children(element, ancestors, transform, &style, opacity, depth);
                 self.pop_effects(previous);
-                self.apply_group_bbox(start, &clips, &masks, filter.as_ref());
+                let frame = self.group_bbox_stack.pop().expect("group bbox frame");
+                if active {
+                    self.apply_group_bbox(start, &clips, &masks, filter.as_ref(), frame.bbox);
+                }
                 result
             }
             "g" | "a" | "switch" => {
                 let (clips, masks, filter) = self.own_effects(&style, transform, None, true);
                 let start = self.shapes.len();
+                let active = !clips.is_empty() || !masks.is_empty() || filter.is_some();
+                self.group_bbox_stack
+                    .push(GroupBboxFrame { bbox: None, active });
                 let previous = self.push_effects(&clips, &masks, filter.as_ref());
                 let result =
                     self.visit_children(element, ancestors, transform, &style, opacity, depth);
                 self.pop_effects(previous);
-                self.apply_group_bbox(start, &clips, &masks, filter.as_ref());
+                let frame = self.group_bbox_stack.pop().expect("group bbox frame");
+                if active {
+                    self.apply_group_bbox(start, &clips, &masks, filter.as_ref(), frame.bbox);
+                }
                 result
             }
             "defs" | "title" | "desc" | "metadata" | "style" | "linearGradient"
@@ -969,13 +1048,19 @@ impl<'a> Builder<'a> {
                 let use_transform = transform.then(Transform::translate(x, y));
                 let (clips, masks, filter) = self.own_effects(&style, use_transform, None, true);
                 let start = self.shapes.len();
+                let active = !clips.is_empty() || !masks.is_empty() || filter.is_some();
+                self.group_bbox_stack
+                    .push(GroupBboxFrame { bbox: None, active });
                 let previous = self.push_effects(&clips, &masks, filter.as_ref());
                 self.use_stack.push(id.to_owned());
                 let result =
                     self.visit(target, ancestors, use_transform, &style, opacity, depth + 1);
                 self.use_stack.pop();
                 self.pop_effects(previous);
-                self.apply_group_bbox(start, &clips, &masks, filter.as_ref());
+                let frame = self.group_bbox_stack.pop().expect("group bbox frame");
+                if active {
+                    self.apply_group_bbox(start, &clips, &masks, filter.as_ref(), frame.bbox);
+                }
                 result
             }
             _ => self.push_shape(element, &name, transform, &style, opacity),
@@ -1244,6 +1329,7 @@ impl<'a> Builder<'a> {
             mask: masks,
             filter,
         });
+        self.record_shape_bbox();
         Ok(())
     }
 }
@@ -2228,6 +2314,7 @@ fn build_effect_shapes(
         active_clips: Vec::new(),
         active_masks: Vec::new(),
         active_filter: None,
+        group_bbox_stack: Vec::new(),
         segments_used: 0,
     };
     let style = Style {
@@ -2569,6 +2656,7 @@ fn build_patterns(
             active_masks: Vec::new(),
             segments_used: 0,
             active_filter: None,
+            group_bbox_stack: Vec::new(),
         };
         let mut style = Style::default();
         let mut ancestors: Vec<&XmlElement> = vec![element];

@@ -667,6 +667,9 @@ impl LimitViolations {
             && self.text_bytes_dropped == 0
             && self.attributes_dropped == 0
             && self.detached_insertions == 0
+            && self.formatting_dropped == 0
+            && self.written_bytes_dropped == 0
+            && self.scripts_skipped == 0
     }
 
     /// Total number of recorded violations (the input truncation counts as one).
@@ -677,6 +680,10 @@ impl LimitViolations {
             + self.nodes_exceeded
             + self.attributes_dropped
             + self.detached_insertions
+            + self.text_bytes_dropped
+            + self.formatting_dropped
+            + self.written_bytes_dropped
+            + self.scripts_skipped
     }
 }
 
@@ -1556,7 +1563,7 @@ impl TreeBuilder {
                 && element.local_name == "template"
                 && element.template_contents.is_some())
         {
-            self.doc.append_text(current, s);
+            let _ = self.doc.append_text(current, s);
             return;
         }
         let loc = self.appropriate_place_for_inserting_node(None);
@@ -1565,9 +1572,9 @@ impl TreeBuilder {
             return;
         }
         if let Some(sib) = loc.insert_before_sibling {
-            self.doc.insert_text_before(sib, s);
+            let _ = self.doc.insert_text_before(sib, s);
         } else {
-            self.doc.append_text(loc.parent, s);
+            let _ = self.doc.append_text(loc.parent, s);
         }
     }
 
@@ -1624,7 +1631,7 @@ impl TreeBuilder {
                 && element.local_name == "template"
                 && element.template_contents.is_some())
         {
-            self.doc.append_text(current, text);
+            let _ = self.doc.append_text(current, text);
             return;
         }
         let loc = self.appropriate_place_for_inserting_node(None);
@@ -1633,9 +1640,9 @@ impl TreeBuilder {
             return;
         }
         if let Some(sib) = loc.insert_before_sibling {
-            self.doc.insert_text_before(sib, text);
+            let _ = self.doc.insert_text_before(sib, text);
         } else {
-            self.doc.append_text(loc.parent, text);
+            let _ = self.doc.append_text(loc.parent, text);
         }
     }
 
@@ -3652,12 +3659,17 @@ impl TreeBuilder {
                 // long table text run lives in a `Vec<char>` (4 B each) until the next
                 // non-character token. Bound it by the text budget instead of the input cap
                 // (#642).
+                // Drop non-characters to match `insert_character`'s body path (#411).
+                // Buffering them as U+FFFD would re-insert them on replay, producing a
+                // different tree for the same input solely because of the insertion mode.
+                let Some(character) = char::from_u32(ch) else {
+                    return None;
+                };
                 if self.pending_table_characters.len() >= self.parse_options.max_text_bytes {
                     self.limit_violations.text_bytes_dropped += 1;
                     return None;
                 }
-                self.pending_table_characters
-                    .push(char::from_u32(ch).unwrap_or('\u{FFFD}'));
+                self.pending_table_characters.push(character);
                 None
             }
             other => {
@@ -4218,7 +4230,7 @@ impl TreeBuilder {
                         break;
                     }
                     let next = self.doc.node(child_id).next_sibling;
-                    let cloned = self.doc.clone_node(child_id, true);
+                    let Some(cloned) = self.doc.clone_node(child_id, true) else { continue; };
                     self.doc.append_child(sc_id, cloned);
                     curr = next;
                 }
@@ -4812,5 +4824,48 @@ mod robustness_regression_tests {
             }
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod invalid_codepoint_context_tests {
+    use super::*;
+
+    fn text_after(tokens: &[Token]) -> String {
+        let mut builder = TreeBuilder::new(false);
+        for token in tokens.iter().cloned() {
+            let _ = builder.process_token(token);
+        }
+        let doc = &builder.doc;
+        let mut text = String::new();
+        let mut stack = vec![doc.root()];
+        while let Some(id) = stack.pop() {
+            if let Some(node) = doc.try_node(id) {
+                if let Some(t) = node.as_text() {
+                    text.push_str(t);
+                }
+                stack.extend(doc.children(id));
+            }
+        }
+        text
+    }
+
+    fn start(name: &str) -> Token {
+        Token::StartTag {
+            name: name.into(),
+            self_closing: false,
+            attributes: vec![],
+        }
+    }
+
+    #[test]
+    fn surrogate_is_dropped_in_table_text_and_body_alike() {
+        // A lone surrogate must not become a U+FFFD node just because the insertion
+        // mode happens to be "in table text" (#411).
+        let body = text_after(&[Token::Character(0xD800), Token::Eof]);
+        let table = text_after(&[start("table"), Token::Character(0xD800), Token::Eof]);
+        assert!(!body.contains('\u{FFFD}'), "body path: {body:?}");
+        assert!(!table.contains('\u{FFFD}'), "table-text path: {table:?}");
+        assert_eq!(body, table);
     }
 }

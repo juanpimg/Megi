@@ -85,6 +85,7 @@ use dom::NodeId;
 use layout::{BoxType, LayoutBox, Rect};
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::display_list::{
@@ -374,7 +375,8 @@ fn build_display_list_inner(
         // page background reports the root element.
         resources.record(viewport, root.node_id(), HitKind::Background);
     }
-    paint_stacking_context(root, &mut list, skip, &resources, false, true, 0);
+    let contexts = index_stacking_contexts(root, resources.effects_present);
+    paint_stacking_context(root, &mut list, skip, &resources, false, true, 0, &contexts);
     let regions = match regions {
         Some(collector) => collector.borrow_mut().take_regions(),
         None => Vec::new(),
@@ -706,6 +708,7 @@ fn inline_filtered_solid(layout_box: &LayoutBox) -> Option<Color> {
 }
 
 /// Paints the appendix E phases of one stacking context.
+#[allow(clippy::too_many_arguments)]
 fn paint_stacking_context(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
@@ -714,6 +717,7 @@ fn paint_stacking_context(
     inherited_hidden: bool,
     is_root: bool,
     depth: usize,
+    contexts: &HashMap<*const LayoutBox, ContextBuckets<'_>>,
 ) {
     let start = list.len();
     let hidden = inherited_hidden || is_hidden(layout_box);
@@ -763,23 +767,29 @@ fn paint_stacking_context(
         return;
     }
 
-    // Split the participating descendant contexts into phase buckets.
-    let mut negative: Vec<&LayoutBox> = Vec::new();
-    let mut zero: Vec<&LayoutBox> = Vec::new();
-    let mut positive: Vec<&LayoutBox> = Vec::new();
-    collect_context_boxes(
-        layout_box,
-        &mut negative,
-        &mut zero,
-        &mut positive,
-        resources.effects_present,
-    );
+    // Direct context children were bucketed once by `index_stacking_contexts`;
+    // no per-context subtree rescan (#443).
+    let empty = ContextBuckets::default();
+    let buckets = contexts
+        .get(&(layout_box as *const LayoutBox))
+        .unwrap_or(&empty);
+    let mut negative: Vec<&LayoutBox> = buckets.negative.to_vec();
+    let mut positive: Vec<&LayoutBox> = buckets.positive.to_vec();
     negative.sort_by_key(|context| context.z_index);
     positive.sort_by_key(|context| context.z_index);
 
     // Step 3: negative z-index contexts.
-    for context in negative {
-        paint_stacking_context(context, list, skip, resources, hidden, false, depth + 1);
+    for &context in &negative {
+        paint_stacking_context(
+            context,
+            list,
+            skip,
+            resources,
+            hidden,
+            false,
+            depth + 1,
+            contexts,
+        );
     }
 
     // Steps 4-6: in-flow block backgrounds, floats, inline content.
@@ -796,13 +806,31 @@ fn paint_stacking_context(
     );
 
     // Step 7: positioned z-index auto/0 and z-index 0 contexts.
-    for context in zero {
-        paint_stacking_context(context, list, skip, resources, hidden, false, depth + 1);
+    for &context in &buckets.zero {
+        paint_stacking_context(
+            context,
+            list,
+            skip,
+            resources,
+            hidden,
+            false,
+            depth + 1,
+            contexts,
+        );
     }
 
     // Step 8: positive z-index contexts.
-    for context in positive {
-        paint_stacking_context(context, list, skip, resources, hidden, false, depth + 1);
+    for &context in &positive {
+        paint_stacking_context(
+            context,
+            list,
+            skip,
+            resources,
+            hidden,
+            false,
+            depth + 1,
+            contexts,
+        );
     }
 
     if clip.is_some() {
@@ -857,29 +885,64 @@ fn paint_stacking_context(
 /// `layout_box` (nearest-context descendants, in tree order).
 ///
 /// Iterative by design: a 20 000-level layout tree must not exhaust the stack.
-fn collect_context_boxes<'a>(
-    layout_box: &'a LayoutBox,
-    negative: &mut Vec<&'a LayoutBox>,
-    zero: &mut Vec<&'a LayoutBox>,
-    positive: &mut Vec<&'a LayoutBox>,
-    layout_box_effects: bool,
-) {
-    let mut stack: Vec<&'a LayoutBox> = Vec::new();
-    for child in layout_box.children.iter().rev() {
-        stack.push(child);
-    }
-    while let Some(child) = stack.pop() {
-        match phase(child, layout_box_effects) {
-            Phase::Negative => negative.push(child),
-            Phase::Zero => zero.push(child),
-            Phase::Positive => positive.push(child),
-            Phase::Float | Phase::InFlow => {
-                for grandchild in child.children.iter().rev() {
-                    stack.push(grandchild);
-                }
+/// Direct stacking-context children of one context, partitioned into Appendix E
+/// phase buckets. Built once for the whole tree (#443).
+#[derive(Default)]
+struct ContextBuckets<'a> {
+    negative: Vec<&'a LayoutBox>,
+    zero: Vec<&'a LayoutBox>,
+    positive: Vec<&'a LayoutBox>,
+}
+
+/// Single-pass index of every stacking context and its direct context children.
+///
+/// The old code called `collect_context_boxes` on every context, and each call
+/// walked the whole descendant subtree: N nested contexts cost O(N²) box visits
+/// (#443). This visits each box exactly once and buckets direct context children
+/// against their nearest ancestor context.
+fn index_stacking_contexts<'a>(
+    root: &'a LayoutBox,
+    effects_present: bool,
+) -> HashMap<*const LayoutBox, ContextBuckets<'a>> {
+    let mut contexts = HashMap::new();
+    let root_ptr = root as *const LayoutBox;
+    contexts.insert(root_ptr, ContextBuckets::default());
+    let mut stack: Vec<(&'a LayoutBox, *const LayoutBox, usize)> = root
+        .children
+        .iter()
+        .rev()
+        .map(|child| (child, root_ptr, 1))
+        .collect();
+    while let Some((node, owner, depth)) = stack.pop() {
+        let bucket = match phase(node, effects_present) {
+            Phase::Negative => Some(0),
+            Phase::Zero => Some(1),
+            Phase::Positive => Some(2),
+            Phase::Float | Phase::InFlow => None,
+        };
+        let node_ptr = node as *const LayoutBox;
+        if let Some(bucket) = bucket
+            && depth < MAX_STACKING_CONTEXT_DEPTH
+        {
+            contexts.entry(node_ptr).or_default();
+            let owner_buckets = contexts.get_mut(&owner).expect("indexed owner context");
+            match bucket {
+                0 => owner_buckets.negative.push(node),
+                1 => owner_buckets.zero.push(node),
+                _ => owner_buckets.positive.push(node),
+            }
+            for child in node.children.iter().rev() {
+                stack.push((child, node_ptr, depth + 1));
+            }
+        } else {
+            // In-flow/float boxes, and contexts past the depth guard, keep the
+            // same owner: their descendants are painted in the owner's passes.
+            for child in node.children.iter().rev() {
+                stack.push((child, owner, depth));
             }
         }
     }
+    contexts
 }
 
 /// Explicit-stack task for the iterative block-background traversal.

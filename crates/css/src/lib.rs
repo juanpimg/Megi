@@ -902,6 +902,30 @@ mod tests {
     }
 
     #[test]
+    fn has_matches_beyond_the_old_10k_descendant_cap() {
+        // Regression test for #1133: :has() used to stop after 10,000 descendants and
+        // silently report a false negative for matches deeper in the subtree.
+        let mut doc = Document::new();
+        let div = doc.create_element(Namespace::Html, "div", vec![]);
+        doc.append_child(doc.root(), div);
+        let mut parent = div;
+        for i in 0..10_005 {
+            let attrs = if i == 10_004 {
+                vec![Attribute::new("class", "target")]
+            } else {
+                vec![]
+            };
+            let span = doc.create_element(Namespace::Html, "span", attrs);
+            doc.append_child(parent, span);
+            parent = span;
+        }
+        assert!(
+            parse_selectors("div:has(span.target)").matches(&doc, div),
+            ":has() must find a match past the old 10k descendant cap"
+        );
+    }
+
+    #[test]
     fn test_structural_pseudo_classes() {
         let mut doc = Document::new();
         let body = doc.create_element(Namespace::Html, "body", vec![]);

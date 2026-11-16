@@ -61,10 +61,31 @@ fuzz_target!(|data: &[u8]| {
                 return Ok(None);
             }
             let chunk = chunks[position].clone();
+            // Derive a producer mode from the chunk index so the transport contract
+            // is actually exercised: truncate (current), exact (no change), or
+            // deliberately oversize up to 2x max to test rejection.
+            let mode = position % 3;
             let chunk = if max == 0 {
                 Vec::new()
             } else {
-                chunk[..chunk.len().min(max)].to_vec()
+                match mode {
+                    0 => chunk[..chunk.len().min(max)].to_vec(),
+                    1 => {
+                        if chunk.len() > max {
+                            chunk[..max].to_vec()
+                        } else {
+                            chunk
+                        }
+                    }
+                    _ => {
+                        // Deliberately oversize: double the max to stress the contract.
+                        if chunk.len() < max * 2 {
+                            chunk
+                        } else {
+                            chunk[..max.saturating_mul(2).min(chunk.len())].to_vec()
+                        }
+                    }
+                }
             };
             Ok(Some(chunk))
         }
@@ -89,9 +110,10 @@ fuzz_target!(|data: &[u8]| {
             break;
         };
         if chunk.len() > max && max > 0 {
-            // A producer violating the contract would make the transport
-            // overrun the peer window; stop the simulation rather than panic.
-            return;
+            // A producer violating the contract must not reach the transport;
+            // panic so the fuzzer records the violation rather than silently
+            // dropping it (#470).
+            panic!("producer returned {} bytes for max {} (contract violation)", chunk.len(), max);
         }
         pulled = pulled.saturating_add(chunk.len());
         max_bytes = max_bytes.max(chunk.len());

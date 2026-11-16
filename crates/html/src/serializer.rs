@@ -497,9 +497,28 @@ fn serialize_node_into(
                 rawtext_context,
             });
         }
-        NodeKind::Doctype { name, .. } => {
+        NodeKind::Doctype {
+            name,
+            public_id,
+            system_id,
+        } => {
             out.push_str("<!DOCTYPE ");
             out.push_str(name);
+            if !public_id.is_empty() {
+                out.push_str(" PUBLIC \"");
+                out.push_str(public_id);
+                out.push('"');
+                if !system_id.is_empty() {
+                    out.push(' ');
+                    out.push('"');
+                    out.push_str(system_id);
+                    out.push('"');
+                }
+            } else if !system_id.is_empty() {
+                out.push_str(" SYSTEM \"");
+                out.push_str(system_id);
+                out.push('"');
+            }
             out.push('>');
         }
         NodeKind::Text(text) => serialize_text_node(text, rawtext_context, out),

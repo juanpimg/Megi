@@ -154,8 +154,8 @@ fn is_custom_ident(value: &str) -> bool {
     let Some(first) = chars.next() else {
         return false;
     };
-    (first.is_ascii_alphabetic() || first == '_' || first == '-')
-        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
+    (crate::tokenizer::is_ident_start(first))
+        && chars.all(crate::tokenizer::is_ident)
         && value != "none"
         && value != "and"
         && value != "or"
