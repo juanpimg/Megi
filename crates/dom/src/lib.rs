@@ -1453,6 +1453,16 @@ impl Document {
                     "slot {slot}: only one of first_child/last_child is set"
                 ));
             }
+            // Only Document, Element and DocumentFragment hold children. The public APIs
+            // already reject the rest with `CannotHaveChildren`, so a link here means the
+            // arena was corrupted (or hand-built) outside them (#385).
+            if !matches!(
+                node.kind,
+                NodeKind::Document | NodeKind::Element(_) | NodeKind::DocumentFragment
+            ) && node.first_child.is_some()
+            {
+                return Err(format!("slot {slot}: non-container node holds children"));
+            }
             if let Some(prev) = node.prev_sibling {
                 let prev_node = self
                     .try_node(prev)
@@ -2996,6 +3006,29 @@ mod tests {
         assert!(doc.validate_invariants().is_err());
         doc.occupied[victim_slot] = false;
         assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn test_validate_invariants_rejects_children_under_non_containers() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let text = doc.create_text_node("hello");
+        let child = doc.create_element(Namespace::Html, "span", vec![]);
+        doc.append_child(root, text);
+        assert!(doc.validate_invariants().is_ok());
+
+        // The public APIs reject this (`CannotHaveChildren`), so build the corruption the way
+        // a broken arena import would: link a child under a Text node (#385).
+        doc.nodes[text.index()].first_child = Some(child);
+        doc.nodes[text.index()].last_child = Some(child);
+        doc.nodes[child.index()].parent = Some(text);
+        let error = doc
+            .validate_invariants()
+            .expect_err("children under a Text node");
+        assert!(
+            error.contains("non-container node holds children"),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]
