@@ -293,7 +293,11 @@ impl RuleIndex {
                 Some(RuleKey::Class(class)) => {
                     self.by_class.entry(class).or_default().push(candidate);
                 }
-                Some(RuleKey::Tag(tag)) => self.by_tag.entry(tag.to_ascii_lowercase()).or_default().push(candidate),
+                Some(RuleKey::Tag(tag)) => self
+                    .by_tag
+                    .entry(tag.to_ascii_lowercase())
+                    .or_default()
+                    .push(candidate),
                 // No usable key (universal or pseudo-class-only rightmost compound): the
                 // selector is evaluated for every element.
                 None => self.slow.push(candidate),
@@ -1146,22 +1150,7 @@ pub fn resolve_document_styles_with_media(
 
     while let Some(node_id) = stack.pop() {
         if let Some(el) = doc.node(node_id).as_element() {
-            let inline_decls = el.get_attribute("style").map(|style| {
-                // Cap inline style length to prevent DoS. A multi-byte code point may
-                // straddle the 64 KiB limit, so back up to the nearest UTF-8 boundary
-                // before slicing (slicing mid-code-point would panic).
-                let style = if style.len() > 64 * 1024 {
-                    let mut end = 64 * 1024;
-                    while end > 0 && !style.is_char_boundary(end) {
-                        end -= 1;
-                    }
-                    &style[..end]
-                } else {
-                    style
-                };
-                let parsed = crate::parser::parse_list_of_declarations(style);
-                expand_declarations(&parsed)
-            });
+            let inline_decls = el.get_attribute("style").map(parse_inline_style);
 
             collection.candidate_selectors(doc, node_id, &mut candidates);
             let mut best = resolve_base_cascaded_properties(
@@ -1230,6 +1219,40 @@ pub fn resolve_document_styles_with_media(
     styles
 }
 
+/// Maximum byte length parsed from a single inline `style="..."` attribute.
+///
+/// Bounding inline styles caps CPU and allocation cost on attacker-controlled documents;
+/// multi-byte UTF-8 code points that straddle this limit are excluded by backing up to a
+/// UTF-8 character boundary via `floor_char_boundary_utf8`.
+pub const MAX_INLINE_STYLE_BYTES: usize = 64 * 1024;
+
+/// Returns the greatest byte offset `<= max_bytes` on a UTF-8 `char` boundary in `text`.
+#[inline]
+fn floor_char_boundary_utf8(text: &str, max_bytes: usize) -> usize {
+    let mut end = max_bytes.min(text.len());
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    end
+}
+
+/// Parses an inline `style="..."` attribute bounded to [`MAX_INLINE_STYLE_BYTES`] on a UTF-8
+/// character boundary, returning unexpanded declarations.
+pub fn parse_inline_declarations(style: &str) -> Vec<Declaration> {
+    let bounded = if style.len() > MAX_INLINE_STYLE_BYTES {
+        &style[..floor_char_boundary_utf8(style, MAX_INLINE_STYLE_BYTES)]
+    } else {
+        style
+    };
+    crate::parser::parse_list_of_declarations(bounded)
+}
+
+/// Parses and shorthand-expands an inline `style="..."` attribute bounded to
+/// [`MAX_INLINE_STYLE_BYTES`] on a UTF-8 character boundary.
+pub fn parse_inline_style(style: &str) -> Vec<Declaration> {
+    expand_declarations(&parse_inline_declarations(style))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1266,9 +1289,7 @@ mod tests {
 
     fn expanded_inline(doc: &Document, node_id: NodeId) -> Option<Vec<Declaration>> {
         let element = doc.node(node_id).as_element()?;
-        element
-            .get_attribute("style")
-            .map(|style| expand_declarations(&crate::parser::parse_list_of_declarations(style)))
+        element.get_attribute("style").map(parse_inline_style)
     }
 
     /// Every `(rule, selector)` pair: the unindexed reference behaviour.
@@ -1606,11 +1627,8 @@ mod tests {
 
         let mut doc = Document::new();
         let html = doc.create_element(Namespace::Html, "html", vec![]);
-        let target = doc.create_element(
-            Namespace::Html,
-            "div",
-            vec![Attribute::new("style", style)],
-        );
+        let target =
+            doc.create_element(Namespace::Html, "div", vec![Attribute::new("style", style)]);
         doc.append_child(doc.root(), html);
         doc.append_child(html, target);
 
@@ -1621,6 +1639,44 @@ mod tests {
             computed.color,
             Color::new(255, 0, 0, 255),
             "the declaration before the cap must survive the boundary-safe truncation"
+        );
+    }
+
+    #[test]
+    fn parse_inline_style_handles_four_byte_char_at_cap_and_container_base() {
+        let prefix = "container-type: inline-size; width: 320px; color: rgb(12, 34, 56); ";
+        let mut style = String::from(prefix);
+        style.push_str(&" ".repeat(MAX_INLINE_STYLE_BYTES - prefix.len() - 2));
+        style.push('🦀');
+        style.push_str("; color: rgb(255, 0, 0);");
+        assert!(!style.is_char_boundary(MAX_INLINE_STYLE_BYTES));
+
+        let decls = parse_inline_declarations(&style);
+        assert!(
+            decls
+                .iter()
+                .any(|d| d.name == "color" && d.raw_value == "rgb(12, 34, 56)")
+        );
+        assert!(!decls.iter().any(|d| d.raw_value == "rgb(255, 0, 0)"));
+
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", vec![]);
+        let container =
+            doc.create_element(Namespace::Html, "div", vec![Attribute::new("style", style)]);
+        let child = doc.create_element(Namespace::Html, "span", vec![]);
+        doc.append_child(doc.root(), html);
+        doc.append_child(html, container);
+        doc.append_child(container, child);
+
+        let css = "@container (min-width: 200px) { span { color: rgb(7, 89, 10); } }";
+        let styles = resolve_document_styles_with_viewport(&doc, Some(css), 800.0, 600.0);
+        assert_eq!(
+            styles.get(&container).expect("container style").color,
+            Color::new(12, 34, 56, 255)
+        );
+        assert_eq!(
+            styles.get(&child).expect("child @container style").color,
+            Color::new(7, 89, 10, 255)
         );
     }
 }
