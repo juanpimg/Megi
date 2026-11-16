@@ -2187,6 +2187,9 @@ fn content_length(headers: &Headers) -> Result<Option<usize>, FetchError> {
             "conflicting Content-Length headers".to_owned(),
         ));
     }
+    if first.starts_with('+') {
+        return Err(FetchError::InvalidResponse(format!("invalid Content-Length `{first}`")));
+    }
     let length: usize = first
         .parse()
         .map_err(|_| FetchError::InvalidResponse(format!("invalid Content-Length `{first}`")))?;
