@@ -667,6 +667,9 @@ impl LimitViolations {
             && self.text_bytes_dropped == 0
             && self.attributes_dropped == 0
             && self.detached_insertions == 0
+            && self.formatting_dropped == 0
+            && self.written_bytes_dropped == 0
+            && self.scripts_skipped == 0
     }
 
     /// Total number of recorded violations (the input truncation counts as one).
@@ -677,6 +680,10 @@ impl LimitViolations {
             + self.nodes_exceeded
             + self.attributes_dropped
             + self.detached_insertions
+            + self.text_bytes_dropped
+            + self.formatting_dropped
+            + self.written_bytes_dropped
+            + self.scripts_skipped
     }
 }
 
