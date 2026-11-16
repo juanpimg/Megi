@@ -402,3 +402,113 @@ fn history_state_is_capped_like_storage() {
         )
         .expect("a state under the quota is accepted");
 }
+
+#[test]
+fn mutation_observer_cap_throws_range_error_above_limit() {
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var count = 0;
+             var lastErr = '';
+             for (var i = 0; i < 1030; i++) {
+                 try {
+                     new MutationObserver(function () {});
+                     count++;
+                 } catch (err) {
+                     lastErr = err.name + ':' + err.message;
+                     break;
+                 }
+             }
+             count + '|' + lastErr",
+            "t",
+        )
+        .expect("eval");
+    assert!(
+        out.starts_with("1024|RangeError:"),
+        "expected cap at 1024 with RangeError: {out}"
+    );
+}
+
+#[test]
+fn mutation_observer_scales_with_depth_not_unrelated_observers() {
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime
+        .eval(
+            "window.__unrelated = 0;
+             window.__matched = 0;
+             for (var i = 0; i < 1023; i++) {
+                 var detached = document.createElement('div');
+                 var o = new MutationObserver(function (records) { window.__unrelated += records.length; });
+                 o.observe(detached, { childList: true, attributes: true, subtree: true });
+             }
+             var target = document.createElement('div');
+             var cur = document.body;
+             for (var d = 0; d < 32; d++) {
+                 var next = document.createElement('div');
+                 cur.appendChild(next);
+                 cur = next;
+             }
+             cur.appendChild(target);
+             var live = new MutationObserver(function (records) { window.__matched += records.length; });
+             live.observe(target, { attributes: true, attributeOldValue: true });",
+            "t",
+        )
+        .expect("setup 1024 observers");
+    let started = std::time::Instant::now();
+    runtime
+        .eval(
+            "for (var m = 0; m < 500; m++) {
+                 target.setAttribute('data-n', String(m));
+             }",
+            "t",
+        )
+        .expect("500 mutations");
+    let elapsed = started.elapsed();
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(runtime.eval("window.__unrelated", "t").unwrap(), "0");
+    assert_eq!(runtime.eval("window.__matched", "t").unwrap(), "500");
+    // Even on heavily loaded CI runners, 500 indexed mutations take a few milliseconds;
+    // keep a very generous ceiling (scaled via MEGI_PERF_BUDGET_SCALE) to avoid flakiness.
+    let scale = std::env::var("MEGI_PERF_BUDGET_SCALE")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+        .filter(|v| v.is_finite() && *v > 0.0)
+        .unwrap_or(1.0)
+        .clamp(0.1, 1000.0);
+    let max_budget = std::time::Duration::from_secs_f64(2.0 * scale);
+    assert!(
+        elapsed < max_budget,
+        "500 mutations with 1023 unrelated subtree observers took {elapsed:?} (budget {max_budget:?})"
+    );
+}
+
+#[test]
+fn mutation_observer_remove_attribute_node_records_old_value() {
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime
+        .eval(
+            "window.__records = [];
+             var el = document.createElement('div');
+             el.setAttribute('data-role', 'initial');
+             var obs = new MutationObserver(function (records) {
+                 for (var i = 0; i < records.length; i++) {
+                     window.__records.push(records[i].type + ':' + records[i].attributeName + ':' + records[i].oldValue);
+                 }
+             });
+             obs.observe(el, { attributes: true, attributeOldValue: true });
+             var attr = el.getAttributeNode('data-role');
+             var removed = el.removeAttributeNode(attr);
+             window.__removed = removed ? removed.name + '=' + removed.value : 'none';",
+            "t",
+        )
+        .expect("eval");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime.eval("window.__removed", "t").unwrap(),
+        "data-role=initial"
+    );
+    assert_eq!(
+        runtime.eval("window.__records.join('|')", "t").unwrap(),
+        "attributes:data-role:initial"
+    );
+}

@@ -55,8 +55,8 @@ use std::rc::Rc;
 
 use crate::error::JsError;
 use crate::host::{
-    ConsoleEntry, HistoryAction, Host, HostScope, LocationAction, MutationKind, MutationRecord,
-    ObserverRegistration, ObserverTarget, StorageKind, StorageProvider, with_host,
+    ConsoleEntry, HistoryAction, Host, HostScope, LocationAction, MAX_OBSERVERS, MutationKind,
+    MutationRecord, ObserverRegistration, ObserverTarget, StorageKind, StorageProvider, with_host,
 };
 
 impl From<BoaError> for JsError {
@@ -1236,6 +1236,11 @@ fn js_error(message: impl Into<String>) -> BoaError {
 /// `SyntaxError` for the DOM APIs that validate an enumerated string argument (#653).
 fn syntax_error(message: impl Into<String>) -> BoaError {
     JsNativeError::syntax().with_message(message.into()).into()
+}
+
+/// `RangeError` for bounded host resource limits (such as `MAX_OBSERVERS`).
+fn range_error(message: impl Into<String>) -> BoaError {
+    JsNativeError::range().with_message(message.into()).into()
 }
 
 /// The four `insertAdjacent*` positions, after ASCII-lowercasing (#653).
@@ -3453,9 +3458,11 @@ fn mutation_observer_constructor(
     };
     // Cap registrations before rooting anything (issue #1134): a script must not be
     // able to create millions of observers that are all visited on every mutation.
-    let has_room = with_host(|host| host.observers.len() < MAX_OBSERVERS).unwrap_or(false);
-    if !has_room {
-        return Err(js_error("MutationObserver limit exceeded"));
+    let observer_count = with_host(|host| host.observers.len()).unwrap_or(0);
+    if observer_count >= MAX_OBSERVERS {
+        return Err(range_error(format!(
+            "MutationObserver limit of {MAX_OBSERVERS} exceeded"
+        )));
     }
     let callback_slot = root_push(context, "__megi_observer_callbacks", callback.clone())?;
     let object_slot = {
@@ -3503,42 +3510,29 @@ fn observer_observe(this: &JsValue, args: &[JsValue], context: &mut Context) -> 
         .get(1)
         .and_then(|value| value.as_object())
         .ok_or_else(|| js_error("MutationObserver.observe options are required"))?;
+    let explicit_attributes = options
+        .get(js_string!("attributes"), context)
+        .ok()
+        .filter(|value| !value.is_undefined())
+        .map(|value| value.to_boolean());
     let mut flag = |name: &str| -> bool {
         options
             .get(js_string!(name), context)
             .ok()
             .is_some_and(|value| value.to_boolean())
     };
+    // DOM §4.3.2: if `attributeOldValue` is true and `attributes` is omitted, `attributes`
+    // defaults to true.
+    let attribute_old_value = flag("attributeOldValue");
     let target = ObserverTarget {
         node,
         child_list: flag("childList"),
-        attributes: flag("attributes"),
+        attributes: explicit_attributes.unwrap_or(attribute_old_value),
+        attribute_old_value,
         character_data: flag("characterData"),
         subtree: flag("subtree"),
     };
-    let registered = with_host(|host| -> Result<(), String> {
-        let Some(registration) = host.observers.iter_mut().find(|r| r.object_slot == slot) else {
-            return Ok(());
-        };
-        // Re-observing a node only updates its options: the DOM spec keeps one registered
-        // observer per (observer, target) pair. Pushing a second entry would deliver every
-        // mutation once per duplicate and walk the ancestor chain once per entry (#437).
-        if let Some(existing) = registration
-            .targets
-            .iter_mut()
-            .find(|existing| existing.node == target.node)
-        {
-            *existing = target;
-            return Ok(());
-        }
-        if registration.targets.len() >= MAX_OBSERVER_TARGETS {
-            return Err(format!(
-                "MutationObserver target limit of {MAX_OBSERVER_TARGETS} exceeded"
-            ));
-        }
-        registration.targets.push(target);
-        Ok(())
-    });
+    let registered = with_host(|host| host.observe_target(slot, target));
     if let Some(Err(message)) = registered {
         return Err(js_error(message));
     }
@@ -3554,12 +3548,7 @@ fn observer_disconnect(
     // Per DOM §4.3.1, disconnect() only stops delivering future records: the observer
     // stays registered so a later observe() can re-arm it. Removing the registration
     // made observe() silently no-op forever (#1135).
-    with_host(|host| {
-        if let Some(registration) = host.observers.iter_mut().find(|r| r.object_slot == slot) {
-            registration.targets.clear();
-            registration.records.clear();
-        }
-    });
+    with_host(|host| host.disconnect_observer(slot));
     Ok(JsValue::undefined())
 }
 
@@ -3580,7 +3569,7 @@ fn note_mutation(
     old_value: Option<String>,
 ) {
     with_host(|host| {
-        if !host.observers.is_empty() {
+        if !host.observer_index.is_empty() {
             host.record_mutation(MutationRecord {
                 kind,
                 target,
@@ -3632,6 +3621,11 @@ fn collect_observer_records(context: &mut Context, slot: u32, take: bool) -> JsR
                 Attribute::READONLY,
             );
         }
+        let old_value = match &record.old_value {
+            Some(old) => JsValue::from(js_string!(old.clone())),
+            None => JsValue::null(),
+        };
+        init.property(js_string!("oldValue"), old_value, Attribute::READONLY);
         let record = init.build();
         array
             .set(
@@ -3673,14 +3667,14 @@ fn deliver_mutation_records(context: &mut Context) -> Result<(), JsError> {
         };
         let args = [JsValue::from(records), object];
         if let Err(error) = callback.call(&JsValue::undefined(), &args, context) {
+            let message = error.to_string();
+            let typed = classify_error(&message);
+            if matches!(typed, JsError::Budget(_)) {
+                return Err(typed);
+            }
             // A throwing callback must be reported, but must not abort delivery to
             // the remaining observers (#1136).
-            let _ = with_host(|host| {
-                host.push_console(ConsoleEntry {
-                    level: "error".to_string(),
-                    message: error.to_string(),
-                })
-            });
+            crate::events::report_uncaught(context, &message, "<mutation-observer>")?;
         }
     }
     Ok(())
@@ -5722,17 +5716,6 @@ const MAX_FETCH_HEADERS: usize = 64;
 const MAX_HISTORY_STATE_BYTES: usize = 1024 * 1024;
 const MAX_FETCH_BODY: usize = 8 * 1024 * 1024;
 
-/// Distinct nodes a single `MutationObserver` may track (#437). `observe()` dedups by node, so
-/// this only bounds distinct targets; the microtask drain walks the ancestor chain once per
-/// target per record, so an unbounded list is both unbounded retention and quadratic CPU.
-const MAX_OBSERVER_TARGETS: usize = 1024;
-
-/// Live `MutationObserver` registrations (#1134). Each observer roots a callback and an
-/// object and is visited on every DOM mutation, so an unbounded count is both unbounded
-/// retention and quadratic dispatch. Registrations are kept after `disconnect()` so a
-/// later `observe()` can re-arm the observer, so this also caps the total ever created.
-const MAX_OBSERVERS: usize = 1024;
-
 /// Request headers the browser owns; page scripts must not set them through `fetch()`.
 const FORBIDDEN_FETCH_HEADERS: &[&str] = &[
     "host",
@@ -6356,12 +6339,13 @@ fn node_remove_attribute_node(
         .first()
         .and_then(|value| value.as_object())
         .ok_or_else(|| js_error("removeAttributeNode expects an Attr"))?;
-    let name = item
+    let raw_name = item
         .get(js_string!("name"), context)
         .map_err(|error| js_error(error.to_string()))?
         .to_string(context)
         .map(|value| value.to_std_string_escaped())
         .unwrap_or_default();
+    let name = attribute_name(node_id, &raw_name);
     let old = with_host(|host| {
         host.document
             .try_node_mut(node_id)
@@ -6421,7 +6405,10 @@ mod document_write_budget_tests {
         let mut runtime = JsRuntime::new().expect("runtime");
         runtime.host.borrow_mut().max_document_write_nodes = 64;
         runtime
-            .eval("document.write('<i></i>'.repeat(100));", "nodes_violation.js")
+            .eval(
+                "document.write('<i></i>'.repeat(100));",
+                "nodes_violation.js",
+            )
             .expect("write");
         let console = runtime.take_console();
         assert!(
@@ -6677,7 +6664,9 @@ mod mutation_observer_delivery_tests {
                 .push_front("not json".to_string());
         }
         // Before the fix this aborted on worker A, so worker B never received its reply.
-        runtime.run_worker_tasks(16).expect("worker pump must not abort");
+        runtime
+            .run_worker_tasks(16)
+            .expect("worker pump must not abort");
         assert_eq!(runtime.eval("__b", "check.js").unwrap(), "2");
         assert!(
             runtime
@@ -6705,7 +6694,9 @@ mod mutation_observer_delivery_tests {
             }}
             "#
         );
-        runtime.eval(&script, "observer_cap.js").expect("eval cap script");
+        runtime
+            .eval(&script, "observer_cap.js")
+            .expect("eval cap script");
         let console = runtime.take_console();
         let messages: Vec<&str> = console.iter().map(|entry| entry.message.as_str()).collect();
         assert!(messages.contains(&"cap-ok"), "{console:?}");
@@ -6734,7 +6725,10 @@ mod mutation_observer_delivery_tests {
         // A callback throwing must be reported, not abort the delivery pass.
         runtime.run_microtasks().expect("microtask delivery");
         runtime
-            .eval("console.log('throwisolate:' + seen);", "observer_throw_check.js")
+            .eval(
+                "console.log('throwisolate:' + seen);",
+                "observer_throw_check.js",
+            )
             .expect("eval check script");
         let console = runtime.take_console();
         let line = console
@@ -6750,6 +6744,121 @@ mod mutation_observer_delivery_tests {
                 .iter()
                 .any(|entry| entry.level == "error" && entry.message.contains("boom")),
             "the thrown exception must be reported as uncaught: {console:?}"
+        );
+    }
+
+    #[test]
+    fn mutation_observer_cap_prevents_unbounded_js_root_growth() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        let summary = runtime
+            .eval(
+                r#"
+                var ok = 0;
+                for (var i = 0; i < 1024; i++) {
+                    new MutationObserver(function() {});
+                    ok++;
+                }
+                var errName = '';
+                try {
+                    new MutationObserver(function() {});
+                } catch (e) {
+                    errName = e.name;
+                }
+                ok + ':' + errName + ':' + __megi_observer_callbacks.length + ':' + __megi_observer_objects.length
+                "#,
+                "observer_cap.js",
+            )
+            .expect("eval cap script");
+        assert_eq!(summary, "1024:RangeError:1024:1024");
+        assert_eq!(runtime.host.borrow().observers.len(), MAX_OBSERVERS);
+    }
+
+    #[test]
+    fn attribute_old_value_and_remove_attribute_node_respect_option_and_case() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        let result = runtime
+            .eval(
+                r#"
+                var el = document.createElement('div');
+                document.body.appendChild(el);
+                var withOld = new MutationObserver(function() {});
+                var withoutOld = new MutationObserver(function() {});
+                withOld.observe(el, { attributeOldValue: true });
+                withoutOld.observe(el, { attributes: true });
+
+                el.setAttribute('DATA-X', 'v1');
+                el.setAttribute('data-x', 'v2');
+                el.removeAttributeNode({ name: 'DATA-X' });
+
+                var a = withOld.takeRecords();
+                var b = withoutOld.takeRecords();
+                [
+                    a.length,
+                    a[0].attributeName + '=' + String(a[0].oldValue),
+                    a[1].attributeName + '=' + a[1].oldValue,
+                    a[2].attributeName + '=' + a[2].oldValue,
+                    b.length,
+                    String(b[1].oldValue),
+                    String(b[2].oldValue)
+                ].join('|')
+                "#,
+                "observer_old_value.js",
+            )
+            .expect("eval oldValue script");
+        assert_eq!(result, "3|data-x=null|data-x=v1|data-x=v2|3|null|null");
+    }
+
+    #[test]
+    fn throwing_observer_hits_onerror_and_budget_error_propagates() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                window.__onerror_msgs = [];
+                window.onerror = function(msg) { window.__onerror_msgs.push(msg); };
+                var el = document.createElement('div');
+                document.body.appendChild(el);
+                var obs = new MutationObserver(function() { throw new Error('cb_fail'); });
+                obs.observe(el, { childList: true });
+                el.appendChild(document.createTextNode('a'));
+                "#,
+                "onerror_obs.js",
+            )
+            .expect("eval");
+        runtime.run_microtasks().expect("microtasks");
+        assert_eq!(
+            runtime
+                .eval("window.__onerror_msgs.length", "check")
+                .unwrap(),
+            "1"
+        );
+
+        let budget = Budget {
+            loop_iterations: 500,
+            ..Budget::default()
+        };
+        let mut budgeted = JsRuntime::new().expect("runtime");
+        budgeted.set_budget(budget);
+        budgeted
+            .eval(
+                r#"
+                var el = document.createElement('div');
+                document.body.appendChild(el);
+                var obs = new MutationObserver(function() {
+                    while (true) {}
+                });
+                obs.observe(el, { childList: true });
+                el.appendChild(document.createTextNode('b'));
+                "#,
+                "budget_obs.js",
+            )
+            .expect("setup mutation");
+        let err = budgeted
+            .run_microtasks()
+            .expect_err("budget error in MutationObserver callback must propagate");
+        assert!(
+            matches!(err, JsError::Budget(_)),
+            "expected JsError::Budget, got {err:?}"
         );
     }
 }
