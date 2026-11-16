@@ -2079,7 +2079,21 @@ fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> J
             max_nodes: host.max_document_write_nodes,
             ..html::ParseOptions::default()
         };
-        let _ = html::document_write_with_options(&mut host.document, &text, false, &options);
+        let violations =
+            html::document_write_with_options(&mut host.document, &text, false, &options);
+        // Surface parser truncation to script instead of silently discarding it (#431).
+        if !violations.is_empty() {
+            host.console.push_back(ConsoleEntry {
+                level: "warn".to_string(),
+                message: format!(
+                    "document.write: {} parse limit violation(s) ({} node(s), {} depth, {} text bytes)",
+                    violations.total(),
+                    violations.nodes_exceeded,
+                    violations.depth_exceeded,
+                    violations.text_bytes_dropped,
+                ),
+            });
+        }
         let target = host
             .document
             .body()
@@ -6392,6 +6406,24 @@ mod document_write_budget_tests {
                 entry.level == "warn" && entry.message.contains("document.write ignored")
             }),
             "the exceeded budget must be reported: {console:?}"
+        );
+    }
+
+    #[test]
+    fn document_write_reports_parser_limit_violations() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime.host.borrow_mut().max_document_write_nodes = 64;
+        runtime
+            .eval("document.write('<i></i>'.repeat(100));", "nodes_violation.js")
+            .expect("write");
+        let console = runtime.take_console();
+        assert!(
+            console.iter().any(|entry| {
+                entry.level == "warn"
+                    && entry.message.contains("parse limit violation")
+                    && entry.message.contains("node(s)")
+            }),
+            "parser truncation must be visible to script: {console:?}"
         );
     }
 }
