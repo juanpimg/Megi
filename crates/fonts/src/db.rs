@@ -615,7 +615,13 @@ impl FontDatabase {
     }
 
     /// Resolves an `@font-face` alias list to the best matching registered face.
-    fn alias_face(&self, families: &[&str], weight: u16, style: FontStyle, stretch: Stretch) -> Option<fontdb::ID> {
+    fn alias_face(
+        &self,
+        families: &[&str],
+        weight: u16,
+        style: FontStyle,
+        stretch: Stretch,
+    ) -> Option<fontdb::ID> {
         let wanted_style = DbStyle::from(style);
         for family in families {
             let Some(ids) = self.aliases.get(&family.to_ascii_lowercase()) else {
@@ -657,7 +663,13 @@ impl FontDatabase {
             .unwrap_or(name)
     }
 
-    fn query_face(&self, families: &[&str], weight: u16, style: FontStyle, stretch: Stretch) -> Option<fontdb::ID> {
+    fn query_face(
+        &self,
+        families: &[&str],
+        weight: u16,
+        style: FontStyle,
+        stretch: Stretch,
+    ) -> Option<fontdb::ID> {
         if let Some(id) = self.alias_face(families, weight, style, stretch) {
             return Some(id);
         }
@@ -673,12 +685,17 @@ impl FontDatabase {
         self.db.query(&Query {
             families: &expanded,
             weight: Weight(weight),
-            stretch: stretch,
+            stretch,
             style: DbStyle::from(style),
         })
     }
 
-    fn last_resort_face(&self, weight: u16, style: FontStyle, stretch: Stretch) -> Option<fontdb::ID> {
+    fn last_resort_face(
+        &self,
+        weight: u16,
+        style: FontStyle,
+        stretch: Stretch,
+    ) -> Option<fontdb::ID> {
         let wanted_style = DbStyle::from(style);
         let mut best: Option<(i32, fontdb::ID)> = None;
         for face in self.db.faces() {
@@ -709,7 +726,10 @@ impl FontDatabase {
         style: FontStyle,
         stretch: Stretch,
     ) -> Result<Font, FontError> {
-        debug_assert!(weight >= 1 && weight <= 1000, "font weight {weight} out of CSS range [1, 1000]");
+        debug_assert!(
+            (1..=1000).contains(&weight),
+            "font weight {weight} out of CSS range [1, 1000]"
+        );
         let weight = weight.clamp(1, 1000);
         if let Some(id) = self.query_face(families, weight, style, stretch) {
             return self.build_font(id);
@@ -760,7 +780,8 @@ impl FontDatabase {
         style: FontStyle,
         size_px: f32,
     ) -> Result<FontMetrics, FontError> {
-        self.font(families, weight, style, Stretch::Normal)?.metrics(size_px)
+        self.font(families, weight, style, Stretch::Normal)?
+            .metrics(size_px)
     }
 
     /// Fallback-aware, unshaped text width in px at `size_px`.
