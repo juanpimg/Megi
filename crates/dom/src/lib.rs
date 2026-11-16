@@ -1693,7 +1693,12 @@ impl Document {
 
     /// Like [`Document::descendants`], but yields `node_id` itself first.
     pub fn descendants_inclusive(&self, node_id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
-        std::iter::once(node_id).chain(self.descendants(node_id))
+        let mut result = Vec::new();
+        if self.try_node(node_id).is_some() {
+            result.push(node_id);
+            result.extend(self.descendants(node_id));
+        }
+        result.into_iter()
     }
 
     /// Returns an iterator over the ancestors of `node_id` (starting with `node.parent`).
