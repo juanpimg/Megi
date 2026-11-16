@@ -394,6 +394,11 @@ impl ElementData {
         match position {
             Some(position) => {
                 if overwrite {
+                    // Apply the same cap as the insert path (issue #1106): scripted
+                    // setters use overwrite=true and must not bypass the anti-DoS bound.
+                    if attr.value.len() > MAX_ATTRIBUTE_VALUE_BYTES {
+                        return false;
+                    }
                     self.attributes[position].value = attr.value;
                 }
                 false
@@ -895,21 +900,26 @@ impl Document {
         };
 
         if let Some(prev_id) = prev {
-            self.node_mut(prev_id).next_sibling = next;
-        } else {
-            self.node_mut(parent_id).first_child = next;
+            if let Some(n) = self.try_node_mut(prev_id) {
+                n.next_sibling = next;
+            }
+        } else if let Some(p) = self.try_node_mut(parent_id) {
+            p.first_child = next;
         }
 
         if let Some(next_id) = next {
-            self.node_mut(next_id).prev_sibling = prev;
-        } else {
-            self.node_mut(parent_id).last_child = prev;
+            if let Some(n) = self.try_node_mut(next_id) {
+                n.prev_sibling = prev;
+            }
+        } else if let Some(p) = self.try_node_mut(parent_id) {
+            p.last_child = prev;
         }
 
-        let n = self.node_mut(node_id);
-        n.parent = None;
-        n.prev_sibling = None;
-        n.next_sibling = None;
+        if let Some(n) = self.try_node_mut(node_id) {
+            n.parent = None;
+            n.prev_sibling = None;
+            n.next_sibling = None;
+        }
     }
 
     /// Appends `child_id` as the last child of `parent_id` in `O(1)` time.
@@ -3220,6 +3230,23 @@ mod tests {
         assert_eq!(doc.get_elements_by_class_name("top primary"), vec![nav]);
         assert!(doc.get_elements_by_class_name("top missing").is_empty());
         assert!(doc.get_elements_by_class_name("  ").is_empty());
+    }
+
+    #[test]
+    fn set_attribute_overwrite_respects_value_byte_cap() {
+        // Regression test for #1106: the overwrite path used by scripted setters
+        // bypassed MAX_ATTRIBUTE_VALUE_BYTES.
+        let mut element = ElementData::new(Namespace::Html, "div");
+        assert!(element.set_attribute(Attribute::new("id", "x"), false));
+        assert!(
+            !element.set_attribute(Attribute::new("id", "y".repeat(1024 * 1024)), true),
+            "an oversized overwrite must be rejected"
+        );
+        assert_eq!(element.get_attribute("id"), Some("x"));
+        // A value within the cap still overwrites normally.
+        let allowed = "y".repeat(MAX_ATTRIBUTE_VALUE_BYTES);
+        assert!(!element.set_attribute(Attribute::new("id", allowed.clone()), true));
+        assert_eq!(element.get_attribute("id"), Some(allowed.as_str()));
     }
 
     #[test]
