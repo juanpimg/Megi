@@ -321,6 +321,30 @@ fn text_and_pattern_rendering_is_deterministic() {
 }
 
 #[test]
+fn pattern_tile_budget_is_shared_across_paints() {
+    // Each paint stays under the per-paint 10k cap, but two of them together
+    // exceed the global budget (#439). Before the fix both were allowed and a
+    // document with many patterned shapes multiplied the work unbounded.
+    let source = "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'>
+      <defs><pattern id='p' patternUnits='userSpaceOnUse' width='0.4' height='0.4'>
+        <rect width='0.4' height='0.4' fill='red'/></pattern></defs>
+      <rect width='32' height='32' fill='url(#p)'/>
+      <rect x='8' y='8' width='16' height='16' fill='url(#p)'/></svg>";
+    let error = render_svg(
+        source.as_bytes(),
+        &SvgOptions {
+            width: Some(32),
+            height: Some(32),
+        },
+    )
+    .expect_err("global tile budget");
+    assert!(
+        matches!(&error, SvgError::Limit(message) if message.contains("global pattern tile budget")),
+        "{error:?}"
+    );
+}
+
+#[test]
 fn extreme_pattern_tiles_hit_the_budget_instead_of_overflowing() {
     let source =
         "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'>

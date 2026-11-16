@@ -12,6 +12,8 @@
 //! pixel buffer byte for byte on every platform (IEEE `f32` arithmetic only, no
 //! threading and no randomness).
 
+use std::cell::Cell;
+
 use crate::color::Color;
 use crate::document::{
     BlendMode, ClipPathSpec, ColorMatrixKind, CompositeOperator, Document, EffectRef, FillRule,
@@ -29,6 +31,10 @@ use crate::{Limits, SvgError, SvgImage};
 const SUB_ROWS: usize = 4;
 /// Sub-samples per axis for stroke primitives.
 const STAMP_SAMPLES: u32 = 4;
+/// Total tile pixels allowed across all pattern paints in one render (#439).
+/// Each tile owns an offscreen `RGBA8` canvas, so this bounds the allocation
+/// work that nested patterns can trigger.
+const MAX_PATTERN_TILE_PIXELS: u64 = 16 * 1024 * 1024;
 
 /// Rasterizes a document into a straight-RGBA image.
 pub(crate) fn rasterize(
@@ -58,6 +64,7 @@ pub(crate) fn rasterize(
             "non-finite viewport transform".to_owned(),
         ));
     }
+    let budget = Cell::new(PatternBudget::default());
     for shape in &document.shapes {
         let context = PaintContext {
             gradients: &document.gradients,
@@ -66,6 +73,7 @@ pub(crate) fn rasterize(
             bbox: shape.bbox,
             viewport,
             depth: 0,
+            budget: &budget,
         };
         if shape.clip.is_empty() && shape.mask.is_empty() && shape.filter.is_none() {
             draw_shape(&mut canvas, shape, &context)?;
@@ -80,6 +88,7 @@ pub(crate) fn rasterize(
             &document.gradients,
             &document.patterns,
             viewport,
+            &budget,
         )?;
     }
     Ok(SvgImage {
@@ -91,6 +100,24 @@ pub(crate) fn rasterize(
 
 /// Paint resolution context (shape transform/bbox for `objectBoundingBox` units plus
 /// pattern recursion depth).
+/// Global anti-DoS budget shared by every pattern paint in one render (#439).
+/// The per-paint tile cap does not bound the cross-level product of nested
+/// patterns, so tiles and tile pixels are charged once, here.
+#[derive(Clone, Copy)]
+struct PatternBudget {
+    tiles: u64,
+    pixels: u64,
+}
+
+impl Default for PatternBudget {
+    fn default() -> Self {
+        Self {
+            tiles: MAX_PATTERN_TILES,
+            pixels: MAX_PATTERN_TILE_PIXELS,
+        }
+    }
+}
+
 struct PaintContext<'a> {
     gradients: &'a [GradientSpec],
     patterns: &'a [PatternSpec],
@@ -98,6 +125,8 @@ struct PaintContext<'a> {
     bbox: (f32, f32, f32, f32),
     viewport: Transform,
     depth: usize,
+    /// Shared across recursion so nested patterns cannot multiply the budget.
+    budget: &'a Cell<PatternBudget>,
 }
 
 /// Draws one shape (fill + stroke) using the coverage canvas.
@@ -307,6 +336,7 @@ fn apply_mask(
             bbox: shape.bbox,
             viewport: mask_viewport,
             depth: context.depth,
+            budget: context.budget,
         };
         draw_shape(&mut content, shape, &shape_context)?;
     }
@@ -920,6 +950,7 @@ fn draw_text(
     gradients: &[GradientSpec],
     patterns: &[PatternSpec],
     viewport: Transform,
+    budget: &Cell<PatternBudget>,
 ) -> Result<(), SvgError> {
     if spec.opacity <= 0.0 || spec.text.is_empty() {
         return Ok(());
@@ -1054,6 +1085,7 @@ fn draw_text(
         bbox: spec.bbox,
         viewport,
         depth: 0,
+        budget,
     };
     if let Some(filled) = prepare_paint(
         spec.fill,
@@ -1222,6 +1254,18 @@ impl Canvas {
         if columns <= 0.0 || rows <= 0.0 {
             return Ok(());
         }
+        // Charge the whole tile grid against the *global* budget before doing any
+        // work (#439). The per-paint cap above is still useful as a fast reject,
+        // but only this shared counter bounds tiles^depth across nested patterns.
+        let tiles = (columns.ceil() as u64).saturating_mul(rows.ceil() as u64);
+        let mut left = context.budget.get();
+        if tiles > left.tiles {
+            return Err(SvgError::Limit(
+                "global pattern tile budget exceeded".to_owned(),
+            ));
+        }
+        left.tiles -= tiles;
+        context.budget.set(left);
         let i0 = (i0f as i64).saturating_sub(1);
         let i1 = (i1f as i64).saturating_add(1);
         let j0 = (j0f as i64).saturating_sub(1);
@@ -1259,6 +1303,15 @@ impl Canvas {
                 }
                 let tile_width = (x1 - x0) as usize;
                 let tile_height = (y1 - y0) as usize;
+                let tile_pixels = (tile_width as u64).saturating_mul(tile_height as u64);
+                let mut left = context.budget.get();
+                if tile_pixels > left.pixels {
+                    return Err(SvgError::Limit(
+                        "global pattern tile pixel budget exceeded".to_owned(),
+                    ));
+                }
+                left.pixels -= tile_pixels;
+                context.budget.set(left);
                 let mut tile = Canvas::new(tile_width, tile_height);
                 let local =
                     Transform::translate(-(x0 as f32), -(y0 as f32)).then(content_to_device);
@@ -1270,6 +1323,7 @@ impl Canvas {
                         bbox: shape.bbox,
                         viewport: local,
                         depth: context.depth + 1,
+                        budget: context.budget,
                     };
                     draw_shape(&mut tile, shape, &shape_context)?;
                 }
