@@ -218,6 +218,8 @@ pub enum DomError {
     /// The node is detached, so an operation that needs its parent (e.g. `outerHTML`
     /// replacement) cannot proceed.
     DetachedNode(NodeId),
+    /// The operation would exceed the maximum node count.
+    NodeLimitExceeded,
 }
 
 impl fmt::Display for DomError {
@@ -240,6 +242,7 @@ impl fmt::Display for DomError {
             Self::DetachedNode(node) => {
                 write!(f, "node {node:?} is detached and has no parent")
             }
+            Self::NodeLimitExceeded => write!(f, "node limit exceeded"),
         }
     }
 }
@@ -2515,15 +2518,26 @@ impl Document {
         if deep {
             stack.push((node_id, root, true));
         }
+        let mut cloned_count: usize = 1;
         while let Some((source_id, cloned_id, descend)) = stack.pop() {
             if !descend {
                 continue;
             }
             let mut child = source.node(source_id).first_child;
             while let Some(child_id) = child {
+                if cloned_count >= MAX_CLONE_NODES {
+                    return Err(DomError::NodeLimitExceeded);
+                }
                 let next = source.try_node(child_id).and_then(|node| node.next_sibling);
                 let cloned = self.import_shallow(source, child_id);
-                self.append_child(cloned_id, cloned);
+                if !self.append_child(cloned_id, cloned) {
+                    self.remove_subtree(cloned);
+                    return Err(DomError::HierarchyRequest {
+                        parent: cloned_id,
+                        child: cloned,
+                    });
+                }
+                cloned_count += 1;
                 if let Some((src_contents, cloned_contents)) =
                     self.import_template_pair(source, child_id, cloned)
                 {
