@@ -137,8 +137,8 @@ doc = false
 bench = false
 
 [[bin]]
-name = "webp_vp8"
-path = "fuzz_targets/webp_vp8.rs"
+name = "webp"
+path = "fuzz_targets/webp.rs"
 test = false
 doc = false
 bench = false
@@ -146,14 +146,6 @@ bench = false
 [[bin]]
 name = "js_module"
 path = "fuzz_targets/js_module.rs"
-test = false
-doc = false
-bench = false
-
-# Round 34 (R228): VP8 lossy keyframe decoder and CSS container queries/at-rules.
-[[bin]]
-name = "webp_lossy"
-path = "fuzz_targets/webp_lossy.rs"
 test = false
 doc = false
 bench = false

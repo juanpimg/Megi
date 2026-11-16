@@ -32,8 +32,7 @@ TARGETS=(
   svg_parse
   image_decode
   hpack_decode
-  webp_lossy
-  webp_vp8
+  webp
   render_pipeline
   container_queries
   text_boundary
