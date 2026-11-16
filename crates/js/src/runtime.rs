@@ -5252,7 +5252,11 @@ impl JsRuntime {
                 if let Some(json) = reply {
                     progressed = true;
                     delivered += 1;
-                    self.deliver_worker_reply(*id as u32, &json)?;
+                    // One worker's failing delivery must not starve the remaining
+                    // workers in this pass (#1140).
+                    if let Err(error) = self.deliver_worker_reply(*id as u32, &json) {
+                        self.report_worker_delivery_error(error, "<worker message>");
+                    }
                 }
                 let error = self.host.borrow_mut().workers[*id]
                     .as_mut()
@@ -5260,7 +5264,9 @@ impl JsRuntime {
                 if let Some(message) = error {
                     progressed = true;
                     delivered += 1;
-                    self.deliver_worker_error(*id as u32, &message)?;
+                    if let Err(error) = self.deliver_worker_error(*id as u32, &message) {
+                        self.report_worker_delivery_error(error, "<worker error>");
+                    }
                 }
             }
             if !progressed {
@@ -5268,6 +5274,14 @@ impl JsRuntime {
             }
         }
         Ok(delivered)
+    }
+
+    /// Reports a worker-delivery failure like any other uncaught error so the pump can
+    /// continue with the other workers (#1140).
+    fn report_worker_delivery_error(&mut self, error: JsError, source: &str) {
+        let message = error.to_string();
+        let _scope = HostScope::enter(&self.host);
+        let _ = crate::events::report_uncaught(&mut self.context, &message, source);
     }
 
     fn deliver_worker_reply(&mut self, id: u32, json: &str) -> Result<(), JsError> {
@@ -6599,6 +6613,46 @@ mod mutation_observer_delivery_tests {
         assert_eq!(
             line.message, "attrnode:1:data-x",
             "removeAttributeNode must deliver an attributes record with its name (#1137): {console:?}"
+        );
+    }
+
+    #[test]
+    fn failing_worker_reply_does_not_starve_other_workers() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime.set_worker_loader(Box::new(|url| {
+            if url.ends_with("worker.js") {
+                Ok("onmessage = function(e) { postMessage(e.data); };".to_string())
+            } else {
+                Err(crate::JsError::Runtime("not found".to_string()))
+            }
+        }));
+        runtime
+            .eval(
+                "window.__a = null; window.__b = null;
+                 var wa = new Worker('worker.js'); wa.onmessage = function(e) { __a = e.data; };
+                 var wb = new Worker('worker.js'); wb.onmessage = function(e) { __b = e.data; };
+                 wa.postMessage(1); wb.postMessage(2);",
+                "workers.js",
+            )
+            .expect("eval workers script");
+        // Make worker A's queued reply undeliverable (malformed JSON).
+        {
+            let host = runtime.host.borrow();
+            let worker_a = host.workers[0].as_ref().expect("worker A");
+            worker_a
+                .to_main
+                .borrow_mut()
+                .push_front("not json".to_string());
+        }
+        // Before the fix this aborted on worker A, so worker B never received its reply.
+        runtime.run_worker_tasks(16).expect("worker pump must not abort");
+        assert_eq!(runtime.eval("__b", "check.js").unwrap(), "2");
+        assert!(
+            runtime
+                .take_console()
+                .iter()
+                .any(|entry| entry.level == "error"),
+            "the failed delivery must be reported"
         );
     }
 
