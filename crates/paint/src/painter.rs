@@ -870,7 +870,7 @@ fn paint_stacking_context(
     }
 
     // Opacity group: the whole subtree is composited once with `opacity`.
-    if !is_root && opacity < 1.0 && list.len() > start {
+    if opacity < 1.0 && list.len() > start {
         let items: Vec<DisplayItem> = list.items.drain(start..).collect();
         let rect = items_bounds(&items).unwrap_or_else(|| layout_box.dimensions.border_box());
         list.push(DisplayItem::OpacityGroup {
