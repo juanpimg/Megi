@@ -4518,6 +4518,8 @@ fn run_fragment_parser(
         TokenizerState::Data
     };
 
+    // Per WHATWG §13.4 there is no appropriate end tag in the fragment case, so the
+    // tokenizer's last start tag stays unset (issue #413 was resolved as invalid).
     let mut tok = Tokenizer::from_str_input(
         input,
         TokenizerConfig {
