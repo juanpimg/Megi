@@ -163,16 +163,15 @@ jobs:
           - target: body_stream
             seconds: 300
             extra: ""
-          - target: webp_vp8
-            seconds: 300
+          # WebP container validation and VP8/VP8L decoding in one target (#471):
+          # the two old 300 s campaigns overlapped heavily, so their budget is kept
+          # as a single 600 s run over the union of both corpora.
+          - target: webp
+            seconds: 600
             extra: ""
           - target: js_module
             seconds: 300
             extra: "-detect_leaks=0"
-          # Round 34 (R228): VP8 lossy keyframe decoder + CSS container queries.
-          - target: webp_lossy
-            seconds: 300
-            extra: ""
           - target: container_queries
             seconds: 300
             extra: ""
@@ -284,7 +283,7 @@ jobs:
             seconds: 120
           - target: svg_parse
             seconds: 120
-          - target: webp_lossy
+          - target: webp
             seconds: 120
           - target: container_queries
             seconds: 120
