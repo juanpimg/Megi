@@ -84,9 +84,10 @@ crates/shell  [F7 — EN CURSO]  Ventana nativa y presentación de framebuffer: 
                     Depende de render, paint y net.
 crates/bench  [tooling]  Benchmarks reproducibles de parseo/estilos/layout/paint/PNG.
 
-fuzz/         [tooling aparte]  Workspace autocontenido con cargo-fuzz/libFuzzer para
-                    html_parse, css_parse, selectors y net_url. NO forma parte del DAG
-                    del motor ni de sus dependencias; se ejecuta en CI nocturna.
+fuzz/         [tooling aparte]  Workspace autocontenido con cargo-fuzz/libFuzzer; cubre
+                    DOM/HTML/CSS, layout, paint, SVG, imágenes, fuentes, red, JS y render
+                    (listado canónico en FUZZING.md). NO forma parte del DAG del motor
+                    ni de sus dependencias; se ejecuta en CI nocturna.
 ```
 
 El grafo es estrictamente acíclico. `crates/dom` es el núcleo de datos sin dependencias externas; los crates de parsing/layout (`dom`, `html`, `css`, `layout`) se implementan sólo con `std`. Las únicas dependencias externas de bajo nivel autorizadas están en la matriz de §3.1 (`serde`/`serde_json` en el arnés de test, las librerías tipográficas de `crates/fonts` y `rustls`/`webpki-roots` en `crates/net`); `bench` no usa dependencias externas. **Todos los crates del motor están marcados `#![forbid(unsafe_code)]`**; `fuzz/` es un workspace aparte que no añade dependencias a los crates del motor.
@@ -192,4 +193,4 @@ La auditoría de Fase 4 detectó que la salida de imagen era únicamente PPM. Se
 
 ### 3.3 Fuzzing como *tooling* separado
 
-El directorio `fuzz/` contiene un **workspace Cargo independiente** (con su propio `Cargo.toml` y `[workspace]` vacío) que depende de `cargo-fuzz`/`libfuzzer-sys` y del toolchain nightly con ASan. **No forma parte del workspace del motor ni de su grafo de dependencias**, y sus crates no se publican. Cubre cuatro superficies de entrada no confiable: `html_parse`, `css_parse`, `selectors` y `net_url`. Se ejecuta en CI nochera (`.github/workflows/fuzz-nightly.yml`) y su política de triaje vive en [`FUZZING.md`](FUZZING.md). Esta separación es deliberada: permite fuzzear con nightly/ASan sin contaminar el lockfile ni el build estable del motor.
+El directorio `fuzz/` contiene un **workspace Cargo independiente** (con su propio `Cargo.toml` y `[workspace]` vacío) que depende de `cargo-fuzz`/`libfuzzer-sys` y del toolchain nightly con ASan. **No forma parte del workspace del motor ni de su grafo de dependencias**, y sus crates no se publican. Cubre múltiples superficies de entrada no confiable (DOM/HTML/CSS, layout, paint, SVG, imágenes, fuentes, red, JS y el pipeline de render); el inventario de targets y corpora se mantiene en [`FUZZING.md`](FUZZING.md), que es la fuente única de verdad (los cuatro iniciales —`html_parse`, `css_parse`, `selectors` y `net_url`— ya no son exhaustivos). Se ejecuta en CI nochera (`.github/workflows/fuzz-nightly.yml`) y su política de triaje vive en [`FUZZING.md`](FUZZING.md). Esta separación es deliberada: permite fuzzear con nightly/ASan sin contaminar el lockfile ni el build estable del motor.
