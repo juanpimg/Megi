@@ -1940,7 +1940,8 @@ fn node_clone_node(this: &JsValue, args: &[JsValue], context: &mut Context) -> J
         )));
     }
     let clone = with_host(|host| host.document.clone_node(node_id, deep))
-        .ok_or_else(|| js_error("no active JavaScript host"))?;
+        .ok_or_else(|| js_error("no active JavaScript host"))?
+        .ok_or_else(|| js_error("NotFoundError: node not found"))?;
     wrap_node(context, clone)
 }
 

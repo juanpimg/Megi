@@ -4225,7 +4225,7 @@ impl TreeBuilder {
                         break;
                     }
                     let next = self.doc.node(child_id).next_sibling;
-                    let cloned = self.doc.clone_node(child_id, true);
+                    let Some(cloned) = self.doc.clone_node(child_id, true) else { continue; };
                     self.doc.append_child(sc_id, cloned);
                     curr = next;
                 }

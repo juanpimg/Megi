@@ -1151,10 +1151,10 @@ impl Document {
     ///
     /// The traversal uses an explicit heap stack, so deep trees cannot overflow the
     /// call stack.
-    pub fn clone_node(&mut self, node_id: NodeId, deep: bool) -> NodeId {
+    pub fn clone_node(&mut self, node_id: NodeId, deep: bool) -> Option<NodeId> {
         // Guard against stale/foreign handles (issue #676).
         if self.try_node(node_id).is_none() {
-            return node_id;
+            return None;
         }
         // Bound clone amplification (issue #678): if the subtree is too large to
         // safely clone, fall back to a shallow clone instead of risking arena
@@ -1167,6 +1167,7 @@ impl Document {
         let mut stack: Vec<(NodeId, NodeId, bool)> = Vec::new();
         if let Some((src_contents, clone_contents)) =
             self.template_contents_pair(node_id, cloned_root)
+            && self.subtree_size(src_contents) <= MAX_CLONE_NODES
         {
             stack.push((src_contents, clone_contents, true));
         }
@@ -1193,7 +1194,7 @@ impl Document {
             }
         }
 
-        cloned_root
+        Some(cloned_root)
     }
 
     /// Allocates a shallow clone of `node_id` (no children) in `O(1)` arena allocations.
@@ -2807,7 +2808,7 @@ mod tests {
         doc.append_child(original_frag, span);
         let _ = doc.append_text(span, "Inert");
 
-        let cloned = doc.clone_node(tmpl, false);
+        let cloned = doc.clone_node(tmpl, false).unwrap();
         assert_ne!(cloned, tmpl);
         let cloned_frag = doc
             .node(cloned)
@@ -3395,7 +3396,7 @@ mod tests {
             let text = doc.create_text_node("x");
             doc.append_child(contents, text);
         }
-        let clone = doc.clone_node(template, false);
+        let clone = doc.clone_node(template, false).unwrap();
         let clone_contents = doc
             .node(clone)
             .as_element()
