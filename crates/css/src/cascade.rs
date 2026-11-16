@@ -293,7 +293,7 @@ impl RuleIndex {
                 Some(RuleKey::Class(class)) => {
                     self.by_class.entry(class).or_default().push(candidate);
                 }
-                Some(RuleKey::Tag(tag)) => self.by_tag.entry(tag).or_default().push(candidate),
+                Some(RuleKey::Tag(tag)) => self.by_tag.entry(tag.to_ascii_lowercase()).or_default().push(candidate),
                 // No usable key (universal or pseudo-class-only rightmost compound): the
                 // selector is evaluated for every element.
                 None => self.slow.push(candidate),
@@ -332,13 +332,9 @@ impl RuleIndex {
         // already lowercase hits the bucket directly; otherwise fold it (allocating only
         // for the rarer uppercase-element case) so `<DIV>` still finds a `div` rule.
         let local_name = element.local_name.as_str();
-        if let Some(rules) = self.by_tag.get(local_name) {
+        let folded = local_name.to_ascii_lowercase();
+        if let Some(rules) = self.by_tag.get(&folded) {
             out.extend_from_slice(rules);
-        } else if local_name.bytes().any(|byte| byte.is_ascii_uppercase()) {
-            let folded = local_name.to_ascii_lowercase();
-            if let Some(rules) = self.by_tag.get(&folded) {
-                out.extend_from_slice(rules);
-            }
         }
 
         // Prune descendant-selector candidates whose required ancestor classes are not on
