@@ -188,7 +188,7 @@ impl Pixmap {
 
     /// Blends a source color over the destination pixel at (x, y) using Porter-Duff source-over.
     pub fn blend_pixel(&mut self, x: u32, y: u32, src: Color) {
-        if x >= self.width || y >= self.height || src.a == 0 {
+        if x >= self.width || y >= self.height || src.a == 0 || self.is_clipped(x, y) {
             return;
         }
         let idx = (y * self.width + x) as usize;
