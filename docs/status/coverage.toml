@@ -513,10 +513,10 @@ evidence = "test:crates/render/tests/background_layers_tests.rs::multi_layer_bac
 [[capability]]
 id = "F7-SCRIPTING-UI"
 area = "F7"
-name = "Formularios, find-in-page, pestañas y menú contextual"
+name = "Find-in-page, pestañas y chrome del shell"
 source = "crates/shell"
 state = "done"
-evidence = "fixture:crates/shell/src/tabs.rs"
+evidence = "test:crates/shell/tests/shell_tests.rs::find_request_reports_hits_and_highlight_rects"
 
 [[capability]]
 id = "F7-CHROME-OVERLAY"
