@@ -3955,10 +3955,78 @@ fn rewrite_dynamic_imports(body: &mut String) -> Result<Vec<String>, JsError> {
     Ok(specifiers)
 }
 
+/// Replaces the contents of JS strings, template literals and comments with spaces,
+/// preserving byte length and newlines. Textual module scans then only see executable
+/// code, so `await` or `import(` inside a string/comment cannot be misdetected (#1145).
+/// Template substitutions (`${…}`) inside a template are masked too: this is part of the
+/// documented module-preprocessor subset.
+fn mask_js_literals(source: &str) -> String {
+    let mut bytes = source.as_bytes().to_vec();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] == b'/'
+            && i + 1 < bytes.len()
+            && (bytes[i + 1] == b'/' || bytes[i + 1] == b'*')
+        {
+            let block = bytes[i + 1] == b'*';
+            bytes[i] = b' ';
+            bytes[i + 1] = b' ';
+            i += 2;
+            if block {
+                while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                    if bytes[i] != b'\n' {
+                        bytes[i] = b' ';
+                    }
+                    i += 1;
+                }
+                if i + 1 < bytes.len() {
+                    bytes[i] = b' ';
+                    bytes[i + 1] = b' ';
+                    i += 2;
+                }
+            } else {
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    bytes[i] = b' ';
+                    i += 1;
+                }
+            }
+        } else if matches!(bytes[i], b'\'' | b'"' | b'`') {
+            let quote = bytes[i];
+            bytes[i] = b' ';
+            i += 1;
+            while i < bytes.len() {
+                if bytes[i] == b'\\' {
+                    bytes[i] = b' ';
+                    i += 1;
+                    if i < bytes.len() {
+                        bytes[i] = b' ';
+                        i += 1;
+                    }
+                    continue;
+                }
+                if bytes[i] == quote {
+                    bytes[i] = b' ';
+                    i += 1;
+                    break;
+                }
+                if bytes[i] != b'\n' {
+                    bytes[i] = b' ';
+                }
+                i += 1;
+            }
+        } else {
+            i += 1;
+        }
+    }
+    // Every replaced byte is ASCII, so masking cannot break UTF-8 sequences.
+    String::from_utf8(bytes).expect("masking preserves UTF-8")
+}
+
 /// Detects top-level `await` (the synchronous module evaluator cannot suspend).
 fn module_has_top_level_await(body: &str) -> bool {
+    let masked = mask_js_literals(body);
     let mut depth = 0i32;
-    for line in body.lines() {
+    for line in masked.lines() {
         let trimmed = line.trim();
         if depth <= 0
             && (trimmed.starts_with("await ")
@@ -6751,5 +6819,19 @@ mod mutation_observer_delivery_tests {
                 .any(|entry| entry.level == "error" && entry.message.contains("boom")),
             "the thrown exception must be reported as uncaught: {console:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod module_scan_tests {
+    use super::*;
+
+    #[test]
+    fn await_in_strings_and_comments_is_not_top_level_await() {
+        assert!(module_has_top_level_await("await Promise.resolve(1);"));
+        assert!(!module_has_top_level_await("var s = 'await Promise.resolve(1)';"));
+        assert!(!module_has_top_level_await("// await Promise.resolve(1)\nvar x = 1;"));
+        assert!(!module_has_top_level_await("/* = await foo(); */ var x = 1;"));
+        assert!(!module_has_top_level_await("var s = `= await foo()`;"));
     }
 }
