@@ -360,9 +360,8 @@ pub fn parse_set_cookie(
             "path" => {
                 if raw_attribute_value.starts_with('/') {
                     parsed.path = Some(raw_attribute_value.to_owned());
-                } else if !raw_attribute_value.is_empty() {
-                    return Err(SetCookieError::InvalidPath(raw_attribute_value.to_owned()));
                 }
+                // Non-absolute paths are ignored and the default path is used (#1263).
             }
             "secure" => parsed.secure = true,
             "httponly" => parsed.http_only = true,
@@ -853,10 +852,9 @@ mod tests {
             parse_set_cookie("a=b; Domain=.other.test", &base, UNIX_EPOCH),
             Err(SetCookieError::InvalidDomain(_))
         ));
-        assert!(matches!(
-            parse_set_cookie("a=b; Path=relative", &base, UNIX_EPOCH),
-            Err(SetCookieError::InvalidPath(_))
-        ));
+        // Non-absolute Path is ignored and the default path applies (#1263).
+        let parsed = parse_set_cookie("a=b; Path=relative", &base, UNIX_EPOCH).expect("valid");
+        assert_eq!(parsed.path, None);
     }
 
     #[test]
