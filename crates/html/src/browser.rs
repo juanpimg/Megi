@@ -199,12 +199,11 @@ pub fn document_write_with_options(
         options,
     );
     let new_children = new_root_children(doc, marker);
-    // Appending to <body> cannot fail for parser-produced nodes; ignore the result but keep
-    // the tree consistent by re-attaching anything that was rejected.
+    // Appending to <body> can in principle be rejected (e.g. a cyclic child chain); drop
+    // the rejected node instead of leaking it into the document root (#1125).
     for child in new_children {
         if !doc.append_child(body, child) {
-            // Should be unreachable: the fragment parser cannot produce ancestor cycles.
-            debug_assert!(false, "document.write could not append a fragment child");
+            doc.remove_subtree(child);
         }
     }
     violations
