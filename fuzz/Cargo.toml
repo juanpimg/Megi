@@ -199,10 +199,6 @@ path = "fuzz_targets/fonts_shape.rs"
 [[bin]]
 name = "font_decode"
 path = "fuzz_targets/font_decode.rs"
-
-[[bin]]
-name = "font_decode"
-path = "fuzz_targets/font_decode.rs"
 test = false
 doc = false
 bench = false

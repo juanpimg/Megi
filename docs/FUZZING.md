@@ -8,11 +8,13 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 
 > **Status**: the harness is wired into CI via
 > [`.github/workflows/fuzz-nightly.yml`](../.github/workflows/fuzz-nightly.yml). The
-> scheduled/dispatch run executes **18 targets** under the default libFuzzer
+> scheduled/dispatch run executes **all 26 harnesses** under the default libFuzzer
 > **AddressSanitizer** build (10 minutes for 9 critical parsers/decoders and 5 minutes for
-> the remaining 8 scheduled targets), plus a short **UndefinedBehaviorSanitizer (UBSan)**
-> smoke matrix on 9 representative targets. Pull requests run a build-only job that compiles
-> every `[[bin]]` fuzz target in `fuzz/Cargo.toml` on nightly (no libFuzzer run).
+> the remaining 17), plus a short **UndefinedBehaviorSanitizer (UBSan)** smoke matrix on 9
+> representative targets. Pull requests and pushes to `main` run a build-only job that
+> compiles every `[[bin]]` fuzz target in `fuzz/Cargo.toml` on the pinned nightly (no
+> libFuzzer run), so a manifest or public-API break fails on the merge that causes it
+> instead of the next morning.
 
 ## Layout
 
@@ -117,7 +119,7 @@ for t in \
   html_parse text_boundary css_parse selectors net_url render_pipeline js_eval svg_parse \
   woff2_decode image_decode exif_parse hpack_decode h2_push body_stream \
   webp_vp8 js_module webp_lossy container_queries dom_tree fonts_shape \
-  layout_tree paint_display_list; do
+  layout_tree paint_display_list dom_mutate layout_resolve net_surface font_decode; do
   extra=""
   case "$t" in js_eval|js_module) extra="-detect_leaks=0" ;; esac
   cargo +nightly fuzz run "$t" -- -max_total_time=30 -timeout=25 $extra
