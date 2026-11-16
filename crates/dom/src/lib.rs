@@ -1159,7 +1159,7 @@ impl Document {
         // Bound clone amplification (issue #678): if the subtree is too large to
         // safely clone, fall back to a shallow clone instead of risking arena
         // exhaustion / panic.
-        let deep = deep && self.subtree_size(node_id) <= MAX_CLONE_NODES;
+        let deep = if deep { self.subtree_size(node_id) <= MAX_CLONE_NODES } else { false };
         let cloned_root = self.clone_node_shallow(node_id);
 
         // Work stack of `(source, clone, deep)` frames; template contents are always deep.
@@ -1967,7 +1967,14 @@ impl Document {
                         // Truncate and stop collecting.
                         let remaining = Self::MAX_TEXT_CONTENT_BYTES.saturating_sub(text.len());
                         if remaining > 0 {
-                            text.push_str(&data[..remaining.min(data.len())]);
+                            // `remaining` is a byte count that can land inside a multi-byte
+                            // code point. Back up to the nearest UTF-8 boundary before
+                            // slicing, otherwise the truncation panics on untrusted text.
+                            let mut end = remaining.min(data.len());
+                            while end > 0 && !data.is_char_boundary(end) {
+                                end -= 1;
+                            }
+                            text.push_str(&data[..end]);
                         }
                         // Mark by clearing pending (best effort).
                         pending.clear();
@@ -3253,6 +3260,29 @@ mod tests {
             Err(DomError::CannotHaveChildren(_))
         ));
         assert!(doc.validate_invariants().is_ok());
+    }
+
+    #[test]
+    fn text_content_truncates_on_utf8_boundary() {
+        // Regression test: a byte-count truncation could slice through a multi-byte
+        // code point and panic (issue #1105).
+        let mut doc = Document::new();
+        let div = doc.create_element(Namespace::Html, "div", vec![]);
+        doc.append_child(doc.root(), div);
+        doc.append_text(div, "a"); // shift `remaining` to an odd byte offset
+        let span = doc.create_element(Namespace::Html, "span", vec![]);
+        doc.append_child(div, span);
+        let mut big = String::new();
+        while big.len() <= Document::MAX_TEXT_CONTENT_BYTES {
+            big.push('é');
+        }
+        doc.append_text(span, &big);
+
+        // Before the fix this panicked with "end byte index ... is not a char boundary".
+        let text = doc.text_content(div);
+        assert!(text.len() <= Document::MAX_TEXT_CONTENT_BYTES);
+        assert_eq!(&text[..1], "a");
+        assert_eq!(text.chars().last(), Some('é'));
     }
 
     #[test]
