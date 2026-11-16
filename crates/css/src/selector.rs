@@ -29,10 +29,42 @@ use std::collections::HashMap;
 /// match (direct API use).
 pub const MAX_MATCH_STEPS: u32 = 200_000;
 
+/// Maximum nesting depth of functional pseudo-class arguments while parsing: `:is(:is(…))`.
+///
+/// The selector grammar is recursive (`:is()`/`:where()`/`:not()` arguments are selector
+/// lists), so a stylesheet of `:is(` repeated tens of thousands of times used to overflow the
+/// host stack before any declaration was validated (#376).
+pub const MAX_SELECTOR_NESTING: usize = 32;
+
 thread_local! {
     static MATCH_STEPS: Cell<u32> = const { Cell::new(0) };
     static MATCH_DEPTH: Cell<u32> = const { Cell::new(0) };
     static MATCH_EXHAUSTED: Cell<bool> = const { Cell::new(false) };
+    static PARSER_NESTING: Cell<usize> = const { Cell::new(0) };
+}
+
+/// Tracks the [`MAX_SELECTOR_NESTING`] recursion depth of [`parse_selectors`].
+struct ParserNestingGuard;
+
+impl ParserNestingGuard {
+    /// Returns `None` once the nesting limit is reached, so the caller can reject the
+    /// selector instead of recursing further.
+    fn enter() -> Option<Self> {
+        PARSER_NESTING.with(|depth| {
+            if depth.get() >= MAX_SELECTOR_NESTING {
+                None
+            } else {
+                depth.set(depth.get() + 1);
+                Some(ParserNestingGuard)
+            }
+        })
+    }
+}
+
+impl Drop for ParserNestingGuard {
+    fn drop(&mut self) {
+        PARSER_NESTING.with(|depth| depth.set(depth.get().saturating_sub(1)));
+    }
 }
 
 struct MatchDepthGuard;
@@ -1017,6 +1049,11 @@ pub fn parse_selectors(input: &str) -> SelectorList {
     if input.trim().is_empty() {
         return SelectorList::default();
     }
+    // Functional pseudo-class arguments recurse through this same entry point; past the cap
+    // the list is dropped as invalid, which also invalidates the declaration that uses it.
+    let Some(_nesting) = ParserNestingGuard::enter() else {
+        return SelectorList::default();
+    };
     let parts = split_top_level_commas(input);
     let mut selectors = Vec::with_capacity(parts.len());
     for part in parts {
