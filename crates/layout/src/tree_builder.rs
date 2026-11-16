@@ -40,10 +40,17 @@ pub fn build_layout_tree_with_replaced_sizes(
 /// 28k boxes of a text-heavy document share the (few hundred) distinct styles
 /// instead of deep-cloning one style per element. Equality is always checked on a
 /// bucket hit, so the key (a cached value fingerprint) can never change semantics.
+/// One cached anonymous-style derivation, keyed by the parent's value fingerprint.
+struct AnonymousStyle {
+    /// The parent style whose derivation this is (kept to verify fingerprint collisions).
+    parent: Arc<ComputedStyle>,
+    derived: Arc<ComputedStyle>,
+}
+
 #[derive(Default)]
 struct StyleCache {
     buckets: HashMap<u64, Vec<Arc<ComputedStyle>>>,
-    anonymous: HashMap<usize, Arc<ComputedStyle>>,
+    anonymous: HashMap<u64, Vec<AnonymousStyle>>,
 }
 
 impl StyleCache {
@@ -73,13 +80,28 @@ impl StyleCache {
     /// Anonymous (generated-box) style derived from a parent style. Parents that
     /// share an interned style share the derived anonymous style too.
     fn anonymous_for(&mut self, parent: &Arc<ComputedStyle>) -> Arc<ComputedStyle> {
-        let key = Arc::as_ptr(parent) as usize;
-        if let Some(style) = self.anonymous.get(&key) {
-            return Arc::clone(style);
+        // Key by the parent's value fingerprint, not its Arc address (#1156): distinct
+        // allocations with equal styles must share the derived anonymous style. Equality
+        // is checked on a bucket hit, so a fingerprint collision cannot change semantics.
+        let cached = parent.fingerprint();
+        let key = if cached == 0 {
+            parent.compute_fingerprint()
+        } else {
+            cached
+        };
+        if let Some(bucket) = self.anonymous.get(&key) {
+            for entry in bucket {
+                if entry.parent.as_ref() == parent.as_ref() {
+                    return Arc::clone(&entry.derived);
+                }
+            }
         }
-        let style = Arc::new(anonymous_style_from(parent));
-        self.anonymous.insert(key, Arc::clone(&style));
-        style
+        let derived = Arc::new(anonymous_style_from(parent));
+        self.anonymous.entry(key).or_default().push(AnonymousStyle {
+            parent: Arc::clone(parent),
+            derived: Arc::clone(&derived),
+        });
+        derived
     }
 }
 
@@ -603,4 +625,25 @@ fn row_fixup_children(
         out.push(cell);
     }
     out
+}
+
+#[cfg(test)]
+mod style_cache_tests {
+    use super::*;
+
+    #[test]
+    fn equal_parent_styles_share_anonymous_derivation() {
+        let mut cache = StyleCache::default();
+        // Two distinct Arc allocations holding equal styles.
+        let a = Arc::new(css::ComputedStyle::initial());
+        let b = Arc::new(css::ComputedStyle::initial());
+        assert!(!Arc::ptr_eq(&a, &b));
+
+        let derived_a = cache.anonymous_for(&a);
+        let derived_b = cache.anonymous_for(&b);
+        assert!(
+            Arc::ptr_eq(&derived_a, &derived_b),
+            "equally-styled parents must share the derived anonymous style (#1156)"
+        );
+    }
 }
