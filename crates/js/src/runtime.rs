@@ -3644,7 +3644,14 @@ fn deliver_mutation_records(context: &mut Context) -> Result<(), JsError> {
         };
         let args = [JsValue::from(records), object];
         if let Err(error) = callback.call(&JsValue::undefined(), &args, context) {
-            return Err(JsError::Runtime(error.to_string()));
+            // A throwing callback must be reported, but must not abort delivery to
+            // the remaining observers (#1136).
+            let _ = with_host(|host| {
+                host.push_console(ConsoleEntry {
+                    level: "error".to_string(),
+                    message: error.to_string(),
+                })
+            });
         }
     }
     Ok(())
@@ -6306,7 +6313,17 @@ fn node_remove_attribute_node(
     })
     .flatten();
     match old {
-        Some(value) => attribute_item(context, &name, &value),
+        Some(value) => {
+            // The other attribute-removal paths record a mutation; removeAttributeNode
+            // must too, otherwise observers watching `attributes` miss the removal (#1137).
+            note_mutation(
+                MutationKind::Attributes,
+                node_id,
+                Some(name.clone()),
+                Some(value.clone()),
+            );
+            attribute_item(context, &name, &value)
+        }
         None => Ok(JsValue::null()),
     }
 }
@@ -6523,6 +6540,76 @@ mod mutation_observer_delivery_tests {
         assert_eq!(
             line.message, "rearm:1:0:1",
             "disconnect() must drop pending records and leave the observer re-armable (#1135): {console:?}"
+        );
+    }
+
+    #[test]
+    fn remove_attribute_node_records_an_attributes_mutation() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                var el = document.createElement('div');
+                document.body.appendChild(el);
+                el.setAttribute('data-x', '1');
+                var attr = el.getAttributeNode('data-x');
+                var obs = new MutationObserver(function() {});
+                obs.observe(el, { attributes: true });
+                el.removeAttributeNode(attr);
+                var records = obs.takeRecords();
+                console.log('attrnode:' + records.length + ':' + (records.length ? records[0].attributeName : '-'));
+                "#,
+                "observer_attrnode.js",
+            )
+            .expect("eval removeAttributeNode script");
+        let console = runtime.take_console();
+        let line = console
+            .iter()
+            .find(|entry| entry.message.starts_with("attrnode:"))
+            .expect("attrnode log");
+        assert_eq!(
+            line.message, "attrnode:1:data-x",
+            "removeAttributeNode must deliver an attributes record with its name (#1137): {console:?}"
+        );
+    }
+
+    #[test]
+    fn throwing_observer_callback_does_not_starve_other_observers() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                var el = document.createElement('div');
+                document.body.appendChild(el);
+                var seen = 0;
+                var bad = new MutationObserver(function() { throw new Error('boom'); });
+                var good = new MutationObserver(function(records) { seen += records.length; });
+                bad.observe(el, { childList: true });
+                good.observe(el, { childList: true });
+                el.appendChild(document.createTextNode('x'));
+                "#,
+                "observer_throw.js",
+            )
+            .expect("eval observer throw script");
+        // A callback throwing must be reported, not abort the delivery pass.
+        runtime.run_microtasks().expect("microtask delivery");
+        runtime
+            .eval("console.log('throwisolate:' + seen);", "observer_throw_check.js")
+            .expect("eval check script");
+        let console = runtime.take_console();
+        let line = console
+            .iter()
+            .find(|entry| entry.message.starts_with("throwisolate:"))
+            .expect("throwisolate log");
+        assert_eq!(
+            line.message, "throwisolate:1",
+            "the healthy observer must still receive its records (#1136): {console:?}"
+        );
+        assert!(
+            console
+                .iter()
+                .any(|entry| entry.level == "error" && entry.message.contains("boom")),
+            "the thrown exception must be reported as uncaught: {console:?}"
         );
     }
 }
