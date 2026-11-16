@@ -1277,7 +1277,9 @@ fn min_height_is_zero(style: &ComputedStyle) -> bool {
     match style.min_height {
         Length::Auto => true,
         Length::Px(px) => px <= 0.0,
-        Length::Percent(_) => false,
+        // 0% resolves to zero; a positive percentage against an indefinite
+        // containing-block height is treated as zero per CSS 2.2 §10.7.
+        Length::Percent(p) => p <= 0.0,
     }
 }
 
