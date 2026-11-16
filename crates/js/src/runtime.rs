@@ -1215,7 +1215,7 @@ fn this_handle(this: &JsValue, context: &mut Context) -> JsResult<u32> {
         .map_err(|error| js_error(error.to_string()))?;
     value
         .as_number()
-        .filter(|number| *number >= 0.0 && number.fract() == 0.0)
+        .filter(|number| *number >= 0.0 && *number <= u32::MAX as f64 && number.fract() == 0.0)
         .map(|number| number as u32)
         .ok_or_else(|| js_error("invalid DOM node handle"))
 }
@@ -3522,7 +3522,15 @@ fn observer_disconnect(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let slot = observer_slot(this, context)?;
-    with_host(|host| host.observers.retain(|r| r.object_slot != slot));
+    // Per DOM §4.3.1, disconnect() only stops delivering future records: the observer
+    // stays registered so a later observe() can re-arm it. Removing the registration
+    // made observe() silently no-op forever (#1135).
+    with_host(|host| {
+        if let Some(registration) = host.observers.iter_mut().find(|r| r.object_slot == slot) {
+            registration.targets.clear();
+            registration.records.clear();
+        }
+    });
     Ok(JsValue::undefined())
 }
 
@@ -6482,5 +6490,39 @@ mod mutation_observer_delivery_tests {
             .find(|entry| entry.message.starts_with("norm:"))
             .expect("norm log");
         assert_eq!(line.message, "norm:1:0");
+    }
+
+    #[test]
+    fn mutation_observer_can_be_rearmed_after_disconnect() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                var target = document.createElement('div');
+                document.body.appendChild(target);
+                var obs = new MutationObserver(function() {});
+                obs.observe(target, { attributes: true });
+                target.setAttribute('a', '1');
+                var before = obs.takeRecords().length;
+                obs.disconnect();
+                target.setAttribute('a', '2');
+                var while_disconnected = obs.takeRecords().length;
+                obs.observe(target, { attributes: true });
+                target.setAttribute('a', '3');
+                var after = obs.takeRecords().length;
+                console.log('rearm:' + before + ':' + while_disconnected + ':' + after);
+                "#,
+                "observer_rearm.js",
+            )
+            .expect("eval observer rearm script");
+        let console = runtime.take_console();
+        let line = console
+            .iter()
+            .find(|entry| entry.message.starts_with("rearm:"))
+            .expect("rearm log");
+        assert_eq!(
+            line.message, "rearm:1:0:1",
+            "disconnect() must drop pending records and leave the observer re-armable (#1135): {console:?}"
+        );
     }
 }
