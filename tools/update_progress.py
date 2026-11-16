@@ -617,6 +617,9 @@ def read_coverage(root: Path) -> dict | None:
         known = int(overall["known"])
         if known < 0 or implemented < 0 or implemented > known or not 0 <= percent <= 100:
             raise ValueError("inconsistent coverage numbers")
+        expected = 0 if known == 0 else (100 if implemented >= known else min(99, round(implemented * 100 / known)))
+        if percent != expected:
+            raise ValueError("coverage percent does not match implemented/known")
         return {
             "percent": percent,
             "implemented": implemented,

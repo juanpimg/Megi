@@ -206,6 +206,70 @@ class CoverageArtifactTests(unittest.TestCase):
         self.assertIn("gate:", text)
 
 
+class ValidatorHardeningTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        (self.root / "crates/example/tests").mkdir(parents=True)
+        (self.root / "crates/example/tests/feature.rs").write_text(
+            "fn real_capability_test_extended() {}\n", encoding="utf-8"
+        )
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _write_status(self) -> None:
+        status = self.root / "docs/status"
+        status.mkdir(parents=True, exist_ok=True)
+        (status / "progress.toml").write_text(
+            '[gate]\nstatus = "PASS"\n'
+            + "".join(f'{k} = "{v}"\n' for k, v in GATE_PASS.items() if k != "status"),
+            encoding="utf-8",
+        )
+
+    def test_unknown_state_is_rejected(self) -> None:
+        self.assertFalse(
+            update_coverage.verify_evidence({"state": "don", "evidence": "none"}, self.root, GATE_PASS)[0]
+        )
+
+    def test_build_fails_on_unknown_state(self) -> None:
+        self._write_status()
+        (self.root / "docs/status/coverage.toml").write_text(
+            "[[capability]]\nid = \"X\"\narea = \"F1\"\nname = \"typo\"\n"
+            "source = \"spec\"\nstate = \"don\"\nevidence = \"none\"\n",
+            encoding="utf-8",
+        )
+        with self.assertRaises(SystemExit):
+            update_coverage.build_artifacts(self.root)
+
+    def test_fn_evidence_requires_word_boundary(self) -> None:
+        ok, _ = update_coverage.verify_evidence(
+            {"state": "done", "evidence": "test:crates/example/tests/feature.rs::real_capability_test"},
+            self.root,
+            GATE_PASS,
+        )
+        self.assertFalse(ok)
+
+    def test_non_done_requires_none_evidence(self) -> None:
+        ok, _ = update_coverage.verify_evidence(
+            {"state": "partial", "evidence": "test:crates/example/tests/feature.rs::real_capability_test_extended"},
+            self.root,
+            GATE_PASS,
+        )
+        self.assertFalse(ok)
+
+    def test_progress_rejects_inconsistent_coverage_percent(self) -> None:
+        import json
+
+        status = self.root / "docs/status"
+        status.mkdir(parents=True, exist_ok=True)
+        (status / "coverage.json").write_text(
+            json.dumps({"overall": {"percent": 99, "implemented": 6, "known": 10, "partial": 0}}),
+            encoding="utf-8",
+        )
+        self.assertIsNone(update_progress.read_coverage(self.root))
+
+
 class ProgressIntegrationTests(unittest.TestCase):
     def test_progress_headline_uses_coverage(self) -> None:
         data = {

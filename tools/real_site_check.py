@@ -15,6 +15,7 @@ import html
 import json
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 try:
@@ -26,8 +27,12 @@ except ModuleNotFoundError:  # pragma: no cover
 STATUS_DIR = Path("docs/status")
 SITES_MANIFEST = STATUS_DIR / "real_sites.toml"
 SNAPSHOT_DIR = Path("tests/fixtures/real-sites")
-PNG_DIR = STATUS_DIR / "real-sites"
 ISSUE_BASE = "https://github.com/juanpimg/Megi/issues/"
+
+
+def png_relative(site_id: str) -> Path:
+    """Path stored in the report, relative to docs/status/real-sites.html."""
+    return Path("real-sites") / f"{site_id}.png"
 
 
 def load_sites(root: Path) -> list[dict]:
@@ -80,8 +85,8 @@ def render_one(root: Path, site: dict, live: bool) -> dict:
         source = str(site["url"])
     else:
         source = str(root / SNAPSHOT_DIR / str(site.get("snapshot", f"{site_id}.html")))
-    png_rel = PNG_DIR / f"{site_id}.png"
-    png_path = root / png_rel
+    png_rel = png_relative(site_id)
+    png_path = root / STATUS_DIR / png_rel
     png_path.parent.mkdir(parents=True, exist_ok=True)
     command = [
         "cargo",
@@ -131,7 +136,7 @@ def _result(site: dict, result: str, stats: dict, error: str, png_rel: Path, sou
     }
 
 
-def render_html(results: list[dict], mode: str = "snapshot") -> str:
+def render_html(results: list[dict], mode: str = "snapshot", generated_at: str = "") -> str:
     counts = {key: sum(1 for item in results if item["result"] == key) for key in ("PASS", "DEGRADADO", "PÁGINA EN BLANCO", "ERROR")}
     rows = []
     for item in results:
@@ -159,8 +164,9 @@ th{{background:#f6f8fa}} .meta{{color:#57606a;font-size:12px}}
 .note{{background:#fff8c5;border-left:4px solid #d29922;padding:10px 14px;margin:1rem 0}}
 </style></head><body>
 <h1>Megi — prueba real de render</h1>
-<p class="meta">Modo: <b>{html.escape(mode)}</b> · {summary} ·
-generado por <code>tools/real_site_check.py</code> desde <code>docs/status/real_sites.toml</code>.</p>
+<p class="meta">Modo: <b>{html.escape(mode)}</b>{' · capturado el ' + html.escape(generated_at) if generated_at else ''} · {summary} ·
+generado por <code>tools/real_site_check.py</code> desde <code>docs/status/real_sites.toml</code>.
+Refrescar con <code>python3 tools/real_site_check.py --live</code> (red) o sin flags (instantáneas).</p>
 <div class="note">Esto es una comprobación de render de extremo a extremo, no una métrica de
 conformidad. Una página en blanco (<code>display_items = 0</code>) o avisos de imagen/layout se
 marcan como fallo aunque el pipeline haya terminado sin error. Las capturas son PNG reales
@@ -176,19 +182,23 @@ producidos por <code>render</code>. Para medir cobertura de capacidades, ver
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Real-site render check for Megi.")
     parser.add_argument("--live", action="store_true", help="fetch real URLs instead of snapshots")
+    parser.add_argument("--offline", action="store_true", help="use versioned snapshots (default)")
     parser.add_argument("--root", default=None)
     args = parser.parse_args(argv)
     root = Path(args.root).resolve() if args.root else Path(__file__).resolve().parent.parent
 
-    results = [render_one(root, site, args.live) for site in load_sites(root)]
+    live = args.live and not args.offline
+    results = [render_one(root, site, live) for site in load_sites(root)]
+    generated_at = datetime.now(timezone.utc).date().isoformat()
     payload = {
-        "mode": "live" if args.live else "snapshot",
+        "mode": "live" if live else "snapshot",
+        "generated_at": generated_at,
         "results": results,
     }
     json_path = root / STATUS_DIR / "real-sites.json"
     html_path = root / STATUS_DIR / "real-sites.html"
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    html_path.write_text(render_html(results, payload["mode"]), encoding="utf-8")
+    html_path.write_text(render_html(results, payload["mode"], generated_at), encoding="utf-8")
     for item in results:
         print(f"{item['result']:>18}  {item['name']}  ({item['display_items']} items)")
     print(f"wrote {json_path.relative_to(root)} and {html_path.relative_to(root)}")

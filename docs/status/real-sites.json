@@ -1,5 +1,6 @@
 {
   "mode": "live",
+  "generated_at": "2026-11-16",
   "results": [
     {
       "id": "example",
@@ -15,10 +16,10 @@
         "console.error: Uncaught TypeError: not a callable function (unknown at :1:980)\n    at <main> (unknown at :1:980)"
       ],
       "images_failed": 0,
-      "time_ms": 1941.4,
+      "time_ms": 1413.5,
       "issue": 0,
       "error": "",
-      "png": "docs/status/real-sites/example.png"
+      "png": "real-sites/example.png"
     },
     {
       "id": "rust",
@@ -33,10 +34,10 @@
         "skipping @font-face \"Fira Sans\": max web fonts per render (8) reached"
       ],
       "images_failed": 0,
-      "time_ms": 5295.9,
+      "time_ms": 5439.2,
       "issue": 0,
       "error": "",
-      "png": "docs/status/real-sites/rust.png"
+      "png": "real-sites/rust.png"
     },
     {
       "id": "wikipedia",
@@ -53,10 +54,10 @@
         "skipping image https://thumb.wikimedia.org/wikipedia/commons/thumb/7/72/Disambig.svg/20px-Disambig.svg.png?utm_source=es.wikipedia.org&utm_campaign=parser&utm_content=thumbnail: invalid chunk \"tEXt\": non-consecutive IDAT"
       ],
       "images_failed": 1,
-      "time_ms": 2702.3,
+      "time_ms": 3449.1,
       "issue": 1013,
       "error": "",
-      "png": "docs/status/real-sites/wikipedia.png"
+      "png": "real-sites/wikipedia.png"
     },
     {
       "id": "hn",
@@ -69,10 +70,10 @@
       "status": 200,
       "warnings": [],
       "images_failed": 0,
-      "time_ms": 3717.3,
+      "time_ms": 4710.7,
       "issue": 1011,
       "error": "",
-      "png": "docs/status/real-sites/hn.png"
+      "png": "real-sites/hn.png"
     }
   ]
 }

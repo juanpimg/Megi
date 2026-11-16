@@ -85,6 +85,8 @@ def verify_evidence(cap: dict, root: Path, gate: dict[str, str]) -> tuple[bool, 
     if state not in ALLOWED_STATES:
         return False, f"estado desconocido: {state!r}"
     if state != "done":
+        if evidence not in ("", "none"):
+            return False, f"state={state} debe usar evidence=none"
         return True, "no requiere evidencia"
     if evidence in ("", "none"):
         return False, "state=done requiere evidencia verificable (no 'none')"
@@ -108,7 +110,8 @@ def verify_evidence(cap: dict, root: Path, gate: dict[str, str]) -> tuple[bool, 
             return False, f"no existe el fichero de test {path_text}"
         if not fn:
             return False, "evidence test: falta ::nombre_del_test"
-        if f"fn {fn}" not in path.read_text(encoding="utf-8", errors="ignore"):
+        source = path.read_text(encoding="utf-8", errors="ignore")
+        if not re.search(r"fn\s+" + re.escape(fn) + r"\b", source):
             return False, f"no aparece fn {fn} en {path_text}"
         return True, f"test {path_text}::{fn}"
 
@@ -174,6 +177,7 @@ def compute_stats(caps: list[dict], root: Path, gate: dict[str, str]) -> dict:
         if not item["counted"]
     ]
     unverified = [str(item.get("id")) for item in enriched if item.get("state") == "done" and not item["verified"]]
+    invalid_states = [str(item.get("id")) for item in enriched if item.get("state") not in ALLOWED_STATES]
 
     return {
         "areas": areas,
@@ -183,6 +187,7 @@ def compute_stats(caps: list[dict], root: Path, gate: dict[str, str]) -> dict:
             "known": known,
             "percent": _percent(implemented, known),
             "unverified": unverified,
+            "invalid_states": invalid_states,
         },
         "capabilities": enriched,
         "missing": missing,
@@ -358,6 +363,11 @@ def build_artifacts(root: Path) -> dict[str, bytes]:
         sys.exit(
             "error: capacidades done sin evidencia verificable: "
             + ", ".join(stats["overall"]["unverified"])
+        )
+    if stats["overall"]["invalid_states"]:
+        sys.exit(
+            "error: estados desconocidos (use done/partial/missing): "
+            + ", ".join(stats["overall"]["invalid_states"])
         )
     payload = {
         "schema": 1,

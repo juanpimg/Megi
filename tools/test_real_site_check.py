@@ -45,6 +45,25 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(result, "DEGRADADO")
 
 
+class PathTests(unittest.TestCase):
+    def test_png_path_is_relative_to_report(self) -> None:
+        from pathlib import Path
+
+        self.assertEqual(real_site_check.png_relative("hn"), Path("real-sites/hn.png"))
+        result = real_site_check._result(
+            {"id": "hn", "name": "HN"},
+            "PASS",
+            {"display_items": 1},
+            "",
+            real_site_check.png_relative("hn"),
+            "https://news.ycombinator.com",
+        )
+        self.assertEqual(result["png"], "real-sites/hn.png")
+        html = real_site_check.render_html([result])
+        self.assertIn("real-sites/hn.png", html)
+        self.assertNotIn("docs/status/docs/status", html)
+
+
 class ReportTests(unittest.TestCase):
     def test_report_links_issues_and_screenshots(self) -> None:
         results = [

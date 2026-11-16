@@ -5,7 +5,8 @@
     "partial": 2,
     "known": 70,
     "percent": 77,
-    "unverified": []
+    "unverified": [],
+    "invalid_states": []
   },
   "areas": [
     {
