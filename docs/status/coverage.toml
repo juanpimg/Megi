@@ -1,0 +1,579 @@
+# Megi capability coverage — SOURCE OF TRUTH (hand-edited).
+#
+# Each [[capability]] is a KNOWN target. `done` counts only when `evidence` can be
+# verified in this repository by tools/update_coverage.py. Adding a capability grows
+# the denominator: the percentage can go down, and that is honest (see COVERAGE.md).
+#
+# Regenerate: python3 tools/update_coverage.py --write
+# Check:      python3 tools/update_coverage.py --check
+
+last_updated_by = "docs (honest coverage, round 36)"
+
+[[capability]]
+id = "F1-TOKENIZER"
+area = "F1"
+name = "Tokenizador HTML5 WHATWG"
+source = "html5lib-tests / ROADMAP WP-1.x"
+state = "done"
+evidence = "gate:tokenizer"
+
+[[capability]]
+id = "F1-TREE"
+area = "F1"
+name = "Construcción del árbol (21 modos, AAA, foster parenting)"
+source = "html5lib-tests / ROADMAP WP-1.8–1.16"
+state = "done"
+evidence = "gate:tree"
+
+[[capability]]
+id = "F1-SERIALIZER"
+area = "F1"
+name = "Serializador público §13.3"
+source = "html5lib-tests serializer"
+state = "done"
+evidence = "gate:serializer"
+
+[[capability]]
+id = "F1-INNERHTML"
+area = "F1"
+name = " innerHTML / outerHTML y fragmentos"
+source = "ROADMAP WP-1.16"
+state = "done"
+evidence = "test:crates/html/tests/browser_api.rs::inner_html_uses_paragraph_context"
+
+[[capability]]
+id = "F1-DOCWRITE"
+area = "F1"
+name = "document.write re-tokenizado"
+source = "ROADMAP WP-6.4"
+state = "done"
+evidence = "test:crates/html/tests/browser_api.rs::document_write_appends_to_body_and_survives_repeated_calls"
+
+[[capability]]
+id = "F1-CAPS"
+area = "F1"
+name = "ParseOptions anti-DoS (profundidad/nodos/atributos)"
+source = "ROADMAP F1"
+state = "done"
+evidence = "test:crates/html/tests/robustness.rs::default_parse_options_do_not_fire_on_normal_documents"
+
+[[capability]]
+id = "F1-ATTRDUP"
+area = "F1"
+name = "Deduplicación de atributos en tiempo lineal"
+source = "ROADMAP F1"
+state = "done"
+evidence = "test:crates/html/tests/robustness.rs::tokenizer_still_reports_duplicate_attributes_and_keeps_the_first"
+
+[[capability]]
+id = "F2-SYNTAX"
+area = "F2"
+name = "CSS Syntax L3 (vendored WPT)"
+source = "WPT css-syntax"
+state = "done"
+evidence = "gate:css_syntax"
+
+[[capability]]
+id = "F2-CASCADE"
+area = "F2"
+name = "Cascada, @layer y revert-layer"
+source = "CSS Cascade L4"
+state = "done"
+evidence = "test:crates/css/tests/cascade_layers.rs::later_layer_wins_for_equal_specificity"
+
+[[capability]]
+id = "F2-CALC"
+area = "F2"
+name = "calc() mixto %+px en longhands"
+source = "CSS Values L4"
+state = "done"
+evidence = "test:crates/css/tests/calc_lengths.rs::width_height_store_mixed_calc_components"
+
+[[capability]]
+id = "F2-SELECTORS"
+area = "F2"
+name = "Selectores L4 funcionales (:is/:where/:has…)"
+source = "Selectors L4"
+state = "done"
+evidence = "test:crates/css/src/query.rs::test_query_selector_functional_pseudos"
+
+[[capability]]
+id = "F2-CONTAINER"
+area = "F2"
+name = "Container Queries (@container, container-type)"
+source = "CSS Containment L3"
+state = "done"
+evidence = "test:crates/css/tests/container_queries.rs::min_width_query_applies_against_inline_size_container"
+
+[[capability]]
+id = "F2-COLOR"
+area = "F2"
+name = "CSS Color 4/5 (lab/lch/oklch/color-mix)"
+source = "CSS Color 4/5"
+state = "done"
+evidence = "test:crates/css/tests/color4.rs::test_lab_and_lch"
+
+[[capability]]
+id = "F2-GRADIENTS"
+area = "F2"
+name = "Gradientes lineales/radiales/cónicos"
+source = "CSS Images L4"
+state = "done"
+evidence = "test:crates/css/tests/gradients.rs::test_linear_gradient_angle_and_default_direction"
+
+[[capability]]
+id = "F2-FONTFACE"
+area = "F2"
+name = "@font-face y fuentes WOFF2"
+source = "CSS Fonts L4"
+state = "done"
+evidence = "test:crates/css/tests/font_face_tests.rs::parses_woff2_and_ttf_sources_with_formats"
+
+[[capability]]
+id = "F2-ANIM-RUNTIME"
+area = "F2"
+name = "Animaciones CSS @keyframes/transition en runtime"
+source = "issue #941 / #942"
+state = "missing"
+evidence = "none"
+issue = 941
+
+[[capability]]
+id = "F3-BOX"
+area = "F3"
+name = "Box tree, cajas anónimas y colapso de márgenes"
+source = "CSS 2.1 / ROADMAP F3"
+state = "done"
+evidence = "test:crates/layout/tests/arc_style.rs::test_sibling_text_boxes_share_the_parent_anonymous_style_arc"
+
+[[capability]]
+id = "F3-GRID"
+area = "F3"
+name = "Grid (tracks, fr, gaps, auto-placement)"
+source = "CSS Grid L1"
+state = "done"
+evidence = "test:crates/layout/tests/grid.rs::test_fr_tracks_share_free_space_with_gaps"
+
+[[capability]]
+id = "F3-FLEX"
+area = "F3"
+name = "Flexbox (grow/shrink, gap, wrap, align)"
+source = "CSS Flexbox L1"
+state = "done"
+evidence = "test:crates/layout/tests/flex.rs::test_flex_grow_and_shrink_with_basis"
+
+[[capability]]
+id = "F3-TABLES"
+area = "F3"
+name = "Tablas (fixed/auto, colspan/rowspan, anónimas)"
+source = "CSS 2.1 §17"
+state = "done"
+evidence = "test:crates/layout/tests/tables.rs::test_table_2x2_fixed_width_layout"
+
+[[capability]]
+id = "F3-BIDI"
+area = "F3"
+name = "Bidi UAX #9 y text-align start/end"
+source = "UAX #9"
+state = "done"
+evidence = "test:crates/layout/tests/bidi_tests.rs::rtl_paragraph_right_aligns_and_reorders_words_visually"
+
+[[capability]]
+id = "F3-CONTAINER-LAYOUT"
+area = "F3"
+name = "Layout consume container queries y aspect-ratio"
+source = "CSS Containment / Sizing L4"
+state = "done"
+evidence = "test:crates/layout/tests/container_queries.rs::inline_size_container_changes_child_width"
+
+[[capability]]
+id = "F3-TABLE-CENTER"
+area = "F3"
+name = "Maquetación real de HN (<center>/<table>) sin página en blanco"
+source = "issue #1011"
+state = "missing"
+evidence = "none"
+issue = 1011
+
+[[capability]]
+id = "F3-IFC-EDGES"
+area = "F3"
+name = "Casos límite IFC (bidi/justify) y profundidad de tablas"
+source = "PROGRESS.md F3 pending"
+state = "missing"
+evidence = "none"
+
+[[capability]]
+id = "F4-PNG-DECODE"
+area = "F4"
+name = "Decoder PNG (golden píxel-exacto)"
+source = "crates/image"
+state = "done"
+evidence = "test:crates/image/tests/decode.rs::decodes_the_real_pipeline_png_and_matches_the_golden_rgba"
+
+[[capability]]
+id = "F4-INFLATE"
+area = "F4"
+name = "Inflate streaming gzip/deflate con CRC/ISIZE"
+source = "crates/image / crates/net"
+state = "done"
+evidence = "test:crates/image/tests/decode.rs::inflate_stored_block_zlib_and_raw"
+
+[[capability]]
+id = "F4-PNG-ENCODE"
+area = "F4"
+name = "Encoder PNG determinista y regiones"
+source = "crates/paint / ROADMAP F4"
+state = "done"
+evidence = "fixture:tests/fixtures/render/showcase/golden.png"
+
+[[capability]]
+id = "F4-SVG-CLIP"
+area = "F4"
+name = "SVG clipPath (userSpace/objectBoundingBox)"
+source = "SVG 1.1"
+state = "done"
+evidence = "test:crates/svg/tests/effects.rs::clip_path_user_space_recorta_fuera"
+
+[[capability]]
+id = "F4-SVG-MASK"
+area = "F4"
+name = "SVG mask por luminancia"
+source = "SVG 1.1"
+state = "done"
+evidence = "test:crates/svg/tests/effects.rs::mask_white_keeps_and_black_clears"
+
+[[capability]]
+id = "F4-SVG-FILTERS"
+area = "F4"
+name = "Filtros SVG (blur/offset/flood/composite)"
+source = "SVG Filter Effects"
+state = "done"
+evidence = "test:crates/svg/tests/effects.rs::gaussian_blur_softens_edges"
+
+[[capability]]
+id = "F4-FONTS"
+area = "F4"
+name = "Motor tipográfico (métricas, shaping LTR, raster)"
+source = "crates/fonts"
+state = "done"
+evidence = "test:crates/fonts/tests/font_engine.rs::shape_hello_matches_advances_and_keeps_byte_clusters"
+
+[[capability]]
+id = "F4-BACKGROUND-GEOMETRY"
+area = "F4"
+name = "background-size cover/contain y地理ometría"
+source = "CSS Backgrounds L4"
+state = "done"
+evidence = "test:crates/paint/tests/background_geometry.rs::test_cover_and_contain_keep_aspect_ratio"
+
+[[capability]]
+id = "F4-INLINE-SVG"
+area = "F4"
+name = "SVG inline rasterizado en el pipeline"
+source = "crates/render"
+state = "done"
+evidence = "test:crates/render/tests/inline_svg_tests.rs::inline_svg_is_rasterized_like_an_image"
+
+[[capability]]
+id = "F4-IMAGE-FORMATS"
+area = "F4"
+name = "JPEG progresivo/EXIF, GIF y WebP en render"
+source = "crates/image / crates/render"
+state = "done"
+evidence = "test:crates/render/tests/image_formats_tests.rs::progressive_and_exif_images_flow_through_the_pipeline"
+
+[[capability]]
+id = "F4-CJK-FONTS"
+area = "F4"
+name = "Fallback de fuentes CJK/emoji (sin tofu)"
+source = "issue #1015"
+state = "missing"
+evidence = "none"
+issue = 1015
+
+[[capability]]
+id = "F4-ARABIC-SHAPING"
+area = "F4"
+name = "Shaping contextual de árabe/hebreo/tailandés"
+source = "issue #987"
+state = "missing"
+evidence = "none"
+issue = 987
+
+[[capability]]
+id = "F4-PERF-BUDGETS"
+area = "F4"
+name = "Presupuestos de rendimiento de rasterizado/decoders en webs reales"
+source = "issue #1014 / PROGRESS.md F4 pending"
+state = "partial"
+evidence = "none"
+issue = 1014
+
+[[capability]]
+id = "F5-HTTP11"
+area = "F5"
+name = "HTTP/1.1 y keep-alive"
+source = "RFC 9112"
+state = "done"
+evidence = "test:crates/net/tests/http10_tests.rs::http10_keep_alive_pool_reuses_one_connection"
+
+[[capability]]
+id = "F5-HTTP2"
+area = "F5"
+name = "HTTP/2 multiplexado, flow control y ALPN"
+source = "RFC 9113"
+state = "done"
+evidence = "test:crates/net/tests/h2_flow_multiplex_tests.rs::multiplexes_two_streams_with_interleaved_frames"
+
+[[capability]]
+id = "F5-H2C"
+area = "F5"
+name = "h2c upgrade con fallback h1"
+source = "crates/net"
+state = "done"
+evidence = "test:crates/net/tests/h2_advanced.rs::h2c_upgrade_succeeds_and_uses_stream_one"
+
+[[capability]]
+id = "F5-COOKIES"
+area = "F5"
+name = "Cookies RFC 6265 + SameSite/PSL"
+source = "RFC 6265"
+state = "done"
+evidence = "test:crates/net/tests/advanced_tests.rs::cookie_is_stored_and_sent_on_the_next_request"
+
+[[capability]]
+id = "F5-COMPRESSION"
+area = "F5"
+name = "gzip/deflate con anti-bomb"
+source = "RFC 1951/1952"
+state = "done"
+evidence = "test:crates/net/tests/advanced_tests.rs::gzip_is_negotiated_decoded_and_header_preserved"
+
+[[capability]]
+id = "F5-STREAMING"
+area = "F5"
+name = "Streaming HTTP/1.1 y redirects antes del body"
+source = "crates/net"
+state = "done"
+evidence = "test:crates/net/tests/h1_streaming_tests.rs::redirect_is_resolved_before_streaming_the_final_body"
+
+[[capability]]
+id = "F5-LOADER-H2"
+area = "F5"
+name = "ResourceLoader usa h2 cuando ALPN lo negocia"
+source = "crates/net"
+state = "done"
+evidence = "test:crates/net/tests/h2_tests.rs::loader_uses_h2_when_alpn_negotiates_it"
+
+[[capability]]
+id = "F5-ERRORS"
+area = "F5"
+name = "Errores tipados de codificación no soportada"
+source = "crates/net"
+state = "done"
+evidence = "test:crates/net/tests/advanced_tests.rs::unsupported_content_encoding_is_rejected"
+
+[[capability]]
+id = "F5-PROXY-PAC"
+area = "F5"
+name = "PAC/SOCKS completo y pooling de proxies"
+source = "PROGRESS.md next_up"
+state = "missing"
+evidence = "none"
+
+[[capability]]
+id = "F5-IMAGE-BUDGETS"
+area = "F5"
+name = "Presupuestos de decodificado de imágenes en webs reales"
+source = "PROGRESS.md F5 pending"
+state = "missing"
+evidence = "none"
+
+[[capability]]
+id = "F6-BOA"
+area = "F6"
+name = "Realm Boa y wrappers DOM/EventTarget"
+source = "crates/js"
+state = "done"
+evidence = "test:crates/render/tests/browser_api_tests.rs::get_computed_style_is_the_pre_script_snapshot"
+
+[[capability]]
+id = "F6-EVENT-LOOP"
+area = "F6"
+name = "Event loop presupuestado (reloj virtual, timers)"
+source = "crates/render"
+state = "done"
+evidence = "test:crates/render/tests/event_loop_tests.rs::no_scripting_skips_timers_and_events"
+
+[[capability]]
+id = "F6-HISTORY"
+area = "F6"
+name = "History/location con providers"
+source = "HTML Living Standard"
+state = "done"
+evidence = "test:crates/js/tests/browser_features_r24.rs::history_provider_push_replace_back_forward_go"
+
+[[capability]]
+id = "F6-STORAGE"
+area = "F6"
+name = "Web Storage (localStorage/sessionStorage)"
+source = "HTML Living Standard"
+state = "done"
+evidence = "test:crates/js/tests/browser_features_r24.rs::web_storage_api_and_isolation"
+
+[[capability]]
+id = "F6-MUTATION"
+area = "F6"
+name = "MutationObserver subset"
+source = "DOM Living Standard"
+state = "done"
+evidence = "test:crates/js/tests/browser_features_r24.rs::mutation_observer_child_list_delivers_on_microtasks"
+
+[[capability]]
+id = "F6-FETCH"
+area = "F6"
+name = "fetch() con AbortController y Response.body stream"
+source = "Fetch Living Standard"
+state = "done"
+evidence = "test:crates/render/tests/fetch_stream_tests.rs::abort_controller_rejects_fetch_and_updates_dom"
+
+[[capability]]
+id = "F6-MODULES"
+area = "F6"
+name = "ES modules, import maps y TLA"
+source = "ECMAScript / HTML"
+state = "done"
+evidence = "test:crates/render/tests/import_map_tests.rs::import_map_remaps_a_bare_specifier_to_a_file_module"
+
+[[capability]]
+id = "F6-RAF"
+area = "F6"
+name = "requestAnimationFrame con epoch determinista"
+source = "crates/js"
+state = "done"
+evidence = "test:crates/render/tests/animations.rs::animation_frames_render_at_the_requested_time"
+
+[[capability]]
+id = "F6-WORKERS-DOM"
+area = "F6"
+name = "Web Workers con acceso a DOM"
+source = "PROGRESS.md F6 pending"
+state = "missing"
+evidence = "none"
+
+[[capability]]
+id = "F6-IMPORTMAP-SCOPES"
+area = "F6"
+name = "Import-map scopes/integrity y dynamic import no literal"
+source = "PROGRESS.md F6 pending"
+state = "missing"
+evidence = "none"
+
+[[capability]]
+id = "F6-CONFORMANCE"
+area = "F6"
+name = "JS/DOM conformance testing y memory accounting"
+source = "PROGRESS.md next_up"
+state = "missing"
+evidence = "none"
+
+[[capability]]
+id = "F7-WINDOW"
+area = "F7"
+name = "Ventana winit+softbuffer y render en worker"
+source = "crates/shell"
+state = "done"
+evidence = "test:crates/shell/tests/shell_tests.rs::headless_screenshot_of_fixture_writes_a_valid_png"
+
+[[capability]]
+id = "F7-NAVIGATION"
+area = "F7"
+name = "Navegación (clic, historial, back/forward)"
+source = "crates/shell"
+state = "done"
+evidence = "test:crates/shell/tests/shell_tests.rs::click_navigation_sequence_pushes_and_back_returns"
+
+[[capability]]
+id = "F7-SCROLL-ZOOM"
+area = "F7"
+name = "Scroll, HiDPI y zoom"
+source = "crates/shell"
+state = "done"
+evidence = "test:crates/shell/tests/shell_tests.rs::scroll_state_is_clamped_and_usable"
+
+[[capability]]
+id = "F7-BACKGROUNDS"
+area = "F7"
+name = "Backgrounds multicapa y overlays de chrome"
+source = "crates/render / crates/shell"
+state = "done"
+evidence = "test:crates/render/tests/background_layers_tests.rs::multi_layer_background_order_origin_and_clip"
+
+[[capability]]
+id = "F7-SCRIPTING-UI"
+area = "F7"
+name = "Formularios, find-in-page, pestañas y menú contextual"
+source = "crates/shell"
+state = "done"
+evidence = "fixture:crates/shell/src/tabs.rs"
+
+[[capability]]
+id = "F7-CHROME-OVERLAY"
+area = "F7"
+name = "La barra de chrome no tapa el contenido (scroll_y=0)"
+source = "issue #1012"
+state = "missing"
+evidence = "none"
+issue = 1012
+
+[[capability]]
+id = "F7-SAVE-AS"
+area = "F7"
+name = "Diálogo visual de guardado y descarga de recursos"
+source = "issue #988"
+state = "missing"
+evidence = "none"
+issue = 988
+
+[[capability]]
+id = "F7-A11Y"
+area = "F7"
+name = "Accesibilidad y widgets nativos"
+source = "issue #989"
+state = "missing"
+evidence = "none"
+issue = 989
+
+[[capability]]
+id = "F7-ISOLATION"
+area = "F7"
+name = "Aislamiento multiproceso por pestaña"
+source = "issue #946"
+state = "missing"
+evidence = "none"
+issue = 946
+
+[[capability]]
+id = "X-BENCH"
+area = "X"
+name = "Bancos de rendimiento y presupuestos repetibles"
+source = "crates/bench"
+state = "done"
+evidence = "fixture:docs/status/bench-baseline.json"
+
+[[capability]]
+id = "X-CI"
+area = "X"
+name = "CI con fmt/clippy/tests/doc/conformance/fuzz"
+source = ".github/workflows/ci.yml"
+state = "done"
+evidence = "fixture:.github/workflows/ci.yml"
+
+[[capability]]
+id = "X-FUZZ-LONG"
+area = "X"
+name = "Campañas largas de fuzzing (16 targets)"
+source = "PROGRESS.md cross-cutting"
+state = "partial"
+evidence = "none"
