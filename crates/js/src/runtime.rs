@@ -177,6 +177,7 @@ impl JsRuntime {
             host: Rc::clone(&host_slot),
             base_url: url.clone(),
             cache: RefCell::new(HashMap::new()),
+            max_cache_entries: 256,
         });
         let mut context = Context::builder()
             .module_loader(module_loader)
@@ -5883,6 +5884,7 @@ struct MegiModuleLoader {
     host: Rc<RefCell<Option<Rc<RefCell<Host>>>>>,
     base_url: String,
     cache: RefCell<HashMap<(String, String), Module>>,
+    max_cache_entries: usize,
 }
 
 impl ModuleLoader for MegiModuleLoader {
@@ -5936,9 +5938,13 @@ impl ModuleLoader for MegiModuleLoader {
                         None,
                         &mut context,
                     )?;
-                    self.cache
-                        .borrow_mut()
-                        .insert((base, specifier), module.clone());
+                    {
+                        let mut cache = self.cache.borrow_mut();
+                        if cache.len() >= self.max_cache_entries {
+                            cache.clear();
+                        }
+                        cache.insert((base, specifier), module.clone());
+                    }
                     return Ok(module);
                 }
                 None => {
@@ -5972,9 +5978,13 @@ impl ModuleLoader for MegiModuleLoader {
             None,
             &mut context,
         )?;
-        self.cache
-            .borrow_mut()
-            .insert((base, specifier), module.clone());
+        {
+            let mut cache = self.cache.borrow_mut();
+            if cache.len() >= self.max_cache_entries {
+                cache.clear();
+            }
+            cache.insert((base, specifier), module.clone());
+        }
         Ok(module)
     }
 
