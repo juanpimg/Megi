@@ -151,7 +151,7 @@ fn finalize_layout_metadata(node: &mut LayoutBox, inherited_clip: Option<Rect>, 
 
     node.establishes_stacking_context = is_root
         || node.style.as_ref().is_some_and(|style| {
-            !(style.opacity >= 1.0)
+            (style.opacity < 1.0 || style.opacity.is_nan())
                 || matches!(style.position, Position::Fixed)
                 || (style.position != Position::Static && style.z_index.is_some())
         });

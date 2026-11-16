@@ -14,3 +14,9 @@ useDefault = true
 description = "CHANGELOG prose triggers the generic-api-key entropy heuristic"
 paths = ['''^CHANGELOG\.md$''']
 rules = ["generic-api-key"]
+
+[[allowlists]]
+description = "Public Wikipedia snapshot contains a public hCaptcha sitekey (wgConfirmEditHCaptchaSiteKey) that trips generic-api-key"
+commits = ["0d10a06f5abe049a649dff6bffcb4b3e71cd5c5e"]
+paths = ['''^tests/fixtures/real-sites/wikipedia\.html$''']
+rules = ["generic-api-key"]
