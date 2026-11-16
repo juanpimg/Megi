@@ -262,7 +262,7 @@ evidence = "test:crates/fonts/tests/font_engine.rs::shape_hello_matches_advances
 [[capability]]
 id = "F4-BACKGROUND-GEOMETRY"
 area = "F4"
-name = "background-size cover/contain y地理ometría"
+name = "background-size cover/contain y geometría"
 source = "CSS Backgrounds L4"
 state = "done"
 evidence = "test:crates/paint/tests/background_geometry.rs::test_cover_and_contain_keep_aspect_ratio"

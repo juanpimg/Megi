@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""Unit tests for tools/update_coverage.py (capability coverage generator)."""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+MODULE_PATH = Path(__file__).with_name("update_coverage.py")
+_spec = importlib.util.spec_from_file_location("update_coverage", MODULE_PATH)
+update_coverage = importlib.util.module_from_spec(_spec)
+sys.modules["update_coverage"] = update_coverage
+_spec.loader.exec_module(update_coverage)
+
+
+GATE_PASS = {
+    "status": "PASS",
+    "tokenizer": "7050 / 7050",
+    "tree": "3904 / 3904",
+    "serializer": "230 / 230",
+    "css_syntax": "30 / 30",
+}
+
+
+def cap(cap_id: str, area: str, state: str, evidence: str, name: str = "") -> str:
+    return (
+        "[[capability]]\n"
+        f'id = "{cap_id}"\n'
+        f'area = "{area}"\n'
+        f'name = "{name or cap_id}"\n'
+        'source = "spec"\n'
+        f'state = "{state}"\n'
+        f'evidence = "{evidence}"\n'
+    )
+
+
+class CoverageCountingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        (self.root / "crates/example/tests").mkdir(parents=True)
+        (self.root / "crates/example/tests/feature.rs").write_text(
+            "fn real_capability_test() {}\n", encoding="utf-8"
+        )
+        (self.root / "fixtures").mkdir()
+        (self.root / "fixtures/golden.html").write_text("<p>ok</p>\n", encoding="utf-8")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def manifest(self, *entries: str) -> list[dict]:
+        import tomllib
+
+        text = "\n".join(entries)
+        return tomllib.loads(text).get("capability", [])
+
+    def test_overall_is_implemented_over_known(self) -> None:
+        caps = self.manifest(
+            cap("A", "F1", "done", "fixture:fixtures/golden.html"),
+            cap("B", "F1", "done", "test:crates/example/tests/feature.rs::real_capability_test"),
+            cap("C", "F1", "missing", "none"),
+            cap("D", "F1", "missing", "none"),
+        )
+        stats = update_coverage.compute_stats(caps, self.root, GATE_PASS)
+        self.assertEqual(stats["overall"]["implemented"], 2)
+        self.assertEqual(stats["overall"]["known"], 4)
+        self.assertEqual(stats["overall"]["percent"], 50)
+
+    def test_partial_counts_as_missing_and_is_listed(self) -> None:
+        caps = self.manifest(
+            cap("A", "F1", "done", "fixture:fixtures/golden.html"),
+            cap("B", "F1", "partial", "none", "half done"),
+        )
+        stats = update_coverage.compute_stats(caps, self.root, GATE_PASS)
+        self.assertEqual(stats["overall"]["implemented"], 1)
+        self.assertEqual(stats["overall"]["partial"], 1)
+        self.assertEqual(stats["overall"]["percent"], 50)
+        self.assertIn("B", {item["id"] for item in stats["missing"]})
+
+    def test_new_capability_grows_denominator_and_lowers_percent(self) -> None:
+        base = [cap("A", "F1", "done", "fixture:fixtures/golden.html"), cap("B", "F1", "missing", "none")]
+        before = update_coverage.compute_stats(self.manifest(*base), self.root, GATE_PASS)
+        after = update_coverage.compute_stats(
+            self.manifest(*base, cap("C", "F1", "missing", "none")), self.root, GATE_PASS
+        )
+        self.assertEqual(before["overall"]["percent"], 50)
+        self.assertEqual(after["overall"]["known"], 3)
+        self.assertEqual(after["overall"]["percent"], 33)
+
+    def test_done_requires_verifiable_test_evidence(self) -> None:
+        ok, reason = update_coverage.verify_evidence(
+            {"state": "done", "evidence": "test:crates/example/tests/feature.rs::real_capability_test"},
+            self.root,
+            GATE_PASS,
+        )
+        self.assertTrue(ok, reason)
+        bad, bad_reason = update_coverage.verify_evidence(
+            {"state": "done", "evidence": "test:crates/example/tests/feature.rs::never_written"},
+            self.root,
+            GATE_PASS,
+        )
+        self.assertFalse(bad)
+        self.assertIn("fn never_written", bad_reason)
+
+        caps = self.manifest(cap("A", "F1", "done", "test:crates/example/tests/feature.rs::never_written"))
+        stats = update_coverage.compute_stats(caps, self.root, GATE_PASS)
+        self.assertEqual(stats["overall"]["implemented"], 0)
+        self.assertEqual(stats["overall"]["unverified"], ["A"])
+        self.assertIn("A", {item["id"] for item in stats["missing"]})
+
+    def test_gate_evidence_requires_suite_and_pass(self) -> None:
+        good = {"state": "done", "evidence": "gate:tokenizer"}
+        self.assertTrue(update_coverage.verify_evidence(good, self.root, GATE_PASS)[0])
+        missing_suite = {"state": "done", "evidence": "gate:not_a_suite"}
+        self.assertFalse(update_coverage.verify_evidence(missing_suite, self.root, GATE_PASS)[0])
+        failed_gate = dict(GATE_PASS, status="FAIL")
+        self.assertFalse(update_coverage.verify_evidence(good, self.root, failed_gate)[0])
+
+    def test_none_evidence_forbidden_when_done(self) -> None:
+        bad = {"state": "done", "evidence": "none"}
+        ok, reason = update_coverage.verify_evidence(bad, self.root, GATE_PASS)
+        self.assertFalse(ok)
+        self.assertIn("none", reason)
+
+
+if __name__ == "__main__":
+    unittest.main()
