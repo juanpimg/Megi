@@ -79,6 +79,8 @@ jobs:
           python-version: '3.11'
       - name: Status freshness (PROGRESS.md + docs/status)
         run: python3 tools/update_progress.py --check --no-gate
+      - name: Coverage freshness (capability manifest + artifacts)
+        run: python3 tools/update_coverage.py --check
 
   quality:
     name: Quality gate (fmt, clippy, tests, docs)
@@ -111,6 +113,8 @@ jobs:
           python-version: '3.11'
       - name: Status freshness (PROGRESS.md + docs/status)
         run: python3 tools/update_progress.py --check --no-gate
+      - name: Coverage freshness (capability manifest + artifacts)
+        run: python3 tools/update_coverage.py --check
       - name: Documentation
         env:
           RUSTDOCFLAGS: -D warnings

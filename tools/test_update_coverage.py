@@ -15,6 +15,12 @@ update_coverage = importlib.util.module_from_spec(_spec)
 sys.modules["update_coverage"] = update_coverage
 _spec.loader.exec_module(update_coverage)
 
+PROGRESS_PATH = Path(__file__).with_name("update_progress.py")
+_progress_spec = importlib.util.spec_from_file_location("update_progress", PROGRESS_PATH)
+update_progress = importlib.util.module_from_spec(_progress_spec)
+sys.modules["update_progress"] = update_progress
+_progress_spec.loader.exec_module(update_progress)
+
 
 GATE_PASS = {
     "status": "PASS",
@@ -198,6 +204,44 @@ class CoverageArtifactTests(unittest.TestCase):
         text = rules.read_text(encoding="utf-8")
         self.assertIn("denominador", text)
         self.assertIn("gate:", text)
+
+
+class ProgressIntegrationTests(unittest.TestCase):
+    def test_progress_headline_uses_coverage(self) -> None:
+        data = {
+            "stats": {
+                "head": "abc1234",
+                "date": "2026-11-17",
+                "tests": 10,
+                "crates": 1,
+                "rust_lines": 100,
+                "unsafe_forbidden": 1,
+            },
+            "gate": {
+                "status": "PASS",
+                "tokenizer": "1 / 1",
+                "tree": "1 / 1",
+                "serializer": "1 / 1",
+                "css_syntax": "1 / 1",
+            },
+            "phases": [
+                {"id": "F1", "title": "html", "percent": 100, "items": [], "pending": []},
+                {"id": "F7", "title": "shell", "percent": 99, "items": [], "pending": []},
+            ],
+            "areas": [],
+            "next_up": [],
+            "rounds": [],
+            "last_updated_by": "test",
+            "subtitle": "test",
+            "coverage": {"percent": 60, "implemented": 6, "known": 10, "partial": 1, "unverified": []},
+        }
+        markdown = update_progress.render_markdown(data)
+        self.assertIn("60%", markdown)
+        self.assertIn("6/10", markdown)
+        self.assertNotIn("overall **99%**", markdown)
+        svg = update_progress.render_progress_svg(data)
+        self.assertIn("60%", svg)
+        self.assertIn("capability coverage", svg)
 
 
 if __name__ == "__main__":
