@@ -44,7 +44,7 @@ use boa_engine::{
     module::{Module, ModuleLoader, Referrer},
     object::FunctionObjectBuilder,
     object::ObjectInitializer,
-    object::builtins::JsArray,
+    object::builtins::{AlignedVec, JsArray, JsArrayBuffer, JsUint8Array},
     property::{Attribute, PropertyDescriptor},
 };
 use dom::{Attribute as DomAttribute, Document, Namespace, NodeId};
@@ -5854,17 +5854,14 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
             .map_err(|error| js_error(error.to_string()))?;
     }
     let body_text = String::from_utf8_lossy(&result.body).to_string();
-    let body_bytes = JsArray::from_iter([], context);
-    for (index, byte) in result.body.iter().enumerate() {
-        body_bytes
-            .set(
-                js_string!(index.to_string()),
-                JsValue::from(f64::from(*byte)),
-                false,
-                context,
-            )
-            .map_err(|error| js_error(error.to_string()))?;
-    }
+    // Expose the body as a packed Uint8Array backed by a single byte block. The old
+    // per-byte JsArray allocated ~8M JsValues and did 8M property sets at the
+    // MAX_FETCH_BODY cap, from untrusted network input (#1143).
+    let block = AlignedVec::from_iter(0, result.body.iter().copied());
+    let buffer = JsArrayBuffer::from_byte_block(block, context)
+        .map_err(|error| js_error(error.to_string()))?;
+    let body_bytes = JsUint8Array::from_array_buffer(buffer, context)
+        .map_err(|error| js_error(error.to_string()))?;
     let mut init = ObjectInitializer::new(context);
     init.property(
         js_string!("status"),
