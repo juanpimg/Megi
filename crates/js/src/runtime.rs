@@ -2054,7 +2054,7 @@ fn charge_document_parse(host: &mut Host, bytes: usize, sink: &str) -> bool {
     {
         if !host.document_write_warned {
             host.document_write_warned = true;
-            host.console.push(ConsoleEntry {
+            host.console.push_back(ConsoleEntry {
                 level: "warn".to_string(),
                 message: format!(
                     "{sink} ignored: the cumulative document budget ({} bytes / {} nodes) is exhausted",

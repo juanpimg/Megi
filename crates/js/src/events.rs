@@ -1166,7 +1166,7 @@ pub(crate) fn report_uncaught(
         }
     }
     let _ = with_host(|host| {
-        host.console.push(crate::host::ConsoleEntry {
+        host.console.push_back(crate::host::ConsoleEntry {
             level: "error".to_string(),
             message: format!("Uncaught {message}"),
         });

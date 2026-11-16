@@ -18,7 +18,7 @@
 //! exposed to scripts.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -253,56 +253,60 @@ pub(crate) struct ObserverTarget {
 /// so `storage.key(index)` is deterministic (#571).
 #[derive(Clone, Debug, Default)]
 pub struct StorageMap {
-    entries: Vec<(String, String)>,
+    /// O(1) lookups; the 1 MiB storage cap bounds the number of entries.
+    values: HashMap<String, String>,
+    /// Insertion order for deterministic `Storage.key(index)` (#571).
+    order: Vec<String>,
 }
 
 impl StorageMap {
     /// Returns the value for `key`, if present.
     pub fn get(&self, key: &str) -> Option<&String> {
-        self.entries.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+        self.values.get(key)
     }
 
     /// Inserts or updates `key` with `value`, preserving insertion order for existing keys.
     pub fn insert(&mut self, key: String, value: String) -> Option<String> {
-        if let Some((_, existing)) = self.entries.iter_mut().find(|(k, _)| k == &key) {
+        if let Some(existing) = self.values.get_mut(&key) {
             return Some(std::mem::replace(existing, value));
         }
-        self.entries.push((key, value));
-        None
+        self.order.push(key.clone());
+        self.values.insert(key, value)
     }
 
     /// Removes `key`, returning its value if present.
     pub fn remove(&mut self, key: &str) -> Option<String> {
-        if let Some(pos) = self.entries.iter().position(|(k, _)| k == key) {
-            Some(self.entries.remove(pos).1)
-        } else {
-            None
+        let value = self.values.remove(key)?;
+        if let Some(pos) = self.order.iter().position(|existing| existing == key) {
+            self.order.remove(pos);
         }
+        Some(value)
     }
 
     /// Clears all entries.
     pub fn clear(&mut self) {
-        self.entries.clear();
+        self.values.clear();
+        self.order.clear();
     }
 
     /// Returns the number of entries.
     pub fn len(&self) -> usize {
-        self.entries.len()
+        self.values.len()
     }
 
     /// Returns `true` when there are no entries.
     pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
+        self.values.is_empty()
     }
 
     /// Iterates keys in insertion order.
     pub fn keys(&self) -> impl Iterator<Item = &String> {
-        self.entries.iter().map(|(k, _)| k)
+        self.order.iter()
     }
 
     /// Iterates `(key, value)` pairs in insertion order.
     pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
-        self.entries.iter().map(|(k, v)| (k, v))
+        self.order.iter().map(|key| (key, &self.values[key]))
     }
 }
 
@@ -322,8 +326,9 @@ pub const MAX_CONSOLE_ENTRIES: usize = 4096;
 pub(crate) struct Host {
     /// The document scripts operate on.
     pub document: Document,
-    /// Captured `console` calls (until the host drains them).
-    pub console: Vec<ConsoleEntry>,
+    /// Captured `console` calls (until the host drains them). A deque keeps the
+    /// 4096-entry cap O(1) per push instead of shifting the whole Vec (#1144).
+    pub console: VecDeque<ConsoleEntry>,
     /// `document.title` value.
     pub title: String,
     /// `document.URL` value.
@@ -419,7 +424,7 @@ impl Host {
     pub fn new(document: Document, url: String) -> Self {
         Self {
             document,
-            console: Vec::new(),
+            console: VecDeque::new(),
             title: String::new(),
             url,
             nodes: Vec::new(),
@@ -569,12 +574,9 @@ impl Host {
     /// Pushes a console entry, dropping oldest when the cap is exceeded (issue #566).
     pub fn push_console(&mut self, entry: ConsoleEntry) {
         if self.console.len() >= MAX_CONSOLE_ENTRIES {
-            // Drop oldest to make room.
-            if !self.console.is_empty() {
-                self.console.remove(0);
-            }
+            self.console.pop_front();
         }
-        self.console.push(entry);
+        self.console.push_back(entry);
     }
 
     /// Current scheduler time in milliseconds (virtual clock or real elapsed).
@@ -601,7 +603,7 @@ impl Host {
 
     /// Drains captured console entries.
     pub fn take_console(&mut self) -> Vec<ConsoleEntry> {
-        std::mem::take(&mut self.console)
+        std::mem::take(&mut self.console).into()
     }
 }
 
@@ -663,4 +665,36 @@ pub(crate) fn with_host<R>(f: impl FnOnce(&mut Host) -> R) -> Option<R> {
     let host = current_host()?;
     let mut borrowed = host.borrow_mut();
     Some(f(&mut borrowed))
+}
+
+#[cfg(test)]
+mod storage_and_console_tests {
+    use super::*;
+
+    #[test]
+    fn storage_map_keeps_insertion_order_with_hash_lookup() {
+        let mut map = StorageMap::default();
+        assert_eq!(map.insert("b".into(), "1".into()), None);
+        assert_eq!(map.insert("a".into(), "2".into()), None);
+        assert_eq!(map.insert("b".into(), "3".into()), Some("1".into()));
+        assert_eq!(map.keys().map(String::as_str).collect::<Vec<_>>(), ["b", "a"]);
+        assert_eq!(map.get("a").map(String::as_str), Some("2"));
+        assert_eq!(map.remove("b").as_deref(), Some("3"));
+        assert_eq!(map.keys().map(String::as_str).collect::<Vec<_>>(), ["a"]);
+        assert_eq!(map.iter().count(), 1);
+    }
+
+    #[test]
+    fn console_drops_oldest_at_cap_in_constant_time() {
+        let mut host = Host::new(Document::new(), "about:blank".into());
+        for i in 0..MAX_CONSOLE_ENTRIES + 3 {
+            host.push_console(ConsoleEntry {
+                level: "log".into(),
+                message: i.to_string(),
+            });
+        }
+        assert_eq!(host.console.len(), MAX_CONSOLE_ENTRIES);
+        assert_eq!(host.console.front().expect("oldest").message, "3");
+        assert_eq!(host.console.back().expect("newest").message, "4098");
+    }
 }
