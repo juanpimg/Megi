@@ -727,7 +727,7 @@ impl Transform {
                             let top_right = if x + 1 < width {
                                 out[(y - 1) * width + x + 1]
                             } else {
-                                out[y * width]
+                                out[(y - 1) * width + x]
                             };
                             predictor_mode(mode, left, top, top_left, top_right)
                         };
