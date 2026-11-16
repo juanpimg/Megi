@@ -1,0 +1,78 @@
+{
+  "mode": "live",
+  "results": [
+    {
+      "id": "example",
+      "name": "example.com",
+      "note": "Referencia mínima: debe verse siempre",
+      "source": "https://example.com",
+      "mode": "live",
+      "result": "DEGRADADO",
+      "display_items": 24,
+      "status": 200,
+      "warnings": [
+        "script https://example.com/s.js failed: JavaScript error: TypeError: not a callable function (unknown at :1:980)\n    at <main> (unknown at :1:980)",
+        "console.error: Uncaught TypeError: not a callable function (unknown at :1:980)\n    at <main> (unknown at :1:980)"
+      ],
+      "images_failed": 0,
+      "time_ms": 1941.4,
+      "issue": 0,
+      "error": "",
+      "png": "docs/status/real-sites/example.png"
+    },
+    {
+      "id": "rust",
+      "name": "rust-lang.org",
+      "note": "CSS/images desde CDN",
+      "source": "https://www.rust-lang.org",
+      "mode": "live",
+      "result": "DEGRADADO",
+      "display_items": 295,
+      "status": 200,
+      "warnings": [
+        "skipping @font-face \"Fira Sans\": max web fonts per render (8) reached"
+      ],
+      "images_failed": 0,
+      "time_ms": 5295.9,
+      "issue": 0,
+      "error": "",
+      "png": "docs/status/real-sites/rust.png"
+    },
+    {
+      "id": "wikipedia",
+      "name": "es.wikipedia.org/wiki/Rust",
+      "note": "Solapes conocidos en la UI Vector",
+      "source": "https://es.wikipedia.org/wiki/Rust",
+      "mode": "live",
+      "result": "DEGRADADO",
+      "display_items": 349,
+      "status": 200,
+      "warnings": [
+        "script inline-script-0 failed: JavaScript error: TypeError: cannot convert 'null' or 'undefined' to object (unknown at :1:947)\n    at <main> (unknown at :1:12)\n    at <main> (unknown at :1:947)",
+        "console.error: Uncaught TypeError: cannot convert 'null' or 'undefined' to object (unknown at :1:947)\n    at <main> (unknown at :1:12)\n    at <main> (unknown at :1:947)",
+        "skipping image https://thumb.wikimedia.org/wikipedia/commons/thumb/7/72/Disambig.svg/20px-Disambig.svg.png?utm_source=es.wikipedia.org&utm_campaign=parser&utm_content=thumbnail: invalid chunk \"tEXt\": non-consecutive IDAT"
+      ],
+      "images_failed": 1,
+      "time_ms": 2702.3,
+      "issue": 1013,
+      "error": "",
+      "png": "docs/status/real-sites/wikipedia.png"
+    },
+    {
+      "id": "hn",
+      "name": "news.ycombinator.com",
+      "note": "Históricamente colapsa a página en blanco (<center>/<table>)",
+      "source": "https://news.ycombinator.com",
+      "mode": "live",
+      "result": "PASS",
+      "display_items": 2409,
+      "status": 200,
+      "warnings": [],
+      "images_failed": 0,
+      "time_ms": 3717.3,
+      "issue": 1011,
+      "error": "",
+      "png": "docs/status/real-sites/hn.png"
+    }
+  ]
+}

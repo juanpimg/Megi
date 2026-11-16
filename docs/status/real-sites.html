@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><title>Megi — render en webs reales</title>
+<style>
+body{font:14px/1.5 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f2328;max-width:1200px;margin:2rem auto;padding:0 1rem}
+h1{font-size:26px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #d0d7de;padding:8px;text-align:left;vertical-align:top}
+th{background:#f6f8fa} .meta{color:#57606a;font-size:12px}
+.note{background:#fff8c5;border-left:4px solid #d29922;padding:10px 14px;margin:1rem 0}
+</style></head><body>
+<h1>Megi — prueba real de render</h1>
+<p class="meta">Modo: <b>live</b> · PASS: 1 · DEGRADADO: 3 · PÁGINA EN BLANCO: 0 · ERROR: 0 ·
+generado por <code>tools/real_site_check.py</code> desde <code>docs/status/real_sites.toml</code>.</p>
+<div class="note">Esto es una comprobación de render de extremo a extremo, no una métrica de
+conformidad. Una página en blanco (<code>display_items = 0</code>) o avisos de imagen/layout se
+marcan como fallo aunque el pipeline haya terminado sin error. Las capturas son PNG reales
+producidos por <code>render</code>. Para medir cobertura de capacidades, ver
+<a href="coverage.html">coverage.html</a>.</p>
+<table><tr><th>Sitio</th><th>Resultado</th><th>display_items</th><th>Tiempo</th><th>Avisos</th><th>Issue</th><th>Captura</th></tr>
+<tr><td><b>example.com</b><br><span class='meta'>Referencia mínima: debe verse siempre</span></td><td style='color:#d29922'><b>DEGRADADO</b></td><td>24</td><td>1941.4 ms</td><td>script https://example.com/s.js failed: JavaScript error: TypeError: not a callable function (unknown at :1:980)
+    at &lt;main&gt; (unknown at :1:980)<br>console.error: Uncaught TypeError: not a callable function (unknown at :1:980)
+    at &lt;main&gt; (unknown at :1:980)</td><td>—</td><td><a href='docs/status/real-sites/example.png'><img src='docs/status/real-sites/example.png' alt='captura de example.com' style='width:220px;border:1px solid #d0d7de'></a></td></tr><tr><td><b>rust-lang.org</b><br><span class='meta'>CSS/images desde CDN</span></td><td style='color:#d29922'><b>DEGRADADO</b></td><td>295</td><td>5295.9 ms</td><td>skipping @font-face &quot;Fira Sans&quot;: max web fonts per render (8) reached</td><td>—</td><td><a href='docs/status/real-sites/rust.png'><img src='docs/status/real-sites/rust.png' alt='captura de rust-lang.org' style='width:220px;border:1px solid #d0d7de'></a></td></tr><tr><td><b>es.wikipedia.org/wiki/Rust</b><br><span class='meta'>Solapes conocidos en la UI Vector</span></td><td style='color:#d29922'><b>DEGRADADO</b></td><td>349</td><td>2702.3 ms</td><td>script inline-script-0 failed: JavaScript error: TypeError: cannot convert &#x27;null&#x27; or &#x27;undefined&#x27; to object (unknown at :1:947)
+    at &lt;main&gt; (unknown at :1:12)
+    at &lt;main&gt; (unknown at :1:947)<br>console.error: Uncaught TypeError: cannot convert &#x27;null&#x27; or &#x27;undefined&#x27; to object (unknown at :1:947)
+    at &lt;main&gt; (unknown at :1:12)
+    at &lt;main&gt; (unknown at :1:947)<br>skipping image https://thumb.wikimedia.org/wikipedia/commons/thumb/7/72/Disambig.svg/20px-Disambig.svg.png?utm_source=es.wikipedia.org&amp;utm_campaign=parser&amp;utm_content=thumbnail: invalid chunk &quot;tEXt&quot;: non-consecutive IDAT</td><td><a href="https://github.com/juanpimg/Megi/issues/1013">#1013</a></td><td><a href='docs/status/real-sites/wikipedia.png'><img src='docs/status/real-sites/wikipedia.png' alt='captura de es.wikipedia.org/wiki/Rust' style='width:220px;border:1px solid #d0d7de'></a></td></tr><tr><td><b>news.ycombinator.com</b><br><span class='meta'>Históricamente colapsa a página en blanco (&lt;center&gt;/&lt;table&gt;)</span></td><td style='color:#2ea043'><b>PASS</b></td><td>2409</td><td>3717.3 ms</td><td>—</td><td><a href="https://github.com/juanpimg/Megi/issues/1011">#1011</a></td><td><a href='docs/status/real-sites/hn.png'><img src='docs/status/real-sites/hn.png' alt='captura de news.ycombinator.com' style='width:220px;border:1px solid #d0d7de'></a></td></tr></table>
+<p class="meta">Datos: <a href="real-sites.json">real-sites.json</a></p>
+</body></html>

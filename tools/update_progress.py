@@ -288,7 +288,9 @@ def render_markdown(data: dict) -> str:
             "[Open the capability coverage report](docs/status/coverage.html) — "
             f"**{coverage['implemented']}/{coverage['known']}** implemented, "
             f"{coverage['partial']} partial. "
-            "[Rules](docs/status/COVERAGE.md). [Progress map SVG](docs/status/progress.svg).\n"
+            "[Rules](docs/status/COVERAGE.md). "
+            "[Real-site render check](docs/status/real-sites.html). "
+            "[Progress map SVG](docs/status/progress.svg).\n"
         )
     else:
         lines.append(f"[Open the progress map SVG](docs/status/progress.svg)\n")

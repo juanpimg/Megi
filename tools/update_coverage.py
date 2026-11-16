@@ -326,7 +326,8 @@ no que el código haya empeorado. Los parciales cuentan como no implementados.</
 <table><tr><th>Área</th><th>Id</th><th>Capacidad</th><th>Estado</th><th>Issue</th><th>Detalle</th></tr>
 {''.join(missing_rows)}</table>
 <p class="meta">Datos crudos: <a href="coverage.json">coverage.json</a> ·
-Reglas: <a href="COVERAGE.md">COVERAGE.md</a></p>
+Reglas: <a href="COVERAGE.md">COVERAGE.md</a> ·
+Comprobación visual en webs reales: <a href="real-sites.html">real-sites.html</a></p>
 </body></html>
 """
 

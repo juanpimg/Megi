@@ -4,11 +4,11 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Coverage](docs/status/badge-coverage.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `17c56ec` (2026-11-17) · coverage **77%** (54/70) · **2,420** tests · conformance **PASS** · **14** crates · **180,621** lines of Rust
+**Snapshot** — commit `adebfc7` (2026-11-17) · coverage **77%** (54/70) · **2,420** tests · conformance **PASS** · **14** crates · **180,635** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
-[Open the capability coverage report](docs/status/coverage.html) — **54/70** implemented, 2 partial. [Rules](docs/status/COVERAGE.md). [Progress map SVG](docs/status/progress.svg).
+[Open the capability coverage report](docs/status/coverage.html) — **54/70** implemented, 2 partial. [Rules](docs/status/COVERAGE.md). [Real-site render check](docs/status/real-sites.html). [Progress map SVG](docs/status/progress.svg).
 
 ## Progress map (legacy feature checklist)
 
@@ -152,9 +152,9 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `17c56ec` (2026-11-17) |
+| Commit | `adebfc7` (2026-11-17) |
 | Crates in the workspace | 14 |
-| Lines of Rust (tracked `.rs`) | 180621 |
+| Lines of Rust (tracked `.rs`) | 180635 |
 | Tests (`cargo test --workspace -- --list`) | 2420 |
 | Crates with `#![forbid(unsafe_code)]` | 14 / 14 |
 | Conformance gate | **PASS** |
