@@ -328,6 +328,9 @@ impl RuleIndex {
             }
         }
 
+        // `by_tag` keys are ASCII-lowercased (see `selector_key`). An element name that is
+        // already lowercase hits the bucket directly; otherwise fold it (allocating only
+        // for the rarer uppercase-element case) so `<DIV>` still finds a `div` rule.
         let local_name = element.local_name.as_str();
         if let Some(rules) = self.by_tag.get(local_name) {
             out.extend_from_slice(rules);
@@ -1148,9 +1151,15 @@ pub fn resolve_document_styles_with_media(
     while let Some(node_id) = stack.pop() {
         if let Some(el) = doc.node(node_id).as_element() {
             let inline_decls = el.get_attribute("style").map(|style| {
-                // Cap inline style length to prevent DoS.
+                // Cap inline style length to prevent DoS. A multi-byte code point may
+                // straddle the 64 KiB limit, so back up to the nearest UTF-8 boundary
+                // before slicing (slicing mid-code-point would panic).
                 let style = if style.len() > 64 * 1024 {
-                    &style[..64 * 1024]
+                    let mut end = 64 * 1024;
+                    while end > 0 && !style.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    &style[..end]
                 } else {
                     style
                 };
@@ -1555,5 +1564,67 @@ mod tests {
             "animation names are case-sensitive"
         );
         assert!(collection.keyframes("other").is_some());
+    }
+
+    #[test]
+    fn type_selectors_match_case_insensitively_through_rule_index() {
+        // HTML type selectors are ASCII case-insensitive (Selectors §4). The index must
+        // not silently drop `DIV { … }` for a lowercase <div> (issue #1127), or `div` for
+        // an uppercase <DIV>. Compare against the unindexed reference path as well.
+        for (selector, tag) in [("DIV", "div"), ("div", "DIV")] {
+            let mut doc = Document::new();
+            let html = doc.create_element(Namespace::Html, "html", vec![]);
+            let target = doc.create_element(Namespace::Html, tag, vec![]);
+            doc.append_child(doc.root(), html);
+            doc.append_child(html, target);
+
+            let collection = collection_with(&format!("{selector} {{ color: rgb(1, 2, 3); }}"));
+            let indexed = resolve_indexed(&doc, &collection);
+            let bruteforce = resolve_bruteforce(&doc, &collection);
+            let expected = Color::new(1, 2, 3, 255);
+
+            assert_eq!(
+                indexed.get(&target).expect("indexed style").color,
+                expected,
+                "indexed path: `{selector}` should match <{tag}>"
+            );
+            assert_eq!(
+                bruteforce.get(&target).expect("bruteforce style").color,
+                expected,
+                "bruteforce path: `{selector}` should match <{tag}>"
+            );
+        }
+    }
+
+    #[test]
+    fn oversized_inline_style_with_multibyte_char_at_cap_does_not_panic() {
+        // Regression test for issue #1126: truncating an inline `style` attribute at byte
+        // 64*1024 used to slice through a multi-byte code point and panic (remote DoS).
+        let prefix = "color: red; ";
+        let mut style = String::from(prefix);
+        // Pad so the two-byte 'é' starts at byte 65535 and straddles the 65536 cap.
+        style.push_str(&" ".repeat(64 * 1024 - prefix.len() - 1));
+        style.push('é');
+        assert_eq!(style.len(), 64 * 1024 + 1);
+        assert!(!style.is_char_boundary(64 * 1024));
+
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", vec![]);
+        let target = doc.create_element(
+            Namespace::Html,
+            "div",
+            vec![Attribute::new("style", style)],
+        );
+        doc.append_child(doc.root(), html);
+        doc.append_child(html, target);
+
+        // Before the fix this call panicked with "end byte index 65536 is not a char boundary".
+        let styles = resolve_document_styles(&doc, None);
+        let computed = styles.get(&target).expect("computed style for target");
+        assert_eq!(
+            computed.color,
+            Color::new(255, 0, 0, 255),
+            "the declaration before the cap must survive the boundary-safe truncation"
+        );
     }
 }
