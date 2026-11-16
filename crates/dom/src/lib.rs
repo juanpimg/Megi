@@ -504,21 +504,21 @@ fn tombstone_node(slot: usize, local_generation: u32) -> Node {
 /// Estimated heap payload of a live node (see [`Document::estimate_bytes`]).
 fn node_payload_bytes(node: &Node) -> usize {
     match &node.kind {
-        NodeKind::Text(text) | NodeKind::Comment(text) => text.len(),
+        NodeKind::Text(text) | NodeKind::Comment(text) => text.capacity(),
         NodeKind::Doctype {
             name,
             public_id,
             system_id,
-        } => name.len() + public_id.len() + system_id.len(),
-        NodeKind::ProcessingInstruction { target, data } => target.len() + data.len(),
+        } => name.capacity() + public_id.capacity() + system_id.capacity(),
+        NodeKind::ProcessingInstruction { target, data } => target.capacity() + data.capacity(),
         NodeKind::Element(element) => {
-            let mut bytes = element.local_name.len()
-                + element.prefix.as_ref().map_or(0, String::len)
-                + element.attributes.len() * std::mem::size_of::<Attribute>();
+            let mut bytes = element.local_name.capacity()
+                + element.prefix.as_ref().map_or(0, String::capacity)
+                + element.attributes.capacity() * std::mem::size_of::<Attribute>();
             for attribute in &element.attributes {
-                bytes += attribute.local_name.len()
-                    + attribute.value.len()
-                    + attribute.prefix.as_ref().map_or(0, String::len);
+                bytes += attribute.local_name.capacity()
+                    + attribute.value.capacity()
+                    + attribute.prefix.as_ref().map_or(0, String::capacity);
             }
             bytes
         }
