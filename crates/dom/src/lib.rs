@@ -1175,14 +1175,16 @@ impl Document {
         let deep = if deep { self.subtree_size(node_id) <= MAX_CLONE_NODES } else { false };
         let cloned_root = self.clone_node_shallow(node_id);
 
-        // Work stack of `(source, clone, deep)` frames; template contents are always deep,
-        // but subject to the same clone-size cap as any other subtree (#1111).
+        // Work stack of `(source, clone, deep)` frames. Template contents always get
+        // their own inert DocumentFragment (shallow clone), and the fragment's children
+        // are deep-cloned only when `deep` is true (per the DOM Standard). The
+        // clone-size cap applies to them as to any other subtree (#1111).
         let mut stack: Vec<(NodeId, NodeId, bool)> = Vec::new();
         if let Some((src_contents, clone_contents)) =
             self.template_contents_pair(node_id, cloned_root)
             && self.subtree_size(src_contents) <= MAX_CLONE_NODES
         {
-            stack.push((src_contents, clone_contents, true));
+            stack.push((src_contents, clone_contents, deep));
         }
         if deep {
             stack.push((node_id, cloned_root, true));
@@ -2912,19 +2914,10 @@ mod tests {
             "template contents must not be shared"
         );
 
-        // Template contents are always cloned deeply, even for a shallow clone.
+        // Template contents are cloned deeply only when `deep` is true; a shallow
+        // clone creates an empty inert fragment (#1111).
         let cloned_children: Vec<NodeId> = doc.children(cloned_frag).collect();
-        assert_eq!(cloned_children.len(), 1);
-        let cloned_span = cloned_children[0];
-        assert_ne!(cloned_span, span);
-        assert_eq!(
-            doc.node(cloned_span).as_element().unwrap().local_name,
-            "span"
-        );
-        assert_eq!(doc.node(cloned_span).parent, Some(cloned_frag));
-        let cloned_text = doc.children(cloned_span).next();
-        assert!(cloned_text.is_some());
-        assert_eq!(doc.node(cloned_text.unwrap()).as_text(), Some("Inert"));
+        assert_eq!(cloned_children.len(), 0);
 
         // The original template is untouched.
         assert_eq!(doc.children(original_frag).collect::<Vec<_>>(), vec![span]);
