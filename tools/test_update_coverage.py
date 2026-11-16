@@ -25,7 +25,8 @@ GATE_PASS = {
 }
 
 
-def cap(cap_id: str, area: str, state: str, evidence: str, name: str = "") -> str:
+def cap(cap_id: str, area: str, state: str, evidence: str, name: str = "", issue: int = 0) -> str:
+    issue_line = f"issue = {issue}\n" if issue else ""
     return (
         "[[capability]]\n"
         f'id = "{cap_id}"\n'
@@ -34,6 +35,7 @@ def cap(cap_id: str, area: str, state: str, evidence: str, name: str = "") -> st
         'source = "spec"\n'
         f'state = "{state}"\n'
         f'evidence = "{evidence}"\n'
+        f"{issue_line}"
     )
 
 
@@ -124,6 +126,78 @@ class CoverageCountingTests(unittest.TestCase):
         ok, reason = update_coverage.verify_evidence(bad, self.root, GATE_PASS)
         self.assertFalse(ok)
         self.assertIn("none", reason)
+
+
+class CoverageArtifactTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        (self.root / "fixtures").mkdir()
+        (self.root / "fixtures/a.html").write_text("ok", encoding="utf-8")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def stats(self) -> dict:
+        import tomllib
+
+        text = "\n".join(
+            [
+                cap("A", "F1", "done", "fixture:fixtures/a.html"),
+                cap("B", "F7", "missing", "none", "chrome tapa contenido", issue=1012),
+                cap("C", "F7", "partial", "none", "a11y"),
+            ]
+        )
+        caps = tomllib.loads(text).get("capability", [])
+        return update_coverage.compute_stats(caps, self.root, GATE_PASS)
+
+    def test_svg_has_area_bars(self) -> None:
+        svg = update_coverage.render_svg(self.stats())
+        self.assertIn("<svg", svg)
+        self.assertIn("F1", svg)
+        self.assertIn("F7", svg)
+        self.assertIn("33%", svg)
+        self.assertIn("1/3", svg)
+
+    def test_html_lists_missing_with_issue_links(self) -> None:
+        html = update_coverage.render_html(self.stats(), {"last_updated_by": "tests"})
+        self.assertIn("issues/1012", html)
+        self.assertIn("F7", html)
+        self.assertIn("a11y", html)
+        self.assertIn("1/3", html)
+
+    def test_json_has_area_breakdown(self) -> None:
+        manifest_path = self.root / "docs/status/coverage.toml"
+        manifest_path.parent.mkdir(parents=True)
+        manifest_path.write_text(
+            "\n".join(
+                [
+                    cap("A", "F1", "done", "fixture:fixtures/a.html"),
+                    cap("B", "F7", "missing", "none"),
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (self.root / "docs/status/progress.toml").parent.mkdir(parents=True, exist_ok=True)
+        (self.root / "docs/status/progress.toml").write_text(
+            '[gate]\nstatus = "PASS"\n' + "".join(f'{k} = "{v}"\n' for k, v in GATE_PASS.items() if k != "status"),
+            encoding="utf-8",
+        )
+        artifacts = update_coverage.build_artifacts(self.root)
+        import json
+
+        payload = json.loads(artifacts["docs/status/coverage.json"])
+        self.assertEqual(payload["areas"][0]["id"], "F1")
+        self.assertEqual(payload["areas"][0]["implemented"], 1)
+        self.assertIn("docs/status/coverage.svg", artifacts)
+        self.assertIn("docs/status/coverage.html", artifacts)
+
+    def test_rules_doc_exists(self) -> None:
+        rules = Path(__file__).resolve().parent.parent / "docs/status/COVERAGE.md"
+        self.assertTrue(rules.is_file())
+        text = rules.read_text(encoding="utf-8")
+        self.assertIn("denominador", text)
+        self.assertIn("gate:", text)
 
 
 if __name__ == "__main__":
