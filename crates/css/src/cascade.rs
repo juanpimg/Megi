@@ -1148,9 +1148,16 @@ pub fn resolve_document_styles_with_media(
     while let Some(node_id) = stack.pop() {
         if let Some(el) = doc.node(node_id).as_element() {
             let inline_decls = el.get_attribute("style").map(|style| {
-                // Cap inline style length to prevent DoS.
-                let style = if style.len() > 64 * 1024 {
-                    &style[..64 * 1024]
+                // Cap inline style length to prevent DoS. Slicing at a fixed
+                // byte offset would panic when it lands inside a multi-byte
+                // code point, so walk back to the nearest char boundary.
+                const MAX_INLINE_STYLE_BYTES: usize = 64 * 1024;
+                let style = if style.len() > MAX_INLINE_STYLE_BYTES {
+                    let mut end = MAX_INLINE_STYLE_BYTES;
+                    while end > 0 && !style.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    &style[..end]
                 } else {
                     style
                 };
