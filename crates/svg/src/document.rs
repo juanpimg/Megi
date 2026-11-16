@@ -401,10 +401,19 @@ impl Document {
             group_bbox_stack: Vec::new(),
             segments_used: 0,
         };
-        let style = Style::default();
+        let mut style = Style::default();
+        let mut selector_budget = SelectorBudget {
+            used: 0,
+            max: limits.max_selector_checks,
+        };
+        style.apply(root, &rules, &[], &gradient_ids, &pattern_ids, &mut selector_budget)?;
+        let root_opacity = root
+            .attribute("opacity")
+            .and_then(|v| v.parse::<f32>().ok())
+            .unwrap_or(1.0);
         let root_transform = Transform::IDENTITY;
         let mut ancestors: Vec<&XmlElement> = vec![root];
-        builder.visit_children(root, &mut ancestors, root_transform, &style, 1.0, 0)?;
+        builder.visit_children(root, &mut ancestors, root_transform, &style, root_opacity, 0)?;
         selector_checks = builder.selector_checks_used;
         let patterns = build_patterns(
             &defs,
