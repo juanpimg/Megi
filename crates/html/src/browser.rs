@@ -139,6 +139,16 @@ pub fn set_outer_html_with_options(
         options,
     );
     let new_children = new_root_children(doc, marker);
+    // A parser that hit a limit produced a partial tree. Replacing the element with it would
+    // lose the original content with nothing to roll back to (#1121), so the write is refused:
+    // the freshly parsed nodes are dropped, the element keeps its place and the caller gets
+    // the violations back.
+    if !violations.is_empty() {
+        for child in new_children {
+            doc.remove_subtree(child);
+        }
+        return Ok(violations);
+    }
     // Insert into a buffered list first and roll back on rejection: inserting one by one
     // straight into the tree left it half-mutated when a later child was rejected (#646).
     let mut inserted: Vec<NodeId> = Vec::new();
