@@ -516,8 +516,8 @@ fn apply_filter(
                     &mut pixels,
                     layer.width,
                     layer.height,
-                    (dx * scale).round() as i32,
-                    (dy * scale).round() as i32,
+                    (dx * scale).round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
+                    (dy * scale).round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
                 );
                 (pixels, result)
             }
