@@ -1434,9 +1434,24 @@ impl Document {
             return Err("document root must be a Document node".to_owned());
         }
 
+        // Counters for Document/Doctype placement checks (issue #1114).
+        let mut document_count = 0usize;
+        let mut doctype_count = 0usize;
+        let mut doctype_parent_is_root = true;
+
         for (slot, node) in self.nodes.iter().enumerate() {
             if !self.occupied[slot] {
                 continue;
+            }
+            // Document placement: count Document nodes and track whether any is the root.
+            if matches!(node.kind, NodeKind::Document) {
+                document_count += 1;
+            }
+            if let NodeKind::Doctype { .. } = node.kind {
+                doctype_count += 1;
+                if node.parent != Some(self.root) {
+                    doctype_parent_is_root = false;
+                }
             }
             if node.id.index() != slot {
                 return Err(format!(
@@ -1578,6 +1593,54 @@ impl Document {
             }
             resolved.extend(path.iter().copied());
         }
+        // Document placement: exactly one Document node, and it is the root (slot 0).
+        if document_count != 1 {
+            return Err(format!(
+                "expected exactly one Document node, found {document_count}"
+            ));
+        }
+        // Doctype placement: at most one, and it must be a direct child of the Document.
+        if doctype_count > 1 {
+            return Err(format!("expected at most one Doctype, found {doctype_count}"));
+        }
+        if doctype_count == 1 && !doctype_parent_is_root {
+            return Err("Doctype must be a direct child of the Document".to_owned());
+        }
+        // Reverse membership: every live node that claims a parent must appear in that
+        // parent's child chain (issue #1114).
+        for (slot, node) in self.nodes.iter().enumerate() {
+            if !self.occupied[slot] {
+                continue;
+            }
+            if let Some(parent_id) = node.parent {
+                let parent = match self.try_node(parent_id) {
+                    Some(p) => p,
+                    None => continue,
+                };
+                // Walk the parent's child chain looking for this node.
+                let mut found = false;
+                let mut child = parent.first_child;
+                let mut guard = 0usize;
+                while let Some(child_id) = child {
+                    if child_id == node.id {
+                        found = true;
+                        break;
+                    }
+                    guard += 1;
+                    if guard > live {
+                        break;
+                    }
+                    child = self.try_node(child_id).and_then(|n| n.next_sibling);
+                }
+                if !found {
+                    return Err(format!(
+                        "slot {slot}: claims parent {} but is not in its child chain",
+                        parent_id.index()
+                    ));
+                }
+            }
+        }
+
         Ok(())
     }
 
