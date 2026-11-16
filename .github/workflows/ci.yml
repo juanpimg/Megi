@@ -30,11 +30,11 @@ concurrency:
 
 jobs:
   # Classify PRs so a docs-only change does not spin up the full Rust matrix (#485).
-  # On push/merge_group/schedule/workflow_dispatch this job is skipped and every
-  # heavy gate runs as before (an empty `docs_only` output is not `'true'`).
+  # This job runs on *every* event and reports `docs_only=false` outside PRs:
+  # a skipped `changes` job would implicitly skip all jobs that `needs` it,
+  # including on push/merge_group, silently disabling the whole Rust matrix.
   changes:
     name: Classify PR changes
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     outputs:
       docs_only: ${{ steps.classify.outputs.docs_only }}
@@ -47,6 +47,12 @@ jobs:
         id: classify
         run: |
           set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            # push / merge_group / schedule / workflow_dispatch: always run the
+            # full matrix, as before the docs-only optimisation.
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           base="origin/${{ github.base_ref }}"
           git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
           docs_only=true
