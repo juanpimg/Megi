@@ -5224,9 +5224,8 @@ impl JsRuntime {
                     continue;
                 };
                 if worker.terminated {
-                    worker.to_worker.clear();
-                    worker.to_main.borrow_mut().clear();
-                    self.host.borrow_mut().workers[*id] = Some(worker);
+                    // Free the slot so a new worker can reuse it (#1138).
+                    self.host.borrow_mut().workers[*id] = None;
                     continue;
                 }
                 while let Some(json) = worker.to_worker.pop_front() {
@@ -5527,11 +5526,8 @@ fn worker_post_message(
 fn worker_terminate(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let id = worker_handle(this, context)?;
     with_host(|host| {
-        if let Some(Some(worker)) = host.workers.get_mut(id as usize) {
-            worker.terminated = true;
-            worker.to_worker.clear();
-            worker.to_main.borrow_mut().clear();
-        }
+        // Free the slot so a new worker can reuse it (#1138).
+        host.workers[id as usize] = None;
     });
     Ok(JsValue::undefined())
 }
