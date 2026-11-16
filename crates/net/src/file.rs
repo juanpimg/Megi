@@ -45,8 +45,20 @@ pub fn load_file_url(url: &Url) -> Result<Vec<u8>, FetchError> {
 }
 
 /// [`load_file_url`] with an explicit size bound (at most `max_bytes + 1` is read).
+///
+/// Only regular files are read: a directory, FIFO, device or socket is rejected with
+/// [`FetchError::FileNotRegular`] before `open`. Otherwise `File::open` on a FIFO blocks the
+/// calling thread until a writer appears (`file:///path/to/fifo` hangs the renderer) and a
+/// device such as `/dev/zero` never reaches end-of-file, growing the read buffer until the
+/// size bound is hit (#307).
 pub fn load_file_url_with_limit(url: &Url, max_bytes: usize) -> Result<Vec<u8>, FetchError> {
     let path = path_from_file_url(url)?;
+    // `metadata` follows symlinks (a symlink to a regular file stays valid) and, unlike
+    // `open`, does not block on a FIFO.
+    let metadata = std::fs::metadata(&path).map_err(|error| map_file_error(error, &path))?;
+    if !metadata.is_file() {
+        return Err(FetchError::FileNotRegular(path));
+    }
     let file = std::fs::File::open(&path).map_err(|error| map_file_error(error, &path))?;
     let mut bytes = Vec::new();
     file.take(max_bytes.saturating_add(1) as u64)
@@ -103,6 +115,28 @@ mod unit_tests {
             Err(FetchError::ResponseTooLarge)
         ));
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn non_regular_files_are_rejected() {
+        // A directory never yields bytes, and a FIFO blocks on open / a device never reaches
+        // end-of-file: reject them before opening (#307).
+        let dir = std::env::temp_dir().join(format!("megi-file-dir-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let url = Url::parse(&format!("file://{}", dir.display())).expect("file URL");
+        assert!(matches!(
+            load_file_url(&url),
+            Err(FetchError::FileNotRegular(path)) if path == dir
+        ));
+
+        // `/dev/null` is a character device, not a regular file.
+        let dev_null = Url::parse("file:///dev/null").expect("file URL");
+        assert!(matches!(
+            load_file_url(&dev_null),
+            Err(FetchError::FileNotRegular(_))
+        ));
+
+        let _ = std::fs::remove_dir(&dir);
     }
 
     #[test]
