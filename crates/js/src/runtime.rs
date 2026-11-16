@@ -2070,7 +2070,14 @@ fn charge_document_parse(host: &mut Host, bytes: usize, sink: &str) -> bool {
 }
 
 fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    const MAX_DOCUMENT_WRITE_INPUT: usize = 16 * 1024 * 1024;
     let text = arg_string(args, 0, context)?;
+    if text.len() > MAX_DOCUMENT_WRITE_INPUT {
+        return Err(js_error(format!(
+            "document.write input exceeds the per-call limit of {} bytes",
+            MAX_DOCUMENT_WRITE_INPUT
+        )));
+    }
     with_host(|host| {
         if !charge_document_parse(host, text.len(), "document.write") {
             return;
