@@ -2,9 +2,9 @@
 //!
 //! `cargo-fuzz` turns every file in `fuzz/fuzz_targets/` into its own binary, so code that
 //! several targets need lives here instead of being copy-pasted into each harness. Keeping
-//! one copy matters for correctness: the RIFF container layout below has to match in the
-//! `webp_vp8` and `webp_lossy` targets, and a duplicated version had already drifted
-//! (see issue #859).
+//! one copy matters for correctness: the RIFF container layout below is shared by the
+//! `webp` target's lossy and lossless paths, and a duplicated version had already drifted
+//! (see issues #859 and #471).
 
 /// Wraps `payload` in a minimal `RIFF....WEBP` container whose single chunk id is `chunk`.
 ///
