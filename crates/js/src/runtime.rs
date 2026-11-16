@@ -5658,7 +5658,7 @@ impl JsRuntime {
             .map_err(|error| JsError::Internal(error.to_string()))?;
         let prelude = r#"
 var __megi_worker_listeners = [];
-function addEventListener(type, callback) { if (type === "message" && typeof callback === "function") { __megi_worker_listeners.push(callback); } }
+function addEventListener(type, callback) { if (type === "message" && typeof callback === "function" && __megi_worker_listeners.length < 64) { __megi_worker_listeners.push(callback); } }
 function removeEventListener() {}
 "#;
         self.context
