@@ -266,7 +266,13 @@ pub fn parse_font_families(font_family: &str) -> Vec<String> {
                 }
             }
             let name = if unescaped.len() > MAX_ENTRY_LEN {
-                &unescaped[..MAX_ENTRY_LEN]
+                // Truncate on a char boundary to avoid panicking on multi-byte
+                // code points straddling the cap (#1228).
+                let mut end = MAX_ENTRY_LEN;
+                while end > 0 && !unescaped.is_char_boundary(end) {
+                    end -= 1;
+                }
+                &unescaped[..end]
             } else {
                 &unescaped
             };
