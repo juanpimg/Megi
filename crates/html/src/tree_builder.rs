@@ -1563,7 +1563,7 @@ impl TreeBuilder {
                 && element.local_name == "template"
                 && element.template_contents.is_some())
         {
-            self.doc.append_text(current, s);
+            let _ = self.doc.append_text(current, s);
             return;
         }
         let loc = self.appropriate_place_for_inserting_node(None);
@@ -1572,9 +1572,9 @@ impl TreeBuilder {
             return;
         }
         if let Some(sib) = loc.insert_before_sibling {
-            self.doc.insert_text_before(sib, s);
+            let _ = self.doc.insert_text_before(sib, s);
         } else {
-            self.doc.append_text(loc.parent, s);
+            let _ = self.doc.append_text(loc.parent, s);
         }
     }
 
@@ -1631,7 +1631,7 @@ impl TreeBuilder {
                 && element.local_name == "template"
                 && element.template_contents.is_some())
         {
-            self.doc.append_text(current, text);
+            let _ = self.doc.append_text(current, text);
             return;
         }
         let loc = self.appropriate_place_for_inserting_node(None);
@@ -1640,9 +1640,9 @@ impl TreeBuilder {
             return;
         }
         if let Some(sib) = loc.insert_before_sibling {
-            self.doc.insert_text_before(sib, text);
+            let _ = self.doc.insert_text_before(sib, text);
         } else {
-            self.doc.append_text(loc.parent, text);
+            let _ = self.doc.append_text(loc.parent, text);
         }
     }
 
