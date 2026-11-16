@@ -3430,6 +3430,12 @@ fn mutation_observer_constructor(
     let Some(callback) = args.first().filter(|value| value.is_callable()) else {
         return Err(js_error("MutationObserver callback must be a function"));
     };
+    // Cap registrations before rooting anything (issue #1134): a script must not be
+    // able to create millions of observers that are all visited on every mutation.
+    let has_room = with_host(|host| host.observers.len() < MAX_OBSERVERS).unwrap_or(false);
+    if !has_room {
+        return Err(js_error("MutationObserver limit exceeded"));
+    }
     let callback_slot = root_push(context, "__megi_observer_callbacks", callback.clone())?;
     let object_slot = {
         let array = root_array(context, "__megi_observer_objects", true)?;
@@ -5690,6 +5696,12 @@ const MAX_FETCH_BODY: usize = 8 * 1024 * 1024;
 /// target per record, so an unbounded list is both unbounded retention and quadratic CPU.
 const MAX_OBSERVER_TARGETS: usize = 1024;
 
+/// Live `MutationObserver` registrations (#1134). Each observer roots a callback and an
+/// object and is visited on every DOM mutation, so an unbounded count is both unbounded
+/// retention and quadratic dispatch. Registrations are kept after `disconnect()` so a
+/// later `observe()` can re-arm the observer, so this also caps the total ever created.
+const MAX_OBSERVERS: usize = 1024;
+
 /// Request headers the browser owns; page scripts must not set them through `fetch()`.
 const FORBIDDEN_FETCH_HEADERS: &[&str] = &[
     "host",
@@ -6588,6 +6600,31 @@ mod mutation_observer_delivery_tests {
             line.message, "attrnode:1:data-x",
             "removeAttributeNode must deliver an attributes record with its name (#1137): {console:?}"
         );
+    }
+
+    #[test]
+    fn mutation_observer_registrations_are_capped() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        let script = format!(
+            r#"
+            for (var i = 0; i < {MAX_OBSERVERS}; i++) {{
+                new MutationObserver(function() {{}});
+            }}
+            console.log('cap-ok');
+            try {{
+                new MutationObserver(function() {{}});
+                console.log('cap-fail');
+            }} catch (e) {{
+                console.log('cap-caught');
+            }}
+            "#
+        );
+        runtime.eval(&script, "observer_cap.js").expect("eval cap script");
+        let console = runtime.take_console();
+        let messages: Vec<&str> = console.iter().map(|entry| entry.message.as_str()).collect();
+        assert!(messages.contains(&"cap-ok"), "{console:?}");
+        assert!(messages.contains(&"cap-caught"), "{console:?}");
+        assert!(!messages.contains(&"cap-fail"), "{console:?}");
     }
 
     #[test]

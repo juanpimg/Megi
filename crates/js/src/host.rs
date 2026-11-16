@@ -488,10 +488,30 @@ impl Host {
         if self.observers.is_empty() {
             return;
         }
-        let document = &self.document;
+        // Compute the target's ancestor chain once per mutation instead of once per
+        // (observer, target) pair (#1134). Bound the walk by the arena size so a
+        // corrupted parent cycle cannot hang dispatch.
+        let mut ancestors: Vec<NodeId> = Vec::new();
+        let max_steps = self.document.len().saturating_add(1);
+        let mut steps = 0usize;
+        let mut current = self
+            .document
+            .try_node(record.target)
+            .and_then(|node| node.parent);
+        while let Some(id) = current {
+            if steps >= max_steps {
+                break;
+            }
+            steps += 1;
+            ancestors.push(id);
+            current = self.document.try_node(id).and_then(|node| node.parent);
+        }
         for observer in &mut self.observers {
-            if record_matches_document(document, observer, &record) && observer.records.len() < 4096
-            {
+            // Most observers watch nothing; skip them without scanning their targets.
+            if observer.targets.is_empty() || observer.records.len() >= 4096 {
+                continue;
+            }
+            if record_matches_observer(&record, observer, &ancestors) {
                 observer.records.push(record.clone());
             }
         }
@@ -607,10 +627,15 @@ impl Drop for HostScope {
     }
 }
 
-pub(crate) fn record_matches_document(
-    document: &Document,
-    observer: &ObserverRegistration,
+/// Whether `record` matches any of `observer`'s registered targets.
+///
+/// `ancestors` is the target node's parent chain, computed once per mutation by
+/// [`Host::record_mutation`] so the dispatch is O(observers × targets) instead of
+/// O(observers × targets × depth) (#1134).
+pub(crate) fn record_matches_observer(
     record: &MutationRecord,
+    observer: &ObserverRegistration,
+    ancestors: &[NodeId],
 ) -> bool {
     observer.targets.iter().any(|target| {
         let kind_enabled = match record.kind {
@@ -624,23 +649,7 @@ pub(crate) fn record_matches_document(
         if target.node == record.target {
             return true;
         }
-        if !target.subtree {
-            return false;
-        }
-        let mut current = match document.try_node(record.target) {
-            Some(node) => node.parent,
-            None => return false,
-        };
-        while let Some(node) = current {
-            if node == target.node {
-                return true;
-            }
-            let Some(parent) = document.try_node(node) else {
-                return false;
-            };
-            current = parent.parent;
-        }
-        false
+        target.subtree && ancestors.contains(&target.node)
     })
 }
 
