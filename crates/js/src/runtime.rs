@@ -3487,11 +3487,32 @@ fn observer_observe(this: &JsValue, args: &[JsValue], context: &mut Context) -> 
         character_data: flag("characterData"),
         subtree: flag("subtree"),
     };
-    with_host(|host| {
-        if let Some(registration) = host.observers.iter_mut().find(|r| r.object_slot == slot) {
-            registration.targets.push(target);
+    let registered = with_host(|host| -> Result<(), String> {
+        let Some(registration) = host.observers.iter_mut().find(|r| r.object_slot == slot) else {
+            return Ok(());
+        };
+        // Re-observing a node only updates its options: the DOM spec keeps one registered
+        // observer per (observer, target) pair. Pushing a second entry would deliver every
+        // mutation once per duplicate and walk the ancestor chain once per entry (#437).
+        if let Some(existing) = registration
+            .targets
+            .iter_mut()
+            .find(|existing| existing.node == target.node)
+        {
+            *existing = target;
+            return Ok(());
         }
+        if registration.targets.len() >= MAX_OBSERVER_TARGETS {
+            return Err(format!(
+                "MutationObserver target limit of {MAX_OBSERVER_TARGETS} exceeded"
+            ));
+        }
+        registration.targets.push(target);
+        Ok(())
     });
+    if let Some(Err(message)) = registered {
+        return Err(js_error(message));
+    }
     Ok(JsValue::undefined())
 }
 
@@ -5640,6 +5661,11 @@ const MAX_FETCH_HEADERS: usize = 64;
 /// the host provider, so an unbounded state is unbounded retention (#663).
 const MAX_HISTORY_STATE_BYTES: usize = 1024 * 1024;
 const MAX_FETCH_BODY: usize = 8 * 1024 * 1024;
+
+/// Distinct nodes a single `MutationObserver` may track (#437). `observe()` dedups by node, so
+/// this only bounds distinct targets; the microtask drain walks the ancestor chain once per
+/// target per record, so an unbounded list is both unbounded retention and quadratic CPU.
+const MAX_OBSERVER_TARGETS: usize = 1024;
 
 /// Request headers the browser owns; page scripts must not set them through `fetch()`.
 const FORBIDDEN_FETCH_HEADERS: &[&str] = &[

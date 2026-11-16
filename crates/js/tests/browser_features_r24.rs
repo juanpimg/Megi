@@ -274,6 +274,51 @@ fn mutation_observer_character_data() {
 }
 
 #[test]
+fn mutation_observer_observe_replaces_options_for_the_same_node() {
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime
+        .eval(
+            "window.__types = [];
+             var obs = new MutationObserver(function (records) {
+                 for (var i = 0; i < records.length; i++) __types.push(records[i].type);
+             });
+             // Re-observing the same node updates its options instead of adding a second
+             // registration (DOM spec, `observe()`). With two entries the childList mutation
+             // below would be delivered as well (#437).
+             obs.observe(document.body, { childList: true });
+             obs.observe(document.body, { attributes: true });
+             document.body.appendChild(document.createElement('p'));
+             document.body.setAttribute('data-x', '1');",
+            "t",
+        )
+        .expect("observe");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime.eval("__types.join(',')", "t").unwrap(),
+        "attributes"
+    );
+}
+
+#[test]
+fn mutation_observer_target_limit_is_enforced() {
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let error = runtime
+        .eval(
+            "var obs = new MutationObserver(function () {});
+             for (var i = 0; i < 2048; i++) {
+                 obs.observe(document.createElement('div'), { attributes: true });
+             }",
+            "t",
+        )
+        .expect_err("observer target cap");
+    let message = error.to_string();
+    assert!(
+        message.contains("MutationObserver target limit"),
+        "unexpected error: {message}"
+    );
+}
+
+#[test]
 fn history_replace_keeps_length_and_updates_state() {
     let mut runtime = JsRuntime::new().expect("runtime");
     runtime.set_history_provider(Box::new(|_| {}));
