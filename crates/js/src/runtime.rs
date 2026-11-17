@@ -7265,7 +7265,9 @@ mod dataset_name_tests {
         assert_eq!(camel_case_attribute("data-foo-bar"), Some("fooBar".into()));
         assert_eq!(camel_case_attribute("data-a-é"), Some("a-é".into()));
         assert_eq!(camel_case_attribute("data-x-1"), Some("x-1".into()));
-        assert_eq!(camel_case_attribute("data--foo"), Some("-Foo".into()));
+        // Per HTML spec, a dash followed by an ASCII lower alpha is removed even
+        // when it is the first character of the suffix: "data--foo" -> "Foo".
+        assert_eq!(camel_case_attribute("data--foo"), Some("Foo".into()));
         assert_eq!(camel_case_attribute("data-ß"), Some("ß".into()));
         assert_eq!(camel_case_attribute("role"), None);
     }
