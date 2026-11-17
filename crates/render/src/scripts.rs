@@ -705,9 +705,8 @@ fn load_worker_source(
 /// Serialized tuple origin used as the localStorage namespace key. `None` for
 /// non-HTTP(S) documents, which keep the legacy flat storage (#1476).
 fn storage_origin_key(url: &Url) -> Option<String> {
-    net::cors::Origin::from_url(url).map(|origin| {
-        format!("{}://{}:{}", origin.scheme, origin.host, origin.port)
-    })
+    net::cors::Origin::from_url(url)
+        .map(|origin| format!("{}://{}:{}", origin.scheme, origin.host, origin.port))
 }
 
 pub fn execute_scripts(
@@ -1613,7 +1612,13 @@ mod storage_origin_tests {
             storage_origin_key(&c),
             "different schemes are different origins"
         );
-        assert_eq!(storage_origin_key(&a), Some("http://example.com:8080".into()));
-        assert_eq!(storage_origin_key(&Url::parse("file:///tmp/x.html").expect("url")), None);
+        assert_eq!(
+            storage_origin_key(&a),
+            Some("http://example.com:8080".into())
+        );
+        assert_eq!(
+            storage_origin_key(&Url::parse("file:///tmp/x.html").expect("url")),
+            None
+        );
     }
 }
