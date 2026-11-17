@@ -34,7 +34,7 @@ findings live here instead.
 | F2 | Source, second pass with seven risk lenses | `src` |
 | F3 | Tools, CI, manifests, docs, examples | `tool`, `ci`, `manifest`, `docs`, `example` |
 | F4 | Measured performance | `tool` (bench harness) |
-| F5 | Feature gap matrices (`docs/GAPS.md`) | — |
+| F5 | Feature gap matrices (GitHub issues) | — |
 | F6 | Dispositions and fixes | — |
 | F7 | Verifiable close: `--check` green and no `pending` rows | — |
 

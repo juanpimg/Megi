@@ -731,6 +731,103 @@ fn build_crypto(context: &mut Context) -> JsObject {
     init.build()
 }
 
+/// Builds the `TextEncoder` constructor.
+fn build_text_encoder(context: &mut Context) -> boa_engine::object::builtins::JsFunction {
+    let constructor = FunctionObjectBuilder::new(context.realm(), native(text_encoder_constructor))
+        .name(js_string!("TextEncoder"))
+        .length(0)
+        .constructor(true)
+        .build();
+    let proto = constructor
+        .get(js_string!("prototype"), context)
+        .unwrap_or(JsValue::undefined())
+        .as_object()
+        .unwrap_or_else(|| ObjectInitializer::new(context).build());
+    let encode_fn = FunctionObjectBuilder::new(context.realm(), native(text_encoder_encode))
+        .name(js_string!("encode"))
+        .length(1)
+        .build();
+    let _ = proto.set(js_string!("encode"), JsValue::from(encode_fn), false, context);
+    let encoding_get = accessor_fn(context, text_encoder_encoding_get);
+    let _ = proto.define_property_or_throw(
+        js_string!("encoding"),
+        PropertyDescriptor::builder().get(JsValue::from(encoding_get)).enumerable(true).configurable(true).build(),
+        context,
+    );
+    constructor
+}
+
+fn text_encoder_constructor(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let mut init = ObjectInitializer::new(context);
+    Ok(JsValue::from(init.build()))
+}
+
+fn text_encoder_encoding_get(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(js_string!("utf-8")))
+}
+
+fn text_encoder_encode(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let input = args.first().map(|v| v.to_string(context).map(|s| s.to_std_string_escaped()).unwrap_or_default()).unwrap_or_default();
+    let block = AlignedVec::from_iter(0, input.as_bytes().iter().copied());
+    let buffer = JsArrayBuffer::from_byte_block(block, context)
+        .map_err(|e| js_error(e.to_string()))?;
+    let arr = JsUint8Array::from_array_buffer(buffer, context)
+        .map_err(|e| js_error(e.to_string()))?;
+    Ok(JsValue::from(arr))
+}
+
+/// Builds the `TextDecoder` constructor.
+fn build_text_decoder(context: &mut Context) -> boa_engine::object::builtins::JsFunction {
+    let constructor = FunctionObjectBuilder::new(context.realm(), native(text_decoder_constructor))
+        .name(js_string!("TextDecoder"))
+        .length(0)
+        .constructor(true)
+        .build();
+    let proto = constructor
+        .get(js_string!("prototype"), context)
+        .unwrap_or(JsValue::undefined())
+        .as_object()
+        .unwrap_or_else(|| ObjectInitializer::new(context).build());
+    let decode_fn = FunctionObjectBuilder::new(context.realm(), native(text_decoder_decode))
+        .name(js_string!("decode"))
+        .length(1)
+        .build();
+    let _ = proto.set(js_string!("decode"), JsValue::from(decode_fn), false, context);
+    let encoding_get = accessor_fn(context, text_decoder_encoding_get);
+    let _ = proto.define_property_or_throw(
+        js_string!("encoding"),
+        PropertyDescriptor::builder().get(JsValue::from(encoding_get)).enumerable(true).configurable(true).build(),
+        context,
+    );
+    constructor
+}
+
+fn text_decoder_constructor(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let mut init = ObjectInitializer::new(context);
+    Ok(JsValue::from(init.build()))
+}
+
+fn text_decoder_encoding_get(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(js_string!("utf-8")))
+}
+
+fn text_decoder_decode(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let input = args.first().cloned().unwrap_or(JsValue::undefined());
+    if input.is_undefined() || input.is_null() {
+        return Ok(JsValue::from(js_string!("")));
+    }
+    // Try to read as Uint8Array
+    let obj = input.as_object().ok_or_else(|| js_error("decode requires a BufferSource"))?;
+    let len = obj.get(js_string!("length"), context).ok().and_then(|v| v.to_number(context).ok()).unwrap_or(0.0) as usize;
+    let mut bytes = Vec::with_capacity(len);
+    for i in 0..len {
+        let b = obj.get(js_string!(i.to_string()), context).ok().and_then(|v| v.to_number(context).ok()).unwrap_or(0.0) as u8;
+        bytes.push(b);
+    }
+    let text = String::from_utf8_lossy(&bytes);
+    Ok(JsValue::from(js_string!(text.to_string())))
+}
+
 /// Installs History/location, Web Storage and MutationObserver (round 24).
 fn install_browser_features(context: &mut Context) -> Result<(), JsError> {
     for name in [
@@ -788,6 +885,16 @@ fn install_browser_features(context: &mut Context) -> Result<(), JsError> {
             false,
             context,
         )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
+    let text_encoder = build_text_encoder(context);
+    let text_decoder = build_text_decoder(context);
+    context
+        .global_object()
+        .set(js_string!("TextEncoder"), JsValue::from(text_encoder), false, context)
+        .map_err(|error| JsError::Internal(error.to_string()))?;
+    context
+        .global_object()
+        .set(js_string!("TextDecoder"), JsValue::from(text_decoder), false, context)
         .map_err(|error| JsError::Internal(error.to_string()))?;
     let navigator = build_navigator(context);
     let performance = build_performance(context);
@@ -1017,6 +1124,8 @@ fn build_document_object(context: &mut Context) -> JsObject {
         .map(|(name, get, set)| (name, accessor_fn(context, get), accessor_fn(context, set)))
         .collect();
     let active_element = pick(context, document_active_element);
+    let cookie_get = pick(context, document_cookie_get);
+    let cookie_set = pick(context, document_cookie_set);
     let mut init = ObjectInitializer::new(context);
     // Methods.
     for (name, length, function) in [
@@ -1080,6 +1189,12 @@ fn build_document_object(context: &mut Context) -> JsObject {
         js_string!("activeElement"),
         Some(active_element),
         None,
+        Attribute::all(),
+    );
+    init.accessor(
+        js_string!("cookie"),
+        Some(cookie_get),
+        Some(cookie_set),
         Attribute::all(),
     );
     init.accessor(js_string!("URL"), Some(url), None, Attribute::all());
@@ -1213,6 +1328,8 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("replaceChild", 2, node_replace_child),
         ("matches", 1, node_matches),
         ("closest", 1, node_closest),
+        ("querySelector", 1, node_query_selector),
+        ("querySelectorAll", 1, node_query_selector_all),
         ("insertAdjacentHTML", 2, node_insert_adjacent_html),
         ("insertAdjacentText", 2, node_insert_adjacent_text),
         ("cloneNode", 1, node_clone_node),
@@ -2368,6 +2485,48 @@ fn document_head(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
     wrap_optional(context, node)
 }
 
+fn document_cookie_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    // Minimal in-memory cookie store; real jar integration is host-backed.
+    let cookies = context
+        .global_object()
+        .get(js_string!("__megi_cookies"), context)
+        .unwrap_or(JsValue::undefined());
+    if cookies.is_undefined() {
+        return Ok(JsValue::from(js_string!("")));
+    }
+    let s = cookies.to_string(context)?.to_std_string().unwrap_or_default();
+    Ok(JsValue::from(js_string!(s)))
+}
+
+fn document_cookie_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let value = arg_string(args, 0, context).unwrap_or_default();
+    // Append to the store (simplified: just store the raw value).
+    let current = context
+        .global_object()
+        .get(js_string!("__megi_cookies"), context)
+        .unwrap_or(JsValue::undefined());
+    let mut store = if current.is_undefined() {
+        String::new()
+    } else {
+        current.to_string(context)?.to_std_string().unwrap_or_default()
+    };
+    // Parse name=value from the set-cookie string.
+    let pair = value.split(';').next().unwrap_or("").trim();
+    if !pair.is_empty() {
+        if !store.is_empty() {
+            store.push_str("; ");
+        }
+        store.push_str(pair);
+    }
+    let _ = context.global_object().set(
+        js_string!("__megi_cookies"),
+        js_string!(store),
+        false,
+        context,
+    );
+    Ok(JsValue::undefined())
+}
+
 fn document_title_get(
     _this: &JsValue,
     _args: &[JsValue],
@@ -2497,6 +2656,21 @@ fn node_closest(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
         .flatten();
     }
     Ok(JsValue::null())
+}
+
+fn node_query_selector(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node = this_node(this, context)?;
+    let selector = arg_string(args, 0, context)?;
+    let found = with_host(|host| css::query::query_selector_from(&host.document, node, &selector));
+    wrap_optional(context, found.flatten())
+}
+
+fn node_query_selector_all(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node = this_node(this, context)?;
+    let selector = arg_string(args, 0, context)?;
+    let nodes = with_host(|host| css::query::query_selector_all_from(&host.document, node, &selector))
+        .unwrap_or_default();
+    wrap_list(context, nodes)
 }
 
 fn insert_relative(
@@ -4483,13 +4657,17 @@ fn node_inner_text_get(
 fn camel_case_attribute(name: &str) -> Option<String> {
     let suffix = name.strip_prefix("data-")?;
     let mut out = String::new();
-    let mut upper = false;
-    for ch in suffix.chars() {
-        if ch == '-' {
-            upper = true;
-        } else if upper {
-            out.extend(ch.to_uppercase());
-            upper = false;
+    let mut chars = suffix.chars().peekable();
+    while let Some(ch) = chars.next() {
+        // DOMStringMap only consumes a dash before an ASCII lowercase letter and
+        // uppercases with ASCII rules; other dashes stay literal (#1451).
+        if ch == '-'
+            && chars
+                .peek()
+                .is_some_and(|next| next.is_ascii_lowercase())
+        {
+            let next = chars.next().expect("peeked lowercase ASCII letter");
+            out.push(next.to_ascii_uppercase());
         } else {
             out.push(ch);
         }
@@ -4991,6 +5169,17 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       if (value.charAt(i + 3) !== "=") { out += String.fromCharCode(n & 255); }
     }
     return out;
+  });
+  define("alert", function (message) {
+    if (typeof console !== "undefined" && console.log) { console.log(String(message)); }
+  });
+  define("confirm", function (message) {
+    if (typeof console !== "undefined" && console.log) { console.log("confirm: " + String(message)); }
+    return true;
+  });
+  define("prompt", function (message, defaultValue) {
+    if (typeof console !== "undefined" && console.log) { console.log("prompt: " + String(message)); }
+    return (defaultValue === undefined ? null : String(defaultValue));
   });
   function clone(value, seen) {
     if (value === null || typeof value !== "object") { return value; }
@@ -5660,10 +5849,12 @@ fn worker_constructor(
         }
     }
     let mut init = ObjectInitializer::new(context);
+    // Internal identity must not be writable by page scripts: a forged id used to
+    // index host.workers out of bounds and abort the process (#1465).
     init.property(
         js_string!("__megi_worker"),
         JsValue::from(f64::from(id)),
-        Attribute::all(),
+        Attribute::default(),
     );
     init.function(native(worker_post_message), js_string!("postMessage"), 1);
     init.function(native(worker_terminate), js_string!("terminate"), 0);
@@ -5720,8 +5911,11 @@ fn worker_post_message(
 fn worker_terminate(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let id = worker_handle(this, context)?;
     with_host(|host| {
-        // Free the slot so a new worker can reuse it (#1138).
-        host.workers[id as usize] = None;
+        // Free the slot so a new worker can reuse it (#1138). Never index directly:
+        // a forged/mismatched handle must be a no-op, not a panic (#1465).
+        if let Some(slot) = host.workers.get_mut(id as usize) {
+            *slot = None;
+        }
     });
     Ok(JsValue::undefined())
 }
@@ -7059,5 +7253,22 @@ mod module_scan_tests {
             "/* = await foo(); */ var x = 1;"
         ));
         assert!(!module_has_top_level_await("var s = `= await foo()`;"));
+    }
+}
+
+#[cfg(test)]
+mod dataset_name_tests {
+    use super::*;
+
+    #[test]
+    fn dataset_camel_case_follows_domstringmap_rules() {
+        assert_eq!(camel_case_attribute("data-foo-bar"), Some("fooBar".into()));
+        assert_eq!(camel_case_attribute("data-a-é"), Some("a-é".into()));
+        assert_eq!(camel_case_attribute("data-x-1"), Some("x-1".into()));
+        // Per HTML spec, a dash followed by an ASCII lower alpha is removed even
+        // when it is the first character of the suffix: "data--foo" -> "Foo".
+        assert_eq!(camel_case_attribute("data--foo"), Some("Foo".into()));
+        assert_eq!(camel_case_attribute("data-ß"), Some("ß".into()));
+        assert_eq!(camel_case_attribute("role"), None);
     }
 }

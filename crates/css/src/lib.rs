@@ -57,7 +57,7 @@ pub use grid::{
     GridTemplateAreas, TrackMax, TrackMin, TrackSize,
 };
 pub use media::{
-    MediaCondition, MediaContext, MediaFeature, MediaQualifier, MediaQuery, MediaQueryList,
+    MediaCondition, MediaContext, MediaFeature, MediaQualifier, MediaQuery, MediaQueryList, ColorScheme,
     MediaType, Orientation, evaluate as evaluate_media, parse_media_query_list,
 };
 pub use parser::{TokenStream, consume_declaration, parse_list_of_declarations, parse_stylesheet};
@@ -1109,6 +1109,8 @@ mod tests {
         let print = MediaContext {
             viewport: None,
             screen: false,
+            color_scheme: ColorScheme::Light,
+            reduced_motion: false,
         };
         let styles = resolve_document_styles_with_media(
             &doc,
@@ -1453,6 +1455,8 @@ mod tests {
         let print_context = MediaContext {
             viewport: None,
             screen: false,
+            color_scheme: ColorScheme::Light,
+            reduced_motion: false,
         };
         assert!(!media::evaluate(&sheet.imports[1].media, &screen_context));
         assert!(media::evaluate(&sheet.imports[1].media, &print_context));
@@ -1536,6 +1540,8 @@ mod tests {
         let print_context = MediaContext {
             viewport: None,
             screen: false,
+            color_scheme: ColorScheme::Light,
+            reduced_motion: false,
         };
         let print = resolve_document_styles_with_media(&doc, Some(css), print_context);
         assert_eq!(print.get(&p).expect("style").color, Color::RED);

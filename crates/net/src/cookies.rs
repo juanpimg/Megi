@@ -546,6 +546,22 @@ impl CookieJar {
         if parsed.secure && request_url.scheme().as_str() != "https" {
             return false;
         }
+        // Cookie prefixes (RFC 6265bis): __Host- requires Secure + Path=/ + no Domain.
+        let name_lower = parsed.name.to_ascii_lowercase();
+        if name_lower.starts_with("__host-") {
+            if !parsed.secure {
+                return false;
+            }
+            if parsed.domain.is_some() {
+                return false;
+            }
+            if parsed.path.as_deref() != Some("/") {
+                return false;
+            }
+        }
+        if name_lower.starts_with("__secure-") && !parsed.secure {
+            return false;
+        }
         let host = request_url.host().to_ascii_lowercase();
         let host_only = parsed.domain.is_none();
         let domain = parsed.domain.clone().unwrap_or_else(|| host.clone());

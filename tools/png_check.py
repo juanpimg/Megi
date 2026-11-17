@@ -310,6 +310,35 @@ def check_file(path: str) -> None:
             # normal FAIL line instead of an uncaught traceback.
             raise PngError(f"invalid PNG filter byte(s): {sorted(set(bad))}")
         print(f"  filters: {len(set(filters))} type(s)")
+    else:
+        # Adam7 interlaced: validate filter bytes of every pass.
+        passes = (
+            (0, 0, 8, 8),
+            (4, 0, 8, 8),
+            (0, 4, 4, 8),
+            (2, 0, 4, 4),
+            (0, 2, 2, 4),
+            (1, 0, 2, 2),
+            (0, 1, 1, 2),
+        )
+        filters = []
+        pos = 0
+        for x0, y0, x_step, y_step in passes:
+            if width <= x0 or height <= y0:
+                continue
+            pw = (width - x0 + x_step - 1) // x_step
+            ph = (height - y0 + y_step - 1) // y_step
+            stride = (pw * channels * bit_depth + 7) // 8
+            row_stride = stride + 1
+            for i in range(ph):
+                off = pos + i * row_stride
+                if off < len(raw):
+                    filters.append(raw[off])
+            pos += ph * row_stride
+        bad = [f for f in filters if f > 4]
+        if bad:
+            raise PngError(f"invalid PNG filter byte(s): {sorted(set(bad))}")
+        print(f"  filters: {len(set(filters))} type(s) (interlaced)")
 
     chunk_names = " ".join(kind.decode("ascii") for kind, _ in chunks)
     print(f"OK: {path}")
@@ -330,7 +359,7 @@ def main(argv: list[str]) -> int:
     for path in argv[1:]:
         try:
             check_file(path)
-        except (OSError, PngError) as error:
+        except (OSError, PngError, ValueError) as error:
             print(f"FAIL: {path}: {error}", file=sys.stderr)
             failures += 1
     return 0 if failures == 0 else 1

@@ -1,6 +1,6 @@
-# Handoff de continuación — Post-Auditoría `v0.1.0` (2026-11-13)
+# Handoff de continuación — Post-Auditoría `v0.1.0` (2026-11-17)
 
-**Fecha**: 2026-11-13 (Europe/Madrid)  
+**Fecha**: 2026-11-17 (Europe/Madrid)  
 **Rama**: `main` (último commit de código: `9f44916`, estado/badges: `7ab03bc`)  
 **Binario interactivo**: `./target/release/megi` (compilado con `cargo build --release --locked -p shell -p render -p test_harness -p bench`)
 
@@ -38,7 +38,7 @@
 
 **Fecha**: 2026-11-12 (Europe/Madrid)
 **Rama**: `main` — Pre-Alpha `v0.1.0`
-**Estado**: **2300 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; **14/14 crates con `#![forbid(unsafe_code)]`**. Manifiesto `docs/status/progress.toml` actualizado; `PROGRESS.md`/SVG se regeneran con `python3 tools/update_progress.py --write`.
+**Estado**: **2488 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; **14/14 crates con `#![forbid(unsafe_code)]`**. Manifiesto `docs/status/progress.toml` actualizado; `PROGRESS.md`/SVG se regeneran con `python3 tools/update_progress.py --write`.
 **CI/Repo**: GitHub Actions y workflow de release (`v*.*.*`) actualizados para empaquetar `megi`, `render`, `test_harness` y `bench` en Linux, macOS y Windows.
 **Estado de fases**: fuente editable [`docs/status/progress.toml`](status/progress.toml), página generada [`PROGRESS.md`](../PROGRESS.md); **no editar a mano** los artefactos generados.
 
@@ -113,7 +113,7 @@ python3 tools/update_progress.py --check --no-gate --no-count
 
 ## Reglas del repositorio (recordatorio)
 
-- Sin *forks* de motores ni crates de parsing/layout/imagen de terceros. Núcleo (`dom`, `html`, `css`, `layout`) sólo `std`; `fonts` usa la pila tipográfica autorizada **y `woff2-patched` 0.4 (Apache-2.0, pure Rust)**; `net` usa `rustls`/`webpki-roots`/`rcgen` (tests) y PSL MPL-2.0 vendorizada; `image`/`svg` std (+`image`/`fonts` internos); `js` usa **Boa 0.21.1**; `render` no añade deps externas; `shell` usa `winit`/`softbuffer`; `test_harness` usa `js`.
+- Sin *forks* de motores ni crates de parsing/layout/imagen de terceros. Núcleo (`dom`, `html`, `css`, `layout`) sólo `std`; `fonts` usa la pila tipográfica autorizada **y `woff2-patched` 0.4 (Apache-2.0, pure Rust)**; `net` usa `rustls`/`webpki-roots`/`rcgen` (tests) y PSL MPL-2.0 vendorizada; `image`/`svg` std (+`image`/`fonts` internos); `js` usa **Boa 0.22.x**; `render` no añade deps externas; `shell` usa `winit`/`softbuffer`; `test_harness` usa `js`.
 - `#![forbid(unsafe_code)]` en todos los crates; `fuzz/` workspace aparte (nightly + ASan).
 - Cero advertencias: `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings` + `cargo doc`.
 - Tests en el mismo commit; *Conventional Commits*; no commit/push desde agentes.

@@ -79,9 +79,10 @@ hits.
   on the baseline propagated by the IFC; the old 8×8 bitmap stub is only a
   last-resort fallback when no font database is available.
 
-- The PNG writer uses stored DEFLATE blocks (no compression) on purpose, see
-  `crates/paint/src/png.rs` and `docs/ARCHITECTURE.md` §3.1 (no external crates
-  without an explicit policy amendment).
+- The PNG writer uses an in-tree LZ77 hash-chain DEFLATE encoder (adaptive
+  filters + compressed blocks) for a ~44.8x size drop; see `crates/paint/src/png.rs`
+  and `docs/ARCHITECTURE.md` §3.1 (no external crates without an explicit policy
+  amendment).
 - The canvas is painted following CSS 2.2 §14.2: an opaque `html` background is
   propagated to the canvas; otherwise the first `body` background is propagated.
   `basic.html` relies on the `html` background (`#eef2f7`) to cover the whole

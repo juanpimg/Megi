@@ -756,7 +756,7 @@ pub fn execute_scripts(
             crate::browser_host::computed_style_for(&styles, document, node_id)
         }));
     }
-    let media = host.media;
+    let media = host.media.clone();
     runtime.set_media_provider(Box::new(move |query: &str| {
         crate::browser_host::media_matches(&media, query)
     }));
@@ -775,7 +775,17 @@ pub fn execute_scripts(
         // surface as a synthetic 404 so scripts can inspect `response.ok`.
         {
             let base = document_url.clone();
-            let options = host.fetch_options.clone();
+            let mut options = host.fetch_options.clone();
+            // Thread the document origin so the loader can run CORS validation (#1530).
+            if options.origin.is_none() {
+                let scheme_str = match base.scheme() { Scheme::Http => "http", Scheme::Https => "https", _ => "http" };
+                let origin = if let Some(port) = base.port_or_default() {
+                    format!("{}://{}:{}", scheme_str, base.host(), port)
+                } else {
+                    format!("{}://{}", scheme_str, base.host())
+                };
+                options.origin = Some(origin);
+            }
             let no_network = host.no_network;
             // `fetch` volume is budgeted per page: the per-call loader caps bound one response,
             // but a script could still issue thousands of calls (#660).
@@ -808,22 +818,11 @@ pub fn execute_scripts(
                         "network disabled (--no-network)".to_string(),
                     ));
                 }
-                let same_origin = match (base.scheme(), url.scheme()) {
-                    (Scheme::Http | Scheme::Https, Scheme::Http | Scheme::Https) => {
-                        base.scheme() == url.scheme()
-                            && base.host() == url.host()
-                            && base.port_or_default() == url.port_or_default()
-                    }
-                    // Same scheme; the directory confinement is enforced below with a
-                    // uniform 404 so out-of-directory and missing files are indistinguishable.
-                    (Scheme::File, Scheme::File) => true,
-                    // data: URLs are same-origin fetchable (browsers allow them).
-                    (_, Scheme::Data) => true,
-                    _ => false,
-                };
-                if !same_origin {
+                // Cross-origin http(s) requests are no longer rejected up-front; the loader
+                // validates them through CORS when `options.origin` is set (#1530).
+                if matches!(url.scheme(), Scheme::File) && base.scheme() != url.scheme() {
                     return Err(js::JsError::Runtime(
-                        "CORS: cross-origin fetch denied (same-origin only)".to_string(),
+                        "CORS: cross-origin fetch denied".to_string(),
                     ));
                 }
                 // `file://` reads are confined to the document's directory. Answer any
