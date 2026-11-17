@@ -29,6 +29,15 @@ use std::collections::HashMap;
 /// match (direct API use).
 pub const MAX_MATCH_STEPS: u32 = 200_000;
 
+/// Maximum selector-match steps for one whole style pass over a document.
+///
+/// The per-element budget above is reset for every element, so a stylesheet with a
+/// pathological selector grows the total work with the number of elements: 100 KB of CSS with
+/// many candidate rules against 100 KB of HTML used to reach ~3.2x10^8 map operations (#1413).
+/// A pass shares one budget, so the cost of resolving a document stays bounded no matter how
+/// many elements it has.
+pub const MAX_PASS_MATCH_STEPS: u32 = 50_000_000;
+
 /// Maximum nesting depth of functional pseudo-class arguments while parsing: `:is(:is(…))`.
 ///
 /// The selector grammar is recursive (`:is()`/`:where()`/`:not()` arguments are selector
@@ -39,6 +48,7 @@ pub const MAX_SELECTOR_NESTING: usize = 32;
 thread_local! {
     static MATCH_STEPS: Cell<u32> = const { Cell::new(0) };
     static MATCH_DEPTH: Cell<u32> = const { Cell::new(0) };
+    static MATCH_PASS_DEPTH: Cell<u32> = const { Cell::new(0) };
     static MATCH_EXHAUSTED: Cell<bool> = const { Cell::new(false) };
     static PARSER_NESTING: Cell<usize> = const { Cell::new(0) };
 }
@@ -99,10 +109,48 @@ pub(crate) struct MatchScope {
 
 pub(crate) fn match_scope() -> MatchScope {
     MATCH_DEPTH.with(|depth| depth.set(depth.get() + 1));
-    MATCH_STEPS.with(|steps| steps.set(MAX_MATCH_STEPS));
-    MATCH_EXHAUSTED.with(|flag| flag.set(false));
+    // Only reset the step budget outside a style pass: a per-element reset is exactly the
+    // quadratic blow-up #1413 describes.
+    if MATCH_PASS_DEPTH.with(|depth| depth.get()) == 0 {
+        MATCH_STEPS.with(|steps| steps.set(MAX_MATCH_STEPS));
+        MATCH_EXHAUSTED.with(|flag| flag.set(false));
+    }
     MatchScope {
         _guard: MatchDepthGuard,
+    }
+}
+
+/// Scope for resolving the styles of a whole document: every element resolution inside it
+/// shares one [`MAX_PASS_MATCH_STEPS`] budget instead of resetting it per element.
+///
+/// Nesting is allowed and only the outermost scope installs the budget, so wrapping an
+/// already-scoped resolution (the renderer styles a document in several passes) is harmless.
+pub struct StylePassScope {
+    _guard: MatchPassGuard,
+}
+
+struct MatchPassGuard;
+
+impl Drop for MatchPassGuard {
+    fn drop(&mut self) {
+        MATCH_PASS_DEPTH.with(|depth| depth.set(depth.get().saturating_sub(1)));
+    }
+}
+
+/// Returns a nested style-pass scope; see [`StylePassScope`].
+#[must_use]
+pub fn style_pass_scope() -> StylePassScope {
+    let outermost = MATCH_PASS_DEPTH.with(|depth| {
+        let current = depth.get();
+        depth.set(current + 1);
+        current == 0
+    });
+    if outermost {
+        MATCH_STEPS.with(|steps| steps.set(MAX_PASS_MATCH_STEPS));
+        MATCH_EXHAUSTED.with(|flag| flag.set(false));
+    }
+    StylePassScope {
+        _guard: MatchPassGuard,
     }
 }
 
@@ -1755,5 +1803,46 @@ mod anplusb_tests {
         let _ = formula.matches(i32::MAX);
         let formula = AnPlusB { a: 1, b: i32::MIN };
         let _ = formula.matches(i32::MIN);
+    }
+}
+
+#[cfg(test)]
+mod style_pass_budget_tests {
+    use super::*;
+
+    #[test]
+    fn a_style_pass_shares_the_step_budget_across_elements() {
+        let _pass = style_pass_scope();
+        {
+            let _element = match_scope();
+            // Pretend this element burned the whole shared budget.
+            MATCH_STEPS.with(|steps| steps.set(0));
+            assert!(!spend_match_step());
+        }
+        let _next_element = match_scope();
+        // The next element of the same pass must not get a fresh 200k budget: that reset is
+        // what turned a pathological stylesheet into quadratic work (#1413).
+        assert!(!spend_match_step());
+    }
+
+    #[test]
+    fn a_standalone_match_scope_still_gets_its_own_budget() {
+        {
+            let _element = match_scope();
+            MATCH_STEPS.with(|steps| steps.set(0));
+            assert!(!spend_match_step());
+        }
+        // Outside a style pass each top-level match/resolution keeps the documented
+        // per-element budget.
+        let _next = match_scope();
+        assert!(spend_match_step());
+    }
+
+    #[test]
+    fn nested_style_passes_install_the_budget_only_once() {
+        let _outer = style_pass_scope();
+        MATCH_STEPS.with(|steps| steps.set(1));
+        let _inner = style_pass_scope();
+        assert_eq!(MATCH_STEPS.with(|steps| steps.get()), 1);
     }
 }
