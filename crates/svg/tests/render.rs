@@ -749,3 +749,18 @@ fn currentcolor_uses_inherited_color() {
     );
     assert_eq!(pixel(&image, 4, 4), [255, 0, 0, 255]);
 }
+
+#[test]
+fn symbol_instantiated_via_use_renders() {
+    // A <symbol> is not painted directly; <use href="#s"> must instantiate its children
+    // through the symbol's viewBox mapping (#38).
+    let image = render_at(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+            <defs><symbol id="s" viewBox="0 0 10 10"><rect width="10" height="10" fill="#00ff00"/></symbol></defs>
+            <use href="#s" x="0" y="0" width="20" height="20"/>
+        </svg>"##,
+        20,
+        20,
+    );
+    assert_eq!(pixel(&image, 5, 5), [0, 255, 0, 255]);
+}

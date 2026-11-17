@@ -1088,8 +1088,21 @@ impl<'a> Builder<'a> {
                     .push(GroupBboxFrame { bbox: None, active });
                 let previous = self.push_effects(&clips, &masks, filter.as_ref());
                 self.use_stack.push(id.to_owned());
-                let result =
-                    self.visit(target, ancestors, use_transform, &style, opacity, depth + 1);
+                let result = if target.local_name_lower() == "symbol" {
+                    // A <symbol> is never painted directly; <use> instantiates its children
+                    // through the symbol's viewBox/preserveAspectRatio viewport mapping (#38).
+                    let symbol_transform = use_transform.then(nested_viewport_transform(target));
+                    self.visit_children(
+                        target,
+                        ancestors,
+                        symbol_transform,
+                        &style,
+                        opacity,
+                        depth + 1,
+                    )
+                } else {
+                    self.visit(target, ancestors, use_transform, &style, opacity, depth + 1)
+                };
                 self.use_stack.pop();
                 self.pop_effects(previous);
                 let frame = self.group_bbox_stack.pop().expect("group bbox frame");
