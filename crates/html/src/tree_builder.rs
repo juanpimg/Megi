@@ -656,6 +656,10 @@ pub struct LimitViolations {
     /// Script executions skipped because [`ParseOptions::max_script_executions`] was
     /// reached (#639).
     pub scripts_skipped: u64,
+    /// The fragment parser panicked while handling the input. The caller's document is left
+    /// with whatever had been parsed up to that point (never wiped), and the fragment is
+    /// incomplete — treat this like a truncation (#1454).
+    pub panicked: bool,
 }
 
 impl LimitViolations {
@@ -670,6 +674,7 @@ impl LimitViolations {
             && self.formatting_dropped == 0
             && self.written_bytes_dropped == 0
             && self.scripts_skipped == 0
+            && !self.panicked
     }
 
     /// Total number of recorded violations (the input truncation counts as one).
@@ -684,6 +689,7 @@ impl LimitViolations {
             + self.formatting_dropped
             + self.written_bytes_dropped
             + self.scripts_skipped
+            + self.panicked as u64
     }
 }
 
@@ -715,6 +721,11 @@ pub struct TreeBuilder {
     pub skip_next_lf: bool,
     pub fragment_context: Option<(Namespace, String)>,
     pub fragment_context_node: Option<NodeId>,
+    /// The synthetic `<html>` root of an in-place fragment parse. Kept on the builder so a
+    /// panic during the fragment parse can still move the parsed children under `doc.root()`
+    /// and free the scaffolding, instead of dropping the caller's document with the builder
+    /// (#1454).
+    fragment_scratch_root: Option<NodeId>,
     pub pending_table_characters: Vec<char>,
     /// Hard safety limits for this parse (anti-DoS).
     pub parse_options: ParseOptions,
@@ -792,6 +803,7 @@ impl TreeBuilder {
             skip_next_lf: false,
             fragment_context: None,
             fragment_context_node: None,
+            fragment_scratch_root: None,
             pending_table_characters: Vec::new(),
             parse_options,
             limit_violations: LimitViolations::default(),
@@ -4402,9 +4414,9 @@ pub fn parse_fragment_with_options(
     scripting_enabled: bool,
     options: &ParseOptions,
 ) -> ParseOutcome {
-    let tb = TreeBuilder::with_options(scripting_enabled, *options);
-    let tb = run_fragment_parser(
-        tb,
+    let mut tb = TreeBuilder::with_options(scripting_enabled, *options);
+    run_fragment_parser(
+        &mut tb,
         input,
         context_namespace,
         context_local_name,
@@ -4441,50 +4453,58 @@ pub fn parse_fragment_into(
     scripting_enabled: bool,
     options: &ParseOptions,
 ) -> LimitViolations {
-    // Take the document out, but guard restoration so a panic during parsing
-    // does not lose the caller's document.
+    // Take the document out of the caller so the builder can parse into it in place, but
+    // keep the builder OUTSIDE the `catch_unwind` closure: if the parser panics, the arena
+    // and every node already in it survive the unwind instead of being dropped together with
+    // the builder. The partial tree is handed back and the panic is reported through
+    // `LimitViolations::panicked`; the caller's document is never replaced with an empty one
+    // (#1454).
     let existing = std::mem::take(doc);
-    // Use catch_unwind to restore the document on panic.
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let tb = TreeBuilder::with_document(scripting_enabled, *options, existing);
-        let tb = run_fragment_parser(
-            tb,
+    let mut tb = TreeBuilder::with_document(scripting_enabled, *options, existing);
+    let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        run_fragment_parser(
+            &mut tb,
             input,
             context_namespace,
             context_local_name,
             scripting_enabled,
             options,
         );
-        let TreeBuilder {
-            doc: parsed,
-            limit_violations,
-            ..
-        } = tb;
-        (parsed, limit_violations)
-    }));
-    match result {
-        Ok((parsed, limit_violations)) => {
-            *doc = parsed;
-            limit_violations
+    }))
+    .is_err();
+    if panicked {
+        // Finish the post-parse fixup the tokenizer loop did not reach: move whatever was
+        // parsed under the document root and free the synthetic `<html>`/context nodes, so a
+        // truncated fragment does not leave parser scaffolding in the caller's DOM.
+        let root = tb.doc.root();
+        if let Some(scratch) = tb.fragment_scratch_root.take() {
+            let _ = tb.doc.reparent_children(scratch, root);
+            tb.doc.remove_subtree(scratch);
         }
-        Err(_) => {
-            // Restore a fresh document on panic (best effort).
-            *doc = Document::new();
-            LimitViolations::default()
+        if let Some(ctx_id) = tb.fragment_context_node.take() {
+            tb.doc.remove_subtree(ctx_id);
         }
+        tb.limit_violations.panicked = true;
     }
+    let TreeBuilder {
+        doc: parsed,
+        limit_violations,
+        ..
+    } = tb;
+    *doc = parsed;
+    limit_violations
 }
 
 /// Shared fragment parser: tokenizer setup, §13.4 synthetic `<html>` root, token loop and
 /// finalization (move children to the document root, drop the synthetic root/context node).
 fn run_fragment_parser(
-    mut tb: TreeBuilder,
+    tb: &mut TreeBuilder,
     input: &str,
     context_namespace: Namespace,
     context_local_name: &str,
     scripting_enabled: bool,
     options: &ParseOptions,
-) -> TreeBuilder {
+) {
     // Cap and validate the context tag name (issue #558): reject empty/whitespace/control
     // names and bound length to prevent unbounded allocation from a huge name.
     const MAX_CONTEXT_NAME_BYTES: usize = 256;
@@ -4493,7 +4513,13 @@ fn run_fragment_parser(
         if trimmed.is_empty() || trimmed.chars().any(|c| c.is_control() || c.is_whitespace()) {
             "div"
         } else if trimmed.len() > MAX_CONTEXT_NAME_BYTES {
-            &trimmed[..MAX_CONTEXT_NAME_BYTES]
+            // The cap is in bytes but the name may be multibyte: walk back to the nearest
+            // code-point boundary instead of splitting one (#1444).
+            let mut end = MAX_CONTEXT_NAME_BYTES;
+            while end > 0 && !trimmed.is_char_boundary(end) {
+                end -= 1;
+            }
+            &trimmed[..end]
         } else {
             trimmed
         };
@@ -4535,6 +4561,7 @@ fn run_fragment_parser(
     tb.fragment_context_node = Some(ctx_node);
 
     let html_root = tb.doc.create_element(Namespace::Html, "html", vec![]);
+    tb.fragment_scratch_root = Some(html_root);
     tb.doc.append_child(tb.doc.root(), html_root);
     tb.push_open_element(html_root);
 
@@ -4543,7 +4570,7 @@ fn run_fragment_parser(
     }
     tb.reset_insertion_mode_appropriately();
 
-    drive_tokenizer(&mut tok, &mut tb);
+    drive_tokenizer(&mut tok, tb);
 
     // Move children of the synthetic `<html>` root directly under `doc.root()` so callers
     // can pick them up as "the new children appended after the previous last child".
@@ -4559,7 +4586,7 @@ fn run_fragment_parser(
         tb.doc.remove_subtree(ctx_id);
     }
     tb.update_selectedcontent_elements();
-    tb
+    tb.fragment_scratch_root = None;
 }
 
 /// Runs the tokenizer → tree-builder loop until EOF.
