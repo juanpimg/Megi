@@ -113,6 +113,8 @@ pub struct LayoutBox {
     pub is_float: bool,
     /// Used `float` side (`Float::None` for non-floated boxes).
     pub float_side: Float,
+    /// `true` when this box was generated for a CSS pseudo-element (`::before`/`::after`).
+    pub is_pseudo: bool,
     /// Child boxes in layout order.
     pub children: Vec<LayoutBox>,
 }
@@ -164,6 +166,7 @@ impl LayoutBox {
             clip: None,
             is_float: false,
             float_side: Float::None,
+            is_pseudo: false,
             children: Vec::new(),
         }
     }

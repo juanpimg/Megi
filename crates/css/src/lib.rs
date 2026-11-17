@@ -47,9 +47,11 @@ pub use calc::{
 };
 pub use cascade::{
     CascadeOriginImportance, CompiledRule, MAX_INLINE_STYLE_BYTES, MatchedDeclaration, Origin,
-    StyleCollection, parse_inline_declarations, parse_inline_style, resolve_cascaded_properties,
-    resolve_document_styles, resolve_document_styles_with_media,
-    resolve_document_styles_with_media_and_state, resolve_document_styles_with_viewport,
+    PseudoStyles, StyleCollection, apply_animations_to_pseudo_styles, parse_inline_declarations,
+    parse_inline_style, resolve_cascaded_properties, resolve_document_styles,
+    resolve_document_styles_from_collection, resolve_document_styles_with_media,
+    resolve_document_styles_with_media_and_state, resolve_document_styles_with_pseudos,
+    resolve_document_styles_with_viewport, resolve_pseudo_cascaded_properties,
 };
 pub use component_value::{ComponentValue, FunctionCall, SimpleBlock};
 pub use flex::{AlignItems, AlignSelf, FlexDirection, FlexWrap, JustifyContent};
@@ -67,12 +69,12 @@ pub use properties::{
     AspectRatio, BackgroundAttachment, BackgroundClip, BackgroundLayer, BackgroundOrigin,
     BackgroundPosition, BackgroundRepeat, BackgroundRepeatAxis, BackgroundSize, BorderCollapse,
     BorderRadii, BorderStyle, BoxShadow, BoxSizing, CaptionSide, Clear, Color, ComputedStyle,
-    ConicGradient, ContainerType, Direction, Display, EmptyCells, FilterFunction, Float, FontStyle,
-    Gradient, GradientKind, GradientStop, InterpolationSpace, Length, LinearDirection,
-    LinearGradient, ListStyleType, MAX_FILTER_FUNCTIONS, MAX_GRADIENT_STOPS, MAX_GRADIENTS,
-    MixBlendMode, ObjectFit, Overflow, Position, RadialExtent, RadialGradient, RadialShape, Radius,
-    RectEdges, TableLayout, TextAlign, TextDecoration, TextShadow, TextTransform, UnicodeBidi,
-    VerticalAlign, Visibility, WhiteSpace,
+    ConicGradient, ContainerType, Content, ContentItem, Direction, Display, EmptyCells,
+    FilterFunction, Float, FontStyle, Gradient, GradientKind, GradientStop, InterpolationSpace,
+    Length, LinearDirection, LinearGradient, ListStyleType, MAX_FILTER_FUNCTIONS,
+    MAX_GRADIENT_STOPS, MAX_GRADIENTS, MixBlendMode, ObjectFit, Overflow, Position, RadialExtent,
+    RadialGradient, RadialShape, Radius, RectEdges, TableLayout, TextAlign, TextDecoration,
+    TextShadow, TextTransform, UnicodeBidi, VerticalAlign, Visibility, WhiteSpace,
 };
 pub use query::{
     SelectorParseError, matches, matches_with_state, query_selector, query_selector_all,
@@ -81,8 +83,8 @@ pub use query::{
 pub use rule::{AtRule, Declaration, FontFaceRule, ImportRule, Rule, StyleRule, Stylesheet};
 pub use selector::{
     AnPlusB, AttrOperator, AttributeSelector, Combinator, ComplexSelector, CompoundSelector,
-    MAX_MATCH_STEPS, MAX_PASS_MATCH_STEPS, MAX_SELECTOR_NESTING, PseudoClass, RelativeSelector,
-    SelectorList, Specificity, parse_selectors, style_pass_scope,
+    MAX_MATCH_STEPS, MAX_PASS_MATCH_STEPS, MAX_SELECTOR_NESTING, PseudoClass, PseudoElement,
+    RelativeSelector, SelectorList, Specificity, parse_selectors, style_pass_scope,
 };
 pub use shorthand::expand_declarations;
 pub use state::{StateContext, StateGuard, current as current_state, with_state};
@@ -109,6 +111,7 @@ impl SimpleSelector {
             classes: self.classes.clone(),
             attributes: Vec::new(),
             pseudo_classes: Vec::new(),
+            pseudo_element: None,
             never_matches: false,
             id_count: u32::from(self.id.is_some()),
         };

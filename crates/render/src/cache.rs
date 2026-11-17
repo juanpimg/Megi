@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use css::ComputedStyle;
+use css::{ComputedStyle, PseudoElement, PseudoStyles};
 use dom::{Document, NodeId, NodeKind};
 use layout::{LayoutBox, Rect, TextMeasurer};
 
@@ -78,7 +78,39 @@ impl RenderCache {
         replaced_sizes: &HashMap<NodeId, (f32, f32)>,
         font_digest: u64,
     ) -> Option<(LayoutBox, bool)> {
-        let fp = layout_fingerprint(document, styles, viewport, replaced_sizes, font_digest);
+        let empty = PseudoStyles::new();
+        self.get_or_compute_layout_with_pseudos(
+            document,
+            styles,
+            &empty,
+            viewport,
+            measurer,
+            replaced_sizes,
+            font_digest,
+        )
+    }
+
+    /// Computes or reuses a [`LayoutBox`] keyed by DOM + styles + pseudo-element styles +
+    /// viewport + replaced-size fingerprint.
+    #[allow(clippy::too_many_arguments)]
+    pub fn get_or_compute_layout_with_pseudos(
+        &mut self,
+        document: &Document,
+        styles: &HashMap<NodeId, ComputedStyle>,
+        pseudo_styles: &PseudoStyles,
+        viewport: Rect,
+        measurer: &dyn TextMeasurer,
+        replaced_sizes: &HashMap<NodeId, (f32, f32)>,
+        font_digest: u64,
+    ) -> Option<(LayoutBox, bool)> {
+        let fp = layout_fingerprint_with_pseudos(
+            document,
+            styles,
+            pseudo_styles,
+            viewport,
+            replaced_sizes,
+            font_digest,
+        );
         if let Some(pos) = self.layout_entries.iter().position(|(k, _)| *k == fp) {
             self.stats.layout_hits += 1;
             let entry = self.layout_entries.remove(pos);
@@ -87,9 +119,10 @@ impl RenderCache {
             return Some((cloned, true));
         }
         self.stats.layout_misses += 1;
-        let layout_root = layout::layout_document_with_measurer_and_replaced_sizes(
+        let layout_root = layout::layout_document_with_measurer_and_pseudos(
             document,
             styles,
+            pseudo_styles,
             viewport,
             measurer,
             Some(replaced_sizes),
@@ -124,11 +157,43 @@ fn mix_str(hash: &mut u64, s: &str) {
     }
 }
 
+fn mix_style_fp(hash: &mut u64, style: &ComputedStyle) {
+    let fp = style.fingerprint();
+    mix_u64(
+        hash,
+        if fp != 0 {
+            fp
+        } else {
+            style.compute_fingerprint()
+        },
+    );
+}
+
 /// Computes a deterministic 64-bit fingerprint over the DOM, computed styles, viewport,
 /// replaced image intrinsic sizes, and the loaded font identity digest (#1218).
 pub fn layout_fingerprint(
     document: &Document,
     styles: &HashMap<NodeId, ComputedStyle>,
+    viewport: Rect,
+    replaced_sizes: &HashMap<NodeId, (f32, f32)>,
+    font_digest: u64,
+) -> u64 {
+    let empty = PseudoStyles::new();
+    layout_fingerprint_with_pseudos(
+        document,
+        styles,
+        &empty,
+        viewport,
+        replaced_sizes,
+        font_digest,
+    )
+}
+
+/// Computes a deterministic 64-bit fingerprint including `::before` / `::after` styles.
+pub fn layout_fingerprint_with_pseudos(
+    document: &Document,
+    styles: &HashMap<NodeId, ComputedStyle>,
+    pseudo_styles: &PseudoStyles,
     viewport: Rect,
     replaced_sizes: &HashMap<NodeId, (f32, f32)>,
     font_digest: u64,
@@ -158,17 +223,19 @@ pub fn layout_fingerprint(
                     mix_str(&mut hash, &attr.value);
                 }
                 if let Some(style) = styles.get(&id) {
-                    let fp = style.fingerprint();
-                    mix_u64(
-                        &mut hash,
-                        if fp != 0 {
-                            fp
-                        } else {
-                            style.compute_fingerprint()
-                        },
-                    );
+                    mix_style_fp(&mut hash, style);
                 } else {
                     mix_u64(&mut hash, 0);
+                }
+                if !pseudo_styles.is_empty() {
+                    if let Some(before) = pseudo_styles.get(&(id, PseudoElement::Before)) {
+                        mix_u64(&mut hash, 0xbef0);
+                        mix_style_fp(&mut hash, before);
+                    }
+                    if let Some(after) = pseudo_styles.get(&(id, PseudoElement::After)) {
+                        mix_u64(&mut hash, 0xaf7e);
+                        mix_style_fp(&mut hash, after);
+                    }
                 }
             }
             NodeKind::Text(text) => {

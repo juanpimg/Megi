@@ -6,7 +6,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use css::{ComputedStyle, Display, Float, Overflow, Position};
+use css::{
+    ComputedStyle, ContentItem, Display, Float, Overflow, Position, PseudoElement, PseudoStyles,
+};
 use dom::{Document, Namespace, NodeId, NodeKind};
 
 use crate::box_tree::{BoxType, LayoutBox, anonymous_style_from, is_collapsible_whitespace_box};
@@ -29,7 +31,19 @@ pub fn build_layout_tree_with_replaced_sizes(
     styles: &HashMap<NodeId, ComputedStyle>,
     replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
 ) -> Option<LayoutBox> {
-    build_layout_tree_internal(doc, styles, replaced_sizes).map(|(root, _)| root)
+    build_layout_tree_internal(doc, styles, None, replaced_sizes).map(|(root, _)| root)
+}
+
+/// Builds the layout box tree with pseudo-element (`::before` / `::after`) styles and
+/// explicit intrinsic sizes for replaced elements.
+pub fn build_layout_tree_with_pseudos(
+    doc: &Document,
+    styles: &HashMap<NodeId, ComputedStyle>,
+    pseudo_styles: &PseudoStyles,
+    replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
+) -> Option<LayoutBox> {
+    build_layout_tree_internal(doc, styles, Some(pseudo_styles), replaced_sizes)
+        .map(|(root, _)| root)
 }
 
 /// Builds the layout tree and reports whether any box establishes `overflow` clipping.
@@ -105,9 +119,48 @@ impl StyleCache {
     }
 }
 
+#[derive(Default)]
+struct CounterScope {
+    stack: Vec<(String, i32, usize)>,
+}
+
+impl CounterScope {
+    fn apply(&mut self, style: &ComputedStyle, depth: usize) {
+        for (name, initial) in &style.counter_reset {
+            self.stack.push((name.clone(), *initial, depth));
+        }
+        for (name, delta) in &style.counter_increment {
+            if let Some((_, val, _)) = self
+                .stack
+                .iter_mut()
+                .rev()
+                .find(|(existing, _, _)| existing == name)
+            {
+                *val = val.saturating_add(*delta);
+            } else {
+                self.stack.push((name.clone(), *delta, depth));
+            }
+        }
+    }
+
+    fn pop_deeper_than(&mut self, depth: usize) {
+        self.stack
+            .retain(|(_, _, entry_depth)| *entry_depth <= depth);
+    }
+
+    fn snapshot(&self) -> HashMap<String, i32> {
+        let mut map = HashMap::new();
+        for (name, value, _) in &self.stack {
+            map.insert(name.clone(), *value);
+        }
+        map
+    }
+}
+
 pub(crate) fn build_layout_tree_internal(
     doc: &Document,
     styles: &HashMap<NodeId, ComputedStyle>,
+    pseudo_styles: Option<&PseudoStyles>,
     replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
 ) -> Option<(LayoutBox, bool)> {
     // Find the <html> element under the document root
@@ -124,14 +177,18 @@ pub(crate) fn build_layout_tree_internal(
     let root_node_id = root_el_id?;
     let mut has_overflow_clip = false;
     let mut style_cache = StyleCache::default();
+    let mut counters = CounterScope::default();
+    let active_pseudos = pseudo_styles.filter(|map| !map.is_empty());
     let root = build_box_for_node(
         doc,
         root_node_id,
         styles,
+        active_pseudos,
         None,
         replaced_sizes,
         &mut has_overflow_clip,
         &mut style_cache,
+        &mut counters,
         0,
     )?;
     Some((root, has_overflow_clip))
@@ -147,18 +204,110 @@ fn is_html_br(node: &dom::Node) -> bool {
     })
 }
 
+/// Builds a layout box for a `::before` or `::after` pseudo-element when generated.
+#[allow(clippy::too_many_arguments)]
+fn build_pseudo_box(
+    doc: &Document,
+    originating: NodeId,
+    pseudo: PseudoElement,
+    pseudo_styles: &PseudoStyles,
+    style_cache: &mut StyleCache,
+    counters: &mut CounterScope,
+    has_overflow_clip: &mut bool,
+    depth: usize,
+) -> Option<LayoutBox> {
+    let style = pseudo_styles.get(&(originating, pseudo))?;
+    if style.display == Display::None || !style.content.generates_box() {
+        return None;
+    }
+    counters.apply(style, depth);
+
+    let blockified = style.float != Float::None
+        || matches!(style.position, Position::Absolute | Position::Fixed);
+    let is_replaced_pseudo = style.content.image_url().is_some();
+
+    let box_type = if is_replaced_pseudo {
+        BoxType::Replaced(originating)
+    } else {
+        match style.display {
+            Display::Table => BoxType::Table(originating),
+            Display::InlineTable => BoxType::InlineTable(originating),
+            Display::TableRowGroup | Display::TableHeaderGroup | Display::TableFooterGroup => {
+                BoxType::TableRowGroup(originating)
+            }
+            Display::TableRow => BoxType::TableRow(originating),
+            Display::TableCell => BoxType::TableCell(originating),
+            Display::TableCaption => BoxType::TableCaption(originating),
+            Display::TableColumn | Display::TableColumnGroup => BoxType::TableColumn(originating),
+            Display::InlineBlock => BoxType::InlineBlock(originating),
+            _ if blockified => BoxType::BlockNode(originating),
+            Display::Block | Display::Flex | Display::Grid | Display::ListItem => {
+                BoxType::BlockNode(originating)
+            }
+            _ => BoxType::InlineNode(originating),
+        }
+    };
+
+    let own_style = style_cache.intern(style);
+    let mut layout_box = LayoutBox::with_shared_style(box_type, Some(Arc::clone(&own_style)));
+    layout_box.is_pseudo = true;
+    layout_box.position = style.position;
+    layout_box.z_index = if style.position == Position::Static {
+        0
+    } else {
+        style.z_index.unwrap_or(0)
+    };
+    layout_box.opacity = style.opacity;
+    layout_box.is_float = style.float != Float::None;
+    layout_box.float_side = style.float;
+    layout_box.establishes_stacking_context = style.opacity.is_nan()
+        || style.opacity < 1.0
+        || matches!(style.position, Position::Fixed)
+        || (style.position != Position::Static && style.z_index.is_some());
+    if !matches!(style.overflow, Overflow::Visible) {
+        *has_overflow_clip = true;
+    }
+
+    if is_replaced_pseudo {
+        layout_box.intrinsic_size = Some((300.0, 150.0));
+    } else {
+        let needs_counters = matches!(
+            &style.content,
+            css::Content::Items(items) if items.iter().any(|it| matches!(it, ContentItem::Counter(_)))
+        );
+        let counter_map = if needs_counters {
+            counters.snapshot()
+        } else {
+            HashMap::new()
+        };
+        if let Some(text) = style.content.resolve_text(doc, originating, &counter_map)
+            && !text.is_empty()
+        {
+            let text_style = style_cache.anonymous_for(&own_style);
+            layout_box.children.push(LayoutBox::with_shared_style(
+                BoxType::TextNode(text),
+                Some(text_style),
+            ));
+        }
+    }
+
+    Some(layout_box)
+}
+
 /// Recursively builds a layout box for a DOM node.
 #[allow(clippy::too_many_arguments)]
 fn build_box_for_node(
     doc: &Document,
     node_id: NodeId,
     styles: &HashMap<NodeId, ComputedStyle>,
+    pseudo_styles: Option<&PseudoStyles>,
     // Inherited style for generated boxes: the anonymous style derived once from the
     // parent element (shared `Arc`), used directly by text and anonymous boxes.
     inherited_style: Option<&Arc<ComputedStyle>>,
     replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
     has_overflow_clip: &mut bool,
     style_cache: &mut StyleCache,
+    counters: &mut CounterScope,
     depth: usize,
 ) -> Option<LayoutBox> {
     if depth >= MAX_TREE_BUILD_DEPTH {
@@ -278,6 +427,11 @@ fn build_box_for_node(
             // `ComputedStyle::initial() + inherit_from` is skipped for them.
             let mut child_style: Option<Arc<ComputedStyle>> = None;
 
+            if pseudo_styles.is_some() {
+                counters.apply(style, depth);
+            }
+            let allow_pseudos = !is_replaced && pseudo_styles.is_some();
+
             // Size the children buffer to the exact DOM child count instead of a fixed
             // `with_capacity(4)`: most elements have 1–2 children, so the old capacity
             // over-allocated (and grew to 8 on the fifth child) for every element.
@@ -288,9 +442,24 @@ fn build_box_for_node(
                     count += 1;
                     child = doc.node(child_id).next_sibling;
                 }
-                count
+                count + usize::from(allow_pseudos) * 2
             };
             let mut raw_children = Vec::with_capacity(child_count);
+            if allow_pseudos
+                && let Some(pseudos) = pseudo_styles
+                && let Some(before_box) = build_pseudo_box(
+                    doc,
+                    node_id,
+                    PseudoElement::Before,
+                    pseudos,
+                    style_cache,
+                    counters,
+                    has_overflow_clip,
+                    depth,
+                )
+            {
+                raw_children.push(before_box);
+            }
             let mut curr = node.first_child;
             while let Some(child_id) = curr {
                 let child_node = doc.node(child_id);
@@ -306,15 +475,35 @@ fn build_box_for_node(
                     doc,
                     child_id,
                     styles,
+                    pseudo_styles,
                     child_style.as_ref(),
                     replaced_sizes,
                     has_overflow_clip,
                     style_cache,
+                    counters,
                     depth + 1,
                 ) {
                     raw_children.push(child_box);
                 }
                 curr = doc.node(child_id).next_sibling;
+            }
+            if allow_pseudos
+                && let Some(pseudos) = pseudo_styles
+                && let Some(after_box) = build_pseudo_box(
+                    doc,
+                    node_id,
+                    PseudoElement::After,
+                    pseudos,
+                    style_cache,
+                    counters,
+                    has_overflow_clip,
+                    depth,
+                )
+            {
+                raw_children.push(after_box);
+            }
+            if pseudo_styles.is_some() {
+                counters.pop_deeper_than(depth);
             }
 
             let needs_anonymous_style = match box_type {
