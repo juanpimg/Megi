@@ -225,12 +225,12 @@ pub fn validate_response(
             ));
         }
     } else {
-        let allowed = Origin::parse(allow_origin).ok_or_else(|| {
-            FetchError::Cors(format!(
-                "malformed Access-Control-Allow-Origin `{allow_origin}`"
-            ))
-        })?;
-        if !allowed.is_same_origin(&request_origin) {
+        // Fetch §4.10 (CORS check): the ACAO value must byte-match the serialized request
+        // origin. Parsing it into `Origin` lowercased the host/scheme and normalized default
+        // ports, wrongly accepting `https://Example.COM` and `https://example.com:443` (#1405).
+        // The request `Origin` header is still parsed (and validated) into `request_origin`;
+        // only the comparison here is byte-exact.
+        if allow_origin != request_origin.as_str() {
             return Err(FetchError::Cors(format!(
                 "origin `{}` is not allowed (server allows `{allow_origin}`)",
                 request_origin.as_str()
@@ -423,6 +423,33 @@ mod tests {
             )
             .is_ok()
         );
+    }
+
+    #[test]
+    fn acao_is_byte_exact_not_case_or_port_normalized() {
+        // Fetch §4.10 compares the ACAO value byte-for-byte with the serialized request
+        // origin. `Origin::parse` lowercases and normalizes default ports, so reusing it
+        // here wrongly accepts `https://App.Example` and `https://app.example:443` for a
+        // request from `https://app.example` (#1405).
+        let cases = [
+            "https://App.example",     // host case differs
+            "https://app.example:443", // explicit default port differs
+            "HTTPS://app.example",     // scheme case differs
+        ];
+        for acao in cases {
+            let response = headers(&[("Access-Control-Allow-Origin", acao)]);
+            let error = validate_response(
+                &url("https://api.example/data"),
+                "https://app.example",
+                &response,
+                false,
+            )
+            .unwrap_err();
+            assert!(
+                matches!(&error, FetchError::Cors(reason) if reason.contains("not allowed")),
+                "ACAO `{acao}` must be rejected byte-exactly, got {error}"
+            );
+        }
     }
 
     #[test]
