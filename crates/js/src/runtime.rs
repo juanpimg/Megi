@@ -3757,19 +3757,25 @@ fn storage_kind(this: &JsValue, context: &mut Context) -> JsResult<StorageKind> 
     })
 }
 
-fn storage_read<F: Fn(&Host) -> &crate::host::StorageMap>(
+/// Runs `f` with a borrow of the selected storage map (#1411).
+///
+/// The old implementation cloned the entire `StorageMap` on every read and discarded `f`
+/// (`let _ = f;`), making every `getItem`/`key`/`length` O(n) over a session. Borrowing through
+/// `with_host` keeps lookups O(1) as documented.
+fn storage_read<T>(
     this: &JsValue,
     context: &mut Context,
-    f: F,
-) -> JsResult<crate::host::StorageMap> {
+    f: impl FnOnce(&crate::host::StorageMap) -> T,
+) -> JsResult<T> {
     let kind = storage_kind(this, context)?;
-    let map = with_host(|host| match kind {
-        StorageKind::Local => host.local_storage.clone(),
-        StorageKind::Session => host.session_storage.clone(),
+    with_host(|host| {
+        let map = match kind {
+            StorageKind::Local => &host.local_storage,
+            StorageKind::Session => &host.session_storage,
+        };
+        f(map)
     })
-    .unwrap_or_default();
-    let _ = f;
-    Ok(map)
+    .ok_or_else(|| js_error("no active JavaScript host"))
 }
 
 fn persist_storage(kind: StorageKind) {
@@ -3794,21 +3800,24 @@ fn persist_storage(kind: StorageKind) {
 
 fn storage_get_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let key = arg_string(args, 0, context)?;
-    let map = storage_read(this, context, |_| unreachable!())?;
-    Ok(map.get(&key).map_or_else(JsValue::null, |value| {
-        JsValue::from(js_string!(value.clone()))
-    }))
+    storage_read(this, context, |map| {
+        map.get(&key).map_or_else(JsValue::null, |value| {
+            JsValue::from(js_string!(value.clone()))
+        })
+    })
 }
 
 fn storage_set_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let key = arg_string(args, 0, context)?;
     let value = arg_string(args, 1, context)?;
     let kind = storage_kind(this, context)?;
-    let current = storage_read(this, context, |_| unreachable!())?;
-    let mut total: usize = current.iter().map(|(k, v)| k.len() + v.len()).sum();
-    if let Some(previous) = current.get(&key) {
-        total = total.saturating_sub(key.len() + previous.len());
-    }
+    let mut total: usize = storage_read(this, context, |current| {
+        let mut total: usize = current.iter().map(|(k, v)| k.len() + v.len()).sum();
+        if let Some(previous) = current.get(&key) {
+            total = total.saturating_sub(key.len() + previous.len());
+        }
+        total
+    })?;
     total = total.saturating_add(key.len() + value.len());
     if total > 1024 * 1024 {
         return Err(js_error(
@@ -3850,11 +3859,11 @@ fn storage_clear(this: &JsValue, _args: &[JsValue], context: &mut Context) -> Js
 
 fn storage_key(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let index = crate::events::webidl_uint32_index(args, context);
-    let map = storage_read(this, context, |_| unreachable!())?;
-    Ok(map
-        .keys()
-        .nth(index)
-        .map_or_else(JsValue::null, |key| JsValue::from(js_string!(key.clone()))))
+    storage_read(this, context, |map| {
+        map.keys()
+            .nth(index)
+            .map_or_else(JsValue::null, |key| JsValue::from(js_string!(key.clone())))
+    })
 }
 
 fn storage_length_get(
@@ -3862,8 +3871,7 @@ fn storage_length_get(
     _args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    let map = storage_read(this, context, |_| unreachable!())?;
-    Ok(JsValue::from(map.len() as f64))
+    storage_read(this, context, |map| JsValue::from(map.len() as f64))
 }
 
 // --- MutationObserver -----------------------------------------------------
@@ -7381,6 +7389,35 @@ mod mutation_observer_delivery_tests {
             matches!(err, JsError::Budget(_)),
             "expected JsError::Budget, got {err:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod storage_borrow_tests {
+    use super::*;
+    use std::cell::Cell;
+
+    /// `storage_read` must actually invoke the caller's closure on a borrow of the selected
+    /// map (#1411). The old implementation cloned the whole map and discarded `f`
+    /// (`let _ = f;`), so this cell would never be set.
+    #[test]
+    fn storage_read_applies_the_closure_without_cloning() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        let _scope = HostScope::enter(&runtime.host);
+        let local = runtime
+            .context
+            .global_object()
+            .get(js_string!("localStorage"), &mut runtime.context)
+            .expect("localStorage global");
+
+        let called = Cell::new(false);
+        let len = storage_read(&local, &mut runtime.context, |map| {
+            called.set(true);
+            map.len()
+        })
+        .expect("storage read");
+        assert!(called.get(), "the storage closure must actually be invoked");
+        assert_eq!(len, 0, "a fresh realm has no localStorage entries");
     }
 }
 
