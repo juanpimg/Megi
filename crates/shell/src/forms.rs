@@ -905,6 +905,94 @@ pub fn caret_visible(tick: u64) -> bool {
     (tick % 21) < 11
 }
 
+/// A form's submission parameters (#1538).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FormSubmission {
+    /// Resolved destination URL (the form's `action`, or the document URL when absent).
+    pub action: String,
+    /// Submitted method, lowercased (`get` or `post`).
+    pub method: String,
+    /// `application/x-www-form-urlencoded` body (empty when there are no successful controls).
+    pub body: String,
+}
+
+/// Resolves a form action against the document URL (absolute URLs pass through; `Url::join`
+/// covers the relative forms the shell already supports for links).
+fn resolve_action(base: &net::Url, action: &str) -> Option<String> {
+    let action = action.trim();
+    if action.is_empty() {
+        return Some(base.as_str());
+    }
+    base.join(action)
+        .map(|url| url.as_str())
+        .ok()
+        .or_else(|| net::Url::parse(action).ok().map(|url| url.as_str()))
+}
+
+/// Builds the submission parameters for a form from its controls (#1538).
+///
+/// Finds the nearest `<form>` ancestor of `form_node`, reads `action`/`method`, and collects
+/// only the controls belonging to that form. When no `action` is present the document URL is
+/// used, matching browser behaviour.
+pub fn form_submission(
+    document: &Document,
+    base: &net::Url,
+    form_node: NodeId,
+    controls: &[FormControl],
+) -> Option<FormSubmission> {
+    // The form node itself, or its nearest ancestor, must be a <form>.
+    let form_elements: Vec<NodeId> = std::iter::once(form_node)
+        .chain(document.ancestors(form_node))
+        .filter(|&id| {
+            document
+                .try_node(id)
+                .and_then(|node| node.as_element())
+                .is_some_and(|element| element.local_name.eq_ignore_ascii_case("form"))
+        })
+        .collect();
+    let form_id = *form_elements.first()?;
+    let element = document.try_node(form_id)?.as_element()?;
+    let action = resolve_action(base, element.get_attribute("action").unwrap_or(""))?;
+    let method = element
+        .get_attribute("method")
+        .unwrap_or("get")
+        .to_ascii_lowercase();
+    let method = if method == "post" { "post" } else { "get" }.to_owned();
+    let mut owned = controls.to_vec();
+    owned.retain(|control| {
+        if !form_elements.contains(&control.node_id) {
+            // A control belongs to the form when the form is its ancestor.
+            return document
+                .ancestors(control.node_id)
+                .any(|ancestor| form_elements.contains(&ancestor));
+        }
+        true
+    });
+    let body = form_urlencoded(&owned);
+    Some(FormSubmission {
+        action,
+        method,
+        body,
+    })
+}
+
+/// Applies a GET submission body to the action URL, producing the navigation target.
+pub fn form_get_target(submission: &FormSubmission) -> Option<String> {
+    if submission.method != "get" || submission.body.is_empty() {
+        return Some(submission.action.clone());
+    }
+    let separator = net::Url::parse(&submission.action)
+        .ok()
+        .and_then(|url| url.query().map(|_| '&'))
+        .unwrap_or('?');
+    net::Url::parse(&format!(
+        "{}{}{}",
+        submission.action, separator, submission.body
+    ))
+    .ok()
+    .map(|url| url.as_str())
+}
+
 /// Percent-encodes a string using the `application/x-www-form-urlencoded` rules:
 /// ASCII alphanumerics and `* - . _` are unreserved, space becomes `+`, and every other
 /// UTF-8 byte becomes uppercase `%HH`. This is the WHATWG "urlencoded serializer".
@@ -978,6 +1066,7 @@ pub fn form_urlencoded(controls: &[FormControl]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dom::Namespace;
 
     fn control(form_id: u32, kind: FormControlKind, value: &str) -> FormControl {
         FormControl {
@@ -998,6 +1087,65 @@ mod tests {
         let mut control = control(0, kind, value);
         control.name = name.to_owned();
         control
+    }
+
+    #[test]
+    fn form_submission_reads_action_method_and_serializes_controls() {
+        // #1538: a form's submission collects its successful controls and its action/method.
+        let mut document = Document::new();
+        let html = document.create_element(Namespace::Html, "html", vec![]);
+        document.append_child(document.root(), html);
+        let body = document.create_element(Namespace::Html, "body", vec![]);
+        document.append_child(html, body);
+        let form = document.create_element(
+            Namespace::Html,
+            "form",
+            vec![
+                Attribute::new("action", "/login"),
+                Attribute::new("method", "POST"),
+            ],
+        );
+        document.append_child(body, form);
+        let user = document.create_element(
+            Namespace::Html,
+            "input",
+            vec![
+                Attribute::new("name", "user"),
+                Attribute::new("value", "alice"),
+            ],
+        );
+        document.append_child(form, user);
+        let mut user_control = control(1, FormControlKind::TextInput, "alice");
+        user_control.node_id = user;
+        user_control.name = "user".to_owned();
+        let base = net::Url::parse("https://example.com/page").expect("base");
+        let submission =
+            form_submission(&document, &base, form, &[user_control]).expect("submission");
+        assert_eq!(submission.action, "https://example.com/login");
+        assert_eq!(submission.method, "post");
+        assert_eq!(submission.body, "user=alice");
+    }
+
+    #[test]
+    fn form_get_target_appends_query() {
+        // #1538: GET submissions append the urlencoded body to the action URL.
+        let submission = FormSubmission {
+            action: "https://example.com/search".to_owned(),
+            method: "get".to_owned(),
+            body: "q=megi+browser".to_owned(),
+        };
+        assert_eq!(
+            form_get_target(&submission).as_deref(),
+            Some("https://example.com/search?q=megi+browser")
+        );
+        let post = FormSubmission {
+            method: "post".to_owned(),
+            ..submission
+        };
+        assert_eq!(
+            form_get_target(&post).as_deref(),
+            Some("https://example.com/search")
+        );
     }
 
     #[test]
