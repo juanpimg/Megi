@@ -14,7 +14,11 @@ pub fn print_table(outcome: &RunOutcome) {
     println!(
         "Megi benchmark suite — commit {}{}",
         meta.commit,
-        if meta.dirty { " (worktree dirty)" } else { "" }
+        if meta.dirty == Some(true) {
+            " (worktree dirty)"
+        } else {
+            ""
+        }
     );
     println!(
         "{} · {} · {} logical cores · scale {:.2} · {} iterations (+{} warm-up) · setup {:.1} ms",
