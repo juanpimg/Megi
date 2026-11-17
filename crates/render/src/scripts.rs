@@ -1663,6 +1663,10 @@ mod fetch_failure_tests {
         assert!(bridged.unwrap_err().contains("permission denied"));
 
         let success: Result<(), String> = Ok(());
-        assert!(success.map_err(|error| format!("fetch failed: {error}")).is_ok());
+        assert!(
+            success
+                .map_err(|error| format!("fetch failed: {error}"))
+                .is_ok()
+        );
     }
 }
