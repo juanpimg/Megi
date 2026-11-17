@@ -293,7 +293,11 @@ impl RuleIndex {
                 Some(RuleKey::Class(class)) => {
                     self.by_class.entry(class).or_default().push(candidate);
                 }
-                Some(RuleKey::Tag(tag)) => self.by_tag.entry(tag).or_default().push(candidate),
+                Some(RuleKey::Tag(tag)) => self
+                    .by_tag
+                    .entry(tag.to_ascii_lowercase())
+                    .or_default()
+                    .push(candidate),
                 // No usable key (universal or pseudo-class-only rightmost compound): the
                 // selector is evaluated for every element.
                 None => self.slow.push(candidate),
@@ -328,14 +332,13 @@ impl RuleIndex {
             }
         }
 
+        // `by_tag` keys are ASCII-lowercased (see `selector_key`). An element name that is
+        // already lowercase hits the bucket directly; otherwise fold it (allocating only
+        // for the rarer uppercase-element case) so `<DIV>` still finds a `div` rule.
         let local_name = element.local_name.as_str();
-        if let Some(rules) = self.by_tag.get(local_name) {
+        let folded = local_name.to_ascii_lowercase();
+        if let Some(rules) = self.by_tag.get(&folded) {
             out.extend_from_slice(rules);
-        } else if local_name.bytes().any(|byte| byte.is_ascii_uppercase()) {
-            let folded = local_name.to_ascii_lowercase();
-            if let Some(rules) = self.by_tag.get(&folded) {
-                out.extend_from_slice(rules);
-            }
         }
 
         // Prune descendant-selector candidates whose required ancestor classes are not on
@@ -1147,16 +1150,7 @@ pub fn resolve_document_styles_with_media(
 
     while let Some(node_id) = stack.pop() {
         if let Some(el) = doc.node(node_id).as_element() {
-            let inline_decls = el.get_attribute("style").map(|style| {
-                // Cap inline style length to prevent DoS.
-                let style = if style.len() > 64 * 1024 {
-                    &style[..64 * 1024]
-                } else {
-                    style
-                };
-                let parsed = crate::parser::parse_list_of_declarations(style);
-                expand_declarations(&parsed)
-            });
+            let inline_decls = el.get_attribute("style").map(parse_inline_style);
 
             collection.candidate_selectors(doc, node_id, &mut candidates);
             let mut best = resolve_base_cascaded_properties(
@@ -1225,6 +1219,40 @@ pub fn resolve_document_styles_with_media(
     styles
 }
 
+/// Maximum byte length parsed from a single inline `style="..."` attribute.
+///
+/// Bounding inline styles caps CPU and allocation cost on attacker-controlled documents;
+/// multi-byte UTF-8 code points that straddle this limit are excluded by backing up to a
+/// UTF-8 character boundary via `floor_char_boundary_utf8`.
+pub const MAX_INLINE_STYLE_BYTES: usize = 64 * 1024;
+
+/// Returns the greatest byte offset `<= max_bytes` on a UTF-8 `char` boundary in `text`.
+#[inline]
+fn floor_char_boundary_utf8(text: &str, max_bytes: usize) -> usize {
+    let mut end = max_bytes.min(text.len());
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    end
+}
+
+/// Parses an inline `style="..."` attribute bounded to [`MAX_INLINE_STYLE_BYTES`] on a UTF-8
+/// character boundary, returning unexpanded declarations.
+pub fn parse_inline_declarations(style: &str) -> Vec<Declaration> {
+    let bounded = if style.len() > MAX_INLINE_STYLE_BYTES {
+        &style[..floor_char_boundary_utf8(style, MAX_INLINE_STYLE_BYTES)]
+    } else {
+        style
+    };
+    crate::parser::parse_list_of_declarations(bounded)
+}
+
+/// Parses and shorthand-expands an inline `style="..."` attribute bounded to
+/// [`MAX_INLINE_STYLE_BYTES`] on a UTF-8 character boundary.
+pub fn parse_inline_style(style: &str) -> Vec<Declaration> {
+    expand_declarations(&parse_inline_declarations(style))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1261,9 +1289,7 @@ mod tests {
 
     fn expanded_inline(doc: &Document, node_id: NodeId) -> Option<Vec<Declaration>> {
         let element = doc.node(node_id).as_element()?;
-        element
-            .get_attribute("style")
-            .map(|style| expand_declarations(&crate::parser::parse_list_of_declarations(style)))
+        element.get_attribute("style").map(parse_inline_style)
     }
 
     /// Every `(rule, selector)` pair: the unindexed reference behaviour.
@@ -1555,5 +1581,102 @@ mod tests {
             "animation names are case-sensitive"
         );
         assert!(collection.keyframes("other").is_some());
+    }
+
+    #[test]
+    fn type_selectors_match_case_insensitively_through_rule_index() {
+        // HTML type selectors are ASCII case-insensitive (Selectors §4). The index must
+        // not silently drop `DIV { … }` for a lowercase <div> (issue #1127), or `div` for
+        // an uppercase <DIV>. Compare against the unindexed reference path as well.
+        for (selector, tag) in [("DIV", "div"), ("div", "DIV")] {
+            let mut doc = Document::new();
+            let html = doc.create_element(Namespace::Html, "html", vec![]);
+            let target = doc.create_element(Namespace::Html, tag, vec![]);
+            doc.append_child(doc.root(), html);
+            doc.append_child(html, target);
+
+            let collection = collection_with(&format!("{selector} {{ color: rgb(1, 2, 3); }}"));
+            let indexed = resolve_indexed(&doc, &collection);
+            let bruteforce = resolve_bruteforce(&doc, &collection);
+            let expected = Color::new(1, 2, 3, 255);
+
+            assert_eq!(
+                indexed.get(&target).expect("indexed style").color,
+                expected,
+                "indexed path: `{selector}` should match <{tag}>"
+            );
+            assert_eq!(
+                bruteforce.get(&target).expect("bruteforce style").color,
+                expected,
+                "bruteforce path: `{selector}` should match <{tag}>"
+            );
+        }
+    }
+
+    #[test]
+    fn oversized_inline_style_with_multibyte_char_at_cap_does_not_panic() {
+        // Regression test for issue #1126: truncating an inline `style` attribute at byte
+        // 64*1024 used to slice through a multi-byte code point and panic (remote DoS).
+        let prefix = "color: red; ";
+        let mut style = String::from(prefix);
+        // Pad so the two-byte 'é' starts at byte 65535 and straddles the 65536 cap.
+        style.push_str(&" ".repeat(64 * 1024 - prefix.len() - 1));
+        style.push('é');
+        assert_eq!(style.len(), 64 * 1024 + 1);
+        assert!(!style.is_char_boundary(64 * 1024));
+
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", vec![]);
+        let target =
+            doc.create_element(Namespace::Html, "div", vec![Attribute::new("style", style)]);
+        doc.append_child(doc.root(), html);
+        doc.append_child(html, target);
+
+        // Before the fix this call panicked with "end byte index 65536 is not a char boundary".
+        let styles = resolve_document_styles(&doc, None);
+        let computed = styles.get(&target).expect("computed style for target");
+        assert_eq!(
+            computed.color,
+            Color::new(255, 0, 0, 255),
+            "the declaration before the cap must survive the boundary-safe truncation"
+        );
+    }
+
+    #[test]
+    fn parse_inline_style_handles_four_byte_char_at_cap_and_container_base() {
+        let prefix = "container-type: inline-size; width: 320px; color: rgb(12, 34, 56); ";
+        let mut style = String::from(prefix);
+        style.push_str(&" ".repeat(MAX_INLINE_STYLE_BYTES - prefix.len() - 2));
+        style.push('🦀');
+        style.push_str("; color: rgb(255, 0, 0);");
+        assert!(!style.is_char_boundary(MAX_INLINE_STYLE_BYTES));
+
+        let decls = parse_inline_declarations(&style);
+        assert!(
+            decls
+                .iter()
+                .any(|d| d.name == "color" && d.raw_value == "rgb(12, 34, 56)")
+        );
+        assert!(!decls.iter().any(|d| d.raw_value == "rgb(255, 0, 0)"));
+
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", vec![]);
+        let container =
+            doc.create_element(Namespace::Html, "div", vec![Attribute::new("style", style)]);
+        let child = doc.create_element(Namespace::Html, "span", vec![]);
+        doc.append_child(doc.root(), html);
+        doc.append_child(html, container);
+        doc.append_child(container, child);
+
+        let css = "@container (min-width: 200px) { span { color: rgb(7, 89, 10); } }";
+        let styles = resolve_document_styles_with_viewport(&doc, Some(css), 800.0, 600.0);
+        assert_eq!(
+            styles.get(&container).expect("container style").color,
+            Color::new(12, 34, 56, 255)
+        );
+        assert_eq!(
+            styles.get(&child).expect("child @container style").color,
+            Color::new(7, 89, 10, 255)
+        );
     }
 }

@@ -734,3 +734,63 @@ fn test_pattern_phase_beyond_the_tile_budget_still_renders() {
     let image = render_at(source, 8, 8);
     assert_eq!(pixel(&image, 0, 0), [255, 0, 0, 255]);
 }
+
+#[test]
+fn currentcolor_uses_inherited_color() {
+    // `currentColor` must resolve to the inherited CSS `color`, not to black (#1276).
+    let image = render_at(
+        &svg_doc(
+            8.0,
+            8.0,
+            "<g color='red'><rect width='8' height='8' fill='currentColor'/></g>",
+        ),
+        8,
+        8,
+    );
+    assert_eq!(pixel(&image, 4, 4), [255, 0, 0, 255]);
+}
+
+#[test]
+fn symbol_instantiated_via_use_renders() {
+    // A <symbol> is not painted directly; <use href="#s"> must instantiate its children
+    // through the symbol's viewBox mapping (#38).
+    let image = render_at(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+            <defs><symbol id="s" viewBox="0 0 10 10"><rect width="10" height="10" fill="#00ff00"/></symbol></defs>
+            <use href="#s" x="0" y="0" width="20" height="20"/>
+        </svg>"##,
+        20,
+        20,
+    );
+    assert_eq!(pixel(&image, 5, 5), [0, 255, 0, 255]);
+}
+
+#[test]
+fn display_none_skips_subtree_and_visibility_can_be_overridden() {
+    let image = render_at(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">
+            <rect width="20" height="20" fill="#ff0000" display="none"/>
+            <g visibility="hidden">
+                <rect width="10" height="10" fill="#00ff00"/>
+                <rect x="10" width="10" height="10" fill="#0000ff" visibility="visible"/>
+            </g>
+        </svg>"##,
+        20,
+        20,
+    );
+    assert_eq!(
+        pixel(&image, 2, 2),
+        [0, 0, 0, 0],
+        "display=none must skip (#37)"
+    );
+    assert_eq!(
+        pixel(&image, 5, 5),
+        [0, 0, 0, 0],
+        "inherited hidden must skip (#37)"
+    );
+    assert_eq!(
+        pixel(&image, 15, 5),
+        [0, 0, 255, 255],
+        "visible override must paint"
+    );
+}

@@ -109,8 +109,6 @@ pub fn preprocess_str(input: &str) -> (Vec<u32>, Vec<ParseError>) {
 
 /// Like [`preprocess_str`], but also returns the line-start offsets (single-pass version
 /// used by [`crate::tokenizer::Tokenizer::from_str_input`]).
-const MAX_LINE_STARTS: usize = 1 << 20;
-
 pub(crate) fn preprocess_str_with_line_starts(
     input: &str,
 ) -> (Vec<u32>, Vec<ParseError>, Vec<usize>, bool) {
@@ -153,9 +151,7 @@ pub(crate) fn preprocess_str_with_line_starts(
                 }
                 index += 1;
                 out.push(0x0A);
-                if line_starts.len() < MAX_LINE_STARTS {
-                    line_starts.push(out.len());
-                }
+                line_starts.push(out.len());
                 line += 1;
                 col = 0;
                 continue;
@@ -163,9 +159,7 @@ pub(crate) fn preprocess_str_with_line_starts(
             if byte == b'\n' {
                 index += 1;
                 out.push(0x0A);
-                if line_starts.len() < MAX_LINE_STARTS {
-                    line_starts.push(out.len());
-                }
+                line_starts.push(out.len());
                 line += 1;
                 col = 0;
                 continue;

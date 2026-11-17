@@ -3,6 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+  # No top-level `paths-ignore`: a skipped workflow never reports the `check`
+  # umbrella, which branch protection requires. Docs-only PRs are classified by
+  # the `changes` job below, which skips the heavy Rust jobs while keeping the
+  # lightweight gates (and `check`) green (#485).
   pull_request:
   # Merge-queue pushes fire `merge_group`, not `push`/`pull_request`; without this
   # trigger a queued merge lands with no CI run at all (issue #697).
@@ -22,11 +26,72 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # Classify PRs so a docs-only change does not spin up the full Rust matrix (#485).
+  # This job runs on *every* event and reports `docs_only=false` outside PRs:
+  # a skipped `changes` job would implicitly skip all jobs that `needs` it,
+  # including on push/merge_group, silently disabling the whole Rust matrix.
+  changes:
+    name: Classify PR changes
+    runs-on: ubuntu-24.04
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify changed files
+        id: classify
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            # push / merge_group / schedule / workflow_dispatch: always run the
+            # full matrix, as before the docs-only optimisation.
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base="origin/${{ github.base_ref }}"
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          changed=$(git diff --name-only "$base"...HEAD) || { echo "::error::cannot diff against $base"; exit 1; }
+          if [ -z "$changed" ]; then
+            echo "::error::empty change set"
+            exit 1
+          fi
+          docs_only=true
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              docs/*|*.md) ;;
+              *) docs_only=false; break ;;
+            esac
+          done <<< "$changed"
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+
+  # Lightweight docs gate: it must keep running on docs-only PRs so a stale
+  # generated PROGRESS.md / docs/status snapshot still fails the build (#485).
+  docs:
+    name: Docs freshness
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - name: Status freshness (PROGRESS.md + docs/status)
+        run: python3 tools/update_progress.py --check --no-gate
+      - name: Coverage freshness (capability manifest + artifacts)
+        run: python3 tools/update_coverage.py --check
+
   quality:
     name: Quality gate (fmt, clippy, tests, docs)
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -45,15 +110,19 @@ jobs:
       - name: Clippy (deny warnings)
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Workspace tests
-        run: cargo test --workspace --all-targets --locked 2>&1 | tee /tmp/workspace-tests.log
+        run: |
+          set -o pipefail
+          cargo test --workspace --all-targets --locked 2>&1 | tee /tmp/workspace-tests.log
       # Checks that PROGRESS.md and docs/status/*.svg match the committed manifest plus the
       # real repository stats (git HEAD/date, crates, Rust lines, test count). The
       # conformance gate already runs in the `conformance` job, so it is not re-run here.
-      - uses: actions/setup-python@0a5c615913736833115f8704b586a2322d4534a2 # v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.11'
       - name: Status freshness (PROGRESS.md + docs/status)
         run: python3 tools/update_progress.py --check --no-gate
+      - name: Coverage freshness (capability manifest + artifacts)
+        run: python3 tools/update_coverage.py --check
       - name: Documentation
         env:
           RUSTDOCFLAGS: -D warnings
@@ -69,6 +138,8 @@ jobs:
 
   conformance:
     name: HTML5 conformance gate
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -81,7 +152,9 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - uses: ./.github/actions/install-system-deps
       - name: Closed-loop conformance summary (fails on unexpected regressions)
-        run: cargo run --locked -p test_harness -- --summary 2>&1 | tee /tmp/conformance.log
+        run: |
+          set -o pipefail
+          cargo run --locked -p test_harness -- --summary 2>&1 | tee /tmp/conformance.log
       - name: Upload conformance log
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -93,7 +166,8 @@ jobs:
 
   msrv:
     name: MSRV (Rust 1.91)
-    needs: quality
+    needs: [changes, quality]
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -116,6 +190,8 @@ jobs:
 
   minimal:
     name: JS-free build (--no-default-features)
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -141,6 +217,8 @@ jobs:
 
   package:
     name: Packaging dry-run
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -158,6 +236,8 @@ jobs:
 
   security:
     name: Dependency security (audit/deny)
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -183,6 +263,8 @@ jobs:
 
   unsafe-audit:
     name: Unsafe audit (cargo-geiger)
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -200,6 +282,7 @@ jobs:
           tool: cargo-geiger
       - name: cargo geiger (forbid-only check)
         run: |
+          set -e
           : > /tmp/geiger.json
           for pkg in dom html css layout fonts image paint net render shell js svg test_harness bench; do
             echo "=== cargo geiger --manifest-path crates/$pkg/Cargo.toml ==="
@@ -301,6 +384,8 @@ jobs:
 
   release:
     name: Release tests (conformance & overflow checks)
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -321,10 +406,14 @@ jobs:
 
   # Umbrella job for branch protection: a single required check that aggregates
   # every gate above (#577). Branch protection can require just `check`.
+  # A gate skipped by the docs-only classifier is not a failure (#485): the
+  # lightweight gates still run, so `check` always reports a definitive result.
   check:
     name: CI umbrella (all gates)
     runs-on: ubuntu-24.04
     needs:
+      - changes
+      - docs
       - quality
       - conformance
       - release
@@ -340,18 +429,17 @@ jobs:
     steps:
       - name: Verify all required gates succeeded
         run: |
-          if [ "${{ needs.quality.result }}" != "success" ] || \
-             [ "${{ needs.conformance.result }}" != "success" ] || \
-             [ "${{ needs.release.result }}" != "success" ] || \
-             [ "${{ needs.msrv.result }}" != "success" ] || \
-             [ "${{ needs.minimal.result }}" != "success" ] || \
-             [ "${{ needs.package.result }}" != "success" ] || \
-             [ "${{ needs.security.result }}" != "success" ] || \
-             [ "${{ needs.unsafe-audit.result }}" != "success" ] || \
-             [ "${{ needs.workflow-lint.result }}" != "success" ] || \
-             [ "${{ needs.secret-scan.result }}" != "success" ] || \
-             [ "${{ needs.docs-links.result }}" != "success" ]; then
-            echo "One or more required gates failed." >&2
-            exit 1
-          fi
+          results="${{ needs.changes.result }} ${{ needs.docs.result }} \
+          ${{ needs.quality.result }} ${{ needs.conformance.result }} \
+          ${{ needs.release.result }} ${{ needs.msrv.result }} \
+          ${{ needs.minimal.result }} ${{ needs.package.result }} \
+          ${{ needs.security.result }} ${{ needs.unsafe-audit.result }} \
+          ${{ needs.workflow-lint.result }} ${{ needs.secret-scan.result }} \
+          ${{ needs.docs-links.result }}"
+          for result in $results; do
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "One or more required gates failed: $results" >&2
+              exit 1
+            fi
+          done
           echo "All required gates succeeded."

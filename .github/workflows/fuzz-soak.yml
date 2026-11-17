@@ -60,7 +60,7 @@ jobs:
       # survives to the next week. Keyed on the run id so each week saves a fresh
       # cache while still restoring the most recent one.
       - name: Restore fuzz corpus
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: fuzz/corpus
           key: fuzz-corpus-soak-${{ github.run_id }}

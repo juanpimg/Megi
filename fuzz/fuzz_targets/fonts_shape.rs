@@ -8,5 +8,5 @@ fuzz_target!(|data: &[u8]| {
     let text = String::from_utf8_lossy(data);
     let db = FontDatabase::new_with_bundled_fonts();
     let _ = db.has_family(&text);
-    let _ = db.font(&[text.as_ref()], 400, FontStyle::Normal);
+    let _ = db.font(&[text.as_ref()], 400, FontStyle::Normal, Default::default());
 });

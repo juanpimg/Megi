@@ -125,7 +125,16 @@ fn next_var_function(value: &str, from: usize) -> Option<usize> {
                 if is_ident_byte(byte) {
                     let start = index;
                     while index < bytes.len() && is_ident_byte(bytes[index]) {
-                        index += 1;
+                        // Consume continuation bytes of a multi-byte UTF-8 sequence
+                        // so the slice stays on char boundaries.
+                        if bytes[index] >= 0xC0 {
+                            index += 1;
+                            while index < bytes.len() && (bytes[index] & 0xC0) == 0x80 {
+                                index += 1;
+                            }
+                        } else {
+                            index += 1;
+                        }
                     }
                     let name = &value[start..index];
                     if bytes.get(index) == Some(&b'(') {
@@ -147,7 +156,14 @@ fn next_var_function(value: &str, from: usize) -> Option<usize> {
                     // Function tokens.
                     index += 1;
                     while index < bytes.len() && is_ident_byte(bytes[index]) {
-                        index += 1;
+                        if bytes[index] >= 0xC0 {
+                            index += 1;
+                            while index < bytes.len() && (bytes[index] & 0xC0) == 0x80 {
+                                index += 1;
+                            }
+                        } else {
+                            index += 1;
+                        }
                     }
                     continue;
                 }
@@ -160,6 +176,9 @@ fn next_var_function(value: &str, from: usize) -> Option<usize> {
 
 /// Whether `byte` can be part of a CSS identifier (so `myvar(` is not `var(`).
 fn is_ident_byte(byte: u8) -> bool {
+    // Accept ASCII ident chars and any byte that is part of a valid UTF-8
+    // sequence (lead or continuation). This keeps byte-level scanning safe
+    // while still rejecting pure ASCII punctuation.
     byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-' || byte >= 0x80
 }
 

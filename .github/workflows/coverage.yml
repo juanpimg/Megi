@@ -55,6 +55,7 @@ jobs:
 
       - name: Summarise coverage
         run: |
+          set -e
           {
             echo '### Coverage (#962)'
             echo
