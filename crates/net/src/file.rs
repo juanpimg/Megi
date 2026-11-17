@@ -53,13 +53,13 @@ pub fn load_file_url(url: &Url) -> Result<Vec<u8>, FetchError> {
 /// size bound is hit (#307).
 pub fn load_file_url_with_limit(url: &Url, max_bytes: usize) -> Result<Vec<u8>, FetchError> {
     let path = path_from_file_url(url)?;
-    // `metadata` follows symlinks (a symlink to a regular file stays valid) and, unlike
-    // `open`, does not block on a FIFO.
-    let metadata = std::fs::metadata(&path).map_err(|error| map_file_error(error, &path))?;
+    // Open first, then fstat the handle, so the size/regular-file checks apply to the
+    // same inode that is actually read (#1261).
+    let file = std::fs::File::open(&path).map_err(|error| map_file_error(error, &path))?;
+    let metadata = file.metadata().map_err(|error| map_file_error(error, &path))?;
     if !metadata.is_file() {
         return Err(FetchError::FileNotRegular(path));
     }
-    let file = std::fs::File::open(&path).map_err(|error| map_file_error(error, &path))?;
     let mut bytes = Vec::new();
     file.take(max_bytes.saturating_add(1) as u64)
         .read_to_end(&mut bytes)
