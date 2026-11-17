@@ -150,6 +150,22 @@ pub struct KeyframesRule {
     pub frames: Vec<Keyframe>,
 }
 
+/// Re-escapes a decoded CSS identifier so re-tokenizing it yields the same name.
+/// Without this, a class written `.md\:flex` serializes as `.md:flex` and matches
+/// a pseudo-class instead of the escaped class name (#1446).
+fn escape_ident(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || !ch.is_ascii() {
+            out.push(ch);
+        } else {
+            out.push('\\');
+            out.push(ch);
+        }
+    }
+    out
+}
+
 /// Helper to serialize component values to a compact string.
 pub fn serialize_component_values(values: &[ComponentValue]) -> String {
     use crate::token::CssToken;
@@ -157,7 +173,10 @@ pub fn serialize_component_values(values: &[ComponentValue]) -> String {
     for cv in values {
         match cv {
             ComponentValue::PreservedToken(tok) => match tok {
-                CssToken::Ident(s) | CssToken::Function(s) => {
+                CssToken::Ident(s) => {
+                    out.push_str(&escape_ident(s));
+                }
+                CssToken::Function(s) => {
                     out.push_str(s);
                 }
                 CssToken::AtKeyword(s) => {
@@ -168,7 +187,7 @@ pub fn serialize_component_values(values: &[ComponentValue]) -> String {
                 }
                 CssToken::Hash { value, .. } => {
                     out.push('#');
-                    out.push_str(value);
+                    out.push_str(&escape_ident(value));
                 }
                 CssToken::String(s) => {
                     // The token value is already escape-decoded: re-escape it so the
@@ -242,4 +261,37 @@ pub fn serialize_component_values(values: &[ComponentValue]) -> String {
         }
     }
     out.trim().to_string()
+}
+
+#[cfg(test)]
+mod selector_escape_tests {
+    use super::*;
+    use crate::token::CssToken;
+
+    fn ident(name: &str) -> ComponentValue {
+        ComponentValue::PreservedToken(CssToken::Ident(name.to_string()))
+    }
+
+    #[test]
+    fn escaped_identifiers_survive_reserialization() {
+        assert_eq!(serialize_component_values(&[ident("md:flex")]), r"md\:flex");
+        assert_eq!(serialize_component_values(&[ident("foo bar")]), r"foo\ bar");
+        assert_eq!(
+            serialize_component_values(&[ComponentValue::PreservedToken(CssToken::Hash {
+                value: "a:b".into(),
+                type_flag: crate::token::HashType::Id,
+            })]),
+            r"#a\:b"
+        );
+        // Re-tokenizing must recover the original decoded identifier.
+        let reparsed = crate::tokenizer::tokenize(r"md\:flex");
+        let idents: Vec<&str> = reparsed
+            .iter()
+            .filter_map(|token| match token {
+                CssToken::Ident(value) => Some(value.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(idents, ["md:flex"]);
+    }
 }
