@@ -5016,7 +5016,10 @@ mod fragment_panic_isolation_tests {
             &options,
         );
 
-        assert!(doc.owns(kept), "the caller's nodes must survive a parser failure");
+        assert!(
+            doc.owns(kept),
+            "the caller's nodes must survive a parser failure"
+        );
         let body_after = doc
             .get_elements_by_tag_name("body")
             .into_iter()
@@ -5024,7 +5027,9 @@ mod fragment_panic_isolation_tests {
             .expect("body");
         let first = doc.node(body_after).first_child.expect("first child");
         assert_eq!(
-            doc.node(first).as_element().map(|el| el.local_name.as_str()),
+            doc.node(first)
+                .as_element()
+                .map(|el| el.local_name.as_str()),
             Some("p")
         );
     }
