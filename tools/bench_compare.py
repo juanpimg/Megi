@@ -26,9 +26,33 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import statistics
 import sys
 from pathlib import Path
+
+
+def validate_rows(data: dict, label: str, key: str) -> None:
+    """Fail with exit 2 (not a traceback) when a document has malformed rows."""
+    rows = data.get(key, [])
+    if not isinstance(rows, list):
+        print(f"error: {label}: '{key}' must be a list", file=sys.stderr)
+        raise SystemExit(2)
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict) or not isinstance(row.get("name"), str):
+            print(f"error: {label}: {key}[{index}] has no string 'name'", file=sys.stderr)
+            raise SystemExit(2)
+        try:
+            value = float(row["median_ms"])
+        except (KeyError, TypeError, ValueError):
+            print(
+                f"error: {label}: {key}[{index}] has no numeric 'median_ms'",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+        if not math.isfinite(value):
+            print(f"error: {label}: {key}[{index}] has non-finite 'median_ms'", file=sys.stderr)
+            raise SystemExit(2)
 
 
 def load_documents(paths: list[Path]) -> list[dict]:
@@ -45,6 +69,7 @@ def load_documents(paths: list[Path]) -> list[dict]:
                 file=sys.stderr,
             )
             raise SystemExit(2)
+        validate_rows(data, str(path), "results")
         documents.append(data)
     if not documents:
         print("error: no benchmark documents given", file=sys.stderr)
@@ -89,6 +114,7 @@ def main() -> int:
     if baseline.get("schema") != "megi-bench-baseline-v1":
         print("error: unexpected baseline schema", file=sys.stderr)
         return 2
+    validate_rows(baseline, str(args.baseline), "rows")
 
     actual = per_row_medians(load_documents(args.actual))
     base_rows = {row["name"]: float(row["median_ms"]) for row in baseline.get("rows", [])}
@@ -102,7 +128,9 @@ def main() -> int:
         delta = got - base
         pct = (delta / base * 100.0) if base > 0 else 0.0
         verdict = "ok"
-        if delta > args.min_ms and pct > args.threshold:
+        # A zero/negative baseline has no meaningful percentage; a large absolute
+        # growth must still be a regression instead of being hidden as "slower".
+        if delta > args.min_ms and (base <= 0.0 or pct > args.threshold):
             verdict = "REGRESSION"
             regressions.append(name)
         elif delta > args.min_ms:

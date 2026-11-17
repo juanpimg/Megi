@@ -285,15 +285,6 @@ def check_file(path: str) -> None:
             f"inflated size mismatch: expected {expected_len} bytes, got {len(raw)}"
         )
 
-    chunk_names = " ".join(kind.decode("ascii") for kind, _ in chunks)
-    print(f"OK: {path}")
-    print(
-        f"  IHDR: {width}x{height}, bit_depth={bit_depth}, "
-        f"color_type={color_type} ({COLOR_TYPE_NAMES[color_type]}), interlace={interlace}"
-    )
-    print(f"  chunks: {chunk_names}")
-    print(f"  IDAT: zlib ok, {len(idat)} compressed -> {len(raw)} raw bytes")
-
     if interlace == 0 and bit_depth == 8:
         rows = unfilter(raw, width, height, channels)
         distinct, transparent, white = describe_pixels(rows, bit_depth, color_type)
@@ -315,8 +306,19 @@ def check_file(path: str) -> None:
         # Validate every filter byte is in the PNG filter range 0..=4.
         bad = [f for f in filters if f > 4]
         if bad:
-            raise ValueError(f"invalid PNG filter byte(s): {sorted(set(bad))}")
+            # Use the same typed error as every other validation so main() reports a
+            # normal FAIL line instead of an uncaught traceback.
+            raise PngError(f"invalid PNG filter byte(s): {sorted(set(bad))}")
         print(f"  filters: {len(set(filters))} type(s)")
+
+    chunk_names = " ".join(kind.decode("ascii") for kind, _ in chunks)
+    print(f"OK: {path}")
+    print(
+        f"  IHDR: {width}x{height}, bit_depth={bit_depth}, "
+        f"color_type={color_type} ({COLOR_TYPE_NAMES[color_type]}), interlace={interlace}"
+    )
+    print(f"  chunks: {chunk_names}")
+    print(f"  IDAT: zlib ok, {len(idat)} compressed -> {len(raw)} raw bytes")
 
 
 def main(argv: list[str]) -> int:
