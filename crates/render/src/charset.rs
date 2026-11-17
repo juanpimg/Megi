@@ -97,6 +97,76 @@ pub fn charset_from_content_type(content_type: &str) -> Option<String> {
     None
 }
 
+/// Decoded stylesheet text plus the encoding label that was used.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DecodedStylesheet {
+    /// Decoded stylesheet text.
+    pub text: String,
+    /// Encoding actually used, normalized to `utf-8` or `windows-1252`.
+    pub charset: String,
+}
+
+/// Decodes the byte stream of a CSS stylesheet per CSS Syntax §3.2.
+///
+/// Precedence: a UTF-8 BOM is stripped and wins over every declaration; otherwise the fallback
+/// encoding is the `Content-Type` charset, then an exact `@charset "…";` declaration in the first
+/// 1024 bytes, then UTF-8. Only the documented UTF-8/Windows-1252 subset is decodable; a UTF-16
+/// BOM or an unsupported declared encoding yields [`RenderError::UnsupportedCharset`] instead of
+/// silently producing mojibake.
+pub fn decode_stylesheet(
+    bytes: &[u8],
+    content_type: &str,
+) -> Result<DecodedStylesheet, RenderError> {
+    // The decode algorithm gives precedence to a BOM over the fallback encoding.
+    if let Some(rest) = bytes.strip_prefix(b"\xEF\xBB\xBF") {
+        return Ok(DecodedStylesheet {
+            text: String::from_utf8_lossy(rest).into_owned(),
+            charset: "utf-8".to_owned(),
+        });
+    }
+    if bytes.starts_with(b"\xFF\xFE") || bytes.starts_with(b"\xFE\xFF") {
+        return Err(RenderError::UnsupportedCharset("utf-16".to_owned()));
+    }
+
+    let declared = charset_from_content_type(content_type)
+        .or_else(|| charset_from_css_declaration(bytes))
+        .unwrap_or_else(|| "utf-8".to_owned());
+    let normalized = normalize_charset_label(&declared)?;
+    let text = match normalized.as_str() {
+        "utf-8" => String::from_utf8_lossy(bytes).into_owned(),
+        "windows-1252" => decode_windows_1252(bytes),
+        other => return Err(RenderError::UnsupportedCharset(other.to_owned())),
+    };
+    Ok(DecodedStylesheet {
+        text,
+        charset: normalized,
+    })
+}
+
+/// Recognizes the exact `@charset "LABEL";` byte sequence from CSS Syntax §3.2.
+///
+/// The declaration must be at the very start of the stream, use double quotes and no whitespace
+/// before the semicolon, and its label bytes must be printable ASCII (excluding `"` and control
+/// characters) — anything else is not an encoding declaration.
+fn charset_from_css_declaration(bytes: &[u8]) -> Option<String> {
+    const PREFIX: &[u8] = b"@charset \"";
+    let window = &bytes[..bytes.len().min(META_PRESCAN_BYTES)];
+    let rest = window.strip_prefix(PREFIX)?;
+    let end = rest.iter().position(|&byte| byte == b'"')?;
+    if rest.get(end + 1) != Some(&b';') {
+        return None;
+    }
+    let label = &rest[..end];
+    if label.is_empty()
+        || !label
+            .iter()
+            .all(|&byte| (0x01..=0x11).contains(&byte) || (0x23..=0x7F).contains(&byte))
+    {
+        return None;
+    }
+    Some(String::from_utf8_lossy(label).into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::charset_from_content_type;
@@ -292,6 +362,59 @@ mod unit_tests {
         let decoded = decode_html(b"<p>caf\xE9</p>", "text/html; charset=latin1").expect("decode");
         assert_eq!(decoded.charset, "windows-1252");
         assert!(decoded.text.contains('é'));
+    }
+}
+
+#[cfg(test)]
+mod stylesheet_charset_tests {
+    use super::*;
+
+    #[test]
+    fn utf8_bom_is_stripped_and_wins_over_declarations() {
+        let decoded = decode_stylesheet(
+            b"\xEF\xBB\xBF@charset \"windows-1252\";.a{color:red}",
+            "text/css; charset=windows-1252",
+        )
+        .expect("decode");
+        assert_eq!(decoded.text, "@charset \"windows-1252\";.a{color:red}");
+        assert_eq!(decoded.charset, "utf-8", "BOM wins over every declaration");
+    }
+
+    #[test]
+    fn charset_declaration_decodes_legacy_bytes() {
+        let bytes = b"@charset \"windows-1252\";p::after{content:\"caf\xE9\"}";
+        let decoded = decode_stylesheet(bytes, "text/css").expect("decode");
+        assert_eq!(decoded.charset, "windows-1252");
+        assert!(decoded.text.contains("café"));
+    }
+
+    #[test]
+    fn content_type_charset_wins_over_declaration() {
+        // CSS Syntax §3.2: the HTTP charset is the fallback's first choice.
+        let bytes = b"@charset \"windows-1252\";p::after{content:\"caf\xE9\"}";
+        let decoded = decode_stylesheet(bytes, "text/css; charset=utf-8").expect("decode");
+        assert_eq!(decoded.charset, "utf-8");
+    }
+
+    #[test]
+    fn loose_charset_declaration_is_not_recognized() {
+        // Leading whitespace and single quotes are valid CSS but not a valid encoding declaration.
+        let bytes = b" @charset 'windows-1252';p{color:red}";
+        let decoded = decode_stylesheet(bytes, "text/css").expect("decode");
+        assert_eq!(decoded.charset, "utf-8");
+        assert_eq!(decoded.text.as_bytes()[0], b' ');
+    }
+
+    #[test]
+    fn unsupported_encoding_is_a_typed_error() {
+        assert!(matches!(
+            decode_stylesheet(b"@charset \"gbk\";", "text/css"),
+            Err(RenderError::UnsupportedCharset(label)) if label == "gbk"
+        ));
+        assert!(matches!(
+            decode_stylesheet(b"\xFF\xFE\x00", "text/css"),
+            Err(RenderError::UnsupportedCharset(_))
+        ));
     }
 }
 

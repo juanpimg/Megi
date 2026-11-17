@@ -1943,11 +1943,28 @@ fn load_stylesheet_text(
                 return Ok(None);
             }
             {
-                let text = String::from_utf8_lossy(&resource.bytes);
-                if text.contains('\u{FFFD}') {
+                // CSS Syntax §3.2: strip the UTF-8 BOM and honour `@charset`/the resource
+                // charset before tokenizing (#1449). An unsupported encoding is non-fatal:
+                // warn and fall back to a BOM-stripped lossy UTF-8 decode, as before.
+                let decoded =
+                    match charset::decode_stylesheet(&resource.bytes, &resource.content_type) {
+                        Ok(decoded) => decoded,
+                        Err(error) => {
+                            warnings.push(format!("stylesheet {url}: {error}; decoding as UTF-8"));
+                            let bytes = resource
+                                .bytes
+                                .strip_prefix(b"\xEF\xBB\xBF")
+                                .unwrap_or(&resource.bytes);
+                            charset::DecodedStylesheet {
+                                text: String::from_utf8_lossy(bytes).into_owned(),
+                                charset: "utf-8".to_owned(),
+                            }
+                        }
+                    };
+                if decoded.text.contains('\u{FFFD}') {
                     warnings.push(format!("stylesheet {url}: non-UTF-8 bytes replaced"));
                 }
-                Ok(Some(text.into_owned()))
+                Ok(Some(decoded.text))
             }
         }
         Err(error) => {
