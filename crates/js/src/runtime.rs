@@ -5099,6 +5099,17 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     }
     return out;
   });
+  define("alert", function (message) {
+    if (typeof console !== "undefined" && console.log) { console.log(String(message)); }
+  });
+  define("confirm", function (message) {
+    if (typeof console !== "undefined" && console.log) { console.log("confirm: " + String(message)); }
+    return true;
+  });
+  define("prompt", function (message, defaultValue) {
+    if (typeof console !== "undefined" && console.log) { console.log("prompt: " + String(message)); }
+    return (defaultValue === undefined ? null : String(defaultValue));
+  });
   function clone(value, seen) {
     if (value === null || typeof value !== "object") { return value; }
     if (seen.has(value)) { throw new DOMException("DataCloneError: cyclic object value", "DataCloneError"); }
