@@ -925,13 +925,10 @@ pub fn execute_scripts(
     if let Some(layout) = host.layout.clone() {
         runtime.set_layout_provider(Box::new(move |node_id| layout.get(&node_id).copied()));
     } else if let Some(provider) = host.layout_provider.clone() {
-        let cached: std::sync::OnceLock<
-            std::collections::HashMap<dom::NodeId, js::host::LayoutRect>,
-        > = std::sync::OnceLock::new();
-        runtime.set_layout_provider(Box::new(move |node_id| {
-            let rects = cached.get_or_init(|| provider());
-            rects.get(&node_id).copied()
-        }));
+        // No OnceLock: a one-shot cache froze the very first measurement for the whole
+        // render (#1470). Re-evaluate the provider on every query so later checkpoints see
+        // fresh geometry (the provider itself is the pre-script snapshot in the pipeline).
+        runtime.set_layout_provider(Box::new(move |node_id| provider().get(&node_id).copied()));
     }
 
     // Browser-facing host providers (R155): History/location actions are queued for the
