@@ -449,15 +449,15 @@ fn register_layout_and_paint(suite: &mut Suite, scale: f64) {
             move || {
                 let document = html::parse_document(&html_source, false);
                 let styles = paint::resolve_embedded_styles(&document);
-                if let Some(root) = layout::layout_document(&document, &styles, viewport) {
-                    let display_list = paint::build_display_list(&root, viewport);
-                    let pixmap = paint::rasterize_display_list(
-                        &display_list,
-                        VIEWPORT_WIDTH,
-                        VIEWPORT_HEIGHT,
-                    );
-                    black_box(pixmap.to_png());
-                }
+                let root = layout::layout_document(&document, &styles, viewport)
+                    .expect("fixture must lay out");
+                let display_list = paint::build_display_list(&root, viewport);
+                let pixmap = paint::rasterize_display_list(
+                    &display_list,
+                    viewport.width as u32,
+                    viewport.height as u32,
+                );
+                black_box(pixmap.to_png());
             },
         )
         .heavy(),
@@ -597,15 +597,15 @@ fn add_feature_pipeline(
                     move || {
                         let document = html::parse_document(&html_source, false);
                         let styles = paint::resolve_embedded_styles(&document);
-                        if let Some(root) = layout::layout_document(&document, &styles, viewport) {
-                            let display_list = paint::build_display_list(&root, viewport);
-                            let pixmap = paint::rasterize_display_list(
-                                &display_list,
-                                VIEWPORT_WIDTH,
-                                VIEWPORT_HEIGHT,
-                            );
-                            black_box(pixmap.to_png());
-                        }
+                        let root = layout::layout_document(&document, &styles, viewport)
+                            .expect("fixture must lay out");
+                        let display_list = paint::build_display_list(&root, viewport);
+                        let pixmap = paint::rasterize_display_list(
+                            &display_list,
+                            viewport.width as u32,
+                            viewport.height as u32,
+                        );
+                        black_box(pixmap.to_png());
                     },
                 )
                 .heavy(),
