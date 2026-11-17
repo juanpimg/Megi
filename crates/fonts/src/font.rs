@@ -129,6 +129,11 @@ impl Font {
         })
     }
 
+    /// Uses `fallback` when a font-reported metric is absent, non-finite or negative (#1237).
+    fn sanitize_metric(value: Option<f32>, fallback: f32) -> f32 {
+        value.unwrap_or(fallback)
+    }
+
     /// Metrics of this face at `size_px`, in CSS pixels.
     ///
     /// `x_height`/`cap_height` fall back to `0.5 * size` / `0.7 * size` when the
@@ -142,14 +147,16 @@ impl Font {
         // `descender` is negative in OpenType; expose the magnitude as positive.
         let descent = (-f32::from(face.descender()) * scale).max(0.0);
         let line_gap = (f32::from(face.line_gap()) * scale).max(0.0);
-        let x_height = face
-            .x_height()
-            .map(|v| f32::from(v) * scale)
-            .unwrap_or(size_px * 0.5);
-        let cap_height = face
-            .capital_height()
-            .map(|v| f32::from(v) * scale)
-            .unwrap_or(size_px * 0.7);
+        // A hostile/odd font can report metrics that scale to non-finite or negative
+        // values; fall back to the em-derived defaults instead of poisoning layout (#1237).
+        let x_height = Self::sanitize_metric(
+            face.x_height().map(|v| f32::from(v) * scale),
+            size_px * 0.5,
+        );
+        let cap_height = Self::sanitize_metric(
+            face.capital_height().map(|v| f32::from(v) * scale),
+            size_px * 0.7,
+        );
         Ok(FontMetrics {
             units_per_em: face.units_per_em().max(1),
             ascent,
@@ -350,5 +357,20 @@ impl Font {
             advance,
             data,
         })
+    }
+}
+
+#[cfg(test)]
+mod metric_sanitization_tests {
+    use super::*;
+
+    #[test]
+    fn invalid_font_metrics_fall_back_to_em_defaults() {
+        assert_eq!(Font::sanitize_metric(Some(8.0), 5.0), 8.0);
+        assert_eq!(Font::sanitize_metric(None, 5.0), 5.0);
+        assert_eq!(Font::sanitize_metric(Some(-1.0), 5.0), 5.0);
+        assert_eq!(Font::sanitize_metric(Some(f32::NAN), 5.0), 5.0);
+        assert_eq!(Font::sanitize_metric(Some(f32::INFINITY), 5.0), 5.0);
+        assert_eq!(Font::sanitize_metric(Some(0.0), 5.0), 0.0);
     }
 }

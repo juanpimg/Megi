@@ -46,6 +46,7 @@ struct Args {
     origin: Option<String>,
     json: bool,
     max_image_dim: Option<u32>,
+    time_ms: Option<f64>,
 }
 
 fn main() -> ExitCode {
@@ -83,6 +84,7 @@ fn run() -> Result<(), CliError> {
         cookies: args.cookies,
         origin: args.origin.clone(),
         max_image_dim: args.max_image_dim,
+        time_ms: args.time_ms.unwrap_or(0.0),
         ..RenderOptions::default()
     };
 
@@ -153,6 +155,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
     let mut origin = None;
     let mut json = false;
     let mut max_image_dim = None;
+    let mut time_ms = None;
     let mut args = args;
     while let Some(argument) = args.next() {
         match argument.as_str() {
@@ -172,6 +175,18 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
             "--json" => json = true,
             "--max-image-dim" => {
                 max_image_dim = Some(parse_dimension(&mut args, "--max-image-dim")?);
+            }
+            "--time" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| CliError::Usage("--time requires a number".to_string()))?;
+                let parsed: f64 = value
+                    .parse()
+                    .map_err(|_| CliError::Usage(format!("invalid --time value `{value}`")))?;
+                if !parsed.is_finite() {
+                    return Err(CliError::Usage(format!("invalid --time value `{value}`")));
+                }
+                time_ms = Some(parsed);
             }
             "--width" => {
                 width = parse_dimension(&mut args, "--width")?;
@@ -210,6 +225,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
         origin,
         json,
         max_image_dim,
+        time_ms,
     })
 }
 
