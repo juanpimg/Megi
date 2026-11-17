@@ -539,28 +539,45 @@ fn overflow_rounded_clip(layout_box: &LayoutBox) -> Option<(Rect, css::BorderRad
         return None;
     }
     let border = layout_box.dimensions.border;
-    let shrink = |length: css::Length, width: f32| -> css::Length {
-        match length {
-            css::Length::Px(px) => css::Length::Px((px - width).max(0.0)),
-            other => other,
-        }
+    let outer = layout_box.dimensions.border_box();
+    // Resolve percent radii against the border box before subtracting the border;
+    // keeping them percent and re-resolving against the padding box is wrong (#audit).
+    let shrink = |length: css::Length, width: f32, area: f32| -> css::Length {
+        let px = match length {
+            css::Length::Px(px) => px,
+            css::Length::Percent(pct) => area * pct / 100.0,
+            css::Length::Auto => 0.0,
+        };
+        css::Length::Px((px - width).max(0.0))
     };
     let radii = css::BorderRadii {
         top_left: css::Radius {
-            x: shrink(style.border_radius.top_left.x, border.left),
-            y: shrink(style.border_radius.top_left.y, border.top),
+            x: shrink(style.border_radius.top_left.x, border.left, outer.width),
+            y: shrink(style.border_radius.top_left.y, border.top, outer.height),
         },
         top_right: css::Radius {
-            x: shrink(style.border_radius.top_right.x, border.right),
-            y: shrink(style.border_radius.top_right.y, border.top),
+            x: shrink(style.border_radius.top_right.x, border.right, outer.width),
+            y: shrink(style.border_radius.top_right.y, border.top, outer.height),
         },
         bottom_right: css::Radius {
-            x: shrink(style.border_radius.bottom_right.x, border.right),
-            y: shrink(style.border_radius.bottom_right.y, border.bottom),
+            x: shrink(
+                style.border_radius.bottom_right.x,
+                border.right,
+                outer.width,
+            ),
+            y: shrink(
+                style.border_radius.bottom_right.y,
+                border.bottom,
+                outer.height,
+            ),
         },
         bottom_left: css::Radius {
-            x: shrink(style.border_radius.bottom_left.x, border.left),
-            y: shrink(style.border_radius.bottom_left.y, border.bottom),
+            x: shrink(style.border_radius.bottom_left.x, border.left, outer.width),
+            y: shrink(
+                style.border_radius.bottom_left.y,
+                border.bottom,
+                outer.height,
+            ),
         },
     };
     Some((padding_box, radii))

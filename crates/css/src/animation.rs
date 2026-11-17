@@ -260,7 +260,13 @@ pub fn parse_transition_property(value: &str) -> Option<TransitionProperty> {
 /// Extracts the arguments of `name(...)` (case-insensitive) when `value` is exactly that call.
 fn function_args<'a>(value: &'a str, name: &str) -> Option<&'a str> {
     let value = value.trim();
-    if value.len() <= name.len() + 1 || !value.is_char_boundary(name.len() + 1) {
+    // Both the name boundary and the '(' after it must be valid char boundaries;
+    // checking only name.len()+1 still allows a multi-byte code point to straddle
+    // name.len() and panic on value[..name.len()] (e.g. "aaaaé(1)" for "steps").
+    if value.len() <= name.len() + 1
+        || !value.is_char_boundary(name.len())
+        || !value.is_char_boundary(name.len() + 1)
+    {
         return None;
     }
     if !value[..name.len()].eq_ignore_ascii_case(name) || !value.ends_with(')') {
@@ -426,6 +432,20 @@ pub(crate) fn parse_transitions(entries: &[(&str, &Declaration)]) -> Vec<Transit
         }
     }
     transitions
+}
+
+#[cfg(test)]
+mod boundary_tests {
+    use super::*;
+
+    #[test]
+    fn function_args_does_not_panic_on_multibyte_name_prefix() {
+        // byte index name.len() (=5) falls inside 'é' in "aaaaé(1)"; checking only
+        // name.len()+1 let the old code slice value[..5] and panic.
+        assert_eq!(function_args("aaaaé(1)", "steps"), None);
+        assert_eq!(function_args("aaaaaaaaaaaé(0,0,0,0)", "cubic-bezier"), None);
+        assert_eq!(function_args("steps(4)", "steps"), Some("4"));
+    }
 }
 
 #[cfg(test)]

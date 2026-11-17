@@ -2177,13 +2177,31 @@ fn resolve_corner_radii(rect: Rect, radii: BorderRadii) -> [(f32, f32); 4] {
             resolve(radii.bottom_left.y, rect.height),
         ),
     ];
-    // CSS scales all radii proportionally when two adjacent radii exceed a side
-    // (CSS Backgrounds 3 §5.4); a simple per-side clamp keeps shapes sane.
-    let half_width = rect.width / 2.0;
-    let half_height = rect.height / 2.0;
-    for corner in &mut corners {
-        corner.0 = corner.0.min(half_width);
-        corner.1 = corner.1.min(half_height);
+    // CSS Backgrounds 3 §5.4: scale ALL radii by the same factor when adjacent
+    // radii overflow a side. Clamping each radius to half the side instead changes
+    // legal asymmetric shapes (e.g. 80px + 20px on a 100px-wide box is valid).
+    // CSS Backgrounds 3 §5.4: scale ALL radii by the same factor when adjacent
+    // radii overflow a side. Clamping each radius to half the side instead changes
+    // legal asymmetric shapes (e.g. 80px + 20px on a 100px-wide box is valid).
+    if rect.width <= 0.0 || rect.height <= 0.0 {
+        return [(0.0, 0.0); 4];
+    }
+    let mut scale = 1.0f32;
+    for (sum, side) in [
+        (corners[0].0 + corners[1].0, rect.width),
+        (corners[3].0 + corners[2].0, rect.width),
+        (corners[0].1 + corners[3].1, rect.height),
+        (corners[1].1 + corners[2].1, rect.height),
+    ] {
+        if sum > side {
+            scale = scale.min(side / sum);
+        }
+    }
+    if scale < 1.0 {
+        for corner in &mut corners {
+            corner.0 *= scale;
+            corner.1 *= scale;
+        }
     }
     corners
 }
@@ -2193,29 +2211,28 @@ fn point_in_rounded_rect(rect: Rect, corners: &[(f32, f32); 4], px: f32, py: f32
     if px < rect.x || py < rect.y || px >= rect.x + rect.width || py >= rect.y + rect.height {
         return false;
     }
-    let (rx, ry) = if px < rect.x + corners[0].0 && py < rect.y + corners[0].1 {
-        corners[0]
+    // Pick the corner ellipse AND its centre from the same corner: with asymmetric
+    // radii using TL/TR for x and TL/BR for y tests the wrong ellipse (e.g. a large
+    // bottom-left radius with small top corners).
+    let (rx, ry, corner) = if px < rect.x + corners[0].0 && py < rect.y + corners[0].1 {
+        (corners[0].0, corners[0].1, 0)
     } else if px > rect.x + rect.width - corners[1].0 && py < rect.y + corners[1].1 {
-        corners[1]
+        (corners[1].0, corners[1].1, 1)
     } else if px > rect.x + rect.width - corners[2].0 && py > rect.y + rect.height - corners[2].1 {
-        corners[2]
+        (corners[2].0, corners[2].1, 2)
     } else if px < rect.x + corners[3].0 && py > rect.y + rect.height - corners[3].1 {
-        corners[3]
+        (corners[3].0, corners[3].1, 3)
     } else {
         return true;
     };
     if rx <= 0.0 || ry <= 0.0 {
         return true;
     }
-    let center_x = if px < rect.x + corners[0].0 {
-        rect.x + corners[0].0
-    } else {
-        rect.x + rect.width - corners[1].0
-    };
-    let center_y = if py < rect.y + corners[0].1 {
-        rect.y + corners[0].1
-    } else {
-        rect.y + rect.height - corners[2].1
+    let (center_x, center_y) = match corner {
+        0 => (rect.x + rx, rect.y + ry),
+        1 => (rect.x + rect.width - rx, rect.y + ry),
+        2 => (rect.x + rect.width - rx, rect.y + rect.height - ry),
+        _ => (rect.x + rx, rect.y + rect.height - ry),
     };
     let qx = (px - center_x) / rx;
     let qy = (py - center_y) / ry;
@@ -2468,22 +2485,24 @@ impl Pixmap {
             (rect.width - left.width - right.width).max(0.0),
             (rect.height - top.width - bottom.width).max(0.0),
         );
+        // Percent radii must be resolved against the OUTER box before subtracting the
+        // border; re-resolving them against the padding box changes the curve (#audit).
         let inner_radii = BorderRadii {
             top_left: css::Radius {
-                x: shrink_radius(radii.top_left.x, left.width),
-                y: shrink_radius(radii.top_left.y, top.width),
+                x: shrink_radius(radii.top_left.x, left.width, rect.width),
+                y: shrink_radius(radii.top_left.y, top.width, rect.height),
             },
             top_right: css::Radius {
-                x: shrink_radius(radii.top_right.x, right.width),
-                y: shrink_radius(radii.top_right.y, top.width),
+                x: shrink_radius(radii.top_right.x, right.width, rect.width),
+                y: shrink_radius(radii.top_right.y, top.width, rect.height),
             },
             bottom_right: css::Radius {
-                x: shrink_radius(radii.bottom_right.x, right.width),
-                y: shrink_radius(radii.bottom_right.y, bottom.width),
+                x: shrink_radius(radii.bottom_right.x, right.width, rect.width),
+                y: shrink_radius(radii.bottom_right.y, bottom.width, rect.height),
             },
             bottom_left: css::Radius {
-                x: shrink_radius(radii.bottom_left.x, left.width),
-                y: shrink_radius(radii.bottom_left.y, bottom.width),
+                x: shrink_radius(radii.bottom_left.x, left.width, rect.width),
+                y: shrink_radius(radii.bottom_left.y, bottom.width, rect.height),
             },
         };
         let Some(clip) = self.clip_rect() else {
@@ -2657,12 +2676,14 @@ impl Pixmap {
     }
 }
 
-/// Shrinks a radius length by a border width (inner border curves).
-fn shrink_radius(radius: css::Length, width: f32) -> css::Length {
-    match radius {
-        css::Length::Px(px) => css::Length::Px((px - width).max(0.0)),
-        other => other,
-    }
+/// Shrinks a radius by a border width, resolving percentages against the outer box first.
+fn shrink_radius(radius: css::Length, width: f32, outer: f32) -> css::Length {
+    let px = match radius {
+        css::Length::Px(px) => px,
+        css::Length::Percent(pct) => outer * pct / 100.0,
+        css::Length::Auto => 0.0,
+    };
+    css::Length::Px((px - width).max(0.0))
 }
 
 /// Paints a rounded clip group's nested items through its rounded mask.
@@ -3122,11 +3143,9 @@ fn sample_gradient(
     if repeating && stops.len() > 1 {
         let length = last - first;
         if length > 1e-6 {
-            if t < first {
-                t = first;
-            } else {
-                t = first + ((t - first) / length).rem_euclid(1.0) * length;
-            }
+            // A repeating gradient tiles in BOTH directions; clamping values below the
+            // first stop made them stick to the first colour instead of wrapping.
+            t = first + ((t - first) / length).rem_euclid(1.0) * length;
         }
     }
     if t <= first {
@@ -4208,5 +4227,64 @@ mod paint_budget_tests {
         assert!(!fresh.enter(64, 64), "live-pixel cap");
         fresh.leave(4096, 4096);
         assert!(fresh.enter(4096, 4096));
+    }
+}
+
+#[cfg(test)]
+mod geometry_sanity_tests {
+    use super::*;
+
+    fn radius(px: f32) -> css::Radius {
+        css::Radius {
+            x: css::Length::Px(px),
+            y: css::Length::Px(px),
+        }
+    }
+
+    #[test]
+    fn asymmetric_corner_uses_its_own_centre() {
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let corners = [(10.0, 10.0), (10.0, 10.0), (10.0, 10.0), (40.0, 40.0)];
+        // Near the bottom-left corner: centre (40,60), not (10,90).
+        assert!(
+            !point_in_rounded_rect(rect, &corners, 5.0, 95.0),
+            "the bottom-left ellipse must be tested from its own centre"
+        );
+        assert!(point_in_rounded_rect(rect, &corners, 50.0, 50.0));
+    }
+
+    #[test]
+    fn legal_asymmetric_radii_are_not_clamped() {
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let radii = css::BorderRadii {
+            top_left: radius(80.0),
+            top_right: radius(20.0),
+            bottom_right: css::Radius::ZERO,
+            bottom_left: css::Radius::ZERO,
+        };
+        let corners = resolve_corner_radii(rect, radii);
+        assert_eq!(corners[0], (80.0, 80.0), "80+20 <= 100 needs no scaling");
+    }
+
+    #[test]
+    fn percent_radius_shrinks_from_the_outer_box() {
+        // border-radius: 20% on a 100px box with a 10px border gives an inner
+        // radius of 10px, not 20% of the 80px padding box (16px).
+        assert_eq!(
+            shrink_radius(css::Length::Percent(20.0), 10.0, 100.0),
+            css::Length::Px(10.0)
+        );
+        assert_eq!(
+            shrink_radius(css::Length::Px(20.0), 10.0, 100.0),
+            css::Length::Px(10.0)
+        );
+    }
+
+    #[test]
+    fn repeating_gradient_wraps_below_the_first_stop() {
+        let stops = [(0.2, Color::RED), (0.8, Color::BLUE)];
+        let wrapped = sample_gradient(&stops, &[], true, 0.0, css::InterpolationSpace::Srgb);
+        let middle = sample_gradient(&stops, &[], true, 0.6, css::InterpolationSpace::Srgb);
+        assert_eq!(wrapped, middle, "t=0 must wrap into the repeated interval");
     }
 }

@@ -69,10 +69,20 @@ impl Color {
             return Self::from_hex(hex);
         }
 
-        if s.len() >= 5 && s[..4].eq_ignore_ascii_case("rgb(") && s.ends_with(')') {
+        // `get(..n)` prevents a panic when byte n falls inside a multi-byte code point
+        // of hostile input (e.g. "aééx"); the comparison is ASCII-only.
+        if s.len() >= 5
+            && s.get(..4)
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case("rgb("))
+            && s.ends_with(')')
+        {
             return Self::from_rgb_fn(&s[4..s.len() - 1]);
         }
-        if s.len() >= 6 && s[..5].eq_ignore_ascii_case("rgba(") && s.ends_with(')') {
+        if s.len() >= 6
+            && s.get(..5)
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case("rgba("))
+            && s.ends_with(')')
+        {
             return Self::from_rgb_fn(&s[5..s.len() - 1]);
         }
 
@@ -1320,15 +1330,48 @@ impl BackgroundPosition {
         let components = split_components(value);
         let mut x = None;
         let mut y = None;
+        // Track which axis a keyword already claimed: two horizontal or two vertical
+        // keywords are invalid even though the value slots are still free (#audit).
+        let mut x_keyword = false;
+        let mut y_keyword = false;
         for component in components.iter().take(2) {
             match component.trim().to_ascii_lowercase().as_str() {
-                "left" => x = Some(Length::Percent(0.0)),
-                "right" => x = Some(Length::Percent(100.0)),
-                "top" => y = Some(Length::Percent(0.0)),
-                "bottom" => y = Some(Length::Percent(100.0)),
+                "left" | "right" => {
+                    if x.is_some() {
+                        return None;
+                    }
+                    x = Some(Length::Percent(
+                        if component.eq_ignore_ascii_case("right") {
+                            100.0
+                        } else {
+                            0.0
+                        },
+                    ));
+                    x_keyword = true;
+                }
+                "top" | "bottom" => {
+                    if y.is_some() {
+                        return None;
+                    }
+                    y = Some(Length::Percent(
+                        if component.eq_ignore_ascii_case("bottom") {
+                            100.0
+                        } else {
+                            0.0
+                        },
+                    ));
+                    y_keyword = true;
+                }
                 "center" => {
-                    x.get_or_insert(Length::Percent(50.0));
-                    y.get_or_insert(Length::Percent(50.0));
+                    if x.is_none() {
+                        x = Some(Length::Percent(50.0));
+                        x_keyword = true;
+                    } else if y.is_none() {
+                        y = Some(Length::Percent(50.0));
+                        y_keyword = true;
+                    } else if !(x_keyword && y_keyword) {
+                        return None;
+                    }
                 }
                 other => {
                     let length = Length::parse(other, font_size, root_font_size)?;
@@ -4430,10 +4473,13 @@ fn split_function_token(token: &str) -> Option<(String, String)> {
 
 fn parse_number_or_percent(value: &str) -> Option<f32> {
     let value = value.trim();
-    if let Some(percentage) = value.strip_suffix('%') {
-        return percentage.trim().parse::<f32>().ok().map(|pct| pct / 100.0);
-    }
-    value.parse::<f32>().ok()
+    let number = if let Some(percentage) = value.strip_suffix('%') {
+        percentage.trim().parse::<f32>().ok().map(|pct| pct / 100.0)
+    } else {
+        value.parse::<f32>().ok()
+    };
+    // Reject infinities (e.g. `1e400`) before they reach filter factors (#audit).
+    number.filter(|number| number.is_finite())
 }
 
 /// Parses a non-negative filter length (`px`/`em`/...; percentages invalid).
@@ -4947,23 +4993,24 @@ fn parse_linear_direction(value: &str) -> Option<LinearDirection> {
 /// Parses a CSS angle (`deg`, `grad`, `rad`, `turn`) into degrees.
 fn parse_angle_degrees(value: &str) -> Option<f32> {
     let value = value.trim().to_ascii_lowercase();
-    if let Some(number) = value.strip_suffix("deg") {
-        return number.trim().parse::<f32>().ok();
-    }
-    if let Some(number) = value.strip_suffix("grad") {
-        return number.trim().parse::<f32>().ok().map(|grad| grad * 0.9);
-    }
-    if let Some(number) = value.strip_suffix("rad") {
-        return number
+    let degrees = if let Some(number) = value.strip_suffix("deg") {
+        number.trim().parse::<f32>().ok()
+    } else if let Some(number) = value.strip_suffix("grad") {
+        number.trim().parse::<f32>().ok().map(|grad| grad * 0.9)
+    } else if let Some(number) = value.strip_suffix("rad") {
+        number
             .trim()
             .parse::<f32>()
             .ok()
-            .map(|rad| rad.to_degrees());
-    }
-    if let Some(number) = value.strip_suffix("turn") {
-        return number.trim().parse::<f32>().ok().map(|turn| turn * 360.0);
-    }
-    None
+            .map(|rad| rad.to_degrees())
+    } else if let Some(number) = value.strip_suffix("turn") {
+        number.trim().parse::<f32>().ok().map(|turn| turn * 360.0)
+    } else {
+        None
+    };
+    // `1e400` parses to infinity in Rust; a non-finite angle would poison gradients
+    // and filters downstream, so reject it like every other length parser (#audit).
+    degrees.filter(|angle| angle.is_finite())
 }
 
 /// Parses the optional `radial-gradient()` prefix: `[<shape> || <size>]? [at <position>]?`.
@@ -5467,6 +5514,42 @@ impl ComputedStyle {
             }
         }
         calc
+    }
+}
+
+#[cfg(test)]
+mod unicode_boundary_tests {
+    use super::*;
+
+    #[test]
+    fn color_parse_does_not_panic_on_non_ascii() {
+        // "aééx" has byte 4 (and 5) inside a multi-byte code point; the old byte
+        // slices panicked before the ASCII prefix comparison ran.
+        assert_eq!(Color::parse("aééx"), None);
+        assert_eq!(Color::parse("rgbé(1,2,3)"), None);
+        assert_eq!(Color::parse("rgbaé(1,2,3,1)"), None);
+        assert_eq!(Color::parse("rgb(1,2,3)"), Some(Color::new(1, 2, 3, 255)));
+    }
+
+    #[test]
+    fn non_finite_numeric_values_are_rejected() {
+        assert_eq!(parse_angle_degrees("1e400deg"), None);
+        assert_eq!(parse_angle_degrees("1e400turn"), None);
+        assert_eq!(parse_angle_degrees("90deg"), Some(90.0));
+        assert_eq!(parse_number_or_percent("1e400"), None);
+        assert_eq!(parse_number_or_percent("1e400%"), None);
+        assert_eq!(parse_number_or_percent("50%"), Some(0.5));
+    }
+
+    #[test]
+    fn background_position_rejects_two_keywords_on_one_axis() {
+        assert_eq!(BackgroundPosition::parse("left right", 16.0, 16.0), None);
+        assert_eq!(BackgroundPosition::parse("top bottom", 16.0, 16.0), None);
+        assert_eq!(BackgroundPosition::parse("left left", 16.0, 16.0), None);
+        assert_eq!(BackgroundPosition::parse("center left", 16.0, 16.0), None);
+        assert!(BackgroundPosition::parse("left center", 16.0, 16.0).is_some());
+        assert!(BackgroundPosition::parse("center center", 16.0, 16.0).is_some());
+        assert!(BackgroundPosition::parse("left 10px", 16.0, 16.0).is_some());
     }
 }
 
