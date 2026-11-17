@@ -778,6 +778,8 @@ fn render_url_inner(
     // A remote (or data:) document must not read the local filesystem through a
     // subresource; only file: documents may load file: URLs.
     loader.set_allow_file(loaded.url.is_file());
+    // Mixed content (#1528): enforce the document's scheme on every subresource load.
+    loader.set_mixed_content_context(Some(loaded.url.scheme()));
     // Push promises received while fetching the document belong to the same load session:
     // transfer them to the subresource loader that serves images/stylesheets/scripts.
     loader.absorb_pushes_from(&mut document_loader);
@@ -1971,7 +1973,7 @@ fn load_stylesheet_text(
         ));
         return Ok(None);
     }
-    match loader.load(url) {
+    match loader.load_checked(url, true) {
         Ok(resource) => {
             if resource.bytes.len() > options.max_css_bytes_per_sheet {
                 // #654: skip the sheet with a warning instead of failing the render.

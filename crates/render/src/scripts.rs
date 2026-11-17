@@ -528,7 +528,7 @@ pub fn load_scripts(
                 break;
             }
             attempts += 1;
-            let resource = match loader.load(&url) {
+            let resource = match loader.load_checked(&url, true) {
                 Ok(resource) => resource,
                 Err(error) => {
                     report.skipped += 1;
@@ -907,7 +907,8 @@ pub fn execute_scripts(
                 }
                 let mut loader =
                     ResourceLoader::with_options(options.clone()).with_allow_file(base.is_file());
-                match loader.load_str(&request.url) {
+                loader.set_mixed_content_context(Some(base.scheme()));
+                match loader.load_str_checked(&request.url, true) {
                     Ok(resource) => {
                         charge(&resource.bytes)?;
                         let mut headers =
@@ -1068,10 +1069,10 @@ pub fn execute_scripts(
                     .map(|url| url.as_str().to_owned()))
             },
         ));
-        let module_loader = Arc::new(Mutex::new(
-            ResourceLoader::with_options(host.fetch_options.clone())
-                .with_allow_file(document_url.is_file()),
-        ));
+        let mut module_loader_inner = ResourceLoader::with_options(host.fetch_options.clone())
+            .with_allow_file(document_url.is_file());
+        module_loader_inner.set_mixed_content_context(Some(document_url.scheme()));
+        let module_loader = Arc::new(Mutex::new(module_loader_inner));
         let no_network = host.no_network;
         let max_module_bytes = limits.max_script_bytes;
         let total_module_bytes = Arc::new(Mutex::new(0usize));
@@ -1100,7 +1101,7 @@ pub fn execute_scripts(
                 let resource = module_loader
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .load(&url)
+                    .load_checked(&url, true)
                     .map_err(|error| {
                         js::JsError::ModuleNotFound(format!("cannot load module {url}: {error}"))
                     })?;

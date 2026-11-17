@@ -171,6 +171,9 @@ pub struct ResourceLoader {
     /// Whether `file:` URLs may be loaded (default `true`; the renderer disables it for
     /// documents that are not themselves `file:`).
     allow_file: bool,
+    /// Scheme of the document this loader serves (#1528). When `https:`, `http:` subresources
+    /// are blocked (active content) or upgraded (passive content) by [`Self::load_checked`].
+    mixed_content_context: Option<Scheme>,
 }
 
 impl Default for ResourceLoader {
@@ -229,6 +232,7 @@ impl ResourceLoader {
             pushed_bytes: 0,
             h1_pool,
             allow_file: true,
+            mixed_content_context: None,
         }
     }
 
@@ -247,6 +251,7 @@ impl ResourceLoader {
             pushed_bytes: 0,
             h1_pool: crate::http::H1Pool::new(4, std::time::Duration::from_secs(30)),
             allow_file: true,
+            mixed_content_context: None,
         }
     }
 
@@ -263,6 +268,36 @@ impl ResourceLoader {
     pub fn with_allow_file(mut self, allow: bool) -> Self {
         self.set_allow_file(allow);
         self
+    }
+
+    /// Sets the document scheme used for mixed-content decisions (#1528). `None` (default)
+    /// disables the policy. The renderer sets this to the loaded document's scheme.
+    pub fn set_mixed_content_context(&mut self, scheme: Option<Scheme>) -> &mut Self {
+        self.mixed_content_context = scheme;
+        self
+    }
+
+    /// Loads a subresource, applying the mixed-content policy (#1528).
+    ///
+    /// `active` is `true` for scripts/styles/fonts/XHR (blocked over `http:` on an HTTPS
+    /// document) and `false` for images/media (upgraded to `https:`). Redirects are covered
+    /// because the upgraded/blocked decision happens before the network request.
+    pub fn load_checked(&mut self, url: &Url, active: bool) -> Result<Arc<Resource>, LoadError> {
+        use crate::mixed_content::{MixedContentAction, decide};
+        match decide(
+            self.mixed_content_context.unwrap_or(Scheme::Http),
+            url,
+            active,
+        ) {
+            MixedContentAction::Allow => self.load(url),
+            MixedContentAction::Block => {
+                Err(FetchError::MixedContentBlocked(url.as_str().to_owned()).into())
+            }
+            MixedContentAction::Upgrade(upgraded) => {
+                let url = Url::parse(&upgraded).map_err(LoadError::Url)?;
+                self.load(&url)
+            }
+        }
     }
 
     /// Rejects `file:` URLs when local-file access is disabled.
@@ -861,6 +896,16 @@ impl ResourceLoader {
     pub fn load_str(&mut self, url: &str) -> Result<Arc<Resource>, LoadError> {
         let parsed = Url::parse(url)?;
         self.load(&parsed)
+    }
+
+    /// Like [`Self::load_str`] but applies the mixed-content policy (#1528).
+    pub fn load_str_checked(
+        &mut self,
+        url: &str,
+        active: bool,
+    ) -> Result<Arc<Resource>, LoadError> {
+        let parsed = Url::parse(url)?;
+        self.load_checked(&parsed, active)
     }
 
     /// Fetches `url` with an arbitrary method and optional request body.

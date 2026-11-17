@@ -193,7 +193,7 @@ pub fn load_webfonts_with_limits(
                 break;
             }
             attempts += 1;
-            let resource = match loader.load(&url) {
+            let resource = match loader.load_checked(&url, true) {
                 Ok(resource) => resource,
                 Err(error) => {
                     last_warning = Some(format!(

@@ -143,6 +143,7 @@ pub mod http;
 pub mod integrity;
 pub mod loader;
 pub mod mime;
+pub mod mixed_content;
 #[cfg(feature = "pac")]
 pub mod pac;
 pub mod proxy;

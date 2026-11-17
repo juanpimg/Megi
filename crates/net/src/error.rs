@@ -104,6 +104,9 @@ pub enum FetchError {
     /// The renderer disables local-file access for documents that are not themselves
     /// `file:`, so a remote page cannot read the filesystem through a subresource.
     FileAccessBlocked,
+    /// An insecure `http:` subresource was blocked because the document is `https:`
+    /// (mixed content, #1528).
+    MixedContentBlocked(String),
     /// A `file:` URL used a non-local host (only `file:///...` is supported).
     UnsupportedFileHost(String),
     /// A `data:` URL is malformed (bad mediatype, invalid base64, ...).
@@ -184,6 +187,9 @@ impl fmt::Display for FetchError {
             Self::FileIo(err) => write!(f, "file I/O error: {err}"),
             Self::FileAccessBlocked => {
                 f.write_str("local file access is blocked for this document")
+            }
+            Self::MixedContentBlocked(url) => {
+                write!(f, "mixed content: blocked insecure request to `{url}`")
             }
             Self::UnsupportedFileHost(host) => {
                 write!(f, "file: URLs can only name the local host, got `{host}`")
