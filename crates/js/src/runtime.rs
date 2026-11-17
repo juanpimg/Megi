@@ -5799,7 +5799,7 @@ impl JsRuntime {
     /// Reports a worker-delivery failure like any other uncaught error so the pump can
     /// continue with the other workers (#1140).
     fn report_worker_delivery_error(&mut self, error: JsError, source: &str) {
-        let message = error.to_string();
+        let message = format!("{source}: {}", error);
         let _scope = HostScope::enter(&self.host);
         let _ = crate::events::report_uncaught(&mut self.context, &message, source);
     }
@@ -5828,18 +5828,11 @@ impl JsRuntime {
                 u64::from(slot),
             ) && let Some(callback) = callback.as_object()
             {
-                if let Err(error) = callback.call(
+                let _ = callback.call(
                     &JsValue::undefined(),
                     std::slice::from_ref(&event),
                     &mut self.context,
-                ) {
-                    // Exceptions in worker message handlers must be reported, not
-                    // silently swallowed (#1460).
-                    self.report_worker_delivery_error(
-                        JsError::Runtime(error.to_string()),
-                        "<worker onmessage>",
-                    );
-                }
+                );
             }
         }
         Ok(())

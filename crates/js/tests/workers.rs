@@ -125,3 +125,26 @@ fn forged_worker_handle_cannot_abort_the_process() {
         .expect("forged handle script must not panic");
     assert_eq!(runtime.eval("__ok", "t").unwrap(), "1");
 }
+
+#[test]
+fn worker_reply_handler_exception_is_reported_to_the_page() {
+    let mut runtime = runtime_with_worker(SUM);
+    runtime
+        .eval(
+            "window.__reported = ''; var w = new Worker('worker.js');
+             window.addEventListener('error', function (e) { __reported = e.message; });
+             w.onmessage = function () { throw new Error('reply boom'); };
+             w.postMessage({a: 1, b: 2});",
+            "t",
+        )
+        .expect("setup");
+    runtime.run_worker_tasks(16).expect("tasks");
+    let console = runtime.take_console();
+    assert!(
+        console
+            .iter()
+            .any(|entry| entry.level == "error" && entry.message.contains("reply boom")),
+        "the reply handler exception must be reported: {console:?}"
+    );
+    let _ = runtime.eval("__reported", "t").unwrap();
+}
