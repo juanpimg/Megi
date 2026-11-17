@@ -74,7 +74,7 @@ crates/css/tests/effects.rs	251	test	F1	waveF1	2026-11-17	covered	#1356-#1360
 crates/css/tests/font_face_tests.rs	86	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/gradients.rs	461	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/length_parse.rs	31	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
-crates/css/tests/parser_depth.rs	61	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
+crates/css/tests/parser_depth.rs	68	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/proptest_css.proptest-regressions	0	generated	-			exempt		not read line by line: generated
 crates/css/tests/proptest_css.rs	167	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/replaced_effects.rs	241	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
