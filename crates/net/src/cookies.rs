@@ -709,7 +709,12 @@ impl CookieJar {
             return None;
         }
         let mut header = String::new();
+        const MAX_COOKIE_HEADER_BYTES: usize = 8 * 1024;
         for (index, cookie) in matching.iter().enumerate() {
+            let entry_len = cookie.name.len() + 1 + cookie.value.len();
+            if header.len() + entry_len + 2 > MAX_COOKIE_HEADER_BYTES {
+                break;
+            }
             if index > 0 {
                 header.push_str("; ");
             }
@@ -717,7 +722,11 @@ impl CookieJar {
             header.push('=');
             header.push_str(&cookie.value);
         }
-        Some(header)
+        if header.is_empty() {
+            None
+        } else {
+            Some(header)
+        }
     }
 }
 
