@@ -1392,6 +1392,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("href", AccessorKind::Href),
         ("src", AccessorKind::Src),
         ("selectedIndex", AccessorKind::SelectedIndex),
+        ("validity", AccessorKind::Validity),
     ];
     type Prepared<'a> = (
         &'a str,
@@ -1511,6 +1512,7 @@ enum AccessorKind {
     Href,
     Src,
     SelectedIndex,
+    Validity,
 }
 
 fn accessor_functions(kind: AccessorKind) -> AccessorPair {
