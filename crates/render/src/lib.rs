@@ -872,7 +872,10 @@ fn render_url_inner(
                 &collection,
                 css::StateContext::new(),
                 options.time_ms,
-                (options.viewport.width as f32, options.viewport.height as f32),
+                (
+                    options.viewport.width as f32,
+                    options.viewport.height as f32,
+                ),
             )));
             reusable_stylesheets = Some((collection, summary, fonts, stylesheet_signature_before));
         }
@@ -1033,7 +1036,10 @@ fn render_url_inner(
         &stylesheet_collection,
         css::StateContext::new(),
         options.time_ms,
-        (options.viewport.width as f32, options.viewport.height as f32),
+        (
+            options.viewport.width as f32,
+            options.viewport.height as f32,
+        ),
     );
     let styles_time = styles_start.elapsed();
 
@@ -1292,7 +1298,10 @@ fn render_svg_document(
         &stylesheet_collection,
         css::StateContext::new(),
         options.time_ms,
-        (options.viewport.width as f32, options.viewport.height as f32),
+        (
+            options.viewport.width as f32,
+            options.viewport.height as f32,
+        ),
     );
 
     let mut image_store = paint::ImageStore::new();
@@ -1579,11 +1588,9 @@ fn collect_styles(
     RenderError,
 > {
     let (vw, vh) = media.viewport.unwrap_or((1280.0, 720.0));
-    let collected = css::with_calc_viewport(
-        vw,
-        vh,
-        || stylesheets::collect_stylesheets(document, base_url, media),
-    );
+    let collected = css::with_calc_viewport(vw, vh, || {
+        stylesheets::collect_stylesheets(document, base_url, media)
+    });
     warnings.extend(collected.warnings.iter().cloned());
     build_author_stylesheet_collection(&collected, base_url, loader, options, media, warnings)
 }
@@ -1986,7 +1993,9 @@ fn resolve_styles_with_state(
     // `calc()` uses a thread-local viewport for vw/vh; install the real one so
     // `calc(50vw)` resolves against the render viewport, not a 1280x720 default (#1469).
     css::with_calc_viewport(viewport.0, viewport.1, || {
-        css::state::with_state(state, || resolve_styles_with_collection(doc, collection, time_ms))
+        css::state::with_state(state, || {
+            resolve_styles_with_collection(doc, collection, time_ms)
+        })
     })
 }
 

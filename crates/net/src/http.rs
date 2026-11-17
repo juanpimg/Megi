@@ -1713,7 +1713,9 @@ fn default_tls_config() -> Result<Arc<rustls::ClientConfig>, FetchError> {
     }
     let config = build_default_tls_config().map_err(|error| {
         eprintln!("megi: cannot initialize default rustls configuration: {error}");
-        FetchError::Tls(format!("cannot initialize the default rustls client configuration: {error}"))
+        FetchError::Tls(format!(
+            "cannot initialize the default rustls client configuration: {error}"
+        ))
     })?;
     let _ = CACHE.set(Arc::clone(&config));
     Ok(config)
