@@ -11,7 +11,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use dom::{Document, NodeKind};
-use render::{RenderOptions, RenderStats, ScriptingLimits, ScriptingMode, Viewport, render_url};
+use render::{
+    RenderOptions, RenderStats, ScriptBudget, ScriptingLimits, ScriptingMode, Viewport, render_url,
+};
 
 fn fixture_path(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -402,4 +404,96 @@ fn top_level_await_respects_the_timer_budget() {
         "hitting the timer budget must be reported: {:?}",
         output.stats.warnings
     );
+}
+
+#[test]
+fn timer_callbacks_use_the_configured_loop_budget() {
+    // The inline script gets a tiny grant from `total_loop_iterations`; the event loop must
+    // then apply the (large) fresh budget to the timer callback instead of inheriting the
+    // tiny limit left in the VM by the last eval (#1215).
+    let html = "<html><body><script>\
+        window.__done = 0;\
+        setTimeout(function () {\
+            var n = 0; for (var j = 0; j < 90000; j++) { n += 1; }\
+            window.__done = 1;\
+        }, 0);\
+        </script></body></html>";
+    let encoded: String = html
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || b"-_.~".contains(&byte) {
+                (byte as char).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect();
+    let options = RenderOptions {
+        viewport: Viewport::new(400, 240).expect("viewport"),
+        scripting: ScriptingMode::Enabled,
+        scripting_limits: ScriptingLimits {
+            max_tasks: 10,
+            total_loop_iterations: 100,
+            budget: ScriptBudget {
+                loop_iterations: 100_000,
+                ..ScriptBudget::default()
+            },
+            ..ScriptingLimits::default()
+        },
+        ..base_options()
+    };
+    let output = render_url(&format!("data:text/html,{encoded}"), &options).expect("render");
+    assert_eq!(
+        output.stats.script_tasks, 1,
+        "the timer must run with the configured budget: {:?}",
+        output.stats.warnings
+    );
+    assert!(
+        !output.stats.script_limited,
+        "a fresh 100k budget must not be cut by the inline script's 100-iteration grant: {:?}",
+        output.stats.warnings
+    );
+}
+
+#[test]
+fn worker_deliveries_do_not_consume_the_timer_task_budget() {
+    use std::fs;
+    let dir = std::env::temp_dir().join(format!("megi-worker-budget-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).expect("mkdir");
+    fs::write(
+        dir.join("worker.js"),
+        "for (var i = 0; i < 100; i++) { postMessage(i); }",
+    )
+    .expect("worker");
+    let page = dir.join("index.html");
+    let page_html = "<!DOCTYPE html><body><script>\
+         window.__workerMessages = 0;\
+         var w = new Worker('file://WORKER_DIR/worker.js');\
+         w.onmessage = function () { window.__workerMessages++; };\
+         setTimeout(function () {\
+           document.body.setAttribute('data-timer', 'ran');\
+         }, 0);\
+         </script></body>"
+        .replace("WORKER_DIR", &dir.display().to_string());
+    fs::write(&page, &page_html).expect("page");
+
+    let options = RenderOptions {
+        viewport: Viewport::new(400, 240).expect("viewport"),
+        scripting: ScriptingMode::Enabled,
+        scripting_limits: ScriptingLimits {
+            max_tasks: 2,
+            ..ScriptingLimits::default()
+        },
+        ..base_options()
+    };
+    let output =
+        render_url(&format!("file://{}/index.html", dir.display()), &options).expect("render");
+    // The single timer must still run even though 100 worker replies were delivered.
+    assert_eq!(
+        output.stats.script_tasks, 1,
+        "worker deliveries must not be counted as timer callbacks (#1221): {:?}",
+        output.stats.warnings
+    );
+    let _ = fs::remove_dir_all(&dir);
 }

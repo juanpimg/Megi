@@ -123,7 +123,9 @@ impl RegionCollector {
     /// Intersection of the whole clip stack (viewport bounds are enforced by the
     /// region rectangles themselves, which the painter already keeps in view).
     fn current_clip(&self) -> Option<Rect> {
-        self.clip_stack.last().and_then(|e| e.map(|(_, running)| running))
+        self.clip_stack
+            .last()
+            .and_then(|e| e.map(|(_, running)| running))
     }
 
     /// Records `rect` clipped by the current clip stack.

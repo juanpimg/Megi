@@ -193,3 +193,32 @@ fn fixtures_render_with_effects() {
     assert!(px(&filter, 45, 40)[3] > 0);
     assert!(px(&filter, 2, 2) == [255, 255, 255, 255]);
 }
+
+#[test]
+fn clip_rule_evenodd_controls_clip_fill_rule() {
+    // Two nested subpaths with the same winding: even-odd must leave the inner square
+    // transparent while nonzero fills it (#1279).
+    let source = |rule: &str| {
+        format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+                <defs><clipPath id="c" clip-rule="{rule}">
+                    <path d="M 2 2 L 38 2 L 38 38 L 2 38 Z M 10 10 L 30 10 L 30 30 L 10 30 Z"/>
+                </clipPath></defs>
+                <rect width="40" height="40" fill="red" clip-path="url(#c)"/>
+            </svg>"##
+        )
+    };
+    let evenodd = render(&source("evenodd"));
+    let nonzero = render(&source("nonzero"));
+    assert_eq!(
+        px(&evenodd, 20, 20)[3],
+        0,
+        "even-odd clip leaves the inner hole"
+    );
+    assert_eq!(
+        px(&nonzero, 20, 20)[3],
+        255,
+        "nonzero clip fills the inner square"
+    );
+    assert_eq!(px(&evenodd, 5, 5)[3], 255, "the outer ring stays opaque");
+}
