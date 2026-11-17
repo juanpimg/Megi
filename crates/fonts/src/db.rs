@@ -764,9 +764,10 @@ impl FontDatabase {
         if let Some(id) = self.query_face(families, weight, style, stretch) {
             return self.build_font(id);
         }
+        // A quoted generic-like name is literal (so it must not select the generic face),
+        // but if no such family is installed the browser falls back to the default face.
         let uses_generic = families.iter().any(|family| {
-            !family.starts_with(QUOTED_FAMILY_PREFIX)
-                && GENERIC_FAMILIES.contains(&family.to_ascii_lowercase().as_str())
+            GENERIC_FAMILIES.contains(&unmark_family(family).to_ascii_lowercase().as_str())
         });
         if families.is_empty() || uses_generic {
             return match self.last_resort_face(weight, style, stretch) {
