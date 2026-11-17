@@ -423,6 +423,10 @@ pub(crate) struct Host {
     pub worker_loader: Option<WorkerLoader>,
     /// `fetch()` provider injected by the host.
     pub fetch_provider: Option<FetchProvider>,
+    /// Shadow DOM (#1541): host element `NodeId` -> shadow-root `NodeId`.
+    pub shadow_roots: std::collections::HashMap<NodeId, NodeId>,
+    /// Reverse map: shadow-root `NodeId` -> host element `NodeId`.
+    pub shadow_hosts: std::collections::HashMap<NodeId, NodeId>,
     /// Deterministic cooperative workers (no threads); `None` slots are terminated/dropped.
     pub workers: Vec<Option<crate::runtime::WorkerState>>,
     /// Parent host when this host belongs to a worker realm.
@@ -483,6 +487,8 @@ impl Host {
             layout_provider: None,
             worker_loader: None,
             fetch_provider: None,
+            shadow_roots: std::collections::HashMap::new(),
+            shadow_hosts: std::collections::HashMap::new(),
             workers: Vec::new(),
             worker_parent: None,
             worker_id: None,

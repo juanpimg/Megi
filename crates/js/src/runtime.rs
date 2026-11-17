@@ -550,6 +550,7 @@ impl JsRuntime {
             + host.nodes.len() * 16
             + host.listeners.len() * 96
             + host.inline_handlers.len() * 64
+            + host.shadow_roots.len() * 32
             + host.timers.len() * 48
             + console_bytes
             + host.title.len()
@@ -1358,7 +1359,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 34] = [
+    let accessors: [(&str, AccessorKind); 35] = [
         ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
@@ -1393,6 +1394,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("src", AccessorKind::Src),
         ("selectedIndex", AccessorKind::SelectedIndex),
         ("validity", AccessorKind::Validity),
+        ("shadowRoot", AccessorKind::ShadowRoot),
     ];
     type Prepared<'a> = (
         &'a str,
@@ -1463,6 +1465,8 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("setCustomValidity", 1, node_set_custom_validity),
         ("requestSubmit", 0, node_request_submit),
         ("submit", 0, node_submit),
+        ("attachShadow", 1, node_attach_shadow),
+        ("getRootNode", 0, node_get_root_node),
     ] {
         init.function(native(function), js_string!(name), length);
     }
@@ -1517,6 +1521,7 @@ enum AccessorKind {
     Src,
     SelectedIndex,
     Validity,
+    ShadowRoot,
 }
 
 fn accessor_functions(kind: AccessorKind) -> AccessorPair {
@@ -1555,6 +1560,7 @@ fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::Src => (node_src_get, Some(node_src_set)),
         AccessorKind::SelectedIndex => (node_selected_index_get, Some(node_selected_index_set)),
         AccessorKind::Validity => (node_validity_get, None),
+        AccessorKind::ShadowRoot => (node_shadow_root_get, None),
     }
 }
 
@@ -5213,6 +5219,69 @@ fn node_blur(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsRe
     Ok(JsValue::undefined())
 }
 
+/// `Element.attachShadow({mode})` — creates an inert `DocumentFragment` as shadow root (#1541).
+fn node_attach_shadow(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let existing = with_host(|host| host.shadow_roots.get(&node_id).copied()).flatten();
+    if let Some(root) = existing {
+        return wrap_node(context, root);
+    }
+    let root = with_host(|host| {
+        let root = host.document.create_document_fragment();
+        host.shadow_roots.insert(node_id, root);
+        host.shadow_hosts.insert(root, node_id);
+        Some(root)
+    })
+    .flatten()
+    .ok_or_else(|| js_error("cannot attach shadow root"))?;
+    wrap_node(context, root)
+}
+
+fn node_shadow_root_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let root = with_host(|host| host.shadow_roots.get(&node_id).copied()).flatten();
+    match root {
+        Some(root) => wrap_node(context, root),
+        None => Ok(JsValue::null()),
+    }
+}
+
+fn node_get_root_node(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let shadow = with_host(|host| {
+        let mut current = Some(node_id);
+        let mut found = None;
+        while let Some(id) = current {
+            if host.shadow_hosts.contains_key(&id) {
+                found = Some(id);
+                break;
+            }
+            current = host.document.try_node(id).and_then(|node| node.parent);
+        }
+        found
+    })
+    .flatten();
+    match shadow {
+        Some(root) => wrap_node(context, root),
+        None => {
+            let root = with_host(|host| host.document.root()).ok_or_else(|| js_error("no host"))?;
+            wrap_node(context, root)
+        }
+    }
+}
+
 fn node_scroll_into_view(
     _this: &JsValue,
     _args: &[JsValue],
@@ -5830,6 +5899,121 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
   XMLHttpRequest.LOADING = 3;
   XMLHttpRequest.DONE = 4;
   define("XMLHttpRequest", XMLHttpRequest);
+  // XMLHttpRequest subset (#1532) implemented over fetch()/the host fetch provider.
+  // Async only (`async === false` is rejected by open()); events use a small per-instance
+  // listener table plus the on* handler properties, and are dispatched by name.
+  function XMLHttpRequest() {
+    this.readyState = 0; // UNSENT
+    this.status = 0;
+    this.statusText = "";
+    this.responseText = "";
+    this.response = null;
+    this.responseType = "";
+    this.responseURL = "";
+    this.timeout = 0;
+    this.withCredentials = false;
+    this.onreadystatechange = null;
+    this.onload = null;
+    this.onerror = null;
+    this.onabort = null;
+    this._listeners = {};
+    this._method = "GET";
+    this._url = "";
+    this._headers = [];
+    this._aborted = false;
+    var self = this;
+    this.addEventListener = function (type, fn) {
+      if (typeof fn !== "function") { return; }
+      if (!self._listeners[type]) { self._listeners[type] = []; }
+      if (self._listeners[type].length < 64) { self._listeners[type].push(fn); }
+    };
+    this.removeEventListener = function (type, fn) {
+      var list = self._listeners[type] || [];
+      self._listeners[type] = list.filter(function (f) { return f !== fn; });
+    };
+    this._fire = function (type) {
+      var event = { type: type, target: self };
+      var handler = self["on" + type];
+      if (typeof handler === "function") { try { handler(event); } catch (e) {} }
+      var list = (self._listeners[type] || []).slice();
+      for (var i = 0; i < list.length; i++) { try { list[i](event); } catch (e) {} }
+    };
+    this._changeState = function (state) {
+      self.readyState = state;
+      self._fire("readystatechange");
+    };
+    this.open = function (method, url, async) {
+      if (async === false) { throw new TypeError("synchronous XMLHttpRequest is not supported"); }
+      var m = String(method).toUpperCase();
+      if (["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"].indexOf(m) < 0) {
+        throw new TypeError("unsupported XMLHttpRequest method: " + String(method));
+      }
+      self._aborted = false;
+      self._method = m;
+      self._url = String(url);
+      self._headers = [];
+      self.status = 0;
+      self.statusText = "";
+      self.responseText = "";
+      self.response = null;
+      self._changeState(1); // OPENED
+    };
+    this.setRequestHeader = function (name, value) {
+      if (self.readyState !== 1) { throw new Error("InvalidStateError"); }
+      self._headers.push([headerName(name), headerValue(value)]);
+    };
+    this.overrideMimeType = function () {};
+    this.abort = function () {
+      if (self.readyState === 0 || self.readyState === 4) { return; }
+      self._aborted = true;
+      self.status = 0;
+      self.readyState = 0;
+      self._fire("abort");
+    };
+    this.send = function (body) {
+      if (self.readyState !== 1) { throw new Error("InvalidStateError"); }
+      var init = { method: self._method, headers: self._headers };
+      if (body !== undefined && body !== null && self._method !== "GET" && self._method !== "HEAD") {
+        init.body = body;
+      }
+      fetch(self._url, init).then(function (response) {
+        if (self._aborted) { return; }
+        self.status = response.status;
+        self.statusText = response.statusText || "";
+        self.responseURL = response.url || self._url;
+        return response.arrayBuffer().then(function (buffer) {
+          if (self._aborted) { return; }
+          if (self.responseType === "arraybuffer") { self.response = buffer; }
+          else {
+            var bytes = new Uint8Array(buffer);
+            var text = "";
+            for (var i = 0; i < bytes.length; i++) { text += String.fromCharCode(bytes[i]); }
+            self.responseText = text;
+            if (self.responseType === "json") {
+              try { self.response = JSON.parse(text); } catch (e) { self.response = null; }
+            } else if (self.responseType === "text" || self.responseType === "") {
+              self.response = text;
+            } else { self.response = text; }
+          }
+          self._changeState(4); // DONE
+          self._fire("load");
+        });
+      }).catch(function () {
+        if (self._aborted) { return; }
+        self.status = 0;
+        self._changeState(4);
+        self._fire("error");
+      });
+    };
+  }
+  XMLHttpRequest.UNSENT = 0;
+  XMLHttpRequest.OPENED = 1;
+  XMLHttpRequest.HEADERS_RECEIVED = 2;
+  XMLHttpRequest.LOADING = 3;
+  XMLHttpRequest.DONE = 4;
+  define("XMLHttpRequest", XMLHttpRequest);
+})();
+
 })();
 "####;
     let fetch_fn = FunctionObjectBuilder::new(context.realm(), native(fetch_native))
