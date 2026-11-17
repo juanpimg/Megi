@@ -1514,7 +1514,11 @@ fn polyline_subpath(
     segments_used: &mut usize,
 ) -> Result<SubPath, SvgError> {
     let text = element.attribute("points").unwrap_or_default();
-    let numbers = parse_number_list(text).unwrap_or_default();
+    let numbers = match parse_number_list(text) {
+        Some(numbers) => numbers,
+        None if text.trim().is_empty() => Vec::new(),
+        None => return Err(SvgError::Limit("points list exceeds limit".to_owned())),
+    };
     let pairs = numbers.as_chunks::<2>().0;
     // The documented segment budget also covers `<polygon>`/`<polyline>`: the rasterizer
     // builds one edge per vertex and scans them per sub-row, so an unbounded `points`
