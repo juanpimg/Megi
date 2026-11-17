@@ -4657,13 +4657,17 @@ fn node_inner_text_get(
 fn camel_case_attribute(name: &str) -> Option<String> {
     let suffix = name.strip_prefix("data-")?;
     let mut out = String::new();
-    let mut upper = false;
-    for ch in suffix.chars() {
-        if ch == '-' {
-            upper = true;
-        } else if upper {
-            out.extend(ch.to_uppercase());
-            upper = false;
+    let mut chars = suffix.chars().peekable();
+    while let Some(ch) = chars.next() {
+        // DOMStringMap only consumes a dash before an ASCII lowercase letter and
+        // uppercases with ASCII rules; other dashes stay literal (#1451).
+        if ch == '-'
+            && chars
+                .peek()
+                .is_some_and(|next| next.is_ascii_lowercase())
+        {
+            let next = chars.next().expect("peeked lowercase ASCII letter");
+            out.push(next.to_ascii_uppercase());
         } else {
             out.push(ch);
         }
@@ -7249,5 +7253,20 @@ mod module_scan_tests {
             "/* = await foo(); */ var x = 1;"
         ));
         assert!(!module_has_top_level_await("var s = `= await foo()`;"));
+    }
+}
+
+#[cfg(test)]
+mod dataset_name_tests {
+    use super::*;
+
+    #[test]
+    fn dataset_camel_case_follows_domstringmap_rules() {
+        assert_eq!(camel_case_attribute("data-foo-bar"), Some("fooBar".into()));
+        assert_eq!(camel_case_attribute("data-a-é"), Some("a-é".into()));
+        assert_eq!(camel_case_attribute("data-x-1"), Some("x-1".into()));
+        assert_eq!(camel_case_attribute("data--foo"), Some("-Foo".into()));
+        assert_eq!(camel_case_attribute("data-ß"), Some("ß".into()));
+        assert_eq!(camel_case_attribute("role"), None);
     }
 }
