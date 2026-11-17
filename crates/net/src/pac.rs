@@ -54,8 +54,13 @@ pub fn resolve(target: &Url, pac_url: &Url) -> Result<Option<Url>, String> {
     // Evict expired entries first.
     cache.retain(|_, (when, _)| when.elapsed() < CACHE_TTL);
     if cache.len() >= MAX_PAC_CACHE_ENTRIES {
-        // Remove the oldest entry.
-        if let Some(oldest_key) = cache.keys().next().cloned() {
+        // HashMap iteration order is arbitrary; evict by timestamp instead so the
+        // live document's entry cannot be dropped at random (#1475).
+        if let Some(oldest_key) = cache
+            .iter()
+            .min_by_key(|(_, (when, _))| *when)
+            .map(|(key, _)| key.clone())
+        {
             cache.remove(&oldest_key);
         }
     }
@@ -168,5 +173,26 @@ mod tests {
     #[test]
     fn js_strings_are_escaped() {
         assert_eq!(js_string("a\"b\\c\n"), "\"a\\\"b\\\\c\\n\"");
+    }
+}
+
+#[cfg(test)]
+mod cache_eviction_tests {
+    use super::*;
+
+    #[test]
+    fn oldest_entry_is_evicted_not_an_arbitrary_one() {
+        let mut cache: HashMap<(String, String), (Instant, Option<Url>)> = HashMap::new();
+        let now = Instant::now();
+        cache.insert(("p".into(), "old".into()), (now - Duration::from_secs(60), None));
+        cache.insert(("p".into(), "fresh".into()), (now, None));
+        let oldest = cache
+            .iter()
+            .min_by_key(|(_, (when, _))| *when)
+            .map(|(key, _)| key.clone())
+            .expect("oldest");
+        assert_eq!(oldest.1, "old");
+        cache.remove(&oldest);
+        assert!(cache.contains_key(&("p".into(), "fresh".into())));
     }
 }
