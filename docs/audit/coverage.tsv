@@ -248,7 +248,7 @@ crates/js/tests/dom_edges_tests.rs	311	test	F1	waveF1	2026-11-17	covered	#1372-#
 crates/js/tests/dom_normalize_tests.rs	44	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/es_modules.rs	375	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/es_modules_stub.rs	19	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
-crates/js/tests/event_advanced_tests.rs	544	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
+crates/js/tests/event_advanced_tests.rs	547	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/fetch_abort_tests.rs	177	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/fetch_tests.rs	337	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/gap_apis.rs	330	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
