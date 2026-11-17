@@ -82,7 +82,7 @@ crates/css/tests/selector_escapes.rs	77	test	F1	waveF6	2026-11-17	covered	#1446	
 crates/css/tests/state_vars_calc.rs	797	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/typography_props.rs	95	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/dom/Cargo.toml	11	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
-crates/dom/src/lib.rs	4008	src	F2	wave1	2026-11-16	covered	#1105-#1119	
+crates/dom/src/lib.rs	4011	src	F2	wave1	2026-11-16	covered	#1105-#1119	
 crates/dom/tests/conformance_r226.rs	67	test	F1	waveF1	2026-11-17	covered	no issues, see findings/f1/render-fonts-th-dom.md	
 crates/dom/tests/conformance_r233.rs	134	test	F1	waveF1	2026-11-17	covered	no issues, see findings/f1/render-fonts-th-dom.md	
 crates/dom/tests/gap_api.rs	44	test	F1	waveF1	2026-11-17	covered	no issues, see findings/f1/render-fonts-th-dom.md	
