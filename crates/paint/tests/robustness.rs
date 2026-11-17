@@ -10,8 +10,8 @@ use css::{Color, ComputedStyle, Display, Position};
 use dom::{Document, Namespace};
 use layout::{BoxType, LayoutBox, Rect};
 use paint::{
-    DisplayList, MAX_DISPLAY_LIST_ITEMS, MAX_FLOAT_DEPTH, MAX_STACKING_CONTEXT_DEPTH, Pixmap,
-    build_display_list, png::PngRegionEncoder,
+    DisplayList, MAX_DISPLAY_LIST_ITEMS, MAX_STACKING_CONTEXT_DEPTH, Pixmap, build_display_list,
+    png::PngRegionEncoder,
 };
 
 const CHAIN_DEPTH: usize = 20_000;
@@ -69,12 +69,20 @@ fn deep_inline_chain(ids: &[dom::NodeId], depth: usize) -> LayoutBox {
 }
 
 #[test]
-fn test_display_list_limits_are_documented_and_nonzero() {
-    const {
-        assert!(MAX_DISPLAY_LIST_ITEMS >= 1_000_000);
-        assert!(MAX_STACKING_CONTEXT_DEPTH >= 64);
-        assert!(MAX_FLOAT_DEPTH >= 16);
+fn test_display_list_truncates_at_the_documented_cap() {
+    let mut list = DisplayList::new();
+    let item = paint::DisplayItem::SolidColor {
+        rect: Rect::new(0.0, 0.0, 1.0, 1.0),
+        color: Color::WHITE,
+    };
+    for _ in 0..=MAX_DISPLAY_LIST_ITEMS {
+        list.push(item.clone());
     }
+    assert_eq!(
+        list.len(),
+        MAX_DISPLAY_LIST_ITEMS,
+        "display list must stop appending once the documented cap is reached"
+    );
 }
 
 #[test]
@@ -88,8 +96,8 @@ fn test_deep_block_chain_does_not_overflow_the_stack() {
     // a recursive deallocation owned by the layout crate (not by paint); leak it
     // so this test pins the painter's stack usage, not the test harness's drop.
     std::mem::forget(root);
-    // No panic/abort; the list stays bounded.
-    assert!(display_list.len() <= MAX_DISPLAY_LIST_ITEMS);
+    // No panic/abort and the painter still emits items for this finite chain.
+    assert!(!display_list.is_empty(), "a finite chain must still paint");
 }
 
 #[test]
@@ -160,13 +168,29 @@ fn hostile_text_size_is_clamped_before_shaping() {
         root.children.push(box_);
 
         let display_list = build_display_list(&root, VIEWPORT);
-        for item in display_list.iter() {
-            if let paint::DisplayItem::Text { font_size, .. } = item {
-                assert!(
-                    font_size.is_finite() && *font_size > 0.0 && *font_size <= 1024.0,
-                    "font size {hostile} must not reach shaping (got {font_size})"
-                );
-            }
+        let text_items: Vec<f32> = display_list
+            .iter()
+            .filter_map(|item| match item {
+                paint::DisplayItem::Text { font_size, .. } => Some(*font_size),
+                _ => None,
+            })
+            .collect();
+
+        if hostile.is_finite() && hostile > 0.0 {
+            assert_eq!(
+                text_items.len(),
+                1,
+                "hostile font size {hostile} must still produce exactly one text item"
+            );
+            assert_eq!(
+                text_items[0], 1024.0,
+                "oversized font size {hostile} must be clamped before shaping"
+            );
+        } else {
+            assert!(
+                text_items.is_empty(),
+                "non-positive/non-finite font size {hostile} must not emit a text item, got {text_items:?}"
+            );
         }
     }
 }

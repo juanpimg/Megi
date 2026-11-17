@@ -164,7 +164,10 @@ fn test_row_filters_are_valid_and_diverse() {
         rgba_from_scanlines(&parsed.raw, 64, 64),
         pixmap.to_rgba_bytes()
     );
-    assert!(!filters.is_empty());
+    assert!(
+        filters.len() >= 2,
+        "a vertical gradient should exercise more than one PNG filter, got {filters:?}"
+    );
 }
 
 #[test]
