@@ -19,8 +19,9 @@ use test_harness::{
     CSS_EXPECTED_RESULTS, KNOWN_SERIALIZER_FAILURES, KNOWN_TOKENIZER_ERROR_ORDER_GAPS,
     KNOWN_TOKENIZER_FAILURES, KNOWN_TREE_FAILURES, SERIALIZER_EXPECTED_PASSED,
     SERIALIZER_EXPECTED_TESTS, SERIALIZER_SUITE_COUNT, SERIALIZER_SUITE_TOTALS,
-    SERIALIZER_XHTML_ALTERNATIVES_IGNORED, TOKENIZER_ERROR_ANNOTATIONS,
-    XML_VIOLATION_UNANNOTATED_ERRORS, allowed_failures,
+    SERIALIZER_XHTML_ALTERNATIVES_IGNORED, TOKENIZER_ERROR_ANNOTATIONS, TOKENIZER_EXPECTED_PASSED,
+    TOKENIZER_EXPECTED_RUNS, TOKENIZER_SUITE_COUNT, TREE_EXPECTED_PASSED, TREE_EXPECTED_RUNS,
+    TREE_SUITE_COUNT, XML_VIOLATION_UNANNOTATED_ERRORS, allowed_failures,
     css_harness::{
         run_wpt_anb_parsing, run_wpt_declarations_trim_whitespace, run_wpt_input_preprocessing,
     },
@@ -63,7 +64,12 @@ fn main() {
             );
             std::process::exit(1);
         })
-        .filter_map(Result::ok)
+        .map(|entry| {
+            entry.unwrap_or_else(|e| {
+                eprintln!("[GATE] unreadable tokenizer fixture entry: {e}");
+                std::process::exit(1);
+            })
+        })
         .map(|e| e.path())
         .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("test"))
         .collect();
@@ -162,6 +168,25 @@ fn main() {
             }
         }
     }
+    if filter.is_none() {
+        // The constants are the single source of truth: a deleted, renamed or
+        // emptied suite would otherwise produce zero failures and a green gate (#1240).
+        if tok_entries.len() != TOKENIZER_SUITE_COUNT {
+            gate_failed = true;
+            unknown_failures.push(format!(
+                "tokenizer: expected {TOKENIZER_SUITE_COUNT} suites, got {}",
+                tok_entries.len()
+            ));
+        }
+        if tok_runs_total != TOKENIZER_EXPECTED_RUNS
+            || tok_passed_total != TOKENIZER_EXPECTED_PASSED
+        {
+            gate_failed = true;
+            unknown_failures.push(format!(
+                "tokenizer: expected {TOKENIZER_EXPECTED_PASSED}/{TOKENIZER_EXPECTED_RUNS} passing runs, got {tok_passed_total}/{tok_runs_total}"
+            ));
+        }
+    }
     println!("Tokenizer Total: {tok_passed_total} / {tok_runs_total} state-runs passed");
     println!(
         "Tokenizer Parse Errors: {tok_error_expected_total} expected annotation(s), \
@@ -195,7 +220,12 @@ fn main() {
             );
             std::process::exit(1);
         })
-        .filter_map(Result::ok)
+        .map(|entry| {
+            entry.unwrap_or_else(|e| {
+                eprintln!("[GATE] unreadable tree-construction fixture entry: {e}");
+                std::process::exit(1);
+            })
+        })
         .map(|e| e.path())
         .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("dat"))
         .collect();
@@ -250,6 +280,21 @@ fn main() {
                     r.actual_document
                 );
             }
+        }
+    }
+    if filter.is_none() {
+        if tree_entries.len() != TREE_SUITE_COUNT {
+            gate_failed = true;
+            unknown_failures.push(format!(
+                "tree: expected {TREE_SUITE_COUNT} suites, got {}",
+                tree_entries.len()
+            ));
+        }
+        if tree_runs_total != TREE_EXPECTED_RUNS || tree_passed_total != TREE_EXPECTED_PASSED {
+            gate_failed = true;
+            unknown_failures.push(format!(
+                "tree: expected {TREE_EXPECTED_PASSED}/{TREE_EXPECTED_RUNS} passing mode-runs, got {tree_passed_total}/{tree_runs_total}"
+            ));
         }
     }
     println!("Tree Construction Total: {tree_passed_total} / {tree_runs_total} mode-runs passed\n");
