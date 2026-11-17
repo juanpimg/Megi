@@ -1649,6 +1649,10 @@ mod layout_provider_freshness_tests {
         let node = dom::NodeId::from_index(1);
         let _ = provider().get(&node).copied();
         let _ = provider().get(&node).copied();
-        assert_eq!(calls.load(Ordering::SeqCst), 2, "provider must be re-evaluated");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "provider must be re-evaluated"
+        );
     }
 }

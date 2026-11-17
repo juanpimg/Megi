@@ -327,6 +327,16 @@ fn invalid_percent_escapes_are_encoded_before_reaching_the_wire() {
 }
 
 #[test]
+fn special_query_encodes_apostrophe() {
+    // URL §4.4: the special-query set (http/https and other special schemes)
+    // percent-encodes `'`, unlike the plain query set (#1406).
+    let url = Url::parse("http://example.com/?a'b").expect("parse");
+    assert_eq!(url.as_str(), "http://example.com/?a%27b");
+    let url = Url::parse("https://example.com/p?x='y'").expect("parse");
+    assert_eq!(url.as_str(), "https://example.com/p?x=%27y%27");
+}
+
+#[test]
 fn decoded_dot_segments_cannot_bypass_path_normalization() {
     // #641: `normalize_path` ran on the encoded form, so `/%2e%2e/x` stayed encoded and the
     // cache key disagreed with what a server would resolve.
