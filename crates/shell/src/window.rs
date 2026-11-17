@@ -1383,7 +1383,11 @@ impl WindowApp {
             self.metrics.css_height,
             base.as_deref(),
         );
-        let _ = sender.send(request);
+        if sender.send(request).is_err() {
+            self.error = Some("render worker stopped unexpectedly".to_string());
+            self.update_title();
+            return;
+        }
         self.document = Some(Arc::new(patched));
         self.update_title();
     }
@@ -1541,7 +1545,11 @@ impl WindowApp {
             self.metrics.css_height,
             base.as_deref(),
         );
-        let _ = sender.send(request);
+        if sender.send(request).is_err() {
+            self.error = Some("render worker stopped unexpectedly".to_string());
+            self.update_title();
+            return;
+        }
         self.document = Some(Arc::new(patched));
         self.update_title();
     }
@@ -1582,7 +1590,11 @@ impl WindowApp {
             self.metrics.css_height,
             base.as_deref(),
         );
-        let _ = sender.send(request);
+        if sender.send(request).is_err() {
+            self.error = Some("render worker stopped unexpectedly".to_string());
+            self.update_title();
+            return;
+        }
         self.document = Some(Arc::new(patched));
         self.update_title();
     }
