@@ -2600,11 +2600,7 @@ mod tests {
         view.css_viewport_height = 200;
         draw_chrome(&mut dest, 320, 200, 1.0, &view);
         let bottom = ((200 - STATUS_BAR_HEIGHT as u32 + 2) * 320) as usize;
-        assert_eq!(
-            dest[bottom],
-            rgb(COLOR_STATUS_BAR),
-            "status bar background"
-        );
+        assert_eq!(dest[bottom], rgb(COLOR_STATUS_BAR), "status bar background");
         let mut clean = buffer(320, 200);
         draw_chrome(
             &mut clean,
@@ -2613,11 +2609,7 @@ mod tests {
             1.0,
             &view_without_hover(&address, &tabs),
         );
-        assert_ne!(
-            clean[bottom],
-            rgb(COLOR_STATUS_BAR),
-            "no bar without hover"
-        );
+        assert_ne!(clean[bottom], rgb(COLOR_STATUS_BAR), "no bar without hover");
     }
 
     fn view_without_hover<'a>(address: &'a AddressBar, tabs: &'a [String]) -> ChromeView<'a> {
@@ -2684,11 +2676,7 @@ mod tests {
         let layout = context_menu_layout(&menu, 400.0, 240);
         let selected = layout.rows[0];
         let pixel = dest[(selected.y as u32 * 400 + selected.x as u32 + 3) as usize];
-        assert_eq!(
-            pixel,
-            rgb(COLOR_MENU_SELECTED),
-            "selected row background"
-        );
+        assert_eq!(pixel, rgb(COLOR_MENU_SELECTED), "selected row background");
         assert!(selected.width > 0.0);
     }
 
