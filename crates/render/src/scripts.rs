@@ -241,8 +241,11 @@ pub struct ScriptLoadReport {
 /// same value. Without a shared value every render starts with empty storage.
 #[derive(Clone, Debug, Default)]
 pub struct RenderStorage {
-    /// `localStorage` entries (`(key, value)` pairs, insertion order).
+    /// `localStorage` entries for non-HTTP(S) documents (single-origin compatibility).
     pub local: Vec<(String, String)>,
+    /// Per-origin `localStorage` entries; the key is the serialized tuple origin.
+    /// Prevents a page on origin A from reading/writing origin B's storage (#1476).
+    pub by_origin: std::collections::HashMap<String, Vec<(String, String)>>,
 }
 
 /// Host environment exposed to page scripts (WP-6.5): the **pre-script computed style
@@ -962,6 +965,11 @@ pub fn execute_scripts(
                 });
         }));
     }
+    // A tuple origin scopes localStorage so pages from different origins sharing a
+    // RenderStorage cannot read or overwrite each other's entries (#1476).
+    let origin_key = net::cors::Origin::from_url(document_url).map(|origin| {
+        format!("{}://{}:{}", origin.scheme, origin.host, origin.port)
+    });
     let per_render_local: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
     let per_render_session: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
     {
@@ -974,11 +982,15 @@ pub fn execute_scripts(
         runtime.set_storage_provider(js::host::StorageProvider {
             load: Box::new(move |kind| match kind {
                 js::host::StorageKind::Local => match &shared_for_load {
-                    Some(storage) => storage
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner())
-                        .local
-                        .clone(),
+                    Some(storage) => {
+                        let storage = storage
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                        match &origin_key {
+                            Some(key) => storage.by_origin.get(key).cloned().unwrap_or_default(),
+                            None => storage.local.clone(),
+                        }
+                    }
                     None => local_load
                         .lock()
                         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -992,10 +1004,15 @@ pub fn execute_scripts(
             save: Box::new(move |kind, entries| match kind {
                 js::host::StorageKind::Local => match &shared_for_save {
                     Some(storage) => {
-                        storage
+                        let mut storage = storage
                             .lock()
-                            .unwrap_or_else(|poisoned| poisoned.into_inner())
-                            .local = entries.to_vec();
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                        match &origin_key {
+                            Some(key) => {
+                                storage.by_origin.insert(key.clone(), entries.to_vec());
+                            }
+                            None => storage.local = entries.to_vec(),
+                        }
                     }
                     None => {
                         *local_save
