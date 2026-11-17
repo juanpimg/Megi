@@ -5989,16 +5989,24 @@ fn worker_constructor(
     let error = runtime.eval(&source, &resolved).err();
     {
         let mut host = parent.borrow_mut();
-        host.workers[id as usize] = Some(WorkerState::new(runtime, outbox));
-        if let Some(error) = error
-            && let Some(worker) = host.workers[id as usize].as_mut()
-        {
-            worker.pending_error = Some(error.to_string());
+        // A page-writable id let `terminate()` index `workers` out of bounds (#1465).
+        if let Some(slot) = host.workers.get_mut(id as usize) {
+            *slot = Some(WorkerState::new(runtime, outbox));
+            if let Some(error) = error
+                && let Some(worker) = slot.as_mut()
+            {
+                worker.pending_error = Some(error.to_string());
+            }
         }
     }
     let mut init = ObjectInitializer::new(context);
+<<<<<<< HEAD
     // Internal identity must not be writable by page scripts: a forged id used to
     // index host.workers out of bounds and abort the process (#1465).
+=======
+    // Read-only handle: the same rule as `__megi_node` (#644). A writable id let page
+    // script index `host.workers` out of bounds through `terminate()` (#1465).
+>>>>>>> 9c6914d (fix(js): make the worker handle read-only and bound-check worker_terminate (#1465))
     init.property(
         js_string!("__megi_worker"),
         JsValue::from(f64::from(id)),
@@ -6059,8 +6067,13 @@ fn worker_post_message(
 fn worker_terminate(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let id = worker_handle(this, context)?;
     with_host(|host| {
+<<<<<<< HEAD
         // Free the slot so a new worker can reuse it (#1138). Never index directly:
         // a forged/mismatched handle must be a no-op, not a panic (#1465).
+=======
+        // Free the slot so a new worker can reuse it (#1138). A forged or stale handle
+        // must not panic the host thread (#1465).
+>>>>>>> 9c6914d (fix(js): make the worker handle read-only and bound-check worker_terminate (#1465))
         if let Some(slot) = host.workers.get_mut(id as usize) {
             *slot = None;
         }

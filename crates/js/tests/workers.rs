@@ -110,6 +110,7 @@ fn worker_reply_delivered_by_run_microtasks() {
 }
 
 #[test]
+<<<<<<< HEAD
 fn forged_worker_handle_cannot_abort_the_process() {
     let mut runtime = runtime_with_worker(SUM);
     // The internal handle is read-only and termination ignores unknown ids. Neither
@@ -147,4 +148,32 @@ fn worker_reply_handler_exception_is_reported_to_the_page() {
         "the reply handler exception must be reported: {console:?}"
     );
     let _ = runtime.eval("__reported", "t").unwrap();
+=======
+fn forged_worker_handle_cannot_abort_the_host() {
+    let mut runtime = runtime_with_worker(SUM);
+    runtime
+        .eval(
+            "var w = new Worker('worker.js'); window.__id = w.__megi_worker;",
+            "t",
+        )
+        .expect("script");
+    // The handle is read-only, so an assignment cannot repoint it.
+    runtime
+        .eval(
+            "w.__megi_worker = 1000; window.__same = w.__megi_worker === __id;",
+            "t",
+        )
+        .expect("assignment");
+    assert_eq!(runtime.eval("__same", "t").unwrap(), "true");
+    // A forged receiver must not index `host.workers` out of bounds (#1465).
+    runtime
+        .eval(
+            "var f = w.terminate; f.call({ __megi_worker: 10000 }); f.call({ __megi_worker: 1e300 });",
+            "t",
+        )
+        .expect("forged terminate");
+    // The real worker can still be terminated and its pending messages dropped.
+    runtime.eval("w.terminate();", "t").expect("terminate");
+    runtime.run_worker_tasks(16).expect("tasks");
+>>>>>>> 9c6914d (fix(js): make the worker handle read-only and bound-check worker_terminate (#1465))
 }
