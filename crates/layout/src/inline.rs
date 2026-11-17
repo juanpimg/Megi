@@ -588,7 +588,7 @@ fn reorder_line_tokens_bidi(
             if let InlineToken::Word {
                 ref mut start,
                 ref mut end,
-                style,
+                style: _,
                 ..
             } = tok
                 && level % 2 == 1
