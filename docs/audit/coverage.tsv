@@ -262,7 +262,7 @@ crates/js/tests/wpt_conformance_r233_extra.rs	427	test	F1	waveF1	2026-11-17	cove
 crates/js/tests/wpt_like_r167.rs	317	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/layout/Cargo.toml	17	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/layout/src/bidi.rs	493	src	F2	wave1	2026-11-16	covered	#1152-#1156	
-crates/layout/src/block.rs	2131	src	F2	wave1	2026-11-16	covered	#1152-#1156	
+crates/layout/src/block.rs	2158	src	F2	wave1	2026-11-16	covered	#1152-#1156	
 crates/layout/src/box_tree.rs	299	src	F2	wave1	2026-11-16	covered	#1152-#1156	
 crates/layout/src/calc.rs	73	src	F2	wave1	2026-11-16	covered	#1152-#1156	
 crates/layout/src/flex.rs	822	src	F2	wave1	2026-11-16	covered	#1152-#1156	
@@ -282,6 +282,7 @@ crates/layout/tests/calc.rs	628	test	F1	waveF1	2026-11-17	covered	#1380-#1385
 crates/layout/tests/container_queries.rs	179	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/deep_tree.rs	127	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/flex.rs	493	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
+crates/layout/tests/float_budget.rs	168	test	F1			pending		
 crates/layout/tests/floats.rs	500	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/fonts_integration.rs	210	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/grid.rs	902	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
