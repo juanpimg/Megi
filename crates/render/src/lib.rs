@@ -834,7 +834,7 @@ fn render_url_inner(
     let mut script_warnings = Vec::new();
     let script_requested = options.scripting == ScriptingMode::Enabled;
     let script_candidates = if script_requested && cfg!(feature = "js") {
-        scripts::discover_scripts(&document, &mut script_warnings)
+        scripts::discover_scripts(&document, &mut script_warnings, scripts::MAX_DISCOVERED_SCRIPTS)
     } else {
         Vec::new()
     };

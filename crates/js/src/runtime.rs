@@ -426,10 +426,19 @@ impl JsRuntime {
         bubbles: bool,
     ) -> Result<bool, JsError> {
         let _scope = HostScope::enter(&self.host);
+        // Listeners must use the currently configured budget, not the one left over
+        // from the last script evaluation (#1215).
+        self.apply_current_budget();
         let result =
             crate::events::dispatch_rust_event(&mut self.context, target, event_type, bubbles);
         drop(_scope);
         result
+    }
+
+    /// Pushes the runtime's configured budget into the Boa VM.
+    fn apply_current_budget(&mut self) {
+        let budget = self.budget;
+        apply_budget(&mut self.context, &budget);
     }
 
     /// Runs pending promise/microtask jobs (Boa's job queue).
@@ -487,6 +496,8 @@ impl JsRuntime {
         max_timers: usize,
     ) -> Result<usize, JsError> {
         let _scope = HostScope::enter(&self.host);
+        // Timer callbacks must not inherit the loop limit of the last script eval (#1215).
+        self.apply_current_budget();
         let result = crate::events::run_until(&mut self.context, deadline_ms, max_timers);
         if let Err(error) = &result {
             let message = error.to_string();
