@@ -4298,3 +4298,18 @@ mod geometry_sanity_tests {
         assert_eq!(wrapped, middle, "t=0 must wrap into the repeated interval");
     }
 }
+
+#[cfg(test)]
+mod glyph_origin_overflow_tests {
+    #[test]
+    fn saturated_origin_plus_ink_offsets_cannot_overflow() {
+        // A long run saturates origin_x to i32::MAX on cast; adding a positive ink
+        // offset in i32 panicked in debug and wrapped in release (#1440).
+        let origin = i32::MAX;
+        let clamped = (i64::from(origin) + 1_i64).clamp(i64::from(i32::MIN), i64::from(i32::MAX));
+        assert_eq!(clamped, i64::from(i32::MAX), "must clamp instead of overflowing");
+        let origin = i32::MIN;
+        let clamped = (i64::from(origin) - 1_i64).clamp(i64::from(i32::MIN), i64::from(i32::MAX));
+        assert_eq!(clamped, i64::from(i32::MIN));
+    }
+}
