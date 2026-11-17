@@ -23,8 +23,6 @@ pub enum UrlError {
     InvalidHost(String),
     /// The port is not a decimal number in `0..=65535`, or is used with `file:`.
     InvalidPort(String),
-    /// A `file:` URL used a non-local host (only the empty host and `localhost` read files).
-    FileHostNotSupported(String),
 }
 
 impl fmt::Display for UrlError {
@@ -36,9 +34,6 @@ impl fmt::Display for UrlError {
             Self::UnsupportedScheme(scheme) => write!(f, "unsupported URL scheme `{scheme}`"),
             Self::InvalidHost(host) => write!(f, "invalid URL host `{host}`"),
             Self::InvalidPort(port) => write!(f, "invalid URL port `{port}`"),
-            Self::FileHostNotSupported(host) => {
-                write!(f, "file: URLs can only name the local host, got `{host}`")
-            }
         }
     }
 }
