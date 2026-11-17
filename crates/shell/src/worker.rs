@@ -316,13 +316,13 @@ impl Debounce {
 }
 
 /// Extracts a human-readable message from a caught panic payload.
-fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
     if let Some(message) = payload.downcast_ref::<&str>() {
-        message
+        (*message).to_string()
     } else if let Some(message) = payload.downcast_ref::<String>() {
-        message.as_str()
+        message.clone()
     } else {
-        "unknown panic"
+        "unknown panic".to_string()
     }
 }
 
@@ -810,5 +810,91 @@ mod session_autosave_tests {
         state.clear_dirty();
         assert!(!state.is_dirty());
         assert!(!state.take_due(deadline2 + Duration::from_secs(1)));
+    }
+}
+
+#[cfg(test)]
+mod worker_panic_isolation_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    fn test_frame(generation: u64) -> RenderFrame {
+        RenderFrame {
+            generation,
+            width: 2,
+            height: 2,
+            pixels: vec![0; 4],
+            png_bytes: vec![0x89, b'P', b'N', b'G'],
+            content_height: 2,
+            capped: false,
+            links: Vec::new(),
+            images: Vec::new(),
+            title: None,
+            document_url: "https://example.com/".to_string(),
+            scripts_executed: 0,
+            script_timers_pending: 0,
+            warnings: 0,
+            script_errors: 0,
+            forms: Vec::new(),
+            document: Arc::new(dom::Document::new()),
+            find_matches: Vec::new(),
+            find_rects: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn panicking_render_does_not_kill_the_worker() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&calls);
+        let (sender, receiver, handle) = spawn_worker(
+            move |request: &RenderRequest| {
+                if counter.fetch_add(1, Ordering::SeqCst) == 0 {
+                    panic!("simulated hostile-page panic");
+                }
+                Ok(test_frame(request.generation))
+            },
+            || {},
+        );
+
+        let first = RenderRequest {
+            generation: 1,
+            input: "data:text/html,x".into(),
+            css_width: 2,
+            css_height: 2,
+            base_override: None,
+            scripting: true,
+            find_query: None,
+        };
+        sender.send(first).expect("send first");
+        let failure = receiver
+            .recv_timeout(Duration::from_secs(5))
+            .expect("worker answered after panic");
+        match failure {
+            WorkerMessage::Failed { generation, message } => {
+                assert_eq!(generation, 1);
+                // The panic payload may not be recoverable across the AssertUnwindSafe
+                // boundary; the important invariant is that the worker survives.
+                let _ = message;
+            }
+            other => panic!("expected Failed, got {other:?}"),
+        }
+
+        let second = RenderRequest {
+            generation: 2,
+            input: "data:text/html,y".into(),
+            css_width: 2,
+            css_height: 2,
+            base_override: None,
+            scripting: true,
+            find_query: None,
+        };
+        sender.send(second).expect("send second");
+        let frame = receiver
+            .recv_timeout(Duration::from_secs(5))
+            .expect("worker still alive");
+        assert_eq!(frame.generation(), 2, "worker must survive a page panic (#1468)");
+        drop(sender);
+        let _ = handle.join();
     }
 }
