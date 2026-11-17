@@ -509,6 +509,10 @@ pub fn fetch_pooled(
         {
             request.push_str(&format!("Referer: {referer}\r\n"));
         }
+        // Same URL-credential rule as `fetch_once` (#310).
+        if let Some(auth) = url_basic_authorization(url) {
+            request.push_str(&format!("Authorization: {auth}\r\n"));
+        }
         if let Some(auth) = proxy_auth.as_ref() {
             request.push_str(&format!("Proxy-Authorization: {auth}\r\n"));
         }
@@ -1327,6 +1331,21 @@ fn fetch_once(
     for (name, value) in extra_headers {
         request_headers.push((name.to_string(), value.to_string()));
     }
+    // Fetch standard, "HTTP-network-or-cache fetch": when the request URL carries
+    // `user:password@`, those credentials supply a Basic `Authorization` header. The userinfo
+    // is part of neither the request target nor the `Host` header, so without this the
+    // credentials were parsed, kept in the URL and silently discarded (#310).
+    //
+    // This runs per hop inside `fetch_once`, so a redirect to a URL without credentials never
+    // inherits them; cross-origin hops already drop any `Authorization` in `headers`. A
+    // caller-supplied `Authorization` (e.g. a revalidation header) wins over the URL.
+    if !request_headers
+        .iter()
+        .any(|(name, _)| name.eq_ignore_ascii_case("authorization"))
+        && let Some(auth) = url_basic_authorization(url)
+    {
+        request_headers.push(("Authorization".to_owned(), auth));
+    }
     if let Some(auth) = proxy_auth_header {
         request_headers.push(("Proxy-Authorization".to_owned(), auth));
     }
@@ -1558,6 +1577,24 @@ fn absolute_request_target(url: &Url, host_header: &str) -> String {
         host_header,
         url.request_target()
     )
+}
+
+/// Builds the `Authorization` value for a URL that carries `user:password@` credentials.
+///
+/// The userinfo is stored percent-encoded (WHATWG URL), so it is decoded first
+/// (`%40` → `@`); the resulting `user:password` bytes are Base64-encoded, which also makes
+/// header injection impossible regardless of what the URL contains (#310).
+fn url_basic_authorization(url: &Url) -> Option<String> {
+    if url.username().is_empty() {
+        return None;
+    }
+    let username = crate::url::percent_decode(url.username());
+    let password = crate::url::percent_decode(url.password());
+    let credentials = format!("{username}:{password}");
+    Some(format!(
+        "Basic {}",
+        crate::data::base64_encode(credentials.as_bytes())
+    ))
 }
 
 /// Opens a `CONNECT host:port` tunnel through `proxy`, returning the raw stream.
