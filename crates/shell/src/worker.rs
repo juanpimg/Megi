@@ -696,3 +696,73 @@ mod unit_tests {
         );
     }
 }
+
+/// Debounced "session needs saving" state. Extracted from the winit handler so the
+/// autosave trigger is testable headlessly (#36).
+#[derive(Clone, Debug)]
+pub struct SessionAutosave {
+    dirty: bool,
+    debounce: Debounce,
+}
+
+impl SessionAutosave {
+    pub const fn new(delay: Duration) -> Self {
+        Self {
+            dirty: false,
+            debounce: Debounce::new(delay),
+        }
+    }
+
+    /// Marks the session dirty and (re)arms the debounce; returns the new deadline.
+    pub fn mark_dirty(&mut self, now: Instant) -> Instant {
+        self.dirty = true;
+        self.debounce.schedule(now)
+    }
+
+    pub const fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    /// Fires exactly once when dirty and due.
+    pub fn take_due(&mut self, now: Instant) -> bool {
+        self.dirty && self.debounce.take_due(now)
+    }
+
+    pub fn clear_dirty(&mut self) {
+        self.dirty = false;
+    }
+
+    /// Pending save deadline, or `None` when clean.
+    pub const fn deadline(&self) -> Option<Instant> {
+        if self.dirty { self.debounce.deadline() } else { None }
+    }
+}
+
+#[cfg(test)]
+mod session_autosave_tests {
+    use super::*;
+
+    #[test]
+    fn mark_dirty_then_debounced_save() {
+        let start = Instant::now();
+        let mut state = SessionAutosave::new(Duration::from_millis(600));
+        assert!(!state.is_dirty());
+        assert!(!state.take_due(start));
+
+        let deadline = state.mark_dirty(start);
+        assert_eq!(deadline, start + Duration::from_millis(600));
+        assert!(state.is_dirty());
+        assert_eq!(state.deadline(), Some(deadline));
+        assert!(!state.take_due(start + Duration::from_millis(599)));
+
+        // A second change re-arms the debounce.
+        let deadline2 = state.mark_dirty(start + Duration::from_millis(500));
+        assert_eq!(deadline2, start + Duration::from_millis(1100));
+        assert!(!state.take_due(deadline));
+
+        assert!(state.take_due(deadline2));
+        state.clear_dirty();
+        assert!(!state.is_dirty());
+        assert!(!state.take_due(deadline2 + Duration::from_secs(1)));
+    }
+}

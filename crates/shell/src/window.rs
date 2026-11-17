@@ -95,7 +95,7 @@ use crate::scroll::{self, ScrollState};
 use crate::tabs::{self, CloseOutcome, TabsState};
 use crate::title::{self, StatusSummary};
 use crate::worker::{
-    Debounce, FrameStore, RENDER_DEBOUNCE, RenderRequest, WorkerMessage, spawn_worker,
+    Debounce, FrameStore, RENDER_DEBOUNCE, RenderRequest, SessionAutosave, WorkerMessage, spawn_worker,
 };
 use crate::zoom;
 
@@ -283,10 +283,9 @@ struct WindowApp {
     session_path: Option<std::path::PathBuf>,
     /// Download directory override.
     download_dir: Option<std::path::PathBuf>,
-    /// Debounced session save.
-    session_debounce: Debounce,
+    /// Debounced session save (dirty flag + timer, #36).
+    session_autosave: SessionAutosave,
     /// Whether unsaved session changes exist.
-    session_dirty: bool,
     /// Transient status notice shown in the window title (downloads/session).
     status: Option<String>,
     /// Render worker has a request in flight for the active tab (loading indicator).
@@ -408,8 +407,7 @@ impl WindowApp {
             dropdown: None,
             session_path: view.session_path.clone(),
             download_dir: view.download_dir.clone(),
-            session_debounce: Debounce::new(std::time::Duration::from_millis(600)),
-            session_dirty: false,
+            session_autosave: SessionAutosave::new(std::time::Duration::from_millis(600)),
             status: startup_notice,
             render_pending: false,
             overflow_menu: None,
@@ -513,6 +511,7 @@ impl WindowApp {
 
     /// Starts rendering `url` and resets per-page state (scroll, stale links/title).
     fn start_navigation(&mut self, url: &net::Url) {
+        self.session_autosave.mark_dirty(Instant::now());
         self.input = url.as_str();
         if let Some(stored) = zoom::site_zoom(&self.site_zooms, &url.as_str()) {
             self.zoom = stored;
@@ -1049,6 +1048,7 @@ impl WindowApp {
             return;
         }
         self.zoom = factor;
+        self.session_autosave.mark_dirty(Instant::now());
         if let Some(current) = self
             .nav
             .current()
@@ -1084,7 +1084,7 @@ impl WindowApp {
         session.recent = self.recent_history.entries().to_vec();
         session.site_zooms = self.site_zooms.clone();
         match crate::session::save(&path, &session) {
-            Ok(()) => self.session_dirty = false,
+            Ok(()) => self.session_autosave.clear_dirty(),
             Err(error) => eprintln!("megi: cannot save session {}: {error}", path.display()),
         }
     }
@@ -1732,6 +1732,7 @@ impl WindowApp {
 
     /// Opens a blank New Tab (`Ctrl+T`).
     fn open_new_tab(&mut self) {
+        self.session_autosave.mark_dirty(Instant::now());
         self.save_active_tab();
         if self.tabs.open_tab(tabs::BLANK_TAB_URL).is_some() {
             self.load_active_tab();
@@ -1740,6 +1741,7 @@ impl WindowApp {
 
     /// Closes the active tab (`Ctrl+W`); the last tab is reset to New Tab.
     fn close_active_tab(&mut self) {
+        self.session_autosave.mark_dirty(Instant::now());
         self.save_active_tab();
         match self.tabs.close_active() {
             CloseOutcome::Closed | CloseOutcome::ResetLast => self.load_active_tab(),
@@ -1749,6 +1751,7 @@ impl WindowApp {
 
     /// Activates the next (`forward`) or previous tab, wrapping around.
     fn cycle_tab(&mut self, forward: bool) {
+        self.session_autosave.mark_dirty(Instant::now());
         self.save_active_tab();
         if forward {
             self.tabs.next_tab();
@@ -1760,6 +1763,7 @@ impl WindowApp {
 
     /// Cycles `delta` tabs forward/backward (mouse wheel over the tab strip).
     fn cycle_tab_by(&mut self, delta: i32) {
+        self.session_autosave.mark_dirty(Instant::now());
         if delta == 0 || self.tabs.len() < 2 {
             return;
         }
@@ -1773,6 +1777,7 @@ impl WindowApp {
 
     /// Activates tab `index` (0-based) if it exists.
     fn activate_tab(&mut self, index: usize) {
+        self.session_autosave.mark_dirty(Instant::now());
         if index >= self.tabs.len() || index == self.tabs.active_index() {
             return;
         }
@@ -2431,7 +2436,7 @@ impl ApplicationHandler<UserEvent> for WindowApp {
             self.scroll.set_viewport_height(self.page_viewport_height());
             self.request_render();
         }
-        if self.session_dirty && self.session_debounce.take_due(now) {
+        if self.session_autosave.take_due(now) {
             self.save_session();
         }
         let mut deadline = match (self.debounce.deadline(), self.refresh.deadline()) {
@@ -2439,9 +2444,7 @@ impl ApplicationHandler<UserEvent> for WindowApp {
             (Some(deadline), None) | (None, Some(deadline)) => Some(deadline),
             (None, None) => None,
         };
-        if self.session_dirty
-            && let Some(session_deadline) = self.session_debounce.deadline()
-        {
+        if let Some(session_deadline) = self.session_autosave.deadline() {
             deadline =
                 Some(deadline.map_or(session_deadline, |deadline| deadline.min(session_deadline)));
         }
