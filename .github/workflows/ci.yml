@@ -55,13 +55,19 @@ jobs:
           fi
           base="origin/${{ github.base_ref }}"
           git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          changed=$(git diff --name-only "$base"...HEAD) || { echo "::error::cannot diff against $base"; exit 1; }
+          if [ -z "$changed" ]; then
+            echo "::error::empty change set"
+            exit 1
+          fi
           docs_only=true
           while IFS= read -r file; do
+            [ -z "$file" ] && continue
             case "$file" in
               docs/*|*.md) ;;
               *) docs_only=false; break ;;
             esac
-          done < <(git diff --name-only "$base"...HEAD)
+          done <<< "$changed"
           echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
 
   # Lightweight docs gate: it must keep running on docs-only PRs so a stale
@@ -104,7 +110,9 @@ jobs:
       - name: Clippy (deny warnings)
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Workspace tests
-        run: cargo test --workspace --all-targets --locked 2>&1 | tee /tmp/workspace-tests.log
+        run: |
+          set -o pipefail
+          cargo test --workspace --all-targets --locked 2>&1 | tee /tmp/workspace-tests.log
       # Checks that PROGRESS.md and docs/status/*.svg match the committed manifest plus the
       # real repository stats (git HEAD/date, crates, Rust lines, test count). The
       # conformance gate already runs in the `conformance` job, so it is not re-run here.
@@ -144,7 +152,9 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - uses: ./.github/actions/install-system-deps
       - name: Closed-loop conformance summary (fails on unexpected regressions)
-        run: cargo run --locked -p test_harness -- --summary 2>&1 | tee /tmp/conformance.log
+        run: |
+          set -o pipefail
+          cargo run --locked -p test_harness -- --summary 2>&1 | tee /tmp/conformance.log
       - name: Upload conformance log
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -272,6 +282,7 @@ jobs:
           tool: cargo-geiger
       - name: cargo geiger (forbid-only check)
         run: |
+          set -e
           : > /tmp/geiger.json
           for pkg in dom html css layout fonts image paint net render shell js svg test_harness bench; do
             echo "=== cargo geiger --manifest-path crates/$pkg/Cargo.toml ==="

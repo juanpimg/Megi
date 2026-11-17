@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! `megi-render` CLI: render a URL or local HTML file to a deterministic PNG.
 //!
 //! ```text
