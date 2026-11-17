@@ -180,7 +180,8 @@ pub struct Throughput {
 /// Environment captured when the suite finished.
 pub struct Meta {
     pub commit: String,
-    pub dirty: bool,
+    /// `None` when git could not be queried: unknown must not be reported as clean (#1463).
+    pub dirty: Option<bool>,
     pub rustc: String,
     pub cpu: String,
     pub cores: usize,
@@ -261,7 +262,7 @@ pub fn workspace_root() -> PathBuf {
 }
 
 /// Best-effort `(short commit, worktree dirty)` from Git.
-fn git_state() -> (String, bool) {
+fn git_state() -> (String, Option<bool>) {
     let root = workspace_root();
     let commit = Command::new("git")
         .arg("-C")
@@ -279,8 +280,8 @@ fn git_state() -> (String, bool) {
         .args(["status", "--porcelain"])
         .output()
         .ok()
-        .map(|output| !output.stdout.is_empty())
-        .unwrap_or(false);
+        .filter(|output| output.status.success())
+        .map(|output| !output.stdout.is_empty());
     (commit, dirty)
 }
 

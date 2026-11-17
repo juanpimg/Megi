@@ -113,7 +113,12 @@ pub fn print_json(outcome: &RunOutcome) {
     json.push_str("  \"commit\": ");
     push_json_string(&mut json, &meta.commit);
     json.push_str(",\n");
-    let _ = writeln!(json, "  \"worktree_dirty\": {},", meta.dirty);
+    match meta.dirty {
+        Some(dirty) => {
+            let _ = writeln!(json, "  \"worktree_dirty\": {},", dirty);
+        }
+        None => json.push_str("  \"worktree_dirty\": null,\n"),
+    }
     json.push_str("  \"rustc\": ");
     push_json_string(&mut json, &meta.rustc);
     json.push_str(",\n");
