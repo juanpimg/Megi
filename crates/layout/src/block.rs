@@ -188,6 +188,18 @@ thread_local! {
 
 const MAX_LAYOUT_DEPTH: usize = 256;
 
+/// Maximum number of floats tracked in one formatting context (issue #1417).
+///
+/// Placing a float must find the lowest position where it fits next to every float
+/// already placed (CSS 2.2 §9.5.1), so F floats cost O(F²) comparisons per formatting
+/// context: a hostile document can inline 66k floats in ~200 KB of markup and turn
+/// layout quadratic. Real pages use tens of floats, so the cap only bites on abuse.
+/// Past the cap, new floats are laid out in flow instead of out of flow: they still
+/// render at their static position, but they no longer shorten line boxes, push in-flow
+/// siblings, or grow `float_extent`. Degrading silently matches the layout depth cap
+/// (`MAX_LAYOUT_DEPTH`, #692): this crate has no diagnostics channel.
+pub const MAX_FLOATS_PER_CONTEXT: usize = 4096;
+
 /// Lays out the contents of a block container and computes its used height.
 ///
 /// `cb_height` is the definite height of the box's containing block (used by percentage
@@ -574,20 +586,29 @@ fn place_float(
     }
     // Move down until the float fits next to the floats already placed.
     loop {
-        let left_limit = floats
-            .iter()
-            .filter(|placed| {
-                placed.side == Float::Left && placed.margin_box.y + placed.margin_box.height > top
-            })
-            .map(|placed| placed.margin_box.x + placed.margin_box.width)
-            .fold(cb.x, f32::max);
-        let right_limit = floats
-            .iter()
-            .filter(|placed| {
-                placed.side == Float::Right && placed.margin_box.y + placed.margin_box.height > top
-            })
-            .map(|placed| placed.margin_box.x)
-            .fold(cb.x + cb.width, f32::min);
+        // One pass over the floats already placed yields both exclusion edges and the
+        // lowest bottom edge below `top`; the three `filter`/`fold` chains this replaces
+        // scanned the whole vector three times per candidate position (issue #1417).
+        let mut left_limit = cb.x;
+        let mut right_limit = cb.x + cb.width;
+        let mut lowest_bottom = f32::NEG_INFINITY;
+        for placed in floats {
+            let bottom = placed.margin_box.y + placed.margin_box.height;
+            // `bottom > top` is the predicate the three filters this replaces used: a
+            // float that ends at or above `top` cannot exclude, and a NaN bottom never
+            // compares greater, so it is skipped too.
+            if bottom > top {
+                lowest_bottom = lowest_bottom.max(bottom);
+                match placed.side {
+                    Float::Left => {
+                        left_limit = left_limit.max(placed.margin_box.x + placed.margin_box.width);
+                    }
+                    Float::Right => right_limit = right_limit.min(placed.margin_box.x),
+                    // A placed float is always left or right; nothing else excludes.
+                    Float::None => {}
+                }
+            }
+        }
 
         let x = if side == Float::Left {
             left_limit
@@ -607,11 +628,7 @@ fn place_float(
             );
         }
         // Does not fit: move below the floats blocking this side (and keep the height).
-        let next_top = floats
-            .iter()
-            .filter(|placed| placed.margin_box.y + placed.margin_box.height > top)
-            .map(|placed| placed.margin_box.y + placed.margin_box.height)
-            .fold(top + margin_box_h, f32::max);
+        let next_top = (top + margin_box_h).max(lowest_bottom);
         if next_top <= top || next_top.is_nan() {
             break;
         }
@@ -758,8 +775,11 @@ fn layout_block_children(
             continue;
         }
 
-        // Floats are out of flow: they do not advance the block flow.
-        if child.is_float {
+        // Floats are out of flow: they do not advance the block flow. Placement scans the
+        // floats already placed, so a formatting context stops placing floats past
+        // `MAX_FLOATS_PER_CONTEXT` and lays the excess out in flow; that keeps layout
+        // linear in the number of floats (issue #1417).
+        if child.is_float && floats.len() < MAX_FLOATS_PER_CONTEXT {
             let (placed, bottom) =
                 place_float(child, cb, definite_height, flow, &floats, measurer, pos);
             floats.push(placed);
@@ -771,6 +791,13 @@ fn layout_block_children(
                     .max(placed.margin_box.y + placed.margin_box.height - cb.y),
             );
             continue;
+        }
+        if child.is_float {
+            // Cap reached (issue #1417): demote the overflow to a normal in-flow block.
+            // Clearing the flag makes the rest of this function treat it as in flow (flow
+            // advance, parent height, `clear` of later siblings); the box still renders in
+            // document order instead of stacking below every tracked float.
+            child.is_float = false;
         }
 
         // `clear` moves the in-flow box below the relevant floats (CSS 2.2 §9.5.2).
