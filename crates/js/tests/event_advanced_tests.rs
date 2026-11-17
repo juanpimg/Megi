@@ -452,3 +452,61 @@ fn window_and_document_targets_use_the_at_target_phase() {
         "2,2"
     );
 }
+
+#[test]
+fn keyboard_input_focus_event_constructors_expose_init_fields() {
+    // #1504: KeyboardEvent/InputEvent/FocusEvent constructors must exist and expose their
+    // standard init fields, so scripts can build and inspect them like MouseEvent.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var k = new KeyboardEvent('keydown', { key: 'a', code: 'KeyA', ctrlKey: true, shiftKey: true, bubbles: true });
+             var i = new InputEvent('input', { data: 'x', inputType: 'insertText' });
+             var f = new FocusEvent('focus', { relatedTarget: null });
+             var ok = typeof KeyboardEvent === 'function'
+               && typeof InputEvent === 'function'
+               && typeof FocusEvent === 'function'
+               && k.key === 'a' && k.code === 'KeyA' && k.ctrlKey === true && k.shiftKey === true
+               && k.bubbles === true && k.__megi_event === true
+               && i.data === 'x' && i.inputType === 'insertText'
+               && f.type === 'focus' && f.relatedTarget === null;
+             String(ok);",
+            "events_ctor.js",
+        )
+        .expect("evaluate event constructors");
+    assert_eq!(
+        out, "true",
+        "all three constructors must expose their init fields"
+    );
+}
+
+#[test]
+fn inline_input_focus_keydown_handlers_dispatch() {
+    // #1504: oninput/onfocus/onblur/onkeydown/onsubmit/onchange are inline event handlers;
+    // assigning them and dispatching the matching event must invoke the callback.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "globalThis.log = [];
+             var input = document.createElement('input');
+             document.body.appendChild(input);
+             input.oninput = function () { log.push('input'); };
+             input.onfocus = function () { log.push('focus'); };
+             input.onblur = function () { log.push('blur'); };
+             input.onkeydown = function (e) { log.push('key:' + e.key); };
+             var form = document.createElement('form');
+             document.body.appendChild(form);
+             form.onsubmit = function () { log.push('submit'); };
+             form.onchange = function () { log.push('change'); };
+             input.dispatchEvent(new Event('input'));
+             input.dispatchEvent(new Event('focus'));
+             input.dispatchEvent(new Event('blur'));
+             input.dispatchEvent(new KeyboardEvent('keydown', { key: 'A' }));
+             form.dispatchEvent(new Event('submit'));
+             form.dispatchEvent(new Event('change'));
+             String(log.length === 6 && log[0] === 'input' && log[1] === 'focus' && log[2] === 'blur' && log[3] === 'key:A' && log[4] === 'submit' && log[5] === 'change');",
+            "inline_handlers.js",
+        )
+        .expect("evaluate inline handlers");
+    assert_eq!(out, "true", "all inline handlers must dispatch: {out}");
+}

@@ -5355,6 +5355,24 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
   define("MouseEvent", makeMouseEvent);
   define("PointerEvent", function (type, init) { makeMouseEvent.call(this, type, init); this.pointerId = (init && init.pointerId) || 0; });
   if (typeof Event === "function" && Event.prototype) { define("PointerEvent", (function (Base) { function PointerEvent(type, init) { Base.call(this, type, init || {}); this.pointerId = (init && init.pointerId) || 0; } PointerEvent.prototype = Object.create(Base.prototype); PointerEvent.prototype.constructor = PointerEvent; return PointerEvent; })(Event)); }
+  // KeyboardEvent / InputEvent / FocusEvent (#1504). Each derives from `Event` when available so
+  // `type`, `bubbles`, `cancelable`, `preventDefault` and `stopPropagation` behave uniformly.
+  function makeEvent(ctorName, Base, initFields) {
+    function EventCtor(type, init) {
+      init = init || {};
+      if (Base) { Base.call(this, type, init); }
+      else { this.__megi_event = true; this.type = String(type); this.bubbles = !!init.bubbles; this.cancelable = !!init.cancelable; this.defaultPrevented = false; }
+      for (var key in initFields) { if (Object.prototype.hasOwnProperty.call(initFields, key)) { this[key] = init[key] === undefined ? initFields[key] : init[key]; } }
+    }
+    if (Base && Base.prototype) { EventCtor.prototype = Object.create(Base.prototype); }
+    else { EventCtor.prototype = { preventDefault: function () { this.defaultPrevented = true; }, stopPropagation: function () {}, stopImmediatePropagation: function () {} }; }
+    EventCtor.prototype.constructor = EventCtor;
+    return EventCtor;
+  }
+  var EventBase = (typeof Event === "function" && Event.prototype) ? Event : null;
+  define("KeyboardEvent", makeEvent("KeyboardEvent", EventBase, { key: '', code: '', ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, repeat: false }));
+  define("InputEvent", makeEvent("InputEvent", EventBase, { data: null, inputType: '' }));
+  define("FocusEvent", makeEvent("FocusEvent", EventBase, { relatedTarget: null }));
   define("Node", { DOCUMENT_POSITION_DISCONNECTED: 1, DOCUMENT_POSITION_PRECEDING: 2, DOCUMENT_POSITION_FOLLOWING: 4, DOCUMENT_POSITION_CONTAINS: 8, DOCUMENT_POSITION_CONTAINED_BY: 16, DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: 32 });
   function Headers(init) {
     this._h = [];

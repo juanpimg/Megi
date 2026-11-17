@@ -289,7 +289,7 @@ macro_rules! inline_handler_accessors {
             }
         )+
 
-        /// Name/getter/setter triples for `window.onclick`, `onload` and `onerror`.
+        /// Name/getter/setter triples for the supported inline handlers (#1504).
         pub(crate) fn inline_handler_accessors() -> Vec<(&'static str, NativeFn, NativeFn)> {
             vec![$(($property, $get as NativeFn, $set as NativeFn)),+]
         }
@@ -300,15 +300,32 @@ inline_handler_accessors!(
     (inline_onclick_get, inline_onclick_set, "onclick", "click"),
     (inline_onload_get, inline_onload_set, "onload", "load"),
     (inline_onerror_get, inline_onerror_set, "onerror", "error"),
+    (inline_oninput_get, inline_oninput_set, "oninput", "input"),
+    (
+        inline_onchange_get,
+        inline_onchange_set,
+        "onchange",
+        "change"
+    ),
+    (
+        inline_onsubmit_get,
+        inline_onsubmit_set,
+        "onsubmit",
+        "submit"
+    ),
+    (
+        inline_onkeydown_get,
+        inline_onkeydown_set,
+        "onkeydown",
+        "keydown"
+    ),
+    (inline_onfocus_get, inline_onfocus_set, "onfocus", "focus"),
+    (inline_onblur_get, inline_onblur_set, "onblur", "blur"),
 );
 
 /// Inline handler accessor pairs shared with node/document wrappers.
-pub(crate) fn inline_node_accessors() -> [(&'static str, NativeFn, NativeFn); 3] {
-    [
-        ("onclick", inline_onclick_get, inline_onclick_set),
-        ("onload", inline_onload_get, inline_onload_set),
-        ("onerror", inline_onerror_get, inline_onerror_set),
-    ]
+pub(crate) fn inline_node_accessors() -> Vec<(&'static str, NativeFn, NativeFn)> {
+    inline_handler_accessors()
 }
 
 fn target_key(this: &JsValue, context: &mut Context) -> JsResult<TargetKey> {
