@@ -149,7 +149,7 @@ impl Url {
         if let Some(rest) = cleaned.strip_prefix('?') {
             let mut url = self.clone();
             let (query, fragment) = split_fragment(rest);
-            url.query = Some(encode_query(query));
+            url.query = Some(encode_query(query, self.scheme.is_special()));
             url.fragment = fragment.map(encode_fragment);
             return Ok(url);
         }
@@ -191,7 +191,7 @@ impl Url {
             host: self.host.clone(),
             port: self.port,
             path,
-            query: query.map(encode_query),
+            query: query.map(|query| encode_query(query, self.scheme.is_special())),
             fragment: fragment.map(encode_fragment),
         })
     }
@@ -243,7 +243,7 @@ impl Url {
             host,
             port,
             path,
-            query: query.map(encode_query),
+            query: query.map(|query| encode_query(query, scheme.is_special())),
             fragment: fragment.map(encode_fragment),
         })
     }
@@ -688,7 +688,7 @@ fn push_encoded_byte(out: &mut String, byte: u8) {
     out.push(HEX_DIGITS[(byte & 0x0F) as usize] as char);
 }
 
-fn encode_with(input: &str, requires_encoding: fn(u8) -> bool) -> String {
+fn encode_with(input: &str, requires_encoding: impl Fn(u8) -> bool) -> String {
     let mut out = String::with_capacity(input.len());
     for ch in input.chars() {
         if ch.is_ascii() {
@@ -717,9 +717,12 @@ fn path_requires_encoding(byte: u8) -> bool {
         )
 }
 
-/// WHATWG *query percent-encode set* (a subset of the special-query set: no `'`).
-fn query_requires_encoding(byte: u8) -> bool {
-    !(0x20..=0x7E).contains(&byte) || matches!(byte, b' ' | b'"' | b'#' | b'<' | b'>')
+/// WHATWG query percent-encode set. For special schemes the query state uses the
+/// *special-query* set, which additionally escapes `'` (URL §4.4, #1406).
+fn query_requires_encoding(byte: u8, special: bool) -> bool {
+    !(0x20..=0x7E).contains(&byte)
+        || matches!(byte, b' ' | b'"' | b'#' | b'<' | b'>')
+        || (special && byte == b'\'')
 }
 
 /// WHATWG *fragment percent-encode set*.
@@ -772,8 +775,8 @@ fn encode_path(input: &str) -> String {
     encode_with(&normalize_escapes(input), path_requires_encoding)
 }
 
-fn encode_query(input: &str) -> String {
-    encode_with(input, query_requires_encoding)
+fn encode_query(input: &str, special: bool) -> String {
+    encode_with(input, |byte| query_requires_encoding(byte, special))
 }
 
 fn encode_fragment(input: &str) -> String {
