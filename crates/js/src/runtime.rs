@@ -731,6 +731,103 @@ fn build_crypto(context: &mut Context) -> JsObject {
     init.build()
 }
 
+/// Builds the `TextEncoder` constructor.
+fn build_text_encoder(context: &mut Context) -> boa_engine::object::builtins::JsFunction {
+    let constructor = FunctionObjectBuilder::new(context.realm(), native(text_encoder_constructor))
+        .name(js_string!("TextEncoder"))
+        .length(0)
+        .constructor(true)
+        .build();
+    let proto = constructor
+        .get(js_string!("prototype"), context)
+        .unwrap_or(JsValue::undefined())
+        .as_object()
+        .unwrap_or_else(|| ObjectInitializer::new(context).build());
+    let encode_fn = FunctionObjectBuilder::new(context.realm(), native(text_encoder_encode))
+        .name(js_string!("encode"))
+        .length(1)
+        .build();
+    let _ = proto.set(js_string!("encode"), JsValue::from(encode_fn), false, context);
+    let encoding_get = accessor_fn(context, text_encoder_encoding_get);
+    let _ = proto.define_property_or_throw(
+        js_string!("encoding"),
+        PropertyDescriptor::builder().get(JsValue::from(encoding_get)).enumerable(true).configurable(true).build(),
+        context,
+    );
+    constructor
+}
+
+fn text_encoder_constructor(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let mut init = ObjectInitializer::new(context);
+    Ok(JsValue::from(init.build()))
+}
+
+fn text_encoder_encoding_get(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(js_string!("utf-8")))
+}
+
+fn text_encoder_encode(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let input = args.first().map(|v| v.to_string(context).map(|s| s.to_std_string_escaped()).unwrap_or_default()).unwrap_or_default();
+    let block = AlignedVec::from_iter(0, input.as_bytes().iter().copied());
+    let buffer = JsArrayBuffer::from_byte_block(block, context)
+        .map_err(|e| js_error(e.to_string()))?;
+    let arr = JsUint8Array::from_array_buffer(buffer, context)
+        .map_err(|e| js_error(e.to_string()))?;
+    Ok(JsValue::from(arr))
+}
+
+/// Builds the `TextDecoder` constructor.
+fn build_text_decoder(context: &mut Context) -> boa_engine::object::builtins::JsFunction {
+    let constructor = FunctionObjectBuilder::new(context.realm(), native(text_decoder_constructor))
+        .name(js_string!("TextDecoder"))
+        .length(0)
+        .constructor(true)
+        .build();
+    let proto = constructor
+        .get(js_string!("prototype"), context)
+        .unwrap_or(JsValue::undefined())
+        .as_object()
+        .unwrap_or_else(|| ObjectInitializer::new(context).build());
+    let decode_fn = FunctionObjectBuilder::new(context.realm(), native(text_decoder_decode))
+        .name(js_string!("decode"))
+        .length(1)
+        .build();
+    let _ = proto.set(js_string!("decode"), JsValue::from(decode_fn), false, context);
+    let encoding_get = accessor_fn(context, text_decoder_encoding_get);
+    let _ = proto.define_property_or_throw(
+        js_string!("encoding"),
+        PropertyDescriptor::builder().get(JsValue::from(encoding_get)).enumerable(true).configurable(true).build(),
+        context,
+    );
+    constructor
+}
+
+fn text_decoder_constructor(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let mut init = ObjectInitializer::new(context);
+    Ok(JsValue::from(init.build()))
+}
+
+fn text_decoder_encoding_get(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(js_string!("utf-8")))
+}
+
+fn text_decoder_decode(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let input = args.first().cloned().unwrap_or(JsValue::undefined());
+    if input.is_undefined() || input.is_null() {
+        return Ok(JsValue::from(js_string!("")));
+    }
+    // Try to read as Uint8Array
+    let obj = input.as_object().ok_or_else(|| js_error("decode requires a BufferSource"))?;
+    let len = obj.get(js_string!("length"), context).ok().and_then(|v| v.to_number(context).ok()).unwrap_or(0.0) as usize;
+    let mut bytes = Vec::with_capacity(len);
+    for i in 0..len {
+        let b = obj.get(js_string!(i.to_string()), context).ok().and_then(|v| v.to_number(context).ok()).unwrap_or(0.0) as u8;
+        bytes.push(b);
+    }
+    let text = String::from_utf8_lossy(&bytes);
+    Ok(JsValue::from(js_string!(text.to_string())))
+}
+
 /// Installs History/location, Web Storage and MutationObserver (round 24).
 fn install_browser_features(context: &mut Context) -> Result<(), JsError> {
     for name in [
@@ -788,6 +885,16 @@ fn install_browser_features(context: &mut Context) -> Result<(), JsError> {
             false,
             context,
         )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
+    let text_encoder = build_text_encoder(context);
+    let text_decoder = build_text_decoder(context);
+    context
+        .global_object()
+        .set(js_string!("TextEncoder"), JsValue::from(text_encoder), false, context)
+        .map_err(|error| JsError::Internal(error.to_string()))?;
+    context
+        .global_object()
+        .set(js_string!("TextDecoder"), JsValue::from(text_decoder), false, context)
         .map_err(|error| JsError::Internal(error.to_string()))?;
     let navigator = build_navigator(context);
     let performance = build_performance(context);
