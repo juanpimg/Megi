@@ -6,7 +6,6 @@
 use html::{
     Document, DomError, LimitViolations, ParseOptions, document_write, document_write_with_options,
     parse_document, set_inner_html, set_inner_html_with_options, set_outer_html,
-    set_outer_html_with_options,
 };
 
 fn parse(markup: &str) -> Document {
