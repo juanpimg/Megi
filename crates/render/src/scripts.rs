@@ -709,6 +709,7 @@ fn storage_origin_key(url: &Url) -> Option<String> {
         .map(|origin| format!("{}://{}:{}", origin.scheme, origin.host, origin.port))
 }
 
+#[cfg(feature = "js")]
 pub fn execute_scripts(
     document: Document,
     document_url: &Url,
@@ -1587,7 +1588,7 @@ mod unit_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "js"))]
 mod storage_origin_tests {
     use super::*;
 
@@ -1617,7 +1618,7 @@ mod storage_origin_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "js"))]
 mod layout_provider_freshness_tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
