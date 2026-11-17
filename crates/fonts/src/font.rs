@@ -131,7 +131,9 @@ impl Font {
 
     /// Uses `fallback` when a font-reported metric is absent, non-finite or negative (#1237).
     fn sanitize_metric(value: Option<f32>, fallback: f32) -> f32 {
-        value.unwrap_or(fallback)
+        value
+            .filter(|value| value.is_finite() && *value >= 0.0)
+            .unwrap_or(fallback)
     }
 
     /// Metrics of this face at `size_px`, in CSS pixels.
