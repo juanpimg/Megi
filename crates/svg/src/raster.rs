@@ -908,6 +908,14 @@ fn blur_pass(pixels: &mut [u8], width: usize, height: usize, radius: u32, horizo
 }
 
 fn offset_pixels(pixels: &mut [u8], width: usize, height: usize, dx: i32, dy: i32) {
+    // feOffset accepts any number: the caller clamps the scaled offset to the i32
+    // range, which still allows i32::MIN, and `x - dx` overflowed on it (panic in
+    // debug, silent wrap in release). A shift at least as large as the layer moves
+    // every source pixel out of the canvas, so the result is fully transparent.
+    if dx.unsigned_abs() as usize >= width || dy.unsigned_abs() as usize >= height {
+        pixels.fill(0);
+        return;
+    }
     let source = pixels.to_vec();
     pixels.fill(0);
     for y in 0..height as i32 {
