@@ -29,12 +29,23 @@ use crate::token::CssToken;
 /// `viewport` is `None` by default, which makes width/height/orientation features evaluate to
 /// `false` (their value is unknown). `screen` selects the target medium: `false` means the
 /// `print` medium.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ColorScheme {
+    #[default]
+    Light,
+    Dark,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct MediaContext {
     /// Viewport size in CSS pixels, if known.
     pub viewport: Option<(f32, f32)>,
     /// `true` for the `screen` medium, `false` for `print`.
     pub screen: bool,
+    /// Preferred color scheme.
+    pub color_scheme: ColorScheme,
+    /// Whether the user prefers reduced motion.
+    pub reduced_motion: bool,
 }
 
 impl Default for MediaContext {
@@ -42,6 +53,8 @@ impl Default for MediaContext {
         Self {
             viewport: None,
             screen: true,
+            color_scheme: ColorScheme::Light,
+            reduced_motion: false,
         }
     }
 }
@@ -52,6 +65,8 @@ impl MediaContext {
         Self {
             viewport: Some((width, height)),
             screen: true,
+            color_scheme: ColorScheme::Light,
+            reduced_motion: false,
         }
     }
 }
@@ -95,7 +110,9 @@ pub enum MediaFeature {
     MaxHeight(f32),
     Height(f32),
     Orientation(Orientation),
-    /// A valid feature that this engine does not model (`resolution`, `prefers-*`, ...);
+    PrefersColorScheme(ColorScheme),
+    PrefersReducedMotion(bool),
+    /// A valid feature that this engine does not model (`resolution`, `hover`, ...);
     /// always evaluates to `false`.
     Unsupported,
 }
@@ -115,6 +132,8 @@ impl MediaFeature {
             Self::Height(value) => (height - *value).abs() < 0.5,
             Self::Orientation(Orientation::Portrait) => height >= width,
             Self::Orientation(Orientation::Landscape) => width > height,
+            Self::PrefersColorScheme(scheme) => *scheme == context.color_scheme,
+            Self::PrefersReducedMotion(value) => *value == context.reduced_motion,
             Self::Unsupported => false,
         }
     }
@@ -438,6 +457,17 @@ fn parse_feature(parser: &mut MediaParser<'_>) -> Option<MediaCondition> {
                 _ => return None,
             })
         }
+        "prefers-color-scheme" => {
+            let value = single_ident(&value_tokens)?.to_ascii_lowercase();
+            MediaFeature::PrefersColorScheme(match value.as_str() {
+                "dark" => ColorScheme::Dark,
+                _ => ColorScheme::Light,
+            })
+        }
+        "prefers-reduced-motion" => {
+            let value = single_ident(&value_tokens)?.to_ascii_lowercase();
+            MediaFeature::PrefersReducedMotion(value == "reduce")
+        }
         // Syntactically valid but not modelled: evaluate to false (documented).
         _ => MediaFeature::Unsupported,
     };
@@ -519,6 +549,8 @@ mod tests {
         let print_ctx = MediaContext {
             viewport: Some((800.0, 600.0)),
             screen: false,
+            color_scheme: ColorScheme::Light,
+            reduced_motion: false,
         };
         assert!(evaluate_str("screen", &screen_ctx));
         assert!(!evaluate_str("print", &screen_ctx));
