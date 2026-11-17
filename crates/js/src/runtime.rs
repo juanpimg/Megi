@@ -1124,6 +1124,8 @@ fn build_document_object(context: &mut Context) -> JsObject {
         .map(|(name, get, set)| (name, accessor_fn(context, get), accessor_fn(context, set)))
         .collect();
     let active_element = pick(context, document_active_element);
+    let cookie_get = pick(context, document_cookie_get);
+    let cookie_set = pick(context, document_cookie_set);
     let mut init = ObjectInitializer::new(context);
     // Methods.
     for (name, length, function) in [
@@ -1187,6 +1189,12 @@ fn build_document_object(context: &mut Context) -> JsObject {
         js_string!("activeElement"),
         Some(active_element),
         None,
+        Attribute::all(),
+    );
+    init.accessor(
+        js_string!("cookie"),
+        Some(cookie_get),
+        Some(cookie_set),
         Attribute::all(),
     );
     init.accessor(js_string!("URL"), Some(url), None, Attribute::all());
@@ -2475,6 +2483,48 @@ fn document_body(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
 fn document_head(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node = with_host(|host| host.document.head()).flatten();
     wrap_optional(context, node)
+}
+
+fn document_cookie_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    // Minimal in-memory cookie store; real jar integration is host-backed.
+    let cookies = context
+        .global_object()
+        .get(js_string!("__megi_cookies"), context)
+        .unwrap_or(JsValue::undefined());
+    if cookies.is_undefined() {
+        return Ok(JsValue::from(js_string!("")));
+    }
+    let s = cookies.to_string(context)?.to_std_string().unwrap_or_default();
+    Ok(JsValue::from(js_string!(s)))
+}
+
+fn document_cookie_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let value = arg_string(args, 0, context).unwrap_or_default();
+    // Append to the store (simplified: just store the raw value).
+    let current = context
+        .global_object()
+        .get(js_string!("__megi_cookies"), context)
+        .unwrap_or(JsValue::undefined());
+    let mut store = if current.is_undefined() {
+        String::new()
+    } else {
+        current.to_string(context)?.to_std_string().unwrap_or_default()
+    };
+    // Parse name=value from the set-cookie string.
+    let pair = value.split(';').next().unwrap_or("").trim();
+    if !pair.is_empty() {
+        if !store.is_empty() {
+            store.push_str("; ");
+        }
+        store.push_str(pair);
+    }
+    let _ = context.global_object().set(
+        js_string!("__megi_cookies"),
+        js_string!(store),
+        false,
+        context,
+    );
+    Ok(JsValue::undefined())
 }
 
 fn document_title_get(
@@ -5862,9 +5912,6 @@ fn worker_terminate(this: &JsValue, _args: &[JsValue], context: &mut Context) ->
         if let Some(slot) = host.workers.get_mut(id as usize) {
             *slot = None;
         }
-        return_unused: {}
-        #[allow(unused_labels)]
-        const _: () = ();
     });
     Ok(JsValue::undefined())
 }
