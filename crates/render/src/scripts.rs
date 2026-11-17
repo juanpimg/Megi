@@ -709,6 +709,7 @@ fn storage_origin_key(url: &Url) -> Option<String> {
         .map(|origin| format!("{}://{}:{}", origin.scheme, origin.host, origin.port))
 }
 
+#[cfg(feature = "js")]
 pub fn execute_scripts(
     document: Document,
     document_url: &Url,
