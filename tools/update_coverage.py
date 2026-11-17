@@ -126,6 +126,37 @@ def _strip_rust_comments_and_strings(source: str) -> str:
             out[i] = out[i + 1] = " "
             in_comment = "/*"
             i += 2
+        elif source[i] == "r" and i + 1 < n and source[i + 1] == '"':
+            # Raw string r"..." (rarely used); blank until the closing quote.
+            out[i] = out[i + 1] = " "
+            j = i + 2
+            while j < n:
+                if source[j] == '"':
+                    out[j] = " "
+                    j += 1
+                    break
+                if source[j] != "\n":
+                    out[j] = " "
+                j += 1
+            i = j
+        elif source[i] == "r" and (m_hash := re.match(r"r(#+)\"", source[i:])):
+            # Raw string r##"..."##: skip exactly the matching number of hashes.
+            hashes = m_hash.group(1)
+            closing = '"' + hashes
+            start_quote = i + 1 + len(hashes)
+            for j in range(i, start_quote + 1):
+                out[j] = " "
+            j = start_quote + 1
+            while j < n:
+                if source.startswith(closing, j):
+                    for k in range(j, j + len(closing)):
+                        out[k] = " "
+                    j += len(closing)
+                    break
+                if source[j] != "\n":
+                    out[j] = " "
+                j += 1
+            i = j
         elif source[i] == '"':
             # Only double-quoted strings; `'` is used for Rust lifetimes/chars and must not
             # open a string state (that would swallow the rest of the file).
