@@ -702,6 +702,14 @@ fn load_worker_source(
 }
 
 #[cfg(feature = "js")]
+/// Serialized tuple origin used as the localStorage namespace key. `None` for
+/// non-HTTP(S) documents, which keep the legacy flat storage (#1476).
+fn storage_origin_key(url: &Url) -> Option<String> {
+    net::cors::Origin::from_url(url).map(|origin| {
+        format!("{}://{}:{}", origin.scheme, origin.host, origin.port)
+    })
+}
+
 pub fn execute_scripts(
     document: Document,
     document_url: &Url,
@@ -967,9 +975,7 @@ pub fn execute_scripts(
     }
     // A tuple origin scopes localStorage so pages from different origins sharing a
     // RenderStorage cannot read or overwrite each other's entries (#1476).
-    let origin_key = net::cors::Origin::from_url(document_url).map(|origin| {
-        format!("{}://{}:{}", origin.scheme, origin.host, origin.port)
-    });
+    let origin_key = storage_origin_key(document_url);
     let per_render_local: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
     let per_render_session: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
     {
@@ -1585,5 +1591,29 @@ mod unit_tests {
             .expect("traversal");
         assert!(!file_fetch_allowed(&base, &traversal));
         let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod storage_origin_tests {
+    use super::*;
+
+    #[test]
+    fn storage_namespace_uses_the_tuple_origin() {
+        let a = Url::parse("http://example.com:8080/a").expect("url");
+        let b = Url::parse("http://example.com:8081/b").expect("url");
+        let c = Url::parse("https://example.com/b").expect("url");
+        assert_ne!(
+            storage_origin_key(&a),
+            storage_origin_key(&b),
+            "different ports are different origins"
+        );
+        assert_ne!(
+            storage_origin_key(&a),
+            storage_origin_key(&c),
+            "different schemes are different origins"
+        );
+        assert_eq!(storage_origin_key(&a), Some("http://example.com:8080".into()));
+        assert_eq!(storage_origin_key(&Url::parse("file:///tmp/x.html").expect("url")), None);
     }
 }
