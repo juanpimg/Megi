@@ -40,6 +40,11 @@ const MAX_PATTERN_TILE_PIXELS: u64 = 16 * 1024 * 1024;
 /// Per-element caps (1000 texts × 10k chars) still allow 10M font lookups + rasterizations.
 const MAX_SVG_GLYPHS: u64 = 50_000;
 
+/// Upper bound on the scratch buffers a single filter chain may allocate. Each primitive
+/// clones full-layer buffers (input + previous result), so a 16-primitive chain on a
+/// 64M-pixel layer would otherwise copy tens of GiB (#430).
+const MAX_FILTER_SCRATCH_BYTES: u64 = 512 * 1024 * 1024;
+
 /// Rasterizes a document into a straight-RGBA image.
 pub(crate) fn rasterize(
     document: &Document,
@@ -443,6 +448,12 @@ fn mask_region_pixels(
     )))
 }
 
+/// Worst-case scratch bytes for a filter chain: 4 base buffers plus at most two
+/// full-layer buffers per primitive (#430).
+fn filter_scratch_bytes(layer_bytes: u64, primitives: usize) -> u64 {
+    layer_bytes.saturating_mul(4u64.saturating_add(2u64.saturating_mul(primitives as u64)))
+}
+
 /// Applies a supported filter chain to the layer pixels.
 ///
 /// Primitives are resolved in order with `in`/`in2`/`result` references
@@ -472,6 +483,14 @@ fn apply_filter(
         .sqrt();
     if !scale.is_finite() || scale <= 0.0 {
         return Ok(());
+    }
+    // Bound worst-case scratch before cloning (#430).
+    let layer_bytes = layer.pixels.len() as u64;
+    let worst_case = filter_scratch_bytes(layer_bytes, spec.primitives.len());
+    if worst_case > MAX_FILTER_SCRATCH_BYTES {
+        return Err(SvgError::Limit(format!(
+            "SVG filter scratch budget of {MAX_FILTER_SCRATCH_BYTES} bytes exceeded"
+        )));
     }
     let source = layer.pixels.clone();
     let mut source_alpha = source.clone();
@@ -2089,5 +2108,22 @@ mod tests {
         canvas.coverage[0] = 0.5;
         canvas.composite(Color::rgba(255, 0, 0, 255), 1.0);
         assert_eq!(canvas.pixels[3], 128);
+    }
+}
+
+#[cfg(test)]
+mod filter_scratch_tests {
+    use super::*;
+
+    #[test]
+    fn filter_scratch_budget_scales_with_primitives() {
+        // A 256 MiB layer (64M RGBA pixels) with 16 primitives would need ~9 GiB.
+        let layer = 256u64 * 1024 * 1024;
+        assert!(filter_scratch_bytes(layer, 1) > MAX_FILTER_SCRATCH_BYTES);
+        assert!(filter_scratch_bytes(layer, 16) > filter_scratch_bytes(layer, 1));
+        // A small layer with a short chain stays within budget.
+        assert!(filter_scratch_bytes(64 * 1024, 2) <= MAX_FILTER_SCRATCH_BYTES);
+        // Arithmetic cannot overflow into a false negative.
+        assert_eq!(filter_scratch_bytes(u64::MAX, usize::MAX), u64::MAX);
     }
 }
