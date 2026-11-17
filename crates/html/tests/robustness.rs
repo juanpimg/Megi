@@ -568,24 +568,26 @@ fn token_values_are_capped_to_the_per_token_budget() {
         .expect("an href attribute");
     assert_eq!(value_len, MAX_TOKEN_BYTES, "attribute value must be capped");
 
-    // A processing instruction target accumulates while the tokenizer scans for the data,
-    // so one `<?` + a long run grows `pending_pi_target` to input size.
+    // A processing instruction target accumulates while the tokenizer scans for the target
+    // delimiter, so an overlong target must be capped and still produce a PI token (#1362).
     let mut tok = Tokenizer::from_str_input(
-        &format!("<?{}", "x".repeat(MAX_TOKEN_BYTES + 4096)),
+        &format!("<?{}?>", "x".repeat(MAX_TOKEN_BYTES + 4096)),
         TokenizerConfig::default(),
     );
     tok.run();
-    let target_len = tok.tokens.iter().find_map(|token| match token {
-        Token::ProcessingInstruction { target, .. } => Some(target.len()),
-        _ => None,
-    });
-    if let Some(len) = target_len {
-        assert_eq!(len, MAX_TOKEN_BYTES, "PI target must be capped");
-        assert!(
-            tok.token_bytes_dropped > 0,
-            "the truncation must be counted"
-        );
-    }
+    let target_len = tok
+        .tokens
+        .iter()
+        .find_map(|token| match token {
+            Token::ProcessingInstruction { target, .. } => Some(target.len()),
+            _ => None,
+        })
+        .expect("a processing instruction token must be emitted");
+    assert_eq!(target_len, MAX_TOKEN_BYTES, "PI target must be capped");
+    assert!(
+        tok.token_bytes_dropped > 0,
+        "the truncation must be counted"
+    );
 }
 
 #[test]
