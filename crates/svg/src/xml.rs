@@ -246,13 +246,16 @@ impl<'a> Parser<'a> {
                             }
                         }
                     }
-                    if !element
+                    if element
                         .attributes
                         .iter()
                         .any(|(existing, _)| existing.eq_ignore_ascii_case(&attribute_name))
                     {
-                        element.attributes.push((attribute_name, raw));
+                        return Err(SvgError::Xml(format!(
+                            "duplicate attribute {attribute_name:?}"
+                        )));
                     }
+                    element.attributes.push((attribute_name, raw));
                 }
             }
         }
