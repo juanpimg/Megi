@@ -15,6 +15,23 @@ use html::{
     parse_document_with_options, parse_fragment_with_options,
 };
 
+/// Budget multiplier from `MEGI_PERF_BUDGET_SCALE` (default `1.0`), shared with
+/// `crates/html/tests/perf.rs` so CI-loaded runs can scale wall-clock budgets.
+fn budget_scale() -> f64 {
+    parse_budget_scale(std::env::var("MEGI_PERF_BUDGET_SCALE").ok().as_deref())
+}
+
+/// Parses the scale: finite and positive, capped at 1000; anything else means `1.0`.
+fn parse_budget_scale(raw: Option<&str>) -> f64 {
+    raw.and_then(|value| value.trim().parse::<f64>().ok())
+        .filter(|scale| scale.is_finite() && *scale > 0.0)
+        .map_or(1.0, |scale| scale.min(1000.0))
+}
+
+fn scaled_budget(base: Duration) -> Duration {
+    base.mul_f64(budget_scale())
+}
+
 const SMALL_STACK: usize = 512 * 1024;
 
 fn in_thread_with_stack<T: Send + 'static>(
@@ -179,9 +196,11 @@ fn tokenizer_handles_many_attributes_in_linear_time() {
     // linear-time path up to the cap.
     assert_eq!(attribute_count, 4096);
     assert!(tok.errors.is_empty());
+    let budget = scaled_budget(Duration::from_secs(10));
     assert!(
-        elapsed < Duration::from_secs(10),
-        "tokenizing 50k attributes took {elapsed:?}; duplicate detection may be quadratic again"
+        elapsed < budget,
+        "tokenizing 50k attributes took {elapsed:?} (budget {budget:?}, scale {}); duplicate detection may be quadratic again",
+        budget_scale()
     );
 }
 
@@ -507,9 +526,11 @@ fn huge_numeric_character_reference_runs_stay_linear_and_out_of_range() {
     let started = std::time::Instant::now();
     let outcome = parse_document_with_options(&input, false, &ParseOptions::default());
     let elapsed = started.elapsed();
+    let budget = scaled_budget(Duration::from_secs(2));
     assert!(
-        elapsed < std::time::Duration::from_secs(2),
-        "a 200k-digit character reference took {elapsed:?}"
+        elapsed < budget,
+        "a 200k-digit character reference took {elapsed:?} (budget {budget:?}, scale {})",
+        budget_scale()
     );
     let text = paragraph_text(&outcome.document);
     assert_eq!(text, "\u{FFFD}", "an out-of-range reference becomes U+FFFD");
@@ -606,9 +627,11 @@ fn active_formatting_list_is_bounded() {
     let started = std::time::Instant::now();
     let outcome = parse_document_with_options(&input, false, &ParseOptions::DEFAULT);
     let elapsed = started.elapsed();
+    let budget = scaled_budget(Duration::from_secs(3));
     assert!(
-        elapsed < std::time::Duration::from_secs(3),
-        "20k distinct formatting elements took {elapsed:?}"
+        elapsed < budget,
+        "20k distinct formatting elements took {elapsed:?} (budget {budget:?}, scale {})",
+        budget_scale()
     );
     assert!(
         outcome.limit_violations.formatting_dropped > 0,
@@ -653,9 +676,11 @@ fn self_writing_script_loops_are_fuelled() {
         Some(Box::new(LoopExecutor { runs: 0 })),
     );
     let elapsed = started.elapsed();
+    let budget = scaled_budget(Duration::from_secs(5));
     assert!(
-        elapsed < std::time::Duration::from_secs(5),
-        "a self-writing script must be fuelled, took {elapsed:?}"
+        elapsed < budget,
+        "a self-writing script must be fuelled, took {elapsed:?} (budget {budget:?}, scale {})",
+        budget_scale()
     );
     assert!(
         outcome.limit_violations.scripts_skipped > 0
@@ -709,9 +734,11 @@ fn many_small_document_writes_stay_linear() {
         Some(Box::new(SmallWrites { remaining: 2_000 })),
     );
     let elapsed = started.elapsed();
+    let budget = scaled_budget(Duration::from_secs(5));
     assert!(
-        elapsed < std::time::Duration::from_secs(5),
-        "2 000 small writes took {elapsed:?}"
+        elapsed < budget,
+        "2 000 small writes took {elapsed:?} (budget {budget:?}, scale {})",
+        budget_scale()
     );
     assert!(
         outcome.limit_violations.scripts_skipped > 0
