@@ -232,7 +232,7 @@ fn import_meta_url_available_in_native_modules() {
         outcome
             .exports
             .iter()
-            .any(|(name, value)| name == "seen" && value.contains("a")),
+            .any(|(name, value)| name == "seen" && value == "mem://a"),
         "{:?}",
         outcome.exports
     );
