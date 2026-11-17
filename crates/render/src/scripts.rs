@@ -1192,7 +1192,15 @@ pub fn execute_scripts(
     const MAX_HOST_EVENT_NAME: usize = 256;
     for event in host.host_events.iter().take(MAX_HOST_EVENTS) {
         let event = if event.len() > MAX_HOST_EVENT_NAME {
-            &event[..MAX_HOST_EVENT_NAME]
+            // Truncate on a UTF-8 boundary: byte 256 may fall inside a multi-byte code
+            // point in a host-supplied event name (#1216).
+            let end = event
+                .char_indices()
+                .take_while(|(index, _)| *index < MAX_HOST_EVENT_NAME)
+                .map(|(index, ch)| index + ch.len_utf8())
+                .last()
+                .unwrap_or(0);
+            &event[..end]
         } else {
             event.as_str()
         };
