@@ -532,6 +532,10 @@ impl CookieJar {
         if parsed.name.len() + parsed.value.len() > MAX_COOKIE_BYTES {
             return false;
         }
+        // Secure cookies must not be set from an insecure origin (#1253).
+        if parsed.secure && request_url.scheme().as_str() != "https" {
+            return false;
+        }
         let host = request_url.host().to_ascii_lowercase();
         let host_only = parsed.domain.is_none();
         let domain = parsed.domain.clone().unwrap_or_else(|| host.clone());
