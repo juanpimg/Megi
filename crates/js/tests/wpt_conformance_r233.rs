@@ -292,10 +292,10 @@ fn normalize_and_compare_document_position() {
       var a = document.createElement('a'); var b = document.createElement('b');
       p.appendChild(a); p.appendChild(b);
       var removed = p.normalize();
-      p.childNodes.length + ':' + p.firstChild.textContent + ':' + a.compareDocumentPosition(b) + ':' + b.compareDocumentPosition(a)
+      p.childNodes.length + ':' + p.firstChild.textContent + ':' + a.compareDocumentPosition(b) + ':' + b.compareDocumentPosition(a) + ':' + typeof removed
     "#,
     );
-    assert_eq!(value, "3:ab:4:2");
+    assert_eq!(value, "3:ab:4:2:undefined");
 }
 
 #[test]

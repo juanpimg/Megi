@@ -79,7 +79,7 @@ fn normalize_merges_text_nodes() {
     let mut rt = runtime();
     rt.eval("var el = document.createElement('p'); el.appendChild(document.createTextNode('a')); el.appendChild(document.createTextNode('b')); el.appendChild(document.createTextNode(''))", "t").unwrap();
     assert_eq!(rt.eval("el.childNodes.length", "t").unwrap(), "3");
-    assert_eq!(rt.eval("el.normalize()", "t").unwrap(), "2");
+    assert_eq!(rt.eval("el.normalize()", "t").unwrap(), "undefined");
     assert_eq!(rt.eval("el.childNodes.length", "t").unwrap(), "1");
     assert_eq!(rt.eval("el.textContent", "t").unwrap(), "ab");
 }
