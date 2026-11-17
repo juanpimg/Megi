@@ -313,6 +313,9 @@ impl Url {
     pub fn cache_key(&self) -> String {
         let mut url = self.clone();
         url.fragment = None;
+        // Strip credentials so they never leak into cache keys (#1296).
+        url.username = String::new();
+        url.password = String::new();
         url.as_str()
     }
 
