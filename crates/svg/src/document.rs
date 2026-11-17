@@ -1863,9 +1863,13 @@ fn animation_fraction(element: &XmlElement, time: f32) -> Option<f32> {
     if let Some(repeats) = repeats
         && repeats.is_finite()
         && repeats >= 0.0
-        && elapsed >= duration * repeats
     {
-        return Some(1.0);
+        if repeats == 0.0 {
+            return None;
+        }
+        if elapsed >= duration * repeats {
+            return Some(1.0);
+        }
     }
     Some((elapsed % duration) / duration)
 }
