@@ -592,7 +592,7 @@ fn add_feature_pipeline(
                     name,
                     "pipeline",
                     format!(
-                        "{what}: {items} items de display list, PNG {png_bytes} B,                          parse+styles+layout+dl+raster+PNG"
+                        "{what}: {items} items de display list, PNG {png_bytes} B - parse+styles+layout+dl+raster+PNG"
                     ),
                     move || {
                         let document = html::parse_document(&html_source, false);
