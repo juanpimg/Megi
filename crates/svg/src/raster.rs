@@ -296,7 +296,7 @@ fn apply_clip(
         }
         fill_scanline(
             &device,
-            shape.fill_rule,
+            spec.fill_rule,
             layer.width,
             layer.height,
             &mut coverage,

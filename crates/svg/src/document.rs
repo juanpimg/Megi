@@ -180,6 +180,8 @@ pub(crate) struct EffectRef {
 #[derive(Clone, Debug)]
 pub(crate) struct ClipPathSpec {
     pub units: Units,
+    /// `clip-rule` inherited from the `<clipPath>` element (#1279).
+    pub fill_rule: FillRule,
     pub shapes: Vec<Shape>,
 }
 
@@ -2397,8 +2399,17 @@ fn build_clip_paths(
         if shapes.len() > MAX_EFFECT_SHAPES {
             return Err(SvgError::Limit("too many shapes in clipPath".to_owned()));
         }
+        let fill_rule = if element
+            .attribute("clip-rule")
+            .is_some_and(|value| value.eq_ignore_ascii_case("evenodd"))
+        {
+            FillRule::EvenOdd
+        } else {
+            FillRule::NonZero
+        };
         specs.push(ClipPathSpec {
             units: Units::parse(element.attribute("clipPathUnits")),
+            fill_rule,
             shapes,
         });
     }
