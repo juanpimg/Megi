@@ -143,6 +143,20 @@ fn head_response_has_empty_body() {
 }
 
 #[test]
+fn array_buffer_exposes_raw_bytes() {
+    let mut result = ok_result();
+    result.body = vec![0, 1, 127, 128, 255];
+    let (mut runtime, _calls) = mock_runtime(result);
+    runtime.eval(
+        "window.__info = ''; fetch('/x').then(function (r) { return r.arrayBuffer(); }).then(function (b) { var u = new Uint8Array(b); __info = u.length + ':' + Array.from(u).join(','); });",
+        "t",
+    )
+    .expect("fetch");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(runtime.eval("__info", "t").unwrap(), "5:0,1,127,128,255");
+}
+
+#[test]
 fn network_error_is_type_error_like() {
     let mut runtime = JsRuntime::new().expect("runtime");
     runtime.set_fetch_provider(Box::new(|_| {

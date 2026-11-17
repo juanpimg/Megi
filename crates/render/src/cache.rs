@@ -22,7 +22,9 @@ pub struct RenderCacheStats {
 #[derive(Clone, Debug, Default)]
 pub struct RenderCache {
     layout_entries: Vec<(u64, LayoutBox)>,
-    css_entries: Vec<(u64, usize, css::Stylesheet)>,
+    /// `(FNV prefilter, exact source text, parsed sheet)`. The source text is kept so a
+    /// hash collision cannot return a different stylesheet (#1223).
+    css_entries: Vec<(u64, String, css::Stylesheet)>,
     stats: RenderCacheStats,
 }
 
@@ -44,15 +46,12 @@ impl RenderCache {
         self.stats = RenderCacheStats::default();
     }
 
-    /// Parses a stylesheet or returns a cached clone when `(hash, len)` matches.
+    /// Parses a stylesheet or returns a cached clone when the exact source text matches.
     pub fn parse_stylesheet(&mut self, css_text: &str) -> css::Stylesheet {
         let key_hash = fnv1a_bytes(css_text.as_bytes());
-        let key_len = css_text.len();
-        if let Some(pos) = self
-            .css_entries
-            .iter()
-            .position(|(h, len, _)| *h == key_hash && *len == key_len)
-        {
+        if let Some(pos) = self.css_entries.iter().position(|(h, source, _)| {
+            *h == key_hash && source.len() == css_text.len() && source == css_text
+        }) {
             self.stats.css_hits += 1;
             let entry = self.css_entries.remove(pos);
             let sheet = entry.2.clone();
@@ -64,7 +63,8 @@ impl RenderCache {
         if self.css_entries.len() >= MAX_CSS_CACHE_ENTRIES {
             self.css_entries.remove(0);
         }
-        self.css_entries.push((key_hash, key_len, sheet.clone()));
+        self.css_entries
+            .push((key_hash, css_text.to_owned(), sheet.clone()));
         sheet
     }
 
@@ -76,9 +76,9 @@ impl RenderCache {
         viewport: Rect,
         measurer: &dyn TextMeasurer,
         replaced_sizes: &HashMap<NodeId, (f32, f32)>,
-        font_count: usize,
+        font_digest: u64,
     ) -> Option<(LayoutBox, bool)> {
-        let fp = layout_fingerprint(document, styles, viewport, replaced_sizes, font_count);
+        let fp = layout_fingerprint(document, styles, viewport, replaced_sizes, font_digest);
         if let Some(pos) = self.layout_entries.iter().position(|(k, _)| *k == fp) {
             self.stats.layout_hits += 1;
             let entry = self.layout_entries.remove(pos);
@@ -125,20 +125,20 @@ fn mix_str(hash: &mut u64, s: &str) {
 }
 
 /// Computes a deterministic 64-bit fingerprint over the DOM, computed styles, viewport,
-/// replaced image intrinsic sizes, and loaded font count.
+/// replaced image intrinsic sizes, and the loaded font identity digest (#1218).
 pub fn layout_fingerprint(
     document: &Document,
     styles: &HashMap<NodeId, ComputedStyle>,
     viewport: Rect,
     replaced_sizes: &HashMap<NodeId, (f32, f32)>,
-    font_count: usize,
+    font_digest: u64,
 ) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325u64;
     mix_u64(&mut hash, u64::from(viewport.x.to_bits()));
     mix_u64(&mut hash, u64::from(viewport.y.to_bits()));
     mix_u64(&mut hash, u64::from(viewport.width.to_bits()));
     mix_u64(&mut hash, u64::from(viewport.height.to_bits()));
-    mix_u64(&mut hash, font_count as u64);
+    mix_u64(&mut hash, font_digest);
 
     let mut stack = vec![document.root()];
     while let Some(id) = stack.pop() {
@@ -198,4 +198,52 @@ pub fn layout_fingerprint(
         }
     }
     hash
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+
+    #[test]
+    fn layout_fingerprint_includes_font_identity() {
+        let document = dom::Document::new();
+        let styles = HashMap::new();
+        let viewport = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let sizes = HashMap::new();
+        let a = layout_fingerprint(&document, &styles, viewport, &sizes, 1);
+        let b = layout_fingerprint(&document, &styles, viewport, &sizes, 2);
+        assert_ne!(
+            a, b,
+            "different font identities must change the layout key (#1218)"
+        );
+    }
+
+    #[test]
+    fn css_cache_compares_exact_source_on_hash_collision() {
+        let a = "a{color:red}";
+        let b = "a{color:tan}";
+        assert_eq!(a.len(), b.len());
+        let sheet_a = css::parse_stylesheet(a);
+
+        let mut cache = RenderCache::new();
+        // Inject an entry whose FNV key matches `b` but whose exact source is `a`:
+        // a `(hash, len)`-only cache would wrongly return sheet_a on this lookup (#1223).
+        cache
+            .css_entries
+            .push((fnv1a_bytes(b.as_bytes()), a.to_string(), sheet_a.clone()));
+        let sheet_b = cache.parse_stylesheet(b);
+
+        assert_ne!(
+            sheet_b, sheet_a,
+            "a hash collision must not return another sheet"
+        );
+        assert_eq!(
+            cache.stats(),
+            RenderCacheStats {
+                css_hits: 0,
+                css_misses: 1,
+                ..Default::default()
+            }
+        );
+    }
 }

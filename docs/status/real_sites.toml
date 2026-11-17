@@ -1,0 +1,39 @@
+# Real websites checked end-to-end with `render --json`.
+#
+# `snapshot` files are versioned copies under tests/fixtures/real-sites/ and are used by
+# default (deterministic, no network). `url` is used with --live.
+# `min_items` is the minimum display_items expected for a non-degraded render.
+
+[[site]]
+id = "example"
+name = "example.com"
+url = "https://example.com"
+snapshot = "example.html"
+min_items = 5
+note = "Referencia mínima: debe verse siempre"
+
+[[site]]
+id = "rust"
+name = "rust-lang.org"
+url = "https://www.rust-lang.org"
+snapshot = "rust.html"
+min_items = 20
+note = "CSS/images desde CDN"
+
+[[site]]
+id = "wikipedia"
+name = "es.wikipedia.org/wiki/Rust"
+url = "https://es.wikipedia.org/wiki/Rust"
+snapshot = "wikipedia.html"
+min_items = 50
+issue = 1013
+note = "Solapes conocidos en la UI Vector"
+
+[[site]]
+id = "hn"
+name = "news.ycombinator.com"
+url = "https://news.ycombinator.com"
+snapshot = "hn.html"
+min_items = 10
+issue = 1011
+note = "Históricamente colapsa a página en blanco (<center>/<table>)"

@@ -18,7 +18,7 @@ fn clone_node_copies_attributes_and_children() {
     assert!(document.append_child(root, parent));
     let child = el(&mut document, "span", vec![]);
     assert!(document.append_child(parent, child));
-    let deep = document.clone_node(parent, true);
+    let deep = document.clone_node(parent, true).unwrap();
     assert_eq!(document.children_ids(deep).count(), 1);
     assert_eq!(
         document

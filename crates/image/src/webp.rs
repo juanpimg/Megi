@@ -727,7 +727,7 @@ impl Transform {
                             let top_right = if x + 1 < width {
                                 out[(y - 1) * width + x + 1]
                             } else {
-                                out[y * width]
+                                out[(y - 1) * width + x]
                             };
                             predictor_mode(mode, left, top, top_left, top_right)
                         };
@@ -883,6 +883,11 @@ fn decode_transform(
 
 /// Locates a chunk `id` inside a RIFF/WEBP container and returns its payload.
 const MAX_ANIMATION_FRAMES: usize = 4096;
+
+/// Aggregate decoded-frame byte budget for animated WebP (#1150). Each frame stores a
+/// full canvas clone, so the frame count alone does not bound memory: a 512x512 canvas
+/// with 4096 frames would otherwise retain ~4 GiB.
+const MAX_ANIMATED_FRAME_BYTES: usize = 256 * 1024 * 1024;
 type RiffChunk<'a> = (&'a [u8; 4], &'a [u8]);
 
 /// Parses a sequence of RIFF chunks `(fourcc, payload)` from an arbitrary chunk stream.
@@ -1092,6 +1097,19 @@ fn read_u24_le(bytes: &[u8]) -> u32 {
     u32::from(bytes[0]) | (u32::from(bytes[1]) << 8) | (u32::from(bytes[2]) << 16)
 }
 
+/// Ensures the retained decoded frames stay within the aggregate byte budget (#1150).
+fn check_animated_frame_budget(frames_so_far: usize, canvas_len: usize) -> Result<(), ImageError> {
+    let total = frames_so_far.saturating_add(1).saturating_mul(canvas_len);
+    if total > MAX_ANIMATED_FRAME_BYTES {
+        return Err(ImageError::LimitExceeded {
+            what: "animated WebP decoded frames",
+            limit: MAX_ANIMATED_FRAME_BYTES as u64,
+            actual: total as u64,
+        });
+    }
+    Ok(())
+}
+
 fn decode_webp_frames(
     bytes: &[u8],
     limits: &PngLimits,
@@ -1178,6 +1196,8 @@ fn decode_webp_frames(
             frame_y,
             no_blend,
         );
+        // Bound total retained decoded memory, not just the frame count (#1150).
+        check_animated_frame_budget(frames.len(), canvas_len)?;
         frames.push(crate::AnimatedFrame {
             image: RgbaImage::new(header.width, header.height, canvas.clone())?,
             delay_ms,
@@ -1388,5 +1408,30 @@ mod palette_tests {
             }
             other => panic!("expected InvalidData, got {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod animated_frame_budget_tests {
+    use super::*;
+
+    #[test]
+    fn aggregate_decoded_frame_budget_is_enforced() {
+        // A 512x512 RGBA canvas is 1 MiB; 256 frames exactly fill the 256 MiB budget.
+        let canvas = 512 * 512 * 4;
+        assert!(check_animated_frame_budget(0, canvas).is_ok());
+        assert!(check_animated_frame_budget(255, canvas).is_ok());
+        assert!(matches!(
+            check_animated_frame_budget(256, canvas),
+            Err(ImageError::LimitExceeded { .. })
+        ));
+    }
+
+    #[test]
+    fn aggregate_frame_budget_does_not_overflow_on_saturating_sizes() {
+        assert!(matches!(
+            check_animated_frame_budget(usize::MAX, usize::MAX),
+            Err(ImageError::LimitExceeded { .. })
+        ));
     }
 }
