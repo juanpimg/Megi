@@ -27,7 +27,7 @@ Cargo.toml	66	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata 
 LICENSE	12	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-APACHE	176	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-MIT	23	fixture	F1	lead	2026-11-17	covered		not code: license text
-PROGRESS.md	209	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
+PROGRESS.md	208	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
 README.md	169	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 SECURITY.md	231	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 cliff.toml	54	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
@@ -558,7 +558,7 @@ docs/status/real-sites/wikipedia.png	0	binary	-			exempt		not read line by line:
 docs/status/real_sites.toml	0	generated	-			exempt		not read line by line: generated
 docs/superpowers/plans/2026-11-17-honest-progress.md	111	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
 docs/superpowers/specs/2026-11-17-honest-progress-design.md	73	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
-fuzz/Cargo.toml	201	fuzz	F1	f1-fuzz	2026-11-17	covered	#1421-#1429	read in the F3/F4 pass
+fuzz/Cargo.toml	208	fuzz	F1	f1-fuzz	2026-11-17	covered	#1421-#1429	read in the F3/F4 pass
 fuzz/corpus/body_stream/empty	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/max-length	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/mode2-oversize	0	exempt	-			exempt		not read line by line: exempt
@@ -566,6 +566,14 @@ fuzz/corpus/body_stream/pairs	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/small	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/three	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/zero-length	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/charset/latin1-bytes	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/charset/malformed-meta	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/charset/meta-charset	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/charset/unsupported-gbk	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/charset/utf16-bom	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/charset/utf8-ascii	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/charset/utf8-bom	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/charset/windows1252	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/container_queries/container.css	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/container_queries/named.css	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/container_queries/queries.txt	0	exempt	-			exempt		not read line by line: exempt
@@ -574,6 +582,11 @@ fuzz/corpus/css_parse/container.css	0	exempt	-			exempt		not read line by line: 
 fuzz/corpus/css_parse/declarations.css	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/css_parse/layers.css	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/css_parse/stylesheet.css	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/dom_mutate/clone-deep	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/dom_mutate/create-append	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/dom_mutate/remove-subtree	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/dom_tree/append-elements	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/dom_tree/attrs-comments	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/exif_parse/baseline_420.jpg	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/exif_parse/exif_o1.jpg	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/exif_parse/exif_o2.jpg	0	exempt	-			exempt		not read line by line: exempt
@@ -584,6 +597,12 @@ fuzz/corpus/exif_parse/exif_o6.jpg	0	exempt	-			exempt		not read line by line: e
 fuzz/corpus/exif_parse/exif_o7.jpg	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/exif_parse/exif_o8.jpg	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/exif_parse/exif_thumb.jpg	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/font_decode/dejavu-ttf	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/font_decode/empty-ish	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/font_decode/invalid-header	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/fonts_shape/dejavu	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/fonts_shape/empty-plus-text	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/fonts_shape/unknown	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/h2_push/data-large	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/h2_push/frame-data	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/h2_push/frame-headers	0	exempt	-			exempt		not read line by line: exempt
@@ -651,11 +670,22 @@ fuzz/corpus/js_module/malformed-map	0	exempt	-			exempt		not read line by line: 
 fuzz/corpus/js_module/simple	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/js_module/syntax-error	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/js_module/top-level-await	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/layout_resolve/basic-block	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/layout_resolve/calc-vw	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/layout_resolve/grid	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/layout_tree/basic	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/layout_tree/with-css	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/net_surface/http-date	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/net_surface/mime-bytes	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/net_surface/range	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/net_surface/set-cookie	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_url/absolute-http.txt	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_url/authority-userinfo.txt	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_url/base-plus-relative.txt	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_url/file-local.txt	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_url/ipv6-and-relative.txt	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/paint_display_list/basic	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/paint_display_list/hit-region	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/render_pipeline/basic.html	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/render_pipeline/malformed.html	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/render_pipeline/styled.html	0	exempt	-			exempt		not read line by line: exempt
@@ -670,6 +700,10 @@ fuzz/corpus/svg_parse/malformed.svg	0	exempt	-			exempt		not read line by line: 
 fuzz/corpus/svg_parse/nested.svg	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/svg_parse/path.svg	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/svg_parse/smil.svg	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/text_boundary/ascii	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/text_boundary/cr-nul	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/text_boundary/noncharacter	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/text_boundary/surrogate	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/webp/lossy.webp	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/webp/palette_real.webp	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/webp/photo_lossy.webp	0	exempt	-			exempt		not read line by line: exempt
@@ -684,6 +718,7 @@ fuzz/corpus/woff2_decode/huge_directory_length.woff2	0	exempt	-			exempt		not re
 fuzz/corpus/woff2_decode/open_sans.woff2	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/woff2_decode/truncated.woff2	0	exempt	-			exempt		not read line by line: exempt
 fuzz/fuzz_targets/body_stream.rs	138	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/charset.rs	61	fuzz	F1			pending		
 fuzz/fuzz_targets/container_queries.rs	116	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/css_parse.rs	41	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/dom_mutate.rs	97	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
@@ -1066,7 +1101,7 @@ tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/real_site_check.py	240	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/soak_fuzz.sh	115	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_audit_coverage.py	267	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
+tools/test_audit_coverage.py	287	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_real_site_check.py	89	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	

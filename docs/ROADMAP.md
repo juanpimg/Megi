@@ -663,7 +663,7 @@ Cuando se retome `F6`, el orden previsto es: (1) verificar la carga dinámica de
 |---|---|---|
 | Tests | Ver `PROGRESS.md` / `docs/status/badge-tests.svg` (objetivo superado) | 2.500+ ✅ |
 | Issues abiertos | 30 | < 20 |
-| Fuzz targets | 25 (124 ficheros de corpus) | 20+ ✅ |
+| Fuzz targets | 26 (158 ficheros de corpus; 25 en la matriz ASan) | 20+ ✅ |
 | Bench filas | 81 | 25+ ✅ |
 | Fases completas | F1–F6 (100 %), F7 (99 %) | Todas al 100 % |
 | Presupuestos | Todos cumplidos | Todos cumplidos con margen |

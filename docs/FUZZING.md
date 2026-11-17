@@ -8,7 +8,7 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 
 > **Status**: the harness is wired into CI via
 > [`.github/workflows/fuzz-nightly.yml`](../.github/workflows/fuzz-nightly.yml). The
-> scheduled/dispatch run executes **all 25 harnesses** under the default libFuzzer
+> scheduled/dispatch run executes **25 harnesses** (26 binaries in `fuzz/Cargo.toml`; `charset` is build-only for now) under the default libFuzzer
 > **AddressSanitizer** build (10 minutes for 10 critical parsers/decoders and 5 minutes for
 > the remaining 15), plus a short **UndefinedBehaviorSanitizer (UBSan)** smoke matrix on 9
 > representative targets. Pull requests and pushes to `main` run a build-only job that
@@ -21,7 +21,7 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 ```text
 fuzz/
 ├── Cargo.toml          # standalone workspace (`[workspace]`), NOT part of the root workspace
-├── fuzz_targets/       # 25 libFuzzer harnesses
+├── fuzz_targets/       # 26 libFuzzer harnesses
 │   ├── body_stream.rs        # RequestBody/BodyProducer streaming contract
 │   ├── container_queries.rs  # CSS @container/@layer parsing + query evaluation
 │   ├── css_parse.rs          # CSS Syntax L3 tokenizer, stylesheets and declaration lists

@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Coverage](docs/status/badge-coverage.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `8f76818` (2026-11-17) · coverage **77%** (54/70) · **2,568** tests · conformance **PASS** · **14** crates · **187,304** lines of Rust
+**Snapshot** — commit `58b28f9` (2026-11-17) · coverage **77%** (54/70) · **2,568** tests · conformance **PASS** · **14** crates · **187,365** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -152,9 +152,9 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `8f76818` (2026-11-17) |
+| Commit | `58b28f9` (2026-11-17) |
 | Crates in the workspace | 14 |
-| Lines of Rust (tracked `.rs`) | 187304 |
+| Lines of Rust (tracked `.rs`) | 187365 |
 | Tests (`cargo test --workspace -- --list`) | 2568 |
 | Crates with `#![forbid(unsafe_code)]` | 14 / 14 |
 | Conformance gate | **PASS** |
@@ -184,9 +184,8 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 - JS/DOM conformance testing and memory accounting
 - Multi-select/native widgets and accessibility in shell
 - Visual save-as/prompt and resource downloads
-- SVG remaining SMIL/CSS animations
-- Image decode budgets on real pages
-- Longer fuzz campaigns with 25 targets
+- Longer fuzz campaigns with 26 targets
+- Wire the charset fuzz target into the CI ASan matrix
 - Bench improvements and real-page E2E rows
 
 ## Cross-cutting areas
@@ -194,7 +193,7 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 | Area | What | Estimate | Notes |
 |---|---|---|---|
 | BENCH | Performance bench & budgets | 90% | crates/bench + docs/PERFORMANCE.md; baselines repeatable, budgets met with margin |
-| FUZZ | Fuzzing | 90% | 25 libFuzzer targets (124 corpus files) + nightly CI smoke; longer campaigns pending |
+| FUZZ | Fuzzing | 90% | 26 libFuzzer targets (158 corpus files; 25 in CI) + nightly smoke; longer campaigns pending |
 | DOCS | Documentation | 92% | ARCHITECTURE/ROADMAP/HANDOFF/FUZZING/TOOLING + generated progress page |
 | CI | CI & quality gates | 97% | fmt/clippy/tests/doc/conformance/MSRV/fuzz + status freshness check |
 

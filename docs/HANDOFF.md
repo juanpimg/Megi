@@ -61,7 +61,7 @@
 - **Perf**: css resolve −50,5 %, layout −7,0 %, PNG decode −62,4 %, encode −18/−22 %, render-to-png −27,7 %, CLI render −6,5 % con PNG byte-idéntico.
 - **Goldens**: básicos/showcase/phase4 intactos; PNG raw md5 idéntico a PIL; TLA E2E 2/2.
 - **Status**: `docs/status/progress.toml` es la fuente editable; `python3 tools/update_progress.py --write` regenera `PROGRESS.md` + `docs/status/*`; CI ejecuta `--check --no-gate --no-count`.
-- **Fuzz**: 25 targets, corpus 124, CI 600 s (10 críticos) / 300 s (15 restantes) + PR build-only.
+- **Fuzz**: 26 targets (25 in the CI ASan matrix), corpus 158, CI 600 s (10 críticos) / 300 s (15 restantes) + PR build-only.
 
 ## Comandos de verificación
 
@@ -102,7 +102,7 @@ Conteos orientativos medidos con `cargo test -p <crate> --all-targets -- --list`
 | `render` | Pipeline URL→PNG + imágenes + module scripts/importmap + scaled decode + providers JS + streaming/keep-alive + workers + encode_png/fetch + **TLA + fast paths** | **230** |
 | `shell` | F7 + chrome contextual + pages/favicons + historial + chrome fast path + PNG single-encode + sesión/save-png + chrome redondeado | **307** |
 | `bench` / `test_harness` | Tooling (PNG/decode/VP8/chrome rows) / gate 4 suites | 12 / 11 |
-| `fuzz` (workspace aparte) | 25 targets + corpus 124 + PR build-only | build 25/25 |
+| `fuzz` (workspace aparte) | 26 targets + corpus 158 + PR build-only | build 26/26 |
 
 ## Deuda priorizada
 

@@ -23,9 +23,8 @@ next_up = [
   "JS/DOM conformance testing and memory accounting",
   "Multi-select/native widgets and accessibility in shell",
   "Visual save-as/prompt and resource downloads",
-  "SVG remaining SMIL/CSS animations",
-  "Image decode budgets on real pages",
-  "Longer fuzz campaigns with 25 targets",
+  "Longer fuzz campaigns with 26 targets",
+  "Wire the charset fuzz target into the CI ASan matrix",
   "Bench improvements and real-page E2E rows",
 ]
 
@@ -34,15 +33,15 @@ next_up = [
 # ---------------------------------------------------------------------------------------
 [stats]
 tests = 2568
-tests_commit = "8f76818"
+tests_commit = "58b28f9"
 tests_date = "2026-11-17"
 crates = 14
-rust_lines = 187304
+rust_lines = 187365
 unsafe_forbidden_crates = 14
 
 [gate]
 status = "PASS"
-verified_commit = "52127a6"
+verified_commit = "58b28f9"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"
@@ -193,7 +192,7 @@ notes = "crates/bench + docs/PERFORMANCE.md; baselines repeatable, budgets met w
 id = "FUZZ"
 title = "Fuzzing"
 percent = 90
-notes = "25 libFuzzer targets (124 corpus files) + nightly CI smoke; longer campaigns pending"
+notes = "26 libFuzzer targets (158 corpus files; 25 in CI) + nightly smoke; longer campaigns pending"
 
 [[area]]
 id = "DOCS"

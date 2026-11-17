@@ -195,6 +195,13 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "charset"
+path = "fuzz_targets/charset.rs"
+test = false
+doc = false
+bench = false
+
 # Keep symbols + ASan stack traces readable in crash reports (cargo-fuzz enables
 # `-Zsanitizer=address` internally; this only affects the fuzz binaries).
 [profile.release]
