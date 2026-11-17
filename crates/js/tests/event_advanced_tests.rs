@@ -510,3 +510,35 @@ fn inline_input_focus_keydown_handlers_dispatch() {
         .expect("evaluate inline handlers");
     assert_eq!(out, "true", "all inline handlers must dispatch: {out}");
 }
+
+#[test]
+fn form_validity_and_submit_methods() {
+    // #1505: controls expose validity/checkValidity/setCustomValidity and forms requestSubmit.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "globalThis.submitted = 0;
+             var form = document.createElement('form');
+             document.body.appendChild(form);
+             var input = document.createElement('input');
+             input.setAttribute('required', '');
+             form.appendChild(input);
+             var beforeValid = input.checkValidity();
+             var beforeValidity = input.validity.valueMissing;
+             var r1 = form.requestSubmit(); // invalid -> blocked
+             input.value = 'x';
+             var afterValid = input.checkValidity();
+             input.setCustomValidity('bad');
+             var customInvalid = !input.checkValidity() && input.validity.customError;
+             input.setCustomValidity('');
+             form.addEventListener('submit', function () { submitted += 1; });
+             var r2 = form.requestSubmit(); // valid -> fires submit
+             String([beforeValid, beforeValidity, r1, afterValid, customInvalid, r2, submitted].join(','));",
+            "validity.js",
+        )
+        .expect("evaluate validity");
+    assert_eq!(
+        out, "false,true,false,true,true,true,1",
+        "validity and submit semantics: {out}"
+    );
+}

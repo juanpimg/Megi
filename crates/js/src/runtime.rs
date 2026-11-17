@@ -1358,7 +1358,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 33] = [
+    let accessors: [(&str, AccessorKind); 34] = [
         ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
@@ -1459,6 +1459,10 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("blur", 0, node_blur),
         ("scrollIntoView", 0, node_scroll_into_view),
         ("getBoundingClientRect", 0, node_get_bounding_client_rect),
+        ("checkValidity", 0, node_check_validity),
+        ("setCustomValidity", 1, node_set_custom_validity),
+        ("requestSubmit", 0, node_request_submit),
+        ("submit", 0, node_submit),
     ] {
         init.function(native(function), js_string!(name), length);
     }
@@ -1550,6 +1554,7 @@ fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::Href => (node_href_get, Some(node_href_set)),
         AccessorKind::Src => (node_src_get, Some(node_src_set)),
         AccessorKind::SelectedIndex => (node_selected_index_get, Some(node_selected_index_set)),
+        AccessorKind::Validity => (node_validity_get, None),
     }
 }
 
@@ -2019,6 +2024,165 @@ fn node_value_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
     .flatten()
     .unwrap_or_default();
     Ok(JsValue::from(js_string!(value)))
+}
+
+/// Validity flags for a form control (#1505). Pure DOM data so it can be computed under a
+/// `with_host` borrow without re-entering JS.
+#[derive(Default)]
+struct ValidityFlags {
+    value_missing: bool,
+    custom_error: bool,
+}
+
+fn validity_flags_element(
+    document: &dom::Document,
+    node_id: NodeId,
+    element: &dom::ElementData,
+) -> ValidityFlags {
+    // A custom validity message is stored on the element as a data attribute so no extra
+    // host state is needed and it survives snapshots/re-renders.
+    let custom_error = element
+        .get_attribute("data-megi-validity-error")
+        .is_some_and(|message| !message.is_empty());
+    let required = element.has_attribute("required");
+    let value_missing = if element.local_name == "input" {
+        let is_checkable = matches!(
+            element
+                .get_attribute("type")
+                .unwrap_or("")
+                .to_ascii_lowercase()
+                .as_str(),
+            "checkbox" | "radio"
+        );
+        if is_checkable {
+            false // checkable controls use `checked`, handled separately by the UA
+        } else {
+            let value = element.get_attribute("value").unwrap_or("");
+            required && value.is_empty()
+        }
+    } else if element.local_name == "textarea" {
+        required && document.text_content(node_id).trim().is_empty()
+    } else {
+        false
+    };
+    ValidityFlags {
+        value_missing,
+        custom_error,
+    }
+}
+
+fn validity_flags(node_id: NodeId) -> ValidityFlags {
+    with_host(|host| {
+        let document = &host.document;
+        let element = document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())?;
+        Some(validity_flags_element(document, node_id, element))
+    })
+    .flatten()
+    .unwrap_or_default()
+}
+
+fn node_check_validity(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let flags = validity_flags(node_id);
+    Ok(JsValue::from(!(flags.value_missing || flags.custom_error)))
+}
+
+fn node_set_custom_validity(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let message = arg_string(args, 0, context)?;
+    with_host(|host| {
+        let document = &mut host.document;
+        let Some(node) = document.try_node_mut(node_id) else {
+            return;
+        };
+        let Some(element) = node.as_element_mut() else {
+            return;
+        };
+        if message.is_empty() {
+            element
+                .attributes
+                .retain(|attr| attr.local_name != "data-megi-validity-error");
+        } else {
+            element.set_attribute(
+                dom::Attribute::new("data-megi-validity-error", &message),
+                true,
+            );
+        }
+    });
+    Ok(JsValue::undefined())
+}
+
+fn node_validity_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let flags = validity_flags(node_id);
+    let valid = !(flags.value_missing || flags.custom_error);
+    let object = ObjectInitializer::new(context).build();
+    for (name, value) in [
+        ("valid", valid),
+        ("valueMissing", flags.value_missing),
+        ("customError", flags.custom_error),
+        ("patternMismatch", false),
+        ("typeMismatch", false),
+        ("tooShort", false),
+        ("tooLong", false),
+        ("rangeUnderflow", false),
+        ("rangeOverflow", false),
+        ("stepMismatch", false),
+        ("badInput", false),
+    ] {
+        let _ = object.set(js_string!(name), JsValue::from(value), false, context);
+    }
+    Ok(JsValue::from(object))
+}
+
+fn node_request_submit(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    // `requestSubmit()` runs constraint validation first and does not fire `submit` if invalid
+    // (#1505). Validate every form control in document order.
+    let node_id = this_node(this, context)?;
+    let invalid = with_host(|host| {
+        let document = &host.document;
+        document
+            .descendants(node_id)
+            .filter_map(|child| {
+                document
+                    .try_node(child)
+                    .and_then(|node| node.as_element().map(|element| (child, element)))
+            })
+            .any(|(child_id, element)| {
+                matches!(element.local_name.as_str(), "input" | "textarea" | "select")
+                    && validity_flags_element(document, child_id, element).value_missing
+            })
+    })
+    .unwrap_or(false);
+    if invalid {
+        return Ok(JsValue::from(false));
+    }
+    let dispatched = crate::events::dispatch_event_type(this, "submit", true, true, context)?;
+    Ok(JsValue::from(dispatched))
+}
+
+fn node_submit(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    // `form.submit()` bypasses constraint validation (#1505).
+    let dispatched = crate::events::dispatch_event_type(this, "submit", true, true, context)?;
+    Ok(JsValue::from(dispatched))
 }
 
 fn node_value_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {

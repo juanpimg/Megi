@@ -665,6 +665,27 @@ fn remove_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> J
     Ok(JsValue::undefined())
 }
 
+/// Dispatches a synthesized event of `event_type` on `target` (used by form submission,
+/// #1505). Builds a real Event object so listeners and inline handlers observe it normally.
+pub(crate) fn dispatch_event_type(
+    target: &JsValue,
+    event_type: &str,
+    bubbles: bool,
+    cancelable: bool,
+    context: &mut Context,
+) -> JsResult<bool> {
+    let event = build_event(
+        context,
+        event_type,
+        bubbles,
+        cancelable,
+        JsValue::undefined(),
+    );
+    let args = [event];
+    let result = dispatch_event(target, &args, context)?;
+    Ok(result.to_boolean())
+}
+
 fn dispatch_event(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let target = target_key(this, context)?;
     let event = args
