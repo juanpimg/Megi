@@ -474,6 +474,8 @@ impl Document {
 /// Inheritable presentation state.
 #[derive(Clone, Debug)]
 struct Style {
+    /// The inherited `color` property; used to resolve `currentColor` (#1276).
+    color: Color,
     fill: Paint,
     stroke: Paint,
     fill_opacity: f32,
@@ -500,6 +502,8 @@ struct Style {
 pub(crate) enum Paint {
     None,
     Solid(Color),
+    /// Resolved to the inherited `color` once the whole style is applied (#1276).
+    CurrentColor,
     Gradient(u32),
     Pattern(u32),
 }
@@ -507,6 +511,7 @@ pub(crate) enum Paint {
 impl Default for Style {
     fn default() -> Self {
         Self {
+            color: Color::BLACK,
             fill: Paint::Solid(Color::BLACK),
             stroke: Paint::None,
             fill_opacity: 1.0,
@@ -530,6 +535,16 @@ impl Default for Style {
 }
 
 impl Style {
+    /// Resolves `currentColor` paints against the inherited `color` property (#1276).
+    fn resolve_current_color(&mut self) {
+        if self.fill == Paint::CurrentColor {
+            self.fill = Paint::Solid(self.color);
+        }
+        if self.stroke == Paint::CurrentColor {
+            self.stroke = Paint::Solid(self.color);
+        }
+    }
+
     /// Applies, in cascade order, the element's presentation attributes, the
     /// matching `<style>` rules (specificity then source order) and finally the
     /// inline `style="..."` attribute (highest priority).
@@ -567,6 +582,11 @@ impl Style {
         patterns: &HashMap<String, u32>,
     ) {
         match name {
+            "color" => {
+                if let Some(color) = parse_color(value) {
+                    self.color = color;
+                }
+            }
             "fill" => self.fill = parse_paint(value, gradients, patterns),
             "stroke" => self.stroke = parse_paint(value, gradients, patterns),
             "fill-opacity" => {
@@ -663,6 +683,8 @@ impl Style {
 
 /// Presentation attributes applied (with specificity 0) before `<style>` rules.
 const PRESENTATION_PROPERTIES: &[&str] = &[
+    // `color` must be applied before `fill`/`stroke` so `currentColor` can resolve.
+    "color",
     "fill",
     "stroke",
     "fill-opacity",
@@ -976,6 +998,8 @@ impl<'a> Builder<'a> {
             self.pattern_ids,
             &mut selector_budget,
         )?;
+        // All declarations are applied now, including `color` from CSS/inline styles.
+        style.resolve_current_color();
         self.selector_checks_used = selector_budget.used;
         let local_transform = element
             .attribute("transform")
@@ -1557,6 +1581,9 @@ fn parse_paint(
     let value = raw.trim();
     if value.eq_ignore_ascii_case("none") {
         return Paint::None;
+    }
+    if value.eq_ignore_ascii_case("currentcolor") {
+        return Paint::CurrentColor;
     }
     if let Some(id) = parse_url_reference(value) {
         if let Some(index) = pattern_ids.get(&id) {

@@ -1178,6 +1178,9 @@ fn prepare_paint<'a>(
 ) -> Option<PreparedPaint<'a>> {
     match paint {
         Paint::None => None,
+        // Resolved by Style::resolve_current_color during document building; defensive
+        // fallback for any style constructed elsewhere.
+        Paint::CurrentColor => Some(PreparedPaint::Solid(Color::BLACK)),
         Paint::Solid(color) => (color.a > 0).then_some(PreparedPaint::Solid(color)),
         Paint::Pattern(index) => patterns
             .get(index as usize)
