@@ -69,10 +69,14 @@ fn main() -> ExitCode {
     let setup_ms = setup_started.elapsed().as_secs_f64() * 1000.0;
 
     let outcome = suite.run(&options, setup_ms);
+    let empty = outcome.results.is_empty();
     if options.json {
         report::print_json(&outcome);
     } else {
         report::print_table(&outcome);
+    }
+    if empty {
+        return ExitCode::FAILURE;
     }
     ExitCode::SUCCESS
 }

@@ -136,10 +136,20 @@ impl Suite {
                 throughput,
             });
         }
+        let skipped = std::mem::take(&mut self.skipped);
+        let skipped = match &opts.filter {
+            Some(filter) => skipped
+                .into_iter()
+                .filter(|(name, _)| {
+                    name.contains(filter.as_str())
+                })
+                .collect(),
+            None => skipped,
+        };
         let total_median_ms = results.iter().map(|result| result.median_ms).sum();
         RunOutcome {
             results,
-            skipped: std::mem::take(&mut self.skipped),
+            skipped,
             meta: Meta::capture(),
             setup_ms,
             total_median_ms,
