@@ -1,23 +1,23 @@
 path	lines	category	phase	auditor	date	status	findings	notes
 .cargo/config.toml	5	manifest	F3			pending		
-.github/CODEOWNERS	31	ci	F3			pending		
-.github/ISSUE_TEMPLATE/bug_report.yml	59	ci	F3			pending		
-.github/ISSUE_TEMPLATE/feature_request.yml	48	ci	F3			pending		
-.github/ISSUE_TEMPLATE/security_report.yml	19	ci	F3			pending		
-.github/PULL_REQUEST_TEMPLATE.md	27	ci	F3			pending		
-.github/actions/install-system-deps/action.yml	21	ci	F3			pending		
-.github/dependabot.yml	25	ci	F3			pending		
-.github/labeler.yml	55	ci	F3			pending		
-.github/workflows/bench.yml	77	ci	F3			pending		
-.github/workflows/ci.yml	452	ci	F3			pending		
-.github/workflows/coverage.yml	75	ci	F3			pending		
-.github/workflows/dependabot-auto-merge.yml	27	ci	F3			pending		
-.github/workflows/docs.yml	51	ci	F3			pending		
-.github/workflows/fuzz-nightly.yml	337	ci	F3			pending		
-.github/workflows/fuzz-soak.yml	90	ci	F3			pending		
-.github/workflows/issue-title-labeler.yml	51	ci	F3			pending		
-.github/workflows/labeler.yml	18	ci	F3			pending		
-.github/workflows/release.yml	193	ci	F3			pending		
+.github/CODEOWNERS	31	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/ISSUE_TEMPLATE/bug_report.yml	59	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/ISSUE_TEMPLATE/feature_request.yml	48	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/ISSUE_TEMPLATE/security_report.yml	19	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/PULL_REQUEST_TEMPLATE.md	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/actions/install-system-deps/action.yml	21	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/dependabot.yml	25	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/labeler.yml	55	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/bench.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/ci.yml	452	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/coverage.yml	75	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/dependabot-auto-merge.yml	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/docs.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/fuzz-nightly.yml	337	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/fuzz-soak.yml	90	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/issue-title-labeler.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/labeler.yml	18	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/release.yml	193	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .gitignore	46	manifest	F3			pending		
 .gitleaks.toml	21	manifest	F3			pending		
 CHANGELOG.md	1774	docs	F3			pending		
@@ -465,11 +465,11 @@ crates/svg/src/gradient.rs	494	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324
 crates/svg/src/lib.rs	351	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/path.rs	601	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/pattern.rs	101	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
-crates/svg/src/raster.rs	2132	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
+crates/svg/src/raster.rs	2140	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/text.rs	117	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/transform.rs	355	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/xml.rs	460	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
-crates/svg/tests/effects.rs	224	test	F1			pending		
+crates/svg/tests/effects.rs	243	test	F1			pending		
 crates/svg/tests/filters_smil.rs	252	test	F1			pending		
 crates/svg/tests/fixtures/blend_merge.svg	17	test	F1			pending		
 crates/svg/tests/fixtures/clip_path.svg	16	test	F1			pending		
@@ -491,7 +491,7 @@ crates/test_harness/Cargo.toml	17	manifest	F3			pending
 crates/test_harness/src/css_harness.rs	447	src	F2	wave1	2026-11-16	covered	#1240-#1251	
 crates/test_harness/src/js_executor.rs	189	src	F2	wave1	2026-11-16	covered	#1240-#1251	
 crates/test_harness/src/lib.rs	143	src	F2	wave1	2026-11-16	covered	#1240-#1251	
-crates/test_harness/src/main.rs	453	src	F2	wave1	2026-11-16	covered	#1240-#1251	
+crates/test_harness/src/main.rs	498	src	F2	wave1	2026-11-16	covered	#1240-#1251	
 crates/test_harness/src/serializer_harness.rs	856	src	F2	wave1	2026-11-16	covered	#1240-#1251	
 crates/test_harness/src/tokenizer_harness.rs	469	src	F2	wave1	2026-11-16	covered	#1240-#1251	
 crates/test_harness/src/tree_harness.rs	267	src	F2	wave1	2026-11-16	covered	#1240-#1251	
@@ -513,7 +513,8 @@ docs/TOOLING.md	787	docs	F3			pending
 docs/audit/FINDINGS.md	254	docs	F3	lead	2026-11-17	covered	-	written and reviewed while building the F0 ledger
 docs/audit/README.md	96	docs	F3	lead	2026-11-17	covered	-	written and reviewed while building the F0 ledger
 docs/audit/coverage.tsv	0	generated	-			exempt		not read line by line: generated
-docs/audit/findings/wave1.json	3420	docs	F3	lead	2026-11-17	covered	-	written and reviewed while building the F0 ledger
+docs/audit/findings/f2/00-index.md	62	docs	F3	lead	2026-11-17	covered	#1404-#1487	
+docs/audit/findings/wave1.json	3420	docs	F3	lead	2026-11-17	covered	#1404-#1487	written and reviewed while building the F0 ledger
 docs/images/images-e2e.png	0	binary	-			exempt		not read line by line: binary
 docs/images/phase4-basic.png	0	binary	-			exempt		not read line by line: binary
 docs/images/render-fixture.png	0	binary	-			exempt		not read line by line: binary
@@ -664,51 +665,51 @@ fuzz/corpus/webp/webp_lossy.webp	0	exempt	-			exempt		not read line by line: exe
 fuzz/corpus/woff2_decode/huge_directory_length.woff2	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/woff2_decode/open_sans.woff2	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/woff2_decode/truncated.woff2	0	exempt	-			exempt		not read line by line: exempt
-fuzz/fuzz_targets/body_stream.rs	136	fuzz	F1			pending		
-fuzz/fuzz_targets/container_queries.rs	116	fuzz	F1			pending		
-fuzz/fuzz_targets/css_parse.rs	41	fuzz	F1			pending		
-fuzz/fuzz_targets/dom_mutate.rs	97	fuzz	F1			pending		
-fuzz/fuzz_targets/dom_tree.rs	63	fuzz	F1			pending		
-fuzz/fuzz_targets/exif_parse.rs	22	fuzz	F1			pending		
-fuzz/fuzz_targets/font_decode.rs	15	fuzz	F1			pending		
-fuzz/fuzz_targets/fonts_shape.rs	12	fuzz	F1			pending		
-fuzz/fuzz_targets/h2_push.rs	141	fuzz	F1			pending		
-fuzz/fuzz_targets/hpack_decode.rs	75	fuzz	F1			pending		
-fuzz/fuzz_targets/html_parse.rs	70	fuzz	F1			pending		
-fuzz/fuzz_targets/image_decode.rs	62	fuzz	F1			pending		
-fuzz/fuzz_targets/js_eval.rs	330	fuzz	F1			pending		
-fuzz/fuzz_targets/js_module.rs	100	fuzz	F1			pending		
-fuzz/fuzz_targets/layout_resolve.rs	39	fuzz	F1			pending		
-fuzz/fuzz_targets/layout_tree.rs	24	fuzz	F1			pending		
-fuzz/fuzz_targets/net_surface.rs	54	fuzz	F1			pending		
-fuzz/fuzz_targets/net_url.rs	44	fuzz	F1			pending		
-fuzz/fuzz_targets/paint_display_list.rs	35	fuzz	F1			pending		
-fuzz/fuzz_targets/render_pipeline.rs	87	fuzz	F1			pending		
-fuzz/fuzz_targets/selectors.rs	111	fuzz	F1			pending		
-fuzz/fuzz_targets/svg_parse.rs	90	fuzz	F1			pending		
-fuzz/fuzz_targets/text_boundary.rs	65	fuzz	F1			pending		
-fuzz/fuzz_targets/webp.rs	71	fuzz	F1			pending		
-fuzz/fuzz_targets/woff2_decode.rs	26	fuzz	F1			pending		
+fuzz/fuzz_targets/body_stream.rs	136	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/container_queries.rs	116	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/css_parse.rs	41	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/dom_mutate.rs	97	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/dom_tree.rs	63	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/exif_parse.rs	22	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/font_decode.rs	15	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/fonts_shape.rs	12	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/h2_push.rs	141	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/hpack_decode.rs	75	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/html_parse.rs	70	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/image_decode.rs	62	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/js_eval.rs	330	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/js_module.rs	100	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/layout_resolve.rs	39	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/layout_tree.rs	24	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/net_surface.rs	54	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/net_url.rs	44	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/paint_display_list.rs	35	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/render_pipeline.rs	87	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/selectors.rs	111	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/svg_parse.rs	90	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/text_boundary.rs	65	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/webp.rs	71	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/woff2_decode.rs	26	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/src/lib.rs	85	fixture	F1			pending		
 rust-toolchain.toml	3	manifest	F3			pending		
-tests/fixtures/phase4/README.md	88	docs	F3			pending		
-tests/fixtures/phase4/basic.html	113	fixture	F1			pending		
+tests/fixtures/phase4/README.md	88	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/phase4/basic.html	113	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/phase4/basic.rgba	0	binary	-			exempt		not read line by line: binary
-tests/fixtures/real-sites/example.html	1	fixture	F1			pending		
-tests/fixtures/real-sites/hn.html	3	fixture	F1			pending		
-tests/fixtures/real-sites/rust.html	390	fixture	F1			pending		
-tests/fixtures/real-sites/wikipedia.html	680	fixture	F1			pending		
-tests/fixtures/render/OFL-OpenSans.txt	92	docs	F3			pending		
+tests/fixtures/real-sites/example.html	1	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/real-sites/hn.html	3	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/real-sites/rust.html	390	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/real-sites/wikipedia.html	680	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/OFL-OpenSans.txt	92	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/OpenSans-Regular-latin-corrupt.woff2	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/OpenSans-Regular-latin.woff2	0	binary	-			exempt		not read line by line: binary
-tests/fixtures/render/README.md	123	docs	F3			pending		
-tests/fixtures/render/aspect_ratio.html	18	fixture	F1			pending		
+tests/fixtures/render/README.md	123	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/aspect_ratio.html	18	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/assets/bg_photo.jpg	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/blocks.gif	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/bullet.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/corrupt.jpg	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/exif.jpg	0	binary	-			exempt		not read line by line: binary
-tests/fixtures/render/assets/js_mutation.js	4	fixture	F1			pending		
+tests/fixtures/render/assets/js_mutation.js	4	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/assets/pattern.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/photo.jpg	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/photo.webp	0	binary	-			exempt		not read line by line: binary
@@ -718,145 +719,145 @@ tests/fixtures/render/assets/progressive.jpg	0	binary	-			exempt		not read line 
 tests/fixtures/render/assets/push_blue.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/push_red.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/px.png	0	binary	-			exempt		not read line by line: binary
-tests/fixtures/render/assets/svg_bg.svg	3	fixture	F1			pending		
-tests/fixtures/render/assets/svg_corrupt.svg	1	fixture	F1			pending		
-tests/fixtures/render/assets/svg_huge.svg	3	fixture	F1			pending		
-tests/fixtures/render/assets/svg_no_dims.svg	3	fixture	F1			pending		
-tests/fixtures/render/assets/svg_red_circle.svg	4	fixture	F1			pending		
-tests/fixtures/render/assets/svg_viewbox.svg	3	fixture	F1			pending		
+tests/fixtures/render/assets/svg_bg.svg	3	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/assets/svg_corrupt.svg	1	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/assets/svg_huge.svg	3	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/assets/svg_no_dims.svg	3	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/assets/svg_red_circle.svg	4	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/assets/svg_viewbox.svg	3	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/assets/v8l_alpha.rgba	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/v8l_alpha.webp	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/v8l_two_color.rgba	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/v8l_two_color.webp	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/webp_lossy.webp	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/webp_photo_lossless.webp	0	binary	-			exempt		not read line by line: binary
-tests/fixtures/render/backdrop_filter.html	31	fixture	F1			pending		
-tests/fixtures/render/background_layers.html	26	fixture	F1			pending		
-tests/fixtures/render/backgrounds.html	45	fixture	F1			pending		
-tests/fixtures/render/basic.html	17	fixture	F1			pending		
-tests/fixtures/render/blend_modes.html	25	fixture	F1			pending		
-tests/fixtures/render/browser_api.html	65	fixture	F1			pending		
-tests/fixtures/render/calc_gap.html	9	fixture	F1			pending		
-tests/fixtures/render/calc_margin.html	8	fixture	F1			pending		
-tests/fixtures/render/calc_width.html	8	fixture	F1			pending		
-tests/fixtures/render/cascade_layers.html	28	fixture	F1			pending		
-tests/fixtures/render/cascade_layers_nested.html	15	fixture	F1			pending		
-tests/fixtures/render/color_spaces.html	30	fixture	F1			pending		
-tests/fixtures/render/conic_gradients.html	28	fixture	F1			pending		
-tests/fixtures/render/conic_repeating.html	18	fixture	F1			pending		
-tests/fixtures/render/console_messages.html	14	fixture	F1			pending		
-tests/fixtures/render/container_queries.html	36	fixture	F1			pending		
-tests/fixtures/render/container_queries_named.html	32	fixture	F1			pending		
-tests/fixtures/render/css_state.html	35	fixture	F1			pending		
-tests/fixtures/render/fetch_data.json	1	fixture	F1			pending		
-tests/fixtures/render/filter_effects.html	29	fixture	F1			pending		
-tests/fixtures/render/find.html	11	fixture	F1			pending		
-tests/fixtures/render/flex_column.html	9	fixture	F1			pending		
-tests/fixtures/render/flex_row.html	9	fixture	F1			pending		
-tests/fixtures/render/flex_wrap.html	10	fixture	F1			pending		
-tests/fixtures/render/forms.html	19	fixture	F1			pending		
-tests/fixtures/render/gradient_linear.html	20	fixture	F1			pending		
-tests/fixtures/render/gradient_radial.html	17	fixture	F1			pending		
-tests/fixtures/render/grid_alignment.html	8	fixture	F1			pending		
-tests/fixtures/render/grid_areas.html	9	fixture	F1			pending		
-tests/fixtures/render/grid_autofill.html	10	fixture	F1			pending		
-tests/fixtures/render/grid_columns.html	9	fixture	F1			pending		
-tests/fixtures/render/grid_content.html	12	fixture	F1			pending		
-tests/fixtures/render/grid_dense.html	9	fixture	F1			pending		
-tests/fixtures/render/grid_rows.html	10	fixture	F1			pending		
-tests/fixtures/render/grid_span.html	11	fixture	F1			pending		
-tests/fixtures/render/image_formats.html	9	fixture	F1			pending		
-tests/fixtures/render/image_scaled.html	10	fixture	F1			pending		
-tests/fixtures/render/image_set.html	20	fixture	F1			pending		
-tests/fixtures/render/images.html	18	fixture	F1			pending		
-tests/fixtures/render/jpeg_gif.html	20	fixture	F1			pending		
-tests/fixtures/render/js_console.html	17	fixture	F1			pending		
-tests/fixtures/render/js_create.html	21	fixture	F1			pending		
-tests/fixtures/render/js_document_write.html	16	fixture	F1			pending		
-tests/fixtures/render/js_event_domcontentloaded.html	17	fixture	F1			pending		
-tests/fixtures/render/js_event_interval.html	17	fixture	F1			pending		
-tests/fixtures/render/js_event_load.html	15	fixture	F1			pending		
-tests/fixtures/render/js_event_loop.html	18	fixture	F1			pending		
-tests/fixtures/render/js_event_timeout.html	12	fixture	F1			pending		
-tests/fixtures/render/js_event_timeout_zero.html	12	fixture	F1			pending		
-tests/fixtures/render/js_external.html	15	fixture	F1			pending		
-tests/fixtures/render/js_fetch_404.html	8	fixture	F1			pending		
-tests/fixtures/render/js_fetch_abort.html	12	fixture	F1			pending		
-tests/fixtures/render/js_fetch_budget.html	11	fixture	F1			pending		
-tests/fixtures/render/js_fetch_json.html	8	fixture	F1			pending		
-tests/fixtures/render/js_fetch_no_network.html	8	fixture	F1			pending		
-tests/fixtures/render/js_fetch_stream.html	21	fixture	F1			pending		
-tests/fixtures/render/js_geometry_display_none.html	7	fixture	F1			pending		
-tests/fixtures/render/js_geometry_fixed.html	8	fixture	F1			pending		
-tests/fixtures/render/js_geometry_timer.html	9	fixture	F1			pending		
-tests/fixtures/render/js_host_events.html	19	fixture	F1			pending		
-tests/fixtures/render/js_loop.html	17	fixture	F1			pending		
-tests/fixtures/render/js_observer_chain.html	34	fixture	F1			pending		
-tests/fixtures/render/js_provider_actions.html	17	fixture	F1			pending		
-tests/fixtures/render/js_storage_read.html	14	fixture	F1			pending		
-tests/fixtures/render/js_storage_write.html	11	fixture	F1			pending		
-tests/fixtures/render/js_text.html	20	fixture	F1			pending		
-tests/fixtures/render/js_throw.html	17	fixture	F1			pending		
-tests/fixtures/render/js_tla_fetch.html	8	fixture	F1			pending		
-tests/fixtures/render/js_tla_timer.html	7	fixture	F1			pending		
-tests/fixtures/render/js_worker_error.html	9	fixture	F1			pending		
-tests/fixtures/render/js_worker_sum.html	10	fixture	F1			pending		
-tests/fixtures/render/layout_aspect_ratio.html	19	fixture	F1			pending		
+tests/fixtures/render/backdrop_filter.html	31	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/background_layers.html	26	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/backgrounds.html	45	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/basic.html	17	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/blend_modes.html	25	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/browser_api.html	65	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/calc_gap.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/calc_margin.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/calc_width.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/cascade_layers.html	28	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/cascade_layers_nested.html	15	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/color_spaces.html	30	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/conic_gradients.html	28	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/conic_repeating.html	18	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/console_messages.html	14	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/container_queries.html	36	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/container_queries_named.html	32	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/css_state.html	35	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/fetch_data.json	1	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/filter_effects.html	29	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/find.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/flex_column.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/flex_row.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/flex_wrap.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/forms.html	19	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/gradient_linear.html	20	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/gradient_radial.html	17	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/grid_alignment.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/grid_areas.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/grid_autofill.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/grid_columns.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/grid_content.html	12	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/grid_dense.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/grid_rows.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/grid_span.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/image_formats.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/image_scaled.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/image_set.html	20	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/images.html	18	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/jpeg_gif.html	20	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_console.html	17	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_create.html	21	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_document_write.html	16	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_event_domcontentloaded.html	17	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_event_interval.html	17	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_event_load.html	15	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_event_loop.html	18	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_event_timeout.html	12	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_event_timeout_zero.html	12	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_external.html	15	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_fetch_404.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_fetch_abort.html	12	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_fetch_budget.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_fetch_json.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_fetch_no_network.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_fetch_stream.html	21	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_geometry_display_none.html	7	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_geometry_fixed.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_geometry_timer.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_host_events.html	19	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_loop.html	17	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_observer_chain.html	34	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_provider_actions.html	17	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_storage_read.html	14	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_storage_write.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_text.html	20	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_throw.html	17	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_tla_fetch.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_tla_timer.html	7	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_worker_error.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/js_worker_sum.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/layout_aspect_ratio.html	19	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/layout_aspect_ratio.png	0	binary	-			exempt		not read line by line: binary
-tests/fixtures/render/module_chain.html	11	fixture	F1			pending		
-tests/fixtures/render/module_error.html	13	fixture	F1			pending		
-tests/fixtures/render/module_external.html	11	fixture	F1			pending		
-tests/fixtures/render/module_inline.html	16	fixture	F1			pending		
-tests/fixtures/render/module_no_network.html	13	fixture	F1			pending		
-tests/fixtures/render/module_observers_timers.html	13	fixture	F1			pending		
-tests/fixtures/render/modules/app.js	11	fixture	F1			pending		
-tests/fixtures/render/modules/broken.js	3	fixture	F1			pending		
-tests/fixtures/render/modules/chain.js	3	fixture	F1			pending		
-tests/fixtures/render/modules/colors.js	2	fixture	F1			pending		
-tests/fixtures/render/modules/geometry.js	4	fixture	F1			pending		
-tests/fixtures/render/modules/meta.js	1	fixture	F1			pending		
-tests/fixtures/render/modules/observer_timer.js	10	fixture	F1			pending		
-tests/fixtures/render/modules/painter.js	8	fixture	F1			pending		
-tests/fixtures/render/object_fit.html	27	fixture	F1			pending		
-tests/fixtures/render/raf_animation.html	33	fixture	F1			pending		
-tests/fixtures/render/script_errors.html	22	fixture	F1			pending		
-tests/fixtures/render/showcase/README.md	55	docs	F3			pending		
+tests/fixtures/render/module_chain.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/module_error.html	13	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/module_external.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/module_inline.html	16	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/module_no_network.html	13	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/module_observers_timers.html	13	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/modules/app.js	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/modules/broken.js	3	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/modules/chain.js	3	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/modules/colors.js	2	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/modules/geometry.js	4	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/modules/meta.js	1	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/modules/observer_timer.js	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/modules/painter.js	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/object_fit.html	27	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/raf_animation.html	33	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/script_errors.html	22	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/showcase/README.md	55	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/showcase/assets/logo.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/showcase/assets/tile.png	0	binary	-			exempt		not read line by line: binary
-tests/fixtures/render/showcase/css/print-sheet.css	8	fixture	F1			pending		
-tests/fixtures/render/showcase/css/site.css	225	fixture	F1			pending		
-tests/fixtures/render/showcase/css/theme.css	31	fixture	F1			pending		
+tests/fixtures/render/showcase/css/print-sheet.css	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/showcase/css/site.css	225	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/showcase/css/theme.css	31	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/showcase/golden.png	0	binary	-			exempt		not read line by line: binary
-tests/fixtures/render/showcase/index.html	86	fixture	F1			pending		
-tests/fixtures/render/sticky_offsets.html	14	fixture	F1			pending		
-tests/fixtures/render/sub/print-only.css	4	fixture	F1			pending		
-tests/fixtures/render/sub/theme.css	7	fixture	F1			pending		
-tests/fixtures/render/svg_background.html	7	fixture	F1			pending		
-tests/fixtures/render/svg_corrupt.html	7	fixture	F1			pending		
-tests/fixtures/render/svg_img.html	7	fixture	F1			pending		
-tests/fixtures/render/svg_inline_block.html	11	fixture	F1			pending		
-tests/fixtures/render/svg_inline_class.html	9	fixture	F1			pending		
-tests/fixtures/render/svg_inline_corrupt.html	10	fixture	F1			pending		
-tests/fixtures/render/svg_inline_multiple.html	11	fixture	F1			pending		
-tests/fixtures/render/svg_inline_simple.html	12	fixture	F1			pending		
-tests/fixtures/render/svg_inline_use.html	16	fixture	F1			pending		
-tests/fixtures/render/svg_inline_viewbox.html	11	fixture	F1			pending		
-tests/fixtures/render/svg_intrinsic.html	7	fixture	F1			pending		
-tests/fixtures/render/svg_viewbox.html	7	fixture	F1			pending		
-tests/fixtures/render/text_transform.html	14	fixture	F1			pending		
-tests/fixtures/render/webfont-corrupt.html	15	fixture	F1			pending		
-tests/fixtures/render/webfont-fallback.html	16	fixture	F1			pending		
-tests/fixtures/render/webfont-multisource.html	20	fixture	F1			pending		
-tests/fixtures/render/webfont-remote.html	15	fixture	F1			pending		
-tests/fixtures/render/webfont-starvation.html	28	fixture	F1			pending		
-tests/fixtures/render/webfont.html	23	fixture	F1			pending		
-tests/fixtures/render/webp.html	20	fixture	F1			pending		
-tests/fixtures/render/webp_lossy.html	11	fixture	F1			pending		
-tests/fixtures/render/webp_real.html	10	fixture	F1			pending		
-tests/fixtures/render/white_space.html	17	fixture	F1			pending		
-tests/fixtures/render/word_spacing.html	14	fixture	F1			pending		
-tests/fixtures/render/worker_error.js	1	fixture	F1			pending		
-tests/fixtures/render/worker_sum.js	3	fixture	F1			pending		
+tests/fixtures/render/showcase/index.html	86	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/sticky_offsets.html	14	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/sub/print-only.css	4	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/sub/theme.css	7	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/svg_background.html	7	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/svg_corrupt.html	7	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/svg_img.html	7	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/svg_inline_block.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/svg_inline_class.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/svg_inline_corrupt.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/svg_inline_multiple.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/svg_inline_simple.html	12	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/svg_inline_use.html	16	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/svg_inline_viewbox.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/svg_intrinsic.html	7	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/svg_viewbox.html	7	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/text_transform.html	14	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/webfont-corrupt.html	15	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/webfont-fallback.html	16	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/webfont-multisource.html	20	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/webfont-remote.html	15	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/webfont-starvation.html	28	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/webfont.html	23	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/webp.html	20	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/webp_lossy.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/webp_real.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/white_space.html	17	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/word_spacing.html	14	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/worker_error.js	1	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/worker_sum.js	3	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/html5lib-tests/.gitattributes	0	vendored	-			exempt		not read line by line: vendored
 tests/html5lib-tests/.github/workflows/downstream.yml	0	vendored	-			exempt		not read line by line: vendored
 tests/html5lib-tests/.github/workflows/lint.yml	0	vendored	-			exempt		not read line by line: vendored
@@ -1034,24 +1035,24 @@ tests/wpt/css/css-syntax/README.md	59	docs	F3			pending
 tests/wpt/css/css-syntax/anb-parsing.html	125	fixture	F1			pending		
 tests/wpt/css/css-syntax/declarations-trim-whitespace.html	54	fixture	F1			pending		
 tests/wpt/css/css-syntax/input-preprocessing.html	46	fixture	F1			pending		
-tools/audit_coverage.py	389	tool	F3	lead	2026-11-17	covered	-	written and reviewed while building the F0 ledger
-tools/audit_recover_issues.py	209	tool	F3	lead	2026-11-17	covered	-	written and reviewed while building the F0 ledger
-tools/bench.sh	111	tool	F3			pending		
-tools/bench_compare.py	169	tool	F3			pending		
-tools/check_docs_links.py	132	tool	F3			pending		
-tools/coverage_report.py	126	tool	F3			pending		
-tools/dev.sh	56	tool	F3			pending		
-tools/megi.sh	73	tool	F3			pending		
-tools/png_check.py	338	tool	F3			pending		
-tools/real_site_check.py	209	tool	F3			pending		
-tools/render_fixture.sh	82	tool	F3			pending		
-tools/soak_fuzz.sh	115	tool	F3			pending		
-tools/test_audit_coverage.py	214	tool	F3	lead	2026-11-17	covered	-	written and reviewed while building the F0 ledger
-tools/test_inspector.py	291	tool	F3			pending		
-tools/test_png_check.py	129	tool	F3			pending		
-tools/test_real_site_check.py	89	tool	F3			pending		
-tools/test_update_coverage.py	312	tool	F3			pending		
-tools/update_coverage.py	438	tool	F3			pending		
-tools/update_progress.py	774	tool	F3			pending		
-tools/update_psl.sh	55	tool	F3			pending		
-tools/whatwg_spec.py	296	tool	F3			pending		
+tools/audit_coverage.py	389	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
+tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
+tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/bench_compare.py	169	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/check_docs_links.py	132	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/coverage_report.py	126	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/dev.sh	56	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/megi.sh	73	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/png_check.py	338	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/real_site_check.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/soak_fuzz.sh	115	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/test_audit_coverage.py	214	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
+tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/test_png_check.py	129	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/test_real_site_check.py	89	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/test_update_coverage.py	312	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/update_coverage.py	438	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/update_progress.py	774	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/whatwg_spec.py	296	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
