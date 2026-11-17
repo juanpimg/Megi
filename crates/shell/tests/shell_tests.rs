@@ -1451,14 +1451,32 @@ fn headless_about_history_page_is_deterministic() {
 }
 
 #[test]
-fn headless_about_history_renders_the_internal_page() {
-    let output = shell::render_target("about:history", 480, 320).expect("history page render");
+fn headless_about_history_renders_known_entries_and_dimensions() {
+    let entries = vec![
+        shell::HistoryEntry {
+            title: "Example A".to_string(),
+            url: "https://a.test/".to_string(),
+            logical_time: 1,
+        },
+        shell::HistoryEntry {
+            title: "Example B".to_string(),
+            url: "https://b.test/page".to_string(),
+            logical_time: 2,
+        },
+    ];
+    let html = shell::history_page_html(&entries);
+    let output = shell::render_target(&shell::pages::data_url(&html), 480, 320)
+        .expect("history page render");
+    assert_eq!(output.dimensions(), (480, 320));
     let text = output
         .document
         .text_content(output.document.body().expect("body"));
     assert!(text.contains("History"), "page text: {text}");
-    assert!(text.contains("No history yet") || text.contains("Title"));
-    let _ = output.dimensions();
+    assert!(text.contains("Example A"), "page text: {text}");
+    assert!(text.contains("https://a.test/"), "page text: {text}");
+    assert!(text.contains("Example B"), "page text: {text}");
+    assert!(text.contains("https://b.test/page"), "page text: {text}");
+    assert!(!text.contains("No history yet"), "page text: {text}");
 }
 
 #[test]
