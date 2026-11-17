@@ -2042,11 +2042,11 @@ mod tests {
         // layer unchanged across all six passes (#1442).
         let (width, height) = (8usize, 8usize);
         let mut pixels = vec![0u8; width * height * 4];
-        for pixel in pixels.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&[100, 150, 200, 255]);
+        for pixel in pixels.as_chunks_mut::<4>().0 {
+            *pixel = [100, 150, 200, 255];
         }
         box_blur(&mut pixels, width, height, 2.0);
-        for pixel in pixels.chunks_exact(4) {
+        for pixel in pixels.as_chunks::<4>().0 {
             assert_eq!(pixel, &[100, 150, 200, 255]);
         }
     }
