@@ -39,7 +39,9 @@ fn test_certificate(sans: &[&str]) -> (CertificateDer<'static>, PrivateKeyDer<'s
     let generated = generate_simple_self_signed(names).expect("generate test certificate");
     (
         generated.cert.der().clone(),
-        PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(generated.key_pair.serialize_der())),
+        PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
+            generated.signing_key.serialize_der(),
+        )),
     )
 }
 
