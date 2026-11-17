@@ -665,11 +665,8 @@ fn calc_in_background_position() {
     append(&mut doc, body, "div", &[("id", "d")]);
     let styles = computed(&doc, "div { background-position: calc(10px + 5px) 20px }");
     let style = style_of(&styles, &doc, "d");
-    let position = &style.background_position;
-    assert!(
-        format!("{position:?}").contains("15"),
-        "background-position: {position:?}"
-    );
+    assert_eq!(style.background_position.x, css::Length::Px(15.0));
+    assert_eq!(style.background_position.y, css::Length::Px(20.0));
 }
 
 #[test]
