@@ -120,6 +120,10 @@ jobs:
         run: |
           set -o pipefail
           cargo test --workspace --all-targets --locked 2>&1 | tee /tmp/workspace-tests.log
+      # `--all-targets` does not include doctests (#1480): run them explicitly so broken
+      # documentation examples in `image`/`fonts` cannot ship green.
+      - name: Doctests
+        run: cargo test --workspace --doc --locked
       # Checks that PROGRESS.md and docs/status/*.svg match the committed manifest plus the
       # real repository stats (git HEAD/date, crates, Rust lines, test count). The
       # conformance gate already runs in the `conformance` job, so it is not re-run here.

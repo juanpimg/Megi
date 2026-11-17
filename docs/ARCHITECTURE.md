@@ -69,7 +69,7 @@ crates/render [F5]  Pipeline de navegador: URL → net → HTML → CSS externo 
                     `data:` URL y patch+re-render; **find-in-page (ronda 19)**:
                     `src/find.rs`, `Ctrl+F`, overlays y `--find` headless. Depende de dom, html, css, layout,
                     fonts, paint, net y js.
-crates/js     [F6]  Runtime Boa 0.21.1 + DOM bindings (tabla lateral NodeId↔handle,
+crates/js     [F6]  Runtime Boa 0.22.x + DOM bindings (tabla lateral NodeId↔handle,
                     EventTarget/Event/CustomEvent con eventos avanzados
                     (currentTarget/eventPhase/once/passive/onclick), timers con reloj
                     inyectable, WP-B:

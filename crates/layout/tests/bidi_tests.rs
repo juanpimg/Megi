@@ -103,3 +103,17 @@ fn bidi_override_rtl_reverses_latin_text() {
     let visual = collect_line_text(&root);
     assert_eq!(visual, "fed cba");
 }
+
+#[test]
+fn bidi_override_control_is_not_rendered_as_a_glyph() {
+    // U+202E forces RTL and must be omitted from the visible text (#1448).
+    let (doc, _) = doc_with_p("", "ab\u{202E}cd");
+    let styles = resolve_document_styles_with_viewport(&doc, None, 800.0, 600.0);
+    let root = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)).unwrap();
+    let visual = collect_line_text(&root);
+    assert!(
+        !visual.contains('\u{202E}'),
+        "control leaked into text: {visual:?}"
+    );
+    assert_eq!(visual, "dcba", "RLO must reverse the run: {visual:?}");
+}

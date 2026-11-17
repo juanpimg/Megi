@@ -245,6 +245,38 @@ fn http_page_with_external_css_renders_the_css() {
 }
 
 #[test]
+fn http_external_css_with_utf8_bom_applies_first_rule() {
+    // A leading UTF-8 BOM is a valid non-ASCII ident start in CSS; without stripping it
+    // (#1449) the first selector becomes "\u{FEFF}html" and matches nothing, so the reset
+    // rule is silently lost. Serve raw bytes so the BOM reaches the stylesheet decoder.
+    let mut routes = HashMap::new();
+    routes.insert(
+        "/page.html".to_string(),
+        RouteResponse::html(
+            "<!doctype html><html><head><link rel=\"stylesheet\" href=\"/bom.css\"></head>\
+             <body><p>bom</p></body></html>",
+        ),
+    );
+    routes.insert(
+        "/bom.css".to_string(),
+        RouteResponse {
+            status: 200,
+            headers: vec![("Content-Type".to_string(), "text/css".to_string())],
+            body: b"\xEF\xBB\xBFhtml { background-color: rgb(0, 128, 0); }".to_vec(),
+        },
+    );
+    let server = TestServer::spawn(routes, 2);
+    let output = render_url(&server.url("/page.html"), &options(200, 100)).expect("render");
+    assert_eq!(output.stats.external_stylesheets, 1);
+    assert!(
+        pixel_is(&output.pixmap, 5, 5, 0, 128, 0),
+        "a UTF-8 BOM must not swallow the first CSS rule, got {:?}",
+        output.pixmap.pixel(5, 5)
+    );
+    server.join();
+}
+
+#[test]
 fn http_page_without_external_css_stays_white() {
     let mut routes = HashMap::new();
     routes.insert(

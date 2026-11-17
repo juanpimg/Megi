@@ -1354,67 +1354,66 @@ mod tests {
         let error = save(&path, &session).expect_err("session exceeds the read cap");
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
         assert!(!path.exists(), "nothing is written");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
-        #[allow(dead_code)]
-        fn temporaries_are_unique_and_exclusive() {
-            let dir = std::env::temp_dir().join(format!("megi-session-tmp-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&dir);
-            std::fs::create_dir_all(&dir).expect("mkdir");
-            let path = dir.join("session.json");
-            let first = write_temporary(&path, b"{}").expect("first temporary");
-            let second = write_temporary(&path, b"{}").expect("second temporary");
-            assert_ne!(first, second, "each call gets its own temporary");
-            assert!(first.is_file() && second.is_file());
-            let _ = std::fs::remove_file(&first);
-            let _ = std::fs::remove_file(&second);
-            let _ = std::fs::remove_dir_all(&dir);
-        }
+    #[test]
+    fn temporaries_are_unique_and_exclusive() {
+        let dir = std::env::temp_dir().join(format!("megi-session-tmp-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("session.json");
+        let first = write_temporary(&path, b"{}").expect("first temporary");
+        let second = write_temporary(&path, b"{}").expect("second temporary");
+        assert_ne!(first, second, "each call gets its own temporary");
+        assert!(first.is_file() && second.is_file());
+        let _ = std::fs::remove_file(&first);
+        let _ = std::fs::remove_file(&second);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
-        #[allow(dead_code)]
-        fn failed_saves_clean_up_their_temporary() {
-            let dir =
-                std::env::temp_dir().join(format!("megi-session-fail-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&dir);
-            std::fs::create_dir_all(&dir).expect("mkdir");
-            // Renaming onto a directory fails; the temporary must not be left behind.
-            let target = dir.join("session.json");
-            std::fs::create_dir(&target).expect("target dir");
-            assert!(save(&target, &sample()).is_err());
-            let leftovers: Vec<String> = std::fs::read_dir(&dir)
-                .expect("read dir")
-                .filter_map(|entry| entry.ok())
-                .map(|entry| entry.file_name().to_string_lossy().into_owned())
-                .filter(|name| name.ends_with(".tmp"))
-                .collect();
-            assert!(leftovers.is_empty(), "no temporary left: {leftovers:?}");
-            let _ = std::fs::remove_dir_all(&dir);
-        }
+    #[test]
+    fn failed_saves_clean_up_their_temporary() {
+        let dir = std::env::temp_dir().join(format!("megi-session-fail-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        // Renaming onto a directory fails; the temporary must not be left behind.
+        let target = dir.join("session.json");
+        std::fs::create_dir(&target).expect("target dir");
+        assert!(save(&target, &sample()).is_err());
+        let leftovers: Vec<String> = std::fs::read_dir(&dir)
+            .expect("read dir")
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "no temporary left: {leftovers:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
-        #[allow(dead_code)]
-        fn saves_use_a_unique_temporary_and_leave_no_files() {
-            let dir =
-                std::env::temp_dir().join(format!("megi-session-save-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&dir);
-            std::fs::create_dir_all(&dir).expect("mkdir");
-            let path = dir.join("session.json");
-            let session = sample();
-            save(&path, &session).expect("save");
-            assert!(path.is_file(), "the session was renamed into place");
-            let leftovers: Vec<String> = std::fs::read_dir(&dir)
-                .expect("read dir")
-                .filter_map(|entry| entry.ok())
-                .map(|entry| entry.file_name().to_string_lossy().into_owned())
-                .filter(|name| name.ends_with(".tmp"))
-                .collect();
-            assert!(
-                leftovers.is_empty(),
-                "no temporary files left: {leftovers:?}"
-            );
-            let parsed = Session::from_json(&std::fs::read_to_string(&path).expect("read"))
-                .expect("parse saved session");
-            assert_eq!(parsed, session);
-            let _ = std::fs::remove_dir_all(&dir);
-        }
+    #[test]
+    fn saves_use_a_unique_temporary_and_leave_no_files() {
+        let dir = std::env::temp_dir().join(format!("megi-session-save-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("session.json");
+        let session = sample();
+        save(&path, &session).expect("save");
+        assert!(path.is_file(), "the session was renamed into place");
+        let leftovers: Vec<String> = std::fs::read_dir(&dir)
+            .expect("read dir")
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.ends_with(".tmp"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "no temporary files left: {leftovers:?}"
+        );
+        let parsed = Session::from_json(&std::fs::read_to_string(&path).expect("read"))
+            .expect("parse saved session");
+        assert_eq!(parsed, session);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

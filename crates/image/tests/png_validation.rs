@@ -68,7 +68,36 @@ fn valid_trns_still_decodes() {
         (b"IDAT", &idat),
         (b"IEND", &[]),
     ]);
-    decode_or_reason(&data).expect("a single tRNS decodes");
+    let image = decode(&data).expect("a single tRNS decodes");
+    // tRNS value 1 is absent from the gray8 samples (0, 17, 31, …), so transparency has no
+    // visible effect and the pixels must match the fixture's oracle byte-for-byte (#1439).
+    // Comparing just `decode(...).expect(...)` let a decoder that returned wrong pixels pass.
+    assert_eq!(
+        image.as_rgba(),
+        &include_bytes!("fixtures/png/gray8.rgba")[..],
+        "tRNS with an unused transparent sample must not change the decoded pixels"
+    );
+}
+
+#[test]
+fn trns_transparent_sample_produces_alpha_zero() {
+    let (ihdr, idat) = gray_fixture();
+    // Gray value 0 is the first pixel of the fixture; tRNS value 0 must make only it transparent.
+    let data = png(&[
+        (b"IHDR", &ihdr),
+        (b"tRNS", &[0, 0]),
+        (b"IDAT", &idat),
+        (b"IEND", &[]),
+    ]);
+    let image = decode(&data).expect("tRNS for gray sample 0");
+    let base = include_bytes!("fixtures/png/gray8.rgba");
+    let mut expected = base.to_vec();
+    expected[3] = 0; // first pixel (gray 0) alpha -> transparent; RGB preserved by the decoder
+    assert_eq!(
+        image.as_rgba(),
+        &expected[..],
+        "only the transparent gray sample must get alpha 0"
+    );
 }
 
 #[test]
