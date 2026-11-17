@@ -5828,11 +5828,18 @@ impl JsRuntime {
                 u64::from(slot),
             ) && let Some(callback) = callback.as_object()
             {
-                let _ = callback.call(
+                if let Err(error) = callback.call(
                     &JsValue::undefined(),
                     std::slice::from_ref(&event),
                     &mut self.context,
-                );
+                ) {
+                    // Exceptions in worker message handlers must be reported, not
+                    // silently swallowed (#1460).
+                    self.report_worker_delivery_error(
+                        JsError::Runtime(error.to_string()),
+                        "<worker onmessage>",
+                    );
+                }
             }
         }
         Ok(())
