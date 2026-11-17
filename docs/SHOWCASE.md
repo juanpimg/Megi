@@ -66,5 +66,5 @@ Render determinista a 800×600 validando las capacidades fundamentales de raster
 - Compresión final generada directamente con el codificador PNG propio de Megi.
 
 ```bash
-cargo run --release -p paint --example html_to_png
+cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
 ```
