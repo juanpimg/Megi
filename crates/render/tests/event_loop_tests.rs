@@ -11,7 +11,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use dom::{Document, NodeKind};
-use render::{RenderOptions, RenderStats, ScriptBudget, ScriptingLimits, ScriptingMode, Viewport, render_url};
+use render::{
+    RenderOptions, RenderStats, ScriptBudget, ScriptingLimits, ScriptingMode, Viewport, render_url,
+};
 
 fn fixture_path(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

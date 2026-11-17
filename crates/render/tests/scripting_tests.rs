@@ -438,11 +438,7 @@ fn repeated_classic_script_src_executes_once_per_element() {
     let dir = std::env::temp_dir().join(format!("megi-script-repeat-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("mkdir");
-    std::fs::write(
-        dir.join("counter.js"),
-        "window.n = (window.n || 0) + 1;",
-    )
-    .expect("write js");
+    std::fs::write(dir.join("counter.js"), "window.n = (window.n || 0) + 1;").expect("write js");
     let document = dir.join("index.html");
     std::fs::write(
         &document,
