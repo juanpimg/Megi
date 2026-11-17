@@ -112,7 +112,7 @@ crates/html/src/tokenizer.rs	3576	src	F2	wave1	2026-11-16	covered	#1120-#1125
 crates/html/src/tree_builder.rs	5036	src	F2	wave1	2026-11-16	covered	#1120-#1125	
 crates/html/tests/browser_api.rs	280	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
 crates/html/tests/perf.rs	146	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
-crates/html/tests/proptest_html.rs	135	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
+crates/html/tests/proptest_html.rs	137	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
 crates/html/tests/robustness.rs	718	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
 crates/html/tests/serializer_tests.rs	1	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
 crates/image/Cargo.toml	11	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
@@ -372,7 +372,7 @@ crates/paint/tests/filter_blend.rs	412	test	F1	waveF1	2026-11-17	covered	#1363,#
 crates/paint/tests/gradients.rs	894	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
 crates/paint/tests/hit_testing.rs	347	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
 crates/paint/tests/images.rs	220	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
-crates/paint/tests/offscreen_budget.rs	174	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
+crates/paint/tests/offscreen_budget.rs	204	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
 crates/paint/tests/png_format.rs	211	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
 crates/paint/tests/png_regions.rs	202	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
 crates/paint/tests/raster_quality.rs	526	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	

@@ -42,7 +42,8 @@ proptest! {
     #[test]
     fn parse_document_arbitrary_utf8_never_panics(input in any::<String>()) {
         let doc = parse_document(&input, false);
-        prop_assert!(!serialize_dom_for_test(&doc).is_empty() || input.is_empty() || true);
+        // Even empty input produces the html/head/body skeleton, so serialization is never blank.
+        prop_assert!(!serialize_dom_for_test(&doc).is_empty());
     }
 
     #[test]
@@ -102,7 +103,8 @@ proptest! {
         let doc = parse_document(&input, false);
         let html_out = serialize_html(&doc);
         let frag_out = serialize_fragment(&doc, doc.root());
-        prop_assert!(html_out.len() >= frag_out.len() || true);
+        prop_assert!(!html_out.is_empty());
+        prop_assert!(!frag_out.is_empty());
     }
 
     #[test]
