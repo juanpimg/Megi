@@ -61,6 +61,9 @@ pub struct RenderRequest {
     pub scripting: bool,
     /// Optional find-in-page query: the frame carries its hits/highlight rectangles.
     pub find_query: Option<String>,
+    /// Host-dispatched window events (e.g. `popstate`/`hashchange` after a same-document
+    /// history navigation, #1503). Applied by `view_options` to the render options.
+    pub host_events: Vec<String>,
 }
 
 /// A finished page frame in CSS resolution (`0RGB`, row-major).
@@ -200,6 +203,7 @@ impl FrameStore {
             base_override: None,
             scripting: true,
             find_query: None,
+            host_events: Vec::new(),
         }
     }
 
@@ -221,6 +225,7 @@ impl FrameStore {
             base_override: None,
             scripting: true,
             find_query: Some(query.to_owned()),
+            host_events: Vec::new(),
         }
     }
 
@@ -244,6 +249,33 @@ impl FrameStore {
             base_override: base_override.map(str::to_owned),
             scripting: false,
             find_query: None,
+            host_events: Vec::new(),
+        }
+    }
+
+    /// Starts a render of the current DOM snapshot with host-dispatched window events
+    /// (`popstate`/`hashchange` after a same-document history navigation, #1503). Scripts run
+    /// on the snapshot so their listeners observe the event and their mutations are painted;
+    /// relative resources resolve against the real page URL via `base_override`.
+    pub fn begin_history_event_request(
+        &mut self,
+        snapshot: &str,
+        css_width: u32,
+        css_height: u32,
+        base_override: Option<&str>,
+        events: &[&str],
+    ) -> RenderRequest {
+        self.generation = self.generation.saturating_add(1);
+        self.pending = true;
+        RenderRequest {
+            generation: self.generation,
+            input: snapshot.to_owned(),
+            css_width,
+            css_height,
+            base_override: base_override.map(str::to_owned),
+            scripting: true,
+            find_query: None,
+            host_events: events.iter().map(|event| (*event).to_owned()).collect(),
         }
     }
 
@@ -545,6 +577,8 @@ fn view_options(
     if probe || !request.scripting {
         options.scripting = render::ScriptingMode::Disabled;
     }
+    // Host-dispatched events run on `window` after `load`, before the final re-render (#1503).
+    options.host_events = request.host_events.clone();
     options
 }
 
@@ -672,6 +706,48 @@ mod unit_tests {
     }
 
     #[test]
+    fn history_event_request_carries_popstate_and_hashchange() {
+        // #1503: a same-document back/forward must render with host events so SPA listeners
+        // fire. Verify the request builder stamps the events and keeps scripting enabled.
+        let mut store = FrameStore::new();
+        let request = store.begin_history_event_request(
+            "data:text/html,<p>x</p>",
+            320,
+            200,
+            Some("https://example.com/page#old"),
+            &["hashchange", "popstate"],
+        );
+        assert_eq!(
+            request.host_events,
+            vec!["hashchange".to_owned(), "popstate".to_owned()]
+        );
+        assert!(request.scripting, "listeners must run on the snapshot");
+        assert_eq!(
+            request.base_override.as_deref(),
+            Some("https://example.com/page#old")
+        );
+    }
+
+    #[test]
+    fn view_options_applies_host_events() {
+        // #1503: `view_options` must forward the request's events into RenderOptions so the
+        // render pipeline dispatches them after `load`.
+        let request = RenderRequest {
+            generation: 1,
+            input: "data:text/html,x".into(),
+            css_width: 100,
+            css_height: 100,
+            base_override: None,
+            scripting: true,
+            find_query: None,
+            host_events: vec!["popstate".to_owned()],
+        };
+        let viewport = render::Viewport::new(100, 100).expect("viewport");
+        let options = view_options(&request, viewport, &render::RenderOptions::default(), false);
+        assert_eq!(options.host_events, vec!["popstate".to_owned()]);
+    }
+
+    #[test]
     fn worker_round_trips_requests_and_messages() {
         let (sender, receiver, handle) = spawn_worker(
             |request: &RenderRequest| Ok(fake_frame(request.generation)),
@@ -726,6 +802,7 @@ mod unit_tests {
             base_override: None,
             scripting: false,
             find_query: None,
+            host_events: Vec::new(),
         };
         let frame = render_document(&request).expect("render");
         // Before the fix the probe's root margin box (≈body height) reported a
@@ -876,6 +953,7 @@ mod worker_panic_isolation_tests {
             base_override: None,
             scripting: true,
             find_query: None,
+            host_events: Vec::new(),
         };
         sender.send(first).expect("send first");
         let failure = receiver
@@ -902,6 +980,7 @@ mod worker_panic_isolation_tests {
             base_override: None,
             scripting: true,
             find_query: None,
+            host_events: Vec::new(),
         };
         sender.send(second).expect("send second");
         let frame = receiver

@@ -453,11 +453,11 @@ crates/shell/src/scroll.rs	249	src	F2	wave1	2026-11-16	covered	#1163-#1178
 crates/shell/src/session.rs	1445	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/tabs.rs	473	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/title.rs	370	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/window.rs	2686	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/worker.rs	940	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/window.rs	2733	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/worker.rs	1019	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/zoom.rs	268	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/tests/fixtures/links.html	10	test	F1	waveF1	2026-11-17	covered	#1379	
-crates/shell/tests/shell_tests.rs	1562	test	F1	waveF1	2026-11-17	covered	#1379	
+crates/shell/tests/shell_tests.rs	1614	test	F1	waveF1	2026-11-17	covered	#1379	
 crates/svg/Cargo.toml	13	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/svg/examples/svg_to_png.rs	114	example	F3	lead	2026-11-17	covered	example read	read in the F3/F4 pass
 crates/svg/src/color.rs	192	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
