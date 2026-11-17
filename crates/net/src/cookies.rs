@@ -556,8 +556,13 @@ impl CookieJar {
             return false;
         }
 
-        let creation = self.next_creation;
-        self.next_creation += 1;
+        let creation = if let Some(index) = existing {
+            self.cookies[index].created
+        } else {
+            let c = self.next_creation;
+            self.next_creation += 1;
+            c
+        };
         let cookie = Cookie {
             name: parsed.name,
             value: parsed.value,
