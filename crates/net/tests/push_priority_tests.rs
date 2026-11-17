@@ -9,7 +9,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use net::h2::client::{self, Limits, PushPriority};
-use net::h2::frame::{self, Frame, FrameReader, HeaderAssembler, flags, kind};
+use net::h2::frame::{self, Frame, FrameReader, HeaderAssembler, error_code, flags, kind};
 use net::h2::hpack::Encoder;
 
 fn spawn_server(handler: impl FnOnce(TcpStream) + Send + 'static) -> (u16, JoinHandle<()>) {
@@ -97,8 +97,9 @@ fn main_response(stream_id: u32, body: &[u8]) -> Vec<Frame> {
     ]
 }
 
-/// Reads client frames for up to `window`, collecting RST_STREAM stream ids.
-fn collect_rst_streams(stream: &mut TcpStream, window: Duration) -> Vec<u32> {
+/// Reads client frames for up to `window`, collecting `(stream id, error code)` of every
+/// RST_STREAM. The code is returned so callers can assert the policy emits `CANCEL` (#1351).
+fn collect_rst_streams(stream: &mut TcpStream, window: Duration) -> Vec<(u32, u32)> {
     let mut cancelled = Vec::new();
     let start = Instant::now();
     let mut reader = FrameReader::new(&mut *stream, frame::DEFAULT_MAX_FRAME_SIZE);
@@ -108,8 +109,7 @@ fn collect_rst_streams(stream: &mut TcpStream, window: Duration) -> Vec<u32> {
                 if frame.header.kind == kind::RST_STREAM
                     && let Ok(code) = frame.parse_rst_stream()
                 {
-                    let _ = code;
-                    cancelled.push(frame.header.stream_id);
+                    cancelled.push((frame.header.stream_id, code));
                 }
             }
             Ok(None) | Err(_) => break,
@@ -164,8 +164,8 @@ fn highest_weight_pushes_win_the_resource_cap() {
         let cancelled = collect_rst_streams(&mut tcp, Duration::from_millis(400));
         assert_eq!(
             cancelled,
-            vec![2],
-            "lowest-weight promise must be cancelled"
+            vec![(2, error_code::CANCEL)],
+            "lowest-weight promise must be cancelled with CANCEL"
         );
         let _ = tcp.shutdown(Shutdown::Write);
     });
@@ -210,7 +210,11 @@ fn fifo_policy_ignores_declared_weights() {
         frames.extend(main_response(main_stream, b"main"));
         write_frames(&mut tcp, &frames);
         let cancelled = collect_rst_streams(&mut tcp, Duration::from_millis(400));
-        assert_eq!(cancelled, vec![6], "FIFO keeps the first two promises");
+        assert_eq!(
+            cancelled,
+            vec![(6, error_code::CANCEL)],
+            "FIFO keeps the first two promises and cancels the rest with CANCEL"
+        );
         let _ = tcp.shutdown(Shutdown::Write);
     });
     let mut stream = connect(port);
@@ -245,7 +249,11 @@ fn promises_without_priority_keep_fifo_order() {
         frames.extend(main_response(main_stream, b"main"));
         write_frames(&mut tcp, &frames);
         let cancelled = collect_rst_streams(&mut tcp, Duration::from_millis(400));
-        assert_eq!(cancelled, vec![6], "no PRIORITY info => FIFO fallback");
+        assert_eq!(
+            cancelled,
+            vec![(6, error_code::CANCEL)],
+            "no PRIORITY info => FIFO fallback, cancelled with CANCEL"
+        );
         let _ = tcp.shutdown(Shutdown::Write);
     });
     let mut stream = connect(port);
