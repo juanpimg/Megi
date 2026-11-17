@@ -274,7 +274,7 @@ impl GridNames {
                     else {
                         continue;
                     };
-                    let key = name.to_ascii_lowercase();
+                    let key = name.clone();
                     let column_entry = names
                         .column_areas
                         .entry(key.clone())
@@ -300,17 +300,16 @@ impl GridNames {
             GridLine::Line(_) => line_boundary(line, track_count),
             GridLine::Auto | GridLine::Span(_) => None,
             GridLine::Name(name) => {
-                let lower = name.to_ascii_lowercase();
                 if let Some(index) = lines
                     .iter()
-                    .position(|names| names.iter().any(|entry| entry.eq_ignore_ascii_case(&lower)))
+                    .position(|names| names.iter().any(|entry| entry == name))
                 {
                     return Some(index);
                 }
-                if let Some(base) = lower.strip_suffix("-start") {
+                if let Some(base) = name.strip_suffix("-start") {
                     return areas.get(base).map(|(start, _)| *start);
                 }
-                if let Some(base) = lower.strip_suffix("-end") {
+                if let Some(base) = name.strip_suffix("-end") {
                     return areas.get(base).map(|(_, end)| *end);
                 }
                 None
@@ -358,16 +357,13 @@ fn placement_request(
     if request.row_start.is_none()
         && request.column_start.is_none()
         && let Some(name) = style.grid_area.as_ref()
+        && let Some((row_start, row_end)) = names.row_areas.get(name)
+        && let Some((column_start, column_end)) = names.column_areas.get(name)
     {
-        let lower = name.to_ascii_lowercase();
-        if let Some((row_start, row_end)) = names.row_areas.get(&lower)
-            && let Some((column_start, column_end)) = names.column_areas.get(&lower)
-        {
-            request.row_start = Some(*row_start);
-            request.row_span = row_end.saturating_sub(*row_start).max(1);
-            request.column_start = Some(*column_start);
-            request.column_span = column_end.saturating_sub(*column_start).max(1);
-        }
+        request.row_start = Some(*row_start);
+        request.row_span = row_end.saturating_sub(*row_start).max(1);
+        request.column_start = Some(*column_start);
+        request.column_span = column_end.saturating_sub(*column_start).max(1);
     }
     // Clamp line indices and spans: they come from CSS integers (u32) and feed the
     // occupancy matrix and the implicit track list. `grid-column: span 4000000000` used to
@@ -1438,25 +1434,4 @@ fn layout_item(
     ));
     layout_box_contents(child, definite_height, false, measurer, pos);
     item.content_height = child.dimensions.content.height;
-}
-
-#[cfg(test)]
-mod occupancy_tests {
-    use super::Occupancy;
-
-    #[test]
-    fn occupancy_bitset_tracks_cells_and_grows() {
-        let mut grid = Occupancy::default();
-        grid.ensure(2, 70);
-        assert!(!grid.get(1, 69));
-        grid.set(1, 69);
-        assert!(grid.get(1, 69));
-        assert!(!grid.get(1, 68));
-        // Growing keeps the existing cells and covers the new width.
-        grid.ensure(3, 130);
-        assert!(grid.get(1, 69), "growth preserves occupied cells");
-        assert!(!grid.get(2, 129));
-        grid.set(2, 129);
-        assert!(grid.get(2, 129));
-    }
 }

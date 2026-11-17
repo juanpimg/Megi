@@ -726,7 +726,7 @@ fn build_crypto(context: &mut Context) -> JsObject {
                 .as_object()
                 .ok_or_else(|| js_error("getRandomValues requires a typed array"))?;
             // Fill with pseudo-random bytes using a simple xorshift seeded by the clock.
-            let mut seed = with_host(|host| host.now_ms()).unwrap_or(12345) as u64;
+            let mut seed = with_host(|host| host.now_ms()).unwrap_or(12345);
             let len = obj
                 .get(js_string!("length"), context)
                 .ok()
@@ -832,7 +832,7 @@ fn text_encoder_encoding_get(
 }
 
 fn text_encoder_encode(
-    this: &JsValue,
+    _this: &JsValue,
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
@@ -2603,7 +2603,7 @@ fn document_head(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
 }
 
 fn document_cookie_get(
-    this: &JsValue,
+    _this: &JsValue,
     _args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
@@ -2623,7 +2623,7 @@ fn document_cookie_get(
 }
 
 fn document_cookie_set(
-    this: &JsValue,
+    _this: &JsValue,
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {

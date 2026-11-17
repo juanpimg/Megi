@@ -241,8 +241,11 @@ pub struct ScriptLoadReport {
 /// same value. Without a shared value every render starts with empty storage.
 #[derive(Clone, Debug, Default)]
 pub struct RenderStorage {
-    /// `localStorage` entries (`(key, value)` pairs, insertion order).
+    /// `localStorage` entries for non-HTTP(S) documents (single-origin compatibility).
     pub local: Vec<(String, String)>,
+    /// Per-origin `localStorage` entries; the key is the serialized tuple origin.
+    /// Prevents a page on origin A from reading/writing origin B's storage (#1476).
+    pub by_origin: std::collections::HashMap<String, Vec<(String, String)>>,
 }
 
 /// Host environment exposed to page scripts (WP-6.5): the **pre-script computed style
@@ -699,6 +702,13 @@ fn load_worker_source(
 }
 
 #[cfg(feature = "js")]
+/// Serialized tuple origin used as the localStorage namespace key. `None` for
+/// non-HTTP(S) documents, which keep the legacy flat storage (#1476).
+fn storage_origin_key(url: &Url) -> Option<String> {
+    net::cors::Origin::from_url(url)
+        .map(|origin| format!("{}://{}:{}", origin.scheme, origin.host, origin.port))
+}
+
 pub fn execute_scripts(
     document: Document,
     document_url: &Url,
@@ -962,11 +972,15 @@ pub fn execute_scripts(
                 });
         }));
     }
+    // A tuple origin scopes localStorage so pages from different origins sharing a
+    // RenderStorage cannot read or overwrite each other's entries (#1476).
+    let origin_key = storage_origin_key(document_url);
     let per_render_local: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
     let per_render_session: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
     {
         let shared_for_load = host.storage.clone();
         let shared_for_save = host.storage.clone();
+        let origin_key_for_save = origin_key.clone();
         let local_load = Arc::clone(&per_render_local);
         let session_load = Arc::clone(&per_render_session);
         let local_save = Arc::clone(&per_render_local);
@@ -974,11 +988,15 @@ pub fn execute_scripts(
         runtime.set_storage_provider(js::host::StorageProvider {
             load: Box::new(move |kind| match kind {
                 js::host::StorageKind::Local => match &shared_for_load {
-                    Some(storage) => storage
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner())
-                        .local
-                        .clone(),
+                    Some(storage) => {
+                        let storage = storage
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                        match &origin_key {
+                            Some(key) => storage.by_origin.get(key).cloned().unwrap_or_default(),
+                            None => storage.local.clone(),
+                        }
+                    }
                     None => local_load
                         .lock()
                         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -992,10 +1010,15 @@ pub fn execute_scripts(
             save: Box::new(move |kind, entries| match kind {
                 js::host::StorageKind::Local => match &shared_for_save {
                     Some(storage) => {
-                        storage
+                        let mut storage = storage
                             .lock()
-                            .unwrap_or_else(|poisoned| poisoned.into_inner())
-                            .local = entries.to_vec();
+                            .unwrap_or_else(|poisoned| poisoned.into_inner());
+                        match &origin_key_for_save {
+                            Some(key) => {
+                                storage.by_origin.insert(key.clone(), entries.to_vec());
+                            }
+                            None => storage.local = entries.to_vec(),
+                        }
                     }
                     None => {
                         *local_save
@@ -1567,5 +1590,35 @@ mod unit_tests {
             .expect("traversal");
         assert!(!file_fetch_allowed(&base, &traversal));
         let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod storage_origin_tests {
+    use super::*;
+
+    #[test]
+    fn storage_namespace_uses_the_tuple_origin() {
+        let a = Url::parse("http://example.com:8080/a").expect("url");
+        let b = Url::parse("http://example.com:8081/b").expect("url");
+        let c = Url::parse("https://example.com/b").expect("url");
+        assert_ne!(
+            storage_origin_key(&a),
+            storage_origin_key(&b),
+            "different ports are different origins"
+        );
+        assert_ne!(
+            storage_origin_key(&a),
+            storage_origin_key(&c),
+            "different schemes are different origins"
+        );
+        assert_eq!(
+            storage_origin_key(&a),
+            Some("http://example.com:8080".into())
+        );
+        assert_eq!(
+            storage_origin_key(&Url::parse("file:///tmp/x.html").expect("url")),
+            None
+        );
     }
 }

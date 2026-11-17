@@ -1779,9 +1779,10 @@ fn parse_head(head: &[u8]) -> Result<(u16, String, Headers), FetchError> {
 /// Parses a status line returning `(major, minor)` as well, for HTTP/1.0 keep-alive and
 /// connection-reuse decisions.
 fn parse_head_verbose(head: &[u8]) -> Result<((u8, u8), u16, String, Headers), FetchError> {
-    // HTTP header field values are ISO-8859-1 on the wire; decode lossily instead of
-    // rejecting non-UTF-8 bytes (robustness: a wrong charset must not kill the fetch).
-    let text = String::from_utf8_lossy(head);
+    // HTTP header field values are ISO-8859-1 on the wire: map each byte to its
+    // U+0000..U+00FF code point. `from_utf8_lossy` replaced 0x80-0xFF with U+FFFD,
+    // corrupting Latin-1 bytes in Set-Cookie/Location (#1453).
+    let text: String = head.iter().map(|&byte| byte as char).collect();
     let mut lines = text.split("\r\n");
     let status_line = lines
         .next()
@@ -2510,6 +2511,26 @@ mod tls_cache_tests {
         assert!(
             Arc::ptr_eq(&a, &b),
             "successful configurations must be shared across fetches"
+        );
+    }
+}
+
+#[cfg(test)]
+mod header_encoding_tests {
+    use super::*;
+
+    #[test]
+    fn latin1_header_bytes_are_preserved() {
+        let head = b"HTTP/1.1 200 OK\r\nX-City: Z\xFCrich\r\n\r\n";
+        let (_major, status, reason, headers) = parse_head_verbose(head).expect("parse");
+        assert_eq!(status, 200);
+        assert_eq!(reason, "OK");
+        assert_eq!(
+            headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case("x-city"))
+                .map(|(_, value)| value.as_str()),
+            Some("Z\u{00FC}rich")
         );
     }
 }
