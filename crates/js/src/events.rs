@@ -676,26 +676,32 @@ fn dispatch_event(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
     let previous_dispatch = with_host(|host| host.dispatch.take()).flatten();
     let _dispatch_guard = DispatchStateGuard::new(previous_dispatch);
     let _ = with_host(|host| host.dispatch = Some(DispatchState::default()));
-    for (phase, key) in &path {
-        let stopped = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_propagation))
-            .flatten()
-            .unwrap_or(false);
-        if stopped {
-            break;
+    let dispatch_result = (|| -> JsResult<bool> {
+        for (phase, key) in &path {
+            let stopped = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_propagation))
+                .flatten()
+                .unwrap_or(false);
+            if stopped {
+                break;
+            }
+            deliver(context, *key, *phase, &event_type, &event)?;
+            let immediate = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_immediate))
+                .flatten()
+                .unwrap_or(false);
+            if immediate {
+                break;
+            }
         }
-        deliver(context, *key, *phase, &event_type, &event)?;
-        let immediate = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_immediate))
-            .flatten()
-            .unwrap_or(false);
-        if immediate {
-            break;
-        }
-    }
-    let prevented = with_host(|host| host.dispatch.map(|dispatch| dispatch.prevent_default))
-        .flatten()
-        .unwrap_or(false);
+        Ok(
+            with_host(|host| host.dispatch.map(|dispatch| dispatch.prevent_default))
+                .flatten()
+                .unwrap_or(false),
+        )
+    })();
+    // These fields must be cleared even when a listener throws or exhausts a budget.
     let _ = event.set(js_string!("currentTarget"), JsValue::null(), false, context);
     let _ = event.set(js_string!("eventPhase"), JsValue::from(0.0), false, context);
+    let prevented = dispatch_result?;
     let _ = event.set(
         js_string!("defaultPrevented"),
         JsValue::from(prevented),
@@ -1593,4 +1599,24 @@ pub(crate) fn run_until(
 /// Current scheduler time (virtual or real).
 pub(crate) fn now_ms() -> u64 {
     with_host(|host| host.now_ms()).unwrap_or(0)
+}
+
+#[cfg(test)]
+mod dispatch_state_guard_tests {
+    use super::*;
+
+    #[test]
+    fn guard_restores_stacked_dispatch_state() {
+        let outer = DispatchState {
+            prevent_default: true,
+            stop_propagation: true,
+            stop_immediate: false,
+            passive: true,
+        };
+        // Constructing and dropping the guard must be panic-free both with and
+        // without an active host scope; the real restore happens inside with_host.
+        let _guard = DispatchStateGuard::new(Some(outer));
+        drop(_guard);
+        let _guard = DispatchStateGuard::new(None);
+    }
 }
