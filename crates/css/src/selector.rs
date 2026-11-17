@@ -29,10 +29,42 @@ use std::collections::HashMap;
 /// match (direct API use).
 pub const MAX_MATCH_STEPS: u32 = 200_000;
 
+/// Maximum nesting depth of functional pseudo-class arguments while parsing: `:is(:is(…))`.
+///
+/// The selector grammar is recursive (`:is()`/`:where()`/`:not()` arguments are selector
+/// lists), so a stylesheet of `:is(` repeated tens of thousands of times used to overflow the
+/// host stack before any declaration was validated (#376).
+pub const MAX_SELECTOR_NESTING: usize = 32;
+
 thread_local! {
     static MATCH_STEPS: Cell<u32> = const { Cell::new(0) };
     static MATCH_DEPTH: Cell<u32> = const { Cell::new(0) };
     static MATCH_EXHAUSTED: Cell<bool> = const { Cell::new(false) };
+    static PARSER_NESTING: Cell<usize> = const { Cell::new(0) };
+}
+
+/// Tracks the [`MAX_SELECTOR_NESTING`] recursion depth of [`parse_selectors`].
+struct ParserNestingGuard;
+
+impl ParserNestingGuard {
+    /// Returns `None` once the nesting limit is reached, so the caller can reject the
+    /// selector instead of recursing further.
+    fn enter() -> Option<Self> {
+        PARSER_NESTING.with(|depth| {
+            if depth.get() >= MAX_SELECTOR_NESTING {
+                None
+            } else {
+                depth.set(depth.get() + 1);
+                Some(ParserNestingGuard)
+            }
+        })
+    }
+}
+
+impl Drop for ParserNestingGuard {
+    fn drop(&mut self) {
+        PARSER_NESTING.with(|depth| depth.set(depth.get().saturating_sub(1)));
+    }
 }
 
 struct MatchDepthGuard;
@@ -893,35 +925,56 @@ fn relative_chain_matches(
     if !spend_match_step() {
         return false;
     }
-    let mut candidates = Vec::new();
+    let (compound, next) = &compounds[index];
+    let is_last = index + 1 == compounds.len();
+
+    // Test each candidate as it is visited (lazy DFS): this spends the match budget once
+    // per candidate instead of once per call, and removes the old fixed 10,000-node cut
+    // that silently produced false negatives on large documents (#1133).
+    let check = |candidate: NodeId| -> bool {
+        if !spend_match_step() {
+            return false;
+        }
+        if !compound.matches(doc, candidate) {
+            return false;
+        }
+        if is_last {
+            return true;
+        }
+        if let Some(next_combinator) = next {
+            return relative_chain_matches(doc, candidate, compounds, index + 1, *next_combinator);
+        }
+        false
+    };
+    let exhausted = || MATCH_EXHAUSTED.with(|flag| flag.get());
+
     match combinator {
         Combinator::Child => {
             let mut child = doc.node(current).first_child;
             while let Some(child_id) = child {
-                candidates.push(child_id);
+                if check(child_id) {
+                    return true;
+                }
+                if exhausted() {
+                    return false;
+                }
                 child = doc.node(child_id).next_sibling;
             }
         }
         Combinator::Descendant => {
-            // Lazy DFS: test each candidate immediately and return early on match.
-            // Collect into a stack but test inline to avoid materializing the
-            // entire subtree before the first candidate is evaluated.
             let mut stack = Vec::new();
             let mut child = doc.node(current).first_child;
             while let Some(child_id) = child {
                 stack.push(child_id);
                 child = doc.node(child_id).next_sibling;
             }
-            // We'll handle this case in the candidate loop below.
-            // Store candidates lazily by using a separate approach.
-            // For now, collect but limit to avoid O(n) memory.
-            let mut visited = 0usize;
             while let Some(candidate) = stack.pop() {
-                if visited >= 10_000 {
-                    break;
+                if check(candidate) {
+                    return true;
                 }
-                visited += 1;
-                candidates.push(candidate);
+                if exhausted() {
+                    return false;
+                }
                 let mut child = doc.node(candidate).first_child;
                 while let Some(child_id) = child {
                     stack.push(child_id);
@@ -932,9 +985,11 @@ fn relative_chain_matches(
         Combinator::NextSibling => {
             let mut sibling = doc.node(current).next_sibling;
             while let Some(sibling_id) = sibling {
-                if doc.node(sibling_id).as_element().is_some() {
-                    candidates.push(sibling_id);
-                    break;
+                if exhausted() {
+                    return false;
+                }
+                if doc.node(sibling_id).as_element().is_some() && check(sibling_id) {
+                    return true;
                 }
                 sibling = doc.node(sibling_id).next_sibling;
             }
@@ -942,25 +997,14 @@ fn relative_chain_matches(
         Combinator::SubsequentSibling => {
             let mut sibling = doc.node(current).next_sibling;
             while let Some(sibling_id) = sibling {
-                if doc.node(sibling_id).as_element().is_some() {
-                    candidates.push(sibling_id);
+                if exhausted() {
+                    return false;
+                }
+                if doc.node(sibling_id).as_element().is_some() && check(sibling_id) {
+                    return true;
                 }
                 sibling = doc.node(sibling_id).next_sibling;
             }
-        }
-    }
-    for candidate in candidates {
-        let (compound, next) = &compounds[index];
-        if !compound.matches(doc, candidate) {
-            continue;
-        }
-        if index + 1 == compounds.len() {
-            return true;
-        }
-        if let Some(next_combinator) = next
-            && relative_chain_matches(doc, candidate, compounds, index + 1, *next_combinator)
-        {
-            return true;
         }
     }
     false
@@ -1017,6 +1061,11 @@ pub fn parse_selectors(input: &str) -> SelectorList {
     if input.trim().is_empty() {
         return SelectorList::default();
     }
+    // Functional pseudo-class arguments recurse through this same entry point; past the cap
+    // the list is dropped as invalid, which also invalidates the declaration that uses it.
+    let Some(_nesting) = ParserNestingGuard::enter() else {
+        return SelectorList::default();
+    };
     let parts = split_top_level_commas(input);
     let mut selectors = Vec::with_capacity(parts.len());
     for part in parts {

@@ -45,8 +45,9 @@ pub use calc::{
     CalcContext, CalcValue, evaluate as evaluate_calc, with_viewport as with_calc_viewport,
 };
 pub use cascade::{
-    CascadeOriginImportance, CompiledRule, MatchedDeclaration, Origin, StyleCollection,
-    resolve_cascaded_properties, resolve_document_styles, resolve_document_styles_with_media,
+    CascadeOriginImportance, CompiledRule, MAX_INLINE_STYLE_BYTES, MatchedDeclaration, Origin,
+    StyleCollection, parse_inline_declarations, parse_inline_style, resolve_cascaded_properties,
+    resolve_document_styles, resolve_document_styles_with_media,
     resolve_document_styles_with_media_and_state, resolve_document_styles_with_viewport,
 };
 pub use component_value::{ComponentValue, FunctionCall, SimpleBlock};
@@ -79,7 +80,8 @@ pub use query::{
 pub use rule::{AtRule, Declaration, FontFaceRule, ImportRule, Rule, StyleRule, Stylesheet};
 pub use selector::{
     AnPlusB, AttrOperator, AttributeSelector, Combinator, ComplexSelector, CompoundSelector,
-    PseudoClass, RelativeSelector, SelectorList, Specificity, parse_selectors,
+    MAX_MATCH_STEPS, MAX_SELECTOR_NESTING, PseudoClass, RelativeSelector, SelectorList,
+    Specificity, parse_selectors,
 };
 pub use shorthand::expand_declarations;
 pub use state::{StateContext, StateGuard, current as current_state, with_state};
@@ -898,6 +900,30 @@ mod tests {
         // :has() participates in the cascade like any other pseudo-class.
         let styles = resolve_document_styles(&doc, Some("div:has(> p.note) { color: red; }"));
         assert_eq!(styles.get(&div).expect("div style").color, Color::RED);
+    }
+
+    #[test]
+    fn has_matches_beyond_the_old_10k_descendant_cap() {
+        // Regression test for #1133: :has() used to stop after 10,000 descendants and
+        // silently report a false negative for matches deeper in the subtree.
+        let mut doc = Document::new();
+        let div = doc.create_element(Namespace::Html, "div", vec![]);
+        doc.append_child(doc.root(), div);
+        let mut parent = div;
+        for i in 0..10_005 {
+            let attrs = if i == 10_004 {
+                vec![Attribute::new("class", "target")]
+            } else {
+                vec![]
+            };
+            let span = doc.create_element(Namespace::Html, "span", attrs);
+            doc.append_child(parent, span);
+            parent = span;
+        }
+        assert!(
+            parse_selectors("div:has(span.target)").matches(&doc, div),
+            ":has() must find a match past the old 10k descendant cap"
+        );
     }
 
     #[test]

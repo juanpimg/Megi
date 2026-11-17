@@ -6,7 +6,7 @@
 [![Tests](docs/status/badge-tests.svg)](PROGRESS.md)
 [![Fuzz nightly](https://github.com/juanpimg/Megi/actions/workflows/fuzz-nightly.yml/badge.svg)](https://github.com/juanpimg/Megi/actions/workflows/fuzz-nightly.yml)
 [![Clippy](https://img.shields.io/badge/Clippy-0%20warnings%20%28--D%20warnings%29-brightgreen.svg)]()
-[![HTML5 Conformance](https://img.shields.io/badge/HTML5-100%25%20conformance-success.svg)](PROGRESS.md)
+[![HTML5 gate](https://img.shields.io/badge/HTML5%20gate-100%25%20(4%20suites)-success.svg)](PROGRESS.md)
 
 > **Megi** es un motor de navegación web moderno, open source e independiente desarrollado desde cero en **Rust** (Edición 2024), sin bifurcar (*fork*) Blink, WebKit ni Gecko. Su diseño se rige estrictamente por las especificaciones formales vivas de **WHATWG** y **W3C**, con verificación continua en bucle cerrado (*closed-loop testing*) contra **Web Platform Tests (WPT)** y **`html5lib-tests`**.
 
@@ -21,13 +21,14 @@
 
 ## 📈 Estado del Proyecto
 
-[![Tests](docs/status/badge-tests.svg)](PROGRESS.md) [![Conformance](docs/status/badge-conformance.svg)](PROGRESS.md) [![Crates](docs/status/badge-crates.svg)](PROGRESS.md) [![unsafe](docs/status/badge-unsafe.svg)](PROGRESS.md) [![coverage](docs/status/badge-coverage.svg)](.github/workflows/coverage.yml)
+[![Tests](docs/status/badge-tests.svg)](PROGRESS.md) [![Conformance](docs/status/badge-conformance.svg)](PROGRESS.md) [![coverage](docs/status/badge-coverage.svg)](docs/status/coverage.html) [![Crates](docs/status/badge-crates.svg)](PROGRESS.md) [![unsafe](docs/status/badge-unsafe.svg)](PROGRESS.md)
 
-[![Progress map](docs/status/progress.svg)](PROGRESS.md)
+[![Capability coverage](docs/status/coverage.svg)](docs/status/coverage.html) · [Progress map (checklist histórico)](docs/status/progress.svg)
 
-**Pre-Alpha `v0.1.0`** · **2.300+ tests** (0 fallos) · conformidad **PASS** (100 %) · **14 crates** · **171.000+ líneas de Rust** · **14/14** crates con `#![forbid(unsafe_code)]`.
+**Pre-Alpha `v0.1.0`** · cobertura de capacidades verificable: ver **[`PROGRESS.md`](PROGRESS.md)** y **[`coverage.html`](docs/status/coverage.html)** · **2.300+ tests** (0 fallos) · gate de conformidad **PASS** (4 suites) · **14 crates** · **171.000+ líneas de Rust** · **14/14** crates con `#![forbid(unsafe_code)]`.
 
 > **Estado Pre-Alpha (`v0.1.0`)**: Megi ya es compilable y ejecutable como navegador de escritorio (`megi`) y pipeline CLI (`render`), con HTML5, CSS3 (Flexbox/Grid/Container Queries/Layers/bidi), JS (Boa 0.22 + ES modules + `fetch`), SVG/SMIL e imágenes (PNG/JPEG/GIF/WebP). Aún en fase Pre-Alpha: animaciones CSS `@keyframes`/`transition` en runtime, shaping de scripts complejos (árabe/hebreo/tailandés/CJK) y aislamiento multiproceso por pestaña llegarán en la fase Alpha.
+> El porcentaje del antiguo mapa de fases era un promedio de estimaciones y **no** indicaba si el navegador es usable. Ahora el titular es `capacidades implementadas / conocidas`, con evidencia verificable y la lista de pendientes en **[`coverage.html`](docs/status/coverage.html)** (reglas en [`COVERAGE.md`](docs/status/COVERAGE.md)). El aspecto real en webs se comprueba con [`real_site_check.py`](tools/real_site_check.py) y se publica en **[`real-sites.html`](docs/status/real-sites.html)** (capturas y avisos reales de `render`).
 > Las métricas exactas se actualizan automáticamente en **[`PROGRESS.md`](PROGRESS.md)**. Para consultar el historial de versiones, revisa el **[`CHANGELOG.md`](CHANGELOG.md)**.
 
 ---

@@ -34,23 +34,24 @@ pub fn print_table(outcome: &RunOutcome) {
     let name_width = outcome
         .results
         .iter()
-        .map(|result| result.name.len())
+        .map(|result| result.name.chars().count())
         .max()
         .unwrap_or(0)
         .max("benchmark".len());
     let detail_width = outcome
         .results
         .iter()
-        .map(|result| result.detail.len())
+        .map(|result| result.detail.chars().count())
         .max()
         .unwrap_or(0)
         .max("workload".len());
     println!();
-    println!(
+    let header = format!(
         "{:<name_width$}  {:<detail_width$}  {:>5}  {:>10}  {:>10}  {:>14}",
         "benchmark", "workload", "iters", "median ms", "min ms", "throughput"
     );
-    println!("{}", "-".repeat(name_width + detail_width + 47));
+    println!("{}", header);
+    println!("{}", "-".repeat(header.chars().count()));
     for result in &outcome.results {
         println!(
             "{:<name_width$}  {:<detail_width$}  {:>5}  {:>10.3}  {:>10.3}  {:>14}",
@@ -62,7 +63,7 @@ pub fn print_table(outcome: &RunOutcome) {
             throughput_label(result)
         );
     }
-    println!("{}", "-".repeat(name_width + detail_width + 47));
+    println!("{}", "-".repeat(header.chars().count()));
     println!(
         "{:<name_width$}  {:<detail_width$}  {:>5}  {:>10.3}",
         "TOTAL", "sum of medians", "", outcome.total_median_ms
@@ -163,11 +164,13 @@ pub fn print_json(outcome: &RunOutcome) {
                 unit,
                 per_second,
             }) => {
-                let _ = writeln!(
-                    json,
-                    "      \"throughput\": {{\"count\": {count:.3}, \"unit\": \"{unit}\", \
-                     \"per_second\": {per_second:.3}}}"
-                );
+                json.push_str("      \"throughput\": {\"count\": ");
+                let _ = write!(json, "{count:.3}");
+                json.push_str(", \"unit\": ");
+                push_json_string(&mut json, unit);
+                json.push_str(", \"per_second\": ");
+                push_json_number(&mut json, *per_second);
+                json.push_str("}\n");
             }
             None => json.push_str("      \"throughput\": null\n"),
         }
@@ -197,6 +200,14 @@ pub fn print_json(outcome: &RunOutcome) {
 }
 
 /// Appends `value` as a JSON string literal (with escaping).
+fn push_json_number(out: &mut String, value: f64) {
+    if value.is_finite() {
+        let _ = write!(out, "{value:.3}");
+    } else {
+        out.push_str("null");
+    }
+}
+
 fn push_json_string(out: &mut String, value: &str) {
     out.push('"');
     for ch in value.chars() {

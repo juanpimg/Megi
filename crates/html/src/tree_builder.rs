@@ -667,6 +667,9 @@ impl LimitViolations {
             && self.text_bytes_dropped == 0
             && self.attributes_dropped == 0
             && self.detached_insertions == 0
+            && self.formatting_dropped == 0
+            && self.written_bytes_dropped == 0
+            && self.scripts_skipped == 0
     }
 
     /// Total number of recorded violations (the input truncation counts as one).
@@ -677,6 +680,10 @@ impl LimitViolations {
             + self.nodes_exceeded
             + self.attributes_dropped
             + self.detached_insertions
+            + self.text_bytes_dropped
+            + self.formatting_dropped
+            + self.written_bytes_dropped
+            + self.scripts_skipped
     }
 }
 
@@ -1422,6 +1429,22 @@ impl TreeBuilder {
         el_id
     }
 
+    /// Checks the same `max_depth`/`max_nodes` gates as inbound tokens for elements
+    /// created internally by formatting reconstruction and the adoption agency (#412).
+    fn parser_node_budget_allows(&mut self) -> bool {
+        if self.open_elements.len() >= self.parse_options.max_depth {
+            self.limit_violations.depth_exceeded =
+                self.limit_violations.depth_exceeded.saturating_add(1);
+            return false;
+        }
+        if self.doc.len() >= self.parse_options.max_nodes {
+            self.limit_violations.nodes_exceeded =
+                self.limit_violations.nodes_exceeded.saturating_add(1);
+            return false;
+        }
+        true
+    }
+
     fn insert_html_element(&mut self, name: &str, raw_attrs: &[(String, String)]) -> NodeId {
         self.insert_element(Namespace::Html, name, raw_attrs)
     }
@@ -1556,7 +1579,7 @@ impl TreeBuilder {
                 && element.local_name == "template"
                 && element.template_contents.is_some())
         {
-            self.doc.append_text(current, s);
+            let _ = self.doc.append_text(current, s);
             return;
         }
         let loc = self.appropriate_place_for_inserting_node(None);
@@ -1565,9 +1588,9 @@ impl TreeBuilder {
             return;
         }
         if let Some(sib) = loc.insert_before_sibling {
-            self.doc.insert_text_before(sib, s);
+            let _ = self.doc.insert_text_before(sib, s);
         } else {
-            self.doc.append_text(loc.parent, s);
+            let _ = self.doc.append_text(loc.parent, s);
         }
     }
 
@@ -1624,7 +1647,7 @@ impl TreeBuilder {
                 && element.local_name == "template"
                 && element.template_contents.is_some())
         {
-            self.doc.append_text(current, text);
+            let _ = self.doc.append_text(current, text);
             return;
         }
         let loc = self.appropriate_place_for_inserting_node(None);
@@ -1633,9 +1656,9 @@ impl TreeBuilder {
             return;
         }
         if let Some(sib) = loc.insert_before_sibling {
-            self.doc.insert_text_before(sib, text);
+            let _ = self.doc.insert_text_before(sib, text);
         } else {
-            self.doc.append_text(loc.parent, text);
+            let _ = self.doc.append_text(loc.parent, text);
         }
     }
 
@@ -1676,6 +1699,10 @@ impl TreeBuilder {
                 ..
             } = self.active_formatting[i].clone()
             {
+                // Parser-reconstructed nodes must respect the same caps as tokens (#412).
+                if !self.parser_node_budget_allows() {
+                    break;
+                }
                 let new_id = self.insert_html_element(&tag_name, &attributes);
                 self.active_formatting[i] = FormattingEntry::Element {
                     node_id: new_id,
@@ -1788,6 +1815,10 @@ impl TreeBuilder {
 
         loop {
             if outer_loop_counter >= 8 {
+                return;
+            }
+            // The adoption agency clones elements internally; gate those too (#412).
+            if !self.parser_node_budget_allows() {
                 return;
             }
             outer_loop_counter += 1;
@@ -3652,12 +3683,15 @@ impl TreeBuilder {
                 // long table text run lives in a `Vec<char>` (4 B each) until the next
                 // non-character token. Bound it by the text budget instead of the input cap
                 // (#642).
+                // Drop non-characters to match `insert_character`'s body path (#411).
+                // Buffering them as U+FFFD would re-insert them on replay, producing a
+                // different tree for the same input solely because of the insertion mode.
+                let character = char::from_u32(ch)?;
                 if self.pending_table_characters.len() >= self.parse_options.max_text_bytes {
                     self.limit_violations.text_bytes_dropped += 1;
                     return None;
                 }
-                self.pending_table_characters
-                    .push(char::from_u32(ch).unwrap_or('\u{FFFD}'));
+                self.pending_table_characters.push(character);
                 None
             }
             other => {
@@ -4218,7 +4252,9 @@ impl TreeBuilder {
                         break;
                     }
                     let next = self.doc.node(child_id).next_sibling;
-                    let cloned = self.doc.clone_node(child_id, true);
+                    let Some(cloned) = self.doc.clone_node(child_id, true) else {
+                        continue;
+                    };
                     self.doc.append_child(sc_id, cloned);
                     curr = next;
                 }
@@ -4482,6 +4518,8 @@ fn run_fragment_parser(
         TokenizerState::Data
     };
 
+    // Per WHATWG §13.4 there is no appropriate end tag in the fragment case, so the
+    // tokenizer's last start tag stays unset (issue #413 was resolved as invalid).
     let mut tok = Tokenizer::from_str_input(
         input,
         TokenizerConfig {
@@ -4812,5 +4850,93 @@ mod robustness_regression_tests {
             }
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod invalid_codepoint_context_tests {
+    use super::*;
+
+    fn text_after(tokens: &[Token]) -> String {
+        let mut builder = TreeBuilder::new(false);
+        for token in tokens.iter().cloned() {
+            let _ = builder.process_token(token);
+        }
+        let doc = &builder.doc;
+        let mut text = String::new();
+        let mut stack = vec![doc.root()];
+        while let Some(id) = stack.pop() {
+            if let Some(node) = doc.try_node(id) {
+                if let Some(t) = node.as_text() {
+                    text.push_str(t);
+                }
+                stack.extend(doc.children(id));
+            }
+        }
+        text
+    }
+
+    fn start(name: &str) -> Token {
+        Token::StartTag {
+            name: name.into(),
+            self_closing: false,
+            attributes: vec![],
+        }
+    }
+
+    #[test]
+    fn surrogate_is_dropped_in_table_text_and_body_alike() {
+        // A lone surrogate must not become a U+FFFD node just because the insertion
+        // mode happens to be "in table text" (#411).
+        let body = text_after(&[Token::Character(0xD800), Token::Eof]);
+        let table = text_after(&[start("table"), Token::Character(0xD800), Token::Eof]);
+        assert!(!body.contains('\u{FFFD}'), "body path: {body:?}");
+        assert!(!table.contains('\u{FFFD}'), "table-text path: {table:?}");
+        assert_eq!(body, table);
+    }
+}
+
+#[cfg(test)]
+mod parser_node_cap_tests {
+    use super::*;
+
+    #[test]
+    fn formatting_reconstruction_respects_max_nodes() {
+        let options = ParseOptions {
+            max_nodes: 8, // root + html + body + 4 stale entries = 7, room for 1
+            ..ParseOptions::default()
+        };
+        let mut tb = TreeBuilder::with_options(false, options);
+        let html = tb.doc.create_element(Namespace::Html, "html", vec![]);
+        let body = tb.doc.create_element(Namespace::Html, "body", vec![]);
+        tb.doc.append_child(tb.doc.root(), html);
+        tb.doc.append_child(html, body);
+        tb.open_elements.push(html);
+        tb.open_elements.push(body);
+        // Several stale formatting entries whose nodes are not open: reconstruction
+        // would clone all of them in one shot without the budget check (#412).
+        for _ in 0..4 {
+            let stale = tb.doc.create_element(Namespace::Html, "b", vec![]);
+            tb.active_formatting.push(FormattingEntry::Element {
+                node_id: stale,
+                tag_name: "b".into(),
+                attributes: vec![],
+            });
+        }
+        let before = tb.doc.len();
+        assert!(before < options.max_nodes, "setup: {before} nodes");
+
+        tb.reconstruct_active_formatting_elements();
+
+        assert!(
+            tb.doc.len() <= options.max_nodes,
+            "reconstruction must stop at max_nodes (#412): {} nodes",
+            tb.doc.len()
+        );
+        assert!(
+            tb.limit_violations.nodes_exceeded > 0,
+            "the bounded bypass must be counted: {:?}",
+            tb.limit_violations
+        );
     }
 }

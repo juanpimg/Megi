@@ -154,8 +154,8 @@ fn is_custom_ident(value: &str) -> bool {
     let Some(first) = chars.next() else {
         return false;
     };
-    (first.is_ascii_alphabetic() || first == '_' || first == '-')
-        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
+    (crate::tokenizer::is_ident_start(first))
+        && chars.all(crate::tokenizer::is_ident)
         && value != "none"
         && value != "and"
         && value != "or"
@@ -257,7 +257,7 @@ impl<'a> BaseStyles<'a> {
             let element = self.doc.node(id).as_element().unwrap();
             let inline = element
                 .get_attribute("style")
-                .map(|style| crate::expand_declarations(&crate::parse_list_of_declarations(style)));
+                .map(crate::parse_inline_style);
             let cascaded = crate::cascade::resolve_cascaded_properties_base(
                 self.doc,
                 id,

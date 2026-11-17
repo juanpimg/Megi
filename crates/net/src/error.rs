@@ -98,6 +98,10 @@ pub enum FetchError {
     FileNotFound(PathBuf),
     /// A `file:` URL pointed at a path without read permission.
     FilePermissionDenied(PathBuf),
+    /// A `file:` URL pointed at something that is not a regular file (directory, FIFO,
+    /// device, socket). Opening a FIFO blocks until a writer appears and a device never
+    /// reaches end-of-file, so such paths are rejected before they are read (#307).
+    FileNotRegular(PathBuf),
     /// Reading the local file failed for another I/O reason.
     FileIo(io::Error),
     /// A `file:` URL was requested by a loader that may not read local files.
@@ -174,6 +178,13 @@ impl fmt::Display for FetchError {
             Self::FileNotFound(path) => write!(f, "file not found: {}", path.display()),
             Self::FilePermissionDenied(path) => {
                 write!(f, "permission denied reading file: {}", path.display())
+            }
+            Self::FileNotRegular(path) => {
+                write!(
+                    f,
+                    "file URL does not name a regular file: {}",
+                    path.display()
+                )
             }
             Self::FileIo(err) => write!(f, "file I/O error: {err}"),
             Self::FileAccessBlocked => {

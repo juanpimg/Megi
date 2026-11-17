@@ -1,8 +1,9 @@
 name: Fuzz (nightly)
 
 # Nightly libFuzzer runs over every parser/renderer surface that consumes untrusted
-# input (17 targets): the 9 critical parsers/decoders run 10 minutes each, the remaining
-# targets 5 minutes. Pull requests get a fast "build every target" job instead.
+# input (26 harnesses): the 9 critical parsers/decoders run 10 minutes each, the other
+# 17 run 5 minutes. Pull requests and pushes to main get a fast "build every target"
+# job instead.
 # Not a substitute for a long-running fuzzing farm: the scheduled job is a daily
 # regression gate that keeps the harnesses compiling and catches shallow crashes.
 #
@@ -16,6 +17,17 @@ on:
     # Every day at 03:17 UTC (off-peak, away from the top-of-hour Actions spike).
     - cron: "17 3 * * *"
   workflow_dispatch:
+  # A manifest/API break in the harness is a hard error, not a flaky run: catch it on
+  # the merge that causes it instead of the next morning (the 2026-11 duplicate
+  # `[[bin]] font_decode` entry broke every scheduled job for days).
+  push:
+    branches: [main]
+    paths:
+      - "fuzz/**"
+      - ".github/workflows/fuzz-nightly.yml"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
   pull_request:
     paths:
       - "fuzz/**"
@@ -39,12 +51,14 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  # Fast PR gate: cargo-fuzz needs nightly (it passes `-Zsanitizer=…` to rustc), so a
+  # Fast build gate: cargo-fuzz needs nightly (it passes `-Zsanitizer=…` to rustc), so a
   # stable-only build job is not viable. This job compiles every target on nightly but does
-  # not run libFuzzer, keeping PR feedback cheap (~few minutes with the rust-cache below).
+  # not run libFuzzer, keeping feedback cheap (~few minutes with the rust-cache below).
+  # It runs on pull requests and, since a broken harness on main silences the whole daily
+  # matrix, on every push to main that can affect it.
   build:
     name: build all fuzz targets
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -78,7 +92,9 @@ jobs:
 
   fuzz:
     name: fuzz ${{ matrix.target }}
-    if: github.event_name != 'pull_request'
+    # Only the nightly schedule and explicit dispatches run the 22 libFuzzer budgets:
+    # pushes to main are covered by the build gate above.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -147,21 +163,35 @@ jobs:
           - target: body_stream
             seconds: 300
             extra: ""
-          - target: webp_vp8
-            seconds: 300
+          # WebP container validation and VP8/VP8L decoding in one target (#471):
+          # the two old 300 s campaigns overlapped heavily, so their budget is kept
+          # as a single 600 s run over the union of both corpora.
+          - target: webp
+            seconds: 600
             extra: ""
           - target: js_module
             seconds: 300
             extra: "-detect_leaks=0"
-          # Round 34 (R228): VP8 lossy keyframe decoder + CSS container queries.
-          - target: webp_lossy
-            seconds: 300
-            extra: ""
           - target: container_queries
             seconds: 300
             extra: ""
           # Ronda 36: byte -> code-point preprocessor (raw lone surrogates, >U+10FFFF).
           - target: text_boundary
+            seconds: 300
+            extra: ""
+          # Direct core-crate harnesses (#834, #716). They were added to the workspace but
+          # never got a scheduled budget, so a regression in them only showed up in the
+          # weekly soak (or not at all).
+          - target: dom_tree
+            seconds: 300
+            extra: ""
+          - target: layout_tree
+            seconds: 300
+            extra: ""
+          - target: paint_display_list
+            seconds: 300
+            extra: ""
+          - target: fonts_shape
             seconds: 300
             extra: ""
     steps:
@@ -229,7 +259,7 @@ jobs:
 
   fuzz-ubsan:
     name: fuzz-ubsan ${{ matrix.target }}
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -253,7 +283,7 @@ jobs:
             seconds: 120
           - target: svg_parse
             seconds: 120
-          - target: webp_lossy
+          - target: webp
             seconds: 120
           - target: container_queries
             seconds: 120

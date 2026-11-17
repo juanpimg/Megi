@@ -87,8 +87,14 @@ fn number_or_percentage(token: &str) -> Option<(f32, bool)> {
 }
 
 fn parse_alpha(token: &str) -> Option<f32> {
-    let (value, _) = number_or_percentage(token)?;
-    Some(value.clamp(0.0, 1.0))
+    let (value, is_pct) = number_or_percentage(token)?;
+    if is_pct {
+        Some(value.clamp(0.0, 1.0))
+    } else if value < 0.0 || value > 1.0 {
+        None
+    } else {
+        Some(value)
+    }
 }
 
 fn parse_hue(token: &str) -> Option<f32> {
@@ -456,8 +462,11 @@ fn parse_hsl(inner: &str) -> Option<Color> {
     let hue = parse_hue(&tokens[0])?.rem_euclid(360.0);
     let (s_val, s_pct) = number_or_percentage(&tokens[1])?;
     let (l_val, l_pct) = number_or_percentage(&tokens[2])?;
-    let sat = (if s_pct { s_val } else { s_val / 100.0 }).clamp(0.0, 1.0);
-    let light = (if l_pct { l_val } else { l_val / 100.0 }).clamp(0.0, 1.0);
+    if !s_pct || !l_pct {
+        return None;
+    }
+    let sat = s_val.clamp(0.0, 1.0);
+    let light = l_val.clamp(0.0, 1.0);
     let f = |n: f32| -> f32 {
         let k = (n + hue / 30.0) % 12.0;
         let a = sat * light.min(1.0 - light);

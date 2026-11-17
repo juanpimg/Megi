@@ -14,8 +14,8 @@ fn clone_node_deep_and_shallow_preserve_attributes() {
     assert!(document.append_child(root, parent));
     let child = element(&mut document, "span", vec![]);
     assert!(document.append_child(parent, child));
-    let deep = document.clone_node(parent, true);
-    let shallow = document.clone_node(parent, false);
+    let deep = document.clone_node(parent, true).unwrap();
+    let shallow = document.clone_node(parent, false).unwrap();
     assert_eq!(document.children_ids(deep).count(), 1);
     assert_eq!(document.children_ids(shallow).count(), 0);
     assert_eq!(

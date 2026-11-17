@@ -321,6 +321,30 @@ fn text_and_pattern_rendering_is_deterministic() {
 }
 
 #[test]
+fn pattern_tile_budget_is_shared_across_paints() {
+    // Each paint stays under the per-paint 10k cap, but two of them together
+    // exceed the global budget (#439). Before the fix both were allowed and a
+    // document with many patterned shapes multiplied the work unbounded.
+    let source = "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'>
+      <defs><pattern id='p' patternUnits='userSpaceOnUse' width='0.4' height='0.4'>
+        <rect width='0.4' height='0.4' fill='red'/></pattern></defs>
+      <rect width='32' height='32' fill='url(#p)'/>
+      <rect x='8' y='8' width='16' height='16' fill='url(#p)'/></svg>";
+    let error = render_svg(
+        source.as_bytes(),
+        &SvgOptions {
+            width: Some(32),
+            height: Some(32),
+        },
+    )
+    .expect_err("global tile budget");
+    assert!(
+        matches!(&error, SvgError::Limit(message) if message.contains("global pattern tile budget")),
+        "{error:?}"
+    );
+}
+
+#[test]
 fn extreme_pattern_tiles_hit_the_budget_instead_of_overflowing() {
     let source =
         "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'>
@@ -340,4 +364,19 @@ fn extreme_pattern_tiles_hit_the_budget_instead_of_overflowing() {
         matches!(&error, SvgError::Limit(message) if message.contains("pattern tile")),
         "{error:?}"
     );
+}
+
+#[test]
+fn aggregate_glyph_budget_is_enforced() {
+    // 6 texts × 10k chars = 60k glyphs, over the 50k global budget (#432), while
+    // each individual text stays within MAX_TEXT_CHARS and the count within MAX_TEXTS.
+    let mut body = String::new();
+    let text = "x".repeat(10_000);
+    for _ in 0..6 {
+        body.push_str(&format!("<text x='1' y='1' font-size='2'>{text}</text>"));
+    }
+    let source = svg_doc(10.0, 10.0, &body);
+    let error =
+        render_svg(source.as_bytes(), &SvgOptions::default()).expect_err("aggregate glyph budget");
+    assert!(matches!(error, SvgError::Limit(_)), "{error:?}");
 }

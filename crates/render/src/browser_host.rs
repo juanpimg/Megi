@@ -112,7 +112,7 @@ pub(crate) fn computed_style_for(
         .and_then(|node| node.as_element())
         .and_then(|element| element.get_attribute("style"))
         .map(|inline| {
-            css::parse_list_of_declarations(inline)
+            css::parse_inline_declarations(inline)
                 .into_iter()
                 .map(|declaration| (declaration.name, declaration.raw_value))
                 .collect()
@@ -231,5 +231,28 @@ fn border_style_css(border_style: BorderStyle) -> &'static str {
         BorderStyle::Ridge => "ridge",
         BorderStyle::Inset => "inset",
         BorderStyle::Outset => "outset",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dom::{Attribute, Namespace};
+
+    #[test]
+    fn computed_style_for_bounds_oversized_inline_style() {
+        let prefix = "color: rgb(1, 2, 3); ";
+        let mut style = String::from(prefix);
+        style.push_str(&" ".repeat(css::MAX_INLINE_STYLE_BYTES - prefix.len() - 1));
+        style.push('🦀');
+        style.push_str("; background-color: rgb(9, 9, 9);");
+        assert!(!style.is_char_boundary(css::MAX_INLINE_STYLE_BYTES));
+
+        let mut doc = Document::new();
+        let div = doc.create_element(Namespace::Html, "div", vec![Attribute::new("style", style)]);
+        doc.append_child(doc.root(), div);
+
+        let pairs = computed_style_for(&HashMap::new(), &doc, div);
+        assert_eq!(pairs, vec![("color".to_owned(), "rgb(1, 2, 3)".to_owned())]);
     }
 }

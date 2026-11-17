@@ -139,6 +139,16 @@ pub fn set_outer_html_with_options(
         options,
     );
     let new_children = new_root_children(doc, marker);
+    // A parser that hit a limit produced a partial tree. Replacing the element with it would
+    // lose the original content with nothing to roll back to (#1121), so the write is refused:
+    // the freshly parsed nodes are dropped, the element keeps its place and the caller gets
+    // the violations back.
+    if !violations.is_empty() {
+        for child in new_children {
+            doc.remove_subtree(child);
+        }
+        return Ok(violations);
+    }
     // Insert into a buffered list first and roll back on rejection: inserting one by one
     // straight into the tree left it half-mutated when a later child was rejected (#646).
     let mut inserted: Vec<NodeId> = Vec::new();
@@ -189,12 +199,11 @@ pub fn document_write_with_options(
         options,
     );
     let new_children = new_root_children(doc, marker);
-    // Appending to <body> cannot fail for parser-produced nodes; ignore the result but keep
-    // the tree consistent by re-attaching anything that was rejected.
+    // Appending to <body> can in principle be rejected (e.g. a cyclic child chain); drop
+    // the rejected node instead of leaking it into the document root (#1125).
     for child in new_children {
         if !doc.append_child(body, child) {
-            // Should be unreachable: the fragment parser cannot produce ancestor cycles.
-            debug_assert!(false, "document.write could not append a fragment child");
+            doc.remove_subtree(child);
         }
     }
     violations
