@@ -691,7 +691,7 @@ fn build_crypto(context: &mut Context) -> JsObject {
             let array = args.first().cloned().unwrap_or(JsValue::undefined());
             let obj = array.as_object().ok_or_else(|| js_error("getRandomValues requires a typed array"))?;
             // Fill with pseudo-random bytes using a simple xorshift seeded by the clock.
-            let mut seed = with_host(|host| host.now_ms()).unwrap_or(12345) as u64;
+            let mut seed = with_host(|host| host.now_ms()).unwrap_or(12345);
             let len = obj.get(js_string!("length"), context).ok().and_then(|v| v.to_number(context).ok()).unwrap_or(0.0) as usize;
             for i in 0..len {
                 seed ^= seed << 13;
@@ -708,7 +708,7 @@ fn build_crypto(context: &mut Context) -> JsObject {
     init.function(
         native(|_this, _args, _context| {
             // Generate a v4 UUID from the same xorshift source.
-            let mut seed = with_host(|host| host.now_ms()).unwrap_or(12345) as u64;
+            let mut seed = with_host(|host| host.now_ms()).unwrap_or(12345);
             let mut bytes = [0u8; 16];
             for b in bytes.iter_mut() {
                 seed ^= seed << 13;
@@ -766,7 +766,7 @@ fn text_encoder_encoding_get(_this: &JsValue, _args: &[JsValue], _context: &mut 
     Ok(JsValue::from(js_string!("utf-8")))
 }
 
-fn text_encoder_encode(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+fn text_encoder_encode(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let input = args.first().map(|v| v.to_string(context).map(|s| s.to_std_string_escaped()).unwrap_or_default()).unwrap_or_default();
     let block = AlignedVec::from_iter(0, input.as_bytes().iter().copied());
     let buffer = JsArrayBuffer::from_byte_block(block, context)
@@ -2485,7 +2485,7 @@ fn document_head(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
     wrap_optional(context, node)
 }
 
-fn document_cookie_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+fn document_cookie_get(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     // Minimal in-memory cookie store; real jar integration is host-backed.
     let cookies = context
         .global_object()
@@ -2498,7 +2498,7 @@ fn document_cookie_get(this: &JsValue, _args: &[JsValue], context: &mut Context)
     Ok(JsValue::from(js_string!(s)))
 }
 
-fn document_cookie_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+fn document_cookie_set(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let value = arg_string(args, 0, context).unwrap_or_default();
     // Append to the store (simplified: just store the raw value).
     let current = context
