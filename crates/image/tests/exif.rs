@@ -56,17 +56,26 @@ fn decodes_all_orientations_to_the_same_upright_pixels() {
             _ => unreachable!(),
         };
         let decoded = decode(bytes).expect("EXIF fixture decodes");
+        // Independent oracle: the stored frames are all 12x8, and only the
+        // orientations that transpose the axes (5..=8) turn the upright image
+        // sideways. Deriving this from `apply_orientation` (the code under test)
+        // would make the assertion vacuous.
+        let expected_dims = if matches!(orientation, 5..=8) {
+            (8_u32, 12_u32)
+        } else {
+            (12_u32, 8_u32)
+        };
+        assert_eq!(
+            (decoded.width, decoded.height),
+            expected_dims,
+            "orientation {orientation} must land on {expected_dims:?}"
+        );
         let expected = apply_orientation(
             image::RgbaImage::new(reference.width, reference.height, reference.data.clone())
                 .expect("clone reference"),
             Some(orientation),
         )
         .expect("reference transform");
-        assert_eq!(
-            (decoded.width, decoded.height),
-            (expected.width, expected.height),
-            "orientation {orientation}"
-        );
         // JPEG is lossy but these fixtures use quality 95 and flat colour blocks;
         // compare with a small per-channel tolerance.
         let max_delta = decoded
