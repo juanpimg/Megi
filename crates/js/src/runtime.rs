@@ -4579,7 +4579,7 @@ fn attributes_remove_named(
 
 fn node_normalize(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let removed = with_host(|host| {
+    with_host(|host| {
         let removed = host.document.normalize(node_id);
         if removed > 0 {
             host.record_mutation(MutationRecord {
@@ -4589,10 +4589,9 @@ fn node_normalize(this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
                 old_value: None,
             });
         }
-        removed
-    })
-    .unwrap_or(0);
-    Ok(JsValue::from(removed as f64))
+    });
+    // DOM §4.6: `normalize()` returns undefined, not the number of merged nodes (#1373).
+    Ok(JsValue::undefined())
 }
 
 fn node_compare_document_position(
@@ -4643,9 +4642,8 @@ fn document_normalize(
     _args: &[JsValue],
     _context: &mut Context,
 ) -> JsResult<JsValue> {
-    let removed = with_host(|host| {
-        let root = host.document.document_element();
-        root.map(|root| {
+    with_host(|host| {
+        if let Some(root) = host.document.document_element() {
             let removed = host.document.normalize(root);
             if removed > 0 {
                 host.record_mutation(MutationRecord {
@@ -4655,12 +4653,10 @@ fn document_normalize(
                     old_value: None,
                 });
             }
-            removed
-        })
-        .unwrap_or(0)
-    })
-    .unwrap_or(0);
-    Ok(JsValue::from(removed as f64))
+        }
+    });
+    // `Document.normalize()` is inherited from `Node`: undefined (DOM §4.6).
+    Ok(JsValue::undefined())
 }
 
 fn document_compare_document_position(
