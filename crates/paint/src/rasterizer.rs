@@ -1958,6 +1958,7 @@ struct ShadowPermit<'a> {
 
 impl ShadowPermit<'_> {
     /// Pixels charged to the pass by this reservation.
+    #[cfg(test)]
     fn charged(&self) -> usize {
         self.charged
     }
@@ -2607,7 +2608,7 @@ impl Pixmap {
     }
 
     /// Draws one `box-shadow` layer (outer or inset) with a deterministic blur.
-    pub fn draw_box_shadow(
+    pub(crate) fn draw_box_shadow(
         &mut self,
         rect: Rect,
         radii: BorderRadii,
