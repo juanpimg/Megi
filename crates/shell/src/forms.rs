@@ -132,6 +132,8 @@ impl SelectOption {
 pub struct FormControl {
     /// Stable id across re-renders (`data-megi-form-id`).
     pub form_id: u32,
+    /// `name` attribute (used as the key when the control is a successful form control).
+    pub name: String,
     /// DOM node in the current snapshot (changes after a re-render).
     pub node_id: NodeId,
     /// Control kind.
@@ -280,6 +282,7 @@ pub fn collect_controls(document: &Document, layout: &LayoutBox) -> Vec<FormCont
                 };
                 controls.push(FormControl {
                     form_id,
+                    name: element.get_attribute("name").unwrap_or("").to_owned(),
                     node_id,
                     kind,
                     rect: CssRect::new(rect.x, rect.y, rect.width, rect.height),
@@ -902,6 +905,76 @@ pub fn caret_visible(tick: u64) -> bool {
     (tick % 21) < 11
 }
 
+/// Percent-encodes a string using the `application/x-www-form-urlencoded` rules:
+/// ASCII alphanumerics and `* - . _` are unreserved, space becomes `+`, and every other
+/// UTF-8 byte becomes uppercase `%HH`. This is the WHATWG "urlencoded serializer".
+pub fn form_urlencode(value: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut out = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'*' | b'-' | b'.' | b'_' => {
+                out.push(byte as char)
+            }
+            b' ' => out.push('+'),
+            _ => {
+                out.push('%');
+                out.push(HEX[(byte >> 4) as usize] as char);
+                out.push(HEX[(byte & 0x0F) as usize] as char);
+            }
+        }
+    }
+    out
+}
+
+/// Builds an `application/x-www-form-urlencoded` body from the successful controls (#1538).
+///
+/// A control is successful when it has a non-empty `name`, is not disabled, is not a
+/// submit/reset/button, and (for checkboxes/radios) is checked. `select` contributes the value
+/// of its selected option. Pairs are emitted in document order, joined by `&`.
+pub fn form_urlencoded(controls: &[FormControl]) -> String {
+    let mut pairs: Vec<String> = Vec::new();
+    for control in controls {
+        if control.name.is_empty()
+            || control.disabled
+            || matches!(
+                control.kind,
+                FormControlKind::Submit | FormControlKind::Reset | FormControlKind::Button
+            )
+        {
+            continue;
+        }
+        let values: Vec<&str> = match control.kind {
+            FormControlKind::Checkbox | FormControlKind::Radio => {
+                if control.checked {
+                    vec![if control.value.is_empty() {
+                        "on"
+                    } else {
+                        &control.value
+                    }]
+                } else {
+                    Vec::new()
+                }
+            }
+            FormControlKind::Select => control
+                .options
+                .iter()
+                .filter(|option| option.selected)
+                .map(|option| option.value.as_str())
+                .collect(),
+            _ => vec![control.value.as_str()],
+        };
+        for value in values {
+            pairs.push(format!(
+                "{}={}",
+                form_urlencode(&control.name),
+                form_urlencode(value)
+            ));
+        }
+    }
+    pairs.join("&")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -909,6 +982,7 @@ mod tests {
     fn control(form_id: u32, kind: FormControlKind, value: &str) -> FormControl {
         FormControl {
             form_id,
+            name: String::new(),
             node_id: NodeId::from_index(0),
             kind,
             rect: CssRect::new(0.0, 0.0, 10.0, 10.0),
@@ -918,6 +992,50 @@ mod tests {
             options: Vec::new(),
             multiple: false,
         }
+    }
+
+    fn named(name: &str, kind: FormControlKind, value: &str) -> FormControl {
+        let mut control = control(0, kind, value);
+        control.name = name.to_owned();
+        control
+    }
+
+    #[test]
+    fn form_urlencode_follows_whatwg_rules() {
+        assert_eq!(form_urlencode("a b&c=d"), "a+b%26c%3Dd");
+        assert_eq!(form_urlencode("a*b-c.d_e"), "a*b-c.d_e");
+        assert_eq!(form_urlencode("caf\u{e9}"), "caf%C3%A9");
+        assert_eq!(form_urlencode("100%"), "100%25");
+    }
+
+    #[test]
+    fn form_urlencoded_skips_unsuccessful_controls() {
+        // #1538: only successful controls contribute to the submitted body.
+        let mut text = named("user", FormControlKind::TextInput, "alice");
+        let mut checked = named("remember", FormControlKind::Checkbox, "1");
+        checked.checked = true;
+        let unchecked = named("news", FormControlKind::Checkbox, "1");
+        let mut disabled = named("secret", FormControlKind::TextInput, "x");
+        disabled.disabled = true;
+        let unnamed = named("", FormControlKind::TextInput, "ignored");
+        let submit = named("go", FormControlKind::Submit, "Go");
+        let controls = [text.clone(), checked, unchecked, disabled, unnamed, submit];
+        text.name.clear(); // sanity: mutation isolated
+        let body = form_urlencoded(&controls);
+        assert_eq!(body, "user=alice&remember=1", "body={body}");
+    }
+
+    #[test]
+    fn form_urlencoded_checkbox_default_and_select() {
+        let mut checkbox = named("ok", FormControlKind::Checkbox, "");
+        checkbox.checked = true;
+        let mut select = named("color", FormControlKind::Select, "");
+        select.options = vec![
+            SelectOption::new("Red", "r", true),
+            SelectOption::new("Blue", "b", false),
+        ];
+        let body = form_urlencoded(&[checkbox, select]);
+        assert_eq!(body, "ok=on&color=r", "body={body}");
     }
 
     #[test]
@@ -1147,6 +1265,7 @@ mod tests {
         );
         let control = FormControl {
             form_id: 7,
+            name: String::new(),
             node_id: document.body().expect("body"),
             kind: FormControlKind::Select,
             rect: CssRect::new(0.0, 0.0, 100.0, 80.0),

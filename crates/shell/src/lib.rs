@@ -223,7 +223,8 @@ pub use find::{
 };
 pub use forms::{
     ACTIVE_ATTR, FOCUS_ATTR, FORM_ID_ATTR, FocusState, FormControl, FormControlKind, TextEdit,
-    assign_form_ids, collect_controls, control_at, patch_control, snapshot_data_url,
+    assign_form_ids, collect_controls, control_at, form_urlencode, form_urlencoded, patch_control,
+    snapshot_data_url,
 };
 pub use headless::{
     ScreenshotInfo, render_target, render_target_with_chrome, render_target_with_chrome_menu,
