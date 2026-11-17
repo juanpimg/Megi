@@ -597,16 +597,63 @@ impl WindowApp {
 
     /// Goes back one history entry (no-op at the beginning of the history).
     fn go_back(&mut self) {
+        let previous = self.nav.current().cloned();
         if let Some(url) = self.nav.back().cloned() {
-            self.start_navigation(&url);
+            self.apply_history_navigation(&url, previous.as_ref());
         }
     }
 
     /// Goes forward one history entry (no-op at the end of the history).
     fn go_forward(&mut self) {
+        let previous = self.nav.current().cloned();
         if let Some(url) = self.nav.forward().cloned() {
-            self.start_navigation(&url);
+            self.apply_history_navigation(&url, previous.as_ref());
         }
+    }
+
+    /// Applies a back/forward navigation.
+    ///
+    /// When the target differs from the current document only by its fragment, the page is not
+    /// reloaded: the current DOM snapshot is re-rendered with `hashchange` and `popstate`
+    /// dispatched on `window` so SPA routers can react (#1503). Any other navigation falls back
+    /// to a full render.
+    fn apply_history_navigation(&mut self, url: &net::Url, previous: Option<&net::Url>) {
+        let same_document = previous.is_some_and(|current| current.cache_key() == url.cache_key());
+        let fragment_changed = previous.and_then(|current| current.fragment()) != url.fragment();
+        if same_document
+            && fragment_changed
+            && self.document.is_some()
+            && self.request_sender.is_some()
+        {
+            let snapshot =
+                crate::forms::snapshot_data_url(self.document.as_ref().expect("document present"));
+            // Resolve relative resources against the target URL (same document as `previous`).
+            let base = Some(url.as_str());
+            let events: Vec<&str> = if url.fragment().is_some() {
+                vec!["hashchange", "popstate"]
+            } else {
+                vec!["popstate"]
+            };
+            let request = self.store.begin_history_event_request(
+                &snapshot,
+                self.metrics.css_width,
+                self.metrics.css_height,
+                base.as_deref(),
+                &events,
+            );
+            if let Some(sender) = &self.request_sender
+                && sender.send(request).is_err()
+            {
+                self.error = Some("render worker stopped unexpectedly".to_string());
+            }
+            self.input = url.as_str();
+            self.update_title();
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
+            return;
+        }
+        self.start_navigation(url);
     }
 
     /// Reloads the current page (keeps scroll position and history).

@@ -294,6 +294,7 @@ fn worker_renderer_produces_a_full_page_frame_without_a_display() {
         base_override: None,
         scripting: true,
         find_query: None,
+        host_events: Vec::new(),
     };
     let frame = shell::worker::render_document(&request).expect("full-page render");
     assert_eq!(frame.generation, 7);
@@ -323,6 +324,7 @@ fn worker_render_document_exposes_links_title_and_final_url() {
         base_override: None,
         scripting: true,
         find_query: None,
+        host_events: Vec::new(),
     };
     let frame = shell::worker::render_document(&request).expect("render");
     assert_eq!(frame.title.as_deref(), Some("Links Page"));
@@ -410,6 +412,7 @@ fn file_fixture_links_are_hittable_and_navigable() {
         base_override: None,
         scripting: true,
         find_query: None,
+        host_events: Vec::new(),
     };
     let frame = shell::worker::render_document(&request).expect("render fixture");
     assert_eq!(frame.title.as_deref(), Some("Links Fixture"));
@@ -563,6 +566,7 @@ fn pending_timers_enable_auto_refresh_and_renders_are_deterministic() {
         base_override: None,
         scripting: true,
         find_query: None,
+        host_events: Vec::new(),
     };
     let first = shell::worker::render_document(&request).expect("first render");
     let mut second_request = request.clone();
@@ -634,6 +638,7 @@ fn forms_fixture_renders_visible_control_borders() {
         base_override: None,
         scripting: true,
         find_query: None,
+        host_events: Vec::new(),
     };
     let frame = shell::worker::render_document(&request).expect("worker forms render");
     assert!(!frame.forms.is_empty(), "frame must expose form controls");
@@ -656,6 +661,7 @@ fn patched_dom_snapshot_re_renders_edited_values() {
         base_override: None,
         scripting: true,
         find_query: None,
+        host_events: Vec::new(),
     };
     let frame = shell::worker::render_document(&request).expect("initial render");
     let text = frame
@@ -683,6 +689,7 @@ fn patched_dom_snapshot_re_renders_edited_values() {
         base_override: Some(forms_fixture_url()),
         scripting: false,
         find_query: None,
+        host_events: Vec::new(),
     };
     let patched = shell::worker::render_document(&patched_request).expect("patched render");
     let edited = patched
@@ -738,6 +745,7 @@ fn find_request_reports_hits_and_highlight_rects() {
         base_override: None,
         scripting: true,
         find_query: Some("megi".to_string()),
+        host_events: Vec::new(),
     };
     let frame = shell::worker::render_document(&request).expect("find render");
     assert!(
@@ -761,6 +769,7 @@ fn find_is_case_insensitive_and_absent_without_query() {
         base_override: None,
         scripting: true,
         find_query: Some("MEGI".to_string()),
+        host_events: Vec::new(),
     };
     let case_upper = shell::worker::render_document(&base).expect("upper render");
     let mut lower = base.clone();
@@ -1037,6 +1046,7 @@ fn select_options_survive_a_patched_rerender() {
         base_override: None,
         scripting: true,
         find_query: None,
+        host_events: Vec::new(),
     };
     let frame = shell::worker::render_document(&request).expect("forms render");
     let select = frame
@@ -1059,6 +1069,7 @@ fn select_options_survive_a_patched_rerender() {
         base_override: Some(request.input.clone()),
         scripting: false,
         find_query: None,
+        host_events: Vec::new(),
     };
     let patched = shell::worker::render_document(&patched_request).expect("patched render");
     let patched_select = patched
@@ -1195,6 +1206,7 @@ fn worker_frame_png_bytes_match_the_render_screenshot() {
         base_override: None,
         scripting: true,
         find_query: None,
+        host_events: Vec::new(),
     };
     let frame = shell::worker::render_document(&request).expect("render");
     assert!(shell::download::is_png(&frame.png_bytes));
@@ -1257,6 +1269,7 @@ fn worker_frame_exposes_image_regions_for_the_context_menu() {
         base_override: None,
         scripting: true,
         find_query: None,
+        host_events: Vec::new(),
     };
     let frame = shell::worker::render_document(&request).expect("render");
     assert!(!frame.images.is_empty(), "img region extracted");
@@ -1559,4 +1572,43 @@ fn reader_page_extracts_the_article_and_centers_the_column() {
     assert!(page.contains("max-width:700px"));
     assert!(!page.contains("<nav>"));
     assert!(!page.contains("<footer>"));
+}
+
+#[test]
+fn worker_render_dispatches_host_popstate_before_the_final_frame() {
+    // #1503: a same-document history navigation re-renders with `host_events=["popstate"]`;
+    // the worker must dispatch it so the listener's DOM mutation reaches the final frame.
+    let url = format!(
+        "file://{}",
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/render/js_host_events.html")
+            .display()
+    );
+    let render = |events: Vec<String>| {
+        let request = RenderRequest {
+            generation: 1,
+            input: url.clone(),
+            css_width: 200,
+            css_height: 120,
+            base_override: None,
+            scripting: true,
+            find_query: None,
+            host_events: events,
+        };
+        shell::worker::render_document(&request).expect("render")
+    };
+    let blue: u32 = 0x0000_00FF;
+    let count_blue =
+        |frame: &shell::worker::RenderFrame| frame.pixels.iter().filter(|&&p| p == blue).count();
+    let without = render(Vec::new());
+    let with = render(vec!["popstate".to_owned()]);
+    assert_eq!(
+        count_blue(&without),
+        0,
+        "without the event the popstate listener must not run"
+    );
+    assert!(
+        count_blue(&with) > 0,
+        "the popstate listener must mutate the DOM and paint blue pixels"
+    );
 }
