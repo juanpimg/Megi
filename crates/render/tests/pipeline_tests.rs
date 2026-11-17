@@ -538,3 +538,33 @@ fn non_stylesheet_media_attributes_are_ignored() {
         output.stats.warnings
     );
 }
+
+#[test]
+fn oversized_inline_style_in_render_pipeline_does_not_panic() {
+    let prefix = "background-color: rgb(0, 180, 0); width: 80px; height: 80px; ";
+    let mut style = String::from(prefix);
+    style.push_str(&" ".repeat(css::MAX_INLINE_STYLE_BYTES - prefix.len() - 1));
+    style.push('🦀');
+    style.push_str("; background-color: rgb(255, 0, 0);");
+    assert!(!style.is_char_boundary(css::MAX_INLINE_STYLE_BYTES));
+
+    let html = format!(
+        "<!doctype html><html><body style=\"margin:0\"><div style=\"{style}\"></div></body></html>"
+    );
+    let mut routes = HashMap::new();
+    routes.insert("/inline_cap.html".to_string(), RouteResponse::html(&html));
+    let server = TestServer::spawn(routes, 1);
+    let output = render_url(&server.url("/inline_cap.html"), &options(100, 100)).expect("render");
+    assert_render_output_consistency(&output);
+    let green_pixels = output
+        .pixmap
+        .pixels
+        .iter()
+        .filter(|px| px.g > 150 && px.r < 40 && px.b < 40)
+        .count();
+    assert!(
+        green_pixels > 5000,
+        "expected oversized inline style prefix declarations to paint green box, got {green_pixels}"
+    );
+    server.join();
+}

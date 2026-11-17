@@ -1166,7 +1166,7 @@ pub(crate) fn report_uncaught(
         }
     }
     let _ = with_host(|host| {
-        host.console.push(crate::host::ConsoleEntry {
+        host.console.push_back(crate::host::ConsoleEntry {
             level: "error".to_string(),
             message: format!("Uncaught {message}"),
         });
@@ -1437,7 +1437,10 @@ fn cancel_animation_frame(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     if let Some(id) = args.first().and_then(JsValue::as_number) {
-        let id = id.max(0.0) as u64;
+        if !id.is_finite() || id < 0.0 || id > u64::MAX as f64 {
+            return Ok(JsValue::undefined());
+        }
+        let id = id as u64;
         let _ = with_host(|host| host.timers.retain(|timer| timer.id != id));
         release_timer_slots(context, id);
     }
@@ -1446,7 +1449,10 @@ fn cancel_animation_frame(
 
 fn clear_timer(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if let Some(id) = args.first().and_then(JsValue::as_number) {
-        let id = id.max(0.0) as u64;
+        if !id.is_finite() || id < 0.0 || id > u64::MAX as f64 {
+            return Ok(JsValue::undefined());
+        }
+        let id = id as u64;
         let _ = with_host(|host| host.timers.retain(|timer| timer.id != id));
         release_timer_slots(context, id);
     }

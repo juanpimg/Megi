@@ -76,19 +76,37 @@ impl Origin {
             "https" => 443,
             _ => return None,
         };
-        let (host, port) = match rest.rsplit_once(':') {
-            Some((host, port)) if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) => {
-                if host.contains(':') {
-                    // Non-bracketed host with extra colon: reject.
+        let (host, port) = if rest.starts_with('[') {
+            // IPv6 literal: host is bracketed, port follows after ']:'
+            let end = rest.find(']')?;
+            let host = &rest[..=end];
+            let tail = &rest[end + 1..];
+            if tail.is_empty() {
+                (host, default_port)
+            } else {
+                let port_str = tail.strip_prefix(':')?;
+                if port_str.is_empty() || !port_str.bytes().all(|b| b.is_ascii_digit()) {
                     return None;
                 }
-                (host, port.parse::<u16>().ok()?)
+                (host, port_str.parse::<u16>().ok()?)
             }
-            Some(_) => {
-                // Non-numeric port: reject instead of absorbing into host.
-                return None;
+        } else {
+            match rest.rsplit_once(':') {
+                Some((host, port))
+                    if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) =>
+                {
+                    if host.contains(':') {
+                        // Non-bracketed host with extra colon: reject.
+                        return None;
+                    }
+                    (host, port.parse::<u16>().ok()?)
+                }
+                Some(_) => {
+                    // Non-numeric port: reject instead of absorbing into host.
+                    return None;
+                }
+                None => (rest, default_port),
             }
-            None => (rest, default_port),
         };
         if host.is_empty()
             || host.contains('/')

@@ -201,6 +201,15 @@ impl ResourceLoader {
         self
     }
 
+    /// Lowers the per-response body cap for the next loads and returns the previous value.
+    /// Used by the render image loader so the image byte budget is enforced while fetching,
+    /// not after buffering every response (#1213).
+    pub fn set_max_response_bytes(&mut self, limit: usize) -> usize {
+        let previous = self.options.max_response_bytes;
+        self.options.max_response_bytes = limit;
+        previous
+    }
+
     /// Creates a loader with custom [`FetchOptions`] and the cache enabled.
     pub fn with_options(options: FetchOptions) -> Self {
         let h1_pool = crate::http::H1Pool::new(
@@ -272,6 +281,7 @@ impl ResourceLoader {
             }
         } else {
             self.cache = None;
+            self.cache_bytes = 0;
         }
     }
 
@@ -373,20 +383,19 @@ impl ResourceLoader {
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(|| mime::sniff(&pushed.body).mime_type().to_owned());
             let key = pushed.url.cache_key();
-            if self
-                .push_cache
-                .insert(
-                    key,
-                    Arc::new(Resource {
-                        url: pushed.url,
-                        content_type,
-                        bytes: pushed.body,
-                    }),
-                )
-                .is_none()
-            {
-                self.pushed_bytes = self.pushed_bytes.saturating_add(bytes);
+            // Subtract the replaced entry's bytes before adding the new one (#1258).
+            if let Some(old) = self.push_cache.get(&key) {
+                self.pushed_bytes = self.pushed_bytes.saturating_sub(old.bytes.len());
             }
+            self.push_cache.insert(
+                key,
+                Arc::new(Resource {
+                    url: pushed.url,
+                    content_type,
+                    bytes: pushed.body,
+                }),
+            );
+            self.pushed_bytes = self.pushed_bytes.saturating_add(bytes);
         }
     }
 

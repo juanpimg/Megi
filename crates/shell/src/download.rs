@@ -76,7 +76,7 @@ pub fn sanitize_host(url: &net::Url) -> String {
         "data" => "page".to_string(),
         _ => url.host().to_lowercase(),
     };
-    let mut sanitized: String = raw
+    let sanitized: String = raw
         .chars()
         .map(|character| {
             if character.is_ascii_alphanumeric() || character == '.' || character == '-' {
@@ -86,6 +86,9 @@ pub fn sanitize_host(url: &net::Url) -> String {
             }
         })
         .collect();
+    // Truncate before collapsing runs: `replace("--", "-")` in a loop is quadratic on a
+    // long hostile host, so bound the input first (#426).
+    let mut sanitized: String = sanitized.chars().take(MAX_HOST_CHARS).collect();
     while sanitized.contains("--") {
         sanitized = sanitized.replace("--", "-");
     }
@@ -93,7 +96,7 @@ pub fn sanitize_host(url: &net::Url) -> String {
     if sanitized.is_empty() {
         "page".to_string()
     } else {
-        sanitized.chars().take(MAX_HOST_CHARS).collect()
+        sanitized
     }
 }
 
@@ -414,6 +417,16 @@ mod tests {
         assert_eq!(sanitize_host(&url("file:///tmp/page.html")), "local");
         assert_eq!(sanitize_host(&url("data:text/html,x")), "page");
         assert_eq!(sanitize_host(&url("https://a__b__c/")), "a-b-c");
+    }
+
+    #[test]
+    fn long_host_is_truncated_before_collapsing_dashes() {
+        // A hostile host must be bounded before the quadratic `replace("--", "-")` loop
+        // (#426); the result never exceeds the cap.
+        let url = url(&format!("https://{}/", "a-".repeat(100)));
+        let host = sanitize_host(&url);
+        assert!(host.chars().count() <= MAX_HOST_CHARS);
+        assert!(!host.contains("--"));
     }
 
     #[test]

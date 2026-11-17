@@ -368,17 +368,27 @@ fn lzw_decode(min_code_size: u8, data: &[u8], pixel_count: usize) -> Result<Vec<
                     reason: "GIF LZW first code is not a literal",
                 });
             }
-            output.push(code as u8);
+            if output.len() < pixel_count {
+                output.push(code as u8);
+            }
             previous = Some(code);
             continue;
         };
         if code < dictionary.len() as u16 {
-            emit_code(code, &dictionary, &mut stack, &mut output)?;
+            emit_code(code, &dictionary, &mut stack, &mut output, pixel_count)?;
         } else if code == dictionary.len() as u16 {
             // KwKwK case: previous string plus its own first byte.
-            emit_code(previous_code, &dictionary, &mut stack, &mut output)?;
+            emit_code(
+                previous_code,
+                &dictionary,
+                &mut stack,
+                &mut output,
+                pixel_count,
+            )?;
             let first = *stack.last().unwrap_or(&0);
-            output.push(first);
+            if output.len() < pixel_count {
+                output.push(first);
+            }
             stack.push(first);
             stack.pop();
         } else {
@@ -420,6 +430,7 @@ fn emit_code(
     dictionary: &[(u16, u8)],
     stack: &mut Vec<u8>,
     output: &mut Vec<u8>,
+    pixel_count: usize,
 ) -> Result<(), ImageError> {
     stack.clear();
     let mut current = code;
@@ -439,6 +450,15 @@ fn emit_code(
                 reason: "GIF LZW cyclic dictionary",
             });
         }
+    }
+    // Bound the emitted bytes so a single code cannot overshoot pixel_count.
+    let emitted = stack.len();
+    if output.len() + emitted > pixel_count {
+        let remaining = pixel_count.saturating_sub(output.len());
+        for value in stack.iter().rev().take(remaining) {
+            output.push(*value);
+        }
+        return Ok(());
     }
     for value in stack.iter().rev() {
         output.push(*value);

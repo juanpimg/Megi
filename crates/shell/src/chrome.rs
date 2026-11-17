@@ -1947,7 +1947,7 @@ fn scaled(rect: Rect, scale: f32) -> Rect {
 
 fn chrome_font_db() -> &'static fonts::FontDatabase {
     static DB: std::sync::OnceLock<fonts::FontDatabase> = std::sync::OnceLock::new();
-    DB.get_or_init(fonts::FontDatabase::new_with_bundled_fonts)
+    DB.get_or_init(fonts::FontDatabase::new_with_bundled_and_system_fonts)
 }
 
 fn measure_text_width(text: &str, font_size_css: f32) -> f32 {
