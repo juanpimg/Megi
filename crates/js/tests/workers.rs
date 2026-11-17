@@ -108,3 +108,20 @@ fn worker_reply_delivered_by_run_microtasks() {
     runtime.run_microtasks().expect("microtasks");
     assert_eq!(runtime.eval("__sum", "t").unwrap(), "42");
 }
+
+#[test]
+fn forged_worker_handle_cannot_abort_the_process() {
+    let mut runtime = runtime_with_worker(SUM);
+    // The internal handle is read-only and termination ignores unknown ids. Neither
+    // a forged assignment nor a borrowed `terminate` may index past the table (#1465).
+    runtime
+        .eval(
+            "window.__ok = 0; var w = new Worker('worker.js');
+             try { w.__megi_worker = 1000; } catch (e) {}
+             try { w.terminate.call({ __megi_worker: 1000 }); } catch (e) {}
+             window.__ok = 1;",
+            "t",
+        )
+        .expect("forged handle script must not panic");
+    assert_eq!(runtime.eval("__ok", "t").unwrap(), "1");
+}

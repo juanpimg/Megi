@@ -5337,14 +5337,14 @@ fn calc_box_sides(
 }
 
 /// Expands a 1-4 component side list to `[top, right, bottom, left]`.
-fn expand_calc_four<T: Clone + Copy>(values: &[T]) -> [T; 4] {
-    match values {
-        [] => panic!("empty value list is rejected by the caller"),
+fn expand_calc_four<T: Clone + Copy>(values: &[T]) -> Option<[T; 4]> {
+    Some(match values {
+        [] => return None, // an empty list is invalid, never a reason to abort (#1466)
         [a] => [*a, *a, *a, *a],
         [a, b] => [*a, *b, *a, *b],
         [a, b, c] => [*a, *b, *c, *b],
         [a, b, c, d, ..] => [*a, *b, *c, *d],
-    }
+    })
 }
 
 impl ComputedStyle {
@@ -5491,15 +5491,10 @@ impl ComputedStyle {
                     .collect()
             };
             let horizontal = parse_list(horizontal_raw);
-            if !horizontal.is_empty() {
-                let horizontal = expand_calc_four(&horizontal);
+            if let Some(horizontal) = expand_calc_four(&horizontal) {
                 let vertical = {
                     let values = parse_list(vertical_raw);
-                    if values.is_empty() {
-                        horizontal
-                    } else {
-                        expand_calc_four(&values)
-                    }
+                    expand_calc_four(&values).unwrap_or(horizontal)
                 };
                 calc.border_radius = Some([
                     horizontal[0],
@@ -5520,6 +5515,15 @@ impl ComputedStyle {
 #[cfg(test)]
 mod unicode_boundary_tests {
     use super::*;
+
+    #[test]
+    fn expand_calc_four_returns_none_for_empty_input() {
+        assert_eq!(expand_calc_four::<i32>(&[]), None);
+        assert_eq!(expand_calc_four(&[1]), Some([1, 1, 1, 1]));
+        assert_eq!(expand_calc_four(&[1, 2]), Some([1, 2, 1, 2]));
+        assert_eq!(expand_calc_four(&[1, 2, 3]), Some([1, 2, 3, 2]));
+        assert_eq!(expand_calc_four(&[1, 2, 3, 4]), Some([1, 2, 3, 4]));
+    }
 
     #[test]
     fn color_parse_does_not_panic_on_non_ascii() {

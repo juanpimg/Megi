@@ -4493,7 +4493,13 @@ fn run_fragment_parser(
         if trimmed.is_empty() || trimmed.chars().any(|c| c.is_control() || c.is_whitespace()) {
             "div"
         } else if trimmed.len() > MAX_CONTEXT_NAME_BYTES {
-            &trimmed[..MAX_CONTEXT_NAME_BYTES]
+            // Clip on a UTF-8 boundary: a multibyte context name used to panic here
+            // and the catch_unwind in parse_fragment_into wiped the caller's document (#1444).
+            let mut end = MAX_CONTEXT_NAME_BYTES;
+            while end > 0 && !trimmed.is_char_boundary(end) {
+                end -= 1;
+            }
+            &trimmed[..end]
         } else {
             trimmed
         };
@@ -4938,5 +4944,45 @@ mod parser_node_cap_tests {
             "the bounded bypass must be counted: {:?}",
             tb.limit_violations
         );
+    }
+}
+
+#[cfg(test)]
+mod context_name_boundary_tests {
+    use super::*;
+
+    #[test]
+    fn multibyte_context_name_is_clipped_on_a_char_boundary() {
+        // 90 * U+6F22 = 270 bytes; byte 256 is inside a char. The old byte slice
+        // panicked and parse_fragment_into replaced the caller's Document (#1444).
+        let name = "漢".repeat(90);
+        assert!(name.len() > 256);
+        let outcome = parse_fragment_with_options(
+            "<b>ok</b>",
+            Namespace::Html,
+            &name,
+            false,
+            &ParseOptions::default(),
+        );
+        // Parsing must succeed and the caller's separate document must remain intact.
+        let root = outcome
+            .document
+            .node(outcome.document.root())
+            .first_child
+            .expect("html root");
+        assert_eq!(outcome.document.text_content(root), "ok");
+
+        let mut caller = Document::new();
+        let kept = caller.create_element(Namespace::Html, "p", vec![]);
+        caller.append_child(caller.root(), kept);
+        let _ = crate::parse_fragment_into(
+            &mut caller,
+            "<i>x</i>",
+            Namespace::Html,
+            &name,
+            false,
+            &ParseOptions::default(),
+        );
+        assert!(caller.owns(kept), "caller document must not be wiped");
     }
 }
