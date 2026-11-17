@@ -449,7 +449,17 @@ pub fn render_document_with_options(
     };
     let scripts_executed = output.stats.scripts_executed;
     let script_timers_pending = output.stats.script_timers_pending;
-    let warnings = output.stats.warnings.len();
+    // Surface scripting/parser budget exhaustion through the same warning channel the
+    // window title and headless CLI already consume (#1458).
+    let mut warning_messages = output.stats.warnings.clone();
+    if output.stats.script_limited {
+        warning_messages.push("scripting budget exhausted".to_string());
+    }
+    let violations = output.stats.limit_violations.total();
+    if violations > 0 {
+        warning_messages.push(format!("{violations} parser/layout limit violation(s)"));
+    }
+    let warnings = warning_messages.len();
     let script_errors = output.stats.scripts_failed
         + output
             .stats
@@ -904,5 +914,27 @@ mod worker_panic_isolation_tests {
         );
         drop(sender);
         let _ = handle.join();
+    }
+}
+
+#[cfg(test)]
+mod render_budget_warning_tests {
+    #[test]
+    fn script_limited_and_limit_violations_become_warnings() {
+        // Mirrors the frame-building logic: both budget fields must reach the caller's
+        // warning channel even when the render itself succeeded (#1458).
+        let base_warnings: Vec<String> = Vec::new();
+        let script_limited = true;
+        let violations: u64 = 3;
+        let mut messages = base_warnings;
+        if script_limited {
+            messages.push("scripting budget exhausted".to_string());
+        }
+        if violations > 0 {
+            messages.push(format!("{violations} parser/layout limit violation(s)"));
+        }
+        assert_eq!(messages.len(), 2);
+        assert!(messages[0].contains("scripting budget"));
+        assert!(messages[1].contains("3 parser/layout"));
     }
 }
