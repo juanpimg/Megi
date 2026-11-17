@@ -117,6 +117,25 @@ fn gaussian_blur_softens_edges() {
 }
 
 #[test]
+fn fe_offset_with_extreme_values_does_not_overflow() {
+    // The scaler clamps the offset to the i32 range, which still includes i32::MIN;
+    // `x - dx` used to panic there ("attempt to subtract with overflow"). Any shift
+    // that large moves the whole layer out of the canvas, so the result is empty.
+    let image = render(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20">
+            <defs><filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="40" height="20">
+                <feOffset dx="-2147483648" dy="2147483647"/></filter></defs>
+            <rect width="10" height="10" fill="red" filter="url(#f)"/>
+        </svg>"##,
+    );
+    for y in 0..20 {
+        for x in 0..40 {
+            assert_eq!(px(&image, x, y)[3], 0, "pixel ({x}, {y}) stays transparent");
+        }
+    }
+}
+
+#[test]
 fn fe_offset_moves_the_shape() {
     let image = render(
         r##"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20">
