@@ -34,23 +34,24 @@ pub fn print_table(outcome: &RunOutcome) {
     let name_width = outcome
         .results
         .iter()
-        .map(|result| result.name.len())
+        .map(|result| result.name.chars().count())
         .max()
         .unwrap_or(0)
         .max("benchmark".len());
     let detail_width = outcome
         .results
         .iter()
-        .map(|result| result.detail.len())
+        .map(|result| result.detail.chars().count())
         .max()
         .unwrap_or(0)
         .max("workload".len());
     println!();
-    println!(
+    let header = format!(
         "{:<name_width$}  {:<detail_width$}  {:>5}  {:>10}  {:>10}  {:>14}",
         "benchmark", "workload", "iters", "median ms", "min ms", "throughput"
     );
-    println!("{}", "-".repeat(name_width + detail_width + 47));
+    println!("{}", header);
+    println!("{}", "-".repeat(header.chars().count()));
     for result in &outcome.results {
         println!(
             "{:<name_width$}  {:<detail_width$}  {:>5}  {:>10.3}  {:>10.3}  {:>14}",
@@ -62,7 +63,7 @@ pub fn print_table(outcome: &RunOutcome) {
             throughput_label(result)
         );
     }
-    println!("{}", "-".repeat(name_width + detail_width + 47));
+    println!("{}", "-".repeat(header.chars().count()));
     println!(
         "{:<name_width$}  {:<detail_width$}  {:>5}  {:>10.3}",
         "TOTAL", "sum of medians", "", outcome.total_median_ms
