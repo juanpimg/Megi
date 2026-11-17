@@ -164,11 +164,13 @@ pub fn print_json(outcome: &RunOutcome) {
                 unit,
                 per_second,
             }) => {
-                let _ = writeln!(
-                    json,
-                    "      \"throughput\": {{\"count\": {count:.3}, \"unit\": \"{unit}\", \
-                     \"per_second\": {per_second:.3}}}"
-                );
+                json.push_str("      \"throughput\": {\"count\": ");
+                let _ = write!(json, "{count:.3}");
+                json.push_str(", \"unit\": ");
+                push_json_string(&mut json, unit);
+                json.push_str(", \"per_second\": ");
+                push_json_number(&mut json, *per_second);
+                json.push_str("}\n");
             }
             None => json.push_str("      \"throughput\": null\n"),
         }
@@ -198,6 +200,14 @@ pub fn print_json(outcome: &RunOutcome) {
 }
 
 /// Appends `value` as a JSON string literal (with escaping).
+fn push_json_number(out: &mut String, value: f64) {
+    if value.is_finite() {
+        let _ = write!(out, "{value:.3}");
+    } else {
+        out.push_str("null");
+    }
+}
+
 fn push_json_string(out: &mut String, value: &str) {
     out.push('"');
     for ch in value.chars() {

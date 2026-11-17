@@ -175,6 +175,16 @@ pub const BUNDLED_FONTS: &[(&str, &[u8])] = &[
     ),
 ];
 
+/// Internal marker prepended to family names that were quoted in the source. Quoted
+/// names are always literal family names, never generic keywords (#1239); the marker
+/// keeps that distinction through the `&[&str]` font-database API.
+const QUOTED_FAMILY_PREFIX: &str = "\u{1}";
+
+/// Returns the literal name of a possibly marked family string.
+fn unmark_family(name: &str) -> &str {
+    name.strip_prefix(QUOTED_FAMILY_PREFIX).unwrap_or(name)
+}
+
 /// Parses a CSS `font-family` value into a priority list of family names.
 ///
 /// Splits on commas, trims ASCII whitespace and strips single/double quotes
@@ -240,10 +250,10 @@ pub fn parse_font_families(font_family: &str) -> Vec<String> {
         let trimmed = part.trim();
         // Strip at most one matched quote pair (CSS Fonts 3); mismatched quotes
         // are kept literal instead of being trimmed away (#605).
-        let trimmed = if trimmed.len() >= 2
+        let was_quoted = trimmed.len() >= 2
             && ((trimmed.starts_with('\'') && trimmed.ends_with('\''))
-                || (trimmed.starts_with('"') && trimmed.ends_with('"')))
-        {
+                || (trimmed.starts_with('"') && trimmed.ends_with('"')));
+        let trimmed = if was_quoted {
             &trimmed[1..trimmed.len() - 1]
         } else {
             trimmed
@@ -276,7 +286,12 @@ pub fn parse_font_families(font_family: &str) -> Vec<String> {
             } else {
                 &unescaped
             };
-            families.push(name.to_string());
+            // Mark quoted names so generic-keyword detection skips them (#1239).
+            families.push(if was_quoted {
+                format!("{QUOTED_FAMILY_PREFIX}{name}")
+            } else {
+                name.to_string()
+            });
         }
     }
     if families.is_empty() {
@@ -585,9 +600,15 @@ impl FontDatabase {
     fn expand_families<'a>(families: &'a [&'a str]) -> Vec<Family<'a>> {
         let mut expanded: Vec<Family<'a>> = Vec::new();
         for family in families {
-            let keyword = family.to_ascii_lowercase();
-            let (generic, fallbacks): (Option<Family<'a>>, &[&'static str]) = match keyword.as_str()
-            {
+            // A quoted family name is always literal, never a generic keyword (#1239).
+            let quoted = family.starts_with(QUOTED_FAMILY_PREFIX);
+            let literal = unmark_family(family);
+            let keyword = literal.to_ascii_lowercase();
+            let (generic, fallbacks): (Option<Family<'a>>, &[&'static str]) = if quoted {
+                (None, &[] as &[&'static str])
+            } else {
+                match keyword.as_str()
+                {
                 "sans-serif" | "system-ui" | "ui-sans-serif" => {
                     (Some(Family::SansSerif), SANS_FALLBACKS)
                 }
@@ -605,6 +626,7 @@ impl FontDatabase {
                 ),
                 "fangsong" => (None, &["FangSong", "STFangsong"] as &[&str]),
                 _ => (None, &[] as &[&'static str]),
+                }
             };
             if let Some(generic) = generic {
                 expanded.push(generic);
@@ -614,7 +636,7 @@ impl FontDatabase {
             }
             if generic.is_none() || !GENERIC_FAMILIES.contains(&keyword.as_str()) {
                 // Explicit family name (also keeps e.g. "emoji"/"math" as names).
-                expanded.push(Family::Name(family));
+                expanded.push(Family::Name(literal));
             }
         }
         expanded
@@ -630,6 +652,7 @@ impl FontDatabase {
     ) -> Option<fontdb::ID> {
         let wanted_style = DbStyle::from(style);
         for family in families {
+            let family = unmark_family(family);
             let Some(ids) = self.aliases.get(&family.to_ascii_lowercase()) else {
                 continue;
             };
@@ -660,6 +683,7 @@ impl FontDatabase {
     }
 
     fn resolve_family_name<'a>(&'a self, name: &'a str) -> &'a str {
+        let name = unmark_family(name);
         self.order
             .iter()
             .filter_map(|id| self.db.face(*id))
@@ -740,9 +764,10 @@ impl FontDatabase {
         if let Some(id) = self.query_face(families, weight, style, stretch) {
             return self.build_font(id);
         }
-        let uses_generic = families
-            .iter()
-            .any(|family| GENERIC_FAMILIES.contains(&family.to_ascii_lowercase().as_str()));
+        let uses_generic = families.iter().any(|family| {
+            !family.starts_with(QUOTED_FAMILY_PREFIX)
+                && GENERIC_FAMILIES.contains(&family.to_ascii_lowercase().as_str())
+        });
         if families.is_empty() || uses_generic {
             return match self.last_resort_face(weight, style, stretch) {
                 Some(id) => self.build_font(id),
@@ -1138,5 +1163,42 @@ impl FontDatabase {
         style: FontStyle,
     ) -> Result<Font, FontError> {
         self.font(families, weight, style, Stretch::Normal)
+    }
+}
+
+#[cfg(test)]
+mod quoted_family_tests {
+    use super::*;
+
+    #[test]
+    fn quoted_generic_name_stays_a_literal_family() {
+        let unquoted = parse_font_families("serif");
+        let quoted = parse_font_families("\"serif\"");
+        assert!(!unquoted[0].starts_with(QUOTED_FAMILY_PREFIX));
+        assert!(quoted[0].starts_with(QUOTED_FAMILY_PREFIX));
+        assert_eq!(unmark_family(&quoted[0]), "serif");
+
+        let unquoted_refs: Vec<&str> = vec![&unquoted[0]];
+        let quoted_refs: Vec<&str> = vec![&quoted[0]];
+        let expanded_unquoted = FontDatabase::expand_families(&unquoted_refs);
+        let expanded_quoted = FontDatabase::expand_families(&quoted_refs);
+        assert!(
+            expanded_unquoted
+                .iter()
+                .any(|family| matches!(family, Family::Serif)),
+            "unquoted serif must select the generic face"
+        );
+        assert!(
+            !expanded_quoted
+                .iter()
+                .any(|family| matches!(family, Family::Serif)),
+            "quoted serif must not select the generic face (#1239)"
+        );
+        assert!(
+            expanded_quoted
+                .iter()
+                .any(|family| matches!(family, Family::Name(name) if *name == "serif")),
+            "quoted serif must be looked up as a literal family name"
+        );
     }
 }
