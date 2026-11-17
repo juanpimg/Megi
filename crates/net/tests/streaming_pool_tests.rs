@@ -318,7 +318,9 @@ fn h2_streaming_callback_failure_resets_the_stream() {
         &mut |_chunk| Err(FetchError::Timeout),
     )
     .expect_err("callback error");
-    let _ = server.join();
+    // Propagate the server thread's result: a client that never sent RST_STREAM(CANCEL)
+    // made the reader hit its 5 s timeout and panic, which `let _ = join()` discarded (#1349).
+    server.join().expect("server saw the cancellation");
     assert!(matches!(error, FetchError::Timeout));
 }
 
