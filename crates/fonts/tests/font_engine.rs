@@ -184,17 +184,35 @@ fn shape_fi_forms_a_ligature_or_at_least_keeps_a_reasonable_advance() {
 #[test]
 fn shape_falls_back_for_characters_without_glyphs_without_panicking() {
     let db = fixture_db();
-    let run = db
-        .shape(&["DejaVu Sans"], 400, FontStyle::Normal, 16.0, "Hé𝕏")
-        .expect("shaping unknown glyphs must not fail");
+    let font = db
+        .font(
+            &["DejaVu Sans"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
+        .expect("fixture family resolves");
+    // Use an unassigned code point the bundled DejaVu Sans fixture does not map.
+    let missing = '\u{0378}';
+    assert!(
+        font.glyph_id(missing).is_none(),
+        "fixture precondition: U+0378 must be unmapped in DejaVu Sans"
+    );
+    let text = format!("Hé{missing}");
+    let run = font
+        .shape(16.0, &text)
+        .expect("shaping a missing glyph must not fail");
     assert!(!run.glyphs.is_empty());
     assert!(run.width > 0.0);
-    // 𝕏 is not in DejaVu Sans: rustybuzz emits .notdef (glyph 0) but keeps going.
-    let _ = run
+    let notdef = run
         .glyphs
         .iter()
         .filter(|glyph| glyph.glyph_id == 0)
         .count();
+    assert_eq!(
+        notdef, 1,
+        "the unmapped U+0378 in {text:?} must shape as exactly one .notdef glyph (#1388)"
+    );
 }
 
 #[test]
