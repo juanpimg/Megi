@@ -903,7 +903,7 @@ fn render_url_inner(
         script_bytes = load_report.script_bytes;
         let mut host_context = scripts::ScriptingHostContext::new(
             pre_script_styles.clone(),
-            media_context,
+            media_context.clone(),
             (options.viewport.width, options.viewport.height),
         );
         #[cfg(feature = "js")]
@@ -1022,7 +1022,7 @@ fn render_url_inner(
                 &base_url,
                 &mut loader,
                 options,
-                &media_context,
+                &media_context.clone(),
                 &mut warnings,
             )?
         }
@@ -1653,7 +1653,7 @@ fn build_author_stylesheet_collection(
     RenderError,
 > {
     let mut collection = css::create_user_agent_style_collection();
-    collection.media = *media;
+    collection.media = media.clone();
     let mut font_faces: Vec<webfonts::LocatedFontFace> = Vec::new();
     let mut summary = StyleSummary {
         external_stylesheets: 0,
