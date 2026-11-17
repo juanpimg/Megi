@@ -159,7 +159,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
-| Runtime **Boa 0.21.1** con feature `js` ON por defecto (stub `--no-default-features`), realm persistente, `eval`, `console.*`, `window`/`document` | **HECHO** | WP-6.1; `#![forbid(unsafe_code)]` |
+| Runtime **Boa 0.22** con feature `js` ON por defecto (stub `--no-default-features`), realm persistente, `eval`, `console.*`, `window`/`document` | **HECHO** | WP-6.1; `#![forbid(unsafe_code)]` |
 | Bindings DOM (`document.write`, `getElementById`, `querySelector(All)`, `innerHTML`, `style`, `classList`, árbol, atributos) sobre side-table `NodeId↔handle` generacional | **HECHO** | identidad de wrappers cacheada (WP-B) |
 | **WP-A: eventos y timers (ronda 10)**: `EventTarget` (`addEventListener`/`removeEventListener`/`dispatchEvent`) con captura window→document→ancestros→target y burbuja; `Event`/`CustomEvent` (`bubbles`/`cancelable`/`detail`/`defaultPrevented`, prevent/stop/stopImmediate); timers con **reloj inyectable** (`setTimeout`/`setInterval`/clear, orden `(due, id)`, `advance`/`run_until`/`now_ms`/`pending_timers`; `run_tasks` ejecuta vencidos por reloj real) | **HECHO** | 14 tests nuevos (26 js); límites: sin `onclick`/`once`/`passive`, `currentTarget` null en listener, `removeEventListener` sin identidad |
 | Anti-DoS: `Budget` → Boa `RuntimeLimits` (bucle 5.000.000, recursión 512, pila VM 20.480; `Budget::SMALL` en páginas/tests), sin APIs de red/FS, side-table cap 1.000.000; scheduler base `setTimeout`/microtasks | **HECHO** | Violaciones → `JsError::Budget`; sin event loop completo |
@@ -191,7 +191,7 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 ## 10. Verificación de la matriz
 
 ```bash
-./tools/dev.sh all                             # fmt, clippy, 1929 tests, doc y gate PASS
+./tools/dev.sh all                             # fmt, clippy, tests (ver badge/`PROGRESS.md`), doc y gate PASS
 cargo test -p css -p layout -p paint -p fonts -p dom -p html
 cargo test -p net -p render -p image -p shell
 cargo test -p js

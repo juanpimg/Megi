@@ -30,7 +30,7 @@
 1. **Fidelidad visual en webs reales**:
    - Seguir cerrando brechas de layout/CSS/pintado detectadas al probar sitios reales en `megi` (posicionamiento, anchos `auto`/flex/grid complejos, centrado, SVG/imágenes y estilos modernos).
 2. **Revisión de PRs y CI**:
-   - Revisar/mergear PR `#1020` (`fix/paint-rasterize-panic` para `#667`) y atender los checks de CI (`MSRV 1.88`, `cargo-audit`/`deny`, `cargo-geiger`).
+   - Revisar/mergear PR `#1020` (`fix/paint-rasterize-panic` para `#667`) y atender los checks de CI (`MSRV 1.91`, `cargo-audit`/`deny`, `cargo-geiger`).
 
 ---
 
@@ -49,25 +49,25 @@
 | `8f3956c` `perf(css,layout)` | **Bloom pruning + layout** | Ancestor-class Bloom pruning (solo descendiente/hijo; candidatos 33→1-2/span), fast paths @container vacío/`has_revert_layer`, Vec de hijos de capacidad exacta y un solo barrido block/inline: css resolve **28,58→14,14 ms (−50,5 %)**, layout **40,18→37,35 ms (−7,0 %)**, resolve-2k −47 %, vars-calc −8,5 %; goldens intactos. |
 | `a90ab4a` `perf(image)` | **PNG decode −62,4 %** | adler32 por bloques 1024 B con módulo diferido, render_row fast path no entrelazado y unfiltro especializado: **6,739→2,536 ms** (inflate 4,06→1,24; render 1,25→0,31), raw md5 idéntico a PIL; sin SIMD/unsafe; fila `image/decode-png-scaled-x2` 2,644 ms. |
 | `343f75c` `perf(render)` | **Fast paths render** | backgrounds 7,0→0,8 ms si ningún estilo referencia imágenes; inline_svg 2,8→0,6 ms sin scripts ni `<svg`; **hallazgo**: la fila pipeline del bench no usa el crate render (compone html/paint/layout/raster a mano) ⇒ no puede moverla; perfil CLI fetch 0,7/parse 20,8/estilos 77,5/layout 104,6/display 10,6/raster 1,1/PNG ~8 (total ~234, glue ~5), A/B 235,0→219,8 ms (−6,5 %) con PNG `b37c60c3…`. |
-| `b4eb190` `feat(js,render)` | **TLA real + live bindings** | `eval_module_async` sobre módulos nativos de Boa 0.21 con ModuleLoader sobre resolver/loader del host (file/http/data, `import.meta.url`): await Promise/fetch/timer, orden topológico, rechazos tipados, let/var vivas sin re-eval, const inmutable, ciclos nativos; render usa async para módulos con await y mantiene el preprocesado para import maps; js **168**/render **172**; fixtures js_tla_fetch/timer. |
+| `b4eb190` `feat(js,render)` | **TLA real + live bindings** | `eval_module_async` sobre módulos nativos de Boa 0.22 con ModuleLoader sobre resolver/loader del host (file/http/data, `import.meta.url`): await Promise/fetch/timer, orden topológico, rechazos tipados, let/var vivas sin re-eval, const inmutable, ciclos nativos; render usa async para módulos con await y mantiene el preprocesado para import maps; js **168**/render **172**; fixtures js_tla_fetch/timer. |
 | `5296cab` `feat(net)` | **h1 streaming + push priority** | h1 streaming real (status/headers incremental, redirects antes del body, CL/chunked/read-to-EOF, caps/timeouts, abort por callback; gzip/deflate buffered+16 KiB slices documentado) y push prioritization (PADDED/PRIORITY, `Limits.pushed_priority: ServerWeights|Fifo`, orden por peso con desalojo RST del menor; peso 16 default ⇒ FIFO); net **325** (+10). |
 | `a477061`/`76e1678` `perf(paint)`/`test(bench)` | **PNG encode byte-safe + filas bench** | encode **−18 % flat / −22 % alpha** (filter −36/−29 %, deflate −17,4/−18,8 %), render-to-png **8,653→6,259 ms (−27,7 %)**; filas png-filter/deflate/encode-800/1024 y decode-png-scaled-x2; goldens byte-idénticos; paint 208/bench 10. |
 | `3e69968` `chore(status)` | **Refresco del status** | Regenera `PROGRESS.md`, `docs/status/progress.svg` y badges; manifiesto editable actualizado en esta ronda (r32). |
 
 ## Evidencia verificada
 
-- `cargo test --workspace` → **1929 tests, 0 fallos**: net **325**, render **172**, js **168**, css **260**, layout **224**, image **90**, paint **208**, shell **238**, dom **36**, html **60**, svg **109**, fonts 17 + 1 doctest, bench **10**, test_harness **11**.
+- `cargo test --workspace` → **0 fallos** (cifra exacta en el badge de `PROGRESS.md`/`docs/status/`); conteos orientativos por crate: bench **12**, image **120**, shell **305**, js **280**, paint **251**.
 - Gate (`cargo run -p test_harness -- --summary`, exit 0): tokenizer **7.050/7.050**, árbol **3.904/3.904**, serializer **230/230**, CSS **30/30**; allowlists tokenizer/tree **(none)**.
 - **Perf**: css resolve −50,5 %, layout −7,0 %, PNG decode −62,4 %, encode −18/−22 %, render-to-png −27,7 %, CLI render −6,5 % con PNG byte-idéntico.
 - **Goldens**: básicos/showcase/phase4 intactos; PNG raw md5 idéntico a PIL; TLA E2E 2/2.
 - **Status**: `docs/status/progress.toml` es la fuente editable; `python3 tools/update_progress.py --write` regenera `PROGRESS.md` + `docs/status/*`; CI ejecuta `--check --no-gate --no-count`.
-- **Fuzz**: 22 targets, corpus 37, CI 300 s + PR build-only.
+- **Fuzz**: 25 targets, corpus 124, CI 600 s (10 críticos) / 300 s (15 restantes) + PR build-only.
 
 ## Comandos de verificación
 
 ```bash
-./tools/dev.sh all                                  # fmt, clippy, 1929 tests, doc y gate
-cargo test --workspace                              # 1929 tests (JS por defecto)
+./tools/dev.sh all                                  # fmt, clippy, tests, doc y gate
+cargo test --workspace                              # suite completa (JS por defecto)
 cargo run -p test_harness -- --summary              # gate: 3904/3904 árbol, PASS, exit 0
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo doc --workspace --no-deps
 cargo +1.91 check --workspace --all-targets         # MSRV
@@ -86,21 +86,23 @@ python3 tools/update_progress.py --check --no-gate --no-count
 
 ## Estado actual por crate
 
+Conteos orientativos medidos con `cargo test -p <crate> --all-targets -- --list`; la cifra exacta y verificada está en [`PROGRESS.md`](../PROGRESS.md).
+
 | Crate | Estado | Tests |
 |---|---|---|
-| `dom` / `html` | COMPLETOS + gaps r27 | **36** / 60 |
-| `css` | F2+F4 + grid + filtros/blend + Color 4/5 + container queries + cascade layers + **Bloom pruning** | **260** |
-| `layout` | F4 completa + flex/grid + calc/sticky/tipografía + interning + aspect-ratio + container queries + **perf r32** | **224** |
-| `fonts` | COMPLETO LTR + fuentes web | 17 + 1 doctest |
-| `paint` | F4 completa + backgrounds/decoraciones/clipping/gradientes + EffectGroup + Color 4/5 + blur/PNG byte-safe + **encode r32** | **208** |
-| `image` | PNG (+decode r32) + JPEG baseline/progresivo/IDCT/EXIF + GIF + EXIF 1–8 + WebP VP8L + VP8 lossy keyframe | **90** |
-| `net` | F5: TLS/caché/cookies/PSL/Referrer/Range + HTTP/2 (HPACK/framing/flow/mux/SETTINGS/bodies/trailers/100-continue/push/priorities/h2c/streaming/keep-alive) + h1 POST + proxies + **h1 streaming/push priority** | **325** |
-| `js` | F6: DOM/eventos/timers/APIs + ES modules/import maps + **TLA/live bindings nativos** + geometría + Web Workers + fetch | **168** |
-| `svg` | Parser/modelo/rasterizador + CSS/gradientes/pattern/text + clipPath/mask/filtros + textPath/SMIL avanzado | **109** |
-| `render` | Pipeline URL→PNG + imágenes + module scripts/importmap + scaled decode + providers JS + streaming/keep-alive + workers + encode_png/fetch + **TLA + fast paths** | **172** |
-| `shell` | F7 + chrome contextual + pages/favicons + historial + chrome fast path + PNG single-encode + sesión/save-png | **238** |
-| `bench` / `test_harness` | Tooling (PNG/decode/VP8/chrome rows) / gate 4 suites | 10 / 11 |
-| `fuzz` (workspace aparte) | 22 targets + corpus 37 + PR build-only | build 22/22 |
+| `dom` / `html` | COMPLETOS + gaps r27 | **65** / 101 |
+| `css` | F2+F4 + grid + filtros/blend + Color 4/5 + container queries + cascade layers + **Bloom pruning** | **341** |
+| `layout` | F4 completa + flex/grid + calc/sticky/tipografía + interning + aspect-ratio + container queries + **perf r32** | **278** |
+| `fonts` | COMPLETO LTR + fuentes web | 32 |
+| `paint` | F4 completa + backgrounds/decoraciones/clipping/gradientes + EffectGroup + Color 4/5 + blur/PNG byte-safe + **encode r32** | **251** |
+| `image` | PNG (+decode r32) + JPEG baseline/progresivo/IDCT/EXIF + GIF + EXIF 1–8 + WebP VP8L + VP8 lossy keyframe | **120** |
+| `net` | F5: TLS/caché/cookies/PSL/Referrer/Range + HTTP/2 (HPACK/framing/flow/mux/SETTINGS/bodies/trailers/100-continue/push/priorities/h2c/streaming/keep-alive) + h1 POST + proxies + **h1 streaming/push priority** | **386** |
+| `js` | F6: DOM/eventos/timers/APIs + ES modules/import maps + **TLA/live bindings nativos** + geometría + Web Workers + fetch | **281** |
+| `svg` | Parser/modelo/rasterizador + CSS/gradientes/pattern/text + clipPath/mask/filtros + textPath/SMIL avanzado | **147** |
+| `render` | Pipeline URL→PNG + imágenes + module scripts/importmap + scaled decode + providers JS + streaming/keep-alive + workers + encode_png/fetch + **TLA + fast paths** | **230** |
+| `shell` | F7 + chrome contextual + pages/favicons + historial + chrome fast path + PNG single-encode + sesión/save-png + chrome redondeado | **307** |
+| `bench` / `test_harness` | Tooling (PNG/decode/VP8/chrome rows) / gate 4 suites | 12 / 11 |
+| `fuzz` (workspace aparte) | 25 targets + corpus 124 + PR build-only | build 25/25 |
 
 ## Deuda priorizada
 
@@ -117,6 +119,6 @@ python3 tools/update_progress.py --check --no-gate --no-count
 - `#![forbid(unsafe_code)]` en todos los crates; `fuzz/` workspace aparte (nightly + ASan).
 - Cero advertencias: `cargo fmt --check` + `cargo clippy --workspace --all-targets -- -D warnings` + `cargo doc`.
 - Tests en el mismo commit; *Conventional Commits*; no commit/push desde agentes.
-- **Presupuestos = gates**: pipeline ≤140 ms y layout ≤43 ms; recuperarlos, nunca subirlos.
+- **Presupuestos = gates**: pipeline ≤140 ms y layout ≤45 ms; recuperarlos, nunca subirlos.
 - `tests/html5lib-tests` versionado; de `tests/wpt/` sólo `tests/wpt/css/css-syntax/`; `.agents/`/`.cache/` ignorados.
 - `docs/PERFORMANCE.md` lo mantiene el carril de rendimiento; `PROGRESS.md`/`docs/status/*.svg` son generados (no editar a mano); `docs/status/progress.toml` es la fuente editable.

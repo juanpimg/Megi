@@ -8,9 +8,9 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 
 > **Status**: the harness is wired into CI via
 > [`.github/workflows/fuzz-nightly.yml`](../.github/workflows/fuzz-nightly.yml). The
-> scheduled/dispatch run executes **all 26 harnesses** under the default libFuzzer
-> **AddressSanitizer** build (10 minutes for 9 critical parsers/decoders and 5 minutes for
-> the remaining 17), plus a short **UndefinedBehaviorSanitizer (UBSan)** smoke matrix on 9
+> scheduled/dispatch run executes **all 25 harnesses** under the default libFuzzer
+> **AddressSanitizer** build (10 minutes for 10 critical parsers/decoders and 5 minutes for
+> the remaining 15), plus a short **UndefinedBehaviorSanitizer (UBSan)** smoke matrix on 9
 > representative targets. Pull requests and pushes to `main` run a build-only job that
 > compiles every `[[bin]]` fuzz target in `fuzz/Cargo.toml` on the pinned nightly (no
 > libFuzzer run), so a manifest or public-API break fails on the merge that causes it
@@ -21,7 +21,7 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 ```text
 fuzz/
 ├── Cargo.toml          # standalone workspace (`[workspace]`), NOT part of the root workspace
-├── fuzz_targets/       # 26 libFuzzer harnesses
+├── fuzz_targets/       # 25 libFuzzer harnesses
 │   ├── body_stream.rs        # RequestBody/BodyProducer streaming contract
 │   ├── container_queries.rs  # CSS @container/@layer parsing + query evaluation
 │   ├── css_parse.rs          # CSS Syntax L3 tokenizer, stylesheets and declaration lists
@@ -237,10 +237,11 @@ Known non-crashes (do not report): the 3 `xmlViolation` tokenizer failures are d
 - on failure uploads `fuzz/artifacts/` and corpus snapshots as workflow artifacts (14 days).
 
 Notes:
-- 25 harnesses exist in `fuzz/fuzz_targets/`; `dom_tree`, `dom_mutate`, `font_decode`,
-  `fonts_shape`, `layout_resolve`, `layout_tree`, `net_surface`, and `paint_display_list`
-  are built in PRs and can be promoted to scheduled ASan/UBSan matrices when their
-  corpus/runtime budgets are validated.
+- 25 harnesses exist in `fuzz/fuzz_targets/`, all of them in the scheduled ASan
+  matrix (10 at 600 s, 15 at 300 s); the 8 direct core-crate harnesses (`dom_tree`,
+  `dom_mutate`, `font_decode`, `fonts_shape`, `layout_resolve`, `layout_tree`,
+  `net_surface`, `paint_display_list`) run at 300 s each and are not in the UBSan
+  smoke matrix.
 - Daily 10-minute critical / 5-minute secondary runs are a regression gate, not a coverage
   guarantee. Longer campaigns should run outside CI.
 

@@ -18,17 +18,17 @@ sin dependencias de permisos especiales y verificable con un comando local.
 | [#472](https://github.com/juanpimg/Megi/issues/472) | `ARCHITECTURE §3.3` describe 4 superficies de fuzz | Solo documentación; apunta a `FUZZING.md` como fuente única | `python3 tools/check_docs_links.py` |
 | [#474](https://github.com/juanpimg/Megi/issues/474) | Matrices de dependencias y recuentos obsoletos | Solo documentación, filas de una tabla | `python3 tools/check_docs_links.py` |
 | [#485](https://github.com/juanpimg/Megi/issues/485) | PRs de docs lanzan toda la matriz Rust | Un workflow, sin tocar código del motor | `actionlint .github/workflows/ci.yml` |
-| [#471](https://github.com/juanpimg/Megi/issues/471) | Targets `webp_vp8`/`webp_lossy` duplicados | Dos harnesses que ya comparten helper | `cargo metadata --manifest-path fuzz/Cargo.toml --no-deps` |
+| [#471](https://github.com/juanpimg/Megi/issues/471) | ~~Targets `webp_vp8`/`webp_lossy` duplicados~~ — **HECHO**: fusionados en el target único `webp` | `ls fuzz/fuzz_targets/webp.rs` |
 | [#473](https://github.com/juanpimg/Megi/issues/473) | Faltan diccionarios/libFuzzer y entradas estructuradas | Workspace de fuzz aparte | `cd fuzz && cargo +nightly fuzz build` |
-| [#469](https://github.com/juanpimg/Megi/issues/469) | `html_parse` no cubre `ParseOptions` con scripting | Añade un target/harness acotado | `cd fuzz && cargo +nightly fuzz build` |
-| [#468](https://github.com/juanpimg/Megi/issues/468) | `net` sin target para cookies/caché/proxy | Añade un target sobre helpers puros | `cd fuzz && cargo +nightly fuzz build` |
-| [#467](https://github.com/juanpimg/Megi/issues/467) | Sin targets directos de layout/paint/fonts | Añade harnesses de core crates | `cd fuzz && cargo +nightly fuzz build` |
+| [#469](https://github.com/juanpimg/Megi/issues/469) | ~~`html_parse` no cubre `ParseOptions` con scripting~~ — **HECHO**: el harness ejercita `parse_document_with_options` con scripting activado/desactivado según el input | `ls fuzz/fuzz_targets/html_parse.rs` |
+| [#468](https://github.com/juanpimg/Megi/issues/468) | ~~`net` sin target para cookies/caché/proxy~~ — **HECHO**: `net_surface` cubre `parse_set_cookie`, `parse_cache_policy` y `proxy_authorization` | `ls fuzz/fuzz_targets/net_surface.rs` |
+| [#467](https://github.com/juanpimg/Megi/issues/467) | ~~Sin targets directos de layout/paint/fonts~~ — **HECHO**: existen `layout_resolve`, `layout_tree`, `paint_display_list` y `fonts_shape` (los 4 en la matriz ASan, 300 s) | `ls fuzz/fuzz_targets/layout_*.rs fuzz/fuzz_targets/paint_display_list.rs fuzz/fuzz_targets/fonts_shape.rs` |
 | [#470](https://github.com/juanpimg/Megi/issues/470) | Harness fidelity: checks inalcanzables en fuzz | Corrección localizada en `fuzz/` | `cd fuzz && cargo +nightly fuzz build` |
 | [#483](https://github.com/juanpimg/Megi/issues/483) | Fuzz de la interacción DOM×JS | Añade camino con DOM al target `js_eval` | `cd fuzz && cargo +nightly fuzz build` |
 | [#443](https://github.com/juanpimg/Megi/issues/443) | Stacking contexts anidados cuadráticos | `S` si se limita a la partición en una pasada | `cargo test -p paint` + bench |
 | [#442](https://github.com/juanpimg/Megi/issues/442) | `apply_group_bbox` reescanea descendientes | `S`: bbox incremental por pila | `cargo test -p svg` |
 | [#439](https://github.com/juanpimg/Megi/issues/439) | Patrones anidados crecen exponencialmente | `M`: presupuesto global de tiles | `cargo test -p svg` |
-| [#970](https://github.com/juanpimg/Megi/issues/970) | Etiquetas y project board | Requiere permisos de maintainer | Revisión del board |
+| [#970](https://github.com/juanpimg/Megi/issues/970) | ~~Etiquetas y project board~~ — **HECHO (etiquetas)**: `labeler.yml` e `issue-title-labeler.yml` etiquetan por área; el tablero vive en GitHub | `ls .github/labeler.yml .github/workflows/issue-title-labeler.yml` |
 
 > Nota: la lista debe revisarse antes de aplicar etiquetas, porque el inventario
 > de issues cambia cada ronda. El criterio anterior es más duradero que la lista.

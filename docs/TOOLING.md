@@ -149,7 +149,7 @@ cargo test -p fonts
 
 Arnés de benchmarks **sin dependencias** (`criterion`/`hyperfine` descartados) para detectar regresiones de complejidad con números medibles:
 
-- `crates/bench`: cargas sintéticas deterministas generadas en memoria (sin reloj/red/`rand`), grupos de parseo HTML, resolución de estilos, layout, rasterizado, render-to-PNG y pipeline completo; `--scale`, `--filter`, `--iterations`, `--warmup` y salida JSON. 8 tests.
+- `crates/bench`: cargas sintéticas deterministas generadas en memoria (sin reloj/red/`rand`), grupos de parseo HTML, resolución de estilos, layout, rasterizado, render-to-PNG y pipeline completo; `--scale`, `--filter`, `--iterations`, `--warmup` y salida JSON. 12 tests.
 - `tools/bench.sh`: compila en release (`cargo build --release -p bench`), ejecuta el binario y guarda `target/bench-latest.txt` + metadatos (`target/bench-latest-meta.txt`: fecha, commit, rustc, args). Argumentos reenviados al binario.
 - `docs/PERFORMANCE.md`: metodología, cargas, máquina, baseline medida y limitaciones; **otro agente lo actualiza** con la baseline de esta ronda (no editar desde tareas de documentación general).
 
@@ -166,9 +166,9 @@ Baseline de referencia (release, i7-12700H): raster 800×600 **1598,8 → 0,9 ms
 
 Workspace Cargo **independiente** (`fuzz/`, con `[workspace]` vacío) que alberga los targets de [libFuzzer](https://llvm.org/docs/LibFuzzer.html) vía [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz). No forma parte del workspace del motor ni de su grafo de dependencias: el tooling de fuzzing (`libfuzzer-sys`, nightly + ASan) no contamina el build estable.
 
-- **Targets** (4): `html_parse` (tokenizer + árbol + serializer), `css_parse` (tokenizer/parser de hojas y declaraciones), `selectors` (Selectors L4 + cascade sobre un DOM sintético) y `net_url` (URL WHATWG + `join`, sin abrir sockets).
-- **Corpus semilla versionado** en `fuzz/corpus/<target>/` (17 ficheros); `fuzz/target/`, `fuzz/artifacts/`, `fuzz/coverage/` y `fuzz/Cargo.lock` están ignorados.
-- **CI**: `.github/workflows/fuzz-nightly.yml` (`schedule` diario 03:17 UTC + `workflow_dispatch`), 300 s por target, sube artefactos de crash si falla.
+- **Targets** (25): `html_parse` (tokenizer + árbol + serializer), `css_parse` (tokenizer/parser de hojas y declaraciones), `selectors` (Selectors L4 + cascade sobre un DOM sintético), `net_url` (URL WHATWG + `join`, sin abrir sockets), pipeline de render (`render_pipeline`), JS (`js_eval`, `js_module`), SVG (`svg_parse`), imágenes/EXIF/WebP (`image_decode`, `exif_parse`, `webp`), fuentes (`font_decode`, `woff2_decode`), red (`net_surface`, `hpack_decode`, `h2_push`, `body_stream`), layout/DOM/paint (`layout_resolve`, `dom_mutate`, `dom_tree`, `layout_tree`, `paint_display_list`, `fonts_shape`), `container_queries` y `text_boundary`.
+- **Corpus semilla versionado** en `fuzz/corpus/<target>/` (124 ficheros); `fuzz/target/`, `fuzz/artifacts/`, `fuzz/coverage/` y `fuzz/Cargo.lock` están ignorados.
+- **CI**: `.github/workflows/fuzz-nightly.yml` (`schedule` diario 03:17 UTC + `workflow_dispatch`), 600 s en los 10 targets críticos y 300 s en los 15 restantes, sube artefactos de crash si falla.
 - **Campaña local documentada**: ~1,06 M de ejecuciones ASan con **0 crashes**; política de triaje (reproducir → minimizar → clasificar → añadir regresión) en [`FUZZING.md`](FUZZING.md).
 
 ```bash
@@ -204,7 +204,7 @@ cargo run -p render -- file:///ruta/pagina.html /tmp/local.png --no-network
 `crates/image` (std puro, sin dependencias) decodifica PNG a RGBA8 straight y expone un inflate zlib/DEFLATE reutilizable:
 
 ```bash
-cargo test -p image                 # 111 tests + 1 doctest (PNG/JPEG/GIF/WebP/EXIF/inflate)
+cargo test -p image                 # 120 tests + 1 doctest (PNG/JPEG/GIF/WebP/EXIF/inflate)
 cargo run -p render -- tests/fixtures/phase4/basic.html /tmp/basic.png 2>/dev/null || true
 # El test de integración decodifica el PNG generado por paint y lo compara con basic.rgba
 cargo test -p paint --test end_to_end_html
@@ -225,7 +225,7 @@ tools/megi.sh tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png
 md5sum /tmp/megi-shot.png     # 7324e851… (idéntico al pipeline render)
 ```
 
-`megi` presenta el `Pixmap` como framebuffer `0RGB` con `softbuffer` (winit 0.30, backends X11/Wayland por dlopen, sin GPU). `--screenshot` usa el mismo pipeline `render` sin `EventLoop` y se testea en CI. **Navegación (rondas 9–10)**: clic izquierdo en enlaces (`Url::join`), historial `NavigationState` (back/forward/replace/reload, cap 256, truncado forward; fallos conservan la entrada), **Alt+←/Backspace/b** atrás, **Alt+→/n** adelante, **r** recargar, **q/Esc** cerrar, scroll completo, HiDPI y **título dinámico** `<title>`+URL+% scroll+`[recortado]` (errores «Megi — error: …»); hit regions y título del mismo render que los píxeles; desde la ronda 10 los enlaces se resuelven con **`RenderOutput.hit_regions` + `paint::find_link_at`** (fallback layout+DOM), el shell acepta `--cookies`/`--origin` y la **ronda 13** añade **zoom** (`Ctrl+=/-/0`, `--zoom` 0.5–3.0) y **auto-refresh opt-in** (`--refresh-ms`). 100 tests. Limitaciones: formularios/pestañas/descargas, fragmentos = nueva navegación, >8192 CSS px recortado, JS/eventos no en el bucle del host y ventana no testeada en CI. Ver `crates/shell/src/lib.rs`.
+`megi` presenta el `Pixmap` como framebuffer `0RGB` con `softbuffer` (winit 0.30, backends X11/Wayland por dlopen, sin GPU). `--screenshot` usa el mismo pipeline `render` sin `EventLoop` y se testea en CI. **Navegación (rondas 9–10)**: clic izquierdo en enlaces (`Url::join`), historial `NavigationState` (back/forward/replace/reload, cap 256, truncado forward; fallos conservan la entrada), **Alt+←/Backspace/b** atrás, **Alt+→/n** adelante, **r** recargar, **q/Esc** cerrar, scroll completo, HiDPI y **título dinámico** `<title>`+URL+% scroll+`[recortado]` (errores «Megi — error: …»); hit regions y título del mismo render que los píxeles; desde la ronda 10 los enlaces se resuelven con **`RenderOutput.hit_regions` + `paint::find_link_at`** (fallback layout+DOM), el shell acepta `--cookies`/`--origin` y la **ronda 13** añade **zoom** (`Ctrl+=/-/0`, `--zoom` 0.5–3.0) y **auto-refresh opt-in** (`--refresh-ms`). 305 tests. Limitaciones: fragmentos = nueva navegación, >8192 CSS px recortado, JS/eventos no en el bucle del host y ventana no testeada en CI. Ver `crates/shell/src/lib.rs`.
 
 ### 2.12 Fixtures de imágenes y captura E2E
 
@@ -344,7 +344,7 @@ Límites: sin WOFF1, primer `src` soportado, weight/style no eligen cara, sin un
 
 ### 2.16f Crate `svg` + SVG E2E en render (ronda 13)
 
-`crates/svg` implementa XML subset + modelo SVG + path data con arcos + rasterizador **scanline AA determinista** (4 subfilas + cobertura analítica; strokes 4×4), con límites anti-DoS (8 MiB/256 profundidad/100k elementos/1M segmentos/16k lado/64 Mpx/`<use>` 16) y `#![forbid(unsafe_code)]`. No soporta `<text>`, CSS class/style sheets, gradientes/patterns, dasharray, markers, filtros/máscaras/clips, script ni refs externas. **Cableado E2E HECHO** en `render`: `<img src=*.svg>` y `background-image` (detección por Content-Type/sniffing, tamaño intrínseco width/height/viewBox con 300×150 por defecto, cap **16 Mpx/64 MiB RGBA**, corrupto ⇒ warning no fatal, navegación directa en página sintética) con stat `svgs_rendered`; 5 fixtures `svg_*` + 6 assets y 11 tests.
+`crates/svg` implementa XML subset + modelo SVG + path data con arcos + rasterizador **scanline AA determinista** (4 subfilas + cobertura analítica; strokes 4×4), con límites anti-DoS (8 MiB/256 profundidad/100k elementos/1M segmentos/16k lado/64 Mpx/`<use>` 16) y `#![forbid(unsafe_code)]`. Soporta `<text>` básico, CSS `class`/`style`, gradientes (`linearGradient`/`radialGradient`) y `<pattern>`; no soporta dasharray, markers, filtros/máscaras/clips, script ni refs externas. **Cableado E2E HECHO** en `render`: `<img src=*.svg>` y `background-image` (detección por Content-Type/sniffing, tamaño intrínseco width/height/viewBox con 300×150 por defecto, cap **16 Mpx/64 MiB RGBA**, corrupto ⇒ warning no fatal, navegación directa en página sintética) con stat `svgs_rendered`; 5 fixtures `svg_*` + 6 assets y 11 tests.
 
 ```bash
 cargo test -p svg
