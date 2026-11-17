@@ -32,11 +32,11 @@ next_up = [
 # GENERATED STATS (rewritten by tools/update_progress.py --write; safe to inspect)
 # ---------------------------------------------------------------------------------------
 [stats]
-tests = 2500
-tests_commit = "ef416bc"
+tests = 2501
+tests_commit = "befdb16"
 tests_date = "2026-11-17"
 crates = 14
-rust_lines = 184498
+rust_lines = 184584
 unsafe_forbidden_crates = 14
 
 [gate]
