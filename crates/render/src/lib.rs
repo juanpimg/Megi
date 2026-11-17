@@ -1578,9 +1578,10 @@ fn collect_styles(
     ),
     RenderError,
 > {
+    let (vw, vh) = media.viewport.unwrap_or((1280.0, 720.0));
     let collected = css::with_calc_viewport(
-        media.width(),
-        media.height(),
+        vw,
+        vh,
         || stylesheets::collect_stylesheets(document, base_url, media),
     );
     warnings.extend(collected.warnings.iter().cloned());
