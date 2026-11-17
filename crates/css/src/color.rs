@@ -500,9 +500,8 @@ fn parse_color_mix(inner: &str) -> Option<Color> {
         return None;
     }
     COLOR_MIX_DEPTH.with(|cell| cell.set(depth + 1));
-    let result = parse_color_mix_inner(inner);
-    COLOR_MIX_DEPTH.with(|cell| cell.set(depth));
-    result
+    let _guard = ColorMixDepthGuard(depth);
+    parse_color_mix_inner(inner)
 }
 
 fn parse_color_mix_inner(inner: &str) -> Option<Color> {
