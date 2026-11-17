@@ -1454,10 +1454,14 @@ impl Pixmap {
         // A long unbreakable run can saturate the origin on cast. Add the positive
         // ink offsets in i64 and clamp before narrowing so neither debug overflow checks
         // nor release wraparound can corrupt the destination rectangle (#1440).
-        let dst_x0 = (i64::from(origin_x) + i64::from(entry.x0)).clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
-        let dst_y0 = (i64::from(origin_y) + i64::from(entry.y0)).clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
-        let dst_x1 = (i64::from(origin_x) + i64::from(entry.x1)).clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
-        let dst_y1 = (i64::from(origin_y) + i64::from(entry.y1)).clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+        let dst_x0 = (i64::from(origin_x) + i64::from(entry.x0))
+            .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+        let dst_y0 = (i64::from(origin_y) + i64::from(entry.y0))
+            .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+        let dst_x1 = (i64::from(origin_x) + i64::from(entry.x1))
+            .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+        let dst_y1 = (i64::from(origin_y) + i64::from(entry.y1))
+            .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
 
         let x0 = dst_x0.max(clip.0).max(0);
         let y0 = dst_y0.max(clip.1).max(0);
@@ -4307,7 +4311,11 @@ mod glyph_origin_overflow_tests {
         // offset in i32 panicked in debug and wrapped in release (#1440).
         let origin = i32::MAX;
         let clamped = (i64::from(origin) + 1_i64).clamp(i64::from(i32::MIN), i64::from(i32::MAX));
-        assert_eq!(clamped, i64::from(i32::MAX), "must clamp instead of overflowing");
+        assert_eq!(
+            clamped,
+            i64::from(i32::MAX),
+            "must clamp instead of overflowing"
+        );
         let origin = i32::MIN;
         let clamped = (i64::from(origin) - 1_i64).clamp(i64::from(i32::MIN), i64::from(i32::MAX));
         assert_eq!(clamped, i64::from(i32::MIN));
