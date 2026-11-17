@@ -76,7 +76,7 @@ pub fn sanitize_host(url: &net::Url) -> String {
         "data" => "page".to_string(),
         _ => url.host().to_lowercase(),
     };
-    let mut sanitized: String = raw
+    let sanitized: String = raw
         .chars()
         .map(|character| {
             if character.is_ascii_alphanumeric() || character == '.' || character == '-' {
