@@ -892,7 +892,7 @@ pub fn fetch_with_request_body_and_trailers(
             return Err(FetchError::TooManyRedirects);
         }
         if raw.status == 303
-            || (matches!(raw.status, 301 | 302) && method != "GET" && method != "HEAD")
+            || (matches!(raw.status, 301 | 302) && method == "POST")
         {
             method = "GET".to_owned();
             body_state = None;
