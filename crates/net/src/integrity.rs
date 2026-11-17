@@ -83,6 +83,15 @@ pub fn verify_integrity(bytes: &[u8], integrity: &str) -> Result<(), IntegrityEr
     }
 }
 
+/// Whether the SHA-256 of `data` equals the base64-encoded digest `expected` (used by CSP
+/// `'sha256-…'` source expressions). Malformed base64 never matches.
+pub fn matches_sha256_base64(data: &[u8], expected: &str) -> bool {
+    match base64_decode(expected) {
+        Some(digest) => digest == sha256(data).to_vec(),
+        None => false,
+    }
+}
+
 /// Computes the SHA-256 digest of `data`.
 pub fn sha256(data: &[u8]) -> [u8; 32] {
     const K: [u32; 64] = [

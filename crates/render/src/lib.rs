@@ -908,13 +908,15 @@ fn render_url_inner(
         let load_report = if script_candidates.is_empty() {
             scripts::ScriptLoadReport::default()
         } else {
-            scripts::load_scripts(
+            let csp = net::csp::ContentSecurityPolicy::from_headers(&loaded.headers);
+            scripts::load_scripts_with_csp(
                 &script_candidates,
                 &base_url,
                 &mut loader,
                 options.scripting_limits,
                 options.no_network,
                 &mut script_warnings,
+                csp.as_ref(),
             )
         };
         script_bytes = load_report.script_bytes;

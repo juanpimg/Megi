@@ -206,6 +206,8 @@ pub struct ScriptCandidate {
     /// `integrity` attribute (Subresource Integrity); verified against the fetched bytes before
     /// execution (#1527). Inline scripts are not subject to SRI.
     pub integrity: Option<String>,
+    /// `nonce` attribute, used by CSP `script-src 'nonce-…'` (#1526).
+    pub nonce: Option<String>,
 }
 
 /// A script ready to be evaluated.
@@ -460,6 +462,7 @@ pub fn discover_scripts(
             is_async: data.has_attribute("async"),
             is_module,
             integrity: data.get_attribute("integrity").map(str::to_owned),
+            nonce: data.get_attribute("nonce").map(str::to_owned),
         });
     }
     candidates
@@ -477,6 +480,21 @@ pub fn load_scripts(
     limits: ScriptingLimits,
     no_network: bool,
     warnings: &mut Vec<String>,
+) -> ScriptLoadReport {
+    load_scripts_with_csp(
+        candidates, base_url, loader, limits, no_network, warnings, None,
+    )
+}
+
+/// Like [`load_scripts`] but enforces a Content Security Policy (#1526) on every script.
+pub fn load_scripts_with_csp(
+    candidates: &[ScriptCandidate],
+    base_url: &Url,
+    loader: &mut ResourceLoader,
+    limits: ScriptingLimits,
+    no_network: bool,
+    warnings: &mut Vec<String>,
+    csp: Option<&net::csp::ContentSecurityPolicy>,
 ) -> ScriptLoadReport {
     let mut report = ScriptLoadReport::default();
     let mut seen_urls: HashSet<String> = HashSet::new();
@@ -507,6 +525,16 @@ pub fn load_scripts(
             if no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
                 report.skipped += 1;
                 warnings.push(format!("skipping script {url} (--no-network is set)"));
+                continue;
+            }
+            // CSP (#1526): block external scripts not allowed by script-src.
+            if let Some(policy) = csp
+                && !policy.allows_external(&url, base_url)
+            {
+                report.skipped += 1;
+                warnings.push(format!(
+                    "skipping script {url}: blocked by Content-Security-Policy"
+                ));
                 continue;
             }
             // Only module scripts are deduplicated by URL (the HTML module map). A classic
@@ -573,6 +601,16 @@ pub fn load_scripts(
             let Some(inline) = &candidate.inline_text else {
                 continue;
             };
+            // CSP (#1526): block inline scripts unless 'unsafe-inline'/nonce/hash allows them.
+            if let Some(policy) = csp
+                && !policy.allows_inline(candidate.nonce.as_deref(), inline)
+            {
+                report.skipped += 1;
+                warnings.push(format!(
+                    "skipping inline script {index}: blocked by Content-Security-Policy"
+                ));
+                continue;
+            }
             source_name = format!("inline-script-{index}");
             text = inline.clone();
             if candidate.is_module {
