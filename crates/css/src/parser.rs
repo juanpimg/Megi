@@ -89,6 +89,15 @@ impl TokenStream {
 /// consumed iteratively and dropped, so the surrounding declarations still parse.
 pub const MAX_COMPONENT_NESTING: usize = 256;
 
+/// Maximum nesting depth of qualified style rules (CSS Nesting).
+///
+/// `consume_qualified_rule` and `consume_block_contents` are mutually recursive; without a bound
+/// a ~52 KB sheet of `a{a{a{…` overflows the 8 MB host stack before any declaration is validated
+/// (#1412). Real author stylesheets nest only a handful of levels. Past this cap the deep block is
+/// consumed with the iterative [`skip_to_matching`] and dropped, so the surrounding rules still
+/// parse.
+pub const MAX_RULE_NESTING: usize = 32;
+
 /// Consumes a component value from the stream (§5.5.8).
 pub fn consume_component_value(stream: &mut TokenStream) -> ComponentValue {
     consume_component_value_at(stream, 0)
@@ -328,6 +337,13 @@ pub fn consume_declaration(stream: &mut TokenStream) -> Option<Declaration> {
 
 /// Consumes block contents (declarations and child rules) (§5.5.5).
 pub fn consume_block_contents(stream: &mut TokenStream) -> (Vec<Declaration>, Vec<Rule>) {
+    consume_block_contents_at(stream, 0)
+}
+
+fn consume_block_contents_at(
+    stream: &mut TokenStream,
+    depth: usize,
+) -> (Vec<Declaration>, Vec<Rule>) {
     let mut decls = Vec::new();
     let mut rules = Vec::new();
 
@@ -354,7 +370,7 @@ pub fn consume_block_contents(stream: &mut TokenStream) -> (Vec<Declaration>, Ve
                 } else {
                     stream.restore_mark();
                     if let Some(rule) =
-                        consume_qualified_rule(stream, Some(&CssToken::Semicolon), true)
+                        consume_qualified_rule_at(stream, Some(&CssToken::Semicolon), true, depth)
                     {
                         rules.push(rule);
                     } else {
@@ -375,6 +391,15 @@ pub fn consume_qualified_rule(
     stop_token: Option<&CssToken>,
     nested: bool,
 ) -> Option<Rule> {
+    consume_qualified_rule_at(stream, stop_token, nested, 0)
+}
+
+fn consume_qualified_rule_at(
+    stream: &mut TokenStream,
+    stop_token: Option<&CssToken>,
+    nested: bool,
+    depth: usize,
+) -> Option<Rule> {
     let mut prelude = Vec::new();
     loop {
         let next = stream.peek();
@@ -386,7 +411,16 @@ pub fn consume_qualified_rule(
         }
         if next == &CssToken::LeftBrace {
             stream.consume(); // '{'
-            let (declarations, child_rules) = consume_block_contents(stream);
+            let (declarations, child_rules) = if depth + 1 >= MAX_RULE_NESTING {
+                // #1412: past the cap, drop the deep block iteratively instead of recursing.
+                // `stream` is just after '{'; skip_to_matching consumes through the matching '}'.
+                // The rule at the cap is still emitted (empty), so at most MAX_RULE_NESTING
+                // rule levels are retained.
+                skip_to_matching(stream, b'}');
+                (Vec::new(), Vec::new())
+            } else {
+                consume_block_contents_at(stream, depth + 1)
+            };
             if stream.peek() == &CssToken::RightBrace {
                 stream.consume(); // '}'
             }
@@ -723,6 +757,64 @@ mod serialization_tests {
     fn string_serialization_keeps_escapes_inside_the_string() {
         let declarations = parse_list_of_declarations(r#"content: "a\"b";"#);
         assert_eq!(declarations[0].raw_value, r#""a\"b""#);
+    }
+}
+
+#[cfg(test)]
+mod nesting_depth_tests {
+    use super::*;
+    use crate::rule::Rule;
+
+    /// Returns the maximum depth of nested child style rules.
+    fn max_rule_depth(rules: &[Rule]) -> usize {
+        rules
+            .iter()
+            .map(|rule| match rule {
+                Rule::Style(style) => 1 + max_rule_depth(&style.child_rules),
+                Rule::At(_) => 1,
+            })
+            .max()
+            .unwrap_or(0)
+    }
+
+    #[test]
+    fn excessive_rule_nesting_is_capped() {
+        // Unbounded `a{a{a{…` recursion (#1412) used to blow the 8 MB stack with ~26 k levels.
+        // A moderate 200 levels is safe to parse, but the resulting tree must be capped; before
+        // the fix max_rule_depth was 200, so this assertion failed.
+        let input = format!("{}color:red{}", "a{".repeat(200), "}".repeat(200));
+        let sheet = parse_stylesheet(&input);
+        assert!(
+            max_rule_depth(&sheet.rules) <= MAX_RULE_NESTING,
+            "nesting must be capped at {MAX_RULE_NESTING}, got {}",
+            max_rule_depth(&sheet.rules)
+        );
+
+        // The issue's exact shape: ~200 KB of `a{` used to abort the process with a stack
+        // overflow. With the cap it parses to completion (and stays bounded).
+        let huge = format!("{}color:red{}", "a{".repeat(100_000), "}".repeat(100_000));
+        let huge_sheet = parse_stylesheet(&huge);
+        assert!(max_rule_depth(&huge_sheet.rules) <= MAX_RULE_NESTING);
+    }
+
+    #[test]
+    fn nesting_cap_keeps_sibling_rules_and_declarations() {
+        // Past the cap the deep block is dropped, but outer declarations and later siblings
+        // must still parse — the cap is a bound, not a whole-sheet abort.
+        let deep = format!("{}color:blue{}", "a{".repeat(100), "}".repeat(100));
+        let input = format!("a{{color:red}}{deep} b{{color:green}}");
+        let sheet = parse_stylesheet(&input);
+        let rules = &sheet.rules;
+        assert!(
+            rules.len() >= 2,
+            "outer siblings must survive the nesting cap, got {} rules",
+            rules.len()
+        );
+        let first = match &rules[0] {
+            Rule::Style(style) => style,
+            other => panic!("expected style rule, got {other:?}"),
+        };
+        assert_eq!(first.declarations[0].name, "color");
     }
 }
 
