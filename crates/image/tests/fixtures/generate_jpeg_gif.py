@@ -165,8 +165,6 @@ def write_reduced_and_thumbnail_fixtures():
     thumbnail.save(buffer, "JPEG", quality=85, subsampling=0)
     thumbnail_bytes = buffer.getvalue()
     _build_exif_thumbnail(base, thumbnail_bytes)
-    with open(f"{jpeg_dir}/exif_thumb.rgba", "wb") as handle:
-        handle.write(Image.open(base).convert("RGBA").tobytes())
     with open(f"{jpeg_dir}/exif_thumb_thumbnail.rgba", "wb") as handle:
         handle.write(Image.open(io.BytesIO(thumbnail_bytes)).convert("RGBA").tobytes())
 
