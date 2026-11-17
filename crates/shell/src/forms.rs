@@ -916,6 +916,20 @@ pub struct FormSubmission {
     pub body: String,
 }
 
+impl FormSubmission {
+    /// Returns the `(Content-Type, body)` pair passed to `ResourceLoader::fetch_with_method`
+    /// for a POST submission (#1538). GET carries no body/header — its values are in the URL.
+    pub fn post_request(&self) -> Option<(&'static str, &[u8])> {
+        if self.method != "post" {
+            return None;
+        }
+        Some((
+            "application/x-www-form-urlencoded; charset=UTF-8",
+            self.body.as_bytes(),
+        ))
+    }
+}
+
 /// Resolves a form action against the document URL (absolute URLs pass through; `Url::join`
 /// covers the relative forms the shell already supports for links).
 fn resolve_action(base: &net::Url, action: &str) -> Option<String> {

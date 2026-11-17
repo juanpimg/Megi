@@ -64,6 +64,8 @@ pub struct RenderRequest {
     /// Host-dispatched window events (e.g. `popstate`/`hashchange` after a same-document
     /// history navigation, #1503). Applied by `view_options` to the render options.
     pub host_events: Vec<String>,
+    /// Optional form POST `(Content-Type, body)` for the main document request (#1538).
+    pub form_post: Option<(String, Vec<u8>)>,
 }
 
 /// A finished page frame in CSS resolution (`0RGB`, row-major).
@@ -204,6 +206,7 @@ impl FrameStore {
             scripting: true,
             find_query: None,
             host_events: Vec::new(),
+            form_post: None,
         }
     }
 
@@ -226,6 +229,7 @@ impl FrameStore {
             scripting: true,
             find_query: Some(query.to_owned()),
             host_events: Vec::new(),
+            form_post: None,
         }
     }
 
@@ -250,6 +254,7 @@ impl FrameStore {
             scripting: false,
             find_query: None,
             host_events: Vec::new(),
+            form_post: None,
         }
     }
 
@@ -276,6 +281,32 @@ impl FrameStore {
             scripting: true,
             find_query: None,
             host_events: events.iter().map(|event| (*event).to_owned()).collect(),
+            form_post: None,
+        }
+    }
+
+    /// Starts a form POST navigation (#1538): fetches `input` with the POST body through the
+    /// render pipeline, so the response document is painted with the submission result.
+    pub fn begin_form_post_request(
+        &mut self,
+        input: &str,
+        css_width: u32,
+        css_height: u32,
+        content_type: &str,
+        body: Vec<u8>,
+    ) -> RenderRequest {
+        self.generation = self.generation.saturating_add(1);
+        self.pending = true;
+        RenderRequest {
+            generation: self.generation,
+            input: input.to_owned(),
+            css_width,
+            css_height,
+            base_override: None,
+            scripting: true,
+            find_query: None,
+            host_events: Vec::new(),
+            form_post: Some((content_type.to_owned(), body)),
         }
     }
 
@@ -579,6 +610,7 @@ fn view_options(
     }
     // Host-dispatched events run on `window` after `load`, before the final re-render (#1503).
     options.host_events = request.host_events.clone();
+    options.form_post = request.form_post.clone();
     options
 }
 
@@ -741,6 +773,7 @@ mod unit_tests {
             scripting: true,
             find_query: None,
             host_events: vec!["popstate".to_owned()],
+            form_post: None,
         };
         let viewport = render::Viewport::new(100, 100).expect("viewport");
         let options = view_options(&request, viewport, &render::RenderOptions::default(), false);
@@ -803,6 +836,7 @@ mod unit_tests {
             scripting: false,
             find_query: None,
             host_events: Vec::new(),
+            form_post: None,
         };
         let frame = render_document(&request).expect("render");
         // Before the fix the probe's root margin box (≈body height) reported a
@@ -954,6 +988,7 @@ mod worker_panic_isolation_tests {
             scripting: true,
             find_query: None,
             host_events: Vec::new(),
+            form_post: None,
         };
         sender.send(first).expect("send first");
         let failure = receiver
@@ -981,6 +1016,7 @@ mod worker_panic_isolation_tests {
             scripting: true,
             find_query: None,
             host_events: Vec::new(),
+            form_post: None,
         };
         sender.send(second).expect("send second");
         let frame = receiver

@@ -295,6 +295,7 @@ fn worker_renderer_produces_a_full_page_frame_without_a_display() {
         scripting: true,
         find_query: None,
         host_events: Vec::new(),
+        form_post: None,
     };
     let frame = shell::worker::render_document(&request).expect("full-page render");
     assert_eq!(frame.generation, 7);
@@ -325,6 +326,7 @@ fn worker_render_document_exposes_links_title_and_final_url() {
         scripting: true,
         find_query: None,
         host_events: Vec::new(),
+        form_post: None,
     };
     let frame = shell::worker::render_document(&request).expect("render");
     assert_eq!(frame.title.as_deref(), Some("Links Page"));
@@ -413,6 +415,7 @@ fn file_fixture_links_are_hittable_and_navigable() {
         scripting: true,
         find_query: None,
         host_events: Vec::new(),
+        form_post: None,
     };
     let frame = shell::worker::render_document(&request).expect("render fixture");
     assert_eq!(frame.title.as_deref(), Some("Links Fixture"));
@@ -567,6 +570,7 @@ fn pending_timers_enable_auto_refresh_and_renders_are_deterministic() {
         scripting: true,
         find_query: None,
         host_events: Vec::new(),
+        form_post: None,
     };
     let first = shell::worker::render_document(&request).expect("first render");
     let mut second_request = request.clone();
@@ -639,6 +643,7 @@ fn forms_fixture_renders_visible_control_borders() {
         scripting: true,
         find_query: None,
         host_events: Vec::new(),
+        form_post: None,
     };
     let frame = shell::worker::render_document(&request).expect("worker forms render");
     assert!(!frame.forms.is_empty(), "frame must expose form controls");
@@ -662,6 +667,7 @@ fn patched_dom_snapshot_re_renders_edited_values() {
         scripting: true,
         find_query: None,
         host_events: Vec::new(),
+        form_post: None,
     };
     let frame = shell::worker::render_document(&request).expect("initial render");
     let text = frame
@@ -690,6 +696,7 @@ fn patched_dom_snapshot_re_renders_edited_values() {
         scripting: false,
         find_query: None,
         host_events: Vec::new(),
+        form_post: None,
     };
     let patched = shell::worker::render_document(&patched_request).expect("patched render");
     let edited = patched
@@ -746,6 +753,7 @@ fn find_request_reports_hits_and_highlight_rects() {
         scripting: true,
         find_query: Some("megi".to_string()),
         host_events: Vec::new(),
+        form_post: None,
     };
     let frame = shell::worker::render_document(&request).expect("find render");
     assert!(
@@ -770,6 +778,7 @@ fn find_is_case_insensitive_and_absent_without_query() {
         scripting: true,
         find_query: Some("MEGI".to_string()),
         host_events: Vec::new(),
+        form_post: None,
     };
     let case_upper = shell::worker::render_document(&base).expect("upper render");
     let mut lower = base.clone();
@@ -1047,6 +1056,7 @@ fn select_options_survive_a_patched_rerender() {
         scripting: true,
         find_query: None,
         host_events: Vec::new(),
+        form_post: None,
     };
     let frame = shell::worker::render_document(&request).expect("forms render");
     let select = frame
@@ -1070,6 +1080,7 @@ fn select_options_survive_a_patched_rerender() {
         scripting: false,
         find_query: None,
         host_events: Vec::new(),
+        form_post: None,
     };
     let patched = shell::worker::render_document(&patched_request).expect("patched render");
     let patched_select = patched
@@ -1207,6 +1218,7 @@ fn worker_frame_png_bytes_match_the_render_screenshot() {
         scripting: true,
         find_query: None,
         host_events: Vec::new(),
+        form_post: None,
     };
     let frame = shell::worker::render_document(&request).expect("render");
     assert!(shell::download::is_png(&frame.png_bytes));
@@ -1270,6 +1282,7 @@ fn worker_frame_exposes_image_regions_for_the_context_menu() {
         scripting: true,
         find_query: None,
         host_events: Vec::new(),
+        form_post: None,
     };
     let frame = shell::worker::render_document(&request).expect("render");
     assert!(!frame.images.is_empty(), "img region extracted");
@@ -1594,6 +1607,7 @@ fn worker_render_dispatches_host_popstate_before_the_final_frame() {
             scripting: true,
             find_query: None,
             host_events: events,
+            form_post: None,
         };
         shell::worker::render_document(&request).expect("render")
     };

@@ -433,6 +433,11 @@ pub struct RenderOptions {
     /// accumulated), while subresources keep using the buffered path. Both paths produce
     /// byte-identical renders; future phases can stream large images/fonts here too.
     pub stream_responses: bool,
+    /// Optional form POST body for the main document request (#1538): `(Content-Type, body)`.
+    ///
+    /// When set, the `http(s)` document is fetched with `net::fetch_with_method("POST", …)` instead
+    /// of `GET`. `None` (default) keeps the ordinary GET navigation unchanged.
+    pub form_post: Option<(String, Vec<u8>)>,
     /// Accept HTTP/2 server pushes and preload images/stylesheets/scripts from the
     /// same-origin push cache of the document load (R177). Default `false`: the client
     /// advertises `SETTINGS_ENABLE_PUSH=0`. Pushes completing after the main response are
@@ -495,6 +500,7 @@ impl Default for RenderOptions {
             cookie_jar: None,
             origin: None,
             stream_responses: false,
+            form_post: None,
             accept_server_push: false,
             storage: None,
             host_events: Vec::new(),
@@ -756,6 +762,7 @@ fn render_url_inner(
         &mut document_loader,
         &document_fetch_options,
         options.stream_responses,
+        options.form_post.as_ref(),
     )?;
     // Subresource fetches send the document's origin (CORS) and its cookies.
     let subresource_origin = options
@@ -1472,6 +1479,7 @@ fn load_document(
     loader: &mut ResourceLoader,
     fetch_options: &FetchOptions,
     stream: bool,
+    form_post: Option<&(String, Vec<u8>)>,
 ) -> Result<LoadedDocument, RenderError> {
     match url.scheme() {
         Scheme::Http | Scheme::Https => {
@@ -1481,7 +1489,16 @@ fn load_document(
             // it here to keep the deterministic pipeline byte-identical to the buffered
             // path. Status/headers/redirects/pushes come from the same response.
             let mut streamed_body = Vec::new();
-            let mut response = if stream {
+            let mut response = if let Some((content_type, body)) = form_post {
+                // Form POST navigation (#1538): send the urlencoded body with its content type.
+                net::fetch_with_method(
+                    url,
+                    fetch_options,
+                    "POST",
+                    &[("Content-Type", content_type.as_str())],
+                    Some(body.as_slice()),
+                )?
+            } else if stream {
                 net::fetch_streaming(url, fetch_options, &mut |chunk| {
                     streamed_body.extend_from_slice(chunk);
                     Ok(())

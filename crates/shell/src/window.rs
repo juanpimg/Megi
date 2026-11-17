@@ -1569,16 +1569,35 @@ impl WindowApp {
         else {
             return false;
         };
-        let target = if submission.method == "get" {
-            crate::forms::form_get_target(&submission)
-        } else {
-            Some(submission.action.clone())
-        };
-        let Some(target) = target.and_then(|url| net::Url::parse(&url).ok()) else {
-            return false;
-        };
         self.editor = None;
         self.focus.blur();
+        if submission.method == "post" {
+            // POST navigation: send the urlencoded body through the worker/render pipeline
+            // (#1538) so the response document is what gets displayed.
+            if let Some((content_type, body)) = submission.post_request() {
+                let request = self.store.begin_form_post_request(
+                    &submission.action,
+                    self.metrics.css_width,
+                    self.metrics.css_height,
+                    content_type,
+                    body.to_vec(),
+                );
+                if let Some(sender) = &self.request_sender
+                    && sender.send(request).is_err()
+                {
+                    self.error = Some("render worker stopped unexpectedly".to_string());
+                }
+                self.input = submission.action.clone();
+                self.update_title();
+                return true;
+            }
+            return false;
+        }
+        let target =
+            crate::forms::form_get_target(&submission).and_then(|url| net::Url::parse(&url).ok());
+        let Some(target) = target else {
+            return false;
+        };
         self.navigate_to(target);
         true
     }
