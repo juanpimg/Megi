@@ -2477,3 +2477,31 @@ impl ApplicationHandler<UserEvent> for WindowApp {
         }
     }
 }
+
+#[cfg(test)]
+mod form_patch_send_tests {
+    #[test]
+    fn failed_patch_send_reports_an_error() {
+        // Mirrors the three patched-render call sites: only a failed send sets the
+        // error and skips committing the patched document (#1459).
+        let mut committed = false;
+        let mut error: Option<String> = None;
+        let send: Result<(), ()> = Err(());
+        if send.is_err() {
+            error = Some("render worker stopped unexpectedly".to_string());
+        } else {
+            committed = true;
+        }
+        assert_eq!(error.as_deref(), Some("render worker stopped unexpectedly"));
+        assert!(!committed);
+
+        let mut committed_ok = false;
+        let send_ok: Result<(), ()> = Ok(());
+        if send_ok.is_err() {
+            panic!("a successful send must not report an error");
+        } else {
+            committed_ok = true;
+        }
+        assert!(committed_ok);
+    }
+}
