@@ -502,10 +502,12 @@ pub fn load_scripts(
                 warnings.push(format!("skipping script {url} (--no-network is set)"));
                 continue;
             }
-            let cache_key = url.cache_key();
-            if !seen_urls.insert(cache_key) {
+            // Only module scripts are deduplicated by URL (the HTML module map). A classic
+            // external script executes once per element; the loader cache avoids re-fetching
+            // the same URL (#1217).
+            if candidate.is_module && !seen_urls.insert(url.cache_key()) {
                 report.skipped += 1;
-                warnings.push(format!("skipping duplicate script {url} (already loaded)"));
+                warnings.push(format!("skipping duplicate module script {url} (already loaded)"));
                 continue;
             }
             if attempts >= limits.max_script_attempts {
