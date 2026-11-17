@@ -382,13 +382,18 @@ pub fn render_document_with_options(
     request: &RenderRequest,
     base_options: &render::RenderOptions,
 ) -> Result<RenderFrame, String> {
-    let probe = render_view(request, request.css_height, base_options)?;
+    // Height probe must not run page scripts: a tall page would otherwise execute
+    // timers/fetches/storage writes twice (once for the probe, once at full height, #1471).
+    let probe = render_view(request, request.css_height, base_options, true)?;
     let layout_height =
         scrollable_content_height(&probe.layout).max(probe.layout.dimensions.margin_box().height);
     let (content_height, capped) = scroll::content_height(layout_height);
     let target_height = content_height.clamp(1, scroll::MAX_CONTENT_HEIGHT);
     let output = if target_height > probe.pixmap.height {
-        render_view(request, target_height, base_options)?
+        render_view(request, target_height, base_options, false)?
+    } else if request.scripting {
+        // Re-run at probe height with scripting enabled so scripts execute once.
+        render_view(request, probe.pixmap.height, base_options, false)?
     } else {
         probe
     };
@@ -489,11 +494,33 @@ fn scrollable_content_height(root: &LayoutBox) -> f32 {
     max_bottom.max(0.0)
 }
 
+/// Builds the `RenderOptions` for one pass. The height probe (`probe = true`) always
+/// disables scripting so tall pages do not run scripts twice (#1471).
+fn view_options(
+    request: &RenderRequest,
+    viewport: render::Viewport,
+    base_options: &render::RenderOptions,
+    probe: bool,
+) -> render::RenderOptions {
+    let mut options = base_options.clone();
+    options.viewport = viewport;
+    if let Some(base) = &request.base_override {
+        options.base_override = Some(base.clone());
+    }
+    // The height probe never executes page scripts (#1471); the final render honors
+    // the caller's scripting toggle.
+    if probe || !request.scripting {
+        options.scripting = render::ScriptingMode::Disabled;
+    }
+    options
+}
+
 /// Runs one `render` pass at `css_width x height`, applying `base_options`.
 fn render_view(
     request: &RenderRequest,
     height: u32,
     base_options: &render::RenderOptions,
+    probe: bool,
 ) -> Result<render::RenderOutput, String> {
     let viewport = render::Viewport::new(request.css_width, height).map_err(|error| {
         format!(
@@ -501,14 +528,7 @@ fn render_view(
             request.css_width
         )
     })?;
-    let mut options = base_options.clone();
-    options.viewport = viewport;
-    if let Some(base) = &request.base_override {
-        options.base_override = Some(base.clone());
-    }
-    if !request.scripting {
-        options.scripting = render::ScriptingMode::Disabled;
-    }
+    let options = view_options(request, viewport, base_options, probe);
     let prepared = match crate::pages::prepare_input(&request.input) {
         Ok(prepared) => prepared,
         Err((code, message)) => {
