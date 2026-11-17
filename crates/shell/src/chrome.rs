@@ -40,6 +40,8 @@ const TAB_RADIUS: f32 = 6.0;
 const PILL_RADIUS: f32 = 7.0;
 /// Corner radius of floating menus and dropdowns.
 const MENU_RADIUS: f32 = 6.0;
+/// Address bar font size, shared by text, URL hierarchy and the caret measurement.
+const ADDRESS_TEXT_SIZE: f32 = 13.0;
 /// Height of one dropdown option row, in CSS pixels.
 pub const DROPDOWN_ROW_HEIGHT: f32 = 18.0;
 /// Maximum number of visible dropdown rows before the list scrolls.
@@ -1535,6 +1537,31 @@ fn paint_panel(pixmap: &mut Pixmap, rect: Rect, scale: f32, radius: f32, surface
     fill_round(pixmap, inner, scale, (radius - 1.0).max(0.0), surface);
 }
 
+/// Highlights a selected menu row with a rounded surface and a slim accent marker.
+fn paint_menu_selection(pixmap: &mut Pixmap, row: Rect, scale: f32) {
+    fill_round(
+        pixmap,
+        Rect::new(
+            row.x + 2.0,
+            row.y + 1.0,
+            (row.width - 4.0).max(0.0),
+            (row.height - 2.0).max(0.0),
+        ),
+        scale,
+        3.0,
+        COLOR_MENU_SELECTED,
+    );
+    pixmap.fill_rect(
+        Rect::new(
+            (row.x + 1.0) * scale,
+            (row.y + 3.0) * scale,
+            2.0 * scale,
+            (row.height - 6.0).max(0.0) * scale,
+        ),
+        ACCENT,
+    );
+}
+
 /// Paints a decoded 16x16 tab icon, or its deterministic color-dot fallback.
 fn paint_favicon(
     pixmap: &mut Pixmap,
@@ -1661,13 +1688,14 @@ fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, width
             );
         }
         let close = tab.close;
+        fill_round(pixmap, close, scale, 3.0, COLOR_ADDRESS_BG);
         draw_text(
             pixmap,
             "x",
             close.x + 3.0,
-            close.y + 3.0,
+            close.y + 2.0,
             scale,
-            10.0,
+            11.0,
             COLOR_TEXT,
         );
     }
@@ -1726,7 +1754,7 @@ fn paint_address_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, wid
         paint_favicon(pixmap, icon, text_x, bar.y + 4.0, scale);
         text_x += 22.0;
     }
-    let text_y = bar.y + 8.0;
+    let text_y = bar.y + 7.0;
     if editing {
         let text = view.address.text();
         draw_text(
@@ -1735,17 +1763,17 @@ fn paint_address_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, wid
             text_x,
             text_y,
             scale,
-            12.0,
+            ADDRESS_TEXT_SIZE,
             COLOR_ADDRESS_TEXT,
         );
         let before = &text[..view.address.caret().min(text.len())];
-        let caret_x = text_x + measure_text_width(before, 12.0);
+        let caret_x = text_x + measure_text_width(before, ADDRESS_TEXT_SIZE);
         pixmap.fill_rect(
             Rect::new(
                 (caret_x * scale).round(),
-                ((bar.y + 5.0) * scale).round(),
+                ((bar.y + 4.0) * scale).round(),
                 scale.max(1.0),
-                ((bar.height - 10.0) * scale).round(),
+                ((bar.height - 8.0) * scale).round(),
             ),
             COLOR_CARET,
         );
@@ -1754,8 +1782,16 @@ fn paint_address_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, wid
         let (scheme, authority, path) = split_url_for_display(view.fallback_url);
         let mut x = text_x;
         if !scheme.is_empty() {
-            draw_text(pixmap, scheme, x, text_y, scale, 12.0, COLOR_ADDRESS_MUTED);
-            x += measure_text_width(scheme, 12.0);
+            draw_text(
+                pixmap,
+                scheme,
+                x,
+                text_y,
+                scale,
+                ADDRESS_TEXT_SIZE,
+                COLOR_ADDRESS_MUTED,
+            );
+            x += measure_text_width(scheme, ADDRESS_TEXT_SIZE);
         }
         draw_text(
             pixmap,
@@ -1763,12 +1799,20 @@ fn paint_address_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, wid
             x,
             text_y,
             scale,
-            12.0,
+            ADDRESS_TEXT_SIZE,
             COLOR_ADDRESS_TEXT,
         );
         if !path.is_empty() {
-            x += measure_text_width(authority, 12.0);
-            draw_text(pixmap, path, x, text_y, scale, 12.0, COLOR_ADDRESS_MUTED);
+            x += measure_text_width(authority, ADDRESS_TEXT_SIZE);
+            draw_text(
+                pixmap,
+                path,
+                x,
+                text_y,
+                scale,
+                ADDRESS_TEXT_SIZE,
+                COLOR_ADDRESS_MUTED,
+            );
         }
     }
 }
@@ -1918,7 +1962,7 @@ fn paint_context_menu(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, me
             break;
         };
         if index == menu.selected {
-            pixmap.fill_rect(scaled(*row, scale), COLOR_MENU_SELECTED);
+            paint_menu_selection(pixmap, *row, scale);
         }
         draw_text(
             pixmap,
@@ -2027,7 +2071,7 @@ fn paint_history_menu(
             break;
         };
         if index == menu.selected {
-            pixmap.fill_rect(scaled(*row, scale), COLOR_MENU_SELECTED);
+            paint_menu_selection(pixmap, *row, scale);
         }
         let (letter, color) = crate::history::domain_badge(&entry.url);
         let badge = Rect::new(row.x + 4.0, row.y + 3.0, 14.0, 14.0);
@@ -2780,7 +2824,7 @@ mod tests {
         draw_chrome(&mut dest, 400, 240, 1.0, &view);
         let layout = context_menu_layout(&menu, 400.0, 240);
         let selected = layout.rows[0];
-        let pixel = dest[(selected.y as u32 * 400 + selected.x as u32 + 3) as usize];
+        let pixel = dest[((selected.y + 6.0) as u32 * 400 + (selected.x + 6.0) as u32) as usize];
         assert_eq!(pixel, rgb(COLOR_MENU_SELECTED), "selected row background");
         assert!(selected.width > 0.0);
     }
@@ -2886,7 +2930,8 @@ mod tests {
         draw_chrome(&mut dest, 480, 300, 1.0, &view);
         let selected = layout.rows[0];
         assert_eq!(
-            dest[(selected.y as u32 * 480 + selected.x as u32 + 3) as usize],
+            dest[((selected.y + 3.0) as u32 * 480 + (selected.x + selected.width - 4.0) as u32)
+                as usize],
             rgb(COLOR_MENU_SELECTED),
             "selected history row"
         );
