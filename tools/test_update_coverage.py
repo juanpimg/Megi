@@ -22,8 +22,21 @@ sys.modules["update_progress"] = update_progress
 _progress_spec.loader.exec_module(update_progress)
 
 
+def _repo_head() -> str:
+    import subprocess
+
+    repo = Path(__file__).resolve().parent.parent
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, timeout=30
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
 GATE_PASS = {
     "status": "PASS",
+    "verified_commit": _repo_head(),
     "tokenizer": "7050 / 7050",
     "tree": "3904 / 3904",
     "serializer": "230 / 230",
@@ -271,6 +284,39 @@ class ValidatorHardeningTests(unittest.TestCase):
                 {"state": "done", "evidence": evidence}, self.root, GATE_PASS
             )
             self.assertFalse(ok, f"{evidence} must not verify a capability: {reason}")
+
+    def test_gate_evidence_rejects_stale_verified_commit(self) -> None:
+        # #1392: `verified_commit` must be HEAD (or an ancestor); a copied-forward commit
+        # must not keep verifying a capability from an old conformance run.
+        good = dict(GATE_PASS, verified_commit="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+        ok, reason = update_coverage.verify_evidence(
+            {"state": "done", "evidence": "gate:tokenizer"}, self.root, good
+        )
+        # `self.root` is a temp dir with no git; a bogus commit cannot be an ancestor of any
+        # HEAD there, so verification must fail.
+        self.assertFalse(ok, f"stale/unknown verified_commit must not verify: {reason}")
+
+    def test_run_gate_fails_when_suite_count_unparseable(self) -> None:
+        # #1392: if `test_harness --summary` output lacks a suite count, run_gate must not
+        # fall back to the manifest count (that hides a broken gate); status must be FAIL.
+        import subprocess
+
+        original = update_progress.run
+
+        def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(
+                args[1] if len(args) > 1 else [], 0, "no parseable suite output\n", ""
+            )
+
+        update_progress.run = fake_run  # type: ignore[assignment]
+        try:
+            gate = update_progress.run_gate(
+                self.root, {"tokenizer": "7050 / 7050", "tree": "3904 / 3904"}
+            )
+            self.assertEqual(gate["status"], "FAIL")
+            self.assertNotIn(gate.get("tokenizer"), ("7050 / 7050",))
+        finally:
+            update_progress.run = original  # type: ignore[assignment]
 
     def test_non_done_requires_none_evidence(self) -> None:
         ok, _ = update_coverage.verify_evidence(

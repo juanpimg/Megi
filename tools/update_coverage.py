@@ -78,6 +78,23 @@ def read_gate(root: Path) -> dict[str, str]:
     return dict(progress.get("gate", {}))
 
 
+def _commit_is_ancestor(root: Path, commit: str) -> bool:
+    """True when `commit` resolves to HEAD or an ancestor of HEAD in `root`'s git repo."""
+    import re as _re
+
+    if not _re.fullmatch(r"[0-9a-fA-F]{7,40}", commit):
+        return False
+    # Use the repository that owns these tools when `root` is not a git work tree
+    # (unit tests pass a temp dir).
+    repo = root if (root / ".git").exists() else Path(__file__).resolve().parent.parent
+    head = run(repo, ["git", "rev-parse", "HEAD"])
+    if head.returncode != 0 or not head.stdout.strip():
+        return False
+    # `git merge-base --is-ancestor <commit> HEAD` exits 0 iff commit is an ancestor (or HEAD).
+    check = run(repo, ["git", "merge-base", "--is-ancestor", commit, "HEAD"])
+    return check.returncode == 0
+
+
 def _strip_rust_comments_and_strings(source: str) -> str:
     """Blank out Rust line/block comments and string/char literals, preserving offsets."""
     out = list(source)
@@ -185,6 +202,12 @@ def verify_evidence(cap: dict, root: Path, gate: dict[str, str]) -> tuple[bool, 
     if kind == "gate":
         if str(gate.get("status", "")).upper() != "PASS":
             return False, "el gate de conformidad no está PASS"
+        # The gate counts are only as fresh as the commit that measured them (#1392).
+        # `verified_commit` must resolve to HEAD or an ancestor in this repository; a
+        # stale/copied-forward commit must not keep verifying a `done` capability.
+        verified = str(gate.get("verified_commit", "") or "").strip()
+        if not verified or not _commit_is_ancestor(root, verified):
+            return False, f"verified_commit `{verified}` no es HEAD ni ancestro"
         counts = str(gate.get(detail, ""))
         match = re.fullmatch(r"(\d+)\s*/\s*(\d+)", counts)
         if not match:

@@ -184,13 +184,17 @@ def run_gate(root: Path, manifest_gate: dict[str, str]) -> dict[str, str]:
     result = run(root, ["cargo", "run", "-q", "-p", "test_harness", "--", "--summary"], timeout=900)
     output = result.stdout + result.stderr
     gate = {"status": "FAIL", "verified_commit": ""}
+    # If any suite count cannot be parsed from the fresh output, the gate cannot be trusted:
+    # do not copy counts forward from the manifest and force FAIL (#1392).
+    all_parsed = True
     for key, prefix in GATE_SUITES.items():
         match = re.search(rf"{re.escape(prefix)}: (\d+) / (\d+)", output)
         if match:
             gate[key] = f"{match.group(1)} / {match.group(2)}"
         else:
-            gate[key] = manifest_gate.get(key, "n/a")
-    if result.returncode == 0 and "Conformance gate: PASS" in output:
+            gate[key] = "n/a"
+            all_parsed = False
+    if all_parsed and result.returncode == 0 and "Conformance gate: PASS" in output:
         gate["status"] = "PASS"
     return gate
 
@@ -668,6 +672,9 @@ def build_artifacts(root: Path, no_count: bool, no_gate: bool) -> dict[str, byte
         verified_commit = manifest_gate.get("verified_commit", head)
     else:
         verified_commit = head
+    # Stamp the gate with the commit that actually measured it so `update_coverage.py` can
+    # reject stale gate evidence (#1392). `run_gate` leaves this empty; fill it here.
+    gate["verified_commit"] = verified_commit
     stats = {
         "head": head,
         "date": date,
