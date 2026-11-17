@@ -344,7 +344,7 @@ crates/net/tests/socks5_tests.rs	218	test	F1	waveF1	2026-11-17	covered	#1343-#13
 crates/net/tests/streaming_compression_tests.rs	324	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/streaming_pool_tests.rs	386	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/tls_tests.rs	184	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
-crates/net/tests/trailers_tests.rs	347	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
+crates/net/tests/trailers_tests.rs	352	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/upload_streaming.rs	565	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/url_tests.rs	354	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/url_userinfo_auth.rs	120	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
