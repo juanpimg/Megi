@@ -229,7 +229,9 @@ fn h2_read_request_frames(stream: &mut TcpStream) -> (u32, bool, Vec<(String, St
                     let is_trailers =
                         got_data && headers.iter().all(|(name, _)| !name.starts_with(':'));
                     if is_trailers {
-                        return (stream_id, true, headers);
+                        // Return the parsed END_STREAM flag instead of a hardcoded `true`,
+                        // so the test actually verifies trailers close the stream (#1347).
+                        return (stream_id, end_stream, headers);
                     }
                     if end_stream {
                         return (stream_id, false, Vec::new());
@@ -253,8 +255,11 @@ fn h2_request_trailers_are_a_final_headers_block_with_end_stream() {
     let (port, server) = spawn_once(|mut tcp| {
         h2_read_preface(&mut tcp);
         h2_send_settings(&mut tcp);
-        let (stream_id, has_trailers, trailers) = h2_read_request_frames(&mut tcp);
-        assert!(has_trailers, "trailers HEADERS expected");
+        let (stream_id, end_stream, trailers) = h2_read_request_frames(&mut tcp);
+        // The helper only returns once it has seen a trailers block, so reaching here with
+        // these headers proves trailers were sent; the parsed flag must also show they closed
+        // the stream (#1347).
+        assert!(end_stream, "final trailers HEADERS must carry END_STREAM");
         assert_eq!(
             trailers,
             vec![("x-checksum".to_owned(), "deadbeef".to_owned())]
