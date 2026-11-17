@@ -169,7 +169,7 @@ fn h1_trailer_validation_is_typed() {
         &[("x-bad".to_owned(), "line\r\ninjection".to_owned())],
     )
     .expect_err("invalid trailer value");
-    assert!(matches!(error, FetchError::InvalidResponse(_)), "{error}");
+    assert!(matches!(error, FetchError::RequestBody(_)), "{error}");
     let error = net::http::fetch_with_trailers(
         &url,
         &FetchOptions::default(),
