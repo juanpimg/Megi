@@ -23,6 +23,7 @@ case "$cmd" in
         cargo clippy --workspace --all-targets -- -D warnings
         python3 tools/check_docs_links.py
         python3 tools/update_progress.py --check --no-gate --no-count
+        python3 tools/update_coverage.py --check
         ;;
     doc)
         cargo doc --workspace --no-deps
@@ -37,6 +38,7 @@ case "$cmd" in
         cargo clippy --workspace --all-targets -- -D warnings
         python3 tools/check_docs_links.py
         python3 tools/update_progress.py --check --no-gate --no-count
+        python3 tools/update_coverage.py --check
         echo "==> [3/5] Running closed-loop workspace tests..."
         cargo test --workspace
         echo "==> [4/5] Building workspace documentation..."
