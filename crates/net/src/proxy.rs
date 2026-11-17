@@ -264,13 +264,29 @@ impl fmt::Display for ProxyConfig {
             ),
             None => "none".to_owned(),
         };
+        let socks = self
+            .socks
+            .as_ref()
+            .map(|s| format!("socks5://{}:{}", s.host, s.port))
+            .unwrap_or_else(|| "none".to_owned());
+        let pac = self
+            .pac_url
+            .as_ref()
+            .map(|u| {
+                if u.username().is_empty() {
+                    format!("{}://{}:{}", u.scheme().as_str(), u.host(), u.port_or_default().unwrap_or(0))
+                } else {
+                    format!("{}://{}:***@{}:{}", u.scheme().as_str(), u.username(), u.host(), u.port_or_default().unwrap_or(0))
+                }
+            })
+            .unwrap_or_else(|| "none".to_owned());
         write!(
             f,
-            "ProxyConfig {{ http: {}, https: {}, socks: {:?}, pac: {:?}, no_proxy: [{}] }}",
+            "ProxyConfig {{ http: {}, https: {}, socks: {}, pac: {}, no_proxy: [{}] }}",
             render(&self.http),
             render(&self.https),
-            self.socks,
-            self.pac_url,
+            socks,
+            pac,
             self.no_proxy.join(", ")
         )
     }
