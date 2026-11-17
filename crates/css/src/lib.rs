@@ -80,8 +80,8 @@ pub use query::{
 pub use rule::{AtRule, Declaration, FontFaceRule, ImportRule, Rule, StyleRule, Stylesheet};
 pub use selector::{
     AnPlusB, AttrOperator, AttributeSelector, Combinator, ComplexSelector, CompoundSelector,
-    MAX_MATCH_STEPS, MAX_SELECTOR_NESTING, PseudoClass, RelativeSelector, SelectorList,
-    Specificity, parse_selectors,
+    MAX_MATCH_STEPS, MAX_PASS_MATCH_STEPS, MAX_SELECTOR_NESTING, PseudoClass, RelativeSelector,
+    SelectorList, Specificity, parse_selectors, style_pass_scope,
 };
 pub use shorthand::expand_declarations;
 pub use state::{StateContext, StateGuard, current as current_state, with_state};

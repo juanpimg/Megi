@@ -59,7 +59,7 @@ crates/css/src/parser.rs	861	src	F2	wave1	2026-11-16	covered	#1126-#1133
 crates/css/src/properties.rs	5627	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/query.rs	370	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/rule.rs	297	src	F2	wave1	2026-11-16	covered	#1126-#1133	
-crates/css/src/selector.rs	1759	src	F2	wave1	2026-11-16	covered	#1126-#1133	
+crates/css/src/selector.rs	1848	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/shorthand.rs	966	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/state.rs	231	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/token.rs	125	src	F2	wave1	2026-11-16	covered	#1126-#1133	
@@ -387,7 +387,7 @@ crates/render/src/charset.rs	442	src	F2	wave1	2026-11-16	covered	#1212-#1227,#12
 crates/render/src/error.rs	135	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/images.rs	384	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/inline_svg.rs	273	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
-crates/render/src/lib.rs	2139	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
+crates/render/src/lib.rs	2142	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/main.rs	357	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/scripts.rs	1673	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/stylesheets.rs	393	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
