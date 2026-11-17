@@ -462,7 +462,9 @@ impl JsRuntime {
             let delivered = deliver_mutation_records(&mut self.context);
             drop(_scope);
             delivered?;
-            let _ = self.run_worker_tasks(64);
+            if let Err(error) = self.run_worker_tasks(64) {
+                self.report_worker_delivery_error(error, "<worker tasks>");
+            }
         }
         result
     }
@@ -5826,11 +5828,18 @@ impl JsRuntime {
                 u64::from(slot),
             ) && let Some(callback) = callback.as_object()
             {
-                let _ = callback.call(
+                if let Err(error) = callback.call(
                     &JsValue::undefined(),
                     std::slice::from_ref(&event),
                     &mut self.context,
-                );
+                ) {
+                    // Exceptions in worker message handlers must be reported, not
+                    // silently swallowed (#1460).
+                    self.report_worker_delivery_error(
+                        JsError::Runtime(error.to_string()),
+                        "<worker onmessage>",
+                    );
+                }
             }
         }
         Ok(())
@@ -5864,11 +5873,16 @@ impl JsRuntime {
             u64::from(slot),
         ) && let Some(callback) = callback.as_object()
         {
-            let _ = callback.call(
+            if let Err(error) = callback.call(
                 &JsValue::undefined(),
                 std::slice::from_ref(&event),
                 &mut self.context,
-            );
+            ) {
+                self.report_worker_delivery_error(
+                    JsError::Runtime(error.to_string()),
+                    "<worker onerror>",
+                );
+            }
         }
         Ok(())
     }
