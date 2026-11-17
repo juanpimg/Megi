@@ -14,8 +14,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     db.load_font_data(DEJAVU_SANS_BOLD.to_vec())?;
     println!("faces loaded: {} -> {:?}", db.len(), db.family_names());
 
-    let regular = db.font(&["DejaVu Sans"], 400, FontStyle::Normal)?;
-    let bold = db.font(&["DejaVu Sans"], 700, FontStyle::Normal)?;
+    let regular = db.font(
+        &["DejaVu Sans"],
+        400,
+        FontStyle::Normal,
+        fontdb::Stretch::Normal,
+    )?;
+    let bold = db.font(
+        &["DejaVu Sans"],
+        700,
+        FontStyle::Normal,
+        fontdb::Stretch::Normal,
+    )?;
     println!(
         "regular: {} ({}), upem={}",
         regular.info().post_script_name,

@@ -41,3 +41,6 @@ Thumbs.db
 /fuzz/artifacts/
 /fuzz/coverage/
 /fuzz/Cargo.lock
+
+# Superpowers planning workspace (specs/plans live in docs/superpowers/ and are tracked)
+/.superpowers/

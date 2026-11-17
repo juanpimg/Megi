@@ -354,3 +354,36 @@ fn remote_documents_cannot_load_file_images() {
         output.stats.warnings
     );
 }
+
+#[test]
+fn test_max_total_decoded_pixels_cap() {
+    let page = "<!doctype html><html><body style=\"margin:0\">\
+                <img src=\"/img.png\" style=\"width:10px;height:10px\">\
+                </body></html>";
+    let mut routes = HashMap::new();
+    routes.insert(
+        "/page.html".to_string(),
+        Response::ok("text/html", page.as_bytes().to_vec()),
+    );
+    routes.insert(
+        "/img.png".to_string(),
+        Response::ok("image/png", fixture_bytes("assets/px.png")),
+    );
+    let server = TestServer::spawn(routes, 2);
+
+    let mut render_options = options();
+    render_options.max_total_decoded_pixels = 0;
+    let output =
+        render_url(&server.url("/page.html"), &render_options).expect("render with 0 pixel budget");
+    assert_eq!(output.stats.images_loaded, 0);
+    assert!(output.stats.images_failed >= 1);
+    assert!(
+        output
+            .stats
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("pixel budget")),
+        "warnings={:?}",
+        output.stats.warnings
+    );
+}

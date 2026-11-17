@@ -36,6 +36,8 @@ pub const DEFAULT_MAX_IMAGES: usize = 64;
 pub const DEFAULT_MAX_IMAGE_BYTES: usize = 8 * 1024 * 1024;
 /// Default maximum total downloaded image bytes per page (32 MiB).
 pub const DEFAULT_MAX_TOTAL_IMAGE_BYTES: usize = 32 * 1024 * 1024;
+/// Default maximum total decoded pixels across `<img>` and CSS background images (64 Mpx ≈ 256 MiB RGBA).
+pub const DEFAULT_MAX_TOTAL_DECODED_PIXELS: u64 = 64 * 1024 * 1024;
 
 /// Defensive caps applied while loading images.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,6 +48,8 @@ pub struct ImageLimits {
     pub max_image_bytes: usize,
     /// Maximum total downloaded image bytes for the page.
     pub max_total_bytes: usize,
+    /// Maximum total decoded pixels across all distinct `<img>` bitmaps.
+    pub max_total_decoded_pixels: u64,
     /// Optional decode downscale cap (`RenderOptions::max_image_dim`).
     pub max_image_dim: Option<u32>,
 }
@@ -56,6 +60,7 @@ impl Default for ImageLimits {
             max_images: DEFAULT_MAX_IMAGES,
             max_image_bytes: DEFAULT_MAX_IMAGE_BYTES,
             max_total_bytes: DEFAULT_MAX_TOTAL_IMAGE_BYTES,
+            max_total_decoded_pixels: DEFAULT_MAX_TOTAL_DECODED_PIXELS,
             max_image_dim: None,
         }
     }
@@ -73,6 +78,8 @@ pub struct LoadedImages {
     pub failed: usize,
     /// Downloaded (compressed) image bytes actually accepted.
     pub downloaded_bytes: usize,
+    /// Total decoded pixels (`width * height`) across distinct decoded bitmaps.
+    pub decoded_pixels: u64,
     /// `<img>` images that were SVGs rasterized through the `svg` crate.
     pub svgs_rendered: usize,
     /// Non-fatal warnings produced by this stage.
@@ -123,6 +130,7 @@ pub fn load_images(
         loaded: 0,
         failed: 0,
         downloaded_bytes: 0,
+        decoded_pixels: 0,
         svgs_rendered: 0,
         warnings: Vec::new(),
     };
@@ -139,6 +147,7 @@ pub fn load_images(
         ));
     }
 
+    let mut resolved = Vec::new();
     for (node_id, src) in sources.into_iter().take(limits.max_images) {
         let url = match base_url.join(&src) {
             Ok(url) => url,
@@ -150,13 +159,6 @@ pub fn load_images(
                 continue;
             }
         };
-        let cache_key = url.to_string();
-        if let Some((size, bitmap)) = cache.get(&cache_key) {
-            result.sizes.insert(node_id, *size);
-            result.store.insert(node_id, Arc::clone(bitmap));
-            result.loaded += 1;
-            continue;
-        }
         if no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
             result.failed += 1;
             result
@@ -164,7 +166,33 @@ pub fn load_images(
                 .push(format!("skipping image {url} (--no-network is set)"));
             continue;
         }
-        let resource = match loader.load(&url) {
+        let use_cors = document
+            .node(node_id)
+            .as_element()
+            .is_some_and(|element| element.get_attribute("crossorigin").is_some());
+        resolved.push((node_id, url, use_cors));
+    }
+
+    let requests: Vec<(&Url, bool)> = resolved
+        .iter()
+        .map(|(_, url, use_cors)| (url, *use_cors))
+        .collect();
+    // Enforce the image byte cap while fetching, not after every response has been
+    // buffered (#1213). Restore the caller's cap afterwards so unrelated later fetches
+    // keep their original limit.
+    let previous_cap = loader.set_max_response_bytes(limits.max_image_bytes);
+    let loaded_resources = loader.load_many(&requests);
+    loader.set_max_response_bytes(previous_cap);
+
+    for ((node_id, url, _use_cors), loaded_res) in resolved.into_iter().zip(loaded_resources) {
+        let cache_key = url.to_string();
+        if let Some((size, bitmap)) = cache.get(&cache_key) {
+            result.sizes.insert(node_id, *size);
+            result.store.insert(node_id, Arc::clone(bitmap));
+            result.loaded += 1;
+            continue;
+        }
+        let resource = match loaded_res {
             Ok(resource) => resource,
             Err(error) => {
                 result.failed += 1;
@@ -204,8 +232,20 @@ pub fn load_images(
             };
             match decoded {
                 Ok(decoded) => {
-                    result.downloaded_bytes += resource.bytes.len();
                     let (width, height) = decoded.dimensions();
+                    let pixels = u64::from(width).saturating_mul(u64::from(height));
+                    if result.decoded_pixels.saturating_add(pixels)
+                        > limits.max_total_decoded_pixels
+                    {
+                        result.failed += 1;
+                        result.warnings.push(format!(
+                            "skipping image {url}: decoded pixel budget exhausted ({} + {} > {} pixels)",
+                            result.decoded_pixels, pixels, limits.max_total_decoded_pixels
+                        ));
+                        continue;
+                    }
+                    result.decoded_pixels = result.decoded_pixels.saturating_add(pixels);
+                    result.downloaded_bytes += resource.bytes.len();
                     let size = (width as f32, height as f32);
                     let bitmap = Arc::new(decoded);
                     result.sizes.insert(node_id, size);
@@ -234,6 +274,19 @@ pub fn load_images(
         } else if svg_assets::looks_like_svg(&resource.content_type, &resource.bytes) {
             match svg_assets::render(&resource.bytes) {
                 Ok(rendered) => {
+                    let (width, height) = rendered.raster.dimensions();
+                    let pixels = u64::from(width).saturating_mul(u64::from(height));
+                    if result.decoded_pixels.saturating_add(pixels)
+                        > limits.max_total_decoded_pixels
+                    {
+                        result.failed += 1;
+                        result.warnings.push(format!(
+                            "skipping image {url}: decoded pixel budget exhausted ({} + {} > {} pixels)",
+                            result.decoded_pixels, pixels, limits.max_total_decoded_pixels
+                        ));
+                        continue;
+                    }
+                    result.decoded_pixels = result.decoded_pixels.saturating_add(pixels);
                     result.downloaded_bytes += resource.bytes.len();
                     let bitmap = Arc::new(rendered.raster);
                     result.sizes.insert(node_id, rendered.intrinsic);
@@ -266,6 +319,31 @@ pub fn load_images(
 mod dedup_tests {
     use super::*;
     use net::FetchOptions;
+
+    #[test]
+    fn image_byte_cap_is_applied_during_fetch() {
+        // A data URL larger than max_image_bytes must be rejected by the fetch layer
+        // (response cap), not only by the post-load size check (#1213).
+        let payload = "x".repeat(4096);
+        let source = format!("<body><img src='data:image/png;base64,{payload}'></body>");
+        let document = html::parse_document(&source, false);
+        let base = net::Url::parse("file:///tmp/page.html").expect("base URL");
+        let mut loader = ResourceLoader::with_options(FetchOptions::default());
+        let limits = ImageLimits {
+            max_image_bytes: 128,
+            ..ImageLimits::default()
+        };
+        let mut warnings = Vec::new();
+        let loaded = load_images(&document, &base, &mut loader, false, limits, &mut warnings);
+        assert!(
+            loaded.failed >= 1,
+            "oversized image must fail: {warnings:?}"
+        );
+        assert!(
+            warnings.iter().any(|w| w.contains("too large")),
+            "the fetch-layer response cap must reject it: {warnings:?}"
+        );
+    }
 
     #[test]
     fn identical_image_urls_share_one_decode() {

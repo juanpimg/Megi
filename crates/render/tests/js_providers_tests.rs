@@ -208,3 +208,18 @@ fn mutation_observer_chain_reaches_the_dom_and_png() {
         "observer 2 chain mutation painted, got {magenta} px"
     );
 }
+
+#[test]
+fn long_multibyte_host_event_name_does_not_panic() {
+    // A host event name whose byte 256 falls inside a multi-byte code point used to
+    // panic on the byte slice (#1216). It simply matches no listener.
+    let options = RenderOptions {
+        host_events: vec!["€".repeat(100)],
+        ..options()
+    };
+    let output = render_fixture_with("js_host_events.html", &options);
+    assert_eq!(
+        output.stats.script_events, 3,
+        "DOMContentLoaded + load + the (unmatched) host event"
+    );
+}

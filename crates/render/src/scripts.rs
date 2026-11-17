@@ -92,6 +92,10 @@ pub const DEFAULT_MAX_SCRIPTS: usize = 64;
 const DEFAULT_MAX_SCRIPT_ATTEMPTS: usize = 256;
 /// Maximum module-graph fetches (including nested imports) per page.
 const DEFAULT_MAX_MODULE_FETCHES: usize = 256;
+/// Maximum number of `fetch()` calls a page's scripts may make (successful or not).
+const DEFAULT_MAX_FETCH_CALLS: usize = 64;
+/// Maximum total bytes a page's scripts may pull through `fetch()` (#660).
+const DEFAULT_MAX_FETCH_BYTES: usize = 32 * 1024 * 1024;
 /// Default total loop-iteration budget across all scripts of the page.
 pub const DEFAULT_MAX_TOTAL_LOOP_ITERATIONS: u64 = 1_000_000;
 /// Default maximum number of timer callbacks pumped after the scripts.
@@ -146,6 +150,11 @@ pub struct ScriptingLimits {
     pub max_script_attempts: usize,
     /// Maximum number of module-graph fetches (including nested imports).
     pub max_module_fetches: usize,
+    /// Maximum number of `fetch()` calls a page's scripts may make (#660). The per-call loader
+    /// caps bound one response, but nothing bounded the number of calls.
+    pub max_fetch_calls: usize,
+    /// Maximum total bytes fetched through `fetch()` per page (#660).
+    pub max_fetch_bytes: usize,
     /// Maximum size of one script source (bytes).
     pub max_script_bytes: usize,
     /// Maximum total script bytes per page (inline + external, bytes).
@@ -167,6 +176,8 @@ impl Default for ScriptingLimits {
             max_scripts: DEFAULT_MAX_SCRIPTS,
             max_script_attempts: DEFAULT_MAX_SCRIPT_ATTEMPTS,
             max_module_fetches: DEFAULT_MAX_MODULE_FETCHES,
+            max_fetch_calls: DEFAULT_MAX_FETCH_CALLS,
+            max_fetch_bytes: DEFAULT_MAX_FETCH_BYTES,
             max_script_bytes: DEFAULT_MAX_SCRIPT_BYTES,
             max_total_bytes: DEFAULT_MAX_TOTAL_SCRIPT_BYTES,
             budget: ScriptBudget::default(),
@@ -266,6 +277,11 @@ pub struct ScriptingHostContext {
     #[cfg(feature = "js")]
     pub layout:
         Option<std::sync::Arc<std::collections::HashMap<dom::NodeId, js::host::LayoutRect>>>,
+    /// Lazy pre-script layout resolver invoked only if a script queries geometry (#534).
+    #[cfg(feature = "js")]
+    pub layout_provider: Option<
+        Arc<dyn Fn() -> std::collections::HashMap<dom::NodeId, js::host::LayoutRect> + Send + Sync>,
+    >,
 }
 
 impl ScriptingHostContext {
@@ -286,6 +302,8 @@ impl ScriptingHostContext {
             enable_workers: true,
             #[cfg(feature = "js")]
             layout: None,
+            #[cfg(feature = "js")]
+            layout_provider: None,
         }
     }
 
@@ -303,6 +321,8 @@ impl ScriptingHostContext {
             enable_workers: true,
             #[cfg(feature = "js")]
             layout: None,
+            #[cfg(feature = "js")]
+            layout_provider: None,
         }
     }
 }
@@ -385,11 +405,22 @@ fn is_module_script(type_attr: Option<&str>) -> bool {
 ///
 /// Unsupported/ignored script types (JSON data blocks, templates, ...) are skipped
 /// silently; `<script type="module">` elements are included and executed later through the
-/// ES module subset. `warnings` is currently unused by this stage (kept for API stability).
-pub fn discover_scripts(document: &Document, _warnings: &mut Vec<String>) -> Vec<ScriptCandidate> {
+/// ES module subset. Discovery has its own (generous) bound; exceeding it is reported in
+/// `warnings` instead of silently dropping later scripts (#1222). Execution caps are
+/// applied later by `load_scripts` (`max_scripts`/`max_script_attempts`).
+pub(crate) const MAX_DISCOVERED_SCRIPTS: usize = 4096;
+
+pub fn discover_scripts(
+    document: &Document,
+    warnings: &mut Vec<String>,
+    max_discovered: usize,
+) -> Vec<ScriptCandidate> {
     let mut candidates = Vec::new();
     for element in document.get_elements_by_tag_name("script") {
-        if candidates.len() >= 1024 {
+        if candidates.len() >= max_discovered {
+            warnings.push(format!(
+                "page references more than {max_discovered} scripts; later scripts ignored"
+            ));
             break;
         }
         let Some(data) = document.node(element).as_element() else {
@@ -471,10 +502,14 @@ pub fn load_scripts(
                 warnings.push(format!("skipping script {url} (--no-network is set)"));
                 continue;
             }
-            let cache_key = url.cache_key();
-            if !seen_urls.insert(cache_key) {
+            // Only module scripts are deduplicated by URL (the HTML module map). A classic
+            // external script executes once per element; the loader cache avoids re-fetching
+            // the same URL (#1217).
+            if candidate.is_module && !seen_urls.insert(url.cache_key()) {
                 report.skipped += 1;
-                warnings.push(format!("skipping duplicate script {url} (already loaded)"));
+                warnings.push(format!(
+                    "skipping duplicate module script {url} (already loaded)"
+                ));
                 continue;
             }
             if attempts >= limits.max_script_attempts {
@@ -742,7 +777,30 @@ pub fn execute_scripts(
             let base = document_url.clone();
             let options = host.fetch_options.clone();
             let no_network = host.no_network;
+            // `fetch` volume is budgeted per page: the per-call loader caps bound one response,
+            // but a script could still issue thousands of calls (#660).
+            let fetch_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let fetch_bytes = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let max_fetch_calls = limits.max_fetch_calls;
+            let max_fetch_bytes = limits.max_fetch_bytes;
             runtime.set_fetch_provider(Box::new(move |request| {
+                let calls = fetch_calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                if calls > max_fetch_calls {
+                    return Err(js::JsError::Runtime(format!(
+                        "fetch budget exhausted ({max_fetch_calls} calls per page)"
+                    )));
+                }
+                let charge = |body: &[u8]| -> Result<(), js::JsError> {
+                    let total = fetch_bytes
+                        .fetch_add(body.len(), std::sync::atomic::Ordering::Relaxed)
+                        + body.len();
+                    if total > max_fetch_bytes {
+                        return Err(js::JsError::Runtime(format!(
+                            "fetch budget exhausted ({max_fetch_bytes} bytes per page)"
+                        )));
+                    }
+                    Ok(())
+                };
                 let url = Url::parse(&request.url)
                     .map_err(|error| js::JsError::Runtime(format!("fetch URL: {error}")))?;
                 if matches!(url.scheme(), Scheme::Http | Scheme::Https) && no_network {
@@ -759,6 +817,8 @@ pub fn execute_scripts(
                     // Same scheme; the directory confinement is enforced below with a
                     // uniform 404 so out-of-directory and missing files are indistinguishable.
                     (Scheme::File, Scheme::File) => true,
+                    // data: URLs are same-origin fetchable (browsers allow them).
+                    (_, Scheme::Data) => true,
                     _ => false,
                 };
                 if !same_origin {
@@ -778,6 +838,21 @@ pub fn execute_scripts(
                         body: Vec::new(),
                     });
                 }
+                if matches!(url.scheme(), Scheme::Data) {
+                    // Decode data: URLs like the loader does (#1224).
+                    let data = net::decode_data_url(&url)
+                        .map_err(|error| js::JsError::Runtime(format!("data url: {error}")))?;
+                    charge(&data.bytes)?;
+                    let mut headers = vec![("content-type".to_string(), data.mime_type.clone())];
+                    headers.truncate(64);
+                    return Ok(js::host::FetchResult {
+                        status: 200,
+                        status_text: "OK".to_string(),
+                        url: url.to_string(),
+                        headers,
+                        body: data.bytes,
+                    });
+                }
                 if matches!(url.scheme(), Scheme::Http | Scheme::Https) {
                     let header_refs: Vec<(&str, &str)> = request
                         .headers
@@ -792,6 +867,7 @@ pub fn execute_scripts(
                         request.body.as_deref(),
                     )
                     .map_err(|error| js::JsError::Runtime(format!("network: {error}")))?;
+                    charge(&response.body)?;
                     return Ok(js::host::FetchResult {
                         status: response.status,
                         status_text: response.reason,
@@ -804,6 +880,7 @@ pub fn execute_scripts(
                     ResourceLoader::with_options(options.clone()).with_allow_file(base.is_file());
                 match loader.load_str(&request.url) {
                     Ok(resource) => {
+                        charge(&resource.bytes)?;
                         let mut headers =
                             vec![("content-type".to_string(), resource.content_type.clone())];
                         headers.truncate(64);
@@ -834,6 +911,14 @@ pub fn execute_scripts(
     #[cfg(feature = "js")]
     if let Some(layout) = host.layout.clone() {
         runtime.set_layout_provider(Box::new(move |node_id| layout.get(&node_id).copied()));
+    } else if let Some(provider) = host.layout_provider.clone() {
+        let cached: std::sync::OnceLock<
+            std::collections::HashMap<dom::NodeId, js::host::LayoutRect>,
+        > = std::sync::OnceLock::new();
+        runtime.set_layout_provider(Box::new(move |node_id| {
+            let rects = cached.get_or_init(|| provider());
+            rects.get(&node_id).copied()
+        }));
     }
 
     // Browser-facing host providers (R155): History/location actions are queued for the
@@ -995,12 +1080,12 @@ pub fn execute_scripts(
                 let mut total = total_module_bytes
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
-                *total = total.saturating_add(text.len());
-                if *total > max_total_module_bytes {
+                if total.saturating_add(text.len()) > max_total_module_bytes {
                     return Err(js::JsError::ModuleNotFound(format!(
                         "module graph exceeds max_total_bytes={max_total_module_bytes}"
                     )));
                 }
+                *total = total.saturating_add(text.len());
                 Ok(text)
             },
         ));
@@ -1135,7 +1220,22 @@ pub fn execute_scripts(
     // 4. Host-dispatched events (e.g. `hashchange`/`popstate` after a shell navigation).
     // Listeners run on `window`, may mutate the DOM and schedule timers; microtasks and the
     // timer queue are pumped again so the final re-render sees their effects.
-    for event in &host.host_events {
+    const MAX_HOST_EVENTS: usize = 16;
+    const MAX_HOST_EVENT_NAME: usize = 256;
+    for event in host.host_events.iter().take(MAX_HOST_EVENTS) {
+        let event = if event.len() > MAX_HOST_EVENT_NAME {
+            // Truncate on a UTF-8 boundary: byte 256 may fall inside a multi-byte code
+            // point in a host-supplied event name (#1216).
+            let end = event
+                .char_indices()
+                .take_while(|(index, _)| *index < MAX_HOST_EVENT_NAME)
+                .map(|(index, ch)| index + ch.len_utf8())
+                .last()
+                .unwrap_or(0);
+            &event[..end]
+        } else {
+            event.as_str()
+        };
         match runtime.dispatch_event(js::JsEventTarget::Window, event, false) {
             Ok(_) => execution.events_dispatched += 1,
             Err(error) => warnings.push(format!("dispatching host event {event} failed: {error}")),
@@ -1146,10 +1246,12 @@ pub fn execute_scripts(
     // 5. Deterministic cooperative workers: drain main→worker and worker→main queues,
     // then pump timers/microtasks scheduled by worker callbacks before the re-render.
     if host.enable_workers {
-        match runtime.run_worker_tasks(limits.max_tasks) {
-            Ok(delivered) => {
-                loop_state.tasks = loop_state.tasks.saturating_add(delivered);
-            }
+        // Worker deliveries get only the *remaining* task budget and are deliberately not
+        // added to `loop_state.tasks`: that counter is the documented "timer callbacks"
+        // stat, and counting deliveries there starves timers and inflates it (#1221).
+        let worker_budget = limits.max_tasks.saturating_sub(loop_state.tasks);
+        match runtime.run_worker_tasks(worker_budget) {
+            Ok(_) => {}
             Err(error) => warnings.push(format!("worker tasks failed: {error}")),
         }
         drain_microtasks(&mut runtime, warnings);
@@ -1364,7 +1466,7 @@ mod unit_tests {
              <script nomodule>n()</script><script>y()</script></body></html>",
         );
         let mut warnings = Vec::new();
-        let candidates = discover_scripts(&doc, &mut warnings);
+        let candidates = discover_scripts(&doc, &mut warnings, MAX_DISCOVERED_SCRIPTS);
         // Classic scripts + the inline module are candidates; `application/json`,
         // `nomodule` and unsupported types are skipped.
         assert_eq!(candidates.len(), 4);
@@ -1376,6 +1478,24 @@ mod unit_tests {
         assert!(
             warnings.is_empty(),
             "module discovery is not a warning: {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn script_discovery_reports_its_cap() {
+        let mut html = String::new();
+        for _ in 0..1100 {
+            html.push_str("<script>x()</script>");
+        }
+        let doc = document_with(&html);
+        let mut warnings = Vec::new();
+        let candidates = discover_scripts(&doc, &mut warnings, 1024);
+        assert_eq!(candidates.len(), 1024);
+        assert!(
+            warnings
+                .iter()
+                .any(|warning| warning.contains("more than 1024 scripts")),
+            "silently dropping later scripts is a defect (#1222): {warnings:?}"
         );
     }
 
@@ -1403,7 +1523,7 @@ mod unit_tests {
         let base = Url::parse("file:///tmp/index.html").expect("file URL");
         let mut loader = ResourceLoader::with_options(net::FetchOptions::default());
         let mut warnings = Vec::new();
-        let candidates = discover_scripts(&doc, &mut warnings);
+        let candidates = discover_scripts(&doc, &mut warnings, MAX_DISCOVERED_SCRIPTS);
         let report = load_scripts(
             &candidates,
             &base,

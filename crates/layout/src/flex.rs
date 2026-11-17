@@ -80,32 +80,48 @@ struct Item<'a> {
 }
 
 impl Item<'_> {
-    fn outer_main(&self) -> f32 {
-        self.used_main
-            + self.edges.padding.left
-            + self.edges.padding.right
-            + self.edges.border.left
-            + self.edges.border.right
-            + self.edges.margin.left
-            + self.edges.margin.right
+    fn outer_main(&self, row: bool) -> f32 {
+        if row {
+            self.used_main
+                + self.edges.padding.left
+                + self.edges.padding.right
+                + self.edges.border.left
+                + self.edges.border.right
+                + self.edges.margin.left
+                + self.edges.margin.right
+        } else {
+            self.used_main
+                + self.edges.padding.top
+                + self.edges.padding.bottom
+                + self.edges.border.top
+                + self.edges.border.bottom
+                + self.edges.margin.top
+                + self.edges.margin.bottom
+        }
     }
 
-    fn outer_cross(&self) -> f32 {
-        self.used_cross
-            + self.edges.padding.top
-            + self.edges.padding.bottom
-            + self.edges.border.top
-            + self.edges.border.bottom
-            + self.edges.margin.top
-            + self.edges.margin.bottom
+    fn outer_cross(&self, row: bool) -> f32 {
+        if row {
+            self.used_cross
+                + self.edges.padding.top
+                + self.edges.padding.bottom
+                + self.edges.border.top
+                + self.edges.border.bottom
+                + self.edges.margin.top
+                + self.edges.margin.bottom
+        } else {
+            self.used_cross
+                + self.edges.padding.left
+                + self.edges.padding.right
+                + self.edges.border.left
+                + self.edges.border.right
+                + self.edges.margin.left
+                + self.edges.margin.right
+        }
     }
 
     fn edges_cross(&self, row: bool) -> f32 {
-        if row {
-            self.outer_cross() - self.used_cross
-        } else {
-            self.outer_main() - self.used_main
-        }
+        self.outer_cross(row) - self.used_cross
     }
 }
 
@@ -293,7 +309,7 @@ fn resolve_flexible_lengths(
     let Some(container_main) = container_main else {
         return;
     };
-    let mut used: f32 = line.iter().map(|index| items[*index].outer_main()).sum();
+    let mut used: f32 = line.iter().map(|index| items[*index].outer_main(row)).sum();
     used += gap * (line.len().saturating_sub(1) as f32);
     let free = container_main - used;
     if free > 0.0 {
@@ -491,7 +507,7 @@ pub(crate) fn layout_flex_children(
     let mut lines: Vec<Vec<usize>> = Vec::new();
     let mut current: Vec<usize> = Vec::new();
     let mut current_main = 0.0_f32;
-    let outer_mains: Vec<f32> = items.iter().map(|item| item.outer_main()).collect();
+    let outer_mains: Vec<f32> = items.iter().map(|item| item.outer_main(row)).collect();
     for (index, item_outer) in outer_mains.iter().enumerate() {
         let item_outer = *item_outer;
         let needed = if current.is_empty() {
@@ -539,7 +555,7 @@ pub(crate) fn layout_flex_children(
     for line in &lines {
         let measured = line
             .iter()
-            .map(|index| items[*index].outer_cross())
+            .map(|index| items[*index].outer_cross(row))
             .fold(0.0_f32, f32::max);
         let cross_limit = if row {
             definite_height
@@ -612,7 +628,7 @@ pub(crate) fn layout_flex_children(
                 set_cross(items[*index].child, row, target);
             }
             items[*index].cross_offset =
-                cross_offset(align, cross_size, items[*index].outer_cross());
+                cross_offset(align, cross_size, items[*index].outer_cross(row));
         }
         if let Some(max_baseline) = max_baseline {
             for (index, baseline) in baselines {
@@ -622,7 +638,7 @@ pub(crate) fn layout_flex_children(
         // Justify: used main length after flexible lengths.
         let used_main: f32 = line
             .iter()
-            .map(|index| items[*index].outer_main())
+            .map(|index| items[*index].outer_main(row))
             .sum::<f32>()
             + main_gap * (line.len().saturating_sub(1) as f32);
         let (leading, effective_gap) = justify_offsets(
@@ -635,13 +651,13 @@ pub(crate) fn layout_flex_children(
         let mut position = leading;
         for index in line {
             items[*index].main_offset = position;
-            position += items[*index].outer_main() + effective_gap;
+            position += items[*index].outer_main(row) + effective_gap;
         }
     }
 
     // Pre-compute total height for column-reverse with auto height.
     let total_column_height = if !row && reverse && content.height <= 0.0 {
-        items.iter().map(|i| i.outer_main()).sum::<f32>()
+        items.iter().map(|i| i.outer_main(row)).sum::<f32>()
             + main_gap * (items.len().saturating_sub(1) as f32)
     } else {
         content.height
@@ -658,14 +674,14 @@ pub(crate) fn layout_flex_children(
             };
             let (margin_main, margin_cross) = if row {
                 let main_origin = if reverse {
-                    content.x + content.width - item.main_offset - item.outer_main()
+                    content.x + content.width - item.main_offset - item.outer_main(row)
                 } else {
                     content.x + item.main_offset
                 };
                 (main_origin, cross_origin + item.cross_offset)
             } else {
                 let main_origin = if reverse {
-                    content.y + total_column_height - item.main_offset - item.outer_main()
+                    content.y + total_column_height - item.main_offset - item.outer_main(row)
                 } else {
                     content.y + item.main_offset
                 };
@@ -715,7 +731,7 @@ pub(crate) fn layout_flex_children(
             line_cross.iter().sum::<f32>() + line_gap * (line_cross.len().saturating_sub(1) as f32);
         definite_height.unwrap_or(total)
     } else {
-        let total: f32 = items.iter().map(|item| item.outer_main()).sum::<f32>()
+        let total: f32 = items.iter().map(|item| item.outer_main(row)).sum::<f32>()
             + main_gap * (items.len().saturating_sub(1) as f32);
         definite_height.unwrap_or(total)
     };
@@ -783,8 +799,20 @@ fn layout_item_at(
         child.dimensions.content.height = item.used_cross.max(0.0);
     } else {
         item.used_cross = child.dimensions.content.width;
-        // `layout_box_contents` recomputed the item's height from its content; the
-        // column main size is authoritative, so restore it (overflow is visible).
+        let auto_column_height = matches!(item.style.flex_basis, Length::Auto)
+            && matches!(item.style.height, Length::Auto)
+            && item.style.calc_lengths.height.is_none()
+            && (definite_height.is_none() || item.flex_grow == 0.0);
+        if auto_column_height {
+            item.used_main = clamp_main(
+                &item.style,
+                child.dimensions.content.height,
+                false,
+                container_width,
+            );
+        }
+        // `layout_box_contents` recomputed the item's height from its content; when the
+        // column main size is definite or flexed, it is authoritative.
         child.dimensions.content.height = item.used_main.max(0.0);
     }
     item.baseline_from_margin_top = first_line_baseline(child).map(|baseline| {

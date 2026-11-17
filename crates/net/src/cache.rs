@@ -225,10 +225,17 @@ pub fn parse_http_date(value: &str) -> Option<SystemTime> {
     if !zone.eq_ignore_ascii_case("GMT") {
         return None;
     }
+    // Reject trailing garbage (strict IMF-fixdate).
+    if parts.next().is_some() {
+        return None;
+    }
     let mut clock = time.split(':');
     let hour: u32 = clock.next()?.parse().ok()?;
     let minute: u32 = clock.next()?.parse().ok()?;
     let second: u32 = clock.next()?.parse().ok()?;
+    if clock.next().is_some() {
+        return None;
+    }
     if !(1..=31).contains(&day)
         || day > days_in_month(year, month)?
         || hour > 23
@@ -243,9 +250,10 @@ pub fn parse_http_date(value: &str) -> Option<SystemTime> {
         // explicit freshness, which is the behaviour this parser has always had.
         return None;
     }
-    let seconds = u64::try_from(days).ok()?.checked_mul(86_400)?.checked_add(
-        u64::from(hour) * 3_600 + u64::from(minute) * 60 + u64::from(second.min(59)),
-    )?;
+    let seconds = u64::try_from(days)
+        .ok()?
+        .checked_mul(86_400)?
+        .checked_add(u64::from(hour) * 3_600 + u64::from(minute) * 60 + u64::from(second))?;
     UNIX_EPOCH.checked_add(Duration::from_secs(seconds))
 }
 

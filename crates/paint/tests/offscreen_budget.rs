@@ -111,3 +111,64 @@ fn flatten_mode_keeps_embedded_opacity_content() {
         "the flattened group dropped its embedded opacity content"
     );
 }
+
+#[test]
+fn deeply_nested_opacity_and_effect_groups_stay_bounded() {
+    // #669: every nested EffectGroup/OpacityGroup allocates its own offscreen and the parents
+    // stay alive, so without a budget a few hundred full-canvas groups become a memory DoS.
+    // The budget caps each buffer, the live total and the nesting depth; past the depth cap
+    // the contents are painted flat instead of recursing.
+    let rect = Rect::new(0.0, 0.0, 64.0, 64.0);
+    let depth = 300;
+    // Each OpacityGroup is a container item, so build the nesting from the inside out.
+    let mut nested = DisplayItem::SolidColor {
+        rect,
+        color: Color::new(0, 0, 255, 255),
+    };
+    for _ in 0..depth {
+        nested = DisplayItem::OpacityGroup {
+            rect,
+            opacity: 0.98,
+            items: vec![nested],
+        };
+    }
+    let pixmap = rasterize_display_list(
+        &DisplayList {
+            items: vec![nested],
+        },
+        64,
+        64,
+    );
+    let pixel = pixmap.pixels[32 * 64 + 32];
+    assert!(
+        pixel.b > 0,
+        "the deeply nested content must still paint (flattened past the depth cap)"
+    );
+
+    // Effect groups go through the same budget: 300 nested `blur(0px)` groups must not
+    // exhaust memory and must terminate.
+    let filters = vec![css::FilterFunction::Blur(0.0)];
+    let mut nested_effect = DisplayItem::SolidColor {
+        rect,
+        color: Color::new(0, 255, 0, 255),
+    };
+    for _ in 0..depth {
+        nested_effect = DisplayItem::EffectGroup {
+            rect,
+            filters: filters.clone(),
+            blend: css::MixBlendMode::Normal,
+            items: vec![nested_effect],
+        };
+    }
+    let pixmap = rasterize_display_list(
+        &DisplayList {
+            items: vec![nested_effect],
+        },
+        64,
+        64,
+    );
+    assert!(
+        pixmap.pixels[32 * 64 + 32].g > 0,
+        "nested effect groups must still paint their content"
+    );
+}

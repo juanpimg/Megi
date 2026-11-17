@@ -1,18 +1,18 @@
 # Megi Web Engine 🌐
 
-[![Rust](https://img.shields.io/badge/Rust-Edition%202024%20(MSRV%201.88%2B)-orange.svg?logo=rust)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Rust-Edition%202024%20(MSRV%201.91%2B)-orange.svg?logo=rust)](https://www.rust-lang.org/)
 [![CI](https://github.com/juanpimg/Megi/actions/workflows/ci.yml/badge.svg)](https://github.com/juanpimg/Megi/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 [![Tests](docs/status/badge-tests.svg)](PROGRESS.md)
 [![Fuzz nightly](https://github.com/juanpimg/Megi/actions/workflows/fuzz-nightly.yml/badge.svg)](https://github.com/juanpimg/Megi/actions/workflows/fuzz-nightly.yml)
 [![Clippy](https://img.shields.io/badge/Clippy-0%20warnings%20%28--D%20warnings%29-brightgreen.svg)]()
-[![HTML5 Conformance](https://img.shields.io/badge/HTML5-100%25%20conformance-success.svg)](PROGRESS.md)
+[![HTML5 gate](https://img.shields.io/badge/HTML5%20gate-100%25%20(4%20suites)-success.svg)](PROGRESS.md)
 
 > **Megi** es un motor de navegación web moderno, open source e independiente desarrollado desde cero en **Rust** (Edición 2024), sin bifurcar (*fork*) Blink, WebKit ni Gecko. Su diseño se rige estrictamente por las especificaciones formales vivas de **WHATWG** y **W3C**, con verificación continua en bucle cerrado (*closed-loop testing*) contra **Web Platform Tests (WPT)** y **`html5lib-tests`**.
 
 ---
 
-## 🖼️ Megi Browser Shell
+## Megi Browser Shell
 
 ![Megi Desktop Browser Showcase](docs/images/showcase.png)
 *Navegador interactivo Megi (`crates/shell`): chrome nativo con barra de navegación, pestañas, motor tipográfico y renderizado determinista de HTML/CSS de extremo a extremo. Para más ejemplos y capturas de renderizado, consulta la [Galería de Renders](docs/SHOWCASE.md).*
@@ -21,33 +21,35 @@
 
 ## 📈 Estado del Proyecto
 
-[![Tests](docs/status/badge-tests.svg)](PROGRESS.md) [![Conformance](docs/status/badge-conformance.svg)](PROGRESS.md) [![Crates](docs/status/badge-crates.svg)](PROGRESS.md) [![unsafe](docs/status/badge-unsafe.svg)](PROGRESS.md)
+[![Tests](docs/status/badge-tests.svg)](PROGRESS.md) [![Conformance](docs/status/badge-conformance.svg)](PROGRESS.md) [![coverage](docs/status/badge-coverage.svg)](docs/status/coverage.html) [![Crates](docs/status/badge-crates.svg)](PROGRESS.md) [![unsafe](docs/status/badge-unsafe.svg)](PROGRESS.md)
 
-[![Progress map](docs/status/progress.svg)](PROGRESS.md)
+[![Capability coverage](docs/status/coverage.svg)](docs/status/coverage.html) · [Progress map (checklist histórico)](docs/status/progress.svg)
 
-**Overall 99 %** · **2.243 tests** (0 fallos) · conformidad **PASS** (100 %) · **14 crates** · **168.585 líneas de Rust** · **12/14** crates con `#![forbid(unsafe_code)]`.
+**Pre-Alpha `v0.1.0`** · cobertura de capacidades verificable: ver **[`PROGRESS.md`](PROGRESS.md)** y **[`coverage.html`](docs/status/coverage.html)** · **2.300+ tests** (0 fallos) · gate de conformidad **PASS** (4 suites) · **14 crates** · **171.000+ líneas de Rust** · **14/14** crates con `#![forbid(unsafe_code)]`.
 
-> Las métricas se actualizan automáticamente en **[`PROGRESS.md`](PROGRESS.md)** mediante herramientas de medición continua. Para consultar el historial de optimizaciones y micro-hitos, revisa el **[`CHANGELOG.md`](CHANGELOG.md)**.
+> **Estado Pre-Alpha (`v0.1.0`)**: Megi ya es compilable y ejecutable como navegador de escritorio (`megi`) y pipeline CLI (`render`), con HTML5, CSS3 (Flexbox/Grid/Container Queries/Layers/bidi), JS (Boa 0.22 + ES modules + `fetch`), SVG/SMIL e imágenes (PNG/JPEG/GIF/WebP). Aún en fase Pre-Alpha: animaciones CSS `@keyframes`/`transition` en runtime, shaping de scripts complejos (árabe/hebreo/tailandés/CJK) y aislamiento multiproceso por pestaña llegarán en la fase Alpha.
+> El porcentaje del antiguo mapa de fases era un promedio de estimaciones y **no** indicaba si el navegador es usable. Ahora el titular es `capacidades implementadas / conocidas`, con evidencia verificable y la lista de pendientes en **[`coverage.html`](docs/status/coverage.html)** (reglas en [`COVERAGE.md`](docs/status/COVERAGE.md)). El aspecto real en webs se comprueba con [`real_site_check.py`](tools/real_site_check.py) y se publica en **[`real-sites.html`](docs/status/real-sites.html)** (capturas y avisos reales de `render`).
+> Las métricas exactas se actualizan automáticamente en **[`PROGRESS.md`](PROGRESS.md)**. Para consultar el historial de versiones, revisa el **[`CHANGELOG.md`](CHANGELOG.md)**.
 
 ---
 
-## ✨ Características Principales
+##  Características Principales
 
-- 🎯 **Conformidad Estricta con Estándares**:
+-  **Conformidad Estricta con Estándares**:
   - **HTML5 100 %**: Tokenizador (7.050/7.050), árbol DOM (3.904/3.904) y serializador (230/230) verificados contra `html5lib-tests`.
   - **CSS Syntax & Selectors**: CSS Syntax WPT (30/30), Selectors L4 con poda por filtros Bloom de ancestros, Cascade Layers (`@layer`) y Container Queries (`@container`).
-- ⚡ **Rendimiento y Ligereza**:
+-  **Rendimiento y Ligereza**:
   - Arena DOM contigua con identificadores `NodeId` generacionales (4 bytes) y resolución de ciclo seguro.
   - Motor de rasterizado CPU optimizado y codificador/decodificador PNG propio con compresión adaptativa.
   - Pipeline de render determinista de bajo consumo de memoria.
-- 🌐 **Red y Protocolos Modernos (`crates/net`)**:
-  - Soporte completo HTTP/1.1 y HTTP/2 multiplexado con control de flujo por ventana y priorización de push.
+-  **Red y Protocolos Modernos (`crates/net`)**:
+  - Soporte completo HTTP/1.0/1.1 y HTTP/2 multiplexado con control de flujo por ventana y priorización de push.
   - Cifrado seguro con TLS 1.2/1.3 en Rust puro (`rustls` + `webpki-roots`).
-  - Caché HTTP (RFC 9111), gestión de Cookies (RFC 6265) y soporte para proxies HTTP/HTTPS.
-- 🧠 **Ejecución de JavaScript (`crates/js`)**:
-  - Integración nativa con el motor ECMAScript **Boa 0.21.x**.
+  - Caché HTTP (RFC 9111), gestión de Cookies (RFC 6265), CORS, Referrer-Policy, Range y soporte para proxies HTTP/HTTPS/SOCKS5/PAC.
+-  **Ejecución de JavaScript (`crates/js`)**:
+  - Integración nativa con el motor ECMAScript **Boa 0.22**.
   - Bindings completos para manipulación del DOM, eventos, temporizadores y Web Workers cooperativos.
-- 🖥️ **Shell de Escritorio Usable (`crates/shell`)**:
+-  **Shell de Escritorio Usable (`crates/shell`)**:
   - Ventana interactiva nativa (X11/Wayland vía `winit`), soporte para múltiples pestañas, zoom dinámico, historial navegable y modo screenshot *headless* para CI.
 
 ---
@@ -58,7 +60,7 @@
 
 ### Requisitos
 
-- **Rust**: Edición 2024 (MSRV 1.88 o superior).
+- **Rust**: Edición 2024 (MSRV 1.91 o superior; lo exige `boa_engine` 0.22).
 - *(Opcional para ventana gráfica)*: Servidor gráfico X11 o Wayland en Linux (ver dependencias en la guía).
 
 ### 1. Compilar y Ejecutar el Navegador
@@ -93,7 +95,7 @@ cargo run --release -p render -- tests/fixtures/render/basic.html /tmp/render.pn
 
 ---
 
-## 🏗️ Arquitectura del Workspace
+##  Arquitectura del Workspace
 
 El proyecto está diseñado como un Grafo Acíclico Dirigido (DAG) desacoplado en 14 crates especializados:
 
@@ -136,15 +138,15 @@ graph TD
 
 ## 📖 Documentación
 
-- 🏛️ [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Arquitectura detallada, modelo de memoria del DOM y política de dependencias.
-- 🖼️ [`docs/SHOWCASE.md`](docs/SHOWCASE.md): Galería de capturas, fixtures y pruebas visuales de render.
-- 🗺️ [`docs/ROADMAP.md`](docs/ROADMAP.md): Plan de fases (`WP-*`) y estado del desarrollo a largo plazo.
-- 📈 [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md): Metodología de benchmarks y mediciones de rendimiento.
-- 🛡️ [`docs/FUZZING.md`](docs/FUZZING.md): Targets de fuzzing continuo y política de triaje de fallos.
-- 🔐 [`SECURITY.md`](SECURITY.md): Modelo de seguridad de memoria, límites anti-DoS y políticas de reporte.
-- 🤝 [`CONTRIBUTING.md`](CONTRIBUTING.md): Guía de contribución, convenciones de código y workflows de CI.
-- 📝 [`CHANGELOG.md`](CHANGELOG.md): Registro histórico de versiones, hitos y optimizaciones por ronda.
-- 🏆 [`docs/MILESTONES.md`](docs/MILESTONES.md): Histórico exhaustivo de micro-hitos, benchmarks y optimizaciones (rondas 1–32).
+-  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Arquitectura detallada, modelo de memoria del DOM y política de dependencias.
+-  [`docs/SHOWCASE.md`](docs/SHOWCASE.md): Galería de capturas, fixtures y pruebas visuales de render.
+-  [`docs/ROADMAP.md`](docs/ROADMAP.md): Plan de fases (`WP-*`) y estado del desarrollo a largo plazo.
+-  [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md): Metodología de benchmarks y mediciones de rendimiento.
+-  [`docs/FUZZING.md`](docs/FUZZING.md): Targets de fuzzing continuo y política de triaje de fallos.
+-  [`SECURITY.md`](SECURITY.md): Modelo de seguridad de memoria, límites anti-DoS y políticas de reporte.
+-  [`CONTRIBUTING.md`](CONTRIBUTING.md): Guía de contribución, convenciones de código y workflows de CI.
+-  [`CHANGELOG.md`](CHANGELOG.md): Registro histórico de versiones, hitos y optimizaciones por ronda.
+-  [`docs/MILESTONES.md`](docs/MILESTONES.md): Histórico exhaustivo de micro-hitos, benchmarks y optimizaciones (rondas 1–32).
 
 ---
 

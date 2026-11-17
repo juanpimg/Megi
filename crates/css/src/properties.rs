@@ -192,23 +192,159 @@ impl Color {
 
     fn from_named(name: &str) -> Option<Self> {
         match name.to_ascii_lowercase().as_str() {
-            "transparent" => Some(Self::TRANSPARENT),
-            "black" => Some(Self::BLACK),
-            "white" => Some(Self::WHITE),
-            "red" => Some(Self::RED),
-            "green" => Some(Self::GREEN),
-            "blue" => Some(Self::BLUE),
-            "yellow" => Some(Self::new(255, 255, 0, 255)),
-            "cyan" | "aqua" => Some(Self::new(0, 255, 255, 255)),
-            "magenta" | "fuchsia" => Some(Self::new(255, 0, 255, 255)),
-            "gray" | "grey" => Some(Self::new(128, 128, 128, 255)),
-            "silver" => Some(Self::new(192, 192, 192, 255)),
+            "aliceblue" => Some(Self::new(240, 248, 255, 255)),
+            "antiquewhite" => Some(Self::new(250, 235, 215, 255)),
+            "aqua" => Some(Self::new(0, 255, 255, 255)),
+            "aquamarine" => Some(Self::new(127, 255, 212, 255)),
+            "azure" => Some(Self::new(240, 255, 255, 255)),
+            "beige" => Some(Self::new(245, 245, 220, 255)),
+            "bisque" => Some(Self::new(255, 228, 196, 255)),
+            "black" => Some(Self::new(0, 0, 0, 255)),
+            "blanchedalmond" => Some(Self::new(255, 235, 205, 255)),
+            "blue" => Some(Self::new(0, 0, 255, 255)),
+            "blueviolet" => Some(Self::new(138, 43, 226, 255)),
+            "brown" => Some(Self::new(165, 42, 42, 255)),
+            "burlywood" => Some(Self::new(222, 184, 135, 255)),
+            "cadetblue" => Some(Self::new(95, 158, 160, 255)),
+            "chartreuse" => Some(Self::new(127, 255, 0, 255)),
+            "chocolate" => Some(Self::new(210, 105, 30, 255)),
+            "coral" => Some(Self::new(255, 127, 80, 255)),
+            "cornflowerblue" => Some(Self::new(100, 149, 237, 255)),
+            "cornsilk" => Some(Self::new(255, 248, 220, 255)),
+            "crimson" => Some(Self::new(220, 20, 60, 255)),
+            "cyan" => Some(Self::new(0, 255, 255, 255)),
+            "darkblue" => Some(Self::new(0, 0, 139, 255)),
+            "darkcyan" => Some(Self::new(0, 139, 139, 255)),
+            "darkgoldenrod" => Some(Self::new(184, 134, 11, 255)),
+            "darkgray" => Some(Self::new(169, 169, 169, 255)),
+            "darkgreen" => Some(Self::new(0, 100, 0, 255)),
+            "darkgrey" => Some(Self::new(169, 169, 169, 255)),
+            "darkkhaki" => Some(Self::new(189, 183, 107, 255)),
+            "darkmagenta" => Some(Self::new(139, 0, 139, 255)),
+            "darkolivegreen" => Some(Self::new(85, 107, 47, 255)),
+            "darkorange" => Some(Self::new(255, 140, 0, 255)),
+            "darkorchid" => Some(Self::new(153, 50, 204, 255)),
+            "darkred" => Some(Self::new(139, 0, 0, 255)),
+            "darksalmon" => Some(Self::new(233, 150, 122, 255)),
+            "darkseagreen" => Some(Self::new(143, 188, 143, 255)),
+            "darkslateblue" => Some(Self::new(72, 61, 139, 255)),
+            "darkslategray" => Some(Self::new(47, 79, 79, 255)),
+            "darkslategrey" => Some(Self::new(47, 79, 79, 255)),
+            "darkturquoise" => Some(Self::new(0, 206, 209, 255)),
+            "darkviolet" => Some(Self::new(148, 0, 211, 255)),
+            "deeppink" => Some(Self::new(255, 20, 147, 255)),
+            "deepskyblue" => Some(Self::new(0, 191, 255, 255)),
+            "dimgray" => Some(Self::new(105, 105, 105, 255)),
+            "dimgrey" => Some(Self::new(105, 105, 105, 255)),
+            "dodgerblue" => Some(Self::new(30, 144, 255, 255)),
+            "firebrick" => Some(Self::new(178, 34, 34, 255)),
+            "floralwhite" => Some(Self::new(255, 250, 240, 255)),
+            "forestgreen" => Some(Self::new(34, 139, 34, 255)),
+            "fuchsia" => Some(Self::new(255, 0, 255, 255)),
+            "gainsboro" => Some(Self::new(220, 220, 220, 255)),
+            "ghostwhite" => Some(Self::new(248, 248, 255, 255)),
+            "gold" => Some(Self::new(255, 215, 0, 255)),
+            "goldenrod" => Some(Self::new(218, 165, 32, 255)),
+            "gray" => Some(Self::new(128, 128, 128, 255)),
+            "green" => Some(Self::new(0, 128, 0, 255)),
+            "greenyellow" => Some(Self::new(173, 255, 47, 255)),
+            "grey" => Some(Self::new(128, 128, 128, 255)),
+            "honeydew" => Some(Self::new(240, 255, 240, 255)),
+            "hotpink" => Some(Self::new(255, 105, 180, 255)),
+            "indianred" => Some(Self::new(205, 92, 92, 255)),
+            "indigo" => Some(Self::new(75, 0, 130, 255)),
+            "ivory" => Some(Self::new(255, 255, 240, 255)),
+            "khaki" => Some(Self::new(240, 230, 140, 255)),
+            "lavender" => Some(Self::new(230, 230, 250, 255)),
+            "lavenderblush" => Some(Self::new(255, 240, 245, 255)),
+            "lawngreen" => Some(Self::new(124, 252, 0, 255)),
+            "lemonchiffon" => Some(Self::new(255, 250, 205, 255)),
+            "lightblue" => Some(Self::new(173, 216, 230, 255)),
+            "lightcoral" => Some(Self::new(240, 128, 128, 255)),
+            "lightcyan" => Some(Self::new(224, 255, 255, 255)),
+            "lightgoldenrodyellow" => Some(Self::new(250, 250, 210, 255)),
+            "lightgray" => Some(Self::new(211, 211, 211, 255)),
+            "lightgreen" => Some(Self::new(144, 238, 144, 255)),
+            "lightgrey" => Some(Self::new(211, 211, 211, 255)),
+            "lightpink" => Some(Self::new(255, 182, 193, 255)),
+            "lightsalmon" => Some(Self::new(255, 160, 122, 255)),
+            "lightseagreen" => Some(Self::new(32, 178, 170, 255)),
+            "lightskyblue" => Some(Self::new(135, 206, 250, 255)),
+            "lightslategray" => Some(Self::new(119, 136, 153, 255)),
+            "lightslategrey" => Some(Self::new(119, 136, 153, 255)),
+            "lightsteelblue" => Some(Self::new(176, 196, 222, 255)),
+            "lightyellow" => Some(Self::new(255, 255, 224, 255)),
+            "lime" => Some(Self::new(0, 255, 0, 255)),
+            "limegreen" => Some(Self::new(50, 205, 50, 255)),
+            "linen" => Some(Self::new(250, 240, 230, 255)),
+            "magenta" => Some(Self::new(255, 0, 255, 255)),
             "maroon" => Some(Self::new(128, 0, 0, 255)),
-            "purple" => Some(Self::new(128, 0, 128, 255)),
+            "mediumaquamarine" => Some(Self::new(102, 205, 170, 255)),
+            "mediumblue" => Some(Self::new(0, 0, 205, 255)),
+            "mediumorchid" => Some(Self::new(186, 85, 211, 255)),
+            "mediumpurple" => Some(Self::new(147, 112, 219, 255)),
+            "mediumseagreen" => Some(Self::new(60, 179, 113, 255)),
+            "mediumslateblue" => Some(Self::new(123, 104, 238, 255)),
+            "mediumspringgreen" => Some(Self::new(0, 250, 154, 255)),
+            "mediumturquoise" => Some(Self::new(72, 209, 204, 255)),
+            "mediumvioletred" => Some(Self::new(199, 21, 133, 255)),
+            "midnightblue" => Some(Self::new(25, 25, 112, 255)),
+            "mintcream" => Some(Self::new(245, 255, 250, 255)),
+            "mistyrose" => Some(Self::new(255, 228, 225, 255)),
+            "moccasin" => Some(Self::new(255, 228, 181, 255)),
+            "navajowhite" => Some(Self::new(255, 222, 173, 255)),
             "navy" => Some(Self::new(0, 0, 128, 255)),
-            "teal" => Some(Self::new(0, 128, 128, 255)),
+            "oldlace" => Some(Self::new(253, 245, 230, 255)),
             "olive" => Some(Self::new(128, 128, 0, 255)),
+            "olivedrab" => Some(Self::new(107, 142, 35, 255)),
             "orange" => Some(Self::new(255, 165, 0, 255)),
+            "orangered" => Some(Self::new(255, 69, 0, 255)),
+            "orchid" => Some(Self::new(218, 112, 214, 255)),
+            "palegoldenrod" => Some(Self::new(238, 232, 170, 255)),
+            "palegreen" => Some(Self::new(152, 251, 152, 255)),
+            "paleturquoise" => Some(Self::new(175, 238, 238, 255)),
+            "palevioletred" => Some(Self::new(219, 112, 147, 255)),
+            "papayawhip" => Some(Self::new(255, 239, 213, 255)),
+            "peachpuff" => Some(Self::new(255, 218, 185, 255)),
+            "peru" => Some(Self::new(205, 133, 63, 255)),
+            "pink" => Some(Self::new(255, 192, 203, 255)),
+            "plum" => Some(Self::new(221, 160, 221, 255)),
+            "powderblue" => Some(Self::new(176, 224, 230, 255)),
+            "purple" => Some(Self::new(128, 0, 128, 255)),
+            "rebeccapurple" => Some(Self::new(102, 51, 153, 255)),
+            "red" => Some(Self::new(255, 0, 0, 255)),
+            "rosybrown" => Some(Self::new(188, 143, 143, 255)),
+            "royalblue" => Some(Self::new(65, 105, 225, 255)),
+            "saddlebrown" => Some(Self::new(139, 69, 19, 255)),
+            "salmon" => Some(Self::new(250, 128, 114, 255)),
+            "sandybrown" => Some(Self::new(244, 164, 96, 255)),
+            "seagreen" => Some(Self::new(46, 139, 87, 255)),
+            "seashell" => Some(Self::new(255, 245, 238, 255)),
+            "sienna" => Some(Self::new(160, 82, 45, 255)),
+            "silver" => Some(Self::new(192, 192, 192, 255)),
+            "skyblue" => Some(Self::new(135, 206, 235, 255)),
+            "slateblue" => Some(Self::new(106, 90, 205, 255)),
+            "slategray" => Some(Self::new(112, 128, 144, 255)),
+            "slategrey" => Some(Self::new(112, 128, 144, 255)),
+            "snow" => Some(Self::new(255, 250, 250, 255)),
+            "springgreen" => Some(Self::new(0, 255, 127, 255)),
+            "steelblue" => Some(Self::new(70, 130, 180, 255)),
+            "tan" => Some(Self::new(210, 180, 140, 255)),
+            "teal" => Some(Self::new(0, 128, 128, 255)),
+            "thistle" => Some(Self::new(216, 191, 216, 255)),
+            "tomato" => Some(Self::new(255, 99, 71, 255)),
+            "turquoise" => Some(Self::new(64, 224, 208, 255)),
+            "violet" => Some(Self::new(238, 130, 238, 255)),
+            "webgray" => Some(Self::new(128, 128, 128, 255)),
+            "webgreen" => Some(Self::new(0, 128, 0, 255)),
+            "webmaroon" => Some(Self::new(128, 0, 0, 255)),
+            "webpurple" => Some(Self::new(128, 0, 128, 255)),
+            "wheat" => Some(Self::new(245, 222, 179, 255)),
+            "white" => Some(Self::new(255, 255, 255, 255)),
+            "whitesmoke" => Some(Self::new(240, 240, 240, 255)),
+            "yellow" => Some(Self::new(255, 255, 0, 255)),
+            "yellowgreen" => Some(Self::new(154, 205, 50, 255)),
+            "transparent" => Some(Self::TRANSPARENT),
             _ => None,
         }
     }
@@ -528,11 +664,67 @@ pub enum TextAlign {
 
 impl TextAlign {
     pub fn parse(s: &str) -> Option<Self> {
+        Self::parse_for_direction(s, Direction::Ltr)
+    }
+
+    pub fn parse_for_direction(s: &str, direction: Direction) -> Option<Self> {
         match s.trim().to_ascii_lowercase().as_str() {
-            "left" | "start" => Some(Self::Left),
-            "right" | "end" => Some(Self::Right),
+            "left" => Some(Self::Left),
+            "right" => Some(Self::Right),
+            "start" => Some(match direction {
+                Direction::Ltr => Self::Left,
+                Direction::Rtl => Self::Right,
+            }),
+            "end" => Some(match direction {
+                Direction::Ltr => Self::Right,
+                Direction::Rtl => Self::Left,
+            }),
             "center" => Some(Self::Center),
             "justify" => Some(Self::Justify),
+            _ => None,
+        }
+    }
+}
+
+/// CSS `direction` property (CSS Writing Modes §2.1, inherited).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Direction {
+    #[default]
+    Ltr,
+    Rtl,
+}
+
+impl Direction {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "ltr" => Some(Self::Ltr),
+            "rtl" => Some(Self::Rtl),
+            _ => None,
+        }
+    }
+}
+
+/// CSS `unicode-bidi` property (CSS Writing Modes §2.2, not inherited).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum UnicodeBidi {
+    #[default]
+    Normal,
+    Embed,
+    BidiOverride,
+    Isolate,
+    IsolateOverride,
+    Plaintext,
+}
+
+impl UnicodeBidi {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "normal" => Some(Self::Normal),
+            "embed" => Some(Self::Embed),
+            "bidi-override" => Some(Self::BidiOverride),
+            "isolate" => Some(Self::Isolate),
+            "isolate-override" => Some(Self::IsolateOverride),
+            "plaintext" => Some(Self::Plaintext),
             _ => None,
         }
     }
@@ -798,8 +990,15 @@ impl VerticalAlign {
             "text-bottom" => Some(Self::TextBottom),
             other => {
                 if let Some(val) = other.strip_suffix("px") {
-                    val.trim().parse::<f32>().ok().map(Self::Length)
+                    let val: f32 = val.trim().parse().ok()?;
+                    if !val.is_finite() {
+                        return None;
+                    }
+                    Some(Self::Length(val))
                 } else if let Ok(val) = other.parse::<f32>() {
+                    if !val.is_finite() {
+                        return None;
+                    }
                     Some(Self::Length(val))
                 } else {
                     None
@@ -1934,6 +2133,8 @@ pub struct ComputedStyle {
     /// required by CSS 2.2 §10.8.1 when a numeric `line-height` is inherited.
     pub line_height_factor: Option<f32>,
     pub text_align: TextAlign,
+    pub direction: Direction,
+    pub unicode_bidi: UnicodeBidi,
     pub white_space: WhiteSpace,
     pub vertical_align: VerticalAlign,
     pub text_decoration: TextDecoration,
@@ -2085,6 +2286,8 @@ impl ComputedStyle {
             line_height: None,
             line_height_factor: None,
             text_align: TextAlign::Left,
+            direction: Direction::Ltr,
+            unicode_bidi: UnicodeBidi::Normal,
             white_space: WhiteSpace::Normal,
             vertical_align: VerticalAlign::Baseline,
             text_decoration: TextDecoration::NONE,
@@ -2143,6 +2346,8 @@ impl ComputedStyle {
         mix(&mut hash, self.box_sizing as u64);
         mix(&mut hash, self.overflow as u64);
         mix(&mut hash, self.visibility as u64);
+        mix(&mut hash, self.direction as u64);
+        mix(&mut hash, self.unicode_bidi as u64);
         mix_len(&mut hash, self.width);
         mix_len(&mut hash, self.height);
         mix_len(&mut hash, self.min_width);
@@ -2328,11 +2533,47 @@ impl ComputedStyle {
             parent.map_or_else(|| "sans-serif".to_string(), |p| p.font_family.clone())
         };
 
-        let text_align = if let Some(decl) = find_declaration(&entries, "text-align") {
-            TextAlign::parse(&decl.raw_value)
-                .unwrap_or_else(|| parent.map_or(TextAlign::Left, |p| p.text_align))
+        let direction = if let Some(decl) = find_declaration(&entries, "direction") {
+            Direction::parse(&decl.raw_value)
+                .unwrap_or_else(|| parent.map_or(Direction::Ltr, |p| p.direction))
         } else {
-            parent.map_or(TextAlign::Left, |p| p.text_align)
+            parent.map_or(Direction::Ltr, |p| p.direction)
+        };
+
+        let unicode_bidi = if let Some(decl) = find_declaration(&entries, "unicode-bidi") {
+            UnicodeBidi::parse(&decl.raw_value).unwrap_or(UnicodeBidi::Normal)
+        } else {
+            UnicodeBidi::Normal
+        };
+
+        let default_align = match direction {
+            Direction::Ltr => TextAlign::Left,
+            Direction::Rtl => TextAlign::Right,
+        };
+        let text_align = if let Some(decl) = find_declaration(&entries, "text-align") {
+            TextAlign::parse_for_direction(&decl.raw_value, direction).unwrap_or_else(|| {
+                parent.map_or(default_align, |p| {
+                    if p.direction != direction
+                        && ((p.direction == Direction::Ltr && p.text_align == TextAlign::Left)
+                            || (p.direction == Direction::Rtl && p.text_align == TextAlign::Right))
+                    {
+                        default_align
+                    } else {
+                        p.text_align
+                    }
+                })
+            })
+        } else {
+            parent.map_or(default_align, |p| {
+                if p.direction != direction
+                    && ((p.direction == Direction::Ltr && p.text_align == TextAlign::Left)
+                        || (p.direction == Direction::Rtl && p.text_align == TextAlign::Right))
+                {
+                    default_align
+                } else {
+                    p.text_align
+                }
+            })
         };
 
         let (line_height, line_height_factor) =
@@ -2660,6 +2901,8 @@ impl ComputedStyle {
             line_height,
             line_height_factor,
             text_align,
+            direction,
+            unicode_bidi,
             white_space,
             vertical_align,
             text_decoration,
@@ -2944,12 +3187,12 @@ impl ComputedStyle {
             }
         }
         let box_shadows = find_declaration(entries, "box-shadow")
-            .map(|decl| {
+            .and_then(|decl| {
                 parse_box_shadows(&decl.raw_value, font_size, root_font_size, current_color)
             })
             .unwrap_or_default();
         let text_shadows = find_declaration(entries, "text-shadow")
-            .map(|decl| {
+            .and_then(|decl| {
                 parse_text_shadows(&decl.raw_value, font_size, root_font_size, current_color)
             })
             .unwrap_or_else(|| inherited_text_shadows.to_vec());
@@ -3354,102 +3597,242 @@ fn parse_shadow_length(value: &str, font_size: f32, root_font_size: f32) -> Opti
 }
 
 /// Parses `box-shadow` (`none` or a comma-separated list of shadows).
+///
+/// Per CSS Backgrounds 3 §6.1, if any comma-separated shadow layer is invalid (or if
+/// `none` is combined with other layers), the entire declaration is invalid and returns
+/// `None` (#383).
 fn parse_box_shadows(
     value: &str,
     font_size: f32,
     root_font_size: f32,
     current_color: Color,
-) -> Vec<BoxShadow> {
-    let lower = value.trim().to_ascii_lowercase();
-    if lower == "none" {
-        return Vec::new();
+) -> Option<Vec<BoxShadow>> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
     }
-    let mut shadows = Vec::new();
-    for layer in split_top_level_commas(value) {
-        let layer_lower = layer.trim().to_ascii_lowercase();
-        if layer_lower == "none" {
-            continue;
+    if trimmed.eq_ignore_ascii_case("none") {
+        return Some(Vec::new());
+    }
+    if trimmed.starts_with(',') || trimmed.ends_with(',') {
+        return None;
+    }
+    let raw_layers = split_top_level_commas_strict(trimmed)?;
+    let mut shadows = Vec::with_capacity(raw_layers.len().min(MAX_BOX_SHADOWS));
+    for layer in raw_layers {
+        if layer.eq_ignore_ascii_case("none") {
+            return None;
         }
         let mut inset = false;
+        let mut has_color = false;
         let mut color = None;
-        let mut lengths = Vec::with_capacity(4);
-        for component in split_components(&layer) {
-            let component_lower = component.trim().to_ascii_lowercase();
-            if component_lower == "inset" {
+        let mut lengths: Vec<f32> = Vec::with_capacity(4);
+        let mut in_lengths = false;
+        let mut lengths_done = false;
+        let components = split_components(&layer);
+        if components.is_empty() {
+            return None;
+        }
+        for component in components {
+            let component_trimmed = component.trim();
+            if component_trimmed.eq_ignore_ascii_case("inset") {
+                if inset {
+                    return None;
+                }
+                if in_lengths {
+                    lengths_done = true;
+                }
                 inset = true;
                 continue;
             }
-            if color.is_none()
-                && (Color::parse(&component).is_some()
-                    || component_lower.eq_ignore_ascii_case("currentcolor"))
+            if !has_color
+                && (Color::parse(component_trimmed).is_some()
+                    || component_trimmed.eq_ignore_ascii_case("currentcolor"))
             {
-                color = Color::parse(&component);
+                if in_lengths {
+                    lengths_done = true;
+                }
+                has_color = true;
+                color = Color::parse(component_trimmed);
                 continue;
             }
-            if lengths.len() < 4
-                && let Some(length) = parse_shadow_length(&component, font_size, root_font_size)
+            if !lengths_done
+                && lengths.len() < 4
+                && let Some(length) =
+                    parse_shadow_length(component_trimmed, font_size, root_font_size)
             {
+                in_lengths = true;
                 lengths.push(length);
+                continue;
             }
+            return None;
         }
         if lengths.len() < 2 {
-            continue;
+            return None;
         }
-        shadows.push(BoxShadow {
-            offset_x: lengths[0],
-            offset_y: lengths[1],
-            blur: lengths.get(2).copied().unwrap_or(0.0).max(0.0),
-            spread: lengths.get(3).copied().unwrap_or(0.0),
-            color: color.unwrap_or(current_color),
-            inset,
-        });
-        if shadows.len() >= MAX_BOX_SHADOWS {
-            break;
+        if let Some(&blur) = lengths.get(2)
+            && blur < 0.0
+        {
+            return None;
+        }
+        if shadows.len() < MAX_BOX_SHADOWS {
+            shadows.push(BoxShadow {
+                offset_x: lengths[0],
+                offset_y: lengths[1],
+                blur: lengths.get(2).copied().unwrap_or(0.0).max(0.0),
+                spread: lengths.get(3).copied().unwrap_or(0.0),
+                color: color.unwrap_or(current_color),
+                inset,
+            });
         }
     }
-    shadows
+    if shadows.is_empty() {
+        return None;
+    }
+    Some(shadows)
 }
 
 /// Parses `text-shadow` (`none` or a comma-separated list of shadows).
+///
+/// Per CSS Text Decoration 3 §4, if any layer is invalid or `none` is mixed in a list,
+/// the entire declaration is invalid and returns `None` (#383).
 fn parse_text_shadows(
     value: &str,
     font_size: f32,
     root_font_size: f32,
     current_color: Color,
-) -> Vec<TextShadow> {
-    let lower = value.trim().to_ascii_lowercase();
-    if lower == "none" {
-        return Vec::new();
+) -> Option<Vec<TextShadow>> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
     }
-    let mut shadows = Vec::new();
-    for layer in split_top_level_commas(value) {
+    if trimmed.eq_ignore_ascii_case("none") {
+        return Some(Vec::new());
+    }
+    if trimmed.starts_with(',') || trimmed.ends_with(',') {
+        return None;
+    }
+    let raw_layers = split_top_level_commas_strict(trimmed)?;
+    let mut shadows = Vec::with_capacity(raw_layers.len().min(MAX_TEXT_SHADOWS));
+    for layer in raw_layers {
+        if layer.eq_ignore_ascii_case("none") {
+            return None;
+        }
+        let mut has_color = false;
         let mut color = None;
-        let mut lengths = Vec::with_capacity(3);
-        for component in split_components(&layer) {
-            if color.is_none() && Color::parse(&component).is_some() {
-                color = Color::parse(&component);
+        let mut lengths: Vec<f32> = Vec::with_capacity(3);
+        let mut in_lengths = false;
+        let mut lengths_done = false;
+        let components = split_components(&layer);
+        if components.is_empty() {
+            return None;
+        }
+        for component in components {
+            let component_trimmed = component.trim();
+            if !has_color
+                && (Color::parse(component_trimmed).is_some()
+                    || component_trimmed.eq_ignore_ascii_case("currentcolor"))
+            {
+                if in_lengths {
+                    lengths_done = true;
+                }
+                has_color = true;
+                color = Color::parse(component_trimmed);
                 continue;
             }
-            if lengths.len() < 3
-                && let Some(length) = parse_shadow_length(&component, font_size, root_font_size)
+            if !lengths_done
+                && lengths.len() < 3
+                && let Some(length) =
+                    parse_shadow_length(component_trimmed, font_size, root_font_size)
             {
+                in_lengths = true;
                 lengths.push(length);
+                continue;
             }
+            return None;
         }
         if lengths.len() < 2 {
-            continue;
+            return None;
         }
-        shadows.push(TextShadow {
-            offset_x: lengths[0],
-            offset_y: lengths[1],
-            blur: lengths.get(2).copied().unwrap_or(0.0).max(0.0),
-            color: color.unwrap_or(current_color),
-        });
-        if shadows.len() >= MAX_TEXT_SHADOWS {
-            break;
+        if let Some(&blur) = lengths.get(2)
+            && blur < 0.0
+        {
+            return None;
+        }
+        if shadows.len() < MAX_TEXT_SHADOWS {
+            shadows.push(TextShadow {
+                offset_x: lengths[0],
+                offset_y: lengths[1],
+                blur: lengths.get(2).copied().unwrap_or(0.0).max(0.0),
+                color: color.unwrap_or(current_color),
+            });
         }
     }
-    shadows
+    if shadows.is_empty() {
+        return None;
+    }
+    Some(shadows)
+}
+
+/// Splits a comma-separated CSS list at top level, returning `None` if any comma-delimited
+/// segment is empty (e.g. `1px 1px, , 2px 2px`).
+fn split_top_level_commas_strict(value: &str) -> Option<Vec<String>> {
+    let mut components = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    for ch in value.chars() {
+        if escaped {
+            current.push(ch);
+            escaped = false;
+            continue;
+        }
+        if let Some(q) = quote {
+            current.push(ch);
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == q {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '"' | '\'' => {
+                quote = Some(ch);
+                current.push(ch);
+            }
+            '(' | '[' => {
+                depth += 1;
+                current.push(ch);
+            }
+            ')' | ']' => {
+                if depth == 0 {
+                    return None;
+                }
+                depth -= 1;
+                current.push(ch);
+            }
+            ',' if depth == 0 => {
+                let trimmed = current.trim();
+                if trimmed.is_empty() {
+                    return None;
+                }
+                components.push(trimmed.to_string());
+                current.clear();
+            }
+            _ => current.push(ch),
+        }
+    }
+    if depth != 0 || quote.is_some() {
+        return None;
+    }
+    let trimmed = current.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    components.push(trimmed.to_string());
+    Some(components)
 }
 
 /// Splits a comma-separated CSS list at top level (parentheses/quotes aware).

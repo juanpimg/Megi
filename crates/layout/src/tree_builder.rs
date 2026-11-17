@@ -40,10 +40,17 @@ pub fn build_layout_tree_with_replaced_sizes(
 /// 28k boxes of a text-heavy document share the (few hundred) distinct styles
 /// instead of deep-cloning one style per element. Equality is always checked on a
 /// bucket hit, so the key (a cached value fingerprint) can never change semantics.
+/// One cached anonymous-style derivation, keyed by the parent's value fingerprint.
+struct AnonymousStyle {
+    /// The parent style whose derivation this is (kept to verify fingerprint collisions).
+    parent: Arc<ComputedStyle>,
+    derived: Arc<ComputedStyle>,
+}
+
 #[derive(Default)]
 struct StyleCache {
     buckets: HashMap<u64, Vec<Arc<ComputedStyle>>>,
-    anonymous: HashMap<usize, Arc<ComputedStyle>>,
+    anonymous: HashMap<u64, Vec<AnonymousStyle>>,
 }
 
 impl StyleCache {
@@ -73,13 +80,28 @@ impl StyleCache {
     /// Anonymous (generated-box) style derived from a parent style. Parents that
     /// share an interned style share the derived anonymous style too.
     fn anonymous_for(&mut self, parent: &Arc<ComputedStyle>) -> Arc<ComputedStyle> {
-        let key = Arc::as_ptr(parent) as usize;
-        if let Some(style) = self.anonymous.get(&key) {
-            return Arc::clone(style);
+        // Key by the parent's value fingerprint, not its Arc address (#1156): distinct
+        // allocations with equal styles must share the derived anonymous style. Equality
+        // is checked on a bucket hit, so a fingerprint collision cannot change semantics.
+        let cached = parent.fingerprint();
+        let key = if cached == 0 {
+            parent.compute_fingerprint()
+        } else {
+            cached
+        };
+        if let Some(bucket) = self.anonymous.get(&key) {
+            for entry in bucket {
+                if entry.parent.as_ref() == parent.as_ref() {
+                    return Arc::clone(&entry.derived);
+                }
+            }
         }
-        let style = Arc::new(anonymous_style_from(parent));
-        self.anonymous.insert(key, Arc::clone(&style));
-        style
+        let derived = Arc::new(anonymous_style_from(parent));
+        self.anonymous.entry(key).or_default().push(AnonymousStyle {
+            parent: Arc::clone(parent),
+            derived: Arc::clone(&derived),
+        });
+        derived
     }
 }
 
@@ -110,9 +132,13 @@ pub(crate) fn build_layout_tree_internal(
         replaced_sizes,
         &mut has_overflow_clip,
         &mut style_cache,
+        0,
     )?;
     Some((root, has_overflow_clip))
 }
+
+/// Maximum DOM nesting depth traversed when constructing the layout box tree (#417).
+const MAX_TREE_BUILD_DEPTH: usize = 256;
 
 /// Returns `true` if the node is an HTML `<br>` element.
 fn is_html_br(node: &dom::Node) -> bool {
@@ -122,6 +148,7 @@ fn is_html_br(node: &dom::Node) -> bool {
 }
 
 /// Recursively builds a layout box for a DOM node.
+#[allow(clippy::too_many_arguments)]
 fn build_box_for_node(
     doc: &Document,
     node_id: NodeId,
@@ -132,7 +159,11 @@ fn build_box_for_node(
     replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
     has_overflow_clip: &mut bool,
     style_cache: &mut StyleCache,
+    depth: usize,
 ) -> Option<LayoutBox> {
+    if depth >= MAX_TREE_BUILD_DEPTH {
+        return None;
+    }
     let node = doc.node(node_id);
     match &node.kind {
         NodeKind::Element(_) => {
@@ -207,10 +238,23 @@ fn build_box_for_node(
                     | "embed"
                     | "object"
             );
-            let box_type = if let Some(role) = display_role {
-                role
-            } else if is_replaced && !blockified {
+            let is_explicit_table = matches!(
+                style.display,
+                Display::Table
+                    | Display::InlineTable
+                    | Display::TableRowGroup
+                    | Display::TableHeaderGroup
+                    | Display::TableFooterGroup
+                    | Display::TableRow
+                    | Display::TableCell
+                    | Display::TableCaption
+                    | Display::TableColumn
+                    | Display::TableColumnGroup
+            );
+            let box_type = if is_replaced && !blockified && !is_explicit_table {
                 BoxType::Replaced(node_id)
+            } else if let Some(role) = display_role {
+                role
             } else if let Some(role) = tag_role {
                 role
             } else if blockified {
@@ -266,6 +310,7 @@ fn build_box_for_node(
                     replaced_sizes,
                     has_overflow_clip,
                     style_cache,
+                    depth + 1,
                 ) {
                     raw_children.push(child_box);
                 }
@@ -335,7 +380,8 @@ fn build_box_for_node(
             layout_box.children = children;
             // Stacking-context flag (CSS 2.2 Appendix E), computed once at build time so
             // the document-wide finalize pass is only needed for `overflow` clipping.
-            layout_box.establishes_stacking_context = style.opacity < 1.0
+            layout_box.establishes_stacking_context = style.opacity.is_nan()
+                || style.opacity < 1.0
                 || matches!(style.position, Position::Fixed)
                 || (style.position != Position::Static && style.z_index.is_some());
             if !matches!(style.overflow, Overflow::Visible) {
@@ -360,13 +406,17 @@ fn build_box_for_node(
                 }
             }
             if matches!(box_type, BoxType::Replaced(_)) {
-                let from_api = replaced_sizes.and_then(|sizes| sizes.get(&node_id).copied());
+                let from_api = replaced_sizes.and_then(|sizes| {
+                    sizes.get(&node_id).copied().filter(|&(w, h)| {
+                        (0.0..=10000.0).contains(&w) && (0.0..=10000.0).contains(&h)
+                    })
+                });
                 let element = node.as_element();
                 let attribute_number = |name: &str| -> Option<f32> {
                     element
                         .and_then(|el| el.get_attribute(name))
                         .and_then(|value| value.trim().trim_end_matches("px").parse::<f32>().ok())
-                        .filter(|value| value.is_finite() && *value >= 0.0)
+                        .filter(|value| value.is_finite() && *value >= 0.0 && *value <= 10000.0)
                 };
                 let attribute_width = attribute_number("width");
                 let attribute_height = attribute_number("height");
@@ -576,4 +626,25 @@ fn row_fixup_children(
         out.push(cell);
     }
     out
+}
+
+#[cfg(test)]
+mod style_cache_tests {
+    use super::*;
+
+    #[test]
+    fn equal_parent_styles_share_anonymous_derivation() {
+        let mut cache = StyleCache::default();
+        // Two distinct Arc allocations holding equal styles.
+        let a = Arc::new(css::ComputedStyle::initial());
+        let b = Arc::new(css::ComputedStyle::initial());
+        assert!(!Arc::ptr_eq(&a, &b));
+
+        let derived_a = cache.anonymous_for(&a);
+        let derived_b = cache.anonymous_for(&b);
+        assert!(
+            Arc::ptr_eq(&derived_a, &derived_b),
+            "equally-styled parents must share the derived anonymous style (#1156)"
+        );
+    }
 }

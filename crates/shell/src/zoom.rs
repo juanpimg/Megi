@@ -165,6 +165,8 @@ pub fn site_origin(url: &str) -> Option<String> {
             let host = parsed.host();
             if host.is_empty() {
                 None
+            } else if let Some(port) = parsed.port() {
+                Some(format!("{}://{}:{}", parsed.scheme().as_str(), host, port))
             } else {
                 Some(format!("{}://{}", parsed.scheme().as_str(), host))
             }
@@ -223,7 +225,7 @@ mod site_zoom_tests {
         );
         assert_eq!(
             site_origin("http://example.com:8080/").as_deref(),
-            Some("http://example.com")
+            Some("http://example.com:8080")
         );
         assert_eq!(
             site_origin("file:///tmp/a.html").as_deref(),

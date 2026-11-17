@@ -339,7 +339,19 @@ impl WindowApp {
                     startup_notice = Some(format!("restored {} tab(s)", session.tabs.len()));
                     recent = crate::history::RecentHistory::from_entries(session.recent.clone());
                     site_zooms = session.site_zooms.clone();
-                    session.restore()
+                    let mut restored = session.restore();
+                    if !input.is_empty() && input != crate::tabs::BLANK_TAB_URL {
+                        if let Some(pos) = restored.tabs().iter().position(|tab| tab.url == input) {
+                            restored.activate(pos);
+                        } else if restored.active().url == crate::tabs::BLANK_TAB_URL {
+                            if let Some(replacement) = crate::tabs::Tab::new(input.clone()) {
+                                *restored.active_mut() = replacement;
+                            }
+                        } else {
+                            restored.open_tab(input.clone());
+                        }
+                    }
+                    restored
                 }
                 None => TabsState::from_urls(view.tabs.clone()),
             }
@@ -438,7 +450,7 @@ impl WindowApp {
         self.scale_factor = window.scale_factor();
         let size = window.inner_size();
         self.metrics = window_metrics_zoomed(size.width, size.height, self.scale_factor, self.zoom);
-        self.scroll = ScrollState::new(1, self.metrics.css_height);
+        self.scroll = ScrollState::new(1, self.page_viewport_height());
         self.window = Some(window);
         self.context = Some(context);
         self.surface = Some(surface);
@@ -480,17 +492,15 @@ impl WindowApp {
         } else {
             self.input.clone()
         };
+        let page_height = self.page_viewport_height();
         let request = if self.find.query().is_empty() {
-            self.store.begin_request(
-                &render_input,
-                self.metrics.css_width,
-                self.metrics.css_height,
-            )
+            self.store
+                .begin_request(&render_input, self.metrics.css_width, page_height)
         } else {
             self.store.begin_find_request(
                 &render_input,
                 self.metrics.css_width,
-                self.metrics.css_height,
+                page_height,
                 self.find.query(),
             )
         };
@@ -529,7 +539,7 @@ impl WindowApp {
         self.history_menu = None;
         self.hover_url = None;
         self.address.cancel();
-        self.scroll = ScrollState::new(1, self.metrics.css_height);
+        self.scroll = ScrollState::new(1, self.page_viewport_height());
         self.update_title();
         if let Some(window) = &self.window {
             window.request_redraw();
@@ -569,10 +579,18 @@ impl WindowApp {
 
     /// Handles a left click: resolves the link under the cursor and navigates to it.
     /// Converts a physical cursor position into page CSS coordinates (scroll/zoom aware).
+    fn page_viewport_height(&self) -> u32 {
+        self.metrics
+            .css_height
+            .saturating_sub(chrome::CHROME_HEIGHT as u32)
+            .max(1)
+    }
+
     fn page_coordinates(&self, physical_x: f64, physical_y: f64) -> (f32, f32) {
+        let chrome_px = f64::from(chrome::CHROME_HEIGHT) * self.metrics.scale;
         physical_to_page(
             physical_x,
-            physical_y,
+            (physical_y - chrome_px).max(0.0),
             // The effective scale includes page zoom: `present_region` maps CSS pixels
             // with device_scale * zoom, so hit-testing must use the same factor.
             self.metrics.scale,
@@ -793,7 +811,7 @@ impl WindowApp {
             self.chrome_click(chrome_x, chrome_y);
             return;
         }
-        let (x, y) = physical_to_page(physical_x, physical_y, scale, self.scroll.offset());
+        let (x, y) = self.page_coordinates(physical_x, physical_y);
         if let Some(menu) = &self.overflow_menu {
             let titles: Vec<String> = self
                 .tabs
@@ -1048,7 +1066,7 @@ impl WindowApp {
             })
             .unwrap_or((self.requested_width, self.requested_height));
         self.metrics = window_metrics_zoomed(width, height, self.scale_factor, self.zoom);
-        self.scroll.set_viewport_height(self.metrics.css_height);
+        self.scroll.set_viewport_height(self.page_viewport_height());
         self.update_title();
         if let Some(window) = &self.window {
             window.request_redraw();
@@ -1691,7 +1709,7 @@ impl WindowApp {
             .unwrap_or((self.requested_width, self.requested_height));
         self.metrics = window_metrics_zoomed(width, height, self.scale_factor, self.zoom);
         self.scroll = tab.scroll;
-        self.scroll.set_viewport_height(self.metrics.css_height);
+        self.scroll.set_viewport_height(self.page_viewport_height());
         self.scroll.clamp();
         self.find = tab.find;
         self.find_editing = tab.find_editing;
@@ -1812,7 +1830,7 @@ impl WindowApp {
         }
         let rect = self.find_rects[self.find.current() % self.find_rects.len()];
         let offset =
-            find::scroll_offset_for(&rect, self.metrics.css_height, self.scroll.max_offset());
+            find::scroll_offset_for(&rect, self.page_viewport_height(), self.scroll.max_offset());
         if self.scroll.scroll_to(offset) {
             self.update_title();
         }
@@ -1931,6 +1949,7 @@ impl WindowApp {
         let chrome_active_tab = self.tabs.active_index();
         let chrome_scroll = self.scroll.offset();
         let chrome_css_height = self.metrics.css_height;
+        let page_viewport_height = self.page_viewport_height();
         let chrome_css_width = self.metrics.css_width as f32;
         let chrome_scale = self.metrics.scale as f32;
         let chrome_history = self.address_history();
@@ -1964,10 +1983,13 @@ impl WindowApp {
                 .frame()
                 .map(|frame| (frame.pixels.as_slice(), frame.width, frame.height))
         };
-        let presented = present::present_region(
+        let chrome_px = ((f64::from(chrome::CHROME_HEIGHT) * self.metrics.scale).round() as u32)
+            .min(height.saturating_sub(1));
+        let presented = present::present_region_at(
             frame,
             self.scroll.offset(),
-            self.metrics.css_height,
+            page_viewport_height,
+            chrome_px,
             &mut buffer,
             width,
             height,
@@ -2406,7 +2428,7 @@ impl ApplicationHandler<UserEvent> for WindowApp {
             && let Some(metrics) = self.pending_metrics.take()
         {
             self.metrics = metrics;
-            self.scroll.set_viewport_height(metrics.css_height);
+            self.scroll.set_viewport_height(self.page_viewport_height());
             self.request_render();
         }
         if self.session_dirty && self.session_debounce.take_due(now) {

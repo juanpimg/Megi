@@ -81,12 +81,21 @@ pub fn icon_url(document: &Document, page: &net::Url) -> Option<net::Url> {
 pub fn fetch(icon_url: &net::Url, options: &render::RenderOptions) -> Option<Vec<u8>> {
     match icon_url.scheme() {
         net::url::Scheme::File => {
+            use std::io::Read as _;
             let path = std::path::PathBuf::from(net::url::percent_decode(icon_url.path()));
-            let metadata = std::fs::metadata(&path).ok()?;
-            if metadata.len() > MAX_FAVICON_BYTES as u64 {
+            let file = std::fs::File::open(path).ok()?;
+            let metadata = file.metadata().ok()?;
+            if !metadata.is_file() || metadata.len() > MAX_FAVICON_BYTES as u64 {
                 return None;
             }
-            std::fs::read(path).ok()
+            let mut bytes = Vec::with_capacity((metadata.len() as usize).min(MAX_FAVICON_BYTES));
+            file.take(MAX_FAVICON_BYTES as u64 + 1)
+                .read_to_end(&mut bytes)
+                .ok()?;
+            if bytes.len() > MAX_FAVICON_BYTES {
+                return None;
+            }
+            Some(bytes)
         }
         net::url::Scheme::Http | net::url::Scheme::Https => {
             if options.no_network {

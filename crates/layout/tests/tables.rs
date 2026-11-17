@@ -3,7 +3,8 @@
 use std::collections::HashMap;
 
 use css::{
-    BorderCollapse, BorderStyle, ComputedStyle, Display, Length, TableLayout, VerticalAlign,
+    BorderCollapse, BorderStyle, ComputedStyle, Display, Length, Position, TableLayout,
+    VerticalAlign,
 };
 use dom::{Attribute, Document, Namespace, NodeId};
 use layout::{BoxType, LayoutBox, Rect, layout_document};
@@ -329,7 +330,10 @@ fn test_rowspan_distributes_row_heights() {
         1,
         "rowspan cell belongs to row 0 only"
     );
-    assert_eq!(rows[1].children[0].dimensions.content.x, 96.5);
+    // Column 0 holds only the empty rowspan cell, so its intrinsic width is 0 rather than
+    // the old 1px floor (#695): the 200px table splits the free space evenly (88 + 100)
+    // and the second column now starts at 96 instead of 96.5.
+    assert_eq!(rows[1].children[0].dimensions.content.x, 96.0);
     let tall_box = &rows[0].children[0];
     let expected_height = 3.0 * 33.3333 + 2.0 * 4.0;
     assert!(
@@ -759,4 +763,179 @@ fn test_border_collapse_cell_text_inside_content_box() {
     // Shared border resolved to max(2,4)=4 affects both cells' content origin.
     assert!((row_box.children[0].dimensions.border.right - 4.0).abs() < 0.01);
     assert!((row_box.children[1].dimensions.border.left - 4.0).abs() < 0.01);
+}
+
+#[test]
+fn test_table_inside_inline_is_laid_out() {
+    let (mut doc, mut styles, body) = setup();
+    let span = mk(&mut doc, body, "span");
+    let mut inline_style = ComputedStyle::initial();
+    inline_style.display = Display::Inline;
+    styles.insert(span, inline_style);
+
+    let table = mk(&mut doc, span, "table");
+    styles.insert(table, table_style(Length::Px(200.0)));
+    let row = add_row(&mut doc, &mut styles, table);
+    let _cell = add_cell(&mut doc, &mut styles, row, "hello", None);
+
+    let tree = layout_tree(&doc, &styles);
+    let mut texts = Vec::new();
+    collect_text_boxes(&tree, &mut texts);
+    assert_eq!(texts.len(), 1, "table inside inline must expose its text");
+    assert!(texts[0].1.width > 0.0 && texts[0].1.height > 0.0);
+}
+
+/// CSS 2.1 §17.5.2: an empty cell contributes zero intrinsic width, so a table whose cells
+/// hold nothing must not grow past its borders/spacing (#695).
+#[test]
+fn empty_cells_contribute_no_intrinsic_width_floor() {
+    let (mut doc, mut styles, body) = setup();
+    let table = mk(&mut doc, body, "table");
+    styles.insert(table, table_style(Length::Auto));
+    let row = mk(&mut doc, table, "tr");
+    styles.insert(row, row_style());
+    for _ in 0..2 {
+        let cell = mk(&mut doc, row, "td");
+        styles.insert(cell, cell_style());
+    }
+    let tree = layout_tree(&doc, &styles);
+    let table_box = &tree.children[0].children[0];
+    // border-spacing separate: 4px left + 4px gap + 4px right = 12px of spacing, and each
+    // empty cell used to add its own 1px floor on top of that.
+    let width = table_box.dimensions.border_box().width;
+    assert!(
+        width <= 12.5,
+        "empty cells must not add a 1px floor per column, got {width}"
+    );
+}
+
+#[test]
+fn a_single_character_still_gives_the_column_a_width() {
+    // Guard against over-correcting: real content must still produce a track.
+    let (mut doc, mut styles, body) = setup();
+    let table = mk(&mut doc, body, "table");
+    styles.insert(table, table_style(Length::Auto));
+    let row = mk(&mut doc, table, "tr");
+    styles.insert(row, row_style());
+    let cell = mk(&mut doc, row, "td");
+    styles.insert(cell, cell_style());
+    doc.append_text(cell, "x");
+    let tree = layout_tree(&doc, &styles);
+    let table_box = &tree.children[0].children[0];
+    let cell_box = &table_box.children[0].children[0];
+    assert!(
+        cell_box.dimensions.content.width > 0.0,
+        "a cell with text keeps a non-zero width"
+    );
+}
+
+/// `colspan` amplification (#690): the effective span is capped, so a `colspan=1000` cell and
+/// a `colspan=512` cell lay out identically instead of allocating 1000 tracks.
+fn layout_single_colspan(colspan: &str) -> (f32, f32, f32) {
+    let (mut doc, mut styles, body) = setup();
+    let table = mk(&mut doc, body, "table");
+    styles.insert(table, table_style(Length::Auto));
+    let row = mk(&mut doc, table, "tr");
+    styles.insert(row, row_style());
+    let cell = doc.create_element(
+        Namespace::Html,
+        "td",
+        vec![Attribute::new("colspan", colspan)],
+    );
+    doc.append_child(row, cell);
+    styles.insert(cell, cell_style());
+    doc.append_text(cell, "x");
+    let tree = layout_tree(&doc, &styles);
+    let table_box = &tree.children[0].children[0];
+    let cell_box = &table_box.children[0].children[0];
+    (
+        table_box.dimensions.border_box().width,
+        cell_box.dimensions.border_box().width,
+        cell_box.dimensions.border_box().x,
+    )
+}
+
+#[test]
+fn huge_colspans_are_capped_to_a_bounded_column_count() {
+    let huge = layout_single_colspan("1000");
+    let capped = layout_single_colspan("512");
+    assert_eq!(
+        huge, capped,
+        "colspan=1000 must clamp to the 512-column cap, not allocate 1000 tracks"
+    );
+    // Sanity: a span that fits under the cap is honoured as-is.
+    let small = layout_single_colspan("3");
+    assert!(
+        small.0 > 0.0 && small.1 > 0.0 && small.1.is_finite(),
+        "ordinary colspans keep their geometry: {small:?}"
+    );
+}
+
+/// An absolutely positioned child of a table must be laid out, not left at its provisional
+/// zero size with an unlaid subtree (#694).
+#[test]
+fn absolutely_positioned_table_child_is_laid_out() {
+    let (mut doc, mut styles, body) = setup();
+    let table = mk(&mut doc, body, "table");
+    styles.insert(table, table_style(Length::Px(200.0)));
+    let row = mk(&mut doc, table, "tr");
+    styles.insert(row, row_style());
+    let cell = mk(&mut doc, row, "td");
+    styles.insert(cell, cell_style());
+    doc.append_text(cell, "cell");
+
+    let overlay = doc.create_element(Namespace::Html, "div", vec![]);
+    doc.append_child(table, overlay);
+    let mut overlay_style = block_style(Length::Auto);
+    overlay_style.position = Position::Absolute;
+    overlay_style.width = Length::Px(60.0);
+    overlay_style.height = Length::Px(30.0);
+    styles.insert(overlay, overlay_style.clone());
+    let inner = mk(&mut doc, overlay, "div");
+    let mut inner_style = block_style(Length::Auto);
+    inner_style.width = Length::Px(20.0);
+    inner_style.height = Length::Px(10.0);
+    styles.insert(inner, inner_style);
+
+    let tree = layout_tree(&doc, &styles);
+    let table_box = &tree.children[0].children[0];
+    let overlay_box = find_box(table_box, overlay);
+    assert_eq!(
+        overlay_box.dimensions.content.width, 60.0,
+        "abspos table child must get its used width"
+    );
+    assert_eq!(overlay_box.dimensions.content.height, 30.0);
+    let inner_box = find_box(overlay_box, inner);
+    assert_eq!(
+        inner_box.dimensions.content.width, 20.0,
+        "the abspos subtree must be laid out, not just positioned"
+    );
+    assert_eq!(inner_box.dimensions.content.height, 10.0);
+}
+
+fn find_box(root: &LayoutBox, id: NodeId) -> &LayoutBox {
+    if matches!(
+        root.box_type,
+        BoxType::BlockNode(node) | BoxType::InlineBlock(node) if node == id
+    ) {
+        return root;
+    }
+    for child in &root.children {
+        if let Some(found) = find_box_opt(child, id) {
+            return found;
+        }
+    }
+    panic!("box {id:?} not found");
+}
+
+fn find_box_opt(root: &LayoutBox, id: NodeId) -> Option<&LayoutBox> {
+    if matches!(
+        root.box_type,
+        BoxType::BlockNode(node) | BoxType::InlineBlock(node) if node == id
+    ) {
+        return Some(root);
+    }
+    root.children
+        .iter()
+        .find_map(|child| find_box_opt(child, id))
 }

@@ -381,3 +381,47 @@ fn get_computed_style_and_bounding_rect_without_provider_are_safe() {
         "documented gap: computed-style missing props"
     );
 }
+
+#[test]
+fn document_get_elements_by_tag_name_wildcard_matches_every_element() {
+    // DOM `getElementsByTagName("*")` must match all descendant elements in any
+    // namespace (#688); before the fix it compared "*" against `local_name` and
+    // returned an empty list, so wildcard enumeration silently yielded nothing.
+    let mut rt = runtime();
+    let value = eval(
+        &mut rt,
+        r#"
+      var host = document.createElement('div');
+      document.body.appendChild(host);
+      host.appendChild(document.createElement('span'));
+      var tags = [];
+      var all = document.getElementsByTagName('*');
+      for (var i = 0; i < all.length; i++) tags.push(all[i].tagName.toLowerCase());
+      tags.join(',') + '|' + document.getElementsByTagName('SPAN').length + '|' +
+        document.getElementsByTagName('nope').length
+    "#,
+    );
+    let (tags, span, missing) = {
+        let mut parts = value.split('|');
+        (
+            parts.next().unwrap_or_default().to_string(),
+            parts.next().unwrap_or_default().to_string(),
+            parts.next().unwrap_or_default().to_string(),
+        )
+    };
+    assert!(
+        tags.contains("html"),
+        "wildcard must include <html>: {tags}"
+    );
+    assert!(
+        tags.contains("body"),
+        "wildcard must include <body>: {tags}"
+    );
+    assert!(tags.contains("div"), "wildcard must include <div>: {tags}");
+    assert!(
+        tags.contains("span"),
+        "wildcard must include <span>: {tags}"
+    );
+    assert_eq!(span, "1", "case-insensitive lookup still works");
+    assert_eq!(missing, "0", "a non-matching name stays empty");
+}

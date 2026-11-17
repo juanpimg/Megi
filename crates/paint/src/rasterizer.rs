@@ -129,30 +129,38 @@ pub struct Pixmap {
     pub width: u32,
     pub height: u32,
     pub pixels: Vec<Color>,
-    clip_stack: Vec<Rect>,
+    clip_stack: Vec<Option<(Rect, Rect)>>,
 }
 
 impl Pixmap {
     /// Creates a new pixmap initialized with transparent pixels.
     ///
-    /// # Panics
-    ///
-    /// Panics if `width * height` exceeds [`MAX_PIXMAP_PIXELS`] or overflows.
+    /// Returns an empty pixmap when `width * height` exceeds [`MAX_PIXMAP_PIXELS`]
+    /// or overflows (issue #667), instead of panicking.
     pub fn new(width: u32, height: u32) -> Self {
         Self::with_background_unchecked(width, height, Color::TRANSPARENT)
     }
 
     /// Creates a new pixmap filled with a background color.
     ///
-    /// # Panics
-    ///
-    /// Panics if `width * height` exceeds [`MAX_PIXMAP_PIXELS`] or overflows.
+    /// Returns an empty pixmap when `width * height` exceeds [`MAX_PIXMAP_PIXELS`]
+    /// or overflows (issue #667), instead of panicking.
     pub fn new_with_background(width: u32, height: u32, bg: Color) -> Self {
         Self::with_background_unchecked(width, height, bg)
     }
 
     fn with_background_unchecked(width: u32, height: u32, bg: Color) -> Self {
-        let size = pixel_count(width, height);
+        // Library entry points must not panic on hostile-but-ordinary numeric input
+        // (issue #667): oversized or overflowing dimensions yield an empty pixmap,
+        // matching the encoder convention (encode_pixels returns an empty vector).
+        let Some(size) = pixel_count(width, height) else {
+            return Self {
+                width: 0,
+                height: 0,
+                pixels: Vec::new(),
+                clip_stack: Vec::new(),
+            };
+        };
         Self {
             width,
             height,
@@ -180,7 +188,7 @@ impl Pixmap {
 
     /// Blends a source color over the destination pixel at (x, y) using Porter-Duff source-over.
     pub fn blend_pixel(&mut self, x: u32, y: u32, src: Color) {
-        if x >= self.width || y >= self.height || src.a == 0 {
+        if x >= self.width || y >= self.height || src.a == 0 || self.is_clipped(x, y) {
             return;
         }
         let idx = (y * self.width + x) as usize;
@@ -307,7 +315,11 @@ impl Pixmap {
         if image.is_empty() || rect.width <= 0.0 || rect.height <= 0.0 {
             return;
         }
-        if !rect.x.is_finite() || !rect.y.is_finite() {
+        if !rect.x.is_finite()
+            || !rect.y.is_finite()
+            || !rect.width.is_finite()
+            || !rect.height.is_finite()
+        {
             return;
         }
         let Some(clip) = self.clip_rect() else {
@@ -377,6 +389,13 @@ impl Pixmap {
         if color.a == 0 || rect.width <= 0.0 || rect.height <= 0.0 {
             return;
         }
+        if !rect.x.is_finite()
+            || !rect.y.is_finite()
+            || !rect.width.is_finite()
+            || !rect.height.is_finite()
+        {
+            return;
+        }
         let Some(clip) = self.clip_rect() else {
             return;
         };
@@ -435,7 +454,13 @@ impl Pixmap {
     /// CSS 2.2 §8.5.2: if the sum of two opposing border widths exceeds the
     /// border box dimension, both are reduced proportionally.
     pub fn draw_border(&mut self, rect: Rect, sides: [BorderSide; 4]) {
-        if rect.width <= 0.0 || rect.height <= 0.0 {
+        if rect.width <= 0.0
+            || rect.height <= 0.0
+            || !rect.x.is_finite()
+            || !rect.y.is_finite()
+            || !rect.width.is_finite()
+            || !rect.height.is_finite()
+        {
             return;
         }
 
@@ -839,16 +864,16 @@ impl Pixmap {
     /// Intersection of the clip stack with the pixmap bounds, in px, or `None`
     /// when the visible area is empty.
     fn clip_rect(&self) -> Option<Rect> {
-        let mut x0 = 0.0f32;
-        let mut y0 = 0.0f32;
-        let mut x1 = self.width as f32;
-        let mut y1 = self.height as f32;
-        for clip in &self.clip_stack {
-            x0 = x0.max(clip.x);
-            y0 = y0.max(clip.y);
-            x1 = x1.min(clip.x + clip.width);
-            y1 = y1.min(clip.y + clip.height);
-        }
+        // Running intersection is maintained on push (issue #651), so this is O(1).
+        let running = match self.clip_stack.last() {
+            Some(Some((_, running))) => *running,
+            Some(None) => Rect::new(0.0, 0.0, self.width as f32, self.height as f32),
+            None => Rect::new(0.0, 0.0, self.width as f32, self.height as f32),
+        };
+        let x0 = running.x;
+        let y0 = running.y;
+        let x1 = running.x + running.width;
+        let y1 = running.y + running.height;
         if x0 >= x1 || y0 >= y1 {
             None
         } else {
@@ -879,9 +904,28 @@ impl Pixmap {
         })
     }
 
-    /// Pushes a clipping boundary onto the stack.
+    /// Maximum clip-stack depth (issue #651): beyond this, pushes are ignored.
+    const MAX_CLIP_DEPTH: usize = 256;
+
+    /// Pushes a clipping boundary onto the stack, maintaining the running
+    /// intersection incrementally (O(1) per push).
     pub fn push_clip(&mut self, rect: Rect) {
-        self.clip_stack.push(rect);
+        if self.clip_stack.len() >= Self::MAX_CLIP_DEPTH {
+            // Push a sentinel so pop_clip stays balanced (#1180).
+            self.clip_stack.push(None);
+            return;
+        }
+        let current = match self.clip_stack.last() {
+            Some(Some((_, running))) => *running,
+            Some(None) => Rect::new(0.0, 0.0, self.width as f32, self.height as f32),
+            None => Rect::new(0.0, 0.0, self.width as f32, self.height as f32),
+        };
+        let x0 = current.x.max(rect.x);
+        let y0 = current.y.max(rect.y);
+        let x1 = (current.x + current.width).min(rect.x + rect.width);
+        let y1 = (current.y + current.height).min(rect.y + rect.height);
+        let running = Rect::new(x0, y0, (x1 - x0).max(0.0), (y1 - y0).max(0.0));
+        self.clip_stack.push(Some((rect, running)));
     }
 
     /// Pops the top clipping boundary; popping an empty stack is a safe no-op.
@@ -952,15 +996,12 @@ impl Pixmap {
 }
 
 /// Computes and validates the pixel count of a pixmap allocation.
-fn pixel_count(width: u32, height: u32) -> usize {
-    let size = (width as usize)
-        .checked_mul(height as usize)
-        .expect("pixmap dimensions overflow usize");
-    assert!(
-        size <= MAX_PIXMAP_PIXELS,
-        "pixmap {width}x{height} = {size} pixels exceeds MAX_PIXMAP_PIXELS ({MAX_PIXMAP_PIXELS})"
-    );
-    size
+fn pixel_count(width: u32, height: u32) -> Option<usize> {
+    let size = (width as usize).checked_mul(height as usize)?;
+    if size > MAX_PIXMAP_PIXELS {
+        return None;
+    }
+    Some(size)
 }
 
 /// 1-D coverage (0..=256, 256 = fully covered) of an overlap length.
@@ -1153,6 +1194,23 @@ impl GlyphMaskEntry {
     }
 }
 
+/// Maximum distinct glyph masks cached per pass (issue #656).
+///
+/// Keys are attacker-influenced (face, glyph id, font-size bits), so an
+/// unbounded map lets a display list with many distinct text items pin memory.
+/// When the cap is reached the mask map is cleared and refilled: drawing never
+/// degrades, it only loses cache hits.
+const MAX_TEXT_CACHE_ENTRIES: usize = 1024;
+
+/// Maximum distinct shaped runs cached per pass (issue #656).
+const MAX_SHAPED_RUNS: usize = 512;
+
+/// Maximum distinct parsed font-family lists cached per pass (issue #656).
+const MAX_FAMILY_LISTS: usize = 256;
+
+/// Maximum font faces resolved per pass (issue #656).
+const MAX_FACES: usize = 64;
+
 /// Per-pass text cache: shaped runs, faces and antialiased glyph masks.
 #[derive(Default)]
 struct TextCache {
@@ -1171,6 +1229,18 @@ impl TextCache {
     fn face_index(&mut self, database: &FontDatabase, info: &fonts::FontRefInfo) -> Option<u32> {
         if let Some(&index) = self.face_ids.get(&info.post_script_name) {
             return (index != u32::MAX).then_some(index);
+        }
+        // Bound both maps (issue #656). Face indices are pre-resolved per run
+        // and reused for every glyph, so the face list must never be cleared
+        // mid-pass; instead new faces are refused once the cap is reached and
+        // the failure is cached so the font database is not re-queried.
+        if self.face_ids.len() >= MAX_FACES {
+            return None;
+        }
+        if self.faces.len() >= MAX_FACES {
+            self.face_ids
+                .insert(info.post_script_name.clone(), u32::MAX);
+            return None;
         }
         let resolved = match database.font_by_ref(info) {
             Ok(font) => {
@@ -1207,6 +1277,11 @@ impl TextCache {
             return Some(Arc::clone(run));
         }
 
+        if self.families.len() >= MAX_FAMILY_LISTS {
+            // Family lists are cheap to re-parse; drop the cache instead of
+            // letting distinct family strings grow without bound (#656).
+            self.families.clear();
+        }
         let families = self
             .families
             .entry(font_family.to_string())
@@ -1223,6 +1298,11 @@ impl TextCache {
             .ok()?;
         let run = Arc::new(run);
         self.stats.shaped_runs += 1;
+        if self.shaped.len() >= MAX_SHAPED_RUNS {
+            // Returned runs are `Arc`s, so clearing only drops the cache hits
+            // for already-rendered text (issue #656).
+            self.shaped.clear();
+        }
         self.shaped.insert(key, Arc::clone(&run));
         Some(run)
     }
@@ -1245,6 +1325,12 @@ impl TextCache {
             } else {
                 self.stats.glyph_masks_rasterized += 1;
             }
+            if self.masks.len() >= MAX_TEXT_CACHE_ENTRIES {
+                // Clear instead of skipping the insert: a missing mask would
+                // make `draw_text_cached` silently drop the glyph, so the cap
+                // must cost cache hits, never ink (issue #656).
+                self.masks.clear();
+            }
             self.masks.insert(key, entry);
         } else {
             self.stats.glyph_mask_hits += 1;
@@ -1262,6 +1348,9 @@ fn alpha_lut(color_alpha: u8) -> [u8; 256] {
     }
     lut
 }
+
+/// Upper bound for a rasterized glyph size, mirroring the painter's ceiling (#672).
+const MAX_RASTERIZED_FONT_SIZE: f32 = 1024.0;
 
 /// Paints one shaped text run using (and filling) the per-pass cache.
 #[allow(clippy::too_many_arguments)]
@@ -1281,6 +1370,12 @@ fn draw_text_cached(
     if color.a == 0 || text.is_empty() {
         return true;
     }
+    // Defence in depth (#672): the painter clamps at the item boundary, but a hand-built
+    // display list can still hand this a hostile size, and a mask is allocated per glyph.
+    if !font_size.is_finite() || font_size <= 0.0 {
+        return true;
+    }
+    let font_size = font_size.min(MAX_RASTERIZED_FONT_SIZE);
 
     let Some(clip) = pixmap.clip_pixel_bounds() else {
         return true;
@@ -2247,6 +2342,10 @@ fn blur_mask_pass(mask: &mut [f32], width: usize, height: usize, horizontal: boo
     output.resize(mask.len(), 0.0);
     blur_pass_into(mask, &mut output, width, height, horizontal, radius);
     mask.copy_from_slice(&output);
+    const MAX_RETAINED_F32S: usize = 1024 * 1024;
+    if output.capacity() > MAX_RETAINED_F32S {
+        output = Vec::new();
+    }
     BLUR_OUTPUT.with(|slot| *slot.borrow_mut() = output);
 }
 
@@ -2307,6 +2406,13 @@ impl Pixmap {
         if color.a == 0 || rect.width <= 0.0 || rect.height <= 0.0 {
             return;
         }
+        if !rect.x.is_finite()
+            || !rect.y.is_finite()
+            || !rect.width.is_finite()
+            || !rect.height.is_finite()
+        {
+            return;
+        }
         let area = (rect.width * rect.height) as usize;
         if area > 16_777_216 {
             return;
@@ -2340,6 +2446,15 @@ impl Pixmap {
     pub fn draw_rounded_border(&mut self, rect: Rect, sides: [BorderSide; 4], radii: BorderRadii) {
         let visible = sides.iter().filter(|side| side.is_visible()).count();
         if visible == 0 {
+            return;
+        }
+        if rect.width <= 0.0
+            || rect.height <= 0.0
+            || !rect.x.is_finite()
+            || !rect.y.is_finite()
+            || !rect.width.is_finite()
+            || !rect.height.is_finite()
+        {
             return;
         }
         let area = (rect.width * rect.height) as usize;
@@ -3180,6 +3295,8 @@ impl Pixmap {
             || rect.height <= 0.0
             || !rect.x.is_finite()
             || !rect.y.is_finite()
+            || !rect.width.is_finite()
+            || !rect.height.is_finite()
         {
             return;
         }
@@ -3606,6 +3723,10 @@ fn blur_rgba(buf: &mut Pixmap, blur: f32) {
                 blur_pass_into(&scratch, plane, width, height, false, radius);
             }
         }
+        const MAX_RETAINED_F32S: usize = 1024 * 1024;
+        if scratch.capacity() > MAX_RETAINED_F32S {
+            scratch = Vec::new();
+        }
         BLUR_OUTPUT.with(|slot| *slot.borrow_mut() = scratch);
         for (index, pixel) in buf.pixels.iter_mut().enumerate() {
             pixel.r = planes[0][index].round().clamp(0.0, 255.0) as u8;
@@ -3615,6 +3736,11 @@ fn blur_rgba(buf: &mut Pixmap, blur: f32) {
                 pixel.a = alpha;
             } else {
                 pixel.a = planes[3][index].round().clamp(0.0, 255.0) as u8;
+            }
+        }
+        for plane in planes.iter_mut() {
+            if plane.capacity() > MAX_RETAINED_F32S {
+                *plane = Vec::new();
             }
         }
     });
@@ -3658,6 +3784,10 @@ fn apply_drop_shadow(buf: &mut Pixmap, offset_x: f32, offset_y: f32, blur: f32, 
         }
         let shadow = Color::new(color.r, color.g, color.b, shadow_alpha);
         *pixel = blend_over(shadow, *pixel);
+    }
+    const MAX_RETAINED_F32S: usize = 1024 * 1024;
+    if mask.capacity() > MAX_RETAINED_F32S {
+        mask = Vec::new();
     }
     DROP_SHADOW_MASK.with(|slot| *slot.borrow_mut() = mask);
 }
@@ -3943,6 +4073,87 @@ mod composite_tests {
         assert_eq!(pixel.r, 128);
         assert_eq!(pixel.g, 0);
         assert_eq!(pixel.b, 127);
+    }
+}
+
+#[cfg(test)]
+mod text_cache_cap_tests {
+    use super::*;
+
+    /// Draws `text` at `size` through the production cache path and returns the
+    /// number of non-blank glyphs actually inked.
+    fn ink(cache: &mut TextCache, database: &FontDatabase, text: &str, size: f32) -> usize {
+        let Some(run) = cache.shape(database, text, "sans-serif", 400, false, size) else {
+            return 0;
+        };
+        let faces: Vec<Option<u32>> = run
+            .fonts
+            .iter()
+            .map(|info| cache.face_index(database, info))
+            .collect();
+        let size_bits = size.to_bits();
+        let mut inked = 0;
+        for glyph in &run.glyphs {
+            let Some(face_index) = faces.get(glyph.font).copied().flatten() else {
+                continue;
+            };
+            let Ok(glyph_id) = u16::try_from(glyph.glyph_id) else {
+                continue;
+            };
+            if let Some(entry) = cache.mask(face_index, glyph_id, size_bits, size)
+                && !entry.is_blank()
+            {
+                inked += 1;
+            }
+        }
+        inked
+    }
+
+    #[test]
+    fn glyph_mask_cache_stays_bounded_and_keeps_inking_glyphs() {
+        let database = crate::bundled_font_database();
+        let mut cache = TextCache::default();
+        // Vary the sub-pixel size so every step produces a fresh
+        // `(face, glyph, size_bits)` key, well past the cap.
+        let steps = MAX_TEXT_CACHE_ENTRIES + 64;
+        let mut inked_total = 0usize;
+        let mut inked_after_cap = 0usize;
+        for step in 0..steps {
+            let size = 12.0 + step as f32 * 0.01;
+            let inked = ink(&mut cache, database, "A", size);
+            inked_total += inked;
+            if step >= MAX_TEXT_CACHE_ENTRIES {
+                inked_after_cap += inked;
+            }
+            assert!(
+                cache.masks.len() <= MAX_TEXT_CACHE_ENTRIES,
+                "mask cache grew past its cap: {} > {}",
+                cache.masks.len(),
+                MAX_TEXT_CACHE_ENTRIES
+            );
+        }
+        assert!(inked_total > 0, "glyphs must rasterize with bundled fonts");
+        assert!(
+            inked_after_cap > 0,
+            "the cap must cost cache hits, never ink: {} glyphs after the cap",
+            inked_after_cap
+        );
+    }
+
+    #[test]
+    fn shaped_run_cache_stays_bounded() {
+        let database = crate::bundled_font_database();
+        let mut cache = TextCache::default();
+        for step in 0..(MAX_SHAPED_RUNS + 32) {
+            let size = 10.0 + step as f32 * 0.01;
+            let _ = cache.shape(database, "bounded", "sans-serif", 400, false, size);
+            assert!(
+                cache.shaped.len() <= MAX_SHAPED_RUNS,
+                "shaped cache grew past its cap: {} > {}",
+                cache.shaped.len(),
+                MAX_SHAPED_RUNS
+            );
+        }
     }
 }
 

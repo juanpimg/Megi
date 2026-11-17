@@ -313,6 +313,9 @@ impl Url {
     pub fn cache_key(&self) -> String {
         let mut url = self.clone();
         url.fragment = None;
+        // Strip credentials so they never leak into cache keys (#1296).
+        url.username = String::new();
+        url.password = String::new();
         url.as_str()
     }
 
@@ -527,6 +530,12 @@ fn split_host_port(input: &str) -> Result<(&str, Option<&str>), UrlError> {
         };
         return Ok((host, Some(port)));
     }
+    // A bare IPv6 literal is not a valid authority: `::1` and `::1:8080` are ambiguous with
+    // `host:port`, so the standard requires brackets. Reject them instead of mis-splitting
+    // (#645).
+    if input.matches(':').count() > 1 {
+        return Err(UrlError::InvalidHost(input.to_owned()));
+    }
     match input.rfind(':') {
         Some(index) => Ok((&input[..index], Some(&input[index + 1..]))),
         None => Ok((input, None)),
@@ -547,10 +556,12 @@ fn normalize_host(scheme: Scheme, raw: &str) -> Result<String, UrlError> {
             return Err(UrlError::InvalidHost(raw.to_owned()));
         }
         let inner = &raw[1..raw.len() - 1];
-        let valid = inner
-            .chars()
-            .all(|ch| ch.is_ascii_hexdigit() || matches!(ch, ':' | '.'));
-        if !valid {
+        // A bracketed host is an IPv6 literal, so validate it as one instead of checking that
+        // the characters merely look hexadecimal (#645): `[::::]`, `[12345]` and
+        // `[1.2.3.4.5]` used to be accepted and then sent to DNS/SNI/TLS as if valid.
+        // `Ipv6Addr` accepts the compressed forms and an embedded IPv4 tail; a link-local
+        // zone id (`fe80::1%eth0`) is not part of the host syntax and stays rejected.
+        if inner.parse::<std::net::Ipv6Addr>().is_err() {
             return Err(UrlError::InvalidHost(raw.to_owned()));
         }
         return Ok(format!("[{}]", inner.to_ascii_lowercase()));
@@ -559,6 +570,11 @@ fn normalize_host(scheme: Scheme, raw: &str) -> Result<String, UrlError> {
         .chars()
         .any(|ch| !ch.is_ascii() || is_forbidden_host_char(ch))
     {
+        return Err(UrlError::InvalidHost(raw.to_owned()));
+    }
+    // DNS names are at most 255 bytes; cap labels too so PSL/cookie/referrer walks
+    // cannot be driven quadratic by a hostile host (#1284).
+    if raw.len() > 255 || raw.bytes().filter(|&byte| byte == b'.').count() >= 128 {
         return Err(UrlError::InvalidHost(raw.to_owned()));
     }
     let host = raw.to_ascii_lowercase();
@@ -602,12 +618,41 @@ fn parse_ipv4(host: &str) -> Result<String, UrlError> {
     ))
 }
 
+/// Decodes `%2E` (case-insensitive) to `.` so that dot-segment resolution sees an escaped
+/// `..` as traversal. `%2F` is deliberately left encoded: WHATWG keeps it opaque, and
+/// decoding it would let `%2f` split a path segment after the fact (#641).
+fn decode_dot_escapes(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(input.len());
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if bytes[index] == b'%'
+            && index + 2 < bytes.len()
+            && hex_value(bytes[index + 1]).is_some()
+            && hex_value(bytes[index + 2]) == Some(0xE)
+        {
+            out.push('.');
+            index += 3;
+            continue;
+        }
+        let ch = input[index..]
+            .chars()
+            .next()
+            .expect("index on char boundary");
+        out.push(ch);
+        index += ch.len_utf8();
+    }
+    out
+}
+
 /// Normalizes the path per the WHATWG "path state": resolves `.` and `..` segments and
 /// preserves empty segments (repeated slashes). `input` is already percent-encoded.
 fn normalize_path(input: &str) -> String {
     if !input.starts_with('/') {
         return format!("/{}", input.trim_start_matches('/'));
     }
+    let decoded = decode_dot_escapes(input);
+    let input = decoded.as_str();
     let trailing_slash =
         input.ends_with('/') || input.ends_with("/.") || input.ends_with("/..") || input == ".";
     let mut segments: Vec<&str> = Vec::new();
@@ -689,8 +734,40 @@ fn userinfo_requires_encoding(byte: u8) -> bool {
         )
 }
 
+/// Rewrites `%XX` escapes to uppercase and encodes a `%` that does not start a valid escape as
+/// `%25`, so an invalid escape can never reach the wire or a cache key (#641).
+fn normalize_escapes(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(input.len());
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let high = bytes.get(index + 1).copied().and_then(hex_value);
+            let low = bytes.get(index + 2).copied().and_then(hex_value);
+            match (high, low) {
+                (Some(high), Some(low)) => {
+                    push_encoded_byte(&mut out, (high << 4) | low);
+                    index += 3;
+                }
+                _ => {
+                    push_encoded_byte(&mut out, b'%');
+                    index += 1;
+                }
+            }
+            continue;
+        }
+        let ch = input[index..]
+            .chars()
+            .next()
+            .expect("index on char boundary");
+        out.push(ch);
+        index += ch.len_utf8();
+    }
+    out
+}
+
 fn encode_path(input: &str) -> String {
-    encode_with(input, path_requires_encoding)
+    encode_with(&normalize_escapes(input), path_requires_encoding)
 }
 
 fn encode_query(input: &str) -> String {
@@ -724,6 +801,19 @@ mod unit_tests {
         assert_eq!(percent_decode("/caf%C3%A9"), "/café");
         assert_eq!(percent_decode("/bad%2"), "/bad%2");
         assert_eq!(percent_decode("/bad%zz"), "/bad%zz");
+    }
+
+    #[test]
+    fn oversized_hosts_are_rejected_quickly() {
+        // 10k labels used to make the PSL/cookie/referrer walks take ~100 s (#1284).
+        let host = "a.".repeat(10_000);
+        let input = format!("http://{host}test/");
+        let start = std::time::Instant::now();
+        assert!(
+            Url::parse(&input).is_err(),
+            "oversized host must be rejected"
+        );
+        assert!(start.elapsed() < std::time::Duration::from_millis(100));
     }
 
     #[test]

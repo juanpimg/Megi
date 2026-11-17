@@ -122,3 +122,16 @@ fn out_of_range_trns_sample_is_rejected() {
         other => panic!("expected sample-range rejection, got {other:?}"),
     }
 }
+
+#[test]
+fn trailing_bytes_after_iend_are_rejected() {
+    let (ihdr, idat) = gray_fixture();
+    let mut data = png(&[(b"IHDR", &ihdr), (b"IDAT", &idat), (b"IEND", &[])]);
+    data.extend_from_slice(b"TRAILING-GARBAGE");
+    match decode_or_reason(&data) {
+        Err(ImageError::InvalidChunk { reason, .. }) => {
+            assert!(reason.contains("trailing data"), "{reason}");
+        }
+        other => panic!("expected trailing-data rejection, got {other:?}"),
+    }
+}

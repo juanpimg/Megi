@@ -1,9 +1,45 @@
-# Handoff de sesión — ronda 32 (perf CSS/layout/PNG, TLA/live bindings, h1 streaming y push priority)
+# Handoff de continuación — Post-Auditoría `v0.1.0` (2026-11-13)
 
-**Fecha**: 2026-11-11 (Europe/Madrid)
-**Rama**: `sprint/robustez-fase4` — HEAD `3e69968`
-**Estado**: **1929 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; **F4/F5/F6 ≈100 %**, **F7 ≈98 %**. Manifiesto `docs/status/progress.toml` actualizado (F5/F6 + `next_up`); `PROGRESS.md`/SVG se regeneran con `python3 tools/update_progress.py --write`.
-**CI/Repo**: GitHub Actions en verde, con **Status freshness**; `main` y `sprint/robustez-fase4` sincronizadas en `3e69968`; fuzz PR build-only (14 targets); suite determinista.
+**Fecha**: 2026-11-13 (Europe/Madrid)  
+**Rama**: `main` (último commit de código: `9f44916`, estado/badges: `7ab03bc`)  
+**Binario interactivo**: `./target/release/megi` (compilado con `cargo build --release --locked -p shell -p render -p test_harness -p bench`)
+
+## Qué se completó y cerró en la sesión actual
+
+| Commit | Alcance | Issues cerrados |
+|---|---|---|
+| `4b9eeab` | `<img>` sin `crossorigin` usa modo `no-cors`; `shell` presenta el viewport desplazado bajo el chrome (`58px`). | `#1010`, `#1012` |
+| `e29e201` | CSS UA `<center>` / `table` y layout de `BlockNode`/`Table` dentro de `InlineNode` (Hacker News visible). | `#1011` |
+| `467a6ba` | `collect_intrinsic_widths` en `flex-direction: row`, inline y `white-space: nowrap/pre` (tabs de Wikipedia sin solape). | `#1013` |
+| `f9e1b83` | `H1Pool` keep-alive HTTPS/HTTP1.1 y `ResourceLoader::load_many` paralelo acotado para imágenes. | `#1014` |
+| `352dfd1`, `9f44916` | Fallback de fuentes del sistema bajo demanda (`SYSTEM_FALLBACK_DB` con `OnceLock`) preservando determinismo golden en fuentes empaquetadas. | `#1015` |
+| `d1da78f` | Runtime de transiciones CSS (`ANIMATABLE_PROPERTIES`, `transition_progress`, `apply_transitions`). | `#941`, `#942` |
+| `7ab03bc` | Actualización de `PROGRESS.md` y badges en `docs/status/`. | — |
+| `905d869`, `4663ca2`, `62c41e9`, `8eef306` | Pixmap vacío en dimensiones desbordadas, clip stack O(1) acotado, `scrollable_overflow_height` en `shell::worker` y límites en `TextCache` (`crates/paint`). | `#667`, `#651`, `#1021`, `#656` |
+| *(actual)* | Actualización de `ARCHITECTURE.md`, `TOOLING.md`, `PHASE4-SUPPORT.md`, `JAVASCRIPT-STRATEGY.md`, `SECURITY.md` y `PROGRESS.md`/badges. | `#718`, `#721`, `#731`, `#825`, `#829`, `#830` |
+
+## Verificación del estado actual en `main`
+
+- `cargo fmt --all -- --check`: **PASS**
+- `cargo clippy --workspace --all-targets -- -D warnings`: **PASS**
+- `cargo test --workspace --locked`: **PASS** (incluyendo los 13 tests de `import_media_tests` y 15+10 de `fonts`)
+- `cargo run --release --locked -p test_harness -- --summary`: **PASS** (tokenizer `7050/7050`, árbol `3904/3904`, serializer `230/230`, CSS syntax `30/30`)
+
+## Pendiente prioritario para la próxima sesión de coding
+
+1. **Fidelidad visual en webs reales**:
+   - Seguir cerrando brechas de layout/CSS/pintado detectadas al probar sitios reales en `megi` (posicionamiento, anchos `auto`/flex/grid complejos, centrado, SVG/imágenes y estilos modernos).
+2. **Revisión de PRs y CI**:
+   - Revisar/mergear PR `#1020` (`fix/paint-rasterize-panic` para `#667`) y atender los checks de CI (`MSRV 1.88`, `cargo-audit`/`deny`, `cargo-geiger`).
+
+---
+
+# Handoff de sesión — Pre-Alpha `v0.1.0` (2026-11-12)
+
+**Fecha**: 2026-11-12 (Europe/Madrid)
+**Rama**: `main` — Pre-Alpha `v0.1.0`
+**Estado**: **2300 tests, 0 fallos**; gate **PASS** con **árbol 3.904/3.904 (100 %)**; **14/14 crates con `#![forbid(unsafe_code)]`**. Manifiesto `docs/status/progress.toml` actualizado; `PROGRESS.md`/SVG se regeneran con `python3 tools/update_progress.py --write`.
+**CI/Repo**: GitHub Actions y workflow de release (`v*.*.*`) actualizados para empaquetar `megi`, `render`, `test_harness` y `bench` en Linux, macOS y Windows.
 **Estado de fases**: fuente editable [`docs/status/progress.toml`](status/progress.toml), página generada [`PROGRESS.md`](../PROGRESS.md); **no editar a mano** los artefactos generados.
 
 ## Qué se hizo en la ronda 32 (6 commits + status)
@@ -25,7 +61,7 @@
 - **Perf**: css resolve −50,5 %, layout −7,0 %, PNG decode −62,4 %, encode −18/−22 %, render-to-png −27,7 %, CLI render −6,5 % con PNG byte-idéntico.
 - **Goldens**: básicos/showcase/phase4 intactos; PNG raw md5 idéntico a PIL; TLA E2E 2/2.
 - **Status**: `docs/status/progress.toml` es la fuente editable; `python3 tools/update_progress.py --write` regenera `PROGRESS.md` + `docs/status/*`; CI ejecuta `--check --no-gate --no-count`.
-- **Fuzz**: 14 targets, corpus 37, CI 300 s + PR build-only.
+- **Fuzz**: 22 targets, corpus 37, CI 300 s + PR build-only.
 
 ## Comandos de verificación
 
@@ -34,7 +70,7 @@
 cargo test --workspace                              # 1929 tests (JS por defecto)
 cargo run -p test_harness -- --summary              # gate: 3904/3904 árbol, PASS, exit 0
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo doc --workspace --no-deps
-cargo +1.88 check --workspace --all-targets         # MSRV
+cargo +1.91 check --workspace --all-targets         # MSRV
 
 # Ronda 32
 cargo run --release -p bench -- --filter css/resolve-styles
@@ -64,7 +100,7 @@ python3 tools/update_progress.py --check --no-gate --no-count
 | `render` | Pipeline URL→PNG + imágenes + module scripts/importmap + scaled decode + providers JS + streaming/keep-alive + workers + encode_png/fetch + **TLA + fast paths** | **172** |
 | `shell` | F7 + chrome contextual + pages/favicons + historial + chrome fast path + PNG single-encode + sesión/save-png | **238** |
 | `bench` / `test_harness` | Tooling (PNG/decode/VP8/chrome rows) / gate 4 suites | 10 / 11 |
-| `fuzz` (workspace aparte) | 14 targets + corpus 37 + PR build-only | build 14/14 |
+| `fuzz` (workspace aparte) | 22 targets + corpus 37 + PR build-only | build 22/22 |
 
 ## Deuda priorizada
 

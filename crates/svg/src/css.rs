@@ -155,11 +155,11 @@ pub(crate) struct StyleRule {
 
 /// A declaration that matched an element during the cascade.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct MatchedDeclaration {
+pub(crate) struct MatchedDeclaration<'a> {
     pub specificity: u32,
     pub order: usize,
-    pub name: String,
-    pub value: String,
+    pub name: &'a str,
+    pub value: &'a str,
 }
 
 /// Parses a stylesheet into rules, skipping unsupported/invalid constructs.
@@ -235,12 +235,12 @@ pub(crate) fn parse_stylesheet(text: &str) -> Vec<StyleRule> {
 
 /// Returns every declaration that applies to `element`, in cascade order
 /// (lowest specificity/order first; callers apply later entries last).
-pub(crate) fn matching_declarations(
-    rules: &[StyleRule],
+pub(crate) fn matching_declarations<'a>(
+    rules: &'a [StyleRule],
     element: &XmlElement,
     ancestors: &[&XmlElement],
     budget: &mut SelectorBudget,
-) -> Result<Vec<MatchedDeclaration>, SvgError> {
+) -> Result<Vec<MatchedDeclaration<'a>>, SvgError> {
     let mut matched = Vec::new();
     for rule in rules {
         let mut best_specificity: Option<u32> = None;
@@ -259,8 +259,8 @@ pub(crate) fn matching_declarations(
             matched.push(MatchedDeclaration {
                 specificity,
                 order: rule.order,
-                name: declaration.name.clone(),
-                value: declaration.value.clone(),
+                name: declaration.name.as_str(),
+                value: declaration.value.as_str(),
             });
         }
     }
@@ -296,22 +296,17 @@ pub(crate) fn parse_declarations(text: &str) -> Vec<Declaration> {
 fn parse_selector(raw: &str) -> Option<Selector> {
     let mut parts = Vec::new();
     // `>` is treated as a descendant combinator (documented approximation).
-    let compounds: Vec<String> = raw
-        .replace('>', " ")
-        .split_ascii_whitespace()
-        .map(str::to_owned)
-        .collect();
-    if compounds.len() > MAX_SELECTOR_PARTS {
-        // Fail closed: reject over-long selectors instead of silently truncating.
-        return None;
-    }
-    for compound in compounds {
+    for compound in raw.split(|c: char| c.is_ascii_whitespace() || c == '>') {
         if compound.is_empty() {
             continue;
         }
-        parts.push(parse_simple_selector(&compound)?);
+        if parts.len() >= MAX_SELECTOR_PARTS {
+            // Fail closed: reject over-long selectors instead of silently truncating.
+            return None;
+        }
+        parts.push(parse_simple_selector(compound)?);
     }
-    if parts.is_empty() || parts.len() > MAX_SELECTOR_PARTS {
+    if parts.is_empty() {
         return None;
     }
     Some(Selector { parts })
@@ -471,9 +466,21 @@ mod tests {
         .expect("cascade");
         let colors: Vec<&str> = matched
             .iter()
-            .map(|declaration| declaration.value.as_str())
+            .map(|declaration| declaration.value)
             .collect();
         assert_eq!(colors, vec!["red", "green", "blue"]);
+    }
+
+    #[test]
+    fn test_child_combinator_and_selector_part_cap() {
+        let rules = parse_stylesheet("svg > g > rect { fill: red }");
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].selectors[0].parts.len(), 3);
+
+        // Over-long selector (> MAX_SELECTOR_PARTS) is rejected without truncating.
+        let long_selector = vec!["g"; MAX_SELECTOR_PARTS + 1].join(" > ");
+        let css = format!("{long_selector} {{ fill: blue }}");
+        assert!(parse_stylesheet(&css).is_empty());
     }
 
     #[test]

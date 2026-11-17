@@ -91,3 +91,37 @@ fn test_deep_dom_layout_does_not_overflow_default_sized_stack() {
         .join()
         .expect("deep document layout must not overflow the stack");
 }
+
+#[test]
+fn test_very_deep_dom_is_bounded_without_stack_overflow() {
+    std::thread::Builder::new()
+        .stack_size(4 * 1024 * 1024)
+        .spawn(|| {
+            let mut doc = Document::new();
+            let html = doc.create_element(Namespace::Html, "html", vec![]);
+            doc.append_child(doc.root(), html);
+            let mut styles = HashMap::new();
+            let mut html_style = ComputedStyle::initial();
+            html_style.display = Display::Block;
+            styles.insert(html, html_style);
+            let mut parent = html;
+            for _ in 0..1000 {
+                let div = doc.create_element(Namespace::Html, "div", vec![]);
+                doc.append_child(parent, div);
+                let mut style = ComputedStyle::initial();
+                style.display = Display::Block;
+                style.width = Length::Auto;
+                styles.insert(div, style);
+                parent = div;
+            }
+            let tree = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0));
+            assert!(
+                tree.is_some(),
+                "very deep DOM must still produce bounded layout"
+            );
+            drop(tree);
+        })
+        .expect("spawn bounded-depth thread")
+        .join()
+        .expect("1000-deep DOM must not overflow the stack");
+}

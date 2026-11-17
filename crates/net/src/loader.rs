@@ -52,7 +52,7 @@ use std::time::{Duration, Instant, SystemTime};
 use crate::cache::{self, CachePolicy};
 use crate::data::decode_data_url;
 use crate::error::{FetchError, LoadError};
-use crate::file::load_file_url;
+use crate::file::load_file_url_with_limit;
 use crate::http::{FetchOptions, Headers, Response, fetch, fetch_with_headers};
 use crate::mime::{self, MimeHint};
 use crate::range::ByteRange;
@@ -66,6 +66,7 @@ use crate::url::{Scheme, Url};
 /// previous memoization semantics with a conservative fixed five-minute window.
 pub const HEURISTIC_FRESHNESS: Duration = Duration::from_secs(300);
 const MAX_CACHE_ENTRIES: usize = 256;
+const MAX_CACHE_BYTES: usize = 64 * 1024 * 1024;
 
 /// A successfully loaded resource.
 #[derive(Clone, Debug)]
@@ -104,6 +105,9 @@ struct CachedEntry {
     last_modified: Option<String>,
     /// `Vary: User-Agent` value at store time (None when the response does not vary).
     vary_user_agent: Option<String>,
+    /// Request `Origin` at store time (`None` for no-CORS/same-origin requests) so a cached
+    /// entry validated for one origin or in `no-cors` mode is never served to another (#99).
+    origin: Option<String>,
 }
 
 impl CachedEntry {
@@ -111,10 +115,12 @@ impl CachedEntry {
         !self.no_cache && !self.must_revalidate && self.stored_at.elapsed() < self.freshness
     }
 
-    fn matches_request(&self, user_agent: &str) -> bool {
-        self.vary_user_agent
-            .as_deref()
-            .is_none_or(|stored| stored == user_agent)
+    fn matches_request(&self, user_agent: &str, origin: Option<&str>) -> bool {
+        self.origin.as_deref() == origin
+            && self
+                .vary_user_agent
+                .as_deref()
+                .is_none_or(|stored| stored == user_agent)
     }
 
     fn can_revalidate(&self) -> bool {
@@ -148,6 +154,7 @@ impl CachedEntry {
 pub struct ResourceLoader {
     options: FetchOptions,
     cache: Option<HashMap<String, CachedEntry>>,
+    cache_bytes: usize,
     cache_hits: u64,
     cache_misses: u64,
     cache_revalidations: u64,
@@ -194,6 +201,15 @@ impl ResourceLoader {
         self
     }
 
+    /// Lowers the per-response body cap for the next loads and returns the previous value.
+    /// Used by the render image loader so the image byte budget is enforced while fetching,
+    /// not after buffering every response (#1213).
+    pub fn set_max_response_bytes(&mut self, limit: usize) -> usize {
+        let previous = self.options.max_response_bytes;
+        self.options.max_response_bytes = limit;
+        previous
+    }
+
     /// Creates a loader with custom [`FetchOptions`] and the cache enabled.
     pub fn with_options(options: FetchOptions) -> Self {
         let h1_pool = crate::http::H1Pool::new(
@@ -203,6 +219,7 @@ impl ResourceLoader {
         Self {
             options,
             cache: Some(HashMap::new()),
+            cache_bytes: 0,
             cache_hits: 0,
             cache_misses: 0,
             cache_revalidations: 0,
@@ -220,6 +237,7 @@ impl ResourceLoader {
         Self {
             options: FetchOptions::default(),
             cache: None,
+            cache_bytes: 0,
             cache_hits: 0,
             cache_misses: 0,
             cache_revalidations: 0,
@@ -263,6 +281,7 @@ impl ResourceLoader {
             }
         } else {
             self.cache = None;
+            self.cache_bytes = 0;
         }
     }
 
@@ -330,6 +349,24 @@ impl ResourceLoader {
     /// later real request still goes to the network.
     fn store_pushed(&mut self, pushed: Vec<crate::http::PushedResponse>) {
         for pushed in pushed {
+            // Pushed responses are real responses: their `Set-Cookie` must land in the jar and
+            // a cross-origin push must pass the same CORS check as a normal fetch — otherwise a
+            // hostile h2 server plants entries in `push_cache` that `load()` serves without any
+            // gate ever running (#652).
+            if let Some(jar) = &self.options.cookie_jar {
+                jar.lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .store_from_response(&pushed.url, &pushed.headers);
+            }
+            if let Some(origin) = self.options.origin.as_deref()
+                // A push is a preload candidate, not a credentialed response: it is only served
+                // to a same-origin/CORS-approved consumer, so the credential flag stays false.
+                && crate::cors::validate_response(&pushed.url, origin, &pushed.headers, false)
+                    .is_err()
+            {
+                self.pushed_discarded += 1;
+                continue;
+            }
             let bytes = pushed.body.len();
             if pushed.body.len() > self.options.max_pushed_body
                 || self.push_cache.len() >= self.options.max_pushed_resources
@@ -346,20 +383,19 @@ impl ResourceLoader {
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(|| mime::sniff(&pushed.body).mime_type().to_owned());
             let key = pushed.url.cache_key();
-            if self
-                .push_cache
-                .insert(
-                    key,
-                    Arc::new(Resource {
-                        url: pushed.url,
-                        content_type,
-                        bytes: pushed.body,
-                    }),
-                )
-                .is_none()
-            {
-                self.pushed_bytes = self.pushed_bytes.saturating_add(bytes);
+            // Subtract the replaced entry's bytes before adding the new one (#1258).
+            if let Some(old) = self.push_cache.get(&key) {
+                self.pushed_bytes = self.pushed_bytes.saturating_sub(old.bytes.len());
             }
+            self.push_cache.insert(
+                key,
+                Arc::new(Resource {
+                    url: pushed.url,
+                    content_type,
+                    bytes: pushed.body,
+                }),
+            );
+            self.pushed_bytes = self.pushed_bytes.saturating_add(bytes);
         }
     }
 
@@ -381,6 +417,9 @@ impl ResourceLoader {
 
         // Server-pushed preloads are consumed before any cache/network work (per session).
         if let Some(resource) = self.push_cache.remove(&url.cache_key()) {
+            // The pushed entry is now consumed: release its bytes so a later push is not
+            // rejected by a stale accounting total (#640).
+            self.pushed_bytes = self.pushed_bytes.saturating_sub(resource.bytes.len());
             self.pushed_used += 1;
             return Ok(resource);
         }
@@ -393,8 +432,8 @@ impl ResourceLoader {
             .cloned();
 
         if let Some(entry) = stored {
-            if !entry.matches_request(&self.options.user_agent) {
-                // Another `Vary` variant: treat as a miss and refetch.
+            if !entry.matches_request(&self.options.user_agent, self.options.origin.as_deref()) {
+                // Another `Vary` or `Origin` variant: treat as a miss and refetch.
             } else if entry.is_fresh() {
                 self.cache_hits += 1;
                 return Ok(entry.resource);
@@ -404,10 +443,26 @@ impl ResourceLoader {
         }
 
         self.cache_misses += 1;
-        let (resource, headers) = self.fetch_resource(url)?;
+        let (resource, headers, status) = self.fetch_resource(url)?;
         let resource = Arc::new(resource);
-        self.store(url, cache_key, Arc::clone(&resource), headers.as_ref());
+        if status.is_none_or(|code| code == 200) {
+            self.store(
+                url,
+                cache_key,
+                Arc::clone(&resource),
+                headers.as_ref(),
+                self.options.origin.clone(),
+            );
+        }
         Ok(resource)
+    }
+
+    /// Loads `url` in `no-cors` mode (without sending `Origin` or enforcing CORS).
+    pub fn load_no_cors(&mut self, url: &Url) -> Result<Arc<Resource>, LoadError> {
+        let saved_origin = self.options.origin.take();
+        let result = self.load(url);
+        self.options.origin = saved_origin;
+        result
     }
 
     /// Loads `url` with a streaming callback.
@@ -456,35 +511,173 @@ impl ResourceLoader {
         self.h1_pool.idle_connections()
     }
 
+    /// Loads multiple URLs, fetching uncached HTTP/HTTPS targets concurrently (bounded to
+    /// 6 worker threads) while preserving cache/push/CORS semantics per request.
+    pub fn load_many(
+        &mut self,
+        requests: &[(&Url, bool)],
+    ) -> Vec<Result<Arc<Resource>, LoadError>> {
+        let mut results: Vec<Option<Result<Arc<Resource>, LoadError>>> =
+            (0..requests.len()).map(|_| None).collect();
+        let mut pending_indices: HashMap<String, (Url, bool, Vec<usize>)> = HashMap::new();
+
+        for (idx, &(url, use_cors)) in requests.iter().enumerate() {
+            if !matches!(url.scheme(), Scheme::Http | Scheme::Https) {
+                results[idx] = Some(if use_cors {
+                    self.load(url)
+                } else {
+                    self.load_no_cors(url)
+                });
+                continue;
+            }
+            let key = url.cache_key();
+            if self.push_cache.contains_key(&key)
+                || self.cache.as_ref().is_some_and(|c| c.contains_key(&key))
+            {
+                results[idx] = Some(if use_cors {
+                    self.load(url)
+                } else {
+                    self.load_no_cors(url)
+                });
+                continue;
+            }
+            let entry = pending_indices
+                .entry(format!("{use_cors}:{key}"))
+                .or_insert_with(|| (url.clone(), use_cors, Vec::new()));
+            entry.2.push(idx);
+        }
+
+        if pending_indices.len() <= 1 {
+            for (_, (url, use_cors, indices)) in pending_indices {
+                for idx in indices {
+                    results[idx] = Some(if use_cors {
+                        self.load(&url)
+                    } else {
+                        self.load_no_cors(&url)
+                    });
+                }
+            }
+            return results.into_iter().map(|r| r.expect("filled")).collect();
+        }
+
+        let work: Vec<(Url, bool, Vec<usize>)> = pending_indices.into_values().collect();
+        let base_options = &self.options;
+        let concurrency = work.len().min(6);
+        let chunk_size = work.len().div_ceil(concurrency);
+        let fetched: Vec<(
+            String,
+            Vec<usize>,
+            Result<crate::http::Response, FetchError>,
+        )> = std::thread::scope(|scope| {
+            let mut handles = Vec::with_capacity(concurrency);
+            for chunk in work.chunks(chunk_size) {
+                handles.push(scope.spawn(move || {
+                    let mut out = Vec::with_capacity(chunk.len());
+                    for (url, use_cors, indices) in chunk {
+                        let mut opts = base_options.clone();
+                        if !*use_cors {
+                            opts.origin = None;
+                        }
+                        let resp = fetch(url, &opts);
+                        out.push((url.cache_key(), indices.clone(), resp));
+                    }
+                    out
+                }));
+            }
+            let mut all = Vec::with_capacity(work.len());
+            for h in handles {
+                all.extend(h.join().expect("fetch worker panicked"));
+            }
+            all
+        });
+
+        for (cache_key, indices, resp) in fetched {
+            let (first_url, use_cors) = requests[indices[0]];
+            let effective_origin = if use_cors {
+                self.options.origin.clone()
+            } else {
+                None
+            };
+            match resp {
+                Ok(mut response) => {
+                    if response.status == 304 {
+                        for idx in indices {
+                            results[idx] =
+                                Some(Err(LoadError::from(FetchError::UnconditionalNotModified)));
+                        }
+                    } else {
+                        let status = response.status;
+                        self.store_pushed(std::mem::take(&mut response.pushed));
+                        let headers = response.headers.clone();
+                        let resource = Arc::new(resource_from_response(response));
+                        self.cache_misses += 1;
+                        if status == 200 {
+                            self.store(
+                                first_url,
+                                cache_key,
+                                Arc::clone(&resource),
+                                Some(&headers),
+                                effective_origin,
+                            );
+                        }
+                        for idx in indices {
+                            results[idx] = Some(Ok(Arc::clone(&resource)));
+                        }
+                    }
+                }
+                Err(err) => {
+                    let msg = err.to_string();
+                    let mut iter = indices.into_iter();
+                    if let Some(first_idx) = iter.next() {
+                        results[first_idx] = Some(Err(LoadError::from(err)));
+                    }
+                    for idx in iter {
+                        results[idx] = Some(Err(LoadError::from(FetchError::InvalidResponse(
+                            msg.clone(),
+                        ))));
+                    }
+                }
+            }
+        }
+
+        results.into_iter().map(|r| r.expect("filled")).collect()
+    }
+
     /// Fetches without consulting the cache (still stores the result when allowed).
     ///
-    /// Returns the response headers (when fetched over HTTP) so the caller can apply
-    /// `Cache-Control`/validators to the stored entry.
-    fn fetch_resource(&mut self, url: &Url) -> Result<(Resource, Option<Headers>), FetchError> {
+    /// Returns the response headers and status code (when fetched over HTTP) so the caller
+    /// can apply `Cache-Control`/validators and only cache `200` responses (#91).
+    fn fetch_resource(
+        &mut self,
+        url: &Url,
+    ) -> Result<(Resource, Option<Headers>, Option<u16>), FetchError> {
         match url.scheme() {
             Scheme::Http | Scheme::Https => {
-                let mut response = if url.scheme() == Scheme::Http {
-                    crate::http::fetch_pooled(url, &self.options, &mut self.h1_pool)?
-                } else {
-                    fetch(url, &self.options)?
-                };
+                let mut response =
+                    crate::http::fetch_pooled(url, &self.options, &mut self.h1_pool)?;
                 if response.status == 304 {
                     // Reached only when no conditional request was sent (no cached
                     // representation): a server bug must be a typed error.
                     return Err(FetchError::UnconditionalNotModified);
                 }
+                let status = response.status;
                 self.store_pushed(std::mem::take(&mut response.pushed));
                 let headers = response.headers.clone();
-                Ok((resource_from_response(response), Some(headers)))
+                Ok((
+                    resource_from_response(response),
+                    Some(headers),
+                    Some(status),
+                ))
             }
             Scheme::File => {
-                let bytes = load_file_url(url)?;
+                let bytes = load_file_url_with_limit(url, self.options.max_response_bytes)?;
                 Ok((
                     Resource {
                         url: url.clone(),
                         content_type: mime::sniff(&bytes).mime_type().to_owned(),
                         bytes,
                     },
+                    None,
                     None,
                 ))
             }
@@ -497,6 +690,7 @@ impl ResourceLoader {
                         bytes: data.bytes,
                         content_type: data.mime_type,
                     },
+                    None,
                     None,
                 ))
             }
@@ -513,9 +707,15 @@ impl ResourceLoader {
         if !matches!(url.scheme(), Scheme::Http | Scheme::Https) {
             // `file://` has no conditional requests: refetch normally.
             self.cache_misses += 1;
-            let (resource, headers) = self.fetch_resource(url)?;
+            let (resource, headers, _) = self.fetch_resource(url)?;
             let resource = Arc::new(resource);
-            self.store(url, cache_key, Arc::clone(&resource), headers.as_ref());
+            self.store(
+                url,
+                cache_key,
+                Arc::clone(&resource),
+                headers.as_ref(),
+                self.options.origin.clone(),
+            );
             return Ok(resource);
         }
         let headers = entry.conditional_headers();
@@ -536,10 +736,25 @@ impl ResourceLoader {
         }
         self.cache_misses += 1;
         let mut response = response;
+        let status = response.status;
         self.store_pushed(std::mem::take(&mut response.pushed));
         let headers = response.headers.clone();
         let resource = Arc::new(resource_from_response(response));
-        self.store(url, cache_key, Arc::clone(&resource), Some(&headers));
+        if status == 200 {
+            self.store(
+                url,
+                cache_key,
+                Arc::clone(&resource),
+                Some(&headers),
+                self.options.origin.clone(),
+            );
+        } else if let Some(cache) = &mut self.cache
+            && let Some(removed) = cache.remove(&cache_key)
+        {
+            self.cache_bytes = self
+                .cache_bytes
+                .saturating_sub(removed.resource.bytes.len());
+        }
         Ok(resource)
     }
 
@@ -550,6 +765,7 @@ impl ResourceLoader {
         cache_key: String,
         resource: Arc<Resource>,
         response_headers: Option<&Headers>,
+        origin: Option<String>,
     ) {
         let Some(cache) = &mut self.cache else {
             return;
@@ -567,21 +783,43 @@ impl ResourceLoader {
                 (policy, freshness)
             }
             // `file://` (and synthetic) resources: heuristic freshness, no validators.
-            None => (CachePolicy::default(), HEURISTIC_FRESHNESS),
+            // Refuse to cache a body above the response cap so a single large file cannot
+            // pin an unbounded amount of memory in the cache HashMap (#637).
+            None => {
+                if resource.bytes.len() > self.options.max_response_bytes {
+                    return;
+                }
+                (CachePolicy::default(), HEURISTIC_FRESHNESS)
+            }
         };
         let vary_user_agent = if policy.vary.user_agent {
             Some(self.options.user_agent.clone())
         } else {
             None
         };
-        // Evict oldest entries when the cap is reached.
-        if cache.len() >= MAX_CACHE_ENTRIES {
-            // Remove the first entry (oldest insertion order in HashMap is arbitrary,
-            // but this bounds memory).
-            if let Some(oldest_key) = cache.keys().next().cloned() {
-                cache.remove(&oldest_key);
+        let entry_bytes = resource.bytes.len();
+        if entry_bytes > MAX_CACHE_BYTES {
+            return;
+        }
+        if let Some(previous) = cache.remove(&cache_key) {
+            self.cache_bytes = self
+                .cache_bytes
+                .saturating_sub(previous.resource.bytes.len());
+        }
+        // Evict entries when the entry count or aggregate byte cap is reached (#455).
+        while cache.len() >= MAX_CACHE_ENTRIES
+            || self.cache_bytes.saturating_add(entry_bytes) > MAX_CACHE_BYTES
+        {
+            let Some(oldest_key) = cache.keys().next().cloned() else {
+                break;
+            };
+            if let Some(removed) = cache.remove(&oldest_key) {
+                self.cache_bytes = self
+                    .cache_bytes
+                    .saturating_sub(removed.resource.bytes.len());
             }
         }
+        self.cache_bytes = self.cache_bytes.saturating_add(entry_bytes);
         cache.insert(
             cache_key,
             CachedEntry {
@@ -593,6 +831,7 @@ impl ResourceLoader {
                 etag: policy.etag,
                 last_modified: policy.last_modified,
                 vary_user_agent,
+                origin,
             },
         );
     }
@@ -684,7 +923,7 @@ impl ResourceLoader {
                 })
             }
             Scheme::File => {
-                let bytes = load_file_url(url)?;
+                let bytes = load_file_url_with_limit(url, self.options.max_response_bytes)?;
                 let slice = slice_bytes(&bytes, range)?;
                 Ok(Resource {
                     url: url.clone(),
@@ -716,6 +955,7 @@ impl ResourceLoader {
         if let Some(cache) = &mut self.cache {
             cache.clear();
         }
+        self.cache_bytes = 0;
     }
 
     /// Number of cached resources (one per URL).
@@ -795,6 +1035,32 @@ mod unit_tests {
     use super::*;
 
     #[test]
+    fn consumed_push_releases_its_bytes() {
+        // #640: `store_pushed` adds `bytes` to `pushed_bytes`, but `load()` used to leave the
+        // total accounting untouched on consume, so it grew monotonically and eventually every
+        // later push was rejected by `max_pushed_total`.
+        use crate::http::PushedResponse;
+
+        let options = FetchOptions::default();
+        let mut loader = ResourceLoader::with_options(options);
+        let url = Url::parse("https://example.test/consumed.css").expect("url");
+        loader.absorb_pushed(vec![PushedResponse {
+            url: url.clone(),
+            headers: vec![("content-type".to_owned(), "text/css".to_owned())],
+            body: vec![0u8; 64],
+        }]);
+
+        assert_eq!(loader.pushed_bytes, 64, "the push must be accounted for");
+        let resource = loader.load(&url).expect("the consumed push must be served");
+        assert_eq!(resource.bytes.len(), 64);
+        assert_eq!(
+            loader.pushed_bytes, 0,
+            "consuming a push must release its bytes"
+        );
+        assert_eq!(loader.pushed_used(), 1);
+    }
+
+    #[test]
     fn loader_starts_with_empty_cache() {
         let loader = ResourceLoader::new();
         assert!(loader.is_cache_enabled());
@@ -812,5 +1078,57 @@ mod unit_tests {
         assert_eq!(loader.cache_len(), 0);
         loader.set_cache_enabled(true);
         assert!(loader.is_cache_enabled());
+    }
+
+    #[test]
+    fn pushed_responses_respect_cors_and_store_cookies() {
+        // #652: pushes were inserted into `push_cache` and served by `load()` without ever
+        // passing the cookie jar or the CORS gate.
+        use crate::cookies::CookieJar;
+        use crate::http::PushedResponse;
+        use std::sync::Mutex;
+
+        let jar = Arc::new(Mutex::new(CookieJar::new()));
+        let options = FetchOptions {
+            origin: Some("https://app.test".to_owned()),
+            cookie_jar: Some(Arc::clone(&jar)),
+            ..FetchOptions::default()
+        };
+        let mut loader = ResourceLoader::with_options(options);
+
+        let allowed = PushedResponse {
+            url: Url::parse("https://cdn.test/allowed.css").expect("url"),
+            headers: vec![
+                (
+                    "access-control-allow-origin".to_owned(),
+                    "https://app.test".to_owned(),
+                ),
+                ("set-cookie".to_owned(), "pushed=1; Path=/".to_owned()),
+            ],
+            body: b"body{}".to_vec(),
+        };
+        let blocked = PushedResponse {
+            url: Url::parse("https://evil.test/blocked.css").expect("url"),
+            headers: vec![("content-type".to_owned(), "text/css".to_owned())],
+            body: b"body{}".to_vec(),
+        };
+        let allowed_key = allowed.url.clone();
+        let blocked_key = blocked.url.clone();
+        loader.absorb_pushed(vec![allowed, blocked]);
+
+        assert!(
+            loader.cache_key_is_preloaded(&allowed_key),
+            "a CORS-approved push must be served"
+        );
+        assert!(
+            !loader.cache_key_is_preloaded(&blocked_key),
+            "a cross-origin push without ACAO must be dropped"
+        );
+        assert_eq!(loader.pushed_discarded(), 1);
+        let jar = jar.lock().expect("jar");
+        assert!(
+            jar.iter().any(|cookie| cookie.name == "pushed"),
+            "Set-Cookie from a push must reach the jar"
+        );
     }
 }

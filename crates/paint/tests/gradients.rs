@@ -805,3 +805,90 @@ fn test_conic_stop_cap_no_panic() {
     );
     assert_eq!(pixmap.width, 60);
 }
+
+#[test]
+fn test_background_clip_text_excludes_outer_shadow_and_border_box_layer() {
+    let mut style = block_style();
+    style.background_color = Color::new(0, 0, 255, 255);
+    style.background_geometry_explicit = true;
+    style.box_shadows.push(css::BoxShadow {
+        offset_x: 0.0,
+        offset_y: 0.0,
+        blur: 0.0,
+        spread: 4.0,
+        color: Color::new(255, 0, 0, 255),
+        inset: false,
+    });
+    style.background_layers = vec![
+        BackgroundLayer {
+            gradient: Some(Arc::new(linear_gradient(
+                LinearDirection::ToRight,
+                vec![("#00ff00", None), ("#00ff00", None)],
+            ))),
+            clip: BackgroundClip::Text,
+            ..BackgroundLayer::default()
+        },
+        BackgroundLayer {
+            gradient: Some(Arc::new(linear_gradient(
+                LinearDirection::ToRight,
+                vec![("blue", None), ("blue", None)],
+            ))),
+            clip: BackgroundClip::BorderBox,
+            ..BackgroundLayer::default()
+        },
+    ];
+    let mut document = Document::new();
+    let html = document.create_element(Namespace::Html, "html", vec![]);
+    let node = document.create_element(Namespace::Html, "div", vec![]);
+    document.append_child(document.root(), html);
+    document.append_child(html, node);
+    let mut root_style = block_style();
+    root_style.background_color = Color::WHITE;
+    let mut root = LayoutBox::new(BoxType::BlockNode(html), Some(root_style));
+    root.dimensions.content = VIEWPORT;
+    let mut child = LayoutBox::new(BoxType::BlockNode(node), Some(style));
+    child.dimensions.content = Rect::new(10.0, 10.0, 40.0, 20.0);
+    root.children.push(child);
+    let list = build_display_list_with_images_and_backgrounds(
+        &root,
+        VIEWPORT,
+        &ImageStore::new(),
+        &BackgroundImages::new(),
+    );
+    let mut shadow_idx = None;
+    let mut first_push_text = None;
+    let mut border_box_grad_idx = None;
+    let mut text_grad_idx = None;
+    for (idx, item) in list.items.iter().enumerate() {
+        match item {
+            paint::DisplayItem::BoxShadow { .. } if shadow_idx.is_none() => shadow_idx = Some(idx),
+            paint::DisplayItem::PushTextMaskGroup { .. } if first_push_text.is_none() => {
+                first_push_text = Some(idx)
+            }
+            paint::DisplayItem::Gradient { .. } => {
+                if border_box_grad_idx.is_none() {
+                    border_box_grad_idx = Some(idx);
+                } else {
+                    text_grad_idx = Some(idx);
+                }
+            }
+            _ => {}
+        }
+    }
+    let shadow_idx = shadow_idx.expect("outer box-shadow");
+    let first_push_text = first_push_text.expect("PushTextMaskGroup");
+    let border_box_grad_idx = border_box_grad_idx.expect("border-box gradient");
+    let text_grad_idx = text_grad_idx.expect("text-clipped gradient");
+    assert!(
+        shadow_idx < first_push_text,
+        "outer box-shadow ({shadow_idx}) must precede PushTextMaskGroup ({first_push_text})"
+    );
+    assert!(
+        border_box_grad_idx < first_push_text,
+        "border-box layer ({border_box_grad_idx}) must precede PushTextMaskGroup ({first_push_text})"
+    );
+    assert!(
+        first_push_text < text_grad_idx,
+        "text-clipped layer ({text_grad_idx}) must be inside PushTextMaskGroup ({first_push_text})"
+    );
+}

@@ -91,6 +91,7 @@ pub fn evaluate(value: &str, context: &CalcContext) -> Option<CalcValue> {
         input: inner.as_bytes(),
         position: 0,
         context: *context,
+        depth: 0,
     };
     let quantity = parser.expression()?;
     parser.skip_whitespace();
@@ -141,6 +142,7 @@ struct Parser<'a> {
     input: &'a [u8],
     position: usize,
     context: CalcContext,
+    depth: usize,
 }
 
 impl Parser<'_> {
@@ -215,30 +217,43 @@ impl Parser<'_> {
 
     fn factor(&mut self) -> Option<Quantity> {
         self.skip_whitespace();
-        match self.peek()? {
-            b'-' => {
-                self.position += 1;
-                let value = self.factor()?;
-                Some(Quantity {
-                    px: -value.px,
-                    percent: -value.percent,
-                    unitless: value.unitless,
-                })
+        // Accumulate consecutive unary signs without recursion (#1128).
+        let mut negate = false;
+        let mut saw_sign = false;
+        while matches!(self.peek(), Some(b'-' | b'+')) {
+            if self.peek() == Some(b'-') {
+                negate = !negate;
             }
-            b'+' => {
-                self.position += 1;
-                self.factor()
-            }
+            self.position += 1;
+            self.skip_whitespace();
+            saw_sign = true;
+        }
+        // Now handle the parenthesised or primary case.
+        let value = match self.peek()? {
             b'(' => {
+                if self.depth >= 64 {
+                    return None;
+                }
+                self.depth += 1;
                 self.position += 1;
                 let value = self.expression()?;
+                self.depth -= 1;
                 self.skip_whitespace();
                 (self.peek() == Some(b')')).then(|| {
                     self.position += 1;
                     value
-                })
+                })?
             }
-            _ => self.number(),
+            _ => self.number()?,
+        };
+        if saw_sign && negate {
+            Some(Quantity {
+                px: -value.px,
+                percent: -value.percent,
+                unitless: value.unitless,
+            })
+        } else {
+            Some(value)
         }
     }
 

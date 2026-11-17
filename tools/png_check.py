@@ -106,6 +106,16 @@ def validate_header(chunks: list[tuple[bytes, bytes]]) -> tuple[int, int, int, i
         raise PngError("IHDR appears more than once")
     if types[-1] != b"IEND":
         raise PngError("IEND is not the last chunk")
+    if chunks[-1][1]:
+        raise PngError(f"IEND chunk must be empty, got {len(chunks[-1][1])} bytes")
+
+    known_critical = {b"IHDR", b"PLTE", b"IDAT", b"IEND"}
+    for kind, payload in chunks:
+        if (kind[0] & 0x20) == 0 and kind not in known_critical:
+            raise PngError(f"unknown critical chunk {kind!r}")
+        if kind == b"PLTE":
+            if len(payload) == 0 or len(payload) % 3 != 0 or len(payload) > 256 * 3:
+                raise PngError(f"invalid PLTE payload length {len(payload)}")
 
     ihdr = chunks[0][1]
     if len(ihdr) != 13:
@@ -295,7 +305,18 @@ def check_file(path: str) -> None:
         )
     elif interlace == 0:
         stride = (width * channels * bit_depth + 7) // 8
-        print(f"  filters: {len(set(raw[:: stride + 1]))} type(s)")
+        row_stride = stride + 1
+        filters = []
+        for i in range(height):
+            off = i * row_stride
+            if off >= len(raw):
+                break
+            filters.append(raw[off])
+        # Validate every filter byte is in the PNG filter range 0..=4.
+        bad = [f for f in filters if f > 4]
+        if bad:
+            raise ValueError(f"invalid PNG filter byte(s): {sorted(set(bad))}")
+        print(f"  filters: {len(set(filters))} type(s)")
 
 
 def main(argv: list[str]) -> int:

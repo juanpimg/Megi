@@ -123,6 +123,16 @@ impl RequestSite {
 /// Maximum number of cookies kept in a jar before eviction.
 pub const MAX_COOKIES: usize = 4096;
 
+/// Per-domain cap, enforced in addition to [`MAX_COOKIES`].
+///
+/// The global cap alone lets one origin `Set-Cookie` thousands of junk cookies for its own
+/// domain and evict every other site's cookies (cross-site jar squatting, session DoS).
+/// Browsers keep roughly 150-180 cookies per host/E-TLD+1; 180 matches the upper end (#649).
+pub const MAX_COOKIES_PER_DOMAIN: usize = 180;
+
+/// Maximum size of a single cookie (name + value + attributes) in bytes.
+pub const MAX_COOKIE_BYTES: usize = 4096;
+
 /// A stored cookie (RFC 6265 §5.3 state).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cookie {
@@ -310,20 +320,33 @@ pub fn parse_set_cookie(
             "expires" => {
                 if let Some(instant) = parse_http_date(raw_attribute_value) {
                     expires = Some(instant);
+                } else {
+                    // Pre-epoch (or otherwise unrepresentable) dates mean "already
+                    // expired" (#1291): treat as delete-now rather than no expiry.
+                    let year = raw_attribute_value
+                        .split_whitespace()
+                        .nth(3)
+                        .and_then(|y| y.parse::<i64>().ok());
+                    if year.is_some_and(|y| y < 1970) {
+                        expires = Some(std::time::UNIX_EPOCH);
+                    }
                 }
             }
             "max-age" => {
-                let seconds: i64 = raw_attribute_value
-                    .parse()
-                    .map_err(|_| SetCookieError::InvalidMaxAge(raw_attribute_value.to_owned()))?;
-                // `Max-Age` is relative to the current clock; 0 or negative means "now"
-                // (immediate expiry / deletion).
-                let delta = Duration::from_secs(seconds.unsigned_abs());
-                max_age = Some(if seconds > 0 {
-                    now.checked_add(delta).unwrap_or(now)
-                } else {
-                    now
-                });
+                // RFC 6265 §5.3: invalid Max-Age is ignored (fall back to Expires).
+                // Reject leading '+' (grammar forbids it).
+                let trimmed = raw_attribute_value.trim();
+                if !trimmed.starts_with('+')
+                    && let Ok(seconds) = trimmed.parse::<i64>()
+                {
+                    // `Max-Age` is relative to the current clock; 0 or negative means "now".
+                    let delta = Duration::from_secs(seconds.unsigned_abs());
+                    max_age = Some(if seconds > 0 {
+                        now.checked_add(delta).unwrap_or(now)
+                    } else {
+                        now
+                    });
+                }
             }
             "domain" => {
                 let domain = raw_attribute_value
@@ -350,9 +373,8 @@ pub fn parse_set_cookie(
             "path" => {
                 if raw_attribute_value.starts_with('/') {
                     parsed.path = Some(raw_attribute_value.to_owned());
-                } else if !raw_attribute_value.is_empty() {
-                    return Err(SetCookieError::InvalidPath(raw_attribute_value.to_owned()));
                 }
+                // Non-absolute paths are ignored and the default path is used (#1263).
             }
             "secure" => parsed.secure = true,
             "httponly" => parsed.http_only = true,
@@ -516,6 +538,14 @@ impl CookieJar {
         let Ok(parsed) = parse_set_cookie(set_cookie, request_url, now) else {
             return false;
         };
+        // Reject cookies that exceed the size budget (#1254).
+        if parsed.name.len() + parsed.value.len() > MAX_COOKIE_BYTES {
+            return false;
+        }
+        // Secure cookies must not be set from an insecure origin (#1253).
+        if parsed.secure && request_url.scheme().as_str() != "https" {
+            return false;
+        }
         let host = request_url.host().to_ascii_lowercase();
         let host_only = parsed.domain.is_none();
         let domain = parsed.domain.clone().unwrap_or_else(|| host.clone());
@@ -536,8 +566,13 @@ impl CookieJar {
             return false;
         }
 
-        let creation = self.next_creation;
-        self.next_creation += 1;
+        let creation = if let Some(index) = existing {
+            self.cookies[index].created
+        } else {
+            let c = self.next_creation;
+            self.next_creation += 1;
+            c
+        };
         let cookie = Cookie {
             name: parsed.name,
             value: parsed.value,
@@ -553,11 +588,40 @@ impl CookieJar {
         match existing {
             Some(index) => self.cookies[index] = cookie,
             None => {
+                let stored_domain = cookie.domain.clone();
                 self.cookies.push(cookie);
+                self.enforce_domain_capacity(&stored_domain);
                 self.enforce_capacity(now);
             }
         }
         true
+    }
+
+    /// Evicts the oldest cookies of `domain` until it is within [`MAX_COOKIES_PER_DOMAIN`].
+    ///
+    /// Only cookies of the domain that just stored a new one are considered, so a hostile
+    /// origin can displace its own cookies but never another site's (#649).
+    fn enforce_domain_capacity(&mut self, domain: &str) {
+        let mut count = self
+            .cookies
+            .iter()
+            .filter(|cookie| cookie.domain == domain)
+            .count();
+        while count > MAX_COOKIES_PER_DOMAIN {
+            let victim = self
+                .cookies
+                .iter()
+                .enumerate()
+                .filter(|(_, cookie)| cookie.domain == domain)
+                .min_by_key(|(_, cookie)| {
+                    // Session cookies go first, then the oldest, mirroring the global policy.
+                    (cookie.expires.is_some(), cookie.created)
+                })
+                .map(|(index, _)| index);
+            let Some(victim) = victim else { break };
+            self.cookies.remove(victim);
+            count -= 1;
+        }
     }
 
     fn enforce_capacity(&mut self, now: SystemTime) {
@@ -648,7 +712,12 @@ impl CookieJar {
             return None;
         }
         let mut header = String::new();
+        const MAX_COOKIE_HEADER_BYTES: usize = 8 * 1024;
         for (index, cookie) in matching.iter().enumerate() {
+            let entry_len = cookie.name.len() + 1 + cookie.value.len();
+            if header.len() + entry_len + 2 > MAX_COOKIE_HEADER_BYTES {
+                break;
+            }
             if index > 0 {
                 header.push_str("; ");
             }
@@ -656,7 +725,11 @@ impl CookieJar {
             header.push('=');
             header.push_str(&cookie.value);
         }
-        Some(header)
+        if header.is_empty() {
+            None
+        } else {
+            Some(header)
+        }
     }
 }
 
@@ -808,18 +881,15 @@ mod tests {
             parse_set_cookie("bad name=value", &base, UNIX_EPOCH),
             Err(SetCookieError::InvalidName(_))
         ));
-        assert!(matches!(
-            parse_set_cookie("a=b; Max-Age=soon", &base, UNIX_EPOCH),
-            Err(SetCookieError::InvalidMaxAge(_))
-        ));
+        // Invalid Max-Age is ignored (RFC 6265 §5.3), cookie still parses.
+        assert!(parse_set_cookie("a=b; Max-Age=soon", &base, UNIX_EPOCH).is_ok());
         assert!(matches!(
             parse_set_cookie("a=b; Domain=.other.test", &base, UNIX_EPOCH),
             Err(SetCookieError::InvalidDomain(_))
         ));
-        assert!(matches!(
-            parse_set_cookie("a=b; Path=relative", &base, UNIX_EPOCH),
-            Err(SetCookieError::InvalidPath(_))
-        ));
+        // Non-absolute Path is ignored and the default path applies (#1263).
+        let parsed = parse_set_cookie("a=b; Path=relative", &base, UNIX_EPOCH).expect("valid");
+        assert_eq!(parsed.path, None);
     }
 
     #[test]
@@ -1012,6 +1082,40 @@ mod tests {
     }
 
     #[test]
+    fn one_domain_cannot_evict_other_sites_cookies() {
+        // #649: the global cap alone let one origin flood its own domain and push every other
+        // site's cookies out of the jar.
+        let mut jar = CookieJar::new();
+        let victim_origin = url("https://victim.test/");
+        jar.store_from_response(
+            &victim_origin,
+            &headers(&[("Set-Cookie", "session=secret")]),
+        );
+
+        let hostile = url("https://hostile.test/");
+        for index in 0..(MAX_COOKIES_PER_DOMAIN + 40) {
+            jar.store_from_response(
+                &hostile,
+                &headers(&[("Set-Cookie", &format!("junk{index}=1"))]),
+            );
+        }
+
+        let hostile_count = jar
+            .iter()
+            .filter(|cookie| cookie.domain == "hostile.test")
+            .count();
+        assert_eq!(
+            hostile_count, MAX_COOKIES_PER_DOMAIN,
+            "the hostile domain must be capped"
+        );
+        assert!(
+            jar.iter()
+                .any(|cookie| cookie.domain == "victim.test" && cookie.name == "session"),
+            "another site's cookie must survive"
+        );
+    }
+
+    #[test]
     fn same_name_different_paths_are_distinct() {
         let mut jar = CookieJar::new();
         let origin = url("https://example.com/");
@@ -1027,11 +1131,7 @@ mod tests {
         assert_eq!(
             jar.store_from_response(
                 &origin,
-                &headers(&[
-                    ("Set-Cookie", ""),
-                    ("Set-Cookie", "=x"),
-                    ("Set-Cookie", "a=b; Max-Age=oops"),
-                ])
+                &headers(&[("Set-Cookie", ""), ("Set-Cookie", "=x"),])
             ),
             0
         );

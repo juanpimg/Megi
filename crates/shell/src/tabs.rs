@@ -2,7 +2,7 @@
 //!
 //! Each [`Tab`] owns its own navigation history, document title/URL, scroll offset, page zoom
 //! and find-in-page state. [`TabsState`] keeps a bounded list of tabs (`MAX_TABS`) and one
-//! active index; [`TabsState::next`]/[`TabsState::previous`] wrap around and `Alt+1..9`
+//! active index; \[`TabsState::next`\]/\[`TabsState::previous`\] wrap around and `Alt+1..9`
 //! activates a concrete tab.
 //!
 //! **Closing policy** (documented, deterministic): closing a tab that is not the last one

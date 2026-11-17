@@ -109,7 +109,7 @@ impl RefreshTimer {
     /// Arms the next refresh at `now + interval`; returns the deadline.
     pub fn schedule(&mut self, now: Instant) -> Option<Instant> {
         let interval = self.policy.interval?;
-        let deadline = now + interval;
+        let deadline = now.checked_add(interval).unwrap_or(now);
         self.deadline = Some(deadline);
         Some(deadline)
     }

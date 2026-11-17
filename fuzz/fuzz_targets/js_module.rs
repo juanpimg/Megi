@@ -1,21 +1,23 @@
 #![no_main]
 //! Fuzz target: ES modules + import maps preprocessing, without page DOM.
 //!
-//! Round 27 added the module subset (`JsRuntime::eval_module`: static imports,
-//! resolver/loader callbacks) and import-map parsing
-//! (`js::ImportMap::from_json` / `set_import_map_json`). This target splits the
-//! input on NUL bytes into: (0) import-map JSON, (1) entry module source,
-//! (2..) dependency module sources. It installs a bounded resolver/loader
-//! (max module count and call budget), applies a tiny [`js::Budget`], and
-//! evaluates the module graph the same way a `<script type="module">` does.
+//! `JsRuntime::eval_module` (static imports, resolver/loader callbacks), import-map parsing
+//! (`js::ImportMap::from_json` / `set_import_map_json`) and the module graph walker.
 //!
-//! Cycles, missing exports, unsupported dynamic imports and budget exhaustion
-//! are expected to return typed `JsError`s; no network, filesystem or wall-clock
-//! access is provided. The target looks for panics/aborts/UB/timeouts.
+//! Input framing: a **length-prefixed** split (`[u16 LE len][bytes]…`, see
+//! [`megi_fuzz::length_prefixed_parts`]) — part 0 is the import-map JSON, part 1 the entry
+//! module, parts 2.. its dependencies. The previous NUL-split framing plus a fixed 256-char
+//! truncation hid most of the interesting byte space (a mutated `"` or `\` inside a JSON
+//! string was clipped away, and NULs made the split degenerate), so both were replaced
+//! (#701). Truncation is char-boundary safe ([`megi_fuzz::lossy_prefix`]).
+//!
+//! The host is bounded: ≤ 8 modules, ≤ 8 KiB per module, ≤ 24 loader calls, tiny
+//! [`js::Budget`]. Cycles, missing exports, unsupported dynamic imports and budget
+//! exhaustion are expected to return typed `JsError`s; no network, filesystem or wall-clock
+//! access is provided. The target looks for panics/aborts/UB/Sanitizer findings/timeouts.
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use libfuzzer_sys::fuzz_target;
 
@@ -31,17 +33,20 @@ fuzz_target!(|data: &[u8]| {
         return;
     }
 
-    let mut parts = data.split(|byte| *byte == 0);
-    let import_map_source = parts.next().unwrap_or_default();
-    let entry_source = parts.next().unwrap_or_default();
-    let mut modules: Vec<String> = Vec::new();
-    for part in parts.take(MAX_MODULES) {
-        let text = String::from_utf8_lossy(part);
-        modules.push(text[..text.len().min(MAX_MODULE_BYTES)].to_string());
-    }
-    let entry_source = entry_source[..entry_source.len().min(MAX_MODULE_BYTES)].to_vec();
-    let import_map_source =
-        import_map_source[..import_map_source.len().min(MAX_MODULE_BYTES)].to_vec();
+    // Length-prefixed framing: keeps NULs and arbitrary bytes inside each part, so JSON
+    // strings and module sources are fuzzed instead of being clipped at the first NUL.
+    let parts = megi_fuzz::length_prefixed_parts(data, MAX_MODULES + 2);
+    let import_map_source = parts.first().copied().unwrap_or_default();
+    let entry_source = parts.get(1).copied().unwrap_or_default();
+    let modules: Vec<String> = parts
+        .iter()
+        .skip(2)
+        .map(|part| megi_fuzz::lossy_prefix(part, MAX_MODULE_BYTES))
+        .collect();
+
+    // Import-map parsing (arbitrary bytes; valid map seeds live in the corpus).
+    let map_text = megi_fuzz::lossy_prefix(import_map_source, MAX_MODULE_BYTES);
+    let _ = js::ImportMap::from_json(&map_text);
 
     let Ok(mut runtime) = js::JsRuntime::new() else {
         return;
@@ -52,21 +57,19 @@ fuzz_target!(|data: &[u8]| {
         stack_size_limit: 2_048,
     };
     runtime.set_budget(budget);
-
-    // Import-map parsing (arbitrary bytes; valid map seeds live in the corpus).
-    let map_text = String::from_utf8_lossy(&import_map_source);
     let _ = runtime.set_import_map_json(&map_text);
-    let _ = js::ImportMap::from_json(&map_text);
 
-    // Resolver: every specifier maps into the synthetic "fuzz://module/…" origin.
+    // Resolver: every specifier maps into the synthetic "fuzz://module/…" origin. Specifiers
+    // are truncated on a char boundary (the old `&specifier[..256]` panicked on a
+    // multi-byte code point straddling the cut).
     runtime.set_module_resolver(Box::new(|specifier: &str, _importer: &str| {
         Ok(Some(format!(
             "fuzz://module/{}",
-            &specifier[..specifier.len().min(256)]
+            megi_fuzz::lossy_prefix(specifier.as_bytes(), 256)
         )))
     }));
 
-    // Loader: bounded number of calls; module texts cycle through the input.
+    // Loader: bounded number of calls; module texts cycle through the input parts.
     let modules = Arc::new(modules);
     let calls = Arc::new(AtomicUsize::new(0));
     let loads = Arc::clone(&calls);
@@ -82,19 +85,16 @@ fuzz_target!(|data: &[u8]| {
         Ok(modules[index].clone())
     }));
 
-    let entry_text = String::from_utf8_lossy(&entry_source).to_string();
-    let mut cache: HashMap<String, String> = HashMap::new();
+    let entry_text = megi_fuzz::lossy_prefix(entry_source, MAX_MODULE_BYTES);
     let entry_name = format!("fuzz://module/entry-{}", data.len());
-    cache.insert(entry_name.clone(), entry_text.clone());
     let _ = runtime.eval_module(&entry_text, "fuzz.js", &entry_name, &budget);
 
-    // A second graph root (fresh module cache per eval_module) with the same
-    // bounded host: exercises cache reset/recursion across roots.
+    // A second graph root (fresh module cache per eval_module) with the same bounded host:
+    // exercises cache reset/recursion across roots.
     let _ = runtime.eval_module(
         "import './dep.js';",
         "fuzz2.js",
         "fuzz://module/second",
         &budget,
     );
-    let _ = cache.len();
 });

@@ -6,6 +6,30 @@ does not yet follow strict semantic versioning; the format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-12 (Pre-Alpha)
+
+### Pre-Alpha milestone highlights (post-Round 33)
+
+#### Added
+
+- **CSS `direction` / `unicode-bidi` and pure-Rust UAX #9 bidi reordering** (`44c0545`):
+  inline bidirectional text reordering in `layout` and `css` property support.
+- **`RenderCache` (`crates/render`)** (`fc00f91`): layout fingerprint and CSS parse
+  caching across repeated renders.
+- **Expanded fuzzing coverage** (`c098ad8`): direct `dom_tree`, `layout_tree`,
+  `paint_display_list`, and `fonts_shape` targets plus expanded existing harnesses.
+
+#### Fixed
+
+- **Column flex auto-height layout** (`crates/layout/src/flex.rs`, `#696`): made
+  `outer_main`/`outer_cross` direction-aware and preserved measured content height for
+  auto-height column flex items.
+- **Release packaging workflow** (`.github/workflows/release.yml`): package the `megi`
+  binary (`crates/shell`) instead of non-existent `shell`.
+- **Tooling and script hardening** (`b245e49`): `tools/dev.sh`, `tools/megi.sh`,
+  `tools/update_psl.sh`, `tools/render_fixture.sh`, `tools/png_check.py`, and
+  `tools/whatwg_spec.py`.
+
 ### Round 33 — style interning, streaming inflate/PNG regions, complete fetch(), SVG textPath and shell reader mode (2026-11-11)
 
 #### Added

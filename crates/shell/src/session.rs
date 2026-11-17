@@ -268,7 +268,7 @@ impl Session {
             .as_array()
             .ok_or("session tabs is not an array")?;
         let mut tabs = Vec::new();
-        for value in tabs_array {
+        for value in tabs_array.iter().take(MAX_SESSION_TABS) {
             let Some(object) = value.as_object() else {
                 continue;
             };
@@ -286,6 +286,7 @@ impl Session {
                 .map(|items| {
                     items
                         .iter()
+                        .take(MAX_HISTORY_PER_TAB)
                         .filter_map(JsonValue::as_str)
                         .map(str::to_owned)
                         .collect()
@@ -304,7 +305,7 @@ impl Session {
         }
         let mut recent = Vec::new();
         if let Some(entries) = get("recent").and_then(JsonValue::as_array) {
-            for value in entries {
+            for value in entries.iter().take(crate::history::MAX_RECENT_HISTORY) {
                 let Some(object) = value.as_object() else {
                     continue;
                 };

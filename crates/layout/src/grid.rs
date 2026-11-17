@@ -207,11 +207,16 @@ fn offset_for(align: AlignSelf, cell: f32, size: f32) -> f32 {
 fn line_boundary(line: &GridLine, track_count: usize) -> Option<usize> {
     match line {
         GridLine::Line(value) => {
-            if *value > 0 {
-                Some((*value - 1) as usize)
+            // Widen to i64 so i32::MIN inputs cannot overflow (issue #689).
+            let value = *value as i64;
+            if value > 0 {
+                // Clamp to the available tracks + 1 so a huge line number cannot
+                // allocate an oversized boundary.
+                let clamped = value.min(track_count as i64 + 1).max(1);
+                Some((clamped - 1) as usize)
             } else {
-                let index = track_count as i32 + 1 + *value;
-                (index >= 0).then_some(index as usize)
+                let index = track_count as i64 + 1 + value;
+                (index >= 0).then_some(index.min(track_count as i64 + 1) as usize)
             }
         }
         GridLine::Span(_) | GridLine::Auto | GridLine::Name(_) => None,
@@ -387,16 +392,18 @@ fn placement_request(
 }
 
 fn span_from(start: &GridLine, end: &GridLine) -> usize {
-    match end {
-        GridLine::Span(span) => (*span).max(1) as usize,
+    // Cap spans so a huge `span N` cannot drive oversized allocations (issue #689).
+    const MAX_SPAN: usize = 1024;
+    let span = match end {
+        GridLine::Span(span) => *span as usize,
         GridLine::Line(_) | GridLine::Name(_) => 1,
         // `grid-column: span N` (start only): the span belongs to the start line.
         GridLine::Auto => match start {
-            GridLine::Span(span) => (*span).max(1) as usize,
+            GridLine::Span(span) => *span as usize,
             _ => 1,
         },
-    }
-    .max(1)
+    };
+    span.clamp(1, MAX_SPAN)
 }
 
 /// Bit-packed occupancy matrix: one bit per grid cell.
@@ -1114,7 +1121,7 @@ pub(crate) fn layout_grid_children(
             item.style.calc_lengths.width,
             Some(container_width),
         );
-        let width = match justify {
+        let mut width = match justify {
             AlignSelf::Stretch | AlignSelf::Auto | AlignSelf::Baseline => explicit
                 .map(|width| width.min(available))
                 .unwrap_or(available),
@@ -1127,8 +1134,29 @@ pub(crate) fn layout_grid_children(
                 }
             }
         };
+        if let Some(max) = crate::calc::length_optional(
+            item.style.max_width,
+            item.style.calc_lengths.max_width,
+            Some(container_width),
+        ) {
+            width = width.min(max.max(0.0));
+        }
+        if let Some(min) = crate::calc::length_optional(
+            item.style.min_width,
+            item.style.calc_lengths.min_width,
+            Some(container_width),
+        ) {
+            width = width.max(min.max(0.0));
+        }
         item.content_width = width.max(0.0);
-        layout_item(item, content.x, content.y, container_width, measurer);
+        layout_item(
+            item,
+            content.x,
+            content.y,
+            container_width,
+            definite_height,
+            measurer,
+        );
     }
 
     // 5. Row track sizes: explicit template tracks first, implicit rows next.
@@ -1256,38 +1284,38 @@ pub(crate) fn layout_grid_children(
                 )
                 .map(|w| w.min((cell_width - h_edges).max(0.0)))
                 .unwrap_or((cell_width - h_edges).max(0.0));
-                // Apply min/max.
-                if let Some(min) = crate::calc::length_optional(
-                    item.style.min_width,
-                    item.style.calc_lengths.min_width,
-                    Some(container_width),
-                ) {
-                    width = width.max(min);
-                }
+                // Apply min/max (CSS §10.4: min wins over max).
                 if let Some(max) = crate::calc::length_optional(
                     item.style.max_width,
                     item.style.calc_lengths.max_width,
                     Some(container_width),
                 ) {
                     width = width.min(max.max(0.0));
+                }
+                if let Some(min) = crate::calc::length_optional(
+                    item.style.min_width,
+                    item.style.calc_lengths.min_width,
+                    Some(container_width),
+                ) {
+                    width = width.max(min.max(0.0));
                 }
                 width
             }
             _ => {
                 let mut width = item.content_width;
-                if let Some(min) = crate::calc::length_optional(
-                    item.style.min_width,
-                    item.style.calc_lengths.min_width,
-                    Some(container_width),
-                ) {
-                    width = width.max(min);
-                }
                 if let Some(max) = crate::calc::length_optional(
                     item.style.max_width,
                     item.style.calc_lengths.max_width,
                     Some(container_width),
                 ) {
                     width = width.min(max.max(0.0));
+                }
+                if let Some(min) = crate::calc::length_optional(
+                    item.style.min_width,
+                    item.style.calc_lengths.min_width,
+                    Some(container_width),
+                ) {
+                    width = width.max(min.max(0.0));
                 }
                 width
             }
@@ -1301,19 +1329,19 @@ pub(crate) fn layout_grid_children(
                 )
                 .map(|h| h.min((cell_height - v_edges).max(0.0)))
                 .unwrap_or((cell_height - v_edges).max(0.0));
-                if let Some(min) = crate::calc::length_optional(
-                    item.style.min_height,
-                    item.style.calc_lengths.min_height,
-                    definite_height,
-                ) {
-                    height = height.max(min);
-                }
                 if let Some(max) = crate::calc::length_optional(
                     item.style.max_height,
                     item.style.calc_lengths.max_height,
                     definite_height,
                 ) {
                     height = height.min(max.max(0.0));
+                }
+                if let Some(min) = crate::calc::length_optional(
+                    item.style.min_height,
+                    item.style.calc_lengths.min_height,
+                    definite_height,
+                ) {
+                    height = height.max(min.max(0.0));
                 }
                 height
             }
@@ -1324,19 +1352,19 @@ pub(crate) fn layout_grid_children(
                     definite_height,
                 )
                 .unwrap_or(item.content_height);
-                if let Some(min) = crate::calc::length_optional(
-                    item.style.min_height,
-                    item.style.calc_lengths.min_height,
-                    definite_height,
-                ) {
-                    height = height.max(min);
-                }
                 if let Some(max) = crate::calc::length_optional(
                     item.style.max_height,
                     item.style.calc_lengths.max_height,
                     definite_height,
                 ) {
                     height = height.min(max.max(0.0));
+                }
+                if let Some(min) = crate::calc::length_optional(
+                    item.style.min_height,
+                    item.style.calc_lengths.min_height,
+                    definite_height,
+                ) {
+                    height = height.max(min.max(0.0));
                 }
                 height
             }
@@ -1383,6 +1411,7 @@ fn layout_item(
     origin_x: f32,
     origin_y: f32,
     container_width: f32,
+    definite_height: Option<f32>,
     measurer: &dyn TextMeasurer,
 ) {
     let padding = resolve_padding(&item.style, container_width);
@@ -1407,7 +1436,7 @@ fn layout_item(
         item.content_width.max(0.0),
         0.0,
     ));
-    layout_box_contents(child, None, false, measurer, pos);
+    layout_box_contents(child, definite_height, false, measurer, pos);
     item.content_height = child.dimensions.content.height;
 }
 

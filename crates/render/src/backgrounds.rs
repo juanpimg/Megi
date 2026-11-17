@@ -63,6 +63,8 @@ pub struct BackgroundLimits {
     pub max_background_bytes: usize,
     /// Maximum total downloaded background bytes for the page.
     pub max_total_bytes: usize,
+    /// Maximum total decoded pixels remaining for distinct background bitmaps.
+    pub max_total_decoded_pixels: u64,
     /// Optional decode downscale cap (`RenderOptions::max_image_dim`).
     pub max_image_dim: Option<u32>,
 }
@@ -73,6 +75,7 @@ impl Default for BackgroundLimits {
             max_backgrounds: DEFAULT_MAX_BACKGROUNDS,
             max_background_bytes: DEFAULT_MAX_BACKGROUND_BYTES,
             max_total_bytes: DEFAULT_MAX_TOTAL_BACKGROUND_BYTES,
+            max_total_decoded_pixels: crate::images::DEFAULT_MAX_TOTAL_DECODED_PIXELS,
             max_image_dim: None,
         }
     }
@@ -112,6 +115,8 @@ pub struct LoadedBackgrounds {
     pub svgs_rendered: usize,
     /// Downloaded (encoded) bytes accepted by the caps.
     pub downloaded_bytes: usize,
+    /// Total decoded pixels (`width * height`) across distinct decoded background bitmaps.
+    pub decoded_pixels: u64,
     /// Non-fatal warnings produced by this stage.
     pub warnings: Vec<String>,
 }
@@ -200,6 +205,7 @@ pub fn load_backgrounds(
         failed: 0,
         svgs_rendered: 0,
         downloaded_bytes: 0,
+        decoded_pixels: 0,
         warnings: Vec::new(),
     };
     // Render-glue fast path: most pages (including the realistic bench document) never
@@ -301,6 +307,7 @@ pub fn load_backgrounds(
             ));
             continue;
         }
+        let mut was_svg = false;
         let bitmap = if matches!(
             image::detect_format(&resource.bytes),
             image::ImageFormat::Png
@@ -335,7 +342,7 @@ pub fn load_backgrounds(
         } else if svg_assets::looks_like_svg(&resource.content_type, &resource.bytes) {
             match svg_assets::render(&resource.bytes) {
                 Ok(rendered) => {
-                    result.svgs_rendered += 1;
+                    was_svg = true;
                     rendered.raster
                 }
                 Err(error) => {
@@ -354,6 +361,20 @@ pub fn load_backgrounds(
             ));
             continue;
         };
+        let (width, height) = bitmap.dimensions();
+        let pixels = u64::from(width).saturating_mul(u64::from(height));
+        if result.decoded_pixels.saturating_add(pixels) > limits.max_total_decoded_pixels {
+            result.failed += 1;
+            result.warnings.push(format!(
+                "skipping background image {url}: decoded pixel budget exhausted ({} + {} > {} pixels)",
+                result.decoded_pixels, pixels, limits.max_total_decoded_pixels
+            ));
+            continue;
+        }
+        result.decoded_pixels = result.decoded_pixels.saturating_add(pixels);
+        if was_svg {
+            result.svgs_rendered += 1;
+        }
         result.downloaded_bytes += resource.bytes.len();
         result.loaded += 1;
         let bitmap = Arc::new(bitmap);

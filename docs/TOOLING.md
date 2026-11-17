@@ -204,7 +204,7 @@ cargo run -p render -- file:///ruta/pagina.html /tmp/local.png --no-network
 `crates/image` (std puro, sin dependencias) decodifica PNG a RGBA8 straight y expone un inflate zlib/DEFLATE reutilizable:
 
 ```bash
-cargo test -p image                 # 45 tests + 1 doctest (decode + inflate + PNG del pipeline)
+cargo test -p image                 # 111 tests + 1 doctest (PNG/JPEG/GIF/WebP/EXIF/inflate)
 cargo run -p render -- tests/fixtures/phase4/basic.html /tmp/basic.png 2>/dev/null || true
 # El test de integración decodifica el PNG generado por paint y lo compara con basic.rgba
 cargo test -p paint --test end_to_end_html
@@ -254,19 +254,19 @@ cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/megi-sh
 
 El golden del showcase compara byte a byte (1024×768, **80.220 B**, `md5 c95c7eff…`) y los tests de render lo verifican tanto por `file://` como por HTTP local. En la ronda 8 se regeneró tras el **fix del texto de celdas de tabla** (paint) y el soporte de **`background-image`/`list-style-image`** E2E (WP-5.9): ahora se ven el texto y las cabeceras en negrita de la tabla, el patrón de fondo de la cabecera/escenario y los marcadores con imagen. Limitaciones visibles restantes: `background-repeat`/`size`/`position`, colores de `border-collapse` y block-in-inline.
 
-### 2.14 `crates/js` — Runtime JavaScript Boa (Fase 6, WP-6.1)
+### 2.14 `crates/js` — Runtime JavaScript Boa (Fase 6)
 
-`crates/js` embebe **Boa 0.21.1** detrás de la feature `js`, **ON por defecto**; con `--no-default-features` queda un stub std-only (sin Boa) para CI y auditoría. Expone `JsRuntime::eval` sobre un realm persistente, `console.*` capturado, bindings DOM (`document.write`, `getElementById`, `querySelector(All)`, `innerHTML`, `style`, `classList`, árbol/atributos) y un scheduler base (`setTimeout`/microtasks). Anti-DoS: `Budget` mapeado a Boa `RuntimeLimits` (5.000.000 iteraciones de bucle, recursión 512, pila VM 20.480; `Budget::SMALL` para páginas/tests) y side-table `NodeId↔handle` capada a 1.000.000; sin APIs de red/FS. Aún **no integrado en `render`**.
+`crates/js` embebe **Boa 0.21.x** detrás de la feature `js`, **ON por defecto**; con `--no-default-features` queda un stub std-only (sin Boa) para CI y auditoría. Expone `JsRuntime::eval`/`eval_module`/`eval_module_async` sobre un realm persistente, `console.*` capturado, bindings DOM (`document.write`, `getElementById`, `querySelector(All)`, `innerHTML`, `style`, `classList`, árbol/atributos), módulos ES, import maps, TLA real, Web Workers cooperativos y `fetch()` completo (`AbortController`, `ReadableStream`), además de eventos/timers/rAF/Storage/History/geometría. Anti-DoS: `Budget` mapeado a Boa `RuntimeLimits` y side-table `NodeId↔handle` capada. Integrado en `render` y `test_harness`.
 
 **Eventos avanzados (ronda 12)**: `currentTarget`/`eventPhase` (1/2/3) reales, `once`/`passive`, `removeEventListener` por identidad, handlers inline `onclick`/`onload`/`onerror`, `document.close()`, `estimated_heap_bytes()` y excepciones de listeners capturadas. **WP-B (ronda 11)**: `CSSStyleDeclaration` completa, `getComputedStyle` con provider inyectable, `NodeList`, `matches`/`closest`, `insertAdjacentHTML/Text`, identidad de wrappers y `document` como `EventTarget`. **WP-A (ronda 10)**: `EventTarget` con captura+burbuja (`Event`/`CustomEvent`) y **timers con reloj inyectable** (`setTimeout`/`setInterval`/clear, `advance`/`run_until`/`now_ms`/`pending_timers`; `run_tasks` solo vencidos por reloj real).
 
-`render` integra el runtime (WP-6.2 host): descubre los `<script>` clásicos (inline/`src`, en orden; módulos avisados y saltados), los ejecuta con `JsRuntime::with_document` bajo `ScriptingLimits`/`ScriptBudget` (budget por script + total), drena microtasks y hasta 10.000 timers, captura `console` (`scripts_executed/failed/bytes/console`, `timings.scripting`) y **re-renderiza estilos→layout→paint sobre el DOM mutado** (mutaciones visibles en el PNG). Caps: 8 MiB/script, 32 MiB total, 64 scripts; `--no-scripting` desactiva todo y `--no-network` bloquea `src` externos.
+`render` integra el runtime (WP-6.2 host): descubre los `<script>` clásicos y `<script type="module">` (inline/`src`, en orden), los ejecuta con `JsRuntime::with_document` bajo `ScriptingLimits`/`ScriptBudget` (budget por script + total), drena microtasks y hasta 10.000 timers, captura `console` (`scripts_executed/failed/bytes/console`, `timings.scripting`) y **re-renderiza estilos→layout→paint sobre el DOM mutado** (mutaciones visibles en el PNG). Caps: 8 MiB/script, 32 MiB total, 64 scripts; `--no-scripting` desactiva todo y `--no-network` bloquea `src` externos.
 
 ```bash
-cargo test -p js                        # 58 tests (feature js por defecto; eventos avanzados)
+cargo test -p js                        # 178+ tests (feature js por defecto; módulos/TLA/fetch/workers)
 cargo test -p js --no-default-features  # stub mínimo sin Boa (CI)
 
-# JS del documento ejecutado de extremo a extremo (7 fixtures js_*)
+# JS del documento ejecutado de extremo a extremo (fixtures js_*)
 cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_on.png
 cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
 md5sum /tmp/js_on.png /tmp/js_off.png   # e1da51d4… (15.876 B) vs 53f67e77… (15.499 B)
@@ -282,12 +282,12 @@ cargo run -p render -- https://example.com/ /tmp/page.png --cookies --origin htt
 cargo run -p shell -- tests/fixtures/render/showcase/index.html --cookies --origin https://localhost
 ```
 
-### 2.15 `crates/net` — cookies, CORS y compresión (Fase 5, WP-5.9)
+### 2.15 `crates/net` — HTTP/1.1, HTTP/2, TLS, cookies, CORS y streaming (Fase 5)
 
-Además de URL/HTTP/TLS/caché: **cookies RFC 6265** (`CookieJar`, cap 4.096, `FetchOptions.cookie_jar`), **CORS básico** (`Origin`, `validate_response`/`validate_preflight_response`, credentials) y **gzip/deflate** (`Accept-Encoding: gzip` por defecto, CRC32/ISIZE, `CompressionLimits`: 64 MiB descomprimidos y ratio máximo 1000:1). Límites: sin SameSite/PSL, CORS parcial (sin caché de preflight), sin `br`/HTTP2/streaming.
+Además de URL/HTTP/TLS/caché: **HTTP/1.1** (`H1Pool` keep-alive, streaming real de respuestas/uploads, trailers), **HTTP/2 completo** (HPACK, framing, ALPN `h2`+`h2c`, flow control, multiplexado, `PUSH_PROMISE` y priorización), **cookies RFC 6265** (`CookieJar`, cap 4.096, `SameSite` + **PSL real vendorizada** MPL-2.0), **CORS**, **Referrer-Policy**, **Range/206**, **proxies HTTP/HTTPS** (`CONNECT` + `no_proxy`) y **streaming inflater** gzip/deflate (`StreamingInflater`, CRC32/ISIZE, `CompressionLimits`: 64 MiB descomprimidos y ratio máximo 1000:1).
 
 ```bash
-cargo test -p net        # 180 tests offline (listeners en 127.0.0.1)
+cargo test -p net        # 331+ tests offline (listeners en 127.0.0.1)
 ```
 
 ### 2.16 Fixtures de `background-image`/`list-style-image` (E2E, ronda 8)
@@ -421,10 +421,27 @@ Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-sp
 
 ---
 
+**`tools/coverage_report.py`** (#962): lee el tracefile lcov de `cargo llvm-cov`, resume líneas y
+funciones cubiertas y, con `--write`, regenera `docs/status/badge-coverage.svg` (sólo si el
+porcentaje redondeado cambia). `--min N` hace que el comando falle por debajo del umbral, que es
+cómo el workflow `coverage` (lunes 03:17 UTC y `workflow_dispatch`) evita que la cobertura caiga
+sin que nadie lo note; el informe HTML y el `lcov.info` se suben como artefacto.
+
+**`tools/bench_compare.py`** (#963): compara una o varias salidas `megi-bench-v1` contra
+`docs/status/bench-baseline.json` (mediana de medianas) y marca `REGRESSION` sólo si una fila
+crece >20 % **y** >0,5 ms; el workflow `bench` lo ejecuta los lunes.
+
+**`tools/check_docs_links.py`** (#725): verificador offline de enlaces Markdown. Comprueba que
+cada enlace relativo de `docs/**/*.md`, `README.md`, `CONTRIBUTING.md`, `SECURITY.md` y
+`CHANGELOG.md` apunta a un fichero/directorio existente y que cada `#ancla` coincide con un
+encabezado del documento destino (slug estilo GitHub). Los enlaces `http(s)://` externos se
+ignoran a propósito (necesitan red y son ruidosos); la CI lo ejecuta en el job `docs-links`.
+Los secretos se revisan con `gitleaks` (job `secret-scan`, configuración `.gitleaks.toml`).
+
 ## 3. Verificación rápida de la documentación y del estado
 
 ```bash
-./tools/dev.sh all                     # fmt, clippy, 1107 tests, doc y gate de conformidad
+./tools/dev.sh all                     # fmt, clippy, 2,300+ tests, doc y gate de conformidad
 cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0 (árbol 3904/3904, 100 %)
 cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
 
@@ -501,7 +518,7 @@ cargo run -p shell -- tests/fixtures/render/find.html --find "link" --screenshot
 
 Límites de la ronda: gradientes cap **64 stops / 256 por estilo**, sin `conic-gradient`/color hints/espacios avanzados/`image-set`/`border-image`; grid avanzado cap **1.024 tracks**, sin dense/zonas/auto-fit real/solapes explícitos; find-in-page sólo texto literal case-insensitive (sin regex/imágenes/barra visual). Referrer/SameSite ya cableados en render (snapshot por render; SameSite top-level aproximado).
 
-Cifras de referencia en la ronda 19: **1260 tests** (bench 8, css 142, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 71, layout 173, net 207, paint 162, **render 136**, shell 125, svg 73, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; fuzz 7 targets; suite determinista; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+Cifras de referencia en la ronda 19: **1260 tests** (bench 8, css 142, dom 28, fonts 17+1 doctest, html 60, image 111+1 doctest, js 71, layout 173, net 207, paint 162, **render 136**, shell 125, svg 73, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; fuzz 7 targets; suite determinista; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
 
 ### 2.16n Ronda 21: recuperación de rendimiento y progress status
 
@@ -517,7 +534,7 @@ cargo run --release -p bench -- --filter pipeline/html-to-png      # 154,13 → 
 
 Resumen de técnicas: html fast paths bulk del tokenizer + runs UTF-8 byte a byte + `has_wide` + dedupe híbrido; css hasher FNV/claves prestadas + caché de `ComputedStyle` 128-bit (umbral 2, sin inline, cap 1024); layout interning de `ComputedStyle` (fingerprint + `eq` exacta antes de compartir `Arc`) + estilos anónimos perezosos + spacing cero en IFC; paint fast path por caja + `DisplayList::with_capacity(16384)` + baseline sin `Vec`. Goldens y gate byte-idénticos; **no se subieron presupuestos**.
 
-Cifras de referencia en la ronda 21: **1345 tests** (bench 8, css 175, dom 28, fonts 17+1 doctest, html 60, image 45+1 doctest, js 71, layout 197, net 207, paint 175, render 136, shell 140, svg 73, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializer 230/230, CSS 30/30; allowlists vacías; status generado overall 95 %, ~108.972 líneas Rust, 14 crates, 12/14 `#![forbid(unsafe_code)]`.
+Cifras de referencia en la ronda 21: **1345 tests** (bench 8, css 175, dom 28, fonts 17+1 doctest, html 60, image 111+1 doctest, js 71, layout 197, net 207, paint 175, render 136, shell 140, svg 73, harness 11); gate tokenizer 7.050/7.050, árbol 3.904/3.904, serializer 230/230, CSS 30/30; allowlists vacías; status generado overall 95 %, ~108.972 líneas Rust, 14 crates, 12/14 `#![forbid(unsafe_code)]`.
 
 **Progress status**: vive en §4; se regenera con `python3 tools/update_progress.py --write` y CI ejecuta `--check --no-gate --no-count` para frescura. No editar a mano `PROGRESS.md` ni `docs/status/`.
 

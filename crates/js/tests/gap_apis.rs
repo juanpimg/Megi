@@ -290,3 +290,38 @@ fn geometry_without_provider_is_zero() {
     );
     assert_eq!(rt.eval("window.innerWidth", "t").unwrap(), "1280"); // documented default without a provider
 }
+
+#[test]
+fn url_resolution_follows_the_whatwg_rules() {
+    // #668: the prelude used a single regex and `lastIndexOf(':')`, so protocol-relative URLs
+    // kept the base host, dot segments were never normalized, userinfo leaked into the
+    // hostname and `[::1]:8080` lost its port.
+    let mut rt = JsRuntime::new().expect("runtime");
+    let cases = [
+        (
+            "new URL('//other.com/x', 'https://base.com/a').href",
+            "https://other.com/x",
+        ),
+        ("new URL('../y', 'https://h/a/b/c').href", "https://h/a/y"),
+        (
+            "new URL('/c', 'https://example.com/a/b').href",
+            "https://example.com/c",
+        ),
+        ("new URL('https://user:pass@h/p').hostname", "h"),
+        (
+            "new URL('https://user:pass@h/p').username + ':' + new URL('https://user:pass@h/p').password",
+            "user:pass",
+        ),
+        ("new URL('http://[::1]:8080/p').port", "8080"),
+        ("new URL('http://[::1]:8080/p').hostname", "[::1]"),
+        ("new URL('?q=1', 'https://h/a/b').href", "https://h/a/b?q=1"),
+        ("new URL('#f', 'https://h/a/b').href", "https://h/a/b#f"),
+        ("new URL('data:text/html,hi').pathname", "text/html,hi"),
+    ];
+    for (expression, expected) in cases {
+        let actual = rt
+            .eval(expression, "t")
+            .unwrap_or_else(|error| panic!("{expression}: {error}"));
+        assert_eq!(actual, expected, "{expression}");
+    }
+}

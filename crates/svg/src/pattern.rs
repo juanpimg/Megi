@@ -94,8 +94,8 @@ impl PatternSpec {
             && self.height.is_finite()
             && self.x.is_finite()
             && self.y.is_finite()
-            && self.width.abs() >= MIN_PATTERN_TILE
-            && self.height.abs() >= MIN_PATTERN_TILE
+            && self.width >= MIN_PATTERN_TILE
+            && self.height >= MIN_PATTERN_TILE
             && !self.shapes.is_empty()
     }
 }

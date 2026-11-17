@@ -469,3 +469,32 @@ fn test_right_over_wide_float_hangs_off_the_left_edge() {
         "right edge flush with the container",
     );
 }
+
+#[test]
+fn many_floats_and_blocks_stay_linear() {
+    // #691: every in-flow child scanned every placed float twice (left and right limits), so N
+    // floats plus N blocks cost O(N²). The query is now a single pass that short-circuits once
+    // the flow has passed the last float, which is the shape of this document.
+    let (mut doc, mut styles, container) = setup_container();
+    styles.insert(container, make_block_style(Length::Px(800.0), Length::Auto));
+    const COUNT: usize = 2_000;
+    for index in 0..COUNT {
+        let float = make_div(&mut doc, container);
+        let side = if index % 2 == 0 {
+            Float::Left
+        } else {
+            Float::Right
+        };
+        styles.insert(float, make_float_style(side, 8.0, 4.0));
+        let block = make_div(&mut doc, container);
+        styles.insert(block, make_block_style(Length::Auto, Length::Px(1.0)));
+    }
+    let started = std::time::Instant::now();
+    let tree = layout_doc(&doc, &styles);
+    let elapsed = started.elapsed();
+    assert!(tree.dimensions.content.height > 0.0);
+    assert!(
+        elapsed < std::time::Duration::from_secs(3),
+        "{COUNT} floats + {COUNT} blocks laid out in {elapsed:?}"
+    );
+}

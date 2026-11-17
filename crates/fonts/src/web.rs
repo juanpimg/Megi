@@ -28,7 +28,7 @@
 use crate::error::FontError;
 
 /// Maximum reconstructed sfnt size accepted from one WOFF2 container.
-const MAX_SFNT_BYTES: usize = 64 * 1024 * 1024;
+pub const MAX_SFNT_BYTES: usize = 64 * 1024 * 1024;
 
 /// Fixed WOFF2 header length (W3C WOFF2 §4.1).
 const WOFF2_HEADER_LEN: usize = 48;

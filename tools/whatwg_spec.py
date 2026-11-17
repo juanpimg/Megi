@@ -44,16 +44,27 @@ DEFAULT_FETCH_TARGETS = [
 ]
 
 
-MAX_SPEC_BYTES = 50 * 1024 * 1024  # 50 MiB cap
+import os
+import time
 
-def ensure_cached(filename: str, force: bool = False) -> Path:
+MAX_SPEC_BYTES = 50 * 1024 * 1024  # 50 MiB cap
+DEFAULT_CACHE_TTL_SECONDS = 7 * 24 * 3600  # 7 days
+
+def ensure_cached(
+    filename: str,
+    force: bool = False,
+    ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS,
+) -> Path:
+    if filename not in SPEC_URLS:
+        known = ", ".join(sorted(SPEC_URLS))
+        raise ValueError(f"Unknown spec target '{filename}'. Known targets: {known}")
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     target = CACHE_DIR / filename
     if target.exists() and target.stat().st_size > 0 and not force:
-        return target
-    url = SPEC_URLS.get(filename)
-    if not url:
-        raise ValueError(f"Unknown spec target: {filename}")
+        age = time.time() - target.stat().st_mtime
+        if ttl_seconds <= 0 or age < ttl_seconds:
+            return target
+    url = SPEC_URLS[filename]
     req = urllib.request.Request(
         url,
         headers={"User-Agent": "MegiBrowserEngine-SpecTool/0.1 (+https://github.com/juanpimg/Megi)"},
@@ -61,14 +72,28 @@ def ensure_cached(filename: str, force: bool = False) -> Path:
     tmp = target.with_suffix(target.suffix + ".tmp")
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            data = resp.read(MAX_SPEC_BYTES + 1)
-        if len(data) > MAX_SPEC_BYTES:
-            raise ValueError(f"Spec download exceeds {MAX_SPEC_BYTES} bytes")
+            status = getattr(resp, "status", 200)
+            if not (200 <= status < 300):
+                raise ValueError(f"Unexpected HTTP status {status} for {url}")
+            # Stream with a byte cap so a compromised mirror or an HTML error page
+            # looped by a proxy cannot exhaust memory (#611).
+            data = bytearray()
+            while True:
+                chunk = resp.read(64 * 1024)
+                if not chunk:
+                    break
+                data.extend(chunk)
+                if len(data) > MAX_SPEC_BYTES:
+                    raise ValueError(f"Spec download exceeds {MAX_SPEC_BYTES} bytes")
         tmp.write_bytes(data)
-        tmp.replace(target)
+        # Atomic replace so a concurrent fetch cannot leave a half-written cache file.
+        os.replace(tmp, target)
     finally:
         if tmp.exists():
             tmp.unlink(missing_ok=True)
+    # Revalidate the cached file before returning it.
+    if not target.exists() or target.stat().st_size == 0 or target.stat().st_size > MAX_SPEC_BYTES:
+        raise ValueError(f"Cached spec {target} failed size validation")
     return target
 
 
@@ -260,7 +285,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    return args.func(args)
+    try:
+        return args.func(args)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

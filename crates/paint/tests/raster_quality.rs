@@ -297,8 +297,11 @@ fn test_pop_clip_on_empty_stack_is_safe() {
 
 #[test]
 fn test_pixmap_rejects_absurd_dimensions() {
-    let result = std::panic::catch_unwind(|| Pixmap::new(u32::MAX, u32::MAX));
-    assert!(result.is_err(), "absurd pixmap dimensions must be rejected");
+    // Oversized dimensions yield an empty pixmap instead of panicking (issue #667).
+    let pixmap = Pixmap::new(u32::MAX, u32::MAX);
+    assert_eq!(pixmap.width, 0);
+    assert_eq!(pixmap.height, 0);
+    assert!(pixmap.pixels.is_empty());
 }
 
 #[test]

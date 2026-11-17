@@ -57,7 +57,10 @@ if [[ "${1:-}" == "--save-png-isolated" ]]; then
         for _ in $(seq 1 7); do
             local start end
             start=$(python3 -c 'import time; print(int(time.time()*1000))')
-            "$@" >/dev/null 2>&1 || true
+            if ! "$@" >/dev/null 2>&1; then
+                echo "error: benchmark command failed: $*" >&2
+                exit 1
+            fi
             end=$(python3 -c 'import time; print(int(time.time()*1000))')
             values+=($((end - start)))
         done
@@ -75,7 +78,9 @@ fi
 
 features_args=()
 if [[ -n "${BENCH_FEATURES:-}" ]]; then
-    features_args=(--features "${BENCH_FEATURES}")
+    # Word-split the env var so multi-word values work (e.g. BENCH_FEATURES="fonts extra").
+    read -ra _bench_features <<< "${BENCH_FEATURES}"
+    features_args=(--features "${_bench_features[@]}")
 fi
 
 echo "==> Building release benchmark binary (cargo build --release -p bench ${features_args[*]:-})"
@@ -99,6 +104,8 @@ set -e
 echo
 echo "Raw table : ${OUTPUT}"
 echo "Metadata  : ${METADATA}"
-echo "Reproduce : cargo run --release -p bench -- "$@""
+printf 'Reproduce : cargo run --release -p bench --'
+printf ' %q' "$@"
+echo
 
 exit "${status}"

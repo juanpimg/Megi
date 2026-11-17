@@ -36,7 +36,7 @@ fn explicit_family_matching_is_case_insensitive() {
     for variant in ["dejavu sans", "DEJAVU SANS", "DeJaVu SaNs"] {
         assert!(db.has_family(variant), "has_family({variant}) must be true");
         let font = db
-            .font(&[variant], 400, FontStyle::Normal)
+            .font(&[variant], 400, FontStyle::Normal, fontdb::Stretch::Normal)
             .expect("case-insensitive explicit family must resolve");
         assert_eq!(font.family_name(), "DejaVu Sans");
     }
@@ -46,7 +46,12 @@ fn explicit_family_matching_is_case_insensitive() {
 fn metrics_are_sane_and_scale_linearly() {
     let db = fixture_db();
     let font = db
-        .font(&["DejaVu Sans"], 400, FontStyle::Normal)
+        .font(
+            &["DejaVu Sans"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
         .expect("fixture family resolves");
     assert_eq!(font.units_per_em(), 2048, "DejaVu Sans uses 2048 units/em");
 
@@ -76,7 +81,12 @@ fn metrics_are_sane_and_scale_linearly() {
 fn measure_text_is_positive_additive_and_fallback_aware() {
     let db = fixture_db();
     let font = db
-        .font(&["DejaVu Sans"], 400, FontStyle::Normal)
+        .font(
+            &["DejaVu Sans"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
         .expect("fixture family resolves");
 
     assert_eq!(font.measure_text(16.0, "").expect("empty text"), 0.0);
@@ -110,7 +120,12 @@ fn measure_text_is_positive_additive_and_fallback_aware() {
 fn shape_hello_matches_advances_and_keeps_byte_clusters() {
     let db = fixture_db();
     let font = db
-        .font(&["DejaVu Sans"], 400, FontStyle::Normal)
+        .font(
+            &["DejaVu Sans"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
         .expect("fixture family resolves");
 
     let run = font.shape(16.0, "Hello").expect("shape Hello");
@@ -144,7 +159,12 @@ fn shape_hello_matches_advances_and_keeps_byte_clusters() {
 fn shape_fi_forms_a_ligature_or_at_least_keeps_a_reasonable_advance() {
     let db = fixture_db();
     let font = db
-        .font(&["DejaVu Sans"], 400, FontStyle::Normal)
+        .font(
+            &["DejaVu Sans"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
         .expect("fixture family resolves");
 
     let ligature = font.shape(16.0, "fi").expect("shape fi");
@@ -181,7 +201,12 @@ fn shape_falls_back_for_characters_without_glyphs_without_panicking() {
 fn rasterize_h_produces_non_zero_antialiased_coverage() {
     let db = fixture_db();
     let font = db
-        .font(&["DejaVu Sans"], 400, FontStyle::Normal)
+        .font(
+            &["DejaVu Sans"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
         .expect("fixture family resolves");
     let glyph_id = font.glyph_id('H').expect("DejaVu Sans has 'H'");
 
@@ -221,7 +246,12 @@ fn rasterize_h_produces_non_zero_antialiased_coverage() {
 fn rasterize_char_uses_the_database_and_agrees_with_the_face() {
     let db = fixture_db();
     let font = db
-        .font(&["DejaVu Sans"], 400, FontStyle::Normal)
+        .font(
+            &["DejaVu Sans"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
         .expect("fixture family resolves");
     let expected = font
         .rasterize_glyph(16.0, font.glyph_id('H').expect("'H'"))
@@ -239,10 +269,20 @@ fn rasterize_char_uses_the_database_and_agrees_with_the_face() {
 fn weight_and_style_select_bold_face() {
     let db = fixture_db();
     let regular = db
-        .font(&["DejaVu Sans"], 400, FontStyle::Normal)
+        .font(
+            &["DejaVu Sans"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
         .expect("regular face");
     let bold = db
-        .font(&["DejaVu Sans"], 700, FontStyle::Normal)
+        .font(
+            &["DejaVu Sans"],
+            700,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
         .expect("bold face");
     assert_eq!(regular.info().weight, 400);
     assert_eq!(bold.info().weight, 700);
@@ -259,7 +299,12 @@ fn weight_and_style_select_bold_face() {
     // Only regular+bold are bundled: requesting italic must degrade to a real
     // face (documented best-effort matching), never fail or panic.
     let italicish = db
-        .font(&["DejaVu Sans"], 400, FontStyle::Italic)
+        .font(
+            &["DejaVu Sans"],
+            400,
+            FontStyle::Italic,
+            fontdb::Stretch::Normal,
+        )
         .expect("italic request degrades gracefully");
     assert_eq!(italicish.family_name(), "DejaVu Sans");
 }
@@ -272,17 +317,28 @@ fn family_list_falls_back_in_priority_order_and_generic_names_resolve() {
             &["Definitely Missing", "DejaVu Sans"],
             400,
             FontStyle::Normal,
+            fontdb::Stretch::Normal,
         )
         .expect("second family in the list is used");
     assert_eq!(font.family_name(), "DejaVu Sans");
 
     let generic = db
-        .font(&["sans-serif"], 400, FontStyle::Normal)
+        .font(
+            &["sans-serif"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
         .expect("generic sans-serif resolves against the loaded fixture");
     assert_eq!(generic.family_name(), "DejaVu Sans");
 
     let empty_db = FontDatabase::new();
-    match empty_db.font(&["sans-serif"], 400, FontStyle::Normal) {
+    match empty_db.font(
+        &["sans-serif"],
+        400,
+        FontStyle::Normal,
+        fontdb::Stretch::Normal,
+    ) {
         Err(FontError::NoFontAvailable) => {}
         other => panic!("empty DB must report NoFontAvailable, got {other:?}"),
     }
@@ -310,7 +366,12 @@ fn invalid_inputs_return_errors_instead_of_panicking() {
     // Invalid sizes.
     let fixture = fixture_db();
     let font = fixture
-        .font(&["DejaVu Sans"], 400, FontStyle::Normal)
+        .font(
+            &["DejaVu Sans"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
         .expect("fixture face");
     assert!(matches!(
         font.metrics(0.0),
@@ -332,7 +393,12 @@ fn invalid_inputs_return_errors_instead_of_panicking() {
     ));
     // Unknown family with no generic fallback is a controlled error.
     assert!(matches!(
-        fixture.font(&["NoSuchFamily"], 400, FontStyle::Normal),
+        fixture.font(
+            &["NoSuchFamily"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal
+        ),
         Err(FontError::FontNotFound { .. })
     ));
 }
@@ -341,7 +407,12 @@ fn invalid_inputs_return_errors_instead_of_panicking() {
 fn font_ref_info_round_trips_through_the_database() {
     let db = fixture_db();
     let font = db
-        .font(&["DejaVu Sans"], 700, FontStyle::Normal)
+        .font(
+            &["DejaVu Sans"],
+            700,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
         .expect("bold face");
     let info = font.info().clone();
     let resolved = db.font_by_ref(&info).expect("face re-resolves by ref");
@@ -358,7 +429,12 @@ fn system_database_is_optional_and_never_panics() {
         return;
     }
     let face = db
-        .font(&["sans-serif"], 400, FontStyle::Normal)
+        .font(
+            &["sans-serif"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
         .expect("non-empty system DB must resolve a default face");
     let metrics = face.metrics(12.0).expect("system metrics");
     assert!(metrics.ascent > 0.0);
@@ -384,4 +460,62 @@ fn huge_font_size_rejects_masks_over_the_pixel_cap() {
         .rasterize_char(&["DejaVu Sans"], 400, FontStyle::Normal, 32.0, 'A')
         .expect("normal glyph");
     assert!(mask.width > 0 && mask.height > 0);
+}
+
+#[test]
+fn duplicate_font_bytes_are_deduplicated_and_aliased() {
+    let mut db = FontDatabase::new();
+    let bytes = DEJAVU_SANS.to_vec();
+    db.load_font_data(bytes.clone()).expect("first load");
+    let count_after_first = db.len();
+    // Loading identical bytes again must deduplicate without adding a second face (#497).
+    db.load_font_data(bytes.clone()).expect("second load");
+    assert_eq!(db.len(), count_after_first);
+    // Loading identical bytes under a @font-face alias reuses the face while binding the alias.
+    db.load_font_data_family("CustomAlias", bytes)
+        .expect("alias load");
+    assert_eq!(db.len(), count_after_first);
+    assert!(db.has_alias("CustomAlias"));
+}
+
+#[test]
+fn combining_mark_stays_attached_to_base_font() {
+    let db = fixture_db();
+    // "e\u{0301}" (e + combining acute accent) must shape in a single font segment
+    // when the base font supports both glyphs (#494).
+    let run = db
+        .shape(&["DejaVu Sans"], 400, FontStyle::Normal, 16.0, "e\u{0301}")
+        .expect("shape combining mark");
+    assert_eq!(
+        run.fonts.len(),
+        1,
+        "expected single font segment: {:?}",
+        run.fonts
+    );
+    assert!(!run.glyphs.is_empty());
+    assert!(run.glyphs.iter().all(|g| g.font == 0));
+}
+
+#[test]
+fn repeated_fallback_queries_are_consistent() {
+    let db = fixture_db();
+    let w1 = db
+        .measure_text(
+            &["DejaVu Sans", "sans-serif"],
+            400,
+            FontStyle::Normal,
+            16.0,
+            "Hello",
+        )
+        .expect("first measure");
+    let w2 = db
+        .measure_text(
+            &["DejaVu Sans", "sans-serif"],
+            400,
+            FontStyle::Normal,
+            16.0,
+            "Hello",
+        )
+        .expect("cached measure");
+    assert!((w1 - w2).abs() < f32::EPSILON);
 }

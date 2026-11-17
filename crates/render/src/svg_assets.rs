@@ -45,6 +45,14 @@ pub(crate) fn looks_like_svg(content_type: &str, bytes: &[u8]) -> bool {
     if essence.eq_ignore_ascii_case("image/svg+xml") {
         return true;
     }
+    // An explicit HTML type wins over sniffing: a page that happens to start with `<svg` (an
+    // inline SVG at the top of the document) is still an HTML document, not a lone SVG image
+    // (#655).
+    if essence.eq_ignore_ascii_case("text/html")
+        || essence.eq_ignore_ascii_case("application/xhtml+xml")
+    {
+        return false;
+    }
     sniff_svg(bytes)
 }
 
@@ -138,4 +146,24 @@ pub(crate) fn render(bytes: &[u8]) -> Result<RenderedSvg, SvgError> {
     )?
     .into_rgba_image()?;
     Ok(RenderedSvg { intrinsic, raster })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::looks_like_svg;
+
+    #[test]
+    fn explicit_html_content_type_wins_over_the_svg_sniffer() {
+        // #655: an HTML page whose first non-whitespace bytes are `<svg` used to be rendered as a
+        // lone SVG image, because the sniffer ran before the HTML check and ignored `text/html`.
+        let page =
+            b"<svg xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"8\" height=\"8\"/></svg>";
+        assert!(!looks_like_svg("text/html; charset=utf-8", page));
+        assert!(!looks_like_svg("TEXT/HTML", page));
+        assert!(!looks_like_svg("application/xhtml+xml", page));
+        // An explicit SVG type and a typeless body still go down the SVG path.
+        assert!(looks_like_svg("image/svg+xml", page));
+        assert!(looks_like_svg("", page));
+        assert!(looks_like_svg("application/octet-stream", page));
+    }
 }

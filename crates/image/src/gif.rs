@@ -64,6 +64,8 @@ pub(crate) fn decode_gif(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, 
 
     let mut transparent_index: Option<u8> = None;
     let mut canvas = vec![0u8; (screen_width as usize) * (screen_height as usize) * 4];
+    let mut metadata_bytes: usize = 0;
+    const MAX_GIF_METADATA_BYTES: usize = 16 * 1024 * 1024;
     loop {
         let block = *bytes.get(index).ok_or(ImageError::Truncated {
             context: "GIF block",
@@ -72,6 +74,13 @@ pub(crate) fn decode_gif(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, 
         match block {
             0x21 => {
                 // Extension introducer: label + sub-blocks.
+                if metadata_bytes > MAX_GIF_METADATA_BYTES {
+                    return Err(ImageError::LimitExceeded {
+                        what: "GIF metadata",
+                        limit: MAX_GIF_METADATA_BYTES as u64,
+                        actual: metadata_bytes as u64,
+                    });
+                }
                 let label = *bytes.get(index).ok_or(ImageError::Truncated {
                     context: "GIF extension",
                 })?;
@@ -94,9 +103,11 @@ pub(crate) fn decode_gif(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, 
                     if block[0] & 0x01 != 0 {
                         transparent_index = Some(block[3]);
                     }
-                    skip_sub_blocks(bytes, &mut index)?;
+                    let skipped = skip_sub_blocks(bytes, &mut index)?;
+                    metadata_bytes = metadata_bytes.saturating_add(skipped);
                 } else {
-                    skip_sub_blocks(bytes, &mut index)?;
+                    let skipped = skip_sub_blocks(bytes, &mut index)?;
+                    metadata_bytes = metadata_bytes.saturating_add(skipped);
                 }
             }
             0x2C => {
@@ -144,7 +155,6 @@ pub(crate) fn decode_gif(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, 
                     context: "GIF LZW minimum code size",
                 })?;
                 index += 1;
-                let data = read_sub_blocks(bytes, &mut index)?;
                 let frame_pixels = (frame_width as usize)
                     .checked_mul(frame_height as usize)
                     .ok_or(ImageError::LimitExceeded {
@@ -159,6 +169,14 @@ pub(crate) fn decode_gif(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, 
                         actual: frame_pixels as u64,
                     });
                 }
+                // Cap buffered LZW data against a multiple of the frame pixel
+                // count so a 1-pixel frame cannot carry megabytes of payload
+                // (#618). LZW data is never larger than a few bytes per pixel.
+                let max_image_data = frame_pixels
+                    .saturating_mul(4)
+                    .saturating_add(65_536)
+                    .min(limits.max_total_idat_bytes);
+                let data = read_sub_blocks(bytes, &mut index, max_image_data)?;
                 let indices = lzw_decode(min_code_size, &data, frame_pixels)?;
                 let row_order = if interlaced {
                     interlaced_rows(frame_height as usize)
@@ -230,14 +248,15 @@ fn read_palette(
     Ok(raw.chunks(3).map(|rgb| [rgb[0], rgb[1], rgb[2]]).collect())
 }
 
-fn skip_sub_blocks(bytes: &[u8], index: &mut usize) -> Result<(), ImageError> {
+fn skip_sub_blocks(bytes: &[u8], index: &mut usize) -> Result<usize, ImageError> {
+    let mut total = 0usize;
     loop {
         let size = *bytes.get(*index).ok_or(ImageError::Truncated {
             context: "GIF data sub-block",
         })? as usize;
         *index += 1;
         if size == 0 {
-            return Ok(());
+            return Ok(total);
         }
         *index += size;
         if *index > bytes.len() {
@@ -245,10 +264,15 @@ fn skip_sub_blocks(bytes: &[u8], index: &mut usize) -> Result<(), ImageError> {
                 context: "GIF data sub-block",
             });
         }
+        total = total.saturating_add(size);
     }
 }
 
-fn read_sub_blocks(bytes: &[u8], index: &mut usize) -> Result<Vec<u8>, ImageError> {
+fn read_sub_blocks(
+    bytes: &[u8],
+    index: &mut usize,
+    max_bytes: usize,
+) -> Result<Vec<u8>, ImageError> {
     let mut data = Vec::new();
     loop {
         let size = *bytes.get(*index).ok_or(ImageError::Truncated {
@@ -257,6 +281,13 @@ fn read_sub_blocks(bytes: &[u8], index: &mut usize) -> Result<Vec<u8>, ImageErro
         *index += 1;
         if size == 0 {
             return Ok(data);
+        }
+        if data.len().saturating_add(size) > max_bytes {
+            return Err(ImageError::LimitExceeded {
+                what: "GIF image data",
+                limit: max_bytes as u64,
+                actual: data.len().saturating_add(size) as u64,
+            });
         }
         let block = bytes
             .get(*index..*index + size)
@@ -337,17 +368,27 @@ fn lzw_decode(min_code_size: u8, data: &[u8], pixel_count: usize) -> Result<Vec<
                     reason: "GIF LZW first code is not a literal",
                 });
             }
-            output.push(code as u8);
+            if output.len() < pixel_count {
+                output.push(code as u8);
+            }
             previous = Some(code);
             continue;
         };
         if code < dictionary.len() as u16 {
-            emit_code(code, &dictionary, &mut stack, &mut output)?;
+            emit_code(code, &dictionary, &mut stack, &mut output, pixel_count)?;
         } else if code == dictionary.len() as u16 {
             // KwKwK case: previous string plus its own first byte.
-            emit_code(previous_code, &dictionary, &mut stack, &mut output)?;
+            emit_code(
+                previous_code,
+                &dictionary,
+                &mut stack,
+                &mut output,
+                pixel_count,
+            )?;
             let first = *stack.last().unwrap_or(&0);
-            output.push(first);
+            if output.len() < pixel_count {
+                output.push(first);
+            }
             stack.push(first);
             stack.pop();
         } else {
@@ -389,6 +430,7 @@ fn emit_code(
     dictionary: &[(u16, u8)],
     stack: &mut Vec<u8>,
     output: &mut Vec<u8>,
+    pixel_count: usize,
 ) -> Result<(), ImageError> {
     stack.clear();
     let mut current = code;
@@ -408,6 +450,15 @@ fn emit_code(
                 reason: "GIF LZW cyclic dictionary",
             });
         }
+    }
+    // Bound the emitted bytes so a single code cannot overshoot pixel_count.
+    let emitted = stack.len();
+    if output.len() + emitted > pixel_count {
+        let remaining = pixel_count.saturating_sub(output.len());
+        for value in stack.iter().rev().take(remaining) {
+            output.push(*value);
+        }
+        return Ok(());
     }
     for value in stack.iter().rev() {
         output.push(*value);

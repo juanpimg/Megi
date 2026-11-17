@@ -23,14 +23,23 @@ impl SocksProxy {
     /// alias). Returns `None` for other schemes or malformed URLs.
     pub fn parse(value: &str) -> Option<Self> {
         let value = value.trim();
-        let rest = value
-            .strip_prefix("socks5://")
-            .or_else(|| value.strip_prefix("socks5h://"))
-            .or_else(|| value.strip_prefix("socks://"))?;
-        let (authority, _path) = match rest.split_once('/') {
-            Some((authority, _)) => (authority, ()),
-            None => (rest, ()),
+        // Scheme matching is case-insensitive (#460).
+        let lower = value.to_ascii_lowercase();
+        let scheme_len = if lower.starts_with("socks5h://") {
+            "socks5h://".len()
+        } else if lower.starts_with("socks5://") {
+            "socks5://".len()
+        } else if lower.starts_with("socks://") {
+            "socks://".len()
+        } else {
+            return None;
         };
+        let rest = &value[scheme_len..];
+        // Reject non-empty path/query/fragment (fail-closed).
+        if rest.contains('/') || rest.contains('?') || rest.contains('#') {
+            return None;
+        }
+        let authority = rest;
         let (userinfo, host_port) = match authority.rsplit_once('@') {
             Some((userinfo, host_port)) => (Some(userinfo), host_port),
             None => (None, authority),

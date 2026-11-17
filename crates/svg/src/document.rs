@@ -180,6 +180,8 @@ pub(crate) struct EffectRef {
 #[derive(Clone, Debug)]
 pub(crate) struct ClipPathSpec {
     pub units: Units,
+    /// `clip-rule` inherited from the `<clipPath>` element (#1279).
+    pub fill_rule: FillRule,
     pub shapes: Vec<Shape>,
 }
 
@@ -394,15 +396,40 @@ impl Document {
             shapes: Vec::new(),
             texts: Vec::new(),
             use_stack: Vec::new(),
+            use_expansions: 0,
             active_clips: Vec::new(),
             active_masks: Vec::new(),
             active_filter: None,
+            group_bbox_stack: Vec::new(),
             segments_used: 0,
         };
-        let style = Style::default();
+        let mut style = Style::default();
+        let mut selector_budget = SelectorBudget {
+            used: 0,
+            max: limits.max_selector_checks,
+        };
+        style.apply(
+            root,
+            &rules,
+            &[],
+            &gradient_ids,
+            &pattern_ids,
+            &mut selector_budget,
+        )?;
+        let root_opacity = root
+            .attribute("opacity")
+            .and_then(|v| v.parse::<f32>().ok())
+            .unwrap_or(1.0);
         let root_transform = Transform::IDENTITY;
         let mut ancestors: Vec<&XmlElement> = vec![root];
-        builder.visit_children(root, &mut ancestors, root_transform, &style, 1.0, 0)?;
+        builder.visit_children(
+            root,
+            &mut ancestors,
+            root_transform,
+            &style,
+            root_opacity,
+            0,
+        )?;
         selector_checks = builder.selector_checks_used;
         let patterns = build_patterns(
             &defs,
@@ -463,6 +490,12 @@ impl Document {
 /// Inheritable presentation state.
 #[derive(Clone, Debug)]
 struct Style {
+    /// The inherited `color` property; used to resolve `currentColor` (#1276).
+    color: Color,
+    /// `display: none` skips the whole subtree (#37).
+    display: bool,
+    /// Inherited `visibility`; a `visible` descendant still paints (#37).
+    visibility: bool,
     fill: Paint,
     stroke: Paint,
     fill_opacity: f32,
@@ -489,6 +522,8 @@ struct Style {
 pub(crate) enum Paint {
     None,
     Solid(Color),
+    /// Resolved to the inherited `color` once the whole style is applied (#1276).
+    CurrentColor,
     Gradient(u32),
     Pattern(u32),
 }
@@ -496,6 +531,9 @@ pub(crate) enum Paint {
 impl Default for Style {
     fn default() -> Self {
         Self {
+            color: Color::BLACK,
+            display: true,
+            visibility: true,
             fill: Paint::Solid(Color::BLACK),
             stroke: Paint::None,
             fill_opacity: 1.0,
@@ -519,6 +557,16 @@ impl Default for Style {
 }
 
 impl Style {
+    /// Resolves `currentColor` paints against the inherited `color` property (#1276).
+    fn resolve_current_color(&mut self) {
+        if self.fill == Paint::CurrentColor {
+            self.fill = Paint::Solid(self.color);
+        }
+        if self.stroke == Paint::CurrentColor {
+            self.stroke = Paint::Solid(self.color);
+        }
+    }
+
     /// Applies, in cascade order, the element's presentation attributes, the
     /// matching `<style>` rules (specificity then source order) and finally the
     /// inline `style="..."` attribute (highest priority).
@@ -537,7 +585,7 @@ impl Style {
             }
         }
         for declaration in matching_declarations(rules, element, ancestors, selector_budget)? {
-            self.apply_declaration(&declaration.name, &declaration.value, gradients, patterns);
+            self.apply_declaration(declaration.name, declaration.value, gradients, patterns);
         }
         if let Some(inline) = element.attribute("style") {
             for declaration in parse_declarations(inline) {
@@ -556,6 +604,16 @@ impl Style {
         patterns: &HashMap<String, u32>,
     ) {
         match name {
+            "color" => {
+                if let Some(color) = parse_color(value) {
+                    self.color = color;
+                }
+            }
+            "display" => self.display = !value.trim().eq_ignore_ascii_case("none"),
+            "visibility" => {
+                let value = value.trim().to_ascii_lowercase();
+                self.visibility = value == "visible";
+            }
             "fill" => self.fill = parse_paint(value, gradients, patterns),
             "stroke" => self.stroke = parse_paint(value, gradients, patterns),
             "fill-opacity" => {
@@ -652,6 +710,10 @@ impl Style {
 
 /// Presentation attributes applied (with specificity 0) before `<style>` rules.
 const PRESENTATION_PROPERTIES: &[&str] = &[
+    // `color` must be applied before `fill`/`stroke` so `currentColor` can resolve.
+    "color",
+    "display",
+    "visibility",
     "fill",
     "stroke",
     "fill-opacity",
@@ -691,9 +753,22 @@ struct Builder<'a> {
     shapes: Vec<Shape>,
     texts: Vec<TextSpec>,
     use_stack: Vec<String>,
+    use_expansions: usize,
     active_clips: Vec<EffectRef>,
     active_masks: Vec<EffectRef>,
     active_filter: Option<EffectRef>,
+    /// Incremental `objectBoundingBox` accumulators for the currently open
+    /// groups. Each shape is folded into every *active* frame once, instead of
+    /// rescanning the whole emitted subtree when each group closes (#442).
+    group_bbox_stack: Vec<GroupBboxFrame>,
+}
+
+/// Accumulator for one open group's descendant bounding box.
+struct GroupBboxFrame {
+    /// Running union of the transformed descendant points, if any.
+    bbox: Option<(f32, f32, f32, f32)>,
+    /// False for groups without effects, where no bbox is ever needed.
+    active: bool,
 }
 
 impl<'a> Builder<'a> {
@@ -790,41 +865,95 @@ impl<'a> Builder<'a> {
         self.active_filter = previous.2;
     }
 
-    /// Computes the union bbox (root user space) of shapes emitted since `start` and copies
-    /// it into the group's `objectBoundingBox` effect refs (group effects are inherited by
-    /// all descendants, so every matching ref is updated).
-    fn apply_group_bbox(
-        &mut self,
-        start: usize,
-        clips: &[EffectRef],
-        masks: &[EffectRef],
-        filter: Option<&EffectRef>,
-    ) {
+    /// Folds the most recently emitted shape into every open group's running bbox.
+    /// Called once from `push_shape`, so a leaf shape is visited once instead of
+    /// once per ancestor group (#442).
+    fn record_shape_bbox(&mut self) {
+        if self.group_bbox_stack.iter().all(|frame| !frame.active) {
+            return;
+        }
+        let Some(shape) = self.shapes.last() else {
+            return;
+        };
         let mut min_x = f32::INFINITY;
         let mut min_y = f32::INFINITY;
         let mut max_x = f32::NEG_INFINITY;
         let mut max_y = f32::NEG_INFINITY;
-        for shape in &self.shapes[start..] {
-            for subpath in &shape.subpaths {
-                for point in &subpath.points {
-                    if point.0.is_finite() && point.1.is_finite() {
-                        min_x = min_x.min(point.0);
-                        min_y = min_y.min(point.1);
-                        max_x = max_x.max(point.0);
-                        max_y = max_y.max(point.1);
-                    }
+        for subpath in &shape.subpaths {
+            for point in &subpath.points {
+                if point.0.is_finite() && point.1.is_finite() {
+                    min_x = min_x.min(point.0);
+                    min_y = min_y.min(point.1);
+                    max_x = max_x.max(point.0);
+                    max_y = max_y.max(point.1);
                 }
             }
         }
         if !min_x.is_finite() || !min_y.is_finite() {
             return;
         }
-        let bbox = (
-            min_x,
-            min_y,
-            (max_x - min_x).max(0.0),
-            (max_y - min_y).max(0.0),
-        );
+        for frame in &mut self.group_bbox_stack {
+            if !frame.active {
+                continue;
+            }
+            frame.bbox = Some(match frame.bbox {
+                None => (min_x, min_y, max_x - min_x, max_y - min_y),
+                Some((x, y, w, h)) => (
+                    x.min(min_x),
+                    y.min(min_y),
+                    (x + w).max(max_x) - x.min(min_x),
+                    (y + h).max(max_y) - y.min(min_y),
+                ),
+            });
+        }
+    }
+
+    /// Copies the group's descendant bbox (root user space) into its
+    /// `objectBoundingBox` effect refs. Group effects are inherited by all
+    /// descendants, so every matching ref is updated. `bbox` is the incremental
+    /// accumulator built while the group was open; the scan is only a fallback
+    /// for shapes inserted through a path that does not call `record_shape_bbox`.
+    fn apply_group_bbox(
+        &mut self,
+        start: usize,
+        clips: &[EffectRef],
+        masks: &[EffectRef],
+        filter: Option<&EffectRef>,
+        bbox: Option<(f32, f32, f32, f32)>,
+    ) {
+        // Plain groups used to rescan their entire subtree for nothing (#442).
+        if clips.is_empty() && masks.is_empty() && filter.is_none() {
+            return;
+        }
+        let bbox = bbox.or_else(|| {
+            let mut min_x = f32::INFINITY;
+            let mut min_y = f32::INFINITY;
+            let mut max_x = f32::NEG_INFINITY;
+            let mut max_y = f32::NEG_INFINITY;
+            for shape in &self.shapes[start..] {
+                for subpath in &shape.subpaths {
+                    for point in &subpath.points {
+                        if point.0.is_finite() && point.1.is_finite() {
+                            min_x = min_x.min(point.0);
+                            min_y = min_y.min(point.1);
+                            max_x = max_x.max(point.0);
+                            max_y = max_y.max(point.1);
+                        }
+                    }
+                }
+            }
+            (min_x.is_finite() && min_y.is_finite()).then(|| {
+                (
+                    min_x,
+                    min_y,
+                    (max_x - min_x).max(0.0),
+                    (max_y - min_y).max(0.0),
+                )
+            })
+        });
+        let Some(bbox) = bbox else {
+            return;
+        };
         let matches = |reference: &EffectRef, candidate: &EffectRef| {
             reference.index == candidate.index && reference.transform == candidate.transform
         };
@@ -876,6 +1005,9 @@ impl<'a> Builder<'a> {
         if depth > self.limits.max_depth {
             return Err(SvgError::Limit("SVG element nesting too deep".to_owned()));
         }
+        if self.shapes.len() >= self.limits.max_shapes {
+            return Err(SvgError::Limit("too many SVG shapes".to_owned()));
+        }
         let name = element.local_name_lower();
         let mut style = parent_style.clone();
         // `clip-path`/`mask`/`filter` are not inherited: descendants only see them through
@@ -895,6 +1027,8 @@ impl<'a> Builder<'a> {
             self.pattern_ids,
             &mut selector_budget,
         )?;
+        // All declarations are applied now, including `color` from CSS/inline styles.
+        style.resolve_current_color();
         self.selector_checks_used = selector_budget.used;
         let local_transform = element
             .attribute("transform")
@@ -904,71 +1038,121 @@ impl<'a> Builder<'a> {
         let transform = transform.then(local_transform);
         let opacity = group_opacity * parse_opacity_attribute(element, "opacity").unwrap_or(1.0);
         ancestors.push(element);
-        let result = match name.as_str() {
-            "svg" => {
-                let viewport = nested_viewport_transform(element);
-                let transform = transform.then(viewport);
-                let (clips, masks, filter) = self.own_effects(&style, transform, None, true);
-                let start = self.shapes.len();
-                let previous = self.push_effects(&clips, &masks, filter.as_ref());
-                let result =
-                    self.visit_children(element, ancestors, transform, &style, opacity, depth);
-                self.pop_effects(previous);
-                self.apply_group_bbox(start, &clips, &masks, filter.as_ref());
-                result
-            }
-            "g" => {
-                let (clips, masks, filter) = self.own_effects(&style, transform, None, true);
-                let start = self.shapes.len();
-                let previous = self.push_effects(&clips, &masks, filter.as_ref());
-                let result =
-                    self.visit_children(element, ancestors, transform, &style, opacity, depth);
-                self.pop_effects(previous);
-                self.apply_group_bbox(start, &clips, &masks, filter.as_ref());
-                result
-            }
-            "defs" | "title" | "desc" | "metadata" | "style" | "linearGradient"
-            | "radialGradient" | "pattern" | "clipPath" | "mask" | "filter" | "symbol"
-            | "marker" | "tspan" | "image" | "foreignObject" | "script" | "stop" => Ok(()),
-            "text" => self.push_text(element, transform, &style, opacity),
-            "use" => {
-                let reference = element
-                    .attribute("href")
-                    .or_else(|| element.attribute("xlink:href"))
-                    .unwrap_or_default();
-                let Some(id) = reference.strip_prefix('#') else {
-                    ancestors.pop();
-                    return Ok(());
-                };
-                let Some(target) = self.defs.get(id).copied() else {
-                    ancestors.pop();
-                    return Ok(());
-                };
-                if self.use_stack.iter().any(|seen| seen == id) {
-                    ancestors.pop();
-                    return Ok(());
+        // `display: none` removes the whole subtree (#37).
+        if !style.display {
+            ancestors.pop();
+            return Ok(());
+        }
+        let visible = style.visibility;
+        let result = if visible {
+            match name.as_str() {
+                "svg" => {
+                    let viewport = nested_viewport_transform(element);
+                    let transform = transform.then(viewport);
+                    let (clips, masks, filter) = self.own_effects(&style, transform, None, true);
+                    let start = self.shapes.len();
+                    let active = !clips.is_empty() || !masks.is_empty() || filter.is_some();
+                    self.group_bbox_stack
+                        .push(GroupBboxFrame { bbox: None, active });
+                    let previous = self.push_effects(&clips, &masks, filter.as_ref());
+                    let result =
+                        self.visit_children(element, ancestors, transform, &style, opacity, depth);
+                    self.pop_effects(previous);
+                    let frame = self.group_bbox_stack.pop().expect("group bbox frame");
+                    if active {
+                        self.apply_group_bbox(start, &clips, &masks, filter.as_ref(), frame.bbox);
+                    }
+                    result
                 }
-                if self.use_stack.len() >= self.limits.max_use_depth {
-                    ancestors.pop();
-                    return Err(SvgError::Limit(
-                        "nested <use> expansion too deep".to_owned(),
-                    ));
+                "g" | "a" | "switch" => {
+                    let (clips, masks, filter) = self.own_effects(&style, transform, None, true);
+                    let start = self.shapes.len();
+                    let active = !clips.is_empty() || !masks.is_empty() || filter.is_some();
+                    self.group_bbox_stack
+                        .push(GroupBboxFrame { bbox: None, active });
+                    let previous = self.push_effects(&clips, &masks, filter.as_ref());
+                    let result =
+                        self.visit_children(element, ancestors, transform, &style, opacity, depth);
+                    self.pop_effects(previous);
+                    let frame = self.group_bbox_stack.pop().expect("group bbox frame");
+                    if active {
+                        self.apply_group_bbox(start, &clips, &masks, filter.as_ref(), frame.bbox);
+                    }
+                    result
                 }
-                let x = parse_length(element.attribute("x"), 0.0).unwrap_or(0.0);
-                let y = parse_length(element.attribute("y"), 0.0).unwrap_or(0.0);
-                let use_transform = transform.then(Transform::translate(x, y));
-                let (clips, masks, filter) = self.own_effects(&style, use_transform, None, true);
-                let start = self.shapes.len();
-                let previous = self.push_effects(&clips, &masks, filter.as_ref());
-                self.use_stack.push(id.to_owned());
-                let result =
-                    self.visit(target, ancestors, use_transform, &style, opacity, depth + 1);
-                self.use_stack.pop();
-                self.pop_effects(previous);
-                self.apply_group_bbox(start, &clips, &masks, filter.as_ref());
-                result
+                "defs" | "title" | "desc" | "metadata" | "style" | "linearGradient"
+                | "radialGradient" | "pattern" | "clipPath" | "mask" | "filter" | "symbol"
+                | "marker" | "tspan" | "image" | "foreignObject" | "script" | "stop" => Ok(()),
+                "text" => self.push_text(element, transform, &style, opacity),
+                "use" => {
+                    let reference = element
+                        .attribute("href")
+                        .or_else(|| element.attribute("xlink:href"))
+                        .unwrap_or_default();
+                    let Some(id) = reference.strip_prefix('#') else {
+                        ancestors.pop();
+                        return Ok(());
+                    };
+                    let Some(target) = self.defs.get(id).copied() else {
+                        ancestors.pop();
+                        return Ok(());
+                    };
+                    if self.use_stack.iter().any(|seen| seen == id) {
+                        ancestors.pop();
+                        return Ok(());
+                    }
+                    if self.use_stack.len() >= self.limits.max_use_depth {
+                        ancestors.pop();
+                        return Err(SvgError::Limit(
+                            "nested <use> expansion too deep".to_owned(),
+                        ));
+                    }
+                    if self.use_expansions >= self.limits.max_use_expansions {
+                        ancestors.pop();
+                        return Err(SvgError::Limit("too many <use> expansions".to_owned()));
+                    }
+                    self.use_expansions += 1;
+                    let x = parse_length(element.attribute("x"), 0.0).unwrap_or(0.0);
+                    let y = parse_length(element.attribute("y"), 0.0).unwrap_or(0.0);
+                    let use_transform = transform.then(Transform::translate(x, y));
+                    let (clips, masks, filter) =
+                        self.own_effects(&style, use_transform, None, true);
+                    let start = self.shapes.len();
+                    let active = !clips.is_empty() || !masks.is_empty() || filter.is_some();
+                    self.group_bbox_stack
+                        .push(GroupBboxFrame { bbox: None, active });
+                    let previous = self.push_effects(&clips, &masks, filter.as_ref());
+                    self.use_stack.push(id.to_owned());
+                    let result = if target.local_name_lower() == "symbol" {
+                        // A <symbol> is never painted directly; <use> instantiates its children
+                        // through the symbol's viewBox/preserveAspectRatio viewport mapping (#38).
+                        let symbol_transform =
+                            use_transform.then(nested_viewport_transform(target));
+                        self.visit_children(
+                            target,
+                            ancestors,
+                            symbol_transform,
+                            &style,
+                            opacity,
+                            depth + 1,
+                        )
+                    } else {
+                        self.visit(target, ancestors, use_transform, &style, opacity, depth + 1)
+                    };
+                    self.use_stack.pop();
+                    self.pop_effects(previous);
+                    let frame = self.group_bbox_stack.pop().expect("group bbox frame");
+                    if active {
+                        self.apply_group_bbox(start, &clips, &masks, filter.as_ref(), frame.bbox);
+                    }
+                    result
+                }
+                _ => self.push_shape(element, &name, transform, &style, opacity),
             }
-            _ => self.push_shape(element, &name, transform, &style, opacity),
+        } else {
+            // Hidden subtrees are not painted, but descendants may opt back in with
+            // `visibility: visible`, so keep walking the tree (#37).
+            self.visit_children(element, ancestors, transform, &style, opacity, depth)
         };
         ancestors.pop();
         result
@@ -1234,6 +1418,7 @@ impl<'a> Builder<'a> {
             mask: masks,
             filter,
         });
+        self.record_shape_bbox();
         Ok(())
     }
 }
@@ -1409,7 +1594,11 @@ fn polyline_subpath(
     segments_used: &mut usize,
 ) -> Result<SubPath, SvgError> {
     let text = element.attribute("points").unwrap_or_default();
-    let numbers = parse_number_list(text).unwrap_or_default();
+    let numbers = match parse_number_list(text) {
+        Some(numbers) => numbers,
+        None if text.trim().is_empty() => Vec::new(),
+        None => return Err(SvgError::Limit("points list exceeds limit".to_owned())),
+    };
     let pairs = numbers.as_chunks::<2>().0;
     // The documented segment budget also covers `<polygon>`/`<polyline>`: the rasterizer
     // builds one edge per vertex and scans them per sub-row, so an unbounded `points`
@@ -1448,6 +1637,9 @@ fn parse_paint(
     let value = raw.trim();
     if value.eq_ignore_ascii_case("none") {
         return Paint::None;
+    }
+    if value.eq_ignore_ascii_case("currentcolor") {
+        return Paint::CurrentColor;
     }
     if let Some(id) = parse_url_reference(value) {
         if let Some(index) = pattern_ids.get(&id) {
@@ -1625,8 +1817,27 @@ fn parse_preserve_aspect_ratio(raw: Option<&str>) -> PreserveAspectRatio {
 /// are linearly interpolated; non-numeric values switch from `from` to `to` at half the
 /// duration. `animateTransform` appends the animated transform after the element's own
 /// transform (documented approximation).
+fn has_smil(element: &XmlElement) -> bool {
+    for child in &element.children {
+        if let XmlNode::Element(child_element) = child {
+            let name = child_element.local_name_lower();
+            if matches!(name.as_str(), "animate" | "set" | "animatetransform") {
+                return true;
+            }
+            if has_smil(child_element) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn apply_smil(root: &XmlElement, svg_time: f32) -> Result<Option<XmlElement>, SvgError> {
     if !svg_time.is_finite() {
+        return Ok(None);
+    }
+    // Skip the full tree clone when there are no animation elements (#629).
+    if !has_smil(root) {
         return Ok(None);
     }
     let mut count = 0usize;
@@ -1739,9 +1950,13 @@ fn animation_fraction(element: &XmlElement, time: f32) -> Option<f32> {
     if let Some(repeats) = repeats
         && repeats.is_finite()
         && repeats >= 0.0
-        && elapsed >= duration * repeats
     {
-        return Some(1.0);
+        if repeats == 0.0 {
+            return None;
+        }
+        if elapsed >= duration * repeats {
+            return Some(1.0);
+        }
     }
     Some((elapsed % duration) / duration)
 }
@@ -2195,9 +2410,11 @@ fn build_effect_shapes(
         shapes: Vec::new(),
         texts: Vec::new(),
         use_stack: Vec::new(),
+        use_expansions: 0,
         active_clips: Vec::new(),
         active_masks: Vec::new(),
         active_filter: None,
+        group_bbox_stack: Vec::new(),
         segments_used: 0,
     };
     let style = Style {
@@ -2236,8 +2453,17 @@ fn build_clip_paths(
         if shapes.len() > MAX_EFFECT_SHAPES {
             return Err(SvgError::Limit("too many shapes in clipPath".to_owned()));
         }
+        let fill_rule = if element
+            .attribute("clip-rule")
+            .is_some_and(|value| value.eq_ignore_ascii_case("evenodd"))
+        {
+            FillRule::EvenOdd
+        } else {
+            FillRule::NonZero
+        };
         specs.push(ClipPathSpec {
             units: Units::parse(element.attribute("clipPathUnits")),
+            fill_rule,
             shapes,
         });
     }
@@ -2534,10 +2760,12 @@ fn build_patterns(
             shapes: Vec::new(),
             texts: Vec::new(),
             use_stack: Vec::new(),
+            use_expansions: 0,
             active_clips: Vec::new(),
             active_masks: Vec::new(),
             segments_used: 0,
             active_filter: None,
+            group_bbox_stack: Vec::new(),
         };
         let mut style = Style::default();
         let mut ancestors: Vec<&XmlElement> = vec![element];
@@ -2565,7 +2793,10 @@ fn build_patterns(
             height: parse_length(element.attribute("height"), 0.0)
                 .filter(|height| height.is_finite() && *height > 0.0)
                 .unwrap_or(0.0),
-            pattern_units: Units::parse(element.attribute("patternUnits")),
+            pattern_units: match element.attribute("patternUnits") {
+                Some(raw) => Units::parse(Some(raw)),
+                None => Units::ObjectBoundingBox,
+            },
             content_units: Units::parse(element.attribute("patternContentUnits")),
             transform: element
                 .attribute("patternTransform")

@@ -134,9 +134,10 @@ impl ProxyConfig {
         }
         #[cfg(feature = "pac")]
         if let Some(pac_url) = &self.pac_url
-            && let Ok(Some(proxy)) = crate::pac::resolve(url, pac_url)
+            && let Ok(result) = crate::pac::resolve(url, pac_url)
         {
-            return Some(proxy);
+            // DIRECT is terminal: no proxy, no fallback to the static config (#1257).
+            return result;
         }
         self.proxy_for(url).cloned()
     }
@@ -175,6 +176,10 @@ fn normalize_host(host: &str) -> String {
 /// Parses a proxy URL, accepting only `http:`/`https:` proxies.
 fn parse_proxy_url(value: &str) -> Option<Url> {
     let url = Url::parse(value.trim()).ok()?;
+    // Reject proxy URLs with non-empty path/query/fragment (fail-closed).
+    if url.path() != "/" || url.query().is_some() || url.fragment().is_some() {
+        return None;
+    }
     matches!(url.scheme(), Scheme::Http | Scheme::Https).then_some(url)
 }
 
@@ -193,16 +198,35 @@ fn no_proxy_entry_matches(entry: &str, host: &str, port: Option<u16>) -> bool {
     // Split an optional `:port` from the host (IPv6 literals keep their brackets).
     let (entry_host, entry_port) = if let Some(rest) = entry.strip_prefix('[') {
         match rest.split_once(']') {
-            Some((host, tail)) => (
-                host.to_owned(),
-                tail.strip_prefix(':')
-                    .and_then(|value| value.parse::<u16>().ok()),
-            ),
+            Some((host, tail)) => {
+                let port = if tail.is_empty() {
+                    None
+                } else if let Some(value) = tail.strip_prefix(':') {
+                    // An explicit but unparseable port must not silently drop the
+                    // constraint (#514): treat the entry as non-matching.
+                    match value.parse::<u16>() {
+                        Ok(p) => Some(p),
+                        Err(_) => return false,
+                    }
+                } else {
+                    None
+                };
+                (host.to_owned(), port)
+            }
             None => (rest.to_owned(), None),
         }
     } else if entry.matches(':').count() == 1 {
         match entry.split_once(':') {
-            Some((host, tail)) => (host.to_owned(), tail.parse::<u16>().ok()),
+            Some((host, tail)) => {
+                if tail.is_empty() {
+                    (host.to_owned(), None)
+                } else {
+                    match tail.parse::<u16>() {
+                        Ok(p) => (host.to_owned(), Some(p)),
+                        Err(_) => return false,
+                    }
+                }
+            }
             None => (entry, None),
         }
     } else {
@@ -240,13 +264,40 @@ impl fmt::Display for ProxyConfig {
             ),
             None => "none".to_owned(),
         };
+        let socks = self
+            .socks
+            .as_ref()
+            .map(|s| format!("socks5://{}:{}", s.host, s.port))
+            .unwrap_or_else(|| "none".to_owned());
+        let pac = self
+            .pac_url
+            .as_ref()
+            .map(|u| {
+                if u.username().is_empty() {
+                    format!(
+                        "{}://{}:{}",
+                        u.scheme().as_str(),
+                        u.host(),
+                        u.port_or_default().unwrap_or(0)
+                    )
+                } else {
+                    format!(
+                        "{}://{}:***@{}:{}",
+                        u.scheme().as_str(),
+                        u.username(),
+                        u.host(),
+                        u.port_or_default().unwrap_or(0)
+                    )
+                }
+            })
+            .unwrap_or_else(|| "none".to_owned());
         write!(
             f,
-            "ProxyConfig {{ http: {}, https: {}, socks: {:?}, pac: {:?}, no_proxy: [{}] }}",
+            "ProxyConfig {{ http: {}, https: {}, socks: {}, pac: {}, no_proxy: [{}] }}",
             render(&self.http),
             render(&self.https),
-            self.socks,
-            self.pac_url,
+            socks,
+            pac,
             self.no_proxy.join(", ")
         )
     }

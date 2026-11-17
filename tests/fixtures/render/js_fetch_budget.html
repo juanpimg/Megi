@@ -1,0 +1,11 @@
+<!doctype html><html><body>
+<div id="out">pending</div>
+<script>
+var done = 0, failed = 0, total = 40;
+function step(i) {
+  if (i >= total) { document.getElementById('out').textContent = 'done=' + done + ',failed=' + failed; return; }
+  fetch('fetch_data.json').then(function () { done++; step(i + 1); }, function () { failed++; step(i + 1); });
+}
+step(0);
+</script>
+</body></html>

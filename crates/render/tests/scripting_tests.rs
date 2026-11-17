@@ -434,6 +434,30 @@ fn script_load_attempts_are_capped_even_when_every_load_fails() {
 }
 
 #[test]
+fn repeated_classic_script_src_executes_once_per_element() {
+    let dir = std::env::temp_dir().join(format!("megi-script-repeat-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    std::fs::write(dir.join("counter.js"), "window.n = (window.n || 0) + 1;").expect("write js");
+    let document = dir.join("index.html");
+    std::fs::write(
+        &document,
+        "<!DOCTYPE html><body>\
+         <script src='counter.js'></script>\
+         <script src='counter.js'></script>\
+         <script>document.body.setAttribute('data-count', String(window.n))</script></body>",
+    )
+    .expect("write document");
+    let output = render_url(&file_url(&document), &options()).expect("render");
+    assert_eq!(
+        output.stats.scripts_executed, 3,
+        "two classic external scripts plus the inline check must all execute (#1217): {:?}",
+        output.stats.warnings
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn failed_script_attempts_do_not_starve_a_valid_one() {
     // `max_scripts` bounds executions and `max_script_attempts` bounds fetches: two failing
     // URLs followed by a valid script must still execute it (a single shared counter with
@@ -510,5 +534,33 @@ fn module_graph_fetches_are_capped() {
         "the third module fetch must be blocked and reported: {:?}",
         output.stats.warnings
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn script_mutating_existing_style_element_invalidates_stylesheet_cache() {
+    let dir = std::env::temp_dir().join(format!("megi-style-mutate-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let document = dir.join("index.html");
+    std::fs::write(
+        &document,
+        "<!DOCTYPE html><html><head>\
+         <style id='s'>div { width: 120px; height: 80px; background: rgb(255, 0, 0); }</style>\
+         </head><body><div></div>\
+         <script>document.getElementById('s').textContent = 'div { width: 120px; height: 80px; background: rgb(0, 255, 0); }';</script>\
+         </body></html>",
+    )
+    .expect("write document");
+
+    let output = render_url(&file_url(&document), &options()).expect("render");
+    assert_eq!(output.stats.scripts_executed, 1);
+    assert!(
+        count_color(&output.pixmap, GREEN) > 5_000,
+        "mutated <style> must turn box green, got {} green / {} red",
+        count_color(&output.pixmap, GREEN),
+        count_color(&output.pixmap, RED)
+    );
+    assert_eq!(count_color(&output.pixmap, RED), 0);
     let _ = std::fs::remove_dir_all(&dir);
 }

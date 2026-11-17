@@ -67,7 +67,7 @@ cd "$REPO_ROOT"
 # Forward every argument to the `megi` binary. MEGI_RELEASE=1 builds/uses the
 # release profile (slower first build, much faster window renders).
 if [[ "${MEGI_RELEASE:-0}" == "1" ]]; then
-    exec cargo run --release -q -p shell -- "$@"
+    exec cargo run --locked --release -q -p shell -- "$@"
 else
-    exec cargo run -q -p shell -- "$@"
+    exec cargo run --locked -q -p shell -- "$@"
 fi

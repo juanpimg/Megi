@@ -270,3 +270,24 @@ fn loader_blocks_file_urls_when_local_access_is_disabled() {
     loader.set_allow_file(true);
     assert_eq!(loader.load(&url).expect("allowed").bytes, b"secret");
 }
+
+#[test]
+fn file_url_respects_max_response_bytes() {
+    // #637: `file://` loads used to bypass `max_response_bytes` (64 MiB file cap) and
+    // cached the whole body unconditionally.
+    let file = TempFile::new("big.bin", &vec![0u8; 1024]);
+    let options = FetchOptions {
+        max_response_bytes: 16,
+        ..FetchOptions::default()
+    };
+    let mut loader = ResourceLoader::with_options(options);
+    let error = loader
+        .load(&file.url())
+        .expect_err("oversized file must be refused");
+    assert!(
+        matches!(error, LoadError::Fetch(FetchError::ResponseTooLarge)),
+        "unexpected error: {error:?}"
+    );
+    // The rejected body must not be cached.
+    assert_eq!(loader.cache_len(), 0);
+}

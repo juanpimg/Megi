@@ -62,6 +62,59 @@ const FANTASY_FALLBACKS: &[&str] = &["Impact", "DejaVu Sans"];
 /// when the requested family list has a single entry.
 const MAX_EXTRA_FALLBACKS: usize = 8;
 
+/// Maximum number of faces loaded via `load_font_data` / `load_font_data_family` (#497).
+const MAX_LOADED_FONT_FACES: usize = 256;
+
+/// Maximum aggregate bytes loaded via `load_font_data` / `load_font_data_family` (#497).
+const MAX_LOADED_FONT_BYTES: usize = 64 * 1024 * 1024;
+
+fn fnv1a_64(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    for &byte in bytes {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    hash
+}
+
+fn style_cache_key(style: FontStyle) -> u8 {
+    match style {
+        FontStyle::Normal => 0,
+        FontStyle::Italic => 1,
+        FontStyle::Oblique => 2,
+    }
+}
+
+fn is_combining_mark(ch: char) -> bool {
+    matches!(
+        ch as u32,
+        0x0300..=0x036F
+            | 0x0483..=0x0489
+            | 0x0591..=0x05BD
+            | 0x05BF
+            | 0x05C1..=0x05C2
+            | 0x05C4..=0x05C5
+            | 0x05C7
+            | 0x0610..=0x061A
+            | 0x064B..=0x065F
+            | 0x0670
+            | 0x06D6..=0x06DC
+            | 0x06DF..=0x06E4
+            | 0x06E7..=0x06E8
+            | 0x06EA..=0x06ED
+            | 0x0900..=0x0903
+            | 0x093A..=0x094F
+            | 0x0951..=0x0957
+            | 0x0962..=0x0963
+            | 0x1AB0..=0x1AFF
+            | 0x1DC0..=0x1DFF
+            | 0x20D0..=0x20FF
+            | 0xFE00..=0xFE0F
+            | 0xFE20..=0xFE2F
+            | 0xE0100..=0xE01EF
+    )
+}
+
 /// A database of system and explicitly loaded font faces.
 ///
 /// # Selection contract
@@ -78,13 +131,21 @@ const MAX_EXTRA_FALLBACKS: usize = 8;
 ///   order.
 ///
 /// The database is `Send + Sync`; the internal byte cache is behind a `Mutex`.
+type FallbackChainKey = (Vec<String>, u16, u8);
+type FallbackChainMap = HashMap<FallbackChainKey, Arc<Vec<Font>>>;
+
 pub struct FontDatabase {
     db: Database,
     cache: Mutex<HashMap<fontdb::ID, Arc<Vec<u8>>>>,
+    fallback_cache: Mutex<FallbackChainMap>,
     order: Vec<fontdb::ID>,
     /// CSS `@font-face` family aliases (lowercased) → faces registered under that name,
     /// regardless of the families in the font's own `name` table.
     aliases: HashMap<String, Vec<fontdb::ID>>,
+    /// Content-dedup map: `(byte_len, fnv1a_64)` → registered `fontdb::ID` lists (#497).
+    loaded_hashes: HashMap<(usize, u64), Vec<Vec<fontdb::ID>>>,
+    loaded_bytes: usize,
+    loaded_faces: usize,
     system_loaded: bool,
 }
 
@@ -113,6 +174,16 @@ pub const BUNDLED_FONTS: &[(&str, &[u8])] = &[
         include_bytes!("../assets/DejaVuSans-Bold.ttf"),
     ),
 ];
+
+/// Internal marker prepended to family names that were quoted in the source. Quoted
+/// names are always literal family names, never generic keywords (#1239); the marker
+/// keeps that distinction through the `&[&str]` font-database API.
+const QUOTED_FAMILY_PREFIX: &str = "\u{1}";
+
+/// Returns the literal name of a possibly marked family string.
+fn unmark_family(name: &str) -> &str {
+    name.strip_prefix(QUOTED_FAMILY_PREFIX).unwrap_or(name)
+}
 
 /// Parses a CSS `font-family` value into a priority list of family names.
 ///
@@ -176,15 +247,51 @@ pub fn parse_font_families(font_family: &str) -> Vec<String> {
         if families.len() >= MAX_FAMILIES {
             break;
         }
-        let trimmed = part.trim().trim_matches(|ch| ch == '\'' || ch == '"');
+        let trimmed = part.trim();
+        // Strip at most one matched quote pair (CSS Fonts 3); mismatched quotes
+        // are kept literal instead of being trimmed away (#605).
+        let was_quoted = trimmed.len() >= 2
+            && ((trimmed.starts_with('\'') && trimmed.ends_with('\''))
+                || (trimmed.starts_with('"') && trimmed.ends_with('"')));
+        let trimmed = if was_quoted {
+            &trimmed[1..trimmed.len() - 1]
+        } else {
+            trimmed
+        };
         let trimmed = trimmed.trim();
         if !trimmed.is_empty() {
-            let name = if trimmed.len() > MAX_ENTRY_LEN {
-                &trimmed[..MAX_ENTRY_LEN]
+            // Unescape CSS backslash sequences (e.g. \" -> ").
+            let mut unescaped = String::with_capacity(trimmed.len());
+            let mut chars = trimmed.chars();
+            while let Some(ch) = chars.next() {
+                if ch == '\\' {
+                    if let Some(next) = chars.next() {
+                        unescaped.push(next);
+                    } else {
+                        // Trailing backslash: keep it.
+                        unescaped.push(ch);
+                    }
+                } else {
+                    unescaped.push(ch);
+                }
+            }
+            let name = if unescaped.len() > MAX_ENTRY_LEN {
+                // Truncate on a char boundary to avoid panicking on multi-byte
+                // code points straddling the cap (#1228).
+                let mut end = MAX_ENTRY_LEN;
+                while end > 0 && !unescaped.is_char_boundary(end) {
+                    end -= 1;
+                }
+                &unescaped[..end]
             } else {
-                trimmed
+                &unescaped
             };
-            families.push(name.to_string());
+            // Mark quoted names so generic-keyword detection skips them (#1239).
+            families.push(if was_quoted {
+                format!("{QUOTED_FAMILY_PREFIX}{name}")
+            } else {
+                name.to_string()
+            });
         }
     }
     if families.is_empty() {
@@ -194,6 +301,38 @@ pub fn parse_font_families(font_family: &str) -> Vec<String> {
 }
 
 impl FontDatabase {
+    /// Deterministic digest of all loaded faces (identities plus face bytes). Used by the
+    /// render layout cache to avoid reusing metrics computed with different fonts (#1218).
+    pub fn identity_digest(&self) -> u64 {
+        let mut hash = 0xcbf2_9ce4_8422_2325u64;
+        let mut mix = |value: u64| {
+            hash ^= value;
+            hash = hash.wrapping_mul(0x1000_0000_01b3);
+        };
+        mix(self.order.len() as u64);
+        for id in &self.order {
+            if let Some(face) = self.db.face(*id) {
+                for byte in face.post_script_name.as_bytes() {
+                    mix(u64::from(*byte));
+                }
+                for (name, _) in &face.families {
+                    for byte in name.as_bytes() {
+                        mix(u64::from(*byte));
+                    }
+                }
+                mix(face.weight.0 as u64);
+                mix((face.style as u8) as u64);
+                mix((face.stretch as u8) as u64);
+            }
+            if let Ok(data) = self.face_data(*id) {
+                for byte in data.iter() {
+                    mix(u64::from(*byte));
+                }
+            }
+        }
+        hash
+    }
+
     /// Loads the deterministic bundled fonts (DejaVu Sans regular + bold) from
     /// `assets/` via `include_bytes!`.
     ///
@@ -215,13 +354,26 @@ impl FontDatabase {
         Self::load_bundled().unwrap_or_else(|_| Self::new())
     }
 
+    /// Loads the deterministic bundled fonts first (preserving bundled DejaVu priority
+    /// for Latin and CSS generic families), then loads installed system fonts so
+    /// per-glyph fallback can render CJK, Arabic, Hebrew, and emoji scripts.
+    pub fn new_with_bundled_and_system_fonts() -> Self {
+        let mut db = Self::new_with_bundled_fonts();
+        db.load_system_fonts();
+        db
+    }
+
     /// Creates an empty database (no system fonts, no loaded bytes).
     pub fn new() -> Self {
         Self {
             db: Database::new(),
             cache: Mutex::new(HashMap::new()),
+            fallback_cache: Mutex::new(HashMap::new()),
             order: Vec::new(),
             aliases: HashMap::new(),
+            loaded_hashes: HashMap::new(),
+            loaded_bytes: 0,
+            loaded_faces: 0,
             system_loaded: false,
         }
     }
@@ -245,6 +397,7 @@ impl FontDatabase {
         self.db.load_system_fonts();
         self.system_loaded = true;
         self.refresh_order();
+        self.fallback_cache_lock().clear();
     }
 
     /// Loads one font file (TTF/OTF/TTC) from disk.
@@ -275,14 +428,32 @@ impl FontDatabase {
         self.load_font_data(bytes)
     }
 
-    /// Loads font bytes (a single face or a font collection) into the database.
-    ///
-    /// The data is validated with `ttf-parser` before being registered; malformed
-    /// input returns [`FontError::InvalidFont`] and leaves the database unchanged.
-    pub fn load_font_data(&mut self, data: Vec<u8>) -> Result<(), FontError> {
+    fn load_font_data_inner(&mut self, data: Vec<u8>) -> Result<Vec<fontdb::ID>, FontError> {
         if data.is_empty() {
             return Err(FontError::InvalidFont {
                 reason: "empty font data".to_string(),
+            });
+        }
+        let key = (data.len(), fnv1a_64(&data));
+        if let Some(buckets) = self.loaded_hashes.get(&key) {
+            let cache = self.cache_lock();
+            for existing_ids in buckets {
+                if let Some(first_id) = existing_ids.first()
+                    && let Some(cached) = cache.get(first_id)
+                    && cached.as_slice() == data.as_slice()
+                {
+                    return Ok(existing_ids.clone());
+                }
+            }
+        }
+        if self.loaded_faces >= MAX_LOADED_FONT_FACES {
+            return Err(FontError::InvalidFont {
+                reason: format!("font face limit reached ({MAX_LOADED_FONT_FACES})"),
+            });
+        }
+        if self.loaded_bytes.saturating_add(data.len()) > MAX_LOADED_FONT_BYTES {
+            return Err(FontError::InvalidFont {
+                reason: format!("total loaded font bytes exceed {MAX_LOADED_FONT_BYTES} byte cap"),
             });
         }
         if let Err(err) = ttf_parser::Face::parse(&data, 0) {
@@ -290,10 +461,14 @@ impl FontDatabase {
                 reason: err.to_string(),
             });
         }
+        let byte_len = data.len();
         let shared: Arc<Vec<u8>> = Arc::new(data);
-        let ids = self.db.load_font_source(Source::Binary(
-            shared.clone() as Arc<dyn AsRef<[u8]> + Send + Sync>
-        ));
+        let ids: Vec<fontdb::ID> = self
+            .db
+            .load_font_source(Source::Binary(
+                shared.clone() as Arc<dyn AsRef<[u8]> + Send + Sync>
+            ))
+            .to_vec();
         if ids.is_empty() {
             return Err(FontError::InvalidFont {
                 reason: "fontdb registered no face for the supplied data".to_string(),
@@ -306,7 +481,19 @@ impl FontDatabase {
             }
         }
         self.order.extend(ids.iter().copied());
-        Ok(())
+        self.loaded_bytes = self.loaded_bytes.saturating_add(byte_len);
+        self.loaded_faces = self.loaded_faces.saturating_add(ids.len());
+        self.loaded_hashes.entry(key).or_default().push(ids.clone());
+        self.fallback_cache_lock().clear();
+        Ok(ids)
+    }
+
+    /// Loads font bytes (a single face or a font collection) into the database.
+    ///
+    /// The data is validated with `ttf-parser` before being registered; malformed
+    /// input returns [`FontError::InvalidFont`] and leaves the database unchanged.
+    pub fn load_font_data(&mut self, data: Vec<u8>) -> Result<(), FontError> {
+        self.load_font_data_inner(data).map(|_| ())
     }
 
     /// Loads raw sfnt (TTF/OTF) bytes under a CSS family **alias**.
@@ -330,9 +517,7 @@ impl FontDatabase {
                 reason: "empty @font-face family alias".to_string(),
             });
         }
-        let first_new = self.order.len();
-        self.load_font_data(bytes_ttf)?;
-        let ids: Vec<fontdb::ID> = self.order[first_new..].to_vec();
+        let ids = self.load_font_data_inner(bytes_ttf)?;
         if ids.is_empty() {
             return Err(FontError::InvalidFont {
                 reason: "fontdb registered no face for the supplied @font-face data".to_string(),
@@ -342,6 +527,7 @@ impl FontDatabase {
             .entry(alias.to_ascii_lowercase())
             .or_default()
             .extend(ids);
+        self.fallback_cache_lock().clear();
         Ok(())
     }
 
@@ -401,6 +587,13 @@ impl FontDatabase {
         }
     }
 
+    fn fallback_cache_lock(&self) -> std::sync::MutexGuard<'_, FallbackChainMap> {
+        match self.fallback_cache.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+
     fn face_data(&self, id: fontdb::ID) -> Result<Arc<Vec<u8>>, FontError> {
         if let Some(data) = self.cache_lock().get(&id).cloned() {
             return Ok(data);
@@ -428,6 +621,7 @@ impl FontDatabase {
             post_script_name: face.post_script_name.clone(),
             weight: face.weight.0,
             style: face.style.into(),
+            stretch: face.stretch,
             monospaced: face.monospaced,
         };
         let index = face.index;
@@ -438,26 +632,32 @@ impl FontDatabase {
     fn expand_families<'a>(families: &'a [&'a str]) -> Vec<Family<'a>> {
         let mut expanded: Vec<Family<'a>> = Vec::new();
         for family in families {
-            let keyword = family.to_ascii_lowercase();
-            let (generic, fallbacks): (Option<Family<'a>>, &[&'static str]) = match keyword.as_str()
-            {
-                "sans-serif" | "system-ui" | "ui-sans-serif" => {
-                    (Some(Family::SansSerif), SANS_FALLBACKS)
+            // A quoted family name is always literal, never a generic keyword (#1239).
+            let quoted = family.starts_with(QUOTED_FAMILY_PREFIX);
+            let literal = unmark_family(family);
+            let keyword = literal.to_ascii_lowercase();
+            let (generic, fallbacks): (Option<Family<'a>>, &[&'static str]) = if quoted {
+                (None, &[] as &[&'static str])
+            } else {
+                match keyword.as_str() {
+                    "sans-serif" | "system-ui" | "ui-sans-serif" => {
+                        (Some(Family::SansSerif), SANS_FALLBACKS)
+                    }
+                    "serif" | "ui-serif" => (Some(Family::Serif), SERIF_FALLBACKS),
+                    "monospace" | "ui-monospace" => (Some(Family::Monospace), MONO_FALLBACKS),
+                    "cursive" => (Some(Family::Cursive), CURSIVE_FALLBACKS),
+                    "fantasy" => (Some(Family::Fantasy), FANTASY_FALLBACKS),
+                    "emoji" => (
+                        Some(Family::SansSerif),
+                        &["Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji"] as &[&str],
+                    ),
+                    "math" => (
+                        Some(Family::Serif),
+                        &["STIX Two Math", "Cambria Math", "Latin Modern Math"] as &[&str],
+                    ),
+                    "fangsong" => (None, &["FangSong", "STFangsong"] as &[&str]),
+                    _ => (None, &[] as &[&'static str]),
                 }
-                "serif" | "ui-serif" => (Some(Family::Serif), SERIF_FALLBACKS),
-                "monospace" | "ui-monospace" => (Some(Family::Monospace), MONO_FALLBACKS),
-                "cursive" => (Some(Family::Cursive), CURSIVE_FALLBACKS),
-                "fantasy" => (Some(Family::Fantasy), FANTASY_FALLBACKS),
-                "emoji" => (
-                    Some(Family::SansSerif),
-                    &["Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji"] as &[&str],
-                ),
-                "math" => (
-                    Some(Family::Serif),
-                    &["STIX Two Math", "Cambria Math", "Latin Modern Math"] as &[&str],
-                ),
-                "fangsong" => (None, &["FangSong", "STFangsong"] as &[&str]),
-                _ => (None, &[] as &[&'static str]),
             };
             if let Some(generic) = generic {
                 expanded.push(generic);
@@ -467,16 +667,23 @@ impl FontDatabase {
             }
             if generic.is_none() || !GENERIC_FAMILIES.contains(&keyword.as_str()) {
                 // Explicit family name (also keeps e.g. "emoji"/"math" as names).
-                expanded.push(Family::Name(family));
+                expanded.push(Family::Name(literal));
             }
         }
         expanded
     }
 
     /// Resolves an `@font-face` alias list to the best matching registered face.
-    fn alias_face(&self, families: &[&str], weight: u16, style: FontStyle) -> Option<fontdb::ID> {
+    fn alias_face(
+        &self,
+        families: &[&str],
+        weight: u16,
+        style: FontStyle,
+        stretch: Stretch,
+    ) -> Option<fontdb::ID> {
         let wanted_style = DbStyle::from(style);
         for family in families {
+            let family = unmark_family(family);
             let Some(ids) = self.aliases.get(&family.to_ascii_lowercase()) else {
                 continue;
             };
@@ -485,9 +692,16 @@ impl FontDatabase {
                 let Some(face) = self.db.face(*id) else {
                     continue;
                 };
-                let style_penalty = if face.style == wanted_style { 0 } else { 1000 };
+                let style_penalty = match (face.style, wanted_style) {
+                    (a, b) if a == b => 0u32,
+                    (DbStyle::Italic, DbStyle::Oblique) | (DbStyle::Oblique, DbStyle::Italic) => {
+                        100
+                    }
+                    _ => 1000,
+                };
                 let weight_penalty = i32::from(face.weight.0.abs_diff(weight));
-                let score = style_penalty + weight_penalty;
+                let stretch_penalty = if face.stretch == stretch { 0i32 } else { 100 };
+                let score = style_penalty as i32 + weight_penalty + stretch_penalty;
                 if best.is_none_or(|(best_score, _)| score < best_score) {
                     best = Some((score, *id));
                 }
@@ -500,6 +714,7 @@ impl FontDatabase {
     }
 
     fn resolve_family_name<'a>(&'a self, name: &'a str) -> &'a str {
+        let name = unmark_family(name);
         self.order
             .iter()
             .filter_map(|id| self.db.face(*id))
@@ -509,8 +724,14 @@ impl FontDatabase {
             .unwrap_or(name)
     }
 
-    fn query_face(&self, families: &[&str], weight: u16, style: FontStyle) -> Option<fontdb::ID> {
-        if let Some(id) = self.alias_face(families, weight, style) {
+    fn query_face(
+        &self,
+        families: &[&str],
+        weight: u16,
+        style: FontStyle,
+        stretch: Stretch,
+    ) -> Option<fontdb::ID> {
+        if let Some(id) = self.alias_face(families, weight, style, stretch) {
             return Some(id);
         }
         let mut expanded = Self::expand_families(families);
@@ -525,18 +746,28 @@ impl FontDatabase {
         self.db.query(&Query {
             families: &expanded,
             weight: Weight(weight),
-            stretch: Stretch::Normal,
+            stretch,
             style: DbStyle::from(style),
         })
     }
 
-    fn last_resort_face(&self, weight: u16, style: FontStyle) -> Option<fontdb::ID> {
+    fn last_resort_face(
+        &self,
+        weight: u16,
+        style: FontStyle,
+        stretch: Stretch,
+    ) -> Option<fontdb::ID> {
         let wanted_style = DbStyle::from(style);
         let mut best: Option<(i32, fontdb::ID)> = None;
         for face in self.db.faces() {
-            let style_penalty = if face.style == wanted_style { 0 } else { 1000 };
+            let style_penalty = match (face.style, wanted_style) {
+                (a, b) if a == b => 0u32,
+                (DbStyle::Italic, DbStyle::Oblique) | (DbStyle::Oblique, DbStyle::Italic) => 100,
+                _ => 1000,
+            };
             let weight_penalty = i32::from(face.weight.0.abs_diff(weight));
-            let score = style_penalty + weight_penalty;
+            let stretch_penalty = if face.stretch == stretch { 0i32 } else { 100 };
+            let score = style_penalty as i32 + weight_penalty + stretch_penalty;
             if best.is_none_or(|(best_score, _)| score < best_score) {
                 best = Some((score, face.id));
             }
@@ -554,15 +785,23 @@ impl FontDatabase {
         families: &[&str],
         weight: u16,
         style: FontStyle,
+        stretch: Stretch,
     ) -> Result<Font, FontError> {
-        if let Some(id) = self.query_face(families, weight, style) {
+        debug_assert!(
+            (1..=1000).contains(&weight),
+            "font weight {weight} out of CSS range [1, 1000]"
+        );
+        let weight = weight.clamp(1, 1000);
+        if let Some(id) = self.query_face(families, weight, style, stretch) {
             return self.build_font(id);
         }
-        let uses_generic = families
-            .iter()
-            .any(|family| GENERIC_FAMILIES.contains(&family.to_ascii_lowercase().as_str()));
+        // A quoted generic-like name is literal (so it must not select the generic face),
+        // but if no such family is installed the browser falls back to the default face.
+        let uses_generic = families.iter().any(|family| {
+            GENERIC_FAMILIES.contains(&unmark_family(family).to_ascii_lowercase().as_str())
+        });
         if families.is_empty() || uses_generic {
-            return match self.last_resort_face(weight, style) {
+            return match self.last_resort_face(weight, style, stretch) {
                 Some(id) => self.build_font(id),
                 None => Err(FontError::NoFontAvailable),
             };
@@ -583,7 +822,12 @@ impl FontDatabase {
             .order
             .iter()
             .filter_map(|id| self.db.face(*id))
-            .find(|face| face.post_script_name == info.post_script_name)
+            .find(|face| {
+                face.post_script_name == info.post_script_name
+                    && face.weight.0 == info.weight
+                    && face.style == DbStyle::from(info.style)
+                    && face.stretch == info.stretch
+            })
             .map(|face| face.id)
             .ok_or_else(|| FontError::FontNotFound {
                 families: info.family.clone(),
@@ -599,7 +843,8 @@ impl FontDatabase {
         style: FontStyle,
         size_px: f32,
     ) -> Result<FontMetrics, FontError> {
-        self.font(families, weight, style)?.metrics(size_px)
+        self.font(families, weight, style, Stretch::Normal)?
+            .metrics(size_px)
     }
 
     /// Fallback-aware, unshaped text width in px at `size_px`.
@@ -616,8 +861,8 @@ impl FontDatabase {
         text: &str,
     ) -> Result<f32, FontError> {
         Font::validate_size(size_px)?;
-        let primary = self.font(families, weight, style)?;
-        let chain = self.fallback_chain(families, weight, style, primary);
+        let primary = self.font(families, weight, style, Stretch::Normal)?;
+        let mut chain = self.fallback_chain(families, weight, style, primary);
         let mut memo: HashMap<char, (usize, Option<u16>)> = HashMap::new();
         let mut width = 0.0f32;
         for ch in text.chars() {
@@ -626,6 +871,13 @@ impl FontDatabase {
                     if let Some(glyph_id) = font.glyph_id(ch) {
                         return (index, Some(glyph_id));
                     }
+                }
+                if let Some((font, glyph_id)) =
+                    self.find_fallback_face_for_char(ch, &chain, weight, style)
+                {
+                    let index = chain.len();
+                    chain.push(font);
+                    return (index, Some(glyph_id));
                 }
                 (0, None)
             });
@@ -653,10 +905,10 @@ impl FontDatabase {
         text: &str,
     ) -> Result<ShapedRun, FontError> {
         Font::validate_size(size_px)?;
-        let primary = self.font(families, weight, style)?;
+        let primary = self.font(families, weight, style, Stretch::Normal)?;
         let metrics = primary.metrics(size_px)?;
-        let chain = self.fallback_chain(families, weight, style, primary);
-        let fonts: Vec<FontRefInfo> = chain.iter().map(|font| font.info().clone()).collect();
+        let mut chain = self.fallback_chain(families, weight, style, primary);
+        let mut fonts: Vec<FontRefInfo> = chain.iter().map(|font| font.info().clone()).collect();
 
         if text.is_empty() {
             return Ok(ShapedRun {
@@ -673,14 +925,29 @@ impl FontDatabase {
         // Current segment: (font index in `chain`, byte start, segment text).
         let mut segment: Option<(usize, usize, String)> = None;
         for (byte_index, ch) in text.char_indices() {
-            let font_index = *memo.entry(ch).or_insert_with(|| {
-                for (index, font) in chain.iter().enumerate() {
-                    if font.has_glyph(ch) {
+            let font_index = if is_combining_mark(ch)
+                && let Some((current, _, _)) = &segment
+                && chain[*current].has_glyph(ch)
+            {
+                *current
+            } else {
+                *memo.entry(ch).or_insert_with(|| {
+                    for (index, font) in chain.iter().enumerate() {
+                        if font.has_glyph(ch) {
+                            return index;
+                        }
+                    }
+                    if let Some((font, _)) =
+                        self.find_fallback_face_for_char(ch, &chain, weight, style)
+                    {
+                        let index = chain.len();
+                        fonts.push(font.info().clone());
+                        chain.push(font);
                         return index;
                     }
-                }
-                0
-            });
+                    0
+                })
+            };
             match &mut segment {
                 Some((current, _start, buffer)) if *current == font_index => buffer.push(ch),
                 Some((current, start, buffer)) => {
@@ -703,13 +970,38 @@ impl FontDatabase {
                 font_index,
             )?);
         }
+        // Only emit faces that actually shaped at least one glyph, remapping the
+        // glyph.font indices so unused fallback faces do not travel with the run
+        // (issue #610).
+        let mut used: Vec<bool> = vec![false; fonts.len()];
+        for glyph in &glyphs {
+            if let Some(slot) = used.get_mut(glyph.font) {
+                *slot = true;
+            }
+        }
+        // The primary face (index 0) is always retained so an empty run still
+        // carries its metrics face.
+        if let Some(slot) = used.first_mut() {
+            *slot = true;
+        }
+        let mut remap: Vec<usize> = vec![0; fonts.len()];
+        let mut compact: Vec<FontRefInfo> = Vec::new();
+        for (index, info) in fonts.into_iter().enumerate() {
+            if used[index] {
+                remap[index] = compact.len();
+                compact.push(info);
+            }
+        }
+        for glyph in &mut glyphs {
+            glyph.font = remap.get(glyph.font).copied().unwrap_or(0);
+        }
         let width = glyphs.iter().map(|glyph| glyph.x_advance).sum();
         Ok(ShapedRun {
             glyphs,
             width,
             ascent: metrics.ascent,
             descent: metrics.descent,
-            fonts,
+            fonts: compact,
         })
     }
 
@@ -726,7 +1018,7 @@ impl FontDatabase {
         size_px: f32,
         glyph_id: u16,
     ) -> Result<GlyphMask, FontError> {
-        self.font(families, weight, style)?
+        self.font(families, weight, style, Stretch::Normal)?
             .rasterize_glyph(size_px, glyph_id)
     }
 
@@ -740,7 +1032,7 @@ impl FontDatabase {
         ch: char,
     ) -> Result<GlyphMask, FontError> {
         Font::validate_size(size_px)?;
-        let primary = self.font(families, weight, style)?;
+        let primary = self.font(families, weight, style, Stretch::Normal)?;
         if let Some(glyph_id) = primary.glyph_id(ch) {
             return primary.rasterize_glyph(size_px, glyph_id);
         }
@@ -750,8 +1042,74 @@ impl FontDatabase {
                 return font.rasterize_glyph(size_px, glyph_id);
             }
         }
+        if let Some((font, glyph_id)) = self.find_fallback_face_for_char(ch, &chain, weight, style)
+        {
+            return font.rasterize_glyph(size_px, glyph_id);
+        }
         // No face has the glyph: render the primary face's .notdef box.
         chain[0].rasterize_glyph(size_px, 0)
+    }
+
+    /// Scans all loaded faces (not yet in `chain`) for a glyph matching `ch`, invoked
+    /// only when the initial fallback chain lacks `ch` (e.g. CJK, Arabic, emoji).
+    /// When `self` only loaded bundled/web fonts, falls back to a cached system font DB
+    /// so missing scripts render without altering primary `serif`/`sans-serif`/`monospace`
+    /// resolution for bundled fonts.
+    fn find_fallback_face_for_char(
+        &self,
+        ch: char,
+        chain: &[Font],
+        weight: u16,
+        style: FontStyle,
+    ) -> Option<(Font, u16)> {
+        if let Some(found) = self.scan_faces_for_char(ch, chain, weight, style) {
+            return Some(found);
+        }
+        if !self.system_loaded {
+            static SYSTEM_FALLBACK_DB: std::sync::OnceLock<FontDatabase> =
+                std::sync::OnceLock::new();
+            let sys_db = SYSTEM_FALLBACK_DB.get_or_init(FontDatabase::from_system);
+            return sys_db.scan_faces_for_char(ch, chain, weight, style);
+        }
+        None
+    }
+
+    fn scan_faces_for_char(
+        &self,
+        ch: char,
+        chain: &[Font],
+        weight: u16,
+        style: FontStyle,
+    ) -> Option<(Font, u16)> {
+        let wanted_style = DbStyle::from(style);
+        let mut candidates: Vec<(u32, fontdb::ID)> =
+            self.db
+                .faces()
+                .filter(|face| {
+                    !chain
+                        .iter()
+                        .any(|f| f.info().post_script_name == face.post_script_name)
+                })
+                .map(|face| {
+                    let style_penalty = match (face.style, wanted_style) {
+                        (a, b) if a == b => 0u32,
+                        (DbStyle::Italic, DbStyle::Oblique)
+                        | (DbStyle::Oblique, DbStyle::Italic) => 100,
+                        _ => 1000,
+                    };
+                    let weight_distance = (face.weight.0 as i32 - weight as i32).unsigned_abs();
+                    (style_penalty + weight_distance, face.id)
+                })
+                .collect();
+        candidates.sort_by_key(|(score, _)| *score);
+        for (_, id) in candidates {
+            if let Ok(font) = self.build_font(id)
+                && let Some(glyph_id) = font.glyph_id(ch)
+            {
+                return Some((font, glyph_id));
+            }
+        }
+        None
     }
 
     /// Builds the ordered fallback chain (primary first) for per-glyph fallback.
@@ -762,16 +1120,28 @@ impl FontDatabase {
         style: FontStyle,
         primary: Font,
     ) -> Vec<Font> {
+        let cache_key = (
+            families
+                .iter()
+                .map(|family| family.to_ascii_lowercase())
+                .collect::<Vec<_>>(),
+            weight,
+            style_cache_key(style),
+        );
+        if let Some(cached) = self.fallback_cache_lock().get(&cache_key).cloned() {
+            return (*cached).clone();
+        }
         let mut chain: Vec<Font> = vec![primary];
+        // Dedup by the underlying face bytes instead of the PostScript name:
+        // distinct subset faces can share a PS name and must not be dropped (#612).
         let mut seen = std::collections::HashSet::new();
-        seen.insert(chain[0].info().post_script_name.clone());
+        seen.insert(std::sync::Arc::as_ptr(&chain[0].data) as usize);
 
         for family in families {
-            if let Ok(font) = self.font(&[*family], weight, style) {
-                let name = font.info().post_script_name.clone();
-                if seen.insert(name) {
-                    chain.push(font);
-                }
+            if let Ok(font) = self.font(&[*family], weight, style, Stretch::Normal)
+                && seen.insert(std::sync::Arc::as_ptr(&font.data) as usize)
+            {
+                chain.push(font);
             }
         }
 
@@ -784,22 +1154,34 @@ impl FontDatabase {
                 }
                 // Score by weight distance and style proximity instead of requiring
                 // an exact match: a family with only a regular face should still
-                // provide fallback glyphs for a bold request.
-                let style_match = face.style == wanted_style;
+                // provide fallback glyphs for a bold request. Italic and oblique are
+                // close cousins (small penalty) so an italic request can still fall
+                // back to an oblique face (and vice versa) before reaching a
+                // normal face, instead of treating every mismatch as equally distant
+                // (#616).
+                let style_penalty = match (face.style, wanted_style) {
+                    (a, b) if a == b => 0u32,
+                    (DbStyle::Italic, DbStyle::Oblique) | (DbStyle::Oblique, DbStyle::Italic) => {
+                        100
+                    }
+                    _ => 1000,
+                };
                 let weight_distance = (face.weight.0 as i32 - weight as i32).unsigned_abs();
-                if weight_distance > 300 && !style_match {
-                    continue;
-                }
-                if seen.contains(&face.post_script_name) {
+                if weight_distance + style_penalty > 1300 {
                     continue;
                 }
                 if let Ok(font) = self.build_font(face.id) {
-                    seen.insert(font.info().post_script_name.clone());
-                    chain.push(font);
-                    extra += 1;
+                    // Dedup by the underlying face bytes instead of the PostScript
+                    // name so distinct subset faces sharing a PS name survive (#612).
+                    if seen.insert(std::sync::Arc::as_ptr(&font.data) as usize) {
+                        chain.push(font);
+                        extra += 1;
+                    }
                 }
             }
         }
+        self.fallback_cache_lock()
+            .insert(cache_key, Arc::new(chain.clone()));
         chain
     }
 }
@@ -812,6 +1194,63 @@ impl FontDatabase {
         weight: u16,
         style: FontStyle,
     ) -> Result<Font, FontError> {
-        self.font(families, weight, style)
+        self.font(families, weight, style, Stretch::Normal)
+    }
+}
+
+#[cfg(test)]
+mod quoted_family_tests {
+    use super::*;
+
+    #[test]
+    fn quoted_generic_name_stays_a_literal_family() {
+        let unquoted = parse_font_families("serif");
+        let quoted = parse_font_families("\"serif\"");
+        assert!(!unquoted[0].starts_with(QUOTED_FAMILY_PREFIX));
+        assert!(quoted[0].starts_with(QUOTED_FAMILY_PREFIX));
+        assert_eq!(unmark_family(&quoted[0]), "serif");
+
+        let unquoted_refs: Vec<&str> = vec![&unquoted[0]];
+        let quoted_refs: Vec<&str> = vec![&quoted[0]];
+        let expanded_unquoted = FontDatabase::expand_families(&unquoted_refs);
+        let expanded_quoted = FontDatabase::expand_families(&quoted_refs);
+        assert!(
+            expanded_unquoted
+                .iter()
+                .any(|family| matches!(family, Family::Serif)),
+            "unquoted serif must select the generic face"
+        );
+        assert!(
+            !expanded_quoted
+                .iter()
+                .any(|family| matches!(family, Family::Serif)),
+            "quoted serif must not select the generic face (#1239)"
+        );
+        assert!(
+            expanded_quoted
+                .iter()
+                .any(|family| matches!(family, Family::Name(name) if *name == "serif")),
+            "quoted serif must be looked up as a literal family name"
+        );
+    }
+}
+
+#[cfg(test)]
+mod identity_digest_tests {
+    use super::*;
+
+    #[test]
+    fn digest_changes_with_face_identity_not_just_count() {
+        let mut a = FontDatabase::new();
+        let mut b = FontDatabase::new();
+        a.load_font_data(BUNDLED_FONTS[0].1.to_vec())
+            .expect("regular");
+        b.load_font_data(BUNDLED_FONTS[1].1.to_vec()).expect("bold");
+        assert_eq!(a.order.len(), b.order.len(), "same number of faces");
+        assert_ne!(
+            a.identity_digest(),
+            b.identity_digest(),
+            "different faces with the same count must have different digests (#1218)"
+        );
     }
 }

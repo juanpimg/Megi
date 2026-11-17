@@ -994,7 +994,31 @@ fn decode_frame(
     }
     let mut above_contexts = vec![[0u8; 9]; mb_cols];
     let mut infos = vec![MbInfo::default(); mb_cols * mb_rows];
+    // Fail fast on truncated input before the expensive MB loop (#511).
+    if mode_bd.truncated() {
+        return Err(ImageError::Truncated {
+            context: "VP8 mode partition",
+        });
+    }
+    for bd in token_bds.iter() {
+        if bd.truncated() {
+            return Err(ImageError::Truncated {
+                context: "VP8 token partition",
+            });
+        }
+    }
     for mb_row in 0..mb_rows {
+        // Bail out early if the mode/token partitions are exhausted (#511).
+        if mode_bd.truncated() {
+            return Err(ImageError::Truncated {
+                context: "VP8 mode partition",
+            });
+        }
+        if token_bds[mb_row % header.num_partitions].truncated() {
+            return Err(ImageError::Truncated {
+                context: "VP8 token partition",
+            });
+        }
         let mut left_context = [0u8; 9];
         let partition = mb_row % header.num_partitions;
         for mb_col in 0..mb_cols {

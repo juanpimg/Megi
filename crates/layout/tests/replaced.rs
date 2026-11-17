@@ -152,3 +152,62 @@ fn test_block_level_replaced_box() {
     assert!((replaced.dimensions.content.height - 30.0).abs() < 0.001);
     assert!((p_box.dimensions.content.height - 30.0).abs() < 0.001);
 }
+
+#[test]
+fn test_inline_block_replaced_keeps_intrinsic_size() {
+    let (mut doc, mut styles, p) = setup();
+    let img = doc.create_element(
+        Namespace::Html,
+        "img",
+        vec![
+            Attribute::new("width", "90"),
+            Attribute::new("height", "45"),
+        ],
+    );
+    doc.append_child(p, img);
+    let mut img_style = ComputedStyle::initial();
+    img_style.display = Display::InlineBlock;
+    styles.insert(img, img_style);
+
+    let tree = layout_tree(&doc, &styles);
+    let line = &tree.children[0].children[0].children[0];
+    let replaced = &line.children[0];
+    assert!(matches!(replaced.box_type, BoxType::Replaced(_)));
+    assert!((replaced.dimensions.content.width - 90.0).abs() < 0.001);
+    assert!((replaced.dimensions.content.height - 45.0).abs() < 0.001);
+}
+
+#[test]
+fn test_replaced_sizes_api_rejects_invalid_numbers() {
+    for invalid in [
+        (f32::NAN, 50.0),
+        (50.0, f32::INFINITY),
+        (-10.0, 50.0),
+        (10_001.0, 50.0),
+    ] {
+        let (mut doc, mut styles, p) = setup();
+        let img = doc.create_element(
+            Namespace::Html,
+            "img",
+            vec![
+                Attribute::new("width", "70"),
+                Attribute::new("height", "35"),
+            ],
+        );
+        doc.append_child(p, img);
+        styles.insert(img, ComputedStyle::initial());
+        let mut sizes = HashMap::new();
+        sizes.insert(img, invalid);
+
+        let tree = layout_document_with_replaced_sizes(
+            &doc,
+            &styles,
+            Rect::new(0.0, 0.0, 800.0, 600.0),
+            &sizes,
+        )
+        .expect("layout");
+        let replaced = &tree.children[0].children[0].children[0].children[0];
+        assert!((replaced.dimensions.content.width - 70.0).abs() < 0.001);
+        assert!((replaced.dimensions.content.height - 35.0).abs() < 0.001);
+    }
+}

@@ -1,7 +1,7 @@
 //! Navigable browsing history metadata: per-tab log, global recent list, history menu state
 //! and the generated `about:history` page (HTML produced by [`crate::pages`]).
 //!
-//! [`NavigationState`] already owns the per-tab URL stack (bounded, consecutive duplicates
+//! \[`NavigationState`\] already owns the per-tab URL stack (bounded, consecutive duplicates
 //! collapsed). This module adds the **presentation metadata** the shell shows: document
 //! titles, a monotonic logical timestamp (deterministic: the shell counts recorded entries,
 //! no wall clock) and a bounded global recent list used by the `Ctrl+H` menu.

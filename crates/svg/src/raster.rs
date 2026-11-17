@@ -12,6 +12,8 @@
 //! pixel buffer byte for byte on every platform (IEEE `f32` arithmetic only, no
 //! threading and no randomness).
 
+use std::cell::Cell;
+
 use crate::color::Color;
 use crate::document::{
     BlendMode, ClipPathSpec, ColorMatrixKind, CompositeOperator, Document, EffectRef, FillRule,
@@ -29,6 +31,19 @@ use crate::{Limits, SvgError, SvgImage};
 const SUB_ROWS: usize = 4;
 /// Sub-samples per axis for stroke primitives.
 const STAMP_SAMPLES: u32 = 4;
+/// Total tile pixels allowed across all pattern paints in one render (#439).
+/// Each tile owns an offscreen `RGBA8` canvas, so this bounds the allocation
+/// work that nested patterns can trigger.
+const MAX_PATTERN_TILE_PIXELS: u64 = 16 * 1024 * 1024;
+
+/// Total glyphs rasterized across all `<text>` elements in one SVG render (#432).
+/// Per-element caps (1000 texts × 10k chars) still allow 10M font lookups + rasterizations.
+const MAX_SVG_GLYPHS: u64 = 50_000;
+
+/// Upper bound on the scratch buffers a single filter chain may allocate. Each primitive
+/// clones full-layer buffers (input + previous result), so a 16-primitive chain on a
+/// 64M-pixel layer would otherwise copy tens of GiB (#430).
+const MAX_FILTER_SCRATCH_BYTES: u64 = 512 * 1024 * 1024;
 
 /// Rasterizes a document into a straight-RGBA image.
 pub(crate) fn rasterize(
@@ -58,6 +73,7 @@ pub(crate) fn rasterize(
             "non-finite viewport transform".to_owned(),
         ));
     }
+    let budget = Cell::new(PatternBudget::default());
     for shape in &document.shapes {
         let context = PaintContext {
             gradients: &document.gradients,
@@ -66,6 +82,7 @@ pub(crate) fn rasterize(
             bbox: shape.bbox,
             viewport,
             depth: 0,
+            budget: &budget,
         };
         if shape.clip.is_empty() && shape.mask.is_empty() && shape.filter.is_none() {
             draw_shape(&mut canvas, shape, &context)?;
@@ -80,6 +97,7 @@ pub(crate) fn rasterize(
             &document.gradients,
             &document.patterns,
             viewport,
+            &budget,
         )?;
     }
     Ok(SvgImage {
@@ -91,6 +109,27 @@ pub(crate) fn rasterize(
 
 /// Paint resolution context (shape transform/bbox for `objectBoundingBox` units plus
 /// pattern recursion depth).
+/// Global anti-DoS budget shared by every pattern paint in one render (#439).
+/// The per-paint tile cap does not bound the cross-level product of nested
+/// patterns, so tiles and tile pixels are charged once, here.
+#[derive(Clone, Copy)]
+struct PatternBudget {
+    tiles: u64,
+    pixels: u64,
+    /// Shared glyph budget for every text element in the render (#432).
+    glyphs: u64,
+}
+
+impl Default for PatternBudget {
+    fn default() -> Self {
+        Self {
+            tiles: MAX_PATTERN_TILES,
+            pixels: MAX_PATTERN_TILE_PIXELS,
+            glyphs: MAX_SVG_GLYPHS,
+        }
+    }
+}
+
 struct PaintContext<'a> {
     gradients: &'a [GradientSpec],
     patterns: &'a [PatternSpec],
@@ -98,6 +137,8 @@ struct PaintContext<'a> {
     bbox: (f32, f32, f32, f32),
     viewport: Transform,
     depth: usize,
+    /// Shared across recursion so nested patterns cannot multiply the budget.
+    budget: &'a Cell<PatternBudget>,
 }
 
 /// Draws one shape (fill + stroke) using the coverage canvas.
@@ -152,7 +193,9 @@ fn draw_shape(
     // A hostile `stroke-width` (huge but finite) would build canvas-spanning quads/discs
     // evaluated with 16 samples per pixel for every stroked shape; clamp it relative to the
     // viewport (any wider stroke already covers the canvas).
-    let stroke_cap = 4.0 * (canvas.width + canvas.height).max(1) as f32;
+    let stroke_cap = ((canvas.width as f32).powi(2) + (canvas.height as f32).powi(2))
+        .sqrt()
+        .max(1.0);
     let width = (shape.stroke_width * viewport_scale).min(stroke_cap);
     if width > 0.0
         && width.is_finite()
@@ -253,7 +296,7 @@ fn apply_clip(
         }
         fill_scanline(
             &device,
-            shape.fill_rule,
+            spec.fill_rule,
             layer.width,
             layer.height,
             &mut coverage,
@@ -305,6 +348,7 @@ fn apply_mask(
             bbox: shape.bbox,
             viewport: mask_viewport,
             depth: context.depth,
+            budget: context.budget,
         };
         draw_shape(&mut content, shape, &shape_context)?;
     }
@@ -404,6 +448,12 @@ fn mask_region_pixels(
     )))
 }
 
+/// Worst-case scratch bytes for a filter chain: 4 base buffers plus at most two
+/// full-layer buffers per primitive (#430).
+fn filter_scratch_bytes(layer_bytes: u64, primitives: usize) -> u64 {
+    layer_bytes.saturating_mul(4u64.saturating_add(2u64.saturating_mul(primitives as u64)))
+}
+
 /// Applies a supported filter chain to the layer pixels.
 ///
 /// Primitives are resolved in order with `in`/`in2`/`result` references
@@ -433,6 +483,14 @@ fn apply_filter(
         .sqrt();
     if !scale.is_finite() || scale <= 0.0 {
         return Ok(());
+    }
+    // Bound worst-case scratch before cloning (#430).
+    let layer_bytes = layer.pixels.len() as u64;
+    let worst_case = filter_scratch_bytes(layer_bytes, spec.primitives.len());
+    if worst_case > MAX_FILTER_SCRATCH_BYTES {
+        return Err(SvgError::Limit(format!(
+            "SVG filter scratch budget of {MAX_FILTER_SCRATCH_BYTES} bytes exceeded"
+        )));
     }
     let source = layer.pixels.clone();
     let mut source_alpha = source.clone();
@@ -484,8 +542,8 @@ fn apply_filter(
                     &mut pixels,
                     layer.width,
                     layer.height,
-                    (dx * scale).round() as i32,
-                    (dy * scale).round() as i32,
+                    (dx * scale).round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
+                    (dy * scale).round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
                 );
                 (pixels, result)
             }
@@ -886,12 +944,19 @@ fn segment_at(
 }
 
 /// Flattens a `textPath`'s sub-paths into contiguous segments and their cumulative ends.
+/// Cap on flattened segments per textPath: a pathological path with millions of
+/// micro-segments must not turn glyph placement into an O(chars * segments) scan.
+const MAX_TEXT_PATH_SEGMENTS: usize = 65_536;
+
 fn text_path_segments(subpaths: &[SubPath]) -> (Vec<TextPathSegment>, Vec<f32>) {
     let mut segments: Vec<TextPathSegment> = Vec::new();
     let mut ends: Vec<f32> = Vec::new();
     let mut total = 0.0f32;
-    for subpath in subpaths {
+    'outer: for subpath in subpaths {
         for window in subpath.points.windows(2) {
+            if segments.len() >= MAX_TEXT_PATH_SEGMENTS {
+                break 'outer;
+            }
             let (x0, y0) = window[0];
             let (x1, y1) = window[1];
             let length = ((x1 - x0).powi(2) + (y1 - y0).powi(2)).sqrt();
@@ -911,10 +976,24 @@ fn draw_text(
     gradients: &[GradientSpec],
     patterns: &[PatternSpec],
     viewport: Transform,
+    budget: &Cell<PatternBudget>,
 ) -> Result<(), SvgError> {
     if spec.opacity <= 0.0 || spec.text.is_empty() {
         return Ok(());
     }
+    // Charge the whole text up front (twice for textPath, which walks glyphs for both
+    // natural-length measurement and placement) so a document full of texts cannot
+    // bypass the global glyph cap (#432).
+    let mut budget_state = budget.get();
+    let passes = if spec.text_path.is_some() { 2u64 } else { 1 };
+    let cost = (spec.text.chars().count() as u64).saturating_mul(passes);
+    if cost > budget_state.glyphs {
+        return Err(SvgError::Limit(format!(
+            "SVG glyph budget of {MAX_SVG_GLYPHS} exceeded"
+        )));
+    }
+    budget_state.glyphs -= cost;
+    budget.set(budget_state);
     let Some(database) = text::bundled_database() else {
         return Ok(());
     };
@@ -1045,6 +1124,7 @@ fn draw_text(
         bbox: spec.bbox,
         viewport,
         depth: 0,
+        budget,
     };
     if let Some(filled) = prepare_paint(
         spec.fill,
@@ -1098,6 +1178,9 @@ fn prepare_paint<'a>(
 ) -> Option<PreparedPaint<'a>> {
     match paint {
         Paint::None => None,
+        // Resolved by Style::resolve_current_color during document building; defensive
+        // fallback for any style constructed elsewhere.
+        Paint::CurrentColor => Some(PreparedPaint::Solid(Color::BLACK)),
         Paint::Solid(color) => (color.a > 0).then_some(PreparedPaint::Solid(color)),
         Paint::Pattern(index) => patterns
             .get(index as usize)
@@ -1213,6 +1296,18 @@ impl Canvas {
         if columns <= 0.0 || rows <= 0.0 {
             return Ok(());
         }
+        // Charge the whole tile grid against the *global* budget before doing any
+        // work (#439). The per-paint cap above is still useful as a fast reject,
+        // but only this shared counter bounds tiles^depth across nested patterns.
+        let tiles = (columns.ceil() as u64).saturating_mul(rows.ceil() as u64);
+        let mut left = context.budget.get();
+        if tiles > left.tiles {
+            return Err(SvgError::Limit(
+                "global pattern tile budget exceeded".to_owned(),
+            ));
+        }
+        left.tiles -= tiles;
+        context.budget.set(left);
         let i0 = (i0f as i64).saturating_sub(1);
         let i1 = (i1f as i64).saturating_add(1);
         let j0 = (j0f as i64).saturating_sub(1);
@@ -1250,6 +1345,15 @@ impl Canvas {
                 }
                 let tile_width = (x1 - x0) as usize;
                 let tile_height = (y1 - y0) as usize;
+                let tile_pixels = (tile_width as u64).saturating_mul(tile_height as u64);
+                let mut left = context.budget.get();
+                if tile_pixels > left.pixels {
+                    return Err(SvgError::Limit(
+                        "global pattern tile pixel budget exceeded".to_owned(),
+                    ));
+                }
+                left.pixels -= tile_pixels;
+                context.budget.set(left);
                 let mut tile = Canvas::new(tile_width, tile_height);
                 let local =
                     Transform::translate(-(x0 as f32), -(y0 as f32)).then(content_to_device);
@@ -1261,6 +1365,7 @@ impl Canvas {
                         bbox: shape.bbox,
                         viewport: local,
                         depth: context.depth + 1,
+                        budget: context.budget,
                     };
                     draw_shape(&mut tile, shape, &shape_context)?;
                 }
@@ -1360,8 +1465,8 @@ impl Canvas {
                 let local_y = row as f32 + mask.top;
                 let dx = local_x * cos - local_y * sin;
                 let dy = local_x * sin + local_y * cos;
-                let px = origin_x + dx.round() as i64;
-                let py = origin_y + dy.round() as i64;
+                let px = origin_x.saturating_add(dx.round() as i64);
+                let py = origin_y.saturating_add(dy.round() as i64);
                 if px < 0 || py < 0 || px >= self.width as i64 || py >= self.height as i64 {
                     continue;
                 }
@@ -1431,8 +1536,8 @@ impl Canvas {
                 let mut best = source[index];
                 for dy in -radius..=radius {
                     for dx in -radius..=radius {
-                        let sx = x as i64 + i64::from(dx);
-                        let sy = y as i64 + i64::from(dy);
+                        let sx = (x as i64).saturating_add(i64::from(dx));
+                        let sy = (y as i64).saturating_add(i64::from(dy));
                         if sx < 0 || sy < 0 || sx >= self.width as i64 || sy >= self.height as i64 {
                             continue;
                         }
@@ -1507,6 +1612,10 @@ fn composite_pixel(pixels: &mut [u8], offset: usize, color: Color, src_a: f32) {
 }
 
 /// Scanline fill with 4 vertical sub-rows and analytic horizontal coverage.
+/// Maximum total scanline work (edges × rows × sub-rows) before fill_scanline bails
+/// out (issue #627): prevents CPU DoS from huge paths.
+const MAX_SCANLINE_WORK: usize = 1 << 24;
+
 fn fill_scanline(
     subpaths: &[SubPath],
     rule: FillRule,
@@ -1532,6 +1641,10 @@ fn fill_scanline(
         }
     }
     if edges.is_empty() {
+        return;
+    }
+    // Bound total work to avoid CPU DoS (issue #627).
+    if edges.len().saturating_mul(height).saturating_mul(4) > MAX_SCANLINE_WORK {
         return;
     }
     let mut crossings: Vec<(f32, i32)> = Vec::new();
@@ -1998,5 +2111,22 @@ mod tests {
         canvas.coverage[0] = 0.5;
         canvas.composite(Color::rgba(255, 0, 0, 255), 1.0);
         assert_eq!(canvas.pixels[3], 128);
+    }
+}
+
+#[cfg(test)]
+mod filter_scratch_tests {
+    use super::*;
+
+    #[test]
+    fn filter_scratch_budget_scales_with_primitives() {
+        // A 256 MiB layer (64M RGBA pixels) with 16 primitives would need ~9 GiB.
+        let layer = 256u64 * 1024 * 1024;
+        assert!(filter_scratch_bytes(layer, 1) > MAX_FILTER_SCRATCH_BYTES);
+        assert!(filter_scratch_bytes(layer, 16) > filter_scratch_bytes(layer, 1));
+        // A small layer with a short chain stays within budget.
+        assert!(filter_scratch_bytes(64 * 1024, 2) <= MAX_FILTER_SCRATCH_BYTES);
+        // Arithmetic cannot overflow into a false negative.
+        assert_eq!(filter_scratch_bytes(u64::MAX, usize::MAX), u64::MAX);
     }
 }

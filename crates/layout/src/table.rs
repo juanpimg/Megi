@@ -202,7 +202,8 @@ fn layout_table_advanced(
             let Some(cell_box) = flat_cells[flat].as_ref() else {
                 continue;
             };
-            let colspan = usize::from(cell_box.colspan.max(1));
+            let colspan = usize::from(cell_box.colspan.max(1))
+                .min(MAX_TABLE_COLUMNS.saturating_sub(column).max(1));
             let rowspan = usize::from(cell_box.rowspan.max(1)).min(row_count - row_index);
             while occupancy[row_index]
                 .get(column)
@@ -679,7 +680,8 @@ fn auto_column_widths(
     let sum_max: f32 = columns.iter().map(|column| column.1).sum::<f32>() + outer_spacing;
     // Explicit `width` fixes the table width; otherwise auto width is
     // min(max(minimum, available), preferred) (CSS 2.1 §17.5.2).
-    let specified_width = matches!(style.width, Length::Px(_) | Length::Percent(_));
+    let specified_width = matches!(style.width, Length::Px(_) | Length::Percent(_))
+        || style.calc_lengths.width.is_some();
     let table_width = if specified_width {
         available_width
     } else {
@@ -735,11 +737,11 @@ fn fixed_column_widths(
         let Some(cell_style) = cell_box.style.as_ref() else {
             continue;
         };
-        let width = match cell_style.width {
-            Length::Px(px) => Some(px),
-            Length::Percent(pct) => Some(available_width * pct / 100.0),
-            Length::Auto => None,
-        };
+        let width = crate::calc::length_optional(
+            cell_style.width,
+            cell_style.calc_lengths.width,
+            Some(available_width),
+        );
         let Some(width) = width else {
             continue;
         };
@@ -756,7 +758,8 @@ fn fixed_column_widths(
     let outer_spacing = spacing_h * (column_count + 1) as f32;
     let explicit_sum: f32 = columns.iter().filter_map(|column| *column).sum();
     let unspecified = columns.iter().filter(|column| column.is_none()).count();
-    let specified_width = matches!(style.width, Length::Px(_) | Length::Percent(_));
+    let specified_width = matches!(style.width, Length::Px(_) | Length::Percent(_))
+        || style.calc_lengths.width.is_some();
     let mut table_width = if specified_width {
         available_width
     } else {
@@ -932,10 +935,12 @@ fn collect_col_widths(table: &LayoutBox, available_width: f32) -> Vec<Option<f32
         if !matches!(child.box_type, BoxType::TableColumn(_)) {
             continue;
         }
-        let width = child.style.as_ref().and_then(|style| match style.width {
-            Length::Px(px) => Some(px),
-            Length::Percent(pct) => Some(available_width * pct / 100.0),
-            Length::Auto => None,
+        let width = child.style.as_ref().and_then(|style| {
+            crate::calc::length_optional(
+                style.width,
+                style.calc_lengths.width,
+                Some(available_width),
+            )
         });
         widths.push(width.map(|width| width.max(0.0)));
     }
@@ -1024,14 +1029,28 @@ fn layout_absolutely_positioned_table_children(
             )
         })
         .collect();
+    // An abspos child of a table is still a real box: route it through the same two-phase
+    // path the block engine uses, with the table's content box as containing block,
+    // instead of only copying the origin and leaving its subtree unlaid-out (#694).
+    let cb = table.dimensions.content;
+    let cb_height = Some(cb.height);
     for &(index, static_x, static_y) in &static_positions {
         if let Some(child) = table.children.get_mut(index) {
-            child.dimensions.content.x = static_x;
-            child.dimensions.content.y = static_y;
-            let _ = (measurer, pos);
+            crate::block::layout_absolutely_positioned(
+                child, cb, cb_height, static_x, static_y, pos, measurer,
+            );
         }
     }
 }
+
+/// Upper bound on the column tracks one table may allocate (#690).
+///
+/// `colspan` is clamped to 1000 per cell when the box tree is built, but a table's column
+/// count is the sum over its cells: one row of N `colspan=1000` cells would allocate N*1000
+/// track slots, and the per-cell offset sums are quadratic on top of that. 512 columns is far
+/// past any real table (the biggest published ones use a few dozen), so the cap only bites
+/// hostile documents.
+const MAX_TABLE_COLUMNS: usize = 512;
 
 /// Min/max content widths of a cell, including its own horizontal decoration.
 fn cell_intrinsic_widths(
@@ -1042,7 +1061,10 @@ fn cell_intrinsic_widths(
 ) -> (f32, f32) {
     let (minimum, maximum) = intrinsic_content_widths(cell, available_width, measurer);
     let _ = collapse;
-    (minimum.max(1.0), maximum.max(1.0))
+    // No `max(1.0)` floor (#695): CSS 2.1 §17.5.2 makes an empty cell contribute zero, and
+    // every consumer already tolerates a zero-width track (the growth-share paths guard it),
+    // so flooring here only inflated those columns by a pixel each.
+    (minimum.max(0.0), maximum.max(0.0))
 }
 
 /// Fast path for plain tables: `border-collapse: separate`, `table-layout: auto` and
@@ -1053,6 +1075,9 @@ fn cell_intrinsic_widths(
 /// border conflict pass and without rebuilding the cell/row tree. It produces exactly
 /// the same geometry as the advanced path for this subset.
 mod legacy {
+    /// Mirror of the parent module's cap: the legacy engine counts columns itself (#690).
+    use super::MAX_TABLE_COLUMNS;
+
     use crate::block::{
         PositioningContext, intrinsic_content_widths, layout_box_contents,
         resolve_horizontal_edges, resolve_vertical_edges, translate_box,
@@ -1106,7 +1131,8 @@ mod legacy {
                         vertical,
                         style.border_collapse,
                         style.caption_side,
-                        matches!(style.width, Length::Px(_) | Length::Percent(_)),
+                        matches!(style.width, Length::Px(_) | Length::Percent(_))
+                            || style.calc_lengths.width.is_some(),
                     )
                 }
                 None => {
@@ -1296,7 +1322,8 @@ mod legacy {
             if !is_cell(cell) {
                 continue;
             }
-            let colspan = usize::from(cell.colspan.max(1));
+            let colspan = usize::from(cell.colspan.max(1))
+                .min(MAX_TABLE_COLUMNS.saturating_sub(next_column).max(1));
             let (min_width, max_width) = cell_intrinsic_widths(cell, available_width, measurer);
             cells.push(CellMetrics {
                 column: next_column,
@@ -1304,7 +1331,9 @@ mod legacy {
                 min_width,
                 max_width,
             });
-            *column_count = (*column_count).max(next_column + colspan);
+            *column_count = (*column_count)
+                .max(next_column + colspan)
+                .min(MAX_TABLE_COLUMNS);
             next_column += colspan;
         }
     }
@@ -1521,14 +1550,15 @@ mod legacy {
                 )
             })
             .collect();
+        // Same two-phase path as the advanced engine: an abspos table child is a real box and
+        // must have its subtree laid out (#694).
+        let cb = table.dimensions.content;
+        let cb_height = Some(cb.height);
         for &(index, static_x, static_y) in &static_positions {
             if let Some(child) = table.children.get_mut(index) {
-                child.dimensions.content.x = static_x;
-                child.dimensions.content.y = static_y;
-                let _ = measurer;
-                let _ = pos;
-                // Absolute table children are rare; they keep their static position until
-                // nested positioned tables are supported.
+                crate::block::layout_absolutely_positioned(
+                    child, cb, cb_height, static_x, static_y, pos, measurer,
+                );
             }
         }
     }
@@ -1572,6 +1602,7 @@ mod legacy {
     ) -> (f32, f32) {
         resolve_horizontal_edges(cell, available_width);
         let (minimum, maximum) = intrinsic_content_widths(cell, available_width, measurer);
-        (minimum.max(1.0), maximum.max(1.0))
+        // See the advanced path: an empty cell's intrinsic width is zero (#695).
+        (minimum.max(0.0), maximum.max(0.0))
     }
 }

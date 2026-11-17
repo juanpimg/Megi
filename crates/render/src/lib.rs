@@ -202,6 +202,7 @@
 pub mod backgrounds;
 #[cfg(feature = "js")]
 mod browser_host;
+pub mod cache;
 pub mod charset;
 pub mod error;
 pub mod images;
@@ -220,14 +221,23 @@ use dom::{Document, NodeId};
 use net::{FetchOptions, ResourceLoader, Scheme, Url};
 
 use images::{
-    DEFAULT_MAX_IMAGE_BYTES, DEFAULT_MAX_IMAGES, DEFAULT_MAX_TOTAL_IMAGE_BYTES, ImageLimits,
+    DEFAULT_MAX_IMAGE_BYTES, DEFAULT_MAX_IMAGES, DEFAULT_MAX_TOTAL_DECODED_PIXELS,
+    DEFAULT_MAX_TOTAL_IMAGE_BYTES, ImageLimits,
 };
 
+pub use cache::{RenderCache, RenderCacheStats};
 pub use error::RenderError;
 pub use scripts::{ConsoleMessage, RenderStorage, ScriptBudget, ScriptingLimits};
 
 /// Largest accepted viewport dimension for a single render.
 pub const MAX_VIEWPORT_DIMENSION: u32 = 8192;
+/// Maximum viewport area in CSS pixels (16 Mi pixels ≈ 4096x4096, 64 MiB of RGBA).
+///
+/// The per-side cap alone allows 8192x8192, whose pixmap is 256 MiB before any image
+/// budget applies — one render request could exhaust a modest host (#671). 16 Mi pixels is
+/// still past any real display (a 5K screen is ~15 Mi device pixels at DPR 1) while keeping
+/// the canvas allocation bounded.
+pub const MAX_VIEWPORT_AREA: u64 = 16 * 1024 * 1024;
 /// Default maximum document size (16 MiB, aligned with the `net` fetch cap).
 pub const DEFAULT_MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 /// Default maximum number of external stylesheets per page.
@@ -245,6 +255,12 @@ pub const DEFAULT_MAX_BACKGROUND_BYTES: usize = backgrounds::DEFAULT_MAX_BACKGRO
 /// Default total background-image byte budget per page (16 MiB).
 pub const DEFAULT_MAX_TOTAL_BACKGROUND_BYTES: usize =
     backgrounds::DEFAULT_MAX_TOTAL_BACKGROUND_BYTES;
+/// Default maximum number of `@font-face` web fonts attempted per render (#531).
+pub const DEFAULT_MAX_WEB_FONTS: usize = webfonts::MAX_WEB_FONTS;
+/// Default maximum encoded bytes accepted for a single web font (#531).
+pub const DEFAULT_MAX_WEB_FONT_BYTES: usize = webfonts::MAX_WEB_FONT_BYTES;
+/// Default maximum encoded bytes accepted for all web fonts per render (#531).
+pub const DEFAULT_MAX_TOTAL_WEB_FONT_BYTES: usize = webfonts::MAX_WEB_FONT_TOTAL_BYTES;
 
 /// Output viewport in CSS pixels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -261,6 +277,9 @@ impl Viewport {
         if !(1..=MAX_VIEWPORT_DIMENSION).contains(&width)
             || !(1..=MAX_VIEWPORT_DIMENSION).contains(&height)
         {
+            return Err(RenderError::InvalidViewport { width, height });
+        }
+        if u64::from(width) * u64::from(height) > MAX_VIEWPORT_AREA {
             return Err(RenderError::InvalidViewport { width, height });
         }
         Ok(Self { width, height })
@@ -375,6 +394,14 @@ pub struct RenderOptions {
     pub max_background_bytes: usize,
     /// Maximum total downloaded background-image bytes for the page.
     pub max_total_background_bytes: usize,
+    /// Maximum total decoded pixels across `<img>` and background bitmaps (#517).
+    pub max_total_decoded_pixels: u64,
+    /// Maximum number of `@font-face` web fonts attempted per render (#531).
+    pub max_web_fonts: usize,
+    /// Maximum encoded bytes accepted for a single web font (#531).
+    pub max_web_font_bytes: usize,
+    /// Maximum encoded bytes accepted for all web fonts per render (#531).
+    pub max_total_web_font_bytes: usize,
     /// Time used to evaluate CSS animations/transitions, in milliseconds (`--time`).
     ///
     /// `0` (the initial state) is the default; a caller that wants a later animation frame
@@ -454,6 +481,10 @@ impl Default for RenderOptions {
             max_backgrounds: DEFAULT_MAX_BACKGROUNDS,
             max_background_bytes: DEFAULT_MAX_BACKGROUND_BYTES,
             max_total_background_bytes: DEFAULT_MAX_TOTAL_BACKGROUND_BYTES,
+            max_total_decoded_pixels: DEFAULT_MAX_TOTAL_DECODED_PIXELS,
+            max_web_fonts: DEFAULT_MAX_WEB_FONTS,
+            max_web_font_bytes: DEFAULT_MAX_WEB_FONT_BYTES,
+            max_total_web_font_bytes: DEFAULT_MAX_TOTAL_WEB_FONT_BYTES,
             time_ms: 0.0,
             scripting: ScriptingMode::default(),
             scripting_limits: ScriptingLimits::default(),
@@ -577,6 +608,8 @@ pub struct RenderStats {
     /// `location.*` navigation requests captured during scripting (see
     /// [`RenderOutput::location_actions`]).
     pub location_actions: usize,
+    /// Whether scripting hit a budget limit (virtual time, iterations, timer count).
+    pub script_limited: bool,
     /// History API requests captured during scripting (see
     /// [`RenderOutput::history_actions`]).
     pub history_actions: usize,
@@ -600,6 +633,8 @@ pub struct RenderStats {
     pub referrer_policy: Option<String>,
     /// HTML parser anti-DoS limits that fired (should be empty for normal pages).
     pub limit_violations: html::LimitViolations,
+    /// `true` when [`render_url_cached`] reused a cached [`layout::LayoutBox`].
+    pub cache_layout_hit: bool,
     /// Per-stage timings.
     pub timings: RenderTimings,
     /// Non-fatal warnings (missing stylesheet, invalid base, skipped media, ...).
@@ -679,6 +714,23 @@ impl std::fmt::Debug for RenderOutput {
 
 /// Loads `input` (an absolute URL: `http(s)://`, `file://` or `data:`) and renders it.
 pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, RenderError> {
+    render_url_inner(input, options, None)
+}
+
+/// Like [`render_url`], but reuses a caller-owned [`RenderCache`] for layout trees.
+pub fn render_url_cached(
+    input: &str,
+    options: &RenderOptions,
+    cache: &mut RenderCache,
+) -> Result<RenderOutput, RenderError> {
+    render_url_inner(input, options, Some(cache))
+}
+
+fn render_url_inner(
+    input: &str,
+    options: &RenderOptions,
+    cache: Option<&mut RenderCache>,
+) -> Result<RenderOutput, RenderError> {
     let total_start = Instant::now();
     let url = Url::parse(input)?;
     stylesheets::ensure_supported_scheme(&url)?;
@@ -782,7 +834,11 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     let mut script_warnings = Vec::new();
     let script_requested = options.scripting == ScriptingMode::Enabled;
     let script_candidates = if script_requested && cfg!(feature = "js") {
-        scripts::discover_scripts(&document, &mut script_warnings)
+        scripts::discover_scripts(
+            &document,
+            &mut script_warnings,
+            scripts::MAX_DISCOVERED_SCRIPTS,
+        )
     } else {
         Vec::new()
     };
@@ -797,12 +853,12 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         css::StyleCollection,
         StyleSummary,
         Vec<webfonts::LocatedFontFace>,
-        usize,
+        u64,
     )> = None;
     let mut pre_warnings = Vec::new();
     if !script_candidates.is_empty() {
         let pre_start = Instant::now();
-        let stylesheet_elements_before = count_stylesheet_elements(&document);
+        let stylesheet_signature_before = stylesheet_signature(&document);
         if let Ok((collection, summary, fonts)) = collect_styles(
             &document,
             &base_url,
@@ -817,7 +873,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
                 css::StateContext::new(),
                 options.time_ms,
             )));
-            reusable_stylesheets = Some((collection, summary, fonts, stylesheet_elements_before));
+            reusable_stylesheets = Some((collection, summary, fonts, stylesheet_signature_before));
         }
         styles_pre_script = pre_start.elapsed();
     }
@@ -852,19 +908,23 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         );
         #[cfg(feature = "js")]
         {
-            if let Some(styles) = pre_script_styles.as_ref() {
+            if let Some(styles) = pre_script_styles.clone() {
                 let pre_layout_viewport = layout::Rect::new(
                     0.0,
                     0.0,
                     options.viewport.width as f32,
                     options.viewport.height as f32,
                 );
-                let layout_root = layout::layout_document(&document, styles, pre_layout_viewport);
-                if let Some(layout_root) = layout_root {
+                let doc_snapshot = document.clone();
+                host_context.layout_provider = Some(Arc::new(move || {
                     let mut rects = std::collections::HashMap::new();
-                    collect_layout_rects(&layout_root, &mut rects);
-                    host_context.layout = Some(std::sync::Arc::new(rects));
-                }
+                    if let Some(layout_root) =
+                        layout::layout_document(&doc_snapshot, &styles, pre_layout_viewport)
+                    {
+                        collect_layout_rects(&layout_root, &mut rects);
+                    }
+                    rects
+                }));
             }
         }
         host_context.storage = options.storage.clone();
@@ -899,6 +959,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         event_loop_time,
         location_actions,
         history_actions,
+        script_limited,
     ) = match scripting_execution {
         Some(execution) => (
             execution.executed,
@@ -912,6 +973,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             execution.event_loop,
             execution.location_actions,
             execution.history_actions,
+            execution.limited,
         ),
         None => (
             0,
@@ -925,6 +987,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             Duration::ZERO,
             Vec::new(),
             Vec::new(),
+            false,
         ),
     };
 
@@ -938,14 +1001,16 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     let inline_svg_report = if scripts_executed == 0 && !source_mentions_svg {
         inline_svg::InlineSvgReport::default()
     } else {
-        inline_svg::replace_inline_svgs(&mut document)
+        // Only replace as many inline SVGs as the image loader will actually fetch, so a
+        // document cannot pay serialization cost for placeholders (#670).
+        inline_svg::replace_inline_svgs(&mut document, options.max_images)
     };
     warnings.extend(inline_svg_report.warnings.iter().cloned());
 
     let styles_start = Instant::now();
     let (stylesheet_collection, style_summary, font_faces) = match reusable_stylesheets {
-        Some((collection, summary, fonts, stylesheet_elements_before))
-            if count_stylesheet_elements(&document) == stylesheet_elements_before =>
+        Some((collection, summary, fonts, stylesheet_signature_before))
+            if stylesheet_signature(&document) == stylesheet_signature_before =>
         {
             warnings.extend(pre_warnings);
             (collection, summary, fonts)
@@ -971,8 +1036,17 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     let styles_time = styles_start.elapsed();
 
     let fonts_start = Instant::now();
-    let loaded_webfonts =
-        webfonts::load_webfonts(&font_faces, &mut loader, options.no_network, &mut warnings);
+    let loaded_webfonts = webfonts::load_webfonts_with_limits(
+        &font_faces,
+        &mut loader,
+        options.no_network,
+        webfonts::WebFontLimits {
+            max_web_fonts: options.max_web_fonts,
+            max_web_font_bytes: options.max_web_font_bytes,
+            max_total_web_font_bytes: options.max_total_web_font_bytes,
+        },
+        &mut warnings,
+    );
     let fonts_time = fonts_start.elapsed();
 
     let images_start = Instant::now();
@@ -985,6 +1059,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             max_images: options.max_images,
             max_image_bytes: options.max_image_bytes,
             max_total_bytes: options.max_total_image_bytes,
+            max_total_decoded_pixels: options.max_total_decoded_pixels,
             max_image_dim: options.max_image_dim,
         },
         &mut warnings,
@@ -992,6 +1067,9 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     let images_time = images_start.elapsed();
 
     let backgrounds_start = Instant::now();
+    let remaining_decoded_pixels = options
+        .max_total_decoded_pixels
+        .saturating_sub(loaded_images.decoded_pixels);
     let loaded_backgrounds = backgrounds::load_backgrounds(
         &document,
         &styles,
@@ -1002,6 +1080,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             max_backgrounds: options.max_backgrounds,
             max_background_bytes: options.max_background_bytes,
             max_total_bytes: options.max_total_background_bytes,
+            max_total_decoded_pixels: remaining_decoded_pixels,
             max_image_dim: options.max_image_dim,
         },
         &mut warnings,
@@ -1009,6 +1088,9 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
     let backgrounds_time = backgrounds_start.elapsed();
 
     let layout_start = Instant::now();
+    // Mix font identities (not just the count) so a caller-shared cache cannot reuse
+    // metrics computed with a different font file (#1218).
+    let font_digest = loaded_webfonts.database.identity_digest();
     let measurer = layout::FontTextMeasurer::from_database(loaded_webfonts.database);
     let viewport = layout::Rect::new(
         0.0,
@@ -1016,14 +1098,28 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
         options.viewport.width as f32,
         options.viewport.height as f32,
     );
-    let layout_root = layout::layout_document_with_measurer_and_replaced_sizes(
-        &document,
-        &styles,
-        viewport,
-        &measurer,
-        Some(&loaded_images.sizes),
-    )
-    .ok_or(RenderError::LayoutFailed)?;
+    let (layout_root, cache_layout_hit) = if let Some(cache) = cache {
+        cache
+            .get_or_compute_layout(
+                &document,
+                &styles,
+                viewport,
+                &measurer,
+                &loaded_images.sizes,
+                font_digest,
+            )
+            .ok_or(RenderError::LayoutFailed)?
+    } else {
+        let root = layout::layout_document_with_measurer_and_replaced_sizes(
+            &document,
+            &styles,
+            viewport,
+            &measurer,
+            Some(&loaded_images.sizes),
+        )
+        .ok_or(RenderError::LayoutFailed)?;
+        (root, false)
+    };
     let layout_time = layout_start.elapsed();
 
     let paint_start = Instant::now();
@@ -1121,6 +1217,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             script_events,
             script_timers_pending,
             location_actions: location_action_count,
+            script_limited,
             history_actions: history_action_count,
             pushed_used: loader.pushed_used(),
             pushed_discarded: loader.pushed_discarded(),
@@ -1130,6 +1227,7 @@ pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, 
             content_encoding,
             referrer_policy: referrer_policy_name,
             limit_violations: parse.limit_violations,
+            cache_layout_hit,
             timings: RenderTimings {
                 fetch: fetch_time,
                 decode_parse: decode_parse_time,
@@ -1165,30 +1263,178 @@ fn render_svg_document(
     fetch_time: Duration,
     total_start: Instant,
 ) -> Result<RenderOutput, RenderError> {
-    let svg_data_url = format!(
-        "data:image/svg+xml;base64,{}",
-        net::base64_encode(&loaded.bytes)
+    let parse = html::parse_document_with_options(
+        "<!doctype html><html><head><style>html,body{margin:0;padding:0;background-color:#ffffff}img{display:block}</style></head><body><img alt=\"\"></body></html>",
+        false,
+        &options.parse_options,
     );
-    let page = format!(
-        "<!doctype html><html><head><style>html,body{{margin:0;padding:0;background-color:#ffffff}}img{{display:block}}</style></head><body><img src=\"{svg_data_url}\" alt=\"\"></body></html>"
+    let document = parse.document;
+    let img_node = document.get_elements_by_tag_name("img").into_iter().next();
+
+    let media_context = css::MediaContext::with_viewport(
+        options.viewport.width as f32,
+        options.viewport.height as f32,
     );
-    let wrapper_url = format!(
-        "data:text/html;base64,{}",
-        net::base64_encode(page.as_bytes())
+    let mut warnings = Vec::new();
+    let mut loader = ResourceLoader::with_options(options.fetch_options.clone());
+    let (stylesheet_collection, style_summary, _font_faces) = collect_styles(
+        &document,
+        &loaded.url,
+        &mut loader,
+        options,
+        &media_context,
+        &mut warnings,
+    )?;
+    let styles = resolve_styles_with_state(
+        &document,
+        &stylesheet_collection,
+        css::StateContext::new(),
+        options.time_ms,
     );
-    let mut output = render_url(&wrapper_url, options)?;
-    output.document_url = loaded.url.clone();
-    output.stats.document_bytes = loaded.bytes.len();
-    output.stats.status = loaded.status;
-    output.stats.referrer_policy = Some(
-        net::ReferrerPolicy::from_headers(&loaded.headers)
-            .unwrap_or_default()
-            .as_str()
-            .to_owned(),
+
+    let mut image_store = paint::ImageStore::new();
+    let mut image_sizes: HashMap<NodeId, (f32, f32)> = HashMap::new();
+    let (mut images_loaded, mut images_failed, mut svgs_rendered) = (0usize, 0usize, 0usize);
+    if let Some(node_id) = img_node {
+        match svg_assets::render(&loaded.bytes) {
+            Ok(rendered) => {
+                let (width, height) = rendered.raster.dimensions();
+                let pixels = u64::from(width).saturating_mul(u64::from(height));
+                if pixels > options.max_total_decoded_pixels {
+                    images_failed = 1;
+                    warnings.push(format!(
+                        "skipping image {}: decoded pixel budget exhausted ({pixels} > {} pixels)",
+                        loaded.url, options.max_total_decoded_pixels
+                    ));
+                } else {
+                    image_sizes.insert(node_id, rendered.intrinsic);
+                    image_store.insert(node_id, Arc::new(rendered.raster));
+                    images_loaded = 1;
+                    svgs_rendered = 1;
+                }
+            }
+            Err(error) => {
+                images_failed = 1;
+                warnings.push(format!(
+                    "skipping image {}: SVG render failed ({error})",
+                    loaded.url
+                ));
+            }
+        }
+    }
+
+    let font_db = fonts::FontDatabase::new_with_bundled_and_system_fonts();
+    let measurer = layout::FontTextMeasurer::from_database(font_db);
+    let viewport = layout::Rect::new(
+        0.0,
+        0.0,
+        options.viewport.width as f32,
+        options.viewport.height as f32,
     );
-    output.stats.timings.fetch = fetch_time;
-    output.stats.timings.total = total_start.elapsed();
-    Ok(output)
+    let layout_root = layout::layout_document_with_measurer_and_replaced_sizes(
+        &document,
+        &styles,
+        viewport,
+        &measurer,
+        Some(&image_sizes),
+    )
+    .ok_or(RenderError::LayoutFailed)?;
+
+    let empty_backgrounds = paint::BackgroundImages::new();
+    let (display_list, hit_regions) = paint::build_display_list_with_hit_regions(
+        &layout_root,
+        viewport,
+        &image_store,
+        &empty_backgrounds,
+    );
+    let display_items = display_list.items.len();
+    let hit_region_count = hit_regions.len();
+
+    let pixmap = paint::rasterize_display_list_with_font_database(
+        &display_list,
+        options.viewport.width,
+        options.viewport.height,
+        paint::RenderConfig::default(),
+        measurer.database(),
+    );
+    let png = if options.encode_png {
+        let png = pixmap.to_png();
+        if png.is_empty() {
+            return Err(RenderError::LayoutFailed);
+        }
+        png
+    } else {
+        Vec::new()
+    };
+
+    Ok(RenderOutput {
+        png,
+        pixmap,
+        document,
+        styles,
+        layout: layout_root,
+        display_list,
+        hit_regions,
+        document_url: loaded.url.clone(),
+        location_actions: Vec::new(),
+        history_actions: Vec::new(),
+        stats: RenderStats {
+            document_bytes: loaded.bytes.len(),
+            charset: "utf-8".to_owned(),
+            status: loaded.status,
+            external_stylesheets: style_summary.external_stylesheets,
+            inline_stylesheets: style_summary.inline_stylesheets,
+            css_bytes: style_summary.css_bytes,
+            imports_loaded: style_summary.imports_loaded,
+            imports_skipped: style_summary.imports_skipped,
+            max_import_depth: style_summary.max_import_depth,
+            media_skipped: style_summary.media_skipped,
+            images_loaded,
+            images_failed,
+            image_bytes: 0,
+            background_images_loaded: 0,
+            background_images_failed: 0,
+            background_bytes: 0,
+            svgs_rendered,
+            inline_svgs: 0,
+            fonts_loaded: 0,
+            fonts_failed: 0,
+            font_bytes: 0,
+            scripts_executed: 0,
+            scripts_failed: 0,
+            script_bytes: 0,
+            console: Vec::new(),
+            console_errors: 0,
+            script_tasks: 0,
+            script_loop_iterations: 0,
+            script_virtual_time_ms: 0,
+            script_events: 0,
+            script_timers_pending: 0,
+            location_actions: 0,
+            script_limited: false,
+            history_actions: 0,
+            pushed_used: 0,
+            pushed_discarded: 0,
+            display_items,
+            hit_regions: hit_region_count,
+            cookies_stored: 0,
+            content_encoding: loaded.content_encoding.clone(),
+            referrer_policy: Some(
+                net::ReferrerPolicy::from_headers(&loaded.headers)
+                    .unwrap_or_default()
+                    .as_str()
+                    .to_owned(),
+            ),
+            limit_violations: parse.limit_violations,
+            cache_layout_hit: false,
+            timings: RenderTimings {
+                fetch: fetch_time,
+                total: total_start.elapsed(),
+                ..RenderTimings::default()
+            },
+            warnings,
+        },
+    })
 }
 
 /// Main document loaded by [`render_url`], before decoding.
@@ -1282,6 +1528,8 @@ struct StyleSummary {
     imports_skipped: usize,
     max_import_depth: usize,
     media_skipped: usize,
+    /// The `max_stylesheets` cap was hit and the warning already pushed (#654).
+    sheets_capped: bool,
 }
 
 /// Mutable state shared by the recursive `@import` walk.
@@ -1296,9 +1544,14 @@ struct ImportWalk<'a> {
     attempts: usize,
     /// Whether the attempt-cap warning was already pushed (one per walk).
     cap_warned: bool,
+    /// Whether the CSS byte-budget warning was already pushed (one per walk, #654).
+    budget_warned: bool,
+    /// Total @import entries processed (including skipped), bounded to prevent
+    /// unbounded CPU on trivial imports (#524).
+    total_imports: usize,
     skipped: usize,
     max_depth: usize,
-    css_bytes: usize,
+    css_bytes: &'a mut usize,
 }
 
 /// Builds the author [`css::StyleCollection`] in cascade order, resolving `@import`
@@ -1327,12 +1580,24 @@ fn collect_styles(
     build_author_stylesheet_collection(&collected, base_url, loader, options, media, warnings)
 }
 
-/// Counts stylesheet-producing elements (`<style>` and `<link rel=stylesheet>`).
+/// Computes a content-and-attribute signature of stylesheet-producing elements (`<base>`,
+/// `<style>`, and `<link>`).
 ///
-/// The post-script style pass can reuse the pre-script collection when scripts did not
-/// change the stylesheet set; only an added/removed `<style>`/`<link>` forces a recollect.
-fn count_stylesheet_elements(document: &Document) -> usize {
-    let mut count = 0usize;
+/// The post-script style pass can reuse the pre-script collection only when scripts did
+/// not add, remove, reorder, or mutate any `<style>`, `<link>`, or `<base>` element,
+/// including `<style>` text content and `<link>`/`<base>` attributes (#462).
+fn stylesheet_signature(document: &Document) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let mix = |hash: &mut u64, bytes: &[u8]| {
+        for &byte in bytes {
+            *hash ^= u64::from(byte);
+            *hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        // Record delimiter so adjacent fields cannot collide.
+        *hash ^= 0xff;
+        *hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    };
+
     for node_id in document.descendants(document.root()) {
         let Some(element) = document.node(node_id).as_element() else {
             continue;
@@ -1340,17 +1605,36 @@ fn count_stylesheet_elements(document: &Document) -> usize {
         if element.namespace != dom::Namespace::Html {
             continue;
         }
-        let is_style = element.local_name == "style";
-        let is_stylesheet_link = element.local_name == "link"
-            && element.get_attribute("rel").is_some_and(|rel| {
-                rel.split_ascii_whitespace()
-                    .any(|token| token.eq_ignore_ascii_case("stylesheet"))
-            });
-        if is_style || is_stylesheet_link {
-            count += 1;
+        let local = element.local_name.as_str();
+        if local.eq_ignore_ascii_case("base") {
+            mix(&mut hash, b"B");
+            if let Some(href) = element.get_attribute("href") {
+                mix(&mut hash, href.as_bytes());
+            }
+        } else if local.eq_ignore_ascii_case("style") {
+            mix(&mut hash, b"S");
+            for attr_name in ["media", "type", "disabled"] {
+                if let Some(val) = element.get_attribute(attr_name) {
+                    mix(&mut hash, attr_name.as_bytes());
+                    mix(&mut hash, val.as_bytes());
+                }
+            }
+            for desc_id in document.descendants(node_id) {
+                if let dom::NodeKind::Text(text) = &document.node(desc_id).kind {
+                    mix(&mut hash, text.as_bytes());
+                }
+            }
+        } else if local.eq_ignore_ascii_case("link") {
+            mix(&mut hash, b"L");
+            for attr_name in ["rel", "href", "media", "type", "disabled"] {
+                if let Some(val) = element.get_attribute(attr_name) {
+                    mix(&mut hash, attr_name.as_bytes());
+                    mix(&mut hash, val.as_bytes());
+                }
+            }
         }
     }
-    count
+    hash
 }
 
 fn build_author_stylesheet_collection(
@@ -1379,6 +1663,7 @@ fn build_author_stylesheet_collection(
         imports_skipped: 0,
         max_import_depth: 0,
         media_skipped: collected.media_skipped,
+        sheets_capped: false,
     };
     let mut walk = ImportWalk {
         loader,
@@ -1389,16 +1674,27 @@ fn build_author_stylesheet_collection(
         loaded: 0,
         attempts: 0,
         cap_warned: false,
+        budget_warned: false,
+        total_imports: 0,
         skipped: 0,
         max_depth: 0,
-        css_bytes: 0,
+        css_bytes: &mut summary.css_bytes,
     };
 
     for source in &collected.sources {
         match source {
             stylesheets::CssSource::Inline { text, .. } => {
                 summary.inline_stylesheets += 1;
-                account_css_bytes(&mut summary.css_bytes, text.len(), options)?;
+                if !account_css_bytes(walk.css_bytes, text.len(), options) {
+                    if !summary.sheets_capped {
+                        summary.sheets_capped = true;
+                        walk.warnings.push(format!(
+                            "CSS byte budget reached ({}); further sheets are skipped",
+                            options.max_total_css_bytes
+                        ));
+                    }
+                    continue;
+                }
                 let sheet = css::parse_stylesheet(text);
                 font_faces.extend(
                     sheet
@@ -1422,17 +1718,31 @@ fn build_author_stylesheet_collection(
                 summary.external_stylesheets += 1;
                 let total_sheets = summary.external_stylesheets + walk.loaded;
                 if total_sheets > options.max_stylesheets {
-                    return Err(RenderError::TooManyStylesheets {
-                        count: total_sheets,
-                        max: options.max_stylesheets,
-                    });
+                    // #654: degrade instead of failing the whole render.
+                    if !summary.sheets_capped {
+                        summary.sheets_capped = true;
+                        walk.warnings.push(format!(
+                            "stylesheet cap reached ({}); further sheets are skipped",
+                            options.max_stylesheets
+                        ));
+                    }
+                    continue;
                 }
                 let Some(text) =
                     load_stylesheet_text(url, &mut *walk.loader, options, &mut *walk.warnings)?
                 else {
                     continue;
                 };
-                account_css_bytes(&mut summary.css_bytes, text.len(), options)?;
+                if !account_css_bytes(walk.css_bytes, text.len(), options) {
+                    if !summary.sheets_capped {
+                        summary.sheets_capped = true;
+                        walk.warnings.push(format!(
+                            "CSS byte budget reached ({}); further sheets are skipped",
+                            options.max_total_css_bytes
+                        ));
+                    }
+                    continue;
+                }
                 // Register the top-level URL so an import cycle back to it is detected.
                 walk.visited.insert(url.cache_key());
                 let sheet = css::parse_stylesheet(&text);
@@ -1456,7 +1766,7 @@ fn build_author_stylesheet_collection(
             }
         }
     }
-    summary.css_bytes += walk.css_bytes;
+    // css_bytes is shared with walk.
     summary.imports_loaded = walk.loaded;
     summary.imports_skipped = walk.skipped;
     summary.max_import_depth = walk.max_depth;
@@ -1477,7 +1787,20 @@ fn walk_imports(
     walk: &mut ImportWalk<'_>,
     font_faces: &mut Vec<webfonts::LocatedFontFace>,
 ) -> Result<(), RenderError> {
-    for import in &sheet.imports {
+    'imports: for import in &sheet.imports {
+        // Bound total import entries (including skipped) to prevent unbounded
+        // CPU on a sheet with thousands of trivial @imports (#524).
+        const MAX_TOTAL_IMPORTS: usize = 10_000;
+        if walk.total_imports >= MAX_TOTAL_IMPORTS {
+            if !walk.cap_warned {
+                walk.cap_warned = true;
+                walk.warnings.push(format!(
+                    "import cap reached ({MAX_TOTAL_IMPORTS}); further @imports are skipped"
+                ));
+            }
+            break 'imports;
+        }
+        walk.total_imports += 1;
         let effective_depth = walk.options.max_import_depth.min(32);
         if depth >= effective_depth {
             walk.skipped += 1;
@@ -1513,12 +1836,16 @@ fn walk_imports(
             walk.skipped += 1;
             continue;
         }
-        // Successful imports keep the hard error (the documented `max_stylesheets` bound).
+        // #654: the sheet cap skips further imports instead of failing the render.
         if walk.loaded + 1 > max_total_sheets {
-            return Err(RenderError::TooManyStylesheets {
-                count: walk.loaded + 1,
-                max: max_total_sheets,
-            });
+            walk.skipped += 1;
+            if !walk.cap_warned {
+                walk.cap_warned = true;
+                walk.warnings.push(format!(
+                    "stylesheet cap reached ({max_total_sheets}); further imports are skipped"
+                ));
+            }
+            continue;
         }
         // `loaded` only counts successes: failed imports would otherwise fetch without
         // limit (one request per unique URL in the stylesheet). Report the cap once.
@@ -1538,7 +1865,17 @@ fn walk_imports(
         else {
             continue;
         };
-        account_css_bytes(&mut walk.css_bytes, text.len(), walk.options)?;
+        if !account_css_bytes(walk.css_bytes, text.len(), walk.options) {
+            walk.skipped += 1;
+            if !walk.budget_warned {
+                walk.budget_warned = true;
+                walk.warnings.push(format!(
+                    "CSS byte budget reached ({}); further imports are skipped",
+                    walk.options.max_total_css_bytes
+                ));
+            }
+            continue;
+        }
         let imported = css::parse_stylesheet(&text);
         walk.loaded += 1;
         walk.max_depth = walk.max_depth.max(depth + 1);
@@ -1582,11 +1919,13 @@ fn load_stylesheet_text(
     match loader.load(url) {
         Ok(resource) => {
             if resource.bytes.len() > options.max_css_bytes_per_sheet {
-                return Err(RenderError::StylesheetTooLarge {
-                    url: url.as_str(),
-                    bytes: resource.bytes.len(),
-                    max: options.max_css_bytes_per_sheet,
-                });
+                // #654: skip the sheet with a warning instead of failing the render.
+                warnings.push(format!(
+                    "skipping stylesheet {url}: {} bytes exceeds the {} byte cap",
+                    resource.bytes.len(),
+                    options.max_css_bytes_per_sheet
+                ));
+                return Ok(None);
             }
             {
                 let text = String::from_utf8_lossy(&resource.bytes);
@@ -1603,20 +1942,19 @@ fn load_stylesheet_text(
     }
 }
 
-/// Adds `additional` bytes to the author CSS budget, failing on overflow.
-fn account_css_bytes(
-    total: &mut usize,
-    additional: usize,
-    options: &RenderOptions,
-) -> Result<(), RenderError> {
-    *total += additional;
-    if *total > options.max_total_css_bytes {
-        return Err(RenderError::CssBudgetExceeded {
-            bytes: *total,
-            max: options.max_total_css_bytes,
-        });
+/// Adds `additional` bytes to the author CSS budget.
+///
+/// Exceeding the budget is **not** fatal (#654): the sheet that crosses the limit is skipped, the
+/// limit is reported once as a warning, and rendering continues with the CSS collected so far —
+/// which is what browsers do and what every other capped resource (images, backgrounds, fonts,
+/// scripts) already did. Returns `false` when the budget is exhausted.
+fn account_css_bytes(total: &mut usize, additional: usize, options: &RenderOptions) -> bool {
+    let attempted = total.saturating_add(additional);
+    if attempted > options.max_total_css_bytes {
+        return false;
     }
-    Ok(())
+    *total = attempted;
+    true
 }
 
 /// Resolves computed styles for every element with a prebuilt [`css::StyleCollection`].
@@ -1656,9 +1994,7 @@ fn resolve_styles_with_collection(
     }
     while let Some(node_id) = stack.pop() {
         if let Some(element) = doc.node(node_id).as_element() {
-            let inline_declarations = element
-                .get_attribute("style")
-                .map(|style| css::expand_declarations(&css::parse_list_of_declarations(style)));
+            let inline_declarations = element.get_attribute("style").map(css::parse_inline_style);
             let cascaded = css::resolve_cascaded_properties(
                 doc,
                 node_id,

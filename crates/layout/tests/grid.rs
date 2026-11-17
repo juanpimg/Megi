@@ -878,3 +878,25 @@ fn test_explicit_line_and_end_beyond_the_track_cap_terminate() {
         assert!(laid_out.dimensions.content.width.is_finite());
     }
 }
+
+#[test]
+fn test_grid_item_respects_min_max_width_and_min_wins_over_max() {
+    // Item with auto width clamped by max-width inside a 200px track.
+    let mut max_clamped = item_style(Length::Auto, Length::Px(20.0));
+    max_clamped.max_width = Length::Px(80.0);
+    let case_max = layout_case(
+        grid_container_style(Length::Px(200.0), Length::Auto),
+        vec![max_clamped],
+    );
+    assert!((case_max.item(0).dimensions.content.width - 80.0).abs() < 0.1);
+
+    // When min-width > max-width, CSS 2.2 §10.4 specifies min-width wins.
+    let mut min_over_max = item_style(Length::Px(50.0), Length::Px(20.0));
+    min_over_max.min_width = Length::Px(120.0);
+    min_over_max.max_width = Length::Px(80.0);
+    let case_min_wins = layout_case(
+        grid_container_style(Length::Px(200.0), Length::Auto),
+        vec![min_over_max],
+    );
+    assert!((case_min_wins.item(0).dimensions.content.width - 120.0).abs() < 0.1);
+}

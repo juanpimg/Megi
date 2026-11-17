@@ -28,7 +28,10 @@
 //!   intrinsic ratio with `auto` (or the declared ratio when it is explicit).
 
 use css::calc::CalcValue;
-use css::{BoxSizing, Clear, ComputedStyle, Display, Float, Length, Overflow, Position};
+use css::{
+    BoxSizing, Clear, ComputedStyle, Display, FlexDirection, FlexWrap, Float, Length, Overflow,
+    Position, WhiteSpace,
+};
 
 use crate::box_tree::{BoxType, LayoutBox};
 use crate::geometry::{Dimensions, EdgeSizes, Rect};
@@ -179,6 +182,12 @@ pub(crate) fn self_positioning_context(
     }
 }
 
+thread_local! {
+    static LAYOUT_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+const MAX_LAYOUT_DEPTH: usize = 256;
+
 /// Lays out the contents of a block container and computes its used height.
 ///
 /// `cb_height` is the definite height of the box's containing block (used by percentage
@@ -191,6 +200,34 @@ pub(crate) fn layout_box_contents(
     measurer: &dyn TextMeasurer,
     pos: PositioningContext,
 ) {
+    // Guard against pathological nesting (issue #692): the HTML parser allows up to
+    // 4096-deep trees, but every layout pass recurses per level. Cap the effective
+    // layout depth so a deep page degrades gracefully instead of overflowing the
+    // stack (SIGABRT).
+    let depth = LAYOUT_DEPTH.with(|cell| {
+        let current = cell.get();
+        if current >= MAX_LAYOUT_DEPTH {
+            return None;
+        }
+        cell.set(current + 1);
+        Some(current + 1)
+    });
+    if depth.is_none() {
+        return;
+    }
+    struct DepthGuard;
+    impl Drop for DepthGuard {
+        fn drop(&mut self) {
+            LAYOUT_DEPTH.with(|cell| {
+                let current = cell.get();
+                if current > 0 {
+                    cell.set(current - 1);
+                }
+            });
+        }
+    }
+    let _guard = DepthGuard;
+
     // CSS 2.1 §17: table boxes use the table layout algorithm instead of the block
     // formatting context.
     if matches!(
@@ -472,6 +509,7 @@ struct PlacedFloat {
 fn place_float(
     child: &mut LayoutBox,
     cb: Rect,
+    definite_height: Option<f32>,
     flow_offset: f32,
     floats: &[PlacedFloat],
     measurer: &dyn TextMeasurer,
@@ -506,7 +544,16 @@ fn place_float(
         } else {
             cb.x + cb.width - margin_box_w
         };
-        return position_float(child, x, top, side, margin_box_w, measurer, pos);
+        return position_float(
+            child,
+            x,
+            top,
+            side,
+            margin_box_w,
+            definite_height,
+            measurer,
+            pos,
+        );
     }
     if !margin_box_h.is_finite() {
         let x = if side == Float::Left {
@@ -514,7 +561,16 @@ fn place_float(
         } else {
             cb.x + cb.width - margin_box_w
         };
-        return position_float(child, x, top, side, margin_box_w, measurer, pos);
+        return position_float(
+            child,
+            x,
+            top,
+            side,
+            margin_box_w,
+            definite_height,
+            measurer,
+            pos,
+        );
     }
     // Move down until the float fits next to the floats already placed.
     loop {
@@ -539,7 +595,16 @@ fn place_float(
             right_limit - margin_box_w
         };
         if x >= cb.x && x + margin_box_w <= right_limit + 0.001 {
-            return position_float(child, x, top, side, margin_box_w, measurer, pos);
+            return position_float(
+                child,
+                x,
+                top,
+                side,
+                margin_box_w,
+                definite_height,
+                measurer,
+                pos,
+            );
         }
         // Does not fit: move below the floats blocking this side (and keep the height).
         let next_top = floats
@@ -552,7 +617,16 @@ fn place_float(
         }
         top = next_top;
     }
-    position_float(child, cb.x, top, side, margin_box_w, measurer, pos)
+    position_float(
+        child,
+        cb.x,
+        top,
+        side,
+        margin_box_w,
+        definite_height,
+        measurer,
+        pos,
+    )
 }
 
 /// Returns `value`, or `0.0` when it is not finite.
@@ -561,12 +635,14 @@ fn finite_or_zero(value: f32) -> f32 {
 }
 
 /// Positions and lays out a float at `(x, top)` and returns its placed margin box.
+#[allow(clippy::too_many_arguments)]
 fn position_float(
     child: &mut LayoutBox,
     x: f32,
     top: f32,
     side: Float,
     margin_box_w: f32,
+    definite_height: Option<f32>,
     measurer: &dyn TextMeasurer,
     pos: PositioningContext,
 ) -> (PlacedFloat, f32) {
@@ -578,7 +654,7 @@ fn position_float(
     child.dimensions.content.y =
         top + margin_top + child.dimensions.border.top + child.dimensions.padding.top;
     let child_pos = self_positioning_context(child, pos);
-    layout_box_contents(child, None, false, measurer, child_pos);
+    layout_box_contents(child, definite_height, false, measurer, child_pos);
     let margin_box = Rect::new(
         x,
         top,
@@ -592,29 +668,33 @@ fn position_float(
 }
 
 /// Returns the horizontal space taken by floats at `y` inside `cb`.
-fn float_exclusions(floats: &[PlacedFloat], cb: Rect, y: f32) -> (f32, f32) {
-    // Documents without floats (the common case) skip the two filter/fold chains per child.
-    if floats.is_empty() {
+///
+/// One pass over the placed floats instead of two `filter`/`fold` chains (#691): the common
+/// case is a handful of floats, but a document can put thousands of them in one formatting
+/// context and this runs once per in-flow child.
+fn float_exclusions(floats: &[PlacedFloat], cb: Rect, y: f32, max_bottom: f32) -> (f32, f32) {
+    // Documents without floats (the common case) skip the loop per child, and so does any
+    // child that sits below every float already placed.
+    if floats.is_empty() || y >= max_bottom {
         return (0.0, 0.0);
     }
-    let left = floats
-        .iter()
-        .filter(|placed| {
-            placed.side == Float::Left
-                && placed.margin_box.y + placed.margin_box.height > y
-                && placed.margin_box.y < y + 1.0
-        })
-        .map(|placed| (placed.margin_box.x + placed.margin_box.width - cb.x).max(0.0))
-        .fold(0.0, f32::max);
-    let right = floats
-        .iter()
-        .filter(|placed| {
-            placed.side == Float::Right
-                && placed.margin_box.y + placed.margin_box.height > y
-                && placed.margin_box.y < y + 1.0
-        })
-        .map(|placed| (cb.x + cb.width - placed.margin_box.x).max(0.0))
-        .fold(0.0, f32::max);
+    let mut left = 0.0_f32;
+    let mut right = 0.0_f32;
+    for placed in floats {
+        if placed.margin_box.y >= y + 1.0 || placed.margin_box.y + placed.margin_box.height <= y {
+            continue;
+        }
+        match placed.side {
+            Float::Left => {
+                left = left.max((placed.margin_box.x + placed.margin_box.width - cb.x).max(0.0));
+            }
+            Float::Right => {
+                right = right.max((cb.x + cb.width - placed.margin_box.x).max(0.0));
+            }
+            // A placed float is always left or right; treat anything else as no exclusion.
+            Float::None => {}
+        }
+    }
     (left, right)
 }
 
@@ -638,7 +718,10 @@ fn layout_block_children(
     // (CSS 2.2 §9.4.2).
     if layout_box.children.iter().all(is_inline_level) {
         crate::inline::layout_inline_formatting_context_with_measurer_and_pos(
-            layout_box, measurer, pos,
+            layout_box,
+            definite_height,
+            measurer,
+            pos,
         );
         return result;
     }
@@ -648,6 +731,9 @@ fn layout_block_children(
     let mut flow = 0.0_f32;
     let mut previous_bottom_margin: Option<f32> = None;
     let mut floats: Vec<PlacedFloat> = Vec::new();
+    // Lowest bottom edge of any placed float; once the flow passes it, no float can exclude
+    // anything and the per-child scan is skipped entirely (#691).
+    let mut floats_bottom = f32::NEG_INFINITY;
 
     for (index, child) in layout_box.children.iter_mut().enumerate() {
         let position = child
@@ -674,8 +760,10 @@ fn layout_block_children(
 
         // Floats are out of flow: they do not advance the block flow.
         if child.is_float {
-            let (placed, _bottom) = place_float(child, cb, flow, &floats, measurer, pos);
+            let (placed, bottom) =
+                place_float(child, cb, definite_height, flow, &floats, measurer, pos);
             floats.push(placed);
+            floats_bottom = floats_bottom.max(bottom);
             result.float_extent = Some(
                 result
                     .float_extent
@@ -719,7 +807,8 @@ fn layout_block_children(
 
         // In-flow block boxes are narrowed to the float edges they overlap
         // (CSS 2.2 §9.5: "line boxes next to a float are shortened").
-        let (left_exclusion, right_exclusion) = float_exclusions(&floats, cb, cb.y + flow);
+        let (left_exclusion, right_exclusion) =
+            float_exclusions(&floats, cb, cb.y + flow, floats_bottom);
         let child_cb = Rect::new(
             cb.x + left_exclusion,
             cb.y,
@@ -767,7 +856,7 @@ fn layout_out_of_flow_children(
 }
 
 /// Lays out one absolutely (or fixed) positioned box (CSS 2.2 §9.6, §10.3.7, §10.6.4).
-fn layout_absolutely_positioned(
+pub(crate) fn layout_absolutely_positioned(
     child: &mut LayoutBox,
     cb: Rect,
     cb_height: Option<f32>,
@@ -1188,7 +1277,9 @@ fn min_height_is_zero(style: &ComputedStyle) -> bool {
     match style.min_height {
         Length::Auto => true,
         Length::Px(px) => px <= 0.0,
-        Length::Percent(_) => false,
+        // 0% resolves to zero; a positive percentage against an indefinite
+        // containing-block height is treated as zero per CSS 2.2 §10.7.
+        Length::Percent(p) => p <= 0.0,
     }
 }
 
@@ -1227,8 +1318,10 @@ fn resolve_min_height(
         return Some(crate::calc::resolve(calc, Some(cb_height.unwrap_or(0.0))));
     }
     match length {
-        Length::Px(px) => Some(px),
-        Length::Percent(pct) => Some(cb_height.unwrap_or(0.0) * (pct / 100.0)),
+        Length::Px(px) => Some(crate::calc::sanitize(px)),
+        Length::Percent(pct) => Some(crate::calc::sanitize(
+            cb_height.unwrap_or(0.0) * (pct / 100.0),
+        )),
         Length::Auto => None,
     }
 }
@@ -1244,8 +1337,10 @@ fn resolve_max_height(
         return Some(crate::calc::resolve(calc, cb_height));
     }
     match length {
-        Length::Px(px) => Some(px),
-        Length::Percent(pct) => cb_height.map(|height| height * (pct / 100.0)),
+        Length::Px(px) => Some(crate::calc::sanitize(px)),
+        Length::Percent(pct) => {
+            cb_height.map(|height| crate::calc::sanitize(height * (pct / 100.0)))
+        }
         Length::Auto => None,
     }
 }
@@ -1257,8 +1352,8 @@ fn specified_width(style: &ComputedStyle, cb_width: f32) -> Option<f32> {
         return Some(crate::calc::resolve(calc, Some(cb_width)));
     }
     match style.width {
-        Length::Px(px) => Some(px),
-        Length::Percent(pct) => Some(cb_width * (pct / 100.0)),
+        Length::Px(px) => Some(crate::calc::sanitize(px)),
+        Length::Percent(pct) => Some(crate::calc::sanitize(cb_width * (pct / 100.0))),
         Length::Auto => None,
     }
 }
@@ -1270,8 +1365,10 @@ fn specified_height(style: &ComputedStyle, cb_height: Option<f32>) -> Option<f32
         return Some(crate::calc::resolve(calc, cb_height));
     }
     match style.height {
-        Length::Px(px) => Some(px),
-        Length::Percent(pct) => cb_height.map(|height| height * (pct / 100.0)),
+        Length::Px(px) => Some(crate::calc::sanitize(px)),
+        Length::Percent(pct) => {
+            cb_height.map(|height| crate::calc::sanitize(height * (pct / 100.0)))
+        }
         Length::Auto => None,
     }
 }
@@ -1319,10 +1416,13 @@ fn apply_relative_offset(layout_box: &mut LayoutBox, cb_width: f32, cb_height: O
 
 /// Translates a box and its whole subtree by `(dx, dy)` in absolute coordinates.
 pub(crate) fn translate_box(layout_box: &mut LayoutBox, dx: f32, dy: f32) {
-    layout_box.dimensions.content.x += dx;
-    layout_box.dimensions.content.y += dy;
-    for child in &mut layout_box.children {
-        translate_box(child, dx, dy);
+    let mut stack = vec![layout_box];
+    while let Some(current) = stack.pop() {
+        current.dimensions.content.x += dx;
+        current.dimensions.content.y += dy;
+        for child in current.children.iter_mut().rev() {
+            stack.push(child);
+        }
     }
 }
 
@@ -1335,8 +1435,8 @@ fn resolve_offset(length: Length, calc: Option<CalcValue>, reference: Option<f32
         return Some(crate::calc::resolve(calc, reference));
     }
     match length {
-        Length::Px(px) => Some(px),
-        Length::Percent(pct) => reference.map(|value| value * (pct / 100.0)),
+        Length::Px(px) => Some(crate::calc::sanitize(px)),
+        Length::Percent(pct) => reference.map(|value| crate::calc::sanitize(value * (pct / 100.0))),
         Length::Auto => None,
     }
 }
@@ -1357,7 +1457,9 @@ pub(crate) fn calculate_shrink_to_fit_width(
         margin_left,
         margin_right,
         is_border_box,
-        width,
+        spec_width,
+        min_width,
+        max_width,
     ) = {
         let Some(style) = layout_box.style.as_ref() else {
             layout_box.dimensions.content.width = available.max(0.0);
@@ -1383,7 +1485,9 @@ pub(crate) fn calculate_shrink_to_fit_width(
                 cb_width,
             ),
             style.box_sizing == BoxSizing::BorderBox,
-            style.width,
+            specified_width(style, cb_width),
+            resolve_min_max(style.min_width, style.calc_lengths.min_width, cb_width),
+            resolve_min_max(style.max_width, style.calc_lengths.max_width, cb_width),
         )
     };
     resolve_vertical_edges(layout_box, cb_width);
@@ -1392,17 +1496,23 @@ pub(crate) fn calculate_shrink_to_fit_width(
         if is_border_box {
             (border_box - edges_h).max(0.0)
         } else {
-            border_box
+            border_box.max(0.0)
         }
     };
-    let content_width = match width {
-        Length::Px(px) => to_content(px.max(0.0)),
-        Length::Percent(pct) => to_content(cb_width * (pct / 100.0)),
-        Length::Auto => {
+    let mut content_width = match spec_width {
+        Some(w) => to_content(w.max(0.0)),
+        None => {
             let usable = (available - margin_left - margin_right - edges_h).max(0.0);
             shrink_to_fit_content_width(layout_box, usable, cb_width, measurer)
         }
     };
+    if let Some(max_w) = max_width {
+        content_width = content_width.min(to_content(max_w.max(0.0)));
+    }
+    if let Some(min_w) = min_width {
+        content_width = content_width.max(to_content(min_w.max(0.0)));
+    }
+    content_width = content_width.max(0.0);
 
     layout_box.dimensions.content.width = content_width;
     layout_box.dimensions.padding.left = padding_left;
@@ -1465,10 +1575,13 @@ fn collect_intrinsic_widths(
                 }
             };
             let max_content = crate::inline::measure_text_width(measurer, text, style);
-            let min_content = text
-                .split_whitespace()
-                .map(|word| crate::inline::measure_text_width(measurer, word, style))
-                .fold(0.0_f32, f32::max);
+            let min_content = if matches!(style.white_space, WhiteSpace::Nowrap | WhiteSpace::Pre) {
+                max_content
+            } else {
+                text.split_whitespace()
+                    .map(|word| crate::inline::measure_text_width(measurer, word, style))
+                    .fold(0.0_f32, f32::max)
+            };
             *minimum = minimum.max(min_content);
             *maximum = maximum.max(max_content);
         }
@@ -1493,6 +1606,9 @@ fn collect_intrinsic_widths(
                             style.calc_lengths.padding_right,
                             cb_width,
                         );
+                let nowrap = matches!(style.white_space, WhiteSpace::Nowrap | WhiteSpace::Pre);
+                let mut inner_min = 0.0_f32;
+                let mut inner_max = 0.0_f32;
                 for child in &layout_box.children {
                     // Absolutely positioned descendants do not contribute to intrinsic
                     // widths (CSS 2.2 §10.3.5).
@@ -1510,9 +1626,15 @@ fn collect_intrinsic_widths(
                         &mut child_min,
                         &mut child_max,
                     );
-                    *minimum = minimum.max(child_min + edges);
-                    *maximum = maximum.max(child_max + edges);
+                    inner_min = if nowrap {
+                        inner_min + child_min
+                    } else {
+                        inner_min.max(child_min)
+                    };
+                    inner_max += child_max;
                 }
+                *minimum = minimum.max(inner_min + edges);
+                *maximum = maximum.max(inner_max + edges);
             }
         }
         BoxType::BlockNode(_)
@@ -1544,6 +1666,15 @@ fn collect_intrinsic_widths(
                             style.calc_lengths.padding_right,
                             cb_width,
                         );
+                let is_flex_row = (style.display == Display::Flex || style.is_inline_flex)
+                    && matches!(
+                        style.flex_direction,
+                        FlexDirection::Row | FlexDirection::RowReverse
+                    );
+                let flex_nowrap = is_flex_row && style.flex_wrap == FlexWrap::NoWrap;
+                let mut inner_min = 0.0_f32;
+                let mut inner_max = 0.0_f32;
+                let mut flex_items = 0usize;
                 for child in &layout_box.children {
                     // Absolutely positioned descendants do not contribute to intrinsic
                     // widths (CSS 2.2 §10.3.5).
@@ -1561,9 +1692,34 @@ fn collect_intrinsic_widths(
                         &mut child_min,
                         &mut child_max,
                     );
-                    *minimum = minimum.max(child_min + edges);
-                    *maximum = maximum.max(child_max + edges);
+                    if is_flex_row {
+                        flex_items += 1;
+                        inner_max += child_max;
+                        inner_min = if flex_nowrap {
+                            inner_min + child_min
+                        } else {
+                            inner_min.max(child_min)
+                        };
+                    } else {
+                        inner_min = inner_min.max(child_min);
+                        inner_max = inner_max.max(child_max);
+                    }
                 }
+                if is_flex_row && flex_items > 1 {
+                    let gap = crate::calc::sanitize(resolve_length(
+                        style.column_gap,
+                        style.calc_lengths.column_gap,
+                        cb_width,
+                    ))
+                    .max(0.0);
+                    let total_gap = gap * (flex_items - 1) as f32;
+                    inner_max += total_gap;
+                    if flex_nowrap {
+                        inner_min += total_gap;
+                    }
+                }
+                *minimum = minimum.max(inner_min + edges);
+                *maximum = maximum.max(inner_max + edges);
             }
         }
         BoxType::Replaced(_) => {
@@ -1699,82 +1855,138 @@ pub(crate) fn replaced_content_size(
         + layout_box.dimensions.border.top
         + layout_box.dimensions.border.bottom;
     let is_border_box = style.box_sizing == BoxSizing::BorderBox;
-    let specified_width = match style.width {
-        Length::Px(px) => Some(if is_border_box {
-            (px - edges_h).max(0.0)
+    let to_content_h = |value: f32| {
+        if is_border_box {
+            (value - edges_h).max(0.0)
         } else {
-            px.max(0.0)
-        }),
-        Length::Percent(pct) => {
-            let border_box = cb_width * (pct / 100.0);
-            Some(if is_border_box {
-                (border_box - edges_h).max(0.0)
-            } else {
-                border_box
-            })
+            value.max(0.0)
         }
-        Length::Auto => None,
     };
-    let specified_height = match style.height {
-        Length::Px(px) => Some(if is_border_box {
-            (px - edges_v).max(0.0)
+    let to_content_v = |value: f32| {
+        if is_border_box {
+            (value - edges_v).max(0.0)
         } else {
-            px.max(0.0)
-        }),
-        Length::Percent(pct) => cb_height.map(|height| {
-            let border_box = height * (pct / 100.0);
-            if is_border_box {
-                (border_box - edges_v).max(0.0)
-            } else {
-                border_box
-            }
-        }),
-        Length::Auto => None,
+            value.max(0.0)
+        }
     };
+    let spec_w = specified_width(style, cb_width).map(to_content_h);
+    let spec_h = specified_height(style, cb_height).map(to_content_v);
 
     // `aspect-ratio` participates when at least one axis is auto (CSS Box Sizing 4 §5).
-    if let Some(ratio) = aspect_ratio_for_box(style, true, layout_box.intrinsic_size) {
-        let has_intrinsic = layout_box.intrinsic_size.is_some();
-        let explicit = style.aspect_ratio.is_some_and(|value| !value.auto);
-        let sized = match (specified_width, specified_height) {
-            (Some(width), Some(height)) => Some((width, height)),
-            (Some(width), None) => Some((width, width / ratio)),
-            (None, Some(height)) => Some((height * ratio, height)),
-            (None, None) if !explicit => {
-                // `auto` + intrinsic content: keep the current intrinsic geometry.
-                has_intrinsic.then_some((intrinsic_width, intrinsic_height))
+    let (mut width, mut height) =
+        if let Some(ratio) = aspect_ratio_for_box(style, true, layout_box.intrinsic_size) {
+            let has_intrinsic = layout_box.intrinsic_size.is_some();
+            let explicit = style.aspect_ratio.is_some_and(|value| !value.auto);
+            let sized = match (spec_w, spec_h) {
+                (Some(width), Some(height)) => Some((width, height)),
+                (Some(width), None) => Some((width, width / ratio)),
+                (None, Some(height)) => Some((height * ratio, height)),
+                (None, None) if !explicit => {
+                    // `auto` + intrinsic content: keep the current intrinsic geometry.
+                    has_intrinsic.then_some((intrinsic_width, intrinsic_height))
+                }
+                (None, None) => {
+                    // Explicit ratio with both axes auto: use the intrinsic width (or the
+                    // documented 300x150 fallback width) as the base of the relation.
+                    Some((intrinsic_width, intrinsic_width / ratio))
+                }
+            };
+            if let Some(size) = sized {
+                size
+            } else {
+                (intrinsic_width, intrinsic_height)
             }
-            (None, None) => {
-                // Explicit ratio with both axes auto: use the intrinsic width (or the
-                // documented 300x150 fallback width) as the base of the relation.
-                Some((intrinsic_width, intrinsic_width / ratio))
+        } else {
+            match (spec_w, spec_h) {
+                (Some(width), Some(height)) => (width, height),
+                (Some(width), None) => {
+                    let height = if intrinsic_width > 0.0 {
+                        width * intrinsic_height / intrinsic_width
+                    } else {
+                        intrinsic_height
+                    };
+                    (width, height)
+                }
+                (None, Some(height)) => {
+                    let width = if intrinsic_height > 0.0 {
+                        height * intrinsic_width / intrinsic_height
+                    } else {
+                        intrinsic_width
+                    };
+                    (width, height)
+                }
+                (None, None) => (intrinsic_width, intrinsic_height),
             }
         };
-        if let Some(size) = sized {
-            return size;
-        }
-    }
 
-    match (specified_width, specified_height) {
-        (Some(width), Some(height)) => (width, height),
-        (Some(width), None) => {
-            let height = if intrinsic_width > 0.0 {
-                width * intrinsic_height / intrinsic_width
-            } else {
-                intrinsic_height
-            };
-            (width, height)
+    let min_w =
+        resolve_min_max(style.min_width, style.calc_lengths.min_width, cb_width).map(to_content_h);
+    let max_w =
+        resolve_min_max(style.max_width, style.calc_lengths.max_width, cb_width).map(to_content_h);
+    let min_h = resolve_min_height(style.min_height, style.calc_lengths.min_height, cb_height)
+        .map(to_content_v);
+    let max_h = resolve_max_height(style.max_height, style.calc_lengths.max_height, cb_height)
+        .map(to_content_v);
+
+    let effective_ratio =
+        aspect_ratio_for_box(style, true, layout_box.intrinsic_size).or_else(|| {
+            (intrinsic_width > 0.0 && intrinsic_height > 0.0)
+                .then_some(intrinsic_width / intrinsic_height)
+        });
+
+    if let Some(max_w) = max_w
+        && width > max_w
+    {
+        width = max_w;
+        if spec_h.is_none()
+            && let Some(r) = effective_ratio
+        {
+            height = width / r;
         }
-        (None, Some(height)) => {
-            let width = if intrinsic_height > 0.0 {
-                height * intrinsic_width / intrinsic_height
-            } else {
-                intrinsic_width
-            };
-            (width, height)
-        }
-        (None, None) => (intrinsic_width, intrinsic_height),
     }
+    if let Some(min_w) = min_w
+        && width < min_w
+    {
+        width = min_w;
+        if spec_h.is_none()
+            && let Some(r) = effective_ratio
+        {
+            height = width / r;
+        }
+    }
+    if let Some(max_h) = max_h
+        && height > max_h
+    {
+        height = max_h;
+        if spec_w.is_none()
+            && let Some(r) = effective_ratio
+        {
+            width = height * r;
+        }
+    }
+    if let Some(min_h) = min_h
+        && height < min_h
+    {
+        height = min_h;
+        if spec_w.is_none()
+            && let Some(r) = effective_ratio
+        {
+            width = height * r;
+        }
+    }
+    if let Some(max_w) = max_w {
+        width = width.min(max_w);
+    }
+    if let Some(min_w) = min_w {
+        width = width.max(min_w);
+    }
+    if let Some(max_h) = max_h {
+        height = height.min(max_h);
+    }
+    if let Some(min_h) = min_h {
+        height = height.max(min_h);
+    }
+    (width.max(0.0), height.max(0.0))
 }
 
 /// A fully laid out atomic inline-level box (inline-block or replaced element).

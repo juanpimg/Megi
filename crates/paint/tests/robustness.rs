@@ -10,8 +10,8 @@ use css::{Color, ComputedStyle, Display, Position};
 use dom::{Document, Namespace};
 use layout::{BoxType, LayoutBox, Rect};
 use paint::{
-    DisplayList, MAX_DISPLAY_LIST_ITEMS, MAX_FLOAT_DEPTH, MAX_STACKING_CONTEXT_DEPTH,
-    build_display_list,
+    DisplayList, MAX_DISPLAY_LIST_ITEMS, MAX_FLOAT_DEPTH, MAX_STACKING_CONTEXT_DEPTH, Pixmap,
+    build_display_list, png::PngRegionEncoder,
 };
 
 const CHAIN_DEPTH: usize = 20_000;
@@ -134,4 +134,84 @@ fn test_deep_stacking_context_chain_is_depth_capped() {
     let display_list = build_display_list(&root, VIEWPORT);
     assert!(!display_list.is_empty());
     assert!(display_list.len() <= MAX_DISPLAY_LIST_ITEMS);
+}
+
+#[test]
+fn hostile_text_size_is_clamped_before_shaping() {
+    // #672: `font-size` is unbounded in CSS, and the rasterizer allocates a mask per
+    // glyph. A non-finite or gigantic size must be clamped at the painter boundary
+    // instead of reaching shaping.
+    let (_document, ids) = node_ids(2);
+
+    for hostile in [
+        f32::INFINITY,
+        f32::NEG_INFINITY,
+        f32::NAN,
+        1.0e30,
+        0.0,
+        -12.0,
+    ] {
+        let mut style = block_style();
+        style.font_size = hostile;
+        let mut box_ = LayoutBox::new(BoxType::TextNode("hostile".to_string()), Some(style));
+        box_.dimensions.content = Rect::new(0.0, 0.0, 400.0, 200.0);
+        let mut root = LayoutBox::new(BoxType::BlockNode(ids[0]), Some(block_style()));
+        root.dimensions.content = Rect::new(0.0, 0.0, 800.0, 600.0);
+        root.children.push(box_);
+
+        let display_list = build_display_list(&root, VIEWPORT);
+        for item in display_list.iter() {
+            if let paint::DisplayItem::Text { font_size, .. } = item {
+                assert!(
+                    font_size.is_finite() && *font_size > 0.0 && *font_size <= 1024.0,
+                    "font size {hostile} must not reach shaping (got {font_size})"
+                );
+            }
+        }
+    }
+}
+
+/// Dirty-rect hints must never panic, whatever their geometry (#650).
+#[test]
+fn region_encoder_tolerates_rects_outside_the_pixmap() {
+    let mut pixmap = Pixmap::new(8, 6);
+    pixmap.fill_rect(Rect::new(0.0, 0.0, 8.0, 6.0), Color::WHITE);
+    let mut encoder = PngRegionEncoder::new();
+    let hints = [
+        Rect::new(0.0, 100.0, 10.0, 10.0), // entirely below the pixmap
+        Rect::new(-50.0, -50.0, 4.0, 4.0), // above/left
+        Rect::new(0.0, 5.5, 8.0, 0.5),     // straddles the last row
+        Rect::new(1000.0, 0.0, 5.0, 5.0),  // to the right
+        Rect::new(0.0, 0.0, 0.0, 0.0),     // empty
+    ];
+    let png = encoder.encode_regions(&pixmap, &hints);
+    assert!(
+        png.starts_with(b"\x89PNG\r\n\x1a\n"),
+        "encoder must still emit a PNG"
+    );
+    // A second call with a rect that starts exactly at the height must not panic either.
+    let _ = encoder.encode_regions(&pixmap, &[Rect::new(0.0, 6.0, 8.0, 1.0)]);
+}
+
+#[test]
+fn hostile_style_text_is_capped_before_the_css_parser() {
+    // #662: `<style>` text descendants were concatenated with no byte cap, so one inline sheet
+    // dictated peak memory before the CSS parser ever saw it.
+    use dom::{Document, Namespace};
+    use paint::style::{MAX_STYLE_TEXT_BYTES, collect_style_text};
+
+    let mut document = Document::new();
+    let root = document.root();
+    let style = document.create_element(Namespace::Html, "style", Vec::new());
+    assert!(document.append_child(root, style));
+    let text = "a{color:red}".repeat(MAX_STYLE_TEXT_BYTES / 12 + 1_000);
+    let text_node = document.create_text_node(&text);
+    assert!(document.append_child(style, text_node));
+
+    let css = collect_style_text(&document);
+    assert!(
+        css.len() <= MAX_STYLE_TEXT_BYTES + 1,
+        "collected {} bytes, cap is {MAX_STYLE_TEXT_BYTES}",
+        css.len()
+    );
 }

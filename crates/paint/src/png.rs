@@ -194,7 +194,18 @@ pub fn encode_pixels(width: u32, height: u32, pixels: &[Color]) -> Vec<u8> {
             filter_row(row, previous.as_slice(), stride, filtered);
             previous.copy_from_slice(row);
         }
-        finalize_png(width, height, filtered)
+        let out = finalize_png(width, height, filtered);
+        const MAX_RETAINED_BYTES: usize = 4 * 1024 * 1024;
+        if filtered.capacity() > MAX_RETAINED_BYTES {
+            *filtered = Vec::new();
+        }
+        if row.capacity() > 64 * 1024 {
+            *row = Vec::new();
+        }
+        if previous.capacity() > 64 * 1024 {
+            *previous = Vec::new();
+        }
+        out
     })
 }
 

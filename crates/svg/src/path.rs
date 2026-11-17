@@ -33,6 +33,7 @@ pub(crate) fn parse_path_data(
     used: &mut usize,
 ) -> Result<Vec<SubPath>, SvgError> {
     let mut scanner = Scanner {
+        text: raw,
         bytes: raw.as_bytes(),
         position: 0,
     };
@@ -290,6 +291,7 @@ pub(crate) fn parse_path_data(
 
 /// Byte scanner for path data.
 struct Scanner<'a> {
+    text: &'a str,
     bytes: &'a [u8],
     position: usize,
 }
@@ -319,8 +321,10 @@ impl<'a> Scanner<'a> {
 
     fn next_number(&mut self) -> Result<f32, SvgError> {
         self.skip_separators();
-        let rest = std::str::from_utf8(&self.bytes[self.position..])
-            .map_err(|_| SvgError::Invalid("path data is not valid UTF-8".to_owned()))?;
+        let rest = self
+            .text
+            .get(self.position..)
+            .ok_or_else(|| SvgError::Invalid("path data is not at a UTF-8 boundary".to_owned()))?;
         match crate::transform::parse_one_number(rest) {
             Some((number, consumed)) if number.is_finite() => {
                 self.position += consumed;

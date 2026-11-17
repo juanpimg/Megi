@@ -96,11 +96,19 @@ def parse_dat_file(dat_path: Path) -> List[Dict[str, Any]]:
 
 
 def load_tokenizer_file(test_path: Path) -> List[Dict[str, Any]]:
-    data = json.loads(test_path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(test_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as error:
+        raise ValueError(f"Malformed tokenizer JSON in {test_path}: {error}") from error
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"Malformed tokenizer JSON in {test_path}: top level must be an object, "
+            f"got {type(data).__name__}"
+        )
     if "tests" in data:
-        return data["tests"]
+        return data["tests"] or []
     if "xmlViolationTests" in data:
-        return data["xmlViolationTests"]
+        return data["xmlViolationTests"] or []
     raise ValueError(
         f"Unrecognized tokenizer schema in {test_path}: "
         "expected 'tests' or 'xmlViolationTests' key"
@@ -112,9 +120,14 @@ def cmd_summary(args: argparse.Namespace) -> int:
     tok_files = sorted(TOKENIZER_DIR.glob("*.test")) if TOKENIZER_DIR.exists() else []
     tok_total = 0
     for tf in tok_files:
-        cases = load_tokenizer_file(tf)
+        try:
+            cases = load_tokenizer_file(tf)
+        except (ValueError, json.JSONDecodeError) as error:
+            print(f"  {tf.name:<34} ERROR: {error}")
+            continue
         tok_total += len(cases)
-        print(f"  {tf.name:<34} {len(cases):5d} tests")
+        flag = "  (empty)" if not cases else ""
+        print(f"  {tf.name:<34} {len(cases):5d} tests{flag}")
     print(f"Total tokenizer test files: {len(tok_files)} ({tok_total} test objects)\n")
 
     print("=== Tree Construction Suites (tests/html5lib-tests/tree-construction/*.dat) ===")
@@ -131,39 +144,61 @@ def cmd_summary(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_fixture_path(raw: str) -> Path | None:
+    """Resolve a fixture path, confining bare names to the three fixture dirs."""
+    candidate = Path(raw)
+    # Reject absolute paths and parent traversal outside the repo.
+    if candidate.is_absolute():
+        return None
+    if ".." in candidate.parts:
+        return None
+    if candidate.exists():
+        return candidate
+    for d in (TOKENIZER_DIR, TREE_DAT_DIR, TREE_JSON_DIR):
+        cand = d / raw
+        if cand.exists():
+            return cand
+    return None
+
+
 def cmd_show(args: argparse.Namespace) -> int:
-    target = Path(args.file)
-    if not target.exists():
-        for d in (TOKENIZER_DIR, TREE_DAT_DIR, TREE_JSON_DIR):
-            cand = d / args.file
-            if cand.exists():
-                target = cand
-                break
-    if not target.exists():
+    target = _resolve_fixture_path(args.file)
+    if target is None:
         print(f"Error: fixture file '{args.file}' not found.", file=sys.stderr)
         return 1
 
-    if target.suffix == ".test":
-        cases = load_tokenizer_file(target)
-        if args.index < 0 or args.index >= len(cases):
-            print(f"Error: index {args.index} out of range (0..{len(cases) - 1}).", file=sys.stderr)
+    try:
+        if target.suffix == ".test":
+            cases = load_tokenizer_file(target)
+            if args.index < 0 or args.index >= len(cases):
+                print(f"Error: index {args.index} out of range (0..{len(cases) - 1}).", file=sys.stderr)
+                return 1
+            print(json.dumps(cases[args.index], indent=2, ensure_ascii=False))
+        elif target.suffix == ".dat":
+            cases = parse_dat_file(target)
+            if args.index < 0 or args.index >= len(cases):
+                print(f"Error: index {args.index} out of range (0..{len(cases) - 1}).", file=sys.stderr)
+                return 1
+            print(json.dumps(cases[args.index], indent=2, ensure_ascii=False))
+        elif target.suffix == ".json":
+            try:
+                data = json.loads(target.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as error:
+                print(f"Error: {error}", file=sys.stderr)
+                return 1
+            if not isinstance(data, dict):
+                print(f"Error: top level must be an object, got {type(data).__name__}", file=sys.stderr)
+                return 1
+            cases = data.get("tests", [])
+            if args.index < 0 or args.index >= len(cases):
+                print(f"Error: index {args.index} out of range (0..{len(cases) - 1}).", file=sys.stderr)
+                return 1
+            print(json.dumps(cases[args.index], indent=2, ensure_ascii=False))
+        else:
+            print(f"Unsupported fixture extension: {target.suffix}", file=sys.stderr)
             return 1
-        print(json.dumps(cases[args.index], indent=2, ensure_ascii=False))
-    elif target.suffix == ".dat":
-        cases = parse_dat_file(target)
-        if args.index < 0 or args.index >= len(cases):
-            print(f"Error: index {args.index} out of range (0..{len(cases) - 1}).", file=sys.stderr)
-            return 1
-        print(json.dumps(cases[args.index], indent=2, ensure_ascii=False))
-    elif target.suffix == ".json":
-        data = json.loads(target.read_text(encoding="utf-8"))
-        cases = data.get("tests", [])
-        if args.index < 0 or args.index >= len(cases):
-            print(f"Error: index {args.index} out of range (0..{len(cases) - 1}).", file=sys.stderr)
-            return 1
-        print(json.dumps(cases[args.index], indent=2, ensure_ascii=False))
-    else:
-        print(f"Unsupported fixture extension: {target.suffix}", file=sys.stderr)
+    except (ValueError, json.JSONDecodeError) as error:
+        print(f"Error: {error}", file=sys.stderr)
         return 1
     return 0
 
@@ -182,19 +217,32 @@ def sanitize_surrogates(s: Optional[str]) -> Optional[str]:
     return "".join(out)
 
 
+def _sanitize_value(value: Any) -> Any:
+    """Recursively sanitize surrogate code points in all string fields."""
+    if isinstance(value, str):
+        return sanitize_surrogates(value)
+    if isinstance(value, dict):
+        return {k: _sanitize_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_value(v) for v in value]
+    return value
+
+
 def cmd_export_json(args: argparse.Namespace) -> int:
     if not TREE_DAT_DIR.exists():
         print(f"Error: {TREE_DAT_DIR} does not exist.", file=sys.stderr)
         return 1
     TREE_JSON_DIR.mkdir(parents=True, exist_ok=True)
     dat_files = sorted(TREE_DAT_DIR.glob("*.dat"))
+    expected = {f"{df.stem}.json" for df in dat_files}
+    # Prune stale outputs whose source .dat was removed.
+    for stale in TREE_JSON_DIR.glob("*.json"):
+        if stale.name not in expected:
+            stale.unlink()
     total_cases = 0
     for df in dat_files:
         cases = parse_dat_file(df)
-        for c in cases:
-            c["data"] = sanitize_surrogates(c["data"])
-            c["document"] = sanitize_surrogates(c["document"])
-            c["description"] = sanitize_surrogates(c["description"])
+        cases = [_sanitize_value(c) for c in cases]
         total_cases += len(cases)
         out_path = TREE_JSON_DIR / f"{df.stem}.json"
         payload = {

@@ -208,7 +208,11 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
                 raw.find = Some(next_value(&arguments, &mut index, "--find")?);
             }
             "--tabs" => {
-                raw.tabs.push(next_value(&arguments, &mut index, "--tabs")?);
+                let value = next_value(&arguments, &mut index, "--tabs")?;
+                if raw.tabs.len() >= 32 {
+                    return Err(ShellError::Usage("--tabs count exceeds 32".to_string()));
+                }
+                raw.tabs.push(value);
             }
             "--chrome" => raw.chrome = true,
             "--chrome-menu" => raw.chrome_menu = true,
@@ -261,10 +265,17 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
             "--refresh-ms" => {
                 // Optional value: use the next argument when it is a bare integer, otherwise
                 // fall back to the default interval without consuming it. A present but
-                // unparseable value is an error (not silently swallowed).
+                // unparseable value is an error (not silently swallowed). Values are
+                // bounded to [16, 60000] ms to avoid overflow in Instant addition
+                // (issue #594).
                 if let Some(value) = arguments.get(index) {
                     match value.parse::<u64>() {
                         Ok(interval) => {
+                            if interval != 0 && !(16..=60000).contains(&interval) {
+                                return Err(ShellError::Usage(format!(
+                                    "invalid --refresh-ms value `{value}` (expected 0 or 16..=60000)"
+                                )));
+                            }
                             index += 1;
                             raw.refresh_ms = Some(interval);
                         }
@@ -353,6 +364,20 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
     {
         return Err(ShellError::Usage(format!(
             "--find value too long (max {MAX_INPUT_BYTES} bytes)"
+        )));
+    }
+    if let Some(ref title) = raw.title
+        && title.len() > MAX_INPUT_BYTES
+    {
+        return Err(ShellError::Usage(format!(
+            "--title value too long (max {MAX_INPUT_BYTES} bytes)"
+        )));
+    }
+    if let Some(ref origin) = raw.origin
+        && origin.len() > MAX_INPUT_BYTES
+    {
+        return Err(ShellError::Usage(format!(
+            "--origin value too long (max {MAX_INPUT_BYTES} bytes)"
         )));
     }
     if let Some(ref input) = raw.input
@@ -722,5 +747,25 @@ mod unit_tests {
         let err = parse_cli(args(&["data:,x", "--chrome-menu"])).expect_err("must reject");
         assert!(matches!(err, ShellError::Usage(_)));
         assert!(parse_cli(args(&["data:,x", "--chrome", "--chrome-menu"])).is_ok());
+    }
+
+    #[test]
+    fn rejects_excessive_tabs_and_long_title_or_origin() {
+        let mut many_tabs = vec!["data:,x".to_string()];
+        for _ in 0..33 {
+            many_tabs.push("--tabs".to_string());
+            many_tabs.push("data:,t".to_string());
+        }
+        assert!(parse_cli(many_tabs.into_iter()).is_err());
+
+        let long = "a".repeat(4097);
+        assert!(
+            parse_cli(vec!["data:,x".to_string(), "--title".to_string(), long.clone()].into_iter())
+                .is_err()
+        );
+        assert!(
+            parse_cli(vec!["data:,x".to_string(), "--origin".to_string(), long].into_iter())
+                .is_err()
+        );
     }
 }

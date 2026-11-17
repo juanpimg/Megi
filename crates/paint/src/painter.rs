@@ -85,6 +85,8 @@ use dom::NodeId;
 use layout::{BoxType, LayoutBox, Rect};
 
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::display_list::{
     BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MAX_SHADOWS,
@@ -191,7 +193,7 @@ fn push_text_mask_group(
     list: &mut DisplayList,
     resources: &PaintResources<'_>,
     rect: Rect,
-    runs: Vec<TextMaskRun>,
+    runs: std::sync::Arc<Vec<TextMaskRun>>,
 ) {
     list.push(DisplayItem::PushTextMaskGroup { rect, runs });
     resources.push_clip(rect);
@@ -253,6 +255,8 @@ pub const IMAGE_PLACEHOLDER: Color = Color::new(0xD9, 0xD9, 0xD9, 255);
 /// [`MAX_FLOAT_DEPTH`]; beyond the caps the subtree is painted as flat in-flow
 /// content. The resulting list is bounded by
 /// [`MAX_DISPLAY_LIST_ITEMS`](crate::MAX_DISPLAY_LIST_ITEMS).
+static TEXT_MASK_COLLECTORS: AtomicUsize = AtomicUsize::new(0);
+
 pub fn build_display_list(root: &LayoutBox, viewport: Rect) -> DisplayList {
     build_display_list_with_images(root, viewport, &ImageStore::new())
 }
@@ -345,6 +349,8 @@ fn build_display_list_inner(
     // Reserve a modest starting capacity: the painter emits roughly one item per
     // text run plus one per painted box, and `DisplayItem` is a large enum, so a
     // few reallocations are expensive on text-heavy pages (R129).
+    // Reset the per-pass counter for `background-clip: text` collectors (#658).
+    TEXT_MASK_COLLECTORS.store(0, std::sync::atomic::Ordering::Relaxed);
     let mut list = DisplayList::with_capacity(20480);
 
     match canvas {
@@ -369,7 +375,8 @@ fn build_display_list_inner(
         // page background reports the root element.
         resources.record(viewport, root.node_id(), HitKind::Background);
     }
-    paint_stacking_context(root, &mut list, skip, &resources, false, true, 0);
+    let contexts = index_stacking_contexts(root, resources.effects_present);
+    paint_stacking_context(root, &mut list, skip, &resources, false, true, 0, &contexts);
     let regions = match regions {
         Some(collector) => collector.borrow_mut().take_regions(),
         None => Vec::new(),
@@ -567,6 +574,13 @@ fn background_clips_to_text(style: &css::ComputedStyle) -> bool {
         .any(|layer| layer.clip == css::BackgroundClip::Text)
 }
 
+/// Per-pass cap on how many boxes may collect a `background-clip: text` mask.
+///
+/// Each collecting box walks its entire descendant subtree and retains the glyph runs
+/// (including their owned text strings), so an unbounded number of collecting boxes
+/// turns a single render into O(N * subtree) work and retained memory (#658).
+const MAX_TEXT_MASK_COLLECTORS: usize = 32;
+
 /// Collects the glyph runs of a box's subtree for a `background-clip: text` mask.
 ///
 /// Visibility-hidden boxes and empty text nodes are skipped, matching the text
@@ -694,6 +708,7 @@ fn inline_filtered_solid(layout_box: &LayoutBox) -> Option<Color> {
 }
 
 /// Paints the appendix E phases of one stacking context.
+#[allow(clippy::too_many_arguments)]
 fn paint_stacking_context(
     layout_box: &LayoutBox,
     list: &mut DisplayList,
@@ -702,6 +717,7 @@ fn paint_stacking_context(
     inherited_hidden: bool,
     is_root: bool,
     depth: usize,
+    contexts: &HashMap<*const LayoutBox, ContextBuckets<'_>>,
 ) {
     let start = list.len();
     let hidden = inherited_hidden || is_hidden(layout_box);
@@ -751,23 +767,29 @@ fn paint_stacking_context(
         return;
     }
 
-    // Split the participating descendant contexts into phase buckets.
-    let mut negative: Vec<&LayoutBox> = Vec::new();
-    let mut zero: Vec<&LayoutBox> = Vec::new();
-    let mut positive: Vec<&LayoutBox> = Vec::new();
-    collect_context_boxes(
-        layout_box,
-        &mut negative,
-        &mut zero,
-        &mut positive,
-        resources.effects_present,
-    );
+    // Direct context children were bucketed once by `index_stacking_contexts`;
+    // no per-context subtree rescan (#443).
+    let empty = ContextBuckets::default();
+    let buckets = contexts
+        .get(&(layout_box as *const LayoutBox))
+        .unwrap_or(&empty);
+    let mut negative: Vec<&LayoutBox> = buckets.negative.to_vec();
+    let mut positive: Vec<&LayoutBox> = buckets.positive.to_vec();
     negative.sort_by_key(|context| context.z_index);
     positive.sort_by_key(|context| context.z_index);
 
     // Step 3: negative z-index contexts.
-    for context in negative {
-        paint_stacking_context(context, list, skip, resources, hidden, false, depth + 1);
+    for &context in &negative {
+        paint_stacking_context(
+            context,
+            list,
+            skip,
+            resources,
+            hidden,
+            false,
+            depth + 1,
+            contexts,
+        );
     }
 
     // Steps 4-6: in-flow block backgrounds, floats, inline content.
@@ -784,13 +806,31 @@ fn paint_stacking_context(
     );
 
     // Step 7: positioned z-index auto/0 and z-index 0 contexts.
-    for context in zero {
-        paint_stacking_context(context, list, skip, resources, hidden, false, depth + 1);
+    for &context in &buckets.zero {
+        paint_stacking_context(
+            context,
+            list,
+            skip,
+            resources,
+            hidden,
+            false,
+            depth + 1,
+            contexts,
+        );
     }
 
     // Step 8: positive z-index contexts.
-    for context in positive {
-        paint_stacking_context(context, list, skip, resources, hidden, false, depth + 1);
+    for &context in &positive {
+        paint_stacking_context(
+            context,
+            list,
+            skip,
+            resources,
+            hidden,
+            false,
+            depth + 1,
+            contexts,
+        );
     }
 
     if clip.is_some() {
@@ -830,7 +870,7 @@ fn paint_stacking_context(
     }
 
     // Opacity group: the whole subtree is composited once with `opacity`.
-    if !is_root && opacity < 1.0 && list.len() > start {
+    if opacity < 1.0 && list.len() > start {
         let items: Vec<DisplayItem> = list.items.drain(start..).collect();
         let rect = items_bounds(&items).unwrap_or_else(|| layout_box.dimensions.border_box());
         list.push(DisplayItem::OpacityGroup {
@@ -845,29 +885,64 @@ fn paint_stacking_context(
 /// `layout_box` (nearest-context descendants, in tree order).
 ///
 /// Iterative by design: a 20 000-level layout tree must not exhaust the stack.
-fn collect_context_boxes<'a>(
-    layout_box: &'a LayoutBox,
-    negative: &mut Vec<&'a LayoutBox>,
-    zero: &mut Vec<&'a LayoutBox>,
-    positive: &mut Vec<&'a LayoutBox>,
-    layout_box_effects: bool,
-) {
-    let mut stack: Vec<&'a LayoutBox> = Vec::new();
-    for child in layout_box.children.iter().rev() {
-        stack.push(child);
-    }
-    while let Some(child) = stack.pop() {
-        match phase(child, layout_box_effects) {
-            Phase::Negative => negative.push(child),
-            Phase::Zero => zero.push(child),
-            Phase::Positive => positive.push(child),
-            Phase::Float | Phase::InFlow => {
-                for grandchild in child.children.iter().rev() {
-                    stack.push(grandchild);
-                }
+/// Direct stacking-context children of one context, partitioned into Appendix E
+/// phase buckets. Built once for the whole tree (#443).
+#[derive(Default)]
+struct ContextBuckets<'a> {
+    negative: Vec<&'a LayoutBox>,
+    zero: Vec<&'a LayoutBox>,
+    positive: Vec<&'a LayoutBox>,
+}
+
+/// Single-pass index of every stacking context and its direct context children.
+///
+/// The old code called `collect_context_boxes` on every context, and each call
+/// walked the whole descendant subtree: N nested contexts cost O(N²) box visits
+/// (#443). This visits each box exactly once and buckets direct context children
+/// against their nearest ancestor context.
+fn index_stacking_contexts<'a>(
+    root: &'a LayoutBox,
+    effects_present: bool,
+) -> HashMap<*const LayoutBox, ContextBuckets<'a>> {
+    let mut contexts = HashMap::new();
+    let root_ptr = root as *const LayoutBox;
+    contexts.insert(root_ptr, ContextBuckets::default());
+    let mut stack: Vec<(&'a LayoutBox, *const LayoutBox, usize)> = root
+        .children
+        .iter()
+        .rev()
+        .map(|child| (child, root_ptr, 1))
+        .collect();
+    while let Some((node, owner, depth)) = stack.pop() {
+        let bucket = match phase(node, effects_present) {
+            Phase::Negative => Some(0),
+            Phase::Zero => Some(1),
+            Phase::Positive => Some(2),
+            Phase::Float | Phase::InFlow => None,
+        };
+        let node_ptr = node as *const LayoutBox;
+        if let Some(bucket) = bucket
+            && depth < MAX_STACKING_CONTEXT_DEPTH
+        {
+            contexts.entry(node_ptr).or_default();
+            let owner_buckets = contexts.get_mut(&owner).expect("indexed owner context");
+            match bucket {
+                0 => owner_buckets.negative.push(node),
+                1 => owner_buckets.zero.push(node),
+                _ => owner_buckets.positive.push(node),
+            }
+            for child in node.children.iter().rev() {
+                stack.push((child, node_ptr, depth + 1));
+            }
+        } else {
+            // In-flow/float boxes, and contexts past the depth guard, keep the
+            // same owner: their descendants are painted in the owner's passes.
+            for child in node.children.iter().rev() {
+                stack.push((child, owner, depth));
             }
         }
     }
+    contexts
 }
 
 /// Explicit-stack task for the iterative block-background traversal.
@@ -1465,18 +1540,24 @@ fn paint_background_border(
     let has_radius = !radii.is_zero();
     let rounded_group = !background_is_propagated && has_radius;
     // `background-clip: text`: the background color/images are composited through
-    // the glyph mask of the box's text descendants.
+    // the glyph mask of the box's text descendants, scoped strictly to the
+    // layers whose `background-clip` is `text` (#446).
     let text_mask_runs = if !background_is_propagated && background_clips_to_text(style) {
-        Some(collect_text_mask_runs(layout_box))
+        // Bound the number of collecting boxes per pass (#658): once the cap is reached,
+        // skip collection so a hostile tree cannot turn one render into O(N * subtree).
+        let count = TEXT_MASK_COLLECTORS.fetch_add(1, Ordering::Relaxed);
+        if count < MAX_TEXT_MASK_COLLECTORS {
+            Some(std::sync::Arc::new(collect_text_mask_runs(layout_box)))
+        } else {
+            None
+        }
     } else {
         None
     };
-    if let Some(runs) = &text_mask_runs {
-        push_text_mask_group(list, resources, border_box, runs.clone());
-    }
 
     // Outer `box-shadow` layers are painted behind the background, last shadow
     // first so the first authored shadow ends up on top (CSS Backgrounds 3 §6).
+    // They are never clipped to `background-clip: text` (#446).
     if !background_is_propagated {
         for shadow in style
             .box_shadows
@@ -1498,7 +1579,19 @@ fn paint_background_border(
     if rounded_group {
         push_rounded_group(list, resources, border_box, radii);
     }
+    let mut text_mask_active = false;
+    let color_clips_to_text = style
+        .background_layers
+        .last()
+        .is_some_and(|layer| layer.clip == css::BackgroundClip::Text);
     if !background_is_propagated && style.background_color.a > 0 {
+        if color_clips_to_text
+            && let Some(runs) = text_mask_runs.as_ref()
+            && !text_mask_active
+        {
+            push_text_mask_group(list, resources, border_box, std::sync::Arc::clone(runs));
+            text_mask_active = true;
+        }
         if has_radius {
             list.push(DisplayItem::RoundedRect {
                 rect: border_box,
@@ -1539,6 +1632,21 @@ fn paint_background_border(
             for layer in layers.iter().rev() {
                 if layer.image.is_none() && layer.gradient.is_none() {
                     continue;
+                }
+                let layer_clips_to_text = layer.clip == css::BackgroundClip::Text;
+                if layer_clips_to_text && !text_mask_active {
+                    if let Some(runs) = text_mask_runs.as_ref() {
+                        push_text_mask_group(
+                            list,
+                            resources,
+                            border_box,
+                            std::sync::Arc::clone(runs),
+                        );
+                        text_mask_active = true;
+                    }
+                } else if !layer_clips_to_text && text_mask_active {
+                    pop_text_mask_group(list, resources);
+                    text_mask_active = false;
                 }
                 let positioning_area =
                     if crate::background::uses_viewport_positioning(layer.attachment) {
@@ -1608,6 +1716,10 @@ fn paint_background_border(
             && let Some(image) = resources.backgrounds.get(url)
             && !image.is_empty()
         {
+            if text_mask_active {
+                pop_text_mask_group(list, resources);
+                text_mask_active = false;
+            }
             // Legacy compatibility: documents that only set `background-image`
             // (all Phase 4/5/6 golden fixtures) keep the historical behaviour of
             // stretching the bitmap over the whole padding box. Authored
@@ -1619,11 +1731,11 @@ fn paint_background_border(
         }
     }
 
+    if text_mask_active {
+        pop_text_mask_group(list, resources);
+    }
     if rounded_group {
         pop_rounded_group(list, resources);
-    }
-    if text_mask_runs.is_some() {
-        pop_text_mask_group(list, resources);
     }
 
     // Inset shadows are painted above the background but below the border and content.
@@ -1727,6 +1839,13 @@ fn paint_text_run(
         (Color::BLACK, 16.0, "serif".to_string())
     };
 
+    let font_size = clamp_font_size(font_size);
+    if font_size == 0.0 {
+        // A zero/non-finite size would rasterize nothing anyway; skip the shadows and the
+        // run instead of emitting items the rasterizer has to defend against.
+        return;
+    }
+
     let char_count = text.chars().count();
     let measured_width = layout_box.dimensions.content.width;
     let advance = if char_count > 0 && measured_width > 0.0 {
@@ -1773,6 +1892,24 @@ fn paint_text_run(
         advance,
         baseline: layout_box.baseline,
     });
+}
+
+/// Defensive ceiling for the size that reaches shaping and the glyph rasterizer (#672).
+///
+/// CSS does not bound `font-size`, and the rasterizer allocates a mask per glyph, so one
+/// hostile value (`inf`, `NaN`, `1e30` from a `calc()` chain or a hand-built display list)
+/// would ask the font backend for an enormous bitmap. 1024 CSS px is far past any real page
+/// — large display type included — while keeping the mask bounded.
+const MAX_RASTERIZED_FONT_SIZE: f32 = 1024.0;
+
+/// Clamps a `font-size` to something the rasterizer can survive; non-positive or non-finite
+/// sizes collapse to `0.0` so the caller can skip the run entirely.
+fn clamp_font_size(font_size: f32) -> f32 {
+    if !font_size.is_finite() || font_size <= 0.0 {
+        0.0
+    } else {
+        font_size.min(MAX_RASTERIZED_FONT_SIZE)
+    }
 }
 
 /// Emits the decoration lines for one text run (CSS 2.2 §16.3.1).
@@ -1871,7 +2008,10 @@ fn paint_marker(
     let Some(style) = layout_box.style.as_ref() else {
         return;
     };
-    let font_size = style.font_size;
+    let font_size = clamp_font_size(style.font_size);
+    if font_size == 0.0 {
+        return;
+    }
     let baseline = first_text_baseline(layout_box)
         .unwrap_or(layout_box.dimensions.content.y + font_size * 0.8);
     let right = layout_box.dimensions.content.x - font_size * 0.5;
@@ -1882,6 +2022,9 @@ fn paint_marker(
     if let Some(url) = style.list_style_image.as_deref()
         && let Some(image) = resources.backgrounds.get(url)
         && !image.is_empty()
+        && font_size.is_finite()
+        && font_size > 0.0
+        && font_size <= 1e4
     {
         let size = font_size.max(1.0);
         let center_y = baseline - font_size * 0.35;

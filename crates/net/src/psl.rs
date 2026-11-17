@@ -8,7 +8,7 @@
 //! [`tools/update_psl.sh`](../../tools/update_psl.sh) and keep the snapshot date in the
 //! vendored header in sync.
 //!
-//! The parser ([`RULES`], a `OnceLock`) understands the three rule forms:
+//! The parser (\[`RULES`\], a `OnceLock`) understands the three rule forms:
 //! - normal rules (`com`, `co.uk`, `github.io`, ...);
 //! - wildcard rules (`*.ck` ⇒ `foo.ck` is a public suffix);
 //! - exception rules (`!www.ck` ⇒ `www.ck` is not a suffix; its suffix is `ck`).
@@ -89,18 +89,29 @@ fn public_suffix_labels(labels: &[&str]) -> usize {
     }
     let rules = rules();
     let mut suffix_labels = 1usize; // last-label fallback
+    // Build the dot-joined host once and slice suffixes from it, instead of re-joining
+    // `labels[index..]` for every label (O(n^2) allocations, #1284).
+    let mut joined = String::with_capacity(labels.iter().map(|label| label.len() + 1).sum());
+    let mut starts = Vec::with_capacity(labels.len());
+    for label in labels {
+        if !joined.is_empty() {
+            joined.push('.');
+        }
+        starts.push(joined.len());
+        joined.push_str(label);
+    }
     for index in 0..labels.len() {
-        let candidate = labels[index..].join(".");
-        if rules.exception.contains(&candidate) {
+        let candidate = &joined[starts[index]..];
+        if rules.exception.contains(candidate) {
             // Exception rule: the public suffix is the rule minus its leftmost label.
             return labels.len() - index - 1;
         }
-        if rules.normal.contains(&candidate) {
+        if rules.normal.contains(candidate) {
             suffix_labels = suffix_labels.max(labels.len() - index);
         }
         if index + 1 < labels.len() {
-            let parent = labels[index + 1..].join(".");
-            if rules.wildcard.contains(&parent) {
+            let parent = &joined[starts[index + 1]..];
+            if rules.wildcard.contains(parent) {
                 suffix_labels = suffix_labels.max(labels.len() - index);
             }
         }

@@ -44,7 +44,14 @@ pub fn decode_data_url(url: &Url) -> Result<DataUrl, FetchError> {
 }
 
 /// Decodes a raw payload (everything after `data:`, without the fragment).
+const MAX_DATA_URL_PAYLOAD_BYTES: usize = 16 * 1024 * 1024;
+
 pub fn decode_data_payload(payload: &str) -> Result<DataUrl, FetchError> {
+    if payload.len() > MAX_DATA_URL_PAYLOAD_BYTES {
+        return Err(FetchError::InvalidDataUrl(
+            "data URL payload too large".to_owned(),
+        ));
+    }
     let (meta, data) = payload.split_once(',').ok_or_else(|| {
         FetchError::InvalidDataUrl("missing `,` separating mediatype and data".to_owned())
     })?;

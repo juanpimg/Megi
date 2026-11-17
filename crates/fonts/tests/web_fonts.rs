@@ -35,7 +35,12 @@ fn registers_under_css_family_alias_and_resolves_metrics() {
     assert!(database.has_family("Open Sans Web"));
     assert!(database.has_alias("Open Sans Web"));
     let font = database
-        .font(&["Open Sans Web"], 400, FontStyle::Normal)
+        .font(
+            &["Open Sans Web"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
         .expect("alias resolves");
     assert!(font.info().weight > 0);
     let metrics = database

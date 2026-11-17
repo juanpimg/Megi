@@ -266,6 +266,14 @@ pub fn apply_orientation(
     let mut data = vec![0u8; (dst_width as usize) * (dst_height as usize) * 4];
     for y in 0..dst_height {
         for x in 0..dst_width {
+            let orientation = match orientation {
+                1..=8 => orientation,
+                _ => {
+                    return Err(ImageError::InvalidData {
+                        reason: "invalid EXIF orientation value",
+                    });
+                }
+            };
             let (sx, sy) = match orientation {
                 2 => (width - 1 - x, y),
                 3 => (width - 1 - x, height - 1 - y),
@@ -276,7 +284,7 @@ pub fn apply_orientation(
                 8 => (width - 1 - y, x),
                 _ => (x, y),
             };
-            let rgba = pixel(sx.min(width - 1), sy.min(height - 1));
+            let rgba = pixel(sx, sy);
             let offset = ((y as usize) * (dst_width as usize) + (x as usize)) * 4;
             data[offset..offset + 4].copy_from_slice(&rgba);
         }
@@ -473,6 +481,28 @@ pub(crate) fn downsample_nearest(image: &RgbaImage, max_dim: u32) -> Result<Rgba
     RgbaImage::new(out_width, out_height, data)
 }
 
+/// One composited frame of an animated image.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AnimatedFrame {
+    /// Full-canvas RGBA8 pixels for this frame.
+    pub image: RgbaImage,
+    /// Display duration in milliseconds before advancing to the next frame.
+    pub delay_ms: u32,
+}
+
+/// Decoded animated image (all frames composited onto the full canvas).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AnimatedImage {
+    /// Canvas width in pixels.
+    pub width: u32,
+    /// Canvas height in pixels.
+    pub height: u32,
+    /// Number of animation loops (`0` means infinite).
+    pub loop_count: u16,
+    /// Ordered sequence of composited frames (at least 1).
+    pub frames: Vec<AnimatedFrame>,
+}
+
 /// Like [`decode`], but with explicit defensive limits (shared by PNG/JPEG/GIF).
 pub fn decode_with_limits(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageError> {
     match detect_format(bytes) {
@@ -488,6 +518,48 @@ pub fn decode_with_limits(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
         }
         ImageFormat::Unknown => Err(ImageError::InvalidSignature),
     }
+}
+
+/// Decodes an image into all animation frames using default defensive limits.
+///
+/// Static images (or formats without multi-frame support) return a single-frame
+/// [`AnimatedImage`] with `loop_count: 1` and `delay_ms: 0`.
+pub fn decode_animated(bytes: &[u8]) -> Result<AnimatedImage, ImageError> {
+    decode_animated_with_limits(bytes, &PngLimits::default())
+}
+
+/// Like [`decode_animated`], but with explicit defensive limits.
+pub fn decode_animated_with_limits(
+    bytes: &[u8],
+    limits: &PngLimits,
+) -> Result<AnimatedImage, ImageError> {
+    if detect_format(bytes) == ImageFormat::WebP && webp::is_animated_webp(bytes)? {
+        let mut animated = webp::decode_animated_webp(bytes, limits)?;
+        let orientation = exif::orientation(bytes);
+        if orientation.is_some_and(|o| o != 1) {
+            for frame in &mut animated.frames {
+                let rotated = apply_orientation(
+                    RgbaImage::new(
+                        frame.image.width,
+                        frame.image.height,
+                        std::mem::take(&mut frame.image.data),
+                    )?,
+                    orientation,
+                )?;
+                animated.width = rotated.width;
+                animated.height = rotated.height;
+                frame.image = rotated;
+            }
+        }
+        return Ok(animated);
+    }
+    let image = decode_with_limits(bytes, limits)?;
+    Ok(AnimatedImage {
+        width: image.width,
+        height: image.height,
+        loop_count: 1,
+        frames: vec![AnimatedFrame { image, delay_ms: 0 }],
+    })
 }
 
 #[cfg(test)]

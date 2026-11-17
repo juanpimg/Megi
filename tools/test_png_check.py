@@ -90,5 +90,40 @@ class PngCheckTests(unittest.TestCase):
             os.unlink(path)
 
 
+    def test_rejects_unknown_critical_chunk_and_bad_iend(self) -> None:
+        ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0)
+        idat = zlib.compress(b"\x00" * 5)
+        bad_crit = (
+            png_check.PNG_SIGNATURE
+            + make_chunk(b"IHDR", ihdr)
+            + make_chunk(b"FOOB", b"")
+            + make_chunk(b"IDAT", idat)
+            + make_chunk(b"IEND", b"")
+        )
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp.write(bad_crit)
+            path = tmp.name
+        try:
+            with self.assertRaisesRegex(png_check.PngError, "unknown critical chunk"):
+                png_check.check_file(path)
+        finally:
+            os.unlink(path)
+
+        bad_iend = (
+            png_check.PNG_SIGNATURE
+            + make_chunk(b"IHDR", ihdr)
+            + make_chunk(b"IDAT", idat)
+            + make_chunk(b"IEND", b"\x00")
+        )
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp.write(bad_iend)
+            path = tmp.name
+        try:
+            with self.assertRaisesRegex(png_check.PngError, "IEND chunk must be empty"):
+                png_check.check_file(path)
+        finally:
+            os.unlink(path)
+
+
 if __name__ == "__main__":
     unittest.main()

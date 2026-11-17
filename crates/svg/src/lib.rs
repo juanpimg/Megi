@@ -7,12 +7,12 @@
 //!
 //! ## Supported
 //!
-//! * XML: prolog/`DOCTYPE`/processing instructions/comments/CDATA (ignored),
+//! * XML: prolog/`DOCTYPE`/processing instructions/comments/CDATA (preserved),
 //!   elements, quoted attributes, XML entities (named + numeric), namespaces
 //!   (prefixes are ignored and only the local name is used).
 //! * Elements: `svg`, `g`, `defs`, `use`, `rect` (`rx`/`ry`), `circle`,
 //!   `ellipse`, `line`, `polyline`, `polygon`, `path`, `text` (per-glyph advance
-//!   positioning; `<textPath>` is not supported), `defs`/`use`, and the effect
+//!   positioning; `<textPath>` is supported), `defs`/`use`, and the effect
 //!   containers `clipPath`, `mask` and `filter`; `title`/`desc` and other unknown
 //!   elements are ignored.
 //! * Path data: `M/m L/l H/h V/v C/c S/s Q/q T/t A/a Z/z`, implicit repeated
@@ -49,11 +49,10 @@
 //! * **Filters**: `feGaussianBlur` (deterministic separable box blur ×3),
 //!   `feOffset`, and the `feFlood` + `feComposite` subset
 //!   (`over`/`in`/`out`/`atop`); `filterUnits` and the x/y/width/height region
-//!   are honoured. `feColorMatrix`, `feBlend`, `feMerge`, `feTile`, `feImage`
-//!   and other primitives are **ignored** (documented subset).
-//! * Also not supported: `<textPath>`, `@` rules and child/sibling/pseudo-class
-//!   selectors, markers, `stroke-dasharray`, `vector-effect`, script, animation
-//!   and external references (no network/FS).
+//!   are honoured. `feTile`, `feImage` and other primitives are **ignored** (documented subset).
+//! * Also not supported: `@` rules and child/sibling/pseudo-class
+//!   selectors, markers, `stroke-dasharray`, `vector-effect`, script,
+//!   and external references (no network/FS). SMIL animation is partially supported.
 //!
 //! ## Supported CSS, gradients and limits
 //!
@@ -134,6 +133,12 @@ pub struct Limits {
     pub max_pixels: u64,
     /// Maximum `<use>` expansion depth (cycle guard).
     pub max_use_depth: usize,
+    /// Maximum number of `<use>` expansions across the document (DoS guard
+    /// against exponential fan-out).
+    pub max_use_expansions: usize,
+    /// Maximum number of flattened shapes in the document (DoS guard against
+    /// exponential `<use>` fan-out).
+    pub max_shapes: usize,
     /// Maximum selector evaluations across the document (rules × selectors × elements).
     ///
     /// The default allows ~100 evaluations per element at [`Limits::max_elements`]; a
@@ -153,6 +158,8 @@ impl Default for Limits {
             max_height: 16_384,
             max_pixels: 64 * 1024 * 1024,
             max_use_depth: 16,
+            max_use_expansions: 1024,
+            max_shapes: 100_000,
             max_selector_checks: 10_000_000,
         }
     }

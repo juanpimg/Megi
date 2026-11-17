@@ -18,7 +18,7 @@
 //!    ```no_run
 //!    use fonts::{FontDatabase, FontStyle};
 //!    let db = FontDatabase::from_system();
-//!    let font = db.font(&["sans-serif"], 400, FontStyle::Normal)?;
+//!    let font = db.font(&["sans-serif"], 400, FontStyle::Normal, fontdb::Stretch::Normal)?;
 //!    let metrics = font.metrics(16.0)?;
 //!    # Ok::<(), fonts::FontError>(())
 //!    ```

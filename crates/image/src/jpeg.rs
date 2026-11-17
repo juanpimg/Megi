@@ -897,6 +897,7 @@ fn parse_sos(
         });
     }
     let mut components = Vec::with_capacity(count);
+    let mut seen_ids = [false; 256];
     for scan_component in 0..count {
         let base = 1 + scan_component * 2;
         let id = segment[base];
@@ -908,6 +909,12 @@ fn parse_sos(
                 reason: "JPEG SOS table selector out of range",
             });
         }
+        if seen_ids[usize::from(id)] {
+            return Err(ImageError::InvalidData {
+                reason: "JPEG SOS lists a component more than once",
+            });
+        }
+        seen_ids[usize::from(id)] = true;
         let index = frame_components
             .iter()
             .position(|component| component.id == id)
@@ -1107,6 +1114,11 @@ fn decode_block(
         let size = u32::from(symbol & 0x0F);
         if size == 0 {
             if run == 15 {
+                if position + 16 > BLOCK_LEN {
+                    return Err(ImageError::InvalidData {
+                        reason: "JPEG ZRL run exceeds the block",
+                    });
+                }
                 position += 16;
                 continue;
             }

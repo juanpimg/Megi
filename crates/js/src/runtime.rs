@@ -44,19 +44,19 @@ use boa_engine::{
     module::{Module, ModuleLoader, Referrer},
     object::FunctionObjectBuilder,
     object::ObjectInitializer,
-    object::builtins::JsArray,
+    object::builtins::{AlignedVec, JsArray, JsArrayBuffer, JsUint8Array},
     property::{Attribute, PropertyDescriptor},
 };
 use dom::{Attribute as DomAttribute, Document, Namespace, NodeId};
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 use std::rc::Rc;
 
 use crate::error::JsError;
 use crate::host::{
-    ConsoleEntry, HistoryAction, Host, HostScope, LocationAction, MutationKind, MutationRecord,
-    ObserverRegistration, ObserverTarget, StorageKind, StorageProvider, with_host,
+    ConsoleEntry, HistoryAction, Host, HostScope, LocationAction, MAX_OBSERVERS, MutationKind,
+    MutationRecord, ObserverRegistration, ObserverTarget, StorageKind, StorageProvider, with_host,
 };
 
 impl From<BoaError> for JsError {
@@ -72,6 +72,8 @@ type AccessorPair = (NativeFn, Option<NativeFn>);
 
 /// Maximum source name length accepted by [`JsRuntime::eval`].
 const MAX_SOURCE_NAME: usize = 128;
+/// Maximum source bytes accepted by `eval`/module/import-map entry points (issue #569).
+const MAX_JS_SOURCE_BYTES: usize = 8 * 1024 * 1024;
 
 /// Anti-DoS budget for script execution.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -162,11 +164,20 @@ impl JsRuntime {
 
     /// Creates a runtime around an existing document (single realm).
     pub fn with_document(document: Document, url: String) -> Result<Self, JsError> {
+        Self::with_document_realm(document, url, false)
+    }
+
+    fn with_document_realm(
+        document: Document,
+        url: String,
+        is_worker: bool,
+    ) -> Result<Self, JsError> {
         let host_slot: Rc<RefCell<Option<Rc<RefCell<Host>>>>> = Rc::new(RefCell::new(None));
         let module_loader = Rc::new(MegiModuleLoader {
             host: Rc::clone(&host_slot),
             base_url: url.clone(),
             cache: RefCell::new(HashMap::new()),
+            max_cache_entries: 256,
         });
         let mut context = Context::builder()
             .module_loader(module_loader)
@@ -174,7 +185,11 @@ impl JsRuntime {
             .map_err(|error| JsError::Internal(error.to_string()))?;
         let host = Rc::new(RefCell::new(Host::new(document, url)));
         *host_slot.borrow_mut() = Some(Rc::clone(&host));
-        install_globals(&mut context, &host)?;
+        if is_worker {
+            install_bare_worker_globals(&mut context)?;
+        } else {
+            install_globals(&mut context, &host)?;
+        }
         Ok(Self {
             context,
             host,
@@ -222,6 +237,9 @@ impl JsRuntime {
     ///
     /// `source_name` is used for stack traces only (bounded to avoid huge source URLs).
     pub fn eval(&mut self, script: &str, source_name: &str) -> Result<String, JsError> {
+        if script.len() > MAX_JS_SOURCE_BYTES {
+            return Err(JsError::Budget("script source exceeds byte cap".to_owned()));
+        }
         self.context
             .runtime_limits_mut()
             .set_loop_iteration_limit(self.budget.loop_iterations);
@@ -408,10 +426,19 @@ impl JsRuntime {
         bubbles: bool,
     ) -> Result<bool, JsError> {
         let _scope = HostScope::enter(&self.host);
+        // Listeners must use the currently configured budget, not the one left over
+        // from the last script evaluation (#1215).
+        self.apply_current_budget();
         let result =
             crate::events::dispatch_rust_event(&mut self.context, target, event_type, bubbles);
         drop(_scope);
         result
+    }
+
+    /// Pushes the runtime's configured budget into the Boa VM.
+    fn apply_current_budget(&mut self) {
+        let budget = self.budget;
+        apply_budget(&mut self.context, &budget);
     }
 
     /// Runs pending promise/microtask jobs (Boa's job queue).
@@ -469,6 +496,8 @@ impl JsRuntime {
         max_timers: usize,
     ) -> Result<usize, JsError> {
         let _scope = HostScope::enter(&self.host);
+        // Timer callbacks must not inherit the loop limit of the last script eval (#1215).
+        self.apply_current_budget();
         let result = crate::events::run_until(&mut self.context, deadline_ms, max_timers);
         if let Err(error) = &result {
             let message = error.to_string();
@@ -559,6 +588,30 @@ fn accessor_fn(
     f: fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>,
 ) -> boa_engine::object::builtins::JsFunction {
     FunctionObjectBuilder::new(context.realm(), native(f)).build()
+}
+
+/// Installs only non-DOM worker globals (`console` and timers).
+fn install_bare_worker_globals(context: &mut Context) -> Result<(), JsError> {
+    let global = context.global_object();
+    let console = build_console(context);
+    global
+        .set(
+            js_string!("console"),
+            JsValue::from(console),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
+    for (name, length, function) in crate::events::timer_globals() {
+        let builtin = FunctionObjectBuilder::new(context.realm(), native(function))
+            .name(js_string!(name))
+            .length(length)
+            .build();
+        global
+            .set(js_string!(name), JsValue::from(builtin), false, context)
+            .map_err(|error| JsError::Internal(error.to_string()))?;
+    }
+    Ok(())
 }
 
 /// Installs `window`, `console`, `document`, `setTimeout`/`setInterval` and helpers.
@@ -808,7 +861,7 @@ fn console_assert(_this: &JsValue, args: &[JsValue], context: &mut Context) -> J
     }
     let message = parts.join(" ");
     let _ = with_host(|host| {
-        host.console.push(ConsoleEntry {
+        host.push_console(ConsoleEntry {
             level: "assert".to_string(),
             message,
         })
@@ -832,7 +885,7 @@ fn record_console(
     }
     let message = parts.join(" ");
     let level = level.to_string();
-    let _ = with_host(|host| host.console.push(ConsoleEntry { level, message }));
+    let _ = with_host(|host| host.push_console(ConsoleEntry { level, message }));
     Ok(JsValue::undefined())
 }
 
@@ -1023,10 +1076,12 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         .map(|(name, get, set)| (name, accessor_fn(context, get), accessor_fn(context, set)))
         .collect();
     let mut init = ObjectInitializer::new(context);
+    // `__megi_node` is the Rust side-table handle; it must never be writable, enumerable or
+    // configurable from script, otherwise a forged value repoints the wrapper (#644).
     init.property(
         js_string!("__megi_node"),
         f64::from(handle),
-        Attribute::all(),
+        Attribute::default(),
     );
     for (name, get, set) in prepared {
         init.accessor(js_string!(name), Some(get), set, Attribute::all());
@@ -1172,7 +1227,7 @@ fn this_handle(this: &JsValue, context: &mut Context) -> JsResult<u32> {
         .map_err(|error| js_error(error.to_string()))?;
     value
         .as_number()
-        .filter(|number| *number >= 0.0 && number.fract() == 0.0)
+        .filter(|number| *number >= 0.0 && *number <= u32::MAX as f64 && number.fract() == 0.0)
         .map(|number| number as u32)
         .ok_or_else(|| js_error("invalid DOM node handle"))
 }
@@ -1187,6 +1242,37 @@ fn this_node(this: &JsValue, context: &mut Context) -> JsResult<NodeId> {
 
 fn js_error(message: impl Into<String>) -> BoaError {
     JsNativeError::typ().with_message(message.into()).into()
+}
+
+/// `SyntaxError` for the DOM APIs that validate an enumerated string argument (#653).
+fn syntax_error(message: impl Into<String>) -> BoaError {
+    JsNativeError::syntax().with_message(message.into()).into()
+}
+
+/// `RangeError` for bounded host resource limits (such as `MAX_OBSERVERS`).
+fn range_error(message: impl Into<String>) -> BoaError {
+    JsNativeError::range().with_message(message.into()).into()
+}
+
+/// The four `insertAdjacent*` positions, after ASCII-lowercasing (#653).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AdjacentPosition {
+    BeforeBegin,
+    AfterBegin,
+    BeforeEnd,
+    AfterEnd,
+}
+
+impl AdjacentPosition {
+    fn parse(position: &str) -> Option<Self> {
+        match position {
+            "beforebegin" => Some(Self::BeforeBegin),
+            "afterbegin" => Some(Self::AfterBegin),
+            "beforeend" => Some(Self::BeforeEnd),
+            "afterend" => Some(Self::AfterEnd),
+            _ => None,
+        }
+    }
 }
 
 fn arg_string(args: &[JsValue], index: usize, context: &mut Context) -> JsResult<String> {
@@ -1348,7 +1434,14 @@ fn node_inner_html_set(
             ..html::ParseOptions::default()
         };
         html::set_inner_html_with_options(&mut host.document, node_id, &html_text, &options)
-            .map(|_| ())
+            .map(|_| {
+                host.record_mutation(MutationRecord {
+                    kind: MutationKind::ChildList,
+                    target: node_id,
+                    name: None,
+                    old_value: None,
+                });
+            })
             .map_err(|error| error.to_string())
     });
     match result {
@@ -1380,12 +1473,22 @@ fn node_outer_html_set(
         if !charge_document_parse(host, html_text.len(), "outerHTML assignment") {
             return Ok(());
         }
+        let parent = host.document.try_node(node_id).and_then(|node| node.parent);
         let options = html::ParseOptions {
             max_nodes: host.max_document_write_nodes,
             ..html::ParseOptions::default()
         };
         html::set_outer_html_with_options(&mut host.document, node_id, &html_text, &options)
-            .map(|_| ())
+            .map(|_| {
+                if let Some(parent) = parent {
+                    host.record_mutation(MutationRecord {
+                        kind: MutationKind::ChildList,
+                        target: parent,
+                        name: None,
+                        old_value: None,
+                    });
+                }
+            })
             .map_err(|error| error.to_string())
     });
     match result {
@@ -1623,7 +1726,7 @@ fn boolean_attribute_set(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let enabled = args.first().and_then(JsValue::as_boolean).unwrap_or(false);
+    let enabled = args.first().is_some_and(JsValue::to_boolean);
     let result = with_host(|host| {
         let element = host
             .document
@@ -1821,8 +1924,40 @@ fn argument_node(args: &[JsValue], index: usize, context: &mut Context) -> JsRes
 fn node_clone_node(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let deep = args.first().and_then(JsValue::as_boolean).unwrap_or(false);
+    // `cloneNode(true)` doubles the arena in one call, so the subtree size is charged before
+    // the clone is allocated (#657).
+    let allowed = with_host(|host| {
+        let extra = if deep {
+            host.document.descendants(node_id).count().max(1)
+        } else {
+            1
+        };
+        let total = host.document.len().saturating_add(extra);
+        if total > host.max_dom_nodes {
+            if !host.dom_budget_warned {
+                host.dom_budget_warned = true;
+                host.push_console(ConsoleEntry {
+                    level: "warn".to_string(),
+                    message: format!(
+                        "cloneNode rejected: the DOM node budget ({} nodes) is exhausted",
+                        host.max_dom_nodes
+                    ),
+                });
+            }
+            return false;
+        }
+        true
+    })
+    .unwrap_or(false);
+    if !allowed {
+        return Err(js_error(format!(
+            "QuotaExceededError: DOM node budget exceeded ({} nodes)",
+            with_host(|host| host.max_dom_nodes).unwrap_or(0)
+        )));
+    }
     let clone = with_host(|host| host.document.clone_node(node_id, deep))
-        .ok_or_else(|| js_error("no active JavaScript host"))?;
+        .ok_or_else(|| js_error("no active JavaScript host"))?
+        .ok_or_else(|| js_error("NotFoundError: node not found"))?;
     wrap_node(context, clone)
 }
 
@@ -1935,7 +2070,7 @@ fn charge_document_parse(host: &mut Host, bytes: usize, sink: &str) -> bool {
     {
         if !host.document_write_warned {
             host.document_write_warned = true;
-            host.console.push(ConsoleEntry {
+            host.console.push_back(ConsoleEntry {
                 level: "warn".to_string(),
                 message: format!(
                     "{sink} ignored: the cumulative document budget ({} bytes / {} nodes) is exhausted",
@@ -1951,7 +2086,14 @@ fn charge_document_parse(host: &mut Host, bytes: usize, sink: &str) -> bool {
 }
 
 fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    const MAX_DOCUMENT_WRITE_INPUT: usize = 16 * 1024 * 1024;
     let text = arg_string(args, 0, context)?;
+    if text.len() > MAX_DOCUMENT_WRITE_INPUT {
+        return Err(js_error(format!(
+            "document.write input exceeds the per-call limit of {} bytes",
+            MAX_DOCUMENT_WRITE_INPUT
+        )));
+    }
     with_host(|host| {
         if !charge_document_parse(host, text.len(), "document.write") {
             return;
@@ -1960,7 +2102,32 @@ fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> J
             max_nodes: host.max_document_write_nodes,
             ..html::ParseOptions::default()
         };
-        let _ = html::document_write_with_options(&mut host.document, &text, false, &options);
+        let violations =
+            html::document_write_with_options(&mut host.document, &text, false, &options);
+        // Surface parser truncation to script instead of silently discarding it (#431).
+        if !violations.is_empty() {
+            host.console.push_back(ConsoleEntry {
+                level: "warn".to_string(),
+                message: format!(
+                    "document.write: {} parse limit violation(s) ({} node(s), {} depth, {} text bytes)",
+                    violations.total(),
+                    violations.nodes_exceeded,
+                    violations.depth_exceeded,
+                    violations.text_bytes_dropped,
+                ),
+            });
+        }
+        let target = host
+            .document
+            .body()
+            .or_else(|| host.document.document_element())
+            .unwrap_or_else(|| host.document.root());
+        host.record_mutation(MutationRecord {
+            kind: MutationKind::ChildList,
+            target,
+            name: None,
+            old_value: None,
+        });
     });
     Ok(JsValue::undefined())
 }
@@ -2027,14 +2194,32 @@ fn document_create_document_fragment(
     wrap_node(context, fragment)
 }
 
+fn is_valid_element_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    let valid_start = first.is_ascii_alphabetic() || first == '_' || first == ':';
+    if !valid_start {
+        return false;
+    }
+    chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '.' | '_' | ':'))
+}
+
 fn document_create_element(
     _this: &JsValue,
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
+    let raw_name = arg_string(args, 0, context)?;
+    if !is_valid_element_name(&raw_name) {
+        return Err(js_error(format!(
+            "InvalidCharacterError: `{raw_name}` is not a valid element name"
+        )));
+    }
     // DOM §4.5: `createElement` lowercases the name for an HTML document, so
     // `createElement("TEMPLATE")` still creates a template with its content fragment.
-    let name = arg_string(args, 0, context)?.to_ascii_lowercase();
+    let name = raw_name.to_ascii_lowercase();
     let node = with_host(|host| {
         host.document
             .create_element(Namespace::Html, name.clone(), Vec::new())
@@ -2134,17 +2319,18 @@ fn node_list(context: &mut Context, nodes: Vec<NodeId>) -> JsResult<JsValue> {
 }
 
 fn node_list_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    let index = args
-        .first()
-        .and_then(JsValue::as_number)
-        .unwrap_or(0.0)
-        .max(0.0) as u64;
+    let index = crate::events::webidl_uint32_index(args, context);
     let object = this
         .as_object()
         .ok_or_else(|| js_error("invalid NodeList receiver"))?;
-    object
+    let value = object
         .get(js_string!(index.to_string()), context)
-        .map_err(|error| js_error(error.to_string()))
+        .map_err(|error| js_error(error.to_string()))?;
+    if value.is_undefined() {
+        Ok(JsValue::null())
+    } else {
+        Ok(value)
+    }
 }
 
 fn node_list_for_each(
@@ -2207,38 +2393,73 @@ fn node_closest(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     Ok(JsValue::null())
 }
 
-fn insert_relative(host: &mut crate::host::Host, target: NodeId, node: NodeId, position: &str) {
-    match position {
-        "beforebegin" => {
+fn insert_relative(
+    host: &mut crate::host::Host,
+    target: NodeId,
+    node: NodeId,
+    position: AdjacentPosition,
+) -> Result<(), String> {
+    let container = match position {
+        AdjacentPosition::BeforeBegin => {
             let parent = host.document.try_node(target).and_then(|node| node.parent);
             if let Some(parent) = parent {
-                let _ = host
-                    .document
-                    .insert_before_child(parent, node, Some(target));
+                host.document
+                    .insert_before_child(parent, node, Some(target))
+                    .map_err(|err| err.to_string())?;
             }
+            parent
         }
-        "afterbegin" => {
+        AdjacentPosition::AfterBegin => {
             let first = host
                 .document
                 .try_node(target)
                 .and_then(|node| node.first_child);
-            let _ = host.document.insert_before_child(target, node, first);
+            host.document
+                .insert_before_child(target, node, first)
+                .map_err(|err| err.to_string())?;
+            Some(target)
         }
-        "beforeend" => {
-            host.document.append_child(target, node);
+        AdjacentPosition::BeforeEnd => {
+            host.document
+                .insert_before_child(target, node, None)
+                .map_err(|err| err.to_string())?;
+            Some(target)
         }
-        "afterend" => {
+        AdjacentPosition::AfterEnd => {
             let parent = host.document.try_node(target).and_then(|node| node.parent);
             if let Some(parent) = parent {
                 let next = host
                     .document
                     .try_node(target)
                     .and_then(|node| node.next_sibling);
-                let _ = host.document.insert_before_child(parent, node, next);
+                host.document
+                    .insert_before_child(parent, node, next)
+                    .map_err(|err| err.to_string())?;
             }
+            parent
         }
-        _ => {}
+    };
+    if let Some(container) = container {
+        host.record_mutation(MutationRecord {
+            kind: MutationKind::ChildList,
+            target: container,
+            name: None,
+            old_value: None,
+        });
     }
+    Ok(())
+}
+
+/// Validates the `position` argument of `insertAdjacent*`, throwing `SyntaxError` for
+/// anything outside the four defined values (#653).
+fn adjacent_position(args: &[JsValue], context: &mut Context) -> JsResult<AdjacentPosition> {
+    let raw = arg_string(args, 0, context)?;
+    let lowered = raw.to_ascii_lowercase();
+    AdjacentPosition::parse(&lowered).ok_or_else(|| {
+        syntax_error(format!(
+            "insertAdjacent*: unknown position `{raw}` (expected beforebegin, afterbegin, beforeend or afterend)"
+        ))
+    })
 }
 
 fn node_insert_adjacent_html(
@@ -2256,11 +2477,11 @@ fn node_insert_adjacent_html(
     if !is_element {
         return Err(js_error("insertAdjacentHTML is only supported on elements"));
     }
-    let position = arg_string(args, 0, context)?.to_ascii_lowercase();
+    let position = adjacent_position(args, context)?;
     let html_text = arg_string(args, 1, context)?;
-    with_host(|host| {
+    let result = with_host(|host| {
         if !charge_document_parse(host, html_text.len(), "insertAdjacentHTML") {
-            return;
+            return Ok(());
         }
         let temp = host
             .document
@@ -2269,16 +2490,28 @@ fn node_insert_adjacent_html(
             max_nodes: host.max_document_write_nodes,
             ..html::ParseOptions::default()
         };
-        if html::set_inner_html_with_options(&mut host.document, temp, &html_text, &options)
-            .is_err()
-        {
-            return;
+        let parsed =
+            html::set_inner_html_with_options(&mut host.document, temp, &html_text, &options);
+        if let Err(err) = parsed {
+            host.document.remove_subtree(temp);
+            return Err(err.to_string());
         }
         let children: Vec<NodeId> = host.document.children(temp).collect();
+        let mut insert_err = None;
         for child in children {
-            insert_relative(host, target, child, &position);
+            if let Err(err) = insert_relative(host, target, child, position) {
+                insert_err = Some(err);
+                break;
+            }
         }
-    });
+        host.document.remove_subtree(temp);
+        match insert_err {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
+    })
+    .unwrap_or(Ok(()));
+    result.map_err(js_error)?;
     Ok(JsValue::undefined())
 }
 
@@ -2297,12 +2530,18 @@ fn node_insert_adjacent_text(
     if !is_element {
         return Err(js_error("insertAdjacentText is only supported on elements"));
     }
-    let position = arg_string(args, 0, context)?.to_ascii_lowercase();
+    let position = adjacent_position(args, context)?;
     let text = arg_string(args, 1, context)?;
-    with_host(|host| {
+    let result = with_host(|host| {
         let node = host.document.create_text_node(&text);
-        insert_relative(host, target, node, &position);
-    });
+        if let Err(err) = insert_relative(host, target, node, position) {
+            host.document.remove_subtree(node);
+            return Err(err);
+        }
+        Ok(())
+    })
+    .unwrap_or(Ok(()));
+    result.map_err(js_error)?;
     Ok(JsValue::undefined())
 }
 
@@ -2532,11 +2771,7 @@ fn style_remove_property(
 
 fn style_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node = style_node(this, context)?;
-    let index = args
-        .first()
-        .and_then(JsValue::as_number)
-        .unwrap_or(0.0)
-        .max(0.0) as usize;
+    let index = crate::events::webidl_uint32_index(args, context);
     let name = with_host(|host| {
         inline_declarations(&host.document, node)
             .into_iter()
@@ -2647,11 +2882,28 @@ fn write_classes(node_id: NodeId, classes: &[String]) {
     });
 }
 
+fn validate_class_token(token: &str) -> JsResult<()> {
+    if token.is_empty() {
+        return Err(syntax_error("The token provided must not be empty."));
+    }
+    if token.chars().any(|ch| ch.is_ascii_whitespace()) {
+        return Err(js_error(
+            "InvalidCharacterError: The token provided contains HTML space characters.",
+        ));
+    }
+    Ok(())
+}
+
 fn class_add(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let (node_id, mut classes) = classes_of(this, context)?;
+    let mut parsed = Vec::with_capacity(args.len());
     for index in 0..args.len() {
         let class = arg_string(args, index, context)?;
-        if !class.is_empty() && !classes.contains(&class) {
+        validate_class_token(&class)?;
+        parsed.push(class);
+    }
+    for class in parsed {
+        if !classes.contains(&class) {
             classes.push(class);
         }
     }
@@ -2661,8 +2913,13 @@ fn class_add(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResul
 
 fn class_remove(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let (node_id, mut classes) = classes_of(this, context)?;
+    let mut parsed = Vec::with_capacity(args.len());
     for index in 0..args.len() {
         let class = arg_string(args, index, context)?;
+        validate_class_token(&class)?;
+        parsed.push(class);
+    }
+    for class in parsed {
         classes.retain(|existing| *existing != class);
     }
     write_classes(node_id, &classes);
@@ -2678,9 +2935,10 @@ fn class_contains(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
 fn class_toggle(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let (node_id, mut classes) = classes_of(this, context)?;
     let class = arg_string(args, 0, context)?;
+    validate_class_token(&class)?;
     let contains = classes.contains(&class);
     let add = match args.get(1) {
-        Some(force) if force.is_boolean() => force.to_boolean(),
+        Some(force) if !force.is_undefined() => force.to_boolean(),
         _ => !contains,
     };
     if add {
@@ -2716,7 +2974,15 @@ fn root_array(context: &mut Context, name: &str, create: bool) -> JsResult<JsObj
     let value = global
         .get(js_string!(name), context)
         .map_err(|error| js_error(error.to_string()))?;
-    if let Some(array) = value.as_object() {
+    // Defensively type-check: a script may have replaced the rooted table with a
+    // non-array value. Treat that as "missing" and recreate it (#644).
+    if let Some(array) = value.as_object()
+        && array
+            .get(js_string!("length"), context)
+            .ok()
+            .and_then(|v| v.as_number())
+            .is_some()
+    {
         return Ok(array.clone());
     }
     let array = JsArray::from_iter([], context);
@@ -2789,6 +3055,12 @@ fn history_push_state(
 ) -> JsResult<JsValue> {
     let state = args.first().cloned().unwrap_or_else(JsValue::undefined);
     let json = json_state(&state, context);
+    if json.len() > MAX_HISTORY_STATE_BYTES {
+        return Err(js_error(format!(
+            "QuotaExceededError: history state limit of 1 MiB exceeded ({} bytes)",
+            json.len()
+        )));
+    }
     let url = args.get(2).and_then(|value| {
         value
             .to_string(context)
@@ -2832,6 +3104,12 @@ fn history_replace_state(
 ) -> JsResult<JsValue> {
     let state = args.first().cloned().unwrap_or_else(JsValue::undefined);
     let json = json_state(&state, context);
+    if json.len() > MAX_HISTORY_STATE_BYTES {
+        return Err(js_error(format!(
+            "QuotaExceededError: history state limit of 1 MiB exceeded ({} bytes)",
+            json.len()
+        )));
+    }
     let url = args.get(2).and_then(|value| {
         value
             .to_string(context)
@@ -3057,11 +3335,11 @@ fn storage_kind(this: &JsValue, context: &mut Context) -> JsResult<StorageKind> 
     })
 }
 
-fn storage_read<F: Fn(&Host) -> &HashMap<String, String>>(
+fn storage_read<F: Fn(&Host) -> &crate::host::StorageMap>(
     this: &JsValue,
     context: &mut Context,
     f: F,
-) -> JsResult<HashMap<String, String>> {
+) -> JsResult<crate::host::StorageMap> {
     let kind = storage_kind(this, context)?;
     let map = with_host(|host| match kind {
         StorageKind::Local => host.local_storage.clone(),
@@ -3149,11 +3427,7 @@ fn storage_clear(this: &JsValue, _args: &[JsValue], context: &mut Context) -> Js
 }
 
 fn storage_key(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    let index = args
-        .first()
-        .and_then(|value| value.to_number(context).ok())
-        .map(|number| number as usize)
-        .unwrap_or(0);
+    let index = crate::events::webidl_uint32_index(args, context);
     let map = storage_read(this, context, |_| unreachable!())?;
     Ok(map
         .keys()
@@ -3193,6 +3467,14 @@ fn mutation_observer_constructor(
     let Some(callback) = args.first().filter(|value| value.is_callable()) else {
         return Err(js_error("MutationObserver callback must be a function"));
     };
+    // Cap registrations before rooting anything (issue #1134): a script must not be
+    // able to create millions of observers that are all visited on every mutation.
+    let observer_count = with_host(|host| host.observers.len()).unwrap_or(0);
+    if observer_count >= MAX_OBSERVERS {
+        return Err(range_error(format!(
+            "MutationObserver limit of {MAX_OBSERVERS} exceeded"
+        )));
+    }
     let callback_slot = root_push(context, "__megi_observer_callbacks", callback.clone())?;
     let object_slot = {
         let array = root_array(context, "__megi_observer_objects", true)?;
@@ -3226,6 +3508,7 @@ fn mutation_observer_constructor(
             callback_slot,
             object_slot,
             targets: Vec::new(),
+            records: Vec::new(),
         });
     });
     Ok(JsValue::from(observer))
@@ -3238,24 +3521,32 @@ fn observer_observe(this: &JsValue, args: &[JsValue], context: &mut Context) -> 
         .get(1)
         .and_then(|value| value.as_object())
         .ok_or_else(|| js_error("MutationObserver.observe options are required"))?;
+    let explicit_attributes = options
+        .get(js_string!("attributes"), context)
+        .ok()
+        .filter(|value| !value.is_undefined())
+        .map(|value| value.to_boolean());
     let mut flag = |name: &str| -> bool {
         options
             .get(js_string!(name), context)
             .ok()
             .is_some_and(|value| value.to_boolean())
     };
+    // DOM §4.3.2: if `attributeOldValue` is true and `attributes` is omitted, `attributes`
+    // defaults to true.
+    let attribute_old_value = flag("attributeOldValue");
     let target = ObserverTarget {
         node,
         child_list: flag("childList"),
-        attributes: flag("attributes"),
+        attributes: explicit_attributes.unwrap_or(attribute_old_value),
+        attribute_old_value,
         character_data: flag("characterData"),
         subtree: flag("subtree"),
     };
-    with_host(|host| {
-        if let Some(registration) = host.observers.iter_mut().find(|r| r.object_slot == slot) {
-            registration.targets.push(target);
-        }
-    });
+    let registered = with_host(|host| host.observe_target(slot, target));
+    if let Some(Err(message)) = registered {
+        return Err(js_error(message));
+    }
     Ok(JsValue::undefined())
 }
 
@@ -3265,7 +3556,10 @@ fn observer_disconnect(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let slot = observer_slot(this, context)?;
-    with_host(|host| host.observers.retain(|r| r.object_slot != slot));
+    // Per DOM §4.3.1, disconnect() only stops delivering future records: the observer
+    // stays registered so a later observe() can re-arm it. Removing the registration
+    // made observe() silently no-op forever (#1135).
+    with_host(|host| host.disconnect_observer(slot));
     Ok(JsValue::undefined())
 }
 
@@ -3286,7 +3580,7 @@ fn note_mutation(
     old_value: Option<String>,
 ) {
     with_host(|host| {
-        if !host.observers.is_empty() {
+        if !host.observer_index.is_empty() {
             host.record_mutation(MutationRecord {
                 kind,
                 target,
@@ -3297,73 +3591,25 @@ fn note_mutation(
     });
 }
 
-fn record_matches(host: &Host, observer: &ObserverRegistration, record: &MutationRecord) -> bool {
-    observer.targets.iter().any(|target| {
-        let kind_enabled = match record.kind {
-            MutationKind::ChildList => target.child_list,
-            MutationKind::Attributes => target.attributes,
-            MutationKind::CharacterData => target.character_data,
-        };
-        if !kind_enabled {
-            return false;
-        }
-        if target.node == record.target {
-            return true;
-        }
-        if !target.subtree {
-            return false;
-        }
-        // The target (or an ancestor) may have been removed between the mutation and the
-        // records being drained (`outerHTML`, `innerHTML`, `textContent` free the old
-        // subtree). A freed slot must simply not match, instead of panicking on a stale
-        // `NodeId`.
-        let mut current = match host.document.try_node(record.target) {
-            Some(node) => node.parent,
-            None => return false,
-        };
-        while let Some(node) = current {
-            if node == target.node {
-                return true;
-            }
-            let Some(parent) = host.document.try_node(node) else {
-                return false;
-            };
-            current = parent.parent;
-        }
-        false
-    })
-}
-
 fn collect_observer_records(context: &mut Context, slot: u32, take: bool) -> JsResult<JsArray> {
-    let (registration, records) = with_host(|host| {
-        let registration = host
-            .observers
-            .iter()
-            .find(|r| r.object_slot == slot)
-            .cloned();
-        let records = match &registration {
-            Some(registration) => host
-                .mutations
-                .iter()
-                .filter(|record| record_matches(host, registration, record))
-                .cloned()
-                .collect::<Vec<_>>(),
-            None => Vec::new(),
+    let records = with_host(|host| {
+        let taken = {
+            let Some(registration) = host.observers.iter_mut().find(|r| r.object_slot == slot)
+            else {
+                return Vec::new();
+            };
+            if take {
+                std::mem::take(&mut registration.records)
+            } else {
+                registration.records.clone()
+            }
         };
-        if take {
-            host.mutations.retain(|record| {
-                !records.iter().any(|taken| {
-                    taken.kind == record.kind
-                        && taken.target == record.target
-                        && taken.name == record.name
-                        && taken.old_value == record.old_value
-                })
-            });
-        }
-        (registration, records)
+        taken
+            .into_iter()
+            .filter(|record| host.document.try_node(record.target).is_some())
+            .collect::<Vec<_>>()
     })
-    .unwrap_or((None, Vec::new()));
-    let _ = registration;
+    .unwrap_or_default();
     let array = JsArray::from_iter([], context);
     for (index, record) in records.iter().enumerate() {
         let kind = match record.kind {
@@ -3386,6 +3632,11 @@ fn collect_observer_records(context: &mut Context, slot: u32, take: bool) -> JsR
                 Attribute::READONLY,
             );
         }
+        let old_value = match &record.old_value {
+            Some(old) => JsValue::from(js_string!(old.clone())),
+            None => JsValue::null(),
+        };
+        init.property(js_string!("oldValue"), old_value, Attribute::READONLY);
         let record = init.build();
         array
             .set(
@@ -3400,9 +3651,16 @@ fn collect_observer_records(context: &mut Context, slot: u32, take: bool) -> JsR
 }
 
 fn deliver_mutation_records(context: &mut Context) -> Result<(), JsError> {
-    let registrations = with_host(|host| host.observers.clone()).unwrap_or_default();
-    for registration in registrations {
-        let records = collect_observer_records(context, registration.object_slot, true)
+    let registrations: Vec<(u32, u32)> = with_host(|host| {
+        host.observers
+            .iter()
+            .filter(|r| !r.records.is_empty())
+            .map(|r| (r.object_slot, r.callback_slot))
+            .collect()
+    })
+    .unwrap_or_default();
+    for (object_slot, callback_slot) in registrations {
+        let records = collect_observer_records(context, object_slot, true)
             .map_err(|error| JsError::Runtime(error.to_string()))?;
         if records.length(context).unwrap_or(0) == 0 {
             continue;
@@ -3410,21 +3668,24 @@ fn deliver_mutation_records(context: &mut Context) -> Result<(), JsError> {
         let callback = root_get(
             context,
             "__megi_observer_callbacks",
-            u64::from(registration.callback_slot),
+            u64::from(callback_slot),
         )
         .map_err(|error| JsError::Runtime(error.to_string()))?;
-        let object = root_get(
-            context,
-            "__megi_observer_objects",
-            u64::from(registration.object_slot),
-        )
-        .map_err(|error| JsError::Runtime(error.to_string()))?;
+        let object = root_get(context, "__megi_observer_objects", u64::from(object_slot))
+            .map_err(|error| JsError::Runtime(error.to_string()))?;
         let Some(callback) = callback.as_object() else {
             continue;
         };
         let args = [JsValue::from(records), object];
         if let Err(error) = callback.call(&JsValue::undefined(), &args, context) {
-            return Err(JsError::Runtime(error.to_string()));
+            let message = error.to_string();
+            let typed = classify_error(&message);
+            if matches!(typed, JsError::Budget(_)) {
+                return Err(typed);
+            }
+            // A throwing callback must be reported, but must not abort delivery to
+            // the remaining observers (#1136).
+            crate::events::report_uncaught(context, &message, "<mutation-observer>")?;
         }
     }
     Ok(())
@@ -3469,6 +3730,12 @@ fn module_quote(value: &str) -> String {
             '"' => out.push_str("\\\""),
             '\n' => out.push_str("\\n"),
             '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{2028}' => out.push_str("\\u2028"),
+            '\u{2029}' => out.push_str("\\u2029"),
+            c if (c as u32) < 0x20 => {
+                out.push_str(&format!("\\u{:04x}", c as u32));
+            }
             _ => out.push(ch),
         }
     }
@@ -3693,10 +3960,76 @@ fn rewrite_dynamic_imports(body: &mut String) -> Result<Vec<String>, JsError> {
     Ok(specifiers)
 }
 
+/// Replaces the contents of JS strings, template literals and comments with spaces,
+/// preserving byte length and newlines. Textual module scans then only see executable
+/// code, so `await` or `import(` inside a string/comment cannot be misdetected (#1145).
+/// Template substitutions (`${…}`) inside a template are masked too: this is part of the
+/// documented module-preprocessor subset.
+fn mask_js_literals(source: &str) -> String {
+    let mut bytes = source.as_bytes().to_vec();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] == b'/' && i + 1 < bytes.len() && (bytes[i + 1] == b'/' || bytes[i + 1] == b'*')
+        {
+            let block = bytes[i + 1] == b'*';
+            bytes[i] = b' ';
+            bytes[i + 1] = b' ';
+            i += 2;
+            if block {
+                while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                    if bytes[i] != b'\n' {
+                        bytes[i] = b' ';
+                    }
+                    i += 1;
+                }
+                if i + 1 < bytes.len() {
+                    bytes[i] = b' ';
+                    bytes[i + 1] = b' ';
+                    i += 2;
+                }
+            } else {
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    bytes[i] = b' ';
+                    i += 1;
+                }
+            }
+        } else if matches!(bytes[i], b'\'' | b'"' | b'`') {
+            let quote = bytes[i];
+            bytes[i] = b' ';
+            i += 1;
+            while i < bytes.len() {
+                if bytes[i] == b'\\' {
+                    bytes[i] = b' ';
+                    i += 1;
+                    if i < bytes.len() {
+                        bytes[i] = b' ';
+                        i += 1;
+                    }
+                    continue;
+                }
+                if bytes[i] == quote {
+                    bytes[i] = b' ';
+                    i += 1;
+                    break;
+                }
+                if bytes[i] != b'\n' {
+                    bytes[i] = b' ';
+                }
+                i += 1;
+            }
+        } else {
+            i += 1;
+        }
+    }
+    // Every replaced byte is ASCII, so masking cannot break UTF-8 sequences.
+    String::from_utf8(bytes).expect("masking preserves UTF-8")
+}
+
 /// Detects top-level `await` (the synchronous module evaluator cannot suspend).
 fn module_has_top_level_await(body: &str) -> bool {
+    let masked = mask_js_literals(body);
     let mut depth = 0i32;
-    for line in body.lines() {
+    for line in masked.lines() {
         let trimmed = line.trim();
         if depth <= 0
             && (trimmed.starts_with("await ")
@@ -3771,35 +4104,51 @@ fn apply_budget(context: &mut Context, budget: &Budget) {
 
 /// Maximum nesting of the static module graph (each level is one Rust stack frame).
 const MAX_MODULE_DEPTH: usize = 128;
+const MAX_MODULE_COUNT: usize = 1024;
 
+#[allow(clippy::too_many_arguments)]
 fn eval_module_graph(
     context: &mut Context,
     host: &Rc<RefCell<Host>>,
     url: &str,
     source: &str,
     budget: &Budget,
-    visiting: &mut Vec<String>,
+    visiting: &mut HashSet<String>,
+    depth: usize,
     done: &mut HashMap<String, JsObject>,
 ) -> Result<JsObject, JsError> {
     if let Some(object) = done.get(url) {
         return Ok(object.clone());
     }
-    if visiting.iter().any(|visited| visited == url) {
+    if !visiting.insert(url.to_string()) {
         return Err(JsError::ModuleCycle(url.to_string()));
     }
     // Static imports recurse through this function: an unbounded chain (a loader can serve
     // any depth) would overflow the native stack.
-    if visiting.len() >= MAX_MODULE_DEPTH {
+    if depth >= MAX_MODULE_DEPTH {
+        visiting.remove(url);
         return Err(JsError::ModuleDepth(url.to_string()));
     }
-    visiting.push(url.to_string());
+    // Cap total module count to prevent memory blowup from wide graphs.
+    if done.len() + visiting.len() > MAX_MODULE_COUNT {
+        visiting.remove(url);
+        return Err(JsError::ModuleBudget(url.to_string()));
+    }
     let parsed = transform_module(source, url)?;
     let mut namespaces = Vec::with_capacity(parsed.imports.len());
     for import in &parsed.imports {
         let dep_url = resolve_module(host, &import.specifier, url)?;
         let dep_source = load_module(host, &dep_url)?;
-        let namespace =
-            eval_module_graph(context, host, &dep_url, &dep_source, budget, visiting, done)?;
+        let namespace = eval_module_graph(
+            context,
+            host,
+            &dep_url,
+            &dep_source,
+            budget,
+            visiting,
+            depth + 1,
+            done,
+        )?;
         namespaces.push(namespace);
     }
     let mut prelude = String::new();
@@ -3857,8 +4206,16 @@ fn eval_module_graph(
     for (index, specifier) in parsed.dynamic_imports.iter().enumerate() {
         let dep_url = resolve_module(host, specifier, url)?;
         let dep_source = load_module(host, &dep_url)?;
-        let namespace =
-            eval_module_graph(context, host, &dep_url, &dep_source, budget, visiting, done)?;
+        let namespace = eval_module_graph(
+            context,
+            host,
+            &dep_url,
+            &dep_source,
+            budget,
+            visiting,
+            depth + 1,
+            done,
+        )?;
         context
             .global_object()
             .set(
@@ -3908,7 +4265,7 @@ fn eval_module_graph(
         .as_object()
         .ok_or_else(|| JsError::Internal("module evaluation returned no namespace".to_string()))?
         .clone();
-    visiting.pop();
+    visiting.remove(url);
     done.insert(url.to_string(), object.clone());
     Ok(object)
 }
@@ -3935,6 +4292,11 @@ impl JsRuntime {
     /// [`crate::ImportMap`]). Resolution is tried before the host module resolver; a `null`
     /// mapping blocks the specifier with [`JsError::ImportMapBlocked`].
     pub fn set_import_map_json(&mut self, source: &str) -> Result<(), JsError> {
+        if source.len() > MAX_JS_SOURCE_BYTES {
+            return Err(JsError::Budget(
+                "import map source exceeds byte cap".to_owned(),
+            ));
+        }
         let map = crate::ImportMap::from_json(source)?;
         self.host.borrow_mut().import_map = Some(map);
         Ok(())
@@ -3960,8 +4322,11 @@ impl JsRuntime {
         base_url: &str,
         budget: &Budget,
     ) -> Result<ModuleOutcome, JsError> {
+        if source.len() > MAX_JS_SOURCE_BYTES {
+            return Err(JsError::Budget("module source exceeds byte cap".to_owned()));
+        }
         apply_budget(&mut self.context, budget);
-        let mut visiting = Vec::new();
+        let mut visiting = HashSet::new();
         let mut done = HashMap::new();
         let namespace = eval_module_graph(
             &mut self.context,
@@ -3970,6 +4335,7 @@ impl JsRuntime {
             source,
             budget,
             &mut visiting,
+            0,
             &mut done,
         )?;
         let mut values = Vec::new();
@@ -4141,10 +4507,7 @@ fn attributes_handle(this: &JsValue, context: &mut Context) -> JsResult<u32> {
 
 fn attributes_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let handle = attributes_handle(this, context)?;
-    let index = args
-        .first()
-        .and_then(|value| value.as_number())
-        .unwrap_or(0.0) as usize;
+    let index = crate::events::webidl_uint32_index(args, context);
     let node_id = with_host(|host| host.node_for_handle(handle))
         .ok_or_else(|| js_error("no active JavaScript host"))?
         .map_err(js_error)?;
@@ -4216,7 +4579,19 @@ fn attributes_remove_named(
 
 fn node_normalize(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let removed = with_host(|host| host.document.normalize(node_id)).unwrap_or(0);
+    let removed = with_host(|host| {
+        let removed = host.document.normalize(node_id);
+        if removed > 0 {
+            host.record_mutation(MutationRecord {
+                kind: MutationKind::ChildList,
+                target: node_id,
+                name: None,
+                old_value: None,
+            });
+        }
+        removed
+    })
+    .unwrap_or(0);
     Ok(JsValue::from(removed as f64))
 }
 
@@ -4270,7 +4645,19 @@ fn document_normalize(
 ) -> JsResult<JsValue> {
     let removed = with_host(|host| {
         let root = host.document.document_element();
-        root.map(|root| host.document.normalize(root)).unwrap_or(0)
+        root.map(|root| {
+            let removed = host.document.normalize(root);
+            if removed > 0 {
+                host.record_mutation(MutationRecord {
+                    kind: MutationKind::ChildList,
+                    target: root,
+                    name: None,
+                    old_value: None,
+                });
+            }
+            removed
+        })
+        .unwrap_or(0)
     })
     .unwrap_or(0);
     Ok(JsValue::from(removed as f64))
@@ -4307,38 +4694,143 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
             .define_property_or_throw(js_string!(name), descriptor, context)
             .map_err(|error| JsError::Internal(error.to_string()))?;
     }
-    const PRELUDE: &str = r#"
+    const PRELUDE: &str = r####"
 (function () {
   function define(name, value) { window[name] = value; }
+  function urlNormalizePath(path) {
+    var segments = String(path).split("/");
+    var out = [];
+    for (var i = 0; i < segments.length; i++) {
+      var segment = segments[i];
+      var last = i === segments.length - 1;
+      if (segment === ".") { if (last) { out.push(""); } continue; }
+      if (segment === "..") {
+        if (out.length > 1 || (out.length === 1 && out[0] !== "")) { out.pop(); }
+        if (last) { out.push(""); }
+        continue;
+      }
+      out.push(segment);
+    }
+    var result = out.join("/");
+    if (result === "") { return "/"; }
+    if (result.charAt(0) !== "/") { result = "/" + result; }
+    return result;
+  }
+  function urlSplitAuthority(authority) {
+    var out = { userinfo: "", host: "", hostname: "", port: "" };
+    if (!authority) { return out; }
+    var hostport = authority;
+    var at = authority.lastIndexOf("@");
+    if (at >= 0) { out.userinfo = authority.substring(0, at); hostport = authority.substring(at + 1); }
+    var hostname = hostport;
+    var port = "";
+    if (hostport.charAt(0) === "[") {
+      var close = hostport.indexOf("]");
+      if (close > 0) {
+        hostname = hostport.substring(0, close + 1);
+        var rest = hostport.substring(close + 1);
+        if (rest.charAt(0) === ":") { port = rest.substring(1); }
+      }
+    } else {
+      var colon = hostport.indexOf(":");
+      if (colon >= 0) { hostname = hostport.substring(0, colon); port = hostport.substring(colon + 1); }
+    }
+    out.hostname = hostname;
+    out.port = port;
+    out.host = port ? hostname + ":" + port : hostname;
+    return out;
+  }
+  function urlBuild(protocol, userinfo, hostname, port, path, search, hash) {
+    var hasAuthority = hostname !== "";
+    var pathname = path === "" ? (hasAuthority ? "/" : "") : path;
+    if (hasAuthority || pathname.charAt(0) === "/") { pathname = urlNormalizePath(pathname); }
+    var searchText = search || "";
+    if (searchText !== "" && searchText.charAt(0) !== "?") { searchText = "?" + searchText; }
+    var hashText = hash || "";
+    if (hashText !== "" && hashText.charAt(0) !== "#") { hashText = "#" + hashText; }
+    var authority = hasAuthority
+      ? "//" + (userinfo ? userinfo + "@" : "") + hostname + (port ? ":" + port : "")
+      : "";
+    var host = hasAuthority ? (port ? hostname + ":" + port : hostname) : "";
+    var credentials = userinfo ? userinfo.split(":") : [];
+    var result = {
+      href: protocol + authority + pathname + searchText + hashText,
+      protocol: protocol,
+      username: credentials.length > 0 ? credentials[0] : "",
+      password: credentials.length > 1 ? credentials.slice(1).join(":") : "",
+      host: host,
+      hostname: hostname,
+      port: port,
+      pathname: pathname,
+      search: searchText,
+      hash: hashText,
+      origin: hasAuthority ? protocol + "//" + host : "null"
+    };
+    result.searchParams = null;
+    return result;
+  }
   function urlParse(input, base) {
     var value = String(input);
-    var match = /^([A-Za-z][A-Za-z0-9+.-]*:)(\/\/[^\/?#]*)?([^?#]*)(\?[^#]*)?(#.*)?$/.exec(value);
-    if (!match && base) {
-      var baseMatch = /^([A-Za-z][A-Za-z0-9+.-]*:)(\/\/[^\/?#]*)?([^?#]*)(\?[^#]*)?(#.*)?$/.exec(String(base));
-      if (baseMatch) {
-        var origin = baseMatch[1] + (baseMatch[2] || "");
-        var path = baseMatch[3] || "/";
-        if (value.charAt(0) === "/") { path = value; }
-        else { path = path.substring(0, path.lastIndexOf("/") + 1) + value; }
-        match = /^([A-Za-z][A-Za-z0-9+.-]*:)(\/\/[^\/?#]*)?([^?#]*)(\?[^#]*)?(#.*)?$/.exec(origin + path);
-      }
+    var baseString = base === undefined || base === null ? "" : String(base);
+    var scheme = /^([A-Za-z][A-Za-z0-9+.-]*:)/.exec(value);
+    var protocolRelative = false;
+    if (!scheme && value.substring(0, 2) === "//") {
+      // Protocol-relative: inherit the base scheme but not its authority.
+      var baseScheme = /^([A-Za-z][A-Za-z0-9+.-]*:)/.exec(baseString);
+      if (!baseScheme) { throw new TypeError("Invalid URL: " + value); }
+      scheme = baseScheme;
+      protocolRelative = true;
     }
-    if (!match) { throw new TypeError("Invalid URL: " + value); }
-    var protocol = match[1];
-    var hostPart = match[2] || "";
-    var pathname = match[3] || "/";
-    var search = match[4] || "";
-    var hash = match[5] || "";
-    var hostname = hostPart.replace(/^\/\//, "");
-    var port = "";
-    var colon = hostname.lastIndexOf(":");
-    if (colon > 0) { port = hostname.substring(colon + 1); hostname = hostname.substring(0, colon); }
-    return {
-      href: protocol + hostPart + pathname + search + hash,
-      protocol: protocol, host: hostPart.replace(/^\/\//, ""), hostname: hostname, port: port,
-      pathname: pathname, search: search, hash: hash,
-      origin: protocol + hostPart
-    };
+    if (!scheme) {
+      if (!baseString) { throw new TypeError("Invalid URL: " + value); }
+      var resolvedBase = urlParse(baseString, null);
+      var path = resolvedBase.pathname;
+      var search = resolvedBase.search;
+      var hash = "";
+      var local = value;
+      var hashIndex = local.indexOf("#");
+      if (hashIndex >= 0) { hash = local.substring(hashIndex); local = local.substring(0, hashIndex); }
+      var localQuery = "";
+      var queryIndex = local.indexOf("?");
+      if (queryIndex >= 0) { localQuery = local.substring(queryIndex); local = local.substring(0, queryIndex); }
+      if (local === "") {
+        if (queryIndex >= 0) { search = localQuery; } else if (hashIndex < 0) { search = resolvedBase.search; }
+      } else if (local.charAt(0) === "/") {
+        path = local;
+        search = localQuery;
+      } else {
+        var slash = path.lastIndexOf("/");
+        path = (slash >= 0 ? path.substring(0, slash + 1) : "/") + local;
+        search = localQuery;
+      }
+      var baseUserinfo = resolvedBase.username
+        ? (resolvedBase.password ? resolvedBase.username + ":" + resolvedBase.password : resolvedBase.username)
+        : "";
+      return urlBuild(
+        resolvedBase.protocol, baseUserinfo, resolvedBase.hostname, resolvedBase.port, path, search, hash
+      );
+    }
+    var protocol = scheme[1];
+    var rest = protocolRelative ? value : value.substring(protocol.length);
+    var hashIndex2 = rest.indexOf("#");
+    var hash2 = "";
+    if (hashIndex2 >= 0) { hash2 = rest.substring(hashIndex2); rest = rest.substring(0, hashIndex2); }
+    var search2 = "";
+    var queryIndex2 = rest.indexOf("?");
+    if (queryIndex2 >= 0) { search2 = rest.substring(queryIndex2); rest = rest.substring(0, queryIndex2); }
+    var authority2 = "";
+    var path2 = rest;
+    if (rest.substring(0, 2) === "//") {
+      var afterSlashes = rest.substring(2);
+      var end = afterSlashes.length;
+      for (var i = 0; i < afterSlashes.length; i++) {
+        if (afterSlashes.charAt(i) === "/") { end = i; break; }
+      }
+      authority2 = afterSlashes.substring(0, end);
+      path2 = afterSlashes.substring(end);
+    }
+    var parts = urlSplitAuthority(authority2);
+    return urlBuild(protocol, parts.userinfo, parts.hostname, parts.port, path2, search2, hash2);
   }
   function SearchParams(init) {
     this._list = [];
@@ -4435,11 +4927,25 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       else { for (var key in init) { if (Object.prototype.hasOwnProperty.call(init, key)) { this.append(key, init[key]); } } }
     }
   }
+  // Header names/values are serialized as `name:value\n` lines for the native side, so a CR,
+  // LF or NUL inside either field would forge extra headers (or a colon inside the name would
+  // re-split it). Validate at the boundary, like the fetch spec's header-name/header-value
+  // grammar (#664).
+  function headerName(value) {
+    var name = String(value);
+    if (/[\r\n\0:]/.test(name)) { throw new TypeError("invalid header name"); }
+    return name;
+  }
+  function headerValue(value) {
+    var text = String(value);
+    if (/[\r\n\0]/.test(text)) { throw new TypeError("invalid header value"); }
+    return text;
+  }
   Headers.prototype._find = function (name) { var lower = String(name).toLowerCase(); for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { return i; } } return -1; };
   Headers.prototype.get = function (name) { var lower = String(name).toLowerCase(); var values = []; for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { values.push(this._h[i][1]); } } return values.length === 0 ? null : values.join(", "); };
   Headers.prototype.has = function (name) { return this._find(name) >= 0; };
-  Headers.prototype.append = function (name, value) { this._h.push([String(name), String(value)]); };
-  Headers.prototype.set = function (name, value) { var lower = String(name).toLowerCase(); var out = []; var found = false; for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { if (!found) { out.push([this._h[i][0], String(value)]); found = true; } } else { out.push(this._h[i]); } } if (!found) { out.push([String(name), String(value)]); } this._h = out; };
+  Headers.prototype.append = function (name, value) { this._h.push([headerName(name), headerValue(value)]); };
+  Headers.prototype.set = function (name, value) { var lower = headerName(name).toLowerCase(); var out = []; var found = false; for (var i = 0; i < this._h.length; i++) { if (this._h[i][0].toLowerCase() === lower) { if (!found) { out.push([this._h[i][0], headerValue(value)]); found = true; } } else { out.push(this._h[i]); } } if (!found) { out.push([headerName(name), headerValue(value)]); } this._h = out; };
   Headers.prototype["delete"] = function (name) { var lower = String(name).toLowerCase(); this._h = this._h.filter(function (pair) { return pair[0].toLowerCase() !== lower; }); };
   Headers.prototype.forEach = function (callback, thisArg) { for (var i = 0; i < this._h.length; i++) { callback.call(thisArg, this._h[i][1], this._h[i][0], this); } };
   Headers.prototype.entries = function () { return this._h.slice(); };
@@ -4590,7 +5096,7 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     });
   });
 })();
-"#;
+"####;
     let fetch_fn = FunctionObjectBuilder::new(context.realm(), native(fetch_native))
         .name(js_string!("__megi_fetch_native"))
         .length(4)
@@ -4753,6 +5259,14 @@ const MAX_WORKERS: usize = 8;
 const MAX_WORKER_MESSAGES: usize = 256;
 
 impl JsRuntime {
+    /// Sets the maximum number of live DOM nodes a script may grow the document to (#657).
+    ///
+    /// Script-driven arena growth (`cloneNode(true)` in a loop, parsed HTML setters) is rejected
+    /// with a `QuotaExceededError` once the document reaches the budget.
+    pub fn set_max_dom_nodes(&mut self, max_nodes: usize) {
+        self.host.borrow_mut().max_dom_nodes = max_nodes;
+    }
+
     /// Installs the `fetch()` provider (the host owns all network/filesystem I/O).
     /// Without a provider `fetch()` rejects with a typed error (documented).
     pub fn set_fetch_provider(&mut self, provider: crate::host::FetchProvider) {
@@ -4771,7 +5285,7 @@ impl JsRuntime {
         id: u32,
         outbox: Rc<RefCell<VecDeque<String>>>,
     ) -> Result<Self, JsError> {
-        let runtime = Self::new()?;
+        let runtime = Self::with_document_realm(Document::new(), "about:blank".to_string(), true)?;
         {
             let mut host = runtime.host.borrow_mut();
             host.worker_parent = Some(parent);
@@ -4802,9 +5316,8 @@ impl JsRuntime {
                     continue;
                 };
                 if worker.terminated {
-                    worker.to_worker.clear();
-                    worker.to_main.borrow_mut().clear();
-                    self.host.borrow_mut().workers[*id] = Some(worker);
+                    // Free the slot so a new worker can reuse it (#1138).
+                    self.host.borrow_mut().workers[*id] = None;
                     continue;
                 }
                 while let Some(json) = worker.to_worker.pop_front() {
@@ -4830,7 +5343,11 @@ impl JsRuntime {
                 if let Some(json) = reply {
                     progressed = true;
                     delivered += 1;
-                    self.deliver_worker_reply(*id as u32, &json)?;
+                    // One worker's failing delivery must not starve the remaining
+                    // workers in this pass (#1140).
+                    if let Err(error) = self.deliver_worker_reply(*id as u32, &json) {
+                        self.report_worker_delivery_error(error, "<worker message>");
+                    }
                 }
                 let error = self.host.borrow_mut().workers[*id]
                     .as_mut()
@@ -4838,7 +5355,9 @@ impl JsRuntime {
                 if let Some(message) = error {
                     progressed = true;
                     delivered += 1;
-                    self.deliver_worker_error(*id as u32, &message)?;
+                    if let Err(error) = self.deliver_worker_error(*id as u32, &message) {
+                        self.report_worker_delivery_error(error, "<worker error>");
+                    }
                 }
             }
             if !progressed {
@@ -4846,6 +5365,14 @@ impl JsRuntime {
             }
         }
         Ok(delivered)
+    }
+
+    /// Reports a worker-delivery failure like any other uncaught error so the pump can
+    /// continue with the other workers (#1140).
+    fn report_worker_delivery_error(&mut self, error: JsError, source: &str) {
+        let message = error.to_string();
+        let _scope = HostScope::enter(&self.host);
+        let _ = crate::events::report_uncaught(&mut self.context, &message, source);
     }
 
     fn deliver_worker_reply(&mut self, id: u32, json: &str) -> Result<(), JsError> {
@@ -5091,11 +5618,8 @@ fn worker_post_message(
 fn worker_terminate(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let id = worker_handle(this, context)?;
     with_host(|host| {
-        if let Some(Some(worker)) = host.workers.get_mut(id as usize) {
-            worker.terminated = true;
-            worker.to_worker.clear();
-            worker.to_main.borrow_mut().clear();
-        }
+        // Free the slot so a new worker can reuse it (#1138).
+        host.workers[id as usize] = None;
     });
     Ok(JsValue::undefined())
 }
@@ -5222,7 +5746,7 @@ impl JsRuntime {
             .map_err(|error| JsError::Internal(error.to_string()))?;
         let prelude = r#"
 var __megi_worker_listeners = [];
-function addEventListener(type, callback) { if (type === "message" && typeof callback === "function") { __megi_worker_listeners.push(callback); } }
+function addEventListener(type, callback) { if (type === "message" && typeof callback === "function" && __megi_worker_listeners.length < 64) { __megi_worker_listeners.push(callback); } }
 function removeEventListener() {}
 "#;
         self.context
@@ -5262,6 +5786,11 @@ fn worker_self_post_message(
 // ---------------------------------------------------------------------------
 
 const MAX_FETCH_HEADERS: usize = 64;
+
+/// Per-entry cap for `history.pushState`/`replaceState` state, matching the Web Storage quota.
+/// The JSON snapshot is kept in Rust (`host.history_state`), rooted as a JS value and copied to
+/// the host provider, so an unbounded state is unbounded retention (#663).
+const MAX_HISTORY_STATE_BYTES: usize = 1024 * 1024;
 const MAX_FETCH_BODY: usize = 8 * 1024 * 1024;
 
 /// Request headers the browser owns; page scripts must not set them through `fetch()`.
@@ -5406,17 +5935,14 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
             .map_err(|error| js_error(error.to_string()))?;
     }
     let body_text = String::from_utf8_lossy(&result.body).to_string();
-    let body_bytes = JsArray::from_iter([], context);
-    for (index, byte) in result.body.iter().enumerate() {
-        body_bytes
-            .set(
-                js_string!(index.to_string()),
-                JsValue::from(f64::from(*byte)),
-                false,
-                context,
-            )
-            .map_err(|error| js_error(error.to_string()))?;
-    }
+    // Expose the body as a packed Uint8Array backed by a single byte block. The old
+    // per-byte JsArray allocated ~8M JsValues and did 8M property sets at the
+    // MAX_FETCH_BODY cap, from untrusted network input (#1143).
+    let block = AlignedVec::from_iter(0, result.body.iter().copied());
+    let buffer = JsArrayBuffer::from_byte_block(block, context)
+        .map_err(|error| js_error(error.to_string()))?;
+    let body_bytes = JsUint8Array::from_array_buffer(buffer, context)
+        .map_err(|error| js_error(error.to_string()))?;
     let mut init = ObjectInitializer::new(context);
     init.property(
         js_string!("status"),
@@ -5465,6 +5991,7 @@ struct MegiModuleLoader {
     host: Rc<RefCell<Option<Rc<RefCell<Host>>>>>,
     base_url: String,
     cache: RefCell<HashMap<(String, String), Module>>,
+    max_cache_entries: usize,
 }
 
 impl ModuleLoader for MegiModuleLoader {
@@ -5518,9 +6045,13 @@ impl ModuleLoader for MegiModuleLoader {
                         None,
                         &mut context,
                     )?;
-                    self.cache
-                        .borrow_mut()
-                        .insert((base, specifier), module.clone());
+                    {
+                        let mut cache = self.cache.borrow_mut();
+                        if cache.len() >= self.max_cache_entries {
+                            cache.clear();
+                        }
+                        cache.insert((base, specifier), module.clone());
+                    }
                     return Ok(module);
                 }
                 None => {
@@ -5554,9 +6085,13 @@ impl ModuleLoader for MegiModuleLoader {
             None,
             &mut context,
         )?;
-        self.cache
-            .borrow_mut()
-            .insert((base, specifier), module.clone());
+        {
+            let mut cache = self.cache.borrow_mut();
+            if cache.len() >= self.max_cache_entries {
+                cache.clear();
+            }
+            cache.insert((base, specifier), module.clone());
+        }
         Ok(module)
     }
 
@@ -5845,10 +6380,7 @@ fn node_selected_index_set(
 
 fn class_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let (_, classes) = classes_of(this, context)?;
-    let index = args
-        .first()
-        .and_then(|value| value.to_number(context).ok())
-        .unwrap_or(0.0) as usize;
+    let index = crate::events::webidl_uint32_index(args, context);
     Ok(classes.get(index).map_or_else(JsValue::null, |value| {
         JsValue::from(js_string!(value.clone()))
     }))
@@ -5884,12 +6416,13 @@ fn node_remove_attribute_node(
         .first()
         .and_then(|value| value.as_object())
         .ok_or_else(|| js_error("removeAttributeNode expects an Attr"))?;
-    let name = item
+    let raw_name = item
         .get(js_string!("name"), context)
         .map_err(|error| js_error(error.to_string()))?
         .to_string(context)
         .map(|value| value.to_std_string_escaped())
         .unwrap_or_default();
+    let name = attribute_name(node_id, &raw_name);
     let old = with_host(|host| {
         host.document
             .try_node_mut(node_id)
@@ -5898,7 +6431,17 @@ fn node_remove_attribute_node(
     })
     .flatten();
     match old {
-        Some(value) => attribute_item(context, &name, &value),
+        Some(value) => {
+            // The other attribute-removal paths record a mutation; removeAttributeNode
+            // must too, otherwise observers watching `attributes` miss the removal (#1137).
+            note_mutation(
+                MutationKind::Attributes,
+                node_id,
+                Some(name.clone()),
+                Some(value.clone()),
+            );
+            attribute_item(context, &name, &value)
+        }
         None => Ok(JsValue::null()),
     }
 }
@@ -5931,6 +6474,27 @@ mod document_write_budget_tests {
                 entry.level == "warn" && entry.message.contains("document.write ignored")
             }),
             "the exceeded budget must be reported: {console:?}"
+        );
+    }
+
+    #[test]
+    fn document_write_reports_parser_limit_violations() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime.host.borrow_mut().max_document_write_nodes = 64;
+        runtime
+            .eval(
+                "document.write('<i></i>'.repeat(100));",
+                "nodes_violation.js",
+            )
+            .expect("write");
+        let console = runtime.take_console();
+        assert!(
+            console.iter().any(|entry| {
+                entry.level == "warn"
+                    && entry.message.contains("parse limit violation")
+                    && entry.message.contains("node(s)")
+            }),
+            "parser truncation must be visible to script: {console:?}"
         );
     }
 }
@@ -6006,5 +6570,392 @@ mod markup_parse_budget_tests {
             .filter(|entry| entry.message.contains("innerHTML assignment ignored"))
             .count();
         assert_eq!(warnings, 1, "reported once: {console:?}");
+    }
+}
+
+#[cfg(test)]
+mod mutation_observer_delivery_tests {
+    use super::*;
+
+    #[test]
+    fn mutation_observer_records_markup_insert_normalize_and_does_not_starve_siblings() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                var box = document.createElement('div');
+                document.body.appendChild(box);
+                var seenA = 0;
+                var seenB = 0;
+                var obsA = new MutationObserver(function(records) { seenA += records.length; });
+                var obsB = new MutationObserver(function(records) { seenB += records.length; });
+                obsA.observe(document.body, { childList: true, subtree: true });
+                obsB.observe(document.body, { childList: true, subtree: true });
+
+                box.innerHTML = '<span>hi</span>';
+                box.firstChild.outerHTML = '<b>there</b>';
+                box.insertAdjacentHTML('beforeend', '<i>!</i>');
+                box.insertAdjacentText('afterbegin', 'pre');
+                box.appendChild(document.createTextNode('a'));
+                box.appendChild(document.createTextNode('b'));
+                box.normalize();
+                document.write('<p>written</p>');
+
+                var takenA = obsA.takeRecords();
+                var takenB = obsB.takeRecords();
+                console.log('counts:' + takenA.length + ':' + takenB.length + ':' + seenA + ':' + seenB);
+                "#,
+                "observer.js",
+            )
+            .expect("eval observer script");
+        let console = runtime.take_console();
+        let line = console
+            .iter()
+            .find(|entry| entry.message.starts_with("counts:"))
+            .expect("counts log");
+        // All 7 mutations (innerHTML, outerHTML, insertAdjacentHTML, insertAdjacentText,
+        // 2x appendChild, normalize, document.write = 8 mutations) must be seen by BOTH observers.
+        assert_eq!(
+            line.message, "counts:8:8:0:0",
+            "both sibling observers must receive all 8 records without starvation: {console:?}"
+        );
+    }
+
+    #[test]
+    fn document_normalize_emits_child_list_record_when_nodes_are_merged() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                var count = 0;
+                var obs = new MutationObserver(function(records) { count += records.length; });
+                obs.observe(document.documentElement, { childList: true, subtree: true });
+                document.body.appendChild(document.createTextNode('x'));
+                document.body.appendChild(document.createTextNode('y'));
+                obs.takeRecords();
+                document.normalize();
+                var after = obs.takeRecords().length;
+                console.log('norm:' + after + ':' + count);
+                "#,
+                "norm.js",
+            )
+            .expect("eval normalize script");
+        let console = runtime.take_console();
+        let line = console
+            .iter()
+            .find(|entry| entry.message.starts_with("norm:"))
+            .expect("norm log");
+        assert_eq!(line.message, "norm:1:0");
+    }
+
+    #[test]
+    fn mutation_observer_can_be_rearmed_after_disconnect() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                var target = document.createElement('div');
+                document.body.appendChild(target);
+                var obs = new MutationObserver(function() {});
+                obs.observe(target, { attributes: true });
+                target.setAttribute('a', '1');
+                var before = obs.takeRecords().length;
+                obs.disconnect();
+                target.setAttribute('a', '2');
+                var while_disconnected = obs.takeRecords().length;
+                obs.observe(target, { attributes: true });
+                target.setAttribute('a', '3');
+                var after = obs.takeRecords().length;
+                console.log('rearm:' + before + ':' + while_disconnected + ':' + after);
+                "#,
+                "observer_rearm.js",
+            )
+            .expect("eval observer rearm script");
+        let console = runtime.take_console();
+        let line = console
+            .iter()
+            .find(|entry| entry.message.starts_with("rearm:"))
+            .expect("rearm log");
+        assert_eq!(
+            line.message, "rearm:1:0:1",
+            "disconnect() must drop pending records and leave the observer re-armable (#1135): {console:?}"
+        );
+    }
+
+    #[test]
+    fn remove_attribute_node_records_an_attributes_mutation() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                var el = document.createElement('div');
+                document.body.appendChild(el);
+                el.setAttribute('data-x', '1');
+                var attr = el.getAttributeNode('data-x');
+                var obs = new MutationObserver(function() {});
+                obs.observe(el, { attributes: true });
+                el.removeAttributeNode(attr);
+                var records = obs.takeRecords();
+                console.log('attrnode:' + records.length + ':' + (records.length ? records[0].attributeName : '-'));
+                "#,
+                "observer_attrnode.js",
+            )
+            .expect("eval removeAttributeNode script");
+        let console = runtime.take_console();
+        let line = console
+            .iter()
+            .find(|entry| entry.message.starts_with("attrnode:"))
+            .expect("attrnode log");
+        assert_eq!(
+            line.message, "attrnode:1:data-x",
+            "removeAttributeNode must deliver an attributes record with its name (#1137): {console:?}"
+        );
+    }
+
+    #[test]
+    fn failing_worker_reply_does_not_starve_other_workers() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime.set_worker_loader(Box::new(|url| {
+            if url.ends_with("worker.js") {
+                Ok("onmessage = function(e) { postMessage(e.data); };".to_string())
+            } else {
+                Err(crate::JsError::Runtime("not found".to_string()))
+            }
+        }));
+        runtime
+            .eval(
+                "window.__a = null; window.__b = null;
+                 var wa = new Worker('worker.js'); wa.onmessage = function(e) { __a = e.data; };
+                 var wb = new Worker('worker.js'); wb.onmessage = function(e) { __b = e.data; };
+                 wa.postMessage(1); wb.postMessage(2);",
+                "workers.js",
+            )
+            .expect("eval workers script");
+        // Make worker A's queued reply undeliverable (malformed JSON).
+        {
+            let host = runtime.host.borrow();
+            let worker_a = host.workers[0].as_ref().expect("worker A");
+            worker_a
+                .to_main
+                .borrow_mut()
+                .push_front("not json".to_string());
+        }
+        // Before the fix this aborted on worker A, so worker B never received its reply.
+        runtime
+            .run_worker_tasks(16)
+            .expect("worker pump must not abort");
+        assert_eq!(runtime.eval("__b", "check.js").unwrap(), "2");
+        assert!(
+            runtime
+                .take_console()
+                .iter()
+                .any(|entry| entry.level == "error"),
+            "the failed delivery must be reported"
+        );
+    }
+
+    #[test]
+    fn mutation_observer_registrations_are_capped() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        let script = format!(
+            r#"
+            for (var i = 0; i < {MAX_OBSERVERS}; i++) {{
+                new MutationObserver(function() {{}});
+            }}
+            console.log('cap-ok');
+            try {{
+                new MutationObserver(function() {{}});
+                console.log('cap-fail');
+            }} catch (e) {{
+                console.log('cap-caught');
+            }}
+            "#
+        );
+        runtime
+            .eval(&script, "observer_cap.js")
+            .expect("eval cap script");
+        let console = runtime.take_console();
+        let messages: Vec<&str> = console.iter().map(|entry| entry.message.as_str()).collect();
+        assert!(messages.contains(&"cap-ok"), "{console:?}");
+        assert!(messages.contains(&"cap-caught"), "{console:?}");
+        assert!(!messages.contains(&"cap-fail"), "{console:?}");
+    }
+
+    #[test]
+    fn throwing_observer_callback_does_not_starve_other_observers() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                var el = document.createElement('div');
+                document.body.appendChild(el);
+                var seen = 0;
+                var bad = new MutationObserver(function() { throw new Error('boom'); });
+                var good = new MutationObserver(function(records) { seen += records.length; });
+                bad.observe(el, { childList: true });
+                good.observe(el, { childList: true });
+                el.appendChild(document.createTextNode('x'));
+                "#,
+                "observer_throw.js",
+            )
+            .expect("eval observer throw script");
+        // A callback throwing must be reported, not abort the delivery pass.
+        runtime.run_microtasks().expect("microtask delivery");
+        runtime
+            .eval(
+                "console.log('throwisolate:' + seen);",
+                "observer_throw_check.js",
+            )
+            .expect("eval check script");
+        let console = runtime.take_console();
+        let line = console
+            .iter()
+            .find(|entry| entry.message.starts_with("throwisolate:"))
+            .expect("throwisolate log");
+        assert_eq!(
+            line.message, "throwisolate:1",
+            "the healthy observer must still receive its records (#1136): {console:?}"
+        );
+        assert!(
+            console
+                .iter()
+                .any(|entry| entry.level == "error" && entry.message.contains("boom")),
+            "the thrown exception must be reported as uncaught: {console:?}"
+        );
+    }
+
+    #[test]
+    fn mutation_observer_cap_prevents_unbounded_js_root_growth() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        let summary = runtime
+            .eval(
+                r#"
+                var ok = 0;
+                for (var i = 0; i < 1024; i++) {
+                    new MutationObserver(function() {});
+                    ok++;
+                }
+                var errName = '';
+                try {
+                    new MutationObserver(function() {});
+                } catch (e) {
+                    errName = e.name;
+                }
+                ok + ':' + errName + ':' + __megi_observer_callbacks.length + ':' + __megi_observer_objects.length
+                "#,
+                "observer_cap.js",
+            )
+            .expect("eval cap script");
+        assert_eq!(summary, "1024:RangeError:1024:1024");
+        assert_eq!(runtime.host.borrow().observers.len(), MAX_OBSERVERS);
+    }
+
+    #[test]
+    fn attribute_old_value_and_remove_attribute_node_respect_option_and_case() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        let result = runtime
+            .eval(
+                r#"
+                var el = document.createElement('div');
+                document.body.appendChild(el);
+                var withOld = new MutationObserver(function() {});
+                var withoutOld = new MutationObserver(function() {});
+                withOld.observe(el, { attributeOldValue: true });
+                withoutOld.observe(el, { attributes: true });
+
+                el.setAttribute('DATA-X', 'v1');
+                el.setAttribute('data-x', 'v2');
+                el.removeAttributeNode({ name: 'DATA-X' });
+
+                var a = withOld.takeRecords();
+                var b = withoutOld.takeRecords();
+                [
+                    a.length,
+                    a[0].attributeName + '=' + String(a[0].oldValue),
+                    a[1].attributeName + '=' + a[1].oldValue,
+                    a[2].attributeName + '=' + a[2].oldValue,
+                    b.length,
+                    String(b[1].oldValue),
+                    String(b[2].oldValue)
+                ].join('|')
+                "#,
+                "observer_old_value.js",
+            )
+            .expect("eval oldValue script");
+        assert_eq!(result, "3|data-x=null|data-x=v1|data-x=v2|3|null|null");
+    }
+
+    #[test]
+    fn throwing_observer_hits_onerror_and_budget_error_propagates() {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime
+            .eval(
+                r#"
+                window.__onerror_msgs = [];
+                window.onerror = function(msg) { window.__onerror_msgs.push(msg); };
+                var el = document.createElement('div');
+                document.body.appendChild(el);
+                var obs = new MutationObserver(function() { throw new Error('cb_fail'); });
+                obs.observe(el, { childList: true });
+                el.appendChild(document.createTextNode('a'));
+                "#,
+                "onerror_obs.js",
+            )
+            .expect("eval");
+        runtime.run_microtasks().expect("microtasks");
+        assert_eq!(
+            runtime
+                .eval("window.__onerror_msgs.length", "check")
+                .unwrap(),
+            "1"
+        );
+
+        let budget = Budget {
+            loop_iterations: 500,
+            ..Budget::default()
+        };
+        let mut budgeted = JsRuntime::new().expect("runtime");
+        budgeted.set_budget(budget);
+        budgeted
+            .eval(
+                r#"
+                var el = document.createElement('div');
+                document.body.appendChild(el);
+                var obs = new MutationObserver(function() {
+                    while (true) {}
+                });
+                obs.observe(el, { childList: true });
+                el.appendChild(document.createTextNode('b'));
+                "#,
+                "budget_obs.js",
+            )
+            .expect("setup mutation");
+        let err = budgeted
+            .run_microtasks()
+            .expect_err("budget error in MutationObserver callback must propagate");
+        assert!(
+            matches!(err, JsError::Budget(_)),
+            "expected JsError::Budget, got {err:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod module_scan_tests {
+    use super::*;
+
+    #[test]
+    fn await_in_strings_and_comments_is_not_top_level_await() {
+        assert!(module_has_top_level_await("await Promise.resolve(1);"));
+        assert!(!module_has_top_level_await(
+            "var s = 'await Promise.resolve(1)';"
+        ));
+        assert!(!module_has_top_level_await(
+            "// await Promise.resolve(1)\nvar x = 1;"
+        ));
+        assert!(!module_has_top_level_await(
+            "/* = await foo(); */ var x = 1;"
+        ));
+        assert!(!module_has_top_level_await("var s = `= await foo()`;"));
     }
 }

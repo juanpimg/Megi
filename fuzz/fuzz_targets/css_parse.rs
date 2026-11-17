@@ -24,4 +24,18 @@ fuzz_target!(|data: &[u8]| {
 
     let tokens = css::tokenize(&text);
     let _ = tokens.len();
+
+    // Exercise cascade, calc(), var(), and color resolution on a tiny DOM (#858).
+    let mut doc = dom::Document::new();
+    let html = doc.create_element(dom::Namespace::Html, "html", vec![]);
+    let body = doc.create_element(dom::Namespace::Html, "body", vec![]);
+    let div = doc.create_element(
+        dom::Namespace::Html,
+        "div",
+        vec![dom::Attribute::new("id", "main")],
+    );
+    doc.append_child(doc.root(), html);
+    doc.append_child(html, body);
+    doc.append_child(body, div);
+    let _ = css::resolve_document_styles_with_viewport(&doc, Some(&text), 800.0, 600.0);
 });
