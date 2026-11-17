@@ -358,7 +358,6 @@ fn placement_request(
         && request.column_start.is_none()
         && let Some(name) = style.grid_area.as_ref()
     {
-        let lower = name.to_ascii_lowercase();
         if let Some((row_start, row_end)) = names.row_areas.get(name)
             && let Some((column_start, column_end)) = names.column_areas.get(name)
         {
