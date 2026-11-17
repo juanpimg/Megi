@@ -4308,7 +4308,6 @@ mod paint_budget_tests {
 }
 
 #[cfg(test)]
-<<<<<<< HEAD
 mod geometry_sanity_tests {
     use super::*;
 
@@ -4316,22 +4315,10 @@ mod geometry_sanity_tests {
         css::Radius {
             x: css::Length::Px(px),
             y: css::Length::Px(px),
-=======
-mod shadow_budget_tests {
-    use super::*;
-
-    fn empty_budget() -> PaintBudget {
-        PaintBudget {
-            depth: 0,
-            pixels: 0,
-            flatten: false,
-            flatten_depth: 0,
->>>>>>> fb4dc57 (fix(paint): charge shadow scratch memory to the paint budget (#1415))
         }
     }
 
     #[test]
-<<<<<<< HEAD
     fn asymmetric_corner_uses_its_own_centre() {
         let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
         let corners = [(10.0, 10.0), (10.0, 10.0), (10.0, 10.0), (40.0, 40.0)];
@@ -4396,7 +4383,22 @@ mod glyph_origin_overflow_tests {
         let clamped = (i64::from(origin) - 1_i64).clamp(i64::from(i32::MIN), i64::from(i32::MAX));
         assert_eq!(clamped, i64::from(i32::MIN));
     }
-=======
+}
+
+#[cfg(test)]
+mod shadow_budget_tests {
+    use super::*;
+
+    fn empty_budget() -> PaintBudget {
+        PaintBudget {
+            depth: 0,
+            pixels: 0,
+            flatten: false,
+            flatten_depth: 0,
+        }
+    }
+
+    #[test]
     fn a_shadow_charges_its_scratch_until_the_permit_drops() {
         let mut budget = empty_budget();
         let charged = {
@@ -4414,7 +4416,6 @@ mod glyph_origin_overflow_tests {
             budget.reserve_shadow(MAX_OFFSCREEN_PIXELS).is_none(),
             "a shadow whose scratch exceeds the whole pass must be refused"
         );
-        // One pixel short of the cap: the scratch no longer fits.
         budget.pixels = MAX_OFFSCREEN_PIXELS - 1;
         assert!(budget.reserve_shadow(1).is_none());
         budget.pixels = 0;
@@ -4424,5 +4425,4 @@ mod glyph_origin_overflow_tests {
             "a shadow that exactly fills the cap is accepted"
         );
     }
->>>>>>> fb4dc57 (fix(paint): charge shadow scratch memory to the paint budget (#1415))
 }
