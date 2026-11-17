@@ -285,8 +285,8 @@ fn git_dirty(root: &Path) -> Option<bool> {
         .args(["status", "--porcelain"])
         .output()
         .ok()
+        .filter(|output| output.status.success())
         .map(|output| !output.stdout.is_empty())
-        .or(Some(false))
 }
 
 /// Version banner of the compiler that built this binary (captured at build time,
