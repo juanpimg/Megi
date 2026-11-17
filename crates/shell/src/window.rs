@@ -2495,13 +2495,10 @@ mod form_patch_send_tests {
         assert_eq!(error.as_deref(), Some("render worker stopped unexpectedly"));
         assert!(!committed);
 
-        let mut committed_ok = false;
         let send_ok: Result<(), ()> = Ok(());
         if send_ok.is_err() {
             panic!("a successful send must not report an error");
-        } else {
-            committed_ok = true;
         }
-        assert!(committed_ok);
+        assert!(send_ok.is_ok());
     }
 }
