@@ -885,7 +885,9 @@ fn blur_pass(pixels: &mut [u8], width: usize, height: usize, radius: u32, horizo
             };
             let pixel = (y * width + x) * 4;
             for channel in 0..4 {
-                temp[pixel + channel] = (accum[channel] / window) as u8;
+                // Round to nearest: three passes each way would otherwise
+                // truncate up to six times and bias blurred layers darker (#1442).
+                temp[pixel + channel] = ((accum[channel] + window / 2) / window) as u8;
             }
             let remove = clamp(offset as isize - radius);
             let add = clamp(offset as isize + radius + 1);
@@ -2031,6 +2033,21 @@ mod tests {
             height,
             pixels: vec![0; width * height * 4],
             coverage: vec![0.0; width * height],
+        }
+    }
+
+    #[test]
+    fn box_blur_preserves_a_constant_color() {
+        // Rounding each pass to nearest (instead of truncating) keeps a flat
+        // layer unchanged across all six passes (#1442).
+        let (width, height) = (8usize, 8usize);
+        let mut pixels = vec![0u8; width * height * 4];
+        for pixel in pixels.as_chunks_mut::<4>().0 {
+            *pixel = [100, 150, 200, 255];
+        }
+        box_blur(&mut pixels, width, height, 2.0);
+        for pixel in pixels.as_chunks::<4>().0 {
+            assert_eq!(pixel, &[100, 150, 200, 255]);
         }
     }
 
