@@ -162,7 +162,11 @@ def count_tests(
             print("warning: `cargo test --workspace -- --list` returned no tests; using manifest value", file=sys.stderr)
             return manifest_tests, False
         return count, True
-    if cache_path.is_file():
+    # A cached count is only valid for a clean tree at this HEAD (#1394): an
+    # uncommitted test addition/removal would otherwise be stamped with a count
+    # that never existed on any pushed commit.
+    tree_dirty = bool(run(root, ["git", "status", "--porcelain"]).stdout.strip())
+    if cache_path.is_file() and not tree_dirty:
         try:
             cache = json.loads(cache_path.read_text(encoding="utf-8"))
             if cache.get("head") == head and isinstance(cache.get("tests"), int):

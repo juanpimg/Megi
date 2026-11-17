@@ -452,7 +452,7 @@ crates/shell/src/scroll.rs	249	src	F2	wave1	2026-11-16	covered	#1163-#1178
 crates/shell/src/session.rs	1445	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/tabs.rs	473	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/title.rs	370	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/window.rs	2733	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/window.rs	2752	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/worker.rs	1019	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/zoom.rs	268	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/tests/fixtures/links.html	10	test	F1	waveF1	2026-11-17	covered	#1379	
@@ -1093,9 +1093,9 @@ tools/audit_coverage.py	405	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	writte
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	197	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/check_docs_links.py	132	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/check_docs_links.py	140	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/coverage_report.py	127	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/dev.sh	56	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/dev.sh	58	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/megi.sh	73	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/real_site_check.py	240	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -1106,7 +1106,7 @@ tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_real_site_check.py	89	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_update_coverage.py	400	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/update_coverage.py	563	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/update_progress.py	781	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/update_coverage.py	555	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/update_progress.py	785	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/whatwg_spec.py	296	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
