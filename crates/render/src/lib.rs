@@ -1084,6 +1084,9 @@ fn render_url_inner(
     let backgrounds_time = backgrounds_start.elapsed();
 
     let layout_start = Instant::now();
+    // Mix font identities (not just the count) so a caller-shared cache cannot reuse
+    // metrics computed with a different font file (#1218).
+    let font_digest = loaded_webfonts.database.identity_digest();
     let measurer = layout::FontTextMeasurer::from_database(loaded_webfonts.database);
     let viewport = layout::Rect::new(
         0.0,
@@ -1099,7 +1102,7 @@ fn render_url_inner(
                 viewport,
                 &measurer,
                 &loaded_images.sizes,
-                loaded_webfonts.loaded,
+                font_digest,
             )
             .ok_or(RenderError::LayoutFailed)?
     } else {

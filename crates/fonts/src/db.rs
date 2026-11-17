@@ -301,6 +301,38 @@ pub fn parse_font_families(font_family: &str) -> Vec<String> {
 }
 
 impl FontDatabase {
+    /// Deterministic digest of all loaded faces (identities plus face bytes). Used by the
+    /// render layout cache to avoid reusing metrics computed with different fonts (#1218).
+    pub fn identity_digest(&self) -> u64 {
+        let mut hash = 0xcbf2_9ce4_8422_2325u64;
+        let mut mix = |value: u64| {
+            hash ^= value;
+            hash = hash.wrapping_mul(0x1000_0000_01b3);
+        };
+        mix(self.order.len() as u64);
+        for id in &self.order {
+            if let Some(face) = self.db.face(*id) {
+                for byte in face.post_script_name.as_bytes() {
+                    mix(u64::from(*byte));
+                }
+                for (name, _) in &face.families {
+                    for byte in name.as_bytes() {
+                        mix(u64::from(*byte));
+                    }
+                }
+                mix(face.weight.0 as u64);
+                mix((face.style as u8) as u64);
+                mix((face.stretch as u8) as u64);
+            }
+            if let Ok(data) = self.face_data(*id) {
+                for byte in data.iter() {
+                    mix(u64::from(*byte));
+                }
+            }
+        }
+        hash
+    }
+
     /// Loads the deterministic bundled fonts (DejaVu Sans regular + bold) from
     /// `assets/` via `include_bytes!`.
     ///
@@ -1200,6 +1232,25 @@ mod quoted_family_tests {
                 .iter()
                 .any(|family| matches!(family, Family::Name(name) if *name == "serif")),
             "quoted serif must be looked up as a literal family name"
+        );
+    }
+}
+
+#[cfg(test)]
+mod identity_digest_tests {
+    use super::*;
+
+    #[test]
+    fn digest_changes_with_face_identity_not_just_count() {
+        let mut a = FontDatabase::new();
+        let mut b = FontDatabase::new();
+        a.load_font_data(BUNDLED_FONTS[0].1.to_vec()).expect("regular");
+        b.load_font_data(BUNDLED_FONTS[1].1.to_vec()).expect("bold");
+        assert_eq!(a.order.len(), b.order.len(), "same number of faces");
+        assert_ne!(
+            a.identity_digest(),
+            b.identity_digest(),
+            "different faces with the same count must have different digests (#1218)"
         );
     }
 }

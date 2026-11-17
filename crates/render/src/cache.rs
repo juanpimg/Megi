@@ -75,9 +75,9 @@ impl RenderCache {
         viewport: Rect,
         measurer: &dyn TextMeasurer,
         replaced_sizes: &HashMap<NodeId, (f32, f32)>,
-        font_count: usize,
+        font_digest: u64,
     ) -> Option<(LayoutBox, bool)> {
-        let fp = layout_fingerprint(document, styles, viewport, replaced_sizes, font_count);
+        let fp = layout_fingerprint(document, styles, viewport, replaced_sizes, font_digest);
         if let Some(pos) = self.layout_entries.iter().position(|(k, _)| *k == fp) {
             self.stats.layout_hits += 1;
             let entry = self.layout_entries.remove(pos);
@@ -124,20 +124,20 @@ fn mix_str(hash: &mut u64, s: &str) {
 }
 
 /// Computes a deterministic 64-bit fingerprint over the DOM, computed styles, viewport,
-/// replaced image intrinsic sizes, and loaded font count.
+/// replaced image intrinsic sizes, and the loaded font identity digest (#1218).
 pub fn layout_fingerprint(
     document: &Document,
     styles: &HashMap<NodeId, ComputedStyle>,
     viewport: Rect,
     replaced_sizes: &HashMap<NodeId, (f32, f32)>,
-    font_count: usize,
+    font_digest: u64,
 ) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325u64;
     mix_u64(&mut hash, u64::from(viewport.x.to_bits()));
     mix_u64(&mut hash, u64::from(viewport.y.to_bits()));
     mix_u64(&mut hash, u64::from(viewport.width.to_bits()));
     mix_u64(&mut hash, u64::from(viewport.height.to_bits()));
-    mix_u64(&mut hash, font_count as u64);
+    mix_u64(&mut hash, font_digest);
 
     let mut stack = vec![document.root()];
     while let Some(id) = stack.pop() {
@@ -202,6 +202,17 @@ pub fn layout_fingerprint(
 #[cfg(test)]
 mod cache_tests {
     use super::*;
+
+    #[test]
+    fn layout_fingerprint_includes_font_identity() {
+        let document = dom::Document::new();
+        let styles = HashMap::new();
+        let viewport = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let sizes = HashMap::new();
+        let a = layout_fingerprint(&document, &styles, viewport, &sizes, 1);
+        let b = layout_fingerprint(&document, &styles, viewport, &sizes, 2);
+        assert_ne!(a, b, "different font identities must change the layout key (#1218)");
+    }
 
     #[test]
     fn css_cache_compares_exact_source_on_hash_collision() {
