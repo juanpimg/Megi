@@ -1622,3 +1622,33 @@ mod storage_origin_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod layout_provider_freshness_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn layout_provider_is_not_frozen_after_the_first_query() {
+        // Mirrors the new provider wrapper: every query re-invokes the underlying
+        // provider instead of caching the first result forever (#1470).
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&calls);
+        let provider = move || {
+            counter.fetch_add(1, Ordering::SeqCst);
+            let mut rects = std::collections::HashMap::new();
+            rects.insert(
+                dom::NodeId::from_index(1),
+                js::host::LayoutRect {
+                    border_box: (0.0, 0.0, 10.0, 10.0),
+                    content_box: (0.0, 0.0, 10.0, 10.0),
+                },
+            );
+            rects
+        };
+        let node = dom::NodeId::from_index(1);
+        let _ = provider().get(&node).copied();
+        let _ = provider().get(&node).copied();
+        assert_eq!(calls.load(Ordering::SeqCst), 2, "provider must be re-evaluated");
+    }
+}
