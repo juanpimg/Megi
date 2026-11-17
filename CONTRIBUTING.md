@@ -70,8 +70,8 @@ crates/
 ├── image/         # Decoder PNG + inflate zlib/DEFLATE propios (std puro, sin deps).
 ├── svg/           # SVG desde cero (Fase 4): parser XML subset + modelo SVG + path/arcos + rasterizador AA, **CSS interno, gradientes, `<pattern>` y `<text>`** (rondas 16-17); `std` + `image` + `fonts`; cableado E2E en render; 73 tests.
 ├── render/        # Pipeline de navegador (Fase 5/6): URL → net → HTML → CSS externo → layout → PNG (+ <img>, backgrounds geometry/SVG inline, scripts, event loop determinista por reloj virtual, hit_regions, cookies/CORS/gzip y webfonts).
-├── js/            # JS (Fase 6, WP-A/B/6.4 + eventos avanzados): Boa 0.22.x + bindings DOM + EventTarget/timers con currentTarget/eventPhase/once/passive/onclick + CSSOM/NodeList/identidad; consumido por render y por el harness; 71 tests.
-├── shell/         # Ventana (Fase 7): winit+softbuffer, scroll/entrada/HiDPI, worker, navegación/historial/título con hit_regions/find_link_at, zoom, auto-refresh opt-in, formularios editables, find-in-page, pestañas y chrome (address bar/tab strip/select); screenshot headless. [Depende de render/paint/net]; 160 tests.
+├── js/            # JS (Fase 6, WP-A/B/6.4 + eventos avanzados): Boa 0.22.x + bindings DOM + EventTarget/timers con currentTarget/eventPhase/once/passive/onclick + CSSOM/NodeList/identidad; consumido por render y por el harness (recuento actual en `docs/status/badge-tests.svg`).
+├── shell/         # Ventana (Fase 7): winit+softbuffer, scroll/entrada/HiDPI, worker, navegación/historial/título con hit_regions/find_link_at, zoom, auto-refresh opt-in, formularios editables, find-in-page, pestañas y chrome (address bar/tab strip/select); screenshot headless. [Depende de render/paint/net] (recuento actual en `docs/status/badge-tests.svg`).
 ├── bench/         # Benchmarks reproducibles (parseo, estilos, layout, paint, PNG). [Solo crates internos]
 └── test_harness/  # Gate de conformidad: tokenizer, árbol 3.904/3.904 (sin allowlist), serializer y CSS Syntax; ejecuta los scripts del corpus vía js (WP-6.4).
 ```
@@ -183,7 +183,7 @@ cargo fmt
 ./tools/dev.sh all
 
 # Comprobaciones individuales útiles
-cargo test --workspace                         # 1986 tests (con JS por defecto)
+cargo test --workspace                         # suite completa (con JS por defecto; recuento en docs/status/badge-tests.svg)
 cargo test -p js --no-default-features         # stub del motor sin Boa (CI)
 cargo test -p render --no-default-features     # render sin scripts (CI)
 cargo +1.91 check --workspace --all-targets
