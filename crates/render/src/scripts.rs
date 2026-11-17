@@ -975,6 +975,7 @@ pub fn execute_scripts(
     {
         let shared_for_load = host.storage.clone();
         let shared_for_save = host.storage.clone();
+        let origin_key_for_save = origin_key.clone();
         let local_load = Arc::clone(&per_render_local);
         let session_load = Arc::clone(&per_render_session);
         let local_save = Arc::clone(&per_render_local);
@@ -1007,7 +1008,7 @@ pub fn execute_scripts(
                         let mut storage = storage
                             .lock()
                             .unwrap_or_else(|poisoned| poisoned.into_inner());
-                        match &origin_key {
+                        match &origin_key_for_save {
                             Some(key) => {
                                 storage.by_origin.insert(key.clone(), entries.to_vec());
                             }
