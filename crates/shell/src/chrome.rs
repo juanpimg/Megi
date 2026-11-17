@@ -1,6 +1,11 @@
 //! Browser chrome drawn by the shell over the rendered page: tab strip, address bar and the
 //! floating `<select>` dropdown.
 //!
+//! Visual design: one accent color drives focus/loading/active-tab affordances, every
+//! surface uses the antialiased rounded-rectangle primitives already in `paint`, and the
+//! address pill splits scheme/authority/path into a text hierarchy. All of it stays pure
+//! (`Pixmap` in, pixels out), deterministic, and free of new dependencies.
+//!
 //! The chrome is an **overlay** painted on the physical framebuffer after the page frame
 //! (documented trade-off: the rendered page keeps its full viewport, so the top
 //! [`CHROME_HEIGHT`] CSS pixels are occluded by the chrome; clicks there are handled by the
@@ -16,6 +21,7 @@
 //! (search terms are treated as URLs). The tab strip shows a compact title per tab with
 //! `+`/`×` affordances and a `+N` overflow marker; there is no drag/reorder.
 
+use css::properties::{BorderRadii, Length, Radius};
 use layout::Rect;
 use paint::{Color, Pixmap};
 
@@ -28,6 +34,12 @@ pub const TAB_STRIP_HEIGHT: f32 = 30.0;
 pub const ADDRESS_BAR_HEIGHT: f32 = 28.0;
 /// Total chrome height, in CSS pixels (tab strip + address bar).
 pub const CHROME_HEIGHT: f32 = TAB_STRIP_HEIGHT + ADDRESS_BAR_HEIGHT;
+/// Corner radius of a tab (top corners only, tabs meet the address strip below).
+const TAB_RADIUS: f32 = 6.0;
+/// Corner radius of the address pill.
+const PILL_RADIUS: f32 = 7.0;
+/// Corner radius of floating menus and dropdowns.
+const MENU_RADIUS: f32 = 6.0;
 /// Height of one dropdown option row, in CSS pixels.
 pub const DROPDOWN_ROW_HEIGHT: f32 = 18.0;
 /// Maximum number of visible dropdown rows before the list scrolls.
@@ -1482,6 +1494,109 @@ pub fn draw_chrome(
     painted
 }
 
+/// Uniform corner radii in **device** pixels (`paint` works in device space).
+fn uniform_radii(px: f32) -> BorderRadii {
+    let radius = Radius::circular(Length::Px(px.max(0.0)));
+    BorderRadii {
+        top_left: radius,
+        top_right: radius,
+        bottom_right: radius,
+        bottom_left: radius,
+    }
+}
+
+/// Rounded top corners only: browser tabs meet the address strip flush at the bottom.
+fn top_radii(px: f32) -> BorderRadii {
+    let radius = Radius::circular(Length::Px(px.max(0.0)));
+    BorderRadii {
+        top_left: radius,
+        top_right: radius,
+        bottom_right: Radius::ZERO,
+        bottom_left: Radius::ZERO,
+    }
+}
+
+/// Fills a CSS-pixel rectangle with antialiased rounded corners.
+fn fill_round(pixmap: &mut Pixmap, rect: Rect, scale: f32, radius: f32, color: Color) {
+    pixmap.fill_rounded_rect(scaled(rect, scale), uniform_radii(radius * scale), color);
+}
+
+/// Paints a floating panel: a deterministic soft shadow, a 1 px border and a surface.
+fn paint_panel(pixmap: &mut Pixmap, rect: Rect, scale: f32, radius: f32, surface: Color) {
+    let shadow = Rect::new(rect.x + 1.0, rect.y + 2.0, rect.width, rect.height);
+    fill_round(pixmap, shadow, scale, radius, COLOR_SHADOW);
+    fill_round(pixmap, rect, scale, radius, COLOR_BORDER);
+    let inner = Rect::new(
+        rect.x + 1.0,
+        rect.y + 1.0,
+        (rect.width - 2.0).max(0.0),
+        (rect.height - 2.0).max(0.0),
+    );
+    fill_round(pixmap, inner, scale, (radius - 1.0).max(0.0), surface);
+}
+
+/// Paints a decoded 16x16 tab icon, or its deterministic color-dot fallback.
+fn paint_favicon(
+    pixmap: &mut Pixmap,
+    icon: &crate::favicon::Favicon,
+    x_css: f32,
+    y_css: f32,
+    scale: f32,
+) {
+    if let Some(pixels) = icon.pixels {
+        for y in 0..crate::favicon::ICON_SIZE {
+            for x in 0..crate::favicon::ICON_SIZE {
+                let offset = ((y * crate::favicon::ICON_SIZE + x) * 4) as usize;
+                let alpha = pixels[offset + 3];
+                if alpha == 0 {
+                    continue;
+                }
+                pixmap.fill_rect(
+                    Rect::new(
+                        (x_css + x as f32) * scale,
+                        (y_css + y as f32) * scale,
+                        scale,
+                        scale,
+                    ),
+                    Color::new(
+                        pixels[offset],
+                        pixels[offset + 1],
+                        pixels[offset + 2],
+                        alpha,
+                    ),
+                );
+            }
+        }
+    } else {
+        pixmap.fill_rect(
+            Rect::new(x_css * scale, y_css * scale, 8.0 * scale, 8.0 * scale),
+            Color::new(icon.color[0], icon.color[1], icon.color[2], 0xFF),
+        );
+    }
+}
+
+/// Splits a URL into scheme, authority and path for the address bar's visual hierarchy.
+/// Non-hierarchical URLs (`data:`, `about:`) keep everything in the authority part.
+fn split_url_for_display(url: &str) -> (&str, &str, &str) {
+    let Some(scheme_end) = url.find("://") else {
+        return ("", url, "");
+    };
+    let scheme_end = scheme_end + 3;
+    let rest = &url[scheme_end..];
+    let authority_end = rest.find('/').unwrap_or(rest.len());
+    (
+        &url[..scheme_end],
+        &rest[..authority_end],
+        &rest[authority_end..],
+    )
+}
+
+/// CSS x where address text (or the favicon that precedes it) starts.
+fn address_text_x(width: f32) -> f32 {
+    let nav = navigation_buttons(width);
+    nav.reload.x + nav.reload.width + 6.0
+}
+
 fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, width: f32) {
     pixmap.fill_rect(
         Rect::new(0.0, 0.0, width * scale, TAB_STRIP_HEIGHT * scale),
@@ -1489,50 +1604,41 @@ fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, width
     );
     let layout = layout_tabs(view.tabs, width, view.active_tab);
     for tab in &layout.tabs {
-        let color = if tab.index == view.active_tab {
-            COLOR_TAB_ACTIVE
-        } else {
-            COLOR_TAB
-        };
-        pixmap.fill_rect(scaled(tab.rect, scale), color);
+        let active = tab.index == view.active_tab;
+        let color = if active { COLOR_TAB_ACTIVE } else { COLOR_TAB };
+        pixmap.fill_rounded_rect(
+            scaled(tab.rect, scale),
+            top_radii(TAB_RADIUS * scale),
+            color,
+        );
+        if !active && tab.index > 0 {
+            pixmap.fill_rect(
+                Rect::new(
+                    tab.rect.x * scale,
+                    6.0 * scale,
+                    scale,
+                    (TAB_STRIP_HEIGHT - 6.0) * scale,
+                ),
+                COLOR_TAB_SEPARATOR,
+            );
+        }
+        if active {
+            // The accent underline is the tab's identity marker: it reads at a glance
+            // which page is visible without relying on a lighter background alone.
+            pixmap.fill_rect(
+                Rect::new(
+                    (tab.rect.x + 2.0) * scale,
+                    (TAB_STRIP_HEIGHT - 2.0) * scale,
+                    (tab.rect.width - 4.0).max(0.0) * scale,
+                    2.0 * scale,
+                ),
+                ACCENT,
+            );
+        }
         let mut title_x = tab.rect.x + 6.0;
         if let Some(Some(icon)) = view.favicons.get(tab.index) {
             title_x = tab.rect.x + 23.0;
-            if let Some(pixels) = icon.pixels {
-                for y in 0..crate::favicon::ICON_SIZE {
-                    for x in 0..crate::favicon::ICON_SIZE {
-                        let offset = ((y * crate::favicon::ICON_SIZE + x) * 4) as usize;
-                        let alpha = pixels[offset + 3];
-                        if alpha == 0 {
-                            continue;
-                        }
-                        pixmap.fill_rect(
-                            Rect::new(
-                                (tab.rect.x + 3.0 + x as f32) * scale,
-                                (tab.rect.y + 4.0 + y as f32) * scale,
-                                scale,
-                                scale,
-                            ),
-                            Color::new(
-                                pixels[offset],
-                                pixels[offset + 1],
-                                pixels[offset + 2],
-                                alpha,
-                            ),
-                        );
-                    }
-                }
-            } else {
-                pixmap.fill_rect(
-                    Rect::new(
-                        (tab.rect.x + 5.0) * scale,
-                        (tab.rect.y + 8.0) * scale,
-                        8.0 * scale,
-                        8.0 * scale,
-                    ),
-                    Color::new(icon.color[0], icon.color[1], icon.color[2], 0xFF),
-                );
-            }
+            paint_favicon(pixmap, icon, tab.rect.x + 3.0, tab.rect.y + 4.0, scale);
         }
         draw_text(
             pixmap,
@@ -1600,26 +1706,38 @@ fn paint_address_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, wid
         ),
         COLOR_ADDRESS_STRIP,
     );
-    pixmap.fill_rect(scaled(bar, scale), COLOR_ADDRESS_BG);
-    let text = if view.address.is_editing() {
-        view.address.text()
-    } else {
-        view.fallback_url
-    };
-    let text_x = {
-        let nav = navigation_buttons(width);
-        nav.reload.x + nav.reload.width + 6.0
-    };
-    draw_text(
+    // Rounded pill: a 1 px border around the same surface used by the active tab.
+    fill_round(pixmap, bar, scale, PILL_RADIUS, COLOR_BORDER);
+    fill_round(
         pixmap,
-        text,
-        text_x,
-        bar.y + 8.0,
+        Rect::new(
+            bar.x + 1.0,
+            bar.y + 1.0,
+            (bar.width - 2.0).max(0.0),
+            (bar.height - 2.0).max(0.0),
+        ),
         scale,
-        12.0,
-        COLOR_ADDRESS_TEXT,
+        (PILL_RADIUS - 1.0).max(0.0),
+        COLOR_ADDRESS_BG,
     );
-    if view.address.is_editing() {
+    let editing = view.address.is_editing();
+    let mut text_x = address_text_x(width);
+    if !editing && let Some(icon) = view.favicons.get(view.active_tab).and_then(Option::as_ref) {
+        paint_favicon(pixmap, icon, text_x, bar.y + 4.0, scale);
+        text_x += 22.0;
+    }
+    let text_y = bar.y + 8.0;
+    if editing {
+        let text = view.address.text();
+        draw_text(
+            pixmap,
+            text,
+            text_x,
+            text_y,
+            scale,
+            12.0,
+            COLOR_ADDRESS_TEXT,
+        );
         let before = &text[..view.address.caret().min(text.len())];
         let caret_x = text_x + measure_text_width(before, 12.0);
         pixmap.fill_rect(
@@ -1631,6 +1749,27 @@ fn paint_address_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, wid
             ),
             COLOR_CARET,
         );
+    } else {
+        // Scheme and path are secondary; the authority (site) is what people scan for.
+        let (scheme, authority, path) = split_url_for_display(view.fallback_url);
+        let mut x = text_x;
+        if !scheme.is_empty() {
+            draw_text(pixmap, scheme, x, text_y, scale, 12.0, COLOR_ADDRESS_MUTED);
+            x += measure_text_width(scheme, 12.0);
+        }
+        draw_text(
+            pixmap,
+            authority,
+            x,
+            text_y,
+            scale,
+            12.0,
+            COLOR_ADDRESS_TEXT,
+        );
+        if !path.is_empty() {
+            x += measure_text_width(authority, 12.0);
+            draw_text(pixmap, path, x, text_y, scale, 12.0, COLOR_ADDRESS_MUTED);
+        }
     }
 }
 
@@ -1648,19 +1787,7 @@ fn paint_dropdown(
         view.scroll_y,
         dropdown.scroll,
     );
-    pixmap.fill_rect(scaled(list.rect, scale), COLOR_BORDER);
-    pixmap.fill_rect(
-        scaled(
-            Rect::new(
-                list.rect.x + 1.0,
-                list.rect.y + 1.0,
-                list.rect.width - 2.0,
-                list.rect.height - 2.0,
-            ),
-            scale,
-        ),
-        COLOR_DROPDOWN_BG,
-    );
+    paint_panel(pixmap, list.rect, scale, MENU_RADIUS, COLOR_DROPDOWN_BG);
     for (row, rect) in list.rows.iter().enumerate() {
         let item_index = list.first + row;
         let Some(item) = items.get(item_index) else {
@@ -1738,19 +1865,7 @@ fn paint_overflow_menu(
         view.css_viewport_height,
         menu,
     );
-    pixmap.fill_rect(scaled(layout.rect, scale), COLOR_BORDER);
-    pixmap.fill_rect(
-        scaled(
-            Rect::new(
-                layout.rect.x + 1.0,
-                layout.rect.y + 1.0,
-                layout.rect.width - 2.0,
-                layout.rect.height - 2.0,
-            ),
-            scale,
-        ),
-        COLOR_MENU_BG,
-    );
+    paint_panel(pixmap, layout.rect, scale, MENU_RADIUS, COLOR_MENU_BG);
     for (row, rect) in layout.rows.iter().enumerate() {
         let Some(tab_index) = menu.items.get(layout.first + row) else {
             break;
@@ -1797,19 +1912,7 @@ fn paint_status_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, url:
 
 fn paint_context_menu(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, menu: &ContextMenu) {
     let layout = context_menu_layout(menu, view.css_width, view.css_viewport_height);
-    pixmap.fill_rect(scaled(layout.rect, scale), COLOR_BORDER);
-    pixmap.fill_rect(
-        scaled(
-            Rect::new(
-                layout.rect.x + 1.0,
-                layout.rect.y + 1.0,
-                layout.rect.width - 2.0,
-                layout.rect.height - 2.0,
-            ),
-            scale,
-        ),
-        COLOR_MENU_BG,
-    );
+    paint_panel(pixmap, layout.rect, scale, MENU_RADIUS, COLOR_MENU_BG);
     for (index, row) in layout.rows.iter().enumerate() {
         let Some(item) = menu.items.get(index) else {
             break;
@@ -1850,7 +1953,19 @@ fn paint_history_button(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>) 
         return;
     }
     let rect = history_button_rect(view.css_width);
-    pixmap.fill_rect(scaled(rect, scale), COLOR_BORDER);
+    fill_round(pixmap, rect, scale, 4.0, COLOR_BORDER);
+    fill_round(
+        pixmap,
+        Rect::new(
+            rect.x + 1.0,
+            rect.y + 1.0,
+            (rect.width - 2.0).max(0.0),
+            (rect.height - 2.0).max(0.0),
+        ),
+        scale,
+        3.0,
+        COLOR_ADDRESS_BG,
+    );
     draw_text(
         pixmap,
         "H",
@@ -1865,6 +1980,8 @@ fn paint_history_button(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>) 
 fn paint_navigation_buttons(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>) {
     let buttons = navigation_buttons(view.css_width);
     let mut draw = |rect: Rect, label: &str, enabled: bool| {
+        // A subtle rounded button surface reads as clickable without needing hover state.
+        fill_round(pixmap, rect, scale, 4.0, COLOR_ADDRESS_BG);
         let color = if enabled {
             COLOR_ADDRESS_TEXT
         } else {
@@ -1892,19 +2009,7 @@ fn paint_history_menu(
     menu: &crate::history::HistoryMenu,
 ) {
     let layout = history_menu_layout(menu, view.css_width, view.css_viewport_height);
-    pixmap.fill_rect(scaled(layout.rect, scale), COLOR_BORDER);
-    pixmap.fill_rect(
-        scaled(
-            Rect::new(
-                layout.rect.x + 1.0,
-                layout.rect.y + 1.0,
-                layout.rect.width - 2.0,
-                layout.rect.height - 2.0,
-            ),
-            scale,
-        ),
-        COLOR_MENU_BG,
-    );
+    paint_panel(pixmap, layout.rect, scale, MENU_RADIUS, COLOR_MENU_BG);
     if menu.entries.is_empty() {
         draw_text(
             pixmap,
@@ -2349,9 +2454,9 @@ mod tests {
         let pixel = |x: u32, y: u32| dest[(y * 640 + x) as usize];
         assert_eq!(pixel(620, 2), rgb(COLOR_TAB_STRIP), "tab strip background");
         assert_eq!(
-            pixel(100, TAB_STRIP_HEIGHT as u32 + 2),
+            pixel(100, (address_bar_rect(640.0).y + 4.0) as u32),
             rgb(COLOR_ADDRESS_BG),
-            "address bar"
+            "address pill surface"
         );
         // The page below the chrome is untouched.
         assert_eq!(pixel(300, 200), 0x00FF_FFFF);
@@ -2919,6 +3024,34 @@ mod tests {
         assert!(range.end <= bar.text().len(), "{range:?}");
         bar.delete_selection();
         assert_eq!(bar.text(), "ht");
+    }
+
+    #[test]
+    fn url_display_splits_scheme_authority_and_path() {
+        assert_eq!(
+            split_url_for_display("https://example.com/a/b"),
+            ("https://", "example.com", "/a/b")
+        );
+        assert_eq!(
+            split_url_for_display("file:///tmp/page.html"),
+            ("file://", "", "/tmp/page.html")
+        );
+        assert_eq!(
+            split_url_for_display("data:text/html,<h1>x</h1>"),
+            ("", "data:text/html,<h1>x</h1>", "")
+        );
+    }
+
+    #[test]
+    fn chrome_radius_helpers_distinguish_tabs_from_panels() {
+        let panel = uniform_radii(7.0);
+        assert!(!panel.is_zero(), "panels have all four corners rounded");
+        let tab = top_radii(6.0);
+        assert!(!tab.top_left.is_zero() && !tab.top_right.is_zero());
+        assert!(
+            tab.bottom_left.is_zero() && tab.bottom_right.is_zero(),
+            "tabs meet the address strip flush at the bottom"
+        );
     }
 
     #[test]
