@@ -949,12 +949,14 @@ impl ResourceLoader {
             .is_some_and(|cache| cache.contains_key(&url.cache_key()))
     }
 
-    /// Drops every cached resource.
+    /// Drops every cached resource, including PAC decisions (#1475).
     pub fn clear_cache(&mut self) {
         if let Some(cache) = &mut self.cache {
             cache.clear();
         }
         self.cache_bytes = 0;
+        #[cfg(feature = "pac")]
+        crate::pac::clear_cache();
     }
 
     /// Number of cached resources (one per URL).
