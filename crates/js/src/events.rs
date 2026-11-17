@@ -176,6 +176,8 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
         ("devicePixelRatio", window_device_pixel_ratio),
         ("pageXOffset", window_page_x),
         ("pageYOffset", window_page_y),
+        ("scrollX", window_page_x),
+        ("scrollY", window_page_y),
     ] {
         let getter = accessor_fn(context, get);
         let descriptor = PropertyDescriptor::builder()
