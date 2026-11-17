@@ -78,25 +78,23 @@ impl Origin {
         };
         let (host, port) = if rest.starts_with('[') {
             // IPv6 literal: host is bracketed, port follows after ']:'
-            if let Some(end) = rest.find(']') {
-                let host = &rest[..=end];
-                let tail = &rest[end + 1..];
-                if tail.is_empty() {
-                    (host, default_port)
-                } else if let Some(port_str) = tail.strip_prefix(':') {
-                    if port_str.is_empty() || !port_str.bytes().all(|b| b.is_ascii_digit()) {
-                        return None;
-                    }
-                    (host, port_str.parse::<u16>().ok()?)
-                } else {
+            let end = rest.find(']')?;
+            let host = &rest[..=end];
+            let tail = &rest[end + 1..];
+            if tail.is_empty() {
+                (host, default_port)
+            } else {
+                let port_str = tail.strip_prefix(':')?;
+                if port_str.is_empty() || !port_str.bytes().all(|b| b.is_ascii_digit()) {
                     return None;
                 }
-            } else {
-                return None;
+                (host, port_str.parse::<u16>().ok()?)
             }
         } else {
             match rest.rsplit_once(':') {
-                Some((host, port)) if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) => {
+                Some((host, port))
+                    if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) =>
+                {
                     if host.contains(':') {
                         // Non-bracketed host with extra colon: reject.
                         return None;

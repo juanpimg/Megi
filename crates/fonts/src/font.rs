@@ -151,10 +151,8 @@ impl Font {
         let line_gap = (f32::from(face.line_gap()) * scale).max(0.0);
         // A hostile/odd font can report metrics that scale to non-finite or negative
         // values; fall back to the em-derived defaults instead of poisoning layout (#1237).
-        let x_height = Self::sanitize_metric(
-            face.x_height().map(|v| f32::from(v) * scale),
-            size_px * 0.5,
-        );
+        let x_height =
+            Self::sanitize_metric(face.x_height().map(|v| f32::from(v) * scale), size_px * 0.5);
         let cap_height = Self::sanitize_metric(
             face.capital_height().map(|v| f32::from(v) * scale),
             size_px * 0.7,

@@ -210,7 +210,15 @@ fn clip_rule_evenodd_controls_clip_fill_rule() {
     };
     let evenodd = render(&source("evenodd"));
     let nonzero = render(&source("nonzero"));
-    assert_eq!(px(&evenodd, 20, 20)[3], 0, "even-odd clip leaves the inner hole");
-    assert_eq!(px(&nonzero, 20, 20)[3], 255, "nonzero clip fills the inner square");
+    assert_eq!(
+        px(&evenodd, 20, 20)[3],
+        0,
+        "even-odd clip leaves the inner hole"
+    );
+    assert_eq!(
+        px(&nonzero, 20, 20)[3],
+        255,
+        "nonzero clip fills the inner square"
+    );
     assert_eq!(px(&evenodd, 5, 5)[3], 255, "the outer ring stays opaque");
 }

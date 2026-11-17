@@ -11,7 +11,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use dom::{Document, NodeKind};
-use render::{RenderOptions, RenderStats, ScriptBudget, ScriptingLimits, ScriptingMode, Viewport, render_url};
+use render::{
+    RenderOptions, RenderStats, ScriptBudget, ScriptingLimits, ScriptingMode, Viewport, render_url,
+};
 
 fn fixture_path(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -472,7 +474,8 @@ fn worker_deliveries_do_not_consume_the_timer_task_budget() {
          setTimeout(function () {\
            document.body.setAttribute('data-timer', 'ran');\
          }, 0);\
-         </script></body>".replace("WORKER_DIR", &dir.display().to_string());
+         </script></body>"
+        .replace("WORKER_DIR", &dir.display().to_string());
     fs::write(&page, &page_html).expect("page");
 
     let options = RenderOptions {
@@ -484,8 +487,8 @@ fn worker_deliveries_do_not_consume_the_timer_task_budget() {
         },
         ..base_options()
     };
-    let output = render_url(&format!("file://{}/index.html", dir.display()), &options)
-        .expect("render");
+    let output =
+        render_url(&format!("file://{}/index.html", dir.display()), &options).expect("render");
     // The single timer must still run even though 100 worker replies were delivered.
     assert_eq!(
         output.stats.script_tasks, 1,

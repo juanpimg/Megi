@@ -408,14 +408,28 @@ impl Document {
             used: 0,
             max: limits.max_selector_checks,
         };
-        style.apply(root, &rules, &[], &gradient_ids, &pattern_ids, &mut selector_budget)?;
+        style.apply(
+            root,
+            &rules,
+            &[],
+            &gradient_ids,
+            &pattern_ids,
+            &mut selector_budget,
+        )?;
         let root_opacity = root
             .attribute("opacity")
             .and_then(|v| v.parse::<f32>().ok())
             .unwrap_or(1.0);
         let root_transform = Transform::IDENTITY;
         let mut ancestors: Vec<&XmlElement> = vec![root];
-        builder.visit_children(root, &mut ancestors, root_transform, &style, root_opacity, 0)?;
+        builder.visit_children(
+            root,
+            &mut ancestors,
+            root_transform,
+            &style,
+            root_opacity,
+            0,
+        )?;
         selector_checks = builder.selector_checks_used;
         let patterns = build_patterns(
             &defs,
@@ -1032,106 +1046,108 @@ impl<'a> Builder<'a> {
         let visible = style.visibility;
         let result = if visible {
             match name.as_str() {
-            "svg" => {
-                let viewport = nested_viewport_transform(element);
-                let transform = transform.then(viewport);
-                let (clips, masks, filter) = self.own_effects(&style, transform, None, true);
-                let start = self.shapes.len();
-                let active = !clips.is_empty() || !masks.is_empty() || filter.is_some();
-                self.group_bbox_stack
-                    .push(GroupBboxFrame { bbox: None, active });
-                let previous = self.push_effects(&clips, &masks, filter.as_ref());
-                let result =
-                    self.visit_children(element, ancestors, transform, &style, opacity, depth);
-                self.pop_effects(previous);
-                let frame = self.group_bbox_stack.pop().expect("group bbox frame");
-                if active {
-                    self.apply_group_bbox(start, &clips, &masks, filter.as_ref(), frame.bbox);
+                "svg" => {
+                    let viewport = nested_viewport_transform(element);
+                    let transform = transform.then(viewport);
+                    let (clips, masks, filter) = self.own_effects(&style, transform, None, true);
+                    let start = self.shapes.len();
+                    let active = !clips.is_empty() || !masks.is_empty() || filter.is_some();
+                    self.group_bbox_stack
+                        .push(GroupBboxFrame { bbox: None, active });
+                    let previous = self.push_effects(&clips, &masks, filter.as_ref());
+                    let result =
+                        self.visit_children(element, ancestors, transform, &style, opacity, depth);
+                    self.pop_effects(previous);
+                    let frame = self.group_bbox_stack.pop().expect("group bbox frame");
+                    if active {
+                        self.apply_group_bbox(start, &clips, &masks, filter.as_ref(), frame.bbox);
+                    }
+                    result
                 }
-                result
-            }
-            "g" | "a" | "switch" => {
-                let (clips, masks, filter) = self.own_effects(&style, transform, None, true);
-                let start = self.shapes.len();
-                let active = !clips.is_empty() || !masks.is_empty() || filter.is_some();
-                self.group_bbox_stack
-                    .push(GroupBboxFrame { bbox: None, active });
-                let previous = self.push_effects(&clips, &masks, filter.as_ref());
-                let result =
-                    self.visit_children(element, ancestors, transform, &style, opacity, depth);
-                self.pop_effects(previous);
-                let frame = self.group_bbox_stack.pop().expect("group bbox frame");
-                if active {
-                    self.apply_group_bbox(start, &clips, &masks, filter.as_ref(), frame.bbox);
+                "g" | "a" | "switch" => {
+                    let (clips, masks, filter) = self.own_effects(&style, transform, None, true);
+                    let start = self.shapes.len();
+                    let active = !clips.is_empty() || !masks.is_empty() || filter.is_some();
+                    self.group_bbox_stack
+                        .push(GroupBboxFrame { bbox: None, active });
+                    let previous = self.push_effects(&clips, &masks, filter.as_ref());
+                    let result =
+                        self.visit_children(element, ancestors, transform, &style, opacity, depth);
+                    self.pop_effects(previous);
+                    let frame = self.group_bbox_stack.pop().expect("group bbox frame");
+                    if active {
+                        self.apply_group_bbox(start, &clips, &masks, filter.as_ref(), frame.bbox);
+                    }
+                    result
                 }
-                result
-            }
-            "defs" | "title" | "desc" | "metadata" | "style" | "linearGradient"
-            | "radialGradient" | "pattern" | "clipPath" | "mask" | "filter" | "symbol"
-            | "marker" | "tspan" | "image" | "foreignObject" | "script" | "stop" => Ok(()),
-            "text" => self.push_text(element, transform, &style, opacity),
-            "use" => {
-                let reference = element
-                    .attribute("href")
-                    .or_else(|| element.attribute("xlink:href"))
-                    .unwrap_or_default();
-                let Some(id) = reference.strip_prefix('#') else {
-                    ancestors.pop();
-                    return Ok(());
-                };
-                let Some(target) = self.defs.get(id).copied() else {
-                    ancestors.pop();
-                    return Ok(());
-                };
-                if self.use_stack.iter().any(|seen| seen == id) {
-                    ancestors.pop();
-                    return Ok(());
+                "defs" | "title" | "desc" | "metadata" | "style" | "linearGradient"
+                | "radialGradient" | "pattern" | "clipPath" | "mask" | "filter" | "symbol"
+                | "marker" | "tspan" | "image" | "foreignObject" | "script" | "stop" => Ok(()),
+                "text" => self.push_text(element, transform, &style, opacity),
+                "use" => {
+                    let reference = element
+                        .attribute("href")
+                        .or_else(|| element.attribute("xlink:href"))
+                        .unwrap_or_default();
+                    let Some(id) = reference.strip_prefix('#') else {
+                        ancestors.pop();
+                        return Ok(());
+                    };
+                    let Some(target) = self.defs.get(id).copied() else {
+                        ancestors.pop();
+                        return Ok(());
+                    };
+                    if self.use_stack.iter().any(|seen| seen == id) {
+                        ancestors.pop();
+                        return Ok(());
+                    }
+                    if self.use_stack.len() >= self.limits.max_use_depth {
+                        ancestors.pop();
+                        return Err(SvgError::Limit(
+                            "nested <use> expansion too deep".to_owned(),
+                        ));
+                    }
+                    if self.use_expansions >= self.limits.max_use_expansions {
+                        ancestors.pop();
+                        return Err(SvgError::Limit("too many <use> expansions".to_owned()));
+                    }
+                    self.use_expansions += 1;
+                    let x = parse_length(element.attribute("x"), 0.0).unwrap_or(0.0);
+                    let y = parse_length(element.attribute("y"), 0.0).unwrap_or(0.0);
+                    let use_transform = transform.then(Transform::translate(x, y));
+                    let (clips, masks, filter) =
+                        self.own_effects(&style, use_transform, None, true);
+                    let start = self.shapes.len();
+                    let active = !clips.is_empty() || !masks.is_empty() || filter.is_some();
+                    self.group_bbox_stack
+                        .push(GroupBboxFrame { bbox: None, active });
+                    let previous = self.push_effects(&clips, &masks, filter.as_ref());
+                    self.use_stack.push(id.to_owned());
+                    let result = if target.local_name_lower() == "symbol" {
+                        // A <symbol> is never painted directly; <use> instantiates its children
+                        // through the symbol's viewBox/preserveAspectRatio viewport mapping (#38).
+                        let symbol_transform =
+                            use_transform.then(nested_viewport_transform(target));
+                        self.visit_children(
+                            target,
+                            ancestors,
+                            symbol_transform,
+                            &style,
+                            opacity,
+                            depth + 1,
+                        )
+                    } else {
+                        self.visit(target, ancestors, use_transform, &style, opacity, depth + 1)
+                    };
+                    self.use_stack.pop();
+                    self.pop_effects(previous);
+                    let frame = self.group_bbox_stack.pop().expect("group bbox frame");
+                    if active {
+                        self.apply_group_bbox(start, &clips, &masks, filter.as_ref(), frame.bbox);
+                    }
+                    result
                 }
-                if self.use_stack.len() >= self.limits.max_use_depth {
-                    ancestors.pop();
-                    return Err(SvgError::Limit(
-                        "nested <use> expansion too deep".to_owned(),
-                    ));
-                }
-                if self.use_expansions >= self.limits.max_use_expansions {
-                    ancestors.pop();
-                    return Err(SvgError::Limit("too many <use> expansions".to_owned()));
-                }
-                self.use_expansions += 1;
-                let x = parse_length(element.attribute("x"), 0.0).unwrap_or(0.0);
-                let y = parse_length(element.attribute("y"), 0.0).unwrap_or(0.0);
-                let use_transform = transform.then(Transform::translate(x, y));
-                let (clips, masks, filter) = self.own_effects(&style, use_transform, None, true);
-                let start = self.shapes.len();
-                let active = !clips.is_empty() || !masks.is_empty() || filter.is_some();
-                self.group_bbox_stack
-                    .push(GroupBboxFrame { bbox: None, active });
-                let previous = self.push_effects(&clips, &masks, filter.as_ref());
-                self.use_stack.push(id.to_owned());
-                let result = if target.local_name_lower() == "symbol" {
-                    // A <symbol> is never painted directly; <use> instantiates its children
-                    // through the symbol's viewBox/preserveAspectRatio viewport mapping (#38).
-                    let symbol_transform = use_transform.then(nested_viewport_transform(target));
-                    self.visit_children(
-                        target,
-                        ancestors,
-                        symbol_transform,
-                        &style,
-                        opacity,
-                        depth + 1,
-                    )
-                } else {
-                    self.visit(target, ancestors, use_transform, &style, opacity, depth + 1)
-                };
-                self.use_stack.pop();
-                self.pop_effects(previous);
-                let frame = self.group_bbox_stack.pop().expect("group bbox frame");
-                if active {
-                    self.apply_group_bbox(start, &clips, &masks, filter.as_ref(), frame.bbox);
-                }
-                result
-            }
-            _ => self.push_shape(element, &name, transform, &style, opacity),
+                _ => self.push_shape(element, &name, transform, &style, opacity),
             }
         } else {
             // Hidden subtrees are not painted, but descendants may opt back in with

@@ -323,7 +323,10 @@ pub fn parse_set_cookie(
                 } else {
                     // Pre-epoch (or otherwise unrepresentable) dates mean "already
                     // expired" (#1291): treat as delete-now rather than no expiry.
-                    let year = raw_attribute_value.split_whitespace().nth(3).and_then(|y| y.parse::<i64>().ok());
+                    let year = raw_attribute_value
+                        .split_whitespace()
+                        .nth(3)
+                        .and_then(|y| y.parse::<i64>().ok());
                     if year.is_some_and(|y| y < 1970) {
                         expires = Some(std::time::UNIX_EPOCH);
                     }

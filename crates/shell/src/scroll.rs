@@ -88,7 +88,9 @@ impl ScrollState {
 
     /// Scrolls by `delta` CSS pixels (positive = content moves up / go down the page).
     pub fn scroll_by(&mut self, delta: i64) -> bool {
-        let new = i64::from(self.offset).saturating_add(delta).clamp(0, i64::from(self.max_offset()));
+        let new = i64::from(self.offset)
+            .saturating_add(delta)
+            .clamp(0, i64::from(self.max_offset()));
         let changed = new as u32 != self.offset;
         self.offset = new as u32;
         changed

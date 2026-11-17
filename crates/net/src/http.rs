@@ -891,9 +891,7 @@ pub fn fetch_with_request_body_and_trailers(
         if redirects >= options.max_redirects {
             return Err(FetchError::TooManyRedirects);
         }
-        if raw.status == 303
-            || (matches!(raw.status, 301 | 302) && method == "POST")
-        {
+        if raw.status == 303 || (matches!(raw.status, 301 | 302) && method == "POST") {
             method = "GET".to_owned();
             body_state = None;
         } else if streaming_body && body_state.is_none() {
@@ -2188,7 +2186,9 @@ fn content_length(headers: &Headers) -> Result<Option<usize>, FetchError> {
         ));
     }
     if first.starts_with('+') {
-        return Err(FetchError::InvalidResponse(format!("invalid Content-Length `{first}`")));
+        return Err(FetchError::InvalidResponse(format!(
+            "invalid Content-Length `{first}`"
+        )));
     }
     let length: usize = first
         .parse()

@@ -809,7 +809,10 @@ mod unit_tests {
         let host = "a.".repeat(10_000);
         let input = format!("http://{host}test/");
         let start = std::time::Instant::now();
-        assert!(Url::parse(&input).is_err(), "oversized host must be rejected");
+        assert!(
+            Url::parse(&input).is_err(),
+            "oversized host must be rejected"
+        );
         assert!(start.elapsed() < std::time::Duration::from_millis(100));
     }
 

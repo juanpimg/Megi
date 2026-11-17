@@ -56,7 +56,9 @@ pub fn load_file_url_with_limit(url: &Url, max_bytes: usize) -> Result<Vec<u8>, 
     // Open first, then fstat the handle, so the size/regular-file checks apply to the
     // same inode that is actually read (#1261).
     let file = std::fs::File::open(&path).map_err(|error| map_file_error(error, &path))?;
-    let metadata = file.metadata().map_err(|error| map_file_error(error, &path))?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| map_file_error(error, &path))?;
     if !metadata.is_file() {
         return Err(FetchError::FileNotRegular(path));
     }

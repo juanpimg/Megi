@@ -778,7 +778,19 @@ fn display_none_skips_subtree_and_visibility_can_be_overridden() {
         20,
         20,
     );
-    assert_eq!(pixel(&image, 2, 2), [0, 0, 0, 0], "display=none must skip (#37)");
-    assert_eq!(pixel(&image, 5, 5), [0, 0, 0, 0], "inherited hidden must skip (#37)");
-    assert_eq!(pixel(&image, 15, 5), [0, 0, 255, 255], "visible override must paint");
+    assert_eq!(
+        pixel(&image, 2, 2),
+        [0, 0, 0, 0],
+        "display=none must skip (#37)"
+    );
+    assert_eq!(
+        pixel(&image, 5, 5),
+        [0, 0, 0, 0],
+        "inherited hidden must skip (#37)"
+    );
+    assert_eq!(
+        pixel(&image, 15, 5),
+        [0, 0, 255, 255],
+        "visible override must paint"
+    );
 }

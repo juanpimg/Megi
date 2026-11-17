@@ -507,7 +507,9 @@ pub fn load_scripts(
             // the same URL (#1217).
             if candidate.is_module && !seen_urls.insert(url.cache_key()) {
                 report.skipped += 1;
-                warnings.push(format!("skipping duplicate module script {url} (already loaded)"));
+                warnings.push(format!(
+                    "skipping duplicate module script {url} (already loaded)"
+                ));
                 continue;
             }
             if attempts >= limits.max_script_attempts {
@@ -1490,7 +1492,9 @@ mod unit_tests {
         let candidates = discover_scripts(&doc, &mut warnings, 1024);
         assert_eq!(candidates.len(), 1024);
         assert!(
-            warnings.iter().any(|warning| warning.contains("more than 1024 scripts")),
+            warnings
+                .iter()
+                .any(|warning| warning.contains("more than 1024 scripts")),
             "silently dropping later scripts is a defect (#1222): {warnings:?}"
         );
     }

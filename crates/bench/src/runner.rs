@@ -140,9 +140,7 @@ impl Suite {
         let skipped = match &opts.filter {
             Some(filter) => skipped
                 .into_iter()
-                .filter(|(name, _)| {
-                    name.contains(filter.as_str())
-                })
+                .filter(|(name, _)| name.contains(filter.as_str()))
                 .collect(),
             None => skipped,
         };

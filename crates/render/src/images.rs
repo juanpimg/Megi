@@ -335,7 +335,10 @@ mod dedup_tests {
         };
         let mut warnings = Vec::new();
         let loaded = load_images(&document, &base, &mut loader, false, limits, &mut warnings);
-        assert!(loaded.failed >= 1, "oversized image must fail: {warnings:?}");
+        assert!(
+            loaded.failed >= 1,
+            "oversized image must fail: {warnings:?}"
+        );
         assert!(
             warnings.iter().any(|w| w.contains("too large")),
             "the fetch-layer response cap must reject it: {warnings:?}"
