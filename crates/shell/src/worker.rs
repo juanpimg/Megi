@@ -363,7 +363,8 @@ where
             }
             // A panic in layout/paint/render must not kill the only render worker:
             // convert it into a Failed message and keep serving later requests (#1468).
-            let rendered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render(&latest)));
+            let rendered =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render(&latest)));
             let message = match rendered {
                 Ok(Ok(frame)) => WorkerMessage::Frame(frame),
                 Ok(Err(message)) => WorkerMessage::Failed {
@@ -871,7 +872,10 @@ mod worker_panic_isolation_tests {
             .recv_timeout(Duration::from_secs(5))
             .expect("worker answered after panic");
         match failure {
-            WorkerMessage::Failed { generation, message } => {
+            WorkerMessage::Failed {
+                generation,
+                message,
+            } => {
                 assert_eq!(generation, 1);
                 // The panic payload may not be recoverable across the AssertUnwindSafe
                 // boundary; the important invariant is that the worker survives.
@@ -893,7 +897,11 @@ mod worker_panic_isolation_tests {
         let frame = receiver
             .recv_timeout(Duration::from_secs(5))
             .expect("worker still alive");
-        assert_eq!(frame.generation(), 2, "worker must survive a page panic (#1468)");
+        assert_eq!(
+            frame.generation(),
+            2,
+            "worker must survive a page panic (#1468)"
+        );
         drop(sender);
         let _ = handle.join();
     }
