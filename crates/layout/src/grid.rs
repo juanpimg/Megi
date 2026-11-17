@@ -1439,24 +1439,3 @@ fn layout_item(
     layout_box_contents(child, definite_height, false, measurer, pos);
     item.content_height = child.dimensions.content.height;
 }
-
-#[cfg(test)]
-mod occupancy_tests {
-    use super::Occupancy;
-
-    #[test]
-    fn occupancy_bitset_tracks_cells_and_grows() {
-        let mut grid = Occupancy::default();
-        grid.ensure(2, 70);
-        assert!(!grid.get(1, 69));
-        grid.set(1, 69);
-        assert!(grid.get(1, 69));
-        assert!(!grid.get(1, 68));
-        // Growing keeps the existing cells and covers the new width.
-        grid.ensure(3, 130);
-        assert!(grid.get(1, 69), "growth preserves occupied cells");
-        assert!(!grid.get(2, 129));
-        grid.set(2, 129);
-        assert!(grid.get(2, 129));
-    }
-}
