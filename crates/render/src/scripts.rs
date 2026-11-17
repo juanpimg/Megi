@@ -1244,10 +1244,12 @@ pub fn execute_scripts(
     // 5. Deterministic cooperative workers: drain main→worker and worker→main queues,
     // then pump timers/microtasks scheduled by worker callbacks before the re-render.
     if host.enable_workers {
-        match runtime.run_worker_tasks(limits.max_tasks) {
-            Ok(delivered) => {
-                loop_state.tasks = loop_state.tasks.saturating_add(delivered);
-            }
+        // Worker deliveries get only the *remaining* task budget and are deliberately not
+        // added to `loop_state.tasks`: that counter is the documented "timer callbacks"
+        // stat, and counting deliveries there starves timers and inflates it (#1221).
+        let worker_budget = limits.max_tasks.saturating_sub(loop_state.tasks);
+        match runtime.run_worker_tasks(worker_budget) {
+            Ok(_) => {}
             Err(error) => warnings.push(format!("worker tasks failed: {error}")),
         }
         drain_microtasks(&mut runtime, warnings);
