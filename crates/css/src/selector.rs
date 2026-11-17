@@ -1077,6 +1077,64 @@ pub fn parse_selectors(input: &str) -> SelectorList {
     SelectorList { selectors }
 }
 
+/// Decodes one CSS escape whose introducing `\` has already been consumed
+/// (CSS Syntax §4.3.7). Returns `U+FFFD` for an invalid or out-of-range escape.
+fn consume_escape(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<char> {
+    match chars.peek().copied() {
+        None => Some('\u{FFFD}'),
+        // A newline after the backslash is not a valid escape: do not consume it.
+        Some(c) if c == '\n' || c == '\r' || c == '\u{c}' => Some('\u{FFFD}'),
+        Some(c) if c.is_ascii_hexdigit() => {
+            let mut value: u32 = 0;
+            let mut digits = 0;
+            while digits < 6 {
+                let Some(h) = chars.peek().copied().filter(|h| h.is_ascii_hexdigit()) else {
+                    break;
+                };
+                chars.next();
+                value = value * 16 + h.to_digit(16).unwrap_or(0);
+                digits += 1;
+            }
+            // One whitespace character terminates the hex escape and is consumed.
+            if chars.peek().is_some_and(|c| c.is_whitespace()) {
+                chars.next();
+            }
+            if value == 0 || value > 0x10FFFF || (0xD800..=0xDFFF).contains(&value) {
+                Some('\u{FFFD}')
+            } else {
+                char::from_u32(value)
+            }
+        }
+        Some(c) => {
+            chars.next();
+            Some(c)
+        }
+    }
+}
+
+/// Reads a CSS identifier from the raw selector text, decoding escapes, so that an
+/// author's `md\:flex` becomes the class name `md:flex` instead of `md` followed by a
+/// `:flex` pseudo-class. Used for type names, ids, classes and pseudo-class names.
+fn read_identifier(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<String> {
+    let mut out = String::new();
+    loop {
+        match chars.peek().copied() {
+            Some('\\') => {
+                chars.next();
+                if let Some(decoded) = consume_escape(chars) {
+                    out.push(decoded);
+                }
+            }
+            Some(c) if c.is_alphanumeric() || c == '-' || c == '_' => {
+                chars.next();
+                out.push(c);
+            }
+            _ => break,
+        }
+    }
+    if out.is_empty() { None } else { Some(out) }
+}
+
 /// Splits a selector list on top-level commas, ignoring commas nested in blocks or strings.
 fn split_top_level_commas(input: &str) -> Vec<String> {
     let mut parts = Vec::new();
@@ -1169,6 +1227,36 @@ fn tokenize_selector_parts(input: &str) -> Vec<String> {
     let mut chars = input.chars().peekable();
 
     while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            // A CSS escape is part of the current compound; never a combinator or a
+            // separator. Copy it verbatim so `read_identifier` decodes it later.
+            current.push(ch);
+            match chars.peek().copied() {
+                Some(h) if h.is_ascii_hexdigit() => {
+                    let mut digits = 0;
+                    while digits < 6 {
+                        let Some(h) = chars.peek().copied().filter(|h| h.is_ascii_hexdigit())
+                        else {
+                            break;
+                        };
+                        current.push(h);
+                        chars.next();
+                        digits += 1;
+                    }
+                    if chars.peek().is_some_and(|c| c.is_whitespace())
+                        && let Some(ws) = chars.next()
+                    {
+                        current.push(ws);
+                    }
+                }
+                Some(next) => {
+                    current.push(next);
+                    chars.next();
+                }
+                None => {}
+            }
+            continue;
+        }
         match ch {
             '>' | '+' | '~' => {
                 push_selector_chunk(&mut parts, &mut current);
@@ -1294,36 +1382,20 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
     if chars
         .peek()
         .copied()
-        .is_some_and(|c| c.is_alphabetic() || c == '*' || c == '_')
+        .is_some_and(|c| c.is_alphabetic() || c == '*' || c == '_' || c == '\\')
     {
-        let mut tag = String::new();
-        while chars
-            .peek()
-            .copied()
-            .is_some_and(|c| c.is_alphanumeric() || c == '*' || c == '-' || c == '_')
-        {
-            tag.push(chars.next().unwrap());
+        if chars.peek() == Some(&'*') {
+            chars.next();
+            compound.tag_name = Some("*".to_string());
+        } else {
+            compound.tag_name = Some(read_identifier(&mut chars)?);
         }
-        if tag.is_empty() {
-            return None;
-        }
-        compound.tag_name = Some(tag);
     }
 
     while let Some(ch) = chars.next() {
         match ch {
             '#' => {
-                let mut id = String::new();
-                while chars
-                    .peek()
-                    .copied()
-                    .is_some_and(|c| c.is_alphanumeric() || c == '-' || c == '_')
-                {
-                    id.push(chars.next().unwrap());
-                }
-                if id.is_empty() {
-                    return None;
-                }
+                let id = read_identifier(&mut chars)?;
                 compound.id_count = compound.id_count.saturating_add(1);
                 if let Some(existing) = &compound.id {
                     // `#a#b` requires two different ids on one element, which is impossible.
@@ -1335,17 +1407,7 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
                 }
             }
             '.' => {
-                let mut class = String::new();
-                while chars
-                    .peek()
-                    .copied()
-                    .is_some_and(|c| c.is_alphanumeric() || c == '-' || c == '_')
-                {
-                    class.push(chars.next().unwrap());
-                }
-                if class.is_empty() {
-                    return None;
-                }
+                let class = read_identifier(&mut chars)?;
                 compound.classes.push(class);
             }
             ':' => {
@@ -1353,17 +1415,7 @@ fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector>
                 if is_pseudo_element {
                     chars.next();
                 }
-                let mut pseudo = String::new();
-                while chars
-                    .peek()
-                    .copied()
-                    .is_some_and(|c| c.is_alphanumeric() || c == '-' || c == '_')
-                {
-                    pseudo.push(chars.next().unwrap());
-                }
-                if pseudo.is_empty() {
-                    return None;
-                }
+                let pseudo = read_identifier(&mut chars)?;
 
                 let mut argument = None;
                 if chars.peek() == Some(&'(') {

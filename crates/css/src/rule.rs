@@ -150,6 +150,57 @@ pub struct KeyframesRule {
     pub frames: Vec<Keyframe>,
 }
 
+/// Serializes an identifier so that re-tokenizing the output yields the same decoded value
+/// (CSSOM "serialize an identifier"). The cascade re-serializes style-rule preludes and
+/// re-parses the resulting text as selectors, so an author's escapes (`.md\:flex`) must
+/// survive that round-trip; without them the identifier decays into a different token run.
+fn push_serialized_ident(out: &mut String, ident: &str) {
+    let mut chars = ident.chars().peekable();
+    let mut index = 0usize;
+    while let Some(ch) = chars.next() {
+        let first = index == 0;
+        match ch {
+            '\0' => out.push('\u{FFFD}'),
+            c if c.is_ascii_control() => push_hex_escape(out, c as u32),
+            c if first && c.is_ascii_digit() => push_hex_escape(out, c as u32),
+            '-' if first && chars.peek().is_none() => push_hex_escape(out, '-' as u32),
+            c if index == 1 && c.is_ascii_digit() && ident.starts_with('-') => {
+                push_hex_escape(out, c as u32)
+            }
+            c if c == '-' || c == '_' || c.is_ascii_alphanumeric() || !c.is_ascii() => out.push(c),
+            c => {
+                out.push('\\');
+                out.push(c);
+            }
+        }
+        index += 1;
+    }
+}
+
+/// Serializes the value of a hash token (`#id`). Unlike an identifier, a hash name may start
+/// with a digit (`#00ff00`), so only the characters that would terminate the hash token are
+/// escaped; leading digits stay intact.
+fn push_serialized_hash_value(out: &mut String, value: &str) {
+    for ch in value.chars() {
+        match ch {
+            '\0' => out.push('\u{FFFD}'),
+            c if c.is_ascii_control() => push_hex_escape(out, c as u32),
+            c if c == '-' || c == '_' || c.is_ascii_alphanumeric() || !c.is_ascii() => out.push(c),
+            c => {
+                out.push('\\');
+                out.push(c);
+            }
+        }
+    }
+}
+
+/// Writes `\XXXX ` (hex code point plus the terminating space) as CSSOM requires.
+fn push_hex_escape(out: &mut String, code: u32) {
+    out.push('\\');
+    out.push_str(&format!("{code:X}"));
+    out.push(' ');
+}
+
 /// Helper to serialize component values to a compact string.
 pub fn serialize_component_values(values: &[ComponentValue]) -> String {
     use crate::token::CssToken;
@@ -157,18 +208,21 @@ pub fn serialize_component_values(values: &[ComponentValue]) -> String {
     for cv in values {
         match cv {
             ComponentValue::PreservedToken(tok) => match tok {
-                CssToken::Ident(s) | CssToken::Function(s) => {
-                    out.push_str(s);
+                CssToken::Ident(s) => {
+                    push_serialized_ident(&mut out, s);
+                }
+                CssToken::Function(s) => {
+                    push_serialized_ident(&mut out, s);
                 }
                 CssToken::AtKeyword(s) => {
                     // Preserve the at-keyword marker so nested at-rules (e.g. `@media` inside
                     // `@layer`) round-trip through `parse_stylesheet`.
                     out.push('@');
-                    out.push_str(s);
+                    push_serialized_ident(&mut out, s);
                 }
                 CssToken::Hash { value, .. } => {
                     out.push('#');
-                    out.push_str(value);
+                    push_serialized_hash_value(&mut out, value);
                 }
                 CssToken::String(s) => {
                     // The token value is already escape-decoded: re-escape it so the
@@ -204,7 +258,7 @@ pub fn serialize_component_values(values: &[ComponentValue]) -> String {
                 }
                 CssToken::Dimension { value, unit, .. } => {
                     out.push_str(&value.to_string());
-                    out.push_str(unit);
+                    push_serialized_ident(&mut out, unit);
                 }
                 CssToken::Whitespace => out.push(' '),
                 CssToken::Cdo => out.push_str("<!--"),
@@ -234,7 +288,7 @@ pub fn serialize_component_values(values: &[ComponentValue]) -> String {
                 out.push(close);
             }
             ComponentValue::Function(f) => {
-                out.push_str(&f.name);
+                push_serialized_ident(&mut out, &f.name);
                 out.push('(');
                 out.push_str(&serialize_component_values(&f.values));
                 out.push(')');
