@@ -274,7 +274,7 @@ impl GridNames {
                     else {
                         continue;
                     };
-                    let key = name.to_ascii_lowercase();
+                    let key = name.clone();
                     let column_entry = names
                         .column_areas
                         .entry(key.clone())
@@ -300,17 +300,16 @@ impl GridNames {
             GridLine::Line(_) => line_boundary(line, track_count),
             GridLine::Auto | GridLine::Span(_) => None,
             GridLine::Name(name) => {
-                let lower = name.to_ascii_lowercase();
                 if let Some(index) = lines
                     .iter()
-                    .position(|names| names.iter().any(|entry| entry.eq_ignore_ascii_case(&lower)))
+                    .position(|names| names.iter().any(|entry| entry == name))
                 {
                     return Some(index);
                 }
-                if let Some(base) = lower.strip_suffix("-start") {
+                if let Some(base) = name.strip_suffix("-start") {
                     return areas.get(base).map(|(start, _)| *start);
                 }
-                if let Some(base) = lower.strip_suffix("-end") {
+                if let Some(base) = name.strip_suffix("-end") {
                     return areas.get(base).map(|(_, end)| *end);
                 }
                 None
@@ -360,8 +359,8 @@ fn placement_request(
         && let Some(name) = style.grid_area.as_ref()
     {
         let lower = name.to_ascii_lowercase();
-        if let Some((row_start, row_end)) = names.row_areas.get(&lower)
-            && let Some((column_start, column_end)) = names.column_areas.get(&lower)
+        if let Some((row_start, row_end)) = names.row_areas.get(name)
+            && let Some((column_start, column_end)) = names.column_areas.get(name)
         {
             request.row_start = Some(*row_start);
             request.row_span = row_end.saturating_sub(*row_start).max(1);
