@@ -184,7 +184,10 @@ mod cache_eviction_tests {
     fn oldest_entry_is_evicted_not_an_arbitrary_one() {
         let mut cache: HashMap<(String, String), (Instant, Option<Url>)> = HashMap::new();
         let now = Instant::now();
-        cache.insert(("p".into(), "old".into()), (now - Duration::from_secs(60), None));
+        cache.insert(
+            ("p".into(), "old".into()),
+            (now - Duration::from_secs(60), None),
+        );
         cache.insert(("p".into(), "fresh".into()), (now, None));
         let oldest = cache
             .iter()
