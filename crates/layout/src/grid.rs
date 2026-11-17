@@ -357,15 +357,13 @@ fn placement_request(
     if request.row_start.is_none()
         && request.column_start.is_none()
         && let Some(name) = style.grid_area.as_ref()
+        && let Some((row_start, row_end)) = names.row_areas.get(name)
+        && let Some((column_start, column_end)) = names.column_areas.get(name)
     {
-        if let Some((row_start, row_end)) = names.row_areas.get(name)
-            && let Some((column_start, column_end)) = names.column_areas.get(name)
-        {
-            request.row_start = Some(*row_start);
-            request.row_span = row_end.saturating_sub(*row_start).max(1);
-            request.column_start = Some(*column_start);
-            request.column_span = column_end.saturating_sub(*column_start).max(1);
-        }
+        request.row_start = Some(*row_start);
+        request.row_span = row_end.saturating_sub(*row_start).max(1);
+        request.column_start = Some(*column_start);
+        request.column_span = column_end.saturating_sub(*column_start).max(1);
     }
     // Clamp line indices and spans: they come from CSS integers (u32) and feed the
     // occupancy matrix and the implicit track list. `grid-column: span 4000000000` used to
