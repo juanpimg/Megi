@@ -223,3 +223,4 @@ fn long_multibyte_host_event_name_does_not_panic() {
         "DOMContentLoaded + load + the (unmatched) host event"
     );
 }
+
