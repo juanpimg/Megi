@@ -137,8 +137,13 @@ fn normalize_input(input: &str) -> Result<String, CliError> {
         ))
     })?;
     let path = path.display().to_string();
-    // The URL parser percent-encodes spaces and non-ASCII UTF-8 path bytes.
-    let url = format!("file://{path}");
+    // Percent-encode path characters that would be misinterpreted as URL syntax (#1219).
+    let encoded = path
+        .replace('%', "%25")
+        .replace('#', "%23")
+        .replace('?', "%3F")
+        .replace(' ', "%20");
+    let url = format!("file://{encoded}");
     net::Url::parse(&url)
         .map(|parsed| parsed.as_str())
         .map_err(|error| CliError::Usage(format!("cannot build file URL for {path}: {error}")))
