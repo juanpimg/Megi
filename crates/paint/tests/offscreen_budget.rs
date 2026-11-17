@@ -5,7 +5,7 @@
 //! painter now has a depth and a live-pixel budget; past it the contents are painted flat
 //! and nested groups are skipped instead of recursing.
 
-use css::{BorderRadii, Color, Length, Radius};
+use css::{BorderRadii, BoxShadow, Color, Length, Radius};
 use layout::Rect;
 use paint::{DisplayItem, DisplayList, rasterize_display_list};
 
@@ -170,5 +170,35 @@ fn deeply_nested_opacity_and_effect_groups_stay_bounded() {
     assert!(
         pixmap.pixels[32 * 64 + 32].g > 0,
         "nested effect groups must still paint their content"
+    );
+}
+
+#[test]
+fn stacked_shadows_stay_inside_the_pass_budget() {
+    // 64 fully overlapping blurred shadows used to allocate a mask plus blur scratch per
+    // layer with none of it charged to the pass budget (#1415). Past the cap the
+    // decoration is dropped, so the pass must complete and paint the first layers.
+    let width = 1024u32;
+    let height = 1024u32;
+    let mut items = Vec::new();
+    for _ in 0..64 {
+        items.push(DisplayItem::BoxShadow {
+            rect: Rect::new(0.0, 0.0, width as f32, height as f32),
+            radii: zero_radii(),
+            shadow: BoxShadow {
+                offset_x: 0.0,
+                offset_y: 0.0,
+                blur: 16.0,
+                spread: 0.0,
+                color: Color::new(0, 0, 0, 255),
+                inset: false,
+            },
+        });
+    }
+    let pixmap = rasterize_display_list(&DisplayList { items }, width, height);
+    let center = pixmap.pixels[(height as usize / 2) * width as usize + width as usize / 2];
+    assert!(
+        center.a > 0,
+        "the first shadow layers must still paint below the cap"
     );
 }

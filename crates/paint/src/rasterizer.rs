@@ -1718,7 +1718,7 @@ fn paint_items(
                 radii,
                 shadow,
             } => {
-                pixmap.draw_box_shadow(shift(*rect, dx, dy), *radii, *shadow);
+                pixmap.draw_box_shadow(shift(*rect, dx, dy), *radii, *shadow, budget);
             }
             DisplayItem::TextDecoration { rect, color } => {
                 pixmap.fill_rect(shift(*rect, dx, dy), *color);
@@ -1796,6 +1796,7 @@ fn paint_items(
                     *offset_x,
                     *offset_y,
                     *blur,
+                    budget,
                 );
             }
             DisplayItem::BackdropFilter { rect, filters } => {
@@ -1874,7 +1875,7 @@ fn paint_items(
 /// Rounded/text-mask/effect/opacity groups allocate a full-size buffer per nesting level;
 /// the per-group pixel cap alone does not bound the total (2,048 nested `border-radius`
 /// groups of 800×600 held ≈3.9 GB). Bound both the nesting depth and the live pixels.
-struct PaintBudget {
+pub(crate) struct PaintBudget {
     depth: usize,
     pixels: usize,
     /// Past the caps: paint group contents in place and skip nested groups instead of
@@ -1916,6 +1917,23 @@ impl PaintBudget {
         result
     }
 
+    /// Charges the transient scratch `pixels` need for one shadow, or refuses it when the
+    /// pass is already at the live-pixel cap.
+    ///
+    /// The reservation lives as long as the returned permit, so sibling shadows release
+    /// their scratch as they finish and only concurrent layers count against the cap.
+    fn reserve_shadow(&mut self, pixels: usize) -> Option<ShadowPermit<'_>> {
+        let charged = pixels.saturating_mul(SHADOW_SCRATCH_COPIES);
+        if self.pixels.saturating_add(charged) > MAX_OFFSCREEN_PIXELS {
+            return None;
+        }
+        self.pixels += charged;
+        Some(ShadowPermit {
+            budget: self,
+            charged,
+        })
+    }
+
     /// Releases a buffer reserved by [`PaintBudget::enter`].
     fn leave(&mut self, width: u32, height: u32) {
         self.leave_buffers(width, height, 1);
@@ -1932,13 +1950,41 @@ impl PaintBudget {
     }
 }
 
+/// Returns a shadow's scratch budget to the pass when the shadow finishes painting.
+struct ShadowPermit<'a> {
+    budget: &'a mut PaintBudget,
+    charged: usize,
+}
+
+impl ShadowPermit<'_> {
+    /// Pixels charged to the pass by this reservation.
+    #[cfg(test)]
+    fn charged(&self) -> usize {
+        self.charged
+    }
+}
+
+impl Drop for ShadowPermit<'_> {
+    fn drop(&mut self) {
+        self.budget.pixels = self.budget.pixels.saturating_sub(self.charged);
+    }
+}
+
 /// Maximum nesting of offscreen groups in one paint pass.
 const MAX_OFFSCREEN_GROUP_DEPTH: usize = 32;
 /// Maximum live offscreen pixels in one paint pass (256 MiB at 4 B/px).
 ///
-/// This bounds the group buffers; filter scratch (`blur_rgba`, text shadows) is not
-/// charged and stays a documented residual.
+/// This bounds the group buffers and, since #1415, the transient scratch a shadow
+/// allocates (its mask plus the separable-blur ping-pong plane). `blur_rgba` filter
+/// scratch reuses one thread-local plane set and stays a documented residual.
 const MAX_OFFSCREEN_PIXELS: usize = 64 * 1024 * 1024;
+
+/// Scratch f32 planes one shadow costs on top of its mask: the mask itself, the blur
+/// ping-pong buffer, and the full RGBA pixmap a text shadow rasterises into.
+///
+/// Charged against [`MAX_OFFSCREEN_PIXELS`] so a long `box-shadow`/`text-shadow` list
+/// cannot allocate one mask plus blur buffers per layer inside a single paint pass (#1415).
+const SHADOW_SCRATCH_COPIES: usize = 4;
 /// Flattened nesting of embedded-content groups (`EffectGroup`/`OpacityGroup`) before
 /// their contents are dropped; a flat recursion per level would overflow the stack.
 const MAX_FLATTEN_DEPTH: usize = 8;
@@ -2562,7 +2608,13 @@ impl Pixmap {
     }
 
     /// Draws one `box-shadow` layer (outer or inset) with a deterministic blur.
-    pub fn draw_box_shadow(&mut self, rect: Rect, radii: BorderRadii, shadow: BoxShadow) {
+    pub(crate) fn draw_box_shadow(
+        &mut self,
+        rect: Rect,
+        radii: BorderRadii,
+        shadow: BoxShadow,
+        budget: &mut PaintBudget,
+    ) {
         if shadow.color.a == 0 || rect.width <= 0.0 || rect.height <= 0.0 {
             return;
         }
@@ -2611,6 +2663,11 @@ impl Pixmap {
             // Defensive cap: skip pathological shadow regions (documented).
             return;
         }
+        // The mask and the blur scratch are charged to the pass budget; past it the
+        // decoration is dropped rather than allocating per layer (#1415).
+        let Some(_scratch) = budget.reserve_shadow(width.saturating_mul(height)) else {
+            return;
+        };
         let corners = resolve_corner_radii(shape, shape_radii);
         let hole = if shadow.inset {
             Some((
@@ -2769,6 +2826,7 @@ fn paint_text_shadow(
     offset_x: f32,
     offset_y: f32,
     blur: f32,
+    budget: &mut PaintBudget,
 ) {
     if color.a == 0 || text.is_empty() {
         return;
@@ -2800,6 +2858,11 @@ fn paint_text_shadow(
     if (width as usize).saturating_mul(height as usize) > MAX_ROUNDED_GROUP_PIXELS {
         return;
     }
+    // The RGBA buffer, the mask and the blur scratch are charged to the pass budget (#1415).
+    let Some(_scratch) = budget.reserve_shadow((width as usize).saturating_mul(height as usize))
+    else {
+        return;
+    };
     let mut buffer = Pixmap::new(width, height);
     buffer.push_clip(Rect::new(0.0, 0.0, width as f32, height as f32));
     let text_rect = Rect::new(
@@ -4319,5 +4382,47 @@ mod glyph_origin_overflow_tests {
         let origin = i32::MIN;
         let clamped = (i64::from(origin) - 1_i64).clamp(i64::from(i32::MIN), i64::from(i32::MAX));
         assert_eq!(clamped, i64::from(i32::MIN));
+    }
+}
+
+#[cfg(test)]
+mod shadow_budget_tests {
+    use super::*;
+
+    fn empty_budget() -> PaintBudget {
+        PaintBudget {
+            depth: 0,
+            pixels: 0,
+            flatten: false,
+            flatten_depth: 0,
+        }
+    }
+
+    #[test]
+    fn a_shadow_charges_its_scratch_until_the_permit_drops() {
+        let mut budget = empty_budget();
+        let charged = {
+            let permit = budget.reserve_shadow(1_000).expect("the first shadow fits");
+            permit.charged()
+        };
+        assert_eq!(budget.pixels, 0, "the permit must return its reservation");
+        assert_eq!(charged, 1_000 * SHADOW_SCRATCH_COPIES);
+    }
+
+    #[test]
+    fn a_shadow_past_the_live_pixel_cap_is_refused() {
+        let mut budget = empty_budget();
+        assert!(
+            budget.reserve_shadow(MAX_OFFSCREEN_PIXELS).is_none(),
+            "a shadow whose scratch exceeds the whole pass must be refused"
+        );
+        budget.pixels = MAX_OFFSCREEN_PIXELS - 1;
+        assert!(budget.reserve_shadow(1).is_none());
+        budget.pixels = 0;
+        let fits = MAX_OFFSCREEN_PIXELS / SHADOW_SCRATCH_COPIES;
+        assert!(
+            budget.reserve_shadow(fits).is_some(),
+            "a shadow that exactly fills the cap is accepted"
+        );
     }
 }
