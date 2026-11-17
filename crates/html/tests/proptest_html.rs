@@ -36,13 +36,37 @@ fn html_like_string() -> impl Strategy<Value = String> {
     .prop_map(|parts| parts.concat())
 }
 
+/// HTML fragments without raw-text elements (`script`/`style`/`textarea`/`title`) or comments.
+/// Only these are guaranteed to round-trip through serialize -> reparse: raw-text content is
+/// serialized verbatim and can re-enter a different tokenizer state on reparse (a spec-level
+/// limitation, not an engine bug).
+fn roundtrippable_html() -> impl Strategy<Value = String> {
+    prop::collection::vec(
+        prop_oneof![
+            Just("<div>".to_string()),
+            Just("</div>".to_string()),
+            Just("<p>".to_string()),
+            Just("</p>".to_string()),
+            Just("<b>".to_string()),
+            Just("</b>".to_string()),
+            Just("<span>".to_string()),
+            Just("</span>".to_string()),
+            Just("&amp;".to_string()),
+            Just("text".to_string()),
+            any::<String>().prop_filter("no markup delimiters", |s| !s.contains(['<', '>', '&'])),
+        ],
+        0..24,
+    )
+    .prop_map(|parts| parts.concat())
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]
 
     #[test]
     fn parse_document_arbitrary_utf8_never_panics(input in any::<String>()) {
         let doc = parse_document(&input, false);
-        prop_assert!(!serialize_dom_for_test(&doc).is_empty() || input.is_empty() || true);
+        prop_assert!(!serialize_dom_for_test(&doc).is_empty() || input.is_empty());
     }
 
     #[test]
@@ -98,11 +122,15 @@ proptest! {
     }
 
     #[test]
-    fn serialize_html_never_panics_on_arbitrary_parsed_dom(input in html_like_string()) {
+    fn serialize_html_round_trips_non_rawtext_dom(input in roundtrippable_html()) {
+        // The old `html_out.len() >= frag_out.len() || true` was vacuous (#1354). Assert the
+        // real invariant: for ordinary (non-raw-text) markup, serialize -> reparse -> serialize
+        // is idempotent. Raw-text elements are excluded because their verbatim serialization
+        // can re-enter a different tokenizer state on reparse (a spec-level limitation).
         let doc = parse_document(&input, false);
         let html_out = serialize_html(&doc);
-        let frag_out = serialize_fragment(&doc, doc.root());
-        prop_assert!(html_out.len() >= frag_out.len() || true);
+        let doc2 = parse_document(&html_out, false);
+        prop_assert_eq!(html_out, serialize_html(&doc2));
     }
 
     #[test]
