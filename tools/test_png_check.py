@@ -4,13 +4,22 @@
 from __future__ import annotations
 
 import binascii
+import importlib.util
 import os
 import struct
+import sys
 import tempfile
 import unittest
+from pathlib import Path
 import zlib
 
-import png_check
+# Load by path so the module works both under `unittest discover -s tools` and as
+# `python3 -m unittest tools.test_png_check` (CI runs the latter; #1402).
+_MODULE_PATH = Path(__file__).with_name("png_check.py")
+_spec = importlib.util.spec_from_file_location("png_check", _MODULE_PATH)
+png_check = importlib.util.module_from_spec(_spec)
+sys.modules["png_check"] = png_check
+_spec.loader.exec_module(png_check)
 
 
 def make_chunk(kind: bytes, payload: bytes) -> bytes:

@@ -92,8 +92,15 @@ jobs:
       # (docs/audit/README.md).
       - name: Audit coverage ledger
         run: python3 tools/audit_coverage.py --check
-      - name: Audit tooling tests
-        run: python3 -m unittest discover -s tools -p 'test_audit_*.py'
+      - name: Tools tests (all modules)
+        # Run every tools test module explicitly (#1402): a `test_*.py` glob would also
+        # pick up test_inspector.py, which is a CLI, not a test module.
+        run: >-
+          python3 -m unittest
+          tools.test_audit_coverage
+          tools.test_update_coverage
+          tools.test_png_check
+          tools.test_real_site_check
 
   quality:
     name: Quality gate (fmt, clippy, tests, docs)

@@ -224,5 +224,44 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(audit_coverage.cmd_check(argparse.Namespace(strict=True)), 1)
 
 
+class CiToolTestsCoverageTest(unittest.TestCase):
+    """CI must execute every tools test module, not just the audit-ledger one (#1402)."""
+
+    def test_ci_runs_all_tools_test_modules(self) -> None:
+        root = Path(__file__).resolve().parent.parent
+        ci = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        # Find the unittest invocation line(s) in the workflow.
+        lines = ci.splitlines()
+        # The command may be a folded YAML scalar (`>-`) with module names on the following
+        # indented lines; collect the invocation line plus its continuation block.
+        start = next(
+            (i for i, line in enumerate(lines) if "python3 -m unittest" in line),
+            None,
+        )
+        self.assertIsNotNone(start, "CI must invoke python3 -m unittest")
+        block: list[str] = []
+        for line in lines[start:]:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            indent = len(line) - len(line.lstrip(" "))
+            # The folded-scalar command lines share the invocation's indent (10 here);
+            # any line at a lower indent starts a new YAML key/step.
+            if block and indent < 10:
+                break
+            block.append(stripped)
+        joined = " ".join(block)
+        for module in (
+            "tools.test_audit_coverage",
+            "tools.test_update_coverage",
+            "tools.test_png_check",
+            "tools.test_real_site_check",
+        ):
+            self.assertIn(module, joined, f"CI must run {module}: {joined}")
+        # `test_inspector.py` is a CLI, not a test module; a broad `test_*.py` discovery
+        # would try to import it. Ensure CI does not rely on that glob.
+        self.assertNotIn("-p 'test_*.py'", joined)
+
+
 if __name__ == "__main__":
     unittest.main()
