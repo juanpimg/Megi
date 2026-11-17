@@ -371,7 +371,7 @@ crates/paint/tests/filter_blend.rs	412	test	F1	waveF1	2026-11-17	covered	#1363,#
 crates/paint/tests/gradients.rs	894	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
 crates/paint/tests/hit_testing.rs	347	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
 crates/paint/tests/images.rs	220	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
-crates/paint/tests/offscreen_budget.rs	174	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
+crates/paint/tests/offscreen_budget.rs	204	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
 crates/paint/tests/png_format.rs	211	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
 crates/paint/tests/png_regions.rs	202	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
 crates/paint/tests/raster_quality.rs	526	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
