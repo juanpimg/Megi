@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Coverage](docs/status/badge-coverage.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `da49557` (2026-11-17) · coverage **77%** (54/70) · **2,443** tests · conformance **PASS** · **14** crates · **181,660** lines of Rust
+**Snapshot** — commit `139e8e5` (2026-11-17) · coverage **77%** (54/70) · **2,444** tests · conformance **PASS** · **14** crates · **181,692** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -152,10 +152,10 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `da49557` (2026-11-17) |
+| Commit | `139e8e5` (2026-11-17) |
 | Crates in the workspace | 14 |
-| Lines of Rust (tracked `.rs`) | 181660 |
-| Tests (`cargo test --workspace -- --list`) | 2443 |
+| Lines of Rust (tracked `.rs`) | 181692 |
+| Tests (`cargo test --workspace -- --list`) | 2444 |
 | Crates with `#![forbid(unsafe_code)]` | 14 / 14 |
 | Conformance gate | **PASS** |
 
