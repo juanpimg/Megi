@@ -32,14 +32,14 @@ Megi ha cerrado funcionalmente la Fase 4 (renderizado) y tiene un pipeline de na
 
 - **Esfuerzo**: un motor ECMAScript completo es un proyecto de años; el objetivo es integrar uno existente, no reimplementarlo.
 - **Licencias**: Megi se distribuye como `MIT OR Apache-2.0`; el motor elegido debe ser compatible y declarado.
-- **Tamaño y compilación**: afecta al build por defecto, al MSRV (1.88) y al CI (el proyecto exige `cargo +1.88 check --workspace --all-targets`).
+- **Tamaño y compilación**: afecta al build por defecto, al MSRV (1.91, exigido por Boa 0.22) y al CI (el proyecto exige `cargo +1.91 check --workspace --all-targets`; el antiguo job `+1.88` ya no compila, ver `CONTRIBUTING.md`).
 - **Política del repo** ([`ARCHITECTURE.md`](ARCHITECTURE.md) §3): prohibido delegar el **núcleo** (HTML/CSS/layout/pintado) a motores de terceros; un motor JS es un **componente** distinto y puede ser delegado, pero la decisión debe ser explícita.
 - **Seguridad**: ejecutar JS no confiable es la mayor superficie de ataque del navegador; requiere frontera, presupuestos y fuzzing desde el primer WP.
 - **Compatibilidad**: el objetivo no es pasar Test262 completo, sino renderizar páginas reales y cerrar los tests `scripted_*` del corpus; hay que decidir cuánto ES/DOM se exige.
 
 **Estado real verificado en la decisión (ronda 7)**: **602 tests, 0 fallos**; gate de 4 suites PASS (tokenizer 7.050/7.050, árbol 3.898/3.904, serializador 230/230, CSS 30/30); Fase 6 con **decisión ACEPTADA el 2026-11-10**, implementación arrancando por `WP-6.1`.
 
-**Estado actual (`main`, post-v0.1.0)**: **2.383 tests, 0 fallos**; gate PASS; **175+ tests js**; **Boa 0.22** embebido con **TLA real y live bindings** (`eval_module_async` con `ModuleLoader`, await Promise/fetch/timer, orden topológico, ciclos nativos), **`fetch()` + `AbortController`/`AbortSignal`**, **Web Workers cooperativos deterministas** (`with_document_realm(..., is_worker)` con realm aislado sin DOM), **`localStorage`/`sessionStorage`** (orden de inserción + WebIDL index/boolean conformance), `MutationObserver` y reutilización acotada de slots de listeners (`MAX_EVENT_LISTENERS = 16_384`). Todos los crates con `#![forbid(unsafe_code)]`; MSRV Rust 1.88+.
+**Estado actual (`main`, post-v0.1.0)**: **2.383 tests, 0 fallos**; gate PASS; **175+ tests js**; **Boa 0.22.x** embebido con **TLA real y live bindings** (`eval_module_async` con `ModuleLoader`, await Promise/fetch/timer, orden topológico, ciclos nativos), **`fetch()` + `AbortController`/`AbortSignal`**, **Web Workers cooperativos deterministas** (`with_document_realm(..., is_worker)` con realm aislado sin DOM), **`localStorage`/`sessionStorage`** (orden de inserción + WebIDL index/boolean conformance), `MutationObserver` y reutilización acotada de slots de listeners (`MAX_EVENT_LISTENERS = 16_384`). Todos los crates con `#![forbid(unsafe_code)]`; MSRV Rust 1.91+ (1.88 fue el MSRV histórico con Boa 0.21).
 
 ---
 

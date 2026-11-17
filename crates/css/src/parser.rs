@@ -94,8 +94,7 @@ pub const MAX_COMPONENT_NESTING: usize = 256;
 /// `consume_qualified_rule` and `consume_block_contents` are mutually recursive; without a bound
 /// a ~52 KB sheet of `a{a{a{…` overflows the 8 MB host stack before any declaration is validated
 /// (#1412). Real author stylesheets nest only a handful of levels. Past this cap the deep block is
-/// consumed with the iterative [`skip_to_matching`] and dropped, so the surrounding rules still
-/// parse.
+/// consumed iteratively and dropped, so the surrounding rules still parse.
 pub const MAX_RULE_NESTING: usize = 32;
 
 /// Consumes a component value from the stream (§5.5.8).
