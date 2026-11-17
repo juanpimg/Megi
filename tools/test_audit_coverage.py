@@ -224,6 +224,26 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(audit_coverage.cmd_check(argparse.Namespace(strict=True)), 1)
 
 
+class FuzzCorpusTest(unittest.TestCase):
+    """Every fuzz target must ship at least one seed (#1425)."""
+
+    def test_every_fuzz_target_has_a_seed(self) -> None:
+        root = Path(__file__).resolve().parent.parent
+        targets = root / "fuzz" / "fuzz_targets"
+        corpus = root / "fuzz" / "corpus"
+        self.assertTrue(targets.is_dir())
+        missing = []
+        for target in sorted(targets.glob("*.rs")):
+            seed_dir = corpus / target.stem
+            seeds = [p for p in seed_dir.iterdir() if p.is_file()] if seed_dir.is_dir() else []
+            if not seeds:
+                missing.append(target.stem)
+        self.assertEqual(
+            missing, [],
+            f"fuzz targets without seed corpus: {missing}",
+        )
+
+
 class CiToolTestsCoverageTest(unittest.TestCase):
     """CI must execute every tools test module, not just the audit-ledger one (#1402)."""
 

@@ -1,0 +1,3 @@
+ X<p class=x>text</p>
+---
+.x{color:red;width:calc(50vw)}
