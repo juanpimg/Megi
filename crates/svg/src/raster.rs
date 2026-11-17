@@ -36,6 +36,10 @@ const STAMP_SAMPLES: u32 = 4;
 /// work that nested patterns can trigger.
 const MAX_PATTERN_TILE_PIXELS: u64 = 16 * 1024 * 1024;
 
+/// Total glyphs rasterized across all `<text>` elements in one SVG render (#432).
+/// Per-element caps (1000 texts × 10k chars) still allow 10M font lookups + rasterizations.
+const MAX_SVG_GLYPHS: u64 = 50_000;
+
 /// Rasterizes a document into a straight-RGBA image.
 pub(crate) fn rasterize(
     document: &Document,
@@ -107,6 +111,8 @@ pub(crate) fn rasterize(
 struct PatternBudget {
     tiles: u64,
     pixels: u64,
+    /// Shared glyph budget for every text element in the render (#432).
+    glyphs: u64,
 }
 
 impl Default for PatternBudget {
@@ -114,6 +120,7 @@ impl Default for PatternBudget {
         Self {
             tiles: MAX_PATTERN_TILES,
             pixels: MAX_PATTERN_TILE_PIXELS,
+            glyphs: MAX_SVG_GLYPHS,
         }
     }
 }
@@ -955,6 +962,19 @@ fn draw_text(
     if spec.opacity <= 0.0 || spec.text.is_empty() {
         return Ok(());
     }
+    // Charge the whole text up front (twice for textPath, which walks glyphs for both
+    // natural-length measurement and placement) so a document full of texts cannot
+    // bypass the global glyph cap (#432).
+    let mut budget_state = budget.get();
+    let passes = if spec.text_path.is_some() { 2u64 } else { 1 };
+    let cost = (spec.text.chars().count() as u64).saturating_mul(passes);
+    if cost > budget_state.glyphs {
+        return Err(SvgError::Limit(format!(
+            "SVG glyph budget of {MAX_SVG_GLYPHS} exceeded"
+        )));
+    }
+    budget_state.glyphs -= cost;
+    budget.set(budget_state);
     let Some(database) = text::bundled_database() else {
         return Ok(());
     };
