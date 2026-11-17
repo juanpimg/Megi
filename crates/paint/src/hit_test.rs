@@ -92,7 +92,7 @@ pub struct HitLink {
 #[derive(Default)]
 pub(crate) struct RegionCollector {
     regions: Vec<HitRegion>,
-    clip_stack: Vec<(Rect, Rect)>,
+    clip_stack: Vec<Option<(Rect, Rect)>>,
 }
 
 impl RegionCollector {
@@ -100,10 +100,12 @@ impl RegionCollector {
 
     pub(crate) fn push_clip(&mut self, rect: Rect) {
         if self.clip_stack.len() >= Self::MAX_CLIP_DEPTH {
+            self.clip_stack.push(None);
             return;
         }
         let current = match self.clip_stack.last() {
-            Some((_, running)) => *running,
+            Some(Some((_, running))) => *running,
+            Some(None) => rect,
             None => rect, // viewport bounds enforced by region rects themselves
         };
         let x0 = current.x.max(rect.x);
@@ -111,7 +113,7 @@ impl RegionCollector {
         let x1 = (current.x + current.width).min(rect.x + rect.width);
         let y1 = (current.y + current.height).min(rect.y + rect.height);
         let running = Rect::new(x0, y0, (x1 - x0).max(0.0), (y1 - y0).max(0.0));
-        self.clip_stack.push((rect, running));
+        self.clip_stack.push(Some((rect, running)));
     }
 
     pub(crate) fn pop_clip(&mut self) {
@@ -121,7 +123,9 @@ impl RegionCollector {
     /// Intersection of the whole clip stack (viewport bounds are enforced by the
     /// region rectangles themselves, which the painter already keeps in view).
     fn current_clip(&self) -> Option<Rect> {
-        self.clip_stack.last().map(|(_, running)| *running)
+        self.clip_stack
+            .last()
+            .and_then(|e| e.map(|(_, running)| running))
     }
 
     /// Records `rect` clipped by the current clip stack.

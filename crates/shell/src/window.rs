@@ -450,7 +450,7 @@ impl WindowApp {
         self.scale_factor = window.scale_factor();
         let size = window.inner_size();
         self.metrics = window_metrics_zoomed(size.width, size.height, self.scale_factor, self.zoom);
-        self.scroll = ScrollState::new(1, self.metrics.css_height);
+        self.scroll = ScrollState::new(1, self.page_viewport_height());
         self.window = Some(window);
         self.context = Some(context);
         self.surface = Some(surface);
@@ -539,7 +539,7 @@ impl WindowApp {
         self.history_menu = None;
         self.hover_url = None;
         self.address.cancel();
-        self.scroll = ScrollState::new(1, self.metrics.css_height);
+        self.scroll = ScrollState::new(1, self.page_viewport_height());
         self.update_title();
         if let Some(window) = &self.window {
             window.request_redraw();
@@ -1066,7 +1066,7 @@ impl WindowApp {
             })
             .unwrap_or((self.requested_width, self.requested_height));
         self.metrics = window_metrics_zoomed(width, height, self.scale_factor, self.zoom);
-        self.scroll.set_viewport_height(self.metrics.css_height);
+        self.scroll.set_viewport_height(self.page_viewport_height());
         self.update_title();
         if let Some(window) = &self.window {
             window.request_redraw();
@@ -1709,7 +1709,7 @@ impl WindowApp {
             .unwrap_or((self.requested_width, self.requested_height));
         self.metrics = window_metrics_zoomed(width, height, self.scale_factor, self.zoom);
         self.scroll = tab.scroll;
-        self.scroll.set_viewport_height(self.metrics.css_height);
+        self.scroll.set_viewport_height(self.page_viewport_height());
         self.scroll.clamp();
         self.find = tab.find;
         self.find_editing = tab.find_editing;
@@ -1830,7 +1830,7 @@ impl WindowApp {
         }
         let rect = self.find_rects[self.find.current() % self.find_rects.len()];
         let offset =
-            find::scroll_offset_for(&rect, self.metrics.css_height, self.scroll.max_offset());
+            find::scroll_offset_for(&rect, self.page_viewport_height(), self.scroll.max_offset());
         if self.scroll.scroll_to(offset) {
             self.update_title();
         }

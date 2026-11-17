@@ -33,7 +33,7 @@ fn test_color_srgb_and_srgb_linear() {
     );
     let alpha = Color::parse("color(srgb 1 0 0 / 50%)").expect("alpha");
     assert_eq!(alpha.a, 128);
-    let clamped = Color::parse("color(srgb 2 -1 0.5 / 2)").expect("clamped");
+    let clamped = Color::parse("color(srgb 2 -1 0.5 / 100%)").expect("clamped");
     assert_eq!(
         (clamped.r, clamped.g, clamped.b, clamped.a),
         (255, 0, 128, 255)

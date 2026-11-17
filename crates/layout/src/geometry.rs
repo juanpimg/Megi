@@ -31,12 +31,34 @@ impl Rect {
 
     /// Tests if a point (px, py) is inside this rectangle.
     pub fn contains_point(&self, px: f32, py: f32) -> bool {
-        px >= self.x && px <= self.x + self.width && py >= self.y && py <= self.y + self.height
+        // A NaN point or a NaN edge must never count as "inside".
+        self.x.is_finite()
+            && self.y.is_finite()
+            && self.width.is_finite()
+            && self.height.is_finite()
+            && px.is_finite()
+            && py.is_finite()
+            && px >= self.x
+            && px <= self.x + self.width
+            && py >= self.y
+            && py <= self.y + self.height
     }
 
     /// Returns the geometric intersection of two rectangles, or `None` when they do not
     /// overlap. Used to compose inherited `overflow` clip rectangles (CSS 2.2 §11.1).
     pub fn intersect(&self, other: Rect) -> Option<Rect> {
+        // Reject any non-finite input so NaN/Inf geometry never reaches paint.
+        if !self.x.is_finite()
+            || !self.y.is_finite()
+            || !self.width.is_finite()
+            || !self.height.is_finite()
+            || !other.x.is_finite()
+            || !other.y.is_finite()
+            || !other.width.is_finite()
+            || !other.height.is_finite()
+        {
+            return None;
+        }
         let x = self.x.max(other.x);
         let y = self.y.max(other.y);
         let right = (self.x + self.width).min(other.x + other.width);

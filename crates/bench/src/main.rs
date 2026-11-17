@@ -22,7 +22,23 @@ use std::time::Instant;
 use cli::{Options, Parsed};
 
 fn main() -> ExitCode {
-    let parsed = match Options::parse(std::env::args().skip(1)) {
+    // `std::env::args()` panics on non-Unicode arguments; `args_os()` lets us report the
+    // same diagnostic as every other CLI error (#1209).
+    let raw_args: Vec<String> = match std::env::args_os()
+        .skip(1)
+        .map(|arg| {
+            arg.into_string()
+                .map_err(|_| "argument is not valid UTF-8".to_string())
+        })
+        .collect::<Result<_, _>>()
+    {
+        Ok(args) => args,
+        Err(error) => {
+            eprintln!("bench: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let parsed = match Options::parse(raw_args) {
         Ok(parsed) => parsed,
         Err(error) => {
             eprintln!("bench: {error}");
@@ -53,10 +69,14 @@ fn main() -> ExitCode {
     let setup_ms = setup_started.elapsed().as_secs_f64() * 1000.0;
 
     let outcome = suite.run(&options, setup_ms);
+    let empty = outcome.results.is_empty();
     if options.json {
         report::print_json(&outcome);
     } else {
         report::print_table(&outcome);
+    }
+    if empty {
+        return ExitCode::FAILURE;
     }
     ExitCode::SUCCESS
 }

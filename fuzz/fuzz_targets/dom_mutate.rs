@@ -55,8 +55,9 @@ fuzz_target!(|data: &[u8]| {
                     let n = nodes[data[i] as usize % nodes.len()];
                     let deep = data[i] & 1 != 0;
                     i += 1;
-                    let clone = doc.clone_node(n, deep);
-                    if nodes.len() < 64 {
+                    if let Some(clone) = doc.clone_node(n, deep)
+                        && nodes.len() < 64
+                    {
                         nodes.push(clone);
                     }
                 }

@@ -1,0 +1,231 @@
+{
+  "schema": 1,
+  "overall": {
+    "implemented": 54,
+    "partial": 2,
+    "known": 70,
+    "percent": 77,
+    "unverified": [],
+    "invalid_states": []
+  },
+  "areas": [
+    {
+      "id": "F1",
+      "implemented": 7,
+      "partial": 0,
+      "known": 7,
+      "percent": 100
+    },
+    {
+      "id": "F2",
+      "implemented": 8,
+      "partial": 0,
+      "known": 9,
+      "percent": 89
+    },
+    {
+      "id": "F3",
+      "implemented": 6,
+      "partial": 0,
+      "known": 8,
+      "percent": 75
+    },
+    {
+      "id": "F4",
+      "implemented": 10,
+      "partial": 1,
+      "known": 13,
+      "percent": 77
+    },
+    {
+      "id": "F5",
+      "implemented": 8,
+      "partial": 0,
+      "known": 10,
+      "percent": 80
+    },
+    {
+      "id": "F6",
+      "implemented": 8,
+      "partial": 0,
+      "known": 11,
+      "percent": 73
+    },
+    {
+      "id": "F7",
+      "implemented": 5,
+      "partial": 0,
+      "known": 9,
+      "percent": 56
+    },
+    {
+      "id": "X",
+      "implemented": 2,
+      "partial": 1,
+      "known": 3,
+      "percent": 67
+    }
+  ],
+  "missing": [
+    {
+      "id": "F2-ANIM-RUNTIME",
+      "area": "F2",
+      "name": "Animaciones CSS @keyframes/transition en runtime",
+      "source": "issue #941 / #942",
+      "state": "missing",
+      "evidence": "none",
+      "issue": 941,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F3-TABLE-CENTER",
+      "area": "F3",
+      "name": "Maquetación real de HN (<center>/<table>) sin página en blanco",
+      "source": "issue #1011",
+      "state": "missing",
+      "evidence": "none",
+      "issue": 1011,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F3-IFC-EDGES",
+      "area": "F3",
+      "name": "Casos límite IFC (bidi/justify) y profundidad de tablas",
+      "source": "PROGRESS.md F3 pending",
+      "state": "missing",
+      "evidence": "none",
+      "issue": "",
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F4-CJK-FONTS",
+      "area": "F4",
+      "name": "Fallback de fuentes CJK/emoji (sin tofu)",
+      "source": "issue #1015",
+      "state": "missing",
+      "evidence": "none",
+      "issue": 1015,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F4-ARABIC-SHAPING",
+      "area": "F4",
+      "name": "Shaping contextual de árabe/hebreo/tailandés",
+      "source": "issue #987",
+      "state": "missing",
+      "evidence": "none",
+      "issue": 987,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F4-PERF-BUDGETS",
+      "area": "F4",
+      "name": "Presupuestos de rendimiento de rasterizado/decoders en webs reales",
+      "source": "issue #1014 / PROGRESS.md F4 pending",
+      "state": "partial",
+      "evidence": "none",
+      "issue": 1014,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F5-PROXY-PAC",
+      "area": "F5",
+      "name": "PAC/SOCKS completo y pooling de proxies",
+      "source": "PROGRESS.md next_up",
+      "state": "missing",
+      "evidence": "none",
+      "issue": "",
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F5-IMAGE-BUDGETS",
+      "area": "F5",
+      "name": "Presupuestos de decodificado de imágenes en webs reales",
+      "source": "PROGRESS.md F5 pending",
+      "state": "missing",
+      "evidence": "none",
+      "issue": "",
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F6-WORKERS-DOM",
+      "area": "F6",
+      "name": "Web Workers con acceso a DOM",
+      "source": "PROGRESS.md F6 pending",
+      "state": "missing",
+      "evidence": "none",
+      "issue": "",
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F6-IMPORTMAP-SCOPES",
+      "area": "F6",
+      "name": "Import-map scopes/integrity y dynamic import no literal",
+      "source": "PROGRESS.md F6 pending",
+      "state": "missing",
+      "evidence": "none",
+      "issue": "",
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F6-CONFORMANCE",
+      "area": "F6",
+      "name": "JS/DOM conformance testing y memory accounting",
+      "source": "PROGRESS.md next_up",
+      "state": "missing",
+      "evidence": "none",
+      "issue": "",
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F7-CHROME-OVERLAY",
+      "area": "F7",
+      "name": "La barra de chrome no tapa el contenido (scroll_y=0)",
+      "source": "issue #1012",
+      "state": "missing",
+      "evidence": "none",
+      "issue": 1012,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F7-SAVE-AS",
+      "area": "F7",
+      "name": "Diálogo visual de guardado y descarga de recursos",
+      "source": "issue #988",
+      "state": "missing",
+      "evidence": "none",
+      "issue": 988,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F7-A11Y",
+      "area": "F7",
+      "name": "Accesibilidad y widgets nativos",
+      "source": "issue #989",
+      "state": "missing",
+      "evidence": "none",
+      "issue": 989,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F7-ISOLATION",
+      "area": "F7",
+      "name": "Aislamiento multiproceso por pestaña",
+      "source": "issue #946",
+      "state": "missing",
+      "evidence": "none",
+      "issue": 946,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "X-FUZZ-LONG",
+      "area": "X",
+      "name": "Campañas largas de fuzzing (16 targets)",
+      "source": "PROGRESS.md cross-cutting",
+      "state": "partial",
+      "evidence": "none",
+      "issue": "",
+      "reason": "no requiere evidencia"
+    }
+  ]
+}

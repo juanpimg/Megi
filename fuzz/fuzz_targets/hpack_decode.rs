@@ -37,6 +37,9 @@ fuzz_target!(|data: &[u8]| {
     }
 
     // 2. HTTP/2 frame stream (bounded by MAX_FRAMES and the 16 KiB frame cap).
+    // Reuse a single dynamic table across frames (#470) so growth/eviction/indexing
+    // bugs are exercised the way a real connection does.
+    let mut decoder = net::h2::hpack::Decoder::new(4096);
     let mut reader =
         net::h2::frame::FrameReader::new(Cursor::new(data), net::h2::MAX_FRAME_SIZE);
     for _ in 0..MAX_FRAMES {
@@ -48,7 +51,6 @@ fuzz_target!(|data: &[u8]| {
                 let _ = frame.parse_goaway();
                 let _ = frame.data_payload();
                 if let Ok(payload) = frame.headers_payload() {
-                    let mut decoder = net::h2::hpack::Decoder::new(4096);
                     if let Ok(headers) = decoder.decode(payload) {
                         for (name, value) in headers {
                             let _ = name.len() + value.len();

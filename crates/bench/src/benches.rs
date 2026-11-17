@@ -127,7 +127,8 @@ fn register_html(suite: &mut Suite, scale: f64) {
         )
         .with_units(mib, "MiB");
         // 32k/64k are the expensive probes: keep their iteration count low.
-        suite.add(if base_depth >= 32_000 {
+        // Classify on the scaled depth so --scale changes the sample regime (#1208).
+        suite.add(if depth >= 32_000 {
             entry.heavy()
         } else {
             entry
@@ -448,15 +449,15 @@ fn register_layout_and_paint(suite: &mut Suite, scale: f64) {
             move || {
                 let document = html::parse_document(&html_source, false);
                 let styles = paint::resolve_embedded_styles(&document);
-                if let Some(root) = layout::layout_document(&document, &styles, viewport) {
-                    let display_list = paint::build_display_list(&root, viewport);
-                    let pixmap = paint::rasterize_display_list(
-                        &display_list,
-                        VIEWPORT_WIDTH,
-                        VIEWPORT_HEIGHT,
-                    );
-                    black_box(pixmap.to_png());
-                }
+                let root = layout::layout_document(&document, &styles, viewport)
+                    .expect("fixture must lay out");
+                let display_list = paint::build_display_list(&root, viewport);
+                let pixmap = paint::rasterize_display_list(
+                    &display_list,
+                    viewport.width as u32,
+                    viewport.height as u32,
+                );
+                black_box(pixmap.to_png());
             },
         )
         .heavy(),
@@ -591,20 +592,20 @@ fn add_feature_pipeline(
                     name,
                     "pipeline",
                     format!(
-                        "{what}: {items} items de display list, PNG {png_bytes} B,                          parse+styles+layout+dl+raster+PNG"
+                        "{what}: {items} items de display list, PNG {png_bytes} B - parse+styles+layout+dl+raster+PNG"
                     ),
                     move || {
                         let document = html::parse_document(&html_source, false);
                         let styles = paint::resolve_embedded_styles(&document);
-                        if let Some(root) = layout::layout_document(&document, &styles, viewport) {
-                            let display_list = paint::build_display_list(&root, viewport);
-                            let pixmap = paint::rasterize_display_list(
-                                &display_list,
-                                VIEWPORT_WIDTH,
-                                VIEWPORT_HEIGHT,
-                            );
-                            black_box(pixmap.to_png());
-                        }
+                        let root = layout::layout_document(&document, &styles, viewport)
+                            .expect("fixture must lay out");
+                        let display_list = paint::build_display_list(&root, viewport);
+                        let pixmap = paint::rasterize_display_list(
+                            &display_list,
+                            viewport.width as u32,
+                            viewport.height as u32,
+                        );
+                        black_box(pixmap.to_png());
                     },
                 )
                 .heavy(),
@@ -1301,19 +1302,19 @@ fn register_image(suite: &mut Suite) {
             "image/decode-webp-lossless",
             WEBP_PHOTO,
             "WebP VP8L (transforms)",
-            true,
+            false,
         ),
         (
             "image/decode-webp-alpha",
             WEBP_ALPHA,
             "WebP VP8L (alpha)",
-            true,
+            false,
         ),
         (
             "image/decode-webp-palette",
             WEBP_PALETTE,
             "WebP VP8L (palette)",
-            true,
+            false,
         ),
         (
             "image/decode-webp-lossy",
@@ -1487,13 +1488,23 @@ fn register_fonts(suite: &mut Suite, scale: f64) {
         suite.skip("fonts/shape-1k-words", reason);
         return;
     }
-    let Ok(measure_font) = database.font(&["DejaVu Sans"], 400, FontStyle::Normal, fontdb::Stretch::Normal) else {
+    let Ok(measure_font) = database.font(
+        &["DejaVu Sans"],
+        400,
+        FontStyle::Normal,
+        fontdb::Stretch::Normal,
+    ) else {
         let reason = "DejaVu Sans no resuelve".to_string();
         suite.skip("fonts/measure-1k-words", reason.clone());
         suite.skip("fonts/shape-1k-words", reason);
         return;
     };
-    let Ok(shape_font) = database.font(&["DejaVu Sans"], 400, FontStyle::Normal, fontdb::Stretch::Normal) else {
+    let Ok(shape_font) = database.font(
+        &["DejaVu Sans"],
+        400,
+        FontStyle::Normal,
+        fontdb::Stretch::Normal,
+    ) else {
         let reason = "DejaVu Sans no resuelve".to_string();
         suite.skip("fonts/measure-1k-words", reason.clone());
         suite.skip("fonts/shape-1k-words", reason);

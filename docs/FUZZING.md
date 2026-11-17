@@ -8,11 +8,13 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 
 > **Status**: the harness is wired into CI via
 > [`.github/workflows/fuzz-nightly.yml`](../.github/workflows/fuzz-nightly.yml). The
-> scheduled/dispatch run executes **18 targets** under the default libFuzzer
+> scheduled/dispatch run executes **all 26 harnesses** under the default libFuzzer
 > **AddressSanitizer** build (10 minutes for 9 critical parsers/decoders and 5 minutes for
-> the remaining 8 scheduled targets), plus a short **UndefinedBehaviorSanitizer (UBSan)**
-> smoke matrix on 9 representative targets. Pull requests run a build-only job that compiles
-> every `[[bin]]` fuzz target in `fuzz/Cargo.toml` on nightly (no libFuzzer run).
+> the remaining 17), plus a short **UndefinedBehaviorSanitizer (UBSan)** smoke matrix on 9
+> representative targets. Pull requests and pushes to `main` run a build-only job that
+> compiles every `[[bin]]` fuzz target in `fuzz/Cargo.toml` on the pinned nightly (no
+> libFuzzer run), so a manifest or public-API break fails on the merge that causes it
+> instead of the next morning.
 
 ## Layout
 
@@ -43,8 +45,7 @@ fuzz/
 │   ├── selectors.rs          # Selectors L4 parser/matcher + cascade over a synthetic DOM
 │   ├── svg_parse.rs          # SVG XML parse + rasterization under strict anti-DoS limits
 │   ├── text_boundary.rs      # byte -> code-point preprocessor (raw surrogates, >U+10FFFF)
-│   ├── webp_lossy.rs         # VP8 lossy keyframe decoder under anti-DoS caps
-│   ├── webp_vp8.rs           # WebP sniffing + VP8/VP8L container validation path
+│   ├── webp.rs               # WebP sniffing, RIFF/VP8/VP8L containers + VP8 decoding
 │   └── woff2_decode.rs       # WOFF2/@font-face decode/validation path
 ├── src/lib.rs          # shared helpers (`megi_fuzz`): RIFF/WebP envelope, lossy
 │                       #   char-boundary-safe text, length-prefixed part framing
@@ -91,9 +92,8 @@ cargo +nightly fuzz build          # builds every [[bin]] target
 | `hpack_decode` | `net::h2::hpack`, `net::h2::frame` parsing/validation helpers | Adversarial HTTP/2 HPACK blocks and frame streams (bounded). |
 | `h2_push` | HTTP/2 PUSH_PROMISE/HEADERS/DATA parsing/reassembly helpers | Untrusted server-push/control/data frames under caps. `FrameReader`/`validate_frame` run against every legal max frame size (`64`, `DEFAULT_MAX_FRAME_SIZE`, `MAX_FRAME_SIZE`, `MAX_FRAME_SIZE_LIMIT`), and promised stream id `0` (protocol error) is exercised (#702). |
 | `body_stream` | `net::{RequestBody, BodyProducer, FetchError}` streaming contract | Bounded pull-based producer/backpressure/error behavior (no socket). |
-| `webp_vp8` | WebP RIFF/VP8/VP8L sniff/container validation paths | WebP container arithmetic and lossless/container handling under caps; the RIFF envelope comes from `megi_fuzz::riff_webp`, shared with `webp_lossy` so the two cannot drift (#859). |
+| `webp` | WebP sniffing, RIFF/VP8/VP8L containers and VP8 lossy/lossless decoding | Single campaign merging the former `webp_vp8` and `webp_lossy` targets (#471) over the union of both corpora. RIFF inputs are decoded as-is and truncated (`/2`, `/4`, `/8`); non-container payloads are re-wrapped as `VP8 ` and `VP8L` with `megi_fuzz::riff_webp` (one shared envelope helper, #859) under a 2048 px, a 64 px and a bounded default-limit profile. |
 | `js_module` | `js` module/import-map resolve/load/eval APIs with budgets | Untrusted module/import-map inputs; bounded resolver/loader calls and no network/FS. Parts are **length-prefixed** (`[u16 LE len][bytes]…`) and truncated on char boundaries, so JSON strings and module sources keep embedded NULs/high bytes instead of being clipped (#701). |
-| `webp_lossy` | VP8 lossy keyframe decode path via image decode APIs | Focused lossy WebP decoder campaign with anti-DoS caps: RIFF inputs decoded as-is and truncated, plus payloads re-wrapped as `VP8 ` **and** `VP8L`, under a 2048 px and a 64 px cap profile (#859). |
 | `container_queries` | `css` parse/tokenize + `css::container` query parse/evaluate | `@container`/`@layer` without DOM/layout. Container sizes are input-derived and include the degenerate set (`NaN`, `±∞`, negative, `0`, `f32::MAX`, missing axis), and style queries run against a `ComputedStyle` carrying input-derived custom properties (#710). |
 | `dom_mutate` | `dom::Document` arena mutations + `validate_invariants()` | Exercises DOM insert/remove/reparent/text-coalesce invariants on arbitrary mutation sequences. |
 | `dom_tree` | DOM construction/mutation-oriented parse paths | Exercises DOM tree building/mutation surfaces from fuzzer input. |
@@ -116,8 +116,8 @@ cd fuzz
 for t in \
   html_parse text_boundary css_parse selectors net_url render_pipeline js_eval svg_parse \
   woff2_decode image_decode exif_parse hpack_decode h2_push body_stream \
-  webp_vp8 js_module webp_lossy container_queries dom_tree fonts_shape \
-  layout_tree paint_display_list; do
+  webp js_module container_queries dom_tree fonts_shape \
+  layout_tree paint_display_list dom_mutate layout_resolve net_surface font_decode; do
   extra=""
   case "$t" in js_eval|js_module) extra="-detect_leaks=0" ;; esac
   cargo +nightly fuzz run "$t" -- -max_total_time=30 -timeout=25 $extra
@@ -158,7 +158,7 @@ committing large growth).
   for t in \
     html_parse text_boundary css_parse selectors net_url render_pipeline js_eval svg_parse \
     woff2_decode image_decode exif_parse hpack_decode h2_push body_stream \
-    webp_vp8 js_module webp_lossy container_queries dom_tree fonts_shape \
+    webp js_module container_queries dom_tree fonts_shape \
     layout_tree paint_display_list; do
     cargo +nightly fuzz cmin "$t" || true
   done
@@ -200,7 +200,7 @@ When libFuzzer finds a crash it writes the reproducer to
 - **UBSan (UndefinedBehaviorSanitizer):** a dedicated `fuzz-ubsan` smoke matrix runs
   `--sanitizer undefined` (120 s) on representative parser/decoder targets
   (`html_parse, css_parse, selectors, net_url, image_decode, hpack_decode, svg_parse,
-  webp_lossy, container_queries`), excluding Boa-embedding JS targets with known
+  webp, container_queries`), excluding Boa-embedding JS targets with known
   third-party leak/compat constraints under sanitizers.
 - **UTF-8-valid-only text targets:** `html_parse`, `css_parse`, `selectors`, `container_queries`,
   `net_url`, `js_eval` and `js_module` decode with `String::from_utf8_lossy` by design — their
@@ -227,10 +227,9 @@ Known non-crashes (do not report): the 3 `xmlViolation` tokenizer failures are d
 
 - triggers: `schedule` (daily, 03:17 UTC), `workflow_dispatch`, and `pull_request` when
   `fuzz/**`, `.github/workflows/fuzz-nightly.yml`, engine crates, or root manifests change;
-- **ASan matrix** (`fuzz`, 18 targets): 600 s for `html_parse, css_parse, selectors, net_url,
-  render_pipeline, js_eval, svg_parse, image_decode, hpack_decode`; 300 s for
-  `woff2_decode, exif_parse, h2_push, body_stream, webp_vp8, js_module, webp_lossy,
-  container_queries` (`-rss_limit_mb=2048 -timeout=25`, `-detect_leaks=0` for Boa targets);
+- **ASan matrix** (`fuzz`): per-target budgets and flags are defined in the `strategy.matrix`
+  of `.github/workflows/fuzz-nightly.yml` (the single source of truth); all targets use
+  `-rss_limit_mb=2048 -timeout=25`, with `-detect_leaks=0` for the Boa-embedding targets;
 - **UBSan smoke** (`fuzz-ubsan`, 9 targets): 120 s with `--sanitizer undefined` on
   representative targets (see Sanitizers above);
 - **PR job** (`build`): `cargo +nightly fuzz build` compiles all `[[bin]]` targets in
@@ -238,7 +237,7 @@ Known non-crashes (do not report): the 3 `xmlViolation` tokenizer failures are d
 - on failure uploads `fuzz/artifacts/` and corpus snapshots as workflow artifacts (14 days).
 
 Notes:
-- 26 harnesses exist in `fuzz/fuzz_targets/`; `dom_tree`, `dom_mutate`, `font_decode`,
+- 25 harnesses exist in `fuzz/fuzz_targets/`; `dom_tree`, `dom_mutate`, `font_decode`,
   `fonts_shape`, `layout_resolve`, `layout_tree`, `net_surface`, and `paint_display_list`
   are built in PRs and can be promoted to scheduled ASan/UBSan matrices when their
   corpus/runtime budgets are validated.

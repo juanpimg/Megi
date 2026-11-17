@@ -17,26 +17,24 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev \
-            libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev libxrandr-dev \
-            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxcb-shm0-dev libxcb-randr0-dev
+      - uses: ./.github/actions/install-system-deps
       - name: Build rustdoc
+        env:
+          RUSTDOCFLAGS: -D warnings
         run: |
           cargo doc --workspace --no-deps --locked
           echo '<meta http-equiv="refresh" content="0; url=render/index.html">' > target/doc/index.html
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: target/doc
 
