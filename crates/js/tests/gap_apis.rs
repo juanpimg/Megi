@@ -158,12 +158,15 @@ fn focus_and_blur_bookkeeping() {
 #[test]
 fn scroll_into_view_is_noop() {
     let mut rt = runtime();
+    let before_x = rt.eval("window.scrollX", "t").unwrap();
+    let before_y = rt.eval("window.scrollY", "t").unwrap();
     rt.eval(
         "var el = document.createElement('div'); el.scrollIntoView()",
         "t",
     )
     .unwrap();
-    assert_eq!(rt.eval("1", "t").unwrap(), "1");
+    assert_eq!(rt.eval("window.scrollX", "t").unwrap(), before_x);
+    assert_eq!(rt.eval("window.scrollY", "t").unwrap(), before_y);
 }
 
 #[test]
