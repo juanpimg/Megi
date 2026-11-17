@@ -179,10 +179,6 @@ pub enum SetCookieError {
     InvalidValue,
     /// The `Domain` attribute is empty or cannot be scoped to the request host.
     InvalidDomain(String),
-    /// The `Path` attribute is malformed (kept for explicit diagnostics).
-    InvalidPath(String),
-    /// The `Max-Age` attribute is not an integer.
-    InvalidMaxAge(String),
     /// `SameSite=None` without the `Secure` attribute (rejected by browsers).
     SameSiteNoneRequiresSecure,
     /// The `Domain` attribute is a public suffix (super-cookie protection).
@@ -197,8 +193,6 @@ impl fmt::Display for SetCookieError {
             Self::InvalidName(name) => write!(f, "invalid cookie name `{name}`"),
             Self::InvalidValue => f.write_str("cookie value contains a control character"),
             Self::InvalidDomain(domain) => write!(f, "invalid cookie domain `{domain}`"),
-            Self::InvalidPath(path) => write!(f, "invalid cookie path `{path}`"),
-            Self::InvalidMaxAge(value) => write!(f, "invalid cookie Max-Age `{value}`"),
             Self::SameSiteNoneRequiresSecure => {
                 f.write_str("SameSite=None requires the Secure attribute")
             }
@@ -258,7 +252,7 @@ pub fn is_valid_cookie_name(name: &str) -> bool {
     !name.is_empty() && name.chars().all(is_token_char)
 }
 
-/// Parses one `Set-Cookie` header value (RFC 6265 §5.2 subset) against the request URL.
+/// Parses one `Set-Cookie` header value (RFC 6265 / 6265bis §5.6 subset) against the request URL.
 ///
 /// `now` is used for `Expires` comparisons only when applying the cookie to a jar; the
 /// returned [`ParsedSetCookie`] carries the absolute expiry, so parsing is clock-free
@@ -276,8 +270,9 @@ pub fn parse_set_cookie(
     let pair = segments.next().ok_or(SetCookieError::Empty)?;
     let (raw_name, raw_value) = match pair.split_once('=') {
         Some((name, value)) => (name.trim(), value.trim()),
-        // RFC 6265 §5.2: a pair without `=` is a cookie with an empty value; an empty
-        // name+value pair is ignored.
+        // RFC 6265bis §5.6: a pair without `=` is accepted as a cookie with an empty value.
+        // (RFC 6265 §5.2 step 2 instead ignored such a string entirely; we follow the
+        // browser/6265bis behaviour deliberately.) An empty name+value pair is ignored.
         None => (pair.trim(), ""),
     };
     if raw_name.is_empty() {
