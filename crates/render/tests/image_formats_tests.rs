@@ -1,6 +1,7 @@
 //! End-to-end image formats (R144): progressive JPEG and EXIF orientation flow
-//! through the `<img>` pipeline; WebP is detected and skipped with a non-fatal
-//! warning (lossless VP8L decoder pending). Fixtures are synthetic (Pillow).
+//! through the `<img>` pipeline. WebP is decoded: VP8L lossless and VP8 lossy
+//! keyframes both load (the legacy "pending/skip" note was stale, #1434).
+//! Fixtures are synthetic (Pillow).
 
 use std::path::Path;
 
