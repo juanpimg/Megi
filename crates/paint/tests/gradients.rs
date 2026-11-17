@@ -78,10 +78,6 @@ fn render(style: ComputedStyle, rect: Rect, children: Vec<LayoutBox>) -> Pixmap 
     rasterize_display_list(&list, 60, 40)
 }
 
-fn tint(color: Color) -> (u8, u8) {
-    (color.r, color.b)
-}
-
 #[test]
 fn test_horizontal_linear_gradient() {
     let gradient = linear_gradient(
@@ -362,12 +358,28 @@ fn test_gradient_rendering_is_deterministic() {
 
 #[test]
 fn test_many_stops_are_capped_and_do_not_panic() {
-    let stops = (0..100)
-        .map(|index| GradientStop {
-            color: Color::new((index * 2) as u8, 0, 0, 255),
+    // 100 authored stops exceed the painter/rasterizer cap (64). Keep the first 64 stops as a
+    // red->blue ramp and place conflicting stops after the cap so rendering proves truncation.
+    let mut stops = Vec::new();
+    for index in 0..64u8 {
+        let t = index as f32 / 63.0;
+        stops.push(GradientStop {
+            color: Color::new(
+                (255.0 * (1.0 - t)).round() as u8,
+                0,
+                (255.0 * t).round() as u8,
+                255,
+            ),
             position: Some(Length::Percent(index as f32)),
-        })
-        .collect();
+        });
+    }
+    for index in 64..100u8 {
+        stops.push(GradientStop {
+            color: Color::GREEN,
+            position: Some(Length::Percent(index as f32)),
+        });
+    }
+    assert!(stops.len() > css::MAX_GRADIENT_STOPS);
     let gradient = Gradient {
         kind: GradientKind::Linear(LinearGradient {
             direction: LinearDirection::ToRight,
@@ -382,8 +394,23 @@ fn test_many_stops_are_capped_and_do_not_panic() {
         Rect::new(0.0, 0.0, 20.0, 10.0),
         vec![],
     );
-    assert_eq!(pixmap.width, 60);
-    assert!(tint(pixmap.pixel(10, 5)) != tint(Color::TRANSPARENT));
+
+    // Samples inside the rendered 20px gradient rect (top-left of the 60x40 canvas).
+    let left = pixmap.pixel(0, 5);
+    let middle = pixmap.pixel(10, 5);
+    let right = pixmap.pixel(19, 5);
+    assert!(
+        left.r > 180 && left.b < 80,
+        "left should follow the first kept stop: {left:?}"
+    );
+    assert!(
+        middle.b > middle.r,
+        "middle should blend toward blue inside the kept ramp: {middle:?}"
+    );
+    assert!(
+        right.b > 180 && right.g < 80,
+        "stops after the cap must not turn the end green: {right:?}"
+    );
 }
 
 #[test]
@@ -782,18 +809,28 @@ fn test_conic_from_180deg_flips_the_turn() {
 
 #[test]
 fn test_conic_stop_cap_no_panic() {
-    let stops = (0..100)
-        .map(|index| GradientStop {
-            color: Color::new((index % 256) as u8, 0, 0, 255),
+    // Keep the first 64 stops red and place green stops only after the cap; sampling the far side
+    // of the turn proves truncated stops do not affect rendering.
+    let mut stops = Vec::new();
+    for index in 0..64u8 {
+        stops.push(GradientStop {
+            color: Color::RED,
             position: Some(Length::Percent(index as f32)),
-        })
-        .collect();
+        });
+    }
+    for index in 64..100u8 {
+        stops.push(GradientStop {
+            color: Color::GREEN,
+            position: Some(Length::Percent(index as f32)),
+        });
+    }
+    assert!(stops.len() > css::MAX_GRADIENT_STOPS);
     let gradient = Gradient {
         kind: GradientKind::Conic(css::ConicGradient {
-            from_angle: 10.0,
+            from_angle: 0.0,
             position: css::BackgroundPosition::parse("center", 16.0, 16.0).expect("center"),
         }),
-        repeating: true,
+        repeating: false,
         stops,
         hints: Vec::new(),
         interpolation: css::InterpolationSpace::Srgb,
@@ -803,7 +840,14 @@ fn test_conic_stop_cap_no_panic() {
         Rect::new(0.0, 0.0, 20.0, 20.0),
         vec![],
     );
-    assert_eq!(pixmap.width, 60);
+
+    // 270deg (left of center) is ~75% around the turn, beyond the last kept stop (63%).
+    let left = pixmap.pixel(2, 10);
+    assert!(
+        left.r > 180 && left.g < 80,
+        "stops after the cap must not paint green at 75%: {left:?}"
+    );
+    assert!(pixmap.pixel(10, 2).r > 180, "early turn remains red");
 }
 
 #[test]
