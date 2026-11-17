@@ -99,7 +99,7 @@ crates/fonts/src/types.rs	183	src	F2	wave1	2026-11-16	covered	#1228-#1239
 crates/fonts/src/web.rs	198	src	F2	wave1	2026-11-16	covered	#1228-#1239	
 crates/fonts/tests/fixtures/OFL-OpenSans.txt	92	test	F1	waveF1	2026-11-17	covered	#1388	
 crates/fonts/tests/fixtures/OpenSans-Regular-latin.woff2	0	binary	-			exempt		not read line by line: binary
-crates/fonts/tests/font_engine.rs	557	test	F1	waveF1	2026-11-17	covered	#1388	
+crates/fonts/tests/font_engine.rs	575	test	F1	waveF1	2026-11-17	covered	#1388	
 crates/fonts/tests/web_fonts.rs	195	test	F1	waveF1	2026-11-17	covered	#1388	
 crates/html/Cargo.toml	15	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/html/src/browser.rs	398	src	F2	wave1	2026-11-16	covered	#1120-#1125	
