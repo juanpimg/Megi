@@ -76,20 +76,31 @@ proptest! {
     #[test]
     fn parse_stylesheet_arbitrary_utf8_never_panics(input in any::<String>()) {
         let sheet = parse_stylesheet(&input);
-        prop_assert_eq!(sheet.rules.len(), parse_stylesheet(&input).rules.len());
+        let reparsed = parse_stylesheet(&input);
+        prop_assert_eq!(sheet.rules.len(), reparsed.rules.len());
+        for rule in &sheet.rules {
+            prop_assert!(matches!(rule, css::rule::Rule::Style(_) | css::rule::Rule::At(_)));
+        }
     }
 
     #[test]
     fn parse_list_of_declarations_arbitrary_utf8_never_panics(input in any::<String>()) {
         let decls = parse_list_of_declarations(&input);
-        prop_assert_eq!(decls.len(), parse_list_of_declarations(&input).len());
+        let reparsed = parse_list_of_declarations(&input);
+        prop_assert_eq!(decls.len(), reparsed.len());
+        for decl in &decls {
+            prop_assert!(!decl.name.is_empty());
+            prop_assert_eq!(decl.raw_value.is_empty(), decl.value.is_empty());
+        }
     }
 
     #[test]
     fn parse_media_query_list_arbitrary_utf8_never_panics(input in any::<String>()) {
         let mql = parse_media_query_list(&input);
         let ctx = MediaContext::with_viewport(1280.0, 720.0);
-        let _ = css::evaluate_media(&mql, &ctx);
+        let first = css::evaluate_media(&mql, &ctx);
+        let second = css::evaluate_media(&parse_media_query_list(&input), &ctx);
+        prop_assert_eq!(first, second);
     }
 
     #[test]

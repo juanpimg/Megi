@@ -119,7 +119,16 @@ fn test_filter_function_cap() {
         .join(" ");
     let style = computed_style("", &format!("filter: {value};"));
     assert_eq!(style.filter.len(), MAX_FILTER_FUNCTIONS);
-    assert!(style.filter.len() <= 16);
+    assert_eq!(style.filter.first(), Some(&FilterFunction::Brightness(1.0)));
+    assert_eq!(
+        style.filter.last(),
+        Some(&FilterFunction::Brightness(1.0 + 15.0 * 0.1))
+    );
+    assert!(
+        !style
+            .filter
+            .contains(&FilterFunction::Brightness(1.0 + 16.0 * 0.1))
+    );
 }
 
 #[test]
