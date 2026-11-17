@@ -1875,7 +1875,7 @@ fn paint_items(
 /// Rounded/text-mask/effect/opacity groups allocate a full-size buffer per nesting level;
 /// the per-group pixel cap alone does not bound the total (2,048 nested `border-radius`
 /// groups of 800×600 held ≈3.9 GB). Bound both the nesting depth and the live pixels.
-struct PaintBudget {
+pub(crate) struct PaintBudget {
     depth: usize,
     pixels: usize,
     /// Past the caps: paint group contents in place and skip nested groups instead of
@@ -2809,7 +2809,6 @@ fn paint_rounded_group(
 }
 
 /// Paints one `text-shadow` layer: glyph coverage offscreen + deterministic blur.
-#[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_arguments)]
 fn paint_text_shadow(
     pixmap: &mut Pixmap,
