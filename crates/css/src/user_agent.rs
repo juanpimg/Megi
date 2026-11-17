@@ -274,6 +274,9 @@ input[data-megi-focused], textarea[data-megi-focused], select[data-megi-focused]
 button[data-megi-focused] {
     border-color: #4d90fe;
 }
+a:focus, a[data-megi-focused] {
+    background-color: #cce0ff;
+}
 input[type=submit][data-megi-active], input[type=button][data-megi-active],
 input[type=reset][data-megi-active], button[data-megi-active] {
     background-color: #d7d7d7;
