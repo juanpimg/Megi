@@ -185,7 +185,6 @@ fn run() -> Result<(), ShellError> {
 
 #[cfg(test)]
 mod screenshot_diagnostics_tests {
-    use super::*;
 
     #[test]
     fn render_diagnostics_are_detected() {
