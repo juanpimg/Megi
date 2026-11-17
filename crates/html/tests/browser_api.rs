@@ -6,7 +6,6 @@
 use html::{
     Document, DomError, LimitViolations, ParseOptions, document_write, document_write_with_options,
     parse_document, set_inner_html, set_inner_html_with_options, set_outer_html,
-    set_outer_html_with_options,
 };
 
 fn parse(markup: &str) -> Document {
@@ -267,40 +266,47 @@ fn inner_html_keeps_previous_children_when_the_parse_hits_a_limit() {
 }
 
 #[test]
-fn outer_html_rolls_back_when_an_insertion_is_rejected() {
-    // The dual half-move hazard: children were inserted one by one before `element`, so a
-    // rejection in the middle left the tree half-mutated (#646). A valid payload never exercised
-    // that path (#1355), so force a rejection with a tight node budget.
-    let mut doc = parse("<html><body><div id=\"x\">keep me</div><p>sibling</p></body></html>");
-    let div = doc.get_element_by_id("x").expect("div present");
-    let before = doc.len();
-    let options = ParseOptions {
-        max_nodes: 4,
-        ..ParseOptions::default()
-    };
-    let violations =
-        set_outer_html_with_options(&mut doc, div, &"<span>x</span>".repeat(1_000), &options)
-            .expect("outerHTML call itself succeeds");
-    assert!(
-        !violations.is_empty(),
-        "the tight node budget must be reported"
+fn outer_html_rejects_skeleton_elements_and_leaves_the_tree_untouched() {
+    // Replacing `<html>`/`<head>`/`<body>` would leave the document without its skeleton and
+    // corrupt every downstream stage (#562), so the setter must refuse before touching the tree.
+    let mut doc = parse(
+        "<html><head><title>t</title></head><body><div id=\"x\"></div><p>sibling</p></body></html>",
     );
-    // The refused write must leave the original element and its subtree exactly as they were.
-    assert_eq!(
-        text(&doc, div),
-        "keep me",
-        "a refused write must leave the original content"
-    );
+    let body = doc.body().expect("body present");
+    let before = doc.allocated();
+    let before_children: Vec<String> = element_names(&doc, body);
+
+    let error = set_outer_html(&mut doc, body, "<span>a</span><span>b</span>")
+        .expect_err("replacing <body> must be refused");
     assert!(
-        doc.get_element_by_id("x").is_some(),
-        "the replaced element must keep its place"
+        matches!(error, DomError::HierarchyRequest { .. }),
+        "expected HierarchyRequest, got {error:?}"
     );
     assert_eq!(
-        doc.get_element_by_id("x"),
-        Some(div),
-        "the original node id must survive the rollback"
+        element_names(&doc, body),
+        before_children,
+        "a refused write must not mutate the element's siblings"
+    );
+    assert_eq!(
+        doc.allocated(),
+        before,
+        "a refused write must not leak nodes"
     );
     assert!(doc.validate_invariants().is_ok());
-    // No fresh nodes from the refused payload may remain live.
-    assert_eq!(doc.len(), before, "refused write must not leak live nodes");
+    assert_eq!(text(&doc, doc.get_element_by_id("x").expect("div")), "");
+}
+
+#[test]
+fn outer_html_rejects_a_non_element_reference() {
+    // The document node is not an element: the fragment context lookup must fail cleanly
+    // instead of replacing the document.
+    let mut doc = parse("<html><body><p>x</p></body></html>");
+    let root = doc.root();
+    let error = set_outer_html(&mut doc, root, "<p>y</p>")
+        .expect_err("the document node is not replaceable");
+    assert!(
+        matches!(error, DomError::NotAnElement(_)),
+        "expected NotAnElement, got {error:?}"
+    );
+    assert!(doc.validate_invariants().is_ok());
 }

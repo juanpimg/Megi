@@ -204,10 +204,24 @@ class CheckTests(unittest.TestCase):
         rows = [row("tests/fixtures/x.png", lines=0, category="binary", phase="-", status="pending")]
         self.assertEqual(self._check(rows), 1)
 
-    def test_rejects_rows_for_untracked_files(self) -> None:
-        self.assertEqual(
-            self._check([row("crates/a/src/lib.rs"), row("crates/gone/src/lib.rs")]), 1
-        )
+    def test_reports_rows_for_untracked_files_as_unknown(self) -> None:
+        # A deleted file leaves a stale row behind; that is cleanup work for the
+        # audit, and blocking every other pull request on it would get the gate
+        # disabled. `--strict` keeps the audit branch honest.
+        rows = [row("crates/a/src/lib.rs"), row("crates/gone/src/lib.rs")]
+        self.assertEqual(self._check(rows), 0)
+        audit_coverage.write_ledger(rows)
+        self.assertEqual(audit_coverage.cmd_check(argparse.Namespace(strict=True)), 1)
+
+    def test_reports_a_new_tracked_file_as_unknown(self) -> None:
+        self._scope = [
+            ("crates/a/src/lib.rs", "src", "F2"),
+            ("crates/b/src/lib.rs", "src", "F2"),
+        ]
+        self._counts = {"crates/a/src/lib.rs": 10, "crates/b/src/lib.rs": 4}
+        self.assertEqual(self._check([row("crates/a/src/lib.rs")]), 0)
+        audit_coverage.write_ledger([row("crates/a/src/lib.rs")])
+        self.assertEqual(audit_coverage.cmd_check(argparse.Namespace(strict=True)), 1)
 
 
 if __name__ == "__main__":
