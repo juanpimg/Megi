@@ -69,10 +69,12 @@ impl Color {
             return Self::from_hex(hex);
         }
 
-        if s.len() >= 5 && s[..4].eq_ignore_ascii_case("rgb(") && s.ends_with(')') {
+        // Compare the function name on bytes: a multibyte first character (`aé€`, `ＲＧＢ(`)
+        // would make a `&s[..4]` slice panic on a char boundary (#1445).
+        if s.len() >= 5 && s.as_bytes()[..4].eq_ignore_ascii_case(b"rgb(") && s.ends_with(')') {
             return Self::from_rgb_fn(&s[4..s.len() - 1]);
         }
-        if s.len() >= 6 && s[..5].eq_ignore_ascii_case("rgba(") && s.ends_with(')') {
+        if s.len() >= 6 && s.as_bytes()[..5].eq_ignore_ascii_case(b"rgba(") && s.ends_with(')') {
             return Self::from_rgb_fn(&s[5..s.len() - 1]);
         }
 
