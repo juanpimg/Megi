@@ -333,7 +333,9 @@ mod tests {
 
 /// Returns the first element matching `selector_list` within the subtree rooted at `root`.
 pub fn query_selector_from(doc: &Document, root: NodeId, selector_list: &str) -> Option<NodeId> {
-    try_query_selector_from(doc, root, selector_list).ok().flatten()
+    try_query_selector_from(doc, root, selector_list)
+        .ok()
+        .flatten()
 }
 
 /// Returns every element matching `selector_list` within the subtree rooted at `root`,

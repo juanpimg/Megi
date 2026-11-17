@@ -643,13 +643,37 @@ fn build_navigator(context: &mut Context) -> JsObject {
     let languages = JsArray::from_iter([JsValue::from(js_string!("en-US"))], context);
     let plugins = JsArray::from_iter([], context);
     let mut init = ObjectInitializer::new(context);
-    init.property(js_string!("userAgent"), js_string!("Megi/1.0"), Attribute::all());
-    init.property(js_string!("language"), js_string!("en-US"), Attribute::all());
-    init.property(js_string!("languages"), JsValue::from(languages), Attribute::all());
+    init.property(
+        js_string!("userAgent"),
+        js_string!("Megi/1.0"),
+        Attribute::all(),
+    );
+    init.property(
+        js_string!("language"),
+        js_string!("en-US"),
+        Attribute::all(),
+    );
+    init.property(
+        js_string!("languages"),
+        JsValue::from(languages),
+        Attribute::all(),
+    );
     init.property(js_string!("onLine"), JsValue::from(true), Attribute::all());
-    init.property(js_string!("hardwareConcurrency"), JsValue::from(1), Attribute::all());
-    init.property(js_string!("platform"), js_string!("Linux x86_64"), Attribute::all());
-    init.property(js_string!("plugins"), JsValue::from(plugins), Attribute::all());
+    init.property(
+        js_string!("hardwareConcurrency"),
+        JsValue::from(1),
+        Attribute::all(),
+    );
+    init.property(
+        js_string!("platform"),
+        js_string!("Linux x86_64"),
+        Attribute::all(),
+    );
+    init.property(
+        js_string!("plugins"),
+        JsValue::from(plugins),
+        Attribute::all(),
+    );
     init.function(
         native(|_this, args, context| {
             let _ = args;
@@ -672,8 +696,20 @@ fn build_performance(context: &mut Context) -> JsObject {
         js_string!("now"),
         0,
     );
-    init.property(js_string!("timeOrigin"), JsValue::from(0.0_f64), Attribute::all());
-    for name in ["mark", "measure", "getEntries", "getEntriesByName", "getEntriesByType", "clearMarks", "clearMeasures"] {
+    init.property(
+        js_string!("timeOrigin"),
+        JsValue::from(0.0_f64),
+        Attribute::all(),
+    );
+    for name in [
+        "mark",
+        "measure",
+        "getEntries",
+        "getEntriesByName",
+        "getEntriesByType",
+        "clearMarks",
+        "clearMeasures",
+    ] {
         init.function(
             native(|_this, _args, _context| Ok(JsValue::undefined())),
             js_string!(name),
@@ -689,16 +725,27 @@ fn build_crypto(context: &mut Context) -> JsObject {
     init.function(
         native(|_this, args, context| {
             let array = args.first().cloned().unwrap_or(JsValue::undefined());
-            let obj = array.as_object().ok_or_else(|| js_error("getRandomValues requires a typed array"))?;
+            let obj = array
+                .as_object()
+                .ok_or_else(|| js_error("getRandomValues requires a typed array"))?;
             // Fill with pseudo-random bytes using a simple xorshift seeded by the clock.
             let mut seed = with_host(|host| host.now_ms()).unwrap_or(12345) as u64;
-            let len = obj.get(js_string!("length"), context).ok().and_then(|v| v.to_number(context).ok()).unwrap_or(0.0) as usize;
+            let len = obj
+                .get(js_string!("length"), context)
+                .ok()
+                .and_then(|v| v.to_number(context).ok())
+                .unwrap_or(0.0) as usize;
             for i in 0..len {
                 seed ^= seed << 13;
                 seed ^= seed >> 7;
                 seed ^= seed << 17;
                 let byte = (seed & 0xff) as u8;
-                let _ = obj.set(js_string!(i.to_string()), JsValue::from(byte as i32), false, context);
+                let _ = obj.set(
+                    js_string!(i.to_string()),
+                    JsValue::from(byte as i32),
+                    false,
+                    context,
+                );
             }
             Ok(array)
         }),
@@ -721,7 +768,11 @@ fn build_crypto(context: &mut Context) -> JsObject {
             let hex: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
             let uuid = format!(
                 "{}-{}-{}-{}-{}",
-                &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32]
+                &hex[0..8],
+                &hex[8..12],
+                &hex[12..16],
+                &hex[16..20],
+                &hex[20..32]
             );
             Ok(JsValue::from(js_string!(uuid)))
         }),
@@ -747,32 +798,60 @@ fn build_text_encoder(context: &mut Context) -> boa_engine::object::builtins::Js
         .name(js_string!("encode"))
         .length(1)
         .build();
-    let _ = proto.set(js_string!("encode"), JsValue::from(encode_fn), false, context);
+    let _ = proto.set(
+        js_string!("encode"),
+        JsValue::from(encode_fn),
+        false,
+        context,
+    );
     let encoding_get = accessor_fn(context, text_encoder_encoding_get);
     let _ = proto.define_property_or_throw(
         js_string!("encoding"),
-        PropertyDescriptor::builder().get(JsValue::from(encoding_get)).enumerable(true).configurable(true).build(),
+        PropertyDescriptor::builder()
+            .get(JsValue::from(encoding_get))
+            .enumerable(true)
+            .configurable(true)
+            .build(),
         context,
     );
     constructor
 }
 
-fn text_encoder_constructor(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+fn text_encoder_constructor(
+    _this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
     let mut init = ObjectInitializer::new(context);
     Ok(JsValue::from(init.build()))
 }
 
-fn text_encoder_encoding_get(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+fn text_encoder_encoding_get(
+    _this: &JsValue,
+    _args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<JsValue> {
     Ok(JsValue::from(js_string!("utf-8")))
 }
 
-fn text_encoder_encode(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    let input = args.first().map(|v| v.to_string(context).map(|s| s.to_std_string_escaped()).unwrap_or_default()).unwrap_or_default();
+fn text_encoder_encode(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let input = args
+        .first()
+        .map(|v| {
+            v.to_string(context)
+                .map(|s| s.to_std_string_escaped())
+                .unwrap_or_default()
+        })
+        .unwrap_or_default();
     let block = AlignedVec::from_iter(0, input.as_bytes().iter().copied());
-    let buffer = JsArrayBuffer::from_byte_block(block, context)
-        .map_err(|e| js_error(e.to_string()))?;
-    let arr = JsUint8Array::from_array_buffer(buffer, context)
-        .map_err(|e| js_error(e.to_string()))?;
+    let buffer =
+        JsArrayBuffer::from_byte_block(block, context).map_err(|e| js_error(e.to_string()))?;
+    let arr =
+        JsUint8Array::from_array_buffer(buffer, context).map_err(|e| js_error(e.to_string()))?;
     Ok(JsValue::from(arr))
 }
 
@@ -792,36 +871,67 @@ fn build_text_decoder(context: &mut Context) -> boa_engine::object::builtins::Js
         .name(js_string!("decode"))
         .length(1)
         .build();
-    let _ = proto.set(js_string!("decode"), JsValue::from(decode_fn), false, context);
+    let _ = proto.set(
+        js_string!("decode"),
+        JsValue::from(decode_fn),
+        false,
+        context,
+    );
     let encoding_get = accessor_fn(context, text_decoder_encoding_get);
     let _ = proto.define_property_or_throw(
         js_string!("encoding"),
-        PropertyDescriptor::builder().get(JsValue::from(encoding_get)).enumerable(true).configurable(true).build(),
+        PropertyDescriptor::builder()
+            .get(JsValue::from(encoding_get))
+            .enumerable(true)
+            .configurable(true)
+            .build(),
         context,
     );
     constructor
 }
 
-fn text_decoder_constructor(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+fn text_decoder_constructor(
+    _this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
     let mut init = ObjectInitializer::new(context);
     Ok(JsValue::from(init.build()))
 }
 
-fn text_decoder_encoding_get(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+fn text_decoder_encoding_get(
+    _this: &JsValue,
+    _args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<JsValue> {
     Ok(JsValue::from(js_string!("utf-8")))
 }
 
-fn text_decoder_decode(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+fn text_decoder_decode(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
     let input = args.first().cloned().unwrap_or(JsValue::undefined());
     if input.is_undefined() || input.is_null() {
         return Ok(JsValue::from(js_string!("")));
     }
     // Try to read as Uint8Array
-    let obj = input.as_object().ok_or_else(|| js_error("decode requires a BufferSource"))?;
-    let len = obj.get(js_string!("length"), context).ok().and_then(|v| v.to_number(context).ok()).unwrap_or(0.0) as usize;
+    let obj = input
+        .as_object()
+        .ok_or_else(|| js_error("decode requires a BufferSource"))?;
+    let len = obj
+        .get(js_string!("length"), context)
+        .ok()
+        .and_then(|v| v.to_number(context).ok())
+        .unwrap_or(0.0) as usize;
     let mut bytes = Vec::with_capacity(len);
     for i in 0..len {
-        let b = obj.get(js_string!(i.to_string()), context).ok().and_then(|v| v.to_number(context).ok()).unwrap_or(0.0) as u8;
+        let b = obj
+            .get(js_string!(i.to_string()), context)
+            .ok()
+            .and_then(|v| v.to_number(context).ok())
+            .unwrap_or(0.0) as u8;
         bytes.push(b);
     }
     let text = String::from_utf8_lossy(&bytes);
@@ -890,11 +1000,21 @@ fn install_browser_features(context: &mut Context) -> Result<(), JsError> {
     let text_decoder = build_text_decoder(context);
     context
         .global_object()
-        .set(js_string!("TextEncoder"), JsValue::from(text_encoder), false, context)
+        .set(
+            js_string!("TextEncoder"),
+            JsValue::from(text_encoder),
+            false,
+            context,
+        )
         .map_err(|error| JsError::Internal(error.to_string()))?;
     context
         .global_object()
-        .set(js_string!("TextDecoder"), JsValue::from(text_decoder), false, context)
+        .set(
+            js_string!("TextDecoder"),
+            JsValue::from(text_decoder),
+            false,
+            context,
+        )
         .map_err(|error| JsError::Internal(error.to_string()))?;
     let navigator = build_navigator(context);
     let performance = build_performance(context);
@@ -2485,7 +2605,11 @@ fn document_head(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
     wrap_optional(context, node)
 }
 
-fn document_cookie_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+fn document_cookie_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
     // Minimal in-memory cookie store; real jar integration is host-backed.
     let cookies = context
         .global_object()
@@ -2494,11 +2618,18 @@ fn document_cookie_get(this: &JsValue, _args: &[JsValue], context: &mut Context)
     if cookies.is_undefined() {
         return Ok(JsValue::from(js_string!("")));
     }
-    let s = cookies.to_string(context)?.to_std_string().unwrap_or_default();
+    let s = cookies
+        .to_string(context)?
+        .to_std_string()
+        .unwrap_or_default();
     Ok(JsValue::from(js_string!(s)))
 }
 
-fn document_cookie_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+fn document_cookie_set(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
     let value = arg_string(args, 0, context).unwrap_or_default();
     // Append to the store (simplified: just store the raw value).
     let current = context
@@ -2508,7 +2639,10 @@ fn document_cookie_set(this: &JsValue, args: &[JsValue], context: &mut Context) 
     let mut store = if current.is_undefined() {
         String::new()
     } else {
-        current.to_string(context)?.to_std_string().unwrap_or_default()
+        current
+            .to_string(context)?
+            .to_std_string()
+            .unwrap_or_default()
     };
     // Parse name=value from the set-cookie string.
     let pair = value.split(';').next().unwrap_or("").trim();
@@ -2658,18 +2792,27 @@ fn node_closest(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     Ok(JsValue::null())
 }
 
-fn node_query_selector(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+fn node_query_selector(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
     let node = this_node(this, context)?;
     let selector = arg_string(args, 0, context)?;
     let found = with_host(|host| css::query::query_selector_from(&host.document, node, &selector));
     wrap_optional(context, found.flatten())
 }
 
-fn node_query_selector_all(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+fn node_query_selector_all(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
     let node = this_node(this, context)?;
     let selector = arg_string(args, 0, context)?;
-    let nodes = with_host(|host| css::query::query_selector_all_from(&host.document, node, &selector))
-        .unwrap_or_default();
+    let nodes =
+        with_host(|host| css::query::query_selector_all_from(&host.document, node, &selector))
+            .unwrap_or_default();
     wrap_list(context, nodes)
 }
 
@@ -4661,11 +4804,7 @@ fn camel_case_attribute(name: &str) -> Option<String> {
     while let Some(ch) = chars.next() {
         // DOMStringMap only consumes a dash before an ASCII lowercase letter and
         // uppercases with ASCII rules; other dashes stay literal (#1451).
-        if ch == '-'
-            && chars
-                .peek()
-                .is_some_and(|next| next.is_ascii_lowercase())
-        {
+        if ch == '-' && chars.peek().is_some_and(|next| next.is_ascii_lowercase()) {
             let next = chars.next().expect("peeked lowercase ASCII letter");
             out.push(next.to_ascii_uppercase());
         } else {
