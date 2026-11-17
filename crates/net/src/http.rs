@@ -845,6 +845,11 @@ pub fn fetch_with_request_body_and_trailers(
             None => None,
         };
         first_attempt = false;
+        // HSTS (#1529): upgrade an `http://` hop to `https://` when an active policy covers the
+        // host (also applied to redirect targets, so a downgrade redirect cannot slip through).
+        if let Some(upgraded) = crate::hsts::upgrade_url(&current) {
+            current = upgraded;
+        }
         let raw = fetch_once(
             &current,
             options,
@@ -879,6 +884,16 @@ pub fn fetch_with_request_body_and_trailers(
                         .split(',')
                         .any(|token| token.trim().eq_ignore_ascii_case("bytes"))
             });
+            // HSTS (#1529): remember the policy from a trusted HTTPS response before `raw`
+            // is moved into the Response. Only secure origins may set it (RFC 6797 §8.1).
+            if current.scheme() == Scheme::Https
+                && let Some(header) = raw
+                    .headers
+                    .iter()
+                    .find(|(name, _)| name.eq_ignore_ascii_case("strict-transport-security"))
+            {
+                crate::hsts::observe_https(current.host(), &header.1);
+            }
             return Ok(Response {
                 status: raw.status,
                 reason: raw.reason,

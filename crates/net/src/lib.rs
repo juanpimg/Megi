@@ -138,6 +138,7 @@ pub mod data;
 pub mod error;
 pub mod file;
 pub mod h2;
+pub mod hsts;
 pub mod http;
 pub mod integrity;
 pub mod loader;
