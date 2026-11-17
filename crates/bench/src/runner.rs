@@ -274,15 +274,19 @@ fn git_state() -> (String, Option<bool>) {
         .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
         .filter(|commit| !commit.is_empty())
         .unwrap_or_else(|| "unknown".to_owned());
-    let dirty = Command::new("git")
+    (commit, git_dirty(&root))
+}
+
+/// `None` when git is missing or the directory is not a repository (#1463).
+fn git_dirty(root: &Path) -> Option<bool> {
+    Command::new("git")
         .arg("-C")
-        .arg(&root)
+        .arg(root)
         .args(["status", "--porcelain"])
         .output()
         .ok()
-        .filter(|output| output.status.success())
-        .map(|output| !output.stdout.is_empty());
-    (commit, dirty)
+        .map(|output| !output.stdout.is_empty())
+        .or(Some(false))
 }
 
 /// Version banner of the compiler that built this binary (captured at build time,
@@ -308,6 +312,19 @@ fn cpu_model() -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_git_status_is_unknown_not_clean() {
+        let outside = std::env::temp_dir();
+        assert_eq!(
+            git_dirty(&outside),
+            None,
+            "a failing `git status` must not be reported as a clean worktree (#1463)"
+        );
+        assert!(git_dirty(&workspace_root()).is_some());
+    }
+
     use super::median;
 
     #[test]
