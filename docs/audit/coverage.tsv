@@ -59,7 +59,7 @@ crates/css/src/parser.rs	861	src	F2	wave1	2026-11-16	covered	#1126-#1133
 crates/css/src/properties.rs	5627	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/query.rs	370	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/rule.rs	332	src	F2	wave1	2026-11-16	covered	#1126-#1133	
-crates/css/src/selector.rs	1900	src	F2	wave1	2026-11-16	covered	#1126-#1133	
+crates/css/src/selector.rs	1951	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/shorthand.rs	966	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/state.rs	231	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/token.rs	125	src	F2	wave1	2026-11-16	covered	#1126-#1133	
@@ -114,7 +114,7 @@ crates/html/src/tree_builder.rs	5036	src	F2	wave1	2026-11-16	covered	#1120-#1125
 crates/html/tests/browser_api.rs	312	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
 crates/html/tests/perf.rs	146	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
 crates/html/tests/proptest_html.rs	137	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
-crates/html/tests/robustness.rs	718	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
+crates/html/tests/robustness.rs	720	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
 crates/html/tests/serializer_tests.rs	125	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
 crates/image/Cargo.toml	11	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/image/src/crc32.rs	65	src	F2	wave1	2026-11-16	covered	#1148-#1151	
