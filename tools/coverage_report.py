@@ -3,8 +3,9 @@
 
 `cargo llvm-cov --lcov` writes the standard lcov records. This script reads them,
 computes line and function coverage over the workspace, prints a short report and
-(carefully) regenerates `docs/status/badge-coverage.svg` next to the other generated
-badges, so the README badge is a real number instead of a hand-edited string.
+(carefully) regenerates `docs/status/badge-lcov.svg` — its own badge, distinct from
+`badge-coverage.svg` which is owned by `update_coverage.py` from the capability manifest
+(#1403).
 
 Badges are only rewritten when the rounded percentage changes, which keeps a
 scheduled coverage run from touching the repository every week for nothing.
@@ -23,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-BADGE_PATH = REPO_ROOT / "docs" / "status" / "badge-coverage.svg"
+BADGE_PATH = REPO_ROOT / "docs" / "status" / "badge-lcov.svg"
 
 
 @dataclass

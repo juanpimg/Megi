@@ -308,5 +308,25 @@ class ProgressIntegrationTests(unittest.TestCase):
         self.assertIn("capability coverage", svg)
 
 
+class BadgeOwnershipTest(unittest.TestCase):
+    """The capability badge and the lcov badge must not share a path (#1403)."""
+
+    def test_badge_writers_use_distinct_paths(self) -> None:
+        report_path = Path(__file__).with_name("coverage_report.py")
+        spec = importlib.util.spec_from_file_location("coverage_report", report_path)
+        report = importlib.util.module_from_spec(spec)
+        sys.modules["coverage_report"] = report
+        spec.loader.exec_module(report)
+
+        # update_coverage.py writes docs/status/badge-coverage.svg from the capability
+        # manifest (CI enforces it byte-for-byte); coverage_report.py must use its own file.
+        self.assertNotEqual(
+            report.BADGE_PATH.name,
+            "badge-coverage.svg",
+            "coverage_report.py must not overwrite the capability badge",
+        )
+        self.assertEqual(report.BADGE_PATH.name, "badge-lcov.svg")
+
+
 if __name__ == "__main__":
     unittest.main()
