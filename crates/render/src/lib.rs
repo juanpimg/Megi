@@ -1994,9 +1994,7 @@ fn resolve_styles_with_collection(
     }
     while let Some(node_id) = stack.pop() {
         if let Some(element) = doc.node(node_id).as_element() {
-            let inline_declarations = element
-                .get_attribute("style")
-                .map(|style| css::expand_declarations(&css::parse_list_of_declarations(style)));
+            let inline_declarations = element.get_attribute("style").map(css::parse_inline_style);
             let cascaded = css::resolve_cascaded_properties(
                 doc,
                 node_id,
