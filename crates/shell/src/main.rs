@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! `megi` — Megi browser shell CLI.
 //!
 //! ```text

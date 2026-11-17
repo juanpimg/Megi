@@ -802,6 +802,8 @@ pub fn execute_scripts(
                     // Same scheme; the directory confinement is enforced below with a
                     // uniform 404 so out-of-directory and missing files are indistinguishable.
                     (Scheme::File, Scheme::File) => true,
+                    // data: URLs are same-origin fetchable (browsers allow them).
+                    (_, Scheme::Data) => true,
                     _ => false,
                 };
                 if !same_origin {
@@ -819,6 +821,21 @@ pub fn execute_scripts(
                         url: request.url,
                         headers: Vec::new(),
                         body: Vec::new(),
+                    });
+                }
+                if matches!(url.scheme(), Scheme::Data) {
+                    // Decode data: URLs like the loader does (#1224).
+                    let data = net::decode_data_url(&url)
+                        .map_err(|error| js::JsError::Runtime(format!("data url: {error}")))?;
+                    charge(&data.bytes)?;
+                    let mut headers = vec![("content-type".to_string(), data.mime_type.clone())];
+                    headers.truncate(64);
+                    return Ok(js::host::FetchResult {
+                        status: 200,
+                        status_text: "OK".to_string(),
+                        url: url.to_string(),
+                        headers,
+                        body: data.bytes,
                     });
                 }
                 if matches!(url.scheme(), Scheme::Http | Scheme::Https) {
@@ -1048,12 +1065,12 @@ pub fn execute_scripts(
                 let mut total = total_module_bytes
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
-                *total = total.saturating_add(text.len());
-                if *total > max_total_module_bytes {
+                if total.saturating_add(text.len()) > max_total_module_bytes {
                     return Err(js::JsError::ModuleNotFound(format!(
                         "module graph exceeds max_total_bytes={max_total_module_bytes}"
                     )));
                 }
+                *total = total.saturating_add(text.len());
                 Ok(text)
             },
         ));
@@ -1192,7 +1209,15 @@ pub fn execute_scripts(
     const MAX_HOST_EVENT_NAME: usize = 256;
     for event in host.host_events.iter().take(MAX_HOST_EVENTS) {
         let event = if event.len() > MAX_HOST_EVENT_NAME {
-            &event[..MAX_HOST_EVENT_NAME]
+            // Truncate on a UTF-8 boundary: byte 256 may fall inside a multi-byte code
+            // point in a host-supplied event name (#1216).
+            let end = event
+                .char_indices()
+                .take_while(|(index, _)| *index < MAX_HOST_EVENT_NAME)
+                .map(|(index, ch)| index + ch.len_utf8())
+                .last()
+                .unwrap_or(0);
+            &event[..end]
         } else {
             event.as_str()
         };

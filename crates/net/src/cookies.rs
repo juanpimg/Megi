@@ -130,6 +130,9 @@ pub const MAX_COOKIES: usize = 4096;
 /// Browsers keep roughly 150-180 cookies per host/E-TLD+1; 180 matches the upper end (#649).
 pub const MAX_COOKIES_PER_DOMAIN: usize = 180;
 
+/// Maximum size of a single cookie (name + value + attributes) in bytes.
+pub const MAX_COOKIE_BYTES: usize = 4096;
+
 /// A stored cookie (RFC 6265 §5.3 state).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cookie {
@@ -317,6 +320,13 @@ pub fn parse_set_cookie(
             "expires" => {
                 if let Some(instant) = parse_http_date(raw_attribute_value) {
                     expires = Some(instant);
+                } else {
+                    // Pre-epoch (or otherwise unrepresentable) dates mean "already
+                    // expired" (#1291): treat as delete-now rather than no expiry.
+                    let year = raw_attribute_value.split_whitespace().nth(3).and_then(|y| y.parse::<i64>().ok());
+                    if year.is_some_and(|y| y < 1970) {
+                        expires = Some(std::time::UNIX_EPOCH);
+                    }
                 }
             }
             "max-age" => {
@@ -360,9 +370,8 @@ pub fn parse_set_cookie(
             "path" => {
                 if raw_attribute_value.starts_with('/') {
                     parsed.path = Some(raw_attribute_value.to_owned());
-                } else if !raw_attribute_value.is_empty() {
-                    return Err(SetCookieError::InvalidPath(raw_attribute_value.to_owned()));
                 }
+                // Non-absolute paths are ignored and the default path is used (#1263).
             }
             "secure" => parsed.secure = true,
             "httponly" => parsed.http_only = true,
@@ -526,6 +535,14 @@ impl CookieJar {
         let Ok(parsed) = parse_set_cookie(set_cookie, request_url, now) else {
             return false;
         };
+        // Reject cookies that exceed the size budget (#1254).
+        if parsed.name.len() + parsed.value.len() > MAX_COOKIE_BYTES {
+            return false;
+        }
+        // Secure cookies must not be set from an insecure origin (#1253).
+        if parsed.secure && request_url.scheme().as_str() != "https" {
+            return false;
+        }
         let host = request_url.host().to_ascii_lowercase();
         let host_only = parsed.domain.is_none();
         let domain = parsed.domain.clone().unwrap_or_else(|| host.clone());
@@ -546,8 +563,13 @@ impl CookieJar {
             return false;
         }
 
-        let creation = self.next_creation;
-        self.next_creation += 1;
+        let creation = if let Some(index) = existing {
+            self.cookies[index].created
+        } else {
+            let c = self.next_creation;
+            self.next_creation += 1;
+            c
+        };
         let cookie = Cookie {
             name: parsed.name,
             value: parsed.value,
@@ -687,7 +709,12 @@ impl CookieJar {
             return None;
         }
         let mut header = String::new();
+        const MAX_COOKIE_HEADER_BYTES: usize = 8 * 1024;
         for (index, cookie) in matching.iter().enumerate() {
+            let entry_len = cookie.name.len() + 1 + cookie.value.len();
+            if header.len() + entry_len + 2 > MAX_COOKIE_HEADER_BYTES {
+                break;
+            }
             if index > 0 {
                 header.push_str("; ");
             }
@@ -695,7 +722,11 @@ impl CookieJar {
             header.push('=');
             header.push_str(&cookie.value);
         }
-        Some(header)
+        if header.is_empty() {
+            None
+        } else {
+            Some(header)
+        }
     }
 }
 
@@ -853,10 +884,9 @@ mod tests {
             parse_set_cookie("a=b; Domain=.other.test", &base, UNIX_EPOCH),
             Err(SetCookieError::InvalidDomain(_))
         ));
-        assert!(matches!(
-            parse_set_cookie("a=b; Path=relative", &base, UNIX_EPOCH),
-            Err(SetCookieError::InvalidPath(_))
-        ));
+        // Non-absolute Path is ignored and the default path applies (#1263).
+        let parsed = parse_set_cookie("a=b; Path=relative", &base, UNIX_EPOCH).expect("valid");
+        assert_eq!(parsed.path, None);
     }
 
     #[test]

@@ -180,6 +180,8 @@ pub(crate) struct EffectRef {
 #[derive(Clone, Debug)]
 pub(crate) struct ClipPathSpec {
     pub units: Units,
+    /// `clip-rule` inherited from the `<clipPath>` element (#1279).
+    pub fill_rule: FillRule,
     pub shapes: Vec<Shape>,
 }
 
@@ -401,10 +403,19 @@ impl Document {
             group_bbox_stack: Vec::new(),
             segments_used: 0,
         };
-        let style = Style::default();
+        let mut style = Style::default();
+        let mut selector_budget = SelectorBudget {
+            used: 0,
+            max: limits.max_selector_checks,
+        };
+        style.apply(root, &rules, &[], &gradient_ids, &pattern_ids, &mut selector_budget)?;
+        let root_opacity = root
+            .attribute("opacity")
+            .and_then(|v| v.parse::<f32>().ok())
+            .unwrap_or(1.0);
         let root_transform = Transform::IDENTITY;
         let mut ancestors: Vec<&XmlElement> = vec![root];
-        builder.visit_children(root, &mut ancestors, root_transform, &style, 1.0, 0)?;
+        builder.visit_children(root, &mut ancestors, root_transform, &style, root_opacity, 0)?;
         selector_checks = builder.selector_checks_used;
         let patterns = build_patterns(
             &defs,
@@ -465,6 +476,8 @@ impl Document {
 /// Inheritable presentation state.
 #[derive(Clone, Debug)]
 struct Style {
+    /// The inherited `color` property; used to resolve `currentColor` (#1276).
+    color: Color,
     fill: Paint,
     stroke: Paint,
     fill_opacity: f32,
@@ -491,6 +504,8 @@ struct Style {
 pub(crate) enum Paint {
     None,
     Solid(Color),
+    /// Resolved to the inherited `color` once the whole style is applied (#1276).
+    CurrentColor,
     Gradient(u32),
     Pattern(u32),
 }
@@ -498,6 +513,7 @@ pub(crate) enum Paint {
 impl Default for Style {
     fn default() -> Self {
         Self {
+            color: Color::BLACK,
             fill: Paint::Solid(Color::BLACK),
             stroke: Paint::None,
             fill_opacity: 1.0,
@@ -521,6 +537,16 @@ impl Default for Style {
 }
 
 impl Style {
+    /// Resolves `currentColor` paints against the inherited `color` property (#1276).
+    fn resolve_current_color(&mut self) {
+        if self.fill == Paint::CurrentColor {
+            self.fill = Paint::Solid(self.color);
+        }
+        if self.stroke == Paint::CurrentColor {
+            self.stroke = Paint::Solid(self.color);
+        }
+    }
+
     /// Applies, in cascade order, the element's presentation attributes, the
     /// matching `<style>` rules (specificity then source order) and finally the
     /// inline `style="..."` attribute (highest priority).
@@ -558,6 +584,11 @@ impl Style {
         patterns: &HashMap<String, u32>,
     ) {
         match name {
+            "color" => {
+                if let Some(color) = parse_color(value) {
+                    self.color = color;
+                }
+            }
             "fill" => self.fill = parse_paint(value, gradients, patterns),
             "stroke" => self.stroke = parse_paint(value, gradients, patterns),
             "fill-opacity" => {
@@ -654,6 +685,8 @@ impl Style {
 
 /// Presentation attributes applied (with specificity 0) before `<style>` rules.
 const PRESENTATION_PROPERTIES: &[&str] = &[
+    // `color` must be applied before `fill`/`stroke` so `currentColor` can resolve.
+    "color",
     "fill",
     "stroke",
     "fill-opacity",
@@ -967,6 +1000,8 @@ impl<'a> Builder<'a> {
             self.pattern_ids,
             &mut selector_budget,
         )?;
+        // All declarations are applied now, including `color` from CSS/inline styles.
+        style.resolve_current_color();
         self.selector_checks_used = selector_budget.used;
         let local_transform = element
             .attribute("transform")
@@ -1505,7 +1540,11 @@ fn polyline_subpath(
     segments_used: &mut usize,
 ) -> Result<SubPath, SvgError> {
     let text = element.attribute("points").unwrap_or_default();
-    let numbers = parse_number_list(text).unwrap_or_default();
+    let numbers = match parse_number_list(text) {
+        Some(numbers) => numbers,
+        None if text.trim().is_empty() => Vec::new(),
+        None => return Err(SvgError::Limit("points list exceeds limit".to_owned())),
+    };
     let pairs = numbers.as_chunks::<2>().0;
     // The documented segment budget also covers `<polygon>`/`<polyline>`: the rasterizer
     // builds one edge per vertex and scans them per sub-row, so an unbounded `points`
@@ -1544,6 +1583,9 @@ fn parse_paint(
     let value = raw.trim();
     if value.eq_ignore_ascii_case("none") {
         return Paint::None;
+    }
+    if value.eq_ignore_ascii_case("currentcolor") {
+        return Paint::CurrentColor;
     }
     if let Some(id) = parse_url_reference(value) {
         if let Some(index) = pattern_ids.get(&id) {
@@ -1854,9 +1896,13 @@ fn animation_fraction(element: &XmlElement, time: f32) -> Option<f32> {
     if let Some(repeats) = repeats
         && repeats.is_finite()
         && repeats >= 0.0
-        && elapsed >= duration * repeats
     {
-        return Some(1.0);
+        if repeats == 0.0 {
+            return None;
+        }
+        if elapsed >= duration * repeats {
+            return Some(1.0);
+        }
     }
     Some((elapsed % duration) / duration)
 }
@@ -2353,8 +2399,17 @@ fn build_clip_paths(
         if shapes.len() > MAX_EFFECT_SHAPES {
             return Err(SvgError::Limit("too many shapes in clipPath".to_owned()));
         }
+        let fill_rule = if element
+            .attribute("clip-rule")
+            .is_some_and(|value| value.eq_ignore_ascii_case("evenodd"))
+        {
+            FillRule::EvenOdd
+        } else {
+            FillRule::NonZero
+        };
         specs.push(ClipPathSpec {
             units: Units::parse(element.attribute("clipPathUnits")),
+            fill_rule,
             shapes,
         });
     }

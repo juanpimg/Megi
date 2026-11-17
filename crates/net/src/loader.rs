@@ -272,6 +272,7 @@ impl ResourceLoader {
             }
         } else {
             self.cache = None;
+            self.cache_bytes = 0;
         }
     }
 
@@ -373,20 +374,19 @@ impl ResourceLoader {
                 .filter(|value| !value.is_empty())
                 .unwrap_or_else(|| mime::sniff(&pushed.body).mime_type().to_owned());
             let key = pushed.url.cache_key();
-            if self
-                .push_cache
-                .insert(
-                    key,
-                    Arc::new(Resource {
-                        url: pushed.url,
-                        content_type,
-                        bytes: pushed.body,
-                    }),
-                )
-                .is_none()
-            {
-                self.pushed_bytes = self.pushed_bytes.saturating_add(bytes);
+            // Subtract the replaced entry's bytes before adding the new one (#1258).
+            if let Some(old) = self.push_cache.get(&key) {
+                self.pushed_bytes = self.pushed_bytes.saturating_sub(old.bytes.len());
             }
+            self.push_cache.insert(
+                key,
+                Arc::new(Resource {
+                    url: pushed.url,
+                    content_type,
+                    bytes: pushed.body,
+                }),
+            );
+            self.pushed_bytes = self.pushed_bytes.saturating_add(bytes);
         }
     }
 

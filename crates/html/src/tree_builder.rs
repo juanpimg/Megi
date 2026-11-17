@@ -1429,6 +1429,22 @@ impl TreeBuilder {
         el_id
     }
 
+    /// Checks the same `max_depth`/`max_nodes` gates as inbound tokens for elements
+    /// created internally by formatting reconstruction and the adoption agency (#412).
+    fn parser_node_budget_allows(&mut self) -> bool {
+        if self.open_elements.len() >= self.parse_options.max_depth {
+            self.limit_violations.depth_exceeded =
+                self.limit_violations.depth_exceeded.saturating_add(1);
+            return false;
+        }
+        if self.doc.len() >= self.parse_options.max_nodes {
+            self.limit_violations.nodes_exceeded =
+                self.limit_violations.nodes_exceeded.saturating_add(1);
+            return false;
+        }
+        true
+    }
+
     fn insert_html_element(&mut self, name: &str, raw_attrs: &[(String, String)]) -> NodeId {
         self.insert_element(Namespace::Html, name, raw_attrs)
     }
@@ -1683,6 +1699,10 @@ impl TreeBuilder {
                 ..
             } = self.active_formatting[i].clone()
             {
+                // Parser-reconstructed nodes must respect the same caps as tokens (#412).
+                if !self.parser_node_budget_allows() {
+                    break;
+                }
                 let new_id = self.insert_html_element(&tag_name, &attributes);
                 self.active_formatting[i] = FormattingEntry::Element {
                     node_id: new_id,
@@ -1795,6 +1815,10 @@ impl TreeBuilder {
 
         loop {
             if outer_loop_counter >= 8 {
+                return;
+            }
+            // The adoption agency clones elements internally; gate those too (#412).
+            if !self.parser_node_budget_allows() {
                 return;
             }
             outer_loop_counter += 1;
@@ -4494,6 +4518,8 @@ fn run_fragment_parser(
         TokenizerState::Data
     };
 
+    // Per WHATWG §13.4 there is no appropriate end tag in the fragment case, so the
+    // tokenizer's last start tag stays unset (issue #413 was resolved as invalid).
     let mut tok = Tokenizer::from_str_input(
         input,
         TokenizerConfig {
@@ -4867,5 +4893,48 @@ mod invalid_codepoint_context_tests {
         assert!(!body.contains('\u{FFFD}'), "body path: {body:?}");
         assert!(!table.contains('\u{FFFD}'), "table-text path: {table:?}");
         assert_eq!(body, table);
+    }
+}
+
+#[cfg(test)]
+mod parser_node_cap_tests {
+    use super::*;
+
+    #[test]
+    fn formatting_reconstruction_respects_max_nodes() {
+        let mut options = ParseOptions::default();
+        options.max_nodes = 8; // root + html + body + 4 stale entries = 7, room for 1
+        let mut tb = TreeBuilder::with_options(false, options);
+        let html = tb.doc.create_element(Namespace::Html, "html", vec![]);
+        let body = tb.doc.create_element(Namespace::Html, "body", vec![]);
+        tb.doc.append_child(tb.doc.root(), html);
+        tb.doc.append_child(html, body);
+        tb.open_elements.push(html);
+        tb.open_elements.push(body);
+        // Several stale formatting entries whose nodes are not open: reconstruction
+        // would clone all of them in one shot without the budget check (#412).
+        for _ in 0..4 {
+            let stale = tb.doc.create_element(Namespace::Html, "b", vec![]);
+            tb.active_formatting.push(FormattingEntry::Element {
+                node_id: stale,
+                tag_name: "b".into(),
+                attributes: vec![],
+            });
+        }
+        let before = tb.doc.len();
+        assert!(before < options.max_nodes, "setup: {before} nodes");
+
+        tb.reconstruct_active_formatting_elements();
+
+        assert!(
+            tb.doc.len() <= options.max_nodes,
+            "reconstruction must stop at max_nodes (#412): {} nodes",
+            tb.doc.len()
+        );
+        assert!(
+            tb.limit_violations.nodes_exceeded > 0,
+            "the bounded bypass must be counted: {:?}",
+            tb.limit_violations
+        );
     }
 }

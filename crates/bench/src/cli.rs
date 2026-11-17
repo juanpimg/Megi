@@ -29,6 +29,12 @@ pub enum Parsed {
     List,
 }
 
+/// Upper bounds for CLI flags so they cannot overflow generator arithmetic, allocate
+/// absurd buffers, or loop forever (#1200).
+const MAX_SCALE: f64 = 64.0;
+const MAX_ITERATIONS: usize = 10_000;
+const MAX_WARMUP: usize = 1_000;
+
 /// Benchmark suite options shared by the runner and the benchmark registry.
 #[derive(Clone, Debug)]
 pub struct Options {
@@ -74,8 +80,10 @@ impl Options {
                     let value = raw
                         .parse::<f64>()
                         .map_err(|_| format!("invalid --scale value: {raw}"))?;
-                    if !value.is_finite() || value <= 0.0 {
-                        return Err(format!("--scale must be a positive number, got {raw}"));
+                    if !value.is_finite() || value <= 0.0 || value > MAX_SCALE {
+                        return Err(format!(
+                            "--scale must be a positive number <= {MAX_SCALE}, got {raw}"
+                        ));
                     }
                     opts.scale = value;
                 }
@@ -86,8 +94,10 @@ impl Options {
                     let value = raw
                         .parse::<usize>()
                         .map_err(|_| format!("invalid --iterations value: {raw}"))?;
-                    if value == 0 {
-                        return Err("--iterations must be at least 1".to_string());
+                    if value == 0 || value > MAX_ITERATIONS {
+                        return Err(format!(
+                            "--iterations must be between 1 and {MAX_ITERATIONS}, got {raw}"
+                        ));
                     }
                     opts.iterations = value;
                 }
@@ -95,9 +105,13 @@ impl Options {
                     let raw = args
                         .next()
                         .ok_or_else(|| "--warmup requires a value".to_string())?;
-                    opts.warmup = raw
+                    let value = raw
                         .parse::<usize>()
                         .map_err(|_| format!("invalid --warmup value: {raw}"))?;
+                    if value > MAX_WARMUP {
+                        return Err(format!("--warmup must be <= {MAX_WARMUP}, got {raw}"));
+                    }
+                    opts.warmup = value;
                 }
                 "--filter" => {
                     let raw = args
@@ -157,5 +171,13 @@ mod tests {
         assert!(parse(&["--scale", "nope"]).is_err());
         assert!(parse(&["--scale", "0"]).is_err());
         assert!(parse(&["--iterations", "0"]).is_err());
+    }
+
+    #[test]
+    fn extreme_numeric_flags_are_rejected() {
+        assert!(parse(&["--scale", "1e300"]).is_err());
+        assert!(parse(&["--scale", "inf"]).is_err());
+        assert!(parse(&["--iterations", "18446744073709551615"]).is_err());
+        assert!(parse(&["--warmup", "18446744073709551615"]).is_err());
     }
 }

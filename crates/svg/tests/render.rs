@@ -734,3 +734,18 @@ fn test_pattern_phase_beyond_the_tile_budget_still_renders() {
     let image = render_at(source, 8, 8);
     assert_eq!(pixel(&image, 0, 0), [255, 0, 0, 255]);
 }
+
+#[test]
+fn currentcolor_uses_inherited_color() {
+    // `currentColor` must resolve to the inherited CSS `color`, not to black (#1276).
+    let image = render_at(
+        &svg_doc(
+            8.0,
+            8.0,
+            "<g color='red'><rect width='8' height='8' fill='currentColor'/></g>",
+        ),
+        8,
+        8,
+    );
+    assert_eq!(pixel(&image, 4, 4), [255, 0, 0, 255]);
+}

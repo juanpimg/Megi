@@ -88,7 +88,7 @@ impl ScrollState {
 
     /// Scrolls by `delta` CSS pixels (positive = content moves up / go down the page).
     pub fn scroll_by(&mut self, delta: i64) -> bool {
-        let new = (i64::from(self.offset) + delta).clamp(0, i64::from(self.max_offset()));
+        let new = i64::from(self.offset).saturating_add(delta).clamp(0, i64::from(self.max_offset()));
         let changed = new as u32 != self.offset;
         self.offset = new as u32;
         changed
@@ -135,13 +135,15 @@ impl ScrollState {
 /// Converts a winit line delta (positive = content moves down, i.e. scroll up)
 /// into a scroll offset delta (positive = go down the page).
 pub fn wheel_line_delta(lines: f64) -> i64 {
-    -((lines * f64::from(LINE_HEIGHT)).round() as i64)
+    let scaled = (lines * f64::from(LINE_HEIGHT)).clamp(i64::MIN as f64, i64::MAX as f64);
+    (scaled.round() as i64).saturating_neg()
 }
 
 /// Converts a winit pixel delta (positive = content moves down) into a scroll
 /// offset delta (positive = go down the page).
 pub fn wheel_pixel_delta(pixels: f64) -> i64 {
-    -(pixels.round() as i64)
+    let clamped = pixels.clamp(i64::MIN as f64, i64::MAX as f64);
+    (clamped.round() as i64).saturating_neg()
 }
 
 /// Clamps a layout height (CSS px, fractional) to the renderable content height.
