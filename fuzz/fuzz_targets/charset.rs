@@ -27,7 +27,9 @@ const CONTENT_TYPES: &[&str] = &[
 fuzz_target!(|data: &[u8]| {
     // Derive a content type from the leading bytes when enough are available; otherwise fall
     // back to the first entry. This keeps the input space small while covering all branches.
-    let index = data.first().map_or(0, |b| usize::from(*b) % CONTENT_TYPES.len());
+    let index = data
+        .first()
+        .map_or(0, |b| usize::from(*b) % CONTENT_TYPES.len());
     let content_type = CONTENT_TYPES[index];
 
     match render::charset::decode_html(data, content_type) {
