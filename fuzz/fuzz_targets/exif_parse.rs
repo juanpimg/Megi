@@ -18,5 +18,13 @@ fuzz_target!(|data: &[u8]| {
     if data.len() > MAX_FUZZ_INPUT {
         return;
     }
-    let _ = image::exif::orientation(data);
+    // The parser must yield a valid EXIF orientation tag or `None`; any other value means
+    // the TIFF/IFD0 walk accepted a corrupt tag (#1428). This invariant gives the dedicated
+    // APP1/TIFF campaign teeth beyond "does not panic".
+    if let Some(orientation) = image::exif::orientation(data) {
+        assert!(
+            (1..=8).contains(&orientation),
+            "orientation tag out of range: {orientation}"
+        );
+    }
 });
