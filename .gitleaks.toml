@@ -1,11 +1,14 @@
 # gitleaks configuration for the Megi repository.
 #
-# The default ruleset is used as-is; the only local addition is an allowlist for
-# a documented false positive: `CHANGELOG.md` is prose and one English sentence
-# ("layout fingerprint and CSS parse caching …") trips the `generic-api-key`
-# entropy heuristic. Nothing else in the tree is exempt, and the allowlist is
-# scoped to that single rule and that single file so a real credential added
-# anywhere else — including elsewhere in the changelog — still fails the gate.
+# The default ruleset is used as-is; the only local additions are allowlists for
+# documented false positives:
+#  - `CHANGELOG.md` is prose and one English sentence ("layout fingerprint and
+#    CSS parse caching …") trips the `generic-api-key` entropy heuristic.
+#  - `tests/fixtures/real-sites/wikipedia.html` is a captured upstream HTML page
+#    that embeds Wikipedia's hCaptcha *site key*, which is public by design (it
+#    ships in every page that renders the widget), not a credential.
+# Nothing else in the tree is exempt, and each allowlist is scoped to one rule
+# and one file so a real credential added anywhere else still fails the gate.
 
 [extend]
 useDefault = true
@@ -13,4 +16,9 @@ useDefault = true
 [[allowlists]]
 description = "CHANGELOG prose triggers the generic-api-key entropy heuristic"
 paths = ['''^CHANGELOG\.md$''']
+rules = ["generic-api-key"]
+
+[[allowlists]]
+description = "captured Wikipedia fixture embeds the public hCaptcha site key"
+paths = ['''^tests/fixtures/real-sites/wikipedia\.html$''']
 rules = ["generic-api-key"]
