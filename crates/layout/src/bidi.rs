@@ -290,13 +290,63 @@ pub fn mirror_char(ch: char) -> char {
     }
 }
 
+/// Returns `true` for nonspacing marks (UAX #9 W1): Hebrew niqqud, Arabic harakat,
+/// combining diacritics, etc. These inherit the previous character's class so a vowel
+/// stays attached to its base letter instead of being reversed away from it (#1447).
+fn is_nonspacing_mark(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{0300}'..='\u{036F}'
+            | '\u{0591}'..='\u{05BD}'
+            | '\u{05BF}'
+            | '\u{05C1}'..='\u{05C2}'
+            | '\u{05C4}'..='\u{05C5}'
+            | '\u{05C7}'
+            | '\u{0610}'..='\u{061A}'
+            | '\u{064B}'..='\u{065F}'
+            | '\u{0670}'
+            | '\u{06D6}'..='\u{06DC}'
+            | '\u{06DF}'..='\u{06E4}'
+            | '\u{06E7}'..='\u{06E8}'
+            | '\u{06EA}'..='\u{06ED}'
+            | '\u{0711}'
+            | '\u{0730}'..='\u{074A}'
+    )
+}
+
 /// Reorders a single word's characters into left-to-right visual glyph order
 /// when its resolved embedding level is odd (RTL).
-pub fn word_to_visual(text: &str, level: u8) -> String {
+///
+/// A blanket `chars().rev()` was wrong for mixed runs: digits (EN/AN) and Latin letters
+/// receive an even (LTR) implicit level and must keep their order inside the RTL word,
+/// while nonspacing marks must stay attached to their base (W1, #1447).
+pub fn word_to_visual(text: &str, level: u8, forced_class: Option<BidiClass>) -> String {
     if level.is_multiple_of(2) {
         return text.to_string();
     }
-    text.chars().rev().map(mirror_char).collect()
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() < 2 {
+        return text.to_string();
+    }
+    let mut classes: Vec<BidiClass> = match forced_class {
+        Some(class) => vec![class; chars.len()], // bidi-override forces every character
+        None => chars.iter().map(|&ch| char_bidi_class(ch)).collect(),
+    };
+    // W1: nonspacing marks inherit the class of the preceding character (ON at word start).
+    for index in 0..classes.len() {
+        if forced_class.is_none() && is_nonspacing_mark(chars[index]) {
+            classes[index] = if index == 0 {
+                BidiClass::ON
+            } else {
+                classes[index - 1]
+            };
+        }
+    }
+    let levels = resolve_levels(&classes, level);
+    reorder_visual_indices(&levels)
+        .into_iter()
+        .map(|index| mirror_char(chars[index]))
+        .collect()
 }
 
 /// Returns the dominant [`BidiClass`] for a word token (first strong character, or `ON`).
@@ -319,6 +369,33 @@ pub fn word_bidi_class(text: &str) -> BidiClass {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rtl_word_keeps_digits_in_ltr_order() {
+        // "שלום123": the Hebrew letters reverse visually, the Latin digits must stay "123".
+        assert_eq!(word_to_visual("שלום123", 1, None), "123םולש");
+        // Arabic-Indic digits (AN) behave the same way.
+        let arabic = word_to_visual("مرحبا١٢٣", 1, None);
+        assert!(
+            arabic.starts_with("١٢٣"),
+            "AN digits must keep their order: {arabic:?}"
+        );
+    }
+
+    #[test]
+    fn nonspacing_marks_stay_within_the_rtl_run() {
+        // W1: niqqud inherits the preceding letter's class instead of becoming L,
+        // so it stays inside the reversed RTL run adjacent to its base (#1447).
+        let visual = word_to_visual("שָלום", 1, None);
+        let chars: Vec<char> = visual.chars().collect();
+        assert_eq!(chars.len(), 5);
+        let base = chars.iter().position(|&ch| ch == 'ש').expect("base letter");
+        assert!(
+            chars.get(base.wrapping_sub(1)) == Some(&'\u{05B8}')
+                || chars.get(base + 1) == Some(&'\u{05B8}'),
+            "the niqqud must remain adjacent to its base: {visual:?}"
+        );
+    }
 
     #[test]
     fn resolves_mixed_ltr_rtl_and_numbers() {
@@ -361,11 +438,11 @@ mod tests {
 
     #[test]
     fn mirrors_brackets_and_reverses_rtl_word() {
-        assert_eq!(word_to_visual("שלום", 1), "םולש");
+        assert_eq!(word_to_visual("שלום", 1, None), "םולש");
         assert_eq!(
-            word_to_visual("(a)", 1),
+            word_to_visual("(a)", 1, None),
             "(a)".chars().rev().map(mirror_char).collect::<String>()
         );
-        assert_eq!(word_to_visual("hello", 0), "hello");
+        assert_eq!(word_to_visual("hello", 0, None), "hello");
     }
 }

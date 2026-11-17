@@ -470,6 +470,17 @@ fn reorder_line_tokens_bidi(
     if tokens.is_empty() {
         return;
     }
+    // A paragraph-level bidi-override forces every character, including Latin text,
+    // into the container direction; per-word style indices are not reliable here.
+    let forced_all = match container_style.unicode_bidi {
+        css::UnicodeBidi::BidiOverride | css::UnicodeBidi::IsolateOverride => {
+            Some(match container_style.direction {
+                css::Direction::Ltr => BidiClass::L,
+                css::Direction::Rtl => BidiClass::R,
+            })
+        }
+        _ => None,
+    };
 
     // Group balanced `BoxStart .. BoxEnd` spans as single reorderable units so
     // inline box nesting stays well-formed; flat tokens are singleton units.
@@ -577,11 +588,12 @@ fn reorder_line_tokens_bidi(
             if let InlineToken::Word {
                 ref mut start,
                 ref mut end,
+                style,
                 ..
             } = tok
                 && level % 2 == 1
             {
-                let visual = word_to_visual(&text_pool[*start..*end], level);
+                let visual = word_to_visual(&text_pool[*start..*end], level, forced_all);
                 let new_start = text_pool.len();
                 text_pool.push_str(&visual);
                 *start = new_start;
