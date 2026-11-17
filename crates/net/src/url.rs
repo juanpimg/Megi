@@ -619,8 +619,10 @@ fn parse_ipv4(host: &str) -> Result<String, UrlError> {
 }
 
 /// Decodes `%2E` (case-insensitive) to `.` so that dot-segment resolution sees an escaped
-/// `..` as traversal. `%2F` is deliberately left encoded: WHATWG keeps it opaque, and
-/// decoding it would let `%2f` split a path segment after the fact (#641).
+/// `..` as traversal. Only the literal two-digit escape `%2E` is a dot: every other `%?E`
+/// pair (`%3E`, `%4E`, `%5E`, `%7E`, …) stays encoded, as WHATWG URL §4.4 requires (#1404).
+/// `%2F` is deliberately left encoded: WHATWG keeps it opaque, and decoding it would let
+/// `%2f` split a path segment after the fact (#641).
 fn decode_dot_escapes(input: &str) -> String {
     let bytes = input.as_bytes();
     let mut out = String::with_capacity(input.len());
@@ -628,7 +630,7 @@ fn decode_dot_escapes(input: &str) -> String {
     while index < bytes.len() {
         if bytes[index] == b'%'
             && index + 2 < bytes.len()
-            && hex_value(bytes[index + 1]).is_some()
+            && hex_value(bytes[index + 1]) == Some(0x2)
             && hex_value(bytes[index + 2]) == Some(0xE)
         {
             out.push('.');
@@ -814,6 +816,21 @@ mod unit_tests {
             "oversized host must be rejected"
         );
         assert!(start.elapsed() < std::time::Duration::from_millis(100));
+    }
+
+    #[test]
+    fn only_percent_2e_is_decoded_to_a_dot() {
+        // Any `%?E` used to collapse to `.`, so `%7Ealice` became `.alice` and `%3E%2E`
+        // vanished as a dot segment (#1404).
+        assert_eq!(decode_dot_escapes("%2e"), ".");
+        assert_eq!(decode_dot_escapes("%2E%2E"), "..");
+        assert_eq!(decode_dot_escapes("%3E"), "%3E");
+        assert_eq!(decode_dot_escapes("%3E%2E"), "%3E.");
+        assert_eq!(decode_dot_escapes("%7Ealice"), "%7Ealice");
+        assert_eq!(normalize_path("/a/%3E/b"), "/a/%3E/b");
+        assert_eq!(normalize_path("/a/%2E%2E/b"), "/b");
+        let url = Url::parse("http://example.com/%7Ealice/").expect("valid URL");
+        assert_eq!(url.path(), "/%7Ealice/");
     }
 
     #[test]
