@@ -869,7 +869,8 @@ impl<'a, S: Read + Write> Session<'a, S> {
                 self.fail_request(
                     request_index,
                     if invalid {
-                        FetchError::InvalidResponse("invalid request trailer name/value".to_owned())
+                        // Local request-side validation failure, not a malformed peer response (#1348).
+                        FetchError::RequestBody("invalid request trailer name/value".to_owned())
                     } else {
                         FetchError::HeadersTooLarge
                     },
