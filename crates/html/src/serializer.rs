@@ -51,7 +51,10 @@ fn serialize_node(
     out: &mut String,
     stack: &mut Vec<Work>,
 ) {
-    let node = doc.node(node_id);
+    // A stale handle (e.g. a subtree freed by innerHTML) must be skipped, not panic (#32).
+    let Some(node) = doc.try_node(node_id) else {
+        return;
+    };
 
     match &node.kind {
         NodeKind::Document | NodeKind::DocumentFragment => {
@@ -109,7 +112,11 @@ fn serialize_node(
                 && let Some(frag_id) = el.template_contents
             {
                 out.push_str(&format!("| {attr_indent}content\n"));
-                push_child_list(stack, doc.node(frag_id).first_child, depth + 2);
+                push_child_list(
+                    stack,
+                    doc.try_node(frag_id).and_then(|node| node.first_child),
+                    depth + 2,
+                );
             }
         }
     }
@@ -136,12 +143,23 @@ pub fn serialize_dom_for_test(doc: &Document) -> String {
 pub fn serialize_dom_for_test_with_limit(doc: &Document, max_output_bytes: usize) -> String {
     let mut out = String::new();
     let mut stack: Vec<Work> = Vec::new();
-    push_child_list(&mut stack, doc.node(doc.root()).first_child, 0);
+    push_child_list(
+        &mut stack,
+        doc.try_node(doc.root()).and_then(|node| node.first_child),
+        0,
+    );
     // Indentation is grown and truncated in place: `"  ".repeat(depth)` per node allocated
     // O(depth) bytes for every node, i.e. O(n·depth) on a deep chain (#647).
     let mut indent = String::new();
 
+    let max_steps = doc.len().saturating_mul(16).max(64);
+    let mut steps = 0usize;
     while let Some(work) = stack.pop() {
+        // A corrupt sibling cycle must terminate instead of growing `stack` forever (#32).
+        if steps >= max_steps {
+            break;
+        }
+        steps += 1;
         if out.len() >= max_output_bytes {
             truncate_to_limit(&mut out, max_output_bytes);
             out.push_str("| <!-- output truncated -->\n");
@@ -154,7 +172,7 @@ pub fn serialize_dom_for_test_with_limit(doc: &Document, max_output_bytes: usize
                 depth,
             } => {
                 stack.push(Work::ChildList {
-                    next: doc.node(id).next_sibling,
+                    next: doc.try_node(id).and_then(|node| node.next_sibling),
                     depth,
                 });
                 stack.push(Work::Node { node_id: id, depth });
@@ -356,7 +374,7 @@ fn serialize_children(
         .and_then(|el| el.template_contents)
         .unwrap_or(parent_id);
     let stack = vec![HtmlSerializeWork::ChildList {
-        next: doc.node(child_root).first_child,
+        next: doc.try_node(child_root).and_then(|node| node.first_child),
         rawtext_context: is_rawtext_element_node(doc, parent_id, options),
     }];
     run_serialization(doc, options, stack, out);
@@ -391,8 +409,8 @@ pub fn serialize_fragment_with_options(
 
 /// Returns whether the children of `node_id` must be serialized as raw text.
 fn is_rawtext_element_node(doc: &Document, node_id: NodeId, options: HtmlSerializeOptions) -> bool {
-    doc.node(node_id)
-        .as_element()
+    doc.try_node(node_id)
+        .and_then(|node| node.as_element())
         .is_some_and(|el| is_rawtext_element(el, options))
 }
 
@@ -404,7 +422,14 @@ fn run_serialization(
     mut stack: Vec<HtmlSerializeWork>,
     out: &mut String,
 ) {
+    let max_steps = doc.len().saturating_mul(16).max(64);
+    let mut steps = 0usize;
     while let Some(work) = stack.pop() {
+        // Terminate on a corrupt sibling cycle instead of growing the stack forever (#32).
+        if steps >= max_steps {
+            break;
+        }
+        steps += 1;
         if out.len() >= options.max_output_bytes {
             truncate_to_limit(out, options.max_output_bytes);
             out.push_str("<!-- output truncated -->");
@@ -417,7 +442,7 @@ fn run_serialization(
                 rawtext_context,
             } => {
                 stack.push(HtmlSerializeWork::ChildList {
-                    next: doc.node(id).next_sibling,
+                    next: doc.try_node(id).and_then(|node| node.next_sibling),
                     rawtext_context,
                 });
                 stack.push(HtmlSerializeWork::Node {
@@ -426,7 +451,7 @@ fn run_serialization(
                 });
             }
             HtmlSerializeWork::CloseElement { node_id } => {
-                if let Some(el) = doc.node(node_id).as_element()
+                if let Some(el) = doc.try_node(node_id).and_then(|node| node.as_element())
                     && !is_void_html_element(el)
                 {
                     out.push_str("</");
@@ -489,7 +514,9 @@ fn serialize_node_into(
     out: &mut String,
     stack: &mut Vec<HtmlSerializeWork>,
 ) {
-    let node = doc.node(node_id);
+    let Some(node) = doc.try_node(node_id) else {
+        return;
+    };
     match &node.kind {
         NodeKind::Document | NodeKind::DocumentFragment => {
             stack.push(HtmlSerializeWork::ChildList {
@@ -555,7 +582,7 @@ fn serialize_node_into(
                     node_id
                 };
                 stack.push(HtmlSerializeWork::ChildList {
-                    next: doc.node(child_root).first_child,
+                    next: doc.try_node(child_root).and_then(|node| node.first_child),
                     rawtext_context: is_rawtext_element(el, options),
                 });
             }
@@ -568,18 +595,42 @@ mod tests {
     use super::*;
     use crate::{parse_document, serialize_fragment, serialize_html, serialize_outer_html};
 
+    #[test]
+    fn serializer_skips_stale_template_contents_handle() {
+        // Removing a template's inert fragment frees its slot but leaves the stale id in
+        // ElementData::template_contents. Both serializers must skip it instead of panicking
+        // on doc.node() (#32).
+        let mut doc = parse_document(
+            "<html><body><template><p>inside</p></template></body></html>",
+            false,
+        );
+        let template = find_element(&doc, "template");
+        let frag = doc
+            .node(template)
+            .as_element()
+            .and_then(|el| el.template_contents)
+            .expect("template contents");
+        let _ = doc.remove_subtree(frag);
+        assert!(!doc.owns(frag));
+
+        let dump = crate::serialize_dom_for_test(&doc);
+        assert!(dump.contains("template"), "{dump}");
+        let fragment = serialize_fragment(&doc, template);
+        assert!(!fragment.contains("inside"), "{fragment}");
+    }
+
     fn find_element(doc: &Document, local_name: &str) -> NodeId {
         let mut stack = vec![doc.root()];
         while let Some(id) = stack.pop() {
-            if let Some(el) = doc.node(id).as_element()
+            if let Some(el) = doc.try_node(id).and_then(|node| node.as_element())
                 && el.local_name == local_name
             {
                 return id;
             }
-            let mut child = doc.node(id).first_child;
+            let mut child = doc.try_node(id).and_then(|node| node.first_child);
             while let Some(c) = child {
                 stack.push(c);
-                child = doc.node(c).next_sibling;
+                child = doc.try_node(c).and_then(|node| node.next_sibling);
             }
         }
         panic!("element <{local_name}> not found");
