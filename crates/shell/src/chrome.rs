@@ -1,6 +1,11 @@
 //! Browser chrome drawn by the shell over the rendered page: tab strip, address bar and the
 //! floating `<select>` dropdown.
 //!
+//! Visual design: one accent color drives focus/loading/active-tab affordances, every
+//! surface uses the antialiased rounded-rectangle primitives already in `paint`, and the
+//! address pill splits scheme/authority/path into a text hierarchy. All of it stays pure
+//! (`Pixmap` in, pixels out), deterministic, and free of new dependencies.
+//!
 //! The chrome is an **overlay** painted on the physical framebuffer after the page frame
 //! (documented trade-off: the rendered page keeps its full viewport, so the top
 //! [`CHROME_HEIGHT`] CSS pixels are occluded by the chrome; clicks there are handled by the
@@ -16,6 +21,7 @@
 //! (search terms are treated as URLs). The tab strip shows a compact title per tab with
 //! `+`/`×` affordances and a `+N` overflow marker; there is no drag/reorder.
 
+use css::properties::{BorderRadii, Length, Radius};
 use layout::Rect;
 use paint::{Color, Pixmap};
 
@@ -28,6 +34,14 @@ pub const TAB_STRIP_HEIGHT: f32 = 30.0;
 pub const ADDRESS_BAR_HEIGHT: f32 = 28.0;
 /// Total chrome height, in CSS pixels (tab strip + address bar).
 pub const CHROME_HEIGHT: f32 = TAB_STRIP_HEIGHT + ADDRESS_BAR_HEIGHT;
+/// Corner radius of a tab (top corners only, tabs meet the address strip below).
+const TAB_RADIUS: f32 = 6.0;
+/// Corner radius of the address pill.
+const PILL_RADIUS: f32 = 7.0;
+/// Corner radius of floating menus and dropdowns.
+const MENU_RADIUS: f32 = 6.0;
+/// Address bar font size, shared by text, URL hierarchy and the caret measurement.
+const ADDRESS_TEXT_SIZE: f32 = 13.0;
 /// Height of one dropdown option row, in CSS pixels.
 pub const DROPDOWN_ROW_HEIGHT: f32 = 18.0;
 /// Maximum number of visible dropdown rows before the list scrolls.
@@ -43,32 +57,49 @@ pub const TAB_CLOSE_WIDTH: f32 = 14.0;
 /// Width reserved for the `+N` overflow marker, in CSS pixels.
 pub const TAB_OVERFLOW_WIDTH: f32 = 34.0;
 
-/// Tab strip background.
-pub const COLOR_TAB_STRIP: Color = Color::new(0x20, 0x21, 0x24, 0xFF);
+/// Single accent used for focus, the active tab, the caret and loading feedback.
+/// Keeping one accent is what makes the chrome read as a coherent design.
+pub const ACCENT: Color = Color::new(0x7C, 0x9C, 0xFF, 0xFF);
+/// Tab strip background (the darkest chrome surface).
+pub const COLOR_TAB_STRIP: Color = Color::new(0x15, 0x17, 0x1B, 0xFF);
 /// Inactive tab background.
-pub const COLOR_TAB: Color = Color::new(0x35, 0x37, 0x3B, 0xFF);
+pub const COLOR_TAB: Color = Color::new(0x1E, 0x21, 0x26, 0xFF);
 /// Active tab background.
-pub const COLOR_TAB_ACTIVE: Color = Color::new(0x4A, 0x4D, 0x52, 0xFF);
-/// Chrome text (tabs/address).
-pub const COLOR_TEXT: Color = Color::new(0xE8, 0xEA, 0xED, 0xFF);
-/// Address bar background.
-pub const COLOR_ADDRESS_BG: Color = Color::new(0xF1, 0xF3, 0xF4, 0xFF);
-/// Address bar text (dark).
-pub const COLOR_ADDRESS_TEXT: Color = Color::new(0x1F, 0x23, 0x28, 0xFF);
-/// Address bar caret.
-pub const COLOR_CARET: Color = Color::new(0x1A, 0x73, 0xE8, 0xFF);
+pub const COLOR_TAB_ACTIVE: Color = Color::new(0x2B, 0x2F, 0x36, 0xFF);
+/// Divider between tabs.
+pub const COLOR_TAB_SEPARATOR: Color = Color::new(0x0D, 0x0F, 0x12, 0xFF);
+/// Chrome text (tabs, menus, secondary UI).
+pub const COLOR_TEXT: Color = Color::new(0xE7, 0xEA, 0xF0, 0xFF);
+/// Secondary text (hints, host suffix, disabled labels).
+pub const COLOR_TEXT_MUTED: Color = Color::new(0x9A, 0xA2, 0xB0, 0xFF);
+/// Address strip behind the address pill.
+pub const COLOR_ADDRESS_STRIP: Color = Color::new(0x11, 0x13, 0x17, 0xFF);
+/// Address pill surface (matches an active tab so the chrome is one surface).
+pub const COLOR_ADDRESS_BG: Color = Color::new(0x2B, 0x2F, 0x36, 0xFF);
+/// Address pill text.
+pub const COLOR_ADDRESS_TEXT: Color = Color::new(0xF0, 0xF2, 0xF6, 0xFF);
+/// Muted part of the URL (scheme and path) in the address pill.
+pub const COLOR_ADDRESS_MUTED: Color = Color::new(0x9A, 0xA2, 0xB0, 0xFF);
+/// Address bar caret (accent).
+pub const COLOR_CARET: Color = ACCENT;
 /// Dropdown background.
-pub const COLOR_DROPDOWN_BG: Color = Color::new(0xFF, 0xFF, 0xFF, 0xFF);
+pub const COLOR_DROPDOWN_BG: Color = Color::new(0x24, 0x27, 0x2D, 0xFF);
 /// Dropdown selected row background.
-pub const COLOR_DROPDOWN_SELECTED: Color = Color::new(0xE8, 0xF0, 0xFE, 0xFF);
+pub const COLOR_DROPDOWN_SELECTED: Color = Color::new(0x2C, 0x3A, 0x5E, 0xFF);
 /// Dropdown hovered/active row background.
-pub const COLOR_DROPDOWN_ACTIVE: Color = Color::new(0xD2, 0xE3, 0xFC, 0xFF);
-/// Dropdown border.
-pub const COLOR_BORDER: Color = Color::new(0xDA, 0xDC, 0xE0, 0xFF);
-/// Dropdown scroll indicator.
-pub const COLOR_SCROLL: Color = Color::new(0x5F, 0x63, 0x68, 0xFF);
+pub const COLOR_DROPDOWN_ACTIVE: Color = Color::new(0x35, 0x43, 0x6B, 0xFF);
+/// Dropdown group header background.
+pub const COLOR_GROUP_HEADER: Color = Color::new(0x1A, 0x1D, 0x21, 0xFF);
+/// Borders and separators.
+pub const COLOR_BORDER: Color = Color::new(0x3B, 0x40, 0x48, 0xFF);
+/// Scrollbar track.
+pub const COLOR_SCROLL_TRACK: Color = Color::new(0x17, 0x1A, 0x1E, 0xFF);
+/// Scrollbar thumb / inactive indicators.
+pub const COLOR_SCROLL: Color = Color::new(0x7B, 0x82, 0x90, 0xFF);
+/// Disabled navigation affordance.
+pub const COLOR_DISABLED: Color = Color::new(0x63, 0x69, 0x75, 0xFF);
 /// Per-tab loading indicator (deterministic dot while the render worker runs).
-pub const COLOR_LOADING: Color = Color::new(0x8A, 0xB4, 0xF8, 0xFF);
+pub const COLOR_LOADING: Color = ACCENT;
 /// Height of one overflow-menu row, in CSS pixels.
 pub const OVERFLOW_MENU_ROW_HEIGHT: f32 = 18.0;
 /// Maximum open-tab rows in the overflow menu before it scrolls.
@@ -80,13 +111,15 @@ pub const CONTEXT_MENU_WIDTH: f32 = 220.0;
 /// Height of one context-menu row, in CSS pixels.
 pub const CONTEXT_MENU_ROW_HEIGHT: f32 = 20.0;
 /// Link-hover status bar background.
-pub const COLOR_STATUS_BAR: Color = Color::new(0x20, 0x21, 0x24, 0xFF);
+pub const COLOR_STATUS_BAR: Color = COLOR_TAB_STRIP;
 /// Link-hover status text.
-pub const COLOR_STATUS_TEXT: Color = Color::new(0xE8, 0xEA, 0xED, 0xFF);
+pub const COLOR_STATUS_TEXT: Color = Color::new(0xAE, 0xB5, 0xC2, 0xFF);
 /// Context menu background.
-pub const COLOR_MENU_BG: Color = Color::new(0xFA, 0xFA, 0xFA, 0xFF);
+pub const COLOR_MENU_BG: Color = COLOR_DROPDOWN_BG;
 /// Context menu selected row.
-pub const COLOR_MENU_SELECTED: Color = Color::new(0xD2, 0xE3, 0xFC, 0xFF);
+pub const COLOR_MENU_SELECTED: Color = COLOR_DROPDOWN_ACTIVE;
+/// Deterministic drop shadow behind floating chrome panels.
+pub const COLOR_SHADOW: Color = Color::new(0x00, 0x00, 0x00, 0x66);
 
 /// Address bar edition state: text, caret, selection anchor and an **internal process
 /// clipboard** (Ctrl+C/X/V copy within the shell; the system clipboard is not touched).
@@ -1463,6 +1496,134 @@ pub fn draw_chrome(
     painted
 }
 
+/// Uniform corner radii in **device** pixels (`paint` works in device space).
+fn uniform_radii(px: f32) -> BorderRadii {
+    let radius = Radius::circular(Length::Px(px.max(0.0)));
+    BorderRadii {
+        top_left: radius,
+        top_right: radius,
+        bottom_right: radius,
+        bottom_left: radius,
+    }
+}
+
+/// Rounded top corners only: browser tabs meet the address strip flush at the bottom.
+fn top_radii(px: f32) -> BorderRadii {
+    let radius = Radius::circular(Length::Px(px.max(0.0)));
+    BorderRadii {
+        top_left: radius,
+        top_right: radius,
+        bottom_right: Radius::ZERO,
+        bottom_left: Radius::ZERO,
+    }
+}
+
+/// Fills a CSS-pixel rectangle with antialiased rounded corners.
+fn fill_round(pixmap: &mut Pixmap, rect: Rect, scale: f32, radius: f32, color: Color) {
+    pixmap.fill_rounded_rect(scaled(rect, scale), uniform_radii(radius * scale), color);
+}
+
+/// Paints a floating panel: a deterministic soft shadow, a 1 px border and a surface.
+fn paint_panel(pixmap: &mut Pixmap, rect: Rect, scale: f32, radius: f32, surface: Color) {
+    let shadow = Rect::new(rect.x + 1.0, rect.y + 2.0, rect.width, rect.height);
+    fill_round(pixmap, shadow, scale, radius, COLOR_SHADOW);
+    fill_round(pixmap, rect, scale, radius, COLOR_BORDER);
+    let inner = Rect::new(
+        rect.x + 1.0,
+        rect.y + 1.0,
+        (rect.width - 2.0).max(0.0),
+        (rect.height - 2.0).max(0.0),
+    );
+    fill_round(pixmap, inner, scale, (radius - 1.0).max(0.0), surface);
+}
+
+/// Highlights a selected menu row with a rounded surface and a slim accent marker.
+fn paint_menu_selection(pixmap: &mut Pixmap, row: Rect, scale: f32) {
+    fill_round(
+        pixmap,
+        Rect::new(
+            row.x + 2.0,
+            row.y + 1.0,
+            (row.width - 4.0).max(0.0),
+            (row.height - 2.0).max(0.0),
+        ),
+        scale,
+        3.0,
+        COLOR_MENU_SELECTED,
+    );
+    pixmap.fill_rect(
+        Rect::new(
+            (row.x + 1.0) * scale,
+            (row.y + 3.0) * scale,
+            2.0 * scale,
+            (row.height - 6.0).max(0.0) * scale,
+        ),
+        ACCENT,
+    );
+}
+
+/// Paints a decoded 16x16 tab icon, or its deterministic color-dot fallback.
+fn paint_favicon(
+    pixmap: &mut Pixmap,
+    icon: &crate::favicon::Favicon,
+    x_css: f32,
+    y_css: f32,
+    scale: f32,
+) {
+    if let Some(pixels) = icon.pixels {
+        for y in 0..crate::favicon::ICON_SIZE {
+            for x in 0..crate::favicon::ICON_SIZE {
+                let offset = ((y * crate::favicon::ICON_SIZE + x) * 4) as usize;
+                let alpha = pixels[offset + 3];
+                if alpha == 0 {
+                    continue;
+                }
+                pixmap.fill_rect(
+                    Rect::new(
+                        (x_css + x as f32) * scale,
+                        (y_css + y as f32) * scale,
+                        scale,
+                        scale,
+                    ),
+                    Color::new(
+                        pixels[offset],
+                        pixels[offset + 1],
+                        pixels[offset + 2],
+                        alpha,
+                    ),
+                );
+            }
+        }
+    } else {
+        pixmap.fill_rect(
+            Rect::new(x_css * scale, y_css * scale, 8.0 * scale, 8.0 * scale),
+            Color::new(icon.color[0], icon.color[1], icon.color[2], 0xFF),
+        );
+    }
+}
+
+/// Splits a URL into scheme, authority and path for the address bar's visual hierarchy.
+/// Non-hierarchical URLs (`data:`, `about:`) keep everything in the authority part.
+fn split_url_for_display(url: &str) -> (&str, &str, &str) {
+    let Some(scheme_end) = url.find("://") else {
+        return ("", url, "");
+    };
+    let scheme_end = scheme_end + 3;
+    let rest = &url[scheme_end..];
+    let authority_end = rest.find('/').unwrap_or(rest.len());
+    (
+        &url[..scheme_end],
+        &rest[..authority_end],
+        &rest[authority_end..],
+    )
+}
+
+/// CSS x where address text (or the favicon that precedes it) starts.
+fn address_text_x(width: f32) -> f32 {
+    let nav = navigation_buttons(width);
+    nav.reload.x + nav.reload.width + 6.0
+}
+
 fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, width: f32) {
     pixmap.fill_rect(
         Rect::new(0.0, 0.0, width * scale, TAB_STRIP_HEIGHT * scale),
@@ -1470,50 +1631,41 @@ fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, width
     );
     let layout = layout_tabs(view.tabs, width, view.active_tab);
     for tab in &layout.tabs {
-        let color = if tab.index == view.active_tab {
-            COLOR_TAB_ACTIVE
-        } else {
-            COLOR_TAB
-        };
-        pixmap.fill_rect(scaled(tab.rect, scale), color);
+        let active = tab.index == view.active_tab;
+        let color = if active { COLOR_TAB_ACTIVE } else { COLOR_TAB };
+        pixmap.fill_rounded_rect(
+            scaled(tab.rect, scale),
+            top_radii(TAB_RADIUS * scale),
+            color,
+        );
+        if !active && tab.index > 0 {
+            pixmap.fill_rect(
+                Rect::new(
+                    tab.rect.x * scale,
+                    6.0 * scale,
+                    scale,
+                    (TAB_STRIP_HEIGHT - 6.0) * scale,
+                ),
+                COLOR_TAB_SEPARATOR,
+            );
+        }
+        if active {
+            // The accent underline is the tab's identity marker: it reads at a glance
+            // which page is visible without relying on a lighter background alone.
+            pixmap.fill_rect(
+                Rect::new(
+                    (tab.rect.x + 2.0) * scale,
+                    (TAB_STRIP_HEIGHT - 2.0) * scale,
+                    (tab.rect.width - 4.0).max(0.0) * scale,
+                    2.0 * scale,
+                ),
+                ACCENT,
+            );
+        }
         let mut title_x = tab.rect.x + 6.0;
         if let Some(Some(icon)) = view.favicons.get(tab.index) {
             title_x = tab.rect.x + 23.0;
-            if let Some(pixels) = icon.pixels {
-                for y in 0..crate::favicon::ICON_SIZE {
-                    for x in 0..crate::favicon::ICON_SIZE {
-                        let offset = ((y * crate::favicon::ICON_SIZE + x) * 4) as usize;
-                        let alpha = pixels[offset + 3];
-                        if alpha == 0 {
-                            continue;
-                        }
-                        pixmap.fill_rect(
-                            Rect::new(
-                                (tab.rect.x + 3.0 + x as f32) * scale,
-                                (tab.rect.y + 4.0 + y as f32) * scale,
-                                scale,
-                                scale,
-                            ),
-                            Color::new(
-                                pixels[offset],
-                                pixels[offset + 1],
-                                pixels[offset + 2],
-                                alpha,
-                            ),
-                        );
-                    }
-                }
-            } else {
-                pixmap.fill_rect(
-                    Rect::new(
-                        (tab.rect.x + 5.0) * scale,
-                        (tab.rect.y + 8.0) * scale,
-                        8.0 * scale,
-                        8.0 * scale,
-                    ),
-                    Color::new(icon.color[0], icon.color[1], icon.color[2], 0xFF),
-                );
-            }
+            paint_favicon(pixmap, icon, tab.rect.x + 3.0, tab.rect.y + 4.0, scale);
         }
         draw_text(
             pixmap,
@@ -1536,13 +1688,14 @@ fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, width
             );
         }
         let close = tab.close;
+        fill_round(pixmap, close, scale, 3.0, COLOR_ADDRESS_BG);
         draw_text(
             pixmap,
             "x",
             close.x + 3.0,
-            close.y + 3.0,
+            close.y + 2.0,
             scale,
-            10.0,
+            11.0,
             COLOR_TEXT,
         );
     }
@@ -1579,39 +1732,88 @@ fn paint_address_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, wid
             width * scale,
             ADDRESS_BAR_HEIGHT * scale,
         ),
-        Color::new(0xDE, 0xE1, 0xE6, 0xFF),
+        COLOR_ADDRESS_STRIP,
     );
-    pixmap.fill_rect(scaled(bar, scale), COLOR_ADDRESS_BG);
-    let text = if view.address.is_editing() {
-        view.address.text()
-    } else {
-        view.fallback_url
-    };
-    let text_x = {
-        let nav = navigation_buttons(width);
-        nav.reload.x + nav.reload.width + 6.0
-    };
-    draw_text(
+    // Rounded pill: a 1 px border around the same surface used by the active tab.
+    fill_round(pixmap, bar, scale, PILL_RADIUS, COLOR_BORDER);
+    fill_round(
         pixmap,
-        text,
-        text_x,
-        bar.y + 8.0,
+        Rect::new(
+            bar.x + 1.0,
+            bar.y + 1.0,
+            (bar.width - 2.0).max(0.0),
+            (bar.height - 2.0).max(0.0),
+        ),
         scale,
-        12.0,
-        COLOR_ADDRESS_TEXT,
+        (PILL_RADIUS - 1.0).max(0.0),
+        COLOR_ADDRESS_BG,
     );
-    if view.address.is_editing() {
+    let editing = view.address.is_editing();
+    let mut text_x = address_text_x(width);
+    if !editing && let Some(icon) = view.favicons.get(view.active_tab).and_then(Option::as_ref) {
+        paint_favicon(pixmap, icon, text_x, bar.y + 4.0, scale);
+        text_x += 22.0;
+    }
+    let text_y = bar.y + 7.0;
+    if editing {
+        let text = view.address.text();
+        draw_text(
+            pixmap,
+            text,
+            text_x,
+            text_y,
+            scale,
+            ADDRESS_TEXT_SIZE,
+            COLOR_ADDRESS_TEXT,
+        );
         let before = &text[..view.address.caret().min(text.len())];
-        let caret_x = text_x + measure_text_width(before, 12.0);
+        let caret_x = text_x + measure_text_width(before, ADDRESS_TEXT_SIZE);
         pixmap.fill_rect(
             Rect::new(
                 (caret_x * scale).round(),
-                ((bar.y + 5.0) * scale).round(),
+                ((bar.y + 4.0) * scale).round(),
                 scale.max(1.0),
-                ((bar.height - 10.0) * scale).round(),
+                ((bar.height - 8.0) * scale).round(),
             ),
             COLOR_CARET,
         );
+    } else {
+        // Scheme and path are secondary; the authority (site) is what people scan for.
+        let (scheme, authority, path) = split_url_for_display(view.fallback_url);
+        let mut x = text_x;
+        if !scheme.is_empty() {
+            draw_text(
+                pixmap,
+                scheme,
+                x,
+                text_y,
+                scale,
+                ADDRESS_TEXT_SIZE,
+                COLOR_ADDRESS_MUTED,
+            );
+            x += measure_text_width(scheme, ADDRESS_TEXT_SIZE);
+        }
+        draw_text(
+            pixmap,
+            authority,
+            x,
+            text_y,
+            scale,
+            ADDRESS_TEXT_SIZE,
+            COLOR_ADDRESS_TEXT,
+        );
+        if !path.is_empty() {
+            x += measure_text_width(authority, ADDRESS_TEXT_SIZE);
+            draw_text(
+                pixmap,
+                path,
+                x,
+                text_y,
+                scale,
+                ADDRESS_TEXT_SIZE,
+                COLOR_ADDRESS_MUTED,
+            );
+        }
     }
 }
 
@@ -1629,19 +1831,7 @@ fn paint_dropdown(
         view.scroll_y,
         dropdown.scroll,
     );
-    pixmap.fill_rect(scaled(list.rect, scale), COLOR_BORDER);
-    pixmap.fill_rect(
-        scaled(
-            Rect::new(
-                list.rect.x + 1.0,
-                list.rect.y + 1.0,
-                list.rect.width - 2.0,
-                list.rect.height - 2.0,
-            ),
-            scale,
-        ),
-        COLOR_DROPDOWN_BG,
-    );
+    paint_panel(pixmap, list.rect, scale, MENU_RADIUS, COLOR_DROPDOWN_BG);
     for (row, rect) in list.rows.iter().enumerate() {
         let item_index = list.first + row;
         let Some(item) = items.get(item_index) else {
@@ -1651,7 +1841,7 @@ fn paint_dropdown(
             .option_index
             .and_then(|index| dropdown.options.get(index));
         let background = if item.option_index.is_none() {
-            Color::new(0xF5, 0xF5, 0xF5, 0xFF)
+            COLOR_GROUP_HEADER
         } else if dropdown.active == Some(item_index) {
             COLOR_DROPDOWN_ACTIVE
         } else if option.is_some_and(|option| option.selected) {
@@ -1690,7 +1880,7 @@ fn paint_dropdown(
             3.0,
             list.rect.height - 4.0,
         );
-        pixmap.fill_rect(scaled(track, scale), Color::new(0xE0, 0xE0, 0xE0, 0xFF));
+        pixmap.fill_rect(scaled(track, scale), COLOR_SCROLL_TRACK);
         let ratio = list.visible as f32 / items.len() as f32;
         let thumb_height = (track.height * ratio).max(8.0);
         let max_scroll = items.len().saturating_sub(list.visible).max(1) as f32;
@@ -1719,19 +1909,7 @@ fn paint_overflow_menu(
         view.css_viewport_height,
         menu,
     );
-    pixmap.fill_rect(scaled(layout.rect, scale), COLOR_BORDER);
-    pixmap.fill_rect(
-        scaled(
-            Rect::new(
-                layout.rect.x + 1.0,
-                layout.rect.y + 1.0,
-                layout.rect.width - 2.0,
-                layout.rect.height - 2.0,
-            ),
-            scale,
-        ),
-        Color::new(0xFA, 0xFA, 0xFA, 0xFF),
-    );
+    paint_panel(pixmap, layout.rect, scale, MENU_RADIUS, COLOR_MENU_BG);
     for (row, rect) in layout.rows.iter().enumerate() {
         let Some(tab_index) = menu.items.get(layout.first + row) else {
             break;
@@ -1778,25 +1956,13 @@ fn paint_status_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, url:
 
 fn paint_context_menu(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, menu: &ContextMenu) {
     let layout = context_menu_layout(menu, view.css_width, view.css_viewport_height);
-    pixmap.fill_rect(scaled(layout.rect, scale), COLOR_BORDER);
-    pixmap.fill_rect(
-        scaled(
-            Rect::new(
-                layout.rect.x + 1.0,
-                layout.rect.y + 1.0,
-                layout.rect.width - 2.0,
-                layout.rect.height - 2.0,
-            ),
-            scale,
-        ),
-        COLOR_MENU_BG,
-    );
+    paint_panel(pixmap, layout.rect, scale, MENU_RADIUS, COLOR_MENU_BG);
     for (index, row) in layout.rows.iter().enumerate() {
         let Some(item) = menu.items.get(index) else {
             break;
         };
         if index == menu.selected {
-            pixmap.fill_rect(scaled(*row, scale), COLOR_MENU_SELECTED);
+            paint_menu_selection(pixmap, *row, scale);
         }
         draw_text(
             pixmap,
@@ -1831,7 +1997,19 @@ fn paint_history_button(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>) 
         return;
     }
     let rect = history_button_rect(view.css_width);
-    pixmap.fill_rect(scaled(rect, scale), COLOR_BORDER);
+    fill_round(pixmap, rect, scale, 4.0, COLOR_BORDER);
+    fill_round(
+        pixmap,
+        Rect::new(
+            rect.x + 1.0,
+            rect.y + 1.0,
+            (rect.width - 2.0).max(0.0),
+            (rect.height - 2.0).max(0.0),
+        ),
+        scale,
+        3.0,
+        COLOR_ADDRESS_BG,
+    );
     draw_text(
         pixmap,
         "H",
@@ -1846,10 +2024,12 @@ fn paint_history_button(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>) 
 fn paint_navigation_buttons(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>) {
     let buttons = navigation_buttons(view.css_width);
     let mut draw = |rect: Rect, label: &str, enabled: bool| {
+        // A subtle rounded button surface reads as clickable without needing hover state.
+        fill_round(pixmap, rect, scale, 4.0, COLOR_ADDRESS_BG);
         let color = if enabled {
             COLOR_ADDRESS_TEXT
         } else {
-            Color::new(0x9A, 0xA0, 0xA6, 0xFF)
+            COLOR_DISABLED
         };
         draw_text(
             pixmap,
@@ -1873,19 +2053,7 @@ fn paint_history_menu(
     menu: &crate::history::HistoryMenu,
 ) {
     let layout = history_menu_layout(menu, view.css_width, view.css_viewport_height);
-    pixmap.fill_rect(scaled(layout.rect, scale), COLOR_BORDER);
-    pixmap.fill_rect(
-        scaled(
-            Rect::new(
-                layout.rect.x + 1.0,
-                layout.rect.y + 1.0,
-                layout.rect.width - 2.0,
-                layout.rect.height - 2.0,
-            ),
-            scale,
-        ),
-        COLOR_MENU_BG,
-    );
+    paint_panel(pixmap, layout.rect, scale, MENU_RADIUS, COLOR_MENU_BG);
     if menu.entries.is_empty() {
         draw_text(
             pixmap,
@@ -1903,7 +2071,7 @@ fn paint_history_menu(
             break;
         };
         if index == menu.selected {
-            pixmap.fill_rect(scaled(*row, scale), COLOR_MENU_SELECTED);
+            paint_menu_selection(pixmap, *row, scale);
         }
         let (letter, color) = crate::history::domain_badge(&entry.url);
         let badge = Rect::new(row.x + 4.0, row.y + 3.0, 14.0, 14.0);
@@ -2098,6 +2266,12 @@ mod tests {
 
     fn buffer(width: u32, height: u32) -> Vec<u32> {
         vec![0x00FF_FFFF; (width * height) as usize]
+    }
+
+    /// Packs a palette token into the `0RGB` word used by the framebuffer tests.
+    /// Assertions reference tokens so a palette refresh cannot leave stale hex behind.
+    fn rgb(color: Color) -> u32 {
+        (u32::from(color.r) << 16) | (u32::from(color.g) << 8) | u32::from(color.b)
     }
 
     #[test]
@@ -2322,11 +2496,11 @@ mod tests {
         let painted = draw_chrome(&mut dest, 640, 400, 1.0, &view(&address, None, &tabs));
         assert!(painted > 0);
         let pixel = |x: u32, y: u32| dest[(y * 640 + x) as usize];
-        assert_eq!(pixel(620, 2), 0x0020_2124, "tab strip background");
+        assert_eq!(pixel(620, 2), rgb(COLOR_TAB_STRIP), "tab strip background");
         assert_eq!(
-            pixel(100, TAB_STRIP_HEIGHT as u32 + 2),
-            0x00F1_F3F4,
-            "address bar"
+            pixel(100, (address_bar_rect(640.0).y + 4.0) as u32),
+            rgb(COLOR_ADDRESS_BG),
+            "address pill surface"
         );
         // The page below the chrome is untouched.
         assert_eq!(pixel(300, 200), 0x00FF_FFFF);
@@ -2356,8 +2530,14 @@ mod tests {
         let first = list.rows[0];
         let second = list.rows[1];
         let pixel = |x: u32, y: u32| dest[(y * 480 + x) as usize];
-        assert_eq!(pixel(first.x as u32 + 3, first.y as u32 + 3), 0x00E8_F0FE);
-        assert_eq!(pixel(second.x as u32 + 3, second.y as u32 + 3), 0x00D2_E3FC);
+        assert_eq!(
+            pixel(first.x as u32 + 3, first.y as u32 + 3),
+            rgb(COLOR_DROPDOWN_SELECTED)
+        );
+        assert_eq!(
+            pixel(second.x as u32 + 3, second.y as u32 + 3),
+            rgb(COLOR_DROPDOWN_ACTIVE)
+        );
     }
 
     #[test]
@@ -2370,7 +2550,7 @@ mod tests {
         let row = (TAB_STRIP_HEIGHT + 10.0) as usize;
         let caret_pixels = dest[row * 480..(row + 1) * 480]
             .iter()
-            .filter(|pixel| **pixel == 0x001A_73E8)
+            .filter(|pixel| **pixel == rgb(COLOR_CARET))
             .count();
         assert!(caret_pixels > 0, "caret visible");
     }
@@ -2506,7 +2686,7 @@ mod tests {
         draw_chrome(&mut dest, 480, 200, 1.0, &view);
         let loading = dest[..(24 * 480) as usize]
             .iter()
-            .filter(|pixel| **pixel == 0x008A_B4F8)
+            .filter(|pixel| **pixel == rgb(COLOR_LOADING))
             .count();
         assert!(loading > 0, "loading dot visible");
         let _ = &mut address;
@@ -2529,7 +2709,10 @@ mod tests {
             1.0,
             &view(&address, Some(&dropdown), &tabs),
         );
-        let scroll_pixels = dest.iter().filter(|pixel| **pixel == 0x005F_6368).count();
+        let scroll_pixels = dest
+            .iter()
+            .filter(|pixel| **pixel == rgb(COLOR_SCROLL))
+            .count();
         assert!(scroll_pixels > 10, "scrollbar painted: {scroll_pixels}");
     }
 
@@ -2566,7 +2749,7 @@ mod tests {
         view.css_viewport_height = 200;
         draw_chrome(&mut dest, 320, 200, 1.0, &view);
         let bottom = ((200 - STATUS_BAR_HEIGHT as u32 + 2) * 320) as usize;
-        assert_eq!(dest[bottom], 0x0020_2124, "status bar background");
+        assert_eq!(dest[bottom], rgb(COLOR_STATUS_BAR), "status bar background");
         let mut clean = buffer(320, 200);
         draw_chrome(
             &mut clean,
@@ -2575,7 +2758,7 @@ mod tests {
             1.0,
             &view_without_hover(&address, &tabs),
         );
-        assert_ne!(clean[bottom], 0x0020_2124, "no bar without hover");
+        assert_ne!(clean[bottom], rgb(COLOR_STATUS_BAR), "no bar without hover");
     }
 
     fn view_without_hover<'a>(address: &'a AddressBar, tabs: &'a [String]) -> ChromeView<'a> {
@@ -2641,8 +2824,8 @@ mod tests {
         draw_chrome(&mut dest, 400, 240, 1.0, &view);
         let layout = context_menu_layout(&menu, 400.0, 240);
         let selected = layout.rows[0];
-        let pixel = dest[(selected.y as u32 * 400 + selected.x as u32 + 3) as usize];
-        assert_eq!(pixel, 0x00D2_E3FC, "selected row background");
+        let pixel = dest[((selected.y + 6.0) as u32 * 400 + (selected.x + 6.0) as u32) as usize];
+        assert_eq!(pixel, rgb(COLOR_MENU_SELECTED), "selected row background");
         assert!(selected.width > 0.0);
     }
 
@@ -2708,7 +2891,8 @@ mod tests {
         let mut dark = 0usize;
         for y in buttons.reload.y as usize..(buttons.reload.y + buttons.reload.height) as usize {
             for x in buttons.reload.x as usize..(buttons.reload.x + buttons.reload.width) as usize {
-                if dest[y * 480 + x] != 0x00F1_F3F4 && dest[y * 480 + x] != 0x00DE_E1E6 {
+                let pixel = dest[y * 480 + x];
+                if pixel != rgb(COLOR_ADDRESS_BG) && pixel != rgb(COLOR_ADDRESS_STRIP) {
                     dark += 1;
                 }
             }
@@ -2746,8 +2930,9 @@ mod tests {
         draw_chrome(&mut dest, 480, 300, 1.0, &view);
         let selected = layout.rows[0];
         assert_eq!(
-            dest[(selected.y as u32 * 480 + selected.x as u32 + 3) as usize],
-            0x00D2_E3FC,
+            dest[((selected.y + 3.0) as u32 * 480 + (selected.x + selected.width - 4.0) as u32)
+                as usize],
+            rgb(COLOR_MENU_SELECTED),
             "selected history row"
         );
     }
@@ -2763,7 +2948,11 @@ mod tests {
         view.download_status = Some("guardando… megi-a.png");
         draw_chrome(&mut dest, 360, 200, 1.0, &view);
         let bottom = ((200 - STATUS_BAR_HEIGHT as u32 + 2) * 360) as usize;
-        assert_eq!(dest[bottom], 0x0020_2124, "status bar painted for download");
+        assert_eq!(
+            dest[bottom],
+            rgb(COLOR_STATUS_BAR),
+            "status bar painted for download"
+        );
         let without = view_without_download(&address, &tabs);
         assert_eq!(without.download_status, None);
     }
@@ -2880,5 +3069,68 @@ mod tests {
         assert!(range.end <= bar.text().len(), "{range:?}");
         bar.delete_selection();
         assert_eq!(bar.text(), "ht");
+    }
+
+    #[test]
+    fn url_display_splits_scheme_authority_and_path() {
+        assert_eq!(
+            split_url_for_display("https://example.com/a/b"),
+            ("https://", "example.com", "/a/b")
+        );
+        assert_eq!(
+            split_url_for_display("file:///tmp/page.html"),
+            ("file://", "", "/tmp/page.html")
+        );
+        assert_eq!(
+            split_url_for_display("data:text/html,<h1>x</h1>"),
+            ("", "data:text/html,<h1>x</h1>", "")
+        );
+    }
+
+    #[test]
+    fn chrome_radius_helpers_distinguish_tabs_from_panels() {
+        let panel = uniform_radii(7.0);
+        assert!(!panel.is_zero(), "panels have all four corners rounded");
+        let tab = top_radii(6.0);
+        assert!(!tab.top_left.is_zero() && !tab.top_right.is_zero());
+        assert!(
+            tab.bottom_left.is_zero() && tab.bottom_right.is_zero(),
+            "tabs meet the address strip flush at the bottom"
+        );
+    }
+
+    #[test]
+    fn palette_uses_one_accent_and_keeps_readable_contrast() {
+        assert_eq!(COLOR_CARET, ACCENT, "the caret follows the accent");
+        assert_eq!(COLOR_LOADING, ACCENT, "loading feedback follows the accent");
+        assert_ne!(ACCENT, COLOR_ADDRESS_BG, "accent stands out from surfaces");
+        let luminance = |color: Color| {
+            0.2126 * f32::from(color.r) + 0.7152 * f32::from(color.g) + 0.0722 * f32::from(color.b)
+        };
+        assert!(
+            luminance(COLOR_ADDRESS_TEXT) - luminance(COLOR_ADDRESS_BG) > 100.0,
+            "address text is legible on its surface"
+        );
+        assert!(
+            luminance(COLOR_TEXT) - luminance(COLOR_TAB_STRIP) > 100.0,
+            "chrome text is legible on the dark strip"
+        );
+        assert!(
+            luminance(COLOR_ADDRESS_MUTED) - luminance(COLOR_ADDRESS_BG) > 30.0,
+            "muted URL parts are still readable"
+        );
+        for color in [
+            ACCENT,
+            COLOR_TAB_STRIP,
+            COLOR_TAB,
+            COLOR_TAB_ACTIVE,
+            COLOR_ADDRESS_BG,
+            COLOR_ADDRESS_TEXT,
+            COLOR_DROPDOWN_BG,
+            COLOR_MENU_BG,
+            COLOR_BORDER,
+        ] {
+            assert_eq!(color.a, 0xFF, "chrome surfaces are opaque");
+        }
     }
 }
