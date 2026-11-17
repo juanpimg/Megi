@@ -192,7 +192,10 @@ mod screenshot_diagnostics_tests {
         // A screenshot with warnings or limit violations must be treated as degraded.
         let mut violations = html::LimitViolations::default();
         let mut warnings: Vec<String> = Vec::new();
-        assert!(warnings.is_empty() && violations.is_empty(), "clean baseline");
+        assert!(
+            warnings.is_empty() && violations.is_empty(),
+            "clean baseline"
+        );
         warnings.push("skipping image: failed".into());
         assert!(!warnings.is_empty());
         violations.nodes_exceeded = 1;
