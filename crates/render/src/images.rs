@@ -39,8 +39,8 @@ pub const DEFAULT_MAX_TOTAL_IMAGE_BYTES: usize = 32 * 1024 * 1024;
 /// Default maximum total decoded pixels across `<img>` and CSS background images (64 Mpx ≈ 256 MiB RGBA).
 pub const DEFAULT_MAX_TOTAL_DECODED_PIXELS: u64 = 64 * 1024 * 1024;
 
-/// Defensive caps applied while loading images.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Defensive caps and display metrics applied while loading images.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ImageLimits {
     /// Maximum number of `<img>` elements fetched.
     pub max_images: usize,
@@ -52,6 +52,8 @@ pub struct ImageLimits {
     pub max_total_decoded_pixels: u64,
     /// Optional decode downscale cap (`RenderOptions::max_image_dim`).
     pub max_image_dim: Option<u32>,
+    /// Device pixel ratio used when selecting `srcset` / `<picture>` candidates (default `1.0`).
+    pub device_pixel_ratio: f32,
 }
 
 impl Default for ImageLimits {
@@ -62,6 +64,7 @@ impl Default for ImageLimits {
             max_total_bytes: DEFAULT_MAX_TOTAL_IMAGE_BYTES,
             max_total_decoded_pixels: DEFAULT_MAX_TOTAL_DECODED_PIXELS,
             max_image_dim: None,
+            device_pixel_ratio: 1.0,
         }
     }
 }
@@ -86,8 +89,430 @@ pub struct LoadedImages {
     pub warnings: Vec<String>,
 }
 
-/// Collects `(NodeId, src)` pairs for every `<img src>` element, in tree order.
-pub fn collect_image_sources(document: &Document) -> Vec<(NodeId, String)> {
+/// Parsed descriptor on a single `srcset` image candidate.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SrcsetDescriptor {
+    /// Pixel density multiplier (`1x`, `2x`, or default `1x`).
+    Density(f32),
+    /// Physical width descriptor (`400w`, `800w`, ...).
+    Width(u32),
+}
+
+/// One parsed candidate entry from an HTML `srcset` attribute.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SrcsetCandidate {
+    /// Raw (unjoined) URL string for the candidate.
+    pub url: String,
+    /// Parsed `w` or `x` descriptor.
+    pub descriptor: SrcsetDescriptor,
+}
+
+/// Sanitizes device pixel ratio (finite and positive; falls back to `1.0`).
+pub fn sanitize_dpr(dpr: f32) -> f32 {
+    if dpr.is_finite() && dpr > 0.0 {
+        dpr
+    } else {
+        1.0
+    }
+}
+
+/// Parses an HTML `srcset` microsyntax string (WHATWG HTML §4.8.4.2).
+///
+/// Supports commas inside `data:` URLs cleanly by splitting URL tokens on ASCII
+/// whitespace (stripping trailing `,` directly attached to a descriptor-less URL)
+/// and scanning descriptor lists up to the next top-level comma.
+/// Rejects malformed descriptors and keeps the candidate set homogeneous
+/// (cannot mix `w` and `x` / default descriptors).
+pub fn parse_srcset(input: &str) -> Vec<SrcsetCandidate> {
+    let bytes = input.as_bytes();
+    let len = bytes.len();
+    let mut pos = 0usize;
+    let mut raw_entries: Vec<(String, Option<SrcsetDescriptor>)> = Vec::new();
+
+    while pos < len {
+        // 1. Skip leading ASCII whitespace and commas.
+        while pos < len && (bytes[pos].is_ascii_whitespace() || bytes[pos] == b',') {
+            pos += 1;
+        }
+        if pos >= len {
+            break;
+        }
+
+        // 2. Scan candidate URL (non-ASCII-whitespace).
+        let url_start = pos;
+        while pos < len && !bytes[pos].is_ascii_whitespace() {
+            pos += 1;
+        }
+        let raw_url = &input[url_start..pos];
+
+        // Per HTML §4.8.4.2: if the URL ends with `,`, trailing commas delimit the
+        // candidate and there are zero descriptors.
+        if raw_url.ends_with(',') {
+            let trimmed_url = raw_url.trim_end_matches(',');
+            if !trimmed_url.is_empty() {
+                raw_entries.push((trimmed_url.to_string(), None));
+            }
+            continue;
+        }
+
+        // Skip whitespace before descriptors.
+        while pos < len && bytes[pos].is_ascii_whitespace() {
+            pos += 1;
+        }
+
+        // 3. Scan descriptor region up to next top-level comma (respecting parens).
+        let desc_start = pos;
+        let mut depth = 0usize;
+        while pos < len {
+            let b = bytes[pos];
+            if b == b'(' {
+                depth += 1;
+            } else if b == b')' {
+                depth = depth.saturating_sub(1);
+            } else if b == b',' && depth == 0 {
+                break;
+            }
+            pos += 1;
+        }
+        let desc_str = input[desc_start..pos].trim();
+        if pos < len && bytes[pos] == b',' {
+            pos += 1;
+        }
+
+        if desc_str.is_empty() {
+            raw_entries.push((raw_url.to_string(), None));
+            continue;
+        }
+
+        // HTML spec allows at most one width (`w`) or pixel density (`x`) descriptor token.
+        let tokens: Vec<&str> = desc_str.split_ascii_whitespace().collect();
+        if tokens.len() != 1 {
+            continue;
+        }
+        let tok = tokens[0];
+        if let Some(num) = tok.strip_suffix(['w', 'W']) {
+            if let Ok(width) = num.parse::<u32>()
+                && width > 0
+                && !num.starts_with('+')
+            {
+                raw_entries.push((raw_url.to_string(), Some(SrcsetDescriptor::Width(width))));
+            }
+        } else if let Some(num) = tok.strip_suffix(['x', 'X'])
+            && let Ok(density) = num.parse::<f32>()
+            && density.is_finite()
+            && density > 0.0
+        {
+            raw_entries.push((
+                raw_url.to_string(),
+                Some(SrcsetDescriptor::Density(density)),
+            ));
+        }
+    }
+
+    if raw_entries.is_empty() {
+        return Vec::new();
+    }
+
+    // Spec §4.8.4.2.1: if any valid candidate specifies a width descriptor, all valid
+    // candidates must specify a width descriptor (mixed x/omitted descriptors are dropped).
+    let uses_width = raw_entries
+        .iter()
+        .any(|(_, d)| matches!(d, Some(SrcsetDescriptor::Width(_))));
+
+    let mut out = Vec::with_capacity(raw_entries.len());
+    for (url, desc) in raw_entries {
+        if uses_width {
+            if let Some(SrcsetDescriptor::Width(w)) = desc
+                && !out.iter().any(|c: &SrcsetCandidate| {
+                    matches!(c.descriptor, SrcsetDescriptor::Width(prev) if prev == w)
+                })
+            {
+                out.push(SrcsetCandidate {
+                    url,
+                    descriptor: SrcsetDescriptor::Width(w),
+                });
+            }
+        } else {
+            let density = match desc {
+                Some(SrcsetDescriptor::Density(d)) => d,
+                None => 1.0,
+                Some(SrcsetDescriptor::Width(_)) => continue,
+            };
+            if !out.iter().any(|c: &SrcsetCandidate| {
+                matches!(c.descriptor, SrcsetDescriptor::Density(prev) if (prev - density).abs() < 1e-4)
+            }) {
+                out.push(SrcsetCandidate {
+                    url,
+                    descriptor: SrcsetDescriptor::Density(density),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Parses and evaluates a `<source-size-value>` CSS length against the viewport metrics.
+fn parse_size_length_px(token: &str, media: &css::MediaContext) -> Option<f32> {
+    let trimmed = token.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let (vw, vh) = media.viewport.unwrap_or((800.0, 600.0));
+    let lower = trimmed.to_ascii_lowercase();
+    let parse_unit = |suffix: &str, scale: f32| -> Option<f32> {
+        let num_str = lower.strip_suffix(suffix)?.trim();
+        let val = num_str.parse::<f32>().ok()?;
+        if val.is_finite() && val >= 0.0 {
+            Some(val * scale)
+        } else {
+            None
+        }
+    };
+    if lower == "0" {
+        return Some(0.0);
+    }
+    parse_unit("px", 1.0)
+        .or_else(|| parse_unit("vw", vw / 100.0))
+        .or_else(|| parse_unit("vh", vh / 100.0))
+        .or_else(|| parse_unit("vmin", vw.min(vh) / 100.0))
+        .or_else(|| parse_unit("vmax", vw.max(vh) / 100.0))
+        .or_else(|| parse_unit("em", 16.0))
+        .or_else(|| parse_unit("rem", 16.0))
+        .or_else(|| parse_unit("pt", 96.0 / 72.0))
+        .or_else(|| parse_unit("pc", 16.0))
+        .or_else(|| parse_unit("in", 96.0))
+        .or_else(|| parse_unit("cm", 96.0 / 2.54))
+        .or_else(|| parse_unit("mm", 96.0 / 25.4))
+}
+
+/// Evaluates an HTML `sizes` attribute against `media`, returning the target CSS width in px.
+///
+/// Falls back to the viewport width (`100vw`, default `800px` when viewport is unknown).
+pub fn resolve_sizes(sizes_attr: Option<&str>, media: &css::MediaContext) -> f32 {
+    let default_width = media.viewport.map_or(800.0, |(w, _)| w.max(1.0));
+    let Some(raw) = sizes_attr.map(str::trim).filter(|s| !s.is_empty()) else {
+        return default_width;
+    };
+
+    // Split on top-level commas (outside parentheses).
+    let mut entries = Vec::new();
+    let mut start = 0usize;
+    let mut depth = 0usize;
+    for (idx, ch) in raw.char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                entries.push(raw[start..idx].trim());
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    entries.push(raw[start..].trim());
+
+    for entry in entries {
+        if entry.is_empty() {
+            continue;
+        }
+        // Separate optional `<media-condition>` from trailing `<source-size-value>` at the
+        // last top-level ASCII whitespace outside parentheses.
+        let mut split_at = None;
+        let mut p_depth = 0usize;
+        for (idx, ch) in entry.char_indices() {
+            match ch {
+                '(' => p_depth += 1,
+                ')' => p_depth = p_depth.saturating_sub(1),
+                c if c.is_ascii_whitespace() && p_depth == 0 => {
+                    split_at = Some(idx);
+                }
+                _ => {}
+            }
+        }
+        let (cond_opt, len_str) = match split_at {
+            Some(idx) => {
+                let cond = entry[..idx].trim();
+                let len = entry[idx..].trim();
+                (if cond.is_empty() { None } else { Some(cond) }, len)
+            }
+            None => (None, entry),
+        };
+        let Some(px) = parse_size_length_px(len_str, media) else {
+            continue;
+        };
+        if let Some(cond) = cond_opt {
+            let list = css::media::parse_media_query_list(cond);
+            if !css::media::evaluate(&list, media) {
+                continue;
+            }
+        }
+        return px;
+    }
+
+    default_width
+}
+
+/// Returns whether a `<source type="...">` MIME type is decodable by the engine.
+pub fn is_supported_image_mime(mime: &str) -> bool {
+    let essential = mime
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if essential.is_empty() {
+        return true;
+    }
+    matches!(
+        essential.as_str(),
+        "image/png" | "image/jpeg" | "image/jpg" | "image/gif" | "image/webp" | "image/svg+xml"
+    )
+}
+
+/// Selects the best image `(url, effective_density)` from `srcset` / `src` / `sizes`.
+pub fn select_image_candidate(
+    srcset: Option<&str>,
+    fallback_src: Option<&str>,
+    sizes_attr: Option<&str>,
+    media: &css::MediaContext,
+    dpr: f32,
+) -> Option<(String, f32)> {
+    let dpr = sanitize_dpr(dpr);
+    let mut candidates = srcset.map(parse_srcset).unwrap_or_default();
+
+    let fallback = fallback_src.map(str::trim).filter(|s| !s.is_empty());
+    let uses_width = candidates
+        .iter()
+        .any(|c| matches!(c.descriptor, SrcsetDescriptor::Width(_)));
+
+    // When using density descriptors (or empty srcset), include `<img src>` as `1x`
+    // unless `srcset` already defines a `1x` candidate (WHATWG HTML §4.8.4.3.5).
+    if !uses_width
+        && let Some(src) = fallback
+        && !candidates
+            .iter()
+            .any(|c| matches!(c.descriptor, SrcsetDescriptor::Density(d) if (d - 1.0).abs() < 1e-4))
+    {
+        candidates.push(SrcsetCandidate {
+            url: src.to_string(),
+            descriptor: SrcsetDescriptor::Density(1.0),
+        });
+    }
+
+    if candidates.is_empty() {
+        return fallback.map(|s| (s.to_string(), 1.0));
+    }
+
+    let target_width = if uses_width {
+        resolve_sizes(sizes_attr, media).max(1.0)
+    } else {
+        1.0
+    };
+
+    let mut weighted: Vec<(String, f32)> = candidates
+        .into_iter()
+        .map(|c| {
+            let density = match c.descriptor {
+                SrcsetDescriptor::Density(d) => d,
+                SrcsetDescriptor::Width(w) => (w as f32 / target_width).max(0.01),
+            };
+            (c.url, density)
+        })
+        .collect();
+
+    // Sort ascending by effective density (stable tie-breaker preserves source order).
+    weighted.sort_by(|a, b| a.1.total_cmp(&b.1));
+
+    // Pick the smallest density >= dpr, or fall back to the highest density available.
+    if let Some(best) = weighted.iter().find(|(_, d)| *d + 1e-4 >= dpr) {
+        Some(best.clone())
+    } else {
+        weighted.last().cloned()
+    }
+}
+
+/// Resolves the selected `(url, effective_density)` for an `<img>` element, taking into
+/// account any enclosing `<picture>` container's `<source media/type/srcset/sizes>` children.
+pub fn resolve_element_image_source(
+    document: &Document,
+    img_node: NodeId,
+    media: &css::MediaContext,
+    dpr: f32,
+) -> Option<(String, f32)> {
+    let img_el = document.node(img_node).as_element()?;
+    let img_sizes = img_el.get_attribute("sizes");
+
+    // Check enclosing `<picture>` for preceding matching `<source>` siblings.
+    if let Some(parent_id) = document.node(img_node).parent
+        && let Some(parent_el) = document.node(parent_id).as_element()
+        && parent_el.local_name.eq_ignore_ascii_case("picture")
+    {
+        for sibling_id in document.children(parent_id) {
+            if sibling_id == img_node {
+                break;
+            }
+            let Some(source_el) = document.node(sibling_id).as_element() else {
+                continue;
+            };
+            if !source_el.local_name.eq_ignore_ascii_case("source") {
+                continue;
+            }
+            if let Some(media_attr) = source_el.get_attribute("media").map(str::trim)
+                && !media_attr.is_empty()
+            {
+                let list = css::media::parse_media_query_list(media_attr);
+                if !css::media::evaluate(&list, media) {
+                    continue;
+                }
+            }
+            if let Some(type_attr) = source_el.get_attribute("type").map(str::trim)
+                && !type_attr.is_empty()
+                && !is_supported_image_mime(type_attr)
+            {
+                continue;
+            }
+            let Some(source_srcset) = source_el
+                .get_attribute("srcset")
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            else {
+                continue;
+            };
+            let sizes = source_el.get_attribute("sizes").or(img_sizes);
+            if let Some(chosen) =
+                select_image_candidate(Some(source_srcset), None, sizes, media, dpr)
+            {
+                return Some(chosen);
+            }
+        }
+    }
+
+    select_image_candidate(
+        img_el.get_attribute("srcset"),
+        img_el.get_attribute("src"),
+        img_sizes,
+        media,
+        dpr,
+    )
+}
+
+/// Resolves only the chosen URL string for an `<img>` element (shared with shell callers).
+pub fn resolve_img_source(
+    document: &Document,
+    img_node: NodeId,
+    media: &css::MediaContext,
+    dpr: f32,
+) -> Option<String> {
+    resolve_element_image_source(document, img_node, media, dpr).map(|(url, _)| url)
+}
+
+/// Collects `(NodeId, src, effective_density)` triples for every `<img>` using responsive
+/// selection (`<picture>` / `<source>`, `srcset`, `sizes`, `dpr`).
+pub fn collect_responsive_image_sources(
+    document: &Document,
+    media: &css::MediaContext,
+    dpr: f32,
+) -> Vec<(NodeId, String, f32)> {
     let mut sources = Vec::new();
     let mut stack = vec![document.root()];
     while let Some(node_id) = stack.pop() {
@@ -97,12 +522,10 @@ pub fn collect_image_sources(document: &Document) -> Vec<(NodeId, String)> {
         let node = document.node(node_id);
         if let Some(element) = node.as_element()
             && element.local_name.eq_ignore_ascii_case("img")
-            && let Some(src) = element
-                .get_attribute("src")
-                .map(str::trim)
-                .filter(|src| !src.is_empty())
+            && let Some((src, density)) =
+                resolve_element_image_source(document, node_id, media, dpr)
         {
-            sources.push((node_id, src.to_string()));
+            sources.push((node_id, src, density));
         }
         // Push children reversed so the stack pops them in document order.
         let children: Vec<NodeId> = document.children(node_id).collect();
@@ -113,7 +536,16 @@ pub fn collect_image_sources(document: &Document) -> Vec<(NodeId, String)> {
     sources
 }
 
-/// Loads, decodes and measures every `<img>` of the document.
+/// Collects `(NodeId, src)` pairs for every `<img>` element (including `srcset`/`<picture>`),
+/// in tree order, evaluated with default media context and `1.0` DPR.
+pub fn collect_image_sources(document: &Document) -> Vec<(NodeId, String)> {
+    collect_responsive_image_sources(document, &css::MediaContext::default(), 1.0)
+        .into_iter()
+        .map(|(id, src, _)| (id, src))
+        .collect()
+}
+
+/// Loads, decodes and measures every `<img>` of the document with default media context.
 ///
 /// Never fails as a whole: individual problems become warnings/placeholders.
 pub fn load_images(
@@ -121,6 +553,28 @@ pub fn load_images(
     base_url: &Url,
     loader: &mut ResourceLoader,
     no_network: bool,
+    limits: ImageLimits,
+    warnings: &mut Vec<String>,
+) -> LoadedImages {
+    load_images_with_context(
+        document,
+        base_url,
+        loader,
+        no_network,
+        &css::MediaContext::default(),
+        limits,
+        warnings,
+    )
+}
+
+/// Loads, decodes and measures every `<img>` of the document using `media` and
+/// `limits.device_pixel_ratio` for `<picture>` / `srcset` / `sizes` resolution.
+pub fn load_images_with_context(
+    document: &Document,
+    base_url: &Url,
+    loader: &mut ResourceLoader,
+    no_network: bool,
+    media: &css::MediaContext,
     limits: ImageLimits,
     warnings: &mut Vec<String>,
 ) -> LoadedImages {
@@ -136,9 +590,11 @@ pub fn load_images(
     };
     // Identical URLs are fetched and decoded once: the decoded bitmap is shared through an
     // `Arc` across every `<img>` that references it (backgrounds already deduplicate this
-    // way). A page repeating one large image no longer pays N decodes or N bitmaps.
-    let mut cache: HashMap<String, ((f32, f32), Arc<image::RgbaImage>)> = HashMap::new();
-    let sources = collect_image_sources(document);
+    // way). The raw `(intrinsic_size, scale_with_density)` tuple lets each `<img srcset>`
+    // apply its own selected density divisor while still sharing the bitmap buffer.
+    type CachedImageEntry = ((f32, f32), bool, Arc<image::RgbaImage>);
+    let mut cache: HashMap<String, CachedImageEntry> = HashMap::new();
+    let sources = collect_responsive_image_sources(document, media, limits.device_pixel_ratio);
     if sources.len() > limits.max_images {
         warnings.push(format!(
             "page references {} images; loading only the first {} (cap)",
@@ -148,7 +604,7 @@ pub fn load_images(
     }
 
     let mut resolved = Vec::new();
-    for (node_id, src) in sources.into_iter().take(limits.max_images) {
+    for (node_id, src, density) in sources.into_iter().take(limits.max_images) {
         let url = match base_url.join(&src) {
             Ok(url) => url,
             Err(error) => {
@@ -170,12 +626,12 @@ pub fn load_images(
             .node(node_id)
             .as_element()
             .is_some_and(|element| element.get_attribute("crossorigin").is_some());
-        resolved.push((node_id, url, use_cors));
+        resolved.push((node_id, url, use_cors, density));
     }
 
     let requests: Vec<(&Url, bool)> = resolved
         .iter()
-        .map(|(_, url, use_cors)| (url, *use_cors))
+        .map(|(_, url, use_cors, _)| (url, *use_cors))
         .collect();
     // Enforce the image byte cap while fetching, not after every response has been
     // buffered (#1213). Restore the caller's cap afterwards so unrelated later fetches
@@ -184,10 +640,22 @@ pub fn load_images(
     let loaded_resources = loader.load_many(&requests);
     loader.set_max_response_bytes(previous_cap);
 
-    for ((node_id, url, _use_cors), loaded_res) in resolved.into_iter().zip(loaded_resources) {
+    let css_size = |raw: (f32, f32), scale_density: bool, density: f32| -> (f32, f32) {
+        if scale_density && density.is_finite() && density > 0.0 {
+            ((raw.0 / density).max(1.0), (raw.1 / density).max(1.0))
+        } else {
+            raw
+        }
+    };
+
+    for ((node_id, url, _use_cors, density), loaded_res) in
+        resolved.into_iter().zip(loaded_resources)
+    {
         let cache_key = url.to_string();
-        if let Some((size, bitmap)) = cache.get(&cache_key) {
-            result.sizes.insert(node_id, *size);
+        if let Some((raw_size, scale_density, bitmap)) = cache.get(&cache_key) {
+            result
+                .sizes
+                .insert(node_id, css_size(*raw_size, *scale_density, density));
             result.store.insert(node_id, Arc::clone(bitmap));
             result.loaded += 1;
             continue;
@@ -248,9 +716,9 @@ pub fn load_images(
                     result.downloaded_bytes += resource.bytes.len();
                     let size = (width as f32, height as f32);
                     let bitmap = Arc::new(decoded);
-                    result.sizes.insert(node_id, size);
+                    result.sizes.insert(node_id, css_size(size, true, density));
                     result.store.insert(node_id, Arc::clone(&bitmap));
-                    cache.insert(cache_key.clone(), (size, bitmap));
+                    cache.insert(cache_key.clone(), (size, true, bitmap));
                     result.loaded += 1;
                 }
                 Err(error) => {
@@ -291,7 +759,7 @@ pub fn load_images(
                     let bitmap = Arc::new(rendered.raster);
                     result.sizes.insert(node_id, rendered.intrinsic);
                     result.store.insert(node_id, Arc::clone(&bitmap));
-                    cache.insert(cache_key.clone(), (rendered.intrinsic, bitmap));
+                    cache.insert(cache_key.clone(), (rendered.intrinsic, false, bitmap));
                     result.loaded += 1;
                     result.svgs_rendered += 1;
                 }
