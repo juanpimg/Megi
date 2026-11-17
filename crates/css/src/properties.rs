@@ -2190,6 +2190,8 @@ pub struct ComputedStyle {
     // Visibility
     pub visibility: Visibility,
     pub opacity: f32,
+    /// CSS `transform` (2D, #1539). `None` means `none`/no transform. Not inherited.
+    pub transform: Option<crate::transform::Transform>,
 
     // Typography: text transformation and spacing (CSS Text 3). All inherited.
     /// `text-transform` (initial `none`); applied by layout while shaping text.
@@ -2339,6 +2341,7 @@ impl ComputedStyle {
 
             visibility: Visibility::Visible,
             opacity: 1.0,
+            transform: None,
 
             text_transform: TextTransform::None,
             word_spacing: Length::Px(0.0),
@@ -2846,6 +2849,11 @@ impl ComputedStyle {
             .map(|val| val.clamp(0.0, 1.0))
             .unwrap_or(1.0);
 
+        // CSS `transform` (2D subset, #1539). Not inherited: an element with no declaration
+        // carries no transform even when an ancestor has one.
+        let transform = find_declaration(&entries, "transform")
+            .and_then(|d| crate::transform::Transform::parse(&d.raw_value));
+
         // CSS Animations 1 / Transitions 1 longhand lists (not inherited).
         let animations = crate::animation::parse_animations(&entries);
         let transitions = crate::animation::parse_transitions(&entries);
@@ -2953,6 +2961,7 @@ impl ComputedStyle {
             list_style_image,
             visibility,
             opacity,
+            transform,
             text_transform,
             word_spacing,
             letter_spacing,

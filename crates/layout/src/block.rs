@@ -116,6 +116,7 @@ pub(crate) fn layout_block_with_viewport(
     let self_pos = self_positioning_context(layout_box, root_pos);
     layout_box_contents(layout_box, Some(cb.height), true, measurer, self_pos);
     apply_relative_offset(layout_box, cb.width, Some(cb.height));
+    apply_transform(layout_box);
 }
 
 /// Lays out a block-level child inside its parent's content box.
@@ -134,6 +135,7 @@ fn layout_child_box(
     if matches!(child.box_type, BoxType::Replaced(_)) {
         layout_block_replaced(child, cb, parent_definite_height, border_top_y);
         apply_relative_offset(child, cb.width, parent_definite_height);
+        apply_transform(child);
         return;
     }
     calculate_block_width(child, cb.width);
@@ -157,6 +159,7 @@ fn layout_child_box(
     let child_pos = self_positioning_context(child, pos);
     layout_box_contents(child, parent_definite_height, false, measurer, child_pos);
     apply_relative_offset(child, cb.width, parent_definite_height);
+    apply_transform(child);
 }
 
 /// Returns the positioning context inherited by the absolute descendants of `layout_box`:
@@ -1410,6 +1413,45 @@ fn specified_height(style: &ComputedStyle, cb_height: Option<f32>) -> Option<f32
 /// relative resolution rules (`top` wins over `bottom`, `left` over `right`). The shell/scroll
 /// integration can later clamp the same displacement against a scroll offset (a future
 /// `LayoutOptions` hook); without sticky declarations the geometry is unchanged.
+/// Applies a CSS 2D `transform` to a box's geometry (#1539).
+///
+/// The transformed axis-aligned bounding box of the content rectangle becomes the box's
+/// content rectangle. Paint and hit-testing consume this geometry, so translate/scale/rotate
+/// all move the painted box (rotation uses the enclosing AABB — a conservative approximation
+/// that keeps the change local and leaves every untransformed box byte-identical).
+fn apply_transform(layout_box: &mut LayoutBox) {
+    let transform = {
+        let Some(style) = layout_box.style.as_ref() else {
+            return;
+        };
+        let Some(transform) = style.transform else {
+            return;
+        };
+        transform
+    };
+    let rect = layout_box.dimensions.content;
+    let corners = [
+        transform.apply(rect.x, rect.y),
+        transform.apply(rect.x + rect.width, rect.y),
+        transform.apply(rect.x, rect.y + rect.height),
+        transform.apply(rect.x + rect.width, rect.y + rect.height),
+    ];
+    let min_x = corners.iter().map(|p| p.0).fold(f32::INFINITY, f32::min);
+    let max_x = corners
+        .iter()
+        .map(|p| p.0)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let min_y = corners.iter().map(|p| p.1).fold(f32::INFINITY, f32::min);
+    let max_y = corners
+        .iter()
+        .map(|p| p.1)
+        .fold(f32::NEG_INFINITY, f32::max);
+    if !min_x.is_finite() || !min_y.is_finite() || !max_x.is_finite() || !max_y.is_finite() {
+        return;
+    }
+    layout_box.dimensions.content = Rect::new(min_x, min_y, max_x - min_x, max_y - min_y);
+}
+
 fn apply_relative_offset(layout_box: &mut LayoutBox, cb_width: f32, cb_height: Option<f32>) {
     // Borrow the style instead of cloning it: this runs for every in-flow box.
     let (left, right, top, bottom) = {
