@@ -572,6 +572,11 @@ fn normalize_host(scheme: Scheme, raw: &str) -> Result<String, UrlError> {
     {
         return Err(UrlError::InvalidHost(raw.to_owned()));
     }
+    // DNS names are at most 255 bytes; cap labels too so PSL/cookie/referrer walks
+    // cannot be driven quadratic by a hostile host (#1284).
+    if raw.len() > 255 || raw.bytes().filter(|&byte| byte == b'.').count() >= 128 {
+        return Err(UrlError::InvalidHost(raw.to_owned()));
+    }
     let host = raw.to_ascii_lowercase();
     if scheme == Scheme::File && host == "localhost" {
         return Ok(String::new());
@@ -796,6 +801,16 @@ mod unit_tests {
         assert_eq!(percent_decode("/caf%C3%A9"), "/café");
         assert_eq!(percent_decode("/bad%2"), "/bad%2");
         assert_eq!(percent_decode("/bad%zz"), "/bad%zz");
+    }
+
+    #[test]
+    fn oversized_hosts_are_rejected_quickly() {
+        // 10k labels used to make the PSL/cookie/referrer walks take ~100 s (#1284).
+        let host = "a.".repeat(10_000);
+        let input = format!("http://{host}test/");
+        let start = std::time::Instant::now();
+        assert!(Url::parse(&input).is_err(), "oversized host must be rejected");
+        assert!(start.elapsed() < std::time::Duration::from_millis(100));
     }
 
     #[test]
