@@ -1551,6 +1551,38 @@ impl WindowApp {
         self.request_repaint();
     }
 
+    /// Submits the form owning the currently focused control (#1538).
+    ///
+    /// Builds the submission parameters from the rendered controls, fires the host-side submit
+    /// (via a patched render with a `submit` event), and navigates to the GET target. POST
+    /// navigates to the action URL (the urlencoded body is computed by `form_submission`).
+    fn submit_focused_form(&mut self) -> bool {
+        let Some(control) = self.focused_control().cloned() else {
+            return false;
+        };
+        let (Some(document), Some(base)) = (self.document.clone(), self.nav.current().cloned())
+        else {
+            return false;
+        };
+        let Some(submission) =
+            crate::forms::form_submission(&document, &base, control.node_id, &self.forms)
+        else {
+            return false;
+        };
+        let target = if submission.method == "get" {
+            crate::forms::form_get_target(&submission)
+        } else {
+            Some(submission.action.clone())
+        };
+        let Some(target) = target.and_then(|url| net::Url::parse(&url).ok()) else {
+            return false;
+        };
+        self.editor = None;
+        self.focus.blur();
+        self.navigate_to(target);
+        true
+    }
+
     /// Focuses/clicks a form control: text fields open the editor, checkboxes/radios toggle
     /// `checked`, buttons flash their pressed state. Disabled controls are ignored.
     fn form_click(&mut self, index: usize) {
@@ -1810,6 +1842,16 @@ impl WindowApp {
                 if control.kind.is_button() {
                     self.apply_form_patch(Some(control.form_id), None, None, true);
                     self.release_button = Some(control.form_id);
+                    return true;
+                }
+                // Enter in a text control submits the owning form (#1538).
+                if matches!(key, Key::Named(NamedKey::Enter))
+                    && matches!(
+                        control.kind,
+                        FormControlKind::TextInput | FormControlKind::Textarea
+                    )
+                    && self.submit_focused_form()
+                {
                     return true;
                 }
             }
