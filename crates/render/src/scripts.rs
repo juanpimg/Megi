@@ -203,6 +203,9 @@ pub struct ScriptCandidate {
     pub is_async: bool,
     /// `<script type="module">` (ES module evaluated with the js crate's module subset).
     pub is_module: bool,
+    /// `integrity` attribute (Subresource Integrity); verified against the fetched bytes before
+    /// execution (#1527). Inline scripts are not subject to SRI.
+    pub integrity: Option<String>,
 }
 
 /// A script ready to be evaluated.
@@ -456,6 +459,7 @@ pub fn discover_scripts(
             deferred: data.has_attribute("defer"),
             is_async: data.has_attribute("async"),
             is_module,
+            integrity: data.get_attribute("integrity").map(str::to_owned),
         });
     }
     candidates
@@ -538,6 +542,17 @@ pub fn load_scripts(
                     "skipping script {url}: {} bytes exceeds max_script_bytes={}",
                     resource.bytes.len(),
                     limits.max_script_bytes
+                ));
+                continue;
+            }
+            // Subresource Integrity (#1527): verify the decoded bytes before execution and fail
+            // closed on mismatch or malformed metadata. An absent `integrity` is a no-op.
+            if let Some(integrity) = &candidate.integrity
+                && let Err(error) = net::integrity::verify_integrity(&resource.bytes, integrity)
+            {
+                report.skipped += 1;
+                warnings.push(format!(
+                    "skipping script {url}: integrity check failed: {error}"
                 ));
                 continue;
             }

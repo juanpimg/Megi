@@ -139,6 +139,7 @@ pub mod error;
 pub mod file;
 pub mod h2;
 pub mod http;
+pub mod integrity;
 pub mod loader;
 pub mod mime;
 #[cfg(feature = "pac")]
@@ -168,6 +169,7 @@ pub use http::{
     FetchOptions, Response, fetch, fetch_streaming, fetch_with_headers, fetch_with_method,
     preflight,
 };
+pub use integrity::{IntegrityError, IntegrityHash, parse_integrity, verify_integrity};
 pub use loader::{HEURISTIC_FRESHNESS, Resource, ResourceLoader};
 pub use mime::{MimeHint, resolve_content_type, sniff};
 pub use proxy::{ProxyConfig, proxy_authorization, proxy_authorization_for};
