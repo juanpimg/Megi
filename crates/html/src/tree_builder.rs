@@ -4441,10 +4441,9 @@ pub fn parse_fragment_into(
     scripting_enabled: bool,
     options: &ParseOptions,
 ) -> LimitViolations {
-    // Take the document out, but guard restoration so a panic during parsing
-    // does not lose the caller's document.
-    let existing = std::mem::take(doc);
-    // Use catch_unwind to restore the document on panic.
+    // Parse into a clone: `doc` itself is never moved out, so a panic inside the parser
+    // leaves the caller's DOM completely intact (#1454).
+    let existing = doc.clone();
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let tb = TreeBuilder::with_document(scripting_enabled, *options, existing);
         let tb = run_fragment_parser(
@@ -4468,8 +4467,7 @@ pub fn parse_fragment_into(
             limit_violations
         }
         Err(_) => {
-            // Restore a fresh document on panic (best effort).
-            *doc = Document::new();
+            // `doc` was never taken, so it still holds the original DOM (#1454).
             LimitViolations::default()
         }
     }
