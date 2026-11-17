@@ -231,7 +231,24 @@ fn test_stop_cap_is_applied() {
     );
     let gradient = gradient_from(&style);
     assert_eq!(gradient.stops.len(), css::MAX_GRADIENT_STOPS);
-    assert!(gradient.stops.len() <= 64);
+    assert_eq!(
+        gradient.stops.first().unwrap().color,
+        css::Color::new(0, 0, 0, 255)
+    );
+    assert_eq!(
+        gradient.stops.last().unwrap().color,
+        css::Color::new((63 * 3) as u8, 0, 0, 255)
+    );
+    assert_eq!(
+        gradient.stops.last().unwrap().position,
+        Some(css::Length::Percent(63.0))
+    );
+    assert!(
+        !gradient
+            .stops
+            .iter()
+            .any(|stop| stop.color == css::Color::new((64 * 3) as u8, 0, 0, 255))
+    );
 }
 
 #[test]

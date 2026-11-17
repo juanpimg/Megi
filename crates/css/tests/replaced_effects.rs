@@ -146,7 +146,19 @@ fn test_backdrop_filter_cap() {
         .join(" ");
     let style = computed_style(&format!("backdrop-filter: {value};"));
     assert_eq!(style.backdrop_filter.len(), css::MAX_FILTER_FUNCTIONS);
-    assert!(style.backdrop_filter.len() <= 16);
+    assert_eq!(
+        style.backdrop_filter.first(),
+        Some(&css::FilterFunction::Brightness(1.0))
+    );
+    assert_eq!(
+        style.backdrop_filter.last(),
+        Some(&css::FilterFunction::Brightness(1.0 + 15.0 * 0.05))
+    );
+    assert!(
+        !style
+            .backdrop_filter
+            .contains(&css::FilterFunction::Brightness(1.0 + 16.0 * 0.05))
+    );
 }
 
 #[test]
