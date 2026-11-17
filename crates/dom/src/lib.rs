@@ -1127,86 +1127,96 @@ impl Document {
         Some(text_id)
     }
 
-    /// Counts the nodes in the subtree rooted at `node_id` (including itself).
+    /// Counts the nodes in the subtree rooted at `node_id` (including itself and any
+    /// `<template>` inert contents), bounded by `MAX_CLONE_NODES + 1` and guarded against
+    /// cyclic links in a corrupted arena.
     fn subtree_size(&self, node_id: NodeId) -> usize {
         let mut count = 0usize;
         let mut stack = vec![node_id];
+        let mut seen = HashSet::new();
+        let max_nodes = self.nodes.len();
         while let Some(id) = stack.pop() {
+            if !seen.insert(id) {
+                continue;
+            }
             count = count.saturating_add(1);
-            if count > MAX_CLONE_NODES {
+            if count > MAX_CLONE_NODES || count > max_nodes {
                 return count;
             }
-            let mut child = self.node(id).first_child;
+            let Some(node) = self.try_node(id) else {
+                continue;
+            };
+            let mut child = node.first_child;
+            let mut steps = 0usize;
             while let Some(child_id) = child {
+                steps += 1;
+                if steps > max_nodes {
+                    break;
+                }
                 stack.push(child_id);
-                child = self.node(child_id).next_sibling;
+                child = self.try_node(child_id).and_then(|n| n.next_sibling);
             }
-            // Template contents are part of the cloned subtree.
-            if let Some(contents) = self
-                .node(id)
-                .as_element()
-                .and_then(|el| el.template_contents)
-            {
+            // Template contents are part of the cloned subtree when `deep` is true.
+            if let Some(contents) = node.as_element().and_then(|el| el.template_contents) {
                 stack.push(contents);
             }
         }
         count
     }
 
-    /// Clones `node_id`. If `deep` is true, iteratively clones all descendant subtrees.
+    /// Clones `node_id`. If `deep` is true, iteratively clones all descendant subtrees
+    /// (up to [`MAX_CLONE_NODES`]).
     ///
-    /// `<template>` elements are special-cased per the DOM Standard: the clone always
-    /// gets its **own** inert `DocumentFragment` and the fragment's children are always
-    /// cloned deeply (`subtree = true`), even when `deep` is false, so that the clone
-    /// never shares template contents with the original. That deep copy is still bounded
-    /// by `MAX_CLONE_NODES`, so a shallow clone of a huge template cannot exhaust the
-    /// arena (issue #1111).
+    /// `<template>` elements always get their **own** empty inert `DocumentFragment` so that
+    /// the clone never shares template contents with the original, and clone the contents'
+    /// children only when `deep` is true (per the DOM Standard, #1111), subject to
+    /// [`MAX_CLONE_NODES`].
     ///
     /// The traversal uses an explicit heap stack, so deep trees cannot overflow the
     /// call stack.
     pub fn clone_node(&mut self, node_id: NodeId, deep: bool) -> Option<NodeId> {
         // Guard against stale/foreign handles (issue #676).
         self.try_node(node_id)?;
-        // Bound clone amplification (issue #678): if the subtree is too large to
-        // safely clone, fall back to a shallow clone instead of risking arena
-        // exhaustion / panic.
-        let deep = if deep {
-            self.subtree_size(node_id) <= MAX_CLONE_NODES
-        } else {
-            false
-        };
+        // Bound clone amplification (issue #678 / #1111): if the subtree (including any
+        // `<template>` contents) is too large to safely clone, fall back to a shallow
+        // clone instead of risking arena exhaustion / panic.
+        let deep = deep && self.subtree_size(node_id) <= MAX_CLONE_NODES;
         let cloned_root = self.clone_node_shallow(node_id);
+        if !deep {
+            return Some(cloned_root);
+        }
 
-        // Work stack of `(source, clone, deep)` frames. Template contents always get
-        // their own inert DocumentFragment (shallow clone), and the fragment's children
-        // are deep-cloned only when `deep` is true (per the DOM Standard). The
-        // clone-size cap applies to them as to any other subtree (#1111).
-        let mut stack: Vec<(NodeId, NodeId, bool)> = Vec::new();
+        // Work stack of `(source, clone)` frames; only walked when `deep` is true.
+        let mut allocated = 1usize;
+        let mut stack: Vec<(NodeId, NodeId)> = Vec::new();
         if let Some((src_contents, clone_contents)) =
             self.template_contents_pair(node_id, cloned_root)
-            && self.subtree_size(src_contents) <= MAX_CLONE_NODES
         {
-            stack.push((src_contents, clone_contents, deep));
+            allocated += 1;
+            stack.push((src_contents, clone_contents));
         }
-        if deep {
-            stack.push((node_id, cloned_root, true));
-        }
+        stack.push((node_id, cloned_root));
 
-        while let Some((source_id, clone_id, descend)) = stack.pop() {
-            if !descend {
-                continue;
-            }
-            let mut curr = self.node(source_id).first_child;
+        let max_steps = self.nodes.len();
+        while let Some((source_id, clone_id)) = stack.pop() {
+            let mut curr = self.try_node(source_id).and_then(|node| node.first_child);
+            let mut steps = 0usize;
             while let Some(child_id) = curr {
-                let next = self.node(child_id).next_sibling;
+                steps += 1;
+                if steps > max_steps || allocated >= MAX_CLONE_NODES {
+                    break;
+                }
+                let next = self.try_node(child_id).and_then(|node| node.next_sibling);
                 let cloned_child = self.clone_node_shallow(child_id);
+                allocated += 1;
                 self.append_child(clone_id, cloned_child);
                 if let Some((src_contents, clone_contents)) =
                     self.template_contents_pair(child_id, cloned_child)
                 {
-                    stack.push((src_contents, clone_contents, true));
+                    allocated += 1;
+                    stack.push((src_contents, clone_contents));
                 }
-                stack.push((child_id, cloned_child, true));
+                stack.push((child_id, cloned_child));
                 curr = next;
             }
         }
@@ -1278,17 +1288,17 @@ impl Document {
         {
             self.remove_subtree(fragment);
         }
-        // Re-attach the children at the removed node's position. Bound the walk by the
-        // arena size (issue #1109): a corrupted cyclic child chain must not hang
-        // remove_node(), which is reachable from ChildNode::remove() and the parser.
-        let max_steps = self.nodes.len() + 1;
+        // Re-attach the children at the removed node's position. Bound the walk against
+        // cyclic sibling chains in a corrupted arena (#1109).
+        let max_steps = self.nodes.len();
         let mut steps = 0usize;
+        let mut seen = HashSet::new();
         let mut child = self.nodes[slot].first_child;
         while let Some(child_id) = child {
-            if steps >= max_steps {
+            steps += 1;
+            if child_id == node_id || steps > max_steps || (steps > 32 && !seen.insert(child_id)) {
                 break;
             }
-            steps += 1;
             let next = self.try_node(child_id).and_then(|node| node.next_sibling);
             match parent {
                 Some(parent_id) => match next_sibling {
@@ -1868,11 +1878,6 @@ impl Document {
             .then_some(parent)
     }
 
-    /// Returns the concatenated text of all descendant text nodes (DOM `textContent`).
-    ///
-    /// Comments, processing instructions, doctypes and inert `<template>` contents are
-    /// excluded; a `Text` node returns its own data. Unknown handles return an empty
-    /// string. Cost: `O(subtree)` with an explicit heap stack (safe on deep trees).
     /// Merges adjacent text nodes and removes empty text nodes under `node_id`.
     ///
     /// Returns the number of nodes removed (for diagnostics/tests).
@@ -1882,31 +1887,24 @@ impl Document {
         }
         // Post-order over the subtree with an explicit stack: the old recursive version
         // overflowed the native stack for a deep chain (reachable from `node.normalize()`
-        // after building 100k nested elements in a script).
+        // after building 100k nested elements in a script). Bounded against cyclic arenas
+        // (#1108).
+        let max_nodes = self.nodes.len();
         let mut order: Vec<NodeId> = Vec::new();
         let mut stack: Vec<(NodeId, bool)> = vec![(node_id, false)];
-        // Bound the traversal (issue #1108): a corrupted cyclic child/sibling chain
-        // must not hang normalize(). Each node is pushed at most twice in a healthy tree.
-        let max_steps = self.nodes.len().saturating_mul(2).max(16);
-        let mut steps = 0usize;
+        let mut seen = HashSet::new();
         while let Some((current, visited)) = stack.pop() {
             if visited {
                 order.push(current);
                 continue;
             }
-            if steps >= max_steps {
-                break;
+            if seen.len() >= max_nodes || !seen.insert(current) {
+                continue;
             }
-            steps += 1;
             stack.push((current, true));
-            let mut child = self.try_node(current).and_then(|node| node.first_child);
-            while let Some(child_id) = child {
-                if steps >= max_steps {
-                    break;
-                }
-                steps += 1;
+            let (children, _) = self.bounded_children_vec(current);
+            for child_id in children {
                 stack.push((child_id, false));
-                child = self.try_node(child_id).and_then(|node| node.next_sibling);
             }
         }
         let mut removed = 0;
@@ -1916,19 +1914,38 @@ impl Document {
         removed
     }
 
+    /// Collects direct child `NodeId`s bounded against sibling cycles (Brent + arena cap).
+    /// Returns `(children, cycle_detected)`.
+    fn bounded_children_vec(&self, parent_id: NodeId) -> (Vec<NodeId>, bool) {
+        let mut children = Vec::new();
+        let max_steps = self.nodes.len();
+        let mut current = self.try_node(parent_id).and_then(|node| node.first_child);
+        let mut tortoise = None;
+        let mut power = 1usize;
+        let mut lam = 0usize;
+        let mut steps = 0usize;
+        while let Some(child_id) = current {
+            steps += 1;
+            if steps > max_steps || Some(child_id) == tortoise {
+                return (children, true);
+            }
+            if lam == power {
+                tortoise = Some(child_id);
+                power *= 2;
+                lam = 0;
+            }
+            lam += 1;
+            children.push(child_id);
+            current = self.try_node(child_id).and_then(|node| node.next_sibling);
+        }
+        (children, false)
+    }
+
     /// Merges adjacent text children and drops empty text children of one node.
     fn normalize_children(&mut self, node_id: NodeId) -> usize {
-        let mut children: Vec<NodeId> = Vec::new();
-        let mut current = self.try_node(node_id).and_then(|node| node.first_child);
-        let max_steps = self.nodes.len() + 1;
-        let mut steps = 0usize;
-        while let Some(child) = current {
-            if steps >= max_steps {
-                break;
-            }
-            steps += 1;
-            children.push(child);
-            current = self.try_node(child).and_then(|node| node.next_sibling);
+        let (children, cyclic) = self.bounded_children_vec(node_id);
+        if cyclic {
+            return 0;
         }
         let mut removed = 0;
         let mut previous_text: Option<NodeId> = None;
@@ -2032,7 +2049,10 @@ impl Document {
             b_chain[index_b - 1]
         };
         let mut current = self.try_node(common).and_then(|node| node.first_child);
-        while let Some(child) = current {
+        for _ in 0..max_steps {
+            let Some(child) = current else {
+                break;
+            };
             if child == child_a {
                 return FOLLOWING;
             }
@@ -2045,83 +2065,62 @@ impl Document {
     }
 
     const MAX_TEXT_CONTENT_BYTES: usize = 16 * 1024 * 1024;
+
+    /// Returns the concatenated text of all descendant text nodes (DOM `textContent`).
+    ///
+    /// Comments, processing instructions, doctypes and inert `<template>` contents are
+    /// excluded; a `Text` node returns its own data. Unknown handles return an empty
+    /// string. Cost: `O(subtree)` with an explicit heap stack (safe on deep trees),
+    /// bounded against corrupted cyclic links (#1107) and capped at 16 MiB (`MAX_TEXT_CONTENT_BYTES`).
     pub fn text_content(&self, node_id: NodeId) -> String {
-        let Some(node) = self.try_node(node_id) else {
+        if self.try_node(node_id).is_none() {
+            return String::new();
+        }
+        // For HTML <template> the content lives in the inert contents fragment; resolve
+        // non-recursively so corrupted self-referential template links cannot blow the stack.
+        let effective_id = self.template_contents_target(node_id);
+        let Some(effective_node) = self.try_node(effective_id) else {
             return String::new();
         };
-        if let Some(text) = node.as_text() {
+        if let Some(text) = effective_node.as_text() {
             return text.to_owned();
         }
-        if matches!(node.kind, NodeKind::Document) {
+        if matches!(effective_node.kind, NodeKind::Document) {
             return String::new();
         }
-        // For HTML <template> the content lives in the inert contents fragment.
-        let target = self.template_contents_target(node_id);
-        if target != node_id {
-            return self.text_content(target);
-        }
+        let max_nodes = self.nodes.len();
         let mut text = String::new();
-        let mut pending: Vec<NodeId> = Vec::new();
-        // Bound every walk by the arena size (issue #1107): a corrupted cyclic
-        // child/sibling chain must make this return, never hang the renderer.
-        let max_steps = self.nodes.len().saturating_mul(2).max(16);
-        let mut steps = 0usize;
-        let mut child = node.first_child;
-        while let Some(child_id) = child {
-            if steps >= max_steps {
-                break;
-            }
-            steps += 1;
-            pending.push(child_id);
-            child = self
-                .try_node(child_id)
-                .and_then(|child_node| child_node.next_sibling);
-        }
-        // Reverse: repairing order of siblings for the stack below.
-        // (Children were pushed in order; push them reversed instead.)
+        // Bound sibling walks and total visited nodes against cyclic arenas (#1107).
+        let (mut pending, _) = self.bounded_children_vec(effective_id);
         pending.reverse();
+        let mut visited = 0usize;
         while let Some(current) = pending.pop() {
-            if steps >= max_steps {
+            visited += 1;
+            if visited > max_nodes {
                 break;
             }
-            steps += 1;
             let Some(current_node) = self.try_node(current) else {
                 continue;
             };
             match &current_node.kind {
                 NodeKind::Text(data) => {
                     if text.len() + data.len() > Self::MAX_TEXT_CONTENT_BYTES {
-                        // Truncate and stop collecting.
+                        // Truncate on a UTF-8 char boundary and stop collecting.
                         let remaining = Self::MAX_TEXT_CONTENT_BYTES.saturating_sub(text.len());
-                        if remaining > 0 {
-                            // `remaining` is a byte count that can land inside a multi-byte
-                            // code point. Back up to the nearest UTF-8 boundary before
-                            // slicing, otherwise the truncation panics on untrusted text.
-                            let mut end = remaining.min(data.len());
-                            while end > 0 && !data.is_char_boundary(end) {
-                                end -= 1;
-                            }
+                        let mut end = remaining.min(data.len());
+                        while end > 0 && !data.is_char_boundary(end) {
+                            end -= 1;
+                        }
+                        if end > 0 {
                             text.push_str(&data[..end]);
                         }
-                        // Mark by clearing pending (best effort).
                         pending.clear();
                     } else {
                         text.push_str(data);
                     }
                 }
                 NodeKind::Element(_) | NodeKind::DocumentFragment => {
-                    let mut children = Vec::new();
-                    let mut child = current_node.first_child;
-                    while let Some(child_id) = child {
-                        if steps >= max_steps {
-                            break;
-                        }
-                        steps += 1;
-                        children.push(child_id);
-                        child = self
-                            .try_node(child_id)
-                            .and_then(|child_node| child_node.next_sibling);
-                    }
+                    let (children, _) = self.bounded_children_vec(current);
                     for child_id in children.into_iter().rev() {
                         pending.push(child_id);
                     }
@@ -3512,6 +3511,99 @@ mod tests {
             .expect("clone has its own template contents");
         // The oversized contents are skipped instead of cloned without a cap (#1111).
         assert_eq!(doc.node(clone_contents).first_child, None);
+    }
+
+    #[test]
+    fn text_content_terminates_on_parent_child_and_self_template_cycles() {
+        // Parent-child cycle must terminate cleanly.
+        let mut doc = Document::new();
+        let outer = doc.create_element(Namespace::Html, "div", vec![]);
+        let inner = doc.create_element(Namespace::Html, "span", vec![]);
+        doc.append_child(outer, inner);
+        doc.nodes[inner.index()].first_child = Some(outer);
+        let _ = doc.text_content(outer);
+
+        // Self-referential `<template>` contents must not recurse forever on the call stack.
+        let mut tmpl_doc = Document::new();
+        let tmpl = tmpl_doc.create_element(Namespace::Html, "template", vec![]);
+        if let Some(el) = tmpl_doc.node_mut(tmpl).as_element_mut() {
+            el.template_contents = Some(tmpl);
+        }
+        let _ = tmpl_doc.text_content(tmpl);
+    }
+
+    #[test]
+    fn normalize_rejects_cycles_without_mutating_corrupted_siblings() {
+        let mut doc = Document::new();
+        let container = doc.create_element(Namespace::Html, "div", vec![]);
+        let t1 = doc.create_text_node("a");
+        let t2 = doc.create_text_node("b");
+        doc.append_child(container, t1);
+        doc.append_child(container, t2);
+        doc.nodes[t2.index()].next_sibling = Some(t1);
+        assert_eq!(doc.normalize(container), 0);
+        assert_eq!(doc.node(t1).as_text(), Some("a"));
+
+        // Parent-child cycle must also terminate cleanly.
+        let mut cycle_doc = Document::new();
+        let outer = cycle_doc.create_element(Namespace::Html, "div", vec![]);
+        let inner = cycle_doc.create_element(Namespace::Html, "span", vec![]);
+        cycle_doc.append_child(outer, inner);
+        cycle_doc.nodes[inner.index()].first_child = Some(outer);
+        assert_eq!(cycle_doc.normalize(outer), 0);
+    }
+
+    #[test]
+    fn remove_node_terminates_on_cyclic_child_chain_with_following_sibling() {
+        for with_following_sibling in [false, true] {
+            let mut doc = Document::new();
+            let root = doc.root();
+            let wrapper = doc.create_element(Namespace::Html, "div", vec![]);
+            let sibling = doc.create_element(Namespace::Html, "p", vec![]);
+            let a = doc.create_element(Namespace::Html, "span", vec![]);
+            let b = doc.create_element(Namespace::Html, "em", vec![]);
+            doc.append_child(root, wrapper);
+            if with_following_sibling {
+                doc.append_child(root, sibling);
+            }
+            doc.append_child(wrapper, a);
+            doc.append_child(wrapper, b);
+            doc.nodes[b.index()].next_sibling = Some(a);
+            doc.nodes[a.index()].prev_sibling = Some(b);
+
+            assert!(doc.remove_node(wrapper));
+            assert!(doc.try_node(wrapper).is_none());
+        }
+    }
+
+    #[test]
+    fn compare_document_position_terminates_on_cyclic_siblings() {
+        let mut doc = Document::new();
+        let common = doc.create_element(Namespace::Html, "div", vec![]);
+        let c1 = doc.create_element(Namespace::Html, "span", vec![]);
+        let c2 = doc.create_element(Namespace::Html, "em", vec![]);
+        let orphan_a = doc.create_element(Namespace::Html, "a", vec![]);
+        let orphan_b = doc.create_element(Namespace::Html, "b", vec![]);
+        doc.append_child(doc.root(), common);
+        doc.append_child(common, c1);
+        doc.append_child(common, c2);
+        // Point orphan_a/orphan_b parent to common without linking them into c1 -> c2 chain,
+        // and turn c1 <-> c2 into a sibling cycle.
+        doc.nodes[orphan_a.index()].parent = Some(common);
+        doc.nodes[orphan_b.index()].parent = Some(common);
+        doc.nodes[c2.index()].next_sibling = Some(c1);
+
+        let _ = doc.compare_document_position(orphan_a, orphan_b);
+    }
+
+    #[test]
+    fn clone_node_invalid_handle_returns_none() {
+        let mut doc = Document::new();
+        let victim = doc.create_element(Namespace::Html, "div", vec![]);
+        doc.append_child(doc.root(), victim);
+        assert!(doc.remove_node(victim));
+        assert_eq!(doc.clone_node(victim, true), None);
+        assert_eq!(doc.clone_node(victim, false), None);
     }
 
     #[test]
