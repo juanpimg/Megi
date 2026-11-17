@@ -1048,12 +1048,12 @@ pub fn execute_scripts(
                 let mut total = total_module_bytes
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
-                *total = total.saturating_add(text.len());
-                if *total > max_total_module_bytes {
+                if total.saturating_add(text.len()) > max_total_module_bytes {
                     return Err(js::JsError::ModuleNotFound(format!(
                         "module graph exceeds max_total_bytes={max_total_module_bytes}"
                     )));
                 }
+                *total = total.saturating_add(text.len());
                 Ok(text)
             },
         ));
