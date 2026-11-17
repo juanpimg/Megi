@@ -1083,9 +1083,7 @@ impl Document {
     /// already a `NodeKind::Text` node (per WHATWG HTML §13.2.6.1 "insert a character").
     pub fn append_text(&mut self, parent_id: NodeId, text: &str) -> Option<NodeId> {
         // Guard against stale/foreign handles (issue #676).
-        if self.try_node(parent_id).is_none() {
-            return None;
-        }
+        self.try_node(parent_id)?;
         let parent_id = self.template_contents_target(parent_id);
         if !self.can_have_children(parent_id) {
             return None;
@@ -1107,11 +1105,13 @@ impl Document {
     /// Inserts text immediately before `reference_sibling_id`, coalescing with the
     /// node immediately preceding `reference_sibling_id` if it is already `NodeKind::Text`
     /// (per WHATWG HTML §13.2.6.1 foster-parented character insertion).
-    pub fn insert_text_before(&mut self, reference_sibling_id: NodeId, text: &str) -> Option<NodeId> {
+    pub fn insert_text_before(
+        &mut self,
+        reference_sibling_id: NodeId,
+        text: &str,
+    ) -> Option<NodeId> {
         // Guard against stale/foreign handles (issue #676).
-        if self.try_node(reference_sibling_id).is_none() {
-            return None;
-        }
+        self.try_node(reference_sibling_id)?;
         if let Some(prev_id) = self.node(reference_sibling_id).prev_sibling
             && let NodeKind::Text(ref mut existing) = self.node_mut(prev_id).kind
         {
@@ -1166,13 +1166,15 @@ impl Document {
     /// call stack.
     pub fn clone_node(&mut self, node_id: NodeId, deep: bool) -> Option<NodeId> {
         // Guard against stale/foreign handles (issue #676).
-        if self.try_node(node_id).is_none() {
-            return None;
-        }
+        self.try_node(node_id)?;
         // Bound clone amplification (issue #678): if the subtree is too large to
         // safely clone, fall back to a shallow clone instead of risking arena
         // exhaustion / panic.
-        let deep = if deep { self.subtree_size(node_id) <= MAX_CLONE_NODES } else { false };
+        let deep = if deep {
+            self.subtree_size(node_id) <= MAX_CLONE_NODES
+        } else {
+            false
+        };
         let cloned_root = self.clone_node_shallow(node_id);
 
         // Work stack of `(source, clone, deep)` frames. Template contents always get
@@ -1606,7 +1608,9 @@ impl Document {
         }
         // Doctype placement: at most one, and it must be a direct child of the Document.
         if doctype_count > 1 {
-            return Err(format!("expected at most one Doctype, found {doctype_count}"));
+            return Err(format!(
+                "expected at most one Doctype, found {doctype_count}"
+            ));
         }
         if doctype_count == 1 && !doctype_parent_is_root {
             return Err("Doctype must be a direct child of the Document".to_owned());
@@ -2430,7 +2434,9 @@ impl Document {
         if !self.can_have_children(parent_id) {
             return Err(DomError::CannotHaveChildren(parent_id));
         }
-        Ok(self.append_text(parent_id, text).unwrap_or_else(|| self.create_text_node(text)))
+        Ok(self
+            .append_text(parent_id, text)
+            .unwrap_or_else(|| self.create_text_node(text)))
     }
 
     /// Replaces every child of `parent_id` with `new_children`, in order

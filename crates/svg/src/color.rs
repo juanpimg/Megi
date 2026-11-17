@@ -155,7 +155,8 @@ fn named_color(name: &str) -> Option<Color> {
         "aqua" | "cyan" => Color::rgba(0, 255, 255, 255),
         "orange" => Color::rgba(255, 165, 0, 255),
         "transparent" => Color::TRANSPARENT,
-        "currentcolor" => Color::BLACK,
+        // `currentcolor` is handled by parse_paint, which resolves it against the
+        // inherited `color` property (#1276).
         _ => return None,
     };
     Some(color)

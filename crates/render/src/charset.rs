@@ -144,16 +144,22 @@ fn charset_from_meta(bytes: &[u8]) -> Option<String> {
     let mut search_start = 0;
     while let Some(meta_pos) = haystack[search_start..].find("<meta") {
         let meta_start = search_start + meta_pos;
-        // Find the end of the meta tag.
-        let tag_end = haystack[meta_start..]
-            .find('>')
-            .map(|i| meta_start + i)
-            .unwrap_or(haystack.len());
-        let tag = &haystack[meta_start..tag_end + 1];
+        // A `<meta` without a closing `>` is truncated input: stop scanning instead of
+        // slicing one byte past the end of the window (#1212).
+        let Some(i) = haystack[meta_start..].find('>') else {
+            break;
+        };
+        let tag_end = meta_start + i;
+        let tag = &haystack[meta_start..=tag_end];
         if let Some(charset_pos) = tag.find("charset") {
             let rest = &tag[charset_pos + "charset".len()..];
             let rest = rest.trim_start();
-            let rest = rest.strip_prefix('=')?;
+            // A `charset` substring without `=` (e.g. content="charset ...") is not a
+            // declaration: try the next `<meta>` rather than aborting the whole scan.
+            let Some(rest) = rest.strip_prefix('=') else {
+                search_start = tag_end + 1;
+                continue;
+            };
             let rest = rest.trim_start_matches([' ', '"', '\'']);
             let label: String = rest
                 .chars()
@@ -198,6 +204,24 @@ mod unit_tests {
         let decoded = decode_html(b"\xEF\xBB\xBF<p>hi</p>", "text/html").expect("decode");
         assert_eq!(decoded.text, "<p>hi</p>");
         assert_eq!(decoded.charset, "utf-8");
+    }
+
+    #[test]
+    fn unterminated_meta_tag_does_not_panic() {
+        // A truncated `<meta` used to slice one byte past the prescan window (#1212).
+        let decoded = decode_html(b"<!DOCTYPE html><meta charset=utf-8", "text/html")
+            .expect("truncated meta must not panic");
+        assert_eq!(decoded.charset, "utf-8");
+    }
+
+    #[test]
+    fn charset_substring_without_equals_does_not_abort_scan() {
+        let decoded = decode_html(
+            b"<meta name=\"x\" content=\"charset utf-8\"><meta charset=windows-1252>",
+            "text/html",
+        )
+        .expect("scan must continue past a non-declaration");
+        assert_eq!(decoded.charset, "windows-1252");
     }
 
     #[test]

@@ -434,6 +434,30 @@ fn script_load_attempts_are_capped_even_when_every_load_fails() {
 }
 
 #[test]
+fn repeated_classic_script_src_executes_once_per_element() {
+    let dir = std::env::temp_dir().join(format!("megi-script-repeat-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    std::fs::write(dir.join("counter.js"), "window.n = (window.n || 0) + 1;").expect("write js");
+    let document = dir.join("index.html");
+    std::fs::write(
+        &document,
+        "<!DOCTYPE html><body>\
+         <script src='counter.js'></script>\
+         <script src='counter.js'></script>\
+         <script>document.body.setAttribute('data-count', String(window.n))</script></body>",
+    )
+    .expect("write document");
+    let output = render_url(&file_url(&document), &options()).expect("render");
+    assert_eq!(
+        output.stats.scripts_executed, 3,
+        "two classic external scripts plus the inline check must all execute (#1217): {:?}",
+        output.stats.warnings
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn failed_script_attempts_do_not_starve_a_valid_one() {
     // `max_scripts` bounds executions and `max_script_attempts` bounds fetches: two failing
     // URLs followed by a valid script must still execute it (a single shared counter with

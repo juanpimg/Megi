@@ -246,14 +246,11 @@ pub fn decode_gzip(body: &[u8], limits: CompressionLimits) -> Result<Vec<u8>, Fe
         position = skip_zero_terminated(body, position, "FCOMMENT")?;
     }
     if flags & 0x02 != 0 {
-        position = position
-            .checked_add(2)
-            .ok_or_else(|| FetchError::Decompression("gzip FHCRC offset overflow".to_owned()))?;
-        if position > body.len() {
-            return Err(FetchError::Decompression(
-                "truncated gzip FHCRC field".to_owned(),
-            ));
-        }
+        // FHCRC is accepted but the header CRC-16 is not verified (#1265);
+        // reject streams that set it rather than silently skipping the field.
+        return Err(FetchError::Decompression(
+            "gzip FHCRC is not supported".to_owned(),
+        ));
     }
     let trailer_start = body.len() - 8;
     if position >= trailer_start {

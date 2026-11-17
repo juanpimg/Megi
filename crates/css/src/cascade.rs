@@ -293,7 +293,11 @@ impl RuleIndex {
                 Some(RuleKey::Class(class)) => {
                     self.by_class.entry(class).or_default().push(candidate);
                 }
-                Some(RuleKey::Tag(tag)) => self.by_tag.entry(tag.to_ascii_lowercase()).or_default().push(candidate),
+                Some(RuleKey::Tag(tag)) => self
+                    .by_tag
+                    .entry(tag.to_ascii_lowercase())
+                    .or_default()
+                    .push(candidate),
                 // No usable key (universal or pseudo-class-only rightmost compound): the
                 // selector is evaluated for every element.
                 None => self.slow.push(candidate),
@@ -1606,11 +1610,8 @@ mod tests {
 
         let mut doc = Document::new();
         let html = doc.create_element(Namespace::Html, "html", vec![]);
-        let target = doc.create_element(
-            Namespace::Html,
-            "div",
-            vec![Attribute::new("style", style)],
-        );
+        let target =
+            doc.create_element(Namespace::Html, "div", vec![Attribute::new("style", style)]);
         doc.append_child(doc.root(), html);
         doc.append_child(html, target);
 

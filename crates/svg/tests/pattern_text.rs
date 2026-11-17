@@ -365,3 +365,18 @@ fn extreme_pattern_tiles_hit_the_budget_instead_of_overflowing() {
         "{error:?}"
     );
 }
+
+#[test]
+fn aggregate_glyph_budget_is_enforced() {
+    // 6 texts × 10k chars = 60k glyphs, over the 50k global budget (#432), while
+    // each individual text stays within MAX_TEXT_CHARS and the count within MAX_TEXTS.
+    let mut body = String::new();
+    let text = "x".repeat(10_000);
+    for _ in 0..6 {
+        body.push_str(&format!("<text x='1' y='1' font-size='2'>{text}</text>"));
+    }
+    let source = svg_doc(10.0, 10.0, &body);
+    let error =
+        render_svg(source.as_bytes(), &SvgOptions::default()).expect_err("aggregate glyph budget");
+    assert!(matches!(error, SvgError::Limit(_)), "{error:?}");
+}
