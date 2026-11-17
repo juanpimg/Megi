@@ -78,6 +78,65 @@ def read_gate(root: Path) -> dict[str, str]:
     return dict(progress.get("gate", {}))
 
 
+def _strip_rust_comments_and_strings(source: str) -> str:
+    """Blank out Rust line/block comments and string/char literals, preserving offsets."""
+    out = list(source)
+    n = len(source)
+    i = 0
+    in_comment = None  # "//" or "/*"
+    quote = None
+    while i < n:
+        if in_comment == "//":
+            if source[i] == "\n":
+                in_comment = None
+            else:
+                out[i] = " "
+            i += 1
+            continue
+        if in_comment == "/*":
+            if source.startswith("*/", i):
+                out[i] = out[i + 1] = " "
+                i += 2
+                in_comment = None
+            else:
+                if source[i] != "\n":
+                    out[i] = " "
+                i += 1
+            continue
+        if quote:
+            if source[i] == "\\":
+                out[i] = " "
+                if i + 1 < n and source[i + 1] != "\n":
+                    out[i + 1] = " "
+                i += 2
+                continue
+            if source[i] == quote:
+                out[i] = " "
+                quote = None
+            else:
+                if source[i] != "\n":
+                    out[i] = " "
+            i += 1
+            continue
+        if source.startswith("//", i):
+            out[i] = out[i + 1] = " "
+            in_comment = "//"
+            i += 2
+        elif source.startswith("/*", i):
+            out[i] = out[i + 1] = " "
+            in_comment = "/*"
+            i += 2
+        elif source[i] == '"':
+            # Only double-quoted strings; `'` is used for Rust lifetimes/chars and must not
+            # open a string state (that would swallow the rest of the file).
+            out[i] = " "
+            quote = '"'
+            i += 1
+        else:
+            i += 1
+    return "".join(out)
+
+
 def verify_evidence(cap: dict, root: Path, gate: dict[str, str]) -> tuple[bool, str]:
     """Return (verified, reason). `done` requires evidence that machines can check."""
     state = str(cap.get("state", ""))
@@ -111,8 +170,20 @@ def verify_evidence(cap: dict, root: Path, gate: dict[str, str]) -> tuple[bool, 
         if not fn:
             return False, "evidence test: falta ::nombre_del_test"
         source = path.read_text(encoding="utf-8", errors="ignore")
-        if not re.search(r"fn\s+" + re.escape(fn) + r"\b", source):
+        # Strip comments and string literals so a `fn name` mentioned in prose cannot
+        # verify a capability (#1391).
+        code = _strip_rust_comments_and_strings(source)
+        pattern = re.compile(r"fn\s+" + re.escape(fn) + r"\b")
+        match = pattern.search(code)
+        if not match:
             return False, f"no aparece fn {fn} en {path_text}"
+        # A real test needs `#[test]`/`#[tokio::test]`, unless the file lives under a
+        # `tests/` directory (integration-test files need no attribute).
+        in_tests_dir = "tests" in path.parts
+        if not in_tests_dir:
+            prefix = code[: match.start()]
+            if not re.search(r"#\[(?:tokio::)?test\]\s*(?:#\[[^\]]*\]\s*)*$", prefix):
+                return False, f"{fn} no está marcado con #[test] en {path_text}"
         return True, f"test {path_text}::{fn}"
 
     if kind == "fixture":

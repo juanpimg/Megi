@@ -250,6 +250,28 @@ class ValidatorHardeningTests(unittest.TestCase):
         )
         self.assertFalse(ok)
 
+    def test_test_evidence_rejects_comment_and_unannotated_fn(self) -> None:
+        # #1391: `verify_evidence` used to accept any `fn <name>` substring, so a commented-out
+        # function or a plain helper (no `#[test]`, outside a tests/ dir) could "verify" a done
+        # capability. Both must be rejected.
+        (self.root / "crates/example/tests/comments.rs").write_text(
+            "// fn commented_out_test() {}\nlet s = \"fn string_test() {}\";\n",
+            encoding="utf-8",
+        )
+        (self.root / "crates/example/src").mkdir(parents=True, exist_ok=True)
+        (self.root / "crates/example/src/lib.rs").write_text(
+            "fn plain_helper() {}\n", encoding="utf-8"
+        )
+        for evidence in (
+            "test:crates/example/tests/comments.rs::commented_out_test",
+            "test:crates/example/tests/comments.rs::string_test",
+            "test:crates/example/src/lib.rs::plain_helper",
+        ):
+            ok, reason = update_coverage.verify_evidence(
+                {"state": "done", "evidence": evidence}, self.root, GATE_PASS
+            )
+            self.assertFalse(ok, f"{evidence} must not verify a capability: {reason}")
+
     def test_non_done_requires_none_evidence(self) -> None:
         ok, _ = update_coverage.verify_evidence(
             {"state": "partial", "evidence": "test:crates/example/tests/feature.rs::real_capability_test_extended"},
