@@ -32,12 +32,12 @@ publica la **baseline de rendimiento vigente**.
 - Cargas en memoria (`crates/bench/src/generators.rs`): E2E, efectos de capa,
   save-png, decode PNG/JPEG/GIF/WebP (VP8L y VP8 lossy), filas nuevas de fases
   PNG (`filter`/`deflate`/`encode`) y `render/html-to-png`.
-- `Instant`, `--warmup 1`, `--iterations 5` (heavy 3); mediana de 5 pasadas
+- `Instant`, `--warmup 1`, `--iterations 5` (heavy 3); mediana de 7 pasadas
   válidas; canónica `./tools/bench.sh`; artefactos JSON por pasada.
 - Render/shell: 10 ejecuciones intercaladas con `--json`/md5; fixtures propias
   en `target/bench-r32/feature/`.
 - Máquina: i7-12700H, 15 GiB, CachyOS 7.3.1, rustc 1.99.1 release; ACPI
-  `performance`; load 1,0–1,83 durante las mediciones.
+  `performance`; load 8,1–13,0 durante la ventana vigente (ver cabecera).
 
 ## 2. Catálogo
 

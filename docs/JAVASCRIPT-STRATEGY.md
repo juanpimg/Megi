@@ -72,7 +72,7 @@ Megi ha cerrado funcionalmente la Fase 4 (renderizado) y tiene un pipeline de na
 #### B1. **Boa** (pure Rust) — `boa_engine`
 
 - Repo: <https://github.com/boa-dev/boa> · crate: <https://crates.io/crates/boa_engine> · docs: <https://docs.rs/boa_engine>
-- **Versión evaluada**: `0.21.1` — **MSRV Rust 1.88.0**, exactamente el MSRV de Megi. (`0.22.0` ya exige Rust 1.91.0: si se sube la MSRV, se puede actualizar.)
+- **Versión evaluada**: `0.21.1` — **MSRV Rust 1.88.0**, exactamente el MSRV de Megi en ese momento. (`0.22.0` ya exige Rust 1.91.0: si se sube la MSRV, se puede actualizar.) *(evaluación inicial de la ADR, superada por 0.22/MSRV 1.91)*
 - **Licencia**: **Unlicense OR MIT** (`LICENSE-MIT` + `LICENSE-UNLICENSE` en el repo; crates.io lo declara `Unlicense OR MIT`). Compatible con la doble licencia de Megi eligiendo MIT, pero la opción Unlicense debe declararse en la política §3.1.
 - **Madurez/cobertura**: motor *experimental* pero activo, **>90 % de la última spec ECMAScript** según su README; conformance pública en <https://boajs.dev/conformance>; ast/engine/string/gc separados (`boa_ast`, `boa_engine`, `boa_string`, `boa_gc`).
 - **Tamaño/compilación**: pure Rust, sin toolchain C/C++ ni binarios precompilados; añade árbol de crates (boa_gc, icu, etc.) y tiempo de compilación, pero es **reproducible offline** una vez en el registry y no requiere *link-time* de librerías del sistema.
@@ -110,7 +110,7 @@ Megi ha cerrado funcionalmente la Fase 4 (renderizado) y tiene un pipeline de na
 | Licencia | MIT/Apache propia | **Unlicense OR MIT** | **MIT** (QuickJS + rquickjs) | V8 BSD / mozjs MPL-2.0 | MIT/Apache |
 | `unsafe` en *nuestro* código | Ninguno | **Ninguno** (safe API) | Ninguno en nuestro código; FFI unsafe encapsulado | Ninguno en nuestro código; FFI/`unsafe` en crates | Ninguno |
 | Compilación / tamaño | std puro | **Pure Rust, sin C**; árbol de crates medio-grande | Requiere `cc` + C; runtime pequeño | C++/prebuilt, enorme | std puro |
-| MSRV 1.88 | — | **Boa 0.21.1 = 1.88** (0.22 pide 1.91) | rquickjs 0.14 = 1.87 | variable | — |
+| MSRV 1.88 (evaluación inicial de la ADR, superada por 0.22/MSRV 1.91) | — | **Boa 0.21.1 = 1.88** (0.22 pide 1.91) | rquickjs 0.14 = 1.87 | variable | — |
 | Madurez | 0 | Experimental, activo | Maduro (QuickJS), bindings activos | Muy maduro | N/A |
 | Rendimiento | — | Medio (mejora continua) | **Alto** (QuickJS) | **Máximo** (V8/SpiderMonkey) | N/A |
 | Encaje con la política del repo | Total | **Alto** (componente externo, núcleo propio) | Alto (añade C al build) | Bajo (runtime gigante) | No (no es navegador) |
@@ -131,15 +131,15 @@ Fundamento (contexto de la recomendación original):
 - **Encaje con la filosofía**: Megi sigue implementando desde cero el núcleo del navegador (DOM/HTML/CSS/layout/paint/render/shell). El motor ECMAScript es un **componente de lenguaje**, no el núcleo; usar un motor existente evita años de trabajo y es coherente con §3.1 (componentes de bajo nivel).
 - **Pure Rust y `#![forbid(unsafe_code)]`**: sin toolchain C ni FFI en nuestro código.
 - **Licencia**: Unlicense OR MIT, compatible con `MIT OR Apache-2.0` eligiendo MIT; declarada en §3.1.
-- **MSRV**: `boa_engine 0.21.1` declara **Rust 1.88.0**, exactamente el MSRV del workspace; fijar `0.21.x` hasta que se decida subir la MSRV (0.22 exige 1.91).
+- **MSRV**: `boa_engine 0.21.1` declaraba **Rust 1.88.0**, exactamente el MSRV del workspace en ese momento; fijar `0.21.x` hasta que se decida subir la MSRV (0.22 exige 1.91). *(evaluación inicial de la ADR, superada por 0.22/MSRV 1.91)*
 - **Cobertura**: >90 % de la spec actual, suficiente para el alcance completo y las páginas reales; si resultara insuficiente, los bindings permiten migrar a QuickJS (§9).
 
 **Consecuencias inmediatas de la decisión**:
 
-- `Cargo.toml` del workspace/`crates/js`: Boa 0.21.x como dependencia **no opcional por defecto** (feature `js` default); MSRV/CI siguen en 1.88, pero el build por defecto crece y compila Boa.
+- `Cargo.toml` del workspace/`crates/js`: Boa 0.21.x como dependencia **no opcional por defecto** (feature `js` default); MSRV/CI seguían en 1.88 en ese momento, pero el build por defecto crece y compila Boa. *(evaluación inicial de la ADR, superada por 0.22/MSRV 1.91)*
 - CI: el job `quality` compila/tests **con JS por defecto**; se añade un job **`minimal`** (`cargo test --workspace --no-default-features`) que garantiza el build std-only; el job MSRV cubre ambas configuraciones.
 - `crates/render`/`crates/shell` habilitan la ejecución JS por defecto y deben poder deshabilitarla con `--no-default-features`.
-- Fase 6 pasa a **EN IMPLEMENTACIÓN**; WP-6.1–6.4 y WP-A/WP-B ya HECHOS (árbol 3.904/3.904 sin allowlist), pendientes módulos ES, memoria real y contabilidad fina.
+- Fase 6 quedó **COMPLETA** (WP-6.1–6.4, WP-A/WP-B, módulos ES, TLA, fetch, workers y APIs de navegador HECHOS; árbol 3.904/3.904 sin allowlist). Siguen pendientes la memoria real/contabilidad fina y los tests de conformidad JS/DOM.
 
 ### 4.1 Reglas de integración propuestas
 
@@ -204,7 +204,7 @@ Estimaciones en días de un agente full-time, con tests y revisión; dependencia
 
 | WP | Objetivo | Dep. | Días | Criterio de aceptación |
 |---|---|---|---:|---|
-| **WP-6.1** | Crate `crates/js` + feature `js` **default ON**; realm Boa (`Context`), `console` mínimo, presupuesto de instrucciones y errores tipados; CI con JS por defecto + job `--no-default-features` | — | 3 | `cargo test -p js`; `cargo test --workspace` (con JS) y `cargo test --workspace --no-default-features` (mínimo) verdes; MSRV 1.88 en ambas configuraciones |
+| **WP-6.1** | Crate `crates/js` + feature `js` **default ON**; realm Boa (`Context`), `console` mínimo, presupuesto de instrucciones y errores tipados; CI con JS por defecto + job `--no-default-features` | — | 3 | `cargo test -p js`; `cargo test --workspace` (con JS) y `cargo test --workspace --no-default-features` (mínimo) verdes; MSRV 1.88 en ambas configuraciones (evaluación inicial de la ADR, superada por 0.22/MSRV 1.91) |
 | **WP-6.2** | Bindings DOM core: tabla lateral por realm, wrappers `Node`/`Document`/`Element`/`Text`, generación/stale, `DomError`→excepción JS | 6.1 | 6 | Micro-tests JS↔DOM (get/set `id`, atributos, `textContent`, hijos); wrappers invalidados tras `remove_node`; sin `unsafe` en `crates/js` |
 | **WP-6.3** | Ejecución de `<script>` parser-inserted + `document.write`/`innerHTML` usando la API existente | 6.2 | 5 | **`cargo run -p test_harness -- --summary`**: suites `scripted_*` dejan de estar en la allowlist; árbol **3.904/3.904**; gate PASS con allowlist sólo de tokenizer |
 | **WP-6.4** | `EventTarget` mínimo + timers/microtareas + integración con el event loop de `render`/`shell` | 6.2, 6.3 | 5 | `setTimeout`/`Promise` ordenados; tests de eventos sintéticos; un script con timer acaba en el pixel esperado |
@@ -212,9 +212,9 @@ Estimaciones en días de un agente full-time, con tests y revisión; dependencia
 | **WP-6.6** | Endurecimiento: presupuestos de tiempo/memoria, fuzz de bindings, aislamiento entre realms | 6.3–6.5 | 3 | Fuzz target de bindings en CI; script malicioso (bucle/alloc) interrumpido sin tumbar el proceso |
 | **WP-6.7** | Integración con `shell` (ventana con JS) y documentación final de Fase 6 | 6.4–6.6 | 3 | `megi` ejecuta una página con JS en ventana y en `--screenshot`; docs + gate verdes |
 
-**Total: 25–30 días-persona** (alcance completo aceptado: WP-6.1–6.7). Hito intermedio: `scripted_*` verdes al cerrar WP-6.3 (≈14 días desde el inicio). Boa 0.21.x; no aplica la variante QuickJS, que queda sólo como plan de migración.
+**Total: 25–30 días-persona** (alcance completo aceptado: WP-6.1–6.7). Hito intermedio: `scripted_*` verdes al cerrar WP-6.3 (≈14 días desde el inicio). Boa 0.21.x (evaluación inicial de la ADR, superada por 0.22/MSRV 1.91); no aplica la variante QuickJS, que queda sólo como plan de migración.
 
-**Estado a ronda 17**: `WP-6.1` **HECHO**; `WP-6.2` **HECHO en su parte host** (bindings core en `crates/js` + integración en `render`: scripts clásicos post-parseo con budgets/caps, microtasks/timers, console y re-render del DOM mutado; 7 fixtures `js_*`). `WP-6.3`/`WP-6.4` parser-inserted/`document.write` para `scripted_*` **HECHO en ronda 11** (árbol 3.904/3.904), eventos/timers (WP-A) **HECHO en ronda 10**, CSSOM/`querySelector` (WP-B) **HECHO en ronda 11** y event loop presupuestado en `render`. Eventos avanzados (ronda 12) **HECHOS** (`currentTarget`/`eventPhase`, `once`/`passive`, handlers inline, excepciones capturadas). Siguientes: módulos ES, memoria real, eventos `resize`/`scroll`/`change`, `WP-6.6` fuzz y `WP-6.7` shell.
+**Estado a ronda 17** (registro histórico; el estado actual está en la sección "Estado actual" del inicio de este documento): `WP-6.1` **HECHO**; `WP-6.2` **HECHO en su parte host** (bindings core en `crates/js` + integración en `render`: scripts clásicos post-parseo con budgets/caps, microtasks/timers, console y re-render del DOM mutado; 7 fixtures `js_*`). `WP-6.3`/`WP-6.4` parser-inserted/`document.write` para `scripted_*` **HECHO en ronda 11** (árbol 3.904/3.904), eventos/timers (WP-A) **HECHO en ronda 10**, CSSOM/`querySelector` (WP-B) **HECHO en ronda 11** y event loop presupuestado en `render`. Eventos avanzados (ronda 12) **HECHOS** (`currentTarget`/`eventPhase`, `once`/`passive`, handlers inline, excepciones capturadas). Siguientes: módulos ES, memoria real, eventos `resize`/`scroll`/`change`, `WP-6.6` fuzz y `WP-6.7` shell.
 
 ### 6.1 Qué NO hacer en Fase 6
 
@@ -233,7 +233,7 @@ Estimaciones en días de un agente full-time, con tests y revisión; dependencia
 | **Servo** | Embebe **SpiderMonkey** mediante el crate `mozjs` mantenido por el equipo de Servo (bindings `mozjs-sys` + `mozjs`; sigue `mozilla-esr153`/SpiderMonkey 153) | <https://github.com/servo/mozjs> · <https://github.com/servo/servo> · crate `mozjs` 0.26.14, **MPL-2.0** (crates.io). Megi no copia código de Servo; sólo se cita como referencia. |
 | **Ladybird** | Motor **LibJS propio en C++** dentro del navegador (su árbol `Libraries/LibJS` incluye parser, runtime y realms; p. ej. `Libraries/LibJS/Runtime/Realm.cpp`) | <https://github.com/LadybirdBrowser/ladybird> (rutas `Libraries/LibJS/CMakeLists.txt` y `Libraries/LibJS/Runtime/Realm.cpp` verificadas HTTP 200). Megi **no** copia su código. |
 | **Blitz** (DioxusLabs) | Renderizador HTML/CSS modular; su README indica que **aún no tiene bindings JS** («We don't yet have Blitz bindings for other languages (JavaScript, Python, etc.) but would accept contributions») | <https://github.com/DioxusLabs/blitz> (README verificado). No hay `packages/blitz-script` en `main` (404). Se cita como referencia de render; no se usa. |
-| **Boa** | Motor ECMAScript pure Rust, >90 % de la spec actual, experimental y activo; usado por otros proyectos Rust como librería embebida | <https://github.com/boa-dev/boa>, <https://boajs.dev/conformance>, crate 0.21.1 MSRV 1.88 (crates.io). |
+| **Boa** | Motor ECMAScript pure Rust, >90 % de la spec actual, experimental y activo; usado por otros proyectos Rust como librería embebida | <https://github.com/boa-dev/boa>, <https://boajs.dev/conformance>, crate 0.21.1 MSRV 1.88 (crates.io; evaluación inicial de la ADR, superada por 0.22/MSRV 1.91). |
 | **QuickJS** | Motor C pequeño y embebible, casi 100 % Test262, licencia MIT (~620 KB de tarball fuente) | <https://bellard.org/quickjs/>, <https://github.com/bellard/quickjs>; bindings `rquickjs` 0.14, MIT, MSRV 1.87. |
 | **V8** | Runtime C++ de Chromium; integrable vía `deno_core` (wrapper MIT, V8 BSD) | <https://github.com/v8/v8>, <https://github.com/denoland/deno>, crate `deno_core` 0.413.0. |
 

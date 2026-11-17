@@ -25,7 +25,7 @@
 
 [![Capability coverage](docs/status/coverage.svg)](docs/status/coverage.html) · [Progress map (checklist histórico)](docs/status/progress.svg)
 
-**Pre-Alpha `v0.1.0`** · cobertura de capacidades verificable: ver **[`PROGRESS.md`](PROGRESS.md)** y **[`coverage.html`](docs/status/coverage.html)** · **2.300+ tests** (0 fallos) · gate de conformidad **PASS** (4 suites) · **14 crates** · **171.000+ líneas de Rust** · **14/14** crates con `#![forbid(unsafe_code)]`.
+**Pre-Alpha `v0.1.0`** · cobertura de capacidades verificable: ver **[`PROGRESS.md`](PROGRESS.md)** y **[`coverage.html`](docs/status/coverage.html)** · tests y líneas de Rust **actualizados en [`PROGRESS.md`](PROGRESS.md)** (badges superiores) · gate de conformidad **PASS** (4 suites) · **14 crates** · **14/14** crates con `#![forbid(unsafe_code)]`.
 
 > **Estado Pre-Alpha (`v0.1.0`)**: Megi ya es compilable y ejecutable como navegador de escritorio (`megi`) y pipeline CLI (`render`), con HTML5, CSS3 (Flexbox/Grid/Container Queries/Layers/bidi), JS (Boa 0.22 + ES modules + `fetch`), SVG/SMIL e imágenes (PNG/JPEG/GIF/WebP). Aún en fase Pre-Alpha: animaciones CSS `@keyframes`/`transition` en runtime, shaping de scripts complejos (árabe/hebreo/tailandés/CJK) y aislamiento multiproceso por pestaña llegarán en la fase Alpha.
 > El porcentaje del antiguo mapa de fases era un promedio de estimaciones y **no** indicaba si el navegador es usable. Ahora el titular es `capacidades implementadas / conocidas`, con evidencia verificable y la lista de pendientes en **[`coverage.html`](docs/status/coverage.html)** (reglas en [`COVERAGE.md`](docs/status/COVERAGE.md)). El aspecto real en webs se comprueba con [`real_site_check.py`](tools/real_site_check.py) y se publica en **[`real-sites.html`](docs/status/real-sites.html)** (capturas y avisos reales de `render`).
@@ -50,7 +50,7 @@
   - Integración nativa con el motor ECMAScript **Boa 0.22**.
   - Bindings completos para manipulación del DOM, eventos, temporizadores y Web Workers cooperativos.
 -  **Shell de Escritorio Usable (`crates/shell`)**:
-  - Ventana interactiva nativa (X11/Wayland vía `winit`), soporte para múltiples pestañas, zoom dinámico, historial navegable y modo screenshot *headless* para CI.
+  - Ventana interactiva nativa (X11/Wayland vía `winit`), soporte para múltiples pestañas, zoom dinámico, historial navegable y modo screenshot *headless* para CI. Chrome oscuro con acento, pestañas redondeadas y barra tipo pill; el mismo binario sirve para X11 y Wayland.
 
 ---
 
