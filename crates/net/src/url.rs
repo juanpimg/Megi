@@ -18,11 +18,24 @@
 //! This is deliberately a subset (the crate documents its limitations):
 //! `http:/foo`-style legacy forms are rejected, non-ASCII/IDNA hosts and
 //! percent-encoded hosts are rejected, octal/hexadecimal IPv4 forms are rejected, and
-//! `data:`/`blob:`/`ftp:` schemes are not supported. All fallible operations return
-//! [`UrlError`]; the parser never panics.
+//! `blob:`/`ftp:` schemes are not supported. `data:` URLs are parsed and decoded (see
+//! [`crate::data`]) but are opaque: they have no host or port, cannot be joined against,
+//! and are not CORS- or network-fetchable. All fallible operations return [`UrlError`];
+//! the parser never panics.
 //!
 //! Test vectors are adapted from the WHATWG URL Standard examples and WPT
 //! `url/resources/urltestdata.json` cases that fall inside the supported subset.
+//!
+//! `data:` URLs are parseable and decodable, but opaque (no host, port or relative resolution):
+//!
+//! ```
+//! use net::{Url, decode_data_url};
+//!
+//! let url = Url::parse("data:text/plain,hello%20world")?;
+//! assert_eq!(url.scheme().as_str(), "data");
+//! assert_eq!(decode_data_url(&url)?.text(), Some("hello world"));
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
 
 use std::fmt;
 
@@ -42,7 +55,7 @@ pub enum Scheme {
 }
 
 impl Scheme {
-    /// Returns the lowercase scheme name (`"http"`, `"https"` or `"file"`).
+    /// Returns the lowercase scheme name (`"http"`, `"https"`, `"file"` or `"data"`).
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Http => "http",
