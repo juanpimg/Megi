@@ -44,6 +44,29 @@ pub fn is_rtl_or_bidi_char(ch: char) -> bool {
     )
 }
 
+/// Explicit bidi formatting controls (LRM/RLM, LRE/RLE, LRO/RLO, LRI/RLI/PDI).
+pub fn is_bidi_control(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{200E}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2066}'..='\u{2069}'
+    )
+}
+
+/// Simplified X1–X8: LRO/RLO force the whole run's direction. Controls are omitted
+/// from the visible text by the tokenizer, but their direction must still apply (#1448).
+pub fn forced_direction_from_controls(text: &str) -> Option<Direction> {
+    for ch in text.chars() {
+        match ch {
+            '\u{202D}' => return Some(Direction::Ltr),
+            '\u{202E}' => return Some(Direction::Rtl),
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Returns `true` if any character in `text` requires bidi processing.
 #[inline]
 pub fn contains_rtl_or_bidi(text: &str) -> bool {
@@ -444,5 +467,27 @@ mod tests {
             "(a)".chars().rev().map(mirror_char).collect::<String>()
         );
         assert_eq!(word_to_visual("hello", 0, None), "hello");
+    }
+}
+
+#[cfg(test)]
+mod bidi_control_tests {
+    use super::*;
+
+    #[test]
+    fn lro_rlo_controls_are_recognized_and_strippable() {
+        assert!(is_bidi_control('\u{202E}'));
+        assert!(is_bidi_control('\u{202D}'));
+        assert!(is_bidi_control('\u{2066}'));
+        assert!(!is_bidi_control('a'));
+        assert_eq!(
+            forced_direction_from_controls("ab\u{202E}cd"),
+            Some(Direction::Rtl)
+        );
+        assert_eq!(
+            forced_direction_from_controls("ab\u{202D}cd"),
+            Some(Direction::Ltr)
+        );
+        assert_eq!(forced_direction_from_controls("abcd"), None);
     }
 }
