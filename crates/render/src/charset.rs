@@ -135,15 +135,47 @@ mod tests {
     }
 }
 
+/// Finds `charset` only where it starts an attribute, not inside another attribute's value.
+fn find_charset_attribute(tag: &str) -> Option<usize> {
+    let mut from = 0;
+    while let Some(pos) = tag[from..].find("charset") {
+        let index = from + pos;
+        if index == 0 || tag.as_bytes()[index - 1].is_ascii_whitespace() {
+            return Some(index);
+        }
+        from = index + 1;
+    }
+    None
+}
+
 /// Prescans the first 1024 bytes for `<meta charset>` / `<meta http-equiv>` charset.
 fn charset_from_meta(bytes: &[u8]) -> Option<String> {
     let window = &bytes[..bytes.len().min(META_PRESCAN_BYTES)];
     let lower: Vec<u8> = window.to_ascii_lowercase();
     let haystack = String::from_utf8_lossy(&lower);
-    // Only scan inside <meta ...> tags.
+    // Only scan inside real `<meta>` tags, skipping comments and tag-like names such as
+    // `<metadata>` so a commented-out declaration cannot win over a later real one (#1450).
     let mut search_start = 0;
-    while let Some(meta_pos) = haystack[search_start..].find("<meta") {
+    loop {
+        if let Some(comment_pos) = haystack[search_start..].find("<!--") {
+            let comment_start = search_start + comment_pos;
+            if let Some(close) = haystack[comment_start + 4..].find("-->") {
+                search_start = comment_start + 4 + close + 3;
+                continue;
+            }
+        }
+        let Some(meta_pos) = haystack[search_start..].find("<meta") else {
+            break;
+        };
         let meta_start = search_start + meta_pos;
+        if haystack
+            .as_bytes()
+            .get(meta_start + 5)
+            .is_some_and(|byte| byte.is_ascii_alphanumeric() || *byte == b'-')
+        {
+            search_start = meta_start + 5;
+            continue;
+        }
         // A `<meta` without a closing `>` is truncated input: stop scanning instead of
         // slicing one byte past the end of the window (#1212).
         let Some(i) = haystack[meta_start..].find('>') else {
@@ -151,7 +183,7 @@ fn charset_from_meta(bytes: &[u8]) -> Option<String> {
         };
         let tag_end = meta_start + i;
         let tag = &haystack[meta_start..=tag_end];
-        if let Some(charset_pos) = tag.find("charset") {
+        if let Some(charset_pos) = find_charset_attribute(tag) {
             let rest = &tag[charset_pos + "charset".len()..];
             let rest = rest.trim_start();
             // A `charset` substring without `=` (e.g. content="charset ...") is not a
@@ -260,5 +292,28 @@ mod unit_tests {
         let decoded = decode_html(b"<p>caf\xE9</p>", "text/html; charset=latin1").expect("decode");
         assert_eq!(decoded.charset, "windows-1252");
         assert!(decoded.text.contains('é'));
+    }
+}
+
+#[cfg(test)]
+mod charset_prescan_tests {
+    use super::*;
+
+    #[test]
+    fn commented_meta_charset_is_ignored() {
+        let bytes = b"<!-- <meta charset=windows-1252> --><meta charset=utf-8>";
+        assert_eq!(charset_from_meta(bytes).as_deref(), Some("utf-8"));
+    }
+
+    #[test]
+    fn charset_inside_another_attribute_is_ignored() {
+        let bytes = b"<meta name=\"charset=utf-8\"><meta charset=windows-1252>";
+        assert_eq!(charset_from_meta(bytes).as_deref(), Some("windows-1252"));
+    }
+
+    #[test]
+    fn metadata_tag_is_not_a_meta_tag() {
+        let bytes = b"<metadata charset=utf-8><meta charset=windows-1252>";
+        assert_eq!(charset_from_meta(bytes).as_deref(), Some("windows-1252"));
     }
 }
