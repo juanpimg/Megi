@@ -638,6 +638,99 @@ fn install_globals(context: &mut Context, host: &Rc<RefCell<Host>>) -> Result<()
     Ok(())
 }
 
+/// Builds the `navigator` host object.
+fn build_navigator(context: &mut Context) -> JsObject {
+    let languages = JsArray::from_iter([JsValue::from(js_string!("en-US"))], context);
+    let plugins = JsArray::from_iter([], context);
+    let mut init = ObjectInitializer::new(context);
+    init.property(js_string!("userAgent"), js_string!("Megi/1.0"), Attribute::all());
+    init.property(js_string!("language"), js_string!("en-US"), Attribute::all());
+    init.property(js_string!("languages"), JsValue::from(languages), Attribute::all());
+    init.property(js_string!("onLine"), JsValue::from(true), Attribute::all());
+    init.property(js_string!("hardwareConcurrency"), JsValue::from(1), Attribute::all());
+    init.property(js_string!("platform"), js_string!("Linux x86_64"), Attribute::all());
+    init.property(js_string!("plugins"), JsValue::from(plugins), Attribute::all());
+    init.function(
+        native(|_this, args, context| {
+            let _ = args;
+            Ok(JsValue::from(true))
+        }),
+        js_string!("sendBeacon"),
+        0,
+    );
+    init.build()
+}
+
+/// Builds the `performance` host object.
+fn build_performance(context: &mut Context) -> JsObject {
+    let mut init = ObjectInitializer::new(context);
+    init.function(
+        native(|_this, _args, _context| {
+            let now = with_host(|host| host.now_ms()).unwrap_or(0);
+            Ok(JsValue::from(now as f64))
+        }),
+        js_string!("now"),
+        0,
+    );
+    init.property(js_string!("timeOrigin"), JsValue::from(0.0_f64), Attribute::all());
+    for name in ["mark", "measure", "getEntries", "getEntriesByName", "getEntriesByType", "clearMarks", "clearMeasures"] {
+        init.function(
+            native(|_this, _args, _context| Ok(JsValue::undefined())),
+            js_string!(name),
+            0,
+        );
+    }
+    init.build()
+}
+
+/// Builds the `crypto` host object.
+fn build_crypto(context: &mut Context) -> JsObject {
+    let mut init = ObjectInitializer::new(context);
+    init.function(
+        native(|_this, args, context| {
+            let array = args.first().cloned().unwrap_or(JsValue::undefined());
+            let obj = array.as_object().ok_or_else(|| js_error("getRandomValues requires a typed array"))?;
+            // Fill with pseudo-random bytes using a simple xorshift seeded by the clock.
+            let mut seed = with_host(|host| host.now_ms()).unwrap_or(12345) as u64;
+            let len = obj.get(js_string!("length"), context).ok().and_then(|v| v.to_number(context).ok()).unwrap_or(0.0) as usize;
+            for i in 0..len {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                let byte = (seed & 0xff) as u8;
+                let _ = obj.set(js_string!(i.to_string()), JsValue::from(byte as i32), false, context);
+            }
+            Ok(array)
+        }),
+        js_string!("getRandomValues"),
+        1,
+    );
+    init.function(
+        native(|_this, _args, _context| {
+            // Generate a v4 UUID from the same xorshift source.
+            let mut seed = with_host(|host| host.now_ms()).unwrap_or(12345) as u64;
+            let mut bytes = [0u8; 16];
+            for b in bytes.iter_mut() {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                *b = (seed & 0xff) as u8;
+            }
+            bytes[6] = (bytes[6] & 0x0f) | 0x40;
+            bytes[8] = (bytes[8] & 0x3f) | 0x80;
+            let hex: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
+            let uuid = format!(
+                "{}-{}-{}-{}-{}",
+                &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32]
+            );
+            Ok(JsValue::from(js_string!(uuid)))
+        }),
+        js_string!("randomUUID"),
+        0,
+    );
+    init.build()
+}
+
 /// Installs History/location, Web Storage and MutationObserver (round 24).
 fn install_browser_features(context: &mut Context) -> Result<(), JsError> {
     for name in [
@@ -696,6 +789,19 @@ fn install_browser_features(context: &mut Context) -> Result<(), JsError> {
             context,
         )
         .map_err(|error| JsError::Internal(error.to_string()))?;
+    let navigator = build_navigator(context);
+    let performance = build_performance(context);
+    let crypto = build_crypto(context);
+    for (name, value) in [
+        ("navigator", JsValue::from(navigator)),
+        ("performance", JsValue::from(performance)),
+        ("crypto", JsValue::from(crypto)),
+    ] {
+        context
+            .global_object()
+            .set(js_string!(name), value, false, context)
+            .map_err(|error| JsError::Internal(error.to_string()))?;
+    }
     Ok(())
 }
 
