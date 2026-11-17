@@ -1062,7 +1062,7 @@ fn decode_scan(
                         if block_col >= blocks_x {
                             continue;
                         }
-                        dequantize(&mut coefficients, quant);
+                        dequantize(&mut coefficients, quant)?;
                         if let Some(reduced_cosine) = reduced_cosine.as_ref() {
                             inverse_dct_reduced(&coefficients, reduced_cosine, sample, &mut blocks);
                             store_block_scaled(
@@ -1137,10 +1137,15 @@ fn decode_block(
     Ok(())
 }
 
-fn dequantize(coefficients: &mut [i32; BLOCK_LEN], quant: &QuantTable) {
+fn dequantize(coefficients: &mut [i32; BLOCK_LEN], quant: &QuantTable) -> Result<(), ImageError> {
     for (coefficient, quant_value) in coefficients.iter_mut().zip(quant.values.iter()) {
-        *coefficient *= i32::from(*quant_value);
+        // A 16-bit DQT value times a large AC coefficient can exceed i32 (#1441).
+        let product = i64::from(*coefficient) * i64::from(*quant_value);
+        *coefficient = i32::try_from(product).map_err(|_| ImageError::InvalidData {
+            reason: "JPEG dequantized coefficient overflow",
+        })?;
     }
+    Ok(())
 }
 
 /// Naive separable 8x8 inverse DCT (float; deterministic, no unsafe).
@@ -1690,7 +1695,7 @@ fn render_progressive_components(
         })?;
         for (block_index, stored) in coeffs.into_iter().enumerate() {
             let mut coefficients = stored;
-            dequantize(&mut coefficients, quant);
+            dequantize(&mut coefficients, quant)?;
             inverse_dct(&coefficients, &cosine, &mut block);
             let block_row = block_index / component.blocks_x.max(1);
             let block_col = block_index % component.blocks_x.max(1);
@@ -1706,4 +1711,27 @@ fn render_progressive_components(
         ..
     } = frame;
     render_components(width, height, &components, max_h, max_v, adobe_transform)
+}
+
+#[cfg(test)]
+mod dequantize_overflow_tests {
+    use super::*;
+
+    #[test]
+    fn dequantize_rejects_i32_overflow() {
+        let mut quant = QuantTable {
+            values: [1u16; BLOCK_LEN],
+        };
+        quant.values[0] = u16::MAX;
+        let mut coefficients = [0i32; BLOCK_LEN];
+        coefficients[0] = i32::MAX;
+        let result = dequantize(&mut coefficients, &quant);
+        assert!(result.is_err());
+
+        quant.values[0] = 2;
+        let mut small = [0i32; BLOCK_LEN];
+        small[0] = 3;
+        assert!(dequantize(&mut small, &quant).is_ok());
+        assert_eq!(small[0], 6);
+    }
 }
