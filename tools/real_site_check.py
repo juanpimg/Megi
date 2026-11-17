@@ -215,7 +215,8 @@ def main(argv: list[str]) -> int:
     root = Path(args.root).resolve() if args.root else Path(__file__).resolve().parent.parent
 
     live = args.live and not args.offline
-    results = [render_one(root, site, live) for site in load_sites(root)]
+    sites = load_sites(root)
+    results = [render_one(root, site, live) for site in sites]
     generated_at = datetime.now(timezone.utc).date().isoformat()
     payload = {
         "mode": "live" if live else "snapshot",
@@ -229,7 +230,10 @@ def main(argv: list[str]) -> int:
     for item in results:
         print(f"{item['result']:>18}  {item['name']}  ({item['display_items']} items)")
     print(f"wrote {json_path.relative_to(root)} and {html_path.relative_to(root)}")
-    return 0
+    failures = failure_reasons(sites, results)
+    for reason in failures:
+        print(f"FAIL: {reason}", file=sys.stderr)
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":
