@@ -297,9 +297,9 @@ fn documented_unsupported_apis_are_absent() {
         &mut runtime,
         r#"
         var div = document.createElement('div');
-        var gaps = [typeof Range, typeof XMLHttpRequest];
+        var gaps = [typeof Range];
         var supported = [
-          typeof URLSearchParams, typeof queueMicrotask, typeof MouseEvent,
+          typeof XMLHttpRequest, typeof URLSearchParams, typeof queueMicrotask, typeof MouseEvent,
           typeof structuredClone, typeof atob, typeof btoa,
           typeof div.getBoundingClientRect, typeof fetch,
           typeof Headers, typeof Request, typeof Response,
