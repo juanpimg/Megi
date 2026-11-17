@@ -628,7 +628,9 @@ fn decode_dot_escapes(input: &str) -> String {
     while index < bytes.len() {
         if bytes[index] == b'%'
             && index + 2 < bytes.len()
-            && hex_value(bytes[index + 1]).is_some()
+            // WHATWG URL §4.4 decodes only `%2E`; matching the low nibble alone
+            // would also turn `%3E`, `%4E`, `%5E`, … into dot segments (#1404).
+            && hex_value(bytes[index + 1]) == Some(0x2)
             && hex_value(bytes[index + 2]) == Some(0xE)
         {
             out.push('.');
@@ -824,5 +826,17 @@ mod unit_tests {
         assert_eq!(normalize_path("/a//b"), "/a//b");
         assert_eq!(normalize_path("/../x"), "/x");
         assert_eq!(normalize_path("/"), "/");
+    }
+
+    #[test]
+    fn only_2e_escapes_are_dot_segments() {
+        // #1404: `%2E`/`%2e` are traversal, every other `%?E` must stay literal.
+        assert_eq!(normalize_path("/a/%2e%2e/b"), "/b");
+        assert_eq!(normalize_path("/a/%2E/b"), "/a/b");
+        // The real `%2E` still decodes, but the resulting `%3E.` is not a dot segment.
+        assert_eq!(normalize_path("/secret/%3E%2E/x"), "/secret/%3E./x");
+        assert_eq!(normalize_path("/%5E/x"), "/%5E/x");
+        assert_eq!(normalize_path("/%7Ealice/"), "/%7Ealice/");
+        assert_eq!(normalize_path("/%ce/"), "/%ce/");
     }
 }
