@@ -177,7 +177,12 @@ pub fn load_images(
         .iter()
         .map(|(_, url, use_cors)| (url, *use_cors))
         .collect();
+    // Enforce the image byte cap while fetching, not after every response has been
+    // buffered (#1213). Restore the caller's cap afterwards so unrelated later fetches
+    // keep their original limit.
+    let previous_cap = loader.set_max_response_bytes(limits.max_image_bytes);
     let loaded_resources = loader.load_many(&requests);
+    loader.set_max_response_bytes(previous_cap);
 
     for ((node_id, url, _use_cors), loaded_res) in resolved.into_iter().zip(loaded_resources) {
         let cache_key = url.to_string();
@@ -314,6 +319,28 @@ pub fn load_images(
 mod dedup_tests {
     use super::*;
     use net::FetchOptions;
+
+    #[test]
+    fn image_byte_cap_is_applied_during_fetch() {
+        // A data URL larger than max_image_bytes must be rejected by the fetch layer
+        // (response cap), not only by the post-load size check (#1213).
+        let payload = "x".repeat(4096);
+        let source = format!("<body><img src='data:image/png;base64,{payload}'></body>");
+        let document = html::parse_document(&source, false);
+        let base = net::Url::parse("file:///tmp/page.html").expect("base URL");
+        let mut loader = ResourceLoader::with_options(FetchOptions::default());
+        let limits = ImageLimits {
+            max_image_bytes: 128,
+            ..ImageLimits::default()
+        };
+        let mut warnings = Vec::new();
+        let loaded = load_images(&document, &base, &mut loader, false, limits, &mut warnings);
+        assert!(loaded.failed >= 1, "oversized image must fail: {warnings:?}");
+        assert!(
+            warnings.iter().any(|w| w.contains("too large")),
+            "the fetch-layer response cap must reject it: {warnings:?}"
+        );
+    }
 
     #[test]
     fn identical_image_urls_share_one_decode() {

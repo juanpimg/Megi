@@ -201,6 +201,15 @@ impl ResourceLoader {
         self
     }
 
+    /// Lowers the per-response body cap for the next loads and returns the previous value.
+    /// Used by the render image loader so the image byte budget is enforced while fetching,
+    /// not after buffering every response (#1213).
+    pub fn set_max_response_bytes(&mut self, limit: usize) -> usize {
+        let previous = self.options.max_response_bytes;
+        self.options.max_response_bytes = limit;
+        previous
+    }
+
     /// Creates a loader with custom [`FetchOptions`] and the cache enabled.
     pub fn with_options(options: FetchOptions) -> Self {
         let h1_pool = crate::http::H1Pool::new(
