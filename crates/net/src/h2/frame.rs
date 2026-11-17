@@ -101,6 +101,10 @@ pub struct Frame {
 impl Frame {
     /// Creates a frame, setting `length` from the payload.
     pub fn new(kind: u8, flags: u8, stream_id: u32, payload: Vec<u8>) -> Self {
+        assert!(
+            payload.len() <= 0x00ff_ffff,
+            "HTTP/2 frame payload exceeds 24-bit length limit"
+        );
         Self {
             header: FrameHeader {
                 length: payload.len() as u32,
@@ -110,6 +114,28 @@ impl Frame {
             },
             payload,
         }
+    }
+
+    /// Like [`Self::new`], but returns an error instead of panicking when the payload
+    /// exceeds the 24-bit frame length limit (#1295).
+    pub fn try_new(
+        kind: u8,
+        flags: u8,
+        stream_id: u32,
+        payload: Vec<u8>,
+    ) -> Result<Self, &'static str> {
+        if payload.len() > 0x00ff_ffff {
+            return Err("HTTP/2 frame payload exceeds 24-bit length limit");
+        }
+        Ok(Self {
+            header: FrameHeader {
+                length: payload.len() as u32,
+                kind,
+                flags,
+                stream_id,
+            },
+            payload,
+        })
     }
 
     /// DATA frame for `stream_id` (optionally with END_STREAM).

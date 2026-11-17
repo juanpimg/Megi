@@ -608,6 +608,8 @@ pub struct RenderStats {
     /// `location.*` navigation requests captured during scripting (see
     /// [`RenderOutput::location_actions`]).
     pub location_actions: usize,
+    /// Whether scripting hit a budget limit (virtual time, iterations, timer count).
+    pub script_limited: bool,
     /// History API requests captured during scripting (see
     /// [`RenderOutput::history_actions`]).
     pub history_actions: usize,
@@ -832,7 +834,11 @@ fn render_url_inner(
     let mut script_warnings = Vec::new();
     let script_requested = options.scripting == ScriptingMode::Enabled;
     let script_candidates = if script_requested && cfg!(feature = "js") {
-        scripts::discover_scripts(&document, &mut script_warnings)
+        scripts::discover_scripts(
+            &document,
+            &mut script_warnings,
+            scripts::MAX_DISCOVERED_SCRIPTS,
+        )
     } else {
         Vec::new()
     };
@@ -953,6 +959,7 @@ fn render_url_inner(
         event_loop_time,
         location_actions,
         history_actions,
+        script_limited,
     ) = match scripting_execution {
         Some(execution) => (
             execution.executed,
@@ -966,6 +973,7 @@ fn render_url_inner(
             execution.event_loop,
             execution.location_actions,
             execution.history_actions,
+            execution.limited,
         ),
         None => (
             0,
@@ -979,6 +987,7 @@ fn render_url_inner(
             Duration::ZERO,
             Vec::new(),
             Vec::new(),
+            false,
         ),
     };
 
@@ -1079,6 +1088,9 @@ fn render_url_inner(
     let backgrounds_time = backgrounds_start.elapsed();
 
     let layout_start = Instant::now();
+    // Mix font identities (not just the count) so a caller-shared cache cannot reuse
+    // metrics computed with a different font file (#1218).
+    let font_digest = loaded_webfonts.database.identity_digest();
     let measurer = layout::FontTextMeasurer::from_database(loaded_webfonts.database);
     let viewport = layout::Rect::new(
         0.0,
@@ -1094,7 +1106,7 @@ fn render_url_inner(
                 viewport,
                 &measurer,
                 &loaded_images.sizes,
-                loaded_webfonts.loaded,
+                font_digest,
             )
             .ok_or(RenderError::LayoutFailed)?
     } else {
@@ -1205,6 +1217,7 @@ fn render_url_inner(
             script_events,
             script_timers_pending,
             location_actions: location_action_count,
+            script_limited,
             history_actions: history_action_count,
             pushed_used: loader.pushed_used(),
             pushed_discarded: loader.pushed_discarded(),
@@ -1398,6 +1411,7 @@ fn render_svg_document(
             script_events: 0,
             script_timers_pending: 0,
             location_actions: 0,
+            script_limited: false,
             history_actions: 0,
             pushed_used: 0,
             pushed_discarded: 0,
@@ -1980,9 +1994,7 @@ fn resolve_styles_with_collection(
     }
     while let Some(node_id) = stack.pop() {
         if let Some(element) = doc.node(node_id).as_element() {
-            let inline_declarations = element
-                .get_attribute("style")
-                .map(|style| css::expand_declarations(&css::parse_list_of_declarations(style)));
+            let inline_declarations = element.get_attribute("style").map(css::parse_inline_style);
             let cascaded = css::resolve_cascaded_properties(
                 doc,
                 node_id,

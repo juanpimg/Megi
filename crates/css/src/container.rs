@@ -257,7 +257,7 @@ impl<'a> BaseStyles<'a> {
             let element = self.doc.node(id).as_element().unwrap();
             let inline = element
                 .get_attribute("style")
-                .map(|style| crate::expand_declarations(&crate::parse_list_of_declarations(style)));
+                .map(crate::parse_inline_style);
             let cascaded = crate::cascade::resolve_cascaded_properties_base(
                 self.doc,
                 id,

@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! CLI Conformance Runner for `test_harness` (`cargo run -p test_harness -- --summary`).
 //!
 //! Exit codes are the gate:
