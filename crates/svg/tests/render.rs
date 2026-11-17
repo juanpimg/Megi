@@ -764,3 +764,21 @@ fn symbol_instantiated_via_use_renders() {
     );
     assert_eq!(pixel(&image, 5, 5), [0, 255, 0, 255]);
 }
+
+#[test]
+fn display_none_skips_subtree_and_visibility_can_be_overridden() {
+    let image = render_at(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">
+            <rect width="20" height="20" fill="#ff0000" display="none"/>
+            <g visibility="hidden">
+                <rect width="10" height="10" fill="#00ff00"/>
+                <rect x="10" width="10" height="10" fill="#0000ff" visibility="visible"/>
+            </g>
+        </svg>"##,
+        20,
+        20,
+    );
+    assert_eq!(pixel(&image, 2, 2), [0, 0, 0, 0], "display=none must skip (#37)");
+    assert_eq!(pixel(&image, 5, 5), [0, 0, 0, 0], "inherited hidden must skip (#37)");
+    assert_eq!(pixel(&image, 15, 5), [0, 0, 255, 255], "visible override must paint");
+}

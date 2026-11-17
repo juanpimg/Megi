@@ -478,6 +478,10 @@ impl Document {
 struct Style {
     /// The inherited `color` property; used to resolve `currentColor` (#1276).
     color: Color,
+    /// `display: none` skips the whole subtree (#37).
+    display: bool,
+    /// Inherited `visibility`; a `visible` descendant still paints (#37).
+    visibility: bool,
     fill: Paint,
     stroke: Paint,
     fill_opacity: f32,
@@ -514,6 +518,8 @@ impl Default for Style {
     fn default() -> Self {
         Self {
             color: Color::BLACK,
+            display: true,
+            visibility: true,
             fill: Paint::Solid(Color::BLACK),
             stroke: Paint::None,
             fill_opacity: 1.0,
@@ -588,6 +594,11 @@ impl Style {
                 if let Some(color) = parse_color(value) {
                     self.color = color;
                 }
+            }
+            "display" => self.display = !value.trim().eq_ignore_ascii_case("none"),
+            "visibility" => {
+                let value = value.trim().to_ascii_lowercase();
+                self.visibility = value == "visible";
             }
             "fill" => self.fill = parse_paint(value, gradients, patterns),
             "stroke" => self.stroke = parse_paint(value, gradients, patterns),
@@ -687,6 +698,8 @@ impl Style {
 const PRESENTATION_PROPERTIES: &[&str] = &[
     // `color` must be applied before `fill`/`stroke` so `currentColor` can resolve.
     "color",
+    "display",
+    "visibility",
     "fill",
     "stroke",
     "fill-opacity",
@@ -1011,7 +1024,14 @@ impl<'a> Builder<'a> {
         let transform = transform.then(local_transform);
         let opacity = group_opacity * parse_opacity_attribute(element, "opacity").unwrap_or(1.0);
         ancestors.push(element);
-        let result = match name.as_str() {
+        // `display: none` removes the whole subtree (#37).
+        if !style.display {
+            ancestors.pop();
+            return Ok(());
+        }
+        let visible = style.visibility;
+        let result = if visible {
+            match name.as_str() {
             "svg" => {
                 let viewport = nested_viewport_transform(element);
                 let transform = transform.then(viewport);
@@ -1112,6 +1132,11 @@ impl<'a> Builder<'a> {
                 result
             }
             _ => self.push_shape(element, &name, transform, &style, opacity),
+            }
+        } else {
+            // Hidden subtrees are not painted, but descendants may opt back in with
+            // `visibility: visible`, so keep walking the tree (#37).
+            self.visit_children(element, ancestors, transform, &style, opacity, depth)
         };
         ancestors.pop();
         result
