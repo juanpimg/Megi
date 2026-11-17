@@ -643,6 +643,15 @@ GPU/compositor, pestañas, extensiones, descargas, impresión, sandbox de proces
 | F3 | Getting started guide | Docs | 1 día | #969 |
 | F4 | Semantic versioning + release process | Release | 1 semana | #965, #966, #967 |
 | F5 | Changelog automatizado | Release | 1 día | #966 |
+| F6 | Empaquetado multiplataforma (Flatpak en Linux, Windows, macOS) | Release | Medio | **DIFERIDO** — ver nota abajo |
+
+#### Empaquetado y distribución — decisión actual (2026-11-17)
+
+**Por ahora se distribuye solo el binario** (`megi`, ELF x86-64) junto al modo headless `--screenshot`. El mismo binario sirve para sesiones **X11 y Wayland** (`winit` 0.30 + `softbuffer` 0.4, sin GPU), y la compatibilidad con las distintas distribuciones se resuelve en el código (features de carga dinámica de librerías), no multiplicando paquetes por versión de Linux.
+
+**Flatpak queda registrado aquí como trabajo futuro, no implementado.** Es la mejor opción para un único paquete que funcione igual en muchas distros, y por eso está en el roadmap, pero se pospone hasta que el proyecto esté más avanzado: sus costes (runtime de ~1 GB, permisos de sandbox para `file://`/descargas/sesión, portal de escritorio, otro canal de publicación que mantener) no compensan ahora, en pre-alpha, frente a la fricción cero de descargar y ejecutar el binario. No afecta al rendimiento de la app (el sandbox es aislamiento del kernel, no una VM), sino a espacio, permisos y mantenimiento.
+
+Cuando se retome `F6`, el orden previsto es: (1) verificar la carga dinámica de X11/Wayland para que un binario arranque con solo las librerías del protocolo en uso; (2) publicar un artefacto portable único (AppImage/tarball) y el manifiesto Flatpak como canal opcional; (3) Windows y macOS, reutilizando los backends que ya trae `winit`/`softbuffer` y ajustando las rutas de sesión/descargas (`APPDATA`/`USERPROFILE`).
 
 ### Métricas de éxito para Pre-Alpha
 
