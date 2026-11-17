@@ -682,12 +682,9 @@ fn cache_control_shared_and_age_directives() {
     assert_eq!(policy.age, Some(30));
     assert!(policy.must_revalidate);
     assert!(!policy.no_cache);
-    assert!(policy.requires_revalidation());
-    // s-maxage is a fallback for this private cache; Age is subtracted.
-    assert_eq!(
-        policy.freshness_lifetime(now),
-        Some(Duration::from_secs(90))
-    );
+    // `s-maxage` is shared-cache-only: this private cache has no explicit lifetime (#1343).
+    assert_eq!(policy.freshness_lifetime(now), None);
+    assert!(!policy.requires_revalidation());
 }
 
 #[test]
@@ -698,6 +695,7 @@ fn cache_control_no_cache_vs_must_revalidate() {
     assert!(no_cache.no_cache);
     assert!(!no_cache.must_revalidate);
     assert_eq!(no_cache.explicit_lifetime(now), Some(Duration::ZERO));
+    assert!(no_cache.requires_revalidation());
     let headers = vec![(
         "Cache-Control".to_owned(),
         "must-revalidate, max-age=60".to_owned(),
@@ -708,7 +706,9 @@ fn cache_control_no_cache_vs_must_revalidate() {
         must_revalidate.explicit_lifetime(now),
         Some(Duration::from_secs(60))
     );
-    assert!(must_revalidate.requires_revalidation());
+    // `must-revalidate` does not mean "always revalidate" (#1344): freshness is
+    // decided by the cache entry's `is_fresh()` using max-age and storage time.
+    assert!(!must_revalidate.requires_revalidation());
 }
 
 #[test]
@@ -742,6 +742,34 @@ fn loader_revalidates_must_revalidate_entries() {
             .to_ascii_lowercase()
             .contains("if-none-match: \"v1\"")
     );
+}
+
+#[test]
+fn loader_serves_fresh_must_revalidate_entries_from_cache() {
+    // #1344: `must-revalidate` forbids serving *stale* responses, it does not
+    // disable freshness. A max-age=60 response must be a cache hit on immediate reuse.
+    let responses = vec![response(
+        "200 OK",
+        &[
+            ("Cache-Control", "max-age=60, must-revalidate"),
+            ("ETag", "\"v1\""),
+        ],
+        b"body-v1",
+    )];
+    let (base, handle) = spawn_server(responses);
+    let mut loader = ResourceLoader::with_options(options());
+    let first = loader
+        .load(&url(&format!("{base}/cached")))
+        .expect("first load");
+    let second = loader
+        .load(&url(&format!("{base}/cached")))
+        .expect("cached load");
+    assert_eq!(first.bytes, b"body-v1");
+    assert_eq!(second.bytes, b"body-v1");
+    assert_eq!(loader.cache_hits(), 1);
+    assert_eq!(loader.cache_revalidations(), 0);
+    let requests = handle.join().expect("server thread");
+    assert_eq!(requests.len(), 1);
 }
 
 #[test]
