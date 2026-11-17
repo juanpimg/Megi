@@ -315,6 +315,17 @@ impl Debounce {
     }
 }
 
+/// Extracts a human-readable message from a caught panic payload.
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        message
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.as_str()
+    } else {
+        "unknown panic"
+    }
+}
+
 /// Spawns the render worker.
 ///
 /// * `render` is injected: production uses [`render_document`]; tests use a
@@ -350,12 +361,23 @@ where
                     Err(TryRecvError::Disconnected) => break,
                 }
             }
-            let message = match render(&latest) {
-                Ok(frame) => WorkerMessage::Frame(frame),
-                Err(message) => WorkerMessage::Failed {
+            // A panic in layout/paint/render must not kill the only render worker:
+            // convert it into a Failed message and keep serving later requests (#1468).
+            let rendered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render(&latest)));
+            let message = match rendered {
+                Ok(Ok(frame)) => WorkerMessage::Frame(frame),
+                Ok(Err(message)) => WorkerMessage::Failed {
                     generation: latest.generation,
                     message,
                 },
+                Err(panic) => {
+                    let detail = panic_message(&panic);
+                    eprintln!("megi: render worker caught a panic: {detail}");
+                    WorkerMessage::Failed {
+                        generation: latest.generation,
+                        message: format!("render panicked: {detail}"),
+                    }
+                }
             };
             if message_sender.send(message).is_err() {
                 break; // event loop is gone
