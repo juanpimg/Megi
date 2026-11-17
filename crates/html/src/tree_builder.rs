@@ -4429,7 +4429,8 @@ pub fn parse_fragment_with_options(
 ///
 /// This is the in-place building block used by [`crate::set_inner_html`],
 /// [`crate::set_outer_html`] and [`crate::document_write`]: it avoids creating a temporary
-/// document and copying nodes between arenas. Existing document content is left untouched;
+/// document and copying nodes between arenas (the input is cloned into a temporary arena so a
+/// parser panic cannot erase the caller's DOM, #1454). Existing document content is left untouched;
 /// the new fragment children are appended as the last children of the document root (the
 /// caller usually moves them under the target element). Returns the
 /// [`LimitViolations`] hit while parsing the fragment.
@@ -4982,5 +4983,49 @@ mod context_name_boundary_tests {
             &ParseOptions::default(),
         );
         assert!(caller.owns(kept), "caller document must not be wiped");
+    }
+}
+
+#[cfg(test)]
+mod fragment_panic_isolation_tests {
+    use super::*;
+
+    #[test]
+    fn caller_document_survives_a_fragment_parse_failure() {
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", vec![]);
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        doc.append_child(doc.root(), html);
+        doc.append_child(html, body);
+        let kept = doc.create_element(Namespace::Html, "p", vec![]);
+        doc.append_child(body, kept);
+
+        // Force the parser's catch_unwind path: a 270-byte multibyte context name used
+        // to panic mid-slice and replace the caller's document with an empty one (#1454).
+        let bad_name = "漢".repeat(90);
+        let options = ParseOptions {
+            max_text_bytes: 0,
+            ..ParseOptions::default()
+        };
+        let _ = parse_fragment_into(
+            &mut doc,
+            "<b>x</b>",
+            Namespace::Html,
+            &bad_name,
+            false,
+            &options,
+        );
+
+        assert!(doc.owns(kept), "the caller's nodes must survive a parser failure");
+        let body_after = doc
+            .get_elements_by_tag_name("body")
+            .into_iter()
+            .next()
+            .expect("body");
+        let first = doc.node(body_after).first_child.expect("first child");
+        assert_eq!(
+            doc.node(first).as_element().map(|el| el.local_name.as_str()),
+            Some("p")
+        );
     }
 }
