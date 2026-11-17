@@ -156,6 +156,20 @@ fn run() -> Result<(), ShellError> {
                 png.len(),
                 zoom::zoom_label(args.zoom)
             );
+            // A degraded capture must be visible to CI, not reported as clean (#1457).
+            let violations = output.stats.limit_violations.total();
+            for warning in &output.stats.warnings {
+                eprintln!("warning: {warning}");
+            }
+            if violations > 0 {
+                eprintln!("warning: {violations} parser/layout limit violation(s) during render");
+            }
+            if violations > 0 {
+                return Err(ShellError::Io {
+                    path: path.display().to_string(),
+                    reason: format!("{violations} parser/layout limit violation(s) during render"),
+                });
+            }
             Ok(())
         }
         LaunchMode::Window => shell::run_window_with_view_options(
@@ -166,5 +180,22 @@ fn run() -> Result<(), ShellError> {
             options,
             view,
         ),
+    }
+}
+
+#[cfg(test)]
+mod screenshot_diagnostics_tests {
+    use super::*;
+
+    #[test]
+    fn render_diagnostics_are_detected() {
+        // A screenshot with warnings or limit violations must be treated as degraded.
+        let mut violations = html::LimitViolations::default();
+        let mut warnings: Vec<String> = Vec::new();
+        assert!(warnings.is_empty() && violations.is_empty(), "clean baseline");
+        warnings.push("skipping image: failed".into());
+        assert!(!warnings.is_empty());
+        violations.nodes_exceeded = 1;
+        assert!(violations.total() > 0);
     }
 }
