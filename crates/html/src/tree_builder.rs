@@ -3662,9 +3662,7 @@ impl TreeBuilder {
                 // Drop non-characters to match `insert_character`'s body path (#411).
                 // Buffering them as U+FFFD would re-insert them on replay, producing a
                 // different tree for the same input solely because of the insertion mode.
-                let Some(character) = char::from_u32(ch) else {
-                    return None;
-                };
+                let character = char::from_u32(ch)?;
                 if self.pending_table_characters.len() >= self.parse_options.max_text_bytes {
                     self.limit_violations.text_bytes_dropped += 1;
                     return None;
@@ -4230,7 +4228,9 @@ impl TreeBuilder {
                         break;
                     }
                     let next = self.doc.node(child_id).next_sibling;
-                    let Some(cloned) = self.doc.clone_node(child_id, true) else { continue; };
+                    let Some(cloned) = self.doc.clone_node(child_id, true) else {
+                        continue;
+                    };
                     self.doc.append_child(sc_id, cloned);
                     curr = next;
                 }

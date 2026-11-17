@@ -677,7 +677,10 @@ mod storage_and_console_tests {
         assert_eq!(map.insert("b".into(), "1".into()), None);
         assert_eq!(map.insert("a".into(), "2".into()), None);
         assert_eq!(map.insert("b".into(), "3".into()), Some("1".into()));
-        assert_eq!(map.keys().map(String::as_str).collect::<Vec<_>>(), ["b", "a"]);
+        assert_eq!(
+            map.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["b", "a"]
+        );
         assert_eq!(map.get("a").map(String::as_str), Some("2"));
         assert_eq!(map.remove("b").as_deref(), Some("3"));
         assert_eq!(map.keys().map(String::as_str).collect::<Vec<_>>(), ["a"]);

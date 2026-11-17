@@ -6421,7 +6421,10 @@ mod document_write_budget_tests {
         let mut runtime = JsRuntime::new().expect("runtime");
         runtime.host.borrow_mut().max_document_write_nodes = 64;
         runtime
-            .eval("document.write('<i></i>'.repeat(100));", "nodes_violation.js")
+            .eval(
+                "document.write('<i></i>'.repeat(100));",
+                "nodes_violation.js",
+            )
             .expect("write");
         let console = runtime.take_console();
         assert!(
@@ -6677,7 +6680,9 @@ mod mutation_observer_delivery_tests {
                 .push_front("not json".to_string());
         }
         // Before the fix this aborted on worker A, so worker B never received its reply.
-        runtime.run_worker_tasks(16).expect("worker pump must not abort");
+        runtime
+            .run_worker_tasks(16)
+            .expect("worker pump must not abort");
         assert_eq!(runtime.eval("__b", "check.js").unwrap(), "2");
         assert!(
             runtime
@@ -6705,7 +6710,9 @@ mod mutation_observer_delivery_tests {
             }}
             "#
         );
-        runtime.eval(&script, "observer_cap.js").expect("eval cap script");
+        runtime
+            .eval(&script, "observer_cap.js")
+            .expect("eval cap script");
         let console = runtime.take_console();
         let messages: Vec<&str> = console.iter().map(|entry| entry.message.as_str()).collect();
         assert!(messages.contains(&"cap-ok"), "{console:?}");
@@ -6734,7 +6741,10 @@ mod mutation_observer_delivery_tests {
         // A callback throwing must be reported, not abort the delivery pass.
         runtime.run_microtasks().expect("microtask delivery");
         runtime
-            .eval("console.log('throwisolate:' + seen);", "observer_throw_check.js")
+            .eval(
+                "console.log('throwisolate:' + seen);",
+                "observer_throw_check.js",
+            )
             .expect("eval check script");
         let console = runtime.take_console();
         let line = console

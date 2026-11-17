@@ -1098,10 +1098,7 @@ fn read_u24_le(bytes: &[u8]) -> u32 {
 }
 
 /// Ensures the retained decoded frames stay within the aggregate byte budget (#1150).
-fn check_animated_frame_budget(
-    frames_so_far: usize,
-    canvas_len: usize,
-) -> Result<(), ImageError> {
+fn check_animated_frame_budget(frames_so_far: usize, canvas_len: usize) -> Result<(), ImageError> {
     let total = frames_so_far.saturating_add(1).saturating_mul(canvas_len);
     if total > MAX_ANIMATED_FRAME_BYTES {
         return Err(ImageError::LimitExceeded {
