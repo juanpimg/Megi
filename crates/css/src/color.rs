@@ -484,6 +484,16 @@ fn parse_hsl(inner: &str) -> Option<Color> {
 // color-mix()
 // ---------------------------------------------------------------------------
 
+/// Restores the thread-local `color-mix()` depth on every exit path, including a panic
+/// unwinding through `parse_color_mix_inner` (#1474).
+struct ColorMixDepthGuard(u32);
+
+impl Drop for ColorMixDepthGuard {
+    fn drop(&mut self) {
+        COLOR_MIX_DEPTH.with(|cell| cell.set(self.0));
+    }
+}
+
 fn parse_color_mix(inner: &str) -> Option<Color> {
     let depth = COLOR_MIX_DEPTH.with(Cell::get);
     if depth >= MAX_COLOR_MIX_DEPTH {
@@ -660,5 +670,26 @@ mod tests {
     fn shallow_nesting_still_works() {
         assert!(Color::parse(&nested_mix(3)).is_some());
         assert!(Color::parse("color-mix(in srgb, red 50%, blue)").is_some());
+    }
+}
+
+#[cfg(test)]
+mod color_mix_depth_tests {
+    use super::*;
+
+    #[test]
+    fn panic_in_color_mix_restores_the_depth_guard() {
+        let before = COLOR_MIX_DEPTH.with(Cell::get);
+        let result = std::panic::catch_unwind(|| {
+            COLOR_MIX_DEPTH.with(|cell| cell.set(before + 1));
+            let _guard = ColorMixDepthGuard(before);
+            panic!("simulated unwinding through parse_color_mix_inner");
+        });
+        assert!(result.is_err());
+        assert_eq!(
+            COLOR_MIX_DEPTH.with(Cell::get),
+            before,
+            "the guard must restore the depth after unwinding (#1474)"
+        );
     }
 }
