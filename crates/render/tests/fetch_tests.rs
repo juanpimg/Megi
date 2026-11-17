@@ -78,3 +78,15 @@ fn fetch_volume_is_budgeted_per_page() {
     assert_eq!(done, 4, "exactly the budgeted calls may succeed: {value}");
     assert!(failed > 0, "later calls must be rejected: {value}");
 }
+
+#[test]
+fn fetch_loader_error_rejects_instead_of_reporting_404() {
+    // #1456: a non-HTTP loader error (permission denied, non-regular file,
+    // oversized response, unsupported scheme) used to resolve the fetch() promise
+    // with a synthetic 404, so a page's `fetch().catch()` never ran.
+    let output = render_fixture("js_fetch_loader_error.html", false);
+    let value = text(&output, "out");
+    assert!(value.starts_with("rejected:"), "{value}");
+    assert!(value.contains("does not name a regular file"), "{value}");
+    assert!(!value.contains("status=404"), "{value}");
+}
