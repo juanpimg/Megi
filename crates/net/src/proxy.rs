@@ -134,9 +134,10 @@ impl ProxyConfig {
         }
         #[cfg(feature = "pac")]
         if let Some(pac_url) = &self.pac_url
-            && let Ok(Some(proxy)) = crate::pac::resolve(url, pac_url)
+            && let Ok(result) = crate::pac::resolve(url, pac_url)
         {
-            return Some(proxy);
+            // DIRECT is terminal: no proxy, no fallback to the static config (#1257).
+            return result;
         }
         self.proxy_for(url).cloned()
     }
