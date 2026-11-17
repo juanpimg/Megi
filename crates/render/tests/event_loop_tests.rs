@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use dom::{Document, NodeKind};
-use render::{RenderOptions, RenderStats, ScriptingLimits, ScriptingMode, Viewport, render_url};
+use render::{RenderOptions, RenderStats, ScriptBudget, ScriptingLimits, ScriptingMode, Viewport, render_url};
 
 fn fixture_path(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -400,6 +400,55 @@ fn top_level_await_respects_the_timer_budget() {
             .iter()
             .any(|warning| warning.contains("timer task budget exhausted")),
         "hitting the timer budget must be reported: {:?}",
+        output.stats.warnings
+    );
+}
+
+#[test]
+fn timer_callbacks_use_the_configured_loop_budget() {
+    // The inline script gets a tiny grant from `total_loop_iterations`; the event loop must
+    // then apply the (large) fresh budget to the timer callback instead of inheriting the
+    // tiny limit left in the VM by the last eval (#1215).
+    let html = "<html><body><script>\
+        window.__done = 0;\
+        setTimeout(function () {\
+            var n = 0; for (var j = 0; j < 90000; j++) { n += 1; }\
+            window.__done = 1;\
+        }, 0);\
+        </script></body></html>";
+    let encoded: String = html
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || b"-_.~".contains(&byte) {
+                (byte as char).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect();
+    let options = RenderOptions {
+        viewport: Viewport::new(400, 240).expect("viewport"),
+        scripting: ScriptingMode::Enabled,
+        scripting_limits: ScriptingLimits {
+            max_tasks: 10,
+            total_loop_iterations: 100,
+            budget: ScriptBudget {
+                loop_iterations: 100_000,
+                ..ScriptBudget::default()
+            },
+            ..ScriptingLimits::default()
+        },
+        ..base_options()
+    };
+    let output = render_url(&format!("data:text/html,{encoded}"), &options).expect("render");
+    assert_eq!(
+        output.stats.script_tasks, 1,
+        "the timer must run with the configured budget: {:?}",
+        output.stats.warnings
+    );
+    assert!(
+        !output.stats.script_limited,
+        "a fresh 100k budget must not be cut by the inline script's 100-iteration grant: {:?}",
         output.stats.warnings
     );
 }
