@@ -734,7 +734,11 @@ impl SessionAutosave {
 
     /// Pending save deadline, or `None` when clean.
     pub const fn deadline(&self) -> Option<Instant> {
-        if self.dirty { self.debounce.deadline() } else { None }
+        if self.dirty {
+            self.debounce.deadline()
+        } else {
+            None
+        }
     }
 }
 

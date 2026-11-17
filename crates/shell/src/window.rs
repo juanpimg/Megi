@@ -95,7 +95,8 @@ use crate::scroll::{self, ScrollState};
 use crate::tabs::{self, CloseOutcome, TabsState};
 use crate::title::{self, StatusSummary};
 use crate::worker::{
-    Debounce, FrameStore, RENDER_DEBOUNCE, RenderRequest, SessionAutosave, WorkerMessage, spawn_worker,
+    Debounce, FrameStore, RENDER_DEBOUNCE, RenderRequest, SessionAutosave, WorkerMessage,
+    spawn_worker,
 };
 use crate::zoom;
 
