@@ -380,7 +380,8 @@ fn build_box_for_node(
             layout_box.children = children;
             // Stacking-context flag (CSS 2.2 Appendix E), computed once at build time so
             // the document-wide finalize pass is only needed for `overflow` clipping.
-            layout_box.establishes_stacking_context = !(style.opacity >= 1.0)
+            layout_box.establishes_stacking_context = style.opacity.is_nan()
+                || style.opacity < 1.0
                 || matches!(style.position, Position::Fixed)
                 || (style.position != Position::Static && style.z_index.is_some());
             if !matches!(style.overflow, Overflow::Visible) {

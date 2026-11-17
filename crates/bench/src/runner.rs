@@ -136,10 +136,18 @@ impl Suite {
                 throughput,
             });
         }
+        let skipped = std::mem::take(&mut self.skipped);
+        let skipped = match &opts.filter {
+            Some(filter) => skipped
+                .into_iter()
+                .filter(|(name, _)| name.contains(filter.as_str()))
+                .collect(),
+            None => skipped,
+        };
         let total_median_ms = results.iter().map(|result| result.median_ms).sum();
         RunOutcome {
             results,
-            skipped: std::mem::take(&mut self.skipped),
+            skipped,
             meta: Meta::capture(),
             setup_ms,
             total_median_ms,
@@ -276,16 +284,10 @@ fn git_state() -> (String, bool) {
     (commit, dirty)
 }
 
-/// Version banner of the compiler that built this binary.
+/// Version banner of the compiler that built this binary (captured at build time,
+/// so it cannot drift with the ambient PATH at runtime, #1210).
 fn rustc_version() -> String {
-    Command::new("rustc")
-        .arg("--version")
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
-        .filter(|version| !version.is_empty())
-        .unwrap_or_else(|| String::from("rustc unknown"))
+    env!("BENCH_RUSTC_VERSION").to_owned()
 }
 
 /// Human-readable CPU model, read from `/proc/cpuinfo` when available.

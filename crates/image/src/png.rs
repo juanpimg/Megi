@@ -210,8 +210,8 @@ fn decode_png_impl(
         // IDAT chunks must be consecutive: after the first IDAT, reject ancillary
         // chunks that are not themselves validated by their own arm. tRNS and PLTE
         // already reject after IDAT in their arms below.
-        if seen_idat && kind != *b"IDAT" && kind != *b"IEND"
-            && kind != *b"tRNS" && kind != *b"PLTE" {
+        if seen_idat && kind != *b"IDAT" && kind != *b"IEND" && kind != *b"tRNS" && kind != *b"PLTE"
+        {
             return Err(invalid_chunk(kind, "non-consecutive IDAT"));
         }
         match &kind {

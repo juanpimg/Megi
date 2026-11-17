@@ -45,8 +45,9 @@ pub use calc::{
     CalcContext, CalcValue, evaluate as evaluate_calc, with_viewport as with_calc_viewport,
 };
 pub use cascade::{
-    CascadeOriginImportance, CompiledRule, MatchedDeclaration, Origin, StyleCollection,
-    resolve_cascaded_properties, resolve_document_styles, resolve_document_styles_with_media,
+    CascadeOriginImportance, CompiledRule, MAX_INLINE_STYLE_BYTES, MatchedDeclaration, Origin,
+    StyleCollection, parse_inline_declarations, parse_inline_style, resolve_cascaded_properties,
+    resolve_document_styles, resolve_document_styles_with_media,
     resolve_document_styles_with_media_and_state, resolve_document_styles_with_viewport,
 };
 pub use component_value::{ComponentValue, FunctionCall, SimpleBlock};

@@ -1038,6 +1038,9 @@ impl<'a, S: Read + Write> Session<'a, S> {
     /// Best-effort flow-control replenishment: if the peer already closed the connection the
     /// update is unnecessary (there is no data left to receive), so I/O errors are ignored.
     fn send_window_update(&mut self, stream_id: u32, increment: u32) {
+        if increment == 0 {
+            return;
+        }
         let _ = send_frame(
             &mut *self.stream,
             &Frame::window_update(stream_id, increment),

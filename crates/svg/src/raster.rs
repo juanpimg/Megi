@@ -36,6 +36,15 @@ const STAMP_SAMPLES: u32 = 4;
 /// work that nested patterns can trigger.
 const MAX_PATTERN_TILE_PIXELS: u64 = 16 * 1024 * 1024;
 
+/// Total glyphs rasterized across all `<text>` elements in one SVG render (#432).
+/// Per-element caps (1000 texts × 10k chars) still allow 10M font lookups + rasterizations.
+const MAX_SVG_GLYPHS: u64 = 50_000;
+
+/// Upper bound on the scratch buffers a single filter chain may allocate. Each primitive
+/// clones full-layer buffers (input + previous result), so a 16-primitive chain on a
+/// 64M-pixel layer would otherwise copy tens of GiB (#430).
+const MAX_FILTER_SCRATCH_BYTES: u64 = 512 * 1024 * 1024;
+
 /// Rasterizes a document into a straight-RGBA image.
 pub(crate) fn rasterize(
     document: &Document,
@@ -107,6 +116,8 @@ pub(crate) fn rasterize(
 struct PatternBudget {
     tiles: u64,
     pixels: u64,
+    /// Shared glyph budget for every text element in the render (#432).
+    glyphs: u64,
 }
 
 impl Default for PatternBudget {
@@ -114,6 +125,7 @@ impl Default for PatternBudget {
         Self {
             tiles: MAX_PATTERN_TILES,
             pixels: MAX_PATTERN_TILE_PIXELS,
+            glyphs: MAX_SVG_GLYPHS,
         }
     }
 }
@@ -284,7 +296,7 @@ fn apply_clip(
         }
         fill_scanline(
             &device,
-            shape.fill_rule,
+            spec.fill_rule,
             layer.width,
             layer.height,
             &mut coverage,
@@ -436,6 +448,12 @@ fn mask_region_pixels(
     )))
 }
 
+/// Worst-case scratch bytes for a filter chain: 4 base buffers plus at most two
+/// full-layer buffers per primitive (#430).
+fn filter_scratch_bytes(layer_bytes: u64, primitives: usize) -> u64 {
+    layer_bytes.saturating_mul(4u64.saturating_add(2u64.saturating_mul(primitives as u64)))
+}
+
 /// Applies a supported filter chain to the layer pixels.
 ///
 /// Primitives are resolved in order with `in`/`in2`/`result` references
@@ -465,6 +483,14 @@ fn apply_filter(
         .sqrt();
     if !scale.is_finite() || scale <= 0.0 {
         return Ok(());
+    }
+    // Bound worst-case scratch before cloning (#430).
+    let layer_bytes = layer.pixels.len() as u64;
+    let worst_case = filter_scratch_bytes(layer_bytes, spec.primitives.len());
+    if worst_case > MAX_FILTER_SCRATCH_BYTES {
+        return Err(SvgError::Limit(format!(
+            "SVG filter scratch budget of {MAX_FILTER_SCRATCH_BYTES} bytes exceeded"
+        )));
     }
     let source = layer.pixels.clone();
     let mut source_alpha = source.clone();
@@ -516,8 +542,8 @@ fn apply_filter(
                     &mut pixels,
                     layer.width,
                     layer.height,
-                    (dx * scale).round() as i32,
-                    (dy * scale).round() as i32,
+                    (dx * scale).round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
+                    (dy * scale).round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
                 );
                 (pixels, result)
             }
@@ -955,6 +981,19 @@ fn draw_text(
     if spec.opacity <= 0.0 || spec.text.is_empty() {
         return Ok(());
     }
+    // Charge the whole text up front (twice for textPath, which walks glyphs for both
+    // natural-length measurement and placement) so a document full of texts cannot
+    // bypass the global glyph cap (#432).
+    let mut budget_state = budget.get();
+    let passes = if spec.text_path.is_some() { 2u64 } else { 1 };
+    let cost = (spec.text.chars().count() as u64).saturating_mul(passes);
+    if cost > budget_state.glyphs {
+        return Err(SvgError::Limit(format!(
+            "SVG glyph budget of {MAX_SVG_GLYPHS} exceeded"
+        )));
+    }
+    budget_state.glyphs -= cost;
+    budget.set(budget_state);
     let Some(database) = text::bundled_database() else {
         return Ok(());
     };
@@ -1139,6 +1178,9 @@ fn prepare_paint<'a>(
 ) -> Option<PreparedPaint<'a>> {
     match paint {
         Paint::None => None,
+        // Resolved by Style::resolve_current_color during document building; defensive
+        // fallback for any style constructed elsewhere.
+        Paint::CurrentColor => Some(PreparedPaint::Solid(Color::BLACK)),
         Paint::Solid(color) => (color.a > 0).then_some(PreparedPaint::Solid(color)),
         Paint::Pattern(index) => patterns
             .get(index as usize)
@@ -2069,5 +2111,22 @@ mod tests {
         canvas.coverage[0] = 0.5;
         canvas.composite(Color::rgba(255, 0, 0, 255), 1.0);
         assert_eq!(canvas.pixels[3], 128);
+    }
+}
+
+#[cfg(test)]
+mod filter_scratch_tests {
+    use super::*;
+
+    #[test]
+    fn filter_scratch_budget_scales_with_primitives() {
+        // A 256 MiB layer (64M RGBA pixels) with 16 primitives would need ~9 GiB.
+        let layer = 256u64 * 1024 * 1024;
+        assert!(filter_scratch_bytes(layer, 1) > MAX_FILTER_SCRATCH_BYTES);
+        assert!(filter_scratch_bytes(layer, 16) > filter_scratch_bytes(layer, 1));
+        // A small layer with a short chain stays within budget.
+        assert!(filter_scratch_bytes(64 * 1024, 2) <= MAX_FILTER_SCRATCH_BYTES);
+        // Arithmetic cannot overflow into a false negative.
+        assert_eq!(filter_scratch_bytes(u64::MAX, usize::MAX), u64::MAX);
     }
 }

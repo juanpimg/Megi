@@ -378,7 +378,13 @@ fn lzw_decode(min_code_size: u8, data: &[u8], pixel_count: usize) -> Result<Vec<
             emit_code(code, &dictionary, &mut stack, &mut output, pixel_count)?;
         } else if code == dictionary.len() as u16 {
             // KwKwK case: previous string plus its own first byte.
-            emit_code(previous_code, &dictionary, &mut stack, &mut output, pixel_count)?;
+            emit_code(
+                previous_code,
+                &dictionary,
+                &mut stack,
+                &mut output,
+                pixel_count,
+            )?;
             let first = *stack.last().unwrap_or(&0);
             if output.len() < pixel_count {
                 output.push(first);
