@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Coverage](docs/status/badge-coverage.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `4bb3a61` (2026-11-17) · coverage **77%** (54/70) · **2,571** tests · conformance **PASS** · **14** crates · **187,552** lines of Rust
+**Snapshot** — commit `08fa66a` (2026-11-17) · coverage **77%** (54/70) · **2,571** tests · conformance **PASS** · **14** crates · **187,552** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -152,7 +152,7 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `4bb3a61` (2026-11-17) |
+| Commit | `08fa66a` (2026-11-17) |
 | Crates in the workspace | 14 |
 | Lines of Rust (tracked `.rs`) | 187552 |
 | Tests (`cargo test --workspace -- --list`) | 2571 |
@@ -185,7 +185,7 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 - JS/DOM conformance testing and memory accounting
 - Multi-select/native widgets and accessibility in shell
 - Visual save-as/prompt and resource downloads
-- Longer fuzz campaigns across the 25 scheduled fuzz targets
+- Longer fuzz campaigns across every fuzz target
 - Bench improvements and real-page E2E rows
 
 ## Cross-cutting areas
