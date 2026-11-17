@@ -3231,9 +3231,19 @@ fn sample_gradient(
     if t >= last {
         return last_color;
     }
-    for (index, window) in stops.windows(2).enumerate() {
-        let (start, start_color) = window[0];
-        let (end, end_color) = window[1];
+    if !t.is_finite() {
+        return last_color;
+    }
+    // Stop positions are ordered, so locate the segment in O(log n) instead of
+    // scanning up to MAX_GRADIENT_STOPS entries for every covered pixel (#1416).
+    // `partition_point(< t)` yields the first segment whose end is >= t, matching
+    // the previous `windows(2)` scan even with duplicate stop positions.
+    let index = stops
+        .partition_point(|&(position, _)| position < t)
+        .saturating_sub(1);
+    let (start, start_color) = stops[index];
+    let (end, end_color) = stops[index + 1];
+    {
         if t >= start && t <= end {
             let span = end - start;
             if span.abs() < 1e-6 {
@@ -4354,6 +4364,22 @@ mod geometry_sanity_tests {
         assert_eq!(
             shrink_radius(css::Length::Px(20.0), 10.0, 100.0),
             css::Length::Px(10.0)
+        );
+    }
+
+    #[test]
+    fn duplicate_gradient_stops_keep_first_window_semantics() {
+        // Binary-search segment lookup must match the old linear scan when two
+        // stops share a position (#1416): the first window ending at t wins.
+        let stops = [
+            (0.0, Color::RED),
+            (0.5, Color::GREEN),
+            (0.5, Color::BLUE),
+            (1.0, Color::WHITE),
+        ];
+        assert_eq!(
+            sample_gradient(&stops, &[], false, 0.5, css::InterpolationSpace::Srgb),
+            Color::GREEN
         );
     }
 
