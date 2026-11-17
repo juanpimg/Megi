@@ -402,6 +402,12 @@ fn span_from(start: &GridLine, end: &GridLine) -> usize {
     span.clamp(1, MAX_SPAN)
 }
 
+// Test-only accumulator for occupancy probes across a `place_items` call (#1418).
+#[cfg(test)]
+thread_local! {
+    static PLACE_PROBES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Bit-packed occupancy matrix: one bit per grid cell.
 ///
 /// The placement code only needs one bit per cell, but `Vec<Vec<bool>>` uses one byte and
@@ -411,6 +417,9 @@ fn span_from(start: &GridLine, end: &GridLine) -> usize {
 struct Occupancy {
     rows: Vec<Vec<u64>>,
     width: usize,
+    /// Number of `get` probes, used by unit tests to assert placement stays linear (#1418).
+    #[cfg(test)]
+    probes: std::cell::Cell<usize>,
 }
 
 impl Occupancy {
@@ -433,6 +442,11 @@ impl Occupancy {
 
     /// Returns whether `(row, column)` is occupied (out-of-range cells are free).
     fn get(&self, row: usize, column: usize) -> bool {
+        #[cfg(test)]
+        {
+            self.probes.set(self.probes.get() + 1);
+            PLACE_PROBES.with(|cell| cell.set(cell.get() + 1));
+        }
         self.rows
             .get(row)
             .and_then(|bits| bits.get(column / 64))
@@ -529,6 +543,8 @@ fn place_items(
     flow: GridAutoFlow,
     names: &GridNames,
 ) -> (Vec<Placement>, usize, usize) {
+    #[cfg(test)]
+    PLACE_PROBES.with(|cell| cell.set(0));
     let mut columns = initial_columns.max(1);
     let mut rows = initial_rows.max(1);
     let mut placements: Vec<Option<Placement>> = vec![None; specs.len()];
@@ -582,6 +598,12 @@ fn place_items(
     let column_flow = matches!(flow, GridAutoFlow::Column | GridAutoFlow::ColumnDense);
     let dense = matches!(flow, GridAutoFlow::RowDense | GridAutoFlow::ColumnDense);
     let mut cursor = (0usize, 0usize);
+    // Next free row per pinned column and next free column per pinned row (#1418). Without
+    // these, N items pinned to one column re-probe rows 0..N (1+2+…+N = O(N²)); the cursor
+    // makes each pinned scan start where the last one left off. Dense flows still start at 0
+    // because they deliberately backfill earlier gaps.
+    let mut column_next_row: Vec<usize> = Vec::new();
+    let mut row_next_column: Vec<usize> = Vec::new();
     for (index, request) in requests.iter().enumerate() {
         if placements[index].is_some() {
             continue;
@@ -605,8 +627,16 @@ fn place_items(
             .unwrap_or(request.row_span)
             .max(1);
         let (row, column) = if let Some(column_start) = request.column_start {
-            // Pinned column: scan rows for a free rectangle at that column.
-            let mut row = 0usize;
+            // Pinned column: scan rows for a free rectangle at that column, starting from the
+            // per-column cursor instead of row 0 (#1418).
+            if column_next_row.len() <= column_start {
+                column_next_row.resize(column_start + 1, 0);
+            }
+            let mut row = if dense {
+                0
+            } else {
+                column_next_row[column_start]
+            };
             loop {
                 occupancy.ensure(row + row_span, columns.max(column_start + column_span));
                 let free = (0..row_span).all(|dr| {
@@ -619,8 +649,12 @@ fn place_items(
                 row += 1;
             }
         } else if let Some(row_start) = request.row_start {
-            // Pinned row: scan columns for a free rectangle at that row.
-            let mut column = 0usize;
+            // Pinned row: scan columns for a free rectangle at that row, starting from the
+            // per-row cursor instead of column 0 (#1418).
+            if row_next_column.len() <= row_start {
+                row_next_column.resize(row_start + 1, 0);
+            }
+            let mut column = if dense { 0 } else { row_next_column[row_start] };
             loop {
                 occupancy.ensure(row_start + row_span, column + column_span);
                 let free = (0..row_span).all(|dr| {
@@ -663,6 +697,17 @@ fn place_items(
         columns = columns.max(column + column_span);
         rows = rows.max(row + row_span);
         mark_occupied(&mut occupancy, placement, columns);
+        // Advance the pinned-axis cursors so the next item on the same line starts past this
+        // one (#1418). Never move a cursor backwards (dense backfills must not regress later
+        // forward placements).
+        if column_next_row.len() <= column {
+            column_next_row.resize(column + 1, 0);
+        }
+        column_next_row[column] = column_next_row[column].max(row + row_span);
+        if row_next_column.len() <= row {
+            row_next_column.resize(row + 1, 0);
+        }
+        row_next_column[row] = row_next_column[row].max(column + column_span);
         placements[index] = Some(placement);
         cursor = if column_flow {
             (row + row_span, column)
@@ -1434,4 +1479,46 @@ fn layout_item(
     ));
     layout_box_contents(child, definite_height, false, measurer, pos);
     item.content_height = child.dimensions.content.height;
+}
+
+#[cfg(test)]
+mod placement_probe_tests {
+    use super::*;
+    use css::{GridAutoFlow, GridLine};
+
+    /// N items pinned to the same column must not re-probe rows 0..N for each item (#1418).
+    /// With the old from-zero scan the probe count is ~N²/2; with a per-column cursor it stays
+    /// linear. A budget of `4 * N` comfortably separates the two.
+    #[test]
+    fn pinned_column_placement_is_linear_not_quadratic() {
+        let n = 200usize;
+        let mut specs = Vec::with_capacity(n);
+        for i in 0..n {
+            let mut style = ComputedStyle::initial();
+            style.grid_column_start = GridLine::Line(1); // column 0 for all items
+            specs.push(Spec {
+                style: Arc::new(style),
+                order: 0,
+                doc_index: i,
+            });
+        }
+        let names = GridNames::default();
+        let (placements, columns, rows) = place_items(
+            &specs,
+            1, // initial columns
+            0, // initial rows
+            GridAutoFlow::Row,
+            &names,
+        );
+        assert_eq!(placements.len(), n);
+        assert_eq!(rows, n, "each pinned item must occupy its own row");
+        assert_eq!(columns, 1, "all items share column 0");
+        // `place_items` builds its own Occupancy internally; expose the probe total through a
+        // thread-local so this test can observe it without changing the public API.
+        let probes = super::PLACE_PROBES.with(|cell| cell.get());
+        assert!(
+            probes <= 4 * n,
+            "placement probed {probes} cells for {n} items (expected linear, got quadratic)"
+        );
+    }
 }
