@@ -778,7 +778,11 @@ pub fn execute_scripts(
             let mut options = host.fetch_options.clone();
             // Thread the document origin so the loader can run CORS validation (#1530).
             if options.origin.is_none() {
-                let scheme_str = match base.scheme() { Scheme::Http => "http", Scheme::Https => "https", _ => "http" };
+                let scheme_str = match base.scheme() {
+                    Scheme::Http => "http",
+                    Scheme::Https => "https",
+                    _ => "http",
+                };
                 let origin = if let Some(port) = base.port_or_default() {
                     format!("{}://{}:{}", scheme_str, base.host(), port)
                 } else {

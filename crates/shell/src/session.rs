@@ -915,14 +915,20 @@ mod tests {
             let guard = TemporaryFileGuard::new(path.clone());
             drop(guard);
         }
-        assert!(!path.exists(), "a failed write must not leave a .tmp file (#1462)");
+        assert!(
+            !path.exists(),
+            "a failed write must not leave a .tmp file (#1462)"
+        );
 
         std::fs::write(&path, b"complete").expect("create temp 2");
         {
             let guard = TemporaryFileGuard::new(path.clone());
             guard.keep();
         }
-        assert!(path.exists(), "a successful write keeps the file for rename");
+        assert!(
+            path.exists(),
+            "a successful write keeps the file for rename"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

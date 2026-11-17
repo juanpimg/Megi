@@ -57,8 +57,8 @@ pub use grid::{
     GridTemplateAreas, TrackMax, TrackMin, TrackSize,
 };
 pub use media::{
-    MediaCondition, MediaContext, MediaFeature, MediaQualifier, MediaQuery, MediaQueryList, ColorScheme,
-    MediaType, Orientation, evaluate as evaluate_media, parse_media_query_list,
+    ColorScheme, MediaCondition, MediaContext, MediaFeature, MediaQualifier, MediaQuery,
+    MediaQueryList, MediaType, Orientation, evaluate as evaluate_media, parse_media_query_list,
 };
 pub use parser::{TokenStream, consume_declaration, parse_list_of_declarations, parse_stylesheet};
 pub use properties::CalcLengths;
