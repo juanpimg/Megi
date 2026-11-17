@@ -272,6 +272,7 @@ impl ResourceLoader {
             }
         } else {
             self.cache = None;
+            self.cache_bytes = 0;
         }
     }
 
