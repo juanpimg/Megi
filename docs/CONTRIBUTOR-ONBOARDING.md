@@ -1,4 +1,4 @@
-# Onboarding de colaboradores (propuesta para #970)
+# Onboarding de colaboradores
 
 > **Estado**: propuesta para revisión del mantenedor. Las acciones que cambian
 > metadatos de GitHub (etiquetas, Projects, permisos de workflows) requieren
@@ -15,20 +15,20 @@ sin dependencias de permisos especiales y verificable con un comando local.
 
 | # | Issue | Por qué es abordable | Verificación |
 |---|---|---|---|
-| [#472](https://github.com/juanpimg/Megi/issues/472) | `ARCHITECTURE §3.3` describe 4 superficies de fuzz | Solo documentación; apunta a `FUZZING.md` como fuente única | `python3 tools/check_docs_links.py` |
-| [#474](https://github.com/juanpimg/Megi/issues/474) | Matrices de dependencias y recuentos obsoletos | Solo documentación, filas de una tabla | `python3 tools/check_docs_links.py` |
-| [#485](https://github.com/juanpimg/Megi/issues/485) | PRs de docs lanzan toda la matriz Rust | Un workflow, sin tocar código del motor | `actionlint .github/workflows/ci.yml` |
-| [#471](https://github.com/juanpimg/Megi/issues/471) | Targets `webp_vp8`/`webp_lossy` duplicados | Dos harnesses que ya comparten helper | `cargo metadata --manifest-path fuzz/Cargo.toml --no-deps` |
-| [#473](https://github.com/juanpimg/Megi/issues/473) | Faltan diccionarios/libFuzzer y entradas estructuradas | Workspace de fuzz aparte | `cd fuzz && cargo +nightly fuzz build` |
-| [#469](https://github.com/juanpimg/Megi/issues/469) | `html_parse` no cubre `ParseOptions` con scripting | Añade un target/harness acotado | `cd fuzz && cargo +nightly fuzz build` |
-| [#468](https://github.com/juanpimg/Megi/issues/468) | `net` sin target para cookies/caché/proxy | Añade un target sobre helpers puros | `cd fuzz && cargo +nightly fuzz build` |
-| [#467](https://github.com/juanpimg/Megi/issues/467) | Sin targets directos de layout/paint/fonts | Añade harnesses de core crates | `cd fuzz && cargo +nightly fuzz build` |
-| [#470](https://github.com/juanpimg/Megi/issues/470) | Harness fidelity: checks inalcanzables en fuzz | Corrección localizada en `fuzz/` | `cd fuzz && cargo +nightly fuzz build` |
-| [#483](https://github.com/juanpimg/Megi/issues/483) | Fuzz de la interacción DOM×JS | Añade camino con DOM al target `js_eval` | `cd fuzz && cargo +nightly fuzz build` |
-| [#443](https://github.com/juanpimg/Megi/issues/443) | Stacking contexts anidados cuadráticos | `S` si se limita a la partición en una pasada | `cargo test -p paint` + bench |
-| [#442](https://github.com/juanpimg/Megi/issues/442) | `apply_group_bbox` reescanea descendientes | `S`: bbox incremental por pila | `cargo test -p svg` |
-| [#439](https://github.com/juanpimg/Megi/issues/439) | Patrones anidados crecen exponencialmente | `M`: presupuesto global de tiles | `cargo test -p svg` |
-| [#970](https://github.com/juanpimg/Megi/issues/970) | Etiquetas y project board | Requiere permisos de maintainer | Revisión del board |
+| [#1424](https://github.com/juanpimg/Megi/issues/1424) | Sin target de fuzz para gzip/deflate | Añade un target sobre `compression` (workspace de fuzz aparte) | `cd fuzz && cargo +nightly fuzz build` |
+| [#1426](https://github.com/juanpimg/Megi/issues/1426) | Status-line/headers HTTP/1.1 inalcanzables desde un harness | Añade un target sobre el parser puro | `cd fuzz && cargo +nightly fuzz build` |
+| [#1422](https://github.com/juanpimg/Megi/issues/1422) | `dom_mutate` no valida invariantes del DOM | Añade comprobaciones al harness existente | `cd fuzz && cargo +nightly fuzz build` |
+| [#1429](https://github.com/juanpimg/Megi/issues/1429) | `container_queries` anuncia style queries no implementadas | Recorta el target/docs a size-only o implementa `style()` | `cd fuzz && cargo +nightly fuzz build` |
+| [#1484](https://github.com/juanpimg/Megi/issues/1484) | `PHASE4-SUPPORT.md` marca capacidades terminadas como PENDIENTE | Solo documentación, filas de una tabla | `python3 tools/check_docs_links.py` |
+| [#1414](https://github.com/juanpimg/Megi/issues/1414) | Selector parsing O(n²) (`Vec::remove(0)`) | Refactor localizado en `css/src/selector.rs` | `cargo test -p css` + bench |
+| [#1416](https://github.com/juanpimg/Megi/issues/1416) | Color de gradientes: escaneo lineal por píxel | Precalculación de stops en `paint` | `cargo test -p paint` + bench |
+| [#1431](https://github.com/juanpimg/Megi/issues/1431) | Fixtures no ejecutados y demos sin test | Añade tests sobre fixtures existentes | `cargo test --workspace` |
+| [#1432](https://github.com/juanpimg/Megi/issues/1432) | Pares de fixtures byte-idénticos | Limpieza de fixtures duplicados | `cargo test --workspace` |
+
+> Nota (actualizada 2026-11-17): la tabla anterior listaba #467/#468/#471/#970 (y otras) que ya
+> están resueltos — los targets de fuzz y el project board existen en el árbol. Esta lista se
+> verificó contra el estado **abierto** de cada issue y su ausencia en el código. El criterio
+> anterior (tareas acotadas y verificables con un comando local) es más duradero que la lista.
 
 > Nota: la lista debe revisarse antes de aplicar etiquetas, porque el inventario
 > de issues cambia cada ronda. El criterio anterior es más duradero que la lista.
