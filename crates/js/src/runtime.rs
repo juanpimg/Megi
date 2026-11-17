@@ -1320,6 +1320,8 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("replaceChild", 2, node_replace_child),
         ("matches", 1, node_matches),
         ("closest", 1, node_closest),
+        ("querySelector", 1, node_query_selector),
+        ("querySelectorAll", 1, node_query_selector_all),
         ("insertAdjacentHTML", 2, node_insert_adjacent_html),
         ("insertAdjacentText", 2, node_insert_adjacent_text),
         ("cloneNode", 1, node_clone_node),
@@ -2604,6 +2606,21 @@ fn node_closest(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
         .flatten();
     }
     Ok(JsValue::null())
+}
+
+fn node_query_selector(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node = this_node(this, context)?;
+    let selector = arg_string(args, 0, context)?;
+    let found = with_host(|host| css::query::query_selector_from(&host.document, node, &selector));
+    wrap_optional(context, found.flatten())
+}
+
+fn node_query_selector_all(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node = this_node(this, context)?;
+    let selector = arg_string(args, 0, context)?;
+    let nodes = with_host(|host| css::query::query_selector_all_from(&host.document, node, &selector))
+        .unwrap_or_default();
+    wrap_list(context, nodes)
 }
 
 fn insert_relative(
@@ -5778,10 +5795,12 @@ fn worker_constructor(
         }
     }
     let mut init = ObjectInitializer::new(context);
+    // Internal identity must not be writable by page scripts: a forged id used to
+    // index host.workers out of bounds and abort the process (#1465).
     init.property(
         js_string!("__megi_worker"),
         JsValue::from(f64::from(id)),
-        Attribute::all(),
+        Attribute::default(),
     );
     init.function(native(worker_post_message), js_string!("postMessage"), 1);
     init.function(native(worker_terminate), js_string!("terminate"), 0);
@@ -5838,8 +5857,14 @@ fn worker_post_message(
 fn worker_terminate(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let id = worker_handle(this, context)?;
     with_host(|host| {
-        // Free the slot so a new worker can reuse it (#1138).
-        host.workers[id as usize] = None;
+        // Free the slot so a new worker can reuse it (#1138). Never index directly:
+        // a forged/mismatched handle must be a no-op, not a panic (#1465).
+        if let Some(slot) = host.workers.get_mut(id as usize) {
+            *slot = None;
+        }
+        return_unused: {}
+        #[allow(unused_labels)]
+        const _: () = ();
     });
     Ok(JsValue::undefined())
 }
