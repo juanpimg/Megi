@@ -38,6 +38,11 @@ head, link, meta, script, style, template, title {
     display: none;
 }
 
+/* [hidden] attribute (§14.3) */
+[hidden] {
+    display: none !important;
+}
+
 /* Page margin (§15.3.3) */
 body {
     margin: 8px;
