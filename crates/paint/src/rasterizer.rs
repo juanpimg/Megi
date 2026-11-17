@@ -2083,7 +2083,14 @@ fn marker_sample_inside(rect: Rect, px: f32, py: f32, kind: MarkerKind) -> bool 
 /// from every rasterization pass in the benchmark loop.
 pub fn bundled_font_database() -> &'static FontDatabase {
     static DATABASE: OnceLock<FontDatabase> = OnceLock::new();
-    DATABASE.get_or_init(|| FontDatabase::load_bundled().unwrap_or_default())
+    DATABASE.get_or_init(|| match FontDatabase::load_bundled() {
+        Ok(database) => database,
+        Err(error) => {
+            // A broken bundle used to render all text blank with no diagnostic (#1461).
+            eprintln!("megi: bundled fonts failed to load: {error}; text may be blank");
+            FontDatabase::default()
+        }
+    })
 }
 
 /// Compact built-in 8x8 font bitmaps for common characters (fallback to filled box).

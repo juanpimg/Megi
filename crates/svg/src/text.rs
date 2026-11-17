@@ -94,7 +94,13 @@ impl TextSpec {
 pub(crate) fn bundled_database() -> Option<&'static fonts::FontDatabase> {
     static DATABASE: OnceLock<Option<fonts::FontDatabase>> = OnceLock::new();
     DATABASE
-        .get_or_init(|| fonts::FontDatabase::load_bundled().ok())
+        .get_or_init(|| match fonts::FontDatabase::load_bundled() {
+            Ok(database) => Some(database),
+            Err(error) => {
+                eprintln!("megi: bundled fonts failed to load: {error}; SVG text may be blank");
+                None
+            }
+        })
         .as_ref()
 }
 
