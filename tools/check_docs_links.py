@@ -29,7 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # repository-root Markdown files.
 ROOT_DOCS = ["README.md", "CONTRIBUTING.md", "SECURITY.md", "CHANGELOG.md"]
 
-INLINE_LINK = re.compile(r"(?<!\!)\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+INLINE_LINK = re.compile(r"(?<![!\\])\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 REFERENCE_LINK = re.compile(r"^\s*\[[^\]]+\]:\s*(\S+)", re.MULTILINE)
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$", re.MULTILINE)
 FENCE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
@@ -53,12 +53,20 @@ def slugify(text: str) -> str:
 
 
 def headings_of(path: Path) -> set[str]:
+    """GitHub anchors, including the `-1`, `-2`, ... suffixes for duplicate headings (#1395)."""
     try:
         body = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return set()
     body = FENCE.sub("", body)
-    return {slugify(m.group(2)) for m in HEADING.finditer(body)}
+    anchors: set[str] = set()
+    counts: dict[str, int] = {}
+    for match in HEADING.finditer(body):
+        base = slugify(match.group(2))
+        seen = counts.get(base, 0)
+        counts[base] = seen + 1
+        anchors.add(base if seen == 0 else f"{base}-{seen}")
+    return anchors
 
 
 def links_of(path: Path) -> list[str]:

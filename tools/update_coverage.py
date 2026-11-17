@@ -56,14 +56,6 @@ def run(root: Path, args: list[str], timeout: int = 60) -> subprocess.CompletedP
     return subprocess.run(args, cwd=root, capture_output=True, text=True, timeout=timeout, check=False)
 
 
-def git_short_head(root: Path) -> str:
-    return run(root, ["git", "rev-parse", "--short", "HEAD"]).stdout.strip() or "uncommitted"
-
-
-def git_commit_date(root: Path) -> str:
-    return run(root, ["git", "log", "-1", "--format=%cs"]).stdout.strip() or "unknown"
-
-
 def load_manifest(path: Path) -> dict:
     try:
         return tomllib.loads(path.read_text(encoding="utf-8"))
