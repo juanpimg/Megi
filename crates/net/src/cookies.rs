@@ -130,6 +130,9 @@ pub const MAX_COOKIES: usize = 4096;
 /// Browsers keep roughly 150-180 cookies per host/E-TLD+1; 180 matches the upper end (#649).
 pub const MAX_COOKIES_PER_DOMAIN: usize = 180;
 
+/// Maximum size of a single cookie (name + value + attributes) in bytes.
+pub const MAX_COOKIE_BYTES: usize = 4096;
+
 /// A stored cookie (RFC 6265 §5.3 state).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cookie {
@@ -525,6 +528,10 @@ impl CookieJar {
         let Ok(parsed) = parse_set_cookie(set_cookie, request_url, now) else {
             return false;
         };
+        // Reject cookies that exceed the size budget (#1254).
+        if parsed.name.len() + parsed.value.len() > MAX_COOKIE_BYTES {
+            return false;
+        }
         let host = request_url.host().to_ascii_lowercase();
         let host_only = parsed.domain.is_none();
         let domain = parsed.domain.clone().unwrap_or_else(|| host.clone());
