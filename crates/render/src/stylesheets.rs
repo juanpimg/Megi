@@ -21,6 +21,9 @@ use net::Url;
 
 use crate::error::RenderError;
 
+/// Maximum number of stylesheet sources collected from one document (#1214).
+const MAX_STYLESHEET_SOURCES: usize = 1024;
+
 /// One author stylesheet source in document order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CssSource {
@@ -85,8 +88,12 @@ fn nodes_in_document_order(doc: &Document) -> Vec<NodeId> {
     for node_id in root_children.into_iter().rev() {
         stack.push(node_id);
     }
+    // Bound only by the arena size (cycle guard), not by an arbitrary 1024-node cap
+    // that hid late `<style>`/`<base>` elements (#1214). The stylesheet-source cap
+    // lives in `collect_stylesheets`.
+    let max_nodes = doc.len();
     while let Some(node_id) = stack.pop() {
-        if order.len() >= 1024 {
+        if order.len() >= max_nodes {
             break;
         }
         order.push(node_id);
@@ -179,11 +186,22 @@ pub fn collect_stylesheets(
     let mut collected = CollectedStyles::default();
     let mut seen_external = std::collections::HashSet::new();
 
+    let mut limit_warned = false;
     for node_id in nodes_in_document_order(doc) {
         let Some(element) = html_element(doc, node_id) else {
             continue;
         };
         let name = element.local_name.to_ascii_lowercase();
+        // Bound collected sources (not the DOM walk) and report truncation (#1214).
+        if collected.sources.len() >= MAX_STYLESHEET_SOURCES {
+            if !limit_warned {
+                collected.warnings.push(format!(
+                    "stylesheet source limit of {MAX_STYLESHEET_SOURCES} exceeded; later sources ignored"
+                ));
+                limit_warned = true;
+            }
+            continue;
+        }
         // Only stylesheet sources carry a meaningful `media` attribute: evaluating
         // it on every element would wrongly skip (and warn about) unrelated
         // elements such as `<meta media=...>` or `<source media=...>`.
@@ -342,5 +360,34 @@ mod unit_tests {
         let narrow = collect_stylesheets(&doc, &document_url, &screen(600.0, 800.0));
         assert_eq!(narrow.sources.len(), 0);
         assert_eq!(narrow.media_skipped, 1);
+    }
+}
+
+#[cfg(test)]
+mod stylesheet_discovery_tests {
+    use super::*;
+
+    #[test]
+    fn stylesheet_after_1024_nodes_is_still_collected() {
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", vec![]);
+        doc.append_child(doc.root(), html);
+        for _ in 0..1100 {
+            let div = doc.create_element(Namespace::Html, "div", vec![]);
+            doc.append_child(html, div);
+        }
+        let style = doc.create_element(Namespace::Html, "style", vec![]);
+        doc.append_text(style, "body{background:red}");
+        doc.append_child(html, style);
+
+        let base = Url::parse("file:///tmp/page.html").expect("url");
+        let collected = collect_stylesheets(&doc, &base, &MediaContext::default());
+        assert!(
+            collected
+                .sources
+                .iter()
+                .any(|source| matches!(source, CssSource::Inline { text, .. } if text.contains("background:red"))),
+            "a <style> past the old 1024-node walk cap must be discovered (#1214)"
+        );
     }
 }
