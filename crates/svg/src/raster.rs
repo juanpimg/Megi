@@ -1622,8 +1622,10 @@ fn composite_pixel(pixels: &mut [u8], offset: usize, color: Color, src_a: f32) {
 }
 
 /// Scanline fill with 4 vertical sub-rows and analytic horizontal coverage.
-/// Maximum total scanline work (edges × rows × sub-rows) before fill_scanline bails
-/// out (issue #627): prevents CPU DoS from huge paths.
+/// Maximum scanline work (edges × sampled rows × sub-rows) for one fill. Past it the
+/// fill samples every `step`-th pixel row and replicates that row instead of dropping
+/// the shape (issue #1325), so the budget still bounds CPU work from huge paths
+/// (issue #627) without turning an over-budget fill, clip or mask into a no-op.
 const MAX_SCANLINE_WORK: usize = 1 << 24;
 
 fn fill_scanline(
@@ -1653,12 +1655,16 @@ fn fill_scanline(
     if edges.is_empty() {
         return;
     }
-    // Bound total work to avoid CPU DoS (issue #627).
-    if edges.len().saturating_mul(height).saturating_mul(4) > MAX_SCANLINE_WORK {
-        return;
-    }
+    // Bound the per-fill work to avoid CPU DoS (issue #627) without dropping the fill
+    // (issue #1325): when one row per pixel does not fit the budget, sample every
+    // `step`-th pixel row and replicate its coverage over the rows it stands for.
+    let per_row_work = edges.len().saturating_mul(SUB_ROWS).max(1);
+    let row_budget = (MAX_SCANLINE_WORK / per_row_work).max(1);
+    let step = height.div_ceil(row_budget).max(1);
     let mut crossings: Vec<(f32, i32)> = Vec::new();
-    for pixel_y in 0..height {
+    for sample in 0..height.div_ceil(step) {
+        let pixel_y = sample * step;
+        let rows_end = (pixel_y + step).min(height);
         for sub_row in 0..SUB_ROWS {
             let y = pixel_y as f32 + (sub_row as f32 + 0.5) / SUB_ROWS as f32;
             crossings.clear();
@@ -1697,6 +1703,12 @@ fn fill_scanline(
                     &mut coverage[base..base + width],
                 );
             }
+        }
+        // Replicate the sampled row over the rows it stands for. With `step == 1` the
+        // range is empty, so the exact per-pixel path is byte-for-byte unchanged.
+        let row_start = pixel_y * width;
+        for row in (pixel_y + 1)..rows_end {
+            coverage.copy_within(row_start..row_start + width, row * width);
         }
     }
 }
