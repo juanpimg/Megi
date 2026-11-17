@@ -1302,19 +1302,19 @@ fn register_image(suite: &mut Suite) {
             "image/decode-webp-lossless",
             WEBP_PHOTO,
             "WebP VP8L (transforms)",
-            true,
+            false,
         ),
         (
             "image/decode-webp-alpha",
             WEBP_ALPHA,
             "WebP VP8L (alpha)",
-            true,
+            false,
         ),
         (
             "image/decode-webp-palette",
             WEBP_PALETTE,
             "WebP VP8L (palette)",
-            true,
+            false,
         ),
         (
             "image/decode-webp-lossy",
