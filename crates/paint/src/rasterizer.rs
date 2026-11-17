@@ -1318,7 +1318,7 @@ impl TextCache {
         let key = (face_index, glyph_id, size_bits);
         if !self.masks.contains_key(&key) {
             let font = self.faces.get(face_index as usize)?;
-            let mask = font.rasterize_glyph(font_size, glyph_id).ok()?;
+            let mask = font.rasterize_glyph(font_size, u32::from(glyph_id)).ok()?;
             let entry = GlyphMaskEntry::new(mask);
             if entry.is_blank() {
                 self.stats.blank_glyph_masks += 1;

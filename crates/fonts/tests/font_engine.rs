@@ -198,6 +198,38 @@ fn shape_falls_back_for_characters_without_glyphs_without_panicking() {
 }
 
 #[test]
+fn glyph_id_wider_than_u16_is_a_typed_error() {
+    // The `Font` glyph APIs accept `u32` and must reject ids that cannot be represented by
+    // the `u16`-based rasterizer with a typed `UnsupportedGlyphId` (#1409), instead of the
+    // caller silently narrowing (which used to map an attacker-controlled id to another glyph).
+    let db = fixture_db();
+    let font = db
+        .font(
+            &["DejaVu Sans"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
+        .expect("fixture family resolves");
+    let too_big = u32::from(u16::MAX) + 1;
+    assert!(
+        matches!(
+            font.rasterize_glyph(16.0, too_big),
+            Err(FontError::UnsupportedGlyphId { glyph_id }) if glyph_id == too_big
+        ),
+        "a glyph id beyond u16 must be a typed error: {:?}",
+        font.rasterize_glyph(16.0, too_big)
+    );
+    assert!(
+        matches!(
+            font.glyph_advance(too_big, 16.0),
+            Err(FontError::UnsupportedGlyphId { glyph_id }) if glyph_id == too_big
+        ),
+        "glyph_advance must reject ids beyond u16 too"
+    );
+}
+
+#[test]
 fn rasterize_h_produces_non_zero_antialiased_coverage() {
     let db = fixture_db();
     let font = db
@@ -210,7 +242,9 @@ fn rasterize_h_produces_non_zero_antialiased_coverage() {
         .expect("fixture family resolves");
     let glyph_id = font.glyph_id('H').expect("DejaVu Sans has 'H'");
 
-    let mask = font.rasterize_glyph(16.0, glyph_id).expect("rasterize H");
+    let mask = font
+        .rasterize_glyph(16.0, u32::from(glyph_id))
+        .expect("rasterize H");
     assert!(mask.width > 0 && mask.height > 0, "H mask must have size");
     assert_eq!(
         mask.data.len(),
@@ -236,7 +270,9 @@ fn rasterize_h_produces_non_zero_antialiased_coverage() {
 
     // A space has no outline: empty mask but a real advance.
     let space = font.glyph_id(' ').expect("DejaVu Sans has space");
-    let space_mask = font.rasterize_glyph(16.0, space).expect("rasterize space");
+    let space_mask = font
+        .rasterize_glyph(16.0, u32::from(space))
+        .expect("rasterize space");
     assert!(space_mask.is_empty(), "space has no visible outline");
     assert!(space_mask.advance > 0.0, "space still advances the pen");
     assert!(space_mask.data.is_empty());
@@ -254,7 +290,7 @@ fn rasterize_char_uses_the_database_and_agrees_with_the_face() {
         )
         .expect("fixture family resolves");
     let expected = font
-        .rasterize_glyph(16.0, font.glyph_id('H').expect("'H'"))
+        .rasterize_glyph(16.0, u32::from(font.glyph_id('H').expect("'H'")))
         .expect("rasterize via face");
     let actual = db
         .rasterize_char(&["sans-serif"], 400, FontStyle::Normal, 16.0, 'H')
@@ -388,7 +424,7 @@ fn invalid_inputs_return_errors_instead_of_panicking() {
 
     // Out-of-range glyph id.
     assert!(matches!(
-        font.rasterize_glyph(16.0, u16::MAX),
+        font.rasterize_glyph(16.0, u32::from(u16::MAX)),
         Err(FontError::MissingGlyph { .. })
     ));
     // Unknown family with no generic fallback is a controlled error.

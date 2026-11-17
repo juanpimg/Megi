@@ -882,7 +882,7 @@ impl FontDatabase {
                 (0, None)
             });
             let advance = match glyph_id {
-                Some(glyph_id) => chain[font_index].glyph_advance(glyph_id, size_px)?,
+                Some(glyph_id) => chain[font_index].glyph_advance(u32::from(glyph_id), size_px)?,
                 None => chain[0].glyph_advance(0, size_px)?,
             };
             width += advance;
@@ -1019,7 +1019,7 @@ impl FontDatabase {
         glyph_id: u16,
     ) -> Result<GlyphMask, FontError> {
         self.font(families, weight, style, Stretch::Normal)?
-            .rasterize_glyph(size_px, glyph_id)
+            .rasterize_glyph(size_px, u32::from(glyph_id))
     }
 
     /// Rasterizes the glyph for `ch`, applying per-glyph fallback.
@@ -1034,17 +1034,17 @@ impl FontDatabase {
         Font::validate_size(size_px)?;
         let primary = self.font(families, weight, style, Stretch::Normal)?;
         if let Some(glyph_id) = primary.glyph_id(ch) {
-            return primary.rasterize_glyph(size_px, glyph_id);
+            return primary.rasterize_glyph(size_px, u32::from(glyph_id));
         }
         let chain = self.fallback_chain(families, weight, style, primary);
         for font in &chain {
             if let Some(glyph_id) = font.glyph_id(ch) {
-                return font.rasterize_glyph(size_px, glyph_id);
+                return font.rasterize_glyph(size_px, u32::from(glyph_id));
             }
         }
         if let Some((font, glyph_id)) = self.find_fallback_face_for_char(ch, &chain, weight, style)
         {
-            return font.rasterize_glyph(size_px, glyph_id);
+            return font.rasterize_glyph(size_px, u32::from(glyph_id));
         }
         // No face has the glyph: render the primary face's .notdef box.
         chain[0].rasterize_glyph(size_px, 0)

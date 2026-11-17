@@ -180,9 +180,15 @@ impl Font {
 
     /// Horizontal advance of `glyph_id` at `size_px`, in pixels.
     ///
-    /// Returns `0.0` for glyph ids without an `hmtx` entry (external glyphs).
-    pub fn glyph_advance(&self, glyph_id: u16, size_px: f32) -> Result<f32, FontError> {
+    /// `glyph_id` is `u32` so callers need not narrow attacker-controlled ids: an id wider
+    /// than `u16` returns [`FontError::UnsupportedGlyphId`] (#1409). Returns `0.0` for ids
+    /// without an `hmtx` entry (external glyphs).
+    pub fn glyph_advance(&self, glyph_id: u32, size_px: f32) -> Result<f32, FontError> {
         Self::validate_size(size_px)?;
+        // The rasterizer represents glyph ids as u16; reject wider ids with a typed error
+        // instead of letting callers narrow them into another glyph (#1409).
+        let glyph_id =
+            u16::try_from(glyph_id).map_err(|_| FontError::UnsupportedGlyphId { glyph_id })?;
         let face = self.ttf_face()?;
         let num_glyphs = self.num_glyphs();
         if glyph_id >= num_glyphs {
@@ -287,14 +293,20 @@ impl Font {
 
     /// Rasterizes `glyph_id` at `size_px` into an 8-bit alpha coverage mask.
     ///
+    /// `glyph_id` is `u32`; an id wider than `u16` returns
+    /// [`FontError::UnsupportedGlyphId`] instead of being silently narrowed (#1409).
     /// The mask uses **y-down pixel coordinates relative to the pen origin on the
     /// baseline**: its top-left pixel sits at `(pen_x + left, baseline_y + top)`.
     /// Glyphs without an outline (e.g. spaces) return an empty mask with the
     /// correct `advance`.
-    pub fn rasterize_glyph(&self, size_px: f32, glyph_id: u16) -> Result<GlyphMask, FontError> {
+    pub fn rasterize_glyph(&self, size_px: f32, glyph_id: u32) -> Result<GlyphMask, FontError> {
         if !size_px.is_finite() || size_px <= 0.0 || size_px > MAX_RASTERIZE_SIZE_PX {
             return Err(FontError::InvalidSize { size_px });
         }
+        // The rasterizer represents glyph ids as u16; reject wider ids with a typed error
+        // instead of silently narrowing them to a different glyph (#1409).
+        let glyph_id =
+            u16::try_from(glyph_id).map_err(|_| FontError::UnsupportedGlyphId { glyph_id })?;
         let num_glyphs = self.num_glyphs();
         if glyph_id >= num_glyphs {
             return Err(FontError::MissingGlyph {
