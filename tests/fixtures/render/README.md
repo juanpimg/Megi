@@ -85,7 +85,8 @@ runtime (`render::ScriptingMode::Enabled`, default with the `js` feature) and ch
 mutated pixels, external `src` loading (`file:` and loopback HTTP), `document.write`,
 `--no-network`, console capture, exception/budget warnings and determinism. Scripts execute
 **after parsing** (parse-time execution is WP-6.4, needed for the html5lib `scripted_*`
-cases); `async`/`defer` ordering and modules are not supported yet.
+cases); `async`/`defer` ordering and ES modules are supported (module_inline,
+  module_external, module_chain, module_error, module_no_network fixtures + modules/*.js).
 
 Deterministic acceptance commands:
 
