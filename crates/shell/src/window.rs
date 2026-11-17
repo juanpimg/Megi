@@ -2151,14 +2151,20 @@ impl WindowApp {
         else {
             return;
         };
-        if surface.resize(width_nonzero, height_nonzero).is_err() {
+        if let Err(error) = surface.resize(width_nonzero, height_nonzero) {
+            self.set_present_error(format!("window surface resize failed: {error}"));
             return;
         }
-        let Ok(mut buffer) = surface.buffer_mut() else {
-            return;
+        let mut buffer = match surface.buffer_mut() {
+            Ok(buffer) => buffer,
+            Err(error) => {
+                self.set_present_error(format!("window buffer acquisition failed: {error}"));
+                return;
+            }
         };
         let expected = expected_buffer_len(width, height).unwrap_or(0);
         if buffer.len() != expected {
+            self.set_present_error("window buffer size mismatch".to_string());
             return;
         }
         // An error always shows a white frame (the previous frame is not reused).
@@ -2226,7 +2232,20 @@ impl WindowApp {
             ..view
         };
         let _ = chrome::draw_chrome(&mut buffer, width, height, chrome_scale, &view);
-        let _ = buffer.present();
+        if let Err(error) = buffer.present() {
+            self.set_present_error(format!("window present failed: {error}"));
+        }
+    }
+
+    /// Records a presentation failure and reflects it in the title without re-entering
+    /// presentation (#1459).
+    fn set_present_error(&mut self, message: String) {
+        if self.error.as_deref() == Some(message.as_str()) {
+            self.update_title();
+            return;
+        }
+        self.error = Some(message);
+        self.update_title();
     }
 }
 

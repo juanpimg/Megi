@@ -242,7 +242,8 @@ fn h2_read_request_frames(stream: &mut TcpStream) -> (u32, bool, Vec<(String, St
             kind::DATA => {
                 got_data = true;
                 if frame.header.flags & flags::END_STREAM != 0 {
-                    return (stream_id, false, Vec::new());
+                    // No trailers followed: report the DATA frame's END_STREAM flag (#1347).
+                    return (stream_id, true, Vec::new());
                 }
             }
             _ => {}
@@ -291,8 +292,12 @@ fn h2_without_trailers_keeps_end_stream_on_the_last_data() {
     let (port, server) = spawn_once(|mut tcp| {
         h2_read_preface(&mut tcp);
         h2_send_settings(&mut tcp);
-        let (stream_id, has_trailers, _) = h2_read_request_frames(&mut tcp);
-        assert!(!has_trailers, "no trailers expected");
+        let (stream_id, end_stream, trailers) = h2_read_request_frames(&mut tcp);
+        assert!(trailers.is_empty(), "no trailers expected");
+        assert!(
+            end_stream,
+            "final DATA must carry END_STREAM when no trailers"
+        );
         h2_respond(&mut tcp, stream_id);
         let _ = tcp.shutdown(Shutdown::Write);
     });

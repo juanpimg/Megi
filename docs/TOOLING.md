@@ -204,7 +204,7 @@ cargo run -p render -- file:///ruta/pagina.html /tmp/local.png --no-network
 `crates/image` (std puro, sin dependencias) decodifica PNG a RGBA8 straight y expone un inflate zlib/DEFLATE reutilizable:
 
 ```bash
-cargo test -p image                 # 120 tests + 1 doctest (PNG/JPEG/GIF/WebP/EXIF/inflate)
+cargo test -p image                 # 121 tests + 1 doctest (PNG/JPEG/GIF/WebP/EXIF/inflate)
 cargo run -p render -- tests/fixtures/phase4/basic.html /tmp/basic.png 2>/dev/null || true
 # El test de integración decodifica el PNG generado por paint y lo compara con basic.rgba
 cargo test -p paint --test end_to_end_html
@@ -225,7 +225,7 @@ tools/megi.sh tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png
 md5sum /tmp/megi-shot.png     # 7324e851… (idéntico al pipeline render)
 ```
 
-`megi` presenta el `Pixmap` como framebuffer `0RGB` con `softbuffer` (winit 0.30, backends X11/Wayland por dlopen, sin GPU). `--screenshot` usa el mismo pipeline `render` sin `EventLoop` y se testea en CI. **Navegación (rondas 9–10)**: clic izquierdo en enlaces (`Url::join`), historial `NavigationState` (back/forward/replace/reload, cap 256, truncado forward; fallos conservan la entrada), **Alt+←/Backspace/b** atrás, **Alt+→/n** adelante, **r** recargar, **q/Esc** cerrar, scroll completo, HiDPI y **título dinámico** `<title>`+URL+% scroll+`[recortado]` (errores «Megi — error: …»); hit regions y título del mismo render que los píxeles; desde la ronda 10 los enlaces se resuelven con **`RenderOutput.hit_regions` + `paint::find_link_at`** (fallback layout+DOM), el shell acepta `--cookies`/`--origin` y la **ronda 13** añade **zoom** (`Ctrl+=/-/0`, `--zoom` 0.5–3.0) y **auto-refresh opt-in** (`--refresh-ms`). 305 tests. Limitaciones: fragmentos = nueva navegación, >8192 CSS px recortado, JS/eventos no en el bucle del host y ventana no testeada en CI. Ver `crates/shell/src/lib.rs`.
+`megi` presenta el `Pixmap` como framebuffer `0RGB` con `softbuffer` (winit 0.30, backends X11/Wayland por dlopen, sin GPU). `--screenshot` usa el mismo pipeline `render` sin `EventLoop` y se testea en CI. **Navegación (rondas 9–10)**: clic izquierdo en enlaces (`Url::join`), historial `NavigationState` (back/forward/replace/reload, cap 256, truncado forward; fallos conservan la entrada), **Alt+←/Backspace/b** atrás, **Alt+→/n** adelante, **r** recargar, **q/Esc** cerrar, scroll completo, HiDPI y **título dinámico** `<title>`+URL+% scroll+`[recortado]` (errores «Megi — error: …»); hit regions y título del mismo render que los píxeles; desde la ronda 10 los enlaces se resuelven con **`RenderOutput.hit_regions` + `paint::find_link_at`** (fallback layout+DOM), el shell acepta `--cookies`/`--origin` y la **ronda 13** añade **zoom** (`Ctrl+=/-/0`, `--zoom` 0.5–3.0) y **auto-refresh opt-in** (`--refresh-ms`). 310 tests (`#[test]` en `crates/shell`, fuente de verdad: `cargo test -p shell -- --list`). Incluye historial/sesión, pestañas, formularios básicos, descargas, find-in-page y chrome/headless; limitaciones actuales: fragmentos = nueva navegación, >8192 CSS px recortado, JS/eventos no totalmente integrados en el bucle interactivo del host, widgets/submit/validación nativos completos pendientes y ventana no testeada en CI. Ver `crates/shell/src/lib.rs`.
 
 ### 2.12 Fixtures de imágenes y captura E2E
 
@@ -518,7 +518,7 @@ cargo run -p shell -- tests/fixtures/render/find.html --find "link" --screenshot
 
 Límites de la ronda: gradientes cap **64 stops / 256 por estilo**, sin `conic-gradient`/color hints/espacios avanzados/`image-set`/`border-image`; grid avanzado cap **1.024 tracks**, sin dense/zonas/auto-fit real/solapes explícitos; find-in-page sólo texto literal case-insensitive (sin regex/imágenes/barra visual). Referrer/SameSite ya cableados en render (snapshot por render; SameSite top-level aproximado).
 
-Cifras de referencia en la ronda 19: **1260 tests** (bench 8, css 142, dom 28, fonts 17+1 doctest, html 60, image 111+1 doctest, js 71, layout 173, net 207, paint 162, **render 136**, shell 125, svg 73, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; fuzz 7 targets; suite determinista; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88.
+Cifras de referencia en la ronda 19 (snapshot histórico): **1260 tests** (bench 8, css 142, dom 28, fonts 17+1 doctest, html 60, image 111+1 doctest, js 71, layout 173, net 207, paint 162, **render 136**, shell 125, svg 73, harness 11); gate tokenizer 7.050/7.050, **árbol 3.904/3.904 (100 %)**, serializer 230/230, CSS 30/30; allowlists vacías; rendimiento: **layout ~36,3 ms**, **pipeline ~120,5 ms** (`html/massive-end-p` ~19 ms), encoder PNG −30,5 % invariante; fuzz 7 targets; suite determinista; todos los crates `#![forbid(unsafe_code)]`; MSRV Rust 1.88 en ese punto (workspace actual: 1.91).
 
 ### 2.16n Ronda 21: recuperación de rendimiento y progress status
 

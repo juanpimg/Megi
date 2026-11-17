@@ -1228,9 +1228,32 @@ fn split_top_level_commas(input: &str) -> Vec<String> {
     parts
 }
 
+/// Forward-only cursor over selector parts. `Vec::remove(0)` shifts every
+/// remaining `String` header, making an n-part selector O(n²) (#1414).
+struct SelectorTokens {
+    parts: Vec<String>,
+    pos: usize,
+}
+
+impl SelectorTokens {
+    fn new(parts: Vec<String>) -> Self {
+        Self { parts, pos: 0 }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.pos >= self.parts.len()
+    }
+
+    fn next_part(&mut self) -> Option<String> {
+        let part = self.parts.get(self.pos)?.clone();
+        self.pos += 1;
+        Some(part)
+    }
+}
+
 /// Parses a single complex selector string.
 fn parse_complex_selector(input: &str) -> Option<ComplexSelector> {
-    let mut tokens = tokenize_selector_parts(input);
+    let mut tokens = SelectorTokens::new(tokenize_selector_parts(input));
     let mut compounds = Vec::new();
 
     loop {
@@ -1239,7 +1262,7 @@ fn parse_complex_selector(input: &str) -> Option<ComplexSelector> {
             compounds.push((compound, None));
             break;
         }
-        let combinator = match tokens.remove(0).as_str() {
+        let combinator = match tokens.next_part()?.as_str() {
             ">" => Combinator::Child,
             "+" => Combinator::NextSibling,
             "~" => Combinator::SubsequentSibling,
@@ -1269,7 +1292,15 @@ fn push_selector_chunk(parts: &mut Vec<String>, current: &mut String) {
 /// combinator tokens. Whitespace and combinators nested in `[...]`, `(...)` or strings stay
 /// inside their chunk, so attribute values such as `[title="Hello, world"]` survive intact
 /// (F15).
+/// Anti-DoS caps for a single selector: beyond these the selector is rejected
+/// instead of spending O(n²) time in the old `Vec::remove(0)` parser (#1414).
+const MAX_SELECTOR_BYTES: usize = 8 * 1024;
+const MAX_SELECTOR_PARTS: usize = 64;
+
 fn tokenize_selector_parts(input: &str) -> Vec<String> {
+    if input.len() > MAX_SELECTOR_BYTES {
+        return Vec::new();
+    }
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut chars = input.chars().peekable();
@@ -1369,6 +1400,9 @@ fn tokenize_selector_parts(input: &str) -> Vec<String> {
             }
             other => current.push(other),
         }
+        if parts.len() > MAX_SELECTOR_PARTS {
+            return Vec::new();
+        }
     }
     if !current.trim().is_empty() {
         parts.push(current.trim().to_string());
@@ -1414,11 +1448,11 @@ const DYNAMIC_PSEUDO_CLASSES: &[&str] = &[
     "paused",
 ];
 
-fn parse_compound_selector(tokens: &mut Vec<String>) -> Option<CompoundSelector> {
+fn parse_compound_selector(tokens: &mut SelectorTokens) -> Option<CompoundSelector> {
     if tokens.is_empty() {
         return None;
     }
-    let s = tokens.remove(0);
+    let s = tokens.next_part()?;
     if matches!(s.as_str(), " " | ">" | "+" | "~") {
         return None;
     }
@@ -1896,5 +1930,22 @@ mod style_pass_budget_tests {
         MATCH_STEPS.with(|steps| steps.set(1));
         let _inner = style_pass_scope();
         assert_eq!(MATCH_STEPS.with(|steps| steps.get()), 1);
+    }
+}
+
+#[cfg(test)]
+mod selector_budget_tests {
+    use super::*;
+
+    #[test]
+    fn oversized_selectors_are_rejected_before_tokenizing() {
+        let huge = "a".repeat(MAX_SELECTOR_BYTES + 1);
+        assert!(tokenize_selector_parts(&huge).is_empty());
+
+        let many = "a ".repeat(MAX_SELECTOR_PARTS + 2);
+        assert!(many.len() < MAX_SELECTOR_BYTES);
+        assert!(tokenize_selector_parts(&many).is_empty());
+
+        assert!(!tokenize_selector_parts("a>b").is_empty());
     }
 }

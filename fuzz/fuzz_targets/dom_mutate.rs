@@ -92,6 +92,12 @@ fuzz_target!(|data: &[u8]| {
             _ => {}
         }
     }
-    // Validate invariants: no panic on traversal.
+    // Validate invariants after mutation sequences (#1422): the harness must
+    // surface silent arena corruption, not only panics during traversal.
+    assert!(
+        doc.validate_invariants().is_ok(),
+        "DOM invariants violated: {:?}",
+        doc.validate_invariants().err()
+    );
     let _ = doc.children(root);
 });

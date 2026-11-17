@@ -184,7 +184,7 @@ fn import_meta_url_is_available() {
         sources: HashMap::new(),
     };
     let mut runtime = runtime_with(&modules);
-    runtime
+    let outcome = runtime
         .eval_module(
             "export const url = import.meta.url;\n",
             "main",
@@ -192,15 +192,14 @@ fn import_meta_url_is_available() {
             &Budget::default(),
         )
         .expect("meta");
-    let outcome = runtime
-        .eval_module(
-            "export const marker = 1;\n",
-            "main",
-            "mem://dir/other.js",
-            &Budget::default(),
-        )
-        .expect("meta2");
-    assert_eq!(outcome.url, "mem://dir/other.js");
+    assert!(
+        outcome
+            .exports
+            .iter()
+            .any(|(name, value)| name == "url" && value == "mem://dir/main.js"),
+        "{:?}",
+        outcome.exports
+    );
 }
 
 #[test]

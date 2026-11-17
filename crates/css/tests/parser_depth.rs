@@ -27,7 +27,14 @@ fn deeply_nested_functions_do_not_overflow_the_stack() {
 fn deeply_nested_selectors_do_not_overflow_the_stack() {
     let css = format!("{}a{{}}", ":is(".repeat(50_000));
     let sheet = parse_stylesheet(&css);
-    let _ = sheet.rules.len();
+    // Past `MAX_SELECTOR_NESTING` the selector list is invalid, so the rule is dropped (#1356).
+    assert!(
+        sheet.rules.is_empty(),
+        "over-nested selector must not produce a rule"
+    );
+    assert!(sheet.imports.is_empty());
+    assert!(sheet.font_faces.is_empty());
+    assert!(sheet.keyframes.is_empty());
 }
 
 #[test]

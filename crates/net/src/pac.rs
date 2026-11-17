@@ -8,8 +8,10 @@
 //! Limitations: only the first `PROXY host:port` directive is consumed (`DIRECT` is
 //! represented as `None`; `SOCKS` directives are ignored and fall back to DIRECT);
 //! WPAD is not auto-discovered (the script URL must be configured); the cache is
-//! process-global with a 5-minute TTL and no invalidation API; PAC evaluation is
-//! synchronous and needs the `pac` feature (`js` runtime).
+//! process-global with a 5-minute TTL (evicting the oldest entry when full) but
+//! can be reset with [`clear_cache`], which `ResourceLoader::clear_cache()` calls
+//! when the network configuration changes; PAC evaluation is synchronous and
+//! needs the `pac` feature (`js` runtime).
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -27,6 +29,15 @@ type Cache = Mutex<HashMap<(String, String), (Instant, Option<Url>)>>;
 fn cache() -> &'static Cache {
     static CACHE: OnceLock<Cache> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Drops every cached PAC decision. Call when the proxy configuration or the
+/// document profile changes so a stale script result cannot leak between
+/// origins/sessions (#1475).
+pub fn clear_cache() {
+    if let Ok(mut cache) = cache().lock() {
+        cache.clear();
+    }
 }
 
 /// Resolves the PAC proxy for `target`, fetching/evaluating the script on a cache miss.
@@ -197,5 +208,17 @@ mod cache_eviction_tests {
         assert_eq!(oldest.1, "old");
         cache.remove(&oldest);
         assert!(cache.contains_key(&("p".into(), "fresh".into())));
+    }
+    #[test]
+    fn clear_cache_removes_all_decisions() {
+        {
+            let mut cache = cache().lock().expect("PAC cache lock");
+            cache.insert(
+                ("pac".to_owned(), "host".to_owned()),
+                (Instant::now(), None),
+            );
+        }
+        clear_cache();
+        assert!(cache().lock().expect("PAC cache lock").is_empty());
     }
 }

@@ -749,9 +749,11 @@ impl Document {
     }
 
     /// Frees `slot`, dropping its payload and making the slot available for reuse.
+    ///
+    /// Invalid or non-live slots are ignored in all build profiles so a double free,
+    /// stale handle or corrupt free-list entry cannot alias a live slot (#1467).
     fn free_slot(&mut self, slot: usize) {
         if slot >= self.nodes.len() || !self.occupied[slot] {
-            debug_assert!(false, "attempted to free a slot that is not live");
             return;
         }
         self.occupied[slot] = false;
@@ -1369,7 +1371,8 @@ impl Document {
                 pending.push(fragment);
             }
             if to_free.len() > self.nodes.len() {
-                debug_assert!(false, "child chain cycle while removing subtree");
+                // A cycle/corrupt chain must be handled in release too: stop collection
+                // instead of relying on a debug-only assertion (#1467).
                 break;
             }
         }

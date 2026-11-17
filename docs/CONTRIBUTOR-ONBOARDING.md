@@ -1,4 +1,4 @@
-# Onboarding de colaboradores
+# Onboarding de colaboradores (propuesta para #970)
 
 > **Estado**: propuesta para revisión del mantenedor. Las acciones que cambian
 > metadatos de GitHub (etiquetas, Projects, permisos de workflows) requieren
@@ -13,25 +13,20 @@ propuesta del tablero de colaboración.
 Criterios usados: alcance acotado a 1–2 archivos, criterio de aceptación explícito,
 sin dependencias de permisos especiales y verificable con un comando local.
 
-| # | Issue | Por qué es abordable | Verificación |
-|---|---|---|---|
-| [#1424](https://github.com/juanpimg/Megi/issues/1424) | Sin target de fuzz para gzip/deflate | Añade un target sobre `compression` (workspace de fuzz aparte) | `cd fuzz && cargo +nightly fuzz build` |
-| [#1426](https://github.com/juanpimg/Megi/issues/1426) | Status-line/headers HTTP/1.1 inalcanzables desde un harness | Añade un target sobre el parser puro | `cd fuzz && cargo +nightly fuzz build` |
-| [#1422](https://github.com/juanpimg/Megi/issues/1422) | `dom_mutate` no valida invariantes del DOM | Añade comprobaciones al harness existente | `cd fuzz && cargo +nightly fuzz build` |
-| [#1429](https://github.com/juanpimg/Megi/issues/1429) | `container_queries` anuncia style queries no implementadas | Recorta el target/docs a size-only o implementa `style()` | `cd fuzz && cargo +nightly fuzz build` |
-| [#1484](https://github.com/juanpimg/Megi/issues/1484) | `PHASE4-SUPPORT.md` marca capacidades terminadas como PENDIENTE | Solo documentación, filas de una tabla | `python3 tools/check_docs_links.py` |
-| [#1414](https://github.com/juanpimg/Megi/issues/1414) | Selector parsing O(n²) (`Vec::remove(0)`) | Refactor localizado en `css/src/selector.rs` | `cargo test -p css` + bench |
-| [#1416](https://github.com/juanpimg/Megi/issues/1416) | Color de gradientes: escaneo lineal por píxel | Precalculación de stops en `paint` | `cargo test -p paint` + bench |
-| [#1431](https://github.com/juanpimg/Megi/issues/1431) | Fixtures no ejecutados y demos sin test | Añade tests sobre fixtures existentes | `cargo test --workspace` |
-| [#1432](https://github.com/juanpimg/Megi/issues/1432) | Pares de fixtures byte-idénticos | Limpieza de fixtures duplicados | `cargo test --workspace` |
+> **Actualización (#1514)**: los ejemplos que aparecían en esta tabla (#467, #468,
+> #469, #470, #471, #472, #473, #474, #483, #485, #439, #442, #443, #970) ya
+> están resueltos o cerrados. Esta sección no debe tratar trabajo ya entregado
+> como candidatura abierta; usa el inventario vivo del repositorio.
 
-> Nota (actualizada 2026-11-17): la tabla anterior listaba #467/#468/#471/#970 (y otras) que ya
-> están resueltos — los targets de fuzz y el project board existen en el árbol. Esta lista se
-> verificó contra el estado **abierto** de cada issue y su ausencia en el código. El criterio
-> anterior (tareas acotadas y verificables con un comando local) es más duradero que la lista.
+| Búsqueda | Cómo usarla | Verificación antes de empezar |
+|---|---|---|
+| Etiqueta `good first issue` | `gh issue list --repo juanpimg/Megi --label "good first issue" --state open` | Confirma que el issue sigue abierto y tiene criterio de aceptación claro |
+| Etiqueta `help wanted` | `gh issue list --repo juanpimg/Megi --label "help wanted" --state open` | Acota el alcance a 1–2 archivos y revisa dependencias |
+| Inventario por área | Filtra issues abiertas por `docs`, `tools`, `tests`, `fuzz`, `ci` u otra área relevante | Verifica el comando local sugerido por el issue (p. ej. `python3 tools/check_docs_links.py`, `cd fuzz && cargo +nightly fuzz build`, `cargo test -p <crate>`) |
 
-> Nota: la lista debe revisarse antes de aplicar etiquetas, porque el inventario
-> de issues cambia cada ronda. El criterio anterior es más duradero que la lista.
+> Nota: revisa el inventario actual antes de aplicar etiquetas o proponer una
+> candidatura, porque las issues cambian en cada ronda. Los criterios anteriores
+> son más duraderos que cualquier lista estática.
 
 ## 2. Propuesta de tablero (GitHub Projects)
 

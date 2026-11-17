@@ -57,6 +57,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Reject non-numeric/negative budgets before they reach shell arithmetic (#1397).
+[[ $HOURS =~ ^[0-9]+$ ]] || { echo "--hours must be a non-negative integer (got: $HOURS)" >&2; exit 2; }
+[[ $SLICE_SECONDS =~ ^[0-9]+$ ]] || { echo "--slice-seconds must be a non-negative integer (got: $SLICE_SECONDS)" >&2; exit 2; }
+[[ $SLICE_SECONDS -gt 0 ]] || { echo "--slice-seconds must be greater than zero" >&2; exit 2; }
+
 command -v cargo >/dev/null || { echo "cargo not found" >&2; exit 2; }
 if ! cargo +nightly fuzz --version >/dev/null 2>&1; then
   echo "cargo-fuzz (nightly) not installed; cargo install cargo-fuzz --version 0.13.2 --locked" >&2
@@ -75,8 +80,9 @@ while [[ $(date +%s) -lt $deadline ]]; do
     now=$(date +%s)
     remaining=$(( deadline - now ))
     [[ $remaining -le 0 ]] && break
+    # Never overshoot the advertised deadline: the final slice is capped at
+    # the remaining time (#1397).
     slice=$(( remaining < SLICE_SECONDS ? remaining : SLICE_SECONDS ))
-    [[ $slice -lt 30 ]] && slice=30
 
     log="$OUT/logs/${target}.log"
     mkdir -p "fuzz/corpus/$target"
