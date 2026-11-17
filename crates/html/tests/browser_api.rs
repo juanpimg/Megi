@@ -266,15 +266,47 @@ fn inner_html_keeps_previous_children_when_the_parse_hits_a_limit() {
 }
 
 #[test]
-fn outer_html_rolls_back_when_an_insertion_is_rejected() {
-    // The dual half-move hazard: children were inserted one by one before `element`, so a
-    // rejection in the middle left the tree half-mutated (#646).
-    let mut doc = parse("<html><body><div id=\"x\"></div><p>sibling</p></body></html>");
-    let div = doc.get_element_by_id("x").expect("div present");
+fn outer_html_rejects_skeleton_elements_and_leaves_the_tree_untouched() {
+    // Replacing `<html>`/`<head>`/`<body>` would leave the document without its skeleton and
+    // corrupt every downstream stage (#562), so the setter must refuse before touching the tree.
+    let mut doc = parse(
+        "<html><head><title>t</title></head><body><div id=\"x\"></div><p>sibling</p></body></html>",
+    );
+    let body = doc.body().expect("body present");
     let before = doc.allocated();
-    // `<html>` as fragment content is rejected by the parser rules for a div context, so this
-    // is mostly a smoke check that a failed write leaves the sibling and the arena consistent.
-    let _ = set_outer_html(&mut doc, div, "<span>a</span><span>b</span>");
+    let before_children: Vec<String> = element_names(&doc, body);
+
+    let error = set_outer_html(&mut doc, body, "<span>a</span><span>b</span>")
+        .expect_err("replacing <body> must be refused");
+    assert!(
+        matches!(error, DomError::HierarchyRequest { .. }),
+        "expected HierarchyRequest, got {error:?}"
+    );
+    assert_eq!(
+        element_names(&doc, body),
+        before_children,
+        "a refused write must not mutate the element's siblings"
+    );
+    assert_eq!(
+        doc.allocated(),
+        before,
+        "a refused write must not leak nodes"
+    );
     assert!(doc.validate_invariants().is_ok());
-    assert!(doc.allocated() >= before);
+    assert_eq!(text(&doc, doc.get_element_by_id("x").expect("div")), "");
+}
+
+#[test]
+fn outer_html_rejects_a_non_element_reference() {
+    // The document node is not an element: the fragment context lookup must fail cleanly
+    // instead of replacing the document.
+    let mut doc = parse("<html><body><p>x</p></body></html>");
+    let root = doc.root();
+    let error = set_outer_html(&mut doc, root, "<p>y</p>")
+        .expect_err("the document node is not replaceable");
+    assert!(
+        matches!(error, DomError::NotAnElement(_)),
+        "expected NotAnElement, got {error:?}"
+    );
+    assert!(doc.validate_invariants().is_ok());
 }
