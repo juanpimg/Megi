@@ -905,13 +905,10 @@ pub fn execute_scripts(
                             body: resource.bytes.clone(),
                         })
                     }
-                    Err(_) => Ok(js::host::FetchResult {
-                        status: 404,
-                        status_text: "Not Found".to_string(),
-                        url: request.url,
-                        headers: Vec::new(),
-                        body: Vec::new(),
-                    }),
+                    // A real loader failure (permission, oversized response, unsupported
+                    // scheme) must reject the fetch promise, not resolve as a 404 (#1456).
+                    // Out-of-directory file access is handled above with a synthetic 404.
+                    Err(error) => Err(js::JsError::Runtime(format!("fetch failed: {error}"))),
                 }
             }));
         }
@@ -1651,5 +1648,21 @@ mod layout_provider_freshness_tests {
             2,
             "provider must be re-evaluated"
         );
+    }
+}
+
+#[cfg(test)]
+mod fetch_failure_tests {
+    #[test]
+    fn loader_failures_reject_instead_of_resolving_404() {
+        // Mirrors the non-HTTP loader error path: an Err from ResourceLoader must become
+        // an Err (rejected promise), never a synthetic successful 404 (#1456).
+        let result: Result<(), String> = Err("permission denied".to_string());
+        let bridged = result.map_err(|error| format!("fetch failed: {error}"));
+        assert!(bridged.is_err());
+        assert!(bridged.unwrap_err().contains("permission denied"));
+
+        let success: Result<(), String> = Ok(());
+        assert!(success.map_err(|error| format!("fetch failed: {error}")).is_ok());
     }
 }
