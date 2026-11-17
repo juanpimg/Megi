@@ -297,7 +297,7 @@ fn documented_unsupported_apis_are_absent() {
         &mut runtime,
         r#"
         var div = document.createElement('div');
-        var gaps = [typeof crypto, typeof Range, typeof XMLHttpRequest];
+        var gaps = [typeof Range, typeof XMLHttpRequest];
         var supported = [
           typeof URLSearchParams, typeof queueMicrotask, typeof MouseEvent,
           typeof structuredClone, typeof atob, typeof btoa,
@@ -306,6 +306,7 @@ fn documented_unsupported_apis_are_absent() {
           typeof AbortController, typeof AbortSignal, typeof ReadableStream
         ];
         gaps.every(function (value) { return value === 'undefined'; }) &&
+          typeof crypto === 'object' &&
           supported.every(function (value) { return value === 'function'; });
         "#,
     );

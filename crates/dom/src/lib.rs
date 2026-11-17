@@ -706,23 +706,30 @@ impl Document {
 
     /// Allocates a node from the free list (or grows the arena) and writes `kind` into it.
     fn alloc_slot(&mut self, kind: NodeKind) -> NodeId {
-        let (slot, local_generation) = match self.free_list.pop() {
-            Some(raw_slot) => {
-                let slot = raw_slot as usize;
-                debug_assert!(!self.occupied[slot], "free list contains an occupied slot");
-                (slot, self.generations[slot])
-            }
-            None => {
-                if self.nodes.len() >= MAX_SLOTS {
-                    panic!(
-                        "Document arena exhausted: at most {MAX_SLOTS} node slots are supported"
-                    );
+        let (slot, local_generation) = loop {
+            match self.free_list.pop() {
+                Some(raw_slot) => {
+                    let slot = raw_slot as usize;
+                    // A corrupt/invalid free-list entry must be skipped in release too:
+                    // handing the slot to a second live node would alias NodeIds (#1467).
+                    if slot < self.occupied.len() && !self.occupied[slot] {
+                        break (slot, self.generations[slot]);
+                    }
+                    // Deliberately not a debug_assert: callers may be fuzzing corrupt
+                    // arenas, and skipping the bad entry must work in every profile.
                 }
-                let slot = self.nodes.len();
-                self.nodes.push(tombstone_node(slot, 0));
-                self.generations.push(0);
-                self.occupied.push(false);
-                (slot, 0)
+                None => {
+                    if self.nodes.len() >= MAX_SLOTS {
+                        panic!(
+                            "Document arena exhausted: at most {MAX_SLOTS} node slots are supported"
+                        );
+                    }
+                    let slot = self.nodes.len();
+                    self.nodes.push(tombstone_node(slot, 0));
+                    self.generations.push(0);
+                    self.occupied.push(false);
+                    break (slot, 0);
+                }
             }
         };
         let id = NodeId::pack(slot, self.encode_generation(local_generation));
@@ -2673,6 +2680,22 @@ impl Iterator for DescendantsIter<'_> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn corrupt_free_list_entry_is_skipped_in_release_too() {
+        let mut doc = Document::new();
+        let a = doc.create_text_node("a");
+        let occupied = a.index();
+        // Inject a corrupt entry pointing at a live slot (#1467).
+        doc.free_list.push(occupied as u32);
+        let b = doc.create_text_node("b");
+        assert_ne!(
+            b.index(),
+            occupied,
+            "allocation must never hand out an occupied slot"
+        );
+        assert_eq!(doc.node(a).as_text(), Some("a"));
+    }
+
     use super::*;
 
     #[test]

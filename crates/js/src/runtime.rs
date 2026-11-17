@@ -675,10 +675,7 @@ fn build_navigator(context: &mut Context) -> JsObject {
         Attribute::all(),
     );
     init.function(
-        native(|_this, args, context| {
-            let _ = args;
-            Ok(JsValue::from(true))
-        }),
+        native(|_this, _args, _context| Ok(JsValue::from(true))),
         js_string!("sendBeacon"),
         0,
     );
@@ -755,7 +752,7 @@ fn build_crypto(context: &mut Context) -> JsObject {
     init.function(
         native(|_this, _args, _context| {
             // Generate a v4 UUID from the same xorshift source.
-            let mut seed = with_host(|host| host.now_ms()).unwrap_or(12345) as u64;
+            let mut seed = with_host(|host| host.now_ms()).unwrap_or(12345);
             let mut bytes = [0u8; 16];
             for b in bytes.iter_mut() {
                 seed ^= seed << 13;

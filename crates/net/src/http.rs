@@ -1705,14 +1705,20 @@ fn connect_tls(
 /// `ring` crypto provider with safe default protocol versions (TLS 1.2 + TLS 1.3).
 #[cfg(feature = "tls")]
 fn default_tls_config() -> Result<Arc<rustls::ClientConfig>, FetchError> {
-    static CACHE: std::sync::OnceLock<Option<Arc<rustls::ClientConfig>>> =
-        std::sync::OnceLock::new();
-    CACHE
-        .get_or_init(|| build_default_tls_config().ok())
-        .clone()
-        .ok_or_else(|| {
-            FetchError::Tls("cannot initialize the default rustls client configuration".to_owned())
-        })
+    // Cache only successful builds: a transient/environmental failure must not make
+    // every later https fetch fail for the rest of the process (#1473).
+    static CACHE: std::sync::OnceLock<Arc<rustls::ClientConfig>> = std::sync::OnceLock::new();
+    if let Some(config) = CACHE.get() {
+        return Ok(Arc::clone(config));
+    }
+    let config = build_default_tls_config().map_err(|error| {
+        eprintln!("megi: cannot initialize default rustls configuration: {error}");
+        FetchError::Tls(format!(
+            "cannot initialize the default rustls client configuration: {error}"
+        ))
+    })?;
+    let _ = CACHE.set(Arc::clone(&config));
+    Ok(config)
 }
 
 #[cfg(feature = "tls")]
@@ -2489,5 +2495,21 @@ fn map_io_error(error: io::Error) -> FetchError {
             }
             FetchError::Io(error)
         }
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "tls")]
+mod tls_cache_tests {
+    use super::*;
+
+    #[test]
+    fn successful_tls_config_is_cached() {
+        let a = default_tls_config().expect("first build");
+        let b = default_tls_config().expect("cached build");
+        assert!(
+            Arc::ptr_eq(&a, &b),
+            "successful configurations must be shared across fetches"
+        );
     }
 }

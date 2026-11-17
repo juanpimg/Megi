@@ -14,7 +14,11 @@ pub fn print_table(outcome: &RunOutcome) {
     println!(
         "Megi benchmark suite — commit {}{}",
         meta.commit,
-        if meta.dirty { " (worktree dirty)" } else { "" }
+        if meta.dirty == Some(true) {
+            " (worktree dirty)"
+        } else {
+            ""
+        }
     );
     println!(
         "{} · {} · {} logical cores · scale {:.2} · {} iterations (+{} warm-up) · setup {:.1} ms",
@@ -113,7 +117,12 @@ pub fn print_json(outcome: &RunOutcome) {
     json.push_str("  \"commit\": ");
     push_json_string(&mut json, &meta.commit);
     json.push_str(",\n");
-    let _ = writeln!(json, "  \"worktree_dirty\": {},", meta.dirty);
+    match meta.dirty {
+        Some(dirty) => {
+            let _ = writeln!(json, "  \"worktree_dirty\": {},", dirty);
+        }
+        None => json.push_str("  \"worktree_dirty\": null,\n"),
+    }
     json.push_str("  \"rustc\": ");
     push_json_string(&mut json, &meta.rustc);
     json.push_str(",\n");

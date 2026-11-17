@@ -33,8 +33,8 @@ fn documented_gap_live_html_collections() {
     "#,
     );
     assert_eq!(
-        value, "undefined:undefined:1:2",
-        "documented gap: no live element collections"
+        value, "undefined:function:1:2",
+        "documented gap: no live element collections (querySelectorAll is a static snapshot)"
     );
 }
 

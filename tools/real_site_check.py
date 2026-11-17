@@ -179,6 +179,33 @@ producidos por <code>render</code>. Para medir cobertura de capacidades, ver
 """
 
 
+def failure_reasons(sites: list[dict], results: list[dict]) -> list[str]:
+    """Reasons why the check must fail a pipeline (issue #1485).
+
+    A blank page, a render error, or fewer than the manifest's `min_items` are hard
+    failures. A merely degraded site (image/script warnings) is reported but does not
+    fail, since that is an expected state for some snapshots.
+    """
+    reasons: list[str] = []
+    for site, item in zip(sites, results, strict=True):
+        name = item.get("name", site.get("id", "?"))
+        if item.get("result") in ("ERROR", "PÁGINA EN BLANK"):
+            reasons.append(f"{name}: {item.get('result')}: {item.get('error', '')}")
+            continue
+        try:
+            minimum = int(site.get("min_items", 0))
+        except (TypeError, ValueError):
+            minimum = 0
+        if minimum > 0:
+            try:
+                items = int(item.get("display_items", 0))
+            except (TypeError, ValueError):
+                items = 0
+            if items < minimum:
+                reasons.append(f"{name}: {items} items < min_items {minimum}")
+    return reasons
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Real-site render check for Megi.")
     parser.add_argument("--live", action="store_true", help="fetch real URLs instead of snapshots")
@@ -188,7 +215,8 @@ def main(argv: list[str]) -> int:
     root = Path(args.root).resolve() if args.root else Path(__file__).resolve().parent.parent
 
     live = args.live and not args.offline
-    results = [render_one(root, site, live) for site in load_sites(root)]
+    sites = load_sites(root)
+    results = [render_one(root, site, live) for site in sites]
     generated_at = datetime.now(timezone.utc).date().isoformat()
     payload = {
         "mode": "live" if live else "snapshot",
@@ -202,7 +230,10 @@ def main(argv: list[str]) -> int:
     for item in results:
         print(f"{item['result']:>18}  {item['name']}  ({item['display_items']} items)")
     print(f"wrote {json_path.relative_to(root)} and {html_path.relative_to(root)}")
-    return 0
+    failures = failure_reasons(sites, results)
+    for reason in failures:
+        print(f"FAIL: {reason}", file=sys.stderr)
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

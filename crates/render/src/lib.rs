@@ -872,6 +872,10 @@ fn render_url_inner(
                 &collection,
                 css::StateContext::new(),
                 options.time_ms,
+                (
+                    options.viewport.width as f32,
+                    options.viewport.height as f32,
+                ),
             )));
             reusable_stylesheets = Some((collection, summary, fonts, stylesheet_signature_before));
         }
@@ -1032,6 +1036,10 @@ fn render_url_inner(
         &stylesheet_collection,
         css::StateContext::new(),
         options.time_ms,
+        (
+            options.viewport.width as f32,
+            options.viewport.height as f32,
+        ),
     );
     let styles_time = styles_start.elapsed();
 
@@ -1290,6 +1298,10 @@ fn render_svg_document(
         &stylesheet_collection,
         css::StateContext::new(),
         options.time_ms,
+        (
+            options.viewport.width as f32,
+            options.viewport.height as f32,
+        ),
     );
 
     let mut image_store = paint::ImageStore::new();
@@ -1575,7 +1587,10 @@ fn collect_styles(
     ),
     RenderError,
 > {
-    let collected = stylesheets::collect_stylesheets(document, base_url, media);
+    let (vw, vh) = media.viewport.unwrap_or((1280.0, 720.0));
+    let collected = css::with_calc_viewport(vw, vh, || {
+        stylesheets::collect_stylesheets(document, base_url, media)
+    });
     warnings.extend(collected.warnings.iter().cloned());
     build_author_stylesheet_collection(&collected, base_url, loader, options, media, warnings)
 }
@@ -1973,9 +1988,14 @@ fn resolve_styles_with_state(
     collection: &css::StyleCollection,
     state: css::StateContext,
     time_ms: f64,
+    viewport: (f32, f32),
 ) -> HashMap<NodeId, ComputedStyle> {
-    css::state::with_state(state, || {
-        resolve_styles_with_collection(doc, collection, time_ms)
+    // `calc()` uses a thread-local viewport for vw/vh; install the real one so
+    // `calc(50vw)` resolves against the render viewport, not a 1280x720 default (#1469).
+    css::with_calc_viewport(viewport.0, viewport.1, || {
+        css::state::with_state(state, || {
+            resolve_styles_with_collection(doc, collection, time_ms)
+        })
     })
 }
 
@@ -2044,5 +2064,36 @@ fn collect_layout_rects(
         for child in current.children.iter().rev() {
             stack.push(child);
         }
+    }
+}
+
+#[cfg(test)]
+mod calc_viewport_tests {
+    use super::*;
+
+    #[test]
+    fn styles_use_the_render_viewport_for_calc_vw() {
+        let doc = html::parse_document(
+            "<!doctype html><html><head></head><body><div>x</div></body></html>",
+            false,
+        );
+        let mut collection = css::StyleCollection::new();
+        collection.add_css("div{width:calc(50vw)}", css::Origin::Author);
+        let styles = resolve_styles_with_state(
+            &doc,
+            &collection,
+            css::StateContext::new(),
+            0.0,
+            (400.0, 300.0),
+        );
+        let div = doc.get_elements_by_tag_name("div")[0];
+        let width = styles
+            .get(&div)
+            .map(|style| style.width)
+            .unwrap_or(css::Length::Px(0.0));
+        assert!(
+            matches!(width, css::Length::Px(px) if (px - 200.0).abs() < 1.0),
+            "calc(50vw) must resolve against the 400px viewport, got {width:?}"
+        );
     }
 }

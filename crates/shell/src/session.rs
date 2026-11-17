@@ -445,6 +445,31 @@ pub fn save(path: &Path, session: &Session) -> io::Result<()> {
     result
 }
 
+/// Removes a newly created temporary file unless the write succeeded and the guard was
+/// disarmed (issue #1462).
+struct TemporaryFileGuard {
+    path: PathBuf,
+    remove: bool,
+}
+
+impl TemporaryFileGuard {
+    fn new(path: PathBuf) -> Self {
+        Self { path, remove: true }
+    }
+
+    fn keep(mut self) {
+        self.remove = false;
+    }
+}
+
+impl Drop for TemporaryFileGuard {
+    fn drop(&mut self) {
+        if self.remove {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+}
+
 /// Creates a fresh temporary next to `path` and writes `contents` into it.
 ///
 /// `create_new` prevents following a symlink or truncating a pre-existing file planted at a
@@ -458,7 +483,14 @@ fn write_temporary(path: &Path, contents: &[u8]) -> io::Result<PathBuf> {
             .open(&candidate)
         {
             Ok(mut file) => {
-                file.write_all(contents)?;
+                // A short write (disk full/quota) must not leave the temporary file
+                // behind; the guard removes it on every early return (#1462).
+                let guard = TemporaryFileGuard::new(candidate.clone());
+                if let Err(error) = file.write_all(contents) {
+                    drop(file);
+                    return Err(error); // dropping the guard removes the partial file
+                }
+                guard.keep();
                 return Ok(candidate);
             }
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
@@ -872,6 +904,34 @@ fn utf8_width(byte: u8) -> usize {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn temporary_file_guard_removes_partial_files() {
+        let dir = std::env::temp_dir().join(format!("megi-tmp-guard-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("session.json.tmp1");
+        std::fs::write(&path, b"partial").expect("create temp");
+
+        {
+            let guard = TemporaryFileGuard::new(path.clone());
+            drop(guard);
+        }
+        assert!(
+            !path.exists(),
+            "a failed write must not leave a .tmp file (#1462)"
+        );
+
+        std::fs::write(&path, b"complete").expect("create temp 2");
+        {
+            let guard = TemporaryFileGuard::new(path.clone());
+            guard.keep();
+        }
+        assert!(
+            path.exists(),
+            "a successful write keeps the file for rename"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     use super::*;
 
     fn sample() -> Session {
