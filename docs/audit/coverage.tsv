@@ -9,7 +9,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/dependabot.yml	25	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/labeler.yml	55	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/bench.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/ci.yml	469	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/ci.yml	463	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/coverage.yml	76	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/dependabot-auto-merge.yml	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/docs.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -78,7 +78,7 @@ crates/css/tests/parser_depth.rs	61	test	F1	waveF1	2026-11-17	covered	#1356-#136
 crates/css/tests/proptest_css.proptest-regressions	0	generated	-			exempt		not read line by line: generated
 crates/css/tests/proptest_css.rs	167	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/replaced_effects.rs	241	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
-crates/css/tests/selector_escapes.rs	77	test	F1			pending		
+crates/css/tests/selector_escapes.rs	77	test	F1	waveF6	2026-11-17	covered	#1446	regression test for escaped selector serialization/matching
 crates/css/tests/state_vars_calc.rs	797	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/typography_props.rs	95	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/dom/Cargo.toml	11	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
@@ -283,7 +283,7 @@ crates/layout/tests/calc.rs	628	test	F1	waveF1	2026-11-17	covered	#1380-#1385
 crates/layout/tests/container_queries.rs	179	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/deep_tree.rs	127	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/flex.rs	493	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
-crates/layout/tests/float_budget.rs	168	test	F1			pending		
+crates/layout/tests/float_budget.rs	168	test	F1	waveF6	2026-11-17	covered	#1417	regression test for float placement budget/cap
 crates/layout/tests/floats.rs	500	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/fonts_integration.rs	210	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/grid.rs	902	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
@@ -453,11 +453,11 @@ crates/shell/src/scroll.rs	249	src	F2	wave1	2026-11-16	covered	#1163-#1178
 crates/shell/src/session.rs	1445	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/tabs.rs	473	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/title.rs	370	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/window.rs	2733	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/worker.rs	1019	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/window.rs	2686	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/worker.rs	940	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/zoom.rs	268	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/tests/fixtures/links.html	10	test	F1	waveF1	2026-11-17	covered	#1379	
-crates/shell/tests/shell_tests.rs	1614	test	F1	waveF1	2026-11-17	covered	#1379	
+crates/shell/tests/shell_tests.rs	1562	test	F1	waveF1	2026-11-17	covered	#1379	
 crates/svg/Cargo.toml	13	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/svg/examples/svg_to_png.rs	114	example	F3	lead	2026-11-17	covered	example read	read in the F3/F4 pass
 crates/svg/src/color.rs	192	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
@@ -485,7 +485,7 @@ crates/svg/tests/fixtures/smil.svg	8	test	F1	waveF1	2026-11-17	covered	P3 only, 
 crates/svg/tests/fixtures/text.svg	7	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
 crates/svg/tests/pattern_text.rs	382	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
 crates/svg/tests/render.rs	796	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
-crates/svg/tests/scanline_budget.rs	62	test	F1			pending		
+crates/svg/tests/scanline_budget.rs	62	test	F1	waveF6	2026-11-17	covered	#1325	regression test for scanline budget quality fallback
 crates/svg/tests/shape_budget.rs	106	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
 crates/svg/tests/style_budget.rs	59	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
 crates/svg/tests/textpath_smil.rs	231	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
@@ -511,7 +511,7 @@ docs/MILESTONES.md	149	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515
 docs/PERFORMANCE.md	405	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
 docs/PHASE4-SUPPORT.md	234	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 docs/RELEASE.md	43	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
-docs/ROADMAP.md	722	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
+docs/ROADMAP.md	718	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
 docs/SHOWCASE.md	70	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
 docs/TOOLING.md	787	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
 docs/audit/FINDINGS.md	254	docs	F3	lead	2026-11-17	covered	-	written and reviewed while building the F0 ledger
@@ -531,6 +531,7 @@ docs/audit/findings/f5/html-css.md	165	docs	F3	lead	2026-11-17	covered	#1496-#15
 docs/audit/findings/f5/js-web-apis.md	167	docs	F3	lead	2026-11-17	covered	#1496-#1547	
 docs/audit/findings/f5/net-security.md	268	docs	F3	lead	2026-11-17	covered	#1496-#1547	
 docs/audit/findings/f5/shell-a11y-i18n.md	231	docs	F3	lead	2026-11-17	covered	#1496-#1547	
+docs/audit/findings/f7/00-closeout.md	109	docs	F3	lead	2026-11-17	covered	F7	Final audit closeout and severity report (F0-F7 complete)
 docs/audit/findings/wave1.json	3420	docs	F3	lead	2026-11-17	covered	#1404-#1487	written and reviewed while building the F0 ledger
 docs/images/images-e2e.png	0	binary	-			exempt		not read line by line: binary
 docs/images/phase4-basic.png	0	binary	-			exempt		not read line by line: binary
@@ -718,7 +719,6 @@ fuzz/corpus/woff2_decode/huge_directory_length.woff2	0	exempt	-			exempt		not re
 fuzz/corpus/woff2_decode/open_sans.woff2	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/woff2_decode/truncated.woff2	0	exempt	-			exempt		not read line by line: exempt
 fuzz/fuzz_targets/body_stream.rs	138	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
-fuzz/fuzz_targets/charset.rs	61	fuzz	F1			pending		
 fuzz/fuzz_targets/container_queries.rs	116	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/css_parse.rs	41	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/dom_mutate.rs	97	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
@@ -838,7 +838,7 @@ tests/fixtures/render/js_fetch_404.html	8	fixture	F1	waveF1	2026-11-17	covered	#
 tests/fixtures/render/js_fetch_abort.html	12	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/js_fetch_budget.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/js_fetch_json.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
-tests/fixtures/render/js_fetch_loader_error.html	10	fixture	F1			pending		
+tests/fixtures/render/js_fetch_loader_error.html	10	fixture	F1	waveF6	2026-11-17	covered	#1456	fixture for fetch loader error rejection regression
 tests/fixtures/render/js_fetch_no_network.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/js_fetch_stream.html	21	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/js_geometry_display_none.html	7	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
@@ -1101,12 +1101,12 @@ tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/real_site_check.py	240	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/soak_fuzz.sh	115	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_audit_coverage.py	287	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
+tools/test_audit_coverage.py	267	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_real_site_check.py	89	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_update_coverage.py	400	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/update_coverage.py	563	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/update_progress.py	781	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/test_update_coverage.py	354	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/update_coverage.py	540	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/update_progress.py	774	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/whatwg_spec.py	296	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
