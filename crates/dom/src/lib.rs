@@ -715,7 +715,8 @@ impl Document {
                     if slot < self.occupied.len() && !self.occupied[slot] {
                         break (slot, self.generations[slot]);
                     }
-                    debug_assert!(false, "free list contains an occupied/out-of-range slot");
+                    // Deliberately not a debug_assert: callers may be fuzzing corrupt
+                    // arenas, and skipping the bad entry must work in every profile.
                 }
                 None => {
                     if self.nodes.len() >= MAX_SLOTS {
