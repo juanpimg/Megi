@@ -32,7 +32,9 @@ fn test_certificate() -> TestCertificate {
         generate_simple_self_signed(vec!["localhost".to_owned()]).expect("test certificate");
     TestCertificate {
         cert: generated.cert.der().clone(),
-        key: PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(generated.key_pair.serialize_der())),
+        key: PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
+            generated.signing_key.serialize_der(),
+        )),
     }
 }
 
