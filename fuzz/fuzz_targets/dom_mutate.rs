@@ -55,6 +55,8 @@ fuzz_target!(|data: &[u8]| {
                     let n = nodes[data[i] as usize % nodes.len()];
                     let deep = data[i] & 1 != 0;
                     i += 1;
+                    // clone_node returns None for invalid/stale handles; a fuzz mutation
+                    // can produce one after earlier removals, so skip it (#1283).
                     if let Some(clone) = doc.clone_node(n, deep)
                         && nodes.len() < 64
                     {
