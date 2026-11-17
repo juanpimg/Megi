@@ -1451,10 +1451,13 @@ impl Pixmap {
         clip: (i32, i32, i32, i32),
     ) {
         let mask = &entry.mask;
-        let dst_x0 = origin_x + entry.x0 as i32;
-        let dst_y0 = origin_y + entry.y0 as i32;
-        let dst_x1 = origin_x + entry.x1 as i32;
-        let dst_y1 = origin_y + entry.y1 as i32;
+        // A long unbreakable run can saturate the origin on cast. Add the positive
+        // ink offsets in i64 and clamp before narrowing so neither debug overflow checks
+        // nor release wraparound can corrupt the destination rectangle (#1440).
+        let dst_x0 = (i64::from(origin_x) + i64::from(entry.x0)).clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+        let dst_y0 = (i64::from(origin_y) + i64::from(entry.y0)).clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+        let dst_x1 = (i64::from(origin_x) + i64::from(entry.x1)).clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+        let dst_y1 = (i64::from(origin_y) + i64::from(entry.y1)).clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
 
         let x0 = dst_x0.max(clip.0).max(0);
         let y0 = dst_y0.max(clip.1).max(0);
