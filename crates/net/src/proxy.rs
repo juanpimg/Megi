@@ -274,9 +274,20 @@ impl fmt::Display for ProxyConfig {
             .as_ref()
             .map(|u| {
                 if u.username().is_empty() {
-                    format!("{}://{}:{}", u.scheme().as_str(), u.host(), u.port_or_default().unwrap_or(0))
+                    format!(
+                        "{}://{}:{}",
+                        u.scheme().as_str(),
+                        u.host(),
+                        u.port_or_default().unwrap_or(0)
+                    )
                 } else {
-                    format!("{}://{}:***@{}:{}", u.scheme().as_str(), u.username(), u.host(), u.port_or_default().unwrap_or(0))
+                    format!(
+                        "{}://{}:***@{}:{}",
+                        u.scheme().as_str(),
+                        u.username(),
+                        u.host(),
+                        u.port_or_default().unwrap_or(0)
+                    )
                 }
             })
             .unwrap_or_else(|| "none".to_owned());

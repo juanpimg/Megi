@@ -4902,8 +4902,10 @@ mod parser_node_cap_tests {
 
     #[test]
     fn formatting_reconstruction_respects_max_nodes() {
-        let mut options = ParseOptions::default();
-        options.max_nodes = 8; // root + html + body + 4 stale entries = 7, room for 1
+        let options = ParseOptions {
+            max_nodes: 8, // root + html + body + 4 stale entries = 7, room for 1
+            ..ParseOptions::default()
+        };
         let mut tb = TreeBuilder::with_options(false, options);
         let html = tb.doc.create_element(Namespace::Html, "html", vec![]);
         let body = tb.doc.create_element(Namespace::Html, "body", vec![]);

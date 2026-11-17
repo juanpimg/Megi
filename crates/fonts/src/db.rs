@@ -639,25 +639,24 @@ impl FontDatabase {
             let (generic, fallbacks): (Option<Family<'a>>, &[&'static str]) = if quoted {
                 (None, &[] as &[&'static str])
             } else {
-                match keyword.as_str()
-                {
-                "sans-serif" | "system-ui" | "ui-sans-serif" => {
-                    (Some(Family::SansSerif), SANS_FALLBACKS)
-                }
-                "serif" | "ui-serif" => (Some(Family::Serif), SERIF_FALLBACKS),
-                "monospace" | "ui-monospace" => (Some(Family::Monospace), MONO_FALLBACKS),
-                "cursive" => (Some(Family::Cursive), CURSIVE_FALLBACKS),
-                "fantasy" => (Some(Family::Fantasy), FANTASY_FALLBACKS),
-                "emoji" => (
-                    Some(Family::SansSerif),
-                    &["Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji"] as &[&str],
-                ),
-                "math" => (
-                    Some(Family::Serif),
-                    &["STIX Two Math", "Cambria Math", "Latin Modern Math"] as &[&str],
-                ),
-                "fangsong" => (None, &["FangSong", "STFangsong"] as &[&str]),
-                _ => (None, &[] as &[&'static str]),
+                match keyword.as_str() {
+                    "sans-serif" | "system-ui" | "ui-sans-serif" => {
+                        (Some(Family::SansSerif), SANS_FALLBACKS)
+                    }
+                    "serif" | "ui-serif" => (Some(Family::Serif), SERIF_FALLBACKS),
+                    "monospace" | "ui-monospace" => (Some(Family::Monospace), MONO_FALLBACKS),
+                    "cursive" => (Some(Family::Cursive), CURSIVE_FALLBACKS),
+                    "fantasy" => (Some(Family::Fantasy), FANTASY_FALLBACKS),
+                    "emoji" => (
+                        Some(Family::SansSerif),
+                        &["Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji"] as &[&str],
+                    ),
+                    "math" => (
+                        Some(Family::Serif),
+                        &["STIX Two Math", "Cambria Math", "Latin Modern Math"] as &[&str],
+                    ),
+                    "fangsong" => (None, &["FangSong", "STFangsong"] as &[&str]),
+                    _ => (None, &[] as &[&'static str]),
                 }
             };
             if let Some(generic) = generic {
@@ -1244,7 +1243,8 @@ mod identity_digest_tests {
     fn digest_changes_with_face_identity_not_just_count() {
         let mut a = FontDatabase::new();
         let mut b = FontDatabase::new();
-        a.load_font_data(BUNDLED_FONTS[0].1.to_vec()).expect("regular");
+        a.load_font_data(BUNDLED_FONTS[0].1.to_vec())
+            .expect("regular");
         b.load_font_data(BUNDLED_FONTS[1].1.to_vec()).expect("bold");
         assert_eq!(a.order.len(), b.order.len(), "same number of faces");
         assert_ne!(

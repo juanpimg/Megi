@@ -376,7 +376,7 @@ fn aggregate_glyph_budget_is_enforced() {
         body.push_str(&format!("<text x='1' y='1' font-size='2'>{text}</text>"));
     }
     let source = svg_doc(10.0, 10.0, &body);
-    let error = render_svg(source.as_bytes(), &SvgOptions::default())
-        .expect_err("aggregate glyph budget");
+    let error =
+        render_svg(source.as_bytes(), &SvgOptions::default()).expect_err("aggregate glyph budget");
     assert!(matches!(error, SvgError::Limit(_)), "{error:?}");
 }

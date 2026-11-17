@@ -3964,9 +3964,7 @@ fn mask_js_literals(source: &str) -> String {
     let mut bytes = source.as_bytes().to_vec();
     let mut i = 0usize;
     while i < bytes.len() {
-        if bytes[i] == b'/'
-            && i + 1 < bytes.len()
-            && (bytes[i + 1] == b'/' || bytes[i + 1] == b'*')
+        if bytes[i] == b'/' && i + 1 < bytes.len() && (bytes[i + 1] == b'/' || bytes[i + 1] == b'*')
         {
             let block = bytes[i + 1] == b'*';
             bytes[i] = b' ';
@@ -6839,9 +6837,15 @@ mod module_scan_tests {
     #[test]
     fn await_in_strings_and_comments_is_not_top_level_await() {
         assert!(module_has_top_level_await("await Promise.resolve(1);"));
-        assert!(!module_has_top_level_await("var s = 'await Promise.resolve(1)';"));
-        assert!(!module_has_top_level_await("// await Promise.resolve(1)\nvar x = 1;"));
-        assert!(!module_has_top_level_await("/* = await foo(); */ var x = 1;"));
+        assert!(!module_has_top_level_await(
+            "var s = 'await Promise.resolve(1)';"
+        ));
+        assert!(!module_has_top_level_await(
+            "// await Promise.resolve(1)\nvar x = 1;"
+        ));
+        assert!(!module_has_top_level_await(
+            "/* = await foo(); */ var x = 1;"
+        ));
         assert!(!module_has_top_level_await("var s = `= await foo()`;"));
     }
 }

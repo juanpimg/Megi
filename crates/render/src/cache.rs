@@ -63,7 +63,8 @@ impl RenderCache {
         if self.css_entries.len() >= MAX_CSS_CACHE_ENTRIES {
             self.css_entries.remove(0);
         }
-        self.css_entries.push((key_hash, css_text.to_owned(), sheet.clone()));
+        self.css_entries
+            .push((key_hash, css_text.to_owned(), sheet.clone()));
         sheet
     }
 
@@ -211,7 +212,10 @@ mod cache_tests {
         let sizes = HashMap::new();
         let a = layout_fingerprint(&document, &styles, viewport, &sizes, 1);
         let b = layout_fingerprint(&document, &styles, viewport, &sizes, 2);
-        assert_ne!(a, b, "different font identities must change the layout key (#1218)");
+        assert_ne!(
+            a, b,
+            "different font identities must change the layout key (#1218)"
+        );
     }
 
     #[test]
@@ -224,14 +228,15 @@ mod cache_tests {
         let mut cache = RenderCache::new();
         // Inject an entry whose FNV key matches `b` but whose exact source is `a`:
         // a `(hash, len)`-only cache would wrongly return sheet_a on this lookup (#1223).
-        cache.css_entries.push((
-            fnv1a_bytes(b.as_bytes()),
-            a.to_string(),
-            sheet_a.clone(),
-        ));
+        cache
+            .css_entries
+            .push((fnv1a_bytes(b.as_bytes()), a.to_string(), sheet_a.clone()));
         let sheet_b = cache.parse_stylesheet(b);
 
-        assert_ne!(sheet_b, sheet_a, "a hash collision must not return another sheet");
+        assert_ne!(
+            sheet_b, sheet_a,
+            "a hash collision must not return another sheet"
+        );
         assert_eq!(
             cache.stats(),
             RenderCacheStats {
