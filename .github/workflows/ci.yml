@@ -87,6 +87,13 @@ jobs:
         run: python3 tools/update_progress.py --check --no-gate
       - name: Coverage freshness (capability manifest + artifacts)
         run: python3 tools/update_coverage.py --check
+      # The audit ledger is the durable record of the line-by-line review: it must
+      # know every tracked file and fail when one changes without being re-read
+      # (docs/audit/README.md).
+      - name: Audit coverage ledger
+        run: python3 tools/audit_coverage.py --check
+      - name: Audit tooling tests
+        run: python3 -m unittest discover -s tools -p 'test_audit_*.py'
 
   quality:
     name: Quality gate (fmt, clippy, tests, docs)

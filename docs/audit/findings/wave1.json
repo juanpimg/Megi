@@ -1,0 +1,3420 @@
+[
+  {
+    "number": 938,
+    "title": "[ci] main is red: recent fix commits are not rustfmt-clean and every PR inherits it",
+    "state": "CLOSED",
+    "closed_at": "2026-11-12T13:59:25Z",
+    "disposition": "fixed",
+    "labels": [],
+    "closing_comment_by": "lolmg445",
+    "closing_comment_at": "2026-11-12T13:59:23Z",
+    "closing_comment": "Fixed in `3c1daf7 style: cargo fmt --all`: `cargo fmt --all -- --check` is now clean on `af1e8c5` (0 files), and the two regressions are also gone from main (`Document::children` no longer redirects template parents; the `Headers.append` test expects `\"1, 2\"`). I rebased the remaining PRs (#935, #936, #939, #940) onto the formatted main. Closing this; thanks for the quick fix!"
+  },
+  {
+    "number": 1105,
+    "title": "[dom] text_content truncation panics inside a multi-byte UTF-8 sequence",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:10:44Z",
+    "disposition": "fixed",
+    "labels": [
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:10:43Z",
+    "closing_comment": "Already fixed on main: text_content truncation backs up to nearest UTF-8 char boundary."
+  },
+  {
+    "number": 1106,
+    "title": "[dom] set_attribute overwrite path bypasses MAX_ATTRIBUTE_VALUE_BYTES",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:10:25Z",
+    "disposition": "fixed",
+    "labels": [
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:10:24Z",
+    "closing_comment": "Already fixed on main: set_attribute overwrite path now checks MAX_ATTRIBUTE_VALUE_BYTES."
+  },
+  {
+    "number": 1107,
+    "title": "[dom] text_content sibling walk is unbounded on a cyclic arena",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:10:08Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:10:07Z",
+    "closing_comment": "Already fixed on main: text_content walks bounded by max_steps."
+  },
+  {
+    "number": 1108,
+    "title": "[dom] normalize/normalize_children child-chain walk is unbounded on a cyclic arena",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:09:49Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:09:48Z",
+    "closing_comment": "Already fixed on main: normalize and normalize_children walks are bounded by max_steps."
+  },
+  {
+    "number": 1109,
+    "title": "[dom] remove_node child re-attachment walk is unbounded on a cyclic arena",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:09:21Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:09:21Z",
+    "closing_comment": "Already fixed on main: re-attachment walk bounded by max_steps = nodes.len() + 1."
+  },
+  {
+    "number": 1110,
+    "title": "[dom] is_ancestor_of has no step bound (unlike is_self_or_ancestor_of)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:08:28Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:08:27Z",
+    "closing_comment": "Already fixed on main: is_ancestor_of now delegates to the bounded is_self_or_ancestor_of."
+  },
+  {
+    "number": 1111,
+    "title": "[dom] clone_node deep-clones <template> contents even when deep=false, bypassing MAX_CLONE_NODES",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:06:58Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:06:57Z",
+    "closing_comment": "Fixed on main: template contents are deep-cloned only when deep is true, per DOM Standard."
+  },
+  {
+    "number": 1112,
+    "title": "[dom] clone_node_into has no size guard and ignores append_child's result",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:04:38Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:04:38Z",
+    "closing_comment": "Fixed on main: clone_node_into now has MAX_CLONE_NODES guard and propagates append_child failures."
+  },
+  {
+    "number": 1113,
+    "title": "[dom] descendants_inclusive yields the input id even when the handle is stale",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:02:52Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:02:52Z",
+    "closing_comment": "Fixed on main: descendants_inclusive returns empty iterator for stale handles."
+  },
+  {
+    "number": 1114,
+    "title": "[dom] validate_invariants misses reverse parent membership and Document/Doctype placement",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:01:18Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:01:17Z",
+    "closing_comment": "Fixed on main: validate_invariants now checks reverse parent membership, exactly-one Document at root, and Doctype placement."
+  },
+  {
+    "number": 1115,
+    "title": "[dom] estimate_bytes ignores Vec/String capacity",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:59:51Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:59:50Z",
+    "closing_comment": "Fixed on main: estimate_bytes now uses capacity() for Vec/String fields."
+  },
+  {
+    "number": 1116,
+    "title": "[dom] detach panics on stale parent/sibling links via node_mut",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:58:39Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:58:38Z",
+    "closing_comment": "Fixed on main: detach now uses try_node_mut and skips stale links instead of panicking."
+  },
+  {
+    "number": 1117,
+    "title": "[dom] clone_node returns the stale input handle unchanged on invalid input",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:57:39Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:57:38Z",
+    "closing_comment": "Fixed on main: clone_node returns None for stale/foreign handles."
+  },
+  {
+    "number": 1118,
+    "title": "[dom] append_text/insert_text_before return misleading NodeIds on failure",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:55:26Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:55:24Z",
+    "closing_comment": "Fixed on main: append_text and insert_text_before now return Option<NodeId>, None on failure."
+  },
+  {
+    "number": 1119,
+    "title": "[dom] clone_node always pays an O(subtree) subtree_size walk even for shallow clones",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:52:18Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "dom"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:52:17Z",
+    "closing_comment": "Fixed on main: subtree_size only called when deep is true."
+  },
+  {
+    "number": 1120,
+    "title": "[html] LimitViolations::is_empty/total omit formatting_dropped, written_bytes_dropped and scripts_skipped",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:51:08Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "html"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:51:07Z",
+    "closing_comment": "Fixed on main: is_empty and total now include text_bytes_dropped, formatting_dropped, written_bytes_dropped, scripts_skipped."
+  },
+  {
+    "number": 1121,
+    "title": "[html] set_outer_html ignores limit violations and replaces the element with a partial fragment",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:11:43Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "html"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:11:43Z",
+    "closing_comment": "Fixed on main: set_outer_html now drops parsed nodes and returns violations on limit hit."
+  },
+  {
+    "number": 1122,
+    "title": "[html] FastHasher seed can be zero, degenerating every internal hash map",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:50:34Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "html"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:50:34Z",
+    "closing_comment": "Already fixed on main: mixed_seed uses  to ensure non-zero seed. Test mixed_seed_is_never_zero passes."
+  },
+  {
+    "number": 1123,
+    "title": "[html] fragment serializer drops doctype public/system identifiers",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:24:06Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "html"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:24:06Z",
+    "closing_comment": "Fixed on main: doctype serialization now includes public/system identifiers."
+  },
+  {
+    "number": 1124,
+    "title": "[html] MAX_LINE_STARTS cap silently corrupts error positions after 1M lines",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:22:10Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "html"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:22:09Z",
+    "closing_comment": "Fixed on main: line_starts no longer capped, preserving error positions."
+  },
+  {
+    "number": 1125,
+    "title": "[html] document_write leaks parsed fragment nodes when append_child fails",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:21:00Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "html"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:20:59Z",
+    "closing_comment": "Fixed on main: rejected children are removed_subtree'd."
+  },
+  {
+    "number": 1126,
+    "title": "[css] inline style attribute truncated at a non-char boundary panics",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:45:41Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "css"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:45:40Z",
+    "closing_comment": "Already fixed on main in commit cfc5514: inline style truncation backs up to the nearest UTF-8 char boundary before slicing."
+  },
+  {
+    "number": 1127,
+    "title": "[css] uppercase type selectors (DIV) never match lowercase elements via the rule index",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:44:41Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "css"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:44:40Z",
+    "closing_comment": "Fixed on main: by_tag keys normalized to lowercase at insertion and lookup."
+  },
+  {
+    "number": 1128,
+    "title": "[css] calc() unary +/- recursion has no depth limit",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:43:32Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "css"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:43:32Z",
+    "closing_comment": "Fixed on main: unary signs accumulated in a loop."
+  },
+  {
+    "number": 1129,
+    "title": "[css] only ~16 CSS named colors are recognized (CSS Color 4 defines 148)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:46:44Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "css"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:46:43Z",
+    "closing_comment": "Fixed on main: from_named now covers all 148 CSS Color 4 named colors."
+  },
+  {
+    "number": 1130,
+    "title": "[css] hsl() accepts unitless saturation/lightness and clamps out-of-range alpha",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:40:51Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "css"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:40:50Z",
+    "closing_comment": "Fixed on main: hsl() now requires % for saturation/lightness, and unitless alpha outside [0,1] is rejected."
+  },
+  {
+    "number": 1131,
+    "title": "[css] custom-property identifier scan treats every byte >= 0x80 as ident",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:48:14Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "css"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:48:13Z",
+    "closing_comment": "Fixed on main: ident scan now consumes full UTF-8 sequences, avoiding mid-code-point slices."
+  },
+  {
+    "number": 1132,
+    "title": "[css] container-name rejects non-ASCII CSS identifiers",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:42:04Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "css"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:42:04Z",
+    "closing_comment": "Fixed on main: is_custom_ident now uses tokenizer::is_ident_start/is_ident."
+  },
+  {
+    "number": 1133,
+    "title": "[css] :has() budget is spent per call, not per candidate, and silently truncates at 10k nodes",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:30:42Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "css"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:30:41Z",
+    "closing_comment": "Already fixed on main: :has() budget is now spent per candidate, 10k node cut removed."
+  },
+  {
+    "number": 1134,
+    "title": "[js] MutationObserver registrations are uncapped and record_mutation is O(observers x depth)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:18:54Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:18:53Z",
+    "closing_comment": "Already fixed on main: MutationObserver registrations capped at MAX_OBSERVERS=1024."
+  },
+  {
+    "number": 1135,
+    "title": "[js] MutationObserver.disconnect() deletes the registration, so the observer can never be re-armed",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:34:51Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:34:50Z",
+    "closing_comment": "Already fixed on main: observer_disconnect clears targets/records but keeps the registration, so observe() can re-arm. Test mutation_observer_can_be_rearmed_after_disconnect passes."
+  },
+  {
+    "number": 1136,
+    "title": "[js] a throwing observer callback aborts delivery to all remaining observers",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:35:58Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:35:57Z",
+    "closing_comment": "Fixed on main: throwing callback is reported via console.error but delivery continues to remaining observers."
+  },
+  {
+    "number": 1137,
+    "title": "[js] removeAttributeNode does not record a MutationObserver attribute mutation",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:49:09Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:49:09Z",
+    "closing_comment": "Already fixed on main: removeAttributeNode now calls note_mutation. Test remove_attribute_node_records_an_attributes_mutation passes."
+  },
+  {
+    "number": 1138,
+    "title": "[js] terminated workers permanently occupy their slot (max 8 workers ever)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:17:37Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:17:36Z",
+    "closing_comment": "Fixed on main: worker_terminate now frees the slot."
+  },
+  {
+    "number": 1139,
+    "title": "[js] worker addEventListener has no listener cap",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:15:09Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:15:08Z",
+    "closing_comment": "Fixed on main: worker addEventListener capped at 64 listeners."
+  },
+  {
+    "number": 1140,
+    "title": "[js] one failing worker reply aborts the whole worker task pass",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:14:24Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:14:23Z",
+    "closing_comment": "Fixed on main: worker delivery errors are reported, not propagated."
+  },
+  {
+    "number": 1141,
+    "title": "[js] module_quote leaves control characters unescaped, allowing script injection",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:50:09Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:50:08Z",
+    "closing_comment": "Fixed on main: module_quote now escapes control chars and line separators."
+  },
+  {
+    "number": 1142,
+    "title": "[js] MegiModuleLoader cache is unbounded",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:39:18Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:39:17Z",
+    "closing_comment": "Fixed on main: cache bounded to 256 entries with clear-on-overflow."
+  },
+  {
+    "number": 1143,
+    "title": "[js] fetch arrayBuffer() materializes the body as a per-byte JsArray (8M values)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:25:57Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:25:57Z",
+    "closing_comment": "Already fixed on main: fetch uses JsUint8Array backed by a single byte block."
+  },
+  {
+    "number": 1144,
+    "title": "[js] host.rs linear-scan collections: console Vec shift and StorageMap Vec scan",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:26:09Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:26:09Z",
+    "closing_comment": "Already fixed on main: console uses VecDeque, StorageMap uses HashMap."
+  },
+  {
+    "number": 1145,
+    "title": "[js] module import rewriting is textual and mis-handles strings/comments",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:36:16Z",
+    "disposition": "unclassified",
+    "labels": [
+      "P3",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:36:16Z",
+    "closing_comment": "Partially addressed: the module preprocessor documents its supported subset (static/dynamic import with string literals, top-level await detection via brace counting). A full JS lexer would be needed for complete correctness; the current implementation handles the common cases and rejects unsupported forms with errors."
+  },
+  {
+    "number": 1146,
+    "title": "[js] this_handle accepts f64 handles above u32::MAX, aliasing node handles",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:32:55Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:32:55Z",
+    "closing_comment": "Fixed on main: this_handle now rejects handles above u32::MAX."
+  },
+  {
+    "number": 1147,
+    "title": "[js] clear_timer/cancel_animation_frame id cast truncates out-of-range values",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:31:30Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "js"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:31:29Z",
+    "closing_comment": "Fixed on main: out-of-range/non-finite timer ids are now ignored."
+  },
+  {
+    "number": 1148,
+    "title": "[image] VP8L predictor top-right fallback uses the current row's first pixel",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:29:13Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "image"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:29:13Z",
+    "closing_comment": "Fixed on main: changed else branch from out[y * width] to out[(y - 1) * width + x]."
+  },
+  {
+    "number": 1149,
+    "title": "[image] PNG chunk ordering not enforced (IHDR not first, non-consecutive IDAT)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:37:32Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "image"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:37:32Z",
+    "closing_comment": "Fixed on main: IHDR must be first chunk, IDAT chunks must be consecutive."
+  },
+  {
+    "number": 1150,
+    "title": "[image] animated WebP has no aggregate decoded-frame byte budget",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:26:37Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "image"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:26:37Z",
+    "closing_comment": "Already fixed on main: animated WebP has aggregate decoded-frame byte budget (MAX_ANIMATED_FRAME_BYTES=256MB)."
+  },
+  {
+    "number": 1151,
+    "title": "[image] GIF LZW output can overshoot the declared pixel count",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:28:10Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "image"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:28:09Z",
+    "closing_comment": "Fixed on main: emit_code and the literal/KwKwK paths now truncate to pixel_count."
+  },
+  {
+    "number": 1152,
+    "title": "[layout] Rect::intersect/contains_point propagate NaN geometry to paint",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:26:44Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "image",
+      "layout"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:26:44Z",
+    "closing_comment": "Fixed on main: Rect::intersect returns None and contains_point returns false for any non-finite input."
+  },
+  {
+    "number": 1153,
+    "title": "[layout] non-finite opacity is treated as opaque for stacking-context detection",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:24:38Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "image",
+      "layout"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:24:37Z",
+    "closing_comment": "Fixed on main: opacity check changed from < 1.0 to !(>= 1.0) in both tree_builder.rs and lib.rs, so NaN/Inf establish a stacking context."
+  },
+  {
+    "number": 1154,
+    "title": "[layout] min_height_is_zero treats min-height: 0% as non-zero",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:25:48Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "image",
+      "layout"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:25:47Z",
+    "closing_comment": "Fixed on main: Length::Percent(0) now returns true."
+  },
+  {
+    "number": 1155,
+    "title": "[layout] flex intrinsic width ignores percentage/calc() column-gap",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T22:34:01Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "image",
+      "layout"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T22:34:00Z",
+    "closing_comment": "Fixed on main: column-gap now resolved via resolve_length + sanitize."
+  },
+  {
+    "number": 1156,
+    "title": "[layout] StyleCache::anonymous keys by Arc pointer, missing style interning",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:30:13Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "image",
+      "layout"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:30:12Z",
+    "closing_comment": "Already fixed on main: StyleCache::anonymous now keys by fingerprint instead of Arc pointer."
+  },
+  {
+    "number": 1162,
+    "title": "[shell] probe delete me",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:38:50Z",
+    "disposition": "unclassified",
+    "labels": [
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:38:49Z",
+    "closing_comment": "Closing probe issue."
+  },
+  {
+    "number": 1163,
+    "title": "[shell] typed navigation overwrites the current history entry, so Back cannot return",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:08:24Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:08:23Z",
+    "closing_comment": "Deferred: complex shell navigation fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1164,
+    "title": "[shell] scroll viewport height ignores the chrome band (last 58 CSS px unreachable)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:41:17Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:41:17Z",
+    "closing_comment": "Fixed on main: scroll constructed with page_viewport_height() at all sites, find scroll uses page height."
+  },
+  {
+    "number": 1165,
+    "title": "[shell] Reader mode persists \"about:reader\" as the tab URL and restores an empty page",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:07:46Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:07:46Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1166,
+    "title": "[shell] <select> dropdown mixes two row models when <optgroup> is present",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:07:44Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:07:43Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1167,
+    "title": "[shell] find highlights are painted one chrome band too high and the current match is arbitrary",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:07:42Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:07:41Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1168,
+    "title": "[shell] every page taller than the viewport is rendered twice (scripts run twice)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:07:12Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:07:11Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1169,
+    "title": "[shell] --tabs is silently dropped when a session file exists",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:07:39Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:07:38Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1170,
+    "title": "[shell] scroll wheel delta can overflow i64 on extreme f64 input",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:06:31Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:06:31Z",
+    "closing_comment": "Fixed on main: wheel_line_delta/wheel_pixel_delta clamp before cast, scroll_by uses saturating_add."
+  },
+  {
+    "number": 1171,
+    "title": "[shell] session save renames without fsync (truncated session.json after a crash)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:07:37Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:07:36Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1172,
+    "title": "[shell] three session save-safety tests are dead code nested inside another test",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:07:35Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:07:34Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1173,
+    "title": "[shell] favicon::fetch follows file: icon URLs supplied by http(s) pages",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:07:33Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:07:32Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1174,
+    "title": "[shell] tab strip has no overflow handling below ~100 CSS px of width",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:07:31Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:07:30Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1175,
+    "title": "[shell] window mode silently ignores headless-only flags",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:07:29Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:07:29Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1176,
+    "title": "[shell] atomic writers use a predictable .<name>.tmp (races and symlink follows)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:05:49Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:05:48Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1177,
+    "title": "[shell] lib.rs module docs contradict the implementation",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:07:27Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:07:27Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1178,
+    "title": "[shell] ScreenshotInfo drops the find hit count",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:07:25Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "shell"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:07:25Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1179,
+    "title": "[paint] rounded rects, rounded borders and gradients are skipped when the unclipped area exceeds 16.7 Mpx",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:07:23Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:07:22Z",
+    "closing_comment": "Deferred: complex shell fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1180,
+    "title": "[paint] clip-depth cap silently desynchronises push/pop (clipping lost)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:42:35Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:42:35Z",
+    "closing_comment": "Fixed on main: clip_stack now stores Option<(Rect,Rect)> and pushes None when over cap, so pop_clip removes exactly one entry."
+  },
+  {
+    "number": 1181,
+    "title": "[paint] mix-blend-mode is lost whenever opacity < 1",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:04:50Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:04:50Z",
+    "closing_comment": "Deferred: complex paint fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1182,
+    "title": "[paint] asymmetric border radii test the wrong ellipse centre",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:04:48Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:04:48Z",
+    "closing_comment": "Deferred: complex paint fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1183,
+    "title": "[paint] background-clip: padding-box / content-box is ignored for the background colour",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:04:47Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:04:46Z",
+    "closing_comment": "Deferred: complex paint fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1184,
+    "title": "[paint] blur_rgba blurs straight-alpha channels (dark fringes)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:04:45Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:04:44Z",
+    "closing_comment": "Deferred: complex paint fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1185,
+    "title": "[paint] object-fit: none paints outside the content box, unclipped",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:04:43Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:04:42Z",
+    "closing_comment": "Deferred: complex paint fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1186,
+    "title": "[paint] blend_pixel bypasses the clip stack while set_pixel honours it",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:43:33Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:43:32Z",
+    "closing_comment": "Fixed on main: blend_pixel now checks is_clipped(x, y)."
+  },
+  {
+    "number": 1187,
+    "title": "[paint] background-clip: text collector budget is a process-global reset by every pass",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:04:41Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:04:40Z",
+    "closing_comment": "Deferred: complex paint fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1188,
+    "title": "[paint] stacking-depth guard drops nested contexts instead of flattening them",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:04:39Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:04:38Z",
+    "closing_comment": "Deferred: complex paint fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1189,
+    "title": "[paint] float nesting is limited by the stacking-context depth counter",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:04:37Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:04:36Z",
+    "closing_comment": "Deferred: complex paint fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1190,
+    "title": "[paint] root element opacity is ignored",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:44:38Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:44:37Z",
+    "closing_comment": "Fixed on main: removed !is_root guard so root element opacity is applied."
+  },
+  {
+    "number": 1191,
+    "title": "[paint] dashed/dotted borders get solid mitred corner squares",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:04:34Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:04:33Z",
+    "closing_comment": "Deferred: complex paint fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1192,
+    "title": "[paint] inset box-shadow is clipped to the border box instead of the padding box",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:04:32Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:04:31Z",
+    "closing_comment": "Deferred: complex paint fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1193,
+    "title": "[paint] image scaling interpolates straight alpha, contradicting its doc comment",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:04:30Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:04:29Z",
+    "closing_comment": "Deferred: complex paint fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1194,
+    "title": "[paint] face_index never caches the failure at the face-index cap",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:04:28Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:04:28Z",
+    "closing_comment": "Deferred: complex paint fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1196,
+    "title": "[paint] alpha_scale flat-opacity path is unreachable and would double-scale text)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:04:23Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:04:22Z",
+    "closing_comment": "Deferred: complex paint fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1197,
+    "title": "[bench] filter-stripped rows measure the identical stylesheet (the no-effect delta is structurally zero)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:03:20Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:03:20Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1198,
+    "title": "[bench] throughput unit for the render row is 5x wrong and units are incomparable across rows)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:03:17Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:03:16Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1199,
+    "title": "[bench] `heavy` caps warm-up at one iteration and silently ignores --iterations/--warmup)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:03:10Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:03:09Z",
+    "closing_comment": "Deferred: complex bench runner fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1200,
+    "title": "[bench] numeric flags reach panicking arithmetic (--scale 1e300, --iterations u64::MAX))",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:02:34Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:02:33Z",
+    "closing_comment": "Already fixed on main: CLI bounds scale/iterations/warmup and rejects extreme values."
+  },
+  {
+    "number": 1201,
+    "title": "[bench] layout and pipeline rows measure the fallback text measurer, not the production one)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:02:18Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:02:17Z",
+    "closing_comment": "Deferred: requires changing all layout call sites to use production measurer. Documented for future work."
+  },
+  {
+    "number": 1202,
+    "title": "[bench] a run that measures nothing exits 0 and prints an unfiltered SKIP list)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:01:01Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:01:00Z",
+    "closing_comment": "Fixed on main: empty results return FAILURE, skipped list filtered by same predicate."
+  },
+  {
+    "number": 1203,
+    "title": "[bench] timed pipeline closures swallow layout failure and report a fast partial pipeline)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:58:37Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:58:36Z",
+    "closing_comment": "Fixed on main: pipeline closures now expect layout to succeed and use viewport.width/height."
+  },
+  {
+    "number": 1204,
+    "title": "[bench] WebP lossless rows are marked heavy although the code comment says small rows keep the default count)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:36:57Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:36:57Z",
+    "closing_comment": "Fixed on main: WebP VP8L rows now use default iteration count."
+  },
+  {
+    "number": 1205,
+    "title": "[bench] JSON can emit inf/NaN and leaves `unit` unescaped)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:36:00Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:35:59Z",
+    "closing_comment": "Fixed on main: JSON now uses push_json_number for non-finite and push_json_string for unit."
+  },
+  {
+    "number": 1206,
+    "title": "[bench] table separator is two columns short and widths are measured in bytes)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:33:07Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:33:06Z",
+    "closing_comment": "Fixed on main: widths use chars().count() and separator derived from header."
+  },
+  {
+    "number": 1207,
+    "title": "[bench] one workload string carries 26 literal spaces, widening every row of a full run)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:32:10Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:32:09Z",
+    "closing_comment": "Fixed on main: removed extra spaces from workload detail string."
+  },
+  {
+    "number": 1208,
+    "title": "[bench] `heavy` is decided from the unscaled size, so --scale changes runtime but not the sample regime)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:31:11Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:31:11Z",
+    "closing_comment": "Fixed on main: heavy classification now uses scaled depth."
+  },
+  {
+    "number": 1209,
+    "title": "[bench] non-UTF-8 CLI arguments panic)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:30:46Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:30:45Z",
+    "closing_comment": "Already fixed on main: 083b93e uses args_os() and maps non-UTF-8 to a diagnostic error."
+  },
+  {
+    "number": 1210,
+    "title": "[bench] the compiler banner comes from PATH at runtime, not from the build)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:47:17Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "performance"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:47:17Z",
+    "closing_comment": "Fixed on main: build.rs captures rustc --version via cargo:rustc-env, runner reads env!(BENCH_RUSTC_VERSION)."
+  },
+  {
+    "number": 1211,
+    "title": "[paint] alpha_scale flat-opacity path is unreachable and would double-scale text)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:03:22Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "paint"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:03:22Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1212,
+    "title": "[render] unterminated <meta in the charset prescan panics the whole render",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:29:30Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:29:29Z",
+    "closing_comment": "Already fixed on main: ab72484 handles unterminated <meta> in charset prescan."
+  },
+  {
+    "number": 1213,
+    "title": "[render] image byte budgets are enforced only after every image is downloaded",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:03:24Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:03:24Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1214,
+    "title": "[render] stylesheet/base discovery silently stops after 1024 DOM nodes, dropping late <style>/<link>",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:03:26Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:03:26Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1215,
+    "title": "[render] event-loop budget is a no-op and the page-wide loop budget is never charged to callbacks",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:03:28Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:03:28Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1216,
+    "title": "[render] host event names are truncated with a byte slice",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:55:53Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:55:52Z",
+    "closing_comment": "Already fixed on main: event name truncation uses char_indices with take_while on char boundary."
+  },
+  {
+    "number": 1217,
+    "title": "[render] a repeated classic <script src> executes only once",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:03:30Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:03:30Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1218,
+    "title": "[render] layout cache fingerprint uses the font count, not font identity",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:03:32Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:03:32Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1219,
+    "title": "[render] the render CLI builds file:// URLs by string concatenation",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:30:18Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:30:17Z",
+    "closing_comment": "Fixed on main: file:// URL path is percent-encoded for #, ?, space, and %."
+  },
+  {
+    "number": 1220,
+    "title": "[render] inline-SVG replacement is skipped when every script threw after mutating the DOM",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:03:34Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:03:34Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1221,
+    "title": "[render] worker deliveries are charged to the timer budget and reported as timer callbacks",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:03:37Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:03:36Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1222,
+    "title": "[render] script discovery truncates at 1024 candidates silently",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:03:39Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:03:39Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1223,
+    "title": "[render] CSS parse cache key is a 64-bit FNV hash + length (collisions use the wrong stylesheet)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:03:41Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:03:41Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1224,
+    "title": "[render] fetch() rejects data: and blob: URLs as cross-origin",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:27:31Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:27:30Z",
+    "closing_comment": "Fixed on main: data: URLs are now fetchable via fetch()."
+  },
+  {
+    "number": 1225,
+    "title": "[render] ScriptExecution::limited is computed but never exposed",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:24:56Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:24:55Z",
+    "closing_comment": "Fixed on main: added RenderStats::script_limited sourced from execution.limited."
+  },
+  {
+    "number": 1226,
+    "title": "[render] module loader charges rejected module bytes to the total",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:22:57Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:22:57Z",
+    "closing_comment": "Fixed on main: module byte budget is checked before charging."
+  },
+  {
+    "number": 1227,
+    "title": "[render] --time is documented for the render CLI but not implemented there",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:21:32Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:21:32Z",
+    "closing_comment": "Fixed on main: added --time <ms> flag to render CLI, parsed as f64 with non-finite rejection."
+  },
+  {
+    "number": 1228,
+    "title": "[fonts] multibyte family name truncation panics on a byte index",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:48:13Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "fonts"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:48:12Z",
+    "closing_comment": "Fixed on main: family-name truncation now walks back to a char boundary."
+  },
+  {
+    "number": 1229,
+    "title": "[fonts] system-fallback glyphs cannot be resolved by paint, so CJK/emoji paint no ink",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:28:59Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "fonts"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:28:59Z",
+    "closing_comment": "Deferred: complex font fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1230,
+    "title": "[fonts] alias_face ignores family-list order",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:28:58Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "fonts"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:28:57Z",
+    "closing_comment": "Deferred: complex font fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1231,
+    "title": "[fonts] post_script_name is used as a face identity",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:28:55Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "fonts"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:28:55Z",
+    "closing_comment": "Deferred: complex font fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1232,
+    "title": "[fonts] unbounded face_data copies, uncapped scan_faces_for_char, process-wide fallback DB",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:28:53Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "fonts"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:28:53Z",
+    "closing_comment": "Deferred: complex font fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1233,
+    "title": "[fonts] an unknown explicit family returns FontNotFound instead of falling back",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:28:51Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "fonts"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:28:50Z",
+    "closing_comment": "Deferred: complex font fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1234,
+    "title": "[fonts] emoji/math generic families resolve in the wrong order",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:28:48Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "fonts"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:28:46Z",
+    "closing_comment": "Deferred: complex font fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1235,
+    "title": "[fonts] fallback_cache is unbounded, omits stretch, and deep-clones",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:28:44Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "fonts"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:28:43Z",
+    "closing_comment": "Deferred: complex font fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1236,
+    "title": "[fonts] alias map is unbounded",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:28:42Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "fonts"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:28:41Z",
+    "closing_comment": "Deferred: complex font fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1237,
+    "title": "[fonts] x_height and cap_height are unvalidated",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:27:59Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "fonts"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:27:59Z",
+    "closing_comment": "Fixed on main: x_height and cap_height are sanitized via sanitize_metric (non-finite/negative → fallback)."
+  },
+  {
+    "number": 1238,
+    "title": "[fonts] family_names lowercases aliases, breaking case-sensitive lookups",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:28:40Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "fonts"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:28:39Z",
+    "closing_comment": "Deferred: complex font fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1239,
+    "title": "[fonts] quotes are stripped before generic-family detection",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:28:34Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "fonts"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:28:33Z",
+    "closing_comment": "Deferred: requires tracking quoted vs unquoted family names through the API. Documented for future work."
+  },
+  {
+    "number": 1240,
+    "title": "[test_harness] CLI never enforces tokenizer/tree suite and run totals",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:19:44Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:19:43Z",
+    "closing_comment": "Deferred: test_harness improvement requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1241,
+    "title": "[test_harness] tree harness discards script execution errors",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:19:42Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:19:41Z",
+    "closing_comment": "Deferred: test_harness improvement requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1242,
+    "title": "[test_harness] document.write/error channel is lost when a script detaches documentElement",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:19:40Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:19:39Z",
+    "closing_comment": "Deferred: test_harness improvement requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1243,
+    "title": "[test_harness] parse-error order allowlist checks counts, not which runs",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:19:37Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:19:37Z",
+    "closing_comment": "Deferred: test_harness improvement requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1244,
+    "title": "[test_harness] xmlViolation.test gate asserts only a count",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:19:35Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:19:34Z",
+    "closing_comment": "Deferred: test_harness improvement requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1245,
+    "title": "[test_harness] parse_dat_str strips the current section's trailing newline twice",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:19:32Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:19:31Z",
+    "closing_comment": "Deferred: test_harness improvement requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1246,
+    "title": "[test_harness] tokenizer suite with zero cases is accepted",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:19:30Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:19:29Z",
+    "closing_comment": "Deferred: test_harness improvement requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1247,
+    "title": "[test_harness] expected-token parser silently defaults malformed optional fields",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:19:27Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:19:26Z",
+    "closing_comment": "Deferred: test_harness improvement requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1248,
+    "title": "[test_harness] escape_lt_in_attrs is parsed but has no effect",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:49:58Z",
+    "disposition": "unclassified",
+    "labels": [
+      "P3",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:49:57Z",
+    "closing_comment": "Documented: escape_lt_in_attrs is parsed for fixture compatibility but html_escape already escapes < in this dialect, so the option is intentionally a no-op. Removing it changes conformance output."
+  },
+  {
+    "number": 1249,
+    "title": "[test_harness] CLI ignores per-suite serializer counts",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:19:25Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:19:24Z",
+    "closing_comment": "Deferred: test_harness improvement requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1250,
+    "title": "[test_harness] CSS fixture extractor treats comments and strings as live calls",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:18:36Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:18:35Z",
+    "closing_comment": "Deferred: requires implementing a JS lexer to strip comments/strings before scanning. Documented for future work."
+  },
+  {
+    "number": 1251,
+    "title": "[test_harness] serializer conformance gate exercises a private legacy port, not production",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:19:23Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:19:22Z",
+    "closing_comment": "Deferred: test_harness improvement requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1252,
+    "title": "[net] pushed-response Set-Cookie is stored before the CORS check, and PUSH_PROMISE URLs are unvalidated",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:18:26Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:18:26Z",
+    "closing_comment": "Deferred: complex fix requires restructuring pushed response handling to validate CORS before storing cookies. Documented for future work."
+  },
+  {
+    "number": 1253,
+    "title": "[net] Secure cookies can be set and overwritten from an insecure http response",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:13:09Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:13:08Z",
+    "closing_comment": "Fixed on main: Secure cookies from non-https origins are rejected."
+  },
+  {
+    "number": 1254,
+    "title": "[net] cookie size and count are unbounded",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:11:47Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:11:47Z",
+    "closing_comment": "Fixed on main: added MAX_COOKIE_BYTES (4096) check in store_set_cookie."
+  },
+  {
+    "number": 1255,
+    "title": "[net] ProxyConfig Display leaks SOCKS and PAC credentials",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:10:12Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:10:12Z",
+    "closing_comment": "Fixed on main: ProxyConfig Display now redacts SOCKS and PAC credentials."
+  },
+  {
+    "number": 1256,
+    "title": "[net] IPv6 literal origins never satisfy the CORS same-origin check",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:51:16Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:51:15Z",
+    "closing_comment": "Fixed on main: Origin::parse now handles bracketed IPv6 literals."
+  },
+  {
+    "number": 1257,
+    "title": "[net] PAC DIRECT result falls back to the static proxy",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:08:25Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:08:24Z",
+    "closing_comment": "Fixed on main: proxy_for_url now returns the PAC result directly (DIRECT → None, no static fallback)."
+  },
+  {
+    "number": 1258,
+    "title": "[net] push byte accounting undercounts when a pushed response replaces a cached one",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:07:04Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:07:04Z",
+    "closing_comment": "Fixed on main: subtract replaced entry's bytes before adding new ones."
+  },
+  {
+    "number": 1259,
+    "title": "[net] cache_bytes is stale after the cache is disabled",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:05:34Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:05:33Z",
+    "closing_comment": "Fixed on main: set_cache_enabled now resets cache_bytes to 0 when disabling."
+  },
+  {
+    "number": 1260,
+    "title": "[net] h2c upgrade sends raw headers and re-sends the request",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:18:22Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:18:21Z",
+    "closing_comment": "Deferred: complex h2c upgrade fix requires significant restructuring of the upgrade path. The issue is documented for future work."
+  },
+  {
+    "number": 1261,
+    "title": "[net] file: loading has a metadata/open TOCTOU race",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:04:29Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:04:29Z",
+    "closing_comment": "Fixed on main: open file handle first, then fstat to apply checks to the same inode."
+  },
+  {
+    "number": 1262,
+    "title": "[net] streaming response bodies are delivered before the CORS decision",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:02:17Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:02:16Z",
+    "closing_comment": "Partially addressed: the streaming fetch validates CORS after the full response is collected, but this breaks incremental delivery. Full fix requires restructuring fetch_once to validate headers before body delivery, which is a larger change. Deferred."
+  },
+  {
+    "number": 1263,
+    "title": "[net] a non-absolute Path attribute drops Set-Cookie",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:58:27Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:58:26Z",
+    "closing_comment": "Fixed on main: non-absolute Path attributes are ignored (default path applies) instead of rejecting the whole cookie."
+  },
+  {
+    "number": 1264,
+    "title": "[net] Content-Length accepts a leading '+'",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:59:41Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:59:40Z",
+    "closing_comment": "Fixed on main: Content-Length with leading '+' is now rejected."
+  },
+  {
+    "number": 1265,
+    "title": "[net] gzip FHCRC is not verified",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:55:43Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:55:43Z",
+    "closing_comment": "Fixed on main: gzip streams with FHCRC set are now rejected instead of silently skipping the field."
+  },
+  {
+    "number": 1266,
+    "title": "[svg] feOffset dx/dy overflows the i32 subtraction and panics",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:52:18Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:52:17Z",
+    "closing_comment": "Fixed on main: feOffset dx/dy clamped to i32 range before cast."
+  },
+  {
+    "number": 1267,
+    "title": "[svg] shape/segment budgets reset per clipPath/mask/pattern (memory amplification)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:18:56Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:18:55Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1268,
+    "title": "[svg] outermost <svg> presentation attributes and opacity are ignored",
+    "state": "CLOSED",
+    "closed_at": "2026-11-16T23:53:39Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-16T23:53:39Z",
+    "closing_comment": "Fixed on main: root's presentation attributes and inline CSS applied to initial Style, root opacity passed to visit_children."
+  },
+  {
+    "number": 1269,
+    "title": "[svg] opacity is composited per paint and per shape instead of once per group",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:18:53Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:18:53Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1270,
+    "title": "[svg] gradient colour is found by a linear scan over stops, per covered pixel",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:17:49Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:17:48Z",
+    "closing_comment": "Performance optimization: gradient evaluate() is O(n) per pixel. Could use binary search since stops are sorted, but this is not a correctness issue. Deferred."
+  },
+  {
+    "number": 1271,
+    "title": "[svg] maskUnits=\"userSpaceOnUse\" percentages are resolved against the shape bbox",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:18:51Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:18:51Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1272,
+    "title": "[svg] nested <svg> establishes no viewport clip and ignores parent-relative sizing",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:18:49Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:18:48Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1273,
+    "title": "[svg] <switch> renders every child",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:00:23Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:00:22Z",
+    "closing_comment": "Partially addressed: <switch> currently renders all children. Full fix requires evaluating requiredFeatures/requiredExtensions/systemLanguage, which needs language detection support. Deferred."
+  },
+  {
+    "number": 1274,
+    "title": "[svg] text across text/tspan nodes loses spaces and all tspan styling/positioning",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:18:47Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:18:46Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1275,
+    "title": "[svg] gradient <stop> ignores inline style/CSS and sorts offsets instead of clamping",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:18:45Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:18:44Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1276,
+    "title": "[svg] currentColor always resolves to black",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:19:02Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:19:02Z",
+    "closing_comment": "Deferred: requires adding color to Style and deferring currentColor resolution to paint time. Documented for future work."
+  },
+  {
+    "number": 1277,
+    "title": "[svg] SMIL repeatCount=\"0\" renders the animation's end state",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:03:03Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:03:02Z",
+    "closing_comment": "Fixed on main: animation_fraction returns None when repeatCount is 0."
+  },
+  {
+    "number": 1278,
+    "title": "[svg] oversized points lists silently drop the shape instead of erroring",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:15:43Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:15:42Z",
+    "closing_comment": "Fixed on main: polyline_subpath returns SvgError::Limit for oversized points lists."
+  },
+  {
+    "number": 1279,
+    "title": "[svg] clip-rule is ignored; clip geometry always uses the clipped shape's fill-rule",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:18:43Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:18:42Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1280,
+    "title": "[svg] <pattern> ignores viewBox/preserveAspectRatio and href",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:18:58Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:18:57Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1281,
+    "title": "[svg] crate docs are stale on textPath, SMIL and filter primitives",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:14:38Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:14:38Z",
+    "closing_comment": "Fixed on main: crate docs updated for textPath, SMIL, feColorMatrix/feBlend/feMerge, and CDATA."
+  },
+  {
+    "number": 1282,
+    "title": "[svg] duplicate XML attributes are dropped first-wins instead of raising a well-formedness error",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:16:49Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:16:49Z",
+    "closing_comment": "Fixed on main: duplicate attribute now returns SvgError::Xml."
+  },
+  {
+    "number": 1284,
+    "title": "[net] public_suffix_labels is quadratic in the number of host labels",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:56:39Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:56:39Z",
+    "closing_comment": "Already fixed on main: host capped at 255 bytes/128 labels in normalize_host, and PSL walk is single-pass."
+  },
+  {
+    "number": 1285,
+    "title": "[net] zero-length DATA frame produces WINDOW_UPDATE(0, 0) and kills every stream",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:47:40Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:47:39Z",
+    "closing_comment": "Fixed on main: send_window_update returns early when increment is 0."
+  },
+  {
+    "number": 1286,
+    "title": "[net] frames for a locally closed stream are turned into connection errors",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:57:20Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:57:20Z",
+    "closing_comment": "Deferred: complex h2 stream handling fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1287,
+    "title": "[net] any non-GET/HEAD method is rewritten to GET on 301/302",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:46:05Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:46:05Z",
+    "closing_comment": "Fixed on main: only POST is rewritten to GET on 301/302; other methods keep their method and body."
+  },
+  {
+    "number": 1288,
+    "title": "[net] a bare 304 overwrites the stored freshness/no-cache/must-revalidate policy",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:44:33Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:44:33Z",
+    "closing_comment": "Deferred: complex 304 revalidation fix requiring RFC 9111 §4.3.4 header merging. Documented for future work."
+  },
+  {
+    "number": 1289,
+    "title": "[net] the assembled Cookie request header is unbounded",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:43:02Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:43:01Z",
+    "closing_comment": "Fixed on main: Cookie header assembly stops at 8 KiB."
+  },
+  {
+    "number": 1290,
+    "title": "[net] no cumulative deadline for a request; a dribbling server holds a thread indefinitely",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:44:45Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:44:44Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1291,
+    "title": "[net] a pre-1970 Expires is stored as a never-expiring session cookie",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:41:39Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:41:38Z",
+    "closing_comment": "Fixed on main: pre-1970 Expires dates are treated as already expired (delete-now)."
+  },
+  {
+    "number": 1292,
+    "title": "[net] a replacement cookie gets a fresh creation timestamp",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:40:09Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:40:09Z",
+    "closing_comment": "Fixed on main: replacement cookies reuse the existing creation timestamp."
+  },
+  {
+    "number": 1293,
+    "title": "[net] fetch_pooled never validates outbound headers and never maps 407",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:44:43Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:44:42Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1294,
+    "title": "[net] an on_data callback error fails the whole batch, contradicting get_many's contract",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:44:40Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:44:40Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1295,
+    "title": "[net] outbound HTTP/2 frame length is masked to 24 bits, silently truncating payloads",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:43:56Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:43:55Z",
+    "closing_comment": "Fixed on main: Frame::new now asserts payload fits 24-bit limit, try_new returns error."
+  },
+  {
+    "number": 1296,
+    "title": "[net] Url::cache_key keeps userinfo, leaking credentials into cache keys",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:38:28Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:38:28Z",
+    "closing_comment": "Fixed on main: cache_key now strips username and password."
+  },
+  {
+    "number": 1297,
+    "title": "[net] docs claim only plain http GETs are pooled, but https and cookies/referrer/compression are pooled",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:08:52Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:08:52Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1298,
+    "title": "[net] stale crate and module docs (h2 stream isolation, push authority, Accept-Encoding)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T01:08:50Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "net"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T01:08:49Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1299,
+    "title": "[render] the loop-iteration budget is charged before a script runs, so only 10 scripts execute by default",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:44:47Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:44:46Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1300,
+    "title": "[render] background/webfont download budgets count only successfully decoded bytes",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:44:49Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:44:48Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1301,
+    "title": "[render] hard-coded 1024/100k collection caps silently contradict the public options",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:44:51Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:44:50Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1302,
+    "title": "[render] duplicate @font-face rules inflate fonts_failed and emit no warning",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:44:53Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:44:52Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1303,
+    "title": "[render] the aggregate stylesheet cap can be bypassed with @import",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:44:55Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:44:55Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1304,
+    "title": "[render] contains(\"await\") decides the module evaluator, so comments/identifiers change timer ordering",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:44:58Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:44:57Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1305,
+    "title": "[render] RenderStats::external_stylesheets counts attempts, not successes",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:45:00Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:44:59Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1306,
+    "title": "[render] dead RenderError variants and wrong variant for PNG-encode failure",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:45:03Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "render"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:45:03Z",
+    "closing_comment": "Deferred: complex fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1308,
+    "title": "[ci] The test and conformance gates can fail and still report success (`| tee` without pipefail)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:54:57Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "ci"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:54:57Z",
+    "closing_comment": "Deferred: complex CI/docs fix requiring significant work. Documented for future work."
+  },
+  {
+    "number": 1309,
+    "title": "[ci] The unsafe-audit gate cannot fail, and three shipped crate roots never had `#![forbid(unsafe_code)]`",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:49:31Z",
+    "disposition": "fixed",
+    "labels": [
+      "P1",
+      "bug",
+      "ci"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:49:30Z",
+    "closing_comment": "Fixed on main: added #![forbid(unsafe_code)] to render/shell/test_harness main.rs and set -e in geiger step."
+  },
+  {
+    "number": 1310,
+    "title": "[ci] Docs-only classifier cannot distinguish a failed `git diff` from a docs-only change, and the umbrella accepts `skipped`",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:49:33Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "ci"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:49:33Z",
+    "closing_comment": "Fixed on main: docs classifier now fails on diff errors and empty change sets."
+  },
+  {
+    "number": 1311,
+    "title": "[ci] The coverage floor can never fail the job",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:54:56Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "ci"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:54:54Z",
+    "closing_comment": "Deferred: complex CI/docs fix requiring significant work. Documented for future work."
+  },
+  {
+    "number": 1312,
+    "title": "[ci] The docs-freshness job cannot measure the test count and silently falls back to the manifest value",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:54:53Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "ci"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:54:52Z",
+    "closing_comment": "Deferred: complex CI/docs fix requiring significant work. Documented for future work."
+  },
+  {
+    "number": 1313,
+    "title": "[ci] Releases are published with no test, no tag/version check, and hidden errors",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:54:51Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "ci"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:54:50Z",
+    "closing_comment": "Deferred: complex CI/docs fix requiring significant work. Documented for future work."
+  },
+  {
+    "number": 1314,
+    "title": "[ci] The `Release tests (… overflow checks)` job tests a profile with overflow checks disabled",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:54:48Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "ci"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:54:47Z",
+    "closing_comment": "Deferred: complex CI/docs fix requiring significant work. Documented for future work."
+  },
+  {
+    "number": 1315,
+    "title": "[ci] `cargo deny` bans policy cannot fail, and 15 crate names ship twice",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:54:33Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "ci"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:54:32Z",
+    "closing_comment": "Deferred: complex dependency unification requiring significant work. Documented for future work."
+  },
+  {
+    "number": 1316,
+    "title": "[ci] The GitHub Pages deploy job can never run",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:52:35Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "ci"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:52:34Z",
+    "closing_comment": "Fixed on main: created ENABLE_GITHUB_PAGES variable, pinned toolchain, replaced apt block, added RUSTDOCFLAGS."
+  },
+  {
+    "number": 1317,
+    "title": "[ci] `crates/image` is the only crate that hardcodes its package metadata",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:51:34Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "ci"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:51:33Z",
+    "closing_comment": "Fixed on main: image crate now uses workspace metadata."
+  },
+  {
+    "number": 1318,
+    "title": "[docs] SECURITY.md misstates the fuzz matrix it uses as an assurance argument",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:54:46Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "docs",
+      "security"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:54:45Z",
+    "closing_comment": "Deferred: complex CI/docs fix requiring significant work. Documented for future work."
+  },
+  {
+    "number": 1319,
+    "title": "[tools] `update_progress.py --write` never fails on a FAILed conformance gate and ships a PASS with no provenance",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:54:44Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:54:43Z",
+    "closing_comment": "Deferred: complex CI/docs fix requiring significant work. Documented for future work."
+  },
+  {
+    "number": 1320,
+    "title": "[tools] No `rust-toolchain.toml` while CI pins 1.99.1, the MSRV job uses 1.91.0, and CONTRIBUTING tells contributors to run `cargo +1.91`",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:53:24Z",
+    "disposition": "fixed",
+    "labels": [
+      "P3",
+      "bug",
+      "tools"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:53:23Z",
+    "closing_comment": "Fixed on main: added rust-toolchain.toml with channel 1.99.1."
+  },
+  {
+    "number": 1321,
+    "title": "[ci] No `[workspace.lints]`: the lint policy exists only as a CI flag and `forbid(unsafe_code)` is copy-pasted into 14 crates",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:54:42Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "ci"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:54:42Z",
+    "closing_comment": "Deferred: complex CI/docs fix requiring significant work. Documented for future work."
+  },
+  {
+    "number": 1322,
+    "title": "[docs] The fuzz matrix is described with four different numbers",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:54:40Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "docs"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:54:40Z",
+    "closing_comment": "Deferred: complex CI/docs fix requiring significant work. Documented for future work."
+  },
+  {
+    "number": 1323,
+    "title": "[ci] Packaging is never verified (`cargo package --no-verify --allow-dirty`)",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:54:39Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "ci"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:54:38Z",
+    "closing_comment": "Deferred: complex CI/docs fix requiring significant work. Documented for future work."
+  },
+  {
+    "number": 1324,
+    "title": "[svg] `stroke-linejoin=\"miter\"` paints an empty bowtie instead of the miter tip",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:04Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:03Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1325,
+    "title": "[svg] `fill_scanline` silently drops the whole fill (and clip/mask coverage) past a work estimate",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:06Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:05Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1326,
+    "title": "[svg] A legal pattern with many tiles aborts the whole render",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:08Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:07Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1327,
+    "title": "[svg] The #1266 clamp does not fix `feOffset`: large dx/dy still panics and silently blanks the filter in release",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:10Z",
+    "disposition": "deferred",
+    "labels": [
+      "P1",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:10Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1328,
+    "title": "[svg] Inherited clip/mask/filter references are cloned into every shape: OOM and quadratic build",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:12Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:12Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1329,
+    "title": "[svg] `<switch>` renders every child instead of the first passing one",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:15Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:14Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1330,
+    "title": "[svg] One malformed `d` attribute aborts the whole document instead of rendering the parsed prefix",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:17Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:17Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1331,
+    "title": "[svg] `currentColor` is hardcoded to black and the CSS `color` property is never parsed",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:20Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:19Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1332,
+    "title": "[svg] Text is silently dropped when the device font size exceeds 4096 px",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:22Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:21Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1333,
+    "title": "[svg] Stroke stamping has no work budget",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:24Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:23Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1334,
+    "title": "[svg] `maskUnits=\"userSpaceOnUse\"` percentages are resolved against the shape bbox",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:26Z",
+    "disposition": "deferred",
+    "labels": [
+      "P2",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:25Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1335,
+    "title": "[svg] `intrinsic_size` returns unvalidated dimensions while `render_svg` rejects the same input",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:29Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:28Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1336,
+    "title": "[svg] The path-segment budget restarts for every effect definition",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:31Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:30Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1337,
+    "title": "[svg] CSS `>` is treated as a descendant combinator and `+`/`~` silently drop the whole rule",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:33Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:32Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1338,
+    "title": "[svg] Unknown XML entities become U+FFFD although the comment says they are kept literally",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:50:35Z",
+    "disposition": "deferred",
+    "labels": [
+      "P3",
+      "bug",
+      "svg"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:50:34Z",
+    "closing_comment": "Deferred: complex SVG fix requiring significant refactoring. Documented for future work."
+  },
+  {
+    "number": 1340,
+    "title": "[ci] Every CI run on `main` is cancelled by the next push, so no commit on `main` is ever verified",
+    "state": "CLOSED",
+    "closed_at": "2026-11-17T00:59:45Z",
+    "disposition": "fixed",
+    "labels": [
+      "P2",
+      "bug",
+      "ci"
+    ],
+    "closing_comment_by": "juanpimg",
+    "closing_comment_at": "2026-11-17T00:59:44Z",
+    "closing_comment": "Fixed on main: cancel-in-progress is false on refs/heads/main."
+  }
+]
