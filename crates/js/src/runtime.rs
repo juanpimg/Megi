@@ -1359,7 +1359,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 35] = [
+    let accessors: [(&str, AccessorKind); 37] = [
         ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
@@ -1395,6 +1395,8 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("selectedIndex", AccessorKind::SelectedIndex),
         ("validity", AccessorKind::Validity),
         ("shadowRoot", AccessorKind::ShadowRoot),
+        ("open", AccessorKind::DialogOpen),
+        ("returnValue", AccessorKind::DialogReturnValue),
     ];
     type Prepared<'a> = (
         &'a str,
@@ -1467,6 +1469,9 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("submit", 0, node_submit),
         ("attachShadow", 1, node_attach_shadow),
         ("getRootNode", 0, node_get_root_node),
+        ("show", 0, node_dialog_show),
+        ("showModal", 0, node_dialog_show_modal),
+        ("close", 1, node_dialog_close),
     ] {
         init.function(native(function), js_string!(name), length);
     }
@@ -1522,6 +1527,8 @@ enum AccessorKind {
     SelectedIndex,
     Validity,
     ShadowRoot,
+    DialogOpen,
+    DialogReturnValue,
 }
 
 fn accessor_functions(kind: AccessorKind) -> AccessorPair {
@@ -1561,6 +1568,8 @@ fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::SelectedIndex => (node_selected_index_get, Some(node_selected_index_set)),
         AccessorKind::Validity => (node_validity_get, None),
         AccessorKind::ShadowRoot => (node_shadow_root_get, None),
+        AccessorKind::DialogOpen => (node_open_get, Some(node_open_set)),
+        AccessorKind::DialogReturnValue => (node_dialog_return_value_get, None),
     }
 }
 
@@ -2191,6 +2200,109 @@ fn node_submit(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsRe
     Ok(JsValue::from(dispatched))
 }
 
+/// Sets/clears the `open` attribute on a dialog element (#1546).
+fn dialog_open(this: &JsValue, open: bool, context: &mut Context) -> JsResult<()> {
+    let node_id = this_node(this, context)?;
+    with_host(|host| {
+        let element = host
+            .document
+            .try_node_mut(node_id)
+            .and_then(|node| node.as_element_mut());
+        if let Some(element) = element {
+            if open {
+                element.set_attribute(DomAttribute::new("open", ""), true);
+            } else {
+                element.attributes.retain(|attr| attr.local_name != "open");
+            }
+        }
+    });
+    Ok(())
+}
+
+/// `HTMLDialogElement.show()` / `showModal()` (#1546). The engine has no separate top-layer yet,
+/// so both reveal the dialog by setting `open`; `showModal()` additionally records the modal
+/// state on the element so scripts and the shell can observe which dialog is modal.
+fn node_dialog_show(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    dialog_open(this, true, context)?;
+    let _ = crate::events::dispatch_event_type(this, "toggle", false, false, context);
+    Ok(JsValue::undefined())
+}
+
+fn node_dialog_show_modal(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    dialog_open(this, true, context)?;
+    let node_id = this_node(this, context)?;
+    with_host(|host| {
+        if let Some(element) = host
+            .document
+            .try_node_mut(node_id)
+            .and_then(|node| node.as_element_mut())
+        {
+            element.set_attribute(DomAttribute::new("data-megi-modal", ""), true);
+        }
+    });
+    let _ = crate::events::dispatch_event_type(this, "toggle", false, false, context);
+    Ok(JsValue::undefined())
+}
+
+/// `HTMLDialogElement.close(returnValue)` (#1546): hides the dialog, stores its return value and
+/// fires a `close` event.
+fn node_dialog_close(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let return_value = args
+        .first()
+        .map(|value| {
+            value
+                .to_string(context)
+                .map(|text| text.to_std_string_escaped())
+        })
+        .transpose()
+        .map_err(|error| js_error(error.to_string()))?
+        .unwrap_or_default();
+    dialog_open(this, false, context)?;
+    let node_id = this_node(this, context)?;
+    with_host(|host| {
+        if let Some(element) = host
+            .document
+            .try_node_mut(node_id)
+            .and_then(|node| node.as_element_mut())
+        {
+            element.set_attribute(
+                DomAttribute::new("data-megi-return-value", &return_value),
+                true,
+            );
+            element
+                .attributes
+                .retain(|attr| attr.local_name != "data-megi-modal");
+        }
+    });
+    let _ = crate::events::dispatch_event_type(this, "close", false, false, context);
+    Ok(JsValue::undefined())
+}
+
+fn node_dialog_return_value_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let value = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| {
+                element
+                    .get_attribute("data-megi-return-value")
+                    .map(str::to_owned)
+            })
+    })
+    .flatten()
+    .unwrap_or_default();
+    Ok(JsValue::from(js_string!(value)))
+}
+
 fn node_value_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let value = arg_string(args, 0, context)?;
@@ -2259,6 +2371,14 @@ fn boolean_attribute_set(
         Some(Err(message)) => Err(js_error(message)),
         None => Err(js_error("no active JavaScript host")),
     }
+}
+
+fn node_open_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    boolean_attribute_get(this, "open", context)
+}
+
+fn node_open_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    boolean_attribute_set(this, "open", args, context)
 }
 
 fn node_checked_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
@@ -6012,6 +6132,120 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
   XMLHttpRequest.LOADING = 3;
   XMLHttpRequest.DONE = 4;
   define("XMLHttpRequest", XMLHttpRequest);
+  // XMLHttpRequest subset (#1532) implemented over fetch()/the host fetch provider.
+  // Async only (`async === false` is rejected by open()); events use a small per-instance
+  // listener table plus the on* handler properties, and are dispatched by name.
+  function XMLHttpRequest() {
+    this.readyState = 0; // UNSENT
+    this.status = 0;
+    this.statusText = "";
+    this.responseText = "";
+    this.response = null;
+    this.responseType = "";
+    this.responseURL = "";
+    this.timeout = 0;
+    this.withCredentials = false;
+    this.onreadystatechange = null;
+    this.onload = null;
+    this.onerror = null;
+    this.onabort = null;
+    this._listeners = {};
+    this._method = "GET";
+    this._url = "";
+    this._headers = [];
+    this._aborted = false;
+    var self = this;
+    this.addEventListener = function (type, fn) {
+      if (typeof fn !== "function") { return; }
+      if (!self._listeners[type]) { self._listeners[type] = []; }
+      if (self._listeners[type].length < 64) { self._listeners[type].push(fn); }
+    };
+    this.removeEventListener = function (type, fn) {
+      var list = self._listeners[type] || [];
+      self._listeners[type] = list.filter(function (f) { return f !== fn; });
+    };
+    this._fire = function (type) {
+      var event = { type: type, target: self };
+      var handler = self["on" + type];
+      if (typeof handler === "function") { try { handler(event); } catch (e) {} }
+      var list = (self._listeners[type] || []).slice();
+      for (var i = 0; i < list.length; i++) { try { list[i](event); } catch (e) {} }
+    };
+    this._changeState = function (state) {
+      self.readyState = state;
+      self._fire("readystatechange");
+    };
+    this.open = function (method, url, async) {
+      if (async === false) { throw new TypeError("synchronous XMLHttpRequest is not supported"); }
+      var m = String(method).toUpperCase();
+      if (["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"].indexOf(m) < 0) {
+        throw new TypeError("unsupported XMLHttpRequest method: " + String(method));
+      }
+      self._aborted = false;
+      self._method = m;
+      self._url = String(url);
+      self._headers = [];
+      self.status = 0;
+      self.statusText = "";
+      self.responseText = "";
+      self.response = null;
+      self._changeState(1); // OPENED
+    };
+    this.setRequestHeader = function (name, value) {
+      if (self.readyState !== 1) { throw new Error("InvalidStateError"); }
+      self._headers.push([headerName(name), headerValue(value)]);
+    };
+    this.overrideMimeType = function () {};
+    this.abort = function () {
+      if (self.readyState === 0 || self.readyState === 4) { return; }
+      self._aborted = true;
+      self.status = 0;
+      self.readyState = 0;
+      self._fire("abort");
+    };
+    this.send = function (body) {
+      if (self.readyState !== 1) { throw new Error("InvalidStateError"); }
+      var init = { method: self._method, headers: self._headers };
+      if (body !== undefined && body !== null && self._method !== "GET" && self._method !== "HEAD") {
+        init.body = body;
+      }
+      fetch(self._url, init).then(function (response) {
+        if (self._aborted) { return; }
+        self.status = response.status;
+        self.statusText = response.statusText || "";
+        self.responseURL = response.url || self._url;
+        return response.arrayBuffer().then(function (buffer) {
+          if (self._aborted) { return; }
+          if (self.responseType === "arraybuffer") { self.response = buffer; }
+          else {
+            var bytes = new Uint8Array(buffer);
+            var text = "";
+            for (var i = 0; i < bytes.length; i++) { text += String.fromCharCode(bytes[i]); }
+            self.responseText = text;
+            if (self.responseType === "json") {
+              try { self.response = JSON.parse(text); } catch (e) { self.response = null; }
+            } else if (self.responseType === "text" || self.responseType === "") {
+              self.response = text;
+            } else { self.response = text; }
+          }
+          self._changeState(4); // DONE
+          self._fire("load");
+        });
+      }).catch(function () {
+        if (self._aborted) { return; }
+        self.status = 0;
+        self._changeState(4);
+        self._fire("error");
+      });
+    };
+  }
+  XMLHttpRequest.UNSENT = 0;
+  XMLHttpRequest.OPENED = 1;
+  XMLHttpRequest.HEADERS_RECEIVED = 2;
+  XMLHttpRequest.LOADING = 3;
+  XMLHttpRequest.DONE = 4;
+  define("XMLHttpRequest", XMLHttpRequest);
+
 })();
 "####;
     let fetch_fn = FunctionObjectBuilder::new(context.realm(), native(fetch_native))

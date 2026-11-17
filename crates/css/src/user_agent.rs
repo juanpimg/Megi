@@ -51,6 +51,11 @@ head, link, meta, script, style, template, title {
     display: none !important;
 }
 
+/* Dialog (§15.3.2 / HTMLDialogElement): a closed dialog is not rendered. */
+dialog:not([open]) {
+    display: none;
+}
+
 /* Page margin (§15.3.3) */
 body {
     margin: 8px;
