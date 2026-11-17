@@ -214,13 +214,19 @@ pub struct StorageProvider {
     pub save: StorageSaveFn,
 }
 
+/// Maximum simultaneous `MutationObserver` registrations per realm (#1134).
+pub(crate) const MAX_OBSERVERS: usize = 1024;
+/// Distinct nodes a single `MutationObserver` may track (#437).
+pub(crate) const MAX_OBSERVER_TARGETS: usize = 1024;
+/// Maximum queued `MutationRecord`s per observer between deliveries.
+pub(crate) const MAX_OBSERVER_RECORDS: usize = 4096;
+
 /// One queued MutationObserver record.
 #[derive(Clone, Debug)]
 pub(crate) struct MutationRecord {
     pub kind: MutationKind,
     pub target: NodeId,
     pub name: Option<String>,
-    #[allow(dead_code)]
     pub old_value: Option<String>,
 }
 
@@ -245,8 +251,19 @@ pub(crate) struct ObserverTarget {
     pub node: NodeId,
     pub child_list: bool,
     pub attributes: bool,
+    pub attribute_old_value: bool,
     pub character_data: bool,
     pub subtree: bool,
+}
+
+impl ObserverTarget {
+    fn matches_kind(self, kind: MutationKind) -> bool {
+        match kind {
+            MutationKind::ChildList => self.child_list,
+            MutationKind::Attributes => self.attributes,
+            MutationKind::CharacterData => self.character_data,
+        }
+    }
 }
 
 /// Insertion-order-preserving key-value map for Web Storage (`localStorage`/`sessionStorage`)
@@ -396,6 +413,8 @@ pub(crate) struct Host {
     pub storage_provider: Option<StorageProvider>,
     /// MutationObserver registrations and per-observer pending records.
     pub observers: Vec<ObserverRegistration>,
+    /// Observed target `NodeId` -> `(observer_index_in_observers, target_options)` index (#1134).
+    pub observer_index: HashMap<NodeId, Vec<(usize, ObserverTarget)>>,
     /// Currently focused element (best-effort `focus()`/`blur()` bookkeeping).
     pub active_element: Option<NodeId>,
     /// Injected layout geometry provider (`getBoundingClientRect`/offset/client metrics).
@@ -459,6 +478,7 @@ impl Host {
             session_storage: StorageMap::default(),
             storage_provider: None,
             observers: Vec::new(),
+            observer_index: HashMap::new(),
             active_element: None,
             layout_provider: None,
             worker_loader: None,
@@ -488,37 +508,121 @@ impl Host {
         u32::try_from(index).map_err(|_| "node handle table overflow".to_string())
     }
 
+    /// Registers or updates an observed target for `slot`, keeping `observer_index` in sync.
+    pub fn observe_target(&mut self, slot: u32, target: ObserverTarget) -> Result<(), String> {
+        let Some(obs_idx) = self.observers.iter().position(|r| r.object_slot == slot) else {
+            return Ok(());
+        };
+        let registration = &mut self.observers[obs_idx];
+        // Re-observing a node only updates its options: the DOM spec keeps one registered
+        // observer per (observer, target) pair (#437).
+        if let Some(existing) = registration
+            .targets
+            .iter_mut()
+            .find(|existing| existing.node == target.node)
+        {
+            *existing = target;
+            if let Some(entries) = self.observer_index.get_mut(&target.node) {
+                for (indexed_obs, indexed_target) in entries.iter_mut() {
+                    if *indexed_obs == obs_idx {
+                        *indexed_target = target;
+                    }
+                }
+            }
+            return Ok(());
+        }
+        if registration.targets.len() >= MAX_OBSERVER_TARGETS {
+            return Err(format!(
+                "MutationObserver target limit of {MAX_OBSERVER_TARGETS} exceeded"
+            ));
+        }
+        registration.targets.push(target);
+        self.observer_index
+            .entry(target.node)
+            .or_default()
+            .push((obs_idx, target));
+        Ok(())
+    }
+
+    /// Clears targets and queued records for `slot`, keeping the observer registration re-armable (#1135).
+    pub fn disconnect_observer(&mut self, slot: u32) {
+        let Some(obs_idx) = self.observers.iter().position(|r| r.object_slot == slot) else {
+            return;
+        };
+        let drained = std::mem::take(&mut self.observers[obs_idx].targets);
+        self.observers[obs_idx].records.clear();
+        for target in drained {
+            if let Some(entries) = self.observer_index.get_mut(&target.node) {
+                entries.retain(|(idx, _)| *idx != obs_idx);
+                if entries.is_empty() {
+                    self.observer_index.remove(&target.node);
+                }
+            }
+        }
+    }
+
     /// Adds a MutationObserver record to each matching observer's queue (bounded per observer).
+    ///
+    /// Walks `record.target`'s ancestor chain once against `observer_index` instead of scanning
+    /// every observer and walking ancestors per observer (`O(depth + matches)` vs `O(observers * depth)`).
     pub fn record_mutation(&mut self, record: MutationRecord) {
-        if self.observers.is_empty() {
+        if self.observer_index.is_empty() || self.observers.is_empty() {
             return;
         }
-        // Compute the target's ancestor chain once per mutation instead of once per
-        // (observer, target) pair (#1134). Bound the walk by the arena size so a
-        // corrupted parent cycle cannot hang dispatch.
-        let mut ancestors: Vec<NodeId> = Vec::new();
+        let mut matched_bits = [0u64; MAX_OBSERVERS.div_ceil(64)];
+        let mut want_old_value = [0u64; MAX_OBSERVERS.div_ceil(64)];
+        let mut matched_indices: Vec<usize> = Vec::new();
         let max_steps = self.document.len().saturating_add(1);
+        let mut current = Some(record.target);
         let mut steps = 0usize;
-        let mut current = self
-            .document
-            .try_node(record.target)
-            .and_then(|node| node.parent);
-        while let Some(id) = current {
+        while let Some(node_id) = current {
+            let is_direct = steps == 0;
+            if let Some(entries) = self.observer_index.get(&node_id) {
+                for &(obs_idx, target) in entries {
+                    let word = obs_idx / 64;
+                    let Some(slot_word) = matched_bits.get_mut(word) else {
+                        continue;
+                    };
+                    if obs_idx >= self.observers.len()
+                        || !target.matches_kind(record.kind)
+                        || (!is_direct && !target.subtree)
+                    {
+                        continue;
+                    }
+                    let bit = 1u64 << (obs_idx % 64);
+                    if target.attribute_old_value {
+                        want_old_value[word] |= bit;
+                    }
+                    if *slot_word & bit == 0 {
+                        *slot_word |= bit;
+                        matched_indices.push(obs_idx);
+                    }
+                }
+            }
             if steps >= max_steps {
                 break;
             }
             steps += 1;
-            ancestors.push(id);
-            current = self.document.try_node(id).and_then(|node| node.parent);
+            current = self.document.try_node(node_id).and_then(|node| node.parent);
         }
-        for observer in &mut self.observers {
-            // Most observers watch nothing; skip them without scanning their targets.
-            if observer.targets.is_empty() || observer.records.len() >= 4096 {
+        if matched_indices.is_empty() {
+            return;
+        }
+        if matched_indices.len() > 1 {
+            matched_indices.sort_unstable();
+        }
+        for obs_idx in matched_indices {
+            let observer = &mut self.observers[obs_idx];
+            if observer.records.len() >= MAX_OBSERVER_RECORDS {
                 continue;
             }
-            if record_matches_observer(&record, observer, &ancestors) {
-                observer.records.push(record.clone());
+            let keep_old = record.kind == MutationKind::Attributes
+                && (want_old_value[obs_idx / 64] & (1u64 << (obs_idx % 64))) != 0;
+            let mut pushed = record.clone();
+            if !keep_old {
+                pushed.old_value = None;
             }
+            observer.records.push(pushed);
         }
     }
 
@@ -629,32 +733,6 @@ impl Drop for HostScope {
     }
 }
 
-/// Whether `record` matches any of `observer`'s registered targets.
-///
-/// `ancestors` is the target node's parent chain, computed once per mutation by
-/// [`Host::record_mutation`] so the dispatch is O(observers × targets) instead of
-/// O(observers × targets × depth) (#1134).
-pub(crate) fn record_matches_observer(
-    record: &MutationRecord,
-    observer: &ObserverRegistration,
-    ancestors: &[NodeId],
-) -> bool {
-    observer.targets.iter().any(|target| {
-        let kind_enabled = match record.kind {
-            MutationKind::ChildList => target.child_list,
-            MutationKind::Attributes => target.attributes,
-            MutationKind::CharacterData => target.character_data,
-        };
-        if !kind_enabled {
-            return false;
-        }
-        if target.node == record.target {
-            return true;
-        }
-        target.subtree && ancestors.contains(&target.node)
-    })
-}
-
 /// Returns a clone of the current thread's host, if a runtime is evaluating.
 pub(crate) fn current_host() -> Option<Rc<RefCell<Host>>> {
     CURRENT_HOST.with(|cell| cell.borrow().clone())
@@ -699,5 +777,171 @@ mod storage_and_console_tests {
         assert_eq!(host.console.len(), MAX_CONSOLE_ENTRIES);
         assert_eq!(host.console.front().expect("oldest").message, "3");
         assert_eq!(host.console.back().expect("newest").message, "4098");
+    }
+}
+
+#[cfg(test)]
+mod mutation_observer_index_tests {
+    use super::*;
+    use dom::Namespace;
+
+    #[test]
+    fn observer_index_updates_cleans_up_and_preserves_order() {
+        let mut doc = Document::new();
+        let parent = doc.create_element(Namespace::Html, "div", vec![]);
+        let child = doc.create_element(Namespace::Html, "span", vec![]);
+        let other = doc.create_element(Namespace::Html, "p", vec![]);
+        assert!(doc.append_child(doc.root(), parent));
+        assert!(doc.append_child(parent, child));
+        assert!(doc.append_child(doc.root(), other));
+
+        let mut host = Host::new(doc, "https://example.com".to_string());
+        for slot in 0..3u32 {
+            host.observers.push(ObserverRegistration {
+                callback_slot: slot,
+                object_slot: slot,
+                targets: Vec::new(),
+                records: Vec::new(),
+            });
+        }
+        host.observe_target(
+            0,
+            ObserverTarget {
+                node: parent,
+                child_list: true,
+                attributes: true,
+                attribute_old_value: false,
+                character_data: false,
+                subtree: true,
+            },
+        )
+        .expect("observe 0");
+        host.observe_target(
+            1,
+            ObserverTarget {
+                node: child,
+                child_list: false,
+                attributes: true,
+                attribute_old_value: true,
+                character_data: false,
+                subtree: false,
+            },
+        )
+        .expect("observe 1");
+        host.observe_target(
+            2,
+            ObserverTarget {
+                node: other,
+                child_list: true,
+                attributes: true,
+                attribute_old_value: true,
+                character_data: false,
+                subtree: true,
+            },
+        )
+        .expect("observe 2");
+        assert_eq!(host.observer_index.len(), 3);
+
+        host.observe_target(
+            0,
+            ObserverTarget {
+                node: child,
+                child_list: false,
+                attributes: true,
+                attribute_old_value: true,
+                character_data: false,
+                subtree: false,
+            },
+        )
+        .expect("observe 0 child");
+
+        host.record_mutation(MutationRecord {
+            kind: MutationKind::Attributes,
+            target: child,
+            name: Some("data-x".to_string()),
+            old_value: Some("before".to_string()),
+        });
+        assert_eq!(host.observers[0].records.len(), 1);
+        assert_eq!(
+            host.observers[0].records[0].old_value.as_deref(),
+            Some("before")
+        );
+        assert_eq!(host.observers[1].records.len(), 1);
+        assert_eq!(
+            host.observers[1].records[0].old_value.as_deref(),
+            Some("before")
+        );
+        assert!(host.observers[2].records.is_empty());
+
+        host.observe_target(
+            0,
+            ObserverTarget {
+                node: child,
+                child_list: false,
+                attributes: true,
+                attribute_old_value: false,
+                character_data: false,
+                subtree: false,
+            },
+        )
+        .expect("re-observe 0 child");
+        host.record_mutation(MutationRecord {
+            kind: MutationKind::Attributes,
+            target: child,
+            name: Some("data-x".to_string()),
+            old_value: Some("after".to_string()),
+        });
+        assert_eq!(host.observers[0].records.len(), 2);
+        assert_eq!(host.observers[0].records[1].old_value, None);
+        assert_eq!(
+            host.observers[1].records[1].old_value.as_deref(),
+            Some("after")
+        );
+
+        host.disconnect_observer(0);
+        assert!(!host.observer_index.contains_key(&parent));
+        assert_eq!(host.observer_index.get(&child).map(Vec::len), Some(1));
+        host.disconnect_observer(1);
+        assert!(!host.observer_index.contains_key(&child));
+        host.disconnect_observer(2);
+        assert!(host.observer_index.is_empty());
+    }
+
+    #[test]
+    fn record_mutation_terminates_on_cyclic_parent_chain() {
+        let mut doc = Document::new();
+        let a = doc.create_element(Namespace::Html, "div", vec![]);
+        let b = doc.create_element(Namespace::Html, "span", vec![]);
+        let unrelated = doc.create_element(Namespace::Html, "p", vec![]);
+        doc.try_node_mut(a).expect("a").parent = Some(b);
+        doc.try_node_mut(b).expect("b").parent = Some(a);
+
+        let mut host = Host::new(doc, "https://example.com".to_string());
+        host.observers.push(ObserverRegistration {
+            callback_slot: 0,
+            object_slot: 0,
+            targets: Vec::new(),
+            records: Vec::new(),
+        });
+        host.observe_target(
+            0,
+            ObserverTarget {
+                node: unrelated,
+                child_list: true,
+                attributes: true,
+                attribute_old_value: false,
+                character_data: false,
+                subtree: true,
+            },
+        )
+        .expect("observe");
+
+        host.record_mutation(MutationRecord {
+            kind: MutationKind::ChildList,
+            target: b,
+            name: None,
+            old_value: None,
+        });
+        assert!(host.observers[0].records.is_empty());
     }
 }
