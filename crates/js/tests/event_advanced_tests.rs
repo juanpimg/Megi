@@ -271,7 +271,7 @@ fn throwing_listener_does_not_interrupt_the_rest() {
 }
 
 #[test]
-fn budgets_still_stop_loops_inside_listeners() {
+fn budgets_stop_loops_inside_listeners_and_report_to_console_without_propagating_in_boa() {
     let mut runtime = runtime();
     let result = runtime.eval(
         "var el = document.createElement('div');
@@ -281,7 +281,10 @@ fn budgets_still_stop_loops_inside_listeners() {
     );
     // Boa 0.22 reports the listener budget error to the console instead of propagating
     // it out of dispatchEvent, so eval succeeds but the console records the budget error.
-    let _ = result;
+    assert!(
+        result.is_ok(),
+        "Boa 0.22 reports listener budget errors to the console instead of propagating them: {result:?}"
+    );
     let console = runtime.take_console();
     assert!(
         console.iter().any(|entry| {
@@ -292,7 +295,7 @@ fn budgets_still_stop_loops_inside_listeners() {
                         .to_ascii_lowercase()
                         .contains("iteration loops"))
         }),
-        "budget must stop the listener: {console:?}"
+        "budget must stop the listener and be reported to console: {console:?}"
     );
 }
 

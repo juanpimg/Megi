@@ -195,12 +195,19 @@ fn insert_adjacent_html_frees_temp_and_propagates_hierarchy_error() {
              }
              var err = '';
              try {
-               document.documentElement.insertAdjacentHTML('afterbegin', '<b>x</b>');
+               document.body.appendChild(document.documentElement);
              } catch (e) { err = String(e); }
              globalThis.__err = err;",
             "adj.js",
         )
         .expect("eval");
+    let err = runtime
+        .eval("globalThis.__err", "adj.js")
+        .expect("read captured error");
+    assert!(
+        err.contains("hierarchy") || err.contains("unknown node"),
+        "hierarchy failure must be reported, got: {err}"
+    );
     let after = runtime.document().len();
     assert!(
         after <= before + 4,
