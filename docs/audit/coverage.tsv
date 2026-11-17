@@ -111,11 +111,11 @@ crates/html/src/scripting.rs	246	src	F2	wave1	2026-11-16	covered	#1120-#1125
 crates/html/src/serializer.rs	688	src	F2	wave1	2026-11-16	covered	#1120-#1125	
 crates/html/src/tokenizer.rs	3576	src	F2	wave1	2026-11-16	covered	#1120-#1125	
 crates/html/src/tree_builder.rs	5036	src	F2	wave1	2026-11-16	covered	#1120-#1125	
-crates/html/tests/browser_api.rs	313	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
+crates/html/tests/browser_api.rs	280	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
 crates/html/tests/perf.rs	146	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
 crates/html/tests/proptest_html.rs	137	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
 crates/html/tests/robustness.rs	718	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
-crates/html/tests/serializer_tests.rs	1	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
+crates/html/tests/serializer_tests.rs	125	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
 crates/image/Cargo.toml	11	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/image/src/crc32.rs	65	src	F2	wave1	2026-11-16	covered	#1148-#1151	
 crates/image/src/error.rs	93	src	F2	wave1	2026-11-16	covered	#1148-#1151	
@@ -269,7 +269,7 @@ crates/layout/src/calc.rs	73	src	F2	wave1	2026-11-16	covered	#1152-#1156
 crates/layout/src/flex.rs	822	src	F2	wave1	2026-11-16	covered	#1152-#1156	
 crates/layout/src/geometry.rs	155	src	F2	wave1	2026-11-16	covered	#1152-#1156	
 crates/layout/src/grid.rs	1437	src	F2	wave1	2026-11-16	covered	#1152-#1156	
-crates/layout/src/inline.rs	2142	src	F2	wave1	2026-11-16	covered	#1152-#1156	
+crates/layout/src/inline.rs	2095	src	F2	wave1	2026-11-16	covered	#1152-#1156	
 crates/layout/src/lib.rs	312	src	F2	wave1	2026-11-16	covered	#1152-#1156	
 crates/layout/src/table.rs	1608	src	F2	wave1	2026-11-16	covered	#1152-#1156	
 crates/layout/src/text.rs	310	src	F2	wave1	2026-11-16	covered	#1152-#1156	
@@ -310,7 +310,7 @@ crates/net/src/h2/client.rs	1864	src	F2	wave1	2026-11-16	covered	#1252-#1265,#12
 crates/net/src/h2/frame.rs	842	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/h2/hpack.rs	706	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/h2/mod.rs	65	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
-crates/net/src/http.rs	2539	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
+crates/net/src/http.rs	2536	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/lib.rs	176	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/loader.rs	1131	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/mime.rs	277	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
@@ -320,7 +320,7 @@ crates/net/src/psl.rs	303	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#129
 crates/net/src/range.rs	240	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/referrer.rs	274	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/socks.rs	243	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
-crates/net/src/url.rs	858	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
+crates/net/src/url.rs	845	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/tests/advanced_tests.rs	660	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/browser_features_tests.rs	824	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/cache_tests.rs	336	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
@@ -359,7 +359,7 @@ crates/paint/src/inflate.rs	329	src	F2	wave1	2026-11-16	covered	#1179-#1196
 crates/paint/src/lib.rs	257	src	F2	wave1	2026-11-16	covered	#1179-#1196	
 crates/paint/src/painter.rs	2120	src	F2	wave1	2026-11-16	covered	#1179-#1196	
 crates/paint/src/png.rs	710	src	F2	wave1	2026-11-16	covered	#1179-#1196	
-crates/paint/src/rasterizer.rs	4428	src	F2	wave1	2026-11-16	covered	#1179-#1196	
+crates/paint/src/rasterizer.rs	4323	src	F2	wave1	2026-11-16	covered	#1179-#1196	
 crates/paint/src/style.rs	203	src	F2	wave1	2026-11-16	covered	#1179-#1196	
 crates/paint/tests/background_geometry.rs	524	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
 crates/paint/tests/background_images.rs	388	test	F1	waveF1	2026-11-17	covered	#1363,#1366-#1370	
