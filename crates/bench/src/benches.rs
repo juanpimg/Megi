@@ -127,7 +127,8 @@ fn register_html(suite: &mut Suite, scale: f64) {
         )
         .with_units(mib, "MiB");
         // 32k/64k are the expensive probes: keep their iteration count low.
-        suite.add(if base_depth >= 32_000 {
+        // Classify on the scaled depth so --scale changes the sample regime (#1208).
+        suite.add(if depth >= 32_000 {
             entry.heavy()
         } else {
             entry
