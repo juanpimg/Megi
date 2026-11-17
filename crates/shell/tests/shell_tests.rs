@@ -351,6 +351,7 @@ fn click_navigation_sequence_pushes_and_back_returns() {
     let regions = vec![shell::LinkRegion {
         rect: shell::CssRect::new(10.0, 10.0, 100.0, 20.0),
         href: "other.html".to_string(),
+        node: None,
     }];
     let clicked = shell::link_url_at(Some(&page), &regions, 50.0, 15.0)
         .expect("resolution")

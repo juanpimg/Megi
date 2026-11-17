@@ -549,6 +549,13 @@ impl FocusState {
         Self { focused: None }
     }
 
+    /// Creates a model already focused on `index` (out-of-range clears focus).
+    pub fn at(index: usize, total: usize) -> Self {
+        Self {
+            focused: if index < total { Some(index) } else { None },
+        }
+    }
+
     /// Currently focused control index, if any.
     pub const fn focused(&self) -> Option<usize> {
         self.focused
@@ -677,6 +684,64 @@ impl TextEdit {
 /// Sets/removes `value`, `checked`, the focus marker (`data-megi-focused` on `form_id`
 /// only) and the active marker (`data-megi-active`). The same attributes are read back by
 /// [`collect_controls`] and by the UA stylesheet, so a re-render shows the new state.
+/// Removes the focus marker (`data-megi-focused`) from every element in `document`.
+///
+/// Used when keyboard focus moves to a link so no stale control keeps its ring (#1517).
+pub fn clear_focus_markers(document: &mut Document) -> bool {
+    let mut changed = false;
+    for node_id in element_ids(document) {
+        let Some(element) = document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+        else {
+            continue;
+        };
+        if !element.get_attribute(FOCUS_ATTR).is_some() {
+            continue;
+        }
+        let mut next = element.clone();
+        next.attributes.retain(|attr| attr.local_name != FOCUS_ATTR);
+        *document
+            .node_mut(node_id)
+            .as_element_mut()
+            .expect("element") = next;
+        changed = true;
+    }
+    changed
+}
+
+/// Sets or clears the focus marker (`data-megi-focused`) on the element `node_id`.
+///
+/// Used by the keyboard focus model to draw a focus ring on `<a href>` links, which have no
+/// `form_id` and therefore cannot go through [`patch_control`] (#1517). Returns whether the
+/// DOM changed.
+pub fn patch_focus_node(document: &mut Document, node_id: NodeId, focus: bool) -> bool {
+    let Some(element) = document.try_node_mut(node_id).and_then(|node| {
+        // `try_node_mut` borrows the document; clone the element to release the borrow, then
+        // replace it below so the mutation goes through the usual node API.
+        node.as_element().cloned()
+    }) else {
+        return false;
+    };
+    let mut next = element;
+    let has = next.get_attribute(FOCUS_ATTR).is_some();
+    if focus && !has {
+        next.set_attribute(Attribute::new(FOCUS_ATTR, ""), true);
+    } else if !focus && has {
+        next.attributes.retain(|attr| attr.local_name != FOCUS_ATTR);
+    } else {
+        return false;
+    }
+    if let Some(node) = document.try_node_mut(node_id)
+        && let Some(slot) = node.as_element_mut()
+    {
+        *slot = next;
+        true
+    } else {
+        false
+    }
+}
+
 pub fn patch_control(
     document: &mut Document,
     form_id: u32,

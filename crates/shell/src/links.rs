@@ -76,6 +76,11 @@ pub struct LinkRegion {
     pub rect: CssRect,
     /// Raw `href` attribute value (not resolved).
     pub href: String,
+    /// DOM node of the anchor (`None` when it could not be recovered from the hit layer).
+    ///
+    /// Keyboard focus and the focus ring key off this node so that one anchor is one focus
+    /// target even when several painted primitives cover it.
+    pub node: Option<dom::NodeId>,
 }
 
 /// Errors produced by [`resolve_href`].
@@ -208,7 +213,7 @@ pub fn collect_link_regions(output: &render::RenderOutput) -> Vec<LinkRegion> {
     if output.hit_regions.is_empty() {
         return collect_link_regions_from_layout(output);
     }
-    let mut regions = Vec::new();
+    let mut regions: Vec<LinkRegion> = Vec::new();
     for hit_region in &output.hit_regions {
         let rect = hit_region.rect;
         let center_x = rect.x + rect.width / 2.0;
@@ -224,10 +229,14 @@ pub fn collect_link_regions(output: &render::RenderOutput) -> Vec<LinkRegion> {
             let region = LinkRegion {
                 rect: CssRect::new(rect.x, rect.y, rect.width, rect.height),
                 href: link.href,
+                node: Some(link.node_id),
             };
-            // Several painted primitives can cover the same anchor rectangle (e.g. a text
-            // run plus its underline); keep one region per exact (href, rect) pair.
-            if !regions.contains(&region) {
+            // Several painted primitives can cover the same anchor (e.g. a text run plus
+            // its underline); keep one region per exact (node, rect) pair.
+            if !regions
+                .iter()
+                .any(|existing| existing.node == region.node && existing.rect == region.rect)
+            {
                 regions.push(region);
             }
         }
@@ -258,6 +267,7 @@ fn collect_link_regions_from_layout(output: &render::RenderOutput) -> Vec<LinkRe
                 regions.push(LinkRegion {
                     rect: CssRect::new(rect.x, rect.y, rect.width, rect.height),
                     href: href.to_owned(),
+                    node: Some(node_id),
                 });
             }
         }
@@ -280,6 +290,7 @@ mod tests {
         LinkRegion {
             rect: CssRect::new(x, y, width, height),
             href: href.to_owned(),
+            node: None,
         }
     }
 

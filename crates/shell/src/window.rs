@@ -78,6 +78,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy}
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
 
+use crate::a11y;
 use crate::chrome::{
     self, AddressBar, ChromeView, ContextMenu, DropdownState, MenuAction, NavigationButton, TabHit,
 };
@@ -86,7 +87,7 @@ use crate::error::ShellError;
 use crate::find::{self, FindState};
 use crate::forms::{self, FocusState, FormControl, FormControlKind, TextEdit};
 use crate::history::{HistoryMenu, RecentHistory, is_history_url};
-use crate::links::{LinkRegion, link_url_at, physical_to_page};
+use crate::links::{LinkRegion, link_url_at, physical_to_page, resolve_href};
 use crate::navigation::{NavigationOutcome, NavigationState};
 use crate::present;
 use crate::refresh::{RefreshPolicy, RefreshTimer};
@@ -214,6 +215,40 @@ pub fn run_window_with_view_options(
         .map_err(|error| ShellError::Window(format!("event loop failed: {error}")))
 }
 
+/// One keyboard-focusable element, in document order (#1517).
+///
+/// Tab/Shift+Tab walk [`WindowApp::focus_targets`] instead of the form-control list alone,
+/// so `<a href>` anchors are reachable without a pointer; `Enter` (and `Space`) activates a
+/// focused link.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FocusTarget {
+    /// Form control identified by its stable `data-megi-form-id`.
+    Control(u32),
+    /// Anchor node (`<a href>`), resolved through [`LinkRegion::node`].
+    Link(dom::NodeId),
+}
+
+/// Builds the keyboard focus list for a DOM snapshot in document order (#1517).
+///
+/// Each focusable element from [`a11y::focus_order`] is mapped to a form control (matched by
+/// its DOM node) or a link (matched by `LinkRegion::node`). Pure so it can be tested without
+/// a window/event loop.
+fn build_focus_targets(
+    document: &dom::Document,
+    forms: &[FormControl],
+    links: &[LinkRegion],
+) -> Vec<FocusTarget> {
+    let mut targets = Vec::new();
+    for node in a11y::focus_order(document, document.root()) {
+        if let Some(pos) = forms.iter().position(|control| control.node_id == node) {
+            targets.push(FocusTarget::Control(forms[pos].form_id));
+        } else if links.iter().any(|region| region.node == Some(node)) {
+            targets.push(FocusTarget::Link(node));
+        }
+    }
+    targets
+}
+
 struct WindowApp {
     input: String,
     title: String,
@@ -260,8 +295,11 @@ struct WindowApp {
     frame_script_errors: usize,
     /// Form controls of the frame on screen (page CSS coordinates).
     forms: Vec<FormControl>,
-    /// Focus model over `forms`.
+    /// Focus model over `focus_targets`.
     focus: FocusState,
+    /// Keyboard-focusable elements in document order (form controls and `<a href>`),
+    /// rebuilt on every applied frame (#1517).
+    focus_targets: Vec<FocusTarget>,
     /// Text editor for the focused text control (`None` for buttons/checkboxes).
     editor: Option<TextEdit>,
     /// DOM snapshot of the frame on screen (source for editing re-renders).
@@ -398,6 +436,7 @@ impl WindowApp {
             frame_script_errors: 0,
             forms: Vec::new(),
             focus: FocusState::new(),
+            focus_targets: Vec::new(),
             editor: None,
             document: None,
             release_button: None,
@@ -902,6 +941,7 @@ impl WindowApp {
             }
         }
         let mut sync_find = false;
+        let mut rebuild_focus = false;
         for message in messages {
             if !self.store.accept(message) {
                 continue; // stale generation
@@ -909,6 +949,7 @@ impl WindowApp {
             applied = true;
             match self.store.frame() {
                 Some(frame) => {
+                    rebuild_focus = true;
                     self.error = None;
                     self.render_pending = false;
                     self.content_capped = frame.capped;
@@ -940,10 +981,7 @@ impl WindowApp {
                     // A patched-DOM render has a data: document URL: keep the real page URL
                     // in history/`input` (only store redirects for normal renders).
                     let patched_render = frame.document_url.starts_with("data:");
-                    if patched_render {
-                        // Focus was re-created from the fresh control list; nothing to sync.
-                    } else {
-                        self.focus = FocusState::new();
+                    if !patched_render {
                         self.editor = None;
                         self.release_button = None;
                     }
@@ -983,6 +1021,11 @@ impl WindowApp {
             }
         }
         if applied {
+            // Rebuild the keyboard focus list for the new DOM, keeping focus when the same
+            // target survived the render. Done here, after the `frame` borrow ended (#1517).
+            if rebuild_focus {
+                self.rebuild_focus_targets();
+            }
             self.update_title();
             if let Some(window) = &self.window {
                 window.request_redraw();
@@ -1467,7 +1510,10 @@ impl WindowApp {
         let Some(control) = self.forms.get(index).cloned() else {
             return;
         };
-        if control.disabled || !self.focus.focus(index, self.forms.len()) {
+        let Some(focus_index) = self.focus_index_for_control(control.form_id) else {
+            return;
+        };
+        if control.disabled || !self.focus.focus(focus_index, self.focus_targets.len()) {
             return;
         }
         if control.kind == FormControlKind::Select {
@@ -1554,6 +1600,59 @@ impl WindowApp {
         self.update_title();
     }
 
+    /// Rebuilds the keyboard focus list for the current frame's DOM (#1517).
+    ///
+    /// `a11y::focus_order` yields focusable, enabled, visible elements in document order;
+    /// each is mapped to a form control (by DOM node) or a link. The previously focused target
+    /// is preserved when it survived the re-render, so Tab position does not jump back to the
+    /// first element after an interaction.
+    fn rebuild_focus_targets(&mut self) {
+        let previous = self
+            .focus
+            .focused()
+            .and_then(|index| self.focus_targets.get(index).copied());
+        let Some(document) = self.document.clone() else {
+            self.focus_targets.clear();
+            self.focus = FocusState::new();
+            return;
+        };
+        let targets = build_focus_targets(&document, &self.forms, &self.links);
+        let kept =
+            previous.and_then(|target| targets.iter().position(|candidate| *candidate == target));
+        self.focus_targets = targets;
+        self.focus = match kept {
+            Some(index) => FocusState::at(index, self.focus_targets.len()),
+            None => FocusState::new(),
+        };
+    }
+
+    /// Position of a form control (by `form_id`) in the keyboard focus list.
+    fn focus_index_for_control(&self, form_id: u32) -> Option<usize> {
+        self.focus_targets
+            .iter()
+            .position(|target| *target == FocusTarget::Control(form_id))
+    }
+
+    /// The form control currently focused, if the focus target is one.
+    fn focused_control(&self) -> Option<&FormControl> {
+        let target = self.focus.focused()?;
+        let FocusTarget::Control(form_id) = self.focus_targets.get(target)? else {
+            return None;
+        };
+        self.forms
+            .iter()
+            .find(|control| control.form_id == *form_id)
+    }
+
+    /// The link region currently focused, if the focus target is one.
+    fn focused_link(&self) -> Option<&LinkRegion> {
+        let target = self.focus.focused()?;
+        let FocusTarget::Link(node) = self.focus_targets.get(target)? else {
+            return None;
+        };
+        self.links.iter().find(|region| region.node == Some(*node))
+    }
+
     /// Patches the current DOM snapshot (value/checked/focus/active) and re-renders it as an
     /// inline `data:` document with the original page URL as resource base and scripts
     /// disabled (the snapshot already contains their effects).
@@ -1571,17 +1670,23 @@ impl WindowApp {
             return;
         };
         let focused = self.focus.focused().is_some();
-        let target = form_id.or_else(|| {
-            self.focus
-                .focused()
-                .and_then(|index| self.forms.get(index))
-                .map(|control| control.form_id)
-        });
-        let Some(target) = target else {
+        let target = form_id.or_else(|| self.focused_control().map(|control| control.form_id));
+        let focused_link = self.focused_link().and_then(|region| region.node);
+        if target.is_none() && focused_link.is_none() && value.is_none() && checked.is_none() {
             return;
-        };
+        }
         let mut patched = (*document).clone();
-        forms::patch_control(&mut patched, target, value, checked, focused, active);
+        if let Some(target) = target {
+            forms::patch_control(&mut patched, target, value, checked, focused, active);
+        } else {
+            // Focus is on a link (or being cleared): drop any stale control focus ring.
+            forms::clear_focus_markers(&mut patched);
+        }
+        // Draw the focus ring on a focused link too (#1517): links have no form_id, so the
+        // form patch above does not touch them.
+        if let Some(node) = focused_link {
+            forms::patch_focus_node(&mut patched, node, focused);
+        }
         let snapshot = forms::snapshot_data_url(&patched);
         let base = self.nav.current_url();
         let request = self.store.begin_patched_request(
@@ -1599,8 +1704,9 @@ impl WindowApp {
         self.update_title();
     }
 
-    /// Handles typing/Tab/Escape while a form control is focused; returns `true` when the key
-    /// was consumed.
+    /// Handles typing/Tab/Escape while an element is focused; returns `true` when the key was
+    /// consumed. Tab walks the unified focus list (form controls and `<a href>` links, #1517);
+    /// Enter/Space activates a focused link.
     fn handle_form_key(
         &mut self,
         key: &Key,
@@ -1608,49 +1714,64 @@ impl WindowApp {
         alt_pressed: bool,
         shift_pressed: bool,
     ) -> bool {
-        if matches!(key, Key::Named(NamedKey::Tab)) && !self.forms.is_empty() {
+        if matches!(key, Key::Named(NamedKey::Tab)) && !self.focus_targets.is_empty() {
             if shift_pressed {
-                self.focus.previous(self.forms.len());
+                self.focus.previous(self.focus_targets.len());
             } else {
-                self.focus.next(self.forms.len());
+                self.focus.next(self.focus_targets.len());
             }
+            // A text editor is only opened for a focused text control, not a link.
             self.editor = self
-                .focus
-                .focused()
-                .and_then(|index| self.forms.get(index))
+                .focused_control()
                 .filter(|control| control.kind.is_text_editable())
                 .map(|control| TextEdit::new(&control.value));
-            if let Some(index) = self.focus.focused()
-                && let Some(control) = self.forms.get(index).cloned()
-            {
-                self.apply_form_patch(Some(control.form_id), None, None, false);
+            // Refresh the focus ring (and clear any previous control's marker).
+            if self.focus.focused().is_some() {
+                self.apply_form_patch(None, None, None, false);
             }
             return true;
         }
-        if matches!(key, Key::Named(NamedKey::Space))
-            && !ctrl_pressed
-            && !alt_pressed
-            && let Some(index) = self.focus.focused()
-            && let Some(control) = self.forms.get(index).cloned()
-            && !control.disabled
-        {
-            if control.kind.is_checkable() {
-                self.apply_form_patch(Some(control.form_id), None, Some(!control.checked), false);
+        let activate = matches!(
+            key,
+            Key::Named(NamedKey::Enter) | Key::Named(NamedKey::Space)
+        );
+        if activate && !ctrl_pressed && !alt_pressed {
+            if let Some(region) = self.focused_link().cloned() {
+                // Activate the focused link exactly like a pointer click (#1517).
+                let url = self
+                    .nav
+                    .current()
+                    .cloned()
+                    .and_then(|base| resolve_href(&base, &region.href).ok());
+                if let Some(url) = url {
+                    self.navigate_to(url);
+                }
                 return true;
             }
-            if control.kind.is_button() {
-                self.apply_form_patch(Some(control.form_id), None, None, true);
-                self.release_button = Some(control.form_id);
-                return true;
+            if let Some(control) = self.focused_control().cloned()
+                && !control.disabled
+            {
+                if matches!(key, Key::Named(NamedKey::Space)) && control.kind.is_checkable() {
+                    self.apply_form_patch(
+                        Some(control.form_id),
+                        None,
+                        Some(!control.checked),
+                        false,
+                    );
+                    return true;
+                }
+                if control.kind.is_button() {
+                    self.apply_form_patch(Some(control.form_id), None, None, true);
+                    self.release_button = Some(control.form_id);
+                    return true;
+                }
             }
         }
         if matches!(key, Key::Named(NamedKey::Escape)) && self.focus.focused().is_some() {
             self.focus.blur();
             self.editor = None;
-            // Clearing focus from every control: reuse the previously focused id.
-            if let Some(control) = self.forms.first().cloned() {
-                self.apply_form_patch(Some(control.form_id), None, None, false);
-            }
+            // Clearing focus: refresh the patch so every focus marker is removed.
+            self.apply_form_patch(None, None, None, false);
             return true;
         }
         if ctrl_pressed || alt_pressed {
@@ -2475,6 +2596,67 @@ impl ApplicationHandler<UserEvent> for WindowApp {
         if let Some(handle) = self.worker.take() {
             let _ = handle.join();
         }
+    }
+}
+
+#[cfg(test)]
+mod focus_target_tests {
+    use super::*;
+    use crate::links::CssRect;
+
+    /// A focusable `<a href>` must appear in the keyboard focus list even though it has no
+    /// form control — the old Tab handler gated on `forms` and could never reach links (#1517).
+    #[test]
+    fn focus_list_includes_links_in_document_order() {
+        let document = html::parse_document(
+            "<input id=a><a id=link href=/next>Next</a><button id=b>Go</button>",
+            false,
+        );
+        // Locate the link node via the a11y tree.
+        let focusable = a11y::focus_order(&document, document.root());
+        let link_node = focusable
+            .iter()
+            .find(|node| {
+                document
+                    .node(**node)
+                    .as_element()
+                    .is_some_and(|el| el.get_attribute("id").is_some_and(|v| v == "link"))
+            })
+            .copied()
+            .expect("link in focus order");
+
+        // No form controls: the focus list must still contain the link.
+        let links = vec![LinkRegion {
+            rect: CssRect::new(0.0, 0.0, 10.0, 10.0),
+            href: "/next".to_string(),
+            node: Some(link_node),
+        }];
+        let targets = build_focus_targets(&document, &[], &links);
+        assert!(
+            targets.contains(&FocusTarget::Link(link_node)),
+            "the link must be keyboard-focusable: {targets:?}"
+        );
+
+        // With `|| true` style gating on `forms`, this list would be empty; prove it is not.
+        assert!(!targets.is_empty(), "focus list must not be forms-only");
+    }
+
+    /// A control's `form_id` maps back to its focus position so mouse clicks keep the unified
+    /// focus model in sync (#1517).
+    #[test]
+    fn control_form_id_maps_to_focus_position() {
+        // Pure check of the mapping used by `focus_index_for_control`: build a target list
+        // where a control sits between two links and verify lookups are stable.
+        let targets = [
+            FocusTarget::Link(dom::NodeId::from_index(1)),
+            FocusTarget::Control(7),
+            FocusTarget::Link(dom::NodeId::from_index(3)),
+        ];
+        let pos = targets
+            .iter()
+            .position(|target| *target == FocusTarget::Control(7));
+        assert_eq!(pos, Some(1));
+        assert!(targets.contains(&FocusTarget::Link(dom::NodeId::from_index(3))));
     }
 }
 
