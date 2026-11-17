@@ -2045,6 +2045,9 @@ fn resolve_styles_with_collection(
     time_ms: f64,
 ) -> HashMap<NodeId, ComputedStyle> {
     let mut styles: HashMap<NodeId, ComputedStyle> = HashMap::new();
+    // One shared selector-matching budget for the whole document: a per-element budget would
+    // grow the total cost with the element count (#1413).
+    let _pass = css::style_pass_scope();
     let root = doc.root();
     let mut stack = Vec::new();
     let mut child = doc.node(root).first_child;
