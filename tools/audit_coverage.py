@@ -295,13 +295,16 @@ def cmd_check(args: argparse.Namespace) -> int:
         return 1
     problems: list[str] = []
     drifted: list[str] = []
+    unknown: list[str] = []
     known = {row["path"] for row in rows}
     if len(known) != len(rows):
         problems.append("ledger contains duplicate paths")
     for path, category, phase in audited_scope():
         row = next((r for r in rows if r["path"] == path), None)
         if row is None:
-            problems.append(f"not in ledger: {path} ({category}/{phase})")
+            # A file nobody has looked at yet is work for the audit, not a reason
+            # to block an unrelated pull request; `--strict` makes it fatal.
+            unknown.append(f"not in ledger: {path} ({category}/{phase})")
             continue
         if row["category"] != category or row["phase"] != phase:
             problems.append(
@@ -325,10 +328,19 @@ def cmd_check(args: argparse.Namespace) -> int:
     tracked = {path for path in tracked_files()}
     for row in rows:
         if row["path"] not in tracked:
-            problems.append(f"ledger row for untracked file: {row['path']}")
+            unknown.append(f"ledger row for untracked file: {row['path']}")
+
+    strict = getattr(args, "strict", False)
+    if unknown and strict:
+        problems.extend(unknown)
+        unknown = []
+    for warning in unknown[:20]:
+        print(f"warning: {warning} (run --generate or --mark)", file=sys.stderr)
+    if len(unknown) > 20:
+        print(f"... and {len(unknown) - 20} more unknown file(s)", file=sys.stderr)
 
     drift = drifted
-    if drift and getattr(args, "strict", False):
+    if drift and strict:
         problems.extend(drift)
         drift = []
     for warning in drift[:20]:
@@ -347,7 +359,8 @@ def cmd_check(args: argparse.Namespace) -> int:
     lines = sum(int(row["lines"]) for row in rows)
     print(
         f"audit ledger ok: {len(rows)} files, {covered} covered, {pending} pending, "
-        f"{lines} lines tracked, {len(drifted)} file(s) to re-read"
+        f"{lines} lines tracked, {len(drifted)} file(s) to re-read, "
+        f"{len(unknown)} unknown file(s)"
     )
     return 0
 
@@ -370,7 +383,10 @@ def main() -> int:
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="with --check: fail when a file changed since it was read (audit branch only)",
+        help=(
+            "with --check: also fail when a file changed since it was read or is "
+            "missing from the ledger (audit branch only)"
+        ),
     )
     args = parser.parse_args()
 
