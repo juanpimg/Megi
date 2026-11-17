@@ -38,6 +38,14 @@ head, link, meta, script, style, template, title {
     display: none;
 }
 
+/* dir attribute (§15.3) */
+[dir="rtl"] {
+    direction: rtl;
+}
+[dir="ltr"] {
+    direction: ltr;
+}
+
 /* [hidden] attribute (§14.3) */
 [hidden] {
     display: none !important;
