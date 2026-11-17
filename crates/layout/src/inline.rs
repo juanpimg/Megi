@@ -798,7 +798,51 @@ fn tokenize_text(
     let mut pending_collapsible_space = false;
     let mut collapsible_space_width: Option<f32> = None;
 
+    // Helper: CJK ideographs and kana are break opportunities per UAX #14.
+    fn is_cjk_break(ch: char) -> bool {
+        matches!(ch as u32,
+            0x2E80..=0x2EFF |  // CJK Radicals Supplement
+            0x2F00..=0x2FDF |  // Kangxi Radicals
+            0x3000..=0x303F |  // CJK Symbols and Punctuation
+            0x3040..=0x309F |  // Hiragana
+            0x30A0..=0x30FF |  // Katakana
+            0x3100..=0x312F |  // Bopomofo
+            0x3130..=0x318F |  // Hangul Compatibility Jamo
+            0x3190..=0x319F |  // Kanbun
+            0x31A0..=0x31BF |  // Bopomofo Extended
+            0x31C0..=0x31EF |  // CJK Strokes
+            0x31F0..=0x31FF |  // Katakana Phonetic Extensions
+            0x3200..=0x32FF |  // Enclosed CJK Letters and Months
+            0x3300..=0x33FF |  // CJK Compatibility
+            0x3400..=0x4DBF |  // CJK Unified Ideographs Extension A
+            0x4E00..=0x9FFF |  // CJK Unified Ideographs
+            0xA000..=0xA4CF |  // Yi Syllables
+            0xAC00..=0xD7AF |  // Hangul Syllables
+            0xF900..=0xFAFF |  // CJK Compatibility Ideographs
+            0xFE30..=0xFE4F |  // CJK Compatibility Forms
+            0xFF00..=0xFFEF |  // Halfwidth and Fullwidth Forms
+            0x20000..=0x2A6DF |  // CJK Unified Ideographs Extension B
+            0x2A700..=0x2B73F |  // CJK Unified Ideographs Extension C
+            0x2B740..=0x2B81F |  // CJK Unified Ideographs Extension D
+            0x2B820..=0x2CEAF |  // CJK Unified Ideographs Extension E
+            0x2CEB0..=0x2EBEF   // CJK Unified Ideographs Extension F
+        )
+    }
+
     for ch in txt.chars() {
+        // CJK characters are break opportunities: flush the current word first.
+        if is_cjk_break(ch) && word_start < pool.len() {
+            flush_word(
+                pool,
+                word_start,
+                style,
+                style_id,
+                (line_ascent, line_descent),
+                measurer,
+                tokens,
+            );
+            word_start = pool.len();
+        }
         match ch {
             // Preserved newline: forced line break.
             '\n' if break_on_newline => {
@@ -843,6 +887,21 @@ fn tokenize_text(
                         allow_wrap,
                     });
                 }
+            }
+            // After a CJK character, flush the word so the next character can start
+            // a new line (UAX #14 ideographic break opportunity).
+            _ if is_cjk_break(ch) => {
+                pool.push(ch);
+                flush_word(
+                    pool,
+                    word_start,
+                    style,
+                    style_id,
+                    (line_ascent, line_descent),
+                    measurer,
+                    tokens,
+                );
+                word_start = pool.len();
             }
             // Soft hyphen: invisible break opportunity (nothing is rendered unless the
             // line is broken here).
