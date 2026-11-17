@@ -307,10 +307,11 @@ fn stale_node_handle_is_a_typed_js_error() {
         .eval("doomed.textContent", "stale.js")
         .expect_err("stale wrapper must throw");
     let message = error.to_string();
+    // The old `matches!(error, JsError::Runtime(_))` clause was true for every JS runtime
+    // exception, so a stale wrapper could fail with any error and still pass (#1375).
+    // Require the specific stable diagnostic for a stale DOM handle.
     assert!(
-        message.contains("stale")
-            || message.contains("DOM error")
-            || matches!(error, JsError::Runtime(_)),
+        message.contains("stale DOM node handle"),
         "unexpected error: {message}"
     );
 }

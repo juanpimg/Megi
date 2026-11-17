@@ -1157,7 +1157,10 @@ fn fetch_once(
                     .any(|byte| !byte.is_ascii() || byte.is_ascii_control())
                 || value.bytes().any(|byte| matches!(byte, b'\r' | b'\n' | 0));
             if invalid {
-                return Err(FetchError::InvalidResponse(
+                // This is a local request-side validation failure, not a malformed peer
+                // response: use the request-body error type like the "trailers need a body"
+                // case above (#1348).
+                return Err(FetchError::RequestBody(
                     "invalid request trailer name/value".to_owned(),
                 ));
             }

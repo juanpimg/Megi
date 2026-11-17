@@ -43,32 +43,49 @@ pub const TAB_CLOSE_WIDTH: f32 = 14.0;
 /// Width reserved for the `+N` overflow marker, in CSS pixels.
 pub const TAB_OVERFLOW_WIDTH: f32 = 34.0;
 
-/// Tab strip background.
-pub const COLOR_TAB_STRIP: Color = Color::new(0x20, 0x21, 0x24, 0xFF);
+/// Single accent used for focus, the active tab, the caret and loading feedback.
+/// Keeping one accent is what makes the chrome read as a coherent design.
+pub const ACCENT: Color = Color::new(0x7C, 0x9C, 0xFF, 0xFF);
+/// Tab strip background (the darkest chrome surface).
+pub const COLOR_TAB_STRIP: Color = Color::new(0x15, 0x17, 0x1B, 0xFF);
 /// Inactive tab background.
-pub const COLOR_TAB: Color = Color::new(0x35, 0x37, 0x3B, 0xFF);
+pub const COLOR_TAB: Color = Color::new(0x1E, 0x21, 0x26, 0xFF);
 /// Active tab background.
-pub const COLOR_TAB_ACTIVE: Color = Color::new(0x4A, 0x4D, 0x52, 0xFF);
-/// Chrome text (tabs/address).
-pub const COLOR_TEXT: Color = Color::new(0xE8, 0xEA, 0xED, 0xFF);
-/// Address bar background.
-pub const COLOR_ADDRESS_BG: Color = Color::new(0xF1, 0xF3, 0xF4, 0xFF);
-/// Address bar text (dark).
-pub const COLOR_ADDRESS_TEXT: Color = Color::new(0x1F, 0x23, 0x28, 0xFF);
-/// Address bar caret.
-pub const COLOR_CARET: Color = Color::new(0x1A, 0x73, 0xE8, 0xFF);
+pub const COLOR_TAB_ACTIVE: Color = Color::new(0x2B, 0x2F, 0x36, 0xFF);
+/// Divider between tabs.
+pub const COLOR_TAB_SEPARATOR: Color = Color::new(0x0D, 0x0F, 0x12, 0xFF);
+/// Chrome text (tabs, menus, secondary UI).
+pub const COLOR_TEXT: Color = Color::new(0xE7, 0xEA, 0xF0, 0xFF);
+/// Secondary text (hints, host suffix, disabled labels).
+pub const COLOR_TEXT_MUTED: Color = Color::new(0x9A, 0xA2, 0xB0, 0xFF);
+/// Address strip behind the address pill.
+pub const COLOR_ADDRESS_STRIP: Color = Color::new(0x11, 0x13, 0x17, 0xFF);
+/// Address pill surface (matches an active tab so the chrome is one surface).
+pub const COLOR_ADDRESS_BG: Color = Color::new(0x2B, 0x2F, 0x36, 0xFF);
+/// Address pill text.
+pub const COLOR_ADDRESS_TEXT: Color = Color::new(0xF0, 0xF2, 0xF6, 0xFF);
+/// Muted part of the URL (scheme and path) in the address pill.
+pub const COLOR_ADDRESS_MUTED: Color = Color::new(0x9A, 0xA2, 0xB0, 0xFF);
+/// Address bar caret (accent).
+pub const COLOR_CARET: Color = ACCENT;
 /// Dropdown background.
-pub const COLOR_DROPDOWN_BG: Color = Color::new(0xFF, 0xFF, 0xFF, 0xFF);
+pub const COLOR_DROPDOWN_BG: Color = Color::new(0x24, 0x27, 0x2D, 0xFF);
 /// Dropdown selected row background.
-pub const COLOR_DROPDOWN_SELECTED: Color = Color::new(0xE8, 0xF0, 0xFE, 0xFF);
+pub const COLOR_DROPDOWN_SELECTED: Color = Color::new(0x2C, 0x3A, 0x5E, 0xFF);
 /// Dropdown hovered/active row background.
-pub const COLOR_DROPDOWN_ACTIVE: Color = Color::new(0xD2, 0xE3, 0xFC, 0xFF);
-/// Dropdown border.
-pub const COLOR_BORDER: Color = Color::new(0xDA, 0xDC, 0xE0, 0xFF);
-/// Dropdown scroll indicator.
-pub const COLOR_SCROLL: Color = Color::new(0x5F, 0x63, 0x68, 0xFF);
+pub const COLOR_DROPDOWN_ACTIVE: Color = Color::new(0x35, 0x43, 0x6B, 0xFF);
+/// Dropdown group header background.
+pub const COLOR_GROUP_HEADER: Color = Color::new(0x1A, 0x1D, 0x21, 0xFF);
+/// Borders and separators.
+pub const COLOR_BORDER: Color = Color::new(0x3B, 0x40, 0x48, 0xFF);
+/// Scrollbar track.
+pub const COLOR_SCROLL_TRACK: Color = Color::new(0x17, 0x1A, 0x1E, 0xFF);
+/// Scrollbar thumb / inactive indicators.
+pub const COLOR_SCROLL: Color = Color::new(0x7B, 0x82, 0x90, 0xFF);
+/// Disabled navigation affordance.
+pub const COLOR_DISABLED: Color = Color::new(0x63, 0x69, 0x75, 0xFF);
 /// Per-tab loading indicator (deterministic dot while the render worker runs).
-pub const COLOR_LOADING: Color = Color::new(0x8A, 0xB4, 0xF8, 0xFF);
+pub const COLOR_LOADING: Color = ACCENT;
 /// Height of one overflow-menu row, in CSS pixels.
 pub const OVERFLOW_MENU_ROW_HEIGHT: f32 = 18.0;
 /// Maximum open-tab rows in the overflow menu before it scrolls.
@@ -80,13 +97,15 @@ pub const CONTEXT_MENU_WIDTH: f32 = 220.0;
 /// Height of one context-menu row, in CSS pixels.
 pub const CONTEXT_MENU_ROW_HEIGHT: f32 = 20.0;
 /// Link-hover status bar background.
-pub const COLOR_STATUS_BAR: Color = Color::new(0x20, 0x21, 0x24, 0xFF);
+pub const COLOR_STATUS_BAR: Color = COLOR_TAB_STRIP;
 /// Link-hover status text.
-pub const COLOR_STATUS_TEXT: Color = Color::new(0xE8, 0xEA, 0xED, 0xFF);
+pub const COLOR_STATUS_TEXT: Color = Color::new(0xAE, 0xB5, 0xC2, 0xFF);
 /// Context menu background.
-pub const COLOR_MENU_BG: Color = Color::new(0xFA, 0xFA, 0xFA, 0xFF);
+pub const COLOR_MENU_BG: Color = COLOR_DROPDOWN_BG;
 /// Context menu selected row.
-pub const COLOR_MENU_SELECTED: Color = Color::new(0xD2, 0xE3, 0xFC, 0xFF);
+pub const COLOR_MENU_SELECTED: Color = COLOR_DROPDOWN_ACTIVE;
+/// Deterministic drop shadow behind floating chrome panels.
+pub const COLOR_SHADOW: Color = Color::new(0x00, 0x00, 0x00, 0x66);
 
 /// Address bar edition state: text, caret, selection anchor and an **internal process
 /// clipboard** (Ctrl+C/X/V copy within the shell; the system clipboard is not touched).
@@ -1579,7 +1598,7 @@ fn paint_address_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, wid
             width * scale,
             ADDRESS_BAR_HEIGHT * scale,
         ),
-        Color::new(0xDE, 0xE1, 0xE6, 0xFF),
+        COLOR_ADDRESS_STRIP,
     );
     pixmap.fill_rect(scaled(bar, scale), COLOR_ADDRESS_BG);
     let text = if view.address.is_editing() {
@@ -1651,7 +1670,7 @@ fn paint_dropdown(
             .option_index
             .and_then(|index| dropdown.options.get(index));
         let background = if item.option_index.is_none() {
-            Color::new(0xF5, 0xF5, 0xF5, 0xFF)
+            COLOR_GROUP_HEADER
         } else if dropdown.active == Some(item_index) {
             COLOR_DROPDOWN_ACTIVE
         } else if option.is_some_and(|option| option.selected) {
@@ -1690,7 +1709,7 @@ fn paint_dropdown(
             3.0,
             list.rect.height - 4.0,
         );
-        pixmap.fill_rect(scaled(track, scale), Color::new(0xE0, 0xE0, 0xE0, 0xFF));
+        pixmap.fill_rect(scaled(track, scale), COLOR_SCROLL_TRACK);
         let ratio = list.visible as f32 / items.len() as f32;
         let thumb_height = (track.height * ratio).max(8.0);
         let max_scroll = items.len().saturating_sub(list.visible).max(1) as f32;
@@ -1730,7 +1749,7 @@ fn paint_overflow_menu(
             ),
             scale,
         ),
-        Color::new(0xFA, 0xFA, 0xFA, 0xFF),
+        COLOR_MENU_BG,
     );
     for (row, rect) in layout.rows.iter().enumerate() {
         let Some(tab_index) = menu.items.get(layout.first + row) else {
@@ -1849,7 +1868,7 @@ fn paint_navigation_buttons(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'
         let color = if enabled {
             COLOR_ADDRESS_TEXT
         } else {
-            Color::new(0x9A, 0xA0, 0xA6, 0xFF)
+            COLOR_DISABLED
         };
         draw_text(
             pixmap,
@@ -2100,6 +2119,12 @@ mod tests {
         vec![0x00FF_FFFF; (width * height) as usize]
     }
 
+    /// Packs a palette token into the `0RGB` word used by the framebuffer tests.
+    /// Assertions reference tokens so a palette refresh cannot leave stale hex behind.
+    fn rgb(color: Color) -> u32 {
+        (u32::from(color.r) << 16) | (u32::from(color.g) << 8) | u32::from(color.b)
+    }
+
     #[test]
     fn address_bar_selects_all_on_open_and_edits() {
         let mut bar = AddressBar::new();
@@ -2322,10 +2347,10 @@ mod tests {
         let painted = draw_chrome(&mut dest, 640, 400, 1.0, &view(&address, None, &tabs));
         assert!(painted > 0);
         let pixel = |x: u32, y: u32| dest[(y * 640 + x) as usize];
-        assert_eq!(pixel(620, 2), 0x0020_2124, "tab strip background");
+        assert_eq!(pixel(620, 2), rgb(COLOR_TAB_STRIP), "tab strip background");
         assert_eq!(
             pixel(100, TAB_STRIP_HEIGHT as u32 + 2),
-            0x00F1_F3F4,
+            rgb(COLOR_ADDRESS_BG),
             "address bar"
         );
         // The page below the chrome is untouched.
@@ -2356,8 +2381,14 @@ mod tests {
         let first = list.rows[0];
         let second = list.rows[1];
         let pixel = |x: u32, y: u32| dest[(y * 480 + x) as usize];
-        assert_eq!(pixel(first.x as u32 + 3, first.y as u32 + 3), 0x00E8_F0FE);
-        assert_eq!(pixel(second.x as u32 + 3, second.y as u32 + 3), 0x00D2_E3FC);
+        assert_eq!(
+            pixel(first.x as u32 + 3, first.y as u32 + 3),
+            rgb(COLOR_DROPDOWN_SELECTED)
+        );
+        assert_eq!(
+            pixel(second.x as u32 + 3, second.y as u32 + 3),
+            rgb(COLOR_DROPDOWN_ACTIVE)
+        );
     }
 
     #[test]
@@ -2370,7 +2401,7 @@ mod tests {
         let row = (TAB_STRIP_HEIGHT + 10.0) as usize;
         let caret_pixels = dest[row * 480..(row + 1) * 480]
             .iter()
-            .filter(|pixel| **pixel == 0x001A_73E8)
+            .filter(|pixel| **pixel == rgb(COLOR_CARET))
             .count();
         assert!(caret_pixels > 0, "caret visible");
     }
@@ -2506,7 +2537,7 @@ mod tests {
         draw_chrome(&mut dest, 480, 200, 1.0, &view);
         let loading = dest[..(24 * 480) as usize]
             .iter()
-            .filter(|pixel| **pixel == 0x008A_B4F8)
+            .filter(|pixel| **pixel == rgb(COLOR_LOADING))
             .count();
         assert!(loading > 0, "loading dot visible");
         let _ = &mut address;
@@ -2529,7 +2560,10 @@ mod tests {
             1.0,
             &view(&address, Some(&dropdown), &tabs),
         );
-        let scroll_pixels = dest.iter().filter(|pixel| **pixel == 0x005F_6368).count();
+        let scroll_pixels = dest
+            .iter()
+            .filter(|pixel| **pixel == rgb(COLOR_SCROLL))
+            .count();
         assert!(scroll_pixels > 10, "scrollbar painted: {scroll_pixels}");
     }
 
@@ -2566,7 +2600,7 @@ mod tests {
         view.css_viewport_height = 200;
         draw_chrome(&mut dest, 320, 200, 1.0, &view);
         let bottom = ((200 - STATUS_BAR_HEIGHT as u32 + 2) * 320) as usize;
-        assert_eq!(dest[bottom], 0x0020_2124, "status bar background");
+        assert_eq!(dest[bottom], rgb(COLOR_STATUS_BAR), "status bar background");
         let mut clean = buffer(320, 200);
         draw_chrome(
             &mut clean,
@@ -2575,7 +2609,7 @@ mod tests {
             1.0,
             &view_without_hover(&address, &tabs),
         );
-        assert_ne!(clean[bottom], 0x0020_2124, "no bar without hover");
+        assert_ne!(clean[bottom], rgb(COLOR_STATUS_BAR), "no bar without hover");
     }
 
     fn view_without_hover<'a>(address: &'a AddressBar, tabs: &'a [String]) -> ChromeView<'a> {
@@ -2642,7 +2676,7 @@ mod tests {
         let layout = context_menu_layout(&menu, 400.0, 240);
         let selected = layout.rows[0];
         let pixel = dest[(selected.y as u32 * 400 + selected.x as u32 + 3) as usize];
-        assert_eq!(pixel, 0x00D2_E3FC, "selected row background");
+        assert_eq!(pixel, rgb(COLOR_MENU_SELECTED), "selected row background");
         assert!(selected.width > 0.0);
     }
 
@@ -2708,7 +2742,8 @@ mod tests {
         let mut dark = 0usize;
         for y in buttons.reload.y as usize..(buttons.reload.y + buttons.reload.height) as usize {
             for x in buttons.reload.x as usize..(buttons.reload.x + buttons.reload.width) as usize {
-                if dest[y * 480 + x] != 0x00F1_F3F4 && dest[y * 480 + x] != 0x00DE_E1E6 {
+                let pixel = dest[y * 480 + x];
+                if pixel != rgb(COLOR_ADDRESS_BG) && pixel != rgb(COLOR_ADDRESS_STRIP) {
                     dark += 1;
                 }
             }
@@ -2747,7 +2782,7 @@ mod tests {
         let selected = layout.rows[0];
         assert_eq!(
             dest[(selected.y as u32 * 480 + selected.x as u32 + 3) as usize],
-            0x00D2_E3FC,
+            rgb(COLOR_MENU_SELECTED),
             "selected history row"
         );
     }
@@ -2763,7 +2798,11 @@ mod tests {
         view.download_status = Some("guardando… megi-a.png");
         draw_chrome(&mut dest, 360, 200, 1.0, &view);
         let bottom = ((200 - STATUS_BAR_HEIGHT as u32 + 2) * 360) as usize;
-        assert_eq!(dest[bottom], 0x0020_2124, "status bar painted for download");
+        assert_eq!(
+            dest[bottom],
+            rgb(COLOR_STATUS_BAR),
+            "status bar painted for download"
+        );
         let without = view_without_download(&address, &tabs);
         assert_eq!(without.download_status, None);
     }
@@ -2880,5 +2919,40 @@ mod tests {
         assert!(range.end <= bar.text().len(), "{range:?}");
         bar.delete_selection();
         assert_eq!(bar.text(), "ht");
+    }
+
+    #[test]
+    fn palette_uses_one_accent_and_keeps_readable_contrast() {
+        assert_eq!(COLOR_CARET, ACCENT, "the caret follows the accent");
+        assert_eq!(COLOR_LOADING, ACCENT, "loading feedback follows the accent");
+        assert_ne!(ACCENT, COLOR_ADDRESS_BG, "accent stands out from surfaces");
+        let luminance = |color: Color| {
+            0.2126 * f32::from(color.r) + 0.7152 * f32::from(color.g) + 0.0722 * f32::from(color.b)
+        };
+        assert!(
+            luminance(COLOR_ADDRESS_TEXT) - luminance(COLOR_ADDRESS_BG) > 100.0,
+            "address text is legible on its surface"
+        );
+        assert!(
+            luminance(COLOR_TEXT) - luminance(COLOR_TAB_STRIP) > 100.0,
+            "chrome text is legible on the dark strip"
+        );
+        assert!(
+            luminance(COLOR_ADDRESS_MUTED) - luminance(COLOR_ADDRESS_BG) > 30.0,
+            "muted URL parts are still readable"
+        );
+        for color in [
+            ACCENT,
+            COLOR_TAB_STRIP,
+            COLOR_TAB,
+            COLOR_TAB_ACTIVE,
+            COLOR_ADDRESS_BG,
+            COLOR_ADDRESS_TEXT,
+            COLOR_DROPDOWN_BG,
+            COLOR_MENU_BG,
+            COLOR_BORDER,
+        ] {
+            assert_eq!(color.a, 0xFF, "chrome surfaces are opaque");
+        }
     }
 }

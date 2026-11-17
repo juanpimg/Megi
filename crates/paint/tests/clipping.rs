@@ -270,10 +270,13 @@ fn test_background_clip_text_masks_color_through_glyphs() {
             .iter()
             .any(|item| matches!(item, DisplayItem::PushTextMaskGroup { .. }))
     );
+    // Count inside the 60x50 container at (10,10) only. The old test counted white over the
+    // whole 100x80 canvas, so a mask that was ignored (~3,000 red pixels in the container,
+    // ~5,000 white outside it) still passed (#1363).
     let mut red_pixels = 0;
     let mut white_pixels = 0;
-    for y in 0..80 {
-        for x in 0..100 {
+    for y in 10..60 {
+        for x in 10..70 {
             let pixel = pixmap.pixel(x, y);
             if pixel.r > 150 && pixel.g < 80 && pixel.b < 80 {
                 red_pixels += 1;
@@ -288,8 +291,13 @@ fn test_background_clip_text_masks_color_through_glyphs() {
         "background color visible through the glyphs"
     );
     assert!(
-        white_pixels > 100,
-        "background stays clipped outside the glyphs"
+        red_pixels < 1_000,
+        "red must stay bounded to glyph coverage, not fill the {}-pixel container ({red_pixels})",
+        60 * 50
+    );
+    assert!(
+        white_pixels > 1_000,
+        "background must stay clipped outside the glyphs ({white_pixels} white in container)"
     );
 }
 
@@ -319,17 +327,30 @@ fn test_background_clip_text_masks_image_and_multiple_lines() {
         DisplayItem::PushTextMaskGroup { runs, .. } if runs.len() == 2
     )));
     let mut blue_pixels = 0;
+    let mut white_pixels = 0;
     for y in 0..70 {
         for x in 0..80 {
             let pixel = pixmap.pixel(x, y);
             if pixel.b > 150 && pixel.r < 80 {
                 blue_pixels += 1;
             }
+            if pixel == Color::WHITE {
+                white_pixels += 1;
+            }
         }
     }
     assert!(
         blue_pixels > 20,
         "image visible through glyphs on both lines"
+    );
+    assert!(
+        blue_pixels < 2_000,
+        "image must stay bounded to glyph coverage, not fill the {}-pixel container ({blue_pixels})",
+        80 * 70
+    );
+    assert!(
+        white_pixels > 2_000,
+        "background must stay clipped outside the glyphs ({white_pixels} white in container)"
     );
 }
 

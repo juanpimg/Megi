@@ -346,6 +346,14 @@ pub fn layout_inline_formatting_context_with_measurer(
 
 /// IFC layout with the inherited positioning context (needed to lay out atomic
 /// inline-level boxes and their absolutely positioned descendants).
+/// Finds an LRO/RLO control anywhere in this formatting context's text (#1448).
+fn bidi_control_direction(box_node: &LayoutBox) -> Option<css::Direction> {
+    match &box_node.box_type {
+        BoxType::TextNode(text) => crate::bidi::forced_direction_from_controls(text),
+        _ => box_node.children.iter().find_map(bidi_control_direction),
+    }
+}
+
 pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
     layout_box: &mut LayoutBox,
     definite_height: Option<f32>,
@@ -368,7 +376,11 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
     // boxes are underestimated on purpose: the estimate never needs to be exact.
     let mut estimated_tokens = 2usize;
     let mut estimated_text = 0usize;
+    let mut control_direction = None;
     for child in &layout_box.children {
+        if control_direction.is_none() {
+            control_direction = bidi_control_direction(child);
+        }
         match &child.box_type {
             BoxType::TextNode(txt) => {
                 estimated_text += txt.len();
@@ -417,7 +429,8 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
     // 4. Construct LineBox layout boxes and resolve baseline / vertical-align
     let bidi_active = container_style.direction == css::Direction::Rtl
         || container_style.unicode_bidi != css::UnicodeBidi::Normal
-        || crate::bidi::contains_rtl_or_bidi(&text_pool);
+        || crate::bidi::contains_rtl_or_bidi(&text_pool)
+        || control_direction.is_some();
     let mut line_boxes = Vec::with_capacity(lines.len());
     let mut current_line_y = container_y;
 
@@ -426,7 +439,13 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
 
     for mut line in lines {
         if bidi_active {
-            reorder_line_tokens_bidi(&mut line.tokens, &mut text_pool, &styles, &container_style);
+            reorder_line_tokens_bidi(
+                &mut line.tokens,
+                &mut text_pool,
+                &styles,
+                &container_style,
+                control_direction,
+            );
         }
         let ctx = LineContext {
             container_x,
@@ -461,6 +480,7 @@ fn reorder_line_tokens_bidi(
     text_pool: &mut String,
     styles: &[Arc<ComputedStyle>],
     container_style: &ComputedStyle,
+    control_direction: Option<css::Direction>,
 ) {
     use crate::bidi::{
         BidiClass, paragraph_base_level, reorder_visual_indices, resolve_levels, word_bidi_class,
@@ -470,6 +490,21 @@ fn reorder_line_tokens_bidi(
     if tokens.is_empty() {
         return;
     }
+    // A paragraph-level bidi-override forces every character, including Latin text,
+    // into the container direction; per-word style indices are not reliable here.
+    let forced_all = match container_style.unicode_bidi {
+        css::UnicodeBidi::BidiOverride | css::UnicodeBidi::IsolateOverride => {
+            Some(match container_style.direction {
+                css::Direction::Ltr => BidiClass::L,
+                css::Direction::Rtl => BidiClass::R,
+            })
+        }
+        // LRO/RLO embedded in the text also force the run (#1448).
+        _ => control_direction.map(|direction| match direction {
+            css::Direction::Ltr => BidiClass::L,
+            css::Direction::Rtl => BidiClass::R,
+        }),
+    };
 
     // Group balanced `BoxStart .. BoxEnd` spans as single reorderable units so
     // inline box nesting stays well-formed; flat tokens are singleton units.
@@ -563,11 +598,18 @@ fn reorder_line_tokens_bidi(
         classes.push(cls);
     }
 
-    let base_level = paragraph_base_level(
+    let mut base_level = paragraph_base_level(
         container_style.direction,
         container_style.unicode_bidi,
         first_strong,
     );
+    if let Some(class) = forced_all {
+        classes.fill(class);
+        base_level = match class {
+            BidiClass::R | BidiClass::AL => 1,
+            _ => 0,
+        };
+    }
     let levels = resolve_levels(&classes, base_level);
     let order = reorder_visual_indices(&levels);
 
@@ -581,7 +623,7 @@ fn reorder_line_tokens_bidi(
             } = tok
                 && level % 2 == 1
             {
-                let visual = word_to_visual(&text_pool[*start..*end], level);
+                let visual = word_to_visual(&text_pool[*start..*end], level, forced_all);
                 let new_start = text_pool.len();
                 text_pool.push_str(&visual);
                 *start = new_start;
@@ -830,6 +872,11 @@ fn tokenize_text(
     }
 
     for ch in txt.chars() {
+        // Bidi formatting controls are not rendered; their direction was applied when
+        // the paragraph was reordered, so strip them before shaping (#1448).
+        if crate::bidi::is_bidi_control(ch) {
+            continue;
+        }
         // CJK characters are break opportunities: flush the current word first.
         if is_cjk_break(ch) && word_start < pool.len() {
             flush_word(
