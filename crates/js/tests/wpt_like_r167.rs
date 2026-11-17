@@ -305,9 +305,11 @@ fn documented_unsupported_apis_are_absent() {
           typeof Headers, typeof Request, typeof Response,
           typeof AbortController, typeof AbortSignal, typeof ReadableStream
         ];
-        gaps.every(function (value) { return value === 'undefined'; }) &&
+        String(
+          gaps.every(function (value) { return value === 'undefined'; }) &&
           typeof crypto === 'object' &&
-          supported.every(function (value) { return value === 'function'; });
+          supported.every(function (value) { return value === 'function'; })
+        );
         "#,
     );
     assert_eq!(

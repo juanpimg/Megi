@@ -6013,8 +6013,6 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
   XMLHttpRequest.DONE = 4;
   define("XMLHttpRequest", XMLHttpRequest);
 })();
-
-})();
 "####;
     let fetch_fn = FunctionObjectBuilder::new(context.realm(), native(fetch_native))
         .name(js_string!("__megi_fetch_native"))
