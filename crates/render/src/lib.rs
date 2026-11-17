@@ -428,11 +428,10 @@ pub struct RenderOptions {
     /// `data:` documents send no `Origin`. Cross-origin subresource CORS failures are
     /// non-fatal warnings (the resource is skipped, the page still renders).
     pub origin: Option<String>,
-    /// Opt-in streaming response path (R185 MVP): documented API switch. The default
-    /// deterministic pipeline still buffers every subresource; when enabled the loader's
-    /// `load_streaming` entry point is available for embedders, but the render pipeline is
-    /// intentionally unchanged so PNG bytes stay identical (`stream_responses=true` and
-    /// `false` render byte-identically; future phases can stream large images/fonts).
+    /// Opt-in streaming response path (R185): when enabled, the main `http(s)` document is
+    /// fetched through [`net::fetch_streaming`] (the body is delivered in chunks and
+    /// accumulated), while subresources keep using the buffered path. Both paths produce
+    /// byte-identical renders; future phases can stream large images/fonts here too.
     pub stream_responses: bool,
     /// Accept HTTP/2 server pushes and preload images/stylesheets/scripts from the
     /// same-origin push cache of the document load (R177). Default `false`: the client
@@ -752,7 +751,12 @@ fn render_url_inner(
     document_fetch_options.origin = None;
     document_fetch_options.accept_push |= options.accept_server_push;
     let mut document_loader = ResourceLoader::with_options(document_fetch_options.clone());
-    let loaded = load_document(&url, &mut document_loader, &document_fetch_options)?;
+    let loaded = load_document(
+        &url,
+        &mut document_loader,
+        &document_fetch_options,
+        options.stream_responses,
+    )?;
     // Subresource fetches send the document's origin (CORS) and its cookies.
     let subresource_origin = options
         .origin
@@ -1467,10 +1471,24 @@ fn load_document(
     url: &Url,
     loader: &mut ResourceLoader,
     fetch_options: &FetchOptions,
+    stream: bool,
 ) -> Result<LoadedDocument, RenderError> {
     match url.scheme() {
         Scheme::Http | Scheme::Https => {
-            let mut response = net::fetch(url, fetch_options)?;
+            // `RenderOptions::stream_responses` routes the document fetch through the
+            // streaming entry point (#1390). The callback receives the decoded body in
+            // chunks (the returned `Response::body` is empty on that path), so accumulate
+            // it here to keep the deterministic pipeline byte-identical to the buffered
+            // path. Status/headers/redirects/pushes come from the same response.
+            let mut streamed_body = Vec::new();
+            let mut response = if stream {
+                net::fetch_streaming(url, fetch_options, &mut |chunk| {
+                    streamed_body.extend_from_slice(chunk);
+                    Ok(())
+                })?
+            } else {
+                net::fetch(url, fetch_options)?
+            };
             // HTTP/2 server pushes received while fetching the document are part of the
             // same load session: cache them for subresource loads (R177).
             loader.absorb_pushed(std::mem::take(&mut response.pushed));
@@ -1480,11 +1498,16 @@ fn load_document(
                     status: response.status,
                 });
             }
-            let content_type = net::resolve_content_type(&response.headers, &response.body);
             let content_encoding = response.header("content-encoding").map(str::to_owned);
+            let bytes = if stream {
+                streamed_body
+            } else {
+                std::mem::take(&mut response.body)
+            };
+            let content_type = net::resolve_content_type(&response.headers, &bytes);
             Ok(LoadedDocument {
                 headers: response.headers,
-                bytes: response.body,
+                bytes,
                 url: response.final_url,
                 content_type,
                 status: Some(response.status),
