@@ -76,11 +76,9 @@ impl CachePolicy {
         if let Some(max_age) = self.max_age {
             return Some(Duration::from_secs(max_age));
         }
-        // `s-maxage` normally only applies to shared caches; this private cache uses it as
-        // a fallback when no `max-age` is present (documented approximation).
-        if let Some(s_maxage) = self.s_maxage {
-            return Some(Duration::from_secs(s_maxage));
-        }
+        // `s-maxage` applies only to shared caches (RFC 9111 §5.2.2.1). This is a
+        // private cache, so a response carrying only `s-maxage` must not be treated
+        // as fresh here (#1343); the field is kept for a future shared-cache mode.
         self.expires_at
             .map(|expires| expires.duration_since(now).unwrap_or(Duration::ZERO))
     }
@@ -95,9 +93,13 @@ impl CachePolicy {
         Some(lifetime.saturating_sub(age))
     }
 
-    /// `true` when the storage may keep the body but must revalidate before every reuse.
+    /// `true` when the body may be stored but must be revalidated before *every* reuse.
+    ///
+    /// Only `no-cache` qualifies: `must-revalidate` merely forbids serving a stale
+    /// response (RFC 9111 §5.2.2.2) and is enforced by the cache entry's freshness
+    /// check, not by this always-revalidate predicate (#1344).
     pub const fn requires_revalidation(&self) -> bool {
-        self.no_cache || self.must_revalidate
+        self.no_cache
     }
 
     /// True when the response must not be stored at all.

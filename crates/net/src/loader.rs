@@ -99,8 +99,6 @@ struct CachedEntry {
     freshness: Duration,
     /// `no-cache`: always revalidate before reuse.
     no_cache: bool,
-    /// `must-revalidate`: once stale, revalidate before reuse (RFC 9111 §5.2.2.2).
-    must_revalidate: bool,
     etag: Option<String>,
     last_modified: Option<String>,
     /// `Vary: User-Agent` value at store time (None when the response does not vary).
@@ -112,7 +110,9 @@ struct CachedEntry {
 
 impl CachedEntry {
     fn is_fresh(&self) -> bool {
-        !self.no_cache && !self.must_revalidate && self.stored_at.elapsed() < self.freshness
+        // `must-revalidate` does not disable freshness (RFC 9111 §5.2.2.2):
+        // a response inside its freshness lifetime is still a cache hit (#1344).
+        !self.no_cache && self.stored_at.elapsed() < self.freshness
     }
 
     fn matches_request(&self, user_agent: &str, origin: Option<&str>) -> bool {
@@ -827,7 +827,6 @@ impl ResourceLoader {
                 stored_at: Instant::now(),
                 freshness,
                 no_cache: policy.no_cache,
-                must_revalidate: policy.must_revalidate,
                 etag: policy.etag,
                 last_modified: policy.last_modified,
                 vary_user_agent,
@@ -1006,14 +1005,12 @@ fn updated_entry(mut entry: CachedEntry, policy: &CachePolicy, user_agent: Strin
         // A `304` with `no-store` invalidates the stored representation.
         entry.freshness = Duration::ZERO;
         entry.no_cache = true;
-        entry.must_revalidate = true;
     } else {
         let freshness = policy
             .freshness_lifetime(SystemTime::now())
             .unwrap_or(HEURISTIC_FRESHNESS);
         entry.freshness = freshness;
         entry.no_cache = policy.no_cache;
-        entry.must_revalidate = policy.must_revalidate;
         if policy.etag.is_some() {
             entry.etag = policy.etag.clone();
         }
