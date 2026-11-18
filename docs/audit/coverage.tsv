@@ -137,12 +137,12 @@ crates/image/src/webp.rs	1437	src	F2	wave1	2026-11-16	covered	#1148-#1151
 crates/image/tests/data/zlib_vectors.rs	258	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/decode.rs	338	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/exif.rs	207	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
-crates/image/tests/fixtures/README.md	60	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
+crates/image/tests/fixtures/README.md	62	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/fixtures/generate.py	308	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/fixtures/generate_exif.py	131	test	F1			pending		
 crates/image/tests/fixtures/generate_exif_orientations.py	69	test	F1			pending		
 crates/image/tests/fixtures/generate_jpeg_gif.py	202	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
-crates/image/tests/fixtures/generate_webp.py	235	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
+crates/image/tests/fixtures/generate_webp.py	374	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/fixtures/gif/animated.gif	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/gif/palette.gif	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/gif/transparent.gif	0	binary	-			exempt		not read line by line: binary
@@ -218,6 +218,9 @@ crates/image/tests/fixtures/png/trns_rgb.png	0	binary	-			exempt		not read line 
 crates/image/tests/fixtures/png/trns_rgb.rgba	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/webp/alpha_real.rgba	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/webp/alpha_real.webp	0	binary	-			exempt		not read line by line: binary
+crates/image/tests/fixtures/webp/animated_blend.frame0.rgba	0	binary	-			exempt		not read line by line: binary
+crates/image/tests/fixtures/webp/animated_blend.frame1.rgba	0	binary	-			exempt		not read line by line: binary
+crates/image/tests/fixtures/webp/animated_blend.webp	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/webp/lossy.webp	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/webp/palette_real.rgba	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/webp/palette_real.webp	0	binary	-			exempt		not read line by line: binary
@@ -235,11 +238,13 @@ crates/image/tests/fixtures/webp/v8l_alpha.rgba	0	binary	-			exempt		not read li
 crates/image/tests/fixtures/webp/v8l_alpha.webp	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/webp/v8l_two_color.rgba	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/webp/v8l_two_color.webp	0	binary	-			exempt		not read line by line: binary
+crates/image/tests/fixtures/webp/vp8x_alpha_lossy.rgba	0	binary	-			exempt		not read line by line: binary
+crates/image/tests/fixtures/webp/vp8x_alpha_lossy.webp	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/jpeg_gif.rs	188	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/jpeg_scaled.rs	161	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/png_validation.rs	166	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/scaled.rs	131	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
-crates/image/tests/webp_tests.rs	581	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
+crates/image/tests/webp_tests.rs	619	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/js/Cargo.toml	19	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/js/src/canvas.rs	440	src	F2			pending		
 crates/js/src/error.rs	69	src	F2	wave1	2026-11-16	covered	#1134-#1147	
