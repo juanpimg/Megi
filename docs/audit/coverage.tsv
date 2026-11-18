@@ -631,16 +631,16 @@ crates/render/src/pipeline/state_stylesheet_text.rs	77	src	F2	wave-max-mod	2026-
 crates/render/src/pipeline/styles.rs	244	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/render/src/pipeline/svg.rs	210	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/render/src/pipeline/url.rs	325	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/render/src/scripts.rs	106	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/render/src/scripts/classic.rs	289	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/render/src/scripts/event_loop.rs	209	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/render/src/scripts/execution.rs	237	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/render/src/scripts/lifecycle.rs	203	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/render/src/scripts/modules.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/render/src/scripts/network.rs	229	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/render/src/scripts/providers.rs	280	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/render/src/scripts/tests.rs	287	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/render/src/scripts/types.rs	345	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/render/src/scripts.rs	106	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	clippy fixes
+crates/render/src/scripts/classic.rs	289	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	clippy fixes
+crates/render/src/scripts/event_loop.rs	209	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	clippy fixes
+crates/render/src/scripts/execution.rs	237	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	clippy fixes
+crates/render/src/scripts/lifecycle.rs	202	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	clippy fixes
+crates/render/src/scripts/modules.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	clippy fixes
+crates/render/src/scripts/network.rs	229	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	clippy fixes
+crates/render/src/scripts/providers.rs	284	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	clippy fixes
+crates/render/src/scripts/tests.rs	287	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	clippy fixes
+crates/render/src/scripts/types.rs	345	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	clippy fixes
 crates/render/src/stylesheets.rs	411	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/svg_assets.rs	169	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/webfonts.rs	278	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
