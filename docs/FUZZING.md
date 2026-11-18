@@ -8,21 +8,25 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 
 > **Status**: the harness is wired into CI via
 > [`.github/workflows/fuzz-nightly.yml`](../.github/workflows/fuzz-nightly.yml). The
-> scheduled/dispatch run executes **25 harnesses** in the scheduled matrix (26 `[[bin]]` targets in `fuzz/Cargo.toml`; `charset` is compiled but build-only for now) under the default libFuzzer
-> **AddressSanitizer** build (10 minutes for 10 critical parsers/decoders and 5 minutes for
-> the remaining 15), plus a short **UndefinedBehaviorSanitizer (UBSan)** smoke matrix on 9
-> representative targets. Pull requests and pushes to `main` run a build-only job that
-> compiles every `[[bin]]` fuzz target in `fuzz/Cargo.toml` on the pinned nightly (no
-> libFuzzer run), so a manifest or public-API break fails on the merge that causes it
-> instead of the next morning.
+> scheduled/dispatch run executes **25 harnesses** in the ASan matrix plus **9** in the
+> UBSan smoke matrix (34 scheduled entries over **28** `[[bin]]` targets in
+> `fuzz/Cargo.toml`; `charset`, `compression`, and `http_head` are compiled but not
+> currently in the ASan matrix) under the default libFuzzer **AddressSanitizer** build
+> (10 minutes for 10 critical parsers/decoders and 5 minutes for the remaining 15), and a
+> short **UndefinedBehaviorSanitizer (UBSan)** smoke pass on representative targets. Pull
+> requests and pushes to `main` run a build-only job that compiles every `[[bin]]` fuzz
+> target in `fuzz/Cargo.toml` on the pinned nightly (no libFuzzer run), so a manifest or
+> public-API break fails on the merge that causes it instead of the next morning.
 
 ## Layout
 
 ```text
 fuzz/
 ├── Cargo.toml          # standalone workspace (`[workspace]`), NOT part of the root workspace
-├── fuzz_targets/       # 26 libFuzzer harnesses / `[[bin]]` targets
+├── fuzz_targets/       # 28 libFuzzer harnesses / `[[bin]]` targets
 │   ├── body_stream.rs        # RequestBody/BodyProducer streaming contract
+│   ├── charset.rs            # Character-encoding detection/label handling
+│   ├── compression.rs        # HTTP compression/deflate/gzip/brotli-like stream handling
 │   ├── container_queries.rs  # CSS @container/@layer parsing + query evaluation
 │   ├── css_parse.rs          # CSS Syntax L3 tokenizer, stylesheets and declaration lists
 │   ├── dom_mutate.rs         # DOM arena mutation & invariant checks
@@ -33,6 +37,7 @@ fuzz/
 │   ├── h2_push.rs            # PUSH_PROMISE/HEADERS/DATA server push (capped)
 │   ├── hpack_decode.rs       # HPACK header blocks + HTTP/2 framing
 │   ├── html_parse.rs         # WHATWG HTML tokenizer + tree builder + canonical serializer
+│   ├── http_head.rs          # HTTP header/status-line parsing surfaces
 │   ├── image_decode.rs       # Full PNG/JPEG/GIF/WebP (VP8/VP8L) decode + EXIF orientation (capped)
 │   ├── js_eval.rs            # JavaScript evaluation + DOM/event/timer host bridge (budgeted)
 │   ├── js_module.rs          # ES modules + import maps (resolver/loader, budgeted)
@@ -49,7 +54,7 @@ fuzz/
 │   └── woff2_decode.rs       # WOFF2/@font-face decode/validation path
 ├── src/lib.rs          # shared helpers (`megi_fuzz`): RIFF/WebP envelope, lossy
 │                       #   char-boundary-safe text, length-prefixed part framing
-└── corpus/<target>/    # versioned seed inputs (small, hand-written where present)
+└── corpus/<target>/    # versioned seed inputs (small, hand-written where present; 170 files total)
 ```
 
 `fuzz/` deliberately has its own empty `[workspace]` table: it must not join the root
@@ -90,10 +95,13 @@ cargo +nightly fuzz build          # builds every [[bin]] target
 | `image_decode` | `detect_format`, `decode_with_limits` (tight + input-derived roomy profile), `decode`, `decode_scaled`, `decode_scaled_with_limits`, `decode_animated`, `decode_animated_with_limits`, `png::decode_png`, `exif::orientation` | Every public decode entry point, not just one capped call: default caps, scaled decode and the animated (ANIM/ANMF) path were unfuzzed before (#853). |
 | `exif_parse` | `megi_image::exif::orientation` | Dedicated APP1/TIFF orientation parser campaign. |
 | `hpack_decode` | `megi_net::h2::hpack`, `megi_net::h2::frame` parsing/validation helpers | Adversarial HTTP/2 HPACK blocks and frame streams (bounded). |
+| `http_head` | HTTP header/status-line parsing surfaces | Malformed request/response head bytes must be rejected or parsed without panics or unbounded allocation. Built in CI, but not currently in the scheduled ASan/UBSan matrix. |
 | `h2_push` | HTTP/2 PUSH_PROMISE/HEADERS/DATA parsing/reassembly helpers | Untrusted server-push/control/data frames under caps. `FrameReader`/`validate_frame` run against every legal max frame size (`64`, `DEFAULT_MAX_FRAME_SIZE`, `MAX_FRAME_SIZE`, `MAX_FRAME_SIZE_LIMIT`), and promised stream id `0` (protocol error) is exercised (#702). |
 | `body_stream` | `megi_net::{RequestBody, BodyProducer, FetchError}` streaming contract | Bounded pull-based producer/backpressure/error behavior (no socket). |
 | `webp` | WebP sniffing, RIFF/VP8/VP8L containers and VP8 lossy/lossless decoding | Single campaign merging the former `webp_vp8` and `webp_lossy` targets (#471) over the union of both corpora. RIFF inputs are decoded as-is and truncated (`/2`, `/4`, `/8`); non-container payloads are re-wrapped as `VP8 ` and `VP8L` with `megi_fuzz::riff_webp` (one shared envelope helper, #859) under a 2048 px, a 64 px and a bounded default-limit profile. |
 | `js_module` | `js` module/import-map resolve/load/eval APIs with budgets | Untrusted module/import-map inputs; bounded resolver/loader calls and no network/FS. Parts are **length-prefixed** (`[u16 LE len][bytes]…`) and truncated on char boundaries, so JSON strings and module sources keep embedded NULs/high bytes instead of being clipped (#701). |
+| `charset` | Character-encoding detection/label handling | Untrusted charset labels/byte sequences must resolve or reject without panics or unbounded work. Built in CI, but not currently in the scheduled ASan/UBSan matrix. |
+| `compression` | HTTP compression stream handling | Malformed compressed byte streams must not panic, loop, or allocate without bounds. Built in CI, but not currently in the scheduled ASan/UBSan matrix. |
 | `container_queries` | `css` parse/tokenize + `megi_css::container` size-query parse/evaluate | `@container`/`@layer` without DOM/layout. Exercises the implemented size-query surface only (`megi_css::container` does not yet parse or evaluate style/scroll-state queries, #1429). Container sizes are input-derived and include the degenerate set (`NaN`, `±∞`, negative, `0`, `f32::MAX`, missing axis). |
 | `dom_mutate` | `megi_core::Document` arena mutations + `validate_invariants()` | Exercises DOM insert/remove/reparent/text-coalesce invariants on arbitrary mutation sequences. |
 | `dom_tree` | DOM construction/mutation-oriented parse paths | Exercises DOM tree building/mutation surfaces from fuzzer input. |
@@ -237,11 +245,11 @@ Known non-crashes (do not report): the 3 `xmlViolation` tokenizer failures are d
 - on failure uploads `fuzz/artifacts/` and corpus snapshots as workflow artifacts (14 days).
 
 Notes:
-- 26 harnesses exist in `fuzz/fuzz_targets/` (26 `[[bin]]` targets); 25 run in the scheduled ASan
-  matrix (10 at 600 s, 15 at 300 s); the 8 direct core-crate harnesses (`dom_tree`,
-  `dom_mutate`, `font_decode`, `fonts_shape`, `layout_resolve`, `layout_tree`,
-  `net_surface`, `paint_display_list`) run at 300 s each and are not in the UBSan
-  smoke matrix.
+- 28 harnesses exist in `fuzz/fuzz_targets/` (28 `[[bin]]` targets) and 170 seed corpus files
+  are tracked under `fuzz/corpus/<target>/`. The scheduled workflow has 25 ASan matrix
+  entries (10 at 600 s, 15 at 300 s) plus 9 UBSan smoke entries (120 s each); `charset`,
+  `compression`, and `http_head` are built by the PR/build job but are not currently in the
+  ASan/UBSan matrices.
 - Daily 10-minute critical / 5-minute secondary runs are a regression gate, not a coverage
   guarantee. Longer campaigns should run outside CI.
 

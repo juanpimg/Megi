@@ -41,7 +41,7 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
   - `cargo +1.91 check --workspace --all-targets`: verificación contra la MSRV declarada (`rust-version = "1.91"`).
   - `./tools/dev.sh all`: script integral (fmt, clippy, tests, doc y **gate de conformidad**) que debe pasar al 100% verde antes de cualquier commit o Pull Request.
 - **Progress status generado**: si tocas docs, tests, fases o `docs/status/progress.toml`, regenera el snapshot antes de commitear con `python3 tools/update_progress.py --write` (CI ejecuta el check de frescura); **no edites a mano** `PROGRESS.md` ni `docs/status/`.
-  - `cd fuzz && cargo +nightly fuzz build`: compila los 21 targets de fuzz (nightly; también lo hace un job build-only en PRs que tocan `fuzz/**`).
+  - `cd fuzz && cargo +nightly fuzz build`: compila los 28 targets de fuzz (nightly; también lo hace un job build-only en PRs y pushes a `main` que tocan `fuzz/**`, crates del motor o manifests raíz).
 
 ### 1.6 Política de MSRV
 

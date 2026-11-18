@@ -69,22 +69,23 @@ after a fix is available.
 ## Fuzzing and continuous robustness
 
 - The parsers that consume untrusted input are fuzzed with libFuzzer through
-  `cargo-fuzz`: **26 targets** (`html_parse`, `css_parse`, `selectors`,
-  `net_url`, `render_pipeline`, `js_eval`, `svg_parse`) with a versioned seed
-  corpus; the round-18 additions cover the full render pipeline (data: URL and
-  caps), the JavaScript host (`Budget` + DOM APIs + event dispatch) and the SVG
-  parser (strict `Limits`). The harness lives in the standalone
-  `fuzz/` workspace (nightly + ASan) and is **not** a dependency of the engine
-  crates.
+  `cargo-fuzz`: **28 harness targets** with a versioned seed corpus (170 tracked seeds in
+  `fuzz/corpus/<target>/`) covering HTML/CSS/selectors/URL, the render pipeline, JS,
+  SVG, images/EXIF/WebP, fonts, network/protocol surfaces, DOM/layout/paint, container
+  queries, charset, compression, and HTTP head parsing. The scheduled workflow runs 25
+  ASan matrix entries and 9 UBSan smoke entries (34 scheduled runs; `charset`,
+  `compression`, and `http_head` are build-only outside those matrices). The harness
+  lives in the standalone `fuzz/` workspace (nightly + ASan/UBSan) and is **not** a
+  dependency of the engine crates.
 - **CI dev environment**: the quality/conformance/MSRV jobs install only the Wayland/X11/xcb **development** packages (`libwayland-dev`, `libxkbcommon*`, `libx11*`, `libxcb*`) that `winit`/`softbuffer` need to compile in the runner; they are build/test dependencies, never shipped or linked into the engine at runtime.
 - **Wired into CI**: [`.github/workflows/fuzz-nightly.yml`](.github/workflows/fuzz-nightly.yml)
-  runs a 5-minute smoke campaign per target daily (03:17 UTC) over the 7-target
-  matrix and on demand, uploading crash artifacts on failure; pull requests touching
-  `fuzz/**` run a cheap build-only job (`cargo +nightly fuzz build`) that never
-  blocks the quality gate. Local round-18 verification built all 7 targets and ran
-  bounded smoke campaigns (400 runs per parser target, 40 for the expensive
-  pipeline, 300 for JS) with no panics/ASan/UBSan findings; `js_eval` runs with
-  `-detect_leaks=0` because Boa 0.22 leaks a constant ~56-byte one-time allocation.
+  runs scheduled ASan campaigns (10 critical targets for 600 s, 15 secondary for 300 s)
+  plus a 120 s UBSan smoke matrix on representative targets, and on demand; pull requests
+  and pushes touching `fuzz/**`, engine crates, or root manifests run a build-only job
+  (`cargo +nightly fuzz build`) that compiles every `[[bin]]` fuzz target. Crash
+  artifacts/corpus snapshots are uploaded on failure. Local smoke runs should follow the
+  per-target flags documented in [`docs/FUZZING.md`](docs/FUZZING.md) (e.g. `-detect_leaks=0`
+  for `js_eval`/`js_module` due to a constant third-party Boa one-time allocation).
 - **Local campaign on record: ~1.06 M ASan executions, 0 crashes.** Triage
   policy, reproduction, minimisation and regression rules are documented in
   [`docs/FUZZING.md`](docs/FUZZING.md); memory-safety crashes and reachable
