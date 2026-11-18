@@ -123,6 +123,16 @@ impl ContentSecurityPolicy {
         self.allows_url_for("connect-src", url, document_url)
     }
 
+    /// Whether a `WebSocket` (`ws:`/`wss:`) connection to `url` is allowed (`connect-src`).
+    pub fn allows_websocket(&self, url: &Url, secure_ws: bool, document_url: &Url) -> bool {
+        self.policies.iter().all(|policy| {
+            let Some(sources) = policy_sources(policy, "connect-src") else {
+                return true;
+            };
+            ws_allowed_by_sources(sources, url, secure_ws, document_url)
+        })
+    }
+
     /// Whether a webfont at `url` may load on `document_url` (`font-src`).
     pub fn allows_font(&self, url: &Url, document_url: &Url) -> bool {
         self.allows_url_for("font-src", url, document_url)
@@ -291,6 +301,69 @@ fn source_matches_host(source: &str, url: &Url) -> bool {
         return false;
     }
 
+    authority_matches(rest, url)
+}
+
+fn ws_allowed_by_sources(
+    sources: &[String],
+    url: &Url,
+    secure_ws: bool,
+    document_url: &Url,
+) -> bool {
+    for source in sources {
+        let source = source.as_str();
+        if source.eq_ignore_ascii_case("'none'") {
+            continue;
+        }
+        if source.eq_ignore_ascii_case("'self'") {
+            let host_port_ok = document_url.host().eq_ignore_ascii_case(url.host())
+                && document_url.port_or_default() == url.port_or_default();
+            let scheme_ok = (document_url.scheme() == Scheme::Http && !secure_ws)
+                || secure_ws && matches!(document_url.scheme(), Scheme::Http | Scheme::Https);
+            if host_port_ok && scheme_ok {
+                return true;
+            }
+            continue;
+        }
+        if source == "*" {
+            return true;
+        }
+        if let Some(scheme_only) = source.strip_suffix(':') {
+            match scheme_only.to_ascii_lowercase().as_str() {
+                "ws" if !secure_ws => return true,
+                "wss" if secure_ws => return true,
+                _ => continue,
+            }
+        }
+        if source.starts_with('\'') {
+            continue;
+        }
+        let lower = source.to_ascii_lowercase();
+        if let Some(rest) = lower.strip_prefix("ws://") {
+            if !secure_ws && authority_matches(rest, url) {
+                return true;
+            }
+            continue;
+        }
+        if let Some(rest) = lower.strip_prefix("wss://") {
+            if secure_ws && authority_matches(rest, url) {
+                return true;
+            }
+            continue;
+        }
+        if let Some(rest) = lower.strip_prefix("*://")
+            && authority_matches(rest, url)
+        {
+            return true;
+        }
+        if !lower.contains("://") && authority_matches(&lower, url) {
+            return true;
+        }
+    }
+    false
+}
+
+fn authority_matches(rest: &str, url: &Url) -> bool {
     let authority = rest.split('/').next().unwrap_or(rest);
     if authority.is_empty() {
         return false;
@@ -494,5 +567,26 @@ mod tests {
         assert!(!policy.allows_image(&doc(), &doc()));
         assert!(policy.allows_connect(&doc(), &doc()));
         assert!(!policy.allows_connect(&Url::parse("https://other.test/").unwrap(), &doc()));
+    }
+
+    #[test]
+    fn allows_websocket_enforces_connect_src_and_schemes() {
+        let http_doc = Url::parse("http://site.test:8080/app").unwrap();
+        let https_doc = Url::parse("https://site.test/app").unwrap();
+        let same_ws = Url::parse("http://site.test:8080/ws").unwrap();
+        let other_ws = Url::parse("http://other.test:9000/ws").unwrap();
+
+        let self_policy = ContentSecurityPolicy::parse("connect-src 'self'");
+        assert!(self_policy.allows_websocket(&same_ws, false, &http_doc));
+        assert!(self_policy.allows_websocket(&same_ws, true, &http_doc));
+        assert!(!self_policy.allows_websocket(&same_ws, false, &https_doc));
+        assert!(!self_policy.allows_websocket(&other_ws, false, &http_doc));
+
+        let wss_only = ContentSecurityPolicy::parse("connect-src wss://other.test:9000");
+        assert!(!wss_only.allows_websocket(&other_ws, false, &https_doc));
+        assert!(wss_only.allows_websocket(&other_ws, true, &https_doc));
+
+        let none_policy = ContentSecurityPolicy::parse("default-src 'none'");
+        assert!(!none_policy.allows_websocket(&same_ws, true, &https_doc));
     }
 }

@@ -1022,8 +1022,51 @@ pub fn execute_scripts(
         // thread handles receives; the transport is polled by the runtime's event loop. This
         // is independent of worker support (WebSocket works in ordinary pages).
         let ws_options = host.fetch_options.clone();
-        runtime.set_websocket_provider(Box::new(move |url| {
-            let transport = crate::ws_bridge::LiveWebSocketTransport::connect(url, &ws_options)?;
+        let ws_no_network = host.no_network;
+        let ws_csp = host.csp.clone();
+        let ws_doc_url = document_url.clone();
+        runtime.set_websocket_provider(Box::new(move |raw_url| {
+            if ws_no_network {
+                return Err(js::JsError::Runtime(format!(
+                    "WebSocket blocked: --no-network prevents opening {raw_url}"
+                )));
+            }
+            let trimmed = raw_url.trim();
+            let (secure_ws, policy_url) = if let Some(rest) = trimmed
+                .strip_prefix("wss://")
+                .or_else(|| trimmed.strip_prefix("WSS://"))
+            {
+                let parsed = Url::parse(&format!("https://{rest}")).map_err(|error| {
+                    js::JsError::Runtime(format!("WebSocket URL {raw_url}: {error}"))
+                })?;
+                (true, parsed)
+            } else if let Some(rest) = trimmed
+                .strip_prefix("ws://")
+                .or_else(|| trimmed.strip_prefix("WS://"))
+            {
+                let parsed = Url::parse(&format!("http://{rest}")).map_err(|error| {
+                    js::JsError::Runtime(format!("WebSocket URL {raw_url}: {error}"))
+                })?;
+                (false, parsed)
+            } else {
+                return Err(js::JsError::Runtime(format!(
+                    "WebSocket URL {raw_url}: expected ws:// or wss://"
+                )));
+            };
+            if ws_doc_url.scheme() == Scheme::Https && !secure_ws {
+                return Err(js::JsError::Runtime(format!(
+                    "Mixed content blocks insecure WebSocket {raw_url} from https document"
+                )));
+            }
+            if let Some(policy) = &ws_csp
+                && !policy.allows_websocket(&policy_url, secure_ws, &ws_doc_url)
+            {
+                return Err(js::JsError::Runtime(format!(
+                    "Content-Security-Policy: connect-src blocks WebSocket {raw_url}"
+                )));
+            }
+            let transport =
+                crate::ws_bridge::LiveWebSocketTransport::connect(trimmed, &ws_options)?;
             Ok(Box::new(transport) as Box<dyn js::host::WebSocketTransport>)
         }));
         let worker_allow_file = document_url.is_file();
@@ -1176,7 +1219,10 @@ pub fn execute_scripts(
     // reads `file://` from disk or `http(s)` through a dedicated `ResourceLoader` configured
     // with the render's FetchOptions (`--no-network` and size caps are enforced). Each
     // `<script type="module">` is an independent root (no shared graph between scripts).
-    if scripts.iter().any(|script| script.is_module) {
+    if scripts
+        .iter()
+        .any(|script| script.is_module || script.text.contains("import"))
+    {
         runtime.set_module_resolver(Box::new(
             |specifier: &str, base: &str| -> Result<Option<String>, js::JsError> {
                 let resolved = match Url::parse(specifier) {
@@ -1307,10 +1353,10 @@ pub fn execute_scripts(
                 .module_url
                 .clone()
                 .unwrap_or_else(|| document_url.as_str());
-            if script.text.contains("await") {
-                // Real top-level await: native Boa modules (live bindings included). The
-                // deterministic host loop drives its microtasks/timers to completion, with
-                // the page's remaining timer budget so it cannot overshoot `max_tasks`.
+            if script.text.contains("await") || script.text.contains("import(") {
+                // Real top-level await and native dynamic `import(expr)`: native Boa modules
+                // (live bindings included). The deterministic host loop drives microtasks/timers
+                // to completion within the page budget.
                 let module_budget = js::ModuleAsyncBudget {
                     timer_tasks: limits.max_tasks.saturating_sub(module_tasks),
                     virtual_time_ms: limits.max_virtual_time_ms.saturating_sub(module_virtual_ms),
@@ -1325,9 +1371,27 @@ pub fn execute_scripts(
                     )
                     .map(Some)
             } else {
-                runtime
-                    .eval_module(&script.text, &script.source_name, &base, &budget)
-                    .map(|_| None)
+                match runtime.eval_module(&script.text, &script.source_name, &base, &budget) {
+                    Ok(_) => Ok(None),
+                    Err(js::JsError::DynamicImport(_) | js::JsError::TopLevelAwait(_)) => {
+                        let module_budget = js::ModuleAsyncBudget {
+                            timer_tasks: limits.max_tasks.saturating_sub(module_tasks),
+                            virtual_time_ms: limits
+                                .max_virtual_time_ms
+                                .saturating_sub(module_virtual_ms),
+                        };
+                        runtime
+                            .eval_module_async_with_budget(
+                                &script.text,
+                                &script.source_name,
+                                &base,
+                                &budget,
+                                module_budget,
+                            )
+                            .map(Some)
+                    }
+                    Err(error) => Err(error),
+                }
             }
         } else {
             runtime
@@ -1990,6 +2054,55 @@ mod fetch_failure_tests {
             success
                 .map_err(|error| format!("fetch failed: {error}"))
                 .is_ok()
+        );
+    }
+}
+
+#[cfg(all(test, feature = "js"))]
+mod websocket_policy_tests {
+    use super::*;
+
+    #[test]
+    fn https_document_blocks_insecure_ws_before_dialing() {
+        let script_text = "var ws = new WebSocket('ws://127.0.0.1:9/insecure');\
+            document.body.setAttribute('data-state', String(ws.readyState));\
+            ws.onerror = function (e) { document.body.setAttribute('data-msg', e.message || ''); };";
+        let html = format!("<!DOCTYPE html><body><script>{script_text}</script></body>");
+        let document = html::parse_document(&html, true);
+        let https_url = Url::parse("https://secure.example.test/app.html").expect("url");
+        let scripts = vec![LoadedScript {
+            text: script_text.to_owned(),
+            source_name: "inline-script-0".to_owned(),
+            bytes: script_text.len(),
+            is_module: false,
+            module_url: None,
+        }];
+        let host = ScriptingHostContext::new(
+            None,
+            css::MediaContext::with_viewport(320.0, 200.0),
+            (320, 200),
+        );
+        let mut warnings = Vec::new();
+        let execution = execute_scripts(
+            document,
+            &https_url,
+            scripts,
+            ScriptingLimits::default(),
+            &host,
+            &mut warnings,
+        );
+        let body = execution.document.body().expect("body");
+        let elem = execution
+            .document
+            .try_node(body)
+            .and_then(|node| node.as_element())
+            .expect("element");
+        assert_eq!(elem.get_attribute("data-state"), Some("3"));
+        assert!(
+            elem.get_attribute("data-msg")
+                .is_some_and(|msg| msg.contains("Mixed content")),
+            "expected mixed content block, got {:?}",
+            elem.get_attribute("data-msg")
         );
     }
 }
