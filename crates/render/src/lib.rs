@@ -1082,6 +1082,8 @@ fn render_url_inner(
     let fonts_time = fonts_start.elapsed();
 
     let images_start = Instant::now();
+    // The canvas blit loop (js feature) mutates this; harmless without the feature.
+    #[allow(unused_mut)]
     let mut loaded_images = images::load_images(
         &document,
         &base_url,
