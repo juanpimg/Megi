@@ -7630,6 +7630,11 @@ impl JsRuntime {
         self.host.borrow_mut().max_dom_nodes = max_nodes;
     }
 
+    /// Whether any live WebSocket transports remain (#1534).
+    pub fn has_websockets(&self) -> bool {
+        !self.host.borrow().websockets.is_empty()
+    }
+
     /// Delivers pending WebSocket transport events to JS handlers (#1534).
     /// Returns the number of instances that received events.
     pub fn poll_websockets(&mut self) -> usize {

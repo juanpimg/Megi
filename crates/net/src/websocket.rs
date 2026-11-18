@@ -6,6 +6,7 @@
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use crate::error::FetchError;
 use crate::http::FetchOptions;
@@ -124,6 +125,14 @@ impl WebSocketClient {
         })
     }
 
+    /// Adjusts the socket read timeout. A short timeout lets a pump thread poll for incoming
+    /// frames without blocking the JS event loop, while the handshake keeps its original budget.
+    pub fn set_read_timeout(&mut self, timeout: Duration) -> Result<(), FetchError> {
+        self.stream
+            .set_read_timeout(Some(timeout))
+            .map_err(FetchError::Io)
+    }
+
     /// Sends a UTF-8 text message as a single masked frame.
     pub fn send_text(&mut self, text: &str) -> Result<(), FetchError> {
         self.send(Opcode::Text, text.as_bytes())
@@ -134,7 +143,8 @@ impl WebSocketClient {
         self.send(Opcode::Binary, data)
     }
 
-    fn send(&mut self, opcode: Opcode, payload: &[u8]) -> Result<(), FetchError> {
+    /// Sends a raw frame with the given opcode and payload (masked, as required for clients).
+    pub fn send(&mut self, opcode: Opcode, payload: &[u8]) -> Result<(), FetchError> {
         if payload.len() > self.max_message {
             return Err(protocol("message exceeds cap"));
         }
@@ -153,6 +163,11 @@ impl WebSocketClient {
     /// Sends a ping control frame.
     pub fn ping(&mut self) -> Result<(), FetchError> {
         self.send(Opcode::Ping, b"")
+    }
+
+    /// Sends a pong control frame in reply to a ping.
+    pub fn pong(&mut self) -> Result<(), FetchError> {
+        self.send(Opcode::Pong, b"")
     }
 
     /// Reads and decodes the next frame from the stream. Control frames (Ping/Pong/Close) are
