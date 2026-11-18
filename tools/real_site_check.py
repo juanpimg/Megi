@@ -189,7 +189,7 @@ def failure_reasons(sites: list[dict], results: list[dict]) -> list[str]:
     reasons: list[str] = []
     for site, item in zip(sites, results, strict=True):
         name = item.get("name", site.get("id", "?"))
-        if item.get("result") in ("ERROR", "PÁGINA EN BLANK"):
+        if item.get("result") in ("ERROR", "PÁGINA EN BLANCO"):
             reasons.append(f"{name}: {item.get('result')}: {item.get('error', '')}")
             continue
         try:

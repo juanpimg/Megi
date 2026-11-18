@@ -387,3 +387,20 @@ fn test_max_total_decoded_pixels_cap() {
         output.stats.warnings
     );
 }
+
+#[test]
+fn image_byte_budget_counts_every_skipped_image() {
+    // #1666: when the total byte budget is exhausted, every subsequent image must be counted
+    // as failed (telemetry), not silently abandoned by a `break`.
+    let fixture = fixture_dir().join("images.html");
+    let mut opts = options();
+    // 1 byte total: the first real image exceeds it and each later one is skipped too.
+    opts.max_total_image_bytes = 1;
+    let output = render_url(&file_url(&fixture), &opts).expect("render with tight budget");
+    assert!(
+        output.stats.images_failed >= 2,
+        "all skipped images must be counted as failed, got {} (warnings {:?})",
+        output.stats.images_failed,
+        output.stats.warnings
+    );
+}

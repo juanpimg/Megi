@@ -85,5 +85,21 @@ class ReportTests(unittest.TestCase):
         self.assertIn("news.ycombinator.com", html)
 
 
+class FailureReasonTests(unittest.TestCase):
+    def test_blank_page_is_a_hard_failure(self) -> None:
+        # #1681: classify() emits "PÁGINA EN BLANCO"; failure_reasons() must treat that exact
+        # classification as a hard failure (the old "PÁGINA EN BLANK" string was never emitted).
+        site = {"id": "blank", "name": "blank.example", "min_items": 1}
+        result = {
+            "id": "blank",
+            "name": "blank.example",
+            "result": real_site_check.classify({"display_items": 0, "warnings": [], "status": 200}),
+            "display_items": 0,
+        }
+        reasons = real_site_check.failure_reasons([site], [result])
+        self.assertTrue(reasons, "a blank page must be reported as a hard failure")
+        self.assertIn("PÁGINA EN BLANCO", reasons[0])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -692,12 +692,15 @@ pub fn load_images_with_context(
             continue;
         }
         if result.downloaded_bytes + resource.bytes.len() > limits.max_total_bytes {
+            // #1666: count every skipped image as failed instead of abandoning the loop, so
+            // telemetry reflects all images the page referenced.
+            result.failed += 1;
             result.warnings.push(format!(
                 "image byte budget exhausted at {url} ({} bytes total, max {})",
                 result.downloaded_bytes + resource.bytes.len(),
                 limits.max_total_bytes
             ));
-            break;
+            continue;
         }
         if matches!(
             image::detect_format(&resource.bytes),
