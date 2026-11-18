@@ -25,3 +25,6 @@ tls = ["dep:rustls", "dep:webpki-roots"]
 rcgen = { workspace = true }
 # TLS tests build client/server configs directly; always available to dev targets.
 rustls = { workspace = true }
+
+[lints]
+workspace = true

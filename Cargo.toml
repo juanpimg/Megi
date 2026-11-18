@@ -64,3 +64,6 @@ ttf-parser = "0.25"
 
 # Property-based testing dev-dependency (#961).
 proptest = "1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

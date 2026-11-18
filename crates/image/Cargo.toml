@@ -9,3 +9,6 @@ repository.workspace = true
 description = "Megi Engine — dependency-free PNG decoder and zlib/DEFLATE inflater (RGBA8)"
 
 [dependencies]
+
+[lints]
+workspace = true

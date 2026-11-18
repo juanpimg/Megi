@@ -33,3 +33,6 @@ path = "src/main.rs"
 [dev-dependencies]
 rcgen.workspace = true
 rustls.workspace = true
+
+[lints]
+workspace = true

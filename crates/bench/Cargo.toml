@@ -24,3 +24,6 @@ fonts = { workspace = true, optional = true }
 # `cargo run --release -p bench --features fonts`.
 default = []
 fonts = ["dep:fonts"]
+
+[lints]
+workspace = true

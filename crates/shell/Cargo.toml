@@ -24,3 +24,6 @@ softbuffer.workspace = true
 [[bin]]
 name = "megi"
 path = "src/main.rs"
+
+[lints]
+workspace = true

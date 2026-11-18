@@ -17,3 +17,6 @@ dom.workspace = true
 html.workspace = true
 css.workspace = true
 boa_engine = { workspace = true, optional = true }
+
+[lints]
+workspace = true

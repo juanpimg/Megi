@@ -5,6 +5,10 @@ OpenCode o cualquier harness de agentes. No asume conocimiento previo del repo y
 evita los errores más comunes: editar artefactos generados, romper el gate de
 cobertura o inventar números de issue.
 
+**Reglas de arquitectura obligatorias:** lee también [`AGENTS.md`](../AGENTS.md)
+(DAG de crates, tamaño máximo de archivos, vetos y gates). Si este prompt y
+`AGENTS.md` difieren, prevalece `AGENTS.md`.
+
 **Uso:** copia el bloque `text` de abajo, sustituye `<issue>` (o déjalo vacío para
 que el agente elija trabajo abierto) y pégalo como primer mensaje.
 
