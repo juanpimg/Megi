@@ -17,7 +17,7 @@
 //! are collected; a generational arena keeps the raw ids distinct). No network/FS APIs are
 //! exposed to scripts.
 
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -975,6 +975,116 @@ pub(crate) fn with_host<R>(f: impl FnOnce(&mut Host) -> R) -> Option<R> {
     let host = current_host()?;
     let mut borrowed = host.borrow_mut();
     Some(f(&mut borrowed))
+}
+
+// ---------------------------------------------------------------------------
+// Parallel bridge: the same host cell, now also reachable from Boa's Context.
+// ---------------------------------------------------------------------------
+
+use boa_engine::{Context, JsError as BoaError, JsNativeError, JsResult};
+
+/// The shared handle stored in Boa's `HostDefined` map.
+///
+/// This is **not** a second `Host`: it is a clone of the exact `Rc` owned by
+/// `JsRuntime` and published to `CURRENT_HOST`, so the legacy TLS bridge and
+/// the context bridge borrow one and the same `RefCell<Host>`. The host-bridge
+/// rewrite removes the TLS bridge and this extra handle in Task 5.
+type ContextHost = Rc<RefCell<Host>>;
+
+// The three entry points below are the parallel bridge consumed by the later
+// migration tasks; only `install_host_cell` is wired in Task 1.
+#[cfg_attr(not(test), allow(dead_code))]
+fn missing_host() -> BoaError {
+    JsNativeError::error()
+        .with_message("no JavaScript host installed in this context")
+        .into()
+}
+
+/// Installs the shared `host` handle in `context`'s `HostDefined` data.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn install_host(context: &mut Context, host: ContextHost) {
+    context.insert_data(host);
+}
+
+/// Installs `host` once and returns the handle `JsRuntime` keeps for the TLS bridge.
+pub(crate) fn install_host_cell(context: &mut Context, host: &ContextHost) -> ContextHost {
+    install_host(context, Rc::clone(host));
+    Rc::clone(host)
+}
+
+/// Mutably borrows the host attached to `context`; re-entry is a typed error.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn host_cell(context: &mut Context) -> JsResult<RefMut<'_, Host>> {
+    let cell = context
+        .host_defined_mut()
+        .get_mut::<ContextHost>()
+        .ok_or_else(missing_host)?;
+    cell.try_borrow_mut().map_err(|error| {
+        JsNativeError::error()
+            .with_message(format!("JavaScript host is already borrowed: {error}"))
+            .into()
+    })
+}
+
+/// Immutably borrows the host attached to `context`.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn host_ref(context: &Context) -> JsResult<Ref<'_, Host>> {
+    let cell = context.get_data::<ContextHost>().ok_or_else(missing_host)?;
+    cell.try_borrow().map_err(|error| {
+        JsNativeError::error()
+            .with_message(format!(
+                "JavaScript host is already mutably borrowed: {error}"
+            ))
+            .into()
+    })
+}
+
+#[cfg(test)]
+mod context_host_tests {
+    use super::*;
+    use boa_engine::Context;
+
+    /// The same shared handle the runtime keeps for the TLS bridge.
+    fn demo_host() -> ContextHost {
+        Rc::new(RefCell::new(Host::new(
+            Document::new(),
+            "about:blank".into(),
+        )))
+    }
+
+    #[test]
+    fn host_is_reachable_from_the_context_and_not_from_tls() {
+        let mut context = Context::default();
+        install_host(&mut context, demo_host());
+        assert!(host_ref(&context).is_ok());
+        assert_eq!(host_ref(&context).unwrap().url, "about:blank");
+    }
+
+    #[test]
+    fn host_cell_and_host_ref_observe_the_same_host() {
+        let mut context = Context::default();
+        install_host(&mut context, demo_host());
+        host_cell(&mut context).unwrap().url = "https://example.com/".to_string();
+        assert_eq!(host_ref(&context).unwrap().url, "https://example.com/");
+    }
+
+    #[test]
+    fn context_and_tls_bridges_share_one_host() {
+        let mut context = Context::default();
+        let host = demo_host();
+        install_host(&mut context, Rc::clone(&host));
+        let _scope = HostScope::enter(&host);
+        let _ = with_host(|h| h.url = "https://example.com/".to_string());
+        assert_eq!(host_ref(&context).unwrap().url, "https://example.com/");
+        host_cell(&mut context).unwrap().title = "shared".to_string();
+        assert_eq!(with_host(|h| h.title.clone()).unwrap(), "shared");
+    }
+
+    #[test]
+    fn missing_host_returns_a_typed_error() {
+        let context = Context::default();
+        assert!(host_ref(&context).is_err());
+    }
 }
 
 #[cfg(test)]

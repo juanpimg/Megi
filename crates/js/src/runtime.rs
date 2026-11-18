@@ -216,7 +216,7 @@ impl JsRuntime {
             .build()
             .map_err(|error| JsError::Internal(error.to_string()))?;
         let host = Rc::new(RefCell::new(Host::new(document, url)));
-        *host_slot.borrow_mut() = Some(Rc::clone(&host));
+        *host_slot.borrow_mut() = Some(crate::host::install_host_cell(&mut context, &host));
         if is_worker {
             install_bare_worker_globals(&mut context)?;
         } else {
