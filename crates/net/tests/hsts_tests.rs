@@ -117,6 +117,7 @@ fn spawn_tls_server(
 
 #[test]
 fn hsts_is_learned_from_https_and_http_is_upgraded() {
+    let _hsts_guard = HSTS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     hsts::clear();
     let (cert, key) = test_certificate();
     let client = client_config_trusting(cert.clone());
