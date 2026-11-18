@@ -433,6 +433,7 @@ crates/render/tests/event_loop_tests.rs	499	test	F1	waveF1	2026-11-17	covered	#1
 crates/render/tests/fetch_stream_tests.rs	51	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/fetch_tests.rs	92	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/filter_fixture_tests.rs	117	test	F1			pending		
+crates/render/tests/fixture_smoke.rs	59	test	F1			pending		
 crates/render/tests/form_post_tests.rs	202	test	F1			pending		
 crates/render/tests/gradient_tests.rs	106	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/image_formats_tests.rs	61	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
@@ -805,7 +806,7 @@ tests/fixtures/real-sites/wikipedia.html	680	fixture	F1	waveF1	2026-11-17	covere
 tests/fixtures/render/OFL-OpenSans.txt	92	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/OpenSans-Regular-latin-corrupt.woff2	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/OpenSans-Regular-latin.woff2	0	binary	-			exempt		not read line by line: binary
-tests/fixtures/render/README.md	132	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/README.md	139	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/animation_time.html	5	fixture	F1			pending		
 tests/fixtures/render/aspect_ratio.html	18	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/assets/bg_photo.jpg	0	binary	-			exempt		not read line by line: binary
