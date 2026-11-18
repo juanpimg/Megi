@@ -3,6 +3,7 @@
 #![cfg(feature = "js")]
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use megi_js::host::FetchResult;
 use megi_js::runtime::{Budget, JsRuntime};
@@ -33,10 +34,10 @@ fn runtime_with(modules: &[(&str, &str)]) -> JsRuntime {
         })
         .collect();
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_module_resolver(Box::new(move |specifier, _base| {
+    runtime.set_module_resolver(Arc::new(move |specifier, _base| {
         Ok(resolver.get(specifier).cloned())
     }));
-    runtime.set_module_loader(Box::new(move |url| {
+    runtime.set_module_loader(Arc::new(move |url| {
         sources
             .get(url)
             .cloned()
@@ -117,7 +118,7 @@ fn top_level_await_with_timer() {
 #[test]
 fn top_level_await_with_fetch_provider() {
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_fetch_provider(Box::new(|_request| {
+    runtime.set_fetch_provider(Arc::new(|_request| {
         Ok(FetchResult {
             status: 200,
             status_text: "OK".into(),

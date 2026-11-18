@@ -11,7 +11,7 @@ fn runtime_with_modules() -> (JsRuntime, Arc<Mutex<HashMap<String, String>>>) {
     runtime.set_budget(Budget::SMALL);
     let modules: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
     let modules_for_resolver = Arc::clone(&modules);
-    runtime.set_module_resolver(Box::new(move |specifier, base| {
+    runtime.set_module_resolver(Arc::new(move |specifier, base| {
         let modules = modules_for_resolver.lock().expect("modules");
         let url = if specifier.starts_with("file:") {
             Some(specifier.to_string())
@@ -31,7 +31,7 @@ fn runtime_with_modules() -> (JsRuntime, Arc<Mutex<HashMap<String, String>>>) {
         }
     }));
     let modules_for_loader = Arc::clone(&modules);
-    runtime.set_module_loader(Box::new(move |url| {
+    runtime.set_module_loader(Arc::new(move |url| {
         modules_for_loader
             .lock()
             .expect("modules")

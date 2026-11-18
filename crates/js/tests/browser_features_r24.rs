@@ -13,7 +13,7 @@ fn history_provider_push_replace_back_forward_go() {
     let mut runtime = JsRuntime::new().expect("runtime");
     let actions = Arc::new(Mutex::new(Vec::<HistoryAction>::new()));
     let seen = Arc::clone(&actions);
-    runtime.set_history_provider(Box::new(move |action| {
+    runtime.set_history_provider(Arc::new(move |action| {
         seen.lock().expect("lock").push(action)
     }));
     runtime
@@ -71,7 +71,7 @@ fn location_properties_and_navigation_provider() {
     assert_eq!(runtime.eval("location.hash", "t").unwrap(), "#frag");
     let actions = Arc::new(Mutex::new(Vec::<LocationAction>::new()));
     let seen = Arc::clone(&actions);
-    runtime.set_location_provider(Box::new(move |action| {
+    runtime.set_location_provider(Arc::new(move |action| {
         seen.lock().expect("lock").push(action)
     }));
     runtime
@@ -141,14 +141,14 @@ fn storage_provider_loads_and_saves() {
     ));
     let saved_clone = Arc::clone(&saved);
     let provider = StorageProvider {
-        load: Box::new(|kind| {
+        load: Arc::new(|kind| {
             if kind == StorageKind::Local {
                 vec![("persisted".to_string(), "yes".to_string())]
             } else {
                 Vec::new()
             }
         }),
-        save: Box::new(move |kind, entries| {
+        save: Arc::new(move |kind, entries| {
             saved_clone
                 .lock()
                 .expect("lock")
@@ -321,7 +321,7 @@ fn mutation_observer_target_limit_is_enforced() {
 #[test]
 fn history_replace_keeps_length_and_updates_state() {
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_history_provider(Box::new(|_| {}));
+    runtime.set_history_provider(Arc::new(|_| {}));
     runtime
         .eval("history.pushState({n:1}, '', '/a')", "t")
         .expect("push");
@@ -342,7 +342,7 @@ fn location_relative_url_and_hash_navigation() {
     let mut runtime =
         JsRuntime::with_document(Document::new(), "https://example.com/docs/page".to_string())
             .expect("runtime");
-    runtime.set_location_provider(Box::new(|_| {}));
+    runtime.set_location_provider(Arc::new(|_| {}));
     runtime
         .eval("location.assign('other?q=1#x')", "t")
         .expect("assign");

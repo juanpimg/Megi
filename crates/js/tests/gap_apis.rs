@@ -3,6 +3,8 @@
 
 #![cfg(feature = "js")]
 
+use std::sync::Arc;
+
 use megi_js::runtime::{Budget, JsRuntime};
 
 fn runtime() -> JsRuntime {
@@ -238,14 +240,14 @@ fn idle_callback_can_be_cancelled() {
 fn layout_provider_geometry() {
     use megi_js::host::{LayoutProvider, LayoutRect, ViewportInfo};
     let mut rt = runtime();
-    let provider: LayoutProvider = Box::new(|_node| {
+    let provider: LayoutProvider = Arc::new(|_node| {
         Some(LayoutRect {
             border_box: (10.0, 20.0, 100.0, 50.0),
             content_box: (12.0, 22.0, 96.0, 46.0),
         })
     });
     rt.set_layout_provider(provider);
-    rt.set_viewport_provider(Box::new(|| ViewportInfo {
+    rt.set_viewport_provider(Arc::new(|| ViewportInfo {
         width: 800,
         height: 600,
         device_pixel_ratio: 2.0,

@@ -3,6 +3,7 @@
 
 #![cfg(feature = "js")]
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use megi_js::{Budget, JsError, JsRuntime, ViewportInfo};
@@ -16,7 +17,7 @@ fn runtime() -> JsRuntime {
 #[test]
 fn match_media_uses_the_injected_provider() {
     let mut runtime = runtime();
-    runtime.set_media_provider(Box::new(|query| query.contains("min-width: 700px")));
+    runtime.set_media_provider(Arc::new(|query| query.contains("min-width: 700px")));
     runtime
         .eval(
             "globalThis.small = window.matchMedia('(max-width: 600px)');
@@ -54,7 +55,7 @@ fn match_media_without_provider_never_matches() {
 #[test]
 fn viewport_provider_exposes_inner_size_and_dpr() {
     let mut runtime = runtime();
-    runtime.set_viewport_provider(Box::new(|| ViewportInfo {
+    runtime.set_viewport_provider(Arc::new(|| ViewportInfo {
         width: 1024,
         height: 768,
         device_pixel_ratio: 2.0,
@@ -324,7 +325,7 @@ fn get_computed_style_provider_covers_render_properties() {
         "border-top-style",
         "opacity",
     ];
-    runtime.set_computed_style_provider(Box::new(move |_document, _node| {
+    runtime.set_computed_style_provider(Arc::new(move |_document, _node| {
         props
             .iter()
             .map(|name| ((*name).to_string(), "1px".to_string()))

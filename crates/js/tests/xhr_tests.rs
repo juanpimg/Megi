@@ -13,7 +13,7 @@ fn mock_runtime(result: FetchResult) -> (JsRuntime, Arc<Mutex<Vec<FetchRequest>>
     let calls = Arc::new(Mutex::new(Vec::new()));
     let seen = Arc::clone(&calls);
     let mut runtime = JsRuntime::new().expect("runtime");
-    let provider: FetchProvider = Box::new(move |request| {
+    let provider: FetchProvider = Arc::new(move |request| {
         seen.lock().expect("lock").push(request);
         Ok(result.clone())
     });
@@ -204,7 +204,7 @@ fn xhr_abort_before_microtask_cancels_request_and_resets_to_unsent() {
 #[test]
 fn xhr_network_error_and_timeout_fire_expected_events() {
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_fetch_provider(Box::new(|request| {
+    runtime.set_fetch_provider(Arc::new(|request| {
         if request.url.contains("timeout") {
             std::thread::sleep(Duration::from_millis(25));
             return Ok(FetchResult {

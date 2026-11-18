@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use megi_js::{JsRuntime, SandboxFlags};
 
 #[test]
@@ -116,7 +118,7 @@ fn cross_origin_iframe_blocks_dom_and_supports_post_message() {
     );
     let mut rt =
         JsRuntime::with_document(doc, "https://app.example/index.html".into()).expect("runtime");
-    rt.set_frame_loader(Box::new(|url| {
+    rt.set_frame_loader(Arc::new(|url| {
         if url == "https://other.example/frame.html" {
             Ok((
                 url.to_string(),

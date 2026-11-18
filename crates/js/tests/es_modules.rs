@@ -3,6 +3,7 @@
 #![cfg(feature = "js")]
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use megi_js::JsError;
 use megi_js::runtime::{Budget, JsRuntime};
@@ -16,10 +17,10 @@ fn runtime_with(modules: &Modules) -> JsRuntime {
     let resolver = modules.resolver.clone();
     let sources = modules.sources.clone();
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_module_resolver(Box::new(move |specifier, _base| {
+    runtime.set_module_resolver(Arc::new(move |specifier, _base| {
         Ok(resolver.get(specifier).cloned())
     }));
-    runtime.set_module_loader(Box::new(move |url| {
+    runtime.set_module_loader(Arc::new(move |url| {
         sources
             .get(url)
             .cloned()
@@ -352,7 +353,7 @@ fn module_graph_depth_is_bounded() {
     // A loader can serve an arbitrary chain of static imports; each level is one Rust stack
     // frame, so the graph depth must be capped instead of overflowing the native stack.
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_module_resolver(Box::new(|_specifier: &str, base: &str| {
+    runtime.set_module_resolver(Arc::new(|_specifier: &str, base: &str| {
         let next = base
             .strip_prefix("m")
             .and_then(|digits| digits.parse::<usize>().ok())
@@ -360,7 +361,7 @@ fn module_graph_depth_is_bounded() {
             + 1;
         Ok(Some(format!("m{next}")))
     }));
-    runtime.set_module_loader(Box::new(|_url: &str| {
+    runtime.set_module_loader(Arc::new(|_url: &str| {
         Ok::<String, JsError>("import './dep'; export const marker = 1;".to_string())
     }));
     let error = runtime

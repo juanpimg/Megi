@@ -2,11 +2,13 @@
 
 #![cfg(feature = "js")]
 
+use std::sync::Arc;
+
 use megi_js::runtime::JsRuntime;
 
 fn runtime_with_worker(source: &'static str) -> JsRuntime {
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_worker_loader(Box::new(move |url| {
+    runtime.set_worker_loader(Arc::new(move |url| {
         if url.ends_with("worker.js") {
             Ok(source.to_string())
         } else {

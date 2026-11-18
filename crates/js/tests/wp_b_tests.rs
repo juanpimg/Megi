@@ -3,6 +3,8 @@
 
 #![cfg(feature = "js")]
 
+use std::sync::Arc;
+
 use megi_js::{Budget, JsRuntime};
 
 fn runtime() -> JsRuntime {
@@ -160,7 +162,7 @@ fn style_object_is_stable_for_reads_inside_one_eval() {
 #[test]
 fn get_computed_style_uses_the_injected_provider() {
     let mut runtime = runtime();
-    runtime.set_computed_style_provider(Box::new(|_document, _node| {
+    runtime.set_computed_style_provider(Arc::new(|_document, _node| {
         vec![
             ("color".to_string(), "rgb(1, 2, 3)".to_string()),
             ("width".to_string(), "100px".to_string()),

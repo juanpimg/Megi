@@ -8,6 +8,8 @@
 
 #![cfg(feature = "js")]
 
+use std::sync::Arc;
+
 use megi_js::JsRuntime;
 use megi_js::host::ViewportInfo;
 
@@ -34,14 +36,14 @@ fn events_module_borrows_host_from_context_not_tls() {
 #[test]
 fn viewport_and_media_providers_work_through_the_bridge() {
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_viewport_provider(Box::new(|| ViewportInfo {
+    runtime.set_viewport_provider(Arc::new(|| ViewportInfo {
         width: 640,
         height: 480,
         device_pixel_ratio: 2.0,
         scroll_x: 0.0,
         scroll_y: 0.0,
     }));
-    runtime.set_media_provider(Box::new(|query| query.contains("640px")));
+    runtime.set_media_provider(Arc::new(|query| query.contains("640px")));
 
     let out = runtime
         .eval(
@@ -57,7 +59,7 @@ fn viewport_and_media_providers_work_through_the_bridge() {
 #[test]
 fn computed_style_provider_survives_the_bridge() {
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_computed_style_provider(Box::new(|_document, _node| {
+    runtime.set_computed_style_provider(Arc::new(|_document, _node| {
         vec![("color".to_string(), "rgb(7, 8, 9)".to_string())]
     }));
 

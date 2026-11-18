@@ -10,7 +10,7 @@ fn mock_runtime(result: FetchResult) -> (JsRuntime, Arc<Mutex<Vec<FetchRequest>>
     let calls = Arc::new(Mutex::new(Vec::new()));
     let seen = Arc::clone(&calls);
     let mut runtime = JsRuntime::new().expect("runtime");
-    let provider: FetchProvider = Box::new(move |request| {
+    let provider: FetchProvider = Arc::new(move |request| {
         seen.lock().expect("lock").push(request);
         Ok(result.clone())
     });
@@ -159,7 +159,7 @@ fn array_buffer_exposes_raw_bytes() {
 #[test]
 fn network_error_is_type_error_like() {
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_fetch_provider(Box::new(|_| {
+    runtime.set_fetch_provider(Arc::new(|_| {
         Err(megi_js::JsError::Runtime("network down".into()))
     }));
     runtime.eval("window.__name = ''; window.__msg = ''; fetch('/x').catch(function (e) { __name = e.name; __msg = String(e); });", "t").expect("fetch");
