@@ -346,7 +346,7 @@ crates/net/tests/h2_advanced.rs	422	test	F1	waveF1	2026-11-17	covered	#1343-#135
 crates/net/tests/h2_flow_multiplex_tests.rs	554	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/h2_push_tests.rs	396	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/h2_tests.rs	404	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
-crates/net/tests/hsts_tests.rs	254	test	F1			pending		
+crates/net/tests/hsts_tests.rs	261	test	F1			pending		
 crates/net/tests/http10_tests.rs	154	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/http_tests.rs	447	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/loader_tests.rs	293	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
