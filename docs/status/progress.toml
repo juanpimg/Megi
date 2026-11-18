@@ -36,6 +36,7 @@ next_up = [
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 tests = 2644
 tests_commit = "609730d"
 tests_date = "2026-11-18"
@@ -73,6 +74,13 @@ tests_date = "2026-11-18"
 crates = 14
 rust_lines = 192950
 >>>>>>> be10326
+=======
+tests = 2646
+tests_commit = "609730d"
+tests_date = "2026-11-18"
+crates = 14
+rust_lines = 193381
+>>>>>>> ff63ff0
 unsafe_forbidden_crates = 14
 
 [gate]

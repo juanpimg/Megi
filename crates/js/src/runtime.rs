@@ -1403,7 +1403,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 37] = [
+    let accessors: [(&str, AccessorKind); 42] = [
         ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
@@ -1438,6 +1438,11 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("src", AccessorKind::Src),
         ("selectedIndex", AccessorKind::SelectedIndex),
         ("validity", AccessorKind::Validity),
+        ("action", AccessorKind::Action),
+        ("method", AccessorKind::Method),
+        ("enctype", AccessorKind::Enctype),
+        ("noValidate", AccessorKind::NoValidate),
+        ("elements", AccessorKind::Elements),
         ("shadowRoot", AccessorKind::ShadowRoot),
         ("open", AccessorKind::DialogOpen),
         ("returnValue", AccessorKind::DialogReturnValue),
@@ -1508,9 +1513,11 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("scrollIntoView", 0, node_scroll_into_view),
         ("getBoundingClientRect", 0, node_get_bounding_client_rect),
         ("checkValidity", 0, node_check_validity),
+        ("reportValidity", 0, node_report_validity),
         ("setCustomValidity", 1, node_set_custom_validity),
         ("requestSubmit", 0, node_request_submit),
         ("submit", 0, node_submit),
+        ("reset", 0, node_reset),
         ("attachShadow", 1, node_attach_shadow),
         ("getRootNode", 0, node_get_root_node),
         ("getContext", 1, canvas_get_context),
@@ -1571,6 +1578,11 @@ enum AccessorKind {
     Src,
     SelectedIndex,
     Validity,
+    Action,
+    Method,
+    Enctype,
+    NoValidate,
+    Elements,
     ShadowRoot,
     DialogOpen,
     DialogReturnValue,
@@ -1612,6 +1624,11 @@ fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::Src => (node_src_get, Some(node_src_set)),
         AccessorKind::SelectedIndex => (node_selected_index_get, Some(node_selected_index_set)),
         AccessorKind::Validity => (node_validity_get, None),
+        AccessorKind::Action => (node_action_get, Some(node_action_set)),
+        AccessorKind::Method => (node_method_get, Some(node_method_set)),
+        AccessorKind::Enctype => (node_enctype_get, Some(node_enctype_set)),
+        AccessorKind::NoValidate => (node_no_validate_get, Some(node_no_validate_set)),
+        AccessorKind::Elements => (node_elements_get, None),
         AccessorKind::ShadowRoot => (node_shadow_root_get, None),
         AccessorKind::DialogOpen => (node_open_get, Some(node_open_set)),
         AccessorKind::DialogReturnValue => (node_dialog_return_value_get, None),
@@ -2086,61 +2103,477 @@ fn node_value_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
     Ok(JsValue::from(js_string!(value)))
 }
 
-/// Validity flags for a form control (#1505). Pure DOM data so it can be computed under a
-/// `with_host` borrow without re-entering JS.
+/// Validity flags for a form control (#1505, #1538).
 #[derive(Default)]
 struct ValidityFlags {
     value_missing: bool,
     custom_error: bool,
+    pattern_mismatch: bool,
+    type_mismatch: bool,
+    too_short: bool,
+    too_long: bool,
+    range_underflow: bool,
+    range_overflow: bool,
+}
+
+impl ValidityFlags {
+    fn is_valid(&self) -> bool {
+        !(self.value_missing
+            || self.custom_error
+            || self.pattern_mismatch
+            || self.type_mismatch
+            || self.too_short
+            || self.too_long
+            || self.range_underflow
+            || self.range_overflow)
+    }
+}
+
+fn is_control_disabled(document: &dom::Document, node_id: NodeId) -> bool {
+    let Some(element) = document.try_node(node_id).and_then(|n| n.as_element()) else {
+        return false;
+    };
+    if element.has_attribute("disabled") {
+        return true;
+    }
+    let mut prev = node_id;
+    let mut cur = document.try_node(node_id).and_then(|n| n.parent);
+    while let Some(ancestor_id) = cur {
+        let Some(ancestor) = document.try_node(ancestor_id).and_then(|n| n.as_element()) else {
+            break;
+        };
+        if ancestor.local_name == "form" {
+            break;
+        }
+        if ancestor.local_name == "fieldset" && ancestor.has_attribute("disabled") {
+            let first_legend = document.children(ancestor_id).find(|child| {
+                document
+                    .try_node(*child)
+                    .and_then(|n| n.as_element())
+                    .is_some_and(|e| e.local_name == "legend")
+            });
+            if first_legend != Some(prev) {
+                return true;
+            }
+        }
+        prev = ancestor_id;
+        cur = document.try_node(ancestor_id).and_then(|n| n.parent);
+    }
+    false
+}
+
+fn enclosing_form(document: &dom::Document, node_id: NodeId) -> Option<NodeId> {
+    let mut cur = document.try_node(node_id).and_then(|n| n.parent);
+    while let Some(ancestor_id) = cur {
+        if document
+            .try_node(ancestor_id)
+            .and_then(|n| n.as_element())
+            .is_some_and(|el| el.local_name == "form")
+        {
+            return Some(ancestor_id);
+        }
+        cur = document.try_node(ancestor_id).and_then(|n| n.parent);
+    }
+    None
+}
+
+fn is_single_valid_email(addr: &str) -> bool {
+    let Some((local, domain)) = addr.split_once('@') else {
+        return false;
+    };
+    if local.is_empty() || domain.is_empty() || domain.contains('@') {
+        return false;
+    }
+    let local_ok = local
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+/=?^_`{|}~.-".contains(&b));
+    if !local_ok {
+        return false;
+    }
+    domain.split('.').all(|label| {
+        !label.is_empty()
+            && label.len() <= 63
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && label
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    })
+}
+
+fn is_valid_email_value(value: &str, multiple: bool) -> bool {
+    if multiple {
+        value.split(',').all(|part| {
+            let trimmed = part.trim_matches(|c: char| matches!(c, ' ' | '\t' | '\n' | '\r'));
+            is_single_valid_email(trimmed)
+        })
+    } else {
+        is_single_valid_email(value)
+    }
+}
+
+fn is_valid_url_value(value: &str) -> bool {
+    if value.chars().any(char::is_whitespace) {
+        return false;
+    }
+    let Some((scheme, rest)) = value.split_once(':') else {
+        return false;
+    };
+    let mut scheme_bytes = scheme.bytes();
+    let Some(first) = scheme_bytes.next() else {
+        return false;
+    };
+    if !first.is_ascii_alphabetic()
+        || !scheme_bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.'))
+    {
+        return false;
+    }
+    let lower_scheme = scheme.to_ascii_lowercase();
+    if matches!(
+        lower_scheme.as_str(),
+        "http" | "https" | "ws" | "wss" | "ftp"
+    ) {
+        let Some(after_slashes) = rest.strip_prefix("//") else {
+            return false;
+        };
+        let host = after_slashes.split(['/', '?', '#']).next().unwrap_or("");
+        !host.is_empty()
+    } else {
+        !rest.is_empty()
+    }
+}
+
+fn control_text_value(
+    document: &dom::Document,
+    node_id: NodeId,
+    element: &dom::ElementData,
+) -> String {
+    if element.local_name == "textarea" {
+        document.text_content(node_id)
+    } else {
+        element.get_attribute("value").unwrap_or("").to_string()
+    }
+}
+
+fn select_selected_value(
+    document: &dom::Document,
+    select_id: NodeId,
+    multiple: bool,
+) -> Option<String> {
+    let options: Vec<(NodeId, &dom::ElementData)> = document
+        .descendants(select_id)
+        .filter_map(|child| {
+            document
+                .try_node(child)
+                .and_then(|node| node.as_element())
+                .filter(|el| el.local_name == "option")
+                .map(|el| (child, el))
+        })
+        .collect();
+    if options.is_empty() {
+        return None;
+    }
+    let option_value = |opt_id: NodeId, el: &dom::ElementData| -> String {
+        el.get_attribute("value")
+            .map(str::to_owned)
+            .unwrap_or_else(|| document.text_content(opt_id))
+    };
+    if multiple {
+        options
+            .into_iter()
+            .find(|(_, el)| el.has_attribute("selected") && !el.has_attribute("disabled"))
+            .map(|(id, el)| option_value(id, el))
+    } else if let Some((id, el)) = options
+        .iter()
+        .copied()
+        .find(|(_, el)| el.has_attribute("selected") && !el.has_attribute("disabled"))
+    {
+        Some(option_value(id, el))
+    } else {
+        options
+            .into_iter()
+            .find(|(_, el)| !el.has_attribute("disabled"))
+            .map(|(id, el)| option_value(id, el))
+    }
 }
 
 fn validity_flags_element(
     document: &dom::Document,
     node_id: NodeId,
     element: &dom::ElementData,
-) -> ValidityFlags {
+) -> (ValidityFlags, Option<(String, String)>) {
+    if is_control_disabled(document, node_id) {
+        return (ValidityFlags::default(), None);
+    }
+    let tag = element.local_name.as_str();
+    if tag == "input"
+        && element
+            .get_attribute("type")
+            .is_some_and(|t| t.eq_ignore_ascii_case("hidden"))
+    {
+        return (ValidityFlags::default(), None);
+    }
+    if !matches!(tag, "input" | "textarea" | "select") {
+        return (ValidityFlags::default(), None);
+    }
+
     // A custom validity message is stored on the element as a data attribute so no extra
     // host state is needed and it survives snapshots/re-renders.
     let custom_error = element
         .get_attribute("data-megi-validity-error")
         .is_some_and(|message| !message.is_empty());
     let required = element.has_attribute("required");
-    let value_missing = if element.local_name == "input" {
-        let is_checkable = matches!(
-            element
-                .get_attribute("type")
-                .unwrap_or("")
-                .to_ascii_lowercase()
-                .as_str(),
-            "checkbox" | "radio"
-        );
-        if is_checkable {
-            false // checkable controls use `checked`, handled separately by the UA
-        } else {
-            let value = element.get_attribute("value").unwrap_or("");
-            required && value.is_empty()
-        }
-    } else if element.local_name == "textarea" {
-        required && document.text_content(node_id).trim().is_empty()
-    } else {
-        false
-    };
-    ValidityFlags {
-        value_missing,
+
+    let mut flags = ValidityFlags {
         custom_error,
+        ..ValidityFlags::default()
+    };
+
+    if tag == "select" {
+        if required {
+            let selected =
+                select_selected_value(document, node_id, element.has_attribute("multiple"));
+            flags.value_missing = selected.is_none_or(|val| val.is_empty());
+        }
+        return (flags, None);
     }
+
+    if tag == "textarea" {
+        let value = control_text_value(document, node_id, element);
+        flags.value_missing = required && value.trim().is_empty();
+        if !value.is_empty() && !element.has_attribute("readonly") {
+            let len = value.encode_utf16().count();
+            if let Some(min_len) = element
+                .get_attribute("minlength")
+                .and_then(|s| s.parse::<usize>().ok())
+                && len < min_len
+            {
+                flags.too_short = true;
+            }
+            if let Some(max_len) = element
+                .get_attribute("maxlength")
+                .and_then(|s| s.parse::<usize>().ok())
+                && len > max_len
+            {
+                flags.too_long = true;
+            }
+        }
+        return (flags, None);
+    }
+
+    // `<input>`
+    let input_type = element
+        .get_attribute("type")
+        .unwrap_or("text")
+        .to_ascii_lowercase();
+    if matches!(input_type.as_str(), "button" | "submit" | "reset" | "image") {
+        return (
+            ValidityFlags {
+                custom_error,
+                ..ValidityFlags::default()
+            },
+            None,
+        );
+    }
+
+    if input_type == "checkbox" {
+        flags.value_missing = required && !element.has_attribute("checked");
+        return (flags, None);
+    }
+
+    if input_type == "radio" {
+        if required {
+            let name = element.get_attribute("name").unwrap_or("");
+            let any_checked = if name.is_empty() {
+                element.has_attribute("checked")
+            } else {
+                let scope = enclosing_form(document, node_id).unwrap_or_else(|| document.root());
+                document.descendants(scope).any(|cand| {
+                    document
+                        .try_node(cand)
+                        .and_then(|n| n.as_element())
+                        .is_some_and(|el| {
+                            el.local_name == "input"
+                                && el
+                                    .get_attribute("type")
+                                    .is_some_and(|t| t.eq_ignore_ascii_case("radio"))
+                                && el.get_attribute("name") == Some(name)
+                                && el.has_attribute("checked")
+                        })
+                })
+            };
+            flags.value_missing = !any_checked;
+        }
+        return (flags, None);
+    }
+
+    let value = control_text_value(document, node_id, element);
+    flags.value_missing = required && value.is_empty();
+
+    if value.is_empty() || element.has_attribute("readonly") {
+        return (flags, None);
+    }
+
+    match input_type.as_str() {
+        "email" => {
+            if !is_valid_email_value(&value, element.has_attribute("multiple")) {
+                flags.type_mismatch = true;
+            }
+        }
+        "url" => {
+            if !is_valid_url_value(&value) {
+                flags.type_mismatch = true;
+            }
+        }
+        "number" | "range" => {
+            if let Ok(num) = value.trim().parse::<f64>()
+                && num.is_finite()
+            {
+                if let Some(min_val) = element
+                    .get_attribute("min")
+                    .and_then(|s| s.trim().parse::<f64>().ok())
+                    .filter(|n| n.is_finite())
+                    && num < min_val
+                {
+                    flags.range_underflow = true;
+                }
+                if let Some(max_val) = element
+                    .get_attribute("max")
+                    .and_then(|s| s.trim().parse::<f64>().ok())
+                    .filter(|n| n.is_finite())
+                    && num > max_val
+                {
+                    flags.range_overflow = true;
+                }
+            }
+        }
+        _ => {}
+    }
+
+    if matches!(
+        input_type.as_str(),
+        "text" | "search" | "url" | "tel" | "email" | "password"
+    ) {
+        let len = value.encode_utf16().count();
+        if let Some(min_len) = element
+            .get_attribute("minlength")
+            .and_then(|s| s.parse::<usize>().ok())
+            && len < min_len
+        {
+            flags.too_short = true;
+        }
+        if let Some(max_len) = element
+            .get_attribute("maxlength")
+            .and_then(|s| s.parse::<usize>().ok())
+            && len > max_len
+        {
+            flags.too_long = true;
+        }
+    }
+
+    let pattern_check = if matches!(
+        input_type.as_str(),
+        "text" | "search" | "url" | "tel" | "email" | "password"
+    ) {
+        element
+            .get_attribute("pattern")
+            .map(|pat| (pat.to_string(), value))
+    } else {
+        None
+    };
+
+    (flags, pattern_check)
 }
 
-fn validity_flags(node_id: NodeId) -> ValidityFlags {
-    with_host(|host| {
+fn test_pattern_in_context(pattern: &str, value: &str, context: &mut Context) -> bool {
+    let Ok(func_val) = context
+        .global_object()
+        .get(js_string!("__megi_test_pattern"), context)
+    else {
+        return true;
+    };
+    let Some(func) = func_val.as_callable() else {
+        return true;
+    };
+    func.call(
+        &JsValue::undefined(),
+        &[
+            JsValue::from(js_string!(pattern)),
+            JsValue::from(js_string!(value)),
+        ],
+        context,
+    )
+    .map(|v| v.to_boolean())
+    .unwrap_or(true)
+}
+
+fn validity_flags(node_id: NodeId, context: &mut Context) -> ValidityFlags {
+    let computed = with_host(|host| {
         let document = &host.document;
         let element = document
             .try_node(node_id)
             .and_then(|node| node.as_element())?;
         Some(validity_flags_element(document, node_id, element))
     })
-    .flatten()
-    .unwrap_or_default()
+    .flatten();
+    let Some((mut flags, pattern_check)) = computed else {
+        return ValidityFlags::default();
+    };
+    if let Some((pattern, value)) = pattern_check
+        && !test_pattern_in_context(&pattern, &value, context)
+    {
+        flags.pattern_mismatch = true;
+    }
+    flags
+}
+
+fn validate_control_and_fire_invalid(
+    node_id: NodeId,
+    wrapper: &JsValue,
+    context: &mut Context,
+) -> JsResult<bool> {
+    let flags = validity_flags(node_id, context);
+    if flags.is_valid() {
+        Ok(true)
+    } else {
+        let _ = crate::events::dispatch_event_type(wrapper, "invalid", false, true, context)?;
+        Ok(false)
+    }
+}
+
+fn form_descendant_controls(document: &dom::Document, form_id: NodeId) -> Vec<NodeId> {
+    document
+        .descendants(form_id)
+        .filter(|child| {
+            document
+                .try_node(*child)
+                .and_then(|node| node.as_element())
+                .is_some_and(|el| matches!(el.local_name.as_str(), "input" | "textarea" | "select"))
+        })
+        .collect()
+}
+
+fn validate_node_or_form(this: &JsValue, node_id: NodeId, context: &mut Context) -> JsResult<bool> {
+    let is_form = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|n| n.as_element())
+            .is_some_and(|el| el.local_name == "form")
+    })
+    .unwrap_or(false);
+    if !is_form {
+        return validate_control_and_fire_invalid(node_id, this, context);
+    }
+    let controls =
+        with_host(|host| form_descendant_controls(&host.document, node_id)).unwrap_or_default();
+    let mut all_valid = true;
+    for control_id in controls {
+        let wrapper = wrap_node(context, control_id)?;
+        if !validate_control_and_fire_invalid(control_id, &wrapper, context)? {
+            all_valid = false;
+        }
+    }
+    Ok(all_valid)
 }
 
 fn node_check_validity(
@@ -2149,8 +2582,18 @@ fn node_check_validity(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let flags = validity_flags(node_id);
-    Ok(JsValue::from(!(flags.value_missing || flags.custom_error)))
+    let valid = validate_node_or_form(this, node_id, context)?;
+    Ok(JsValue::from(valid))
+}
+
+fn node_report_validity(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let valid = validate_node_or_form(this, node_id, context)?;
+    Ok(JsValue::from(valid))
 }
 
 fn node_set_custom_validity(
@@ -2188,19 +2631,19 @@ fn node_validity_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let flags = validity_flags(node_id);
-    let valid = !(flags.value_missing || flags.custom_error);
+    let flags = validity_flags(node_id, context);
+    let valid = flags.is_valid();
     let object = ObjectInitializer::new(context).build();
     for (name, value) in [
         ("valid", valid),
         ("valueMissing", flags.value_missing),
         ("customError", flags.custom_error),
-        ("patternMismatch", false),
-        ("typeMismatch", false),
-        ("tooShort", false),
-        ("tooLong", false),
-        ("rangeUnderflow", false),
-        ("rangeOverflow", false),
+        ("patternMismatch", flags.pattern_mismatch),
+        ("typeMismatch", flags.type_mismatch),
+        ("tooShort", flags.too_short),
+        ("tooLong", flags.too_long),
+        ("rangeUnderflow", flags.range_underflow),
+        ("rangeOverflow", flags.range_overflow),
         ("stepMismatch", false),
         ("badInput", false),
     ] {
@@ -2211,38 +2654,159 @@ fn node_validity_get(
 
 fn node_request_submit(
     this: &JsValue,
-    _args: &[JsValue],
+    args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    // `requestSubmit()` runs constraint validation first and does not fire `submit` if invalid
-    // (#1505). Validate every form control in document order.
+    // `requestSubmit(submitter?)` runs constraint validation unless suppressed by `novalidate`
+    // or submitter `formnovalidate`, and fires `submit` if valid (#1505, #1538).
     let node_id = this_node(this, context)?;
-    let invalid = with_host(|host| {
+    let submitter_arg = args.first().cloned().unwrap_or_else(JsValue::undefined);
+    let submitter_id = if !submitter_arg.is_undefined() && !submitter_arg.is_null() {
+        Some(this_node(&submitter_arg, context)?)
+    } else {
+        None
+    };
+    let skip_validation = with_host(|host| {
         let document = &host.document;
-        document
-            .descendants(node_id)
-            .filter_map(|child| {
-                document
-                    .try_node(child)
-                    .and_then(|node| node.as_element().map(|element| (child, element)))
-            })
-            .any(|(child_id, element)| {
-                matches!(element.local_name.as_str(), "input" | "textarea" | "select")
-                    && validity_flags_element(document, child_id, element).value_missing
-            })
+        let form_novalidate = document
+            .try_node(node_id)
+            .and_then(|n| n.as_element())
+            .is_some_and(|el| el.has_attribute("novalidate"));
+        let submitter_novalidate = submitter_id.is_some_and(|id| {
+            document
+                .try_node(id)
+                .and_then(|n| n.as_element())
+                .is_some_and(|el| el.has_attribute("formnovalidate"))
+        });
+        form_novalidate || submitter_novalidate
     })
     .unwrap_or(false);
-    if invalid {
+
+    if !skip_validation && !validate_node_or_form(this, node_id, context)? {
         return Ok(JsValue::from(false));
     }
-    let dispatched = crate::events::dispatch_event_type(this, "submit", true, true, context)?;
+    let submitter = if submitter_id.is_some() {
+        submitter_arg
+    } else {
+        JsValue::null()
+    };
+    let dispatched = crate::events::dispatch_submit_event(this, submitter, context)?;
     Ok(JsValue::from(dispatched))
 }
 
 fn node_submit(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     // `form.submit()` bypasses constraint validation (#1505).
-    let dispatched = crate::events::dispatch_event_type(this, "submit", true, true, context)?;
+    let dispatched = crate::events::dispatch_submit_event(this, JsValue::null(), context)?;
     Ok(JsValue::from(dispatched))
+}
+
+fn node_reset(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let is_form = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|n| n.as_element())
+            .is_some_and(|el| el.local_name == "form")
+    })
+    .unwrap_or(false);
+    if !is_form {
+        return Ok(JsValue::undefined());
+    }
+    let dispatched = crate::events::dispatch_event_type(this, "reset", true, true, context)?;
+    if !dispatched {
+        return Ok(JsValue::undefined());
+    }
+    with_host(|host| {
+        let descendants: Vec<NodeId> = host.document.descendants(node_id).collect();
+        for child_id in descendants {
+            let tag = host
+                .document
+                .try_node(child_id)
+                .and_then(|n| n.as_element())
+                .map(|el| el.local_name.clone());
+            let Some(tag) = tag else { continue };
+            match tag.as_str() {
+                "input" => {
+                    if let Some(orig) = host.initial_control_values.remove(&child_id)
+                        && let Some(el) = host
+                            .document
+                            .try_node_mut(child_id)
+                            .and_then(|n| n.as_element_mut())
+                    {
+                        match orig {
+                            Some(v) => {
+                                el.set_attribute(DomAttribute::new("value", v), true);
+                            }
+                            None => {
+                                el.remove_attribute("value");
+                            }
+                        }
+                    }
+                    if let Some(orig_checked) = host.initial_control_checked.remove(&child_id)
+                        && let Some(el) = host
+                            .document
+                            .try_node_mut(child_id)
+                            .and_then(|n| n.as_element_mut())
+                    {
+                        if orig_checked {
+                            el.set_attribute(DomAttribute::new("checked", ""), true);
+                        } else {
+                            el.remove_attribute("checked");
+                        }
+                    }
+                    if let Some(el) = host
+                        .document
+                        .try_node_mut(child_id)
+                        .and_then(|n| n.as_element_mut())
+                    {
+                        el.attributes
+                            .retain(|attr| attr.local_name != "data-megi-validity-error");
+                    }
+                }
+                "textarea" => {
+                    if let Some(orig) = host.initial_control_values.remove(&child_id) {
+                        let _ = host
+                            .document
+                            .set_text_content(child_id, &orig.unwrap_or_default());
+                    }
+                    if let Some(el) = host
+                        .document
+                        .try_node_mut(child_id)
+                        .and_then(|n| n.as_element_mut())
+                    {
+                        el.attributes
+                            .retain(|attr| attr.local_name != "data-megi-validity-error");
+                    }
+                }
+                "option" => {
+                    if let Some(orig_selected) = host.initial_control_checked.remove(&child_id)
+                        && let Some(el) = host
+                            .document
+                            .try_node_mut(child_id)
+                            .and_then(|n| n.as_element_mut())
+                    {
+                        if orig_selected {
+                            el.set_attribute(DomAttribute::new("selected", ""), true);
+                        } else {
+                            el.remove_attribute("selected");
+                        }
+                    }
+                }
+                "select" => {
+                    if let Some(el) = host
+                        .document
+                        .try_node_mut(child_id)
+                        .and_then(|n| n.as_element_mut())
+                    {
+                        el.attributes
+                            .retain(|attr| attr.local_name != "data-megi-validity-error");
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
+    Ok(JsValue::undefined())
 }
 
 /// Sets/clears the `open` attribute on a dialog element (#1546).
@@ -2352,19 +2916,68 @@ fn node_value_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
     let node_id = this_node(this, context)?;
     let value = arg_string(args, 0, context)?;
     let result = with_host(|host| {
-        let document = &mut host.document;
-        let tag = document
+        let tag = host
+            .document
             .try_node(node_id)
             .and_then(|node| node.as_element())
             .map(|element| element.local_name.clone())
             .ok_or_else(|| "node is not an element".to_string())?;
         if tag == "textarea" {
-            document
+            if !host.initial_control_values.contains_key(&node_id) {
+                let initial = host.document.text_content(node_id);
+                host.initial_control_values.insert(node_id, Some(initial));
+            }
+            host.document
                 .set_text_content(node_id, &value)
                 .map_err(|error| error.to_string())?;
             return Ok::<(), String>(());
         }
-        let element = document
+        if tag == "select" {
+            let options = option_ids(&host.document, node_id);
+            for option_id in options {
+                let opt_val = host
+                    .document
+                    .try_node(option_id)
+                    .and_then(|n| n.as_element())
+                    .map(|el| {
+                        el.get_attribute("value")
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| host.document.text_content(option_id))
+                    })
+                    .unwrap_or_default();
+                let matches = opt_val == value;
+                if !host.initial_control_checked.contains_key(&option_id) {
+                    let was_selected = host
+                        .document
+                        .try_node(option_id)
+                        .and_then(|n| n.as_element())
+                        .is_some_and(|el| el.get_attribute("selected").is_some());
+                    host.initial_control_checked.insert(option_id, was_selected);
+                }
+                if let Some(el) = host
+                    .document
+                    .try_node_mut(option_id)
+                    .and_then(|n| n.as_element_mut())
+                {
+                    if matches {
+                        el.set_attribute(DomAttribute::new("selected", ""), true);
+                    } else {
+                        el.remove_attribute("selected");
+                    }
+                }
+            }
+            return Ok(());
+        }
+        if !host.initial_control_values.contains_key(&node_id) {
+            let initial = host
+                .document
+                .try_node(node_id)
+                .and_then(|node| node.as_element())
+                .and_then(|el| el.get_attribute("value").map(str::to_owned));
+            host.initial_control_values.insert(node_id, initial);
+        }
+        let element = host
+            .document
             .try_node_mut(node_id)
             .and_then(|node| node.as_element_mut())
             .ok_or_else(|| "node is not an element".to_string())?;
@@ -2431,6 +3044,17 @@ fn node_checked_get(this: &JsValue, _args: &[JsValue], context: &mut Context) ->
 }
 
 fn node_checked_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    with_host(|host| {
+        if !host.initial_control_checked.contains_key(&node_id) {
+            let initial = host
+                .document
+                .try_node(node_id)
+                .and_then(|n| n.as_element())
+                .is_some_and(|el| el.get_attribute("checked").is_some());
+            host.initial_control_checked.insert(node_id, initial);
+        }
+    });
     boolean_attribute_set(this, "checked", args, context)
 }
 
@@ -2455,6 +3079,17 @@ fn node_selected_get(
 }
 
 fn node_selected_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    with_host(|host| {
+        if !host.initial_control_checked.contains_key(&node_id) {
+            let initial = host
+                .document
+                .try_node(node_id)
+                .and_then(|n| n.as_element())
+                .is_some_and(|el| el.get_attribute("selected").is_some());
+            host.initial_control_checked.insert(node_id, initial);
+        }
+    });
     boolean_attribute_set(this, "selected", args, context)
 }
 
@@ -6191,6 +6826,200 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     }
     return s;
   }
+  define("__megi_test_pattern", function (pattern, value) {
+    var re;
+    try { re = new RegExp("^(?:" + pattern + ")$", "u"); }
+    catch (_e1) {
+      try { re = new RegExp("^(?:" + pattern + ")$"); }
+      catch (_e2) { return true; }
+    }
+    return re.test(value);
+  });
+  function formControlDisabled(el, form) {
+    if (el.disabled || (el.hasAttribute && el.hasAttribute("disabled"))) { return true; }
+    var cur = el.parentNode;
+    var child = el;
+    while (cur && cur !== form) {
+      if (cur.tagName && cur.tagName.toUpperCase() === "FIELDSET" && (cur.disabled || (cur.hasAttribute && cur.hasAttribute("disabled")))) {
+        var firstLegend = null;
+        var fsChildren = cur.children || [];
+        for (var i = 0; i < fsChildren.length; i++) {
+          if (fsChildren[i].tagName && fsChildren[i].tagName.toUpperCase() === "LEGEND") { firstLegend = fsChildren[i]; break; }
+        }
+        if (child !== firstLegend) { return true; }
+      }
+      child = cur;
+      cur = cur.parentNode;
+    }
+    return false;
+  }
+  function collectFormControls(root, form, list) {
+    var kids = root.children || [];
+    for (var i = 0; i < kids.length; i++) {
+      var el = kids[i];
+      if (!el || !el.tagName) { continue; }
+      var tag = el.tagName.toUpperCase();
+      if (tag === "DATALIST") { continue; }
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") {
+        list.push(el);
+      }
+      collectFormControls(el, form, list);
+    }
+  }
+  function FormData(form, submitter) {
+    this._list = [];
+    this._boundary = "----megiFormBoundary7f3e9a2c";
+    if (form !== undefined && form !== null) {
+      if (!form.tagName || form.tagName.toUpperCase() !== "FORM") {
+        throw new TypeError("Failed to construct 'FormData': parameter 1 is not of type 'HTMLFormElement'");
+      }
+      var controls = [];
+      collectFormControls(form, form, controls);
+      for (var i = 0; i < controls.length; i++) {
+        var el = controls[i];
+        if (formControlDisabled(el, form)) { continue; }
+        var tag = el.tagName.toUpperCase();
+        var name = el.getAttribute ? el.getAttribute("name") : null;
+        if (!name) { continue; }
+        if (tag === "BUTTON") {
+          var btnType = (el.getAttribute("type") || "submit").toLowerCase();
+          if (el === submitter && btnType !== "reset" && btnType !== "button") {
+            this._list.push([name, String(el.value || "")]);
+          }
+          continue;
+        }
+        if (tag === "INPUT") {
+          var type = (el.getAttribute("type") || "text").toLowerCase();
+          if (type === "submit" || type === "reset" || type === "button" || type === "image") {
+            if (el === submitter && type !== "reset" && type !== "button") {
+              this._list.push([name, String(el.value || "")]);
+            }
+            continue;
+          }
+          if (type === "checkbox" || type === "radio") {
+            if (!el.checked) { continue; }
+            var rawVal = el.getAttribute("value");
+            this._list.push([name, rawVal === null ? "on" : String(rawVal)]);
+            continue;
+          }
+          if (type === "file") { continue; }
+          this._list.push([name, String(el.value || "")]);
+          continue;
+        }
+        if (tag === "TEXTAREA") {
+          this._list.push([name, String(el.value || "")]);
+          continue;
+        }
+        if (tag === "SELECT") {
+          var multiple = el.hasAttribute && el.hasAttribute("multiple");
+          var opts = el.options || [];
+          if (multiple) {
+            for (var j = 0; j < opts.length; j++) {
+              if (opts[j].selected && !opts[j].disabled) {
+                this._list.push([name, String(opts[j].value || "")]);
+              }
+            }
+          } else {
+            var picked = null;
+            for (var j = 0; j < opts.length; j++) {
+              if (opts[j].selected && !opts[j].disabled) { picked = opts[j]; break; }
+            }
+            if (!picked) {
+              for (var j = 0; j < opts.length; j++) {
+                if (!opts[j].disabled) { picked = opts[j]; break; }
+              }
+            }
+            if (picked) {
+              this._list.push([name, String(picked.value || "")]);
+            }
+          }
+        }
+      }
+    }
+  }
+  function makeFormDataIter(list, mapFn) {
+    var idx = 0;
+    var iter = {
+      next: function () {
+        if (idx >= list.length) { return { value: undefined, done: true }; }
+        return { value: mapFn(list[idx++]), done: false };
+      }
+    };
+    if (typeof Symbol === "function" && Symbol.iterator) {
+      iter[Symbol.iterator] = function () { return this; };
+    }
+    return iter;
+  }
+  FormData.prototype.append = function (name, value) {
+    this._list.push([String(name), String(value)]);
+  };
+  FormData.prototype["delete"] = function (name) {
+    var key = String(name);
+    this._list = this._list.filter(function (pair) { return pair[0] !== key; });
+  };
+  FormData.prototype.get = function (name) {
+    var key = String(name);
+    for (var i = 0; i < this._list.length; i++) {
+      if (this._list[i][0] === key) { return this._list[i][1]; }
+    }
+    return null;
+  };
+  FormData.prototype.getAll = function (name) {
+    var key = String(name);
+    var out = [];
+    for (var i = 0; i < this._list.length; i++) {
+      if (this._list[i][0] === key) { out.push(this._list[i][1]); }
+    }
+    return out;
+  };
+  FormData.prototype.has = function (name) { return this.get(name) !== null; };
+  FormData.prototype.set = function (name, value) {
+    var key = String(name);
+    var val = String(value);
+    var found = false;
+    var out = [];
+    for (var i = 0; i < this._list.length; i++) {
+      if (this._list[i][0] === key) {
+        if (!found) { out.push([key, val]); found = true; }
+      } else {
+        out.push(this._list[i]);
+      }
+    }
+    if (!found) { out.push([key, val]); }
+    this._list = out;
+  };
+  FormData.prototype.keys = function () {
+    return makeFormDataIter(this._list, function (pair) { return pair[0]; });
+  };
+  FormData.prototype.values = function () {
+    return makeFormDataIter(this._list, function (pair) { return pair[1]; });
+  };
+  FormData.prototype.entries = function () {
+    return makeFormDataIter(this._list, function (pair) { return [pair[0], pair[1]]; });
+  };
+  FormData.prototype.forEach = function (callback, thisArg) {
+    for (var i = 0; i < this._list.length; i++) {
+      callback.call(thisArg, this._list[i][1], this._list[i][0], this);
+    }
+  };
+  if (typeof Symbol === "function" && Symbol.iterator) {
+    FormData.prototype[Symbol.iterator] = FormData.prototype.entries;
+  }
+  FormData.prototype._toMultipart = function () {
+    var b = this._boundary;
+    var out = "";
+    for (var i = 0; i < this._list.length; i++) {
+      var escapedName = this._list[i][0].replace(/[\r\n"]/g, function (c) {
+        return c === '"' ? "%22" : (c === "\r" ? "%0D" : "%0A");
+      });
+      out += "--" + b + "\r\n";
+      out += 'Content-Disposition: form-data; name="' + escapedName + '"\r\n\r\n';
+      out += this._list[i][1] + "\r\n";
+    }
+    out += "--" + b + "--\r\n";
+    return out;
+  };
+  define("FormData", FormData);
   function Request(input, init) {
     init = init || {};
     if (input && typeof input === "object" && typeof input.url === "string") {
@@ -6209,6 +7038,19 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       if (this.body !== null && (this.method === "GET" || this.method === "HEAD")) { throw new TypeError("Request with GET/HEAD method cannot have body"); }
       this.signal = init.signal || null;
       this.redirect = normalizeRedirect(init.redirect);
+    }
+    if (this.body !== null && typeof this.body === "object") {
+      if (this.body instanceof FormData) {
+        if (!this.headers.has("Content-Type")) {
+          this.headers.set("Content-Type", "multipart/form-data; boundary=" + this.body._boundary);
+        }
+        this.body = this.body._toMultipart();
+      } else if (this.body instanceof SearchParams) {
+        if (!this.headers.has("Content-Type")) {
+          this.headers.set("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
+        }
+        this.body = this.body.toString();
+      }
     }
   }
   define("Request", Request);
@@ -7645,6 +8487,103 @@ fn node_src_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsResult<JsVa
     string_attribute_set(this, "src", a, c)
 }
 
+fn node_action_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, c)?;
+    let value = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute("action").map(str::to_owned))
+    })
+    .flatten()
+    .unwrap_or_default();
+    Ok(JsValue::from(js_string!(value)))
+}
+fn node_action_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    string_attribute_set(this, "action", a, c)
+}
+
+fn node_method_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, c)?;
+    let method = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute("method"))
+            .map(|value| {
+                if value.eq_ignore_ascii_case("post") {
+                    "post"
+                } else if value.eq_ignore_ascii_case("dialog") {
+                    "dialog"
+                } else {
+                    "get"
+                }
+            })
+            .unwrap_or("get")
+    })
+    .unwrap_or("get");
+    Ok(JsValue::from(js_string!(method)))
+}
+fn node_method_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    string_attribute_set(this, "method", a, c)
+}
+
+fn node_enctype_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, c)?;
+    let enctype = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute("enctype"))
+            .map(|value| {
+                if value.eq_ignore_ascii_case("multipart/form-data") {
+                    "multipart/form-data"
+                } else if value.eq_ignore_ascii_case("text/plain") {
+                    "text/plain"
+                } else {
+                    "application/x-www-form-urlencoded"
+                }
+            })
+            .unwrap_or("application/x-www-form-urlencoded")
+    })
+    .unwrap_or("application/x-www-form-urlencoded");
+    Ok(JsValue::from(js_string!(enctype)))
+}
+fn node_enctype_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    string_attribute_set(this, "enctype", a, c)
+}
+
+fn node_no_validate_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    boolean_attribute_get(this, "novalidate", c)
+}
+fn node_no_validate_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    boolean_attribute_set(this, "novalidate", a, c)
+}
+
+fn node_elements_get(this: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let controls: Vec<NodeId> = with_host(|host| {
+        let document = &host.document;
+        document
+            .descendants(node_id)
+            .filter(|child| {
+                document
+                    .try_node(*child)
+                    .and_then(|node| node.as_element())
+                    .is_some_and(|el| match el.local_name.as_str() {
+                        "button" | "fieldset" | "select" | "textarea" => true,
+                        "input" => !el
+                            .get_attribute("type")
+                            .is_some_and(|t| t.eq_ignore_ascii_case("image")),
+                        _ => false,
+                    })
+            })
+            .collect()
+    })
+    .unwrap_or_default();
+    node_list(context, controls)
+}
+
 fn option_ids(document: &dom::Document, select: NodeId) -> Vec<NodeId> {
     document
         .descendants(select)
@@ -7692,6 +8631,14 @@ fn node_selected_index_set(
     with_host(|host| {
         let options = option_ids(&host.document, node_id);
         for (position, option) in options.iter().enumerate() {
+            if !host.initial_control_checked.contains_key(option) {
+                let was_selected = host
+                    .document
+                    .try_node(*option)
+                    .and_then(|n| n.as_element())
+                    .is_some_and(|el| el.get_attribute("selected").is_some());
+                host.initial_control_checked.insert(*option, was_selected);
+            }
             if let Some(element) = host
                 .document
                 .try_node_mut(*option)

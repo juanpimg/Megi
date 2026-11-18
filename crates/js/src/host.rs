@@ -443,6 +443,10 @@ pub(crate) struct Host {
     pub module_loader: Option<ModuleLoader>,
     /// Installed import map (resolution happens before the host resolver).
     pub import_map: Option<crate::import_map::ImportMap>,
+    /// Pre-mutation `value` attribute (or textarea text) for form controls, used by `form.reset()`.
+    pub initial_control_values: HashMap<NodeId, Option<String>>,
+    /// Pre-mutation `checked` / `selected` state for form controls/options, used by `form.reset()`.
+    pub initial_control_checked: HashMap<NodeId, bool>,
 }
 
 impl Host {
@@ -500,6 +504,8 @@ impl Host {
             module_resolver: None,
             module_loader: None,
             import_map: None,
+            initial_control_values: HashMap::new(),
+            initial_control_checked: HashMap::new(),
         }
     }
 
