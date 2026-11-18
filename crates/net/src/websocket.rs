@@ -72,13 +72,9 @@ impl WebSocketClient {
         key_bytes[8..].copy_from_slice(&seed.swap_bytes().to_le_bytes());
         let key = handshake_key(key_bytes);
 
-        let path = if url.path().is_empty() {
-            "/"
-        } else {
-            url.path()
-        };
+        let target = url.request_target();
         let request = format!(
-            "GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\n\
+            "GET {target} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\n\
              Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n"
         );
         stream
