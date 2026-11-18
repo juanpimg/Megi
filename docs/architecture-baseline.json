@@ -6,7 +6,7 @@
     "crates/js/src/runtime.rs": 11028,
     "crates/css/src/properties.rs": 6029,
     "crates/html/src/tree_builder.rs": 5036,
-    "crates/core/src/lib.rs": 4011,
+    "crates/core/src/lib.rs": 1755,
     "crates/html/src/tokenizer.rs": 3602,
     "crates/browser/src/window.rs": 3200,
     "crates/browser/src/chrome.rs": 3187,
@@ -78,7 +78,9 @@
     "crates/test_harness/src/main.rs": 513,
     "crates/raster/src/rasterizer.rs": 4454,
     "crates/raster/src/png.rs": 710,
-    "crates/raster/src/deflate.rs": 558
+    "crates/raster/src/deflate.rs": 558,
+    "crates/core/src/query.rs": 857,
+    "crates/core/src/tests.rs": 1331
   },
   "forbidden_patterns": {
     "crates/js/src/host.rs:490": "pub(crate) type FrameOutbox = Rc<RefCell<VecDeque<(String, String, String)>>>;",
@@ -106,7 +108,8 @@
     "crates/js/src/runtime.rs:9347": "fn new(runtime: JsRuntime, outbox: Rc<RefCell<VecDeque<String>>>) -> Self {",
     "crates/js/src/runtime.rs:9891": "host: Rc<RefCell<Option<Rc<RefCell<Host>>>>>,",
     "crates/js/src/runtime.rs:9899": "self: Rc<Self>,",
-    "crates/js/src/runtime.rs:10012": "self: Rc<Self>,"
+    "crates/js/src/runtime.rs:10012": "self: Rc<Self>,",
+    "crates/js/src/host.rs:1190": "Rc<RefCell<Host>> in ignored Task 4.1 RED test"
   },
   "edges": {
     "core": [],
