@@ -416,9 +416,10 @@ impl Document {
             &pattern_ids,
             &mut selector_budget,
         )?;
+        // #1659: the root must accept percentage opacity like every other element.
         let root_opacity = root
             .attribute("opacity")
-            .and_then(|v| v.parse::<f32>().ok())
+            .and_then(parse_opacity)
             .unwrap_or(1.0);
         let root_transform = Transform::IDENTITY;
         let mut ancestors: Vec<&XmlElement> = vec![root];
@@ -612,7 +613,12 @@ impl Style {
             "display" => self.display = !value.trim().eq_ignore_ascii_case("none"),
             "visibility" => {
                 let value = value.trim().to_ascii_lowercase();
-                self.visibility = value == "visible";
+                // #1657: `inherit` keeps the parent's value (the child style was cloned from it).
+                match value.as_str() {
+                    "inherit" => {}
+                    "visible" => self.visibility = true,
+                    _ => self.visibility = false, // hidden | collapse
+                }
             }
             "fill" => self.fill = parse_paint(value, gradients, patterns),
             "stroke" => self.stroke = parse_paint(value, gradients, patterns),
@@ -2809,12 +2815,14 @@ fn build_patterns(
     Ok(specs)
 }
 
-/// First numeric value of an SVG list attribute (e.g. `x="10 20"` → 10).
+/// First numeric value of an SVG list attribute (e.g. `x="10 20"` → 10). Accepts the same
+/// `<length>` units as other SVG attributes (#1658): bare numbers default to px, and
+/// `10px`/`2px` must not collapse to 0.
 fn first_number(raw: Option<&str>) -> f32 {
     raw.and_then(|value| {
         value
             .split([',', ' ', '\t', '\n'])
-            .find_map(|part| part.trim().parse::<f32>().ok())
+            .find_map(|part| parse_length(Some(part.trim()), 1.0))
     })
     .filter(|value| value.is_finite())
     .unwrap_or(0.0)

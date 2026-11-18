@@ -1,11 +1,12 @@
-//! WebSocket framing (RFC 6455, #1534): pure encode/decode of frames plus the HTTP upgrade
-//! handshake helpers. This module performs no I/O — the host owns the socket — so it is fully
-//! deterministic and unit-testable. The JS `WebSocket` class is layered over a host provider
-//! that uses these primitives.
+//! WebSocket (RFC 6455, #1534): pure frame encode/decode plus a client that owns the byte-stream
+//! transport (plain TCP for `ws://`, rustls for `wss://`) and performs the HTTP upgrade handshake.
+//! The frame codec itself is pure and unit-testable; the JS `WebSocket` class is layered over a
+//! host provider that drives the client from a pump thread.
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use crate::error::FetchError;
@@ -15,26 +16,109 @@ use crate::url::{Scheme, Url};
 /// Default maximum payload accepted for a single WebSocket message.
 pub const DEFAULT_MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
 
-/// An open WebSocket connection (client side). Owns the TCP stream and performs RFC 6455
-/// framing; the host drives `recv` from its event loop. Only plaintext `ws://` is wired here —
-/// `wss://` requires a TLS stream and is rejected with a typed error rather than silently
-/// downgrading (fail closed).
+/// Byte-stream transport for one WebSocket connection: plain TCP (`ws://`) or a rustls session
+/// (`wss://`). Implements `Read`/`Write` so the framing code is transport-agnostic.
+#[derive(Debug)]
+enum WsTransport {
+    Plain(TcpStream),
+    #[cfg(feature = "tls")]
+    Tls(Box<rustls::StreamOwned<rustls::ClientConnection, TcpStream>>),
+}
+
+impl Read for WsTransport {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Plain(stream) => stream.read(buffer),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.read(buffer),
+        }
+    }
+}
+
+impl Write for WsTransport {
+    fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Plain(stream) => stream.write(buffer),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.write(buffer),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Self::Plain(stream) => stream.flush(),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.flush(),
+        }
+    }
+}
+
+impl WsTransport {
+    fn set_read_timeout(&self, timeout: Duration) -> std::io::Result<()> {
+        match self {
+            Self::Plain(stream) => stream.set_read_timeout(Some(timeout)),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.sock.set_read_timeout(Some(timeout)),
+        }
+    }
+
+    fn set_write_timeout(&self, timeout: Duration) -> std::io::Result<()> {
+        match self {
+            Self::Plain(stream) => stream.set_write_timeout(Some(timeout)),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.sock.set_write_timeout(Some(timeout)),
+        }
+    }
+}
+
+/// Builds the default rustls client config (webpki-roots trust anchors) for `wss://`, mirroring
+/// the HTTP client's configuration.
+#[cfg(feature = "tls")]
+fn default_wss_config() -> Result<Arc<rustls::ClientConfig>, FetchError> {
+    static CACHE: OnceLock<Arc<rustls::ClientConfig>> = OnceLock::new();
+    if let Some(config) = CACHE.get() {
+        return Ok(Arc::clone(config));
+    }
+    let mut roots = rustls::RootCertStore::empty();
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let config = Arc::new(
+        rustls::ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .map_err(|error| FetchError::Tls(error.to_string()))?
+            .with_root_certificates(roots)
+            .with_no_client_auth(),
+    );
+    let _ = CACHE.set(Arc::clone(&config));
+    Ok(config)
+}
+
+/// An open WebSocket connection (client side). Owns the byte-stream transport and performs
+/// RFC 6455 framing; the host drives `recv` from its event loop. Both `ws://` and `wss://`
+/// (TLS) are supported; a failed TLS handshake is a typed error, never a plaintext downgrade.
 pub struct WebSocketClient {
-    stream: TcpStream,
+    stream: WsTransport,
     max_message: usize,
 }
 
 impl WebSocketClient {
     /// Performs the HTTP Upgrade handshake and returns an open client.
     pub fn connect(url: &Url, options: &FetchOptions) -> Result<Self, FetchError> {
-        if url.scheme() != Scheme::Http {
-            return Err(FetchError::UnsupportedScheme(format!(
-                "{} (expected ws)",
-                url.scheme().as_str()
-            )));
-        }
+        let secure = match url.scheme() {
+            Scheme::Http => false,
+            #[cfg(feature = "tls")]
+            Scheme::Https => true,
+            other => {
+                return Err(FetchError::UnsupportedScheme(format!(
+                    "{} (expected ws/wss)",
+                    other.as_str()
+                )));
+            }
+        };
         let host = url.host();
-        let port = url.port_or_default().unwrap_or(80);
+        let port = url
+            .port_or_default()
+            .unwrap_or(if secure { 443 } else { 80 });
         let addresses: Vec<SocketAddr> = (host, port)
             .to_socket_addrs()
             .map_err(|error| FetchError::Dns(format!("{host}: {error}")))?
@@ -50,16 +134,52 @@ impl WebSocketClient {
                 Err(error) => last_error = Some(error),
             }
         }
-        let mut stream = stream.ok_or_else(|| {
+        let mut tcp = stream.ok_or_else(|| {
             FetchError::Connect(last_error.unwrap_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "no address")
             }))
         })?;
+        #[allow(unused_mut)]
+        let mut stream: WsTransport = if secure {
+            #[cfg(feature = "tls")]
+            {
+                // `wss://`: TLS with SNI, certificate validation against webpki-roots (or the
+                // caller's injected config), exactly like the HTTP client. Never downgrade.
+                let config = match &options.tls_config {
+                    Some(config) => Arc::clone(config),
+                    None => default_wss_config()?,
+                };
+                let server_name = rustls::pki_types::ServerName::try_from(host.to_owned())
+                    .map_err(|error| {
+                        FetchError::Tls(format!("invalid server name `{host}`: {error}"))
+                    })?
+                    .to_owned();
+                let mut connection =
+                    rustls::ClientConnection::new(config, server_name).map_err(|error| {
+                        FetchError::Tls(format!("cannot create TLS client: {error}"))
+                    })?;
+                // Complete the handshake eagerly (SNI + certificate validation) before the WS
+                // upgrade; timeouts are configured on the socket below.
+                while connection.is_handshaking() {
+                    connection
+                        .complete_io(&mut tcp)
+                        .map_err(|error| FetchError::Tls(error.to_string()))?;
+                }
+                WsTransport::Tls(Box::new(rustls::StreamOwned::new(connection, tcp)))
+            }
+            #[cfg(not(feature = "tls"))]
+            {
+                let _ = tcp;
+                return Err(FetchError::TlsUnsupported);
+            }
+        } else {
+            WsTransport::Plain(tcp)
+        };
         stream
-            .set_read_timeout(Some(options.read_timeout))
+            .set_read_timeout(options.read_timeout)
             .map_err(FetchError::Io)?;
         stream
-            .set_write_timeout(Some(options.read_timeout))
+            .set_write_timeout(options.read_timeout)
             .map_err(FetchError::Io)?;
 
         static NONCE: AtomicU64 = AtomicU64::new(0);
@@ -97,27 +217,7 @@ impl WebSocketClient {
             response.extend_from_slice(&buffer[..read]);
         }
         let head = String::from_utf8_lossy(&response);
-        let status_line = head.lines().next().unwrap_or("");
-        if !status_line.contains(" 101") {
-            return Err(protocol(&format!(
-                "unexpected handshake status: {status_line}"
-            )));
-        }
-        let accept = head
-            .lines()
-            .find_map(|line| {
-                line.split_once(':').and_then(|(name, value)| {
-                    if name.trim().eq_ignore_ascii_case("sec-websocket-accept") {
-                        Some(value.trim())
-                    } else {
-                        None
-                    }
-                })
-            })
-            .ok_or_else(|| protocol("missing Sec-WebSocket-Accept"))?;
-        if accept != accept_value(&key) {
-            return Err(protocol("Sec-WebSocket-Accept mismatch"));
-        }
+        validate_handshake_response(&head, &key)?;
 
         Ok(Self {
             stream,
@@ -129,7 +229,7 @@ impl WebSocketClient {
     /// frames without blocking the JS event loop, while the handshake keeps its original budget.
     pub fn set_read_timeout(&mut self, timeout: Duration) -> Result<(), FetchError> {
         self.stream
-            .set_read_timeout(Some(timeout))
+            .set_read_timeout(timeout)
             .map_err(FetchError::Io)
     }
 
@@ -148,7 +248,7 @@ impl WebSocketClient {
         if payload.len() > self.max_message {
             return Err(protocol("message exceeds cap"));
         }
-        let key = [0x12, 0x34, 0x56, 0x78]; // fixed client mask (RFC 6455 only requires unpredictability)
+        let key = client_mask();
         let frame = Frame {
             fin: true,
             opcode,
@@ -274,6 +374,29 @@ pub mod close_code {
     }
 }
 
+/// Generates an unpredictable 4-byte client masking key (RFC 6455 §5.3).
+///
+/// No extra dependencies: a per-call random [`std::collections::hash_map::RandomState`]
+/// hash over an atomic counter, wall-clock time and process id. Consecutive calls differ
+/// with overwhelming probability (counter + fresh random hash keys).
+pub fn client_mask() -> [u8; 4] {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hash, Hasher};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let mut hasher = RandomState::new().build_hasher();
+    counter.hash(&mut hasher);
+    now.hash(&mut hasher);
+    (std::process::id() as u64).hash(&mut hasher);
+    hasher.finish().to_le_bytes()[..4]
+        .try_into()
+        .expect("u64 yields four bytes")
+}
+
 /// Applies/removes the RFC 6455 masking transform (XOR with the repeating 4-byte key).
 pub fn mask(payload: &mut [u8], key: [u8; 4]) {
     for (index, byte) in payload.iter_mut().enumerate() {
@@ -333,6 +456,10 @@ pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, Fe
                 return Err(protocol("truncated 16-bit length"));
             }
             length = u16::from_be_bytes([bytes[2], bytes[3]]) as u64;
+            // RFC 6455 §5.2: extended length encodings MUST use the shortest form (#1642).
+            if length < 126 {
+                return Err(protocol("non-minimal 16-bit length"));
+            }
             offset = 4;
         }
         127 => {
@@ -342,6 +469,9 @@ pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, Fe
             let mut array = [0u8; 8];
             array.copy_from_slice(&bytes[2..10]);
             length = u64::from_be_bytes(array);
+            if length <= u16::MAX as u64 {
+                return Err(protocol("non-minimal 64-bit length"));
+            }
             offset = 10;
         }
         _ => {}
@@ -387,6 +517,9 @@ fn frame_total_len(bytes: &[u8]) -> Option<usize> {
                 return None;
             }
             length = u16::from_be_bytes([bytes[2], bytes[3]]) as usize;
+            if length < 126 {
+                return None;
+            } // non-minimal encoding (#1642)
             offset = 4;
         }
         127 => {
@@ -395,7 +528,12 @@ fn frame_total_len(bytes: &[u8]) -> Option<usize> {
             }
             let mut array = [0u8; 8];
             array.copy_from_slice(&bytes[2..10]);
-            length = u64::from_be_bytes(array) as usize;
+            let wide = u64::from_be_bytes(array);
+            if wide <= u16::MAX as u64 {
+                return None;
+            } // non-minimal encoding (#1642)
+            // #1643: reject lengths that cannot fit `usize` (e.g. on 32-bit) instead of wrapping.
+            length = usize::try_from(wide).ok()?;
             offset = 10;
         }
         _ => {}
@@ -428,25 +566,94 @@ fn protocol(reason: &str) -> FetchError {
     FetchError::InvalidResponse(format!("websocket: {reason}"))
 }
 
-/// Parses a WebSocket URL, rewriting `ws://` to `http://` so the existing URL parser can handle
-/// it. `wss://` is rejected explicitly (this client has no TLS transport yet — it must never
-/// silently downgrade to plaintext). Any other scheme is a typed error.
-pub fn parse_ws_url(input: &str) -> Result<Url, FetchError> {
-    let input = input.trim();
-    if let Some(rest) = input.strip_prefix("wss://") {
-        return Err(FetchError::UnsupportedScheme(format!(
-            "wss://{rest} (TLS not supported)"
+/// Validates an HTTP upgrade response for `key` (RFC 6455 §4.1).
+///
+/// The status code must be exactly 101 (parsed as the second status-line token, so
+/// `200 OK ( 101 reasons)` is rejected), and the headers must include
+/// `Upgrade: websocket` plus a `Connection` token `Upgrade` (both case-insensitive),
+/// alongside the expected `Sec-WebSocket-Accept` value.
+pub fn validate_handshake_response(head: &str, key: &str) -> Result<(), FetchError> {
+    let mut lines = head.lines();
+    let status_line = lines.next().unwrap_or("");
+    let mut parts = status_line.split_whitespace();
+    let version = parts.next().unwrap_or("");
+    let code = parts.next().unwrap_or("");
+    let valid_status =
+        version.starts_with("HTTP/") && code.parse::<u16>().is_ok_and(|status| status == 101);
+    if !valid_status {
+        return Err(protocol(&format!(
+            "unexpected handshake status: {status_line}"
         )));
     }
-    if let Some(rest) = input.strip_prefix("ws://") {
+    let mut upgrade: Option<String> = None;
+    let mut connection: Option<String> = None;
+    let mut accept: Option<String> = None;
+    for line in lines {
+        if line.trim().is_empty() {
+            break;
+        }
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        if name.trim().eq_ignore_ascii_case("upgrade") {
+            upgrade = Some(value.trim().to_owned());
+        } else if name.trim().eq_ignore_ascii_case("connection") {
+            let entry = connection.get_or_insert_with(String::new);
+            if !entry.is_empty() {
+                entry.push(',');
+            }
+            entry.push_str(value.trim());
+        } else if name.trim().eq_ignore_ascii_case("sec-websocket-accept") {
+            accept = Some(value.trim().to_owned());
+        }
+    }
+    let upgrade_ok = upgrade.is_some_and(|value| value.eq_ignore_ascii_case("websocket"));
+    if !upgrade_ok {
+        return Err(protocol("missing or invalid Upgrade header"));
+    }
+    let connection_ok = connection.is_some_and(|value| {
+        value
+            .split(',')
+            .any(|token| token.trim().eq_ignore_ascii_case("upgrade"))
+    });
+    if !connection_ok {
+        return Err(protocol("missing or invalid Connection header"));
+    }
+    let accept = accept.ok_or_else(|| protocol("missing Sec-WebSocket-Accept"))?;
+    if accept != accept_value(key) {
+        return Err(protocol("Sec-WebSocket-Accept mismatch"));
+    }
+    Ok(())
+}
+
+/// Parses a WebSocket URL, normalizing it to the HTTP(S) URL the handshake is performed against.
+/// `ws://host/path` becomes `http://host/path` and `wss://host/path` becomes `https://host/path`
+/// (same default port handling), which the handshake uses to resolve the endpoint and `Host`
+/// header while still identifying the scheme as WebSocket at the API boundary. `wss://`
+/// handshakes are performed over TLS and are never downgraded to plaintext.
+pub fn parse_ws_url(input: &str) -> Result<Url, FetchError> {
+    // #1641: do not silently trim — whitespace in a pasted URL is a caller error.
+    if input.chars().any(char::is_whitespace) {
+        return Err(FetchError::InvalidResponse(
+            "invalid ws URL: surrounding or embedded whitespace".to_owned(),
+        ));
+    }
+    // #1644: URL schemes are ASCII case-insensitive; the gate in `WebSocket::connect` also
+    // lowercases, so both paths must agree.
+    let lower = input.to_ascii_lowercase();
+    if let Some(rest) = lower.strip_prefix("wss://") {
+        return Url::parse(&format!("https://{rest}"))
+            .map_err(|error| FetchError::InvalidResponse(format!("invalid wss URL: {error}")));
+    }
+    if let Some(rest) = lower.strip_prefix("ws://") {
         return Url::parse(&format!("http://{rest}"))
             .map_err(|error| FetchError::InvalidResponse(format!("invalid ws URL: {error}")));
     }
     let url = Url::parse(input)
         .map_err(|error| FetchError::InvalidResponse(format!("invalid ws URL: {error}")))?;
-    if url.scheme() != Scheme::Http {
+    if url.scheme() != Scheme::Http && url.scheme() != Scheme::Https {
         return Err(FetchError::UnsupportedScheme(format!(
-            "{} (expected ws)",
+            "{} (expected ws/wss)",
             url.scheme().as_str()
         )));
     }
@@ -566,11 +773,164 @@ mod tests {
     }
 
     #[test]
+    fn non_minimal_lengths_are_rejected() {
+        // #1642: RFC 6455 §5.2 requires the shortest length encoding.
+        // 0x7E with a 16-bit value < 126 must be rejected.
+        let short_16 = [0x81u8, 0x7E, 0x00, 0x05, b'h', b'e', b'l', b'l', b'o'];
+        assert!(decode_frame(&short_16, 1024).is_err());
+        // 0x7F with a 64-bit value <= u16::MAX must be rejected.
+        let mut short_64 = vec![0x81u8, 0x7F, 0, 0, 0, 0, 0, 0, 0, 5];
+        short_64.extend_from_slice(b"hello");
+        assert!(decode_frame(&short_64, 1024).is_err());
+        // Minimal encodings still work.
+        let minimal = [0x81u8, 0x05, b'h', b'e', b'l', b'l', b'o'];
+        assert_eq!(
+            decode_frame(&minimal, 1024).expect("valid").frame.payload,
+            b"hello"
+        );
+    }
+
+    #[test]
     fn close_codes_validation() {
         assert!(close_code::is_valid_outgoing(close_code::NORMAL));
         assert!(close_code::is_valid_outgoing(4000));
         assert!(!close_code::is_valid_outgoing(close_code::ABNORMAL));
         assert!(!close_code::is_valid_outgoing(1004));
+    }
+
+    // w2-net-002 + w2-net-d01 (RED): strict handshake status + Upgrade/Connection checks.
+    fn serve_handshake_with(
+        build: impl FnOnce(String) -> String + Send + 'static,
+    ) -> (Url, std::thread::JoinHandle<()>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                .ok();
+            let mut bytes = Vec::new();
+            let mut byte = [0u8; 1];
+            while !bytes.ends_with(b"\r\n\r\n") && bytes.len() < 16 * 1024 {
+                match stream.read(&mut byte) {
+                    Ok(1) => bytes.push(byte[0]),
+                    _ => break,
+                }
+            }
+            let request = String::from_utf8_lossy(&bytes).into_owned();
+            let key = request
+                .lines()
+                .find_map(|line| {
+                    line.split_once(':').and_then(|(name, value)| {
+                        if name.trim().eq_ignore_ascii_case("sec-websocket-key") {
+                            Some(value.trim().to_owned())
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .unwrap_or_default();
+            let response = build(crate::websocket::accept_value(&key));
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+            // Keep the socket briefly so a successful handshake can return.
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        });
+        let url = Url::parse(&format!("http://127.0.0.1:{port}/chat")).expect("url");
+        (url, handle)
+    }
+
+    fn test_options() -> FetchOptions {
+        FetchOptions {
+            connect_timeout: std::time::Duration::from_secs(2),
+            read_timeout: std::time::Duration::from_secs(2),
+            ..FetchOptions::default()
+        }
+    }
+
+    #[test]
+    fn handshake_rejects_200_with_embedded_101() {
+        // `status_line.contains(" 101")` wrongly accepts `200 OK ( 101 reasons)`.
+        let (url, server) = serve_handshake_with(|accept| {
+            format!(
+                "HTTP/1.1 200 OK ( 101 reasons)\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
+            )
+        });
+        let result = WebSocketClient::connect(&url, &test_options());
+        let _ = server.join();
+        assert!(result.is_err(), "200 with embedded 101 must be rejected");
+    }
+
+    #[test]
+    fn handshake_rejects_missing_upgrade() {
+        let (url, server) = serve_handshake_with(|accept| {
+            format!(
+                "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
+            )
+        });
+        let result = WebSocketClient::connect(&url, &test_options());
+        let _ = server.join();
+        assert!(result.is_err(), "missing Upgrade header must be rejected");
+    }
+
+    #[test]
+    fn handshake_rejects_missing_connection() {
+        let (url, server) = serve_handshake_with(|accept| {
+            format!(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
+            )
+        });
+        let result = WebSocketClient::connect(&url, &test_options());
+        let _ = server.join();
+        assert!(
+            result.is_err(),
+            "missing Connection header must be rejected"
+        );
+    }
+
+    #[test]
+    fn handshake_accepts_rfc_valid_response() {
+        let (url, server) = serve_handshake_with(|accept| {
+            format!(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
+            )
+        });
+        let result = WebSocketClient::connect(&url, &test_options());
+        let _ = server.join();
+        assert!(result.is_ok(), "RFC-valid handshake must pass");
+    }
+
+    #[test]
+    fn client_masks_are_unpredictable() {
+        // w2-net-003: the fixed `[0x12,0x34,0x56,0x78]` mask makes keystreams predictable.
+        let first = client_mask();
+        let second = client_mask();
+        assert_ne!(first, second, "consecutive client masks must differ");
+        assert!(
+            !(first == [0x12, 0x34, 0x56, 0x78] && second == [0x12, 0x34, 0x56, 0x78]),
+            "client masks must not be the fixed legacy value"
+        );
+    }
+
+    #[test]
+    fn fresh_mask_still_masks_frames() {
+        // A frame masked with a fresh mask round-trips through unmasking, and the
+        // RFC 6455 §5.7 known vector still holds via `encode_frame`.
+        let key = client_mask();
+        let frame = Frame {
+            fin: true,
+            opcode: Opcode::Text,
+            masked: true,
+            payload: b"Hello".to_vec(),
+        };
+        let encoded = encode_frame(&frame, key);
+        assert_eq!(encoded[0], 0x81);
+        assert_eq!(encoded[1], 0x85, "client frames must carry MASK + length");
+        assert_eq!(&encoded[2..6], &key, "wire mask must be the fresh key");
+        let mut payload = encoded[6..].to_vec();
+        mask(&mut payload, key);
+        assert_eq!(payload, b"Hello");
     }
 }
 
@@ -600,7 +960,7 @@ pub enum WebSocketError {
 impl std::fmt::Display for WebSocketError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UnsupportedScheme => write!(f, "WebSocket requires the ws: scheme"),
+            Self::UnsupportedScheme => write!(f, "WebSocket requires the ws: or wss: scheme"),
             Self::Io(error) => write!(f, "WebSocket I/O error: {error}"),
             Self::InvalidHandshake(reason) => write!(f, "invalid WebSocket handshake: {reason}"),
             Self::UpgradeRejected(status) => write!(f, "WebSocket upgrade rejected ({status})"),
@@ -641,7 +1001,8 @@ pub struct WebSocket {
 
 impl WebSocket {
     pub fn connect(url: &str) -> Result<Self, WebSocketError> {
-        if !url.trim().to_ascii_lowercase().starts_with("ws://") {
+        let lower = url.trim().to_ascii_lowercase();
+        if !lower.starts_with("ws://") && !lower.starts_with("wss://") {
             return Err(WebSocketError::UnsupportedScheme);
         }
         let parsed =

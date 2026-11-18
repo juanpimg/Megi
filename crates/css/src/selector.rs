@@ -1721,9 +1721,8 @@ fn parse_compound_selector(tokens: &mut SelectorTokens) -> Option<CompoundSelect
                         }
                         continue;
                     }
-                    // Other legacy single-colon pseudo-elements match nothing directly.
-                    "first-line" | "first-letter" if argument.is_none() => PseudoClass::Never,
-                    // Legacy single-colon pseudo-element syntax (`:first-line`, `:first-letter`).
+                    // Legacy single-colon pseudo-element syntax (`:first-line`, `:first-letter`)
+                    // matches nothing directly.
                     "first-line" | "first-letter" if argument.is_none() => PseudoClass::Never,
                     _ if DYNAMIC_PSEUDO_CLASSES.contains(&name.as_str()) && argument.is_none() => {
                         PseudoClass::Never

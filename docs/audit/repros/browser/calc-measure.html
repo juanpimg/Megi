@@ -1,0 +1,8 @@
+<!doctype html><html><head><style>
+#a{width:calc(50vw + 10px);}#b{width:calc(10px + 5%);}#c{width:calc(100px/4);}#d{width:calc(10px*2);}
+</style></head><body>
+<div id="a">a</div><div id="b">b</div><div id="c">c</div><div id="d">d</div>
+<script>
+function w(id){var e=document.getElementById(id);var r=e.getBoundingClientRect();return id+"="+r.width;}
+document.body.innerHTML+="<p id=out>"+["a","b","c","d"].map(w).join("|")+"</p>";
+</script></body></html>

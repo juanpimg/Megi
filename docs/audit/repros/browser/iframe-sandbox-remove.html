@@ -1,0 +1,10 @@
+<!doctype html><html><body>
+<iframe id="f" sandbox="allow-scripts" srcdoc="<title>InnerTitle</title><p id='a'>secret</p>"></iframe>
+<script>
+var fr0 = document.getElementById("f").contentDocument;
+var before = (fr0 === null) ? "NULL-before" : "EXPOSED-before";
+document.getElementById("f").removeAttribute("sandbox");
+var fr1 = document.getElementById("f").contentDocument;
+var after = (fr1 === null) ? "NULL-after" : "EXPOSED-after:" + (function(){ try { return fr1.getElementById("a").textContent; } catch(e){ return "ERR"; } })();
+document.body.innerHTML += "<p id=out>" + before + "|" + after + "</p>";
+</script><p>outer</p></body></html>

@@ -274,7 +274,8 @@ impl Parser<'_> {
             .ok()?
             .parse()
             .ok()?;
-        if !number.is_finite() {
+        // #1669: apply the same magnitude cap as `Length::parse` so calc() cannot bypass it.
+        if !number.is_finite() || number.abs() > 1e6 {
             return None;
         }
         let unit_start = self.position;

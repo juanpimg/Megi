@@ -284,6 +284,8 @@ pub struct ScriptingHostContext {
     /// Events dispatched on `window` by the host after `load` (e.g. `hashchange`,
     /// `popstate`) so their listeners can mutate the DOM before the final re-render.
     pub host_events: Vec<String>,
+    #[cfg(feature = "js")]
+    pub frame_documents: Vec<(dom::NodeId, dom::Document)>,
     /// Optional Content Security Policy enforced across `fetch`/`XHR`, modules, and `eval` (#1526).
     pub csp: Option<net::csp::ContentSecurityPolicy>,
     /// Structured DOM/UI events forwarded from the host UI into the live JS realm (#1504).
@@ -316,6 +318,8 @@ impl ScriptingHostContext {
             fetch_options: net::FetchOptions::default(),
             no_network: false,
             host_events: Vec::new(),
+            #[cfg(feature = "js")]
+            frame_documents: Vec::new(),
             host_dom_events: Vec::new(),
             enable_workers: true,
             csp: None,
@@ -338,6 +342,8 @@ impl ScriptingHostContext {
             fetch_options: net::FetchOptions::default(),
             no_network: false,
             host_events: Vec::new(),
+            #[cfg(feature = "js")]
+            frame_documents: Vec::new(),
             host_dom_events: Vec::new(),
             enable_workers: true,
             csp: None,
@@ -826,6 +832,10 @@ pub fn execute_scripts(
             return execution;
         }
     };
+
+    for (iframe, frame_document) in &host.frame_documents {
+        runtime.set_frame_document(*iframe, frame_document.clone());
+    }
 
     let mut import_map_integrity: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();

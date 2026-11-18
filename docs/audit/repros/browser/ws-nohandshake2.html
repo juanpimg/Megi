@@ -1,0 +1,11 @@
+<!doctype html><html><body><script>
+var out=[];
+try{
+var ws=new WebSocket("ws://127.0.0.1:8766/");
+ws.onopen=function(){out.push("OPEN");document.body.innerHTML+="<p id=out>"+out.join("|")+"</p>";};
+ws.onerror=function(){out.push("ERROR");document.body.innerHTML+="<p id=out>"+out.join("|")+"</p>";};
+ws.onclose=function(){out.push("CLOSE");document.body.innerHTML+="<p id=out>"+out.join("|")+"</p>";};
+out.push("constructed");
+}catch(e){out.push("throw:"+String(e).slice(0,80));}
+document.body.innerHTML+="<p id=sync>"+out.join("|")+"</p>";
+</script><p>ws test</p></body></html>

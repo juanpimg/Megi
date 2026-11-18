@@ -47,8 +47,41 @@ impl Transform {
         let mut matrix = Self::IDENTITY;
         for function in split_functions(value)? {
             let (name, args) = function;
-            let numbers = parse_args(&args)?;
-            match name {
+            let name = name.to_ascii_lowercase();
+            let tokens = parse_args(&args)?;
+            // Strict arity per CSS Transforms 1: silently ignoring extra args is invalid (#1667).
+            let (kind, expected) = match name.as_str() {
+                "translate" => (ArgKind::Length, 1..=2),
+                "translatex" | "translatey" => (ArgKind::Length, 1..=1),
+                "scale" => (ArgKind::Number, 1..=2),
+                "scalex" | "scaley" => (ArgKind::Number, 1..=1),
+                "rotate" => (ArgKind::Angle, 1..=1),
+                _ => return None, // unsupported function -> treat whole value as invalid
+            };
+            if !expected.contains(&tokens.len()) {
+                return None;
+            }
+            // A single angle expression may carry its unit once, after the last argument
+            // (e.g. `rotate(90deg)`); validate each token's unit against the function kind.
+            let mut values = Vec::with_capacity(tokens.len());
+            for (number, unit) in tokens {
+                let value = match kind {
+                    ArgKind::Length if unit.is_empty() || unit == "px" => number,
+                    ArgKind::Number if unit.is_empty() => number,
+                    ArgKind::Angle if unit == "deg" => number,
+                    ArgKind::Angle if unit == "rad" => number.to_degrees(),
+                    ArgKind::Angle if unit == "grad" => number * 0.9,
+                    ArgKind::Angle if unit == "turn" => number * 360.0,
+                    // `%`, unknown units (`qpx`) and wrong unit kinds are invalid in this subset.
+                    _ => return None,
+                };
+                if !value.is_finite() {
+                    return None;
+                }
+                values.push(value);
+            }
+            let numbers = values;
+            match name.as_str() {
                 "translate" => {
                     let tx = numbers.first().copied().unwrap_or(0.0);
                     let ty = numbers.get(1).copied().unwrap_or(0.0);
@@ -58,15 +91,15 @@ impl Transform {
                         ..Self::IDENTITY
                     });
                 }
-                "translateX" => {
-                    let tx = *numbers.first()?;
+                "translatex" => {
+                    let tx = numbers[0];
                     matrix = matrix.multiply(&Self {
                         e: tx,
                         ..Self::IDENTITY
                     });
                 }
-                "translateY" => {
-                    let ty = *numbers.first()?;
+                "translatey" => {
+                    let ty = numbers[0];
                     matrix = matrix.multiply(&Self {
                         f: ty,
                         ..Self::IDENTITY
@@ -81,23 +114,22 @@ impl Transform {
                         ..Self::IDENTITY
                     });
                 }
-                "scaleX" => {
-                    let sx = *numbers.first()?;
+                "scalex" => {
+                    let sx = numbers[0];
                     matrix = matrix.multiply(&Self {
                         a: sx,
                         ..Self::IDENTITY
                     });
                 }
-                "scaleY" => {
-                    let sy = *numbers.first()?;
+                "scaley" => {
+                    let sy = numbers[0];
                     matrix = matrix.multiply(&Self {
                         d: sy,
                         ..Self::IDENTITY
                     });
                 }
                 "rotate" => {
-                    let degrees = *numbers.first()?;
-                    let radians = degrees.to_radians();
+                    let radians = numbers[0].to_radians();
                     let (sin, cos) = radians.sin_cos();
                     matrix = matrix.multiply(&Self {
                         a: cos,
@@ -107,7 +139,7 @@ impl Transform {
                         ..Self::IDENTITY
                     });
                 }
-                _ => return None, // unsupported function -> treat whole value as invalid
+                _ => unreachable!(),
             }
         }
         if !matrix.is_finite() {
@@ -212,17 +244,27 @@ fn split_functions(value: &str) -> Option<Vec<(&str, String)>> {
     if out.is_empty() { None } else { Some(out) }
 }
 
-/// Parses comma/whitespace-separated numbers, ignoring CSS length units (px, deg, etc.).
-fn parse_args(args: &str) -> Option<Vec<f32>> {
+/// The unit kind a transform function expects for its arguments.
+#[derive(Clone, Copy)]
+enum ArgKind {
+    Length,
+    Number,
+    Angle,
+}
+
+/// Parses comma/whitespace-separated `<number><unit>` tokens into `(value, unit)` pairs. The
+/// whole token must be consumed: a garbage suffix like `qpx` is rejected (#1667).
+fn parse_args(args: &str) -> Option<Vec<(f32, String)>> {
     let mut out = Vec::new();
     for token in args.split(|c: char| c == ',' || c.is_ascii_whitespace()) {
         if token.is_empty() {
             continue;
         }
-        let number: String = token
-            .chars()
-            .take_while(|ch| ch.is_ascii_digit() || matches!(ch, '-' | '+' | '.' | 'e' | 'E'))
-            .collect();
+        let split = token
+            .char_indices()
+            .find(|(_, ch)| !(ch.is_ascii_digit() || matches!(ch, '-' | '+' | '.' | 'e' | 'E')))
+            .map_or(token.len(), |(index, _)| index);
+        let (number, unit) = token.split_at(split);
         if number.is_empty() {
             return None;
         }
@@ -230,7 +272,7 @@ fn parse_args(args: &str) -> Option<Vec<f32>> {
         if !value.is_finite() {
             return None;
         }
-        out.push(value);
+        out.push((value, unit.to_ascii_lowercase()));
     }
     if out.is_empty() { None } else { Some(out) }
 }

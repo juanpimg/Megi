@@ -1451,7 +1451,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 42] = [
+    let accessors: [(&str, AccessorKind); 43] = [
         ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
@@ -1494,6 +1494,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("shadowRoot", AccessorKind::ShadowRoot),
         ("open", AccessorKind::DialogOpen),
         ("returnValue", AccessorKind::DialogReturnValue),
+        ("contentDocument", AccessorKind::ContentDocument),
     ];
     type Prepared<'a> = (
         &'a str,
@@ -1636,6 +1637,7 @@ enum AccessorKind {
     ShadowRoot,
     DialogOpen,
     DialogReturnValue,
+    ContentDocument,
 }
 
 fn accessor_functions(kind: AccessorKind) -> AccessorPair {
@@ -1682,6 +1684,7 @@ fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::ShadowRoot => (node_shadow_root_get, None),
         AccessorKind::DialogOpen => (node_open_get, Some(node_open_set)),
         AccessorKind::DialogReturnValue => (node_dialog_return_value_get, None),
+        AccessorKind::ContentDocument => (iframe_content_document, None),
     }
 }
 
@@ -6472,8 +6475,215 @@ fn node_shadow_root_get(
     }
 }
 
-/// Resolves the shadow host of a `<slot>`: walks up to the nearest registered shadow root and
-/// returns its host element (#1541).
+fn frame_handle(this: &JsValue, context: &mut Context) -> JsResult<u32> {
+    let object = this
+        .as_object()
+        .ok_or_else(|| js_error("frame method requires an object"))?;
+    object
+        .get(js_string!("__megi_frame"), context)
+        .ok()
+        .and_then(|v| v.as_number())
+        .filter(|v| *v >= 0.0 && v.fract() == 0.0)
+        .map(|v| v as u32)
+        .ok_or_else(|| js_error("invalid frame document handle"))
+}
+
+fn frame_node(this: &JsValue, context: &mut Context) -> JsResult<(u32, NodeId)> {
+    let handle = frame_handle(this, context)?;
+    let node_handle = this
+        .as_object()
+        .and_then(|o| o.get(js_string!("__megi_frame_node"), context).ok())
+        .and_then(|v| v.as_number())
+        .ok_or_else(|| js_error("invalid frame node"))? as u32;
+    let node = with_host(|host| host.frame_nodes.get(&node_handle).copied())
+        .flatten()
+        .ok_or_else(|| js_error("stale frame node"))?;
+    Ok((handle, node))
+}
+
+fn frame_element_wrapper(context: &mut Context, handle: u32, node: NodeId) -> JsResult<JsValue> {
+    let tag = with_host(|host| {
+        host.frame_documents
+            .get(&handle)
+            .and_then(|d| d.try_node(node).and_then(|n| n.as_element()))
+            .map(|e| e.local_name.clone())
+    })
+    .flatten()
+    .unwrap_or_default();
+    let node_handle = with_host(|host| {
+        let h = host.frame_node_next_handle;
+        host.frame_node_next_handle = host.frame_node_next_handle.wrapping_add(1);
+        host.frame_nodes.insert(h, node);
+        h
+    })
+    .ok_or_else(|| js_error("no host"))?;
+    let mut init = ObjectInitializer::new(context);
+    init.property(
+        js_string!("__megi_frame"),
+        JsValue::from(handle),
+        Attribute::all(),
+    );
+    init.property(
+        js_string!("__megi_frame_node"),
+        JsValue::from(node_handle as f64),
+        Attribute::all(),
+    );
+    init.property(
+        js_string!("tagName"),
+        JsValue::from(js_string!(tag.to_ascii_uppercase())),
+        Attribute::all(),
+    );
+    init.function(
+        native(frame_get_attribute as NativeFn),
+        js_string!("getAttribute"),
+        1,
+    );
+    let object = init.build();
+    let getter = accessor_fn(context, frame_text_content);
+    let descriptor = PropertyDescriptor::builder()
+        .get(JsValue::from(getter))
+        .enumerable(true)
+        .configurable(true)
+        .build();
+    let _ = object.define_property_or_throw(js_string!("textContent"), descriptor, context);
+    Ok(object.into())
+}
+
+fn frame_get_attribute(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let (handle, node) = frame_node(this, context)?;
+    let name = arg_string(args, 0, context)?;
+    let value = with_host(|host| {
+        host.frame_documents
+            .get(&handle)
+            .and_then(|d| d.try_node(node).and_then(|n| n.as_element()))
+            .and_then(|e| e.get_attribute(&name).map(str::to_owned))
+    })
+    .flatten();
+    match value {
+        Some(v) => Ok(JsValue::from(js_string!(v))),
+        None => Ok(JsValue::null()),
+    }
+}
+
+fn frame_text_content(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let (handle, node) = frame_node(this, context)?;
+    let text = with_host(|host| {
+        host.frame_documents
+            .get(&handle)
+            .map(|d| d.text_content(node))
+    })
+    .flatten()
+    .unwrap_or_default();
+    Ok(JsValue::from(js_string!(text)))
+}
+
+fn frame_get_element_by_id(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let handle = frame_handle(this, context)?;
+    let id = arg_string(args, 0, context)?;
+    let node = with_host(|host| {
+        host.frame_documents
+            .get(&handle)
+            .and_then(|d| d.get_element_by_id(&id))
+    })
+    .flatten();
+    match node {
+        Some(n) => frame_element_wrapper(context, handle, n),
+        None => Ok(JsValue::null()),
+    }
+}
+
+fn frame_query_selector_all(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let handle = frame_handle(this, context)?;
+    let selector = arg_string(args, 0, context)?;
+    let nodes: Vec<NodeId> = with_host(|host| {
+        host.frame_documents
+            .get(&handle)
+            .map(|d| d.get_elements_by_tag_name(&selector).into_iter().collect())
+    })
+    .flatten()
+    .unwrap_or_default();
+    let mut wrappers = Vec::with_capacity(nodes.len());
+    for n in nodes {
+        wrappers.push(frame_element_wrapper(context, handle, n)?);
+    }
+    Ok(JsArray::from_iter(wrappers, context).into())
+}
+
+fn iframe_content_document(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = this_node(this, context)?;
+    let handle = with_host(|host| {
+        if host
+            .document
+            .try_node(node)
+            .and_then(|n| n.as_element())
+            .is_some_and(|e| e.has_attribute("sandbox"))
+        {
+            return None;
+        }
+        host.iframe_frames.get(&node).copied()
+    })
+    .flatten();
+    let Some(handle) = handle else {
+        return Ok(JsValue::null());
+    };
+    let body_node = with_host(|host| host.frame_documents.get(&handle).and_then(|d| d.body()))
+        .flatten()
+        .unwrap_or_else(|| NodeId::from_index(usize::MAX));
+    let body = frame_element_wrapper(context, handle, body_node)?;
+    let title = with_host(|host| {
+        host.frame_documents.get(&handle).and_then(|d| {
+            d.get_elements_by_tag_name("title")
+                .first()
+                .map(|n| d.text_content(*n))
+        })
+    })
+    .flatten()
+    .unwrap_or_default();
+    let mut init = ObjectInitializer::new(context);
+    init.property(
+        js_string!("__megi_frame"),
+        JsValue::from(handle),
+        Attribute::all(),
+    );
+    init.function(
+        native(frame_get_element_by_id as NativeFn),
+        js_string!("getElementById"),
+        1,
+    );
+    init.function(
+        native(frame_query_selector_all as NativeFn),
+        js_string!("querySelectorAll"),
+        1,
+    );
+    init.property(
+        js_string!("title"),
+        JsValue::from(js_string!(title)),
+        Attribute::all(),
+    );
+    init.property(js_string!("body"), body, Attribute::all());
+    Ok(init.build().into())
+}
+
 fn slot_host(slot: NodeId) -> Option<NodeId> {
     with_host(|host| {
         let mut current = Some(slot);
@@ -7730,6 +7940,16 @@ impl JsRuntime {
     /// with a `QuotaExceededError` once the document reaches the budget.
     pub fn set_max_dom_nodes(&mut self, max_nodes: usize) {
         self.host.borrow_mut().max_dom_nodes = max_nodes;
+    }
+
+    /// Registers a same-origin framed document for an `<iframe>` (#1544).
+    pub fn set_frame_document(&mut self, iframe: NodeId, document: dom::Document) -> u32 {
+        let mut host = self.host.borrow_mut();
+        let handle = host.frame_next_handle;
+        host.frame_next_handle = host.frame_next_handle.wrapping_add(1);
+        host.frame_documents.insert(handle, document);
+        host.iframe_frames.insert(iframe, handle);
+        handle
     }
 
     /// Whether any live WebSocket transports remain (#1534).

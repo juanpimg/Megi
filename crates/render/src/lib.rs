@@ -792,7 +792,8 @@ impl std::fmt::Debug for RenderOutput {
 
 /// Loads `input` (an absolute URL: `http(s)://`, `file://` or `data:`) and renders it.
 pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, RenderError> {
-    render_url_inner(input, options, None, 0)
+    let mut budget = frames::FrameBudget::new(frames::MAX_FRAMES_PER_PAGE);
+    render_url_inner(input, options, None, 0, &mut budget)
 }
 
 /// Like [`render_url`], but reuses a caller-owned [`RenderCache`] for layout trees.
@@ -801,7 +802,8 @@ pub fn render_url_cached(
     options: &RenderOptions,
     cache: &mut RenderCache,
 ) -> Result<RenderOutput, RenderError> {
-    render_url_inner(input, options, Some(cache), 0)
+    let mut budget = frames::FrameBudget::new(frames::MAX_FRAMES_PER_PAGE);
+    render_url_inner(input, options, Some(cache), 0, &mut budget)
 }
 
 fn render_url_inner(
@@ -809,6 +811,7 @@ fn render_url_inner(
     options: &RenderOptions,
     cache: Option<&mut RenderCache>,
     frame_depth: usize,
+    budget: &mut frames::FrameBudget,
 ) -> Result<RenderOutput, RenderError> {
     let total_start = Instant::now();
     let url = Url::parse(input)?;
@@ -1015,6 +1018,20 @@ fn render_url_inner(
             (options.viewport.width, options.viewport.height),
         );
         #[cfg(feature = "js")]
+        for iframe in document.get_elements_by_tag_name("iframe") {
+            let Some(data) = document.try_node(iframe).and_then(|n| n.as_element()) else {
+                continue;
+            };
+            if data.has_attribute("sandbox") {
+                continue;
+            }
+            if let Some(srcdoc) = data.get_attribute("srcdoc") {
+                host_context
+                    .frame_documents
+                    .push((iframe, html::parse_document(srcdoc, false)));
+            }
+        }
+        #[cfg(feature = "js")]
         {
             if let Some(styles) = pre_script_styles.clone() {
                 let pre_pseudos = pre_script_pseudos.clone();
@@ -1213,8 +1230,14 @@ fn render_url_inner(
 
     // Nested browsing contexts (#1544): render each <iframe>'s document into its own viewport
     // and blit it as a replaced element. Depth/count caps keep self-referential trees bounded.
-    for frame in frames::collect_frames(&document, &base_url, options, frame_depth, &mut warnings)?
-    {
+    for frame in frames::collect_frames(
+        &document,
+        &base_url,
+        options,
+        frame_depth,
+        &mut warnings,
+        budget,
+    )? {
         loaded_images
             .store
             .insert(frame.node, std::sync::Arc::new(frame.image));

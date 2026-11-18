@@ -135,8 +135,9 @@ pub fn resolve_download_dir(explicit: Option<&Path>) -> PathBuf {
     default_download_dir(explicit, home.as_deref())
 }
 
-/// Writes `bytes` atomically: a sibling `.<name>.tmp` file is written and renamed over the
-/// target (same filesystem), so a crash/interruption never leaves a half-written download.
+/// Writes `bytes` atomically via a unique sibling temporary (`create_new`, same
+/// filesystem), so a crash/interruption never leaves a half-written download and a
+/// pre-planted `.<name>.tmp` symlink/file is never followed or truncated.
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<usize, String> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
@@ -144,20 +145,67 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<usize, String> {
         fs::create_dir_all(parent)
             .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
     }
-    let file_name = path
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "download".to_string());
-    let temporary = path.with_file_name(format!(".{file_name}.tmp"));
-    if let Err(error) = fs::write(&temporary, bytes) {
-        let _ = fs::remove_file(&temporary);
-        return Err(format!("cannot write {}: {error}", path.display()));
+    let (temporary, mut file) = create_new_temp_file(path)
+        .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+    {
+        use std::io::Write as _;
+        if let Err(error) = file.write_all(bytes) {
+            drop(file);
+            let _ = fs::remove_file(&temporary);
+            return Err(format!("cannot write {}: {error}", path.display()));
+        }
     }
+    drop(file);
     fs::rename(&temporary, path).map_err(|error| {
         let _ = fs::remove_file(&temporary);
         format!("cannot write {}: {error}", path.display())
     })?;
     Ok(bytes.len())
+}
+
+/// Returns a unique, unpredictable sibling temporary path for `path` (same
+/// filesystem, so the final rename stays atomic).
+///
+/// `.‍<name>.<pid>.<nanos>.<counter>.tmp` can neither be guessed by a local
+/// attacker nor collide between two concurrent/sequential writers.
+pub(crate) fn unique_temporary_path(path: &Path) -> PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "download".to_string());
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let count = COUNTER.fetch_add(1, Ordering::Relaxed);
+    path.with_file_name(format!(
+        ".{name}.{}.{nanos}.{count}.tmp",
+        std::process::id()
+    ))
+}
+
+/// Creates a fresh temporary file next to `path` with `create_new` (fails when
+/// the candidate already exists, so a planted symlink/file is never followed).
+/// Retries on `AlreadyExists` collisions.
+pub(crate) fn create_new_temp_file(path: &Path) -> std::io::Result<(PathBuf, fs::File)> {
+    for _ in 0..16 {
+        let candidate = unique_temporary_path(path);
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(file) => return Ok((candidate, file)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "cannot create a unique download temporary",
+    ))
 }
 
 /// Saves PNG bytes produced by the render pipeline as a download, **without re-encoding**.
@@ -589,6 +637,87 @@ mod tests {
         let saved_jpeg = save_image(&dir, &url("https://example.com/photo"), &jpeg).expect("jpeg");
         assert!(saved_jpeg.path.to_string_lossy().ends_with(".jpg"));
         assert!(save_image(&dir, &url("https://example.com/x"), b"").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn atomic_write_does_not_clobber_preplanted_predictable_tmp() {
+        // w2-st-1176 RED: legacy `.<name>.tmp` must not be truncated/followed.
+        let dir = temp_dir("tmp-race");
+        fs::create_dir_all(&dir).expect("mkdir");
+        let target = dir.join("out.bin");
+        let legacy = target.with_file_name(".out.bin.tmp");
+        fs::write(&legacy, b"attacker-sentinel").expect("plant");
+        let written = write_atomic(&target, b"new-bytes");
+        // With the fix the predictable tmp is left alone (unique tmp is used).
+        let legacy_bytes = fs::read(&legacy).expect("read legacy tmp");
+        assert_eq!(
+            legacy_bytes, b"attacker-sentinel",
+            "predictable tmp must not be overwritten"
+        );
+        assert!(written.is_ok(), "write via unique tmp must succeed");
+        assert_eq!(
+            fs::read(&target).expect("read target"),
+            b"new-bytes",
+            "target must hold the new bytes"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn atomic_write_does_not_follow_symlink_at_predictable_tmp() {
+        // w2-st-1176 RED: a symlink planted at `.<name>.tmp` must not redirect bytes.
+        let dir = temp_dir("tmp-symlink");
+        fs::create_dir_all(&dir).expect("mkdir");
+        let target = dir.join("out.bin");
+        let legacy = target.with_file_name(".out.bin.tmp");
+        let outside = dir.join("outside.bin");
+        fs::write(&outside, b"secret").expect("write outside");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, &legacy).expect("plant symlink");
+        #[cfg(not(unix))]
+        fs::write(&legacy, b"attacker-sentinel").expect("plant");
+        let _ = write_atomic(&target, b"new-bytes");
+        let outside_bytes = fs::read(&outside).expect("read outside");
+        assert_eq!(
+            outside_bytes, b"secret",
+            "symlink at predictable tmp must not be followed"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unique_temporary_paths_are_distinct_and_unpredictable() {
+        let dir = temp_dir("tmp-unique");
+        let target = dir.join("out.bin");
+        let first = unique_temporary_path(&target);
+        let second = unique_temporary_path(&target);
+        assert_ne!(first, second, "sequential writers must differ");
+        assert_ne!(
+            first,
+            target.with_file_name(".out.bin.tmp"),
+            "must not reuse the legacy predictable name"
+        );
+        assert_ne!(first.parent(), None);
+        assert_eq!(first.parent(), target.parent());
+    }
+
+    #[test]
+    fn create_new_refuses_a_preexisting_temporary() {
+        // A planted file/symlink at the exact candidate must fail instead of
+        // being truncated or followed.
+        let dir = temp_dir("tmp-create-new");
+        fs::create_dir_all(&dir).expect("mkdir");
+        let target = dir.join("out.bin");
+        let candidate = unique_temporary_path(&target);
+        fs::write(&candidate, b"planted").expect("plant");
+        let refused = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists);
+        assert!(refused, "create_new must reject a pre-existing tmp");
+        assert_eq!(fs::read(&candidate).expect("read"), b"planted");
         let _ = fs::remove_dir_all(&dir);
     }
 

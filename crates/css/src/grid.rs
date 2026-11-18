@@ -620,11 +620,7 @@ fn parse_minmax(body: &str, font_size: f32, root_font_size: f32) -> Option<Track
     };
     let max = if max.eq_ignore_ascii_case("auto") {
         TrackMax::Auto
-    } else if let Some(fraction) = max
-        .strip_suffix("fr")
-        .or_else(|| max.strip_suffix("FR"))
-        .or_else(|| max.strip_suffix("fr "))
-    {
+    } else if let Some(fraction) = max.strip_suffix("fr").or_else(|| max.strip_suffix("FR")) {
         TrackMax::Fraction(fraction.trim().parse::<f32>().ok()?.max(0.0))
     } else {
         TrackMax::Fixed(Length::parse(max, font_size, root_font_size)?)

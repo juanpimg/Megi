@@ -1,0 +1,1 @@
+<!doctype html><html><body><script>var out=[];try{Object.defineProperty(this,"__megi_worker",{value:999,configurable:true});out.push("def-global-ok");}catch(e){out.push("def-global-err");}try{var w=new Worker("nowhere-worker-xyz.js");}catch(e){out.push("ctor-err:"+String(e).slice(0,60));}document.body.innerHTML+="<p id=out>"+out.join("|")+"</p>";</script></body></html>

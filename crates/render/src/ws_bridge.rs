@@ -27,8 +27,8 @@ fn lock(client: &Mutex<WebSocketClient>) -> std::sync::MutexGuard<'_, WebSocketC
 }
 
 impl LiveWebSocketTransport {
-    /// Opens a `ws://` connection and starts its receive pump. `wss://` is rejected by the
-    /// URL parser (no TLS transport), so no silent downgrade is possible.
+    /// Opens a `ws://` or `wss://` connection and starts its receive pump. `wss://` handshakes
+    /// are performed over TLS (no silent downgrade to plaintext).
     pub fn connect(url: &str, options: &FetchOptions) -> Result<Self, JsError> {
         let parsed = websocket::parse_ws_url(url)
             .map_err(|error| JsError::Runtime(format!("WebSocket URL: {error}")))?;

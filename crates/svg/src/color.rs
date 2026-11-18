@@ -67,6 +67,8 @@ pub(crate) fn parse_color(raw: &str) -> Option<Color> {
     let arguments = &lower[open + 1..close];
     match function {
         "rgb" | "rgba" => parse_rgb_function(arguments, function == "rgba"),
+        // #1656: CSS Color 3 functional hsl()/hsla() colors.
+        "hsl" | "hsla" => parse_hsl_function(arguments, function == "hsla"),
         _ => None,
     }
 }
@@ -89,6 +91,70 @@ fn parse_hex(hex: &str) -> Option<Color> {
         8 => Some(Color::rgba(pair(0)?, pair(2)?, pair(4)?, pair(6)?)),
         _ => None,
     }
+}
+
+/// Parses `hsl(h, s%, l%)` / `hsla(h, s%, l%, a)` (CSS Color 3 §4.2.4), with legacy
+/// comma syntax and the modern space syntax. Hue wraps modulo 360; percentages clamp (#1656).
+fn parse_hsl_function(arguments: &str, with_alpha: bool) -> Option<Color> {
+    let parts: Vec<&str> = arguments
+        .split(|c: char| c == ',' || c.is_ascii_whitespace())
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect();
+    if parts.len() != if with_alpha { 4 } else { 3 } {
+        return None;
+    }
+    let parse_angle = |raw: &str| -> Option<f32> {
+        let raw = raw.trim().to_ascii_lowercase();
+        if let Some(deg) = raw.strip_suffix("deg") {
+            deg.trim().parse::<f32>().ok()
+        } else if let Some(rad) = raw.strip_suffix("rad") {
+            rad.trim().parse::<f32>().ok().map(|v| v.to_degrees())
+        } else if let Some(turn) = raw.strip_suffix("turn") {
+            turn.trim().parse::<f32>().ok().map(|v| v * 360.0)
+        } else {
+            raw.parse::<f32>().ok()
+        }
+    };
+    let hue = parse_angle(parts[0])?.rem_euclid(360.0);
+    let saturation = parts[1]
+        .strip_suffix('%')?
+        .trim()
+        .parse::<f32>()
+        .ok()?
+        .clamp(0.0, 100.0)
+        / 100.0;
+    let lightness = parts[2]
+        .strip_suffix('%')?
+        .trim()
+        .parse::<f32>()
+        .ok()?
+        .clamp(0.0, 100.0)
+        / 100.0;
+    let alpha = if with_alpha {
+        parts[3].trim().parse::<f32>().ok()?.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    // HSL -> RGB (CSS Color 3 algorithm).
+    let c = (1.0 - (2.0 * lightness - 1.0).abs()) * saturation;
+    let x = c * (1.0 - ((hue / 60.0) % 2.0 - 1.0).abs());
+    let m = lightness - c / 2.0;
+    let (r, g, b) = match hue as u32 / 60 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let byte = |value: f32| ((value + m) * 255.0).round().clamp(0.0, 255.0) as u8;
+    Some(Color::rgba(
+        byte(r),
+        byte(g),
+        byte(b),
+        (alpha * 255.0).round().clamp(0.0, 255.0) as u8,
+    ))
 }
 
 fn parse_rgb_function(arguments: &str, with_alpha: bool) -> Option<Color> {

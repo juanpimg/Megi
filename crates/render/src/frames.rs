@@ -10,6 +10,37 @@ use net::Url;
 
 use crate::{RenderError, RenderOptions, Viewport};
 
+/// Global per-page frame budget shared across the whole recursion tree.
+///
+/// `MAX_FRAMES_PER_PAGE` used to be enforced per level (`out.len()` in
+/// `collect_frames`), so a 4-wide self-nested tree rendered
+/// 1 + 4 + 16 + 64 + 256 = 341 documents. The budget below is created once per
+/// top-level page and threaded by `&mut` through `render_url_inner` and
+/// `collect_frames`, so the total number of frame renders is bounded.
+pub struct FrameBudget {
+    remaining: usize,
+}
+
+impl FrameBudget {
+    /// Creates a budget allowing up to `limit` frame renders.
+    pub fn new(limit: usize) -> Self {
+        Self { remaining: limit }
+    }
+
+    /// Frames still available.
+    pub fn remaining(&self) -> usize {
+        self.remaining
+    }
+
+    /// Consumes one frame slot. Returns `false` when exhausted.
+    pub fn try_consume(&mut self) -> bool {
+        if self.remaining == 0 {
+            return false;
+        }
+        self.remaining -= 1;
+        true
+    }
+}
 /// Maximum nesting depth of frames (a frame at this depth renders no children).
 pub const MAX_FRAME_DEPTH: usize = 4;
 /// Maximum number of frames rendered per page render.
@@ -35,13 +66,14 @@ pub fn collect_frames(
     options: &RenderOptions,
     depth: usize,
     warnings: &mut Vec<String>,
+    budget: &mut FrameBudget,
 ) -> Result<Vec<FrameRender>, RenderError> {
     if depth >= MAX_FRAME_DEPTH {
         return Ok(Vec::new());
     }
     let mut out = Vec::new();
     for element in document.get_elements_by_tag_name("iframe") {
-        if out.len() >= MAX_FRAMES_PER_PAGE {
+        if budget.remaining() == 0 {
             warnings.push(format!(
                 "page has more than {MAX_FRAMES_PER_PAGE} iframes; remaining frames are not rendered (cap)"
             ));
@@ -110,7 +142,13 @@ pub fn collect_frames(
             child_options.form_post = None;
         }
 
-        match crate::render_url_inner(&child_input, &child_options, None, depth + 1) {
+        if !budget.try_consume() {
+            warnings.push(format!(
+                "page has more than {MAX_FRAMES_PER_PAGE} iframes; remaining frames are not rendered (cap)"
+            ));
+            break;
+        }
+        match crate::render_url_inner(&child_input, &child_options, None, depth + 1, budget) {
             Ok(child) => {
                 let bytes = child.pixmap.to_rgba_bytes();
                 match image::RgbaImage::new(width, height, bytes) {

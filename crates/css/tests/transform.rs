@@ -64,3 +64,47 @@ fn transform_is_not_inherited() {
         "transform must not inherit"
     );
 }
+
+#[test]
+fn transform_function_names_are_case_insensitive() {
+    // #1668: CSS function names are ASCII case-insensitive.
+    let upper = css::transform::Transform::parse("TRANSLATE(10px) ROTATE(90deg)");
+    let lower = css::transform::Transform::parse("translate(10px) rotate(90deg)");
+    assert!(upper.is_some(), "uppercase function names must parse");
+    assert_eq!(upper, lower);
+}
+
+#[test]
+fn transform_validates_units_and_arity() {
+    use css::transform::Transform;
+    // #1667: typed units and strict arity; garbage suffixes and extra args are invalid.
+    assert!(
+        Transform::parse("translate(10%)").is_none(),
+        "percent not supported in 2D subset"
+    );
+    assert!(
+        Transform::parse("translate(10qpx)").is_none(),
+        "garbage unit must be rejected"
+    );
+    assert!(
+        Transform::parse("translate(1px,2px,3px)").is_none(),
+        "translate takes 1-2 args"
+    );
+    assert!(
+        Transform::parse("rotate(90deg,1)").is_none(),
+        "rotate takes exactly 1 arg"
+    );
+    assert!(
+        Transform::parse("scale(2,3,4)").is_none(),
+        "scale takes 1-2 args"
+    );
+    // rad is a valid angle: 1.5707963rad ≈ 90deg.
+    let rad = Transform::parse("rotate(1.5707963rad)").expect("rad angle");
+    let deg = Transform::parse("rotate(90deg)").expect("deg angle");
+    let p = rad.apply(1.0, 0.0);
+    let q = deg.apply(1.0, 0.0);
+    assert!(
+        (p.0 - q.0).abs() < 1e-5 && (p.1 - q.1).abs() < 1e-5,
+        "rad vs deg: {p:?} {q:?}"
+    );
+}
