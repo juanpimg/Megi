@@ -295,24 +295,92 @@ impl ResourceLoader {
     /// Loads a subresource, applying the mixed-content policy (#1528).
     ///
     /// `active` is `true` for scripts/styles/fonts/XHR (blocked over `http:` on an HTTPS
-    /// document) and `false` for images/media (upgraded to `https:`). Redirects are covered
-    /// because the upgraded/blocked decision happens before the network request.
+    /// document) and `false` for images/media (upgraded to `https:`). The policy is installed on
+    /// [`FetchOptions::mixed_content`] for the duration of the fetch so every HTTP redirect hop is
+    /// also checked/upgraded before any plaintext connection opens.
     pub fn load_checked(&mut self, url: &Url, active: bool) -> Result<Arc<Resource>, LoadError> {
-        use crate::mixed_content::{MixedContentAction, decide};
-        match decide(
-            self.mixed_content_context.unwrap_or(Scheme::Http),
-            url,
-            active,
-        ) {
-            MixedContentAction::Allow => self.load(url),
-            MixedContentAction::Block => {
-                Err(FetchError::MixedContentBlocked(url.as_str().to_owned()).into())
-            }
-            MixedContentAction::Upgrade(upgraded) => {
-                let url = Url::parse(&upgraded).map_err(LoadError::Url)?;
-                self.load(&url)
+        let Some(doc_scheme) = self.mixed_content_context else {
+            return self.load(url);
+        };
+        let policy = crate::mixed_content::MixedContentPolicy::new(doc_scheme, active);
+        let checked_url = policy.apply(url)?;
+        let saved = self.options.mixed_content.replace(policy);
+        let result = self.load(&checked_url);
+        self.options.mixed_content = saved;
+        let resource = result?;
+        // Also guard against a cached resource whose final URL was plaintext HTTP.
+        if policy.decide(&resource.url) != crate::mixed_content::MixedContentAction::Allow {
+            return Err(FetchError::MixedContentBlocked(resource.url.as_str().to_owned()).into());
+        }
+        Ok(resource)
+    }
+
+    /// Batch variant of [`Self::load_checked`]: loads `(url, use_cors, active)` entries while
+    /// enforcing the installed mixed-content policy on initial URLs and redirect hops (#1528).
+    pub fn load_many_checked(
+        &mut self,
+        requests: &[(&Url, bool, bool)],
+    ) -> Vec<Result<Arc<Resource>, LoadError>> {
+        let Some(doc_scheme) = self.mixed_content_context else {
+            let plain: Vec<(&Url, bool)> =
+                requests.iter().map(|&(url, cors, _)| (url, cors)).collect();
+            return self.load_many(&plain);
+        };
+        let mut results: Vec<Option<Result<Arc<Resource>, LoadError>>> =
+            (0..requests.len()).map(|_| None).collect();
+        let mut forwarded_urls: Vec<Url> = Vec::with_capacity(requests.len());
+        let mut forwarded_flags: Vec<(usize, bool, bool)> = Vec::with_capacity(requests.len());
+        for (idx, &(url, use_cors, active)) in requests.iter().enumerate() {
+            let policy = crate::mixed_content::MixedContentPolicy::new(doc_scheme, active);
+            match policy.apply(url) {
+                Ok(checked) => {
+                    forwarded_urls.push(checked);
+                    forwarded_flags.push((idx, use_cors, active));
+                }
+                Err(error) => {
+                    results[idx] = Some(Err(error.into()));
+                }
             }
         }
+        // Only passive (active = false) or active (active = true) policies need redirect enforcement;
+        // if all forwarded requests share `active`, run `load_many` once; otherwise split.
+        let mut run_batch = |target_active: bool| {
+            let subset_indices: Vec<usize> = forwarded_flags
+                .iter()
+                .enumerate()
+                .filter_map(|(pos, &(_, _, active))| (active == target_active).then_some(pos))
+                .collect();
+            if subset_indices.is_empty() {
+                return;
+            }
+            let policy = crate::mixed_content::MixedContentPolicy::new(doc_scheme, target_active);
+            let sub_reqs: Vec<(&Url, bool)> = subset_indices
+                .iter()
+                .map(|&pos| (&forwarded_urls[pos], forwarded_flags[pos].1))
+                .collect();
+            let saved = self.options.mixed_content.replace(policy);
+            let sub_results = self.load_many(&sub_reqs);
+            self.options.mixed_content = saved;
+            for (pos, res) in subset_indices.into_iter().zip(sub_results) {
+                let orig_idx = forwarded_flags[pos].0;
+                let checked = res.and_then(|resource| {
+                    if policy.decide(&resource.url)
+                        != crate::mixed_content::MixedContentAction::Allow
+                    {
+                        Err(
+                            FetchError::MixedContentBlocked(resource.url.as_str().to_owned())
+                                .into(),
+                        )
+                    } else {
+                        Ok(resource)
+                    }
+                });
+                results[orig_idx] = Some(checked);
+            }
+        };
+        run_batch(false);
+        run_batch(true);
+        results.into_iter().map(|r| r.expect("filled")).collect()
     }
 
     /// Rejects `file:` URLs when local-file access is disabled.

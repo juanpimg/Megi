@@ -165,6 +165,11 @@ pub struct FetchOptions {
     /// `None` (default) connects directly. Use [`crate::ProxyConfig::from_env`] to read
     /// the conventional environment variables.
     pub proxy: Option<Arc<crate::proxy::ProxyConfig>>,
+    /// Mixed-content policy applied to the initial URL and every redirect hop (#1528).
+    ///
+    /// When set, `http://` targets from an `https:` document are blocked for active content or
+    /// upgraded to `https://` for passive content before any transport or redirect hop connects.
+    pub mixed_content: Option<crate::mixed_content::MixedContentPolicy>,
     /// Custom TLS client configuration (root store, client auth, protocol versions).
     ///
     /// `None` (the default) uses the built-in webpki-roots (Mozilla) trust anchors and
@@ -203,6 +208,7 @@ impl Default for FetchOptions {
             range: None,
             referrer: None,
             proxy: None,
+            mixed_content: None,
             #[cfg(feature = "tls")]
             tls_config: None,
             hsts_store: None,
@@ -410,6 +416,14 @@ pub fn fetch_pooled(
     options: &FetchOptions,
     pool: &mut H1Pool,
 ) -> Result<Response, FetchError> {
+    // Mixed-content first, then HSTS upgrade (both may rewrite the URL before the socket opens).
+    let checked_url;
+    let url = if let Some(policy) = options.mixed_content {
+        checked_url = policy.apply(url)?;
+        &checked_url
+    } else {
+        url
+    };
     let upgraded_url = crate::hsts::upgrade_url_with(options.hsts_store.as_deref(), url);
     let url = upgraded_url.as_ref().unwrap_or(url);
     let pool_proxy = options
@@ -616,9 +630,25 @@ pub fn fetch_pooled(
         }
     }
     // Redirects/encoded responses/races fall back to the buffered fetch (semantics first).
-    fetch(url, options).or(Err(last_error.unwrap_or(FetchError::InvalidResponse(
-        "pooled fetch failed".to_owned(),
-    ))))
+    let is_pooled_redirect = matches!(
+        &last_error,
+        Some(FetchError::InvalidResponse(msg)) if msg == "redirect in pooled fetch"
+    );
+    match fetch(url, options) {
+        Ok(response) => Ok(response),
+        Err(error)
+            if is_pooled_redirect
+                || matches!(
+                    error,
+                    FetchError::MixedContentBlocked(_) | FetchError::Cors(_)
+                ) =>
+        {
+            Err(error)
+        }
+        Err(_) => Err(last_error.unwrap_or(FetchError::InvalidResponse(
+            "pooled fetch failed".to_owned(),
+        ))),
+    }
 }
 
 /// Buffered fallback streaming fetch: the response is fetched normally (redirects,
@@ -637,6 +667,9 @@ pub fn fetch_streaming(
     let mut current = url.clone();
     let mut redirects = 0usize;
     loop {
+        if let Some(policy) = options.mixed_content {
+            current = policy.apply(&current)?;
+        }
         if let Some(upgraded) =
             crate::hsts::upgrade_url_with(options.hsts_store.as_deref(), &current)
         {
@@ -879,6 +912,11 @@ pub fn fetch_with_request_body_and_trailers(
             None => None,
         };
         first_attempt = false;
+        // Mixed content (#1528): check/upgrade on the initial URL and every redirect target
+        // before HSTS or opening a plaintext TCP connection.
+        if let Some(policy) = options.mixed_content {
+            current = policy.apply(&current)?;
+        }
         // HSTS (#1529): upgrade an `http://` hop to `https://` when an active policy covers the
         // host (also applied to redirect targets, so a downgrade redirect cannot slip through).
         if let Some(upgraded) =
@@ -1109,6 +1147,13 @@ pub fn preflight(
     method: &str,
     request_headers: &[(&str, &str)],
 ) -> Result<(), FetchError> {
+    let checked_url;
+    let url = if let Some(policy) = options.mixed_content {
+        checked_url = policy.apply(url)?;
+        &checked_url
+    } else {
+        url
+    };
     let origin = options.origin.as_deref().ok_or_else(|| {
         FetchError::Cors("preflight requires FetchOptions::origin to be set".to_owned())
     })?;

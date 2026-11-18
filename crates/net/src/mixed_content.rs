@@ -3,6 +3,7 @@
 //! styles or images despite the secure document. The decision is pure so it can be enforced at
 //! any load boundary (initial URL and every redirect hop) and unit-tested deterministically.
 
+use crate::error::FetchError;
 use crate::url::{Scheme, Url};
 
 /// The action a loader should take for a subresource URL.
@@ -14,6 +15,44 @@ pub enum MixedContentAction {
     Upgrade(String),
     /// Refuse the request (active mixed content on an HTTPS document).
     Block,
+}
+
+/// Mixed-content policy attached to a subresource request or redirect chain (#1528).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MixedContentPolicy {
+    /// Scheme of the initiator document (only [`Scheme::Https`] triggers restrictions).
+    pub document_scheme: Scheme,
+    /// `true` for blockable active content (scripts, styles, XHR/fetch, fonts), `false` for
+    /// upgradeable passive content (images, media).
+    pub active: bool,
+}
+
+impl MixedContentPolicy {
+    /// Builds a mixed-content policy for `document_scheme` and content class `active`.
+    pub const fn new(document_scheme: Scheme, active: bool) -> Self {
+        Self {
+            document_scheme,
+            active,
+        }
+    }
+
+    /// Evaluates the policy against `resource`.
+    pub fn decide(&self, resource: &Url) -> MixedContentAction {
+        decide(self.document_scheme, resource, self.active)
+    }
+
+    /// Enforces the policy on `resource`, returning either the allowed/upgraded URL or
+    /// [`FetchError::MixedContentBlocked`].
+    pub fn apply(&self, resource: &Url) -> Result<Url, FetchError> {
+        match self.decide(resource) {
+            MixedContentAction::Allow => Ok(resource.clone()),
+            MixedContentAction::Upgrade(upgraded) => Url::parse(&upgraded)
+                .map_err(|_| FetchError::MixedContentBlocked(resource.as_str().to_owned())),
+            MixedContentAction::Block => Err(FetchError::MixedContentBlocked(
+                resource.as_str().to_owned(),
+            )),
+        }
+    }
 }
 
 /// Decides how to treat `resource` when loaded from a document with scheme `document_scheme`.
@@ -89,5 +128,20 @@ mod tests {
             decide(Scheme::Https, &https, true),
             MixedContentAction::Allow
         );
+    }
+
+    #[test]
+    fn policy_apply_enforces_active_and_passive() {
+        let http = Url::parse("http://cdn.test/asset?x=1").expect("url");
+        let active = MixedContentPolicy::new(Scheme::Https, true);
+        let err = active.apply(&http).expect_err("active http must block");
+        assert!(matches!(err, FetchError::MixedContentBlocked(_)));
+
+        let passive = MixedContentPolicy::new(Scheme::Https, false);
+        let upgraded = passive.apply(&http).expect("passive http must upgrade");
+        assert_eq!(upgraded.as_str(), "https://cdn.test/asset?x=1");
+
+        let insecure_doc = MixedContentPolicy::new(Scheme::Http, true);
+        assert_eq!(insecure_doc.apply(&http).expect("http doc"), http);
     }
 }
