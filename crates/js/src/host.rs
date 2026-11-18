@@ -8,9 +8,11 @@
 //!   the host side table); the actual generation-checked [`NodeId`] stays in Rust. Every access
 //!   revalidates it with [`megi_core::Document::try_node`], so stale/removed nodes raise a typed
 //!   JS error instead of panicking (handles are never dereferenced blindly).
-//! - **Per-thread current host.** Boa native functions are plain `fn` pointers (no
-//!   captures); the runtime publishes its host in a thread-local for the duration of an
-//!   `eval`. Tests run in parallel threads, so each thread sees its own runtime.
+//! - **Context-installed host.** Boa native functions are plain `fn` pointers (no
+//!   captures); the shared host cell is installed in the `Context`'s `HostDefined` data
+//!   at construction. Every native function borrows it from the `Context` it receives,
+//!   so a nested realm (iframe/worker) always reaches its own host without thread-local
+//!   state. Tests run in parallel threads with independent runtimes.
 //!
 //! Limits documented for consumers: the side table keeps one entry per distinct node
 //! handle ever exposed to JS (bounded by the DOM arena plus removed nodes until wrappers
@@ -442,9 +444,6 @@ impl FromIterator<(String, String)> for StorageMap {
 /// Shared, mutable host state.
 pub const MAX_CONSOLE_ENTRIES: usize = 4096;
 
-/// Outbox queue for child-to-parent `postMessage` (`(json_payload, sender_origin, target_origin)`).
-pub(crate) type FrameOutbox = Rc<RefCell<VecDeque<(String, String, String)>>>;
-
 pub(crate) struct Host {
     /// The document scripts operate on.
     pub document: Document,
@@ -556,12 +555,10 @@ pub(crate) struct Host {
     pub frame_node_next_handle: u32,
     /// Deterministic cooperative workers (no threads); `None` slots are terminated/dropped.
     pub workers: Vec<Option<crate::runtime::WorkerState>>,
-    /// Parent host when this host belongs to a worker realm.
-    pub worker_parent: Option<Rc<RefCell<Host>>>,
     /// Worker id in the parent host (worker realms only).
     pub worker_id: Option<u32>,
-    /// Outbox queue of the worker realm (`postMessage` from the worker).
-    pub worker_outbox: Option<Rc<RefCell<std::collections::VecDeque<String>>>>,
+    /// Outbox queue of the worker realm (`postMessage` from the worker), owned by this host.
+    pub worker_outbox: Option<VecDeque<String>>,
     /// ES module resolver/loader injected by the host (no I/O in `js`).
     pub module_resolver: Option<ModuleResolver>,
     pub module_loader: Option<ModuleLoader>,
@@ -587,8 +584,9 @@ pub(crate) struct Host {
     pub parent_origin: Option<String>,
     /// Whether this child frame is same-origin with its parent (and not opaque).
     pub parent_same_origin: bool,
-    /// Outbox for `window.parent.postMessage(...)` (`(json_payload, child_origin, target_origin)`).
-    pub parent_outbox: Option<FrameOutbox>,
+    /// Outbox for `window.parent.postMessage(...)` (`(json_payload, child_origin, target_origin)`),
+    /// owned by this (child) host; the parent drains it through the child's context.
+    pub parent_outbox: Option<VecDeque<(String, String, String)>>,
     /// Pending self-targeted `window.postMessage(...)` messages (`(json_payload, origin)`).
     pub self_messages: VecDeque<(String, String)>,
     /// Child `<iframe>` browsing contexts owned by this document.
@@ -658,7 +656,6 @@ impl Host {
             frame_nodes: std::collections::HashMap::new(),
             frame_node_next_handle: 1,
             workers: Vec::new(),
-            worker_parent: None,
             worker_id: None,
             worker_outbox: None,
             module_resolver: None,
@@ -899,56 +896,19 @@ impl Host {
     }
 }
 
-thread_local! {
-    static CURRENT_HOST: RefCell<Option<Rc<RefCell<Host>>>> = const { RefCell::new(None) };
-}
-
-/// Publishes `host` as the current thread's host; restores the previous value on drop.
-pub(crate) struct HostScope(Option<Rc<RefCell<Host>>>);
-
-impl HostScope {
-    pub fn enter(host: &Rc<RefCell<Host>>) -> Self {
-        let previous = CURRENT_HOST.with(|cell| cell.borrow_mut().replace(Rc::clone(host)));
-        Self(previous)
-    }
-}
-
-impl Drop for HostScope {
-    fn drop(&mut self) {
-        CURRENT_HOST.with(|cell| {
-            *cell.borrow_mut() = self.0.take();
-        });
-    }
-}
-
-/// Returns a clone of the current thread's host, if a runtime is evaluating.
-pub(crate) fn current_host() -> Option<Rc<RefCell<Host>>> {
-    CURRENT_HOST.with(|cell| cell.borrow().clone())
-}
-
-/// Runs `f` with exclusive access to the current host.
-pub(crate) fn with_host<R>(f: impl FnOnce(&mut Host) -> R) -> Option<R> {
-    let host = current_host()?;
-    let mut borrowed = host.borrow_mut();
-    Some(f(&mut borrowed))
-}
-
 // ---------------------------------------------------------------------------
-// Parallel bridge: the same host cell, now also reachable from Boa's Context.
+// Context bridge: the host cell lives in Boa's `HostDefined` data.
 // ---------------------------------------------------------------------------
 
 use boa_engine::{Context, JsError as BoaError, JsNativeError, JsResult};
 
 /// The shared handle stored in Boa's `HostDefined` map.
 ///
-/// This is **not** a second `Host`: it is a clone of the exact `Rc` owned by
-/// `JsRuntime` and published to `CURRENT_HOST`, so the legacy TLS bridge and
-/// the context bridge borrow one and the same `RefCell<Host>`. The host-bridge
-/// rewrite removes the TLS bridge and this extra handle in Task 5.
+/// This is the single owner of the host cell: the `Context` keeps it alive, and
+/// every native function borrows it from the `Context` it receives. There is no
+/// thread-local "current host" and no second owner on `JsRuntime`.
 type ContextHost = Rc<RefCell<Host>>;
 
-// The three entry points below are the parallel bridge consumed by the later
-// migration tasks; only `install_host_cell` is wired in Task 1.
 #[cfg_attr(not(test), allow(dead_code))]
 fn missing_host() -> BoaError {
     JsNativeError::error()
@@ -960,12 +920,6 @@ fn missing_host() -> BoaError {
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn install_host(context: &mut Context, host: ContextHost) {
     context.insert_data(host);
-}
-
-/// Installs `host` once and returns the handle `JsRuntime` keeps for the TLS bridge.
-pub(crate) fn install_host_cell(context: &mut Context, host: &ContextHost) -> ContextHost {
-    install_host(context, Rc::clone(host));
-    Rc::clone(host)
 }
 
 /// Mutably borrows the host attached to `context`; re-entry is a typed error.
@@ -1000,7 +954,7 @@ mod context_host_tests {
     use super::*;
     use boa_engine::Context;
 
-    /// The same shared handle the runtime keeps for the TLS bridge.
+    /// A standalone host cell installed into a fresh context.
     fn demo_host() -> ContextHost {
         Rc::new(RefCell::new(Host::new(
             Document::new(),
@@ -1009,7 +963,7 @@ mod context_host_tests {
     }
 
     #[test]
-    fn host_is_reachable_from_the_context_and_not_from_tls() {
+    fn host_is_reachable_from_the_context() {
         let mut context = Context::default();
         install_host(&mut context, demo_host());
         assert!(host_ref(&context).is_ok());
@@ -1022,18 +976,6 @@ mod context_host_tests {
         install_host(&mut context, demo_host());
         host_cell(&mut context).unwrap().url = "https://example.com/".to_string();
         assert_eq!(host_ref(&context).unwrap().url, "https://example.com/");
-    }
-
-    #[test]
-    fn context_and_tls_bridges_share_one_host() {
-        let mut context = Context::default();
-        let host = demo_host();
-        install_host(&mut context, Rc::clone(&host));
-        let _scope = HostScope::enter(&host);
-        let _ = with_host(|h| h.url = "https://example.com/".to_string());
-        assert_eq!(host_ref(&context).unwrap().url, "https://example.com/");
-        host_cell(&mut context).unwrap().title = "shared".to_string();
-        assert_eq!(with_host(|h| h.title.clone()).unwrap(), "shared");
     }
 
     #[test]

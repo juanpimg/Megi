@@ -8,8 +8,9 @@
 //!   only carry a small numeric handle; the generation-checked `NodeId` stays in Rust and is
 //!   revalidated with `Document::try_node` on every access. Stale handles produce a typed
 //!   JS `TypeError`, never a panic.
-//! - Native functions access the host through a thread-local installed for the duration of
-//!   an `eval`; tests run in parallel threads with independent runtimes.
+//! - Native functions borrow the host from the `Context` they receive (stored in Boa's
+//!   `HostDefined` data); nested iframe/worker realms therefore always reach their own
+//!   host, and tests run in parallel threads with independent runtimes.
 //!
 //! ## Anti-DoS budgets
 //!
@@ -55,9 +56,9 @@ use std::rc::Rc;
 
 use crate::error::JsError;
 use crate::host::{
-    ConsoleEntry, HistoryAction, Host, HostScope, LocationAction, MAX_OBSERVERS, MutationKind,
-    MutationRecord, ObserverRegistration, ObserverTarget, SandboxFlags, StorageKind,
-    StorageProvider, host_cell, host_ref, with_host,
+    ConsoleEntry, HistoryAction, Host, LocationAction, MAX_OBSERVERS, MutationKind, MutationRecord,
+    ObserverRegistration, ObserverTarget, SandboxFlags, StorageKind, StorageProvider, host_cell,
+    host_ref,
 };
 
 impl From<BoaError> for JsError {
@@ -164,10 +165,8 @@ impl boa_engine::context::HostHooks for CspEvalHooks {
 
 /// Embedded JavaScript runtime bound to one DOM document.
 pub struct JsRuntime {
-    /// Boa context (single realm).
+    /// Boa context (single realm). It owns the shared host cell in `HostDefined`.
     context: Context,
-    /// Shared host state.
-    host: Rc<RefCell<Host>>,
     /// Execution budget applied before each `eval`.
     budget: Budget,
     /// Whether `eval` / `new Function` are allowed by CSP (`'unsafe-eval'`).
@@ -200,9 +199,7 @@ impl JsRuntime {
         url: String,
         is_worker: bool,
     ) -> Result<Self, JsError> {
-        let host_slot: Rc<RefCell<Option<Rc<RefCell<Host>>>>> = Rc::new(RefCell::new(None));
         let module_loader = Rc::new(MegiModuleLoader {
-            host: Rc::clone(&host_slot),
             base_url: url.clone(),
             cache: RefCell::new(HashMap::new()),
             max_cache_entries: 256,
@@ -215,16 +212,18 @@ impl JsRuntime {
             }))
             .build()
             .map_err(|error| JsError::Internal(error.to_string()))?;
-        let host = Rc::new(RefCell::new(Host::new(document, url)));
-        *host_slot.borrow_mut() = Some(crate::host::install_host_cell(&mut context, &host));
+        // The Context is the single owner of the host cell; no thread-local mirror.
+        crate::host::install_host(
+            &mut context,
+            Rc::new(RefCell::new(Host::new(document, url))),
+        );
         if is_worker {
             install_bare_worker_globals(&mut context)?;
         } else {
-            install_globals(&mut context, &host)?;
+            install_globals(&mut context)?;
         }
         Ok(Self {
             context,
-            host,
             budget: Budget::default(),
             allow_eval,
             last_error: None,
@@ -255,12 +254,10 @@ impl JsRuntime {
         std::cell::Ref::map(host, |host| &host.document)
     }
 
-    /// Mutable access to the document.
-    ///
-    /// Kept on the shared cell: this `&self` accessor hands out an `RefMut`
-    /// tied to the cell, and a `&mut Context` is not available here.
-    pub fn document_mut(&self) -> std::cell::RefMut<'_, Document> {
-        std::cell::RefMut::map(self.host.borrow_mut(), |host| &mut host.document)
+    /// Mutable access to the document, borrowed from the context's host cell.
+    pub fn document_mut(&mut self) -> std::cell::RefMut<'_, Document> {
+        let host = host_cell(&mut self.context).expect("JavaScript host installed in context");
+        std::cell::RefMut::map(host, |host| &mut host.document)
     }
 
     /// Snapshot of the canvas 2D surfaces created by scripts (#1545), keyed by `<canvas>` node.
@@ -306,9 +303,7 @@ impl JsRuntime {
 
         let name: String = source_name.chars().take(MAX_SOURCE_NAME).collect();
         let source = Source::from_bytes(script);
-        let _scope = HostScope::enter(&self.host);
         let result = self.context.eval(source);
-        drop(_scope);
 
         match result {
             Ok(value) => {
@@ -322,9 +317,7 @@ impl JsRuntime {
             Err(error) => {
                 let message = error.to_string();
                 let typed = classify_error(&message);
-                let _scope = HostScope::enter(&self.host);
                 let _ = crate::events::report_uncaught(&mut self.context, &message, &name);
-                drop(_scope);
                 self.last_error = Some(message);
                 Err(typed)
             }
@@ -333,14 +326,12 @@ impl JsRuntime {
 
     /// Executes timers whose due time has arrived (real clock by default).
     pub fn run_tasks(&mut self, max_steps: usize) -> Result<usize, JsError> {
-        let _scope = HostScope::enter(&self.host);
         let deadline = crate::events::now_ms();
         let result = crate::events::run_due_timers(&mut self.context, deadline, max_steps);
         if let Err(error) = &result {
             let message = error.to_string();
             let _ = crate::events::report_uncaught(&mut self.context, &message, "<timer>");
         }
-        drop(_scope);
         result
     }
 
@@ -353,7 +344,9 @@ impl JsRuntime {
         if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
             slot.computed_style = Some(provider.clone());
         }
-        self.host.borrow_mut().computed_style_provider = Some(provider);
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .computed_style_provider = Some(provider);
     }
 
     /// Installs the provider used by `window.matchMedia(query).matches`.
@@ -366,7 +359,9 @@ impl JsRuntime {
         if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
             slot.media = Some(provider.clone());
         }
-        self.host.borrow_mut().media_provider = Some(provider);
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .media_provider = Some(provider);
     }
 
     /// Installs the provider used by `window.innerWidth/innerHeight/devicePixelRatio`
@@ -379,7 +374,7 @@ impl JsRuntime {
         if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
             slot.viewport = Some(provider.clone());
         }
-        let mut host = self.host.borrow_mut();
+        let mut host = host_cell(&mut self.context).expect("JavaScript host installed in context");
         host.scroll_x = initial.scroll_x;
         host.scroll_y = initial.scroll_y;
         host.viewport_provider = Some(provider);
@@ -391,7 +386,9 @@ impl JsRuntime {
         if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
             slot.history = Some(provider.clone());
         }
-        self.host.borrow_mut().history_provider = Some(provider);
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .history_provider = Some(provider);
     }
 
     /// Installs the `location.assign/replace/reload` provider.
@@ -399,7 +396,9 @@ impl JsRuntime {
         if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
             slot.location = Some(provider.clone());
         }
-        self.host.borrow_mut().location_provider = Some(provider);
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .location_provider = Some(provider);
     }
 
     /// Installs optional Web Storage persistence and loads the current snapshots.
@@ -410,7 +409,7 @@ impl JsRuntime {
             slot.storage_load = Some(provider.load.clone());
             slot.storage_save = Some(provider.save.clone());
         }
-        let mut host = self.host.borrow_mut();
+        let mut host = host_cell(&mut self.context).expect("JavaScript host installed in context");
         host.local_storage = local.into_iter().collect();
         host.session_storage = session.into_iter().collect();
         host.storage_provider = Some(provider);
@@ -422,7 +421,9 @@ impl JsRuntime {
             slot.cookie_get = Some(provider.get.clone());
             slot.cookie_set = Some(provider.set.clone());
         }
-        self.host.borrow_mut().cookie_provider = Some(provider);
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .cookie_provider = Some(provider);
     }
 
     /// Current `document.readyState` (`loading` until the host changes it).
@@ -509,14 +510,10 @@ impl JsRuntime {
         event_type: &str,
         bubbles: bool,
     ) -> Result<bool, JsError> {
-        let _scope = HostScope::enter(&self.host);
         // Listeners must use the currently configured budget, not the one left over
         // from the last script evaluation (#1215).
         self.apply_current_budget();
-        let result =
-            crate::events::dispatch_rust_event(&mut self.context, target, event_type, bubbles);
-        drop(_scope);
-        result
+        crate::events::dispatch_rust_event(&mut self.context, target, event_type, bubbles)
     }
 
     /// Dispatches a structured UI event (`KeyboardEvent`, `InputEvent`, `FocusEvent`, or
@@ -529,18 +526,15 @@ impl JsRuntime {
         cancelable: bool,
         kind: &crate::events::JsUiEventKind,
     ) -> Result<bool, JsError> {
-        let _scope = HostScope::enter(&self.host);
         self.apply_current_budget();
-        let result = crate::events::dispatch_rust_ui_event(
+        crate::events::dispatch_rust_ui_event(
             &mut self.context,
             target,
             event_type,
             bubbles,
             cancelable,
             kind,
-        );
-        drop(_scope);
-        result
+        )
     }
 
     /// Updates `document.activeElement` from the host UI (e.g. shell focus changes, #1504).
@@ -556,24 +550,18 @@ impl JsRuntime {
 
     /// Runs pending promise/microtask jobs (Boa's job queue).
     pub fn run_microtasks(&mut self) -> Result<(), JsError> {
-        let _scope = HostScope::enter(&self.host);
         let result = match self.context.run_jobs() {
             Ok(()) => Ok(()),
             Err(error) => {
                 let message = error.to_string();
-                let _scope = HostScope::enter(&self.host);
                 let _ = crate::events::report_uncaught(&mut self.context, &message, "<microtask>");
-                drop(_scope);
                 let typed = classify_error(&message);
                 self.last_error = Some(message);
                 Err(typed)
             }
         };
-        drop(_scope);
         if result.is_ok() {
-            let _scope = HostScope::enter(&self.host);
             let delivered = deliver_mutation_records(&mut self.context);
-            drop(_scope);
             delivered?;
             if let Err(error) = self.run_worker_tasks(64) {
                 self.report_worker_delivery_error(error, "<worker tasks>");
@@ -584,13 +572,11 @@ impl JsRuntime {
 
     /// Advances the injectable virtual clock by `delta` and runs the timers now due.
     pub fn advance(&mut self, delta: std::time::Duration) -> Result<u64, JsError> {
-        let _scope = HostScope::enter(&self.host);
         let result = crate::events::advance_clock(&mut self.context, delta);
         if let Err(error) = &result {
             let message = error.to_string();
             let _ = crate::events::report_uncaught(&mut self.context, &message, "<timer>");
         }
-        drop(_scope);
         result
     }
 
@@ -610,7 +596,6 @@ impl JsRuntime {
         deadline_ms: u64,
         max_timers: usize,
     ) -> Result<usize, JsError> {
-        let _scope = HostScope::enter(&self.host);
         // Timer callbacks must not inherit the loop limit of the last script eval (#1215).
         self.apply_current_budget();
         let result = crate::events::run_until(&mut self.context, deadline_ms, max_timers);
@@ -618,7 +603,6 @@ impl JsRuntime {
             let message = error.to_string();
             let _ = crate::events::report_uncaught(&mut self.context, &message, "<timer>");
         }
-        drop(_scope);
         result
     }
 
@@ -712,14 +696,13 @@ fn accessor_fn(
     FunctionObjectBuilder::new(context.realm(), native(f)).build()
 }
 
-/// Borrows the host attached to `context` for the duration of `f` (never TLS).
+/// Borrows the host attached to `context` for the duration of `f`.
 ///
-/// This is the mechanical migration adapter for leaf/DOM bindings that used to
-/// call `with_host`. It keeps the legacy `Option<R>` shape so each call site's
-/// fallback (`unwrap_or`, `ok_or_else`, …) is unchanged; the underlying
-/// [`host_cell`] borrow is a `RefMut` that is dropped as soon as `f` returns,
-/// so no borrow ever survives a call back into JavaScript. Re-entry is a typed
-/// Boa error (mapped to `None` here) instead of the old `already borrowed` panic.
+/// This is the single access path for native bindings. It keeps the `Option<R>`
+/// shape so each call site's fallback (`unwrap_or`, `ok_or_else`, …) is concise;
+/// the underlying [`host_cell`] borrow is a `RefMut` dropped as soon as `f`
+/// returns, so no borrow survives a call back into JavaScript. Re-entry is a
+/// typed Boa error (mapped to `None` here) instead of a panic.
 fn with_host_cell<R>(context: &mut Context, f: impl FnOnce(&mut Host) -> R) -> Option<R> {
     host_cell(context).ok().map(|mut host| f(&mut host))
 }
@@ -771,10 +754,9 @@ fn install_bare_worker_globals(context: &mut Context) -> Result<(), JsError> {
 }
 
 /// Installs `window`, `console`, `document`, `setTimeout`/`setInterval` and helpers.
-fn install_globals(context: &mut Context, host: &Rc<RefCell<Host>>) -> Result<(), JsError> {
+fn install_globals(context: &mut Context) -> Result<(), JsError> {
     let global = context.global_object();
     let window_value = JsValue::from(global.clone());
-    let _ = host;
 
     let console = build_console(context);
     let document = build_document_object(context);
@@ -1968,7 +1950,7 @@ fn node_text_content_set(
     });
     match result {
         Some(Ok(())) => {
-            note_mutation(MutationKind::CharacterData, node_id, None, None);
+            note_mutation(MutationKind::CharacterData, node_id, None, None, context);
             Ok(JsValue::undefined())
         }
         Some(Err(error)) => Err(js_error(error.to_string())),
@@ -2180,8 +2162,8 @@ fn node_class_list_get(
 /// Returns the attribute name to use for `node_id`: HTML elements lowercase attribute names
 /// (DOM `getAttribute`/`setAttribute` case-insensitivity for HTML), foreign elements keep
 /// the authored case.
-fn attribute_name(node_id: NodeId, name: &str) -> String {
-    let is_html = with_host(|host| {
+fn attribute_name(node_id: NodeId, name: &str, context: &mut Context) -> String {
+    let is_html = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
@@ -3274,7 +3256,7 @@ fn node_set_attribute(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let name = attribute_name(node_id, &arg_string(args, 0, context)?);
+    let name = attribute_name(node_id, &arg_string(args, 0, context)?, context);
     let value = arg_string(args, 1, context)?;
     let old_value = with_host_cell(context, |host| {
         host.document
@@ -3297,7 +3279,13 @@ fn node_set_attribute(
     });
     match result {
         Some(Ok(())) => {
-            note_mutation(MutationKind::Attributes, node_id, Some(name), old_value);
+            note_mutation(
+                MutationKind::Attributes,
+                node_id,
+                Some(name),
+                old_value,
+                context,
+            );
             Ok(JsValue::undefined())
         }
         Some(Err(message)) => Err(js_error(message)),
@@ -3311,7 +3299,7 @@ fn node_get_attribute(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let name = attribute_name(node_id, &arg_string(args, 0, context)?);
+    let name = attribute_name(node_id, &arg_string(args, 0, context)?, context);
     let value = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
@@ -3334,7 +3322,7 @@ fn node_remove_attribute(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let name = attribute_name(node_id, &arg_string(args, 0, context)?);
+    let name = attribute_name(node_id, &arg_string(args, 0, context)?, context);
     let old_value = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
@@ -3356,7 +3344,13 @@ fn node_remove_attribute(
             invalidate_iframe_state(host, node_id);
         }
     });
-    note_mutation(MutationKind::Attributes, node_id, Some(name), old_value);
+    note_mutation(
+        MutationKind::Attributes,
+        node_id,
+        Some(name),
+        old_value,
+        context,
+    );
     Ok(JsValue::undefined())
 }
 
@@ -3366,7 +3360,7 @@ fn node_has_attribute(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let name = attribute_name(node_id, &arg_string(args, 0, context)?);
+    let name = attribute_name(node_id, &arg_string(args, 0, context)?, context);
     let has = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
@@ -3451,7 +3445,7 @@ fn node_append_child(this: &JsValue, args: &[JsValue], context: &mut Context) ->
     if !appended {
         return Err(js_error("appendChild failed (hierarchy or unknown node)"));
     }
-    note_mutation(MutationKind::ChildList, parent, None, None);
+    note_mutation(MutationKind::ChildList, parent, None, None, context);
     wrap_node(context, child)
 }
 
@@ -3480,7 +3474,7 @@ fn node_insert_before(
     if !inserted {
         return Err(js_error("insertBefore failed (hierarchy or unknown node)"));
     }
-    note_mutation(MutationKind::ChildList, parent, None, None);
+    note_mutation(MutationKind::ChildList, parent, None, None, context);
     wrap_node(context, new_node)
 }
 
@@ -3494,7 +3488,7 @@ fn node_remove_child(this: &JsValue, args: &[JsValue], context: &mut Context) ->
     if !removed {
         return Err(js_error("removeChild failed (node is not a child)"));
     }
-    note_mutation(MutationKind::ChildList, parent, None, None);
+    note_mutation(MutationKind::ChildList, parent, None, None, context);
     wrap_node(context, child)
 }
 
@@ -3515,7 +3509,7 @@ fn node_replace_child(
     if !replaced {
         return Err(js_error("replaceChild failed"));
     }
-    note_mutation(MutationKind::ChildList, parent, None, None);
+    note_mutation(MutationKind::ChildList, parent, None, None, context);
     wrap_node(context, old_node)
 }
 
@@ -4620,8 +4614,8 @@ fn classes_of(this: &JsValue, context: &mut Context) -> JsResult<(NodeId, Vec<St
     Ok((node_id, classes))
 }
 
-fn write_classes(node_id: NodeId, classes: &[String]) {
-    with_host(|host| {
+fn write_classes(node_id: NodeId, classes: &[String], context: &mut Context) {
+    with_host_cell(context, |host| {
         if let Some(element) = host
             .document
             .try_node_mut(node_id)
@@ -4657,7 +4651,7 @@ fn class_add(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResul
             classes.push(class);
         }
     }
-    write_classes(node_id, &classes);
+    write_classes(node_id, &classes, context);
     Ok(JsValue::undefined())
 }
 
@@ -4672,7 +4666,7 @@ fn class_remove(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     for class in parsed {
         classes.retain(|existing| *existing != class);
     }
-    write_classes(node_id, &classes);
+    write_classes(node_id, &classes, context);
     Ok(JsValue::undefined())
 }
 
@@ -4698,7 +4692,7 @@ fn class_toggle(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     } else {
         classes.retain(|existing| *existing != class);
     }
-    write_classes(node_id, &classes);
+    write_classes(node_id, &classes, context);
     Ok(JsValue::from(add))
 }
 
@@ -4818,7 +4812,9 @@ fn history_push_state(
             .map(|text| text.to_std_string_escaped())
             .filter(|text| !text.is_empty())
     });
-    let resolved = with_host(|host| url.as_deref().map(|url| host.resolve_url(url)));
+    let resolved = with_host_cell(context, |host| {
+        url.as_deref().map(|url| host.resolve_url(url))
+    });
     let Some(resolved) = resolved else {
         return Err(js_error("no active JavaScript host"));
     };
@@ -4838,7 +4834,7 @@ fn history_push_state(
     };
     if applied {
         root_set(context, "__megi_history_state", 0, state)?;
-        with_host(|host| {
+        with_host_cell(context, |host| {
             host.history_length = host.history_length.saturating_add(1);
             host.history_state = json.clone();
             if let Some(url) = &resolved {
@@ -4869,7 +4865,9 @@ fn history_replace_state(
             .map(|text| text.to_std_string_escaped())
             .filter(|text| !text.is_empty())
     });
-    let resolved = with_host(|host| url.as_deref().map(|url| host.resolve_url(url)));
+    let resolved = with_host_cell(context, |host| {
+        url.as_deref().map(|url| host.resolve_url(url))
+    });
     let Some(resolved) = resolved else {
         return Err(js_error("no active JavaScript host"));
     };
@@ -4889,7 +4887,7 @@ fn history_replace_state(
     };
     if applied {
         root_set(context, "__megi_history_state", 0, state)?;
-        with_host(|host| {
+        with_host_cell(context, |host| {
             host.history_state = json.clone();
             if let Some(url) = &resolved {
                 host.url = url.clone();
@@ -5045,7 +5043,7 @@ fn location_href_get(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult
 
 fn navigate_location(args: &[JsValue], context: &mut Context, replace: bool) -> JsResult<JsValue> {
     let url = arg_string(args, 0, context)?;
-    let resolved = with_host(|host| host.resolve_url(&url));
+    let resolved = with_host_cell(context, |host| host.resolve_url(&url));
     let Some(resolved) = resolved else {
         return Err(js_error("no active JavaScript host"));
     };
@@ -5103,7 +5101,7 @@ fn storage_kind(this: &JsValue, context: &mut Context) -> JsResult<StorageKind> 
 ///
 /// The old implementation cloned the entire `StorageMap` on every read and discarded `f`
 /// (`let _ = f;`), making every `getItem`/`key`/`length` O(n) over a session. Borrowing through
-/// `with_host` keeps lookups O(1) as documented.
+/// `host_ref` keeps lookups O(1) as documented.
 fn storage_read<T>(
     this: &JsValue,
     context: &mut Context,
@@ -5265,7 +5263,7 @@ fn mutation_observer_constructor(
     };
     // Cap registrations before rooting anything (issue #1134): a script must not be
     // able to create millions of observers that are all visited on every mutation.
-    let observer_count = with_host(|host| host.observers.len()).unwrap_or(0);
+    let observer_count = with_host_cell(context, |host| host.observers.len()).unwrap_or(0);
     if observer_count >= MAX_OBSERVERS {
         return Err(range_error(format!(
             "MutationObserver limit of {MAX_OBSERVERS} exceeded"
@@ -5299,7 +5297,7 @@ fn mutation_observer_constructor(
         u64::from(object_slot),
         JsValue::from(observer.clone()),
     )?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         host.observers.push(ObserverRegistration {
             callback_slot,
             object_slot,
@@ -5339,7 +5337,7 @@ fn observer_observe(this: &JsValue, args: &[JsValue], context: &mut Context) -> 
         character_data: flag("characterData"),
         subtree: flag("subtree"),
     };
-    let registered = with_host(|host| host.observe_target(slot, target));
+    let registered = with_host_cell(context, |host| host.observe_target(slot, target));
     if let Some(Err(message)) = registered {
         return Err(js_error(message));
     }
@@ -5355,7 +5353,7 @@ fn observer_disconnect(
     // Per DOM §4.3.1, disconnect() only stops delivering future records: the observer
     // stays registered so a later observe() can re-arm it. Removing the registration
     // made observe() silently no-op forever (#1135).
-    with_host(|host| host.disconnect_observer(slot));
+    with_host_cell(context, |host| host.disconnect_observer(slot));
     Ok(JsValue::undefined())
 }
 
@@ -5374,8 +5372,9 @@ fn note_mutation(
     target: NodeId,
     name: Option<String>,
     old_value: Option<String>,
+    context: &mut Context,
 ) {
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if !host.observer_index.is_empty() {
             host.record_mutation(MutationRecord {
                 kind,
@@ -5388,7 +5387,7 @@ fn note_mutation(
 }
 
 fn collect_observer_records(context: &mut Context, slot: u32, take: bool) -> JsResult<JsArray> {
-    let records = with_host(|host| {
+    let records = with_host_cell(context, |host| {
         let taken = {
             let Some(registration) = host.observers.iter_mut().find(|r| r.object_slot == slot)
             else {
@@ -5447,7 +5446,7 @@ fn collect_observer_records(context: &mut Context, slot: u32, take: bool) -> JsR
 }
 
 fn deliver_mutation_records(context: &mut Context) -> Result<(), JsError> {
-    let registrations: Vec<(u32, u32)> = with_host(|host| {
+    let registrations: Vec<(u32, u32)> = with_host_cell(context, |host| {
         host.observers
             .iter()
             .filter(|r| !r.records.is_empty())
@@ -5849,15 +5848,11 @@ fn module_error(error: boa_engine::JsError) -> JsError {
     classify_error(&error.to_string())
 }
 
-fn resolve_module(
-    host: &Rc<RefCell<Host>>,
-    specifier: &str,
-    base: &str,
-) -> Result<String, JsError> {
+fn resolve_module(context: &Context, specifier: &str, base: &str) -> Result<String, JsError> {
     // Clone the Arc provider out of the borrow before invoking it: a resolver may
     // re-enter JavaScript, which must not borrow the host again.
     let (import_target, resolver) = {
-        let host = host.borrow();
+        let host = host_ref(context).map_err(|error| JsError::Internal(error.to_string()))?;
         (
             host.import_map
                 .as_ref()
@@ -5887,8 +5882,13 @@ fn resolve_module(
     resolved.ok_or_else(|| JsError::ModuleNotFound(format!("{specifier} (base {base})")))
 }
 
-fn load_module(host: &Rc<RefCell<Host>>, url: &str) -> Result<String, JsError> {
-    let loader = { host.borrow().module_loader.clone() };
+fn load_module(context: &Context, url: &str) -> Result<String, JsError> {
+    let loader = {
+        host_ref(context)
+            .map_err(|error| JsError::Internal(error.to_string()))?
+            .module_loader
+            .clone()
+    };
     let loaded = match &loader {
         Some(loader) => Some(loader(url)?),
         None => None,
@@ -5915,7 +5915,6 @@ const MAX_MODULE_COUNT: usize = 1024;
 #[allow(clippy::too_many_arguments)]
 fn eval_module_graph(
     context: &mut Context,
-    host: &Rc<RefCell<Host>>,
     url: &str,
     source: &str,
     budget: &Budget,
@@ -5943,11 +5942,10 @@ fn eval_module_graph(
     let parsed = transform_module(source, url)?;
     let mut namespaces = Vec::with_capacity(parsed.imports.len());
     for import in &parsed.imports {
-        let dep_url = resolve_module(host, &import.specifier, url)?;
-        let dep_source = load_module(host, &dep_url)?;
+        let dep_url = resolve_module(context, &import.specifier, url)?;
+        let dep_source = load_module(context, &dep_url)?;
         let namespace = eval_module_graph(
             context,
-            host,
             &dep_url,
             &dep_source,
             budget,
@@ -6010,11 +6008,10 @@ fn eval_module_graph(
     }
     // Literal dynamic imports are evaluated with the graph (documented eager subset).
     for (index, specifier) in parsed.dynamic_imports.iter().enumerate() {
-        let dep_url = resolve_module(host, specifier, url)?;
-        let dep_source = load_module(host, &dep_url)?;
+        let dep_url = resolve_module(context, specifier, url)?;
+        let dep_source = load_module(context, &dep_url)?;
         let namespace = eval_module_graph(
             context,
-            host,
             &dep_url,
             &dep_source,
             budget,
@@ -6054,11 +6051,7 @@ fn eval_module_graph(
         return_fields.join(", ")
     );
     apply_budget(context, budget);
-    let value = {
-        let _scope = HostScope::enter(host);
-        context.eval(Source::from_bytes(&script))
-    }
-    .map_err(module_error)?;
+    let value = { context.eval(Source::from_bytes(&script)) }.map_err(module_error)?;
     for index in 0..parsed.imports.len() {
         let _ = context.global_object().set(
             js_string!(format!("__megi_module_{index}")),
@@ -6084,7 +6077,9 @@ impl JsRuntime {
         if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
             slot.layout = Some(provider.clone());
         }
-        self.host.borrow_mut().layout_provider = Some(provider);
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .layout_provider = Some(provider);
     }
 
     /// Installs the ES module resolver (specifier + importer URL → resolved URL).
@@ -6092,7 +6087,9 @@ impl JsRuntime {
         if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
             slot.module_resolver = Some(resolver.clone());
         }
-        self.host.borrow_mut().module_resolver = Some(resolver);
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .module_resolver = Some(resolver);
     }
 
     /// Installs the ES module loader (`url → source text`; `js` performs no I/O itself).
@@ -6100,7 +6097,9 @@ impl JsRuntime {
         if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
             slot.module_loader = Some(loader.clone());
         }
-        self.host.borrow_mut().module_loader = Some(loader);
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .module_loader = Some(loader);
     }
 
     /// Installs an import map from JSON source (`{"imports":{...}}` subset; see
@@ -6113,7 +6112,9 @@ impl JsRuntime {
             ));
         }
         let map = crate::ImportMap::from_json(source)?;
-        self.host.borrow_mut().import_map = Some(map);
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .import_map = Some(map);
         Ok(())
     }
 
@@ -6145,7 +6146,6 @@ impl JsRuntime {
         let mut done = HashMap::new();
         let namespace = eval_module_graph(
             &mut self.context,
-            &self.host,
             base_url,
             source,
             budget,
@@ -6386,6 +6386,7 @@ fn attributes_remove_named(
         node_id,
         Some(name.clone()),
         old.clone(),
+        context,
     );
     match old {
         Some(value) => attribute_item(context, &name, &value),
@@ -6773,14 +6774,14 @@ fn frame_node(this: &JsValue, context: &mut Context) -> JsResult<(u32, NodeId)> 
         .and_then(|o| o.get(js_string!("__megi_frame_node"), context).ok())
         .and_then(|v| v.as_number())
         .ok_or_else(|| js_error("invalid frame node"))? as u32;
-    let node = with_host(|host| host.frame_nodes.get(&node_handle).copied())
+    let node = with_host_cell(context, |host| host.frame_nodes.get(&node_handle).copied())
         .flatten()
         .ok_or_else(|| js_error("stale frame node"))?;
     Ok((handle, node))
 }
 
 fn frame_element_wrapper(context: &mut Context, handle: u32, node: NodeId) -> JsResult<JsValue> {
-    let tag = with_host(|host| {
+    let tag = with_host_cell(context, |host| {
         host.frame_documents
             .get(&handle)
             .and_then(|d| d.try_node(node).and_then(|n| n.as_element()))
@@ -6788,7 +6789,7 @@ fn frame_element_wrapper(context: &mut Context, handle: u32, node: NodeId) -> Js
     })
     .flatten()
     .unwrap_or_default();
-    let node_handle = with_host(|host| {
+    let node_handle = with_host_cell(context, |host| {
         let h = host.frame_node_next_handle;
         host.frame_node_next_handle = host.frame_node_next_handle.wrapping_add(1);
         host.frame_nodes.insert(h, node);
@@ -6834,7 +6835,7 @@ fn frame_get_attribute(
 ) -> JsResult<JsValue> {
     let (handle, node) = frame_node(this, context)?;
     let name = arg_string(args, 0, context)?;
-    let value = with_host(|host| {
+    let value = with_host_cell(context, |host| {
         host.frame_documents
             .get(&handle)
             .and_then(|d| d.try_node(node).and_then(|n| n.as_element()))
@@ -6853,7 +6854,7 @@ fn frame_text_content(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let (handle, node) = frame_node(this, context)?;
-    let text = with_host(|host| {
+    let text = with_host_cell(context, |host| {
         host.frame_documents
             .get(&handle)
             .map(|d| d.text_content(node))
@@ -6870,7 +6871,7 @@ fn frame_get_element_by_id(
 ) -> JsResult<JsValue> {
     let handle = frame_handle(this, context)?;
     let id = arg_string(args, 0, context)?;
-    let node = with_host(|host| {
+    let node = with_host_cell(context, |host| {
         host.frame_documents
             .get(&handle)
             .and_then(|d| d.get_element_by_id(&id))
@@ -6889,7 +6890,7 @@ fn frame_query_selector_all(
 ) -> JsResult<JsValue> {
     let handle = frame_handle(this, context)?;
     let selector = arg_string(args, 0, context)?;
-    let nodes: Vec<NodeId> = with_host(|host| {
+    let nodes: Vec<NodeId> = with_host_cell(context, |host| {
         host.frame_documents
             .get(&handle)
             .map(|d| d.get_elements_by_tag_name(&selector).into_iter().collect())
@@ -6910,7 +6911,7 @@ fn iframe_content_document(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = this_node(this, context)?;
-    let handle = with_host(|host| {
+    let handle = with_host_cell(context, |host| {
         if host
             .document
             .try_node(node)
@@ -6925,11 +6926,13 @@ fn iframe_content_document(
     let Some(handle) = handle else {
         return Ok(JsValue::null());
     };
-    let body_node = with_host(|host| host.frame_documents.get(&handle).and_then(|d| d.body()))
-        .flatten()
-        .unwrap_or_else(|| NodeId::from_index(usize::MAX));
+    let body_node = with_host_cell(context, |host| {
+        host.frame_documents.get(&handle).and_then(|d| d.body())
+    })
+    .flatten()
+    .unwrap_or_else(|| NodeId::from_index(usize::MAX));
     let body = frame_element_wrapper(context, handle, body_node)?;
-    let title = with_host(|host| {
+    let title = with_host_cell(context, |host| {
         host.frame_documents.get(&handle).and_then(|d| {
             d.get_elements_by_tag_name("title")
                 .first()
@@ -6963,8 +6966,8 @@ fn iframe_content_document(
     Ok(init.build().into())
 }
 
-fn slot_host(slot: NodeId) -> Option<NodeId> {
-    with_host(|host| {
+fn slot_host(slot: NodeId, context: &mut Context) -> Option<NodeId> {
+    with_host_cell(context, |host| {
         let mut current = Some(slot);
         while let Some(id) = current {
             if let Some(host_node) = host.shadow_hosts.get(&id) {
@@ -6986,7 +6989,7 @@ fn slot_assigned_nodes(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let slot = this_node(this, context)?;
-    let Some(host_node) = slot_host(slot) else {
+    let Some(host_node) = slot_host(slot, context) else {
         return wrap_list(context, Vec::new());
     };
     let slot_name = with_host_cell(context, |host| {
@@ -8107,7 +8110,6 @@ pub(crate) struct IframeState {
     pub same_origin: bool,
     pub sandbox: SandboxFlags,
     pub to_child: VecDeque<(String, String)>,
-    pub to_parent: Rc<RefCell<VecDeque<(String, String, String)>>>,
 }
 
 fn invalidate_iframe_state(host: &mut Host, node_id: NodeId) {
@@ -8330,8 +8332,8 @@ fn bridge_decode_to_parent(
     }
 }
 
-fn get_iframe_rc(frame_id: u32) -> Option<Rc<RefCell<IframeState>>> {
-    with_host(|host| {
+fn get_iframe_rc(frame_id: u32, context: &mut Context) -> Option<Rc<RefCell<IframeState>>> {
+    with_host_cell(context, |host| {
         host.frames
             .get(frame_id as usize)
             .and_then(|slot| slot.as_ref().map(Rc::clone))
@@ -8343,16 +8345,15 @@ fn frame_bridge_get(_t: &JsValue, args: &[JsValue], context: &mut Context) -> Js
     let frame_id = args.first().and_then(JsValue::as_number).unwrap_or(-1.0) as u32;
     let ref_id = args.get(1).and_then(JsValue::as_number).unwrap_or(0.0) as u32;
     let prop = arg_string(args, 2, context)?;
-    let state_rc = get_iframe_rc(frame_id)
+    let state_rc = get_iframe_rc(frame_id, context)
         .ok_or_else(|| js_error("TypeError: detached iframe browsing context"))?;
     let encoded = {
         let mut state = state_rc.borrow_mut();
-        if !state.same_origin || state.runtime.host.borrow().opaque_origin {
+        if !state.same_origin || host_opaque_origin(&state.runtime) {
             return Err(js_error(
                 "SecurityError: Blocked a frame from accessing a cross-origin frame.",
             ));
         }
-        let _scope = HostScope::enter(&state.runtime.host);
         let child_ctx = &mut state.runtime.context;
         let obj = bridge_arg_to_child(BridgeArg::FrameRef(ref_id), child_ctx)?
             .as_object()
@@ -8374,15 +8375,14 @@ fn frame_bridge_set(_t: &JsValue, args: &[JsValue], context: &mut Context) -> Js
         frame_id,
         context,
     );
-    let state_rc = get_iframe_rc(frame_id)
+    let state_rc = get_iframe_rc(frame_id, context)
         .ok_or_else(|| js_error("TypeError: detached iframe browsing context"))?;
     let mut state = state_rc.borrow_mut();
-    if !state.same_origin || state.runtime.host.borrow().opaque_origin {
+    if !state.same_origin || host_opaque_origin(&state.runtime) {
         return Err(js_error(
             "SecurityError: Blocked a frame from accessing a cross-origin frame.",
         ));
     }
-    let _scope = HostScope::enter(&state.runtime.host);
     let child_ctx = &mut state.runtime.context;
     let obj = bridge_arg_to_child(BridgeArg::FrameRef(ref_id), child_ctx)?
         .as_object()
@@ -8397,15 +8397,14 @@ fn frame_bridge_has(_t: &JsValue, args: &[JsValue], context: &mut Context) -> Js
     let frame_id = args.first().and_then(JsValue::as_number).unwrap_or(-1.0) as u32;
     let ref_id = args.get(1).and_then(JsValue::as_number).unwrap_or(0.0) as u32;
     let prop = arg_string(args, 2, context)?;
-    let state_rc = get_iframe_rc(frame_id)
+    let state_rc = get_iframe_rc(frame_id, context)
         .ok_or_else(|| js_error("TypeError: detached iframe browsing context"))?;
     let state = state_rc.borrow();
-    if !state.same_origin || state.runtime.host.borrow().opaque_origin {
+    if !state.same_origin || host_opaque_origin(&state.runtime) {
         return Ok(JsValue::from(false));
     }
     drop(state);
     let mut state = state_rc.borrow_mut();
-    let _scope = HostScope::enter(&state.runtime.host);
     let child_ctx = &mut state.runtime.context;
     let obj = bridge_arg_to_child(BridgeArg::FrameRef(ref_id), child_ctx)?
         .as_object()
@@ -8434,16 +8433,15 @@ fn frame_bridge_call(_t: &JsValue, args: &[JsValue], context: &mut Context) -> J
             call_args.push(bridge_arg_from_parent(&item, frame_id, context));
         }
     }
-    let state_rc = get_iframe_rc(frame_id)
+    let state_rc = get_iframe_rc(frame_id, context)
         .ok_or_else(|| js_error("TypeError: detached iframe browsing context"))?;
     let encoded = {
         let mut state = state_rc.borrow_mut();
-        if !state.same_origin || state.runtime.host.borrow().opaque_origin {
+        if !state.same_origin || host_opaque_origin(&state.runtime) {
             return Err(js_error(
                 "SecurityError: Blocked a frame from accessing a cross-origin frame.",
             ));
         }
-        let _scope = HostScope::enter(&state.runtime.host);
         let child_ctx = &mut state.runtime.context;
         let func_val = bridge_arg_to_child(BridgeArg::FrameRef(fn_ref_id), child_ctx)?;
         let func_obj = func_val
@@ -8463,6 +8461,13 @@ fn frame_bridge_call(_t: &JsValue, args: &[JsValue], context: &mut Context) -> J
         bridge_encode_child_value(res, child_ctx)?
     };
     bridge_decode_to_parent(encoded, frame_id, None, context)
+}
+
+/// Reads a nested realm's sandbox flag from its context-installed host cell.
+fn host_opaque_origin(runtime: &JsRuntime) -> bool {
+    host_ref(&runtime.context)
+        .map(|host| host.opaque_origin)
+        .unwrap_or(false)
 }
 
 fn node_is_connected(doc: &Document, node_id: NodeId) -> bool {
@@ -8499,8 +8504,11 @@ fn post_target_origin_arg(
         .map_err(|error| js_error(error.to_string()))
 }
 
-fn ensure_iframe_state(node_id: NodeId) -> Result<(u32, Rc<RefCell<IframeState>>), JsError> {
-    let existing = with_host(|host| {
+fn ensure_iframe_state(
+    node_id: NodeId,
+    context: &mut Context,
+) -> Result<(u32, Rc<RefCell<IframeState>>), JsError> {
+    let existing = with_host_cell(context, |host| {
         if let Some(&idx) = host.frame_by_node.get(&node_id)
             && let Some(Some(rc)) = host.frames.get(idx as usize)
         {
@@ -8514,7 +8522,7 @@ fn ensure_iframe_state(node_id: NodeId) -> Result<(u32, Rc<RefCell<IframeState>>
     }
 
     let (sandbox, srcdoc, parent_url, parent_depth, opaque, parent_origin, resolved_url, loader) =
-        with_host(|host| {
+        with_host_cell(context, |host| {
             if host.frame_depth >= MAX_FRAME_DEPTH {
                 return Err("maximum iframe depth reached".to_string());
             }
@@ -8620,10 +8628,10 @@ fn ensure_iframe_state(node_id: NodeId) -> Result<(u32, Rc<RefCell<IframeState>>
         Vec::new()
     };
 
-    let to_parent = Rc::new(RefCell::new(VecDeque::new()));
     let mut child_runtime = JsRuntime::with_document(parsed_doc, final_url.clone())?;
     {
-        let mut child_host = child_runtime.host.borrow_mut();
+        let mut child_host =
+            host_cell(&mut child_runtime.context).expect("JavaScript host installed in context");
         child_host.opaque_origin = opaque;
         child_host.allow_forms = sandbox.allow_forms;
         child_host.allow_popups = sandbox.allow_popups;
@@ -8631,7 +8639,7 @@ fn ensure_iframe_state(node_id: NodeId) -> Result<(u32, Rc<RefCell<IframeState>>
         child_host.is_child_frame = true;
         child_host.parent_origin = Some(parent_origin);
         child_host.parent_same_origin = same_origin;
-        child_host.parent_outbox = Some(Rc::clone(&to_parent));
+        child_host.parent_outbox = Some(VecDeque::new());
     }
 
     for script_src in inline_scripts {
@@ -8646,10 +8654,9 @@ fn ensure_iframe_state(node_id: NodeId) -> Result<(u32, Rc<RefCell<IframeState>>
         same_origin,
         sandbox,
         to_child: VecDeque::new(),
-        to_parent,
     }));
 
-    let idx = with_host(|host| {
+    let idx = with_host_cell(context, |host| {
         if let Some(&idx) = host.frame_by_node.get(&node_id)
             && let Some(Some(_)) = host.frames.get(idx as usize)
         {
@@ -8671,16 +8678,17 @@ fn node_content_document_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let connected = with_host(|host| node_is_connected(&host.document, node_id)).unwrap_or(false);
+    let connected =
+        with_host_cell(context, |host| node_is_connected(&host.document, node_id)).unwrap_or(false);
     if !connected {
         return Ok(JsValue::null());
     }
-    let Ok((frame_id, state_rc)) = ensure_iframe_state(node_id) else {
+    let Ok((frame_id, state_rc)) = ensure_iframe_state(node_id, context) else {
         return Ok(JsValue::null());
     };
     let allow = {
         let st = state_rc.borrow();
-        st.same_origin && !st.runtime.host.borrow().opaque_origin
+        st.same_origin && !host_opaque_origin(&st.runtime)
     };
     if !allow {
         return Ok(JsValue::null());
@@ -8752,15 +8760,16 @@ fn enqueue_parent_to_child_message(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let payload = stringify_for_message(message, context)?;
-    let sender_origin =
-        with_host(|host| crate::host::origin_for_url(&host.url, host.opaque_origin))
-            .unwrap_or_else(|| "null".to_string());
-    let Some(state_rc) = get_iframe_rc(frame_id) else {
+    let sender_origin = with_host_cell(context, |host| {
+        crate::host::origin_for_url(&host.url, host.opaque_origin)
+    })
+    .unwrap_or_else(|| "null".to_string());
+    let Some(state_rc) = get_iframe_rc(frame_id, context) else {
         return Ok(JsValue::undefined());
     };
     let mut state = state_rc.borrow_mut();
     let receiver_origin =
-        crate::host::origin_for_url(&state.url, state.runtime.host.borrow().opaque_origin);
+        crate::host::origin_for_url(&state.url, host_opaque_origin(&state.runtime));
     if target_origin_matches(target_origin, &receiver_origin, &sender_origin)
         && state.to_child.len() < MAX_FRAME_MESSAGES
     {
@@ -8807,13 +8816,12 @@ fn parent_post_message(
 ) -> JsResult<JsValue> {
     let payload = stringify_for_message(args.first().unwrap_or(&JsValue::undefined()), context)?;
     let target_origin = post_target_origin_arg(args, 1, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         let child_origin = crate::host::origin_for_url(&host.url, host.opaque_origin);
-        if let Some(outbox) = &host.parent_outbox {
-            let mut q = outbox.borrow_mut();
-            if q.len() < MAX_FRAME_MESSAGES {
-                q.push_back((payload, child_origin, target_origin));
-            }
+        if let Some(outbox) = &mut host.parent_outbox
+            && outbox.len() < MAX_FRAME_MESSAGES
+        {
+            outbox.push_back((payload, child_origin, target_origin));
         }
     });
     Ok(JsValue::undefined())
@@ -8825,16 +8833,17 @@ fn node_content_window_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let connected = with_host(|host| node_is_connected(&host.document, node_id)).unwrap_or(false);
+    let connected =
+        with_host_cell(context, |host| node_is_connected(&host.document, node_id)).unwrap_or(false);
     if !connected {
         return Ok(JsValue::null());
     }
-    let Ok((frame_id, state_rc)) = ensure_iframe_state(node_id) else {
+    let Ok((frame_id, state_rc)) = ensure_iframe_state(node_id, context) else {
         return Ok(JsValue::null());
     };
     let same_origin = {
         let st = state_rc.borrow();
-        st.same_origin && !st.runtime.host.borrow().opaque_origin
+        st.same_origin && !host_opaque_origin(&st.runtime)
     };
     if same_origin {
         bridge_decode_to_parent(
@@ -8854,7 +8863,7 @@ fn node_content_window_get(
 
 fn node_srcdoc_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let val = with_host(|host| {
+    let val = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|n| n.as_element())
@@ -8871,7 +8880,7 @@ fn node_srcdoc_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> J
 
 fn node_sandbox_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let val = with_host(|host| {
+    let val = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|n| n.as_element())
@@ -8891,8 +8900,10 @@ fn window_origin_get(
     _args: &[JsValue],
     _context: &mut Context,
 ) -> JsResult<JsValue> {
-    let origin = with_host(|host| crate::host::origin_for_url(&host.url, host.opaque_origin))
-        .unwrap_or_else(|| "null".to_string());
+    let origin = with_host_cell(_context, |host| {
+        crate::host::origin_for_url(&host.url, host.opaque_origin)
+    })
+    .unwrap_or_else(|| "null".to_string());
     Ok(JsValue::from(js_string!(origin)))
 }
 
@@ -8901,7 +8912,7 @@ fn window_parent_get(
     _args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    let is_child = with_host(|host| host.is_child_frame).unwrap_or(false);
+    let is_child = with_host_cell(context, |host| host.is_child_frame).unwrap_or(false);
     if !is_child {
         return Ok(JsValue::from(context.global_object()));
     }
@@ -8929,7 +8940,7 @@ fn window_post_message(
 ) -> JsResult<JsValue> {
     let payload = stringify_for_message(args.first().unwrap_or(&JsValue::undefined()), context)?;
     let target_origin = post_target_origin_arg(args, 1, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         let origin = crate::host::origin_for_url(&host.url, host.opaque_origin);
         if target_origin_matches(&target_origin, &origin, &origin)
             && host.self_messages.len() < MAX_FRAME_MESSAGES
@@ -9073,12 +9084,14 @@ fn install_frame_globals(context: &mut Context) -> Result<(), JsError> {
 impl JsRuntime {
     /// Marks this runtime as having an opaque origin (`sandbox` without `allow-same-origin`, #1544).
     pub fn set_opaque_origin(&mut self, opaque: bool) {
-        self.host.borrow_mut().opaque_origin = opaque;
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .opaque_origin = opaque;
     }
 
     /// Configures `<iframe sandbox>` capability flags (`allow_forms`, `allow_popups`, `allow_same_origin`, #1544).
     pub fn set_sandbox_flags(&mut self, flags: SandboxFlags) {
-        let mut host = self.host.borrow_mut();
+        let mut host = host_cell(&mut self.context).expect("JavaScript host installed in context");
         host.opaque_origin = !flags.allow_same_origin;
         host.allow_forms = flags.allow_forms;
         host.allow_popups = flags.allow_popups;
@@ -9089,19 +9102,23 @@ impl JsRuntime {
         if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
             slot.frame_loader = Some(loader.clone());
         }
-        self.host.borrow_mut().frame_loader = Some(loader);
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .frame_loader = Some(loader);
     }
 
     /// Sets the current nesting depth of this document's browsing context (#1544).
     pub fn set_frame_depth(&mut self, depth: usize) {
-        self.host.borrow_mut().frame_depth = depth;
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .frame_depth = depth;
     }
 
     /// Ensures every connected `<iframe>` in the document has initialized its nested browsing
     /// context and executed its inline scripts (if allowed by `sandbox`), bounded by caps.
     pub fn init_connected_frames(&mut self) {
         let iframe_nodes: Vec<NodeId> = {
-            let host = self.host.borrow();
+            let host = host_ref(&self.context).expect("JavaScript host installed in context");
             host.document
                 .get_elements_by_tag_name("iframe")
                 .into_iter()
@@ -9111,9 +9128,8 @@ impl JsRuntime {
         if iframe_nodes.is_empty() {
             return;
         }
-        let _scope = HostScope::enter(&self.host);
         for node_id in iframe_nodes {
-            let _ = ensure_iframe_state(node_id);
+            let _ = ensure_iframe_state(node_id, &mut self.context);
         }
     }
 
@@ -9124,13 +9140,15 @@ impl JsRuntime {
             let mut progressed = false;
 
             // 1) Self-targeted `window.postMessage(...)` on the parent window.
-            let self_msg = self.host.borrow_mut().self_messages.pop_front();
+            let self_msg = host_cell(&mut self.context)
+                .expect("JavaScript host installed in context")
+                .self_messages
+                .pop_front();
             if let Some((json, origin)) = self_msg {
                 progressed = true;
                 delivered += 1;
                 if let Ok(data) = self.parse_json_value(&json) {
                     let window_val = JsValue::from(self.context.global_object());
-                    let _scope = HostScope::enter(&self.host);
                     let _ = crate::events::dispatch_message_event(
                         &window_val,
                         data,
@@ -9142,11 +9160,13 @@ impl JsRuntime {
             }
 
             // 2) Child frame queues (self, parent -> child, and child -> parent).
-            let count = self.host.borrow().frames.len();
+            let count = host_ref(&self.context)
+                .expect("JavaScript host installed in context")
+                .frames
+                .len();
             for idx in 0..count {
-                let state_rc = self
-                    .host
-                    .borrow()
+                let state_rc = host_ref(&self.context)
+                    .expect("JavaScript host installed in context")
                     .frames
                     .get(idx)
                     .and_then(|slot| slot.as_ref().map(Rc::clone));
@@ -9157,8 +9177,9 @@ impl JsRuntime {
                 // Deliver self-targeted `window.postMessage(...)` inside child frame.
                 loop {
                     let next_self = {
-                        let st = state_rc.borrow();
-                        let mut child_host = st.runtime.host.borrow_mut();
+                        let mut st = state_rc.borrow_mut();
+                        let mut child_host = host_cell(&mut st.runtime.context)
+                            .expect("JavaScript host installed in context");
                         child_host.self_messages.pop_front()
                     };
                     let Some((json, origin)) = next_self else {
@@ -9170,7 +9191,6 @@ impl JsRuntime {
                     let Ok(data) = state.runtime.parse_json_value(&json) else {
                         continue;
                     };
-                    let _scope = HostScope::enter(&state.runtime.host);
                     let child_window = JsValue::from(state.runtime.context.global_object());
                     let _ = crate::events::dispatch_message_event(
                         &child_window,
@@ -9179,7 +9199,6 @@ impl JsRuntime {
                         child_window.clone(),
                         &mut state.runtime.context,
                     );
-                    drop(_scope);
                     let _ = state.runtime.run_microtasks();
                 }
 
@@ -9195,7 +9214,6 @@ impl JsRuntime {
                     let Ok(data) = state.runtime.parse_json_value(&json) else {
                         continue;
                     };
-                    let _scope = HostScope::enter(&state.runtime.host);
                     let child_window = JsValue::from(state.runtime.context.global_object());
                     let parent_proxy =
                         build_restricted_frame_window(&mut state.runtime.context, None, true)
@@ -9208,22 +9226,25 @@ impl JsRuntime {
                         parent_proxy,
                         &mut state.runtime.context,
                     );
-                    drop(_scope);
                     let _ = state.runtime.run_microtasks();
                 }
 
                 // Drain child -> parent messages.
                 loop {
                     let next_reply = {
-                        let st = state_rc.borrow();
-                        let mut q = st.to_parent.borrow_mut();
-                        q.pop_front()
+                        let mut st = state_rc.borrow_mut();
+                        host_cell(&mut st.runtime.context)
+                            .ok()
+                            .and_then(|mut child_host| {
+                                child_host.parent_outbox.as_mut()?.pop_front()
+                            })
                     };
                     let Some((json, child_origin, target_origin)) = next_reply else {
                         break;
                     };
                     let (parent_origin, sender_origin) = {
-                        let host = self.host.borrow();
+                        let host =
+                            host_ref(&self.context).expect("JavaScript host installed in context");
                         (
                             crate::host::origin_for_url(&host.url, host.opaque_origin),
                             child_origin.clone(),
@@ -9239,9 +9260,8 @@ impl JsRuntime {
                     };
                     let same_origin_child = {
                         let st = state_rc.borrow();
-                        st.same_origin && !st.runtime.host.borrow().opaque_origin
+                        st.same_origin && !host_opaque_origin(&st.runtime)
                     };
-                    let _scope = HostScope::enter(&self.host);
                     let source = if same_origin_child {
                         bridge_decode_to_parent(
                             BridgeResult::Ref {
@@ -9279,11 +9299,14 @@ impl JsRuntime {
 
     /// Snapshots initialized/mutated child `<iframe>` documents keyed by host element `NodeId` (#1544).
     pub fn snapshot_frame_documents(&self) -> Vec<(NodeId, Document, SandboxFlags, String)> {
-        let host = self.host.borrow();
+        let host = host_ref(&self.context).expect("JavaScript host installed in context");
         let mut out = Vec::new();
         for state_rc in host.frames.iter().flatten() {
             let state = state_rc.borrow();
-            let child_doc = state.runtime.host.borrow().document.clone();
+            let child_doc = host_ref(&state.runtime.context)
+                .expect("JavaScript host installed in context")
+                .document
+                .clone();
             out.push((state.node_id, child_doc, state.sandbox, state.url.clone()));
         }
         out
@@ -9299,7 +9322,6 @@ pub(crate) struct WorkerState {
     pub runtime: JsRuntime,
     pub terminated: bool,
     pub to_worker: VecDeque<String>,
-    pub to_main: Rc<RefCell<VecDeque<String>>>,
     pub onmessage: Vec<u32>,
     pub onerror: Option<u32>,
     pub pending_error: Option<String>,
@@ -9314,12 +9336,14 @@ impl JsRuntime {
     /// Script-driven arena growth (`cloneNode(true)` in a loop, parsed HTML setters) is rejected
     /// with a `QuotaExceededError` once the document reaches the budget.
     pub fn set_max_dom_nodes(&mut self, max_nodes: usize) {
-        self.host.borrow_mut().max_dom_nodes = max_nodes;
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .max_dom_nodes = max_nodes;
     }
 
     /// Registers a same-origin framed document for an `<iframe>` (#1544).
     pub fn set_frame_document(&mut self, iframe: NodeId, document: megi_core::Document) -> u32 {
-        let mut host = self.host.borrow_mut();
+        let mut host = host_cell(&mut self.context).expect("JavaScript host installed in context");
         let handle = host.frame_next_handle;
         host.frame_next_handle = host.frame_next_handle.wrapping_add(1);
         host.frame_documents.insert(handle, document);
@@ -9329,16 +9353,16 @@ impl JsRuntime {
 
     /// Whether any live WebSocket transports remain (#1534).
     pub fn has_websockets(&self) -> bool {
-        !self.host.borrow().websockets.is_empty()
+        !host_ref(&self.context)
+            .expect("JavaScript host installed in context")
+            .websockets
+            .is_empty()
     }
 
     /// Delivers pending WebSocket transport events to JS handlers (#1534).
     /// Returns the number of instances that received events.
     pub fn poll_websockets(&mut self) -> usize {
-        let _scope = HostScope::enter(&self.host);
-        let count = crate::websocket::poll(&mut self.context);
-        drop(_scope);
-        count
+        crate::websocket::poll(&mut self.context)
     }
 
     /// Installs the WebSocket transport provider (the host owns the socket).
@@ -9346,7 +9370,9 @@ impl JsRuntime {
         if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
             slot.websocket = Some(provider.clone());
         }
-        self.host.borrow_mut().websocket_provider = Some(provider);
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .websocket_provider = Some(provider);
     }
 
     /// Installs the `fetch()` provider (the host owns all network/filesystem I/O).
@@ -9355,7 +9381,9 @@ impl JsRuntime {
         if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
             slot.fetch = Some(provider.clone());
         }
-        self.host.borrow_mut().fetch_provider = Some(provider);
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .fetch_provider = Some(provider);
     }
 
     /// Installs the worker script loader (`url → source text`; the host owns all I/O).
@@ -9363,22 +9391,21 @@ impl JsRuntime {
         if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
             slot.worker_loader = Some(loader.clone());
         }
-        self.host.borrow_mut().worker_loader = Some(loader);
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .worker_loader = Some(loader);
     }
 
     /// Creates an isolated worker realm without DOM globals (only timers/console/
     /// `postMessage`/`onmessage`/`addEventListener('message')`).
-    fn new_worker(
-        parent: Rc<RefCell<Host>>,
-        id: u32,
-        outbox: Rc<RefCell<VecDeque<String>>>,
-    ) -> Result<Self, JsError> {
-        let runtime = Self::with_document_realm(Document::new(), "about:blank".to_string(), true)?;
+    fn new_worker(id: u32) -> Result<Self, JsError> {
+        let mut runtime =
+            Self::with_document_realm(Document::new(), "about:blank".to_string(), true)?;
         {
-            let mut host = runtime.host.borrow_mut();
-            host.worker_parent = Some(parent);
+            let mut host =
+                host_cell(&mut runtime.context).expect("JavaScript host installed in context");
             host.worker_id = Some(id);
-            host.worker_outbox = Some(outbox);
+            host.worker_outbox = Some(VecDeque::new());
         }
         Ok(runtime)
     }
@@ -9390,22 +9417,26 @@ impl JsRuntime {
         let mut delivered = 0usize;
         for _ in 0..max_steps {
             let mut progressed = false;
-            let ids: Vec<usize> = self
-                .host
-                .borrow()
+            let ids: Vec<usize> = host_ref(&self.context)
+                .expect("JavaScript host installed in context")
                 .workers
                 .iter()
                 .enumerate()
                 .filter_map(|(id, worker)| worker.as_ref().map(|_| id))
                 .collect();
             for id in &ids {
-                let mut state = self.host.borrow_mut().workers[*id].take();
+                let mut state = host_cell(&mut self.context)
+                    .expect("JavaScript host installed in context")
+                    .workers[*id]
+                    .take();
                 let Some(mut worker) = state.take() else {
                     continue;
                 };
                 if worker.terminated {
                     // Free the slot so a new worker can reuse it (#1138).
-                    self.host.borrow_mut().workers[*id] = None;
+                    host_cell(&mut self.context)
+                        .expect("JavaScript host installed in context")
+                        .workers[*id] = None;
                     continue;
                 }
                 while let Some(json) = worker.to_worker.pop_front() {
@@ -9418,16 +9449,25 @@ impl JsRuntime {
                 if worker.pending_error.is_some() {
                     progressed = true;
                 }
-                self.host.borrow_mut().workers[*id] = Some(worker);
+                host_cell(&mut self.context)
+                    .expect("JavaScript host installed in context")
+                    .workers[*id] = Some(worker);
             }
             for id in &ids {
-                let reply = self.host.borrow().workers[*id].as_ref().and_then(|worker| {
-                    if worker.terminated {
-                        None
-                    } else {
-                        worker.to_main.borrow_mut().pop_front()
-                    }
-                });
+                let reply = {
+                    let mut host =
+                        host_cell(&mut self.context).expect("JavaScript host installed in context");
+                    host.workers[*id]
+                        .as_mut()
+                        .filter(|worker| !worker.terminated)
+                        .and_then(|worker| {
+                            host_cell(&mut worker.runtime.context)
+                                .ok()?
+                                .worker_outbox
+                                .as_mut()?
+                                .pop_front()
+                        })
+                };
                 if let Some(json) = reply {
                     progressed = true;
                     delivered += 1;
@@ -9437,7 +9477,9 @@ impl JsRuntime {
                         self.report_worker_delivery_error(error, "<worker message>");
                     }
                 }
-                let error = self.host.borrow_mut().workers[*id]
+                let error = host_cell(&mut self.context)
+                    .expect("JavaScript host installed in context")
+                    .workers[*id]
                     .as_mut()
                     .and_then(|worker| worker.pending_error.take());
                 if let Some(message) = error {
@@ -9459,13 +9501,12 @@ impl JsRuntime {
     /// continue with the other workers (#1140).
     fn report_worker_delivery_error(&mut self, error: JsError, source: &str) {
         let message = format!("{source}: {}", error);
-        let _scope = HostScope::enter(&self.host);
         let _ = crate::events::report_uncaught(&mut self.context, &message, source);
     }
 
     fn deliver_worker_reply(&mut self, id: u32, json: &str) -> Result<(), JsError> {
         let onmessage = {
-            let host = self.host.borrow();
+            let host = host_ref(&self.context).expect("JavaScript host installed in context");
             match host
                 .workers
                 .get(id as usize)
@@ -9479,7 +9520,6 @@ impl JsRuntime {
         let mut init = ObjectInitializer::new(&mut self.context);
         init.property(js_string!("data"), event, Attribute::all());
         let event = JsValue::from(init.build());
-        let _scope = HostScope::enter(&self.host);
         for slot in onmessage {
             if let Ok(callback) = root_get(
                 &mut self.context,
@@ -9505,7 +9545,7 @@ impl JsRuntime {
 
     fn deliver_worker_error(&mut self, id: u32, message: &str) -> Result<(), JsError> {
         let slot = {
-            let host = self.host.borrow();
+            let host = host_ref(&self.context).expect("JavaScript host installed in context");
             host.workers
                 .get(id as usize)
                 .and_then(|worker| worker.as_ref())
@@ -9524,7 +9564,6 @@ impl JsRuntime {
             Attribute::all(),
         );
         let event = JsValue::from(init.build());
-        let _scope = HostScope::enter(&self.host);
         if let Ok(callback) = root_get(
             &mut self.context,
             "__megi_worker_callbacks",
@@ -9553,12 +9592,11 @@ impl JsRuntime {
 }
 
 impl WorkerState {
-    fn new(runtime: JsRuntime, outbox: Rc<RefCell<VecDeque<String>>>) -> Self {
+    fn new(runtime: JsRuntime) -> Self {
         Self {
             runtime,
             terminated: false,
             to_worker: VecDeque::new(),
-            to_main: outbox,
             onmessage: Vec::new(),
             onerror: None,
             pending_error: None,
@@ -9587,7 +9625,6 @@ impl JsRuntime {
   }
 })();
 "#;
-        let _scope = HostScope::enter(&self.host);
         self.context
             .eval(Source::from_bytes(script))
             .map(|_| ())
@@ -9614,8 +9651,6 @@ fn worker_constructor(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let url = arg_string(args, 0, context)?;
-    let parent =
-        crate::host::current_host().ok_or_else(|| js_error("no active JavaScript host"))?;
     let resolved = with_host_cell(context, |host| host.resolve_url(&url))
         .ok_or_else(|| js_error("no active JavaScript host"))?;
     let loader = ctx_or_mirror(
@@ -9625,35 +9660,33 @@ fn worker_constructor(
     )
     .ok_or_else(|| js_error("Worker scripts are not available in this host"))?;
     let source = loader(&resolved).map_err(|error| js_error(error.to_string()))?;
-    let id = {
-        let mut host = parent.borrow_mut();
+    let id = with_host_cell(context, |host| {
         let existing = host.workers.iter().position(|worker| worker.is_none());
-        let id = match existing {
-            Some(id) => id,
+        match existing {
+            Some(id) => Some(id),
             None if host.workers.len() < MAX_WORKERS => {
                 host.workers.push(None);
-                host.workers.len() - 1
+                Some(host.workers.len() - 1)
             }
-            None => return Err(js_error("too many Web Workers (limit 8)")),
-        };
-        id as u32
-    };
-    let outbox = Rc::new(RefCell::new(VecDeque::new()));
-    let mut runtime = JsRuntime::new_worker(parent.clone(), id, outbox.clone())
-        .map_err(|error| js_error(error.to_string()))?;
+            None => None,
+        }
+    })
+    .ok_or_else(|| js_error("no active JavaScript host"))?
+    .ok_or_else(|| js_error("too many Web Workers (limit 8)"))? as u32;
+    let mut runtime = JsRuntime::new_worker(id).map_err(|error| js_error(error.to_string()))?;
     runtime
         .install_worker_globals()
         .map_err(|error| js_error(error.to_string()))?;
     let error = runtime.eval(&source, &resolved).err();
-    {
-        let mut host = parent.borrow_mut();
-        host.workers[id as usize] = Some(WorkerState::new(runtime, outbox));
+    with_host_cell(context, |host| {
+        host.workers[id as usize] = Some(WorkerState::new(runtime));
         if let Some(error) = error
             && let Some(worker) = host.workers[id as usize].as_mut()
         {
             worker.pending_error = Some(error.to_string());
         }
-    }
+    })
+    .ok_or_else(|| js_error("no active JavaScript host"))?;
     let mut init = ObjectInitializer::new(context);
     // Internal identity must not be writable by page scripts: a forged id used to
     // index host.workers out of bounds and abort the process (#1465).
@@ -9697,7 +9730,7 @@ fn worker_post_message(
     let id = worker_handle(this, context)?;
     let value = args.first().cloned().unwrap_or_else(JsValue::undefined);
     let json = json_state(&value, context);
-    let queued = with_host(|host| {
+    let queued = with_host_cell(context, |host| {
         let Some(Some(worker)) = host.workers.get_mut(id as usize) else {
             return false;
         };
@@ -9716,7 +9749,7 @@ fn worker_post_message(
 
 fn worker_terminate(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let id = worker_handle(this, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         // Free the slot so a new worker can reuse it (#1138). Never index directly:
         // a forged/mismatched handle must be a no-op, not a panic (#1465).
         if let Some(slot) = host.workers.get_mut(id as usize) {
@@ -9738,7 +9771,7 @@ fn worker_add_listener(
     }
     let callback = args.get(1).cloned().unwrap_or_else(JsValue::undefined);
     let slot = root_push(context, "__megi_worker_callbacks", callback)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if let Some(Some(worker)) = host.workers.get_mut(id as usize) {
             worker.onmessage.push(slot);
         }
@@ -9752,7 +9785,7 @@ fn worker_onmessage_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let id = worker_handle(this, context)?;
-    let slot = with_host(|host| {
+    let slot = with_host_cell(context, |host| {
         host.workers
             .get(id as usize)
             .and_then(|worker| worker.as_ref())
@@ -9773,7 +9806,7 @@ fn worker_onmessage_set(
     let id = worker_handle(this, context)?;
     let callback = args.first().cloned().unwrap_or_else(JsValue::undefined);
     let slot = root_push(context, "__megi_worker_callbacks", callback)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if let Some(Some(worker)) = host.workers.get_mut(id as usize) {
             worker.onmessage.clear();
             worker.onmessage.push(slot);
@@ -9798,7 +9831,7 @@ fn worker_onerror_set(
     let id = worker_handle(this, context)?;
     let callback = args.first().cloned().unwrap_or_else(JsValue::undefined);
     let slot = root_push(context, "__megi_worker_callbacks", callback)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if let Some(Some(worker)) = host.workers.get_mut(id as usize) {
             worker.onerror = Some(slot);
         }
@@ -9865,11 +9898,10 @@ fn worker_self_post_message(
 ) -> JsResult<JsValue> {
     let value = args.first().cloned().unwrap_or_else(JsValue::undefined);
     let json = json_state(&value, context);
-    let sent = with_host(|host| {
-        let Some(outbox) = &host.worker_outbox else {
+    let sent = with_host_cell(context, |host| {
+        let Some(outbox) = &mut host.worker_outbox else {
             return false;
         };
-        let mut outbox = outbox.borrow_mut();
         if outbox.len() >= MAX_WORKER_MESSAGES {
             return false;
         }
@@ -10096,7 +10128,6 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
 // ---------------------------------------------------------------------------
 
 struct MegiModuleLoader {
-    host: Rc<RefCell<Option<Rc<RefCell<Host>>>>>,
     base_url: String,
     cache: RefCell<HashMap<(String, String), Module>>,
     max_cache_entries: usize,
@@ -10122,23 +10153,23 @@ impl ModuleLoader for MegiModuleLoader {
         {
             return Ok(module);
         }
-        let host = self
-            .host
-            .borrow()
-            .clone()
-            .ok_or_else(|| js_error("no active JavaScript host"))?;
-        // Clone the Arc providers out of the host before invoking them: a resolver or
-        // loader may re-enter JavaScript and must not observe a live host borrow.
-        let (resolver, loader) = {
-            let host = host.borrow();
-            (host.module_resolver.clone(), host.module_loader.clone())
-        };
-        // Consult the import map first (like resolve_module does).
-        let import_map_result = {
-            let host = host.borrow();
-            host.import_map
-                .as_ref()
-                .and_then(|map| map.resolve_with_base(&specifier, Some(&base)))
+        // Resolve the host from the context Boa hands us. There is no separate
+        // loader-side host slot (and no thread-local): every realm resolves its
+        // own provider/import-map state from the Context it is loading into.
+        // Clone the providers out before invoking them: a resolver or loader may
+        // re-enter JavaScript and must not observe a live host borrow.
+        let (resolver, loader, import_map_result) = {
+            let ctx_ref = context.borrow();
+            let host =
+                crate::host::host_ref(&ctx_ref).map_err(|error| js_error(error.to_string()))?;
+            (
+                host.module_resolver.clone(),
+                host.module_loader.clone(),
+                // Consult the import map first (like resolve_module does).
+                host.import_map
+                    .as_ref()
+                    .and_then(|map| map.resolve_with_base(&specifier, Some(&base))),
+            )
         };
         if let Some(result) = import_map_result {
             match result {
@@ -10271,7 +10302,6 @@ impl JsRuntime {
         )
         .map_err(module_error)?;
         let promise = module.load_link_evaluate(&mut self.context);
-        let _scope = HostScope::enter(&self.host);
         let mut timer_tasks = 0usize;
         let mut virtual_time_ms = 0u64;
         let mut limited = false;
@@ -10305,7 +10335,6 @@ impl JsRuntime {
                 timer_tasks += pumped;
             }
         }
-        drop(_scope);
         match promise.state() {
             PromiseState::Fulfilled(_) => {}
             PromiseState::Rejected(error) => {
@@ -10645,7 +10674,7 @@ fn node_remove_attribute_node(
         .to_string(context)
         .map(|value| value.to_std_string_escaped())
         .unwrap_or_default();
-    let name = attribute_name(node_id, &raw_name);
+    let name = attribute_name(node_id, &raw_name, context);
     let old = with_host_cell(context, |host| {
         host.document
             .try_node_mut(node_id)
@@ -10662,6 +10691,7 @@ fn node_remove_attribute_node(
                 node_id,
                 Some(name.clone()),
                 Some(value.clone()),
+                context,
             );
             attribute_item(context, &name, &value)
         }
@@ -10676,7 +10706,9 @@ mod document_write_budget_tests {
     #[test]
     fn document_write_stops_at_the_cumulative_budget() {
         let mut runtime = JsRuntime::new().expect("runtime");
-        runtime.host.borrow_mut().max_document_write_bytes = 4 * 1024;
+        host_cell(&mut runtime.context)
+            .expect("host installed")
+            .max_document_write_bytes = 4 * 1024;
         runtime
             .eval(
                 "var s = 'A'.repeat(1024);
@@ -10703,7 +10735,9 @@ mod document_write_budget_tests {
     #[test]
     fn document_write_reports_parser_limit_violations() {
         let mut runtime = JsRuntime::new().expect("runtime");
-        runtime.host.borrow_mut().max_document_write_nodes = 64;
+        host_cell(&mut runtime.context)
+            .expect("host installed")
+            .max_document_write_nodes = 64;
         runtime
             .eval(
                 "document.write('<i></i>'.repeat(100));",
@@ -10731,7 +10765,9 @@ mod document_write_node_budget_tests {
         let mut runtime = JsRuntime::new().expect("runtime");
         // The parser must use the host's node cap, not the 1M default: 100 elements with a
         // 64-node budget leave ~62 nodes.
-        runtime.host.borrow_mut().max_document_write_nodes = 64;
+        host_cell(&mut runtime.context)
+            .expect("host installed")
+            .max_document_write_nodes = 64;
         runtime
             .eval("document.write('<i></i>'.repeat(100));", "nodes.js")
             .expect("first write");
@@ -10742,7 +10778,9 @@ mod document_write_node_budget_tests {
         );
         // Host-side rejection: a cap below the current size rejects every write; the
         // warning must appear exactly once.
-        runtime.host.borrow_mut().max_document_write_nodes = 1;
+        host_cell(&mut runtime.context)
+            .expect("host installed")
+            .max_document_write_nodes = 1;
         runtime
             .eval(
                 "for (var j = 0; j < 5; j++) { document.write('<b></b>'); }",
@@ -10771,7 +10809,9 @@ mod markup_parse_budget_tests {
     #[test]
     fn innerhtml_is_charged_against_the_cumulative_budget() {
         let mut runtime = JsRuntime::new().expect("runtime");
-        runtime.host.borrow_mut().max_document_write_bytes = 64;
+        host_cell(&mut runtime.context)
+            .expect("host installed")
+            .max_document_write_bytes = 64;
         runtime
             .eval("document.body.innerHTML = '<b>first</b>';", "inner.js")
             .expect("first assignment");
@@ -10957,11 +10997,13 @@ mod mutation_observer_delivery_tests {
             .expect("eval workers script");
         // Make worker A's queued reply undeliverable (malformed JSON).
         {
-            let host = runtime.host.borrow();
-            let worker_a = host.workers[0].as_ref().expect("worker A");
-            worker_a
-                .to_main
-                .borrow_mut()
+            let mut host = host_cell(&mut runtime.context).expect("host installed");
+            let worker_a = host.workers[0].as_mut().expect("worker A");
+            let mut worker_host = host_cell(&mut worker_a.runtime.context).expect("worker host");
+            worker_host
+                .worker_outbox
+                .as_mut()
+                .expect("worker outbox")
                 .push_front("not json".to_string());
         }
         // Before the fix this aborted on worker A, so worker B never received its reply.
@@ -11071,7 +11113,13 @@ mod mutation_observer_delivery_tests {
             )
             .expect("eval cap script");
         assert_eq!(summary, "1024:RangeError:1024:1024");
-        assert_eq!(runtime.host.borrow().observers.len(), MAX_OBSERVERS);
+        assert_eq!(
+            host_ref(&runtime.context)
+                .expect("host installed")
+                .observers
+                .len(),
+            MAX_OBSERVERS
+        );
     }
 
     #[test]
@@ -11175,7 +11223,6 @@ mod storage_borrow_tests {
     #[test]
     fn storage_read_applies_the_closure_without_cloning() {
         let mut runtime = JsRuntime::new().expect("runtime");
-        let _scope = HostScope::enter(&runtime.host);
         let local = runtime
             .context
             .global_object()
@@ -11234,12 +11281,11 @@ mod dataset_name_tests {
 mod context_bridge_migration_tests {
     use super::*;
 
-    /// A binding migrated to `host_cell` must find the host installed in the
-    /// Boa `Context` even with no legacy TLS `HostScope` active on this thread.
-    /// Reverting `document_title_get` to `with_host` makes this return the
-    /// empty-string fallback instead, so the test guards the migration.
+    /// A native binding must resolve its host solely from the Boa `Context`.
+    /// There is no thread-local fallback any more, so this test guards the
+    /// context-installed bridge used by every realm (including nested ones).
     #[test]
-    fn migrated_binding_reads_host_from_context_without_tls() {
+    fn binding_reads_host_from_context() {
         let mut runtime = JsRuntime::new().unwrap();
         runtime.set_title("from-context");
         let value = document_title_get(&JsValue::undefined(), &[], &mut runtime.context).unwrap();
