@@ -1,5 +1,7 @@
 # Browser gap matrix
 
+> **Histórico (2026-11-12):** esta matriz describe el estado de esa fecha. Varias filas marcadas `absent` ya están implementadas (`js/src/xhr.rs`, `js/src/websocket.rs`, `css/src/query.rs`, `css/src/transform.rs`, `net/src/{csp,integrity,hsts,mixed_content}.rs`). Verifica siempre el código antes de actuar.
+
 This file records **what Megi does not implement yet**, measured against what a
 general-purpose browser has to do to load and run a normal page. It is the durable
 counterpart of the gap-audit phase (F5) of the repository audit: every `absent` row
