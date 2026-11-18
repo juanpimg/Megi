@@ -26,7 +26,8 @@
 | 5.1 `megi-webview` | ✅ complete | load/frame/hit-test/history/events; light graph has zero Boa/winit/softbuffer |
 | 6.1 thin `megi-browser` | ✅ complete | browser deps = webview + winit + softbuffer; 60 shell tests pass |
 | 7.1 feature matrix + CI | ✅ complete | `megi-test-harness/js` optional; CI checks light WebView |
-| 8.1–8.6 god-file splits | ⏳ deferred | 108 pre-existing violations (oversized files, legacy edges, `Rc`) tracked as legacy in the baseline |
+| 8.1 `megi-core` split | ✅ complete | `lib.rs` 1755 / `query.rs` 857 / `iter.rs` 88 / `unit_tests.rs` 1331 lines; 62 core tests pass |
+| 8.2–8.6 remaining god-file splits | ⏳ deferred | 111 legacy items tracked in the baseline |
 
 The two deferred items are independent of the completed work and are tracked in
 `.superpowers/sdd/2026-11-18-megi-modular-restructuring/progress.md` with their
