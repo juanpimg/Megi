@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 pub mod css_harness;
+#[cfg(feature = "js")]
 pub mod js_executor;
 pub mod serializer_harness;
 pub mod tokenizer_harness;

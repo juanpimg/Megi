@@ -394,6 +394,7 @@ fn test_closed_loop_tree_construction_all_62_suites_exact_gate() {
 /// parser-inserted scripts (DOM mutation + `document.write` re-tokenization) and pass, and
 /// the tree allowlist must stay empty (3,904/3,904 mode-runs).
 #[test]
+#[cfg(feature = "js")]
 fn test_scripted_parser_inserted_suites_pass_with_js_executor() {
     const SCRIPTED_SUITES: [&str; 4] = [
         "scripted_adoption01.dat",

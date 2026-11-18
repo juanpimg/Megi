@@ -20,6 +20,7 @@ use megi_html::{
 };
 use serde::Deserialize;
 
+#[cfg(feature = "js")]
 use crate::js_executor::JsScriptExecutor;
 
 /// Script execution mode directive for a tree-construction test case.
@@ -220,7 +221,10 @@ pub fn execute_tree_case(
             &case.data,
             true,
             &megi_html::ParseOptions::default(),
+            #[cfg(feature = "js")]
             Some(Box::new(JsScriptExecutor::new())),
+            #[cfg(not(feature = "js"))]
+            None,
         )
         .document
     } else {

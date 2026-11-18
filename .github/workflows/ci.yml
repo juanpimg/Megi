@@ -136,6 +136,12 @@ jobs:
       # from docs/superpowers/specs/2026-11-18-megi-modular-architecture-design.md.
       - name: Architecture DAG and file-size check
         run: python3 tools/check_arch.py
+      # The light WebView must not link Boa or any windowing backend.
+      - name: Light WebView build (no JS, no UI)
+        run: |
+          cargo check -p megi-webview --no-default-features
+          cargo test -p megi-webview --no-default-features
+          ! cargo tree -p megi-webview --no-default-features -e normal | grep -Eqi 'boa|winit|softbuffer'
       - name: Workspace tests
         run: |
           set -o pipefail
