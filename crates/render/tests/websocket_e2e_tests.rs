@@ -1,6 +1,7 @@
 //! #1534: end-to-end — a page script opens a real WebSocket, sends a message and receives the
 //! echo, with the JS handler mutating the DOM (verified via the document title).
 
+#![cfg(feature = "js")]
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread::JoinHandle;
