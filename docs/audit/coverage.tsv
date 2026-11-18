@@ -426,7 +426,7 @@ crates/render/src/cache.rs	316	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299
 crates/render/src/charset.rs	442	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/error.rs	135	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/frames.rs	180	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
-crates/render/src/images.rs	864	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
+crates/render/src/images.rs	867	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/inline_svg.rs	273	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/lib.rs	2427	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/main.rs	357	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
@@ -450,13 +450,13 @@ crates/render/tests/fetch_stream_tests.rs	51	test	F1	waveF1	2026-11-17	covered	#
 crates/render/tests/fetch_tests.rs	92	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/filter_fixture_tests.rs	117	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/render/tests/fixture_smoke.rs	59	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
-crates/render/tests/form_post_tests.rs	202	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+crates/render/tests/form_post_tests.rs	204	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/render/tests/frame_budget_tests.rs	88	test	F1	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 code line-by-line audit (re-synced after security fixes)
 crates/render/tests/gradient_tests.rs	106	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/iframe_tests.rs	147	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/render/tests/image_formats_tests.rs	61	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/image_scaled_tests.rs	64	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
-crates/render/tests/images_tests.rs	389	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
+crates/render/tests/images_tests.rs	406	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/import_map_tests.rs	158	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/import_media_tests.rs	603	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/inline_svg_tests.rs	349	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
