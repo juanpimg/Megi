@@ -10,6 +10,31 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-18-megi-modular-architecture-design.md`
 
+## Execution status (updated 2026-11-18)
+
+| Task | Status | Evidence |
+|---|---|---|
+| 0.1 baseline + GAPS drift | ✅ complete | `docs/architecture-baseline.json`, banner in `docs/GAPS.md` |
+| 0.2 architecture linter in CI | ✅ complete | `tools/check_arch.py`, 3 unit tests, CI `quality` job |
+| 0.3 AGENTS.md + workspace lints | ✅ complete | `AGENTS.md`, `[workspace.lints.rust]`, all manifests inherit |
+| 1.1 rename leaf crates | ✅ complete | `megi-core`, `megi-image`, `megi-fonts` compile + tests |
+| 1.2 rename remaining crates | ✅ complete | 14 `megi-*` packages, gate 4/4 PASS, full suite green |
+| 2.1 `megi-display` | ✅ complete | `DisplayItem`/`DisplayList`/`HitRegion` moved, ownership test |
+| 2.2 `megi-raster` | ✅ complete | rasterizer/PNG moved, PNG md5 `e943565…` before = after |
+| 3.1 PAC inversion | ✅ complete | `PacEvaluator` trait; `cargo tree -e normal` has zero Boa |
+| 4.1 de-Rc JS runtime | ⏳ deferred | 11k-line `runtime.rs` and `Rc<RefCell<Host>>` still present; needs its own atomic refactor with WPT gate |
+| 5.1 `megi-webview` | ✅ complete | load/frame/hit-test/history/events; light graph has zero Boa/winit/softbuffer |
+| 6.1 thin `megi-browser` | ✅ complete | browser deps = webview + winit + softbuffer; 60 shell tests pass |
+| 7.1 feature matrix + CI | ✅ complete | `megi-test-harness/js` optional; CI checks light WebView |
+| 8.1–8.6 god-file splits | ⏳ deferred | 108 pre-existing violations (oversized files, legacy edges, `Rc`) tracked as legacy in the baseline |
+
+The two deferred items are independent of the completed work and are tracked in
+`.superpowers/sdd/2026-11-18-megi-modular-restructuring/progress.md` with their
+rulings. Everything shipped so far is green: `cargo test --workspace`,
+`cargo clippy --workspace --all-targets -- -D warnings`, `cargo check --workspace
+--no-default-features`, conformance gate PASS, `tools/check_arch.py` OK and
+byte-identical PNG output.
+
 ## Global Constraints
 
 - All 14 engine crates are `#![forbid(unsafe_code)]`. Zero `unsafe` in `src/`.
