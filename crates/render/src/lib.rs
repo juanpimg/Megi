@@ -936,6 +936,7 @@ fn render_url_inner(
             }
         }
         host_context.storage = options.storage.clone();
+        host_context.cookie_jar = cookie_jar.clone();
         host_context.enable_workers = options.enable_workers;
         host_context.host_events = options.host_events.clone();
         host_context.fetch_options = loader.fetch_options().clone();

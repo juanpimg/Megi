@@ -343,6 +343,11 @@ impl JsRuntime {
         host.storage_provider = Some(provider);
     }
 
+    /// Installs the host cookie jar provider used by `document.cookie`.
+    pub fn set_cookie_provider(&mut self, provider: crate::host::CookieProvider) {
+        self.host.borrow_mut().cookie_provider = Some(provider);
+    }
+
     /// Current `document.readyState` (`loading` until the host changes it).
     pub fn ready_state(&self) -> String {
         self.host.borrow().ready_state.clone()
@@ -2773,21 +2778,19 @@ fn document_head(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
 fn document_cookie_get(
     _this: &JsValue,
     _args: &[JsValue],
-    context: &mut Context,
+    _context: &mut Context,
 ) -> JsResult<JsValue> {
-    // Minimal in-memory cookie store; real jar integration is host-backed.
-    let cookies = context
-        .global_object()
-        .get(js_string!("__megi_cookies"), context)
-        .unwrap_or(JsValue::undefined());
-    if cookies.is_undefined() {
-        return Ok(JsValue::from(js_string!("")));
-    }
-    let s = cookies
-        .to_string(context)?
-        .to_std_string()
-        .unwrap_or_default();
-    Ok(JsValue::from(js_string!(s)))
+    let cookie_str = with_host(|host| match &host.cookie_provider {
+        Some(provider) => (provider.get)(&host.url),
+        None => host
+            .cookies_fallback
+            .iter()
+            .map(|(name, value)| format!("{name}={value}"))
+            .collect::<Vec<_>>()
+            .join("; "),
+    })
+    .unwrap_or_default();
+    Ok(JsValue::from(js_string!(cookie_str)))
 }
 
 fn document_cookie_set(
@@ -2796,33 +2799,51 @@ fn document_cookie_set(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let value = arg_string(args, 0, context).unwrap_or_default();
-    // Append to the store (simplified: just store the raw value).
-    let current = context
-        .global_object()
-        .get(js_string!("__megi_cookies"), context)
-        .unwrap_or(JsValue::undefined());
-    let mut store = if current.is_undefined() {
-        String::new()
-    } else {
-        current
-            .to_string(context)?
-            .to_std_string()
-            .unwrap_or_default()
-    };
-    // Parse name=value from the set-cookie string.
-    let pair = value.split(';').next().unwrap_or("").trim();
-    if !pair.is_empty() {
-        if !store.is_empty() {
-            store.push_str("; ");
+    let _ = with_host(|host| {
+        if let Some(provider) = &host.cookie_provider {
+            (provider.set)(&host.url, &value);
+            return;
         }
-        store.push_str(pair);
-    }
-    let _ = context.global_object().set(
-        js_string!("__megi_cookies"),
-        js_string!(store),
-        false,
-        context,
-    );
+        let mut segments = value.split(';');
+        let pair = segments.next().unwrap_or("").trim();
+        let (name, val) = match pair.split_once('=') {
+            Some((n, v)) => (n.trim(), v.trim()),
+            None => (pair, ""),
+        };
+        if name.is_empty() {
+            return;
+        }
+        let mut is_http_only = false;
+        let mut delete = false;
+        for attr in segments {
+            let trimmed = attr.trim();
+            if trimmed.eq_ignore_ascii_case("httponly") {
+                is_http_only = true;
+            } else if let Some((k, v)) = trimmed.split_once('=')
+                && k.trim().eq_ignore_ascii_case("max-age")
+                && let Ok(secs) = v.trim().parse::<i64>()
+                && secs <= 0
+            {
+                delete = true;
+            }
+        }
+        if is_http_only {
+            return;
+        }
+        if delete {
+            host.cookies_fallback
+                .retain(|(existing, _)| existing != name);
+        } else if let Some((_, existing_val)) = host
+            .cookies_fallback
+            .iter_mut()
+            .find(|(existing, _)| existing == name)
+        {
+            *existing_val = val.to_owned();
+        } else {
+            host.cookies_fallback
+                .push((name.to_owned(), val.to_owned()));
+        }
+    });
     Ok(JsValue::undefined())
 }
 

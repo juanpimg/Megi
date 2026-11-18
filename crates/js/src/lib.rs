@@ -211,7 +211,7 @@ pub use events::JsEventTarget;
 #[cfg(feature = "js")]
 pub use host::ConsoleEntry;
 #[cfg(feature = "js")]
-pub use host::{MediaProvider, ViewportInfo, ViewportProvider};
+pub use host::{CookieProvider, MediaProvider, ViewportInfo, ViewportProvider};
 pub use import_map::ImportMap;
 #[cfg(feature = "js")]
 pub use runtime::{Budget, JsRuntime, ModuleAsyncBudget, ModuleAsyncOutcome};
