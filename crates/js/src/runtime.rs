@@ -628,7 +628,7 @@ impl JsRuntime {
             + host.nodes.len() * 16
             + host.listeners.len() * 96
             + host.inline_handlers.len() * 64
-            + host.shadow_roots.len() * 32
+            + host.document.all_shadow_roots().len() * 32
             + host.timers.len() * 48
             + console_bytes
             + host.title.len()
@@ -718,9 +718,36 @@ fn install_globals(context: &mut Context, host: &Rc<RefCell<Host>>) -> Result<()
     install_gap_apis(context)?;
     crate::xhr::install_xhr(context)?;
     crate::websocket::install(context).map_err(|error| JsError::Internal(error.to_string()))?;
+    let html_element_ctor =
+        FunctionObjectBuilder::new(context.realm(), native(html_element_constructor))
+            .name(js_string!("HTMLElement"))
+            .constructor(true)
+            .build();
+    let html_element_proto = ObjectInitializer::new(context).build();
+    let _ = html_element_ctor.set(
+        js_string!("prototype"),
+        JsValue::from(html_element_proto.clone()),
+        false,
+        context,
+    );
+    let _ = html_element_proto.set(
+        js_string!("constructor"),
+        JsValue::from(html_element_ctor.clone()),
+        false,
+        context,
+    );
+    global
+        .set(
+            js_string!("HTMLElement"),
+            JsValue::from(html_element_ctor),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
     let registry = ObjectInitializer::new(context)
         .function(native(custom_elements_define), js_string!("define"), 2)
         .function(native(custom_elements_get), js_string!("get"), 1)
+        .function(native(custom_elements_upgrade), js_string!("upgrade"), 1)
         .build();
     global
         .set(
@@ -729,6 +756,28 @@ fn install_globals(context: &mut Context, host: &Rc<RefCell<Host>>) -> Result<()
             false,
             context,
         )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
+    context
+        .eval(Source::from_bytes(
+            br#"(function () {
+  var waiters = Object.create(null);
+  customElements._waiters = waiters;
+  customElements.whenDefined = function (name) {
+    var lower = String(name).toLowerCase();
+    if (lower.indexOf('-') === -1) {
+      return Promise.reject(new DOMException("NotSupportedError: invalid custom element name", "SyntaxError"));
+    }
+    var ctor = customElements.get(lower);
+    if (ctor !== undefined) {
+      return Promise.resolve(ctor);
+    }
+    return new Promise(function (resolve) {
+      if (!waiters[lower]) { waiters[lower] = []; }
+      waiters[lower].push(resolve);
+    });
+  };
+})();"#,
+        ))
         .map_err(|error| JsError::Internal(error.to_string()))?;
     Ok(())
 }
@@ -1451,7 +1500,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 42] = [
+    let accessors: [(&str, AccessorKind); 48] = [
         ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
@@ -1492,6 +1541,12 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("noValidate", AccessorKind::NoValidate),
         ("elements", AccessorKind::Elements),
         ("shadowRoot", AccessorKind::ShadowRoot),
+        ("isConnected", AccessorKind::IsConnected),
+        ("assignedSlot", AccessorKind::AssignedSlot),
+        ("slot", AccessorKind::SlotAttr),
+        ("name", AccessorKind::NameAttr),
+        ("host", AccessorKind::ShadowHost),
+        ("mode", AccessorKind::ShadowMode),
         ("open", AccessorKind::DialogOpen),
         ("returnValue", AccessorKind::DialogReturnValue),
     ];
@@ -1568,6 +1623,8 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("reset", 0, node_reset),
         ("attachShadow", 1, node_attach_shadow),
         ("getRootNode", 0, node_get_root_node),
+        ("assignedNodes", 0, slot_assigned_nodes),
+        ("assignedElements", 0, slot_assigned_elements),
         ("getContext", 1, canvas_get_context),
         ("show", 0, node_dialog_show),
         ("showModal", 0, node_dialog_show_modal),
@@ -1632,6 +1689,12 @@ enum AccessorKind {
     NoValidate,
     Elements,
     ShadowRoot,
+    IsConnected,
+    AssignedSlot,
+    SlotAttr,
+    NameAttr,
+    ShadowHost,
+    ShadowMode,
     DialogOpen,
     DialogReturnValue,
 }
@@ -1678,6 +1741,12 @@ fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::NoValidate => (node_no_validate_get, Some(node_no_validate_set)),
         AccessorKind::Elements => (node_elements_get, None),
         AccessorKind::ShadowRoot => (node_shadow_root_get, None),
+        AccessorKind::IsConnected => (node_is_connected, None),
+        AccessorKind::AssignedSlot => (node_assigned_slot, None),
+        AccessorKind::SlotAttr => (node_slot_attr_get, Some(node_slot_attr_set)),
+        AccessorKind::NameAttr => (node_name_attr_get, Some(node_name_attr_set)),
+        AccessorKind::ShadowHost => (node_shadow_host_get, None),
+        AccessorKind::ShadowMode => (node_shadow_mode_get, None),
         AccessorKind::DialogOpen => (node_open_get, Some(node_open_set)),
         AccessorKind::DialogReturnValue => (node_dialog_return_value_get, None),
     }
@@ -1899,6 +1968,21 @@ fn node_inner_html_set(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let html_text = arg_string(args, 0, context)?;
+    let (roots, before_slots, removed_snapshot) = with_host(|host| {
+        let roots = if host.document.has_shadow_roots() {
+            collect_relevant_shadow_roots(&host.document, &[node_id])
+        } else {
+            Vec::new()
+        };
+        let before_slots = snapshot_slots_in_roots(&host.document, &roots);
+        let removed_snapshot: Vec<(NodeId, bool)> = host
+            .document
+            .children(node_id)
+            .flat_map(|c| snapshot_subtree_nodes(&host.document, c))
+            .collect();
+        (roots, before_slots, removed_snapshot)
+    })
+    .unwrap_or_default();
     let result = with_host(|host| {
         if !charge_document_parse(host, html_text.len(), "innerHTML assignment") {
             return Ok(());
@@ -1919,7 +2003,19 @@ fn node_inner_html_set(
             .map_err(|error| error.to_string())
     });
     match result {
-        Some(Ok(())) => Ok(JsValue::undefined()),
+        Some(Ok(())) => {
+            let inserted_snapshot = with_host(|host| {
+                host.document
+                    .children(node_id)
+                    .flat_map(|c| snapshot_subtree_nodes(&host.document, c))
+                    .map(|(id, _)| (id, false))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+            apply_subtree_lifecycle_after_mutation(&inserted_snapshot, &removed_snapshot, context);
+            notify_slotchange_for_diff(before_slots, &roots, context);
+            Ok(JsValue::undefined())
+        }
         Some(Err(message)) => Err(js_error(message)),
         None => Err(js_error("no active JavaScript host")),
     }
@@ -1943,11 +2039,22 @@ fn node_outer_html_set(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let html_text = arg_string(args, 0, context)?;
+    let (parent, roots, before_slots, removed_snapshot) = with_host(|host| {
+        let parent = host.document.try_node(node_id).and_then(|node| node.parent);
+        let roots = if host.document.has_shadow_roots() {
+            collect_relevant_shadow_roots(&host.document, &[node_id])
+        } else {
+            Vec::new()
+        };
+        let before_slots = snapshot_slots_in_roots(&host.document, &roots);
+        let removed_snapshot = snapshot_subtree_nodes(&host.document, node_id);
+        (parent, roots, before_slots, removed_snapshot)
+    })
+    .unwrap_or((None, Vec::new(), Vec::new(), Vec::new()));
     let result = with_host(|host| {
         if !charge_document_parse(host, html_text.len(), "outerHTML assignment") {
             return Ok(());
         }
-        let parent = host.document.try_node(node_id).and_then(|node| node.parent);
         let options = html::ParseOptions {
             max_nodes: host.max_document_write_nodes,
             ..html::ParseOptions::default()
@@ -1966,7 +2073,30 @@ fn node_outer_html_set(
             .map_err(|error| error.to_string())
     });
     match result {
-        Some(Ok(())) => Ok(JsValue::undefined()),
+        Some(Ok(())) => {
+            if let Some(parent_id) = parent {
+                let inserted_snapshot = with_host(|host| {
+                    host.document
+                        .children(parent_id)
+                        .flat_map(|c| snapshot_subtree_nodes(&host.document, c))
+                        .map(|(id, _)| {
+                            let was_upgraded = host.upgraded_custom_elements.contains(&id);
+                            (id, was_upgraded)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+                apply_subtree_lifecycle_after_mutation(
+                    &inserted_snapshot,
+                    &removed_snapshot,
+                    context,
+                );
+            } else {
+                apply_subtree_lifecycle_after_mutation(&[], &removed_snapshot, context);
+            }
+            notify_slotchange_for_diff(before_slots, &roots, context);
+            Ok(JsValue::undefined())
+        }
         Some(Err(message)) => Err(js_error(message)),
         None => Err(js_error("no active JavaScript host")),
     }
@@ -3158,6 +3288,50 @@ fn node_options(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsR
     node_list(context, options)
 }
 
+fn notify_attribute_change(
+    node_id: NodeId,
+    name: &str,
+    old_value: Option<String>,
+    new_value: Option<String>,
+    roots: &[NodeId],
+    before_slots: Vec<(NodeId, Vec<NodeId>)>,
+    context: &mut Context,
+) {
+    if old_value.as_deref() != new_value.as_deref() {
+        let should_invoke = with_host(|host| {
+            if !host.upgraded_custom_elements.contains(&node_id) {
+                return false;
+            }
+            let Some(el) = host.document.try_node(node_id).and_then(|n| n.as_element()) else {
+                return false;
+            };
+            let tag = el.local_name.to_ascii_lowercase();
+            let lower_attr = name.to_ascii_lowercase();
+            host.custom_elements
+                .get(&tag)
+                .is_some_and(|def| def.observed_attributes.contains(&lower_attr))
+        })
+        .unwrap_or(false);
+        if should_invoke {
+            let old_js = match &old_value {
+                Some(v) => JsValue::from(js_string!(v.as_str())),
+                None => JsValue::null(),
+            };
+            let new_js = match &new_value {
+                Some(v) => JsValue::from(js_string!(v.as_str())),
+                None => JsValue::null(),
+            };
+            invoke_custom_element_callback(
+                node_id,
+                "attributeChangedCallback",
+                &[JsValue::from(js_string!(name)), old_js, new_js],
+                context,
+            );
+        }
+    }
+    notify_slotchange_for_diff(before_slots, roots, context);
+}
+
 fn node_set_attribute(
     this: &JsValue,
     args: &[JsValue],
@@ -3166,25 +3340,49 @@ fn node_set_attribute(
     let node_id = this_node(this, context)?;
     let name = attribute_name(node_id, &arg_string(args, 0, context)?);
     let value = arg_string(args, 1, context)?;
-    let old_value = with_host(|host| {
-        host.document
+    let (old_value, roots, before_slots) = with_host(|host| {
+        let old_value = host
+            .document
             .try_node(node_id)
             .and_then(|node| node.as_element())
-            .and_then(|element| element.get_attribute(&name).map(str::to_owned))
+            .and_then(|element| element.get_attribute(&name).map(str::to_owned));
+        let roots = if host.document.has_shadow_roots()
+            && (name.eq_ignore_ascii_case("slot") || name.eq_ignore_ascii_case("name"))
+        {
+            collect_relevant_shadow_roots(&host.document, &[node_id])
+        } else {
+            Vec::new()
+        };
+        let before_slots = snapshot_slots_in_roots(&host.document, &roots);
+        (old_value, roots, before_slots)
     })
-    .flatten();
+    .unwrap_or((None, Vec::new(), Vec::new()));
     let result = with_host(|host| {
         let element = host
             .document
             .try_node_mut(node_id)
             .and_then(|node| node.as_element_mut())
             .ok_or_else(|| "node is not an element".to_string())?;
-        element.set_attribute(DomAttribute::new(name.clone(), value), true);
+        element.set_attribute(DomAttribute::new(name.clone(), value.clone()), true);
         Ok::<(), String>(())
     });
     match result {
         Some(Ok(())) => {
-            note_mutation(MutationKind::Attributes, node_id, Some(name), old_value);
+            note_mutation(
+                MutationKind::Attributes,
+                node_id,
+                Some(name.clone()),
+                old_value.clone(),
+            );
+            notify_attribute_change(
+                node_id,
+                &name,
+                old_value,
+                Some(value),
+                &roots,
+                before_slots,
+                context,
+            );
             Ok(JsValue::undefined())
         }
         Some(Err(message)) => Err(js_error(message)),
@@ -3222,13 +3420,23 @@ fn node_remove_attribute(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let name = attribute_name(node_id, &arg_string(args, 0, context)?);
-    let old_value = with_host(|host| {
-        host.document
+    let (old_value, roots, before_slots) = with_host(|host| {
+        let old_value = host
+            .document
             .try_node(node_id)
             .and_then(|node| node.as_element())
-            .and_then(|element| element.get_attribute(&name).map(str::to_owned))
+            .and_then(|element| element.get_attribute(&name).map(str::to_owned));
+        let roots = if host.document.has_shadow_roots()
+            && (name.eq_ignore_ascii_case("slot") || name.eq_ignore_ascii_case("name"))
+        {
+            collect_relevant_shadow_roots(&host.document, &[node_id])
+        } else {
+            Vec::new()
+        };
+        let before_slots = snapshot_slots_in_roots(&host.document, &roots);
+        (old_value, roots, before_slots)
     })
-    .flatten();
+    .unwrap_or((None, Vec::new(), Vec::new()));
     with_host(|host| {
         if let Some(element) = host
             .document
@@ -3240,7 +3448,21 @@ fn node_remove_attribute(
                 .retain(|attribute| attribute.local_name != name);
         }
     });
-    note_mutation(MutationKind::Attributes, node_id, Some(name), old_value);
+    note_mutation(
+        MutationKind::Attributes,
+        node_id,
+        Some(name.clone()),
+        old_value.clone(),
+    );
+    notify_attribute_change(
+        node_id,
+        &name,
+        old_value,
+        None,
+        &roots,
+        before_slots,
+        context,
+    );
     Ok(JsValue::undefined())
 }
 
@@ -3326,6 +3548,17 @@ fn node_clone_node(this: &JsValue, args: &[JsValue], context: &mut Context) -> J
 fn node_append_child(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let parent = this_node(this, context)?;
     let child = argument_node(args, 0, context)?;
+    let (roots, before_slots, child_snapshot) = with_host(|host| {
+        let roots = if host.document.has_shadow_roots() {
+            collect_relevant_shadow_roots(&host.document, &[parent, child])
+        } else {
+            Vec::new()
+        };
+        let before_slots = snapshot_slots_in_roots(&host.document, &roots);
+        let child_snapshot = snapshot_subtree_nodes(&host.document, child);
+        (roots, before_slots, child_snapshot)
+    })
+    .unwrap_or_default();
     // DOM insertion expands document fragments (their children are moved, the fragment
     // itself is never attached).
     let appended =
@@ -3334,6 +3567,8 @@ fn node_append_child(this: &JsValue, args: &[JsValue], context: &mut Context) ->
         return Err(js_error("appendChild failed (hierarchy or unknown node)"));
     }
     note_mutation(MutationKind::ChildList, parent, None, None);
+    apply_subtree_lifecycle_after_mutation(&child_snapshot, &[], context);
+    notify_slotchange_for_diff(before_slots, &roots, context);
     wrap_node(context, child)
 }
 
@@ -3353,6 +3588,17 @@ fn node_insert_before(
         // DOM spec: inserting a node before itself is a no-op.
         return wrap_node(context, new_node);
     }
+    let (roots, before_slots, child_snapshot) = with_host(|host| {
+        let roots = if host.document.has_shadow_roots() {
+            collect_relevant_shadow_roots(&host.document, &[parent, new_node])
+        } else {
+            Vec::new()
+        };
+        let before_slots = snapshot_slots_in_roots(&host.document, &roots);
+        let child_snapshot = snapshot_subtree_nodes(&host.document, new_node);
+        (roots, before_slots, child_snapshot)
+    })
+    .unwrap_or_default();
     let inserted = with_host(|host| {
         host.document
             .insert_node(parent, new_node, reference)
@@ -3363,18 +3609,33 @@ fn node_insert_before(
         return Err(js_error("insertBefore failed (hierarchy or unknown node)"));
     }
     note_mutation(MutationKind::ChildList, parent, None, None);
+    apply_subtree_lifecycle_after_mutation(&child_snapshot, &[], context);
+    notify_slotchange_for_diff(before_slots, &roots, context);
     wrap_node(context, new_node)
 }
 
 fn node_remove_child(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let parent = this_node(this, context)?;
     let child = argument_node(args, 0, context)?;
+    let (roots, before_slots, removed_snapshot) = with_host(|host| {
+        let roots = if host.document.has_shadow_roots() {
+            collect_relevant_shadow_roots(&host.document, &[parent, child])
+        } else {
+            Vec::new()
+        };
+        let before_slots = snapshot_slots_in_roots(&host.document, &roots);
+        let removed_snapshot = snapshot_subtree_nodes(&host.document, child);
+        (roots, before_slots, removed_snapshot)
+    })
+    .unwrap_or_default();
     let removed =
         with_host(|host| host.document.remove_child(parent, child).is_ok()).unwrap_or(false);
     if !removed {
         return Err(js_error("removeChild failed (node is not a child)"));
     }
     note_mutation(MutationKind::ChildList, parent, None, None);
+    apply_subtree_lifecycle_after_mutation(&[], &removed_snapshot, context);
+    notify_slotchange_for_diff(before_slots, &roots, context);
     wrap_node(context, child)
 }
 
@@ -3386,6 +3647,18 @@ fn node_replace_child(
     let parent = this_node(this, context)?;
     let new_node = argument_node(args, 0, context)?;
     let old_node = argument_node(args, 1, context)?;
+    let (roots, before_slots, inserted_snapshot, removed_snapshot) = with_host(|host| {
+        let roots = if host.document.has_shadow_roots() {
+            collect_relevant_shadow_roots(&host.document, &[parent, new_node, old_node])
+        } else {
+            Vec::new()
+        };
+        let before_slots = snapshot_slots_in_roots(&host.document, &roots);
+        let inserted_snapshot = snapshot_subtree_nodes(&host.document, new_node);
+        let removed_snapshot = snapshot_subtree_nodes(&host.document, old_node);
+        (roots, before_slots, inserted_snapshot, removed_snapshot)
+    })
+    .unwrap_or_default();
     let replaced = with_host(|host| {
         host.document
             .replace_node(parent, new_node, old_node)
@@ -3396,6 +3669,8 @@ fn node_replace_child(
         return Err(js_error("replaceChild failed"));
     }
     note_mutation(MutationKind::ChildList, parent, None, None);
+    apply_subtree_lifecycle_after_mutation(&inserted_snapshot, &removed_snapshot, context);
+    notify_slotchange_for_diff(before_slots, &roots, context);
     wrap_node(context, old_node)
 }
 
@@ -3568,9 +3843,366 @@ fn is_valid_element_name(name: &str) -> bool {
     chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '.' | '_' | ':'))
 }
 
-/// `customElements.define(name, constructor)` (#1541): registers a constructor for a custom tag.
-/// The name must contain a hyphen (Custom Elements spec). The constructor is stored on the global
-/// object under an opaque key so `createElement` can invoke it to upgrade new instances.
+thread_local! {
+    static PENDING_UPGRADE_TARGET: RefCell<Option<JsObject>> = const { RefCell::new(None) };
+}
+
+fn read_observed_attributes(constructor: &JsObject, context: &mut Context) -> Vec<String> {
+    let Ok(val) = constructor.get(js_string!("observedAttributes"), context) else {
+        return Vec::new();
+    };
+    let Some(arr) = val.as_object() else {
+        return Vec::new();
+    };
+    let Ok(len_val) = arr.get(js_string!("length"), context) else {
+        return Vec::new();
+    };
+    let len = len_val.as_number().unwrap_or(0.0).clamp(0.0, 1024.0) as usize;
+    let mut attrs = Vec::with_capacity(len);
+    for i in 0..len {
+        if let Ok(item) = arr.get(i, context)
+            && !item.is_undefined()
+            && !item.is_null()
+            && let Ok(s) = item.to_string(context)
+        {
+            let lower = s.to_std_string_escaped().to_ascii_lowercase();
+            if !attrs.contains(&lower) {
+                attrs.push(lower);
+            }
+        }
+    }
+    attrs
+}
+
+fn invoke_custom_element_callback(
+    node_id: NodeId,
+    method: &str,
+    args: &[JsValue],
+    context: &mut Context,
+) {
+    let is_upgraded =
+        with_host(|host| host.upgraded_custom_elements.contains(&node_id)).unwrap_or(false);
+    if !is_upgraded {
+        return;
+    }
+    let Ok(wrapper_val) = wrap_node(context, node_id) else {
+        return;
+    };
+    let Some(wrapper) = wrapper_val.as_object() else {
+        return;
+    };
+    let Ok(cb_val) = wrapper.get(js_string!(method), context) else {
+        return;
+    };
+    if let Some(cb) = cb_val.as_callable() {
+        let _ = cb.call(&wrapper_val, args, context);
+    }
+}
+
+fn try_upgrade_custom_element(node_id: NodeId, context: &mut Context) {
+    let info = with_host(|host| {
+        if host.upgraded_custom_elements.contains(&node_id) {
+            return None;
+        }
+        let el = host.document.try_node(node_id)?.as_element()?;
+        if el.namespace != Namespace::Html {
+            return None;
+        }
+        let tag = el.local_name.to_ascii_lowercase();
+        let def = host.custom_elements.get(&tag)?.clone();
+        let initial_attrs: Vec<(String, String)> = def
+            .observed_attributes
+            .iter()
+            .filter_map(|attr_name| {
+                el.get_attribute(attr_name)
+                    .map(|val| (attr_name.clone(), val.to_owned()))
+            })
+            .collect();
+        host.upgraded_custom_elements.insert(node_id);
+        let connected = host.document.is_connected(node_id);
+        Some((def.handle, initial_attrs, connected))
+    })
+    .flatten();
+
+    let Some((handle, initial_attrs, connected)) = info else {
+        return;
+    };
+    let Ok(wrapper_val) = wrap_node(context, node_id) else {
+        return;
+    };
+    let Some(wrapper_obj) = wrapper_val.as_object() else {
+        return;
+    };
+    let Ok(ctor_val) = context
+        .global_object()
+        .get(js_string!(format!("__megi_ce_{handle}")), context)
+    else {
+        return;
+    };
+    let Some(constructor) = ctor_val.as_callable() else {
+        return;
+    };
+
+    if let Ok(proto_val) = constructor.get(js_string!("prototype"), context)
+        && let Some(proto_obj) = proto_val.as_object()
+    {
+        let _ = wrapper_obj.set_prototype(Some(proto_obj));
+    }
+
+    let call_res = constructor.call(&wrapper_val, &[], context);
+    if let Err(err) = call_res {
+        let msg = err.to_string().to_ascii_lowercase();
+        if msg.contains("class constructor") || msg.contains("cannot call a class") {
+            PENDING_UPGRADE_TARGET.with(|cell| {
+                *cell.borrow_mut() = Some(wrapper_obj.clone());
+            });
+            let _ = constructor.construct(&[], Some(&constructor), context);
+            PENDING_UPGRADE_TARGET.with(|cell| {
+                cell.borrow_mut().take();
+            });
+        }
+    }
+
+    for (attr_name, val) in initial_attrs {
+        invoke_custom_element_callback(
+            node_id,
+            "attributeChangedCallback",
+            &[
+                JsValue::from(js_string!(attr_name)),
+                JsValue::null(),
+                JsValue::from(js_string!(val)),
+            ],
+            context,
+        );
+    }
+
+    if connected {
+        invoke_custom_element_callback(node_id, "connectedCallback", &[], context);
+    }
+}
+
+/// `HTMLElement` constructor: supports `class MyEl extends HTMLElement { constructor() { super(); } }`
+/// both during element upgrades and when directly invoked with `new MyEl()`.
+fn html_element_constructor(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    if let Some(target) = PENDING_UPGRADE_TARGET.with(|cell| cell.borrow_mut().take()) {
+        return Ok(JsValue::from(target));
+    }
+    let Some(new_target) = this.as_object() else {
+        return Err(js_error("TypeError: Illegal constructor"));
+    };
+    let target_proto = new_target
+        .get(js_string!("prototype"), context)
+        .ok()
+        .and_then(|v| v.as_object())
+        .or_else(|| new_target.prototype());
+
+    let matched = with_host(|host| {
+        host.custom_elements
+            .iter()
+            .map(|(tag, def)| (tag.clone(), def.handle))
+            .collect::<Vec<_>>()
+    })
+    .unwrap_or_default()
+    .into_iter()
+    .find_map(|(tag, handle)| {
+        let ctor = context
+            .global_object()
+            .get(js_string!(format!("__megi_ce_{handle}")), context)
+            .ok()
+            .and_then(|v| v.as_object())?;
+        if ctor == new_target {
+            return Some((tag, ctor));
+        }
+        let ctor_proto = ctor
+            .get(js_string!("prototype"), context)
+            .ok()
+            .and_then(|v| v.as_object())?;
+        if target_proto.as_ref() == Some(&ctor_proto) {
+            Some((tag, ctor))
+        } else {
+            None
+        }
+    });
+
+    let Some((tag, ctor)) = matched else {
+        return Err(js_error("TypeError: Illegal constructor"));
+    };
+
+    let node_id = with_host(|host| {
+        let id = host
+            .document
+            .create_element(Namespace::Html, tag, Vec::new());
+        host.upgraded_custom_elements.insert(id);
+        id
+    })
+    .ok_or_else(|| js_error("no active JavaScript host"))?;
+
+    let wrapper = wrap_node(context, node_id)?;
+    if let Some(wrapper_obj) = wrapper.as_object()
+        && let Ok(proto_val) = ctor.get(js_string!("prototype"), context)
+        && let Some(proto_obj) = proto_val.as_object()
+    {
+        let _ = wrapper_obj.set_prototype(Some(proto_obj));
+    }
+    Ok(wrapper)
+}
+
+fn collect_all_document_elements_and_custom_tags(doc: &dom::Document) -> Vec<NodeId> {
+    let mut nodes = Vec::new();
+    let mut stack = vec![doc.root()];
+    for (_host, root, _mode) in doc.all_shadow_roots() {
+        stack.push(root);
+    }
+    let max = doc.len();
+    let mut seen = std::collections::HashSet::new();
+    while let Some(root) = stack.pop() {
+        if nodes.len() >= max {
+            break;
+        }
+        for desc in doc.descendants(root) {
+            if seen.insert(desc) && doc.try_node(desc).is_some_and(|n| n.as_element().is_some()) {
+                nodes.push(desc);
+            }
+        }
+    }
+    nodes
+}
+
+fn snapshot_subtree_nodes(doc: &dom::Document, root: NodeId) -> Vec<(NodeId, bool)> {
+    let mut out = Vec::new();
+    let mut stack = vec![root];
+    let max = doc.len();
+    while let Some(id) = stack.pop() {
+        if out.len() >= max {
+            break;
+        }
+        if let Some(node) = doc.try_node(id) {
+            if node.as_element().is_some() {
+                out.push((id, doc.is_connected(id)));
+            }
+            let mut kids = Vec::new();
+            let mut child = node.first_child;
+            while let Some(c) = child {
+                kids.push(c);
+                child = doc.try_node(c).and_then(|n| n.next_sibling);
+            }
+            for c in kids.into_iter().rev() {
+                stack.push(c);
+            }
+        }
+    }
+    out
+}
+
+fn collect_relevant_shadow_roots(doc: &dom::Document, seeds: &[NodeId]) -> Vec<NodeId> {
+    let mut roots = Vec::new();
+    for &id in seeds {
+        if let Some(sr) = doc.shadow_root_node(id)
+            && !roots.contains(&sr)
+        {
+            roots.push(sr);
+        }
+        if let Some(sr) = doc.containing_shadow_root(id)
+            && !roots.contains(&sr)
+        {
+            roots.push(sr);
+        }
+        if let Some(slot) = doc.assigned_slot(id)
+            && let Some(sr) = doc.containing_shadow_root(slot)
+            && !roots.contains(&sr)
+        {
+            roots.push(sr);
+        }
+        if let Some(parent) = doc.try_node(id).and_then(|n| n.parent) {
+            if let Some(sr) = doc.shadow_root_node(parent)
+                && !roots.contains(&sr)
+            {
+                roots.push(sr);
+            }
+            if let Some(sr) = doc.containing_shadow_root(parent)
+                && !roots.contains(&sr)
+            {
+                roots.push(sr);
+            }
+        }
+    }
+    roots
+}
+
+fn snapshot_slots_in_roots(doc: &dom::Document, roots: &[NodeId]) -> Vec<(NodeId, Vec<NodeId>)> {
+    let mut result = Vec::new();
+    for &sr in roots {
+        for desc in doc.descendants(sr) {
+            if let Some(el) = doc.try_node(desc).and_then(|n| n.as_element())
+                && el.namespace == Namespace::Html
+                && el.local_name.eq_ignore_ascii_case("slot")
+            {
+                result.push((desc, doc.slot_assigned_nodes(desc, false)));
+            }
+        }
+    }
+    result
+}
+
+fn notify_slotchange_for_diff(
+    before: Vec<(NodeId, Vec<NodeId>)>,
+    roots: &[NodeId],
+    context: &mut Context,
+) {
+    if roots.is_empty() {
+        return;
+    }
+    let after =
+        with_host(|host| snapshot_slots_in_roots(&host.document, roots)).unwrap_or_default();
+    let mut changed_slots = Vec::new();
+    for (slot_id, after_nodes) in after {
+        let prev = before
+            .iter()
+            .find(|(id, _)| *id == slot_id)
+            .map(|(_, nodes)| nodes.as_slice());
+        if prev != Some(after_nodes.as_slice()) {
+            changed_slots.push(slot_id);
+        }
+    }
+    for slot_id in changed_slots {
+        if let Ok(slot_val) = wrap_node(context, slot_id) {
+            let _ =
+                crate::events::dispatch_event_type(&slot_val, "slotchange", true, false, context);
+        }
+    }
+}
+
+fn apply_subtree_lifecycle_after_mutation(
+    inserted_snapshot: &[(NodeId, bool)],
+    removed_snapshot: &[(NodeId, bool)],
+    context: &mut Context,
+) {
+    for &(id, was_connected) in inserted_snapshot {
+        let now_connected = with_host(|host| host.document.is_connected(id)).unwrap_or(false);
+        if now_connected {
+            let already_upgraded =
+                with_host(|host| host.upgraded_custom_elements.contains(&id)).unwrap_or(false);
+            if !already_upgraded {
+                try_upgrade_custom_element(id, context);
+            } else if !was_connected {
+                invoke_custom_element_callback(id, "connectedCallback", &[], context);
+            }
+        }
+    }
+    for &(id, was_connected) in removed_snapshot {
+        let now_connected = with_host(|host| host.document.is_connected(id)).unwrap_or(false);
+        if was_connected && !now_connected {
+            invoke_custom_element_callback(id, "disconnectedCallback", &[], context);
+        }
+    }
+}
+
+/// `customElements.define(name, constructor)` (#1541): registers a constructor for a custom tag,
+/// upgrades matching elements already in the document, and resolves `whenDefined(name)` promises.
 fn custom_elements_define(
     _this: &JsValue,
     args: &[JsValue],
@@ -3587,25 +4219,84 @@ fn custom_elements_define(
         .and_then(JsValue::as_callable)
         .ok_or_else(|| js_error("TypeError: custom element constructor must be callable"))?
         .clone();
+    let observed_attributes = read_observed_attributes(&constructor, context);
     let handle = with_host(|host| {
-        if let Some(existing) = host.custom_elements.get(&name) {
-            return *existing;
+        if host.custom_elements.contains_key(&name) {
+            return Err(format!(
+                "NotSupportedError: `{name}` has already been defined"
+            ));
         }
         let handle = host.custom_element_next_handle;
         host.custom_element_next_handle = host.custom_element_next_handle.wrapping_add(1);
-        host.custom_elements.insert(name.clone(), handle);
-        handle
+        host.custom_elements.insert(
+            name.clone(),
+            crate::host::CustomElementDef {
+                handle,
+                observed_attributes,
+            },
+        );
+        Ok(handle)
     })
-    .ok_or_else(|| js_error("no active JavaScript host"))?;
+    .ok_or_else(|| js_error("no active JavaScript host"))?
+    .map_err(js_error)?;
     context
         .global_object()
         .set(
             js_string!(format!("__megi_ce_{handle}")),
-            JsValue::from(constructor),
+            JsValue::from(constructor.clone()),
             false,
             context,
         )
         .map_err(|error| js_error(error.to_string()))?;
+
+    // Upgrade existing elements matching `name` across document & shadow trees.
+    let candidates = with_host(|host| {
+        collect_all_document_elements_and_custom_tags(&host.document)
+            .into_iter()
+            .filter(|&id| {
+                host.document
+                    .try_node(id)
+                    .and_then(|n| n.as_element())
+                    .is_some_and(|el| {
+                        el.namespace == Namespace::Html && el.local_name.eq_ignore_ascii_case(&name)
+                    })
+            })
+            .collect::<Vec<_>>()
+    })
+    .unwrap_or_default();
+    for id in candidates {
+        try_upgrade_custom_element(id, context);
+    }
+
+    // Resolve any pending `customElements.whenDefined(name)` promises.
+    if let Ok(ce) = context
+        .global_object()
+        .get(js_string!("customElements"), context)
+        && let Some(ce_obj) = ce.as_object()
+        && let Ok(waiters_val) = ce_obj.get(js_string!("_waiters"), context)
+        && let Some(waiters_obj) = waiters_val.as_object()
+        && let Ok(list_val) = waiters_obj.get(js_string!(name.as_str()), context)
+        && let Some(list_obj) = list_val.as_object()
+    {
+        let len = list_obj
+            .get(js_string!("length"), context)
+            .ok()
+            .and_then(|v| v.as_number())
+            .unwrap_or(0.0) as usize;
+        for i in 0..len {
+            if let Ok(res_fn) = list_obj.get(i, context)
+                && let Some(cb) = res_fn.as_callable()
+            {
+                let _ = cb.call(
+                    &JsValue::undefined(),
+                    &[JsValue::from(constructor.clone())],
+                    context,
+                );
+            }
+        }
+        let _ = waiters_obj.delete_property_or_throw(js_string!(name.as_str()), context);
+    }
+
     Ok(JsValue::undefined())
 }
 
@@ -3616,7 +4307,7 @@ fn custom_elements_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let name = arg_string(args, 0, context)?.to_ascii_lowercase();
-    let handle = with_host(|host| host.custom_elements.get(&name).copied()).flatten();
+    let handle = with_host(|host| host.custom_elements.get(&name).map(|d| d.handle)).flatten();
     match handle {
         Some(handle) => context
             .global_object()
@@ -3624,6 +4315,20 @@ fn custom_elements_get(
             .map_err(|error| js_error(error.to_string())),
         None => Ok(JsValue::undefined()),
     }
+}
+
+/// `customElements.upgrade(root)` — upgrades all un-upgraded custom elements in `root`.
+fn custom_elements_upgrade(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let root = argument_node(args, 0, context)?;
+    let nodes = with_host(|host| snapshot_subtree_nodes(&host.document, root)).unwrap_or_default();
+    for (id, _) in nodes {
+        try_upgrade_custom_element(id, context);
+    }
+    Ok(JsValue::undefined())
 }
 
 fn document_create_element(
@@ -3644,23 +4349,12 @@ fn document_create_element(
         host.document
             .create_element(Namespace::Html, name.clone(), Vec::new())
     });
-    let wrapper = match node {
-        Some(node_id) => wrap_node(context, node_id)?,
+    let node_id = match node {
+        Some(node_id) => node_id,
         None => return Err(js_error("no active JavaScript host")),
     };
-    // Custom Elements upgrade (#1541): if a constructor is registered for this tag, invoke it
-    // with the new element as `this` so it can attach a shadow root / set up state.
-    let handle = with_host(|host| host.custom_elements.get(&name).copied()).flatten();
-    if let Some(handle) = handle {
-        let constructor = context
-            .global_object()
-            .get(js_string!(format!("__megi_ce_{handle}")), context)
-            .ok()
-            .and_then(|value| value.as_callable());
-        if let Some(constructor) = constructor {
-            let _ = constructor.call(&wrapper, &[], context);
-        }
-    }
+    let wrapper = wrap_node(context, node_id)?;
+    try_upgrade_custom_element(node_id, context);
     Ok(wrapper)
 }
 
@@ -6435,26 +7129,46 @@ fn node_blur(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsRe
     Ok(JsValue::undefined())
 }
 
-/// `Element.attachShadow({mode})` — creates an inert `DocumentFragment` as shadow root (#1541).
+/// `Element.attachShadow({mode})` — creates an inert `DocumentFragment` shadow root (#1541).
 fn node_attach_shadow(
     this: &JsValue,
-    _args: &[JsValue],
+    args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let existing = with_host(|host| host.shadow_roots.get(&node_id).copied()).flatten();
-    if let Some(root) = existing {
-        return wrap_node(context, root);
+    let init_obj = args
+        .first()
+        .and_then(JsValue::as_object)
+        .ok_or_else(|| js_error("TypeError: attachShadow requires an options object with mode"))?;
+    let mode_val = init_obj
+        .get(js_string!("mode"), context)
+        .map_err(|e| js_error(e.to_string()))?;
+    let mode_str = if mode_val.is_undefined() {
+        String::new()
+    } else {
+        mode_val
+            .to_string(context)
+            .map_err(|e| js_error(e.to_string()))?
+            .to_std_string_escaped()
+    };
+    let mode = match mode_str.as_str() {
+        "open" => dom::ShadowRootMode::Open,
+        "closed" => dom::ShadowRootMode::Closed,
+        _ => {
+            return Err(js_error(
+                "TypeError: attachShadow mode must be 'open' or 'closed'",
+            ));
+        }
+    };
+    let res = with_host(|host| host.document.attach_shadow_root(node_id, mode))
+        .ok_or_else(|| js_error("no active JavaScript host"))?;
+    match res {
+        Ok(root) => wrap_node(context, root),
+        Err(dom::DomError::HierarchyRequest { .. }) => Err(js_error(
+            "NotSupportedError: element already has a shadow root",
+        )),
+        Err(err) => Err(js_error(format!("cannot attach shadow root: {err}"))),
     }
-    let root = with_host(|host| {
-        let root = host.document.create_document_fragment();
-        host.shadow_roots.insert(node_id, root);
-        host.shadow_hosts.insert(root, node_id);
-        Some(root)
-    })
-    .flatten()
-    .ok_or_else(|| js_error("cannot attach shadow root"))?;
-    wrap_node(context, root)
 }
 
 fn node_shadow_root_get(
@@ -6463,7 +7177,7 @@ fn node_shadow_root_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let root = with_host(|host| host.shadow_roots.get(&node_id).copied()).flatten();
+    let root = with_host(|host| host.document.public_shadow_root(node_id)).flatten();
     match root {
         Some(root) => wrap_node(context, root),
         None => Ok(JsValue::null()),
@@ -6472,35 +7186,225 @@ fn node_shadow_root_get(
 
 fn node_get_root_node(
     this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let composed = args
+        .first()
+        .and_then(JsValue::as_object)
+        .and_then(|obj| obj.get(js_string!("composed"), context).ok())
+        .is_some_and(|v| v.to_boolean());
+    let (root_node, is_doc_root) = with_host(|host| {
+        let doc_root = host.document.root();
+        let resolved = if composed {
+            if host.document.is_connected(node_id) {
+                Some(doc_root)
+            } else {
+                let mut cur = node_id;
+                while let Some(parent) = host
+                    .document
+                    .composed_parent(cur)
+                    .or_else(|| host.document.try_node(cur).and_then(|n| n.parent))
+                {
+                    cur = parent;
+                }
+                Some(cur)
+            }
+        } else if let Some(root) = host.document.shadow_root_node(node_id) {
+            // A shadow host's own shadow tree root (kept compatible with #1541 shadow tests).
+            Some(root)
+        } else if let Some(shadow_root) = host.document.containing_shadow_root(node_id) {
+            Some(shadow_root)
+        } else if host.document.is_connected(node_id) {
+            Some(doc_root)
+        } else {
+            let mut cur = node_id;
+            while let Some(parent) = host.document.try_node(cur).and_then(|n| n.parent) {
+                cur = parent;
+            }
+            Some(cur)
+        };
+        resolved.map(|id| (id, id == doc_root))
+    })
+    .flatten()
+    .ok_or_else(|| js_error("no active JavaScript host"))?;
+    if is_doc_root {
+        return context
+            .global_object()
+            .get(js_string!("document"), context)
+            .map_err(|error| js_error(error.to_string()));
+    }
+    wrap_node(context, root_node)
+}
+
+fn node_is_connected(
+    this: &JsValue,
     _args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let shadow = with_host(|host| {
-        // A shadow host's own root is its shadow tree (per DOM §4.6 getRootNode).
-        if let Some(root) = host.shadow_roots.get(&node_id) {
-            return Some(*root);
+    let connected = with_host(|host| host.document.is_connected(node_id)).unwrap_or(false);
+    Ok(JsValue::from(connected))
+}
+
+fn node_assigned_slot(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let slot = with_host(|host| {
+        let slot_id = host.document.assigned_slot(node_id)?;
+        let shadow_root = host.document.containing_shadow_root(slot_id)?;
+        let host_id = host.document.shadow_host(shadow_root)?;
+        match host.document.shadow_root(host_id) {
+            Some((_, dom::ShadowRootMode::Open)) => Some(slot_id),
+            _ => None,
         }
-        // Descendants walk up to the shadow root that contains them.
-        let mut current = Some(node_id);
-        let mut found = None;
-        while let Some(id) = current {
-            if host.shadow_hosts.contains_key(&id) {
-                found = Some(id);
-                break;
-            }
-            current = host.document.try_node(id).and_then(|node| node.parent);
-        }
-        found
     })
     .flatten();
-    match shadow {
-        Some(root) => wrap_node(context, root),
-        None => {
-            let root = with_host(|host| host.document.root()).ok_or_else(|| js_error("no host"))?;
-            wrap_node(context, root)
-        }
+    match slot {
+        Some(slot_id) => wrap_node(context, slot_id),
+        None => Ok(JsValue::null()),
     }
+}
+
+fn node_slot_attr_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let val = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|n| n.as_element())
+            .and_then(|el| el.get_attribute("slot"))
+            .unwrap_or("")
+            .to_owned()
+    })
+    .unwrap_or_default();
+    Ok(JsValue::from(js_string!(val)))
+}
+
+fn node_slot_attr_set(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let value = args
+        .first()
+        .cloned()
+        .unwrap_or_else(|| JsValue::from(js_string!("")));
+    node_set_attribute(this, &[JsValue::from(js_string!("slot")), value], context)
+}
+
+fn node_name_attr_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let val = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|n| n.as_element())
+            .and_then(|el| el.get_attribute("name"))
+            .unwrap_or("")
+            .to_owned()
+    })
+    .unwrap_or_default();
+    Ok(JsValue::from(js_string!(val)))
+}
+
+fn node_name_attr_set(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let value = args
+        .first()
+        .cloned()
+        .unwrap_or_else(|| JsValue::from(js_string!("")));
+    node_set_attribute(this, &[JsValue::from(js_string!("name")), value], context)
+}
+
+fn node_shadow_host_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let host_id = with_host(|host| host.document.shadow_host(node_id)).flatten();
+    match host_id {
+        Some(host_id) => wrap_node(context, host_id),
+        None => Ok(JsValue::undefined()),
+    }
+}
+
+fn node_shadow_mode_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let mode = with_host(|host| {
+        let host_id = host.document.shadow_host(node_id)?;
+        let (_, mode) = host.document.shadow_root(host_id)?;
+        Some(match mode {
+            dom::ShadowRootMode::Open => "open",
+            dom::ShadowRootMode::Closed => "closed",
+        })
+    })
+    .flatten();
+    match mode {
+        Some(m) => Ok(JsValue::from(js_string!(m))),
+        None => Ok(JsValue::undefined()),
+    }
+}
+
+fn slot_assigned_nodes_inner(
+    this: &JsValue,
+    args: &[JsValue],
+    elements_only: bool,
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let flatten = args
+        .first()
+        .and_then(JsValue::as_object)
+        .and_then(|obj| obj.get(js_string!("flatten"), context).ok())
+        .is_some_and(|v| v.to_boolean());
+    let assigned = with_host(|host| {
+        let mut nodes = host.document.slot_assigned_nodes(node_id, flatten);
+        if elements_only {
+            nodes.retain(|id| {
+                host.document
+                    .try_node(*id)
+                    .is_some_and(|n| n.as_element().is_some())
+            });
+        }
+        nodes
+    })
+    .unwrap_or_default();
+    node_list(context, assigned)
+}
+
+fn slot_assigned_nodes(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    slot_assigned_nodes_inner(this, args, false, context)
+}
+
+fn slot_assigned_elements(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    slot_assigned_nodes_inner(this, args, true, context)
 }
 
 fn node_scroll_into_view(

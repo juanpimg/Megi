@@ -432,17 +432,28 @@ fn build_box_for_node(
             }
             let allow_pseudos = !is_replaced && pseudo_styles.is_some();
 
+            let shadow_children: Option<Vec<NodeId>> = if doc.has_shadow_roots() {
+                let mut flat = Vec::new();
+                collect_composed_layout_children(doc, node_id, styles, &mut flat, 0);
+                Some(flat)
+            } else {
+                None
+            };
+
             // Size the children buffer to the exact DOM child count instead of a fixed
             // `with_capacity(4)`: most elements have 1–2 children, so the old capacity
             // over-allocated (and grew to 8 on the fifth child) for every element.
-            let child_count = {
-                let mut count = 0usize;
-                let mut child = node.first_child;
-                while let Some(child_id) = child {
-                    count += 1;
-                    child = doc.node(child_id).next_sibling;
+            let child_count = match &shadow_children {
+                Some(children) => children.len() + usize::from(allow_pseudos) * 2,
+                None => {
+                    let mut count = 0usize;
+                    let mut child = node.first_child;
+                    while let Some(child_id) = child {
+                        count += 1;
+                        child = doc.node(child_id).next_sibling;
+                    }
+                    count + usize::from(allow_pseudos) * 2
                 }
-                count + usize::from(allow_pseudos) * 2
             };
             let mut raw_children = Vec::with_capacity(child_count);
             if allow_pseudos
@@ -460,32 +471,60 @@ fn build_box_for_node(
             {
                 raw_children.push(before_box);
             }
-            let mut curr = node.first_child;
-            while let Some(child_id) = curr {
-                let child_node = doc.node(child_id);
-                let inherited_needed = match &child_node.kind {
-                    NodeKind::Text(text) => !text.is_empty(),
-                    NodeKind::Element(_) => styles.get(&child_id).is_none(),
-                    _ => false,
-                };
-                if inherited_needed && child_style.is_none() {
-                    child_style = Some(style_cache.anonymous_for(&own_style));
+            if let Some(children) = shadow_children {
+                for child_id in children {
+                    let child_node = doc.node(child_id);
+                    let inherited_needed = match &child_node.kind {
+                        NodeKind::Text(text) => !text.is_empty(),
+                        NodeKind::Element(_) => styles.get(&child_id).is_none(),
+                        _ => false,
+                    };
+                    if inherited_needed && child_style.is_none() {
+                        child_style = Some(style_cache.anonymous_for(&own_style));
+                    }
+                    if let Some(child_box) = build_box_for_node(
+                        doc,
+                        child_id,
+                        styles,
+                        pseudo_styles,
+                        child_style.as_ref(),
+                        replaced_sizes,
+                        has_overflow_clip,
+                        style_cache,
+                        counters,
+                        depth + 1,
+                    ) {
+                        raw_children.push(child_box);
+                    }
                 }
-                if let Some(child_box) = build_box_for_node(
-                    doc,
-                    child_id,
-                    styles,
-                    pseudo_styles,
-                    child_style.as_ref(),
-                    replaced_sizes,
-                    has_overflow_clip,
-                    style_cache,
-                    counters,
-                    depth + 1,
-                ) {
-                    raw_children.push(child_box);
+            } else {
+                let mut curr = node.first_child;
+                while let Some(child_id) = curr {
+                    let child_node = doc.node(child_id);
+                    let inherited_needed = match &child_node.kind {
+                        NodeKind::Text(text) => !text.is_empty(),
+                        NodeKind::Element(_) => styles.get(&child_id).is_none(),
+                        _ => false,
+                    };
+                    if inherited_needed && child_style.is_none() {
+                        child_style = Some(style_cache.anonymous_for(&own_style));
+                    }
+                    if let Some(child_box) = build_box_for_node(
+                        doc,
+                        child_id,
+                        styles,
+                        pseudo_styles,
+                        child_style.as_ref(),
+                        replaced_sizes,
+                        has_overflow_clip,
+                        style_cache,
+                        counters,
+                        depth + 1,
+                    ) {
+                        raw_children.push(child_box);
+                    }
+                    curr = doc.node(child_id).next_sibling;
                 }
-                curr = doc.node(child_id).next_sibling;
             }
             if allow_pseudos
                 && let Some(pseudos) = pseudo_styles
@@ -644,6 +683,33 @@ fn build_box_for_node(
             ))
         }
         _ => None,
+    }
+}
+
+/// Collects composed child nodes for layout when the document has Shadow DOM roots, flattening
+/// active `<slot>` elements into their assigned light DOM children (or fallback content).
+fn collect_composed_layout_children(
+    doc: &Document,
+    node_id: NodeId,
+    styles: &HashMap<NodeId, ComputedStyle>,
+    out: &mut Vec<NodeId>,
+    slot_depth: usize,
+) {
+    if slot_depth >= 64 {
+        return;
+    }
+    for child_id in doc.composed_children(node_id) {
+        if doc.slot_name(child_id).is_some() && doc.containing_shadow_root(child_id).is_some() {
+            if styles
+                .get(&child_id)
+                .is_some_and(|s| s.display == Display::None)
+            {
+                continue;
+            }
+            collect_composed_layout_children(doc, child_id, styles, out, slot_depth + 1);
+        } else {
+            out.push(child_id);
+        }
     }
 }
 

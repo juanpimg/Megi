@@ -51,6 +51,34 @@ thread_local! {
     static MATCH_PASS_DEPTH: Cell<u32> = const { Cell::new(0) };
     static MATCH_EXHAUSTED: Cell<bool> = const { Cell::new(false) };
     static PARSER_NESTING: Cell<usize> = const { Cell::new(0) };
+    static SHADOW_HOST: Cell<Option<NodeId>> = const { Cell::new(None) };
+    static SHADOW_ROOT: Cell<Option<NodeId>> = const { Cell::new(None) };
+}
+
+struct ShadowScopeGuard {
+    prev_host: Option<NodeId>,
+    prev_root: Option<NodeId>,
+}
+
+impl Drop for ShadowScopeGuard {
+    fn drop(&mut self) {
+        SHADOW_HOST.with(|cell| cell.set(self.prev_host));
+        SHADOW_ROOT.with(|cell| cell.set(self.prev_root));
+    }
+}
+
+pub(crate) fn with_shadow_scope<R>(
+    host: Option<NodeId>,
+    shadow_root: Option<NodeId>,
+    f: impl FnOnce() -> R,
+) -> R {
+    let prev_host = SHADOW_HOST.with(|cell| cell.replace(host));
+    let prev_root = SHADOW_ROOT.with(|cell| cell.replace(shadow_root));
+    let _guard = ShadowScopeGuard {
+        prev_host,
+        prev_root,
+    };
+    f()
 }
 
 /// Tracks the [`MAX_SELECTOR_NESTING`] recursion depth of [`parse_selectors`].
@@ -384,6 +412,10 @@ pub enum PseudoClass {
     Lang(String),
     /// `::backdrop` — pseudo-element behind a top-layer modal `<dialog>`.
     Backdrop,
+    /// `:host` or `:host(<compound-selector>)` — matches the active shadow host (#1541).
+    Host(Option<SelectorList>),
+    /// `::slotted(<compound-selector>)` — matches light DOM elements slotted into the active shadow root (#1541).
+    Slotted(SelectorList),
     /// Known pseudo-class/pseudo-element whose state this engine cannot observe.
     Never,
 }
@@ -403,6 +435,9 @@ impl PseudoClass {
                 .map(|relative| relative.selector.specificity())
                 .max()
                 .unwrap_or(Specificity::ZERO),
+            Self::Host(None) => Specificity::new(0, 1, 0),
+            Self::Host(Some(selectors)) => Specificity::new(0, 1, 0) + selectors.max_specificity(),
+            Self::Slotted(selectors) => Specificity::new(0, 0, 1) + selectors.max_specificity(),
             Self::Backdrop => Specificity::new(0, 0, 1),
             _ => Specificity::new(0, 1, 0),
         }
@@ -425,6 +460,28 @@ impl PseudoClass {
             Self::PlaceholderShown => crate::state::is_placeholder_shown(doc, node_id),
             Self::Modal => crate::state::is_modal(doc, node_id),
             Self::Lang(range) => matches_language(doc, node_id, range),
+            Self::Host(selector_list) => {
+                let Some(active_host) = SHADOW_HOST.with(Cell::get) else {
+                    return false;
+                };
+                if node_id != active_host {
+                    return false;
+                }
+                match selector_list {
+                    Some(list) => list.matches(doc, node_id),
+                    None => true,
+                }
+            }
+            Self::Slotted(selector_list) => {
+                let Some(active_root) = SHADOW_ROOT.with(Cell::get) else {
+                    return false;
+                };
+                let is_slotted_here = doc
+                    .assigned_slot(node_id)
+                    .and_then(|slot| doc.containing_shadow_root(slot))
+                    == Some(active_root);
+                is_slotted_here && selector_list.matches(doc, node_id)
+            }
             Self::Backdrop | Self::Never => false,
             Self::Is(selectors) | Self::Where(selectors) => selectors.matches(doc, node_id),
             Self::Not(selectors) => !selectors.matches(doc, node_id),
@@ -885,6 +942,26 @@ pub struct ComplexSelector {
 }
 
 impl ComplexSelector {
+    /// Returns `true` when this selector targets `:host` or `:host(...)` on its subject.
+    pub fn has_host(&self) -> bool {
+        self.compounds.last().is_some_and(|(compound, _)| {
+            compound
+                .pseudo_classes
+                .iter()
+                .any(|pseudo| matches!(pseudo, PseudoClass::Host(_)))
+        })
+    }
+
+    /// Returns `true` when this selector targets `::slotted(...)` on its subject.
+    pub fn has_slotted(&self) -> bool {
+        self.compounds.last().is_some_and(|(compound, _)| {
+            compound
+                .pseudo_classes
+                .iter()
+                .any(|pseudo| matches!(pseudo, PseudoClass::Slotted(_)))
+        })
+    }
+
     /// Returns `true` when this selector targets the `::backdrop` pseudo-element on its subject.
     pub fn has_backdrop(&self) -> bool {
         self.compounds.last().is_some_and(|(compound, _)| {
@@ -992,9 +1069,18 @@ impl ComplexSelector {
             return false;
         };
 
+        let use_composed = self.has_slotted() && SHADOW_ROOT.with(Cell::get).is_some();
+        let next_parent = |id: NodeId| {
+            if use_composed {
+                doc.composed_parent(id)
+            } else {
+                doc.node(id).parent
+            }
+        };
+
         match combinator {
             Combinator::Child => {
-                let Some(parent_id) = doc.node(current_node).parent else {
+                let Some(parent_id) = next_parent(current_node) else {
                     return false;
                 };
                 if prev_compound.matches(doc, parent_id) {
@@ -1004,14 +1090,14 @@ impl ComplexSelector {
                 }
             }
             Combinator::Descendant => {
-                let mut ancestor = doc.node(current_node).parent;
+                let mut ancestor = next_parent(current_node);
                 while let Some(anc_id) = ancestor {
                     if prev_compound.matches(doc, anc_id)
                         && self.matches_from_right(doc, anc_id, prev_index)
                     {
                         return true;
                     }
-                    ancestor = doc.node(anc_id).parent;
+                    ancestor = next_parent(anc_id);
                 }
                 false
             }
@@ -1647,6 +1733,9 @@ fn parse_compound_selector(tokens: &mut SelectorTokens) -> Option<CompoundSelect
                 if is_pseudo_element {
                     if pseudo.eq_ignore_ascii_case("backdrop") && argument.is_none() {
                         compound.pseudo_classes.push(PseudoClass::Backdrop);
+                    } else if pseudo.eq_ignore_ascii_case("slotted") {
+                        let inner = parse_selector_argument(&argument)?;
+                        compound.pseudo_classes.push(PseudoClass::Slotted(inner));
                     } else if argument.is_none() {
                         let parsed = match name.as_str() {
                             "before" => Some(PseudoElement::Before),
@@ -1704,6 +1793,10 @@ fn parse_compound_selector(tokens: &mut SelectorTokens) -> Option<CompoundSelect
                     "placeholder-shown" if argument.is_none() => PseudoClass::PlaceholderShown,
                     "modal" if argument.is_none() => PseudoClass::Modal,
                     "lang" => PseudoClass::Lang(parse_language_range(argument.as_deref()?)?),
+                    "host" => match argument {
+                        None => PseudoClass::Host(None),
+                        Some(_) => PseudoClass::Host(Some(parse_selector_argument(&argument)?)),
+                    },
                     // Legacy CSS2 single-colon syntax for `:before` and `:after`.
                     "before" if argument.is_none() => {
                         if compound.pseudo_element.is_some() {

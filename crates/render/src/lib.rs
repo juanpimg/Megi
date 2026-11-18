@@ -888,6 +888,7 @@ fn render_url_inner(
     )));
     let parse = html::parse_document_with_options(&decoded.text, false, &options.parse_options);
     let mut document = parse.document;
+    document.activate_declarative_shadow_dom();
     let decode_parse_time = decode_start.elapsed();
 
     // Base URL for every relative subresource (scripts, stylesheets, images, backgrounds).
@@ -938,7 +939,7 @@ fn render_url_inner(
     #[cfg(feature = "js")]
     let mut pre_script_pseudos: Option<Arc<css::PseudoStyles>> = None;
     let mut reusable_stylesheets: Option<(
-        css::StyleCollection,
+        ResolvedCollections,
         StyleSummary,
         Vec<webfonts::LocatedFontFace>,
         u64,
@@ -1779,6 +1780,11 @@ fn document_csp(
     (!combined.is_empty()).then_some(combined)
 }
 
+struct ResolvedCollections {
+    main: css::StyleCollection,
+    shadows: HashMap<NodeId, css::StyleCollection>,
+}
+
 /// Builds the author [`css::StyleCollection`] in cascade order, resolving `@import`
 /// directives recursively (depth-limited, deduplicated, media-gated, non-fatal errors).
 /// Collects the author stylesheets and builds the cascade collection for `document`.
@@ -1795,7 +1801,7 @@ fn collect_styles(
     warnings: &mut Vec<String>,
 ) -> Result<
     (
-        css::StyleCollection,
+        ResolvedCollections,
         StyleSummary,
         Vec<webfonts::LocatedFontFace>,
     ),
@@ -1806,15 +1812,48 @@ fn collect_styles(
         stylesheets::collect_stylesheets(document, base_url, media)
     });
     warnings.extend(collected.warnings.iter().cloned());
-    build_author_stylesheet_collection(&collected, base_url, loader, options, media, csp, warnings)
+    let (main, mut summary, mut font_faces) = build_author_stylesheet_collection(
+        &collected, base_url, loader, options, media, csp, warnings,
+    )?;
+
+    let mut shadows = HashMap::new();
+    for (_host_id, shadow_root_id, _mode) in document.all_shadow_roots() {
+        let shadow_collected = css::with_calc_viewport(vw, vh, || {
+            stylesheets::collect_stylesheets_in_root(document, shadow_root_id, base_url, media)
+        });
+        warnings.extend(shadow_collected.warnings.iter().cloned());
+        let (shadow_collection, shadow_summary, shadow_fonts) = build_author_stylesheet_collection(
+            &shadow_collected,
+            base_url,
+            loader,
+            options,
+            media,
+            csp,
+            warnings,
+        )?;
+        summary.external_stylesheets += shadow_summary.external_stylesheets;
+        summary.inline_stylesheets += shadow_summary.inline_stylesheets;
+        summary.css_bytes += shadow_summary.css_bytes;
+        summary.imports_loaded += shadow_summary.imports_loaded;
+        summary.imports_skipped += shadow_summary.imports_skipped;
+        summary.max_import_depth = summary
+            .max_import_depth
+            .max(shadow_summary.max_import_depth);
+        summary.media_skipped += shadow_summary.media_skipped;
+        summary.sheets_capped |= shadow_summary.sheets_capped;
+        font_faces.extend(shadow_fonts);
+        shadows.insert(shadow_root_id, shadow_collection);
+    }
+
+    Ok((ResolvedCollections { main, shadows }, summary, font_faces))
 }
 
 /// Computes a content-and-attribute signature of stylesheet-producing elements (`<base>`,
-/// `<style>`, and `<link>`).
+/// `<style>`, and `<link>`), across both light DOM and attached shadow roots.
 ///
 /// The post-script style pass can reuse the pre-script collection only when scripts did
-/// not add, remove, reorder, or mutate any `<style>`, `<link>`, or `<base>` element,
-/// including `<style>` text content and `<link>`/`<base>` attributes (#462).
+/// not add, remove, reorder, or mutate any `<style>`, `<link>`, `<base>` element or shadow
+/// root, including `<style>` text content and `<link>`/`<base>` attributes (#462, #1541).
 fn stylesheet_signature(document: &Document) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     let mix = |hash: &mut u64, bytes: &[u8]| {
@@ -1827,46 +1866,62 @@ fn stylesheet_signature(document: &Document) -> u64 {
         *hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     };
 
-    for node_id in document.descendants(document.root()) {
-        let Some(element) = document.node(node_id).as_element() else {
-            continue;
-        };
-        if element.namespace != dom::Namespace::Html {
-            continue;
-        }
-        let local = element.local_name.as_str();
-        if local.eq_ignore_ascii_case("base") {
-            mix(&mut hash, b"B");
-            if let Some(href) = element.get_attribute("href") {
-                mix(&mut hash, href.as_bytes());
+    let mut roots = vec![document.root()];
+    let mut shadow_roots: Vec<(u32, NodeId)> = document
+        .all_shadow_roots()
+        .into_iter()
+        .map(|(host, root, _)| {
+            mix(&mut hash, b"SR");
+            mix(&mut hash, &host.get().to_le_bytes());
+            mix(&mut hash, &root.get().to_le_bytes());
+            (host.get(), root)
+        })
+        .collect();
+    shadow_roots.sort_unstable_by_key(|(h, _)| *h);
+    roots.extend(shadow_roots.into_iter().map(|(_, root)| root));
+
+    for subtree_root in roots {
+        for node_id in document.descendants(subtree_root) {
+            let Some(element) = document.node(node_id).as_element() else {
+                continue;
+            };
+            if element.namespace != dom::Namespace::Html {
+                continue;
             }
-        } else if local.eq_ignore_ascii_case("style") {
-            mix(&mut hash, b"S");
-            for attr_name in ["media", "type", "disabled", "nonce"] {
-                if let Some(val) = element.get_attribute(attr_name) {
-                    mix(&mut hash, attr_name.as_bytes());
-                    mix(&mut hash, val.as_bytes());
+            let local = element.local_name.as_str();
+            if local.eq_ignore_ascii_case("base") {
+                mix(&mut hash, b"B");
+                if let Some(href) = element.get_attribute("href") {
+                    mix(&mut hash, href.as_bytes());
                 }
-            }
-            for desc_id in document.descendants(node_id) {
-                if let dom::NodeKind::Text(text) = &document.node(desc_id).kind {
-                    mix(&mut hash, text.as_bytes());
+            } else if local.eq_ignore_ascii_case("style") {
+                mix(&mut hash, b"S");
+                for attr_name in ["media", "type", "disabled", "nonce"] {
+                    if let Some(val) = element.get_attribute(attr_name) {
+                        mix(&mut hash, attr_name.as_bytes());
+                        mix(&mut hash, val.as_bytes());
+                    }
                 }
-            }
-        } else if local.eq_ignore_ascii_case("link") {
-            mix(&mut hash, b"L");
-            for attr_name in [
-                "rel",
-                "href",
-                "media",
-                "type",
-                "disabled",
-                "crossorigin",
-                "integrity",
-            ] {
-                if let Some(val) = element.get_attribute(attr_name) {
-                    mix(&mut hash, attr_name.as_bytes());
-                    mix(&mut hash, val.as_bytes());
+                for desc_id in document.descendants(node_id) {
+                    if let dom::NodeKind::Text(text) = &document.node(desc_id).kind {
+                        mix(&mut hash, text.as_bytes());
+                    }
+                }
+            } else if local.eq_ignore_ascii_case("link") {
+                mix(&mut hash, b"L");
+                for attr_name in [
+                    "rel",
+                    "href",
+                    "media",
+                    "type",
+                    "disabled",
+                    "crossorigin",
+                    "integrity",
+                ] {
+                    if let Some(val) = element.get_attribute(attr_name) {
+                        mix(&mut hash, attr_name.as_bytes());
+                        mix(&mut hash, val.as_bytes());
+                    }
                 }
             }
         }
@@ -2284,7 +2339,7 @@ fn account_css_bytes(total: &mut usize, additional: usize, options: &RenderOptio
 /// inject those attributes after a user interaction and re-render.
 fn resolve_styles_with_state(
     doc: &Document,
-    collection: &css::StyleCollection,
+    collections: &ResolvedCollections,
     state: css::StateContext,
     time_ms: f64,
     viewport: (f32, f32),
@@ -2293,21 +2348,28 @@ fn resolve_styles_with_state(
     // `calc(50vw)` resolves against the render viewport, not a 1280x720 default (#1469).
     css::with_calc_viewport(viewport.0, viewport.1, || {
         css::state::with_state(state, || {
-            resolve_styles_with_collection(doc, collection, time_ms)
+            resolve_styles_with_collection(doc, collections, time_ms)
         })
     })
 }
 
 fn resolve_styles_with_collection(
     doc: &Document,
-    collection: &css::StyleCollection,
+    collections: &ResolvedCollections,
     time_ms: f64,
 ) -> (HashMap<NodeId, ComputedStyle>, css::PseudoStyles) {
     // One shared selector-matching budget for the whole document: a per-element budget would
     // grow the total cost with the element count (#1413).
     let _pass = css::style_pass_scope();
-    let (mut styles, mut pseudo_styles) =
-        css::resolve_document_styles_from_collection(doc, collection);
+    let (mut styles, mut pseudo_styles) = if doc.has_shadow_roots() {
+        css::resolve_document_styles_from_collections_with_shadows(
+            doc,
+            &collections.main,
+            &collections.shadows,
+        )
+    } else {
+        css::resolve_document_styles_from_collection(doc, &collections.main)
+    };
     // `#1546`: resolve the `::backdrop` color for modal dialogs after the main cascade, since
     // the generic collector does not know about the HTML top layer.
     let root = doc.root();
@@ -2322,11 +2384,18 @@ fn resolve_styles_with_collection(
             {
                 return None;
             }
-            let parent_style = doc.node(*node_id).parent.and_then(|p| styles.get(&p));
+            let active_col = doc
+                .containing_shadow_root(*node_id)
+                .and_then(|sr| collections.shadows.get(&sr))
+                .unwrap_or(&collections.main);
+            let parent_style = doc
+                .composed_parent(*node_id)
+                .or_else(|| doc.node(*node_id).parent)
+                .and_then(|p| styles.get(&p));
             let root_style = styles.get(&root);
             Some((
                 *node_id,
-                css::resolve_backdrop_color(doc, *node_id, collection, parent_style, root_style),
+                css::resolve_backdrop_color(doc, *node_id, active_col, parent_style, root_style),
             ))
         })
         .collect();
@@ -2335,8 +2404,8 @@ fn resolve_styles_with_collection(
             computed.set_backdrop_color(color);
         }
     }
-    css::cascade::apply_animations_to_styles(doc, &mut styles, collection, time_ms as f32);
-    css::apply_animations_to_pseudo_styles(&mut pseudo_styles, collection, time_ms as f32);
+    css::cascade::apply_animations_to_styles(doc, &mut styles, &collections.main, time_ms as f32);
+    css::apply_animations_to_pseudo_styles(&mut pseudo_styles, &collections.main, time_ms as f32);
     (styles, pseudo_styles)
 }
 
@@ -2382,9 +2451,13 @@ mod calc_viewport_tests {
         );
         let mut collection = css::StyleCollection::new();
         collection.add_css("div{width:calc(50vw)}", css::Origin::Author);
+        let collections = ResolvedCollections {
+            main: collection,
+            shadows: HashMap::new(),
+        };
         let (styles, _pseudos) = resolve_styles_with_state(
             &doc,
-            &collection,
+            &collections,
             css::StateContext::new(),
             0.0,
             (400.0, 300.0),

@@ -44,7 +44,7 @@
 
 #![forbid(unsafe_code)]
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::num::NonZeroU32;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -529,6 +529,14 @@ fn node_payload_bytes(node: &Node) -> usize {
     }
 }
 
+/// Encapsulation mode of a Shadow DOM subtree attached to a host element.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ShadowRootMode {
+    #[default]
+    Open,
+    Closed,
+}
+
 /// Document-Owned Contiguous Arena holding all nodes in a DOM tree.
 ///
 /// The arena stores live nodes contiguously in `nodes` plus per-slot bookkeeping:
@@ -554,6 +562,8 @@ pub struct Document {
     arena_id: u64,
     generation_seed: u32,
     pub quirks_mode: QuirksMode,
+    shadow_roots: HashMap<NodeId, (NodeId, ShadowRootMode)>,
+    shadow_hosts: HashMap<NodeId, NodeId>,
 }
 
 /// Process-wide source of unique arena identifiers (also seeds handle generations).
@@ -595,6 +605,8 @@ impl Document {
             arena_id,
             generation_seed,
             quirks_mode: QuirksMode::NoQuirks,
+            shadow_roots: HashMap::new(),
+            shadow_hosts: HashMap::new(),
         }
     }
 
@@ -645,7 +657,10 @@ impl Document {
             + self.nodes.capacity() * std::mem::size_of::<Node>()
             + self.generations.capacity() * std::mem::size_of::<u32>()
             + self.occupied.capacity() * std::mem::size_of::<bool>()
-            + self.free_list.capacity() * std::mem::size_of::<u32>();
+            + self.free_list.capacity() * std::mem::size_of::<u32>()
+            + self.shadow_roots.capacity()
+                * std::mem::size_of::<(NodeId, (NodeId, ShadowRootMode))>()
+            + self.shadow_hosts.capacity() * std::mem::size_of::<(NodeId, NodeId)>();
         for (slot, node) in self.nodes.iter().enumerate() {
             if self.occupied[slot] {
                 total += node_payload_bytes(node);
@@ -1288,7 +1303,7 @@ impl Document {
             let node = &self.nodes[slot];
             (node.parent, node.next_sibling)
         };
-        // Free a <template>'s inert contents (not reachable through the child chain).
+        // Free a <template>'s inert contents or attached shadow root (not reachable via child chain).
         if let Some(fragment) = self
             .nodes
             .get(slot)
@@ -1296,6 +1311,13 @@ impl Document {
             .and_then(|element| element.template_contents)
         {
             self.remove_subtree(fragment);
+        }
+        if let Some((shadow_root, _)) = self.shadow_roots.remove(&node_id) {
+            self.shadow_hosts.remove(&shadow_root);
+            self.remove_subtree(shadow_root);
+        }
+        if let Some(host_id) = self.shadow_hosts.remove(&node_id) {
+            self.shadow_roots.remove(&host_id);
         }
         // Re-attach the children at the removed node's position. Bound the walk against
         // cyclic sibling chains in a corrupted arena (#1109).
@@ -1369,6 +1391,13 @@ impl Document {
                 .and_then(|element| element.template_contents)
             {
                 pending.push(fragment);
+            }
+            if let Some((shadow_root, _)) = self.shadow_roots.remove(&current) {
+                self.shadow_hosts.remove(&shadow_root);
+                pending.push(shadow_root);
+            }
+            if let Some(host_id) = self.shadow_hosts.remove(&current) {
+                self.shadow_roots.remove(&host_id);
             }
             if to_free.len() > self.nodes.len() {
                 // A cycle/corrupt chain must be handled in release too: stop collection
@@ -2639,6 +2668,317 @@ impl Iterator for AncestorsIter<'_> {
         self.remaining -= 1;
         self.next = self.doc.try_node(current).and_then(|node| node.parent);
         Some(current)
+    }
+}
+
+impl Document {
+    /// Attaches a ShadowRoot (`DocumentFragment`) in `mode` to `host_id` (#1541).
+    ///
+    /// Returns [`DomError::UnknownNode`] or [`DomError::NotAnElement`] if `host_id` is not a
+    /// live element, or [`DomError::HierarchyRequest`] if `host_id` already has a shadow root
+    /// with a conflicting mode (idempotently returning the existing root if modes match).
+    pub fn attach_shadow_root(
+        &mut self,
+        host_id: NodeId,
+        mode: ShadowRootMode,
+    ) -> Result<NodeId, DomError> {
+        let Some(node) = self.try_node(host_id) else {
+            return Err(DomError::UnknownNode(host_id));
+        };
+        if node.as_element().is_none() {
+            return Err(DomError::NotAnElement(host_id));
+        }
+        if let Some(&(existing_root, existing_mode)) = self.shadow_roots.get(&host_id) {
+            if existing_mode == mode {
+                return Ok(existing_root);
+            }
+            return Err(DomError::HierarchyRequest {
+                parent: host_id,
+                child: existing_root,
+            });
+        }
+        let root_id = self.create_document_fragment();
+        self.shadow_roots.insert(host_id, (root_id, mode));
+        self.shadow_hosts.insert(root_id, host_id);
+        Ok(root_id)
+    }
+
+    /// Returns `(shadow_root_id, mode)` if `host_id` owns an attached ShadowRoot.
+    pub fn shadow_root(&self, host_id: NodeId) -> Option<(NodeId, ShadowRootMode)> {
+        self.shadow_roots.get(&host_id).copied()
+    }
+
+    /// Returns the attached ShadowRoot fragment id regardless of open/closed mode.
+    pub fn shadow_root_node(&self, host_id: NodeId) -> Option<NodeId> {
+        self.shadow_roots.get(&host_id).map(|&(root, _)| root)
+    }
+
+    /// Returns the attached ShadowRoot fragment id only when `mode == ShadowRootMode::Open`.
+    pub fn public_shadow_root(&self, host_id: NodeId) -> Option<NodeId> {
+        self.shadow_roots
+            .get(&host_id)
+            .and_then(|&(root, mode)| (mode == ShadowRootMode::Open).then_some(root))
+    }
+
+    /// Returns the host element owning `shadow_root_id`, if `shadow_root_id` is a ShadowRoot.
+    pub fn shadow_host(&self, shadow_root_id: NodeId) -> Option<NodeId> {
+        self.shadow_hosts.get(&shadow_root_id).copied()
+    }
+
+    /// Returns `true` when this document contains at least one ShadowRoot.
+    pub fn has_shadow_roots(&self) -> bool {
+        !self.shadow_roots.is_empty()
+    }
+
+    /// Returns all `(host_id, shadow_root_id, mode)` entries in arbitrary order.
+    pub fn all_shadow_roots(&self) -> Vec<(NodeId, NodeId, ShadowRootMode)> {
+        self.shadow_roots
+            .iter()
+            .map(|(&host, &(root, mode))| (host, root, mode))
+            .collect()
+    }
+
+    /// Returns the ShadowRoot fragment that contains `node_id` (or `node_id` itself if it
+    /// is a ShadowRoot), stopping at shadow boundaries.
+    pub fn containing_shadow_root(&self, node_id: NodeId) -> Option<NodeId> {
+        let mut current = Some(node_id);
+        let mut steps = 0usize;
+        let limit = self.len().saturating_add(1);
+        while let Some(id) = current {
+            steps += 1;
+            if steps > limit {
+                break;
+            }
+            if self.shadow_hosts.contains_key(&id) {
+                return Some(id);
+            }
+            current = self.try_node(id).and_then(|node| node.parent);
+        }
+        None
+    }
+
+    /// Returns `true` when `node_id` is connected to [`Document::root`], walking across
+    /// ShadowRoot → host boundaries per WHATWG DOM §4.2.
+    pub fn is_connected(&self, node_id: NodeId) -> bool {
+        let mut current = Some(node_id);
+        let mut steps = 0usize;
+        let limit = self.len().saturating_add(1);
+        while let Some(id) = current {
+            if id == self.root {
+                return true;
+            }
+            steps += 1;
+            if steps > limit {
+                break;
+            }
+            if let Some(host) = self.shadow_hosts.get(&id).copied() {
+                current = Some(host);
+            } else {
+                current = self.try_node(id).and_then(|node| node.parent);
+            }
+        }
+        false
+    }
+
+    /// If `slot_id` is an HTML `<slot>` element, returns its `name` attribute (`""` if absent).
+    pub fn slot_name(&self, slot_id: NodeId) -> Option<&str> {
+        let el = self.try_node(slot_id)?.as_element()?;
+        if el.namespace == Namespace::Html && el.local_name.eq_ignore_ascii_case("slot") {
+            Some(el.get_attribute("name").unwrap_or(""))
+        } else {
+            None
+        }
+    }
+
+    /// Finds the first `<slot>` element inside `shadow_root` matching `slot_name` in
+    /// shadow-tree order (without crossing into nested shadow roots).
+    fn find_slot_for_name(&self, shadow_root: NodeId, slot_name: &str) -> Option<NodeId> {
+        let mut stack: Vec<NodeId> = Vec::new();
+        let mut direct: Vec<NodeId> = self.children(shadow_root).collect();
+        direct.reverse();
+        stack.extend(direct);
+        let mut steps = 0usize;
+        let limit = self.len().saturating_add(1);
+        while let Some(id) = stack.pop() {
+            steps += 1;
+            if steps > limit {
+                break;
+            }
+            if let Some(name) = self.slot_name(id)
+                && name == slot_name
+            {
+                return Some(id);
+            }
+            // Do not descend into child ShadowRoots owned by elements inside this shadow tree;
+            // only traverse light children inside this shadow root.
+            let mut kids: Vec<NodeId> = self.children(id).collect();
+            kids.reverse();
+            stack.extend(kids);
+        }
+        None
+    }
+
+    /// Returns the `<slot>` element to which a light DOM child `node_id` is assigned, if
+    /// `node_id`'s parent is a shadow host and its shadow tree contains a matching `<slot>`.
+    pub fn assigned_slot(&self, node_id: NodeId) -> Option<NodeId> {
+        let parent = self.try_node(node_id)?.parent?;
+        let shadow_root = self.shadow_root_node(parent)?;
+        let requested_name = match &self.try_node(node_id)?.kind {
+            NodeKind::Element(el) => el.get_attribute("slot").unwrap_or(""),
+            NodeKind::Text(_) => "",
+            _ => return None,
+        };
+        self.find_slot_for_name(shadow_root, requested_name)
+    }
+
+    /// Returns the nodes assigned to `<slot>` element `slot_id` (or empty if not a slot
+    /// inside a shadow root). When `flatten` is `true`, nested assigned `<slot>` elements
+    /// are recursively expanded into their assigned nodes (or fallback children).
+    pub fn slot_assigned_nodes(&self, slot_id: NodeId, flatten: bool) -> Vec<NodeId> {
+        self.slot_assigned_nodes_bounded(slot_id, flatten, 0)
+    }
+
+    fn slot_assigned_nodes_bounded(
+        &self,
+        slot_id: NodeId,
+        flatten: bool,
+        depth: usize,
+    ) -> Vec<NodeId> {
+        if depth > 64 {
+            return Vec::new();
+        }
+        if self.slot_name(slot_id).is_none() {
+            return Vec::new();
+        }
+        let Some(shadow_root) = self.containing_shadow_root(slot_id) else {
+            return Vec::new();
+        };
+        let Some(host) = self.shadow_host(shadow_root) else {
+            return Vec::new();
+        };
+        let mut assigned = Vec::new();
+        for child in self.children(host) {
+            if self.assigned_slot(child) == Some(slot_id) {
+                if flatten
+                    && self.slot_name(child).is_some()
+                    && self.containing_shadow_root(child).is_some()
+                {
+                    let nested = self.slot_assigned_nodes_bounded(child, true, depth + 1);
+                    if nested.is_empty() {
+                        assigned.extend(self.composed_children_for_slot_fallback(child, depth + 1));
+                    } else {
+                        assigned.extend(nested);
+                    }
+                } else {
+                    assigned.push(child);
+                }
+            }
+        }
+        assigned
+    }
+
+    fn composed_children_for_slot_fallback(&self, slot_id: NodeId, depth: usize) -> Vec<NodeId> {
+        if depth > 64 {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        for child in self.children(slot_id) {
+            if self.slot_name(child).is_some() && self.containing_shadow_root(child).is_some() {
+                let nested = self.slot_assigned_nodes_bounded(child, true, depth + 1);
+                if nested.is_empty() {
+                    out.extend(self.composed_children_for_slot_fallback(child, depth + 1));
+                } else {
+                    out.extend(nested);
+                }
+            } else {
+                out.push(child);
+            }
+        }
+        out
+    }
+
+    /// Returns the children of `node_id` in the flattened/composed tree used by CSS
+    /// inheritance and layout:
+    /// - if `node_id` is a shadow host, returns its `ShadowRoot`'s children;
+    /// - if `node_id` is an active `<slot>` inside a shadow tree, returns its assigned light
+    ///   DOM nodes (or the `<slot>`'s own fallback children when nothing is assigned);
+    /// - otherwise returns `self.children(node_id)`.
+    pub fn composed_children(&self, node_id: NodeId) -> Vec<NodeId> {
+        if let Some(shadow_root) = self.shadow_root_node(node_id) {
+            return self.children(shadow_root).collect();
+        }
+        if self.slot_name(node_id).is_some() && self.containing_shadow_root(node_id).is_some() {
+            let assigned = self.slot_assigned_nodes(node_id, false);
+            if !assigned.is_empty() {
+                return assigned;
+            }
+        }
+        self.children(node_id).collect()
+    }
+
+    /// Returns the parent of `node_id` in the flattened/composed tree:
+    /// - if `node_id` is slotted light DOM inside a shadow host, returns its assigned `<slot>`
+    ///   (or the `<slot>`'s composed parent element);
+    /// - if `node_id` is a light child of a shadow host that matched no `<slot>`, returns
+    ///   `None` (unslotted nodes do not participate in the composed render tree);
+    /// - if `node_id`'s DOM parent is a `ShadowRoot`, returns that root's shadow host;
+    /// - otherwise returns `node_id`'s DOM parent.
+    pub fn composed_parent(&self, node_id: NodeId) -> Option<NodeId> {
+        let dom_parent = self.try_node(node_id)?.parent?;
+        if self.shadow_root_node(dom_parent).is_some() {
+            return self.assigned_slot(node_id);
+        }
+        if let Some(host) = self.shadow_host(dom_parent) {
+            return Some(host);
+        }
+        Some(dom_parent)
+    }
+
+    /// Promotes `<template shadowrootmode="open|closed">` elements parsed by HTML into
+    /// live attached `ShadowRoot`s on their parent element (#1541 declarative Shadow DOM).
+    pub fn activate_declarative_shadow_dom(&mut self) -> usize {
+        let templates: Vec<(NodeId, NodeId, ShadowRootMode, NodeId)> = self
+            .descendants(self.root)
+            .filter_map(|id| {
+                let node = self.try_node(id)?;
+                let el = node.as_element()?;
+                if el.namespace != Namespace::Html
+                    || !el.local_name.eq_ignore_ascii_case("template")
+                {
+                    return None;
+                }
+                let mode_str = el.get_attribute("shadowrootmode")?;
+                let mode = if mode_str.eq_ignore_ascii_case("open") {
+                    ShadowRootMode::Open
+                } else if mode_str.eq_ignore_ascii_case("closed") {
+                    ShadowRootMode::Closed
+                } else {
+                    return None;
+                };
+                let parent = node.parent?;
+                self.try_node(parent)?.as_element()?;
+                let contents = el.template_contents?;
+                Some((id, parent, mode, contents))
+            })
+            .collect();
+
+        let mut activated = 0usize;
+        for (template_id, host_id, mode, contents) in templates {
+            if self.shadow_roots.contains_key(&host_id) {
+                continue;
+            }
+            if let Ok(shadow_root) = self.attach_shadow_root(host_id, mode) {
+                let moved: Vec<NodeId> = self.children(contents).collect();
+                for child in moved {
+                    self.detach(child);
+                    self.append_child(shadow_root, child);
+                }
+                self.detach(template_id);
+                self.remove_subtree(template_id);
+                activated += 1;
+            }
+        }
+        activated
     }
 }
 

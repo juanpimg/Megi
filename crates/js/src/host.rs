@@ -377,6 +377,13 @@ impl FromIterator<(String, String)> for StorageMap {
 /// Shared, mutable host state.
 pub const MAX_CONSOLE_ENTRIES: usize = 4096;
 
+/// Registered custom element definition (#1541).
+#[derive(Clone, Debug)]
+pub(crate) struct CustomElementDef {
+    pub handle: u32,
+    pub observed_attributes: Vec<String>,
+}
+
 pub(crate) struct Host {
     /// The document scripts operate on.
     pub document: Document,
@@ -469,17 +476,14 @@ pub(crate) struct Host {
     pub websockets: std::collections::HashMap<u32, Box<dyn WebSocketTransport>>,
     /// Monotonic handle counter for WebSocket transports.
     pub websocket_next_handle: u32,
-    /// Shadow DOM (#1541): host element `NodeId` -> shadow-root `NodeId`.
-    pub shadow_roots: std::collections::HashMap<NodeId, NodeId>,
-    /// Reverse map: shadow-root `NodeId` -> host element `NodeId`.
-    pub shadow_hosts: std::collections::HashMap<NodeId, NodeId>,
-    /// Canvas 2D surfaces keyed by `<canvas>` node id (#1545).
-    pub canvas_store: crate::canvas::CanvasStore,
-    /// Custom element registry (#1541): name -> integer handle; the JS constructor is stored on
-    /// `globalThis.__megi_ce_<handle>` so it stays reachable without a cross-crate handle type.
-    pub custom_elements: std::collections::HashMap<String, u32>,
+    /// Custom element registry definition (#1541): tag name -> constructor handle and observed attributes.
+    pub custom_elements: std::collections::HashMap<String, CustomElementDef>,
+    /// Elements whose custom element constructor/upgrade has already run.
+    pub upgraded_custom_elements: std::collections::HashSet<NodeId>,
     /// Monotonic handle counter for custom element constructors.
     pub custom_element_next_handle: u32,
+    /// Canvas 2D surfaces keyed by `<canvas>` node id (#1545).
+    pub canvas_store: crate::canvas::CanvasStore,
     /// Deterministic cooperative workers (no threads); `None` slots are terminated/dropped.
     pub workers: Vec<Option<crate::runtime::WorkerState>>,
     /// Parent host when this host belongs to a worker realm.
@@ -549,10 +553,9 @@ impl Host {
             websocket_provider: None,
             websockets: std::collections::HashMap::new(),
             websocket_next_handle: 1,
-            shadow_roots: std::collections::HashMap::new(),
-            shadow_hosts: std::collections::HashMap::new(),
             canvas_store: crate::canvas::CanvasStore::new(),
             custom_elements: std::collections::HashMap::new(),
+            upgraded_custom_elements: std::collections::HashSet::new(),
             custom_element_next_handle: 1,
             workers: Vec::new(),
             worker_parent: None,

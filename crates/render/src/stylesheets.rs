@@ -86,11 +86,11 @@ fn attr<'a>(element: &'a dom::ElementData, name: &str) -> Option<&'a str> {
         .map(|attribute| attribute.value.as_str())
 }
 
-/// Returns every node in document order (iterative pre-order traversal).
-fn nodes_in_document_order(doc: &Document) -> Vec<NodeId> {
+/// Returns every node in `root`'s subtree in document order (iterative pre-order traversal).
+fn nodes_in_subtree_order(doc: &Document, root: NodeId) -> Vec<NodeId> {
     let mut order = Vec::new();
     let mut stack: Vec<NodeId> = Vec::new();
-    let mut child = doc.node(doc.root()).first_child;
+    let mut child = doc.node(root).first_child;
     let mut root_children = Vec::new();
     while let Some(node_id) = child {
         root_children.push(node_id);
@@ -119,6 +119,11 @@ fn nodes_in_document_order(doc: &Document) -> Vec<NodeId> {
         }
     }
     order
+}
+
+/// Returns every node in document order (iterative pre-order traversal).
+fn nodes_in_document_order(doc: &Document) -> Vec<NodeId> {
+    nodes_in_subtree_order(doc, doc.root())
 }
 
 /// Concatenated text descendants of `node_id` (used for `<style>` elements).
@@ -194,11 +199,22 @@ pub fn collect_stylesheets(
     base_url: &Url,
     media: &MediaContext,
 ) -> CollectedStyles {
+    collect_stylesheets_in_root(doc, doc.root(), base_url, media)
+}
+
+/// Collects inline and external stylesheets inside `root` (e.g. a ShadowRoot fragment)
+/// in pre-order traversal order.
+pub fn collect_stylesheets_in_root(
+    doc: &Document,
+    root: NodeId,
+    base_url: &Url,
+    media: &MediaContext,
+) -> CollectedStyles {
     let mut collected = CollectedStyles::default();
     let mut seen_external = std::collections::HashSet::new();
 
     let mut limit_warned = false;
-    for node_id in nodes_in_document_order(doc) {
+    for node_id in nodes_in_subtree_order(doc, root) {
         let Some(element) = html_element(doc, node_id) else {
             continue;
         };

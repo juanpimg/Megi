@@ -404,6 +404,10 @@ pub struct StyleCollection {
     layer_index: HashMap<Vec<String>, u32>,
     /// `::backdrop` rules compiled from stylesheets (applied to top-layer modal elements).
     pub backdrop_rules: Vec<CompiledRule>,
+    /// `:host` / `:host(...)` rules compiled from shadow stylesheets.
+    pub host_rules: Vec<CompiledRule>,
+    /// `::slotted(...)` rules compiled from shadow stylesheets.
+    pub slotted_rules: Vec<CompiledRule>,
     /// Rule index by rightmost-compound key. Maintained by the `add_*` methods; if the public
     /// `rules` vector is mutated directly, resolution falls back to evaluating every rule.
     index: RuleIndex,
@@ -630,26 +634,56 @@ impl StyleCollection {
             .selectors
             .selectors
             .iter()
-            .any(ComplexSelector::has_backdrop)
+            .any(|s| s.has_backdrop() || s.has_host() || s.has_slotted())
         {
             let mut backdrop_selectors = Vec::new();
+            let mut host_selectors = Vec::new();
+            let mut slotted_selectors = Vec::new();
             let mut normal_selectors = Vec::new();
             for selector in compiled.selectors.selectors.drain(..) {
                 if selector.has_backdrop() {
                     backdrop_selectors.push(selector);
+                } else if selector.has_host() {
+                    host_selectors.push(selector);
+                } else if selector.has_slotted() {
+                    slotted_selectors.push(selector);
                 } else {
                     normal_selectors.push(selector);
                 }
             }
-            self.backdrop_rules.push(CompiledRule {
-                selectors: SelectorList {
-                    selectors: backdrop_selectors,
-                },
-                declarations: compiled.declarations.clone(),
-                origin: compiled.origin,
-                source_order: compiled.source_order,
-                layer_rank: compiled.layer_rank,
-            });
+            if !backdrop_selectors.is_empty() {
+                self.backdrop_rules.push(CompiledRule {
+                    selectors: SelectorList {
+                        selectors: backdrop_selectors,
+                    },
+                    declarations: compiled.declarations.clone(),
+                    origin: compiled.origin,
+                    source_order: compiled.source_order,
+                    layer_rank: compiled.layer_rank,
+                });
+            }
+            if !host_selectors.is_empty() {
+                self.host_rules.push(CompiledRule {
+                    selectors: SelectorList {
+                        selectors: host_selectors,
+                    },
+                    declarations: compiled.declarations.clone(),
+                    origin: compiled.origin,
+                    source_order: compiled.source_order,
+                    layer_rank: compiled.layer_rank,
+                });
+            }
+            if !slotted_selectors.is_empty() {
+                self.slotted_rules.push(CompiledRule {
+                    selectors: SelectorList {
+                        selectors: slotted_selectors,
+                    },
+                    declarations: compiled.declarations.clone(),
+                    origin: compiled.origin,
+                    source_order: compiled.source_order,
+                    layer_rank: compiled.layer_rank,
+                });
+            }
             if normal_selectors.is_empty() {
                 return;
             }
@@ -1495,6 +1529,253 @@ fn resolve_document_styles_from_collection_inner(
             stack.push(c);
             child = doc.node(c).prev_sibling;
         }
+    }
+
+    (styles, pseudo_styles)
+}
+
+fn merge_scoped_shadow_rules<'a>(
+    doc: &Document,
+    node_id: NodeId,
+    scoped_rules: &'a [CompiledRule],
+    host_id: Option<NodeId>,
+    shadow_root_id: Option<NodeId>,
+    best: &mut HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher>,
+) {
+    if scoped_rules.is_empty() {
+        return;
+    }
+    let mut scoped_best: HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher> =
+        HashMap::with_hasher(FastBuildHasher);
+    crate::selector::with_shadow_scope(host_id, shadow_root_id, || {
+        for rule in scoped_rules {
+            let mut matched_spec: Option<Specificity> = None;
+            for selector in &rule.selectors.selectors {
+                if selector.matches(doc, node_id) {
+                    let spec = selector.specificity();
+                    matched_spec = Some(matched_spec.map_or(spec, |prev| prev.max(spec)));
+                }
+            }
+            let Some(specificity) = matched_spec else {
+                continue;
+            };
+            for (declaration_order, declaration) in rule.declarations.iter().enumerate() {
+                let origin_importance =
+                    CascadeOriginImportance::new(rule.origin, declaration.important);
+                let candidate = MatchedDeclaration {
+                    declaration,
+                    origin_importance,
+                    layer_rank: rule.layer_rank,
+                    specificity,
+                    source_order: rule.source_order,
+                    declaration_order: declaration_order as u32,
+                };
+                match scoped_best.entry(declaration.name.as_str()) {
+                    std::collections::hash_map::Entry::Occupied(mut occupied) => {
+                        if candidate > *occupied.get() {
+                            occupied.insert(candidate);
+                        }
+                    }
+                    std::collections::hash_map::Entry::Vacant(vacant) => {
+                        vacant.insert(candidate);
+                    }
+                }
+            }
+        }
+    });
+
+    for (prop, cand) in scoped_best {
+        match best.entry(prop) {
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                vacant.insert(cand);
+            }
+            std::collections::hash_map::Entry::Occupied(mut occupied) => {
+                let existing = occupied.get();
+                let cand_imp = is_important(cand.origin_importance);
+                let ex_imp = is_important(existing.origin_importance);
+                let ex_is_ua = matches!(
+                    existing.origin_importance,
+                    CascadeOriginImportance::UserAgentNormal | CascadeOriginImportance::UserNormal
+                );
+                if (cand_imp && !ex_imp) || (!ex_imp && ex_is_ua) {
+                    occupied.insert(cand);
+                }
+            }
+        }
+    }
+}
+
+/// Resolves computed styles and pseudo-element styles across both the outer document and
+/// any attached Shadow DOM trees (#1541):
+/// - styles inside a `ShadowRoot` use that shadow root's [`StyleCollection`] (isolated from
+///   outer author stylesheets);
+/// - `:host` / `:host(...)` rules inside a shadow stylesheet target its host element;
+/// - `::slotted(...)` rules inside a shadow stylesheet target slotted light DOM nodes;
+/// - inherited CSS properties inherit along [`Document::composed_parent`].
+pub fn resolve_document_styles_from_collections_with_shadows(
+    doc: &Document,
+    collection: &StyleCollection,
+    shadow_collections: &HashMap<NodeId, StyleCollection>,
+) -> (
+    HashMap<NodeId, crate::properties::ComputedStyle>,
+    PseudoStyles,
+) {
+    if !doc.has_shadow_roots() {
+        return resolve_document_styles_from_collection_inner(doc, collection, true);
+    }
+
+    let _sibling_scope = crate::selector::document_scope();
+    let mut ua_fallback = crate::user_agent::create_user_agent_style_collection();
+    ua_fallback.media = collection.media.clone();
+
+    let mut styles: HashMap<NodeId, crate::properties::ComputedStyle> = HashMap::new();
+    let mut pseudo_styles: PseudoStyles = HashMap::new();
+    let mut candidates: Vec<Candidate> = Vec::new();
+    let root = doc.root();
+
+    let mut stack: Vec<NodeId> = Vec::new();
+    let mut curr = doc.node(root).last_child;
+    while let Some(c) = curr {
+        stack.push(c);
+        curr = doc.node(c).prev_sibling;
+    }
+
+    while let Some(node_id) = stack.pop() {
+        if styles.contains_key(&node_id) {
+            continue;
+        }
+        if let Some(el) = doc.node(node_id).as_element() {
+            let active_collection = if let Some(sr) = doc.containing_shadow_root(node_id) {
+                shadow_collections.get(&sr).unwrap_or(&ua_fallback)
+            } else {
+                collection
+            };
+            let inline_decls = el.get_attribute("style").map(parse_inline_style);
+
+            active_collection.candidate_selectors(doc, node_id, &mut candidates);
+            let mut best = resolve_base_cascaded_properties_for(
+                doc,
+                node_id,
+                None,
+                active_collection,
+                inline_decls.as_deref(),
+                &candidates,
+            );
+            merge_container_rules_for(doc, node_id, None, active_collection, &mut best);
+            apply_revert_layer_for(
+                doc,
+                node_id,
+                None,
+                active_collection,
+                &candidates,
+                &mut best,
+            );
+
+            if let Some(owned_shadow) = doc.shadow_root_node(node_id)
+                && let Some(shadow_col) = shadow_collections.get(&owned_shadow)
+            {
+                merge_scoped_shadow_rules(
+                    doc,
+                    node_id,
+                    &shadow_col.host_rules,
+                    Some(node_id),
+                    Some(owned_shadow),
+                    &mut best,
+                );
+            }
+            if let Some(slot_id) = doc.assigned_slot(node_id)
+                && let Some(slot_shadow) = doc.containing_shadow_root(slot_id)
+                && let Some(shadow_col) = shadow_collections.get(&slot_shadow)
+            {
+                let host_id = doc.shadow_host(slot_shadow);
+                merge_scoped_shadow_rules(
+                    doc,
+                    node_id,
+                    &shadow_col.slotted_rules,
+                    host_id,
+                    Some(slot_shadow),
+                    &mut best,
+                );
+            }
+
+            let cascaded = owned_declarations(best);
+            let parent_style = doc
+                .composed_parent(node_id)
+                .or_else(|| doc.node(node_id).parent)
+                .and_then(|p| styles.get(&p));
+            let root_style = styles.get(&root);
+            let is_modal = crate::state::is_modal(doc, node_id);
+            let mut computed =
+                crate::properties::ComputedStyle::compute(&cascaded, parent_style, root_style);
+            if is_modal {
+                computed.set_backdrop_color(resolve_backdrop_color(
+                    doc,
+                    node_id,
+                    active_collection,
+                    parent_style,
+                    root_style,
+                ));
+            }
+            styles.insert(node_id, computed);
+
+            if active_collection.may_have_pseudo_rules() {
+                let originating_style = styles.get(&node_id);
+                let pseudo_root_style = styles.get(&root);
+                for pseudo in [PseudoElement::Before, PseudoElement::After] {
+                    let pseudo_cascaded = resolve_pseudo_cascaded_with_candidates(
+                        doc,
+                        node_id,
+                        pseudo,
+                        active_collection,
+                        &candidates,
+                    );
+                    if pseudo_cascaded.is_empty() {
+                        continue;
+                    }
+                    let computed_pseudo = crate::properties::ComputedStyle::compute(
+                        &pseudo_cascaded,
+                        originating_style,
+                        pseudo_root_style,
+                    );
+                    if computed_pseudo.content.generates_box() {
+                        pseudo_styles.insert((node_id, pseudo), computed_pseudo);
+                    }
+                }
+            }
+        }
+
+        let composed_kids = doc.composed_children(node_id);
+        for child_id in composed_kids.into_iter().rev() {
+            stack.push(child_id);
+        }
+    }
+
+    // Best-effort resolve unslotted light DOM elements (not part of the composed tree) so
+    // JS `getComputedStyle(unslottedEl)` remains consistent.
+    for node_id in doc.descendants(root) {
+        if styles.contains_key(&node_id) {
+            continue;
+        }
+        let Some(el) = doc.node(node_id).as_element() else {
+            continue;
+        };
+        let inline_decls = el.get_attribute("style").map(parse_inline_style);
+        collection.candidate_selectors(doc, node_id, &mut candidates);
+        let mut best = resolve_base_cascaded_properties_for(
+            doc,
+            node_id,
+            None,
+            collection,
+            inline_decls.as_deref(),
+            &candidates,
+        );
+        merge_container_rules_for(doc, node_id, None, collection, &mut best);
+        apply_revert_layer_for(doc, node_id, None, collection, &candidates, &mut best);
+        let cascaded = owned_declarations(best);
+        let parent_style = doc.node(node_id).parent.and_then(|p| styles.get(&p));
+        let computed =
+            crate::properties::ComputedStyle::compute(&cascaded, parent_style, styles.get(&root));
+        styles.insert(node_id, computed);
     }
 
     (styles, pseudo_styles)

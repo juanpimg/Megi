@@ -209,11 +209,13 @@ pub fn document_write_with_options(
     violations
 }
 
-/// Returns the namespace/local-name fragment-parsing context for `element`.
+/// Returns the namespace/local-name fragment-parsing context for `element` (or a `ShadowRoot`
+/// via its host element per HTML's `ShadowRoot.innerHTML` fragment parsing rules).
 fn fragment_context(doc: &Document, element: NodeId) -> Result<(dom::Namespace, String), DomError> {
+    let context_node = doc.shadow_host(element).unwrap_or(element);
     let element_data = doc
-        .try_node(element)
-        .ok_or(DomError::UnknownNode(element))?
+        .try_node(context_node)
+        .ok_or(DomError::UnknownNode(context_node))?
         .as_element()
         .ok_or(DomError::NotAnElement(element))?;
     Ok((element_data.namespace, element_data.local_name.clone()))

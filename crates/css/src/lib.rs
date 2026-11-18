@@ -50,9 +50,9 @@ pub use cascade::{
     PseudoStyles, StyleCollection, apply_animations_to_pseudo_styles, parse_inline_declarations,
     parse_inline_style, resolve_backdrop_color, resolve_cascaded_properties,
     resolve_document_styles, resolve_document_styles_from_collection,
-    resolve_document_styles_with_media, resolve_document_styles_with_media_and_state,
-    resolve_document_styles_with_pseudos, resolve_document_styles_with_viewport,
-    resolve_pseudo_cascaded_properties,
+    resolve_document_styles_from_collections_with_shadows, resolve_document_styles_with_media,
+    resolve_document_styles_with_media_and_state, resolve_document_styles_with_pseudos,
+    resolve_document_styles_with_viewport, resolve_pseudo_cascaded_properties,
 };
 pub use component_value::{ComponentValue, FunctionCall, SimpleBlock};
 pub use flex::{AlignItems, AlignSelf, FlexDirection, FlexWrap, JustifyContent};
