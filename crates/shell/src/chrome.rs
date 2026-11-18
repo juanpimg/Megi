@@ -1433,6 +1433,9 @@ pub struct ChromeView<'a> {
     /// Show the visual history button in the address bar (window only; headless off keeps
     /// the existing chrome goldens byte-identical).
     pub history_button: bool,
+    /// IME preedit (composition) text shown at the address-bar caret while editing.
+    /// Empty when no composition is active or the address bar is not the IME target.
+    pub ime_preedit: &'a str,
 }
 
 /// Paints the chrome over a physical `0RGB` framebuffer; returns the painted pixel count.
@@ -1757,20 +1760,65 @@ fn paint_address_bar(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>, wid
     let text_y = bar.y + 7.0;
     if editing {
         let text = view.address.text();
+        let caret = view.address.caret().min(text.len());
+        let preedit = if view.ime_preedit.is_empty() {
+            ""
+        } else {
+            view.ime_preedit
+        };
+        let before = &text[..caret];
+        let after = &text[caret..];
         draw_text(
             pixmap,
-            text,
+            before,
             text_x,
             text_y,
             scale,
             ADDRESS_TEXT_SIZE,
             COLOR_ADDRESS_TEXT,
         );
-        let before = &text[..view.address.caret().min(text.len())];
         let caret_x = text_x + measure_text_width(before, ADDRESS_TEXT_SIZE);
+        let mut after_x = caret_x;
+        if !preedit.is_empty() {
+            // IME composition: paint preedit at the insertion point and move caret/text after it.
+            let preedit_width = measure_text_width(preedit, ADDRESS_TEXT_SIZE);
+            draw_text(
+                pixmap,
+                preedit,
+                caret_x,
+                text_y,
+                scale,
+                ADDRESS_TEXT_SIZE,
+                COLOR_ADDRESS_TEXT,
+            );
+            // Underline marks the active composition range (#1519).
+            let underline_y = ((bar.y + bar.height - 5.0) * scale).round();
+            let underline_h = (1.5 * scale).round().max(1.0);
+            pixmap.fill_rect(
+                Rect::new(
+                    (caret_x * scale).round(),
+                    underline_y,
+                    (preedit_width * scale).round().max(1.0),
+                    underline_h,
+                ),
+                ACCENT,
+            );
+            after_x = caret_x + preedit_width;
+        }
+        if !after.is_empty() {
+            draw_text(
+                pixmap,
+                after,
+                after_x,
+                text_y,
+                scale,
+                ADDRESS_TEXT_SIZE,
+                COLOR_ADDRESS_TEXT,
+            );
+        }
         pixmap.fill_rect(
             Rect::new(
-                (caret_x * scale).round(),
+                (after_x * scale).round(),
                 ((bar.y + 4.0) * scale).round(),
                 scale.max(1.0),
                 ((bar.height - 8.0) * scale).round(),
@@ -2261,6 +2309,7 @@ mod tests {
             history_menu: None,
             download_status: None,
             history_button: false,
+            ime_preedit: "",
         }
     }
 
