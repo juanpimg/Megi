@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use megi_css::{BorderRadii, BorderStyle, BoxShadow, Color};
 use megi_core::NodeId;
-use megi_layout::Rect;
+use megi_core::Rect;
 
 /// Decoded replaced-element images keyed by the DOM node that references them.
 ///
@@ -431,3 +431,8 @@ impl IntoIterator for DisplayList {
         self.items.into_iter()
     }
 }
+
+pub mod hit_test;
+pub use hit_test::{
+    HitKind, HitLink, HitRegion, RegionCollector, find_link_at, hit_test, hit_test_all,
+};

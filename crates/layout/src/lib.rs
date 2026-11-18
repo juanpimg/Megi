@@ -10,7 +10,6 @@ pub mod block;
 pub mod box_tree;
 mod calc;
 mod flex;
-pub mod geometry;
 mod grid;
 pub mod inline;
 pub mod table;
@@ -25,7 +24,7 @@ use megi_core::{Document, NodeId};
 use block::layout_block_with_viewport;
 pub use block::{layout_block, layout_block_with_measurer};
 pub use box_tree::{BoxType, LayoutBox};
-pub use geometry::{Dimensions, EdgeSizes, Rect};
+pub use megi_core::{Dimensions, EdgeSizes, Rect};
 pub use inline::{
     DefaultTextMeasurer, FontMetrics, TextMeasurer, layout_inline_formatting_context,
     layout_inline_formatting_context_with_measurer,

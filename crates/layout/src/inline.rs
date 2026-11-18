@@ -11,7 +11,7 @@ use megi_css::{ComputedStyle, Length, TextAlign, TextTransform, VerticalAlign, W
 use megi_core::NodeId;
 
 use crate::box_tree::{BoxType, LayoutBox};
-use crate::geometry::Rect;
+use megi_core::geometry::Rect;
 
 /// Typographic font metrics for text measurement and baseline alignment.
 #[derive(Clone, Copy, Debug, PartialEq)]

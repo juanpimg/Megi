@@ -44,6 +44,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod geometry;
+
 use std::collections::HashSet;
 use std::fmt;
 use std::num::NonZeroU32;
@@ -4009,3 +4011,5 @@ mod template_child_edges {
         assert_eq!(doc.node(span).parent, Some(fragment));
     }
 }
+
+pub use geometry::{Dimensions, EdgeSizes, Rect};

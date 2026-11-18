@@ -60,7 +60,7 @@ use crate::block::{
     resolve_vertical_edges, translate_box,
 };
 use crate::box_tree::{BoxType, LayoutBox};
-use crate::geometry::EdgeSizes;
+use megi_core::geometry::EdgeSizes;
 use crate::inline::TextMeasurer;
 
 /// Fallback `border-spacing` when the CSS declaration is absent (HTML default: 2px).
@@ -1083,7 +1083,7 @@ mod legacy {
         resolve_horizontal_edges, resolve_vertical_edges, translate_box,
     };
     use crate::box_tree::{BoxType, LayoutBox};
-    use crate::geometry::EdgeSizes;
+    use megi_core::geometry::EdgeSizes;
     use crate::inline::TextMeasurer;
     use megi_css::{BorderCollapse, CaptionSide, Length, Position, VerticalAlign};
 
@@ -1224,7 +1224,7 @@ mod legacy {
                     }
                 }
             } else if matches!(child.box_type, BoxType::TableColumn(_)) {
-                child.dimensions.content = crate::geometry::Rect::new(table_x, table_y, 0.0, 0.0);
+                child.dimensions.content = megi_core::geometry::Rect::new(table_x, table_y, 0.0, 0.0);
             }
         }
         let row_count = count_rows(table);

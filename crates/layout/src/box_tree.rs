@@ -8,7 +8,7 @@ use std::sync::Arc;
 use megi_css::{ComputedStyle, Float, Position};
 use megi_core::NodeId;
 
-use crate::geometry::{Dimensions, Rect};
+use megi_core::geometry::{Dimensions, Rect};
 
 /// The nature of a box in the layout tree.
 #[derive(Clone, Debug, PartialEq)]

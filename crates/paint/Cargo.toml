@@ -14,6 +14,7 @@ megi-css = { workspace = true }
 megi-layout = { workspace = true }
 megi-fonts = { workspace = true }
 megi-image = { workspace = true }
+megi-display = { workspace = true }
 
 [dev-dependencies]
 megi-html = { workspace = true }

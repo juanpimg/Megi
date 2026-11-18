@@ -88,11 +88,11 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::display_list::{
+use megi_display::{
     BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MAX_SHADOWS,
     MAX_TEXT_MASK_RUNS, MarkerKind, TextMaskRun,
 };
-use crate::hit_test::{HitKind, HitRegion, RegionCollector};
+use megi_display::{HitKind, HitRegion, RegionCollector};
 
 /// Background color propagated from the root element or `body` to the canvas.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1939,7 +1939,7 @@ fn paint_text_run(
     list.push(DisplayItem::Text {
         text: text
             .chars()
-            .take(crate::display_list::MAX_TEXT_RUN_CHARS)
+            .take(megi_display::MAX_TEXT_RUN_CHARS)
             .collect(),
         rect: layout_box.dimensions.content,
         color: scaled(color, alpha_scale),

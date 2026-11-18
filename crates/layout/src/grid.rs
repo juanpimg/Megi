@@ -63,7 +63,7 @@ use crate::block::{
     calculate_block_height, calculate_shrink_to_fit_width, layout_box_contents, translate_box,
 };
 use crate::box_tree::LayoutBox;
-use crate::geometry::{EdgeSizes, Rect};
+use megi_core::geometry::{EdgeSizes, Rect};
 use crate::inline::TextMeasurer;
 
 /// Maximum number of tracks after expanding `auto-fill`/`auto-fit`.

@@ -40,7 +40,7 @@
 //! 3D effects are out of scope for Phase 7.
 
 use megi_core::{Document, NodeId};
-use megi_layout::Rect;
+use megi_core::Rect;
 
 /// Coarse kind of painted primitive that produced a [`HitRegion`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -90,7 +90,8 @@ pub struct HitLink {
 /// It mirrors the painter's clip stack and records clipped regions in painting
 /// order.
 #[derive(Default)]
-pub(crate) struct RegionCollector {
+/// Clip-stack aware collector used by the painter to emit [`HitRegion`]s.
+pub struct RegionCollector {
     regions: Vec<HitRegion>,
     clip_stack: Vec<Option<(Rect, Rect)>>,
 }
@@ -98,7 +99,7 @@ pub(crate) struct RegionCollector {
 impl RegionCollector {
     const MAX_CLIP_DEPTH: usize = 256;
 
-    pub(crate) fn push_clip(&mut self, rect: Rect) {
+    pub fn push_clip(&mut self, rect: Rect) {
         if self.clip_stack.len() >= Self::MAX_CLIP_DEPTH {
             self.clip_stack.push(None);
             return;
@@ -116,7 +117,7 @@ impl RegionCollector {
         self.clip_stack.push(Some((rect, running)));
     }
 
-    pub(crate) fn pop_clip(&mut self) {
+    pub fn pop_clip(&mut self) {
         self.clip_stack.pop();
     }
 
@@ -129,7 +130,7 @@ impl RegionCollector {
     }
 
     /// Records `rect` clipped by the current clip stack.
-    pub(crate) fn record(&mut self, rect: Rect, node_id: Option<NodeId>, kind: HitKind) {
+    pub fn record(&mut self, rect: Rect, node_id: Option<NodeId>, kind: HitKind) {
         if !rect.x.is_finite()
             || !rect.y.is_finite()
             || !rect.width.is_finite()
@@ -153,7 +154,7 @@ impl RegionCollector {
     }
 
     /// Moves the collected regions out (used by the builder after painting).
-    pub(crate) fn take_regions(&mut self) -> Vec<HitRegion> {
+    pub fn take_regions(&mut self) -> Vec<HitRegion> {
         std::mem::take(&mut self.regions)
     }
 }

@@ -1,0 +1,17 @@
+[package]
+name = "megi-display"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Megi Engine — pure display-list contract shared by paint and raster"
+
+[dependencies]
+megi-core.workspace = true
+megi-css.workspace = true
+megi-image.workspace = true
+
+[lints]
+workspace = true

@@ -34,7 +34,7 @@ use megi_css::{
 };
 
 use crate::box_tree::{BoxType, LayoutBox};
-use crate::geometry::{Dimensions, EdgeSizes, Rect};
+use megi_core::geometry::{Dimensions, EdgeSizes, Rect};
 use crate::inline::{DefaultTextMeasurer, TextMeasurer};
 
 /// Positioning context inherited down the box tree (CSS 2.2 §9.6, §10.1).

@@ -35,7 +35,9 @@ def allowed_edges() -> dict[str, set[str]]:
         "image": set(),
         "net": {"image"},  # MIME sniffing / image decode in the loader
         "js": {"core", "html", "css"},
-        "display": {"core", "fonts"},
+        # Temporary: DisplayItem embeds css::Color/BorderStyle/Gradient and
+        # image::RgbaImage value types. Move those DTOs to core in Task 8.x.
+        "display": {"core", "fonts", "css", "image"},
         "layout": {"core", "css", "fonts"},
         "paint": {"core", "css", "layout", "fonts", "image", "display"},
         "raster": {"core", "display", "fonts"},

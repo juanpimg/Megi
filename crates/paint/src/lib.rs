@@ -22,8 +22,6 @@
 
 pub mod background;
 pub mod deflate;
-pub mod display_list;
-pub mod hit_test;
 pub mod inflate;
 pub mod painter;
 pub mod png;
@@ -33,11 +31,12 @@ pub mod style;
 pub use background::{MAX_BACKGROUND_TILES, background_tile_size, background_tiles};
 pub use megi_css::Color;
 pub use deflate::zlib_compress;
-pub use display_list::{
+pub use megi_display::{
     BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MAX_DISPLAY_LIST_ITEMS,
     MAX_TEXT_MASK_RUNS, MarkerKind, TextMaskRun,
 };
-pub use hit_test::{HitKind, HitLink, HitRegion, find_link_at, hit_test, hit_test_all};
+pub use megi_display::{HitKind, HitLink, HitRegion, find_link_at, hit_test, hit_test_all};
+pub use megi_display::RegionCollector;
 pub use inflate::inflate_zlib;
 pub use painter::{
     IMAGE_PLACEHOLDER, MAX_FLOAT_DEPTH, MAX_STACKING_CONTEXT_DEPTH, build_display_list,

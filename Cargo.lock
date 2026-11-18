@@ -1409,6 +1409,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "megi-display"
+version = "0.1.0"
+dependencies = [
+ "megi-core",
+ "megi-css",
+ "megi-image",
+]
+
+[[package]]
 name = "megi-fonts"
 version = "0.1.0"
 dependencies = [
@@ -1468,6 +1477,7 @@ version = "0.1.0"
 dependencies = [
  "megi-core",
  "megi-css",
+ "megi-display",
  "megi-fonts",
  "megi-html",
  "megi-image",

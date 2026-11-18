@@ -48,7 +48,7 @@ use megi_css::{BorderRadii, BoxShadow, Color};
 use megi_fonts::{Font, FontDatabase, FontStyle as FontsFontStyle, GlyphMask, ShapedRun};
 use megi_layout::Rect;
 
-use crate::display_list::{
+use megi_display::{
     BorderSide, DisplayItem, DisplayList, MAX_ROUNDED_GROUP_PIXELS, MAX_SHADOW_BLUR,
     MAX_TEXT_MASK_RUNS, MarkerKind, TextMaskRun,
 };

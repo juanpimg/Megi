@@ -7,6 +7,7 @@ members = [
     "crates/layout",
     "crates/fonts",
     "crates/image",
+    "crates/display",
     "crates/paint",
     "crates/net",
     "crates/render",
@@ -32,6 +33,7 @@ megi-css = { path = "crates/css", version = "0.1.0" }
 megi-layout = { path = "crates/layout", version = "0.1.0" }
 megi-fonts = { path = "crates/fonts", version = "0.1.0" }
 megi-image = { path = "crates/image", version = "0.1.0" }
+megi-display = { path = "crates/display", version = "0.1.0" }
 megi-paint = { path = "crates/paint", version = "0.1.0" }
 megi-net = { path = "crates/net", version = "0.1.0" }
 megi-render = { path = "crates/render", version = "0.1.0" }
