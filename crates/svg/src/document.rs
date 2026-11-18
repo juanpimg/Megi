@@ -416,9 +416,10 @@ impl Document {
             &pattern_ids,
             &mut selector_budget,
         )?;
+        // #1659: the root must accept percentage opacity like every other element.
         let root_opacity = root
             .attribute("opacity")
-            .and_then(|v| v.parse::<f32>().ok())
+            .and_then(parse_opacity)
             .unwrap_or(1.0);
         let root_transform = Transform::IDENTITY;
         let mut ancestors: Vec<&XmlElement> = vec![root];
@@ -612,7 +613,12 @@ impl Style {
             "display" => self.display = !value.trim().eq_ignore_ascii_case("none"),
             "visibility" => {
                 let value = value.trim().to_ascii_lowercase();
-                self.visibility = value == "visible";
+                // #1657: `inherit` keeps the parent's value (the child style was cloned from it).
+                match value.as_str() {
+                    "inherit" => {}
+                    "visible" => self.visibility = true,
+                    _ => self.visibility = false, // hidden | collapse
+                }
             }
             "fill" => self.fill = parse_paint(value, gradients, patterns),
             "stroke" => self.stroke = parse_paint(value, gradients, patterns),
