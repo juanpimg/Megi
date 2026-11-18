@@ -1346,7 +1346,7 @@ fn build_document_object(context: &mut Context) -> JsObject {
             1usize,
             document_write as fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>,
         ),
-        ("writeln", 1, document_write),
+        ("writeln", 1, document_writeln),
         ("getElementById", 1, document_get_element_by_id),
         ("getElementsByTagName", 1, document_get_elements_by_tag_name),
         (
@@ -3450,6 +3450,18 @@ fn charge_document_parse(host: &mut Host, bytes: usize, sink: &str) -> bool {
     }
     host.document_write_bytes = total;
     true
+}
+
+/// `document.writeln` is `write` plus a trailing newline (#1620).
+fn document_writeln(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let text = arg_string(args, 0, context)?;
+    let with_newline = format!("{text}\n");
+    let mut new_args = args.to_vec();
+    if new_args.is_empty() {
+        new_args.push(JsValue::undefined());
+    }
+    new_args[0] = JsValue::from(js_string!(with_newline));
+    document_write(this, &new_args, context)
 }
 
 fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
