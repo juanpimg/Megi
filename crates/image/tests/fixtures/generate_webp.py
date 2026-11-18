@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generates the VP8L fixtures used by the R147 WebP tests.
 
-Two families are produced:
+Families produced:
 
 - simple, hand-written VP8L streams (own synthetic content, ``v8l_*``) that exercise
   the literal/Huffman subset without relying on PIL, with their exact RGBA stored;
@@ -9,7 +9,15 @@ Two families are produced:
   ``alpha_real``, ``palette_transform``) that use the full VP8L feature set
   (predictor/colour transforms, LZ77, colour cache, colour indexing). PIL/libwebp is
   the independent oracle: the Rust decoder is compared byte-exactly against the
-  RGBA oracle stored next to each fixture (``.rgba`` raw files).
+  RGBA oracle stored next to each fixture (``.rgba`` raw files);
+- **animated WebP** (``animated_blend.webp``): a real VP8X+ANIM+ANMF container built
+  from the existing ``v8l_two_color``/``v8l_alpha`` VP8L chunks (frame compositing,
+  alpha blending and disposal). Per-frame composited RGBA oracles are stored as
+  ``animated_blend.frame0.rgba`` / ``animated_blend.frame1.rgba``;
+- **static VP8X+ALPH** (``vp8x_alpha_lossy.webp``): a VP8X container with an
+  uncompressed ALPH plane (method 0, filter 0) over the ``lossy.webp`` VP8 payload.
+  The RGBA oracle (PIL RGB channels + generated alpha gradient) is stored as
+  ``vp8x_alpha_lossy.rgba``.
 
 Run from the repository root: python3 crates/image/tests/fixtures/generate_webp.py
 """
@@ -210,6 +218,137 @@ def main():
     Image.new("RGB", (16, 16), (30, 160, 90)).save(render_lossy, "WEBP", quality=80)
     print(render_lossy, os.path.getsize(render_lossy), "bytes (VP8 lossy)")
     write_lossy_oracles()
+    write_animated_fixture()
+    write_vp8x_alpha_fixture()
+
+
+def riff_container(chunks):
+    body = b"WEBP"
+    for cid, payload in chunks:
+        body += cid + len(payload).to_bytes(4, "little") + payload
+        if len(payload) % 2:
+            body += b"\x00"
+    return b"RIFF" + len(body).to_bytes(4, "little") + body
+
+
+def u24(value):
+    return bytes([value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF])
+
+
+def read_chunks(path):
+    data = open(path, "rb").read()
+    offset = 12
+    chunks = []
+    while offset + 8 <= len(data):
+        cid = data[offset:offset + 4]
+        length = int.from_bytes(data[offset + 4:offset + 8], "little")
+        chunks.append((cid, data[offset + 8:offset + 8 + length]))
+        offset += 8 + length + (length & 1)
+    return chunks
+
+
+def find_chunk_payload(path, chunk_id):
+    for cid, payload in read_chunks(path):
+        if cid == chunk_id:
+            return payload
+    raise ValueError(f"{path}: missing {chunk_id!r}")
+
+
+def write_rgba(path, data):
+    with open(path, "wb") as handle:
+        handle.write(data)
+    print(path, len(data), "bytes (RGBA oracle)")
+
+
+def blend_over(dst_rgba, src_rgba):
+    """Composites src over dst (straight alpha, RGBA8) and returns dst updated."""
+    out = bytearray(dst_rgba)
+    for index in range(0, len(out), 4):
+        sa = src_rgba[index + 3] / 255.0
+        for channel in range(3):
+            out[index + channel] = int(
+                src_rgba[index + channel] * sa + out[index + channel] * (1.0 - sa) + 0.5
+            )
+        out[index + 3] = int(src_rgba[index + 3] * sa + out[index + 3] * (1.0 - sa) + 0.5)
+    return bytes(out)
+
+
+def write_animated_fixture():
+    """Writes a real VP8X+ANIM+ANMF animated WebP with per-frame composited oracles.
+
+    Two 8x8 VP8L frames are reused from the existing simple-code fixtures:
+    frame 0 is opaque ``v8l_two_color`` (100ms, dispose none, blend), frame 1 is
+    ``v8l_alpha`` (250ms, dispose to background, blend) whose transparent right half
+    preserves frame 0 pixels. Canvas 8x8, loop count 3, background green (BGRA).
+    """
+    solid = find_chunk_payload(os.path.join(FIXTURES, "v8l_two_color.webp"), b"VP8L")
+    alpha = find_chunk_payload(os.path.join(FIXTURES, "v8l_alpha.webp"), b"VP8L")
+    canvas_w = canvas_h = 8
+    vp8x = bytearray(10)
+    vp8x[0] = 0x12  # alpha + animation flags
+    vp8x[4:7] = u24(canvas_w - 1)
+    vp8x[7:10] = u24(canvas_h - 1)
+    anim = bytearray(6)
+    anim[0:4] = bytes([0, 255, 0, 255])  # background BGRA green
+    anim[4:6] = (3).to_bytes(2, "little")  # loop count
+
+    def anmf(x, y, width, height, delay_ms, flags, vp8l_payload):
+        payload = bytearray()
+        payload += u24(x // 2) + u24(y // 2) + u24(width - 1) + u24(height - 1)
+        payload += u24(delay_ms) + bytes([flags])
+        payload += b"VP8L" + len(vp8l_payload).to_bytes(4, "little") + vp8l_payload
+        if len(vp8l_payload) % 2:
+            payload += b"\x00"
+        return bytes(payload)
+
+    webp = riff_container([
+        (b"VP8X", bytes(vp8x)),
+        (b"ANIM", bytes(anim)),
+        (b"ANMF", anmf(0, 0, 8, 8, 100, 0x00, solid)),
+        (b"ANMF", anmf(0, 0, 8, 8, 250, 0x01, alpha)),
+    ])
+    path = os.path.join(FIXTURES, "animated_blend.webp")
+    with open(path, "wb") as handle:
+        handle.write(webp)
+    print(path, len(webp), "bytes (animated VP8X/ANIM/ANMF)")
+
+    frame0 = open(os.path.join(FIXTURES, "v8l_two_color.rgba"), "rb").read()
+    alpha_rgba = open(os.path.join(FIXTURES, "v8l_alpha.rgba"), "rb").read()
+    frame1 = blend_over(frame0, alpha_rgba)
+    write_rgba(os.path.join(FIXTURES, "animated_blend.frame0.rgba"), frame0)
+    write_rgba(os.path.join(FIXTURES, "animated_blend.frame1.rgba"), frame1)
+
+
+def write_vp8x_alpha_fixture():
+    """Writes a static VP8X+ALPH (uncompressed, filter 0) fixture with an RGBA oracle.
+
+    The VP8 payload comes from ``lossy.webp`` (16x16 PIL/WebP lossy). A horizontal
+    alpha gradient (0..255) is applied via an uncompressed ALPH chunk, so the decoder's
+    VP8X alpha-plane path is exercised on a real fixture with a deterministic oracle.
+    """
+    vp8 = find_chunk_payload(os.path.join(FIXTURES, "lossy.webp"), b"VP8 ")
+    image = Image.open(os.path.join(FIXTURES, "lossy.webp")).convert("RGBA")
+    width, height = image.size
+    alpha_plane = bytearray(width * height)
+    for y in range(height):
+        for x in range(width):
+            alpha_plane[y * width + x] = int(x * 255 / (width - 1)) if width > 1 else 255
+
+    vp8x = bytearray(10)
+    vp8x[0] = 0x10  # alpha flag
+    vp8x[4:7] = u24(width - 1)
+    vp8x[7:10] = u24(height - 1)
+    alph = bytes([0x00]) + bytes(alpha_plane)  # compression 0 (none), filter 0
+    webp = riff_container([(b"VP8X", bytes(vp8x)), (b"ALPH", alph), (b"VP8 ", vp8)])
+    path = os.path.join(FIXTURES, "vp8x_alpha_lossy.webp")
+    with open(path, "wb") as handle:
+        handle.write(webp)
+    print(path, len(webp), "bytes (VP8X + uncompressed ALPH)")
+
+    oracle = bytearray(image.tobytes())
+    for index, alpha in enumerate(alpha_plane):
+        oracle[index * 4 + 3] = alpha
+    write_rgba(os.path.join(FIXTURES, "vp8x_alpha_lossy.rgba"), bytes(oracle))
 
 
 def write_lossy_oracles():

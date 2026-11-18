@@ -579,3 +579,41 @@ fn rejects_out_of_bounds_anmf_frame_and_missing_anim() {
         Err(ImageError::InvalidData { .. })
     ));
 }
+
+#[test]
+fn decodes_real_animated_webp_fixture_with_compositing() {
+    // Real VP8X/ANIM/ANMF container (not synthesized in memory) exercising frame
+    // compositing, alpha blending and disposal (#1436). Oracles are per-frame
+    // composited RGBA stored by crates/image/tests/fixtures/generate_webp.py.
+    let webp = fixture("animated_blend.webp");
+    let first = decode(&webp).expect("animated fixture static decode");
+    assert_eq!(first.dimensions(), (8, 8));
+    assert_eq!(first.data, fixture("animated_blend.frame0.rgba"));
+
+    let anim = image::decode_animated(&webp).expect("animated fixture frames");
+    assert_eq!((anim.width, anim.height, anim.loop_count), (8, 8, 3));
+    assert_eq!(anim.frames.len(), 2);
+    assert_eq!(anim.frames[0].delay_ms, 100);
+    assert_eq!(anim.frames[1].delay_ms, 250);
+    assert_eq!(
+        anim.frames[0].image.data,
+        fixture("animated_blend.frame0.rgba")
+    );
+    assert_eq!(
+        anim.frames[1].image.data,
+        fixture("animated_blend.frame1.rgba")
+    );
+    // Frame 1 blends a transparent-right-half alpha frame over frame 0 (dispose none).
+    assert_eq!(anim.frames[1].image.pixel(7, 7), Some([0, 0, 255, 255]));
+}
+
+#[test]
+fn decodes_vp8x_uncompressed_alph_lossy_fixture_exactly() {
+    // Static VP8X + VP8 lossy with an uncompressed ALPH plane (method 0, filter 0)
+    // committed as a real fixture (#1436).
+    let image = decode(&fixture("vp8x_alpha_lossy.webp")).expect("VP8X+ALPH fixture");
+    assert_eq!(image.dimensions(), (16, 16));
+    assert_eq!(image.data, fixture("vp8x_alpha_lossy.rgba"));
+    assert_eq!(image.pixel(0, 0).map(|pixel| pixel[3]), Some(0));
+    assert_eq!(image.pixel(15, 0).map(|pixel| pixel[3]), Some(255));
+}
