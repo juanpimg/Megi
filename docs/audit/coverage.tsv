@@ -516,7 +516,7 @@ crates/shell/tests/fixtures/links.html	10	test	F1	waveF1	2026-11-17	covered	#137
 crates/shell/tests/shell_tests.rs	1694	test	F1	waveF1	2026-11-17	covered	#1379	
 crates/svg/Cargo.toml	13	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/svg/examples/svg_to_png.rs	114	example	F3	lead	2026-11-17	covered	example read	read in the F3/F4 pass
-crates/svg/src/color.rs	314	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
+crates/svg/src/color.rs	391	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/css.rs	532	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/document.rs	2936	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/gradient.rs	494	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
@@ -594,6 +594,7 @@ docs/audit/findings/wave2/00-baseline.md	36	docs	F3	wave2	2026-11-18	covered	#16
 docs/audit/findings/wave2/07-closeout.md	43	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
 docs/audit/findings/wave2/FINAL-REVIEW.md	98	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
 docs/audit/findings/wave2/PUBLISHED.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/SECURITY-FIXES.md	21	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 security fix record
 docs/audit/findings/wave2/advisories/w2-render-01.md	25	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
 docs/audit/findings/wave2/advisories/w2-st-1173-file-icon.md	22	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
 docs/audit/findings/wave2/advisories/w2-st-1176-tmp-writers.md	22	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
