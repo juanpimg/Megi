@@ -475,6 +475,11 @@ pub(crate) struct Host {
     pub shadow_hosts: std::collections::HashMap<NodeId, NodeId>,
     /// Canvas 2D surfaces keyed by `<canvas>` node id (#1545).
     pub canvas_store: crate::canvas::CanvasStore,
+    /// Custom element registry (#1541): name -> integer handle; the JS constructor is stored on
+    /// `globalThis.__megi_ce_<handle>` so it stays reachable without a cross-crate handle type.
+    pub custom_elements: std::collections::HashMap<String, u32>,
+    /// Monotonic handle counter for custom element constructors.
+    pub custom_element_next_handle: u32,
     /// Deterministic cooperative workers (no threads); `None` slots are terminated/dropped.
     pub workers: Vec<Option<crate::runtime::WorkerState>>,
     /// Parent host when this host belongs to a worker realm.
@@ -547,6 +552,8 @@ impl Host {
             shadow_roots: std::collections::HashMap::new(),
             shadow_hosts: std::collections::HashMap::new(),
             canvas_store: crate::canvas::CanvasStore::new(),
+            custom_elements: std::collections::HashMap::new(),
+            custom_element_next_handle: 1,
             workers: Vec::new(),
             worker_parent: None,
             worker_id: None,

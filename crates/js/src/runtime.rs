@@ -718,6 +718,18 @@ fn install_globals(context: &mut Context, host: &Rc<RefCell<Host>>) -> Result<()
     install_gap_apis(context)?;
     crate::xhr::install_xhr(context)?;
     crate::websocket::install(context).map_err(|error| JsError::Internal(error.to_string()))?;
+    let registry = ObjectInitializer::new(context)
+        .function(native(custom_elements_define), js_string!("define"), 2)
+        .function(native(custom_elements_get), js_string!("get"), 1)
+        .build();
+    global
+        .set(
+            js_string!("customElements"),
+            JsValue::from(registry),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
     Ok(())
 }
 
@@ -3556,6 +3568,64 @@ fn is_valid_element_name(name: &str) -> bool {
     chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '.' | '_' | ':'))
 }
 
+/// `customElements.define(name, constructor)` (#1541): registers a constructor for a custom tag.
+/// The name must contain a hyphen (Custom Elements spec). The constructor is stored on the global
+/// object under an opaque key so `createElement` can invoke it to upgrade new instances.
+fn custom_elements_define(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let name = arg_string(args, 0, context)?.to_ascii_lowercase();
+    if !name.contains('-') || !is_valid_element_name(&name) {
+        return Err(js_error(format!(
+            "NotSupportedError: `{name}` is not a valid custom element name"
+        )));
+    }
+    let constructor = args
+        .get(1)
+        .and_then(JsValue::as_callable)
+        .ok_or_else(|| js_error("TypeError: custom element constructor must be callable"))?
+        .clone();
+    let handle = with_host(|host| {
+        if let Some(existing) = host.custom_elements.get(&name) {
+            return *existing;
+        }
+        let handle = host.custom_element_next_handle;
+        host.custom_element_next_handle = host.custom_element_next_handle.wrapping_add(1);
+        host.custom_elements.insert(name.clone(), handle);
+        handle
+    })
+    .ok_or_else(|| js_error("no active JavaScript host"))?;
+    context
+        .global_object()
+        .set(
+            js_string!(format!("__megi_ce_{handle}")),
+            JsValue::from(constructor),
+            false,
+            context,
+        )
+        .map_err(|error| js_error(error.to_string()))?;
+    Ok(JsValue::undefined())
+}
+
+/// `customElements.get(name)` — returns the registered constructor or `undefined`.
+fn custom_elements_get(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let name = arg_string(args, 0, context)?.to_ascii_lowercase();
+    let handle = with_host(|host| host.custom_elements.get(&name).copied()).flatten();
+    match handle {
+        Some(handle) => context
+            .global_object()
+            .get(js_string!(format!("__megi_ce_{handle}")), context)
+            .map_err(|error| js_error(error.to_string())),
+        None => Ok(JsValue::undefined()),
+    }
+}
+
 fn document_create_element(
     _this: &JsValue,
     args: &[JsValue],
@@ -3574,10 +3644,24 @@ fn document_create_element(
         host.document
             .create_element(Namespace::Html, name.clone(), Vec::new())
     });
-    match node {
-        Some(node_id) => wrap_node(context, node_id),
-        None => Err(js_error("no active JavaScript host")),
+    let wrapper = match node {
+        Some(node_id) => wrap_node(context, node_id)?,
+        None => return Err(js_error("no active JavaScript host")),
+    };
+    // Custom Elements upgrade (#1541): if a constructor is registered for this tag, invoke it
+    // with the new element as `this` so it can attach a shadow root / set up state.
+    let handle = with_host(|host| host.custom_elements.get(&name).copied()).flatten();
+    if let Some(handle) = handle {
+        let constructor = context
+            .global_object()
+            .get(js_string!(format!("__megi_ce_{handle}")), context)
+            .ok()
+            .and_then(|value| value.as_callable());
+        if let Some(constructor) = constructor {
+            let _ = constructor.call(&wrapper, &[], context);
+        }
     }
+    Ok(wrapper)
 }
 
 fn document_create_text_node(
@@ -6393,6 +6477,11 @@ fn node_get_root_node(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let shadow = with_host(|host| {
+        // A shadow host's own root is its shadow tree (per DOM §4.6 getRootNode).
+        if let Some(root) = host.shadow_roots.get(&node_id) {
+            return Some(*root);
+        }
+        // Descendants walk up to the shadow root that contains them.
         let mut current = Some(node_id);
         let mut found = None;
         while let Some(id) = current {

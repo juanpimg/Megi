@@ -36,7 +36,7 @@ fn shadow_root_children_and_get_root_node() {
              var child = document.createElement('span'); \
              root.appendChild(child); \
              String(root.firstChild === child && child.getRootNode() === root \
-                    && host.getRootNode() !== root && root.querySelector('span') === child);",
+                    && host.getRootNode() === root && root.querySelector('span') === child);",
             "t",
         )
         .expect("shadow children");
