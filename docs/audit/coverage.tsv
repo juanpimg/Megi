@@ -482,12 +482,13 @@ crates/shell/src/find.rs	692	src	F2	wave1	2026-11-16	covered	#1163-#1178
 crates/shell/src/forms.rs	1579	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/headless.rs	396	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/history.rs	388	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/i18n.rs	145	src	F2			pending		
 crates/shell/src/images.rs	119	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/lib.rs	269	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/lib.rs	270	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/links.rs	491	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/main.rs	203	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/navigation.rs	391	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/pages.rs	519	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/pages.rs	622	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/present.rs	255	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/reader.rs	233	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/refresh.rs	206	src	F2	wave1	2026-11-16	covered	#1163-#1178	
