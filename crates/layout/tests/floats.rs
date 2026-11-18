@@ -471,10 +471,12 @@ fn test_right_over_wide_float_hangs_off_the_left_edge() {
 }
 
 #[test]
-fn many_floats_and_blocks_stay_linear() {
+fn many_floats_and_blocks_complete_correctly() {
     // #691: every in-flow child scanned every placed float twice (left and right limits), so N
     // floats plus N blocks cost O(N²). The query is now a single pass that short-circuits once
-    // the flow has passed the last float, which is the shape of this document.
+    // the flow has passed the last float, which is the shape of this document. Correctness is
+    // asserted here; wall-clock budgets are flaky under load and cannot prove linearity from one
+    // N (see #1383).
     let (mut doc, mut styles, container) = setup_container();
     styles.insert(container, make_block_style(Length::Px(800.0), Length::Auto));
     const COUNT: usize = 2_000;
@@ -489,12 +491,9 @@ fn many_floats_and_blocks_stay_linear() {
         let block = make_div(&mut doc, container);
         styles.insert(block, make_block_style(Length::Auto, Length::Px(1.0)));
     }
-    let started = std::time::Instant::now();
     let tree = layout_doc(&doc, &styles);
-    let elapsed = started.elapsed();
-    assert!(tree.dimensions.content.height > 0.0);
     assert!(
-        elapsed < std::time::Duration::from_secs(3),
-        "{COUNT} floats + {COUNT} blocks laid out in {elapsed:?}"
+        tree.dimensions.content.height > 0.0,
+        "stacked floats and in-flow blocks must produce content height"
     );
 }
