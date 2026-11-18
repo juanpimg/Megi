@@ -343,7 +343,7 @@ crates/net/tests/data_tests.rs	107	test	F1	waveF1	2026-11-17	covered	#1343-#1352
 crates/net/tests/fixtures/gzip_bomb_zeros_1mib.hex	1	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/h1_streaming_tests.rs	244	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/h2_advanced.rs	422	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
-crates/net/tests/h2_flow_multiplex_tests.rs	554	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
+crates/net/tests/h2_flow_multiplex_tests.rs	559	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/h2_push_tests.rs	396	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/h2_tests.rs	404	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/hsts_tests.rs	261	test	F1			pending		
