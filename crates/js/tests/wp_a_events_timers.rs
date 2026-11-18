@@ -386,3 +386,27 @@ fn pending_timer_cap_is_enforced() {
         "the cap error is reported: {error}"
     );
 }
+
+#[test]
+fn timeout_with_string_delay_applies_to_number() {
+    // #1622: setTimeout(fn, "100") must coerce the delay with ToNumber, not fire at 0ms.
+    use std::time::Duration;
+    let mut runtime = runtime();
+    let base = runtime
+        .advance(Duration::ZERO)
+        .expect("pin the virtual clock");
+    runtime
+        .eval(
+            "var fired = 0; setTimeout(function () { fired += 1; }, '100');",
+            "tstr.js",
+        )
+        .expect("schedule with string delay");
+    assert_eq!(
+        runtime.run_until(base + 50).expect("clock to +50ms"),
+        0,
+        "a string delay of 100ms must not fire at 50ms"
+    );
+    assert_eq!(runtime.eval("fired", "tstr.js").expect("fired"), "0");
+    assert_eq!(runtime.run_until(base + 120).expect("clock to +120ms"), 1);
+    assert_eq!(runtime.eval("fired", "tstr.js").expect("fired"), "1");
+}
