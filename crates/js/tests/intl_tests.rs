@@ -1,4 +1,4 @@
-//! #1523: Intl.NumberFormat subset — locale-aware grouping and fraction digits.
+//! #1523: Intl.NumberFormat and Intl.DateTimeFormat subsets — locale-aware grouping, fraction digits and date order.
 
 #![cfg(feature = "js")]
 
@@ -52,4 +52,15 @@ fn number_format_resolved_options_and_nonfinite() {
          String(o.locale + '|' + o.minimumFractionDigits + '|' + f.format(Infinity));",
     );
     assert_eq!(out, "fr-FR|1|Infinity", "resolved options: {out}");
+}
+
+#[test]
+fn datetime_format_and_to_locale_date_string_use_locale_order() {
+    let out = eval(
+        "var d = new Date(2024, 0, 15, 12); \
+         var us = new Intl.DateTimeFormat('en-US').format(d); \
+         var es = new Intl.DateTimeFormat('es-ES').format(d); \
+         String(us + '|' + es + '|' + d.toLocaleDateString('en-GB'));",
+    );
+    assert_eq!(out, "01/15/2024|15/01/2024|15/01/2024", "{out}");
 }

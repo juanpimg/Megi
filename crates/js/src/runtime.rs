@@ -7292,11 +7292,44 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     };
     var intl = (typeof Intl === 'object' && Intl) ? Intl : {};
     intl.NumberFormat = NumberFormat;
+
+    // Intl.DateTimeFormat subset (#1523): locale-ordered numeric dates. Kept dependency-free
+    // (no ICU) and intentionally small: the common `toLocaleDateString` display case.
+    var dateOrder = {
+      'en': ['m', 'd', 'y'], 'en-us': ['m', 'd', 'y'], 'en-gb': ['d', 'm', 'y'],
+      'es': ['d', 'm', 'y'], 'es-es': ['d', 'm', 'y'],
+      'de': ['d', 'm', 'y'], 'de-de': ['d', 'm', 'y'],
+      'fr': ['d', 'm', 'y'], 'fr-fr': ['d', 'm', 'y'],
+      'pt': ['d', 'm', 'y'], 'pt-br': ['d', 'm', 'y']
+    };
+    function DateTimeFormat(locale) {
+      locale = String(locale || 'en-US');
+      var key = locale.toLowerCase();
+      this._order = dateOrder[key] || dateOrder[locale.split('-')[0].toLowerCase()] || dateOrder['en'];
+      this._locale = locale;
+    }
+    DateTimeFormat.prototype.resolvedOptions = function () { return { locale: this._locale }; };
+    DateTimeFormat.prototype.format = function (date) {
+      var d = new Date(Number(date));
+      if (isNaN(d.getTime())) { return 'Invalid Date'; }
+      var parts = {
+        y: String(d.getFullYear()),
+        m: String(d.getMonth() + 1).padStart(2, '0'),
+        d: String(d.getDate()).padStart(2, '0')
+      };
+      return this._order.map(function (key) { return parts[key]; }).join('/');
+    };
+    intl.DateTimeFormat = DateTimeFormat;
     define('Intl', intl);
     if (typeof Number === 'function' && Number.prototype) {
       Number.prototype.toLocaleString = function (locale, options) {
         return new NumberFormat(locale, options).format(this);
       };
+      if (typeof Date === 'function' && Date.prototype) {
+        Date.prototype.toLocaleDateString = function (locale) {
+          return new DateTimeFormat(locale).format(this);
+        };
+      }
     }
   })();
 })();
