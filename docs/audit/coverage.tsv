@@ -45,21 +45,21 @@ crates/bench/src/runner.rs	337	tool	F4	wave1	2026-11-16	covered	#1197-#1210
 crates/css/Cargo.toml	15	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/css/src/animation.rs	561	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/animation_runtime.rs	712	src	F2	wave1	2026-11-16	covered	#1126-#1133	
-crates/css/src/calc.rs	442	src	F2	wave1	2026-11-16	covered	#1126-#1133	
+crates/css/src/calc.rs	443	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/cascade.rs	1963	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/color.rs	694	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/component_value.rs	41	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/container.rs	420	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/custom.rs	582	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/flex.rs	393	src	F2	wave1	2026-11-16	covered	#1126-#1133	
-crates/css/src/grid.rs	884	src	F2	wave1	2026-11-16	covered	#1126-#1133	
+crates/css/src/grid.rs	880	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/lib.rs	2131	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/media.rs	634	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/parser.rs	861	src	F2	wave1	2026-11-16	covered	#1126-#1133	
-crates/css/src/properties.rs	6022	src	F2	wave1	2026-11-16	covered	#1126-#1133	
+crates/css/src/properties.rs	6029	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/query.rs	370	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/rule.rs	332	src	F2	wave1	2026-11-16	covered	#1126-#1133	
-crates/css/src/selector.rs	2145	src	F2	wave1	2026-11-16	covered	#1126-#1133	
+crates/css/src/selector.rs	2144	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/shorthand.rs	966	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/state.rs	242	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/token.rs	125	src	F2	wave1	2026-11-16	covered	#1126-#1133	
@@ -77,7 +77,7 @@ crates/css/tests/effects.rs	260	test	F1	waveF1	2026-11-17	covered	#1356-#1360
 crates/css/tests/font_face_tests.rs	86	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/gradients.rs	478	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/length_parse.rs	31	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
-crates/css/tests/numeric_ranges.rs	68	test	F1	wave2	2026-11-18	covered	#1670,#1671,#1676	Regression test for wave2 findings
+crates/css/tests/numeric_ranges.rs	114	test	F1	wave2	2026-11-18	covered	#1670,#1671,#1676	Regression test for wave2 findings
 crates/css/tests/parser_depth.rs	68	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/proptest_css.proptest-regressions	0	generated	-			exempt		not read line by line: generated
 crates/css/tests/proptest_css.rs	178	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
@@ -344,7 +344,7 @@ crates/net/src/hsts.rs	396	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 li
 crates/net/src/http.rs	2814	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/integrity.rs	619	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/net/src/lib.rs	199	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
-crates/net/src/loader.rs	1300	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
+crates/net/src/loader.rs	1335	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/mime.rs	277	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/mixed_content.rs	147	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/net/src/pac.rs	224	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
@@ -354,9 +354,9 @@ crates/net/src/range.rs	240	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1
 crates/net/src/referrer.rs	274	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/socks.rs	243	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/url.rs	858	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
-crates/net/src/websocket.rs	801	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+crates/net/src/websocket.rs	1040	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/net/tests/advanced_tests.rs	660	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
-crates/net/tests/auth_tests.rs	99	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+crates/net/tests/auth_tests.rs	98	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/net/tests/browser_features_tests.rs	824	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/cache_tests.rs	336	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/data_tests.rs	107	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
@@ -386,7 +386,7 @@ crates/net/tests/trailers_tests.rs	352	test	F1	waveF1	2026-11-17	covered	#1343-#
 crates/net/tests/upload_streaming.rs	565	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/url_tests.rs	354	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/url_userinfo_auth.rs	120	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
-crates/net/tests/websocket_tests.rs	242	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+crates/net/tests/websocket_tests.rs	263	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/paint/Cargo.toml	19	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/paint/examples/html_to_png.rs	181	example	F3	lead	2026-11-17	covered	example read	read in the F3/F4 pass
 crates/paint/src/background.rs	696	src	F2	wave1	2026-11-16	covered	#1179-#1196	
@@ -425,10 +425,10 @@ crates/render/src/browser_host.rs	258	src	F2	wave1	2026-11-16	covered	#1212-#122
 crates/render/src/cache.rs	316	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/charset.rs	442	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/error.rs	135	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
-crates/render/src/frames.rs	142	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+crates/render/src/frames.rs	180	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/render/src/images.rs	864	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/inline_svg.rs	273	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
-crates/render/src/lib.rs	2418	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
+crates/render/src/lib.rs	2427	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/main.rs	357	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/scripts.rs	2005	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/stylesheets.rs	408	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
@@ -451,6 +451,7 @@ crates/render/tests/fetch_tests.rs	92	test	F1	waveF1	2026-11-17	covered	#1386,#1
 crates/render/tests/filter_fixture_tests.rs	117	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/render/tests/fixture_smoke.rs	59	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/render/tests/form_post_tests.rs	202	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+crates/render/tests/frame_budget_tests.rs	88	test	F1	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 code line-by-line audit (re-synced after security fixes)
 crates/render/tests/gradient_tests.rs	106	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/iframe_tests.rs	147	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/render/tests/image_formats_tests.rs	61	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
@@ -479,19 +480,19 @@ crates/render/tests/tla_tests.rs	49	test	F1	waveF1	2026-11-17	covered	#1386,#138
 crates/render/tests/webfont_tests.rs	184	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/webp_lossy_tests.rs	100	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/webp_tests.rs	93	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
-crates/render/tests/websocket_e2e_tests.rs	109	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+crates/render/tests/websocket_e2e_tests.rs	110	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/render/tests/worker_tests.rs	50	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/shell/Cargo.toml	26	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/shell/src/a11y.rs	527	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/chrome.rs	3186	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/cli.rs	771	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/convert.rs	92	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/download.rs	606	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/download.rs	735	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/error.rs	42	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/favicon.rs	347	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/favicon.rs	410	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/find.rs	692	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/forms.rs	1579	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/headless.rs	409	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/headless.rs	454	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/history.rs	391	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/i18n.rs	179	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/shell/src/images.rs	119	src	F2	wave1	2026-11-16	covered	#1163-#1178	
@@ -515,9 +516,9 @@ crates/shell/tests/fixtures/links.html	10	test	F1	waveF1	2026-11-17	covered	#137
 crates/shell/tests/shell_tests.rs	1694	test	F1	waveF1	2026-11-17	covered	#1379	
 crates/svg/Cargo.toml	13	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/svg/examples/svg_to_png.rs	114	example	F3	lead	2026-11-17	covered	example read	read in the F3/F4 pass
-crates/svg/src/color.rs	192	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
+crates/svg/src/color.rs	258	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/css.rs	532	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
-crates/svg/src/document.rs	2928	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
+crates/svg/src/document.rs	2936	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/gradient.rs	494	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/lib.rs	351	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/path.rs	601	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
@@ -543,6 +544,7 @@ crates/svg/tests/render.rs	796	test	F1	waveF1	2026-11-17	covered	P3 only, see fi
 crates/svg/tests/scanline_budget.rs	62	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/svg/tests/shape_budget.rs	106	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
 crates/svg/tests/style_budget.rs	59	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
+crates/svg/tests/style_inheritance.rs	94	test	F1	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 code line-by-line audit (re-synced after security fixes)
 crates/svg/tests/textpath_smil.rs	231	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
 crates/svg/tests/textpath_use.rs	186	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
 crates/test_harness/Cargo.toml	17	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
