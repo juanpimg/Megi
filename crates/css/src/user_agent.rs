@@ -5,8 +5,8 @@
 //! controls** section (R102) for the desktop shell. This engine paints no native widgets:
 //! inputs/textarea/select/button are ordinary CSS boxes with borders/padding/backgrounds;
 //! checkbox/radio are squares/circles whose `checked` state comes from the DOM `checked`
-//! attribute (`:checked`/`:disabled`/`:focus` are dynamic pseudo-classes this engine maps to
-//! `PseudoClass::Never`, so attribute selectors are used instead). The shell additionally
+//! attribute (`:checked`/`:disabled`/`:focus`/`:enabled` are implemented as dynamic pseudo-
+//! classes; attribute selectors are also used where stable author hooks are useful). The shell additionally
 //! sets `data-megi-focused`/`data-megi-active` attributes while editing so the focus ring and
 //! pressed state can be styled here. This is deliberately Chrome-approximate, not pixel-
 //! exact.
