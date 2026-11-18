@@ -59,7 +59,7 @@ crates/css/src/parser.rs	861	src	F2	wave1	2026-11-16	covered	#1126-#1133
 crates/css/src/properties.rs	6006	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/query.rs	370	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/rule.rs	332	src	F2	wave1	2026-11-16	covered	#1126-#1133	
-crates/css/src/selector.rs	2099	src	F2	wave1	2026-11-16	covered	#1126-#1133	
+crates/css/src/selector.rs	2145	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/shorthand.rs	966	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/state.rs	242	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/token.rs	125	src	F2	wave1	2026-11-16	covered	#1126-#1133	
@@ -68,7 +68,7 @@ crates/css/src/transform.rs	271	src	F2			pending
 crates/css/src/user_agent.rs	578	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/calc_lengths.rs	273	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
-crates/css/tests/cascade_core.rs	114	test	F1			pending		
+crates/css/tests/cascade_core.rs	143	test	F1			pending		
 crates/css/tests/cascade_layers.rs	242	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/color4.rs	552	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/container_queries.rs	182	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
