@@ -1579,22 +1579,18 @@ fn get_computed_style(
         })
         .ok_or_else(|| js_error("getComputedStyle expects an element"))?;
     let node_id = node_id_of(context, node)?;
-    // Clone the Arc from the immutable provider slot so it runs with no host
-    // borrow, and snapshot the document it reads. `Document: Clone` keeps the
-    // handles valid.
+    // Clone the Arc from the immutable provider slot. Providers are `'static +
+    // Send + Sync` closures with no `&mut Context`, so they cannot re-enter
+    // this realm; calling under a short shared borrow is safe and avoids an
+    // O(arena) deep clone of the document on every getComputedStyle call.
     let provider = provider_or_mirror(
         context,
         |slot| slot.computed_style.clone(),
         |host| host.computed_style_provider.clone(),
     );
-    let document = if provider.is_some() {
-        host_ref(context).ok().map(|host| host.document.clone())
-    } else {
-        None
-    };
-    let pairs = match (&provider, &document) {
-        (Some(provider), Some(document)) => provider(document, node_id),
-        _ => {
+    let pairs = match provider {
+        Some(provider) => provider(&host_ref(context)?.document, node_id),
+        None => {
             // Fallback reads the inline `style` attribute with its own short borrow.
             host_ref(context)?
                 .document

@@ -70,8 +70,12 @@ Cada fase termina con `cargo test -p megi-js` en verde y sin cambios de comporta
 
 ## 5. Criterios de aceptación
 
-- `grep -R 'CURRENT_HOST\|with_host\|Rc<RefCell<Host>>' crates/js/src` → 0 resultados.
+- `grep -R 'CURRENT_HOST\|with_host\|HostScope\|host_slot' crates/js/src` → 0 resultados. El helper de acceso se llama `with_context_host` (no contiene `with_host`). Permanecen 4 `Rc<RefCell<Host>>`: el contenedor único `ContextHost` dentro de `HostDefined` de Boa y sus accesores; es propiedad del Context, no estado ambiental compartido.
 - `python3 tools/check_arch.py` → 0 violaciones nuevas (los `Rc`legacy se eliminan del baseline).
 - `cargo test -p megi-js` → todos los tests (312+) pasan, incluidos los nuevos test dereentrancia de providers y de despacho anidado.
 - `cargo test --workspace`, gate `PASS`, PNG byte-idéntico.
 - Ninguna función pública nueva con `unsafe` o con `Rc`.
+
+## 6. Alcance de la reentrancia de providers (aclaración final)
+
+Los providers son cláusulas `'static + Send + Sync` sin `&mut Context`; por construcción **no pueden reentrar en el mismo realm** que los invoca. Los tests marcados como "provider reentrancy" crean un runtime corto dentro de la cláusula y comprueban ausencia de pánico y entrega única, no reentrancia del mismo host. La garantía real del diseño es: (1) no hay `Rc<RefCell<Host>>` ambiental ni TLS, (2) los providers se invocan sin préstamo activo del host, y (3) los eventos anidados del mismo realm no hacen doble-borrow.
