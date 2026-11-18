@@ -121,6 +121,8 @@ pub struct LayoutBox {
     pub top_layer_order: u32,
     /// Resolved `::backdrop` background color for top-layer modal dialogs.
     pub backdrop_color: Option<css::Color>,
+    /// `true` when this box was generated for a CSS pseudo-element (`::before`/`::after`).
+    pub is_pseudo: bool,
     /// Child boxes in layout order.
     pub children: Vec<LayoutBox>,
 }
@@ -175,6 +177,7 @@ impl LayoutBox {
             is_top_layer: false,
             top_layer_order: 0,
             backdrop_color: None,
+            is_pseudo: false,
             children: Vec::new(),
         }
     }

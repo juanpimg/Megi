@@ -19,7 +19,7 @@ pub mod tree_builder;
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Overflow, Position};
+use css::{ComputedStyle, Overflow, Position, PseudoStyles};
 use dom::{Document, NodeId};
 
 use block::layout_block_with_viewport;
@@ -32,7 +32,9 @@ pub use inline::{
 };
 pub use text::FontTextMeasurer;
 use tree_builder::build_layout_tree_internal;
-pub use tree_builder::{build_layout_tree, build_layout_tree_with_replaced_sizes};
+pub use tree_builder::{
+    build_layout_tree, build_layout_tree_with_pseudos, build_layout_tree_with_replaced_sizes,
+};
 
 /// Completely lays out a DOM document against a viewport rectangle.
 ///
@@ -55,6 +57,24 @@ pub fn layout_document(
     layout_document_with_measurer_and_replaced_sizes(
         doc,
         styles,
+        viewport,
+        &DefaultTextMeasurer,
+        None,
+    )
+}
+
+/// Lays out a document with pseudo-element (`::before` / `::after`) styles using the
+/// deterministic default measurer.
+pub fn layout_document_with_pseudos(
+    doc: &Document,
+    styles: &HashMap<NodeId, ComputedStyle>,
+    pseudo_styles: &PseudoStyles,
+    viewport: Rect,
+) -> Option<LayoutBox> {
+    layout_document_with_measurer_and_pseudos(
+        doc,
+        styles,
+        pseudo_styles,
         viewport,
         &DefaultTextMeasurer,
         None,
@@ -104,8 +124,46 @@ pub fn layout_document_with_measurer_and_replaced_sizes(
     measurer: &dyn TextMeasurer,
     replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
 ) -> Option<LayoutBox> {
+    layout_document_with_measurer_and_pseudos_inner(
+        doc,
+        styles,
+        None,
+        viewport,
+        measurer,
+        replaced_sizes,
+    )
+}
+
+/// Full pipeline entry point with pseudo-elements (`::before` / `::after`), explicit
+/// measurer, and optional intrinsic replaced sizes.
+pub fn layout_document_with_measurer_and_pseudos(
+    doc: &Document,
+    styles: &HashMap<NodeId, ComputedStyle>,
+    pseudo_styles: &PseudoStyles,
+    viewport: Rect,
+    measurer: &dyn TextMeasurer,
+    replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
+) -> Option<LayoutBox> {
+    layout_document_with_measurer_and_pseudos_inner(
+        doc,
+        styles,
+        Some(pseudo_styles),
+        viewport,
+        measurer,
+        replaced_sizes,
+    )
+}
+
+fn layout_document_with_measurer_and_pseudos_inner(
+    doc: &Document,
+    styles: &HashMap<NodeId, ComputedStyle>,
+    pseudo_styles: Option<&PseudoStyles>,
+    viewport: Rect,
+    measurer: &dyn TextMeasurer,
+    replaced_sizes: Option<&HashMap<NodeId, (f32, f32)>>,
+) -> Option<LayoutBox> {
     let (mut root_box, has_overflow_clip) =
-        build_layout_tree_internal(doc, styles, replaced_sizes)?;
+        build_layout_tree_internal(doc, styles, pseudo_styles, replaced_sizes)?;
 
     let initial_containing_block = Dimensions {
         content: Rect::new(viewport.x, viewport.y, viewport.width, viewport.height),

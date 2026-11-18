@@ -265,9 +265,17 @@ impl TextMeasurer for DefaultTextMeasurer {
 #[derive(Clone, Debug)]
 enum InlineToken {
     /// Start of an inline container element (`<span>`).
-    BoxStart { node_id: NodeId, style: u32 },
+    BoxStart {
+        node_id: NodeId,
+        style: u32,
+        is_pseudo: bool,
+    },
     /// End of an inline container element.
-    BoxEnd { node_id: NodeId, style: u32 },
+    BoxEnd {
+        node_id: NodeId,
+        style: u32,
+        is_pseudo: bool,
+    },
     /// An unbroken word run.
     ///
     /// The characters live in the per-IFC text pool (`[start, end)` byte range),
@@ -654,6 +662,7 @@ fn collect_inline_tokens(
         match &child.box_type {
             BoxType::InlineNode(node_id) => {
                 let node_id = *node_id;
+                let is_pseudo = child.is_pseudo;
                 // The inline box is consumed into tokens; move its style instead of
                 // cloning it (the surviving fragments re-use the same `Arc`).
                 let style = child
@@ -664,6 +673,7 @@ fn collect_inline_tokens(
                 tokens.push(InlineToken::BoxStart {
                     node_id,
                     style: style_id,
+                    is_pseudo,
                 });
                 collect_inline_tokens(
                     &mut child.children,
@@ -678,6 +688,7 @@ fn collect_inline_tokens(
                 tokens.push(InlineToken::BoxEnd {
                     node_id,
                     style: style_id,
+                    is_pseudo,
                 });
             }
             BoxType::TextNode(txt) => {
@@ -1349,6 +1360,7 @@ struct ActiveBoxInfo {
     node_id: NodeId,
     style: Arc<ComputedStyle>,
     is_first_fragment: bool,
+    is_pseudo: bool,
 }
 
 /// Context parameters for formatting a single line in an IFC.
@@ -1439,6 +1451,7 @@ struct ActiveBoxFrame {
     node_id: NodeId,
     style: Arc<ComputedStyle>,
     is_first_fragment: bool,
+    is_pseudo: bool,
     start_x: f32,
     children: Vec<LayoutBox>,
     /// `(subtree top, subtree baseline, subtree height)` for `top`/`bottom` aligned
@@ -1735,6 +1748,7 @@ fn format_line(
             node_id: prev.node_id,
             style: prev.style,
             is_first_fragment: prev.is_first_fragment,
+            is_pseudo: prev.is_pseudo,
             start_x: curr_x,
             children: Vec::new(),
             anchor,
@@ -1743,7 +1757,11 @@ fn format_line(
 
     for (index, token) in tokens.into_iter().enumerate() {
         match token {
-            InlineToken::BoxStart { node_id, style } => {
+            InlineToken::BoxStart {
+                node_id,
+                style,
+                is_pseudo,
+            } => {
                 let style_arc = styles[style as usize].clone();
                 let style = style_arc.as_ref();
                 let left_margin = resolve_length(
@@ -1781,13 +1799,19 @@ fn format_line(
                     node_id,
                     style: style_arc,
                     is_first_fragment: true,
+                    is_pseudo,
                     start_x,
                     children: Vec::new(),
                     anchor,
                 });
             }
-            InlineToken::BoxEnd { node_id, .. } => {
-                if let Some(pos) = active_stack.iter().rposition(|b| b.node_id == node_id) {
+            InlineToken::BoxEnd {
+                node_id, is_pseudo, ..
+            } => {
+                if let Some(pos) = active_stack
+                    .iter()
+                    .rposition(|b| b.node_id == node_id && b.is_pseudo == is_pseudo)
+                {
                     let frame = active_stack.remove(pos);
                     let right_padding = resolve_length(
                         frame.style.padding.right,
@@ -1835,6 +1859,7 @@ fn format_line(
                         BoxType::InlineNode(frame.node_id),
                         Some(frame.style.clone()),
                     );
+                    inline_box.is_pseudo = frame.is_pseudo;
                     inline_box.dimensions.margin.left = left_margin;
                     inline_box.dimensions.margin.right = right_margin;
                     inline_box.dimensions.border.left = left_border;
@@ -2013,6 +2038,7 @@ fn format_line(
             BoxType::InlineNode(frame.node_id),
             Some(frame.style.clone()),
         );
+        inline_box.is_pseudo = frame.is_pseudo;
         inline_box.dimensions.margin.left = left_margin;
         inline_box.dimensions.margin.right = 0.0;
         inline_box.dimensions.border.left = left_border;
@@ -2031,6 +2057,7 @@ fn format_line(
             node_id: frame.node_id,
             style: frame.style,
             is_first_fragment: false,
+            is_pseudo: frame.is_pseudo,
         });
 
         if let Some(parent) = active_stack.last_mut() {

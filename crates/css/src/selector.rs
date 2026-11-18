@@ -729,6 +729,15 @@ impl std::fmt::Display for Specificity {
     }
 }
 
+/// Supported CSS pseudo-elements (#1540).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PseudoElement {
+    /// `::before` / `:before`
+    Before,
+    /// `::after` / `:after`
+    After,
+}
+
 /// A compound selector without combinators (e.g. `div#main.active[data-kind]:first-child`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CompoundSelector {
@@ -737,6 +746,8 @@ pub struct CompoundSelector {
     pub classes: Vec<String>,
     pub attributes: Vec<AttributeSelector>,
     pub pseudo_classes: Vec<PseudoClass>,
+    /// Optional trailing pseudo-element (`::before` / `::after`).
+    pub pseudo_element: Option<PseudoElement>,
     /// `#a#b` with different ids can never match: an element has a single `id` attribute.
     pub never_matches: bool,
     /// Number of `#id` simple selectors in the compound (specificity counts every one).
@@ -748,11 +759,8 @@ impl CompoundSelector {
     pub fn specificity(&self) -> Specificity {
         let a = self.id_count.max(u32::from(self.id.is_some()));
         let b = (self.classes.len() + self.attributes.len()) as u32;
-        let c = if self.tag_name.as_deref().is_some_and(|t| t != "*") {
-            1
-        } else {
-            0
-        };
+        let c = u32::from(self.tag_name.as_deref().is_some_and(|t| t != "*"))
+            + u32::from(self.pseudo_element.is_some());
         let mut specificity = Specificity::new(a, b, c);
         for pseudo in &self.pseudo_classes {
             specificity += pseudo.specificity();
@@ -762,19 +770,35 @@ impl CompoundSelector {
 
     /// Matches this compound selector against a DOM element.
     ///
+    /// Selectors with a pseudo-element (`::before`/`::after`) never match an ordinary
+    /// DOM element directly; use [`Self::matches_for_pseudo`] for pseudo-element resolution.
+    ///
     /// Type selectors match HTML elements case-insensitively and foreign (SVG/MathML)
     /// elements case-sensitively. Unlike the previous implementation, type/class/id/attribute
     /// and universal selectors are no longer restricted to the HTML namespace, so styles now
     /// apply to SVG/MathML elements (F14).
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
-        self.matches_with_backdrop(doc, node_id, false)
+        if self.pseudo_element.is_some() {
+            return false;
+        }
+        self.matches_inner(doc, node_id, false)
     }
 
     pub(crate) fn matches_for_backdrop(&self, doc: &Document, node_id: NodeId) -> bool {
-        self.matches_with_backdrop(doc, node_id, true)
+        self.matches_inner(doc, node_id, true)
     }
 
-    fn matches_with_backdrop(&self, doc: &Document, node_id: NodeId, allow_backdrop: bool) -> bool {
+    /// Matches this compound selector as a pseudo-element rule for `pseudo` on `node_id`.
+    pub fn matches_for_pseudo(
+        &self,
+        doc: &Document,
+        node_id: NodeId,
+        pseudo: PseudoElement,
+    ) -> bool {
+        self.pseudo_element == Some(pseudo) && self.matches_inner(doc, node_id, false)
+    }
+
+    fn matches_inner(&self, doc: &Document, node_id: NodeId, allow_backdrop: bool) -> bool {
         if self.never_matches {
             return false;
         }
@@ -884,9 +908,24 @@ impl ComplexSelector {
         self.matches_from_right(doc, node_id, last_idx)
     }
 
+    /// Returns the pseudo-element targeted by this selector, if any.
+    pub fn pseudo_element(&self) -> Option<PseudoElement> {
+        self.compounds.last().and_then(|(c, _)| c.pseudo_element)
+    }
+
     /// Matches the target element `node_id` against this complex selector.
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
         with_match_budget(|| self.matches_inner(doc, node_id))
+    }
+
+    /// Matches the `pseudo` pseudo-element of `originating` against this complex selector.
+    pub fn matches_for_pseudo(
+        &self,
+        doc: &Document,
+        originating: NodeId,
+        pseudo: PseudoElement,
+    ) -> bool {
+        with_match_budget(|| self.matches_for_pseudo_inner(doc, originating, pseudo))
     }
 
     fn matches_inner(&self, doc: &Document, node_id: NodeId) -> bool {
@@ -901,6 +940,27 @@ impl ComplexSelector {
         }
 
         self.matches_from_right(doc, node_id, last_idx)
+    }
+
+    fn matches_for_pseudo_inner(
+        &self,
+        doc: &Document,
+        originating: NodeId,
+        pseudo: PseudoElement,
+    ) -> bool {
+        if self.compounds.is_empty() {
+            return false;
+        }
+
+        let last_idx = self.compounds.len() - 1;
+        if !self.compounds[last_idx]
+            .0
+            .matches_for_pseudo(doc, originating, pseudo)
+        {
+            return false;
+        }
+
+        self.matches_from_right(doc, originating, last_idx)
     }
 
     /// Calculates the total specificity of this complex selector chain (§16).
@@ -1309,6 +1369,10 @@ fn parse_complex_selector(input: &str) -> Option<ComplexSelector> {
             compounds.push((compound, None));
             break;
         }
+        // Pseudo-elements are only valid on the originating (rightmost) compound.
+        if compound.pseudo_element.is_some() {
+            return None;
+        }
         let combinator = match tokens.next_part()?.as_str() {
             ">" => Combinator::Child,
             "+" => Combinator::NextSibling,
@@ -1573,18 +1637,33 @@ fn parse_compound_selector(tokens: &mut SelectorTokens) -> Option<CompoundSelect
                     argument = Some(arg);
                 }
 
+                let name = pseudo.to_ascii_lowercase();
                 if is_pseudo_element {
                     if pseudo.eq_ignore_ascii_case("backdrop") && argument.is_none() {
                         compound.pseudo_classes.push(PseudoClass::Backdrop);
+                    } else if argument.is_none() {
+                        let parsed = match name.as_str() {
+                            "before" => Some(PseudoElement::Before),
+                            "after" => Some(PseudoElement::After),
+                            _ => None,
+                        };
+                        if let Some(pe) = parsed {
+                            if compound.pseudo_element.is_some() {
+                                compound.never_matches = true;
+                            } else {
+                                compound.pseudo_element = Some(pe);
+                            }
+                            continue;
+                        }
+                        // Other pseudo-elements (`::first-line`, `::placeholder`, ...) keep
+                        // parsing cleanly while matching nothing directly.
+                        compound.pseudo_classes.push(PseudoClass::Never);
                     } else {
-                        // Pseudo-element boxes are not generated yet: the selector stays valid
-                        // but can never match an element (F13).
                         compound.pseudo_classes.push(PseudoClass::Never);
                     }
                     continue;
                 }
 
-                let name = pseudo.to_ascii_lowercase();
                 let pseudo_class = match name.as_str() {
                     "first-child" if argument.is_none() => PseudoClass::FirstChild,
                     "last-child" if argument.is_none() => PseudoClass::LastChild,
@@ -1618,10 +1697,27 @@ fn parse_compound_selector(tokens: &mut SelectorTokens) -> Option<CompoundSelect
                     "required" if argument.is_none() => PseudoClass::Required,
                     "placeholder-shown" if argument.is_none() => PseudoClass::PlaceholderShown,
                     "modal" if argument.is_none() => PseudoClass::Modal,
-                    // Legacy single-colon pseudo-element syntax (`:before`, `:first-line`, ...).
-                    "before" | "after" | "first-line" | "first-letter" if argument.is_none() => {
-                        PseudoClass::Never
+                    // Legacy CSS2 single-colon syntax for `:before` and `:after`.
+                    "before" if argument.is_none() => {
+                        if compound.pseudo_element.is_some() {
+                            compound.never_matches = true;
+                        } else {
+                            compound.pseudo_element = Some(PseudoElement::Before);
+                        }
+                        continue;
                     }
+                    "after" if argument.is_none() => {
+                        if compound.pseudo_element.is_some() {
+                            compound.never_matches = true;
+                        } else {
+                            compound.pseudo_element = Some(PseudoElement::After);
+                        }
+                        continue;
+                    }
+                    // Other legacy single-colon pseudo-elements match nothing directly.
+                    "first-line" | "first-letter" if argument.is_none() => PseudoClass::Never,
+                    // Legacy single-colon pseudo-element syntax (`:first-line`, `:first-letter`).
+                    "first-line" | "first-letter" if argument.is_none() => PseudoClass::Never,
                     _ if DYNAMIC_PSEUDO_CLASSES.contains(&name.as_str()) && argument.is_none() => {
                         PseudoClass::Never
                     }

@@ -60,9 +60,15 @@ impl std::hash::BuildHasher for FastBuildHasher {
 }
 
 use crate::rule::{Declaration, Rule, Stylesheet, serialize_component_values};
-use crate::selector::{Combinator, ComplexSelector, SelectorList, Specificity, parse_selectors};
+use crate::selector::{
+    Combinator, ComplexSelector, PseudoElement, SelectorList, Specificity, parse_selectors,
+};
 use crate::shorthand::expand_declarations;
 use dom::{Document, NodeId};
+
+/// Computed styles for generated pseudo-elements (`::before` / `::after`), keyed by
+/// `(originating_element, pseudo_element)`.
+pub type PseudoStyles = HashMap<(NodeId, PseudoElement), crate::properties::ComputedStyle>;
 
 /// Layer rank for declarations that do not belong to any `@layer`. Normal unlayered
 /// declarations outrank every layer; important unlayered declarations are the lowest
@@ -404,6 +410,8 @@ pub struct StyleCollection {
     /// Whether any compiled declaration uses the `revert-layer` value. When false (the
     /// common case) the per-element revert-layer scan is skipped entirely.
     has_revert_layer: bool,
+    /// Whether any compiled selector targets a pseudo-element (`::before`/`::after`).
+    has_pseudo_rules: bool,
 }
 
 /// Compiles one style rule (selectors + expanded declarations) without assigning a source
@@ -576,6 +584,14 @@ impl StyleCollection {
                         if compiled.declarations.iter().any(is_revert_layer) {
                             self.has_revert_layer = true;
                         }
+                        if compiled
+                            .selectors
+                            .selectors
+                            .iter()
+                            .any(|s| s.pseudo_element().is_some())
+                        {
+                            self.has_pseudo_rules = true;
+                        }
                         self.container_rules.push(ContainerRule {
                             query: query.clone(),
                             rule: compiled,
@@ -644,7 +660,20 @@ impl StyleCollection {
         if compiled.declarations.iter().any(is_revert_layer) {
             self.has_revert_layer = true;
         }
+        if compiled
+            .selectors
+            .selectors
+            .iter()
+            .any(|s| s.pseudo_element().is_some())
+        {
+            self.has_pseudo_rules = true;
+        }
         self.rules.push(compiled);
+    }
+
+    /// Returns true if pseudo-element rules may be present (or `rules` was mutated directly).
+    pub fn may_have_pseudo_rules(&self) -> bool {
+        self.has_pseudo_rules || self.index.indexed_rules != self.rules.len()
     }
 
     /// Returns the candidate selectors that can possibly match `node_id`, in ascending
@@ -701,16 +730,19 @@ impl StyleCollection {
 }
 
 /// Resolves the cascaded property declarations for a DOM element node.
-///
-/// Evaluates:
-/// 1. Matched rules in [`StyleCollection`] (User-Agent, User, Author).
-/// 2. Inline declarations from the element's `style="..."` attribute (if present).
-/// 3. Normalizes priority via `(Origin & Importance, Specificity, Source Order)`.
-///
-/// Returns a map of property name (lowercase) to the winning [`Declaration`]. Shorthands in
-/// the rules are already expanded; callers passing inline `style="..."` declarations should
-/// expand them with [`crate::shorthand::expand_declarations`] first (as
-/// [`resolve_document_styles`] does).
+#[inline]
+fn selector_matches(
+    selector: &ComplexSelector,
+    doc: &Document,
+    node_id: NodeId,
+    pseudo: Option<PseudoElement>,
+) -> bool {
+    match pseudo {
+        Some(p) => selector.matches_for_pseudo(doc, node_id, p),
+        None => selector.matches(doc, node_id),
+    }
+}
+
 pub fn resolve_cascaded_properties<'a>(
     doc: &Document,
     node_id: NodeId,
@@ -719,15 +751,59 @@ pub fn resolve_cascaded_properties<'a>(
 ) -> HashMap<String, &'a Declaration> {
     let mut candidates = Vec::new();
     collection.candidate_selectors(doc, node_id, &mut candidates);
-    let mut best = resolve_base_cascaded_properties(
+    let mut best = resolve_base_cascaded_properties_for(
         doc,
         node_id,
+        None,
         collection,
         inline_declarations,
         &candidates,
     );
-    merge_container_rules(doc, node_id, collection, &mut best);
-    apply_revert_layer(doc, node_id, collection, &candidates, &mut best);
+    merge_container_rules_for(doc, node_id, None, collection, &mut best);
+    apply_revert_layer_for(doc, node_id, None, collection, &candidates, &mut best);
+    owned_declarations(best)
+}
+
+/// Resolves the cascaded property declarations for a pseudo-element (`::before`/`::after`)
+/// targeting originating element `node_id`.
+pub fn resolve_pseudo_cascaded_properties<'a>(
+    doc: &Document,
+    node_id: NodeId,
+    pseudo: PseudoElement,
+    collection: &'a StyleCollection,
+) -> HashMap<String, &'a Declaration> {
+    if !collection.may_have_pseudo_rules() {
+        return HashMap::new();
+    }
+    let mut candidates = Vec::new();
+    collection.candidate_selectors(doc, node_id, &mut candidates);
+    resolve_pseudo_cascaded_with_candidates(doc, node_id, pseudo, collection, &candidates)
+}
+
+fn resolve_pseudo_cascaded_with_candidates<'a>(
+    doc: &Document,
+    node_id: NodeId,
+    pseudo: PseudoElement,
+    collection: &'a StyleCollection,
+    candidates: &[Candidate],
+) -> HashMap<String, &'a Declaration> {
+    let mut best = resolve_base_cascaded_properties_for(
+        doc,
+        node_id,
+        Some(pseudo),
+        collection,
+        None,
+        candidates,
+    );
+    merge_container_rules_for(doc, node_id, Some(pseudo), collection, &mut best);
+    apply_revert_layer_for(
+        doc,
+        node_id,
+        Some(pseudo),
+        collection,
+        candidates,
+        &mut best,
+    );
     owned_declarations(best)
 }
 
@@ -739,6 +815,24 @@ pub fn resolve_cascaded_properties<'a>(
 fn resolve_base_cascaded_properties<'a>(
     doc: &Document,
     node_id: NodeId,
+    collection: &'a StyleCollection,
+    inline_declarations: Option<&'a [Declaration]>,
+    candidates: &[Candidate],
+) -> HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher> {
+    resolve_base_cascaded_properties_for(
+        doc,
+        node_id,
+        None,
+        collection,
+        inline_declarations,
+        candidates,
+    )
+}
+
+fn resolve_base_cascaded_properties_for<'a>(
+    doc: &Document,
+    node_id: NodeId,
+    pseudo: Option<PseudoElement>,
     collection: &'a StyleCollection,
     inline_declarations: Option<&'a [Declaration]>,
     candidates: &[Candidate],
@@ -755,7 +849,7 @@ fn resolve_base_cascaded_properties<'a>(
     for candidate in candidates {
         let rule = &collection.rules[candidate.rule as usize];
         let selector = &rule.selectors.selectors[candidate.selector as usize];
-        if selector.matches(doc, node_id) {
+        if selector_matches(selector, doc, node_id, pseudo) {
             let spec = selector.specificity();
             for (declaration_order, decl) in rule.declarations.iter().enumerate() {
                 let origin_importance = CascadeOriginImportance::new(rule.origin, decl.important);
@@ -783,7 +877,9 @@ fn resolve_base_cascaded_properties<'a>(
     }
 
     // 2. Process inline styles from style attribute (Author origin with high specificity)
-    if let Some(inline_decls) = inline_declarations {
+    if pseudo.is_none()
+        && let Some(inline_decls) = inline_declarations
+    {
         let inline_specificity = Specificity::new(100_000, 0, 0);
         let inline_source_order = collection.next_source_order + 10_000;
         for (declaration_order, decl) in inline_decls.iter().enumerate() {
@@ -832,9 +928,10 @@ fn resolve_cascaded_properties_from_candidates<'a>(
 }
 
 /// Applies the collection's `@container` rules to `best` (already resolved base cascade).
-fn merge_container_rules<'a>(
+fn merge_container_rules_for<'a>(
     doc: &Document,
     node_id: NodeId,
+    pseudo: Option<PseudoElement>,
     collection: &'a StyleCollection,
     best: &mut HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher>,
 ) {
@@ -845,7 +942,7 @@ fn merge_container_rules<'a>(
     for container_rule in &collection.container_rules {
         let rule = &container_rule.rule;
         for selector in &rule.selectors.selectors {
-            if !selector.matches(doc, node_id) {
+            if !selector_matches(selector, doc, node_id, pseudo) {
                 continue;
             }
             let Some((size, container_style)) =
@@ -901,9 +998,10 @@ fn is_important(origin_importance: CascadeOriginImportance) -> bool {
 /// Applies `revert-layer`: the winner rolls back to the previous cascade layer (not the UA
 /// origin). Candidates from the same layer are skipped; a missing previous layer removes the
 /// property (initial/inherited value).
-fn apply_revert_layer<'a>(
+fn apply_revert_layer_for<'a>(
     doc: &Document,
     node_id: NodeId,
+    pseudo: Option<PseudoElement>,
     collection: &'a StyleCollection,
     candidates: &[Candidate],
     best: &mut HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher>,
@@ -936,7 +1034,7 @@ fn apply_revert_layer<'a>(
             let Some(selector) = rule.selectors.selectors.get(candidate.selector as usize) else {
                 continue;
             };
-            if !selector.matches(doc, node_id) {
+            if !selector_matches(selector, doc, node_id, pseudo) {
                 continue;
             }
             let specificity = selector.specificity();
@@ -970,7 +1068,7 @@ fn apply_revert_layer<'a>(
                 continue;
             }
             for selector in &rule.selectors.selectors {
-                if !selector.matches(doc, node_id) {
+                if !selector_matches(selector, doc, node_id, pseudo) {
                     continue;
                 }
                 let specificity = selector.specificity();
@@ -1099,6 +1197,28 @@ pub fn apply_animations_to_styles(
     }
 }
 
+/// Applies embedded CSS animations to already-resolved pseudo-element styles at `time_ms`.
+pub fn apply_animations_to_pseudo_styles(
+    pseudo_styles: &mut PseudoStyles,
+    collection: &StyleCollection,
+    time_ms: f32,
+) {
+    if collection.keyframes.is_empty() || !time_ms.is_finite() || pseudo_styles.is_empty() {
+        return;
+    }
+    for base in pseudo_styles.values_mut() {
+        if base.animations.is_empty() {
+            continue;
+        }
+        *base = crate::animation_runtime::apply_animations(
+            base,
+            &base.animations,
+            &collection.keyframes,
+            time_ms,
+        );
+    }
+}
+
 /// Resolves computed styles for all elements in the DOM document.
 ///
 /// Pre-loads the default WHATWG HTML User-Agent stylesheet, then compiles and cascades
@@ -1199,28 +1319,70 @@ pub fn resolve_backdrop_color(
     Some(computed.background_color)
 }
 
+/// Resolves computed styles and pseudo-element (`::before` / `::after`) styles with a fully
+/// specified [`MediaContext`].
+pub fn resolve_document_styles_with_pseudos(
+    doc: &Document,
+    author_css: Option<&str>,
+    media: MediaContext,
+) -> (
+    HashMap<NodeId, crate::properties::ComputedStyle>,
+    PseudoStyles,
+) {
+    let mut collection = crate::user_agent::create_user_agent_style_collection();
+    collection.media = media;
+    if let Some(css) = author_css {
+        collection.add_css(css, Origin::Author);
+    }
+    resolve_document_styles_from_collection(doc, &collection)
+}
+
+/// Resolves computed styles and pseudo-element styles against a prebuilt [`StyleCollection`].
+pub fn resolve_document_styles_from_collection(
+    doc: &Document,
+    collection: &StyleCollection,
+) -> (
+    HashMap<NodeId, crate::properties::ComputedStyle>,
+    PseudoStyles,
+) {
+    resolve_document_styles_from_collection_inner(doc, collection, true)
+}
+
 /// Resolves computed styles with a fully specified [`MediaContext`] for `@media` evaluation.
 pub fn resolve_document_styles_with_media(
     doc: &Document,
     author_css: Option<&str>,
     media: MediaContext,
 ) -> HashMap<NodeId, crate::properties::ComputedStyle> {
-    // One sibling-index cache for the whole pass: `:nth-*` matching becomes O(1) per element
-    // instead of scanning the sibling chain.
-    let _sibling_scope = crate::selector::document_scope();
     let mut collection = crate::user_agent::create_user_agent_style_collection();
     collection.media = media;
     if let Some(css) = author_css {
         collection.add_css(css, Origin::Author);
     }
+    resolve_document_styles_from_collection_inner(doc, &collection, false).0
+}
+
+fn resolve_document_styles_from_collection_inner(
+    doc: &Document,
+    collection: &StyleCollection,
+    include_pseudos: bool,
+) -> (
+    HashMap<NodeId, crate::properties::ComputedStyle>,
+    PseudoStyles,
+) {
+    // One sibling-index cache for the whole pass: `:nth-*` matching becomes O(1) per element
+    // instead of scanning the sibling chain.
+    let _sibling_scope = crate::selector::document_scope();
 
     let mut styles: HashMap<NodeId, crate::properties::ComputedStyle> = HashMap::new();
+    let mut pseudo_styles: PseudoStyles = HashMap::new();
     let mut style_cache: HashMap<u128, crate::properties::ComputedStyle, FastBuildHasher> =
         HashMap::with_hasher(FastBuildHasher);
     let mut style_seen: HashMap<u128, u8, FastBuildHasher> = HashMap::with_hasher(FastBuildHasher);
     let mut style_keys: HashMap<NodeId, u128, FastBuildHasher> =
         HashMap::with_hasher(FastBuildHasher);
     let mut candidates: Vec<Candidate> = Vec::new();
+    let check_pseudos = include_pseudos && collection.may_have_pseudo_rules();
     let root = doc.root();
 
     // Collect elements in top-down pre-order traversal
@@ -1236,15 +1398,16 @@ pub fn resolve_document_styles_with_media(
             let inline_decls = el.get_attribute("style").map(parse_inline_style);
 
             collection.candidate_selectors(doc, node_id, &mut candidates);
-            let mut best = resolve_base_cascaded_properties(
+            let mut best = resolve_base_cascaded_properties_for(
                 doc,
                 node_id,
-                &collection,
+                None,
+                collection,
                 inline_decls.as_deref(),
                 &candidates,
             );
-            merge_container_rules(doc, node_id, &collection, &mut best);
-            apply_revert_layer(doc, node_id, &collection, &candidates, &mut best);
+            merge_container_rules_for(doc, node_id, None, collection, &mut best);
+            apply_revert_layer_for(doc, node_id, None, collection, &candidates, &mut best);
             let cascaded = owned_declarations(best);
 
             let parent_style = doc.node(node_id).parent.and_then(|p| styles.get(&p));
@@ -1271,7 +1434,7 @@ pub fn resolve_document_styles_with_media(
                     computed.set_backdrop_color(resolve_backdrop_color(
                         doc,
                         node_id,
-                        &collection,
+                        collection,
                         parent_style,
                         root_style,
                     ));
@@ -1298,6 +1461,31 @@ pub fn resolve_document_styles_with_media(
                     style_keys.insert(node_id, u128::from(hash) << 64 | u128::from(hash ^ 0xa5a5));
                 }
             }
+
+            if check_pseudos {
+                let originating_style = styles.get(&node_id);
+                let pseudo_root_style = styles.get(&root);
+                for pseudo in [PseudoElement::Before, PseudoElement::After] {
+                    let pseudo_cascaded = resolve_pseudo_cascaded_with_candidates(
+                        doc,
+                        node_id,
+                        pseudo,
+                        collection,
+                        &candidates,
+                    );
+                    if pseudo_cascaded.is_empty() {
+                        continue;
+                    }
+                    let computed_pseudo = crate::properties::ComputedStyle::compute(
+                        &pseudo_cascaded,
+                        originating_style,
+                        pseudo_root_style,
+                    );
+                    if computed_pseudo.content.generates_box() {
+                        pseudo_styles.insert((node_id, pseudo), computed_pseudo);
+                    }
+                }
+            }
         }
 
         // Push children in reverse order (last child first) so the first child is popped
@@ -1309,7 +1497,7 @@ pub fn resolve_document_styles_with_media(
         }
     }
 
-    styles
+    (styles, pseudo_styles)
 }
 
 /// Maximum byte length parsed from a single inline `style="..."` attribute.

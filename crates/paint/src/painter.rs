@@ -408,7 +408,8 @@ fn build_display_list_inner(
 /// Returns the first block-level child of the root box, interpreted as `body`.
 fn first_body_box(root: &LayoutBox, effects_present: bool) -> Option<&LayoutBox> {
     root.children.iter().find(|child| {
-        matches!(child.box_type, BoxType::BlockNode(_))
+        !child.is_pseudo
+            && matches!(child.box_type, BoxType::BlockNode(_))
             && phase(child, effects_present) == Phase::InFlow
     })
 }
@@ -1470,7 +1471,16 @@ fn paint_replaced_element(
         },
         |style| style.object_position,
     );
-    match resources.images.get(&node_id) {
+    let image_opt = if layout_box.is_pseudo {
+        layout_box
+            .style
+            .as_ref()
+            .and_then(|s| s.content.image_url())
+            .and_then(|url| resources.backgrounds.get(url))
+    } else {
+        resources.images.get(&node_id)
+    };
+    match image_opt {
         Some(image) if !image.is_empty() => {
             let start = list.len();
             let drawn =
@@ -1548,7 +1558,7 @@ fn paint_background_border(
     }
 
     if let Some(filtered) = inline_filtered_solid(layout_box) {
-        if filtered.a > 0 && !(is_root && skip.root_background) {
+        if filtered.a > 0 && !(!layout_box.is_pseudo && is_root && skip.root_background) {
             list.push(DisplayItem::SolidColor {
                 rect: border_box,
                 color: scaled(filtered, alpha_scale),
@@ -1557,8 +1567,9 @@ fn paint_background_border(
         return;
     }
 
-    let background_is_propagated = (is_root && skip.root_background)
-        || layout_box.node_id().is_some() && layout_box.node_id() == skip.body_node;
+    let background_is_propagated = !layout_box.is_pseudo
+        && ((is_root && skip.root_background)
+            || layout_box.node_id().is_some() && layout_box.node_id() == skip.body_node);
     // Fast path: most boxes in real documents paint no background, border,
     // shadow or radius. Detect that with cheap flags before any feature
     // preparation (layers, gradients, masks, shadows, radii) so text-heavy

@@ -145,43 +145,53 @@ pub fn collect_background_references(
         let Some(style) = styles.get(&node_id) else {
             continue;
         };
-        // Multi-layer backgrounds: one reference per layer image (top-first order, which
-        // is what paint expects). `background_image` remains the mirror of the first layer
-        // for compatibility; it is only used when the layer list has no image at all so a
-        // singular declaration is not counted twice.
-        let mut mirrored_first_layer = false;
-        for (index, layer) in style.background_layers.iter().enumerate() {
-            let Some(raw_url) = layer.image.as_deref() else {
-                continue;
-            };
-            if !mirrored_first_layer
-                && style.background_image.as_deref() == Some(raw_url)
-                && index == 0
-            {
-                mirrored_first_layer = true;
-            }
-            references.push(BackgroundReference {
-                node: node_id,
-                raw_url: raw_url.to_owned(),
-                kind: BackgroundKind::Background,
-            });
-        }
-        if !mirrored_first_layer && let Some(raw_url) = style.background_image.as_deref() {
-            references.push(BackgroundReference {
-                node: node_id,
-                raw_url: raw_url.to_owned(),
-                kind: BackgroundKind::Background,
-            });
-        }
-        if let Some(raw_url) = style.list_style_image.as_deref() {
-            references.push(BackgroundReference {
-                node: node_id,
-                raw_url: raw_url.to_owned(),
-                kind: BackgroundKind::ListStyleImage,
-            });
-        }
+        push_style_background_references(node_id, style, false, &mut references);
     }
     references
+}
+
+fn push_style_background_references(
+    node_id: NodeId,
+    style: &ComputedStyle,
+    include_content_url: bool,
+    references: &mut Vec<BackgroundReference>,
+) {
+    let mut mirrored_first_layer = false;
+    for (index, layer) in style.background_layers.iter().enumerate() {
+        let Some(raw_url) = layer.image.as_deref() else {
+            continue;
+        };
+        if !mirrored_first_layer && style.background_image.as_deref() == Some(raw_url) && index == 0
+        {
+            mirrored_first_layer = true;
+        }
+        references.push(BackgroundReference {
+            node: node_id,
+            raw_url: raw_url.to_owned(),
+            kind: BackgroundKind::Background,
+        });
+    }
+    if !mirrored_first_layer && let Some(raw_url) = style.background_image.as_deref() {
+        references.push(BackgroundReference {
+            node: node_id,
+            raw_url: raw_url.to_owned(),
+            kind: BackgroundKind::Background,
+        });
+    }
+    if let Some(raw_url) = style.list_style_image.as_deref() {
+        references.push(BackgroundReference {
+            node: node_id,
+            raw_url: raw_url.to_owned(),
+            kind: BackgroundKind::ListStyleImage,
+        });
+    }
+    if include_content_url && let Some(raw_url) = style.content.image_url() {
+        references.push(BackgroundReference {
+            node: node_id,
+            raw_url: raw_url.to_owned(),
+            kind: BackgroundKind::Background,
+        });
+    }
 }
 
 /// Loads every referenced background image and builds the [`paint::BackgroundImages`] map.
@@ -198,6 +208,24 @@ pub fn load_backgrounds(
     limits: BackgroundLimits,
     warnings: &mut Vec<String>,
 ) -> LoadedBackgrounds {
+    let empty = css::PseudoStyles::new();
+    load_backgrounds_with_pseudos(
+        document, styles, &empty, base_url, loader, no_network, limits, warnings,
+    )
+}
+
+/// Loads background/list/content images referenced on elements and `::before`/`::after` pseudo-elements.
+#[allow(clippy::too_many_arguments)]
+pub fn load_backgrounds_with_pseudos(
+    document: &Document,
+    styles: &HashMap<NodeId, ComputedStyle>,
+    pseudo_styles: &css::PseudoStyles,
+    base_url: &Url,
+    loader: &mut ResourceLoader,
+    no_network: bool,
+    limits: BackgroundLimits,
+    warnings: &mut Vec<String>,
+) -> LoadedBackgrounds {
     let mut result = LoadedBackgrounds {
         images: paint::BackgroundImages::new(),
         references: 0,
@@ -208,22 +236,24 @@ pub fn load_backgrounds(
         decoded_pixels: 0,
         warnings: Vec::new(),
     };
-    // Render-glue fast path: most pages (including the realistic bench document) never
-    // reference a background/list-style image. Scanning ~30k DOM nodes with a styles-map
-    // lookup per node costs several milliseconds; scanning the style map values once is
-    // much cheaper and produces exactly the same empty result.
-    let has_any_image = styles.values().any(|style| {
+    let has_style_image = |style: &ComputedStyle, include_content: bool| {
         style.background_image.is_some()
             || style.list_style_image.is_some()
             || style
                 .background_layers
                 .iter()
                 .any(|layer| layer.image.is_some())
-    });
+            || (include_content && style.content.image_url().is_some())
+    };
+    let has_any_image = styles.values().any(|s| has_style_image(s, false))
+        || pseudo_styles.values().any(|s| has_style_image(s, true));
     if !has_any_image {
         return result;
     }
-    let references = collect_background_references(document, styles);
+    let mut references = collect_background_references(document, styles);
+    for (&(node_id, _pseudo), style) in pseudo_styles {
+        push_style_background_references(node_id, style, true, &mut references);
+    }
     result.references = references.len();
     if references.is_empty() {
         return result;

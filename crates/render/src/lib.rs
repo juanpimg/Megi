@@ -933,6 +933,8 @@ fn render_url_inner(
     // otherwise the post-script pass recollects (script-inserted stylesheets still apply).
     let mut styles_pre_script = Duration::ZERO;
     let mut pre_script_styles: Option<Arc<HashMap<NodeId, ComputedStyle>>> = None;
+    #[cfg(feature = "js")]
+    let mut pre_script_pseudos: Option<Arc<css::PseudoStyles>> = None;
     let mut reusable_stylesheets: Option<(
         css::StyleCollection,
         StyleSummary,
@@ -952,7 +954,7 @@ fn render_url_inner(
             csp.as_ref(),
             &mut pre_warnings,
         ) {
-            pre_script_styles = Some(Arc::new(resolve_styles_with_state(
+            let (resolved, resolved_pseudos) = resolve_styles_with_state(
                 &document,
                 &collection,
                 css::StateContext::new(),
@@ -961,7 +963,14 @@ fn render_url_inner(
                     options.viewport.width as f32,
                     options.viewport.height as f32,
                 ),
-            )));
+            );
+            pre_script_styles = Some(Arc::new(resolved));
+            #[cfg(feature = "js")]
+            {
+                pre_script_pseudos = Some(Arc::new(resolved_pseudos));
+            }
+            #[cfg(not(feature = "js"))]
+            let _ = resolved_pseudos;
             reusable_stylesheets = Some((collection, summary, fonts, stylesheet_signature_before));
         }
         styles_pre_script = pre_start.elapsed();
@@ -1004,6 +1013,7 @@ fn render_url_inner(
         #[cfg(feature = "js")]
         {
             if let Some(styles) = pre_script_styles.clone() {
+                let pre_pseudos = pre_script_pseudos.clone();
                 let pre_layout_viewport = layout::Rect::new(
                     0.0,
                     0.0,
@@ -1013,9 +1023,14 @@ fn render_url_inner(
                 let doc_snapshot = document.clone();
                 host_context.layout_provider = Some(Arc::new(move || {
                     let mut rects = std::collections::HashMap::new();
-                    if let Some(layout_root) =
-                        layout::layout_document(&doc_snapshot, &styles, pre_layout_viewport)
-                    {
+                    let empty_pseudos = css::PseudoStyles::new();
+                    let pseudos_ref = pre_pseudos.as_deref().unwrap_or(&empty_pseudos);
+                    if let Some(layout_root) = layout::layout_document_with_pseudos(
+                        &doc_snapshot,
+                        &styles,
+                        pseudos_ref,
+                        pre_layout_viewport,
+                    ) {
                         collect_layout_rects(&layout_root, &mut rects);
                     }
                     rects
@@ -1130,7 +1145,7 @@ fn render_url_inner(
             )?
         }
     };
-    let styles = resolve_styles_with_state(
+    let (styles, pseudo_styles) = resolve_styles_with_state(
         &document,
         &stylesheet_collection,
         css::StateContext::new(),
@@ -1196,9 +1211,10 @@ fn render_url_inner(
     let remaining_decoded_pixels = options
         .max_total_decoded_pixels
         .saturating_sub(loaded_images.decoded_pixels);
-    let loaded_backgrounds = backgrounds::load_backgrounds(
+    let loaded_backgrounds = backgrounds::load_backgrounds_with_pseudos(
         &document,
         &styles,
+        &pseudo_styles,
         &base_url,
         &mut loader,
         options.no_network,
@@ -1226,9 +1242,10 @@ fn render_url_inner(
     );
     let (layout_root, cache_layout_hit) = if let Some(cache) = cache {
         cache
-            .get_or_compute_layout(
+            .get_or_compute_layout_with_pseudos(
                 &document,
                 &styles,
+                &pseudo_styles,
                 viewport,
                 &measurer,
                 &loaded_images.sizes,
@@ -1236,9 +1253,10 @@ fn render_url_inner(
             )
             .ok_or(RenderError::LayoutFailed)?
     } else {
-        let root = layout::layout_document_with_measurer_and_replaced_sizes(
+        let root = layout::layout_document_with_measurer_and_pseudos(
             &document,
             &styles,
+            &pseudo_styles,
             viewport,
             &measurer,
             Some(&loaded_images.sizes),
@@ -1412,7 +1430,7 @@ fn render_svg_document(
         None,
         &mut warnings,
     )?;
-    let styles = resolve_styles_with_state(
+    let (styles, pseudo_styles) = resolve_styles_with_state(
         &document,
         &stylesheet_collection,
         css::StateContext::new(),
@@ -1462,9 +1480,10 @@ fn render_svg_document(
         options.viewport.width as f32,
         options.viewport.height as f32,
     );
-    let layout_root = layout::layout_document_with_measurer_and_replaced_sizes(
+    let layout_root = layout::layout_document_with_measurer_and_pseudos(
         &document,
         &styles,
+        &pseudo_styles,
         viewport,
         &measurer,
         Some(&image_sizes),
@@ -2257,7 +2276,7 @@ fn resolve_styles_with_state(
     state: css::StateContext,
     time_ms: f64,
     viewport: (f32, f32),
-) -> HashMap<NodeId, ComputedStyle> {
+) -> (HashMap<NodeId, ComputedStyle>, css::PseudoStyles) {
     // `calc()` uses a thread-local viewport for vw/vh; install the real one so
     // `calc(50vw)` resolves against the render viewport, not a 1280x720 default (#1469).
     css::with_calc_viewport(viewport.0, viewport.1, || {
@@ -2271,56 +2290,42 @@ fn resolve_styles_with_collection(
     doc: &Document,
     collection: &css::StyleCollection,
     time_ms: f64,
-) -> HashMap<NodeId, ComputedStyle> {
-    let mut styles: HashMap<NodeId, ComputedStyle> = HashMap::new();
+) -> (HashMap<NodeId, ComputedStyle>, css::PseudoStyles) {
     // One shared selector-matching budget for the whole document: a per-element budget would
     // grow the total cost with the element count (#1413).
     let _pass = css::style_pass_scope();
+    let (mut styles, mut pseudo_styles) =
+        css::resolve_document_styles_from_collection(doc, collection);
+    // `#1546`: resolve the `::backdrop` color for modal dialogs after the main cascade, since
+    // the generic collector does not know about the HTML top layer.
     let root = doc.root();
-    let mut stack = Vec::new();
-    let mut child = doc.node(root).first_child;
-    while let Some(child_id) = child {
-        stack.push(child_id);
-        child = doc.node(child_id).next_sibling;
-    }
-    while let Some(node_id) = stack.pop() {
-        if let Some(element) = doc.node(node_id).as_element() {
-            let inline_declarations = element.get_attribute("style").map(css::parse_inline_style);
-            let cascaded = css::resolve_cascaded_properties(
-                doc,
-                node_id,
-                collection,
-                inline_declarations.as_deref(),
-            );
-            let parent_style = doc
-                .node(node_id)
-                .parent
-                .and_then(|parent| styles.get(&parent));
-            let root_style = styles.get(&root);
-            let mut computed = css::ComputedStyle::compute(&cascaded, parent_style, root_style);
-            if element.namespace == dom::Namespace::Html
-                && element.local_name.eq_ignore_ascii_case("dialog")
-                && element.get_attribute("open").is_some()
-                && element.get_attribute("data-megi-modal").is_some()
+    let backdrop_updates: Vec<(NodeId, Option<css::Color>)> = styles
+        .keys()
+        .filter_map(|node_id| {
+            let element = doc.node(*node_id).as_element()?;
+            if element.namespace != dom::Namespace::Html
+                || !element.local_name.eq_ignore_ascii_case("dialog")
+                || element.get_attribute("open").is_none()
+                || element.get_attribute("data-megi-modal").is_none()
             {
-                computed.set_backdrop_color(css::resolve_backdrop_color(
-                    doc,
-                    node_id,
-                    collection,
-                    parent_style,
-                    root_style,
-                ));
+                return None;
             }
-            styles.insert(node_id, computed);
-        }
-        let mut child = doc.node(node_id).last_child;
-        while let Some(child_id) = child {
-            stack.push(child_id);
-            child = doc.node(child_id).prev_sibling;
+            let parent_style = doc.node(*node_id).parent.and_then(|p| styles.get(&p));
+            let root_style = styles.get(&root);
+            Some((
+                *node_id,
+                css::resolve_backdrop_color(doc, *node_id, collection, parent_style, root_style),
+            ))
+        })
+        .collect();
+    for (node_id, color) in backdrop_updates {
+        if let Some(computed) = styles.get_mut(&node_id) {
+            computed.set_backdrop_color(color);
         }
     }
     css::cascade::apply_animations_to_styles(doc, &mut styles, collection, time_ms as f32);
-    styles
+    css::apply_animations_to_pseudo_styles(&mut pseudo_styles, collection, time_ms as f32);
+    (styles, pseudo_styles)
 }
 
 /// Collects viewport-space border/content rects for every laid-out DOM node (round 28).
@@ -2337,7 +2342,9 @@ fn collect_layout_rects(
             break;
         }
         visited += 1;
-        if let Some(node_id) = current.node_id() {
+        if !current.is_pseudo
+            && let Some(node_id) = current.node_id()
+        {
             let border = current.dimensions.border_box();
             let content = current.dimensions.content;
             rects.entry(node_id).or_insert(js::host::LayoutRect {
@@ -2363,7 +2370,7 @@ mod calc_viewport_tests {
         );
         let mut collection = css::StyleCollection::new();
         collection.add_css("div{width:calc(50vw)}", css::Origin::Author);
-        let styles = resolve_styles_with_state(
+        let (styles, _pseudos) = resolve_styles_with_state(
             &doc,
             &collection,
             css::StateContext::new(),
