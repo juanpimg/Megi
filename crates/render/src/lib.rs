@@ -1014,6 +1014,20 @@ fn render_url_inner(
             (options.viewport.width, options.viewport.height),
         );
         #[cfg(feature = "js")]
+        for iframe in document.get_elements_by_tag_name("iframe") {
+            let Some(data) = document.try_node(iframe).and_then(|n| n.as_element()) else {
+                continue;
+            };
+            if data.has_attribute("sandbox") {
+                continue;
+            }
+            if let Some(srcdoc) = data.get_attribute("srcdoc") {
+                host_context
+                    .frame_documents
+                    .push((iframe, html::parse_document(srcdoc, false)));
+            }
+        }
+        #[cfg(feature = "js")]
         {
             if let Some(styles) = pre_script_styles.clone() {
                 let pre_pseudos = pre_script_pseudos.clone();

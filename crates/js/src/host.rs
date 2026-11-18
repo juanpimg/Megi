@@ -480,6 +480,12 @@ pub(crate) struct Host {
     pub custom_elements: std::collections::HashMap<String, u32>,
     /// Monotonic handle counter for custom element constructors.
     pub custom_element_next_handle: u32,
+    /// Same-origin framed documents for `iframe.contentDocument` (#1544).
+    pub frame_documents: std::collections::HashMap<u32, dom::Document>,
+    pub iframe_frames: std::collections::HashMap<dom::NodeId, u32>,
+    pub frame_next_handle: u32,
+    pub frame_nodes: std::collections::HashMap<u32, dom::NodeId>,
+    pub frame_node_next_handle: u32,
     /// Deterministic cooperative workers (no threads); `None` slots are terminated/dropped.
     pub workers: Vec<Option<crate::runtime::WorkerState>>,
     /// Parent host when this host belongs to a worker realm.
@@ -554,6 +560,11 @@ impl Host {
             canvas_store: crate::canvas::CanvasStore::new(),
             custom_elements: std::collections::HashMap::new(),
             custom_element_next_handle: 1,
+            frame_documents: std::collections::HashMap::new(),
+            iframe_frames: std::collections::HashMap::new(),
+            frame_next_handle: 1,
+            frame_nodes: std::collections::HashMap::new(),
+            frame_node_next_handle: 1,
             workers: Vec::new(),
             worker_parent: None,
             worker_id: None,
