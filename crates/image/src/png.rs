@@ -176,6 +176,7 @@ fn decode_png_impl(
     let mut transparency: Option<Transparency> = None;
     let mut idat: Vec<u8> = Vec::new();
     let mut seen_idat = false;
+    let mut seen_idat_end = false;
     let mut seen_iend = false;
 
     while position < bytes.len() {
@@ -207,12 +208,12 @@ fn decode_png_impl(
         if header.is_none() && kind != *b"IHDR" {
             return Err(invalid_chunk(kind, "chunk before IHDR"));
         }
-        // IDAT chunks must be consecutive: after the first IDAT, reject ancillary
-        // chunks that are not themselves validated by their own arm. tRNS and PLTE
-        // already reject after IDAT in their arms below.
+        // IDAT chunks must be consecutive: once a non-IDAT chunk follows IDAT, no further
+        // IDAT chunks may appear, though trailing ancillary metadata (e.g. tEXt, iTXt, zTXt)
+        // before IEND is valid per ISO/IEC 15948.
         if seen_idat && kind != *b"IDAT" && kind != *b"IEND" && kind != *b"tRNS" && kind != *b"PLTE"
         {
-            return Err(invalid_chunk(kind, "non-consecutive IDAT"));
+            seen_idat_end = true;
         }
         match &kind {
             b"IHDR" => {
@@ -243,6 +244,9 @@ fn decode_png_impl(
             }
             b"IDAT" => {
                 let current = header.ok_or_else(|| invalid_chunk(kind, "IDAT before IHDR"))?;
+                if seen_idat_end {
+                    return Err(invalid_chunk(kind, "non-consecutive IDAT"));
+                }
                 if current.color_type == 3 && palette.is_none() {
                     return Err(invalid_chunk(kind, "indexed PNG without PLTE"));
                 }
