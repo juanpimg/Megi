@@ -731,23 +731,40 @@ docs/audit/findings/wave2/verify-render-A.md	80	docs	F3	wave2	2026-11-18	covered
 docs/audit/findings/wave2/verify-render-B.md	56	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
 docs/audit/findings/wave2/verify-st-A.md	69	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
 docs/audit/findings/wave2/verify-st-B.md	77	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/repros/browser/bad.gif	0	binary	-			exempt		not read line by line: binary
+docs/audit/repros/browser/bad.jpg	0	binary	-			exempt		not read line by line: binary
+docs/audit/repros/browser/bad.png	0	binary	-			exempt		not read line by line: binary
+docs/audit/repros/browser/bad.webp	0	binary	-			exempt		not read line by line: binary
+docs/audit/repros/browser/calc-edge.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 browser reproducer
 docs/audit/repros/browser/calc-measure.html	8	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
 docs/audit/repros/browser/calc-viewport.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
 docs/audit/repros/browser/control.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
 docs/audit/repros/browser/docwrite-loop.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
+docs/audit/repros/browser/docwrite-nasty.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 browser reproducer
 docs/audit/repros/browser/find-target.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
+docs/audit/repros/browser/fontface-flood.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 browser reproducer
 docs/audit/repros/browser/gbr-edge.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
 docs/audit/repros/browser/gbr-mutate.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
 docs/audit/repros/browser/iframe-contentdoc.html	13	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
+docs/audit/repros/browser/iframe-plain.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 browser reproducer
 docs/audit/repros/browser/iframe-sandbox-remove.html	10	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
 docs/audit/repros/browser/iframe-sandbox.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
 docs/audit/repros/browser/img-corrupt.html	3	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
+docs/audit/repros/browser/nest-50k.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 browser reproducer
+docs/audit/repros/browser/sandbox-allowscripts.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 browser reproducer
+docs/audit/repros/browser/sandbox-empty.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 browser reproducer
+docs/audit/repros/browser/sandbox-jsurl.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 browser reproducer
+docs/audit/repros/browser/selectors-100k.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 browser reproducer
 docs/audit/repros/browser/session-page.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
 docs/audit/repros/browser/svg-use-cycle.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
 docs/audit/repros/browser/title-roundtrip.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
+docs/audit/repros/browser/title-set.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 browser reproducer
+docs/audit/repros/browser/utf8-bidi.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 browser reproducer
 docs/audit/repros/browser/w2-worker-real.js	4	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
+docs/audit/repros/browser/worker-forge.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 browser reproducer
 docs/audit/repros/browser/worker-forge2.html	15	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
 docs/audit/repros/browser/worker-tamper.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
+docs/audit/repros/browser/ws-nohandshake.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 browser reproducer
 docs/audit/repros/browser/ws-nohandshake2.html	11	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
 docs/images/images-e2e.png	0	binary	-			exempt		not read line by line: binary
 docs/images/phase4-basic.png	0	binary	-			exempt		not read line by line: binary
