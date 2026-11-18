@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use css::{Color, ComputedStyle, Display};
-use dom::{Document, Namespace};
-use image::RgbaImage;
+use megi_core::{Document, Namespace};
+use megi_image::RgbaImage;
 use layout::{BoxType, LayoutBox, Rect};
 use paint::{
     DisplayItem, DisplayList, IMAGE_PLACEHOLDER, ImageStore, Pixmap, build_display_list,
@@ -25,7 +25,7 @@ const VIEWPORT: Rect = Rect {
     height: 100.0,
 };
 
-fn node_ids(count: usize) -> (Document, Vec<dom::NodeId>) {
+fn node_ids(count: usize) -> (Document, Vec<megi_core::NodeId>) {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     document.append_child(document.root(), html);
@@ -51,7 +51,7 @@ fn replaced_style() -> ComputedStyle {
 }
 
 /// Root block containing one `<img>` replaced box with the given content rect.
-fn tree_with_image(document: &Document, image_id: dom::NodeId, rect: Rect) -> LayoutBox {
+fn tree_with_image(document: &Document, image_id: megi_core::NodeId, rect: Rect) -> LayoutBox {
     let root_id = document
         .children(document.root())
         .next()
@@ -65,7 +65,7 @@ fn tree_with_image(document: &Document, image_id: dom::NodeId, rect: Rect) -> La
     root
 }
 
-fn store_with(image_id: dom::NodeId, width: u32, height: u32, data: Vec<u8>) -> ImageStore {
+fn store_with(image_id: megi_core::NodeId, width: u32, height: u32, data: Vec<u8>) -> ImageStore {
     let image = RgbaImage::new(width, height, data).expect("valid RGBA data");
     let mut store = ImageStore::new();
     store.insert(image_id, Arc::new(image));
@@ -215,6 +215,6 @@ fn test_image_painting_is_deterministic() {
 
 #[test]
 fn test_empty_store_type_is_usable_from_public_api() {
-    let store: HashMap<dom::NodeId, Arc<RgbaImage>> = ImageStore::new();
+    let store: HashMap<megi_core::NodeId, Arc<RgbaImage>> = ImageStore::new();
     assert!(store.is_empty());
 }

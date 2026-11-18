@@ -8,7 +8,7 @@
 use std::hint::black_box;
 use std::sync::Arc;
 
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 use html::ParseOptions;
 use layout::Rect;
 
@@ -712,7 +712,7 @@ fn register_layer_effects(suite: &mut Suite) {
     // (b) object-fit: display list + raster of replaced images.
     {
         let mut document = Document::new();
-        let html_node = document.create_element(dom::Namespace::Html, "html", vec![]);
+        let html_node = document.create_element(megi_core::Namespace::Html, "html", vec![]);
         document.append_child(document.root(), html_node);
         let mut root_style = css::ComputedStyle::initial();
         root_style.display = css::Display::Block;
@@ -721,7 +721,7 @@ fn register_layer_effects(suite: &mut Suite) {
             layout::LayoutBox::new(layout::BoxType::BlockNode(html_node), Some(root_style));
         root.dimensions.content = viewport;
         let image = Arc::new(
-            image::RgbaImage::new(16, 10, vec![120u8; 16 * 10 * 4]).expect("RGBA fixture"),
+            megi_image::RgbaImage::new(16, 10, vec![120u8; 16 * 10 * 4]).expect("RGBA fixture"),
         );
         let mut images = paint::ImageStore::new();
         let fits = [
@@ -731,7 +731,7 @@ fn register_layer_effects(suite: &mut Suite) {
             css::ObjectFit::ScaleDown,
         ];
         for index in 0..128u32 {
-            let node = document.create_element(dom::Namespace::Html, "img", vec![]);
+            let node = document.create_element(megi_core::Namespace::Html, "img", vec![]);
             document.append_child(html_node, node);
             images.insert(node, Arc::clone(&image));
             let mut style = css::ComputedStyle::initial();
@@ -941,7 +941,7 @@ fn register_effect_fixture_pipelines(suite: &mut Suite) {
         let viewport = Rect::new(0.0, 0.0, width as f32, height as f32);
         let root = layout::layout_document(&document, &styles, viewport);
         let mut backgrounds = paint::BackgroundImages::new();
-        if let Ok(pattern) = image::decode(PATTERN_PNG) {
+        if let Ok(pattern) = megi_image::decode(PATTERN_PNG) {
             backgrounds.insert("assets/pattern.png".to_string(), Arc::new(pattern));
         }
         let images = paint::ImageStore::new();
@@ -1024,7 +1024,7 @@ fn register_backdrop_stage_rows(suite: &mut Suite) {
         let viewport = Rect::new(0.0, 0.0, width as f32, height as f32);
         let root = layout::layout_document(&document, &styles, viewport).expect("layout");
         let mut backgrounds = paint::BackgroundImages::new();
-        if let Ok(pattern) = image::decode(PATTERN_PNG) {
+        if let Ok(pattern) = megi_image::decode(PATTERN_PNG) {
             backgrounds.insert("assets/pattern.png".to_string(), Arc::new(pattern));
         }
         let images = paint::ImageStore::new();
@@ -1335,7 +1335,7 @@ fn register_image(suite: &mut Suite) {
             false,
         ),
     ] {
-        match image::decode(bytes) {
+        match megi_image::decode(bytes) {
             Ok(probe) => {
                 let pixels = (probe.width as f64) * (probe.height as f64) / 1_000_000.0;
                 let detail = format!(
@@ -1345,7 +1345,7 @@ fn register_image(suite: &mut Suite) {
                     bytes.len()
                 );
                 let entry = BenchEntry::new(name, "image", detail, move || {
-                    black_box(image::decode(bytes).expect("committed image fixture decodes"));
+                    black_box(megi_image::decode(bytes).expect("committed image fixture decodes"));
                 })
                 .with_units(pixels, "MPix");
                 suite.add(if heavy { entry.heavy() } else { entry });
@@ -1364,7 +1364,7 @@ fn register_image(suite: &mut Suite) {
             scaled_label.to_string(),
             move || {
                 black_box(
-                    image::decode_scaled(PNG_800X600, 400)
+                    megi_image::decode_scaled(PNG_800X600, 400)
                         .expect("committed PNG fixture decodes scaled"),
                 );
             },
@@ -1461,7 +1461,7 @@ fn collect_elements(document: &Document) -> Vec<NodeId> {
 /// the suite (the `fonts` crate is still being migrated during the sprint).
 #[cfg(feature = "fonts")]
 fn register_fonts(suite: &mut Suite, scale: f64) {
-    use fonts::{FontDatabase, FontStyle};
+    use megi_fonts::{FontDatabase, FontStyle};
 
     let root = crate::runner::workspace_root();
     let candidates = [
@@ -1680,7 +1680,7 @@ mod tests {
             ("webp-lossy-q75", WEBP_LOSSY_Q75, 64, 48),
             ("webp-lossy-q90", WEBP_LOSSY_Q90, 64, 48),
         ] {
-            let decoded = image::decode(bytes).expect("committed fixture decodes");
+            let decoded = megi_image::decode(bytes).expect("committed fixture decodes");
             assert_eq!((decoded.width, decoded.height), (width, height), "{label}");
             assert_eq!(decoded.data.len(), (width * height * 4) as usize, "{label}");
         }
@@ -1695,8 +1695,8 @@ mod tests {
             ("webp-lossy-q75", WEBP_LOSSY_Q75),
             ("webp-lossy-q90", WEBP_LOSSY_Q90),
         ] {
-            let first = image::decode(bytes).expect("first decode");
-            let second = image::decode(bytes).expect("second decode");
+            let first = megi_image::decode(bytes).expect("first decode");
+            let second = megi_image::decode(bytes).expect("second decode");
             assert_eq!(
                 (first.width, first.height),
                 (second.width, second.height),

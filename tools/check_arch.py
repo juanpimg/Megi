@@ -21,7 +21,8 @@ MAX_LINES = 500
 
 def normalize(name: str) -> str:
     """Crate names may be `megi-core`, `megi_core` or plain `core`."""
-    return name.removeprefix("megi_").replace("-", "_")
+    n = name.replace("-", "_")
+    return n[5:] if n.startswith("megi_") else n
 
 
 def allowed_edges() -> dict[str, set[str]]:

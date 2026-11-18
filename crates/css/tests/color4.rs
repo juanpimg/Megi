@@ -237,7 +237,7 @@ fn test_legacy_colors_still_work() {
 
 #[test]
 fn test_modern_colors_in_properties() {
-    use dom::{Attribute, Document, Namespace};
+    use megi_core::{Attribute, Document, Namespace};
     let mut document = Document::new();
     let body = document.create_element(Namespace::Html, "body", vec![]);
     let element = document.create_element(
@@ -357,7 +357,7 @@ fn test_color_mix_alpha_weights() {
 
 #[test]
 fn test_modern_colors_in_filter_and_drop_shadow() {
-    use dom::{Attribute, Document, Namespace};
+    use megi_core::{Attribute, Document, Namespace};
     let mut document = Document::new();
     let body = document.create_element(Namespace::Html, "body", vec![]);
     let element = document.create_element(
@@ -382,7 +382,7 @@ fn test_modern_colors_in_filter_and_drop_shadow() {
 
 #[test]
 fn test_modern_colors_in_conic_gradient_stops() {
-    use dom::{Attribute, Document, Namespace};
+    use megi_core::{Attribute, Document, Namespace};
     let mut document = Document::new();
     let body = document.create_element(Namespace::Html, "body", vec![]);
     let element = document.create_element(
@@ -499,7 +499,7 @@ fn modern_rgb_and_hsl_space_slash_and_case_insensitive() {
 
 #[test]
 fn shadow_list_rejects_entire_declaration_when_any_layer_is_invalid() {
-    use dom::{Attribute, Document, Namespace};
+    use megi_core::{Attribute, Document, Namespace};
 
     let check = |style_attr: &str| -> css::ComputedStyle {
         let mut document = Document::new();

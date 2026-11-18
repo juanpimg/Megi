@@ -11,7 +11,7 @@
 //! URL at [`MAX_SHORT_URL_CHARS`] with an ellipsis; `data:` URLs are shortened to
 //! `data:…` because they are usually huge inline documents.
 
-use dom::{Document, Namespace, NodeId, NodeKind};
+use megi_core::{Document, Namespace, NodeId, NodeKind};
 
 use net::Url;
 

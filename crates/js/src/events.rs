@@ -19,7 +19,7 @@ use boa_engine::{
     object::builtins::JsArray,
     property::{Attribute, PropertyDescriptor},
 };
-use dom::NodeId;
+use megi_core::NodeId;
 
 use crate::error::JsError as CrateJsError;
 use crate::host::{DispatchState, InlineHandler, Listener, TargetKey, TimerEntry, with_host};
@@ -51,7 +51,7 @@ pub enum JsEventTarget {
     /// The `document` object; with `bubbles` the event continues to `window`.
     Document,
     /// A DOM node, bubbling through its ancestors when requested.
-    Node(dom::NodeId),
+    Node(megi_core::NodeId),
 }
 
 /// Kind and initialization data for a structured UI event dispatched from Rust (#1504).

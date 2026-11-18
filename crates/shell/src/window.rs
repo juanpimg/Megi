@@ -225,7 +225,7 @@ enum FocusTarget {
     /// Form control identified by its stable `data-megi-form-id`.
     Control(u32),
     /// Anchor node (`<a href>`), resolved through [`LinkRegion::node`].
-    Link(dom::NodeId),
+    Link(megi_core::NodeId),
 }
 
 /// Builds the keyboard focus list for a DOM snapshot in document order (#1517).
@@ -234,7 +234,7 @@ enum FocusTarget {
 /// its DOM node) or a link (matched by `LinkRegion::node`). Pure so it can be tested without
 /// a window/event loop.
 fn build_focus_targets(
-    document: &dom::Document,
+    document: &megi_core::Document,
     forms: &[FormControl],
     links: &[LinkRegion],
 ) -> Vec<FocusTarget> {
@@ -305,7 +305,7 @@ struct WindowApp {
     /// Active IME composition state (#1519).
     ime: crate::forms::ImeState,
     /// DOM snapshot of the frame on screen (source for editing re-renders).
-    document: Option<Arc<dom::Document>>,
+    document: Option<Arc<megi_core::Document>>,
     /// Pending button id whose pressed state must be released after the next frame.
     release_button: Option<u32>,
     /// Find-in-page state (query, hits, current hit).
@@ -3162,15 +3162,15 @@ mod focus_target_tests {
         // Pure check of the mapping used by `focus_index_for_control`: build a target list
         // where a control sits between two links and verify lookups are stable.
         let targets = [
-            FocusTarget::Link(dom::NodeId::from_index(1)),
+            FocusTarget::Link(megi_core::NodeId::from_index(1)),
             FocusTarget::Control(7),
-            FocusTarget::Link(dom::NodeId::from_index(3)),
+            FocusTarget::Link(megi_core::NodeId::from_index(3)),
         ];
         let pos = targets
             .iter()
             .position(|target| *target == FocusTarget::Control(7));
         assert_eq!(pos, Some(1));
-        assert!(targets.contains(&FocusTarget::Link(dom::NodeId::from_index(3))));
+        assert!(targets.contains(&FocusTarget::Link(megi_core::NodeId::from_index(3))));
     }
 }
 

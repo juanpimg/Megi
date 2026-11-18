@@ -11,14 +11,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use css::{BorderRadii, BorderStyle, BoxShadow, Color};
-use dom::NodeId;
+use megi_core::NodeId;
 use layout::Rect;
 
 /// Decoded replaced-element images keyed by the DOM node that references them.
 ///
-/// Built by the integration crate (`render`: `net` fetch + `image::decode`) and
+/// Built by the integration crate (`render`: `net` fetch + `megi_image::decode`) and
 /// consumed by painting. A decoded image is straight-alpha RGBA8.
-pub type ImageStore = HashMap<NodeId, Arc<image::RgbaImage>>;
+pub type ImageStore = HashMap<NodeId, Arc<megi_image::RgbaImage>>;
 
 /// Decoded background/embedded images keyed by their **raw CSS URL string**.
 ///
@@ -29,7 +29,7 @@ pub type ImageStore = HashMap<NodeId, Arc<image::RgbaImage>>;
 /// the bitmap here under the original (unresolved) URL string so paint can look
 /// it up while walking the layout tree. A URL that is absent from the map simply
 /// paints nothing (backgrounds) or falls back to the default list marker.
-pub type BackgroundImages = HashMap<String, Arc<image::RgbaImage>>;
+pub type BackgroundImages = HashMap<String, Arc<megi_image::RgbaImage>>;
 
 /// One painted side of a CSS border box.
 ///
@@ -204,7 +204,7 @@ pub enum DisplayItem {
     /// with straight-alpha source-over, clipped by the active clip stack.
     Image {
         rect: Rect,
-        image: Arc<image::RgbaImage>,
+        image: Arc<megi_image::RgbaImage>,
     },
     /// Fills an antialiased rounded rectangle.
     ///

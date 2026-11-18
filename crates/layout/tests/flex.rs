@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use css::{
     AlignItems, AlignSelf, ComputedStyle, Display, FlexDirection, FlexWrap, JustifyContent, Length,
 };
-use dom::{Document, Namespace, NodeId};
+use megi_core::{Document, Namespace, NodeId};
 use layout::{BoxType, LayoutBox, Rect, layout_document};
 
 fn block_style() -> ComputedStyle {

@@ -6,7 +6,7 @@
 //! grammars **and** the envelope fuzzed together (the two former targets, `webp_vp8` and
 //! `webp_lossy`, shared the `megi_fuzz::riff_webp` helper and overlapped heavily (#471)):
 //!
-//! 1. the input goes to [`image::detect_format`] and to [`image::decode_with_limits`]
+//! 1. the input goes to [`megi_image::detect_format`] and to [`megi_image::decode_with_limits`]
 //!    under three caps (a wide profile, a tight profile, and the smallest legal dimension)
 //!    so hostile dimension headers are rejected before any allocation;
 //! 2. RIFF/WEBP inputs are decoded as-is, truncated at several divisors, and their VP8
@@ -26,8 +26,8 @@ const MAX_FUZZ_INPUT: usize = 512 * 1024;
 /// Cap on bytes wrapped into a synthesized RIFF chunk.
 const MAX_CHUNK: usize = 128 * 1024;
 
-fn caps(dimension: u32) -> image::PngLimits {
-    image::PngLimits::new(
+fn caps(dimension: u32) -> megi_image::PngLimits {
+    megi_image::PngLimits::new(
         dimension,
         u64::from(dimension) * u64::from(dimension).max(1),
         128 * 1024,
@@ -42,30 +42,30 @@ fuzz_target!(|data: &[u8]| {
     let wide = caps(2048);
     let tight = caps(64);
 
-    let _ = image::detect_format(data);
-    let _ = image::decode_with_limits(data, &wide);
-    let _ = image::decode_with_limits(data, &tight);
+    let _ = megi_image::detect_format(data);
+    let _ = megi_image::decode_with_limits(data, &wide);
+    let _ = megi_image::decode_with_limits(data, &tight);
 
     if data.starts_with(b"RIFF") && data.get(8..12) == Some(b"WEBP") {
         for divisor in [2, 4, 8] {
-            let _ = image::decode_with_limits(&data[..data.len() / divisor], &wide);
+            let _ = megi_image::decode_with_limits(&data[..data.len() / divisor], &wide);
         }
         // A VP8 chunk with a corrupted payload still exercises header validation.
         let payload = &data[20.min(data.len())..][..data.len().saturating_sub(20).min(MAX_CHUNK)];
-        let _ = image::decode_with_limits(&megi_fuzz::riff_webp(b"VP8 ", payload), &wide);
+        let _ = megi_image::decode_with_limits(&megi_fuzz::riff_webp(b"VP8 ", payload), &wide);
         return;
     }
 
     let payload = &data[..data.len().min(MAX_CHUNK)];
     let lossy = megi_fuzz::riff_webp(b"VP8 ", payload);
-    let _ = image::decode_with_limits(&lossy, &wide);
-    let _ = image::decode_with_limits(&lossy, &tight);
-    let _ = image::decode_with_limits(&lossy[..lossy.len() / 2], &wide);
+    let _ = megi_image::decode_with_limits(&lossy, &wide);
+    let _ = megi_image::decode_with_limits(&lossy, &tight);
+    let _ = megi_image::decode_with_limits(&lossy[..lossy.len() / 2], &wide);
 
     let lossless = megi_fuzz::riff_webp(b"VP8L", payload);
-    let _ = image::decode_with_limits(&lossless, &wide);
-    let _ = image::decode_with_limits(&lossless[..lossless.len() / 2], &wide);
+    let _ = megi_image::decode_with_limits(&lossless, &wide);
+    let _ = megi_image::decode_with_limits(&lossless[..lossless.len() / 2], &wide);
 
     // Default limits: the caps above can hide the size arithmetic of a plausible image.
-    let _ = image::decode(&lossy[..lossy.len().min(64 * 1024)]);
+    let _ = megi_image::decode(&lossy[..lossy.len().min(64 * 1024)]);
 });

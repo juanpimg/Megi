@@ -14,8 +14,8 @@
 use std::sync::Arc;
 
 use css::{Color, ComputedStyle, Display, ListStyleType};
-use dom::{Document, Namespace};
-use image::RgbaImage;
+use megi_core::{Document, Namespace};
+use megi_image::RgbaImage;
 use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use paint::{
     BackgroundImages, DisplayItem, ImageStore, Pixmap, build_display_list_with_images,
@@ -29,7 +29,7 @@ const VIEWPORT: Rect = Rect {
     height: 100.0,
 };
 
-fn node_ids(count: usize) -> (Document, Vec<dom::NodeId>) {
+fn node_ids(count: usize) -> (Document, Vec<megi_core::NodeId>) {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     document.append_child(document.root(), html);
@@ -49,7 +49,7 @@ fn block_style() -> ComputedStyle {
 }
 
 fn box_with_rect(
-    id: dom::NodeId,
+    id: megi_core::NodeId,
     style: ComputedStyle,
     x: f32,
     y: f32,

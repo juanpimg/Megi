@@ -233,13 +233,13 @@ Verificado-fijo (no es hallazgo): `currentColor` + propiedad `color` (#1276/#133
 - `evidence`: `vp8x_alpha_lossy.webp` (16×16, ALPH sin comprimir) con los bits
   de filtro cambiados: `filter=0: OK 16x16`, `filter=1: OK 16x16`,
   `filter=2: ERR unsupported feature: WebP ALPH filtering method`,
-  `filter=3: ERR …` (harness `image::decode`, mismos bytes salvo el byte 0).
+  `filter=3: ERR …` (harness `megi_image::decode`, mismos bytes salvo el byte 0).
 - `impact`: WebP extended válidos (codificadores emiten 2/3) no abren.
 - `expected`: WebP Container Spec ("ALPH chunk", filtering method 0–3).
 - `fix`: implementar filtros vertical y gradient (espejos del horizontal por
   columnas / predictor), o decodificarlos a plano sin filtrar equivalente.
 - `repro`: `repro-w2-assets/alph-f1.webp` (control OK), `alph-f2.webp`,
-  `alph-f3.webp` + `image::decode`.
+  `alph-f3.webp` + `megi_image::decode`.
 - `dedup`: new.
 
 ### w2-assets-10 — el doc de JPEG progresivo promete rechazar refines entrelazados, pero los acepta
@@ -257,7 +257,7 @@ Verificado-fijo (no es hallazgo): `currentColor` + propiedad `color` (#1276/#133
 - `expected`: el doc debe decir "sólo se rechazan AC entrelazados (`Ss>0`)".
 - `fix`: corregir el docstring (líneas 8–11 y 26) o añadir el rechazo si el
   spec lo exigiera.
-- `repro`: parseo SOS del fixture + `cargo test -p image progressive`.
+- `repro`: parseo SOS del fixture + `cargo test -p megi-image progressive`.
 - `dedup`: new.
 
 ### w2-assets-11 — ómnibus de docs rancios (contrato escrito ≠ código)
@@ -274,7 +274,7 @@ Verificado-fijo (no es hallazgo): `currentColor` + propiedad `color` (#1276/#133
 - `impact`: lectores del contrato esperan errores que ya no existen.
 - `expected`: docs = comportamiento.
 - `fix`: actualizar los tres docstrings.
-- `repro`: lectura + `cargo test -p image -p svg`.
+- `repro`: lectura + `cargo test -p megi-image -p svg`.
 - `dedup`: new.
 
 ## Comandos ejecutados
@@ -282,10 +282,10 @@ Verificado-fijo (no es hallazgo): `currentColor` + propiedad `color` (#1276/#133
 Desde `/tmp/opencode/megi-verify` (HEAD 3c06db8; el árbol principal no compilaba
 por cambios WIP en `crates/js`/`crates/render`, fuera de este scope):
 
-- `cargo test -p fonts` → `3, 19, 10, 1 passed; 0 failed` (33 tests).
-- `cargo test -p image` → `32, 34, 5, 9, 8, 6 … passed; 0 failed` (123 tests).
+- `cargo test -p megi-fonts` → `3, 19, 10, 1 passed; 0 failed` (33 tests).
+- `cargo test -p megi-image` → `32, 34, 5, 9, 8, 6 … passed; 0 failed` (123 tests).
 - `cargo test -p svg` → 147 passed, 0 failed.
-- Total: 303 passed, 0 failed. (Un intento inicial de `cargo test -p fonts -p image -p svg`
+- Total: 303 passed, 0 failed. (Un intento inicial de `cargo test -p megi-fonts -p megi-image -p svg`
   en paralelo falló el linkado por carrera de `rlib` en el `target` compartido;
   reejecutado por crate en serie: verde.)
 - `cargo run -p svg --example svg_to_png -- <repro>.svg /tmp/w2-*.png` (10 fixtures):
@@ -296,7 +296,7 @@ por cambios WIP en `crates/js`/`crates/render`, fuera de este scope):
   miter col x=100 filas 0–8 alfa 0 vs bevel filas 5+ pintadas; tip correcto
   (100, 1.97).
 - Gradientes 1600² (debug): g2 1315/1158/1049 ms; g256 2567/1848/2042 ms.
-- ALPH (harness `image::decode`): `filter=0: OK 16x16`, `filter=1: OK 16x16`,
+- ALPH (harness `megi_image::decode`): `filter=0: OK 16x16`, `filter=1: OK 16x16`,
   `filter=2: ERR unsupported feature: WebP ALPH filtering method`,
   `filter=3: ERR …`.
 - SOS de `progressive.jpg`: `Ns=3 Ss=0 Se=0 Ah=0 Al=1`, `Ns=1 …` (×5),
@@ -314,7 +314,7 @@ por cambios WIP en `crates/js`/`crates/render`, fuera de este scope):
   el truncado silencioso es aceptable o debe ser `SvgError::Limit`.
 - **C2 (needs-repro)**: `svg::text::families` parte por comas sin respetar
   comillas y desnuda genéricos entrecomillados, divergiendo de
-  `fonts::parse_font_families` y del fix #1239 (`"serif"` citado → genérico).
+  `megi_fonts::parse_font_families` y del fix #1239 (`"serif"` citado → genérico).
   Sólo evidencia a nivel código (`text.rs:108-123` vs `db.rs:193-301`).
 - **C3 (needs-repro)**: `StreamingInflater::feed` sólo drena `input` si
   `bit == 0` (`inflate.rs:811-815`): con feeds pequeños el buffer retiene todo

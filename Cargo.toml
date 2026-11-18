@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/dom",
+    "crates/core",
     "crates/html",
     "crates/css",
     "crates/layout",
@@ -26,12 +26,12 @@ authors = ["Megi Engine Contributors"]
 repository = "https://github.com/juanpimg/Megi"
 
 [workspace.dependencies]
-dom = { path = "crates/dom", version = "0.1.0" }
+megi-core = { path = "crates/core", version = "0.1.0" }
 html = { path = "crates/html", version = "0.1.0" }
 css = { path = "crates/css", version = "0.1.0" }
 layout = { path = "crates/layout", version = "0.1.0" }
-fonts = { path = "crates/fonts", version = "0.1.0" }
-image = { path = "crates/image", version = "0.1.0" }
+megi-fonts = { path = "crates/fonts", version = "0.1.0" }
+megi-image = { path = "crates/image", version = "0.1.0" }
 paint = { path = "crates/paint", version = "0.1.0" }
 net = { path = "crates/net", version = "0.1.0" }
 render = { path = "crates/render", version = "0.1.0" }

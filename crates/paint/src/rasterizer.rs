@@ -5,7 +5,7 @@
 //!
 //! ## Performance model (WP-4.11)
 //!
-//! The historical implementation rebuilt a `fonts::Font` per glyph
+//! The historical implementation rebuilt a `megi_fonts::Font` per glyph
 //! (`FontDatabase::font_by_ref` parses the face), re-rasterized every glyph
 //! outline and re-shaped every text run on every paint. The Phase 4 benchmark
 //! measured 1 485 ms for the 800×600 realistic page, with ~1 M glyphs. This
@@ -45,7 +45,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
 use css::{BorderRadii, BoxShadow, Color};
-use fonts::{Font, FontDatabase, FontStyle as FontsFontStyle, GlyphMask, ShapedRun};
+use megi_fonts::{Font, FontDatabase, FontStyle as FontsFontStyle, GlyphMask, ShapedRun};
 use layout::Rect;
 
 use crate::display_list::{
@@ -311,7 +311,7 @@ impl Pixmap {
     /// (antialiased scaling) and composited with straight-alpha source-over,
     /// respecting the active clip stack. The operation is deterministic: only
     /// IEEE `f32` arithmetic over the input bytes is used.
-    pub fn draw_image(&mut self, rect: Rect, image: &image::RgbaImage) {
+    pub fn draw_image(&mut self, rect: Rect, image: &megi_image::RgbaImage) {
         if image.is_empty() || rect.width <= 0.0 || rect.height <= 0.0 {
             return;
         }
@@ -750,7 +750,7 @@ impl Pixmap {
 
     /// Renders text into the pixmap using the **real font engine**.
     ///
-    /// Shapes `text` with `rustybuzz` through `fonts::FontDatabase`, resolves
+    /// Shapes `text` with `rustybuzz` through `megi_fonts::FontDatabase`, resolves
     /// each shaped glyph to its face (handles per-glyph fallback), rasterizes the
     /// antialiased alpha mask with `ab_glyph` and blends it over the canvas using
     /// the text `color` at the propagated `baseline` (`rect.y + baseline` is the
@@ -1226,7 +1226,7 @@ struct TextCache {
 
 impl TextCache {
     /// Resolves (and caches) the face of a shaped-run font reference.
-    fn face_index(&mut self, database: &FontDatabase, info: &fonts::FontRefInfo) -> Option<u32> {
+    fn face_index(&mut self, database: &FontDatabase, info: &megi_fonts::FontRefInfo) -> Option<u32> {
         if let Some(&index) = self.face_ids.get(&info.post_script_name) {
             return (index != u32::MAX).then_some(index);
         }
@@ -1285,7 +1285,7 @@ impl TextCache {
         let families = self
             .families
             .entry(font_family.to_string())
-            .or_insert_with(|| fonts::db::parse_font_families(font_family))
+            .or_insert_with(|| megi_fonts::db::parse_font_families(font_family))
             .clone();
         let family_refs: Vec<&str> = families.iter().map(String::as_str).collect();
         let style = if font_italic {
@@ -2079,7 +2079,7 @@ fn paint_opacity_group(
 ///
 /// Positions are clamped to the image bounds before sampling (clamp-to-edge),
 /// which keeps the outermost pixels intact when scaling up.
-fn bilinear_sample(image: &image::RgbaImage, u: f32, v: f32) -> Option<[u8; 4]> {
+fn bilinear_sample(image: &megi_image::RgbaImage, u: f32, v: f32) -> Option<[u8; 4]> {
     if image.is_empty() {
         return None;
     }

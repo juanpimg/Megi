@@ -10,7 +10,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use dom::{Document, NodeKind};
+use megi_core::{Document, NodeKind};
 use render::{
     RenderOptions, RenderStats, ScriptBudget, ScriptingLimits, ScriptingMode, Viewport, render_url,
 };
@@ -44,7 +44,7 @@ fn render_fixture(name: &str, options: &RenderOptions) -> render::RenderOutput {
 }
 
 /// Collects the concatenated text descendants of `node_id`.
-fn collect_text(doc: &Document, node_id: dom::NodeId) -> String {
+fn collect_text(doc: &Document, node_id: megi_core::NodeId) -> String {
     let mut out = String::new();
     let mut stack = vec![node_id];
     while let Some(id) = stack.pop() {

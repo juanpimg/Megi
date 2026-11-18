@@ -36,7 +36,7 @@
 //!   lost (the synthetic image is not interactive).
 //! * The rasterized intrinsic size may be fractional; it is rounded up by <1 CSS px.
 
-use dom::{Attribute, Document, Namespace, NodeId};
+use megi_core::{Attribute, Document, Namespace, NodeId};
 
 /// Maximum number of inline SVG elements converted per document.
 pub const MAX_INLINE_SVGS: usize = 256;

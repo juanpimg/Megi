@@ -15,7 +15,7 @@ use paint::{
 };
 
 /// Bundled font database used by the reference pipeline.
-fn database() -> &'static fonts::FontDatabase {
+fn database() -> &'static megi_fonts::FontDatabase {
     paint::bundled_font_database()
 }
 
@@ -377,7 +377,7 @@ fn test_offscreen_text_is_culled() {
 }
 
 /// Regression test (round 3): glyph masks must be placed with the
-/// `fonts::GlyphMask` placement offsets (`left`/`top`). Dropping them top-aligns
+/// `megi_fonts::GlyphMask` placement offsets (`left`/`top`). Dropping them top-aligns
 /// every glyph's ink box, which lifts periods and dots to cap height and
 /// shifts text horizontally.
 #[test]

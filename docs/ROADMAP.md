@@ -66,7 +66,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 
 | Fase / Bloque | Barra | Estado | Cobertura Verificada | Hito Clave Alcanzado |
 |---|:---:|:---:|---|---|
-| **Fase 0: Tooling, Arena DOM & Closed-Loop Harness** | `[██████████] 100%` | **COMPLETO** | 28 tests en `crates/dom` | Arena contigua indexada (`NodeId(NonZeroU32)` de 4 bytes) sin `Rc<RefCell<Node>>`, scripts CLI de inspección WHATWG en vivo. |
+| **Fase 0: Tooling, Arena DOM & Closed-Loop Harness** | `[██████████] 100%` | **COMPLETO** | 28 tests en `crates/core` | Arena contigua indexada (`NodeId(NonZeroU32)` de 4 bytes) sin `Rc<RefCell<Node>>`, scripts CLI de inspección WHATWG en vivo. |
 | **Fase 1A: Tokenizador HTML5 (84 Estados & 2.231 Entidades)** | `[██████████] 100%` | **COMPLETO** | 7.050 / 7.050 estados en el gate (allowlist vacía) | 13 suites estándar de `html5lib-tests/tokenizer` al 100%; `ParseOptions` anti-DoS y deduplicación de atributos en tiempo lineal. |
 | **Fase 1B: Árbol DOM, Serializador §13.3 & DOM de navegador** | `[██████████] 100%` | **COMPLETO** | **3.904/3.904 árbol (100 %)** + 230/230 serializer + **60 tests html** | 21 modos de inserción, AAA, *foster parenting*, `innerHTML`; **serializador público WHATWG HTML §13.3** (`serialize_html`/`serialize_fragment`/`serialize_outer_html` + opciones) con las 5 suites `html5lib-tests/serializer` en el gate. **WP-6.4 (ronda 11)**: hook `ScriptExecutor` + scripts parser-inserted + `document.write` re-tokenizado ⇒ las 4 suites `scripted_*` pasan y la allowlist de tree queda vacía; fix de la regresión `tag-40k-attrs` (~12,4 ms). |
 | **Fase 2: Motor CSS (Sintaxis L3, Selectores L4, Cascada L4, Hoja UA §15)** | `[██████████] 100%` | **COMPLETO** | 230/230 unit + 30/30 WPT | Selectores L4 funcionales (`:is/:where/:not/:has`) y estructurales, especificidad, expansión de shorthands antes de la cascada, `font` shorthand, `@media` básico y índice de reglas (2,1× en resolve-styles 10k nodos); bases de Fase 4 (bordes por lado, `border-style: none`, `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type`, `line_height_factor`). |
@@ -88,12 +88,12 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
   - WHATWG DOM §4.4 *Interface Node* (`#interface-node`) y §4.5 *Interface Document* (`#interface-document`, `#concept-document-quirks`)
   - WHATWG HTML §4.12.3 *The `template` element* (`https://html.spec.whatwg.org/multipage/scripting.html#the-template-element`)
 - **Archivo(s) de test que lo validan**:
-  - Tests unitarios de invariantes de arena y mutaciones `O(1)` en `crates/dom/src/lib.rs`.
+  - Tests unitarios de invariantes de arena y mutaciones `O(1)` en `crates/core/src/lib.rs`.
 - **Crate y módulo responsable**:
   - `Cargo.toml`, `.cargo/config.toml`, `tools/whatwg_spec.py`, `tools/test_inspector.py`, `tools/dev.sh`
-  - `crates/dom/src/lib.rs` (`NodeId(NonZeroU32)`, `Document`, `Node`, `NodeKind`, `ElementData`, `Attribute`, `Namespace`, `QuirksMode`)
+  - `crates/core/src/lib.rs` (`NodeId(NonZeroU32)`, `Document`, `Node`, `NodeKind`, `ElementData`, `Attribute`, `Namespace`, `QuirksMode`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo test -p dom` pasa al 100% verificando `size_of::<Option<NodeId>>() == 4`, `append_child`, `insert_before`, `detach`, `reparent_children`, coalescencia de nodos de texto (`append_text` / `insert_text_before`) y creación del `DocumentFragment` inerte para `<template>`.
+  - `cargo test -p megi-core` pasa al 100% verificando `size_of::<Option<NodeId>>() == 4`, `append_child`, `insert_before`, `detach`, `reparent_children`, coalescencia de nodos de texto (`append_text` / `insert_text_before`) y creación del `DocumentFragment` inerte para `<template>`.
 
 ---
 
@@ -533,7 +533,7 @@ Resultados visuales: [`images/phase4-basic.png`](images/phase4-basic.png), [`ima
 | `WP-5.10` | Backgrounds E2E (`background-image`/`list-style-image`) en `render` | **HECHO** (ronda 8; caps 32/8 MiB/16 MiB) |
 | `WP-5.11` | Red avanzada E2E en el pipeline: cookies (jar por render o sesión), CORS/credentials con denegación no fatal, gzip/deflate en HTML/CSS; `--cookies`/`--origin` y stats (`cookies_stored`/`content_encoding`) | **HECHO** (ronda 10; render 114 tests tras ronda 15) |
 
-Criterio global: `cargo test -p net -p image -p render` + `cargo run -p render -- tests/fixtures/render/images.html /tmp/images.png` + `bash tools/render_fixture.sh`.
+Criterio global: `cargo test -p net -p megi-image -p render` + `cargo run -p render -- tests/fixtures/render/images.html /tmp/images.png` + `bash tools/render_fixture.sh`.
 
 ---
 

@@ -124,14 +124,14 @@ graph TD
     render --> image["crates/image (PNG, JPEG, GIF, WebP)"]
     render --> svg["crates/svg (Parser & Rasterizer)"]
     
-    html --> dom["crates/dom (Arena de Nodos)"]
+    html --> dom["crates/core (Arena de Nodos)"]
     layout --> dom
     paint --> image
 ```
 
 | Crate | Responsabilidad | Concurrencia / Seguridad |
 |---|---|:---:|
-| [`crates/dom`](crates/dom) | Arena de nodos DOM contigua con `NodeId` generacional libre de ciclos. | `#![forbid(unsafe_code)]` |
+| [`crates/core`](crates/core) | Arena de nodos DOM contigua con `NodeId` generacional libre de ciclos. | `#![forbid(unsafe_code)]` |
 | [`crates/html`](crates/html) | Tokenizador y árbol WHATWG HTML5 con conformidad 100%. | `#![forbid(unsafe_code)]` |
 | [`crates/css`](crates/css) | Parser CSS Syntax L3, Cascade Layers, Selectors L4 y Bloom pruning. | `#![forbid(unsafe_code)]` |
 | [`crates/layout`](crates/layout) | Árbol de cajas, BFC, IFC, CSS Grid, Flexbox y Container Queries. | `#![forbid(unsafe_code)]` |

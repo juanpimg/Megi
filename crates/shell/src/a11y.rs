@@ -7,7 +7,7 @@
 //! no live-region announcements and no computed accessible-name algorithm beyond
 //! `aria-label` → `aria-labelledby` → text/attribute fallback.
 
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 
 /// One accessibility node exposed by the shell.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -129,7 +129,7 @@ fn is_closed_dialog(document: &Document, node: NodeId) -> bool {
         .try_node(node)
         .and_then(|n| n.as_element())
         .is_some_and(|el| {
-            el.namespace == dom::Namespace::Html
+            el.namespace == megi_core::Namespace::Html
                 && el.local_name.eq_ignore_ascii_case("dialog")
                 && el.get_attribute("open").is_none()
         })
@@ -137,7 +137,7 @@ fn is_closed_dialog(document: &Document, node: NodeId) -> bool {
 
 fn modal_dialog_order(document: &Document, node: NodeId) -> Option<u32> {
     let el = document.try_node(node)?.as_element()?;
-    if el.namespace == dom::Namespace::Html
+    if el.namespace == megi_core::Namespace::Html
         && el.local_name.eq_ignore_ascii_case("dialog")
         && el.get_attribute("open").is_some()
         && let Some(order) = el.get_attribute("data-megi-modal")

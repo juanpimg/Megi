@@ -15,12 +15,12 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-dom = { path = "../crates/dom" }
-fonts = { path = "../crates/fonts" }
+megi-core = { path = "../crates/core" }
+megi-fonts = { path = "../crates/fonts" }
 html = { path = "../crates/html" }
 css = { path = "../crates/css" }
 net = { path = "../crates/net" }
-image = { path = "../crates/image" }
+megi-image = { path = "../crates/image" }
 render = { path = "../crates/render" }
 js = { path = "../crates/js" }
 svg = { path = "../crates/svg" }

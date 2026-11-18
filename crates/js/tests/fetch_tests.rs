@@ -180,7 +180,7 @@ fn fetch_caps_headers() {
 
 #[test]
 fn fetch_file_base_resolves_json_chain() {
-    use dom::Document;
+    use megi_core::Document;
     let mut runtime = JsRuntime::with_document(
         Document::new(),
         "file:///tmp/js_fetch_json.html".to_string(),

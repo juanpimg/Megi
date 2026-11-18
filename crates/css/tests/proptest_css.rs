@@ -6,7 +6,7 @@ use css::{
     resolve_document_styles_with_viewport, tokenizer::tokenize, try_query_selector,
     try_query_selector_all,
 };
-use dom::{Attribute, Document, Namespace};
+use megi_core::{Attribute, Document, Namespace};
 use proptest::prelude::*;
 
 fn sample_document() -> Document {

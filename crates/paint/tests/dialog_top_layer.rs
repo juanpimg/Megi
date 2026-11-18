@@ -1,14 +1,14 @@
 //! Paint and hit-test ordering tests for top-layer `<dialog>` and `::backdrop`.
 
 use css::{Color, ComputedStyle, Display, Position};
-use dom::{Document, Namespace};
+use megi_core::{Document, Namespace};
 use layout::{BoxType, Dimensions, LayoutBox, Rect};
 use paint::{
     DisplayItem, HitKind, RenderConfig, build_display_list_and_hit_regions, hit_test,
     rasterize_display_list_with_font_database,
 };
 
-fn elem(doc: &mut Document, parent: dom::NodeId, tag: &str) -> dom::NodeId {
+fn elem(doc: &mut Document, parent: megi_core::NodeId, tag: &str) -> megi_core::NodeId {
     let id = doc.create_element(Namespace::Html, tag, vec![]);
     doc.append_child(parent, id);
     id
@@ -23,7 +23,7 @@ fn solid_style(color: Color, pos: Position, z: Option<i32>) -> ComputedStyle {
     style
 }
 
-fn make_box(id: dom::NodeId, style: ComputedStyle, rect: Rect) -> LayoutBox {
+fn make_box(id: megi_core::NodeId, style: ComputedStyle, rect: Rect) -> LayoutBox {
     let mut b = LayoutBox::new(BoxType::BlockNode(id), Some(style));
     b.dimensions = Dimensions::default();
     b.dimensions.content = rect;

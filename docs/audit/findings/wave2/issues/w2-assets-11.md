@@ -8,7 +8,7 @@ P3 — docs: lectores del contrato esperan errores que ya no existen. Sólo docs
 
 ## Pasos para reproducir
 1. Lectura: `crates/image/src/lib.rs:10-12,40-43,122-123` vs éxito de decode progresivo/VP8X (suite verde); `png.rs:358` vs `png.rs:152`; `gif.rs:315` vs `gif.rs:323`.
-2. `cargo test -p image -p svg` (verde) + `image::decode` sobre `alph-f1.webp` (OK 16x16, VP8X funcional).
+2. `cargo test -p megi-image -p svg` (verde) + `megi_image::decode` sobre `alph-f1.webp` (OK 16x16, VP8X funcional).
 
 ## Esperado vs observado
 Esperado: docs = comportamiento.

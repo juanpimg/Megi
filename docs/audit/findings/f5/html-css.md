@@ -46,14 +46,14 @@ semantics on top of a correct parse.
 | obsolete `center`, `font`, `big`, `strike`, `tt`, `nobr`, `marquee`, `frameset`, `applet`, `basefont`, `bgsound`, `plaintext`, `xmp` | partial (parse) / absent (render) | parser handles them (`crates/html/src/tree_builder.rs`, obsolete tag list) but `rg 'bgcolor|cellpadding|cellspacing|"valign"|"face"|"color"' crates/css/src/lib.rs crates/layout/src/tree_builder.rs` → no presentational-hint mapping | legacy presentation attributes (`align`, `valign`, `bgcolor`, `cellpadding`, `cellspacing`, `border`, `font size/face/color`, `<center>`) are ignored by the cascade; old pages lose their entire visual intent |
 | `svg` (inline), `svg` as image | partial | `crates/render/src/inline_svg.rs:1-20`: inline SVG is serialized to a `data:image/svg+xml` **`<img>`** | CSS from the document does not reach inside the `data:` image (no `fill: currentColor`, no inherited `font-family`, no `:hover` on SVG children); external `<use href>`, CSS-in-SVG interactions limited to what `crates/svg` implements |
 | `math` (MathML) | absent | foreign content parsed (`crates/html/src/tree_builder.rs`, MathML name sets) but `rg 'mathml|"math"' crates/render/src` → 0 | math is laid out as ordinary inline HTML text; no fraction/radical/scripts layout |
-| `template` | partial | `crates/css/src/user_agent.rs:37-39` (`display:none`) | template **content** is not treated as an inert `DocumentFragment` (no `template.content` semantics in `crates/dom/src/lib.rs`) |
+| `template` | partial | `crates/css/src/user_agent.rs:37-39` (`display:none`) | template **content** is not treated as an inert `DocumentFragment` (no `template.content` semantics in `crates/core/src/lib.rs`) |
 | `noscript` | full (parse) | `crates/html/src/tree_builder.rs:2866-2879`, `:3460` (scripting-aware insertion modes) | scripting disabled/enabled handled at parse time; no separate paint gap |
 
 ### 1.1 Global and element attributes
 
 | Attribute | Status | Evidence | Note |
 |---|---|---|---|
-| `id`, `class`, `style`, `title`, `data-*`, `aria-*`, `role` | full | `crates/dom/src/lib.rs`; `crates/shell/src/a11y.rs:12-25` (role/name/disabled/hidden) | a11y is a minimal model (no computed name algorithm, no live regions) |
+| `id`, `class`, `style`, `title`, `data-*`, `aria-*`, `role` | full | `crates/core/src/lib.rs`; `crates/shell/src/a11y.rs:12-25` (role/name/disabled/hidden) | a11y is a minimal model (no computed name algorithm, no live regions) |
 | `lang` | partial | parsed/stored; `:lang()` selector unimplemented — `crates/css/src/selector.rs:18-20` lists it as pending | language-dependent typography/quotes unavailable |
 | `dir` | **absent** | `rg 'get_attribute\("dir"\)|"dir"\)' crates --glob '!*/tests/*'` → only tree-builder attribute tables; `crates/layout/src/bidi.rs:1-6` runs UAX#9 from *computed* `direction` | `<html dir="rtl">`/`dir="auto"` never sets the paragraph direction: RTL pages render LTR unless the page also sets `direction` in CSS |
 | `hidden` | **absent** | no `[hidden]` rule in `crates/css/src/user_agent.rs`; `rg '"hidden"' crates/layout/src crates/css/src crates/render/src` → only `overflow:hidden`/`border-style:hidden` values | `<div hidden>`, `<section hidden>` etc. stay **visible and occupy layout**; `crates/shell/src/a11y.rs:20` does exclude them from the focus order, so a11y and rendering disagree |

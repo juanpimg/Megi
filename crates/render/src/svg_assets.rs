@@ -36,7 +36,7 @@ pub(crate) struct RenderedSvg {
     /// Intrinsic size in CSS px (may be fractional), for layout's replaced sizes.
     pub intrinsic: (f32, f32),
     /// Rasterized straight-RGBA bitmap at `ceil(intrinsic)` pixels.
-    pub raster: image::RgbaImage,
+    pub raster: megi_image::RgbaImage,
 }
 
 /// Returns `true` when the payload should be handled as an SVG image.

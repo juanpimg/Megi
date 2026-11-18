@@ -25,7 +25,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 use net::{ResourceLoader, Scheme, Url};
 
 use crate::svg_assets;
@@ -595,7 +595,7 @@ pub fn load_images_with_context(
     // `Arc` across every `<img>` that references it (backgrounds already deduplicate this
     // way). The raw `(intrinsic_size, scale_with_density)` tuple lets each `<img srcset>`
     // apply its own selected density divisor while still sharing the bitmap buffer.
-    type CachedImageEntry = ((f32, f32), bool, Arc<image::RgbaImage>);
+    type CachedImageEntry = ((f32, f32), bool, Arc<megi_image::RgbaImage>);
     let mut cache: HashMap<String, CachedImageEntry> = HashMap::new();
     let sources = collect_responsive_image_sources(document, media, limits.device_pixel_ratio);
     if sources.len() > limits.max_images {
@@ -703,15 +703,15 @@ pub fn load_images_with_context(
             continue;
         }
         if matches!(
-            image::detect_format(&resource.bytes),
-            image::ImageFormat::Png
-                | image::ImageFormat::Jpeg
-                | image::ImageFormat::Gif
-                | image::ImageFormat::WebP
+            megi_image::detect_format(&resource.bytes),
+            megi_image::ImageFormat::Png
+                | megi_image::ImageFormat::Jpeg
+                | megi_image::ImageFormat::Gif
+                | megi_image::ImageFormat::WebP
         ) {
             let decoded = match limits.max_image_dim {
-                Some(max_dim) => image::decode_scaled(&resource.bytes, max_dim),
-                None => image::decode(&resource.bytes),
+                Some(max_dim) => megi_image::decode_scaled(&resource.bytes, max_dim),
+                None => megi_image::decode(&resource.bytes),
             };
             match decoded {
                 Ok(decoded) => {
@@ -742,8 +742,8 @@ pub fn load_images_with_context(
                     // Broken/unsupported VP8 lossy payloads (e.g. VP8X containers or a
                     // truncated keyframe) keep an explicit WebP-lossy warning.
                     if matches!(
-                        image::detect_format(&resource.bytes),
-                        image::ImageFormat::WebP
+                        megi_image::detect_format(&resource.bytes),
+                        megi_image::ImageFormat::WebP
                     ) && error.to_string().contains("VP8")
                     {
                         result.warnings.push(format!(
@@ -786,7 +786,7 @@ pub fn load_images_with_context(
                 }
             }
         } else {
-            let format = image::detect_format(&resource.bytes);
+            let format = megi_image::detect_format(&resource.bytes);
             result.failed += 1;
             result.warnings.push(format!(
                 "skipping image {url}: unsupported format {format:?} (PNG, JPEG, GIF, WebP-lossless and SVG are decoded)"

@@ -1,7 +1,7 @@
 //! Layout tests for `<dialog>`, `fit-content` + `margin: auto` centering, and top-layer clip escaping.
 
 use css::resolve_document_styles_with_viewport;
-use dom::{Attribute, Document, Namespace, NodeId};
+use megi_core::{Attribute, Document, Namespace, NodeId};
 use layout::{LayoutBox, Rect, layout_document};
 
 fn elem(doc: &mut Document, parent: NodeId, tag: &str, attrs: &[(&str, &str)]) -> NodeId {

@@ -1,8 +1,8 @@
 //! Round 35: DOM conformance regressions (clone attributes, fragment insertion, ancestor bits).
 
-use dom::{Document, Namespace};
+use megi_core::{Document, Namespace};
 
-fn el(document: &mut Document, name: &str, attributes: Vec<dom::Attribute>) -> dom::NodeId {
+fn el(document: &mut Document, name: &str, attributes: Vec<megi_core::Attribute>) -> megi_core::NodeId {
     document.create_element(Namespace::Html, name, attributes)
 }
 
@@ -13,7 +13,7 @@ fn clone_node_copies_attributes_and_children() {
     let parent = el(
         &mut document,
         "div",
-        vec![dom::Attribute::new("data-x", "1")],
+        vec![megi_core::Attribute::new("data-x", "1")],
     );
     assert!(document.append_child(root, parent));
     let child = el(&mut document, "span", vec![]);

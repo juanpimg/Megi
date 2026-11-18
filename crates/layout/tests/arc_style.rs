@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use css::{ComputedStyle, Display};
-use dom::{Document, Namespace, NodeId};
+use megi_core::{Document, Namespace, NodeId};
 use layout::{BoxType, Rect, layout_document};
 
 fn element(doc: &mut Document, parent: NodeId, name: &str) -> NodeId {

@@ -4,7 +4,7 @@
 The previous `exif_o1..o8.jpg` fixtures all stored an upright 12x8 frame and only
 changed the orientation tag, so the real-world case (pixels stored rotated, tag says
 rotate them back) was never exercised. Here each file stores the source rotated by the
-*inverse* of the tag's transform, per `image::apply_orientation`:
+*inverse* of the tag's transform, per `megi_image::apply_orientation`:
 
   dst(x, y) = src(sx, sy)   with   dst == upright
 

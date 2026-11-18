@@ -167,7 +167,7 @@
 //!   (including `@import`ed ones) are collected by [`webfonts`], deduplicated by URL,
 //!   fetched with the shared loader (honoring `--no-network`) and decoded from WOFF2 into
 //!   sfnt with pure-Rust `woff2` (Apache-2.0). Faces are registered under their CSS family
-//!   alias in a per-render [`fonts::FontDatabase`] (bundled faces + web faces) that is used
+//!   alias in a per-render [`megi_fonts::FontDatabase`] (bundled faces + web faces) that is used
 //!   by **both** layout ([`layout::FontTextMeasurer`]) and paint
 //!   ([`paint::rasterize_display_list_with_font_database`]). Caps: 8 fonts, 8 MiB each,
 //!   32 MiB total; failures are non-fatal warnings and `stats.fonts_loaded/failed/bytes`
@@ -220,7 +220,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use css::ComputedStyle;
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 use net::{FetchOptions, ResourceLoader, Scheme, Url};
 
 use images::{
@@ -1188,7 +1188,7 @@ fn render_parsed_document_inner(
     // Canvas 2D surfaces painted by scripts (#1545); inserted into the image store after images load.
     // The map is only meaningful with the `js` feature: without scripts there is no canvas.
     #[cfg(feature = "js")]
-    let mut canvas_surfaces: std::collections::HashMap<dom::NodeId, js::canvas::CanvasSurface> =
+    let mut canvas_surfaces: std::collections::HashMap<megi_core::NodeId, js::canvas::CanvasSurface> =
         std::collections::HashMap::new();
     if script_requested && !cfg!(feature = "js") {
         warnings.push(
@@ -1440,7 +1440,7 @@ fn render_parsed_document_inner(
     #[cfg(feature = "js")]
     {
         for (node, surface) in canvas_surfaces {
-            if let Ok(rgba) = image::RgbaImage::new(surface.width, surface.height, surface.pixels) {
+            if let Ok(rgba) = megi_image::RgbaImage::new(surface.width, surface.height, surface.pixels) {
                 let size = (surface.width as f32, surface.height as f32);
                 loaded_images.store.insert(node, std::sync::Arc::new(rgba));
                 loaded_images.sizes.insert(node, size);
@@ -1733,7 +1733,7 @@ fn render_svg_document(
 
     // #1665: use only the bundled (deterministic) fonts, matching the normal render path in
     // `webfonts.rs`. System fonts vary per host and made the same SVG produce different PNGs.
-    let font_db = fonts::FontDatabase::new_with_bundled_fonts();
+    let font_db = megi_fonts::FontDatabase::new_with_bundled_fonts();
     let measurer = layout::FontTextMeasurer::from_database(font_db);
     let viewport = layout::Rect::new(
         0.0,
@@ -2007,7 +2007,7 @@ fn document_csp(
         let Some(element) = document.node(node_id).as_element() else {
             continue;
         };
-        if element.namespace != dom::Namespace::Html
+        if element.namespace != megi_core::Namespace::Html
             || !element.local_name.eq_ignore_ascii_case("meta")
         {
             continue;
@@ -2080,7 +2080,7 @@ fn stylesheet_signature(document: &Document) -> u64 {
         let Some(element) = document.node(node_id).as_element() else {
             continue;
         };
-        if element.namespace != dom::Namespace::Html {
+        if element.namespace != megi_core::Namespace::Html {
             continue;
         }
         let local = element.local_name.as_str();
@@ -2098,7 +2098,7 @@ fn stylesheet_signature(document: &Document) -> u64 {
                 }
             }
             for desc_id in document.descendants(node_id) {
-                if let dom::NodeKind::Text(text) = &document.node(desc_id).kind {
+                if let megi_core::NodeKind::Text(text) = &document.node(desc_id).kind {
                     mix(&mut hash, text.as_bytes());
                 }
             }
@@ -2564,7 +2564,7 @@ fn resolve_styles_with_collection(
         .keys()
         .filter_map(|node_id| {
             let element = doc.node(*node_id).as_element()?;
-            if element.namespace != dom::Namespace::Html
+            if element.namespace != megi_core::Namespace::Html
                 || !element.local_name.eq_ignore_ascii_case("dialog")
                 || element.get_attribute("open").is_none()
                 || element.get_attribute("data-megi-modal").is_none()

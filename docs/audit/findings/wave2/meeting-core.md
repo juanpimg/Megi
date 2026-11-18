@@ -4,7 +4,7 @@
 - Commit verificado: `3c06db8` (worktree limpio `/tmp/opencode/megi-verify`).
 - Fuentes: informe `f2-core.md` (15 hallazgos 01–09, 10a, 10b, 11–14 + 1 latent;
   sonda `/tmp/probe` T1–T10, L1–L7, O1/O2, H1–H3, W1, B1/B2, Q1/Q2, V1, M1/M2,
-  F1, C1/C2, S1 + `mem`, 2 ejecuciones idénticas; `cargo test -p dom -p html -p css`
+  F1, C1/C2, S1 + `mem`, 2 ejecuciones idénticas; `cargo test -p megi-core -p html -p css`
   → 529 passed, 0 failed; `cargo build -p css` → 0 warnings; `/tmp/dup.rs`),
   `verify-core-A.md` (reproductor independiente), `verify-core-B.md` (fiscal
   inicial 01–10, truncado), `verify-core-B2.md` (fiscal completo, sustituye a B),

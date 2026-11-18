@@ -9,8 +9,8 @@
 use std::sync::Arc;
 
 use css::{BorderStyle, Color, ComputedStyle, Display, TextDecoration};
-use dom::{Document, Namespace};
-use image::RgbaImage;
+use megi_core::{Document, Namespace};
+use megi_image::RgbaImage;
 use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use paint::{
     HitKind, HitLink, ImageStore, build_display_list_and_hit_regions,
@@ -24,7 +24,7 @@ const VIEWPORT: Rect = Rect {
     height: 200.0,
 };
 
-fn node_ids(count: usize) -> (Document, Vec<dom::NodeId>) {
+fn node_ids(count: usize) -> (Document, Vec<megi_core::NodeId>) {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     document.append_child(document.root(), html);
@@ -43,7 +43,7 @@ fn block_style() -> ComputedStyle {
     style
 }
 
-fn box_with_rect(id: dom::NodeId, style: ComputedStyle, rect: Rect) -> LayoutBox {
+fn box_with_rect(id: megi_core::NodeId, style: ComputedStyle, rect: Rect) -> LayoutBox {
     let mut layout_box = LayoutBox::new(BoxType::BlockNode(id), Some(style));
     layout_box.dimensions = Dimensions {
         content: rect,
@@ -54,7 +54,7 @@ fn box_with_rect(id: dom::NodeId, style: ComputedStyle, rect: Rect) -> LayoutBox
     layout_box
 }
 
-fn transparent_root(id: dom::NodeId) -> LayoutBox {
+fn transparent_root(id: megi_core::NodeId) -> LayoutBox {
     let mut root = LayoutBox::new(BoxType::BlockNode(id), Some(block_style()));
     root.dimensions.content = VIEWPORT;
     root
@@ -111,7 +111,7 @@ fn test_hit_test_all_returns_topmost_first() {
     ));
     let (_list, regions) = build_display_list_and_hit_regions(&root, VIEWPORT);
     let hits = hit_test_all(&regions, 20.0, 20.0);
-    let node_order: Vec<Option<dom::NodeId>> = hits.iter().map(|hit| hit.node_id).collect();
+    let node_order: Vec<Option<megi_core::NodeId>> = hits.iter().map(|hit| hit.node_id).collect();
     assert_eq!(node_order.first(), Some(&Some(ids[2])), "topmost first");
     assert!(node_order.contains(&Some(ids[1])));
 }
@@ -234,7 +234,7 @@ fn test_find_link_at_span_inside_anchor() {
                 found = Some(node);
                 break;
             }
-            let children: Vec<dom::NodeId> = document.children(node).collect();
+            let children: Vec<megi_core::NodeId> = document.children(node).collect();
             for child in children {
                 stack.push(child);
             }

@@ -3,10 +3,10 @@
 
 #![cfg(feature = "js")]
 
-use dom::{Document, Namespace};
+use megi_core::{Document, Namespace};
 use js::{Budget, JsError, JsRuntime};
 
-fn document_with_target() -> (Document, dom::NodeId) {
+fn document_with_target() -> (Document, megi_core::NodeId) {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     let body = document.create_element(Namespace::Html, "body", vec![]);

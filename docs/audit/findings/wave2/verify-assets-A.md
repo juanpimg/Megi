@@ -26,7 +26,7 @@
 | w2-assets-06 | VERIFIED | probe `textpos` (mín-x de tinta) + lectura `document.rs:2813-2821` | `text-px.svg: ink_min_x=Some(1) ink_count=74`; `text-num.svg: ink_min_x=Some(11) ink_count=74` | `first_number` hace `part.trim().parse::<f32>()` directo: `"10px"` falla → `0.0`; el texto se desplaza al origen con el mismo nº de glifos. Inconsistente con `length_attr` (acepta `px`). La parte `stdDeviation` del título es lectura estática (no ejercitada dinámicamente). |
 | w2-assets-07 | VERIFIED | probe `file` (control decimal vs `%`) + lectura `document.rs:419-422` | `root-opacity-dec.svg (opacity="0.5"): px(10,10)=(255,0,0,128)`; `root-opacity-pct.svg (opacity="50%"): px(10,10)=(255,0,0,255)` | Raíz usa `v.parse::<f32>()` en vez de `parse_opacity`; `"50%"` falla → `unwrap_or(1.0)`. El resto de elementos sí acepta `%`. Inconsistencia raíz/resto confirmada con control. |
 | w2-assets-08 | VERIFIED | probe `grad` (1 pasada, perfil debug) + lectura `gradient.rs:225-242`, `raster.rs:1583` | `g2-16.svg: 1600x1600 494.97ms painted=2560000`; `g256-16.svg: 1600x1600 1.66s painted=2560000` (≈3,4×) | `evaluate` recorre linealmente `&self.stops[1..]` por píxel; stops ordenados (`sort_by` en `gradient.rs:365`) admiten bisección. Absolutos menores que los del informe (1 pasada vs 3), pero el factor de escala con nº de stops persiste en el mismo perfil debug. Perf, no corrección. |
-| w2-assets-09 | VERIFIED | probe `alph` (`image::decode` sobre `alph-f1/2/3.webp` + mutación de bits de filtro del chunk `ALPH`) | `ALPH chunk at file offset 30`; `filter=0: OK 16x16`; `filter=1: OK 16x16`; `filter=2: ERR UnsupportedFeature { feature: "WebP ALPH filtering method" }`; `filter=3: ERR …` | `apply_alpha_plane` (`webp.rs:993-1032`) sólo implementa 0/1 y rechaza 2 (vertical) / 3 (gradient), válidos según el spec del contenedor. Los fixtures `alph-f2/f3.webp` del repro dan el mismo `ERR`. |
+| w2-assets-09 | VERIFIED | probe `alph` (`megi_image::decode` sobre `alph-f1/2/3.webp` + mutación de bits de filtro del chunk `ALPH`) | `ALPH chunk at file offset 30`; `filter=0: OK 16x16`; `filter=1: OK 16x16`; `filter=2: ERR UnsupportedFeature { feature: "WebP ALPH filtering method" }`; `filter=3: ERR …` | `apply_alpha_plane` (`webp.rs:993-1032`) sólo implementa 0/1 y rechaza 2 (vertical) / 3 (gradient), válidos según el spec del contenedor. Los fixtures `alph-f2/f3.webp` del repro dan el mismo `ERR`. |
 | w2-assets-10 | VERIFIED | probe `jpeg` (barrido SOS + `decode`/`decode_scaled`) + lectura `jpeg.rs:8-11` vs `parse_sos` (`jpeg.rs:948-950`) | `SOS scans: [(3, 0, 0, 0, 1), …, (3, 0, 0, 1, 0), (1, 1, 63, 1, 0), …]`; `decode OK 12x8`; `scaled OK 6x4` | El scan `(Ns=3, Ss=0, Se=0, Ah=1, Al=0)` = refine-DC entrelazado **presente** en `progressive.jpg` y decodificado sin error; el doc promete `UnsupportedFeature` para `Ah>0` multi-componente pero `parse_sos` sólo rechaza `len>1 && ss!=0`. Discrepancia doc-vs-código exacta. El comportamiento (decodificar) es el razonable; el fix es de docstring. |
 | w2-assets-11 | VERIFIED | lectura estática + `decode` OK de w2-assets-10/probe `alph` (f1 OK) | `lib.rs:10-12` «typed errors for progressive» vs `decode OK 12x8`; `lib.rs:22-24,40-43` «VP8X … stay unsupported» / «animation/alpha-only WebP (VP8X)» vs `alph-f1.webp: OK 16x16`; `png.rs:358` «accumulate per-output-pixel RGBA sums» vs `png.rs:152` «Sampling is nearest-neighbour»; `gif.rs:315` «MSB-first bit reader» vs `gif.rs:323` «least-significant-bit first» | Los tres docstrings contradicen al código del mismo árbol (a y c son auto-evidentes en el propio archivo; b es contradicción interna 358 vs 152). La parte (b)-`decode_png_scaled` doc 149–155 ya dice nearest y es la correcta. Sólo docs, sin cambio de comportamiento. |
 
@@ -34,8 +34,8 @@ Detalle de comandos (todos con `TMPDIR=/home/jp/.cache/megi-tmp CARGO_TARGET_DIR
 desde `/tmp/opencode/megi-verify`):
 
 - `cargo run --manifest-path /home/jp/.cache/megi-probe-assets/Cargo.toml -- render|textcol|alph|jpeg|grad|textpos|concerns|file …`
-  (sonda con path-deps al worktree; render in-process vía `svg::render_svg`, ALPH/JPEG vía `image::decode`).
-- `cargo test -p svg`, `cargo test -p image`, `cargo test -p fonts` en serie: todo `ok`, 0 failed
+  (sonda con path-deps al worktree; render in-process vía `svg::render_svg`, ALPH/JPEG vía `megi_image::decode`).
+- `cargo test -p svg`, `cargo test -p megi-image`, `cargo test -p megi-fonts` en serie: todo `ok`, 0 failed
   (svg: 37+14+13+16+…; image: 32+34+5+9+8+6+7+21+1; fonts: 3+19+10+1).
 - Verificado-fijo del informe (`currentcolor`): re-confirmado —
   `currentcolor.svg: 20x20 painted=400 … ((255, 0, 0, 255), 400)`. No es hallazgo.
@@ -49,7 +49,7 @@ desde `/tmp/opencode/megi-verify`):
    considerar `SvgError::Limit` o documentar el tope), no sólo concern.
 2. **C2 — needs-repro (sólo código)**: `svg::text::families` (`text.rs:108-123`) parte por `,`
    sin respetar comillas y desnuda genéricos entrecomillados, mientras
-   `fonts::parse_font_families` (`db.rs:193-…`) sí respeta comillas (bucle con
+   `megi_fonts::parse_font_families` (`db.rs:193-…`) sí respeta comillas (bucle con
    `in_single`/`in_double`/`escaped`). Divergencia confirmada por lectura; sin sonda de
    render diferencial (p. ej. `font-family='"serif", "DejaVu Sans", serif'` con comas dentro
    de comillas). Si Mesa C lo incluye, pedir repro de píxeles o marcar `exclude`.

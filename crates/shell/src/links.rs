@@ -26,7 +26,7 @@
 //!   therefore count as a new navigation in this round (no in-page smooth scrolling yet).
 //! - No forms, no `<area>`, no `javascript:` execution, no downloads.
 
-use dom::Namespace;
+use megi_core::Namespace;
 use layout::LayoutBox;
 
 /// Rectangle in CSS page coordinates (CSS px, document origin, no scroll applied).
@@ -80,7 +80,7 @@ pub struct LinkRegion {
     ///
     /// Keyboard focus and the focus ring key off this node so that one anchor is one focus
     /// target even when several painted primitives cover it.
-    pub node: Option<dom::NodeId>,
+    pub node: Option<megi_core::NodeId>,
 }
 
 /// Errors produced by [`resolve_href`].

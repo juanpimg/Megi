@@ -17,7 +17,7 @@
 //! The DOM is deliberately tiny (≤ 64 elements, shallow) so the target stays fast while
 //! still exercising combinators, pseudo-classes, attribute selectors and the cascade.
 
-use dom::{Attribute, Document, Namespace};
+use megi_core::{Attribute, Document, Namespace};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

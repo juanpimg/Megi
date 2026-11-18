@@ -88,7 +88,7 @@ fn zlib_stored(parts: &[Vec<u8>]) -> Vec<u8> {
         out.extend_from_slice(part);
         all.extend_from_slice(part);
     }
-    out.extend_from_slice(&image::adler32(&all).to_be_bytes());
+    out.extend_from_slice(&megi_image::adler32(&all).to_be_bytes());
     out
 }
 

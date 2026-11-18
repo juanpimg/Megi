@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 
 use css::{AspectRatio, ComputedStyle, Display, Length};
-use dom::{Document, Namespace, NodeId};
+use megi_core::{Document, Namespace, NodeId};
 use layout::{LayoutBox, Rect, layout_document, layout_document_with_replaced_sizes};
 
 fn style(width: Length, height: Length, ratio: Option<AspectRatio>) -> ComputedStyle {

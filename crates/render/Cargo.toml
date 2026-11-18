@@ -15,14 +15,14 @@ default = ["js"]
 js = ["dep:js"]
 
 [dependencies]
-dom.workspace = true
+megi-core.workspace = true
 html.workspace = true
 css.workspace = true
 layout.workspace = true
-fonts.workspace = true
+megi-fonts.workspace = true
 paint.workspace = true
 net.workspace = true
-image.workspace = true
+megi-image.workspace = true
 js = { workspace = true, optional = true }
 svg.workspace = true
 

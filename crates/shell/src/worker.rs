@@ -111,7 +111,7 @@ pub struct RenderFrame {
     /// Rendered form controls (page CSS coordinates) for the shell editor.
     pub forms: Vec<crate::forms::FormControl>,
     /// DOM snapshot of this frame (patched and re-rendered by the form editor).
-    pub document: Arc<dom::Document>,
+    pub document: Arc<megi_core::Document>,
     /// Find-in-page hits for [`RenderRequest::find_query`] (empty when no query).
     pub find_matches: Vec<crate::find::FindMatch>,
     /// Highlight rectangles (page CSS coordinates) for those hits, from the layout tree.
@@ -709,7 +709,7 @@ mod unit_tests {
             warnings: 0,
             script_errors: 0,
             forms: Vec::new(),
-            document: Arc::new(dom::Document::new()),
+            document: Arc::new(megi_core::Document::new()),
             find_matches: Vec::new(),
             find_rects: Vec::new(),
         }
@@ -1023,7 +1023,7 @@ mod worker_panic_isolation_tests {
             warnings: 0,
             script_errors: 0,
             forms: Vec::new(),
-            document: Arc::new(dom::Document::new()),
+            document: Arc::new(megi_core::Document::new()),
             find_matches: Vec::new(),
             find_rects: Vec::new(),
         }

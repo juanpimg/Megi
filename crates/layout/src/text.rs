@@ -2,7 +2,7 @@
 //!
 //! [`FontTextMeasurer`] is the production [`TextMeasurer`] implementation: it
 //! resolves the CSS `font-family` list, `font-weight` and `font-style` against a
-//! [`fonts::FontDatabase`] and returns real OpenType metrics (ascent, descent,
+//! [`megi_fonts::FontDatabase`] and returns real OpenType metrics (ascent, descent,
 //! line gap, x-height) and `hmtx` advances in CSS pixels.
 //!
 //! The deterministic [`DefaultTextMeasurer`]
@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use css::{ComputedStyle, FontStyle};
-use fonts::FontDatabase;
+use megi_fonts::FontDatabase;
 
 use crate::inline::{DefaultTextMeasurer, FontMetrics, TextMeasurer};
 
@@ -26,9 +26,9 @@ use crate::inline::{DefaultTextMeasurer, FontMetrics, TextMeasurer};
 /// ```no_run
 /// use layout::{FontTextMeasurer, Rect, layout_document_with_measurer};
 /// # use std::collections::HashMap;
-/// # use dom::{Document, NodeId};
+/// # use megi_core::{Document, NodeId};
 /// # use css::ComputedStyle;
-/// # fn main() -> Result<(), fonts::FontError> {
+/// # fn main() -> Result<(), megi_fonts::FontError> {
 /// let measurer = FontTextMeasurer::bundled()?;
 /// # let doc = Document::new();
 /// # let styles: HashMap<NodeId, ComputedStyle> = HashMap::new();
@@ -87,7 +87,7 @@ struct MeasurerCache {
 impl FontTextMeasurer {
     /// Creates a measurer backed by the deterministic bundled fonts
     /// (`crates/fonts/assets/DejaVuSans*.ttf`), independent of system fonts.
-    pub fn bundled() -> Result<Self, fonts::FontError> {
+    pub fn bundled() -> Result<Self, megi_fonts::FontError> {
         Ok(Self {
             database: FontDatabase::load_bundled()?,
             cache: Mutex::new(MeasurerCache::default()),
@@ -109,16 +109,16 @@ impl FontTextMeasurer {
 
     /// Resolves a CSS family value into the owned family-name list used by `fonts`.
     fn families(font_family: &str) -> Vec<String> {
-        fonts::db::parse_font_families(font_family)
+        megi_fonts::db::parse_font_families(font_family)
     }
 
-    fn weight_and_italic(weight: u16, italic: bool) -> (u16, fonts::FontStyle) {
+    fn weight_and_italic(weight: u16, italic: bool) -> (u16, megi_fonts::FontStyle) {
         (
             weight,
             if italic {
-                fonts::FontStyle::Italic
+                megi_fonts::FontStyle::Italic
             } else {
-                fonts::FontStyle::Normal
+                megi_fonts::FontStyle::Normal
             },
         )
     }

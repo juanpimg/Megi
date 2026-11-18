@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use css::{ComputedStyle, Display, Length, TextTransform, WhiteSpace, resolve_document_styles};
-use dom::{Document, Namespace, NodeId};
+use megi_core::{Document, Namespace, NodeId};
 
 fn setup() -> (Document, NodeId, NodeId) {
     let mut doc = Document::new();

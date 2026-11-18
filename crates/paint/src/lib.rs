@@ -58,7 +58,7 @@ mod tests {
 
     use super::*;
     use css::{ComputedStyle, Display, Length};
-    use dom::{Document, Namespace};
+    use megi_core::{Document, Namespace};
     use layout::{Rect, layout_document};
 
     fn make_box_style(

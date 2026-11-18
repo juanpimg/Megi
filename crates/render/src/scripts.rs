@@ -79,7 +79,7 @@ use std::sync::{Arc, Mutex};
 use crate::{HistoryAction, LocationAction};
 
 use css::ComputedStyle;
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 use net::{ResourceLoader, Scheme, Url};
 
 /// Default maximum size of one script source (8 MiB).
@@ -285,7 +285,7 @@ pub struct ScriptingHostContext {
     /// `popstate`) so their listeners can mutate the DOM before the final re-render.
     pub host_events: Vec<String>,
     #[cfg(feature = "js")]
-    pub frame_documents: Vec<(dom::NodeId, dom::Document)>,
+    pub frame_documents: Vec<(megi_core::NodeId, megi_core::Document)>,
     /// Optional Content Security Policy enforced across `fetch`/`XHR`, modules, and `eval` (#1526).
     pub csp: Option<net::csp::ContentSecurityPolicy>,
     /// Structured DOM/UI events forwarded from the host UI into the live JS realm (#1504).
@@ -294,11 +294,11 @@ pub struct ScriptingHostContext {
     /// runtime so scripts can measure the initial layout (viewport coords, scroll = 0).
     #[cfg(feature = "js")]
     pub layout:
-        Option<std::sync::Arc<std::collections::HashMap<dom::NodeId, js::host::LayoutRect>>>,
+        Option<std::sync::Arc<std::collections::HashMap<megi_core::NodeId, js::host::LayoutRect>>>,
     /// Lazy pre-script layout resolver invoked only if a script queries geometry (#534).
     #[cfg(feature = "js")]
     pub layout_provider: Option<
-        Arc<dyn Fn() -> std::collections::HashMap<dom::NodeId, js::host::LayoutRect> + Send + Sync>,
+        Arc<dyn Fn() -> std::collections::HashMap<megi_core::NodeId, js::host::LayoutRect> + Send + Sync>,
     >,
     /// Optional `<iframe sandbox>` flags applied when this document is a framed subdocument (#1544).
     #[cfg(feature = "js")]
@@ -383,7 +383,7 @@ pub struct ScriptExecution {
     /// Canvas 2D surfaces created/filled by scripts (#1545), keyed by `<canvas>` node.
     /// Only available when the `js` feature is enabled (no canvas without scripts).
     #[cfg(feature = "js")]
-    pub canvas_surfaces: std::collections::HashMap<dom::NodeId, js::canvas::CanvasSurface>,
+    pub canvas_surfaces: std::collections::HashMap<megi_core::NodeId, js::canvas::CanvasSurface>,
     /// Mutated/initialized child `<iframe>` documents captured during scripting (#1544).
     #[cfg(feature = "js")]
     pub frame_documents: Vec<(NodeId, Document, js::SandboxFlags, String)>,
@@ -701,7 +701,7 @@ pub fn load_scripts_with_csp(
 /// helper scans the document once up front (the executor runs scripts after parsing).
 #[cfg(feature = "js")]
 fn import_map_source(
-    document: &dom::Document,
+    document: &megi_core::Document,
     max_bytes: usize,
     warnings: &mut Vec<String>,
 ) -> Option<String> {
@@ -2087,7 +2087,7 @@ mod layout_provider_freshness_tests {
             counter.fetch_add(1, Ordering::SeqCst);
             let mut rects = std::collections::HashMap::new();
             rects.insert(
-                dom::NodeId::from_index(1),
+                megi_core::NodeId::from_index(1),
                 js::host::LayoutRect {
                     border_box: (0.0, 0.0, 10.0, 10.0),
                     content_box: (0.0, 0.0, 10.0, 10.0),
@@ -2095,7 +2095,7 @@ mod layout_provider_freshness_tests {
             );
             rects
         };
-        let node = dom::NodeId::from_index(1);
+        let node = megi_core::NodeId::from_index(1);
         let _ = provider().get(&node).copied();
         let _ = provider().get(&node).copied();
         assert_eq!(

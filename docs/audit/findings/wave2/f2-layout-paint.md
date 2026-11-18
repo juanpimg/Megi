@@ -9,7 +9,7 @@ Prefijo: `w2-lp`. Alcance: todos los `.rs` bajo `crates/layout/src/` y
 > `crates/paint/src/`. Todos los comandos cargo/test se ejecutaron desde el
 > worktree limpio `/tmp/opencode/megi-verify` (HEAD `3c06db8`, sin cambios).
 > Lecturas hechas en el árbol principal; `diff -r` confirma que
-> `crates/layout`, `crates/paint`, `crates/css`, `crates/dom` y
+> `crates/layout`, `crates/paint`, `crates/css`, `crates/core` y
 > `crates/image/src` son **byte-idénticos** entre ambos árboles. Los cambios
 > WIP del árbol principal (`crates/js`, `crates/render`) no afectan a este
 > scope: ningún hallazgo depende de ellos (ninguno marcado

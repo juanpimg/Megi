@@ -112,7 +112,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 |---|:---:|---|
 | fontdb + ttf-parser + rustybuzz + ab_glyph; fallback, métricas, shaping LTR, máscaras de glifo | **HECHO** | Integrado en layout/paint; fuente DejaVu determinista |
 | `font-weight`/`font-style`, baseline en la display list | **HECHO** | — |
-| **Fuentes web `@font-face`/WOFF2 (ronda 13)**: `fonts::decode_web_font`/`is_woff2` (WOFF2→sfnt con **`woff2-patched` 0.4**, Apache-2.0, pure Rust sin C/FFI), `FontDatabase::load_font_data_family(alias, sfnt)`; `render` recoge las reglas de todas las hojas (incl. `@import`), deduplica, descarga con `ResourceLoader` (`--no-network`, caps **8 fuentes/8 MiB/32 MiB**) y pasa una **DB por render** a layout+paint, con stats `fonts_loaded/failed/bytes` y `timings.fonts` | **HECHO** | Fixture Open Sans OFL (18.640 B): webfont `md5 f38aed032b8d160075097f1e4ad83b49` vs fallback `e2d76dee98f7c4ef2896c5d003be74f2`; fallos ⇒ warning no fatal |
+| **Fuentes web `@font-face`/WOFF2 (ronda 13)**: `megi_fonts::decode_web_font`/`is_woff2` (WOFF2→sfnt con **`woff2-patched` 0.4**, Apache-2.0, pure Rust sin C/FFI), `FontDatabase::load_font_data_family(alias, sfnt)`; `render` recoge las reglas de todas las hojas (incl. `@import`), deduplica, descarga con `ResourceLoader` (`--no-network`, caps **8 fuentes/8 MiB/32 MiB**) y pasa una **DB por render** a layout+paint, con stats `fonts_loaded/failed/bytes` y `timings.fonts` | **HECHO** | Fixture Open Sans OFL (18.640 B): webfont `md5 f38aed032b8d160075097f1e4ad83b49` vs fallback `e2d76dee98f7c4ef2896c5d003be74f2`; fallos ⇒ warning no fatal |
 | Límites web fonts: sin WOFF1, primer `src` soportado, weight/style no eligen cara, sin unicode-range/font-display (bloqueante), sin subsetting/color fonts, DB no cacheada | **PENDIENTE** | Próximas rondas |
 | Bidi, scripts complejos, fuentes variables | **PENDIENTE** | Fuera de alcance de Fase 4 |
 | **Crate `svg`** (`crates/svg`, **73 tests**, rondas 13/16/17): CSS interno, gradientes, **`<pattern>`** (cap 10k tiles) y **`<text>` básico** (fonts bundled, caps 1.000 texts/10.000 chars); parser XML subset + modelo SVG + rasterizador vectorial AA determinista (shapes, path con arcos, transforms, viewBox, estilos, opacidad; límites anti-DoS; `examples/svg_to_png`). NO soportado: CSS class/style sheets, dasharray, markers, filtros/máscaras/clips, script y refs externas | **HECHO (crate + E2E)** | Cableado en `render` para `<img src=*.svg>` y `background-image`: detección Content-Type/sniffing, tamaño intrínseco (300×150 por defecto), cap 16 Mpx/64 MiB RGBA, corrupto ⇒ warning no fatal, navegación directa en página sintética y stat `svgs_rendered`; 5 fixtures `svg_*` + 11 tests |
@@ -139,7 +139,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | `br` (Brotli)/stacked encodings y CORS completo | **PENDIENTE** | HTTP/1.0 opt-in, proxies HTTP/HTTPS/SOCKS5/PAC, HTTP/2 + h2c, streaming H1/inflate, PSL real, SameSite, Referrer-Policy y Range ya HECHOS |
 | Ventana/eventos/scroll/zoom | **PARCIAL** | Fase 7: ventana+scroll+inputs+HiDPI+worker+navegación+zoom+auto-refresh y formularios/pestañas básicos (edición, find-in-page, tabs) hechos; submit/validación real, widgets nativos avanzados, event-loop real y eventos DOM completos pendientes |
 
-## 6. DOM generacional + API de navegador (`crates/dom`, 36 tests)
+## 6. DOM generacional + API de navegador (`crates/core`, 36 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -192,8 +192,8 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 
 ```bash
 ./tools/dev.sh all                             # fmt, clippy, tests (ver badge/`PROGRESS.md`), doc y gate PASS
-cargo test -p css -p layout -p paint -p fonts -p dom -p html
-cargo test -p net -p render -p image -p shell
+cargo test -p css -p layout -p paint -p megi-fonts -p megi-core -p html
+cargo test -p net -p render -p megi-image -p shell
 cargo test -p js
 cargo test -p js --no-default-features
 cargo run -p render -- tests/fixtures/render/showcase/index.html docs/images/showcase.png --width 1024 --height 768
@@ -214,7 +214,7 @@ cargo test -p paint --test hit_testing
 cargo test -p svg                              # crate SVG (60 tests)
 cargo test -p render --test svg_tests          # SVG E2E en render (11 tests)
 cargo run -p render -- tests/fixtures/render/svg_img.html /tmp/svg_img.png --json   # svgs_rendered=1
-cargo test -p fonts -p css -p render          # fuentes web @font-face/WOFF2 E2E
+cargo test -p megi-fonts -p css -p render          # fuentes web @font-face/WOFF2 E2E
 cargo run -p render -- tests/fixtures/render/webfont.html /tmp/webfont.png --json   # md5 f38aed03… vs e2d76dee… (fallback)
 cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/zoom2.png --width 640 --height 400 --zoom 2  # md5 c11903cf…
 cargo run -p test_harness -- --summary          # gate: árbol 3904/3904 (100 %), 230/230 serializer, 30/30 CSS; exit 0

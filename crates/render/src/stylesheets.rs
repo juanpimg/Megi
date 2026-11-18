@@ -16,7 +16,7 @@
 //! - `style=""` attributes are handled later by the CSS cascade, not here.
 
 use css::{MediaContext, evaluate_media, parse_media_query_list};
-use dom::{Document, Namespace, NodeId, NodeKind};
+use megi_core::{Document, Namespace, NodeId, NodeKind};
 use net::Url;
 
 use crate::error::RenderError;
@@ -68,14 +68,14 @@ impl CollectedStyles {
 }
 
 /// Returns the element payload for `node_id` when it is an HTML element.
-fn html_element(doc: &Document, node_id: NodeId) -> Option<&dom::ElementData> {
+fn html_element(doc: &Document, node_id: NodeId) -> Option<&megi_core::ElementData> {
     doc.node(node_id)
         .as_element()
         .filter(|element| element.namespace == Namespace::Html)
 }
 
 /// Case-insensitive attribute lookup by local name in the null namespace.
-fn attr<'a>(element: &'a dom::ElementData, name: &str) -> Option<&'a str> {
+fn attr<'a>(element: &'a megi_core::ElementData, name: &str) -> Option<&'a str> {
     element
         .attributes
         .iter()
@@ -303,24 +303,24 @@ mod unit_tests {
         let base = doc.create_element(
             Namespace::Html,
             "base",
-            vec![dom::Attribute::new("href", "/assets/")],
+            vec![megi_core::Attribute::new("href", "/assets/")],
         );
         let style = doc.create_element(Namespace::Html, "style", vec![]);
         let link = doc.create_element(
             Namespace::Html,
             "link",
             vec![
-                dom::Attribute::new("rel", "stylesheet"),
-                dom::Attribute::new("href", "theme.css"),
+                megi_core::Attribute::new("rel", "stylesheet"),
+                megi_core::Attribute::new("href", "theme.css"),
             ],
         );
         let print_link = doc.create_element(
             Namespace::Html,
             "link",
             vec![
-                dom::Attribute::new("rel", "stylesheet"),
-                dom::Attribute::new("href", "print.css"),
-                dom::Attribute::new("media", "print"),
+                megi_core::Attribute::new("rel", "stylesheet"),
+                megi_core::Attribute::new("href", "print.css"),
+                megi_core::Attribute::new("media", "print"),
             ],
         );
         doc.append_child(doc.root(), html);
@@ -360,9 +360,9 @@ mod unit_tests {
             Namespace::Html,
             "link",
             vec![
-                dom::Attribute::new("rel", "stylesheet"),
-                dom::Attribute::new("href", "wide.css"),
-                dom::Attribute::new("media", "(min-width: 900px)"),
+                megi_core::Attribute::new("rel", "stylesheet"),
+                megi_core::Attribute::new("href", "wide.css"),
+                megi_core::Attribute::new("media", "(min-width: 900px)"),
             ],
         );
         doc.append_child(doc.root(), html);

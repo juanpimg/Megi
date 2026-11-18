@@ -7,7 +7,7 @@ use css::{
     BackgroundClip, BackgroundLayer, BorderRadii, Color, ComputedStyle, Display, FontStyle, Length,
     Radius, TextDecoration,
 };
-use dom::{Document, Namespace};
+use megi_core::{Document, Namespace};
 use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use paint::{
     BackgroundImages, DisplayItem, DisplayList, ImageStore, Pixmap,
@@ -21,7 +21,7 @@ const VIEWPORT: Rect = Rect {
     height: 80.0,
 };
 
-fn document_with_nodes(count: usize) -> (Document, Vec<dom::NodeId>) {
+fn document_with_nodes(count: usize) -> (Document, Vec<megi_core::NodeId>) {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     document.append_child(document.root(), html);
@@ -179,7 +179,7 @@ fn test_overflow_hidden_radius_clips_replaced_image() {
     );
     image_box.baseline = 20.0;
     let image =
-        Arc::new(image::RgbaImage::new(40, 40, [0u8, 0, 255, 255].repeat(1600)).expect("RGBA"));
+        Arc::new(megi_image::RgbaImage::new(40, 40, [0u8, 0, 255, 255].repeat(1600)).expect("RGBA"));
     let images: ImageStore = [(image_node, image)].into_iter().collect();
     let (_list, pixmap) = render_container(
         overflow_style(8.0),
@@ -310,7 +310,7 @@ fn test_background_clip_text_masks_image_and_multiple_lines() {
         clip: BackgroundClip::Text,
         ..BackgroundLayer::default()
     }];
-    let image = Arc::new(image::RgbaImage::new(8, 8, [0u8, 0, 255, 255].repeat(64)).expect("RGBA"));
+    let image = Arc::new(megi_image::RgbaImage::new(8, 8, [0u8, 0, 255, 255].repeat(64)).expect("RGBA"));
     let backgrounds: BackgroundImages = [("bg.png".to_string(), image)].into_iter().collect();
     let (list, pixmap) = render_container(
         style,

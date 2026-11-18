@@ -22,7 +22,7 @@
 //! selectors in the UA stylesheet ([`crate::links`] shows the same layout-based extraction
 //! pattern).
 
-use dom::{Attribute, Document, NodeId};
+use megi_core::{Attribute, Document, NodeId};
 use layout::LayoutBox;
 
 use crate::links::CssRect;
@@ -234,7 +234,7 @@ fn text_content(document: &Document, node_id: NodeId) -> String {
     }
     while let Some(id) = stack.pop() {
         let node = document.node(id);
-        if let dom::NodeKind::Text(text) = &node.kind {
+        if let megi_core::NodeKind::Text(text) = &node.kind {
             out.push_str(text);
         }
         if let Some(sibling) = node.next_sibling {
@@ -886,7 +886,7 @@ fn set_text_content(document: &mut Document, node_id: NodeId, text: &str) -> boo
     for (id, _) in &children {
         let _ = document.remove_child(node_id, *id);
     }
-    let text_node = document.create_node(dom::NodeKind::Text(text.to_owned()));
+    let text_node = document.create_node(megi_core::NodeKind::Text(text.to_owned()));
     document.append_child(node_id, text_node);
     true
 }
@@ -1126,7 +1126,7 @@ pub fn form_urlencoded(controls: &[FormControl]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dom::Namespace;
+    use megi_core::Namespace;
 
     fn control(form_id: u32, kind: FormControlKind, value: &str) -> FormControl {
         FormControl {

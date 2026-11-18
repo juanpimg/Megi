@@ -273,7 +273,7 @@ pub fn save_image(dir: &Path, url: &net::Url, bytes: &[u8]) -> Result<SavedDownl
 }
 
 /// Serializes a DOM as a complete HTML document (doctype prepended when missing).
-pub fn serialize_document(document: &dom::Document) -> String {
+pub fn serialize_document(document: &megi_core::Document) -> String {
     let mut html = html::serialize_html(document);
     if !html
         .trim_start()
@@ -295,7 +295,7 @@ pub fn write_png_bytes_to(path: &Path, png: &[u8]) -> Result<usize, String> {
 }
 
 /// Writes the serialized DOM (doctype included) to an explicit path (`--save-html`).
-pub fn write_html_to(path: &Path, document: &dom::Document) -> Result<usize, String> {
+pub fn write_html_to(path: &Path, document: &megi_core::Document) -> Result<usize, String> {
     let html = serialize_document(document);
     write_atomic(path, html.as_bytes())
 }
@@ -304,7 +304,7 @@ pub fn write_html_to(path: &Path, document: &dom::Document) -> Result<usize, Str
 pub fn save_html(
     dir: &Path,
     url: &net::Url,
-    document: &dom::Document,
+    document: &megi_core::Document,
 ) -> Result<SavedDownload, String> {
     fs::create_dir_all(dir).map_err(|error| format!("cannot create {}: {error}", dir.display()))?;
     let path = next_download_path(dir, url, DownloadKind::Html.extension());

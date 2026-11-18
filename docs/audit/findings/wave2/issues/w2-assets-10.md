@@ -8,7 +8,7 @@ P3 — docs: discrepancia doc/código; el comportamiento real (decodificar) es e
 
 ## Pasos para reproducir
 1. Parsear SOS de `crates/image/tests/fixtures/jpeg/progressive.jpg`: contiene `Ns=3 Ss=0 Se=0 Ah=1 Al=0`.
-2. `cargo test -p image progressive` (tests `jpeg_scaled` y `scaled` en verde: `decode`/`decode_scaled` tienen éxito).
+2. `cargo test -p megi-image progressive` (tests `jpeg_scaled` y `scaled` en verde: `decode`/`decode_scaled` tienen éxito).
 
 ## Esperado vs observado
 Esperado (según doc): `UnsupportedFeature` para `Ah>0` multi-componente.

@@ -9,7 +9,7 @@
 //! cached here (the shell re-fetches the resource on demand when saving; see
 //! [`crate::download::save_image`]).
 
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 use layout::LayoutBox;
 
 use crate::links::CssRect;

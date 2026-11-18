@@ -231,7 +231,7 @@ fn worker_channel_applies_only_the_latest_generation() {
                 warnings: 0,
                 script_errors: 0,
                 forms: Vec::new(),
-                document: std::sync::Arc::new(dom::Document::new()),
+                document: std::sync::Arc::new(megi_core::Document::new()),
                 find_matches: Vec::new(),
                 find_rects: Vec::new(),
             })
@@ -265,7 +265,7 @@ fn worker_channel_applies_only_the_latest_generation() {
         warnings: 0,
         script_errors: 0,
         forms: Vec::new(),
-        document: std::sync::Arc::new(dom::Document::new()),
+        document: std::sync::Arc::new(megi_core::Document::new()),
         find_matches: Vec::new(),
         find_rects: Vec::new(),
     });
@@ -1742,7 +1742,7 @@ fn headless_active_tab_selects_the_requested_tab() {
     );
     let bytes = std::fs::read(&out).expect("png written");
     // Decode the tiny PNG and sample a pixel: the second (blue) tab must have been rendered.
-    let image = image::decode(&bytes).expect("decode screenshot");
+    let image = megi_image::decode(&bytes).expect("decode screenshot");
     let pixel = image.pixel(20, 10).expect("pixel");
     assert!(
         pixel[2] > 180 && pixel[0] < 40 && pixel[1] < 40 && pixel[3] == 255,

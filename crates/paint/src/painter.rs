@@ -81,7 +81,7 @@
 //! the whole viewport and the originating element does not paint it again.
 
 use css::{BorderStyle, Color, Display, ListStyleType, Position, TextDecoration, Visibility};
-use dom::NodeId;
+use megi_core::NodeId;
 use layout::{BoxType, LayoutBox, Rect};
 
 use std::cell::RefCell;
@@ -117,7 +117,7 @@ struct PaintSkip {
 /// Decoded image resources available to one paint pass.
 ///
 /// Bundled so the internal painting helpers thread a single reference: replaced
-/// elements are keyed by [`dom::NodeId`] ([`ImageStore`]) while CSS background
+/// elements are keyed by [`megi_core::NodeId`] ([`ImageStore`]) while CSS background
 /// and list-marker images are keyed by their raw CSS URL string
 /// ([`BackgroundImages`]).
 struct PaintResources<'a> {
@@ -138,7 +138,7 @@ struct PaintResources<'a> {
 impl PaintResources<'_> {
     /// Records a painted primitive for hit-testing (no-op when regions are off).
     #[inline]
-    fn record(&self, rect: Rect, node_id: Option<dom::NodeId>, kind: HitKind) {
+    fn record(&self, rect: Rect, node_id: Option<megi_core::NodeId>, kind: HitKind) {
         if let Some(collector) = self.regions {
             collector.borrow_mut().record(rect, node_id, kind);
         }
@@ -1175,7 +1175,7 @@ enum InlineTask<'a> {
         alpha: f32,
         ordinal: u32,
         /// Nearest element `NodeId` (for text/decoration hit regions).
-        owner: Option<dom::NodeId>,
+        owner: Option<megi_core::NodeId>,
     },
     PopClip,
     PopRoundedGroup,
@@ -1357,7 +1357,7 @@ fn push_inline_children<'a>(
     inherited_hidden: bool,
     inherited_decoration: TextDecoration,
     alpha_scale: f32,
-    owner: Option<dom::NodeId>,
+    owner: Option<megi_core::NodeId>,
     stack: &mut Vec<InlineTask<'a>>,
     effects_present: bool,
 ) {
@@ -1450,7 +1450,7 @@ fn object_fit_rect(
 /// is handled by layout; paint only stretches the bitmap to `content`).
 fn paint_replaced_element(
     layout_box: &LayoutBox,
-    node_id: dom::NodeId,
+    node_id: megi_core::NodeId,
     list: &mut DisplayList,
     resources: &PaintResources<'_>,
     alpha_scale: f32,
@@ -1887,7 +1887,7 @@ fn paint_text_run(
     text: &str,
     list: &mut DisplayList,
     resources: &PaintResources<'_>,
-    owner: Option<dom::NodeId>,
+    owner: Option<megi_core::NodeId>,
     alpha_scale: f32,
 ) {
     let style = layout_box.style.as_ref();
@@ -1976,7 +1976,7 @@ fn paint_text_decorations(
     decoration: TextDecoration,
     list: &mut DisplayList,
     resources: &PaintResources<'_>,
-    owner: Option<dom::NodeId>,
+    owner: Option<megi_core::NodeId>,
     alpha_scale: f32,
 ) {
     if decoration.is_empty() {

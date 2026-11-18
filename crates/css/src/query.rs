@@ -1,7 +1,7 @@
 //! # Selector query API (`querySelector` / `matches`)
 //!
 //! DOM-style query helpers built on the existing selector engine ([`crate::selector`]) and
-//! [`dom::Document::descendants`]. They only read the document; nothing is mutated.
+//! [`megi_core::Document::descendants`]. They only read the document; nothing is mutated.
 //!
 //! Tree order follows the DOM definition (pre-order: an element before its children, siblings
 //! left to right). `:scope` is not implemented: selectors are matched against the document as
@@ -12,7 +12,7 @@
 //! variants when the caller needs to distinguish invalid selectors (e.g. JavaScript bindings
 //! that should throw a `SyntaxError`).
 
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 
 use crate::selector::{SelectorList, parse_selectors};
 
@@ -184,7 +184,7 @@ pub fn try_query_selector_all_from(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dom::{Attribute, Namespace};
+    use megi_core::{Attribute, Namespace};
 
     fn build_document() -> Document {
         let mut doc = Document::new();

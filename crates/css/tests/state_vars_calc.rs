@@ -6,7 +6,7 @@ use css::{
     CalcContext, StateContext, evaluate_calc, matches_with_state, resolve_document_styles,
     with_calc_viewport, with_state,
 };
-use dom::{Attribute, Document, Namespace, NodeId};
+use megi_core::{Attribute, Document, Namespace, NodeId};
 
 fn append(doc: &mut Document, parent: NodeId, name: &str, attrs: &[(&str, &str)]) -> NodeId {
     let attributes = attrs

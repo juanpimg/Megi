@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use css::selector::{Specificity, parse_selectors};
 use css::{ComputedStyle, Length, Origin, StyleCollection};
-use dom::{Attribute, Document, Namespace, NodeId};
+use megi_core::{Attribute, Document, Namespace, NodeId};
 
 fn append(doc: &mut Document, parent: NodeId, name: &str, attrs: &[(&str, &str)]) -> NodeId {
     let attributes = attrs

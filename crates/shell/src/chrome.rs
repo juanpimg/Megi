@@ -2163,9 +2163,9 @@ fn scaled(rect: Rect, scale: f32) -> Rect {
     )
 }
 
-fn chrome_font_db() -> &'static fonts::FontDatabase {
-    static DB: std::sync::OnceLock<fonts::FontDatabase> = std::sync::OnceLock::new();
-    DB.get_or_init(fonts::FontDatabase::new_with_bundled_and_system_fonts)
+fn chrome_font_db() -> &'static megi_fonts::FontDatabase {
+    static DB: std::sync::OnceLock<megi_fonts::FontDatabase> = std::sync::OnceLock::new();
+    DB.get_or_init(megi_fonts::FontDatabase::new_with_bundled_and_system_fonts)
 }
 
 fn measure_text_width(text: &str, font_size_css: f32) -> f32 {
@@ -2176,7 +2176,7 @@ fn measure_text_width(text: &str, font_size_css: f32) -> f32 {
     if let Ok(run) = db.shape(
         &["sans-serif"],
         400,
-        fonts::FontStyle::Normal,
+        megi_fonts::FontStyle::Normal,
         font_size_css,
         text,
     ) {
@@ -2827,7 +2827,7 @@ mod tests {
         assert_eq!(link.items[0].action, MenuAction::OpenLinkInNewTab);
         assert_eq!(link.items[1].action, MenuAction::CopyLinkAddress);
         let image = crate::images::ImageRegion {
-            node_id: dom::NodeId::from_index(0),
+            node_id: megi_core::NodeId::from_index(0),
             rect: crate::links::CssRect::new(0.0, 0.0, 10.0, 10.0),
             url: "https://example.com/i.png".to_string(),
         };

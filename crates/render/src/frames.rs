@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use dom::NodeId;
+use megi_core::NodeId;
 use net::Url;
 
 use crate::{FrameRenderContext, RenderError, RenderOptions, Viewport};
@@ -52,7 +52,7 @@ pub const MAX_FRAME_PIXELS: u64 = 4_000_000;
 
 /// Pre-scripted child `<iframe>` state captured from the parent `JsRuntime` (#1544).
 #[cfg(feature = "js")]
-pub type PreScriptedFrameMap = HashMap<NodeId, (dom::Document, js::SandboxFlags, String)>;
+pub type PreScriptedFrameMap = HashMap<NodeId, (megi_core::Document, js::SandboxFlags, String)>;
 #[cfg(not(feature = "js"))]
 pub type PreScriptedFrameMap = HashMap<NodeId, ()>;
 
@@ -61,7 +61,7 @@ pub struct FrameRender {
     /// The `<iframe>` element node in the parent document.
     pub node: NodeId,
     /// Rasterized child document.
-    pub image: image::RgbaImage,
+    pub image: megi_image::RgbaImage,
     /// Intrinsic size in CSS px (the frame box size).
     pub size: (f32, f32),
 }
@@ -69,7 +69,7 @@ pub struct FrameRender {
 /// Renders every `<iframe>` in `document` into an image, resolving `srcdoc`/`src` against
 /// `base_url`. Failures are non-fatal warnings: the frame stays a gray placeholder.
 pub fn collect_frames(
-    document: &dom::Document,
+    document: &megi_core::Document,
     base_url: &Url,
     options: &RenderOptions,
     depth: usize,
@@ -96,7 +96,7 @@ pub fn collect_frames(
 /// parent-script-mutated child DOMs without re-parsing stale markup (#1544).
 #[allow(clippy::too_many_arguments)]
 pub fn collect_frames_with_context(
-    document: &dom::Document,
+    document: &megi_core::Document,
     base_url: &Url,
     options: &RenderOptions,
     styles: &HashMap<NodeId, css::ComputedStyle>,
@@ -218,7 +218,7 @@ pub fn collect_frames_with_context(
             ) {
                 Ok(child) => {
                     let bytes = child.pixmap.to_rgba_bytes();
-                    match image::RgbaImage::new(width, height, bytes) {
+                    match megi_image::RgbaImage::new(width, height, bytes) {
                         Ok(image) => out.push(FrameRender {
                             node: element,
                             image,
@@ -293,7 +293,7 @@ pub fn collect_frames_with_context(
         ) {
             Ok(child) => {
                 let bytes = child.pixmap.to_rgba_bytes();
-                match image::RgbaImage::new(width, height, bytes) {
+                match megi_image::RgbaImage::new(width, height, bytes) {
                     Ok(image) => out.push(FrameRender {
                         node: element,
                         image,

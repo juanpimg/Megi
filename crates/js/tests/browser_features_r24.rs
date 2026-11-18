@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use dom::Document;
+use megi_core::Document;
 use js::host::{HistoryAction, LocationAction, StorageKind, StorageProvider};
 use js::runtime::JsRuntime;
 

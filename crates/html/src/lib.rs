@@ -18,7 +18,7 @@ pub use browser::{
     document_write, document_write_with_options, set_inner_html, set_inner_html_with_options,
     set_outer_html, set_outer_html_with_options,
 };
-pub use dom::{Document, DomError, Namespace, NodeId};
+pub use megi_core::{Document, DomError, Namespace, NodeId};
 pub use scripting::{ScriptExecution, ScriptExecutor};
 pub use serializer::{
     HtmlSerializeOptions, serialize_dom_for_test, serialize_fragment,

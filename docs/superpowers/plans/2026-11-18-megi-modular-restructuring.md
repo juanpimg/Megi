@@ -99,7 +99,7 @@ Create `tools/test_check_arch.py` with `test_unknown_edge_is_violation`, `test_k
 ### Task 1.1: Rename leaf crates (`dom`, `image`, `fonts`)
 
 **Files:**
-- Modify: `Cargo.toml`, `crates/{dom,image,fonts}/Cargo.toml`, all manifests referencing them, all `use dom::`/`use image::`/`use fonts::` occurrences, docs and workflows.
+- Modify: `Cargo.toml`, `crates/{dom,image,fonts}/Cargo.toml`, all manifests referencing them, all `use megi_core::`/`use megi_image::`/`use megi_fonts::` occurrences, docs and workflows.
 - Test: `cargo check --workspace --all-targets`, `cargo test -p megi-core -p megi-image -p megi-fonts`.
 
 **Interfaces:**
@@ -108,7 +108,7 @@ Create `tools/test_check_arch.py` with `test_unknown_edge_is_violation`, `test_k
 
 - [ ] **Step 1: Rename the three leaf directories and package names**; update `[workspace.dependencies]` keys and `path`s.
 
-- [ ] **Step 2: Replace `use dom::` → `use megi_core::`, `use image::` → `use megi_image::`, `use fonts::` → `use megi_fonts::` repo-wide** (including tests, fuzz, benches, docs code blocks).
+- [ ] **Step 2: Replace `use megi_core::` → `use megi_core::`, `use megi_image::` → `use megi_image::`, `use megi_fonts::` → `use megi_fonts::` repo-wide** (including tests, fuzz, benches, docs code blocks).
 
 - [ ] **Step 3: Run `cargo check --workspace --all-targets`** → PASS. Run `cargo test -p megi-core -p megi-image -p megi-fonts` → PASS. Commit `refactor(arch): rename leaf crates to megi-*`.
 

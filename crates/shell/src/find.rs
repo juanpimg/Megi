@@ -1,6 +1,6 @@
 //! Find-in-page: case-insensitive text search over the rendered DOM and highlights.
 //!
-//! The search runs on the **DOM text nodes** of the frame (`dom::NodeKind::Text`), in
+//! The search runs on the **DOM text nodes** of the frame (`megi_core::NodeKind::Text`), in
 //! document order, and returns `(NodeId, byte range)` pairs. Highlight rectangles are
 //! derived from the **layout tree** (`BoxType::TextNode` inline fragments): the shell paints
 //! one translucent yellow rectangle per layout text fragment that contains a hit, which is
@@ -20,7 +20,7 @@
 
 use std::ops::Range;
 
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 use layout::{BoxType, LayoutBox};
 
 use crate::links::CssRect;

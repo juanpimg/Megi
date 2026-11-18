@@ -1,9 +1,9 @@
-//! Additive scaled-decoding API (`image::decode_scaled`).
+//! Additive scaled-decoding API (`megi_image::decode_scaled`).
 
 use std::fs;
 use std::path::PathBuf;
 
-use image::{ImageError, RgbaImage, decode, decode_scaled};
+use megi_image::{ImageError, RgbaImage, decode, decode_scaled};
 
 fn fixture(name: &str) -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

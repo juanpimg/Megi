@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use css::{ComputedStyle, Display, Length, Position, TextTransform, WhiteSpace};
-use dom::{Document, Namespace, NodeId};
+use megi_core::{Document, Namespace, NodeId};
 use layout::{BoxType, DefaultTextMeasurer, LayoutBox, Rect, layout_document_with_measurer};
 
 fn block_style() -> ComputedStyle {

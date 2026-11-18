@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use css::{ComputedStyle, PseudoElement, PseudoStyles};
-use dom::{Document, NodeId, NodeKind};
+use megi_core::{Document, NodeId, NodeKind};
 use layout::{LayoutBox, Rect, TextMeasurer};
 
 const MAX_LAYOUT_CACHE_ENTRIES: usize = 16;
@@ -273,7 +273,7 @@ mod cache_tests {
 
     #[test]
     fn layout_fingerprint_includes_font_identity() {
-        let document = dom::Document::new();
+        let document = megi_core::Document::new();
         let styles = HashMap::new();
         let viewport = Rect::new(0.0, 0.0, 100.0, 100.0);
         let sizes = HashMap::new();

@@ -26,13 +26,13 @@ fuzz_target!(|data: &[u8]| {
     let _ = tokens.len();
 
     // Exercise cascade, calc(), var(), and color resolution on a tiny DOM (#858).
-    let mut doc = dom::Document::new();
-    let html = doc.create_element(dom::Namespace::Html, "html", vec![]);
-    let body = doc.create_element(dom::Namespace::Html, "body", vec![]);
+    let mut doc = megi_core::Document::new();
+    let html = doc.create_element(megi_core::Namespace::Html, "html", vec![]);
+    let body = doc.create_element(megi_core::Namespace::Html, "body", vec![]);
     let div = doc.create_element(
-        dom::Namespace::Html,
+        megi_core::Namespace::Html,
         "div",
-        vec![dom::Attribute::new("id", "main")],
+        vec![megi_core::Attribute::new("id", "main")],
     );
     doc.append_child(doc.root(), html);
     doc.append_child(html, body);

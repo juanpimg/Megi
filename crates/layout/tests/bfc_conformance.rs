@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 
 use css::{BoxSizing, Color, ComputedStyle, Display, Length, RectEdges};
-use dom::{Document, Namespace, NodeId};
+use megi_core::{Document, Namespace, NodeId};
 use layout::{BoxType, Rect, layout_document};
 
 // ---------------------------------------------------------------------------

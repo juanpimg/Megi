@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use css::{ComputedStyle, Float, Position};
-use dom::NodeId;
+use megi_core::NodeId;
 
 use crate::geometry::{Dimensions, Rect};
 

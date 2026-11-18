@@ -431,7 +431,7 @@ jobs:
       - name: Release-profile tests (core crates)
         run: |
           cargo test --release --locked --lib \
-            -p dom -p html -p css -p layout -p fonts -p image -p paint -p net -p svg -p js
+            -p megi-core -p html -p css -p layout -p megi-fonts -p megi-image -p paint -p net -p svg -p js
       - name: Release conformance summary
         run: cargo run --release --locked -p test_harness -- --summary
 

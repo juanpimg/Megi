@@ -1,7 +1,7 @@
 //! # Megi JavaScript (`js`) — embedded runtime with minimal DOM bindings
 //!
 //! Phase 6 (WP-6.1 + base of WP-6.2): an embedded **Boa 0.21** ECMAScript runtime bound to
-//! one [`dom::Document`], with a small, auditable DOM bridge and anti-DoS budgets.
+//! one [`megi_core::Document`], with a small, auditable DOM bridge and anti-DoS budgets.
 //!
 //! ## What works today
 //!
@@ -34,7 +34,7 @@
 //! ## Rust-facing APIs (block 0, used by the HTML harness)
 //!
 //! - [`JsRuntime::eval_on_document`] evaluates a script against a **borrowed**
-//!   `&mut dom::Document` (temporary realm, applies [`Budget`], writes the document back
+//!   `&mut megi_core::Document` (temporary realm, applies [`Budget`], writes the document back
 //!   even when the script fails).
 //! - [`JsRuntime::dispatch_simple_event`] dispatches a synthetic DOM event from Rust
 //!   (`Some(NodeId)` targets a node and bubbles; `None` targets `window`, useful for

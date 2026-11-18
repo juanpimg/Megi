@@ -1,9 +1,9 @@
 //! Prints the measured metrics of the deterministic test font (DejaVu Sans) at
 //! 16 px, so layout/paint integrators can sanity-check their numbers.
 //!
-//! Run with `cargo run -p fonts --example report`.
+//! Run with `cargo run -p megi-fonts --example report`.
 
-use fonts::{FontDatabase, FontStyle};
+use megi_fonts::{FontDatabase, FontStyle};
 
 const DEJAVU_SANS: &[u8] = include_bytes!("../assets/DejaVuSans.ttf");
 const DEJAVU_SANS_BOLD: &[u8] = include_bytes!("../assets/DejaVuSans-Bold.ttf");

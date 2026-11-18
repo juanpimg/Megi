@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use dom::Document;
+use megi_core::Document;
 use render::{HistoryAction, LocationAction, RenderOptions, RenderStorage, Viewport, render_url};
 
 fn fixture_dir() -> PathBuf {
@@ -34,7 +34,7 @@ fn render_fixture(name: &str) -> render::RenderOutput {
     render_fixture_with(name, &options())
 }
 
-fn element_with_id(document: &Document, id: &str) -> dom::NodeId {
+fn element_with_id(document: &Document, id: &str) -> megi_core::NodeId {
     document
         .descendants(document.root())
         .find(|node_id| {

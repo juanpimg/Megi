@@ -64,7 +64,7 @@ use crate::selector::{
     Combinator, ComplexSelector, PseudoElement, SelectorList, Specificity, parse_selectors,
 };
 use crate::shorthand::expand_declarations;
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 
 /// Computed styles for generated pseudo-elements (`::before` / `::after`), keyed by
 /// `(originating_element, pseudo_element)`.
@@ -1539,7 +1539,7 @@ mod tests {
     use super::*;
     use crate::properties::{Color, ComputedStyle};
     use crate::rule::Declaration;
-    use dom::{Attribute, Namespace};
+    use megi_core::{Attribute, Namespace};
 
     fn collection_with(author_css: &str) -> StyleCollection {
         let mut collection = crate::user_agent::create_user_agent_style_collection();

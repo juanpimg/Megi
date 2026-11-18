@@ -2,11 +2,11 @@
 //!
 //! The bridge is deliberately small and auditable:
 //!
-//! - **One realm per runtime/document.** [`crate::JsRuntime`] owns a [`dom::Document`] and a
+//! - **One realm per runtime/document.** [`crate::JsRuntime`] owns a [`megi_core::Document`] and a
 //!   Boa `Context`; a script mutates the document through native functions.
 //! - **Side table `NodeId` ↔ JS handle.** JS wrappers carry a numeric handle (index into
 //!   the host side table); the actual generation-checked [`NodeId`] stays in Rust. Every access
-//!   revalidates it with [`dom::Document::try_node`], so stale/removed nodes raise a typed
+//!   revalidates it with [`megi_core::Document::try_node`], so stale/removed nodes raise a typed
 //!   JS error instead of panicking (handles are never dereferenced blindly).
 //! - **Per-thread current host.** Boa native functions are plain `fn` pointers (no
 //!   captures); the runtime publishes its host in a thread-local for the duration of an
@@ -22,7 +22,7 @@ use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 
 /// One captured `console.*` call.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -326,7 +326,7 @@ pub fn is_same_origin_url(parent_url: &str, child_url: &str, opaque: bool) -> bo
 
 /// Injected geometry provider (`NodeId → LayoutRect`); `None` means the node has no box
 /// (e.g. `display: none` or a node outside the laid-out document).
-pub type LayoutProvider = Box<dyn Fn(dom::NodeId) -> Option<LayoutRect> + Send + Sync>;
+pub type LayoutProvider = Box<dyn Fn(megi_core::NodeId) -> Option<LayoutRect> + Send + Sync>;
 
 /// Resolves an ES module specifier against the importing module's URL.
 ///
@@ -593,10 +593,10 @@ pub(crate) struct Host {
     /// Monotonic handle counter for custom element constructors.
     pub custom_element_next_handle: u32,
     /// Same-origin framed documents for `iframe.contentDocument` (#1544).
-    pub frame_documents: std::collections::HashMap<u32, dom::Document>,
-    pub iframe_frames: std::collections::HashMap<dom::NodeId, u32>,
+    pub frame_documents: std::collections::HashMap<u32, megi_core::Document>,
+    pub iframe_frames: std::collections::HashMap<megi_core::NodeId, u32>,
     pub frame_next_handle: u32,
-    pub frame_nodes: std::collections::HashMap<u32, dom::NodeId>,
+    pub frame_nodes: std::collections::HashMap<u32, megi_core::NodeId>,
     pub frame_node_next_handle: u32,
     /// Deterministic cooperative workers (no threads); `None` slots are terminated/dropped.
     pub workers: Vec<Option<crate::runtime::WorkerState>>,
@@ -1015,7 +1015,7 @@ mod storage_and_console_tests {
 #[cfg(test)]
 mod mutation_observer_index_tests {
     use super::*;
-    use dom::Namespace;
+    use megi_core::Namespace;
 
     #[test]
     fn observer_index_updates_cleans_up_and_preserves_order() {

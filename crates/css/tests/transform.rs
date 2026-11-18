@@ -2,7 +2,7 @@
 //! on `ComputedStyle`; `none` and malformed values stay unset.
 
 use css::resolve_document_styles;
-use dom::{Document, Namespace};
+use megi_core::{Document, Namespace};
 
 fn style_for(css_text: &str) -> css::ComputedStyle {
     let mut doc = Document::new();
@@ -11,7 +11,7 @@ fn style_for(css_text: &str) -> css::ComputedStyle {
     let div = doc.create_element(
         Namespace::Html,
         "div",
-        vec![dom::Attribute::new("id", "target")],
+        vec![megi_core::Attribute::new("id", "target")],
     );
     doc.append_child(html, div);
     let styles = resolve_document_styles(&doc, Some(css_text));

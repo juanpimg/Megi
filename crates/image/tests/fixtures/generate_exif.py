@@ -2,7 +2,7 @@
 """Generate EXIF orientation fixtures (exif_o1.jpg .. exif_o8.jpg) for #1365.
 
 Each file stores a physically transformed bitmap with an EXIF Orientation tag such
-that `image::decode` (which applies the tag via `image::apply_orientation`)
+that `megi_image::decode` (which applies the tag via `megi_image::apply_orientation`)
 returns the same upright 12x8 reference image for every orientation.
 
 For upright reference U (12x8) and EXIF tag o, the stored bitmap is

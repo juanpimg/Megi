@@ -2,7 +2,7 @@
 //!
 //! ## Architecture
 //!
-//! - One **realm** per [`JsRuntime`]; the runtime owns the [`dom::Document`] that scripts
+//! - One **realm** per [`JsRuntime`]; the runtime owns the [`megi_core::Document`] that scripts
 //!   mutate through native functions.
 //! - The `NodeId` ↔ JS object bridge is a **side table** in [`crate::host`]: JS wrappers
 //!   only carry a small numeric handle; the generation-checked `NodeId` stays in Rust and is
@@ -47,7 +47,7 @@ use boa_engine::{
     object::builtins::{AlignedVec, JsArray, JsArrayBuffer, JsUint8Array},
     property::{Attribute, PropertyDescriptor},
 };
-use dom::{Attribute as DomAttribute, Document, Namespace, NodeId};
+use megi_core::{Attribute as DomAttribute, Document, Namespace, NodeId};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
@@ -259,7 +259,7 @@ impl JsRuntime {
     /// Snapshot of the canvas 2D surfaces created by scripts (#1545), keyed by `<canvas>` node.
     pub fn canvas_surfaces(
         &self,
-    ) -> std::collections::HashMap<dom::NodeId, crate::canvas::CanvasSurface> {
+    ) -> std::collections::HashMap<megi_core::NodeId, crate::canvas::CanvasSurface> {
         self.host.borrow().canvas_store.clone_surfaces()
     }
 
@@ -2193,7 +2193,7 @@ impl ValidityFlags {
     }
 }
 
-fn is_control_disabled(document: &dom::Document, node_id: NodeId) -> bool {
+fn is_control_disabled(document: &megi_core::Document, node_id: NodeId) -> bool {
     let Some(element) = document.try_node(node_id).and_then(|n| n.as_element()) else {
         return false;
     };
@@ -2226,7 +2226,7 @@ fn is_control_disabled(document: &dom::Document, node_id: NodeId) -> bool {
     false
 }
 
-fn enclosing_form(document: &dom::Document, node_id: NodeId) -> Option<NodeId> {
+fn enclosing_form(document: &megi_core::Document, node_id: NodeId) -> Option<NodeId> {
     let mut cur = document.try_node(node_id).and_then(|n| n.parent);
     while let Some(ancestor_id) = cur {
         if document
@@ -2308,9 +2308,9 @@ fn is_valid_url_value(value: &str) -> bool {
 }
 
 fn control_text_value(
-    document: &dom::Document,
+    document: &megi_core::Document,
     node_id: NodeId,
-    element: &dom::ElementData,
+    element: &megi_core::ElementData,
 ) -> String {
     if element.local_name == "textarea" {
         document.text_content(node_id)
@@ -2320,11 +2320,11 @@ fn control_text_value(
 }
 
 fn select_selected_value(
-    document: &dom::Document,
+    document: &megi_core::Document,
     select_id: NodeId,
     multiple: bool,
 ) -> Option<String> {
-    let options: Vec<(NodeId, &dom::ElementData)> = document
+    let options: Vec<(NodeId, &megi_core::ElementData)> = document
         .descendants(select_id)
         .filter_map(|child| {
             document
@@ -2337,7 +2337,7 @@ fn select_selected_value(
     if options.is_empty() {
         return None;
     }
-    let option_value = |opt_id: NodeId, el: &dom::ElementData| -> String {
+    let option_value = |opt_id: NodeId, el: &megi_core::ElementData| -> String {
         el.get_attribute("value")
             .map(str::to_owned)
             .unwrap_or_else(|| document.text_content(opt_id))
@@ -2362,9 +2362,9 @@ fn select_selected_value(
 }
 
 fn validity_flags_element(
-    document: &dom::Document,
+    document: &megi_core::Document,
     node_id: NodeId,
-    element: &dom::ElementData,
+    element: &megi_core::ElementData,
 ) -> (ValidityFlags, Option<(String, String)>) {
     if is_control_disabled(document, node_id) {
         return (ValidityFlags::default(), None);
@@ -2605,7 +2605,7 @@ fn validate_control_and_fire_invalid(
     }
 }
 
-fn form_descendant_controls(document: &dom::Document, form_id: NodeId) -> Vec<NodeId> {
+fn form_descendant_controls(document: &megi_core::Document, form_id: NodeId) -> Vec<NodeId> {
     document
         .descendants(form_id)
         .filter(|child| {
@@ -2681,7 +2681,7 @@ fn node_set_custom_validity(
                 .retain(|attr| attr.local_name != "data-megi-validity-error");
         } else {
             element.set_attribute(
-                dom::Attribute::new("data-megi-validity-error", &message),
+                megi_core::Attribute::new("data-megi-validity-error", &message),
                 true,
             );
         }
@@ -9118,7 +9118,7 @@ impl JsRuntime {
     }
 
     /// Registers a same-origin framed document for an `<iframe>` (#1544).
-    pub fn set_frame_document(&mut self, iframe: NodeId, document: dom::Document) -> u32 {
+    pub fn set_frame_document(&mut self, iframe: NodeId, document: megi_core::Document) -> u32 {
         let mut host = self.host.borrow_mut();
         let handle = host.frame_next_handle;
         host.frame_next_handle = host.frame_next_handle.wrapping_add(1);
@@ -10155,13 +10155,13 @@ fn node_node_type(this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
         host.document
             .try_node(node_id)
             .map(|node| match &node.kind {
-                dom::NodeKind::Element(_) => 1.0,
-                dom::NodeKind::Text(_) => 3.0,
-                dom::NodeKind::Comment(_) => 8.0,
-                dom::NodeKind::Document => 9.0,
-                dom::NodeKind::DocumentFragment => 11.0,
-                dom::NodeKind::Doctype { .. } => 10.0,
-                dom::NodeKind::ProcessingInstruction { .. } => 7.0,
+                megi_core::NodeKind::Element(_) => 1.0,
+                megi_core::NodeKind::Text(_) => 3.0,
+                megi_core::NodeKind::Comment(_) => 8.0,
+                megi_core::NodeKind::Document => 9.0,
+                megi_core::NodeKind::DocumentFragment => 11.0,
+                megi_core::NodeKind::Doctype { .. } => 10.0,
+                megi_core::NodeKind::ProcessingInstruction { .. } => 7.0,
             })
     })
     .flatten()
@@ -10195,7 +10195,7 @@ fn string_attribute_set(
             .try_node_mut(node_id)
             .and_then(|node| node.as_element_mut())
         {
-            element.set_attribute(dom::Attribute::new(name.to_string(), value), true);
+            element.set_attribute(megi_core::Attribute::new(name.to_string(), value), true);
         }
         if matches!(name, "src" | "srcdoc" | "sandbox") {
             invalidate_iframe_state(host, node_id);
@@ -10326,7 +10326,7 @@ fn node_elements_get(this: &JsValue, _a: &[JsValue], context: &mut Context) -> J
     node_list(context, controls)
 }
 
-fn option_ids(document: &dom::Document, select: NodeId) -> Vec<NodeId> {
+fn option_ids(document: &megi_core::Document, select: NodeId) -> Vec<NodeId> {
     document
         .descendants(select)
         .filter(|id| {
@@ -10387,7 +10387,7 @@ fn node_selected_index_set(
                 .and_then(|node| node.as_element_mut())
             {
                 if position as i64 == index {
-                    element.set_attribute(dom::Attribute::new("selected", String::new()), true);
+                    element.set_attribute(megi_core::Attribute::new("selected", String::new()), true);
                 } else {
                     element
                         .attributes

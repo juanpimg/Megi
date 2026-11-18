@@ -5,8 +5,8 @@
 //! 1. The CSS layer exposes [`css::FontFaceRule`]s per stylesheet (no I/O there).
 //! 2. This module deduplicates sources by final URL, fetches them with the shared
 //!    [`net::ResourceLoader`] (so `--no-network` and the HTTP cache apply), decodes WOFF2
-//!    into sfnt bytes with [`fonts::decode_web_font`] and registers each face under its CSS
-//!    `font-family` alias with [`fonts::FontDatabase::load_font_data_family`].
+//!    into sfnt bytes with [`megi_fonts::decode_web_font`] and registers each face under its CSS
+//!    `font-family` alias with [`megi_fonts::FontDatabase::load_font_data_family`].
 //! 3. The resulting database starts from the deterministic bundled faces and is used by
 //!    **both** layout (`layout::FontTextMeasurer`) and paint
 //!    (`paint::rasterize_display_list_with_font_database`).
@@ -22,7 +22,7 @@
 use std::collections::HashSet;
 
 use css::FontFaceRule;
-use fonts::FontDatabase;
+use megi_fonts::FontDatabase;
 use net::{ResourceLoader, Scheme, Url};
 
 /// Maximum number of `@font-face` sources attempted per render.
@@ -239,7 +239,7 @@ pub fn load_webfonts_with_csp(
                 ));
                 continue;
             }
-            let sfnt = match fonts::decode_web_font(&resource.bytes) {
+            let sfnt = match megi_fonts::decode_web_font(&resource.bytes) {
                 Ok(sfnt) => sfnt,
                 Err(error) => {
                     last_warning = Some(format!(

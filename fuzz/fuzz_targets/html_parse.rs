@@ -13,7 +13,7 @@
 //! Outputs are intentionally discarded: the target looks for panics, aborts, stack
 //! overflows, UB under ASan and timeouts, not for semantic mismatches.
 
-use dom::Namespace;
+use megi_core::Namespace;
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

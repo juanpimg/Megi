@@ -1,8 +1,8 @@
 //! Round 34: DOM conformance regressions (cloneNode, fragment insertion, sibling order).
 
-use dom::{Document, Namespace};
+use megi_core::{Document, Namespace};
 
-fn element(document: &mut Document, name: &str, attributes: Vec<dom::Attribute>) -> dom::NodeId {
+fn element(document: &mut Document, name: &str, attributes: Vec<megi_core::Attribute>) -> megi_core::NodeId {
     document.create_element(Namespace::Html, name, attributes)
 }
 
@@ -10,7 +10,7 @@ fn element(document: &mut Document, name: &str, attributes: Vec<dom::Attribute>)
 fn clone_node_deep_and_shallow_preserve_attributes() {
     let mut document = Document::new();
     let root = document.root();
-    let parent = element(&mut document, "div", vec![dom::Attribute::new("id", "p")]);
+    let parent = element(&mut document, "div", vec![megi_core::Attribute::new("id", "p")]);
     assert!(document.append_child(root, parent));
     let child = element(&mut document, "span", vec![]);
     assert!(document.append_child(parent, child));

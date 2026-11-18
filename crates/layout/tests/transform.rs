@@ -2,7 +2,7 @@
 //! painted box geometry through the transform's axis-aligned bounding box.
 
 use css::resolve_document_styles;
-use dom::{Document, Namespace};
+use megi_core::{Document, Namespace};
 use layout::{Rect, layout_document};
 
 fn layout_for_style(css_text: &str) -> layout::LayoutBox {

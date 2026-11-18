@@ -7,7 +7,7 @@
     "crates/css/src/properties.rs": 6029,
     "crates/html/src/tree_builder.rs": 5036,
     "crates/paint/src/rasterizer.rs": 4454,
-    "crates/dom/src/lib.rs": 4011,
+    "crates/core/src/lib.rs": 4011,
     "crates/html/src/tokenizer.rs": 3602,
     "crates/shell/src/window.rs": 3200,
     "crates/shell/src/chrome.rs": 3187,
@@ -109,23 +109,23 @@
     "crates/js/src/runtime.rs:10012": "self: Rc<Self>,"
   },
   "edges": {
-    "dom": [],
+    "core": [],
     "html": [
-      "dom"
+      "core"
     ],
     "css": [
-      "dom"
+      "core"
     ],
     "layout": [
       "css",
-      "dom",
+      "core",
       "fonts"
     ],
     "fonts": [],
     "image": [],
     "paint": [
       "css",
-      "dom",
+      "core",
       "fonts",
       "image",
       "layout"
@@ -136,7 +136,7 @@
     ],
     "render": [
       "css",
-      "dom",
+      "core",
       "fonts",
       "html",
       "image",
@@ -148,7 +148,7 @@
     ],
     "shell": [
       "css",
-      "dom",
+      "core",
       "fonts",
       "html",
       "image",
@@ -159,7 +159,7 @@
     ],
     "js": [
       "css",
-      "dom",
+      "core",
       "html"
     ],
     "svg": [
@@ -168,13 +168,13 @@
     ],
     "test_harness": [
       "css",
-      "dom",
+      "core",
       "html",
       "js"
     ],
     "bench": [
       "css",
-      "dom",
+      "core",
       "fonts",
       "html",
       "image",

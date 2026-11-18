@@ -147,7 +147,7 @@ pub fn decode_png(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, ImageEr
 }
 
 /// Decodes a PNG downscaled by an integer box factor so that neither dimension
-/// exceeds `max_dim` (used by the additive `image::decode_scaled` API).
+/// exceeds `max_dim` (used by the additive `megi_image::decode_scaled` API).
 ///
 /// Sampling is nearest-neighbour: one source pixel per output pixel
 /// (`x % factor == 0 && y % factor == 0`, including Adam7 passes), so the full-resolution

@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use css::{BackgroundPosition, Color, ComputedStyle, Display, FilterFunction, Length, ObjectFit};
-use dom::{Document, Namespace};
-use image::RgbaImage;
+use megi_core::{Document, Namespace};
+use megi_image::RgbaImage;
 use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use paint::{
     BackgroundImages, DisplayItem, ImageStore, Pixmap,
@@ -369,7 +369,7 @@ fn test_no_backdrop_filter_keeps_legacy_display_list() {
 
 #[test]
 fn test_object_fit_from_css_resolution() {
-    use dom::Attribute;
+    use megi_core::Attribute;
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     let body = document.create_element(Namespace::Html, "body", vec![]);

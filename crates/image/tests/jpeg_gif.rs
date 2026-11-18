@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use image::{ImageError, ImageFormat, decode, detect_format};
+use megi_image::{ImageError, ImageFormat, decode, detect_format};
 
 fn fixture(relative: &str) -> Vec<u8> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))

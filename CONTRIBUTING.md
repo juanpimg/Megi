@@ -18,7 +18,7 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 
 ### 1.2 Independencia Absoluta (Zero Engine Forks & Pure Safe Rust)
 - Megi **no es una bifurcación (*fork*)** ni un envoltorio de Blink (Chromium), WebKit (Safari), Gecko (Firefox), ni de los motores de layout de Servo o Blitz.
-- Los crates de parsing/layout fundamentales (`crates/dom`, `crates/html`, `crates/css`, `crates/layout`) se desarrollan exclusivamente con la **biblioteca estándar de Rust (`std`)**, sin librerías externas de parsing en crates.io. La única excepción autorizada son las dependencias tipográficas de bajo nivel de `crates/fonts` (`fontdb`, `ttf-parser`, `rustybuzz`, `ab_glyph`), listadas en `docs/ARCHITECTURE.md` §3.1; el rasterizador y el codificador PNG de `crates/paint` son propios y no usan dependencias externas (decisión D3, §3.2).
+- Los crates de parsing/layout fundamentales (`crates/core`, `crates/html`, `crates/css`, `crates/layout`) se desarrollan exclusivamente con la **biblioteca estándar de Rust (`std`)**, sin librerías externas de parsing en crates.io. La única excepción autorizada son las dependencias tipográficas de bajo nivel de `crates/fonts` (`fontdb`, `ttf-parser`, `rustybuzz`, `ab_glyph`), listadas en `docs/ARCHITECTURE.md` §3.1; el rasterizador y el codificador PNG de `crates/paint` son propios y no usan dependencias externas (decisión D3, §3.2).
 
 ### 1.3 Auto-Testeo Continuo en Bucle Cerrado (Closed-Loop Testing)
 - Ninguna funcionalidad se considera completada sin una prueba de conformidad que la valide.
@@ -29,7 +29,7 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 
 ### 1.4 Modelo de Memoria en Arena (Sin `Rc<RefCell<Node>>`)
 - Uno de los mayores cuellos de botella y fuentes de *memory leaks* en motores web en Rust es el uso de `Rc<RefCell<Node>>` o recolectores de basura pesados.
-- Megi utiliza una **arena contigua indexada** ([`crates/dom/src/lib.rs`](crates/dom/src/lib.rs)):
+- Megi utiliza una **arena contigua indexada** ([`crates/core/src/lib.rs`](crates/core/src/lib.rs)):
   - Todos los nodos residen en un vector plano `Document::nodes: Vec<Node>`.
   - Los nodos se referencian mediante manejadores compactos de 4 bytes: `NodeId(NonZeroU32)` (aprovechando la optimización de nicho para que `Option<NodeId>` ocupe solo 4 bytes).
   - Los 5 punteros del árbol (`parent`, `first_child`, `last_child`, `prev_sibling`, `next_sibling`) son intrusivos y permiten mutaciones y reparentados en tiempo constante $O(1)$ con máxima localidad de caché.
@@ -115,7 +115,7 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
   - Ya hecho (ronda 13): **`@font-face`+WOFF2 E2E** (dep autorizada `woff2-patched` 0.4, DB por render en layout+paint, caps 8/8 MiB/32 MiB, stats/timing y warnings no fatales).
   - Mejoras de shaping para más scripts, fallback entre familias y métricas de fuentes variables.
 - **SVG (`crates/svg` + `render`, rondas 13-17)**: crate propio completo (parser XML+modelo+rasterizador AA, **73 tests**) con **CSS interno y gradientes lineales/radiales** (ronda 16) y **cableado E2E**: `<img src=*.svg>`, `background-image` **e inline `<svg>`** (caps 256/1 MiB/8 MiB, `svgs_rendered`/`inline_svgs`; 11+10 tests). **Ronda 17**: **`<pattern>`** (cap 10k tiles) y **`<text>` básico** con `crates/fonts` (caps 1.000 texts/10.000 chars). Siguientes: shaping avanzado (kerning/italic/bidi), patterns rotados y cache por URL.
-- **Rendimiento y features (`crates/html`, `crates/dom`, `layout`, `paint`, `css`, `svg`, `shell`) — los presupuestos son gates que NO se suben**: ronda 21 recuperó pipeline ≤140 ms y layout ≤43 ms (html −18/−20 %, css resolve 33,91 ms, layout 36,4 ms, build-display −9,1 %).
+- **Rendimiento y features (`crates/html`, `crates/core`, `layout`, `paint`, `css`, `svg`, `shell`) — los presupuestos son gates que NO se suben**: ronda 21 recuperó pipeline ≤140 ms y layout ≤43 ms (html −18/−20 %, css resolve 33,91 ms, layout 36,4 ms, build-display −9,1 %).
   - DOM identidad/memoria (auditoría F8), recursión de layout/paint en documentos profundos (F6), presupuestos de tiempo y API `Result`.
   - Benchmarks reproducibles (`./tools/bench.sh`) y regresiones de complejidad.
 - **Fuzzing (`fuzz/`)**:
@@ -206,7 +206,7 @@ python3 tools/png_check.py /tmp/basic.png
 ./tools/bench.sh --filter pipeline  # ronda 12: ~134-137 ms
 
 # Red, render y JS (Fases 5–6; tests offline)
-cargo test -p net -p render -p image
+cargo test -p net -p render -p megi-image
 cargo test -p js
 cargo test -p js --no-default-features   # stub mínimo sin Boa
 cargo test -p js                                # 58 tests (eventos avanzados)
@@ -222,7 +222,7 @@ cargo run -p render -- tests/fixtures/render/browser_api.html /tmp/api.png --jso
 cargo run -p render -- tests/fixtures/render/backgrounds.html /tmp/bg.png
 cargo run --release -p bench -- --filter layout --iterations 5   # ~36 ms
 cargo run -p render -- tests/fixtures/render/svg_img.html /tmp/svg_img.png --json   # svgs_rendered=1
-cargo test -p fonts -p css -p render             # fuentes web @font-face/WOFF2
+cargo test -p megi-fonts -p css -p render             # fuentes web @font-face/WOFF2
 cargo run -p render -- tests/fixtures/render/webfont.html /tmp/webfont.png --json   # md5 f38aed03…
 cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/zoom2.png --width 640 --height 400 --zoom 2  # md5 c11903cf…
 cargo test -p html --lib scripting             # WP-6.4: hook parser-inserted

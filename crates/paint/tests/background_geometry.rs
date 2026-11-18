@@ -7,8 +7,8 @@ use std::sync::Arc;
 use css::{
     BackgroundPosition, BackgroundRepeat, BackgroundSize, Color, ComputedStyle, Display, Length,
 };
-use dom::{Document, Namespace};
-use image::RgbaImage;
+use megi_core::{Document, Namespace};
+use megi_image::RgbaImage;
 use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use paint::{
     BackgroundImages, DisplayItem, ImageStore, MAX_BACKGROUND_TILES, Pixmap, background_tiles,
@@ -22,7 +22,7 @@ const VIEWPORT: Rect = Rect {
     height: 120.0,
 };
 
-fn node_ids(count: usize) -> (Document, Vec<dom::NodeId>) {
+fn node_ids(count: usize) -> (Document, Vec<megi_core::NodeId>) {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     document.append_child(document.root(), html);
@@ -56,7 +56,7 @@ fn background_style(
 }
 
 fn box_with_style(
-    id: dom::NodeId,
+    id: megi_core::NodeId,
     style: ComputedStyle,
     rect: Rect,
     padding: EdgeSizes,

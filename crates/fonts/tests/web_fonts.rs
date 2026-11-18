@@ -3,7 +3,7 @@
 //! Fixture: Open Sans Regular latin subset (SIL Open Font License 1.1) downloaded from
 //! Google Fonts; see `tests/fixtures/OFL-OpenSans.txt`.
 
-use fonts::{FontDatabase, FontError, FontStyle, decode_web_font, is_woff2};
+use megi_fonts::{FontDatabase, FontError, FontStyle, decode_web_font, is_woff2};
 
 const WOFF2: &[u8] = include_bytes!("fixtures/OpenSans-Regular-latin.woff2");
 
@@ -75,7 +75,7 @@ fn corrupt_woff2_returns_typed_error() {
     }
     let error = decode_web_font(&corrupt).expect_err("corrupt woff2 must fail");
     assert!(
-        matches!(error, fonts::FontError::InvalidWebFont { .. }),
+        matches!(error, megi_fonts::FontError::InvalidWebFont { .. }),
         "{error:?}"
     );
     let mut database = FontDatabase::new();
@@ -83,7 +83,7 @@ fn corrupt_woff2_returns_typed_error() {
         .load_font_data_family("Corrupt", corrupt)
         .expect_err("corrupt woff2 cannot be registered");
     assert!(
-        matches!(error, fonts::FontError::InvalidFont { .. }),
+        matches!(error, megi_fonts::FontError::InvalidFont { .. }),
         "{error:?}"
     );
 }
@@ -94,7 +94,7 @@ fn non_woff2_bytes_pass_through_and_empty_input_fails() {
     assert_eq!(decode_web_font(&ttf).expect("passthrough"), ttf);
     assert!(matches!(
         decode_web_font(&[]),
-        Err(fonts::FontError::InvalidWebFont { .. })
+        Err(megi_fonts::FontError::InvalidWebFont { .. })
     ));
 }
 

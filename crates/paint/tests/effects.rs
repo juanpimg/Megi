@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use css::{BorderRadii, BoxShadow, Color, ComputedStyle, Display, Length, Radius};
-use dom::{Document, Namespace};
+use megi_core::{Document, Namespace};
 use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use paint::{
     BackgroundImages, DisplayItem, DisplayList, ImageStore, Pixmap,
@@ -17,7 +17,7 @@ const VIEWPORT: Rect = Rect {
     height: 60.0,
 };
 
-fn ids(count: usize) -> (Document, Vec<dom::NodeId>) {
+fn ids(count: usize) -> (Document, Vec<megi_core::NodeId>) {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     document.append_child(document.root(), html);
@@ -36,7 +36,7 @@ fn block_style() -> ComputedStyle {
     style
 }
 
-fn box_at(id: dom::NodeId, style: ComputedStyle, rect: Rect) -> LayoutBox {
+fn box_at(id: megi_core::NodeId, style: ComputedStyle, rect: Rect) -> LayoutBox {
     let mut layout_box = LayoutBox::new(BoxType::BlockNode(id), Some(style));
     layout_box.dimensions = Dimensions {
         content: rect,
@@ -143,7 +143,7 @@ fn test_rounded_background_image_is_clipped() {
     root.dimensions.content = VIEWPORT;
     root.children
         .push(box_at(nodes[1], style, Rect::new(10.0, 10.0, 20.0, 20.0)));
-    let image = Arc::new(image::RgbaImage::new(4, 4, [0u8, 0, 255, 255].repeat(16)).expect("RGBA"));
+    let image = Arc::new(megi_image::RgbaImage::new(4, 4, [0u8, 0, 255, 255].repeat(16)).expect("RGBA"));
     let backgrounds: BackgroundImages = [("bg.png".to_string(), image)].into_iter().collect();
     let list = build_display_list_with_images_and_backgrounds(
         &root,

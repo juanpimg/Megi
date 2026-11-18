@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 
 use css::{ComputedStyle, Display, Length, VerticalAlign, WhiteSpace};
-use dom::{Document, Namespace, NodeId};
+use megi_core::{Document, Namespace, NodeId};
 use layout::{BoxType, Rect, layout_document};
 
 fn make_block_style(width: Length, height: Length) -> ComputedStyle {

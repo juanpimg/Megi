@@ -24,7 +24,7 @@
 use std::collections::HashMap;
 
 use css::{BorderStyle, Color, ComputedStyle, Display, FontStyle, Length, Position, TextAlign};
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 
 /// Serializes one computed style into `(kebab-case property, CSS value)` pairs.
 pub(crate) fn computed_style_pairs(style: &ComputedStyle) -> Vec<(String, String)> {
@@ -237,7 +237,7 @@ fn border_style_css(border_style: BorderStyle) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dom::{Attribute, Namespace};
+    use megi_core::{Attribute, Namespace};
 
     #[test]
     fn computed_style_for_bounds_oversized_inline_style() {

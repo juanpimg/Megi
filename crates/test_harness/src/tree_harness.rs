@@ -7,13 +7,13 @@
 //! 2. Exported `.json` fixtures (`tests/html5lib-tests/tree-construction-json/*.json`).
 //!
 //! Feeds each test case into [`html::parse_document`] or [`html::parse_fragment`],
-//! serializes the resulting [`dom::Document`] via [`html::serialize_dom_for_test`],
+//! serializes the resulting [`megi_core::Document`] via [`html::serialize_dom_for_test`],
 //! and compares actual vs expected `#document` tree output.
 
 use std::collections::HashMap;
 use std::path::Path;
 
-use dom::Namespace;
+use megi_core::Namespace;
 use html::{
     parse_document, parse_document_with_options_and_executor, parse_fragment,
     serialize_dom_for_test,

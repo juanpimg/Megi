@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use css::{ComputedStyle, Display, Length};
-use dom::{Attribute, Document, Namespace, NodeId};
+use megi_core::{Attribute, Document, Namespace, NodeId};
 use layout::{BoxType, LayoutBox, Rect, layout_document, layout_document_with_replaced_sizes};
 
 fn make_block_style(width: Length) -> ComputedStyle {

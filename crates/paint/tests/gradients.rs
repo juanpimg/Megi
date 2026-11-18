@@ -8,7 +8,7 @@ use css::{
     GradientKind, GradientStop, Length, LinearDirection, LinearGradient, RadialExtent,
     RadialGradient, RadialShape, Radius, resolve_document_styles,
 };
-use dom::{Attribute, Document, Namespace};
+use megi_core::{Attribute, Document, Namespace};
 use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use paint::{
     BackgroundImages, ImageStore, Pixmap, build_display_list_with_images_and_backgrounds,

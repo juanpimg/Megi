@@ -2185,8 +2185,8 @@ impl Content {
     /// Resolves textual content items against an originating DOM element and counter map.
     pub fn resolve_text(
         &self,
-        doc: &dom::Document,
-        originating: dom::NodeId,
+        doc: &megi_core::Document,
+        originating: megi_core::NodeId,
         counters: &HashMap<String, i32>,
     ) -> Option<String> {
         let Self::Items(items) = self else {

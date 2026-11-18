@@ -9,21 +9,21 @@ repository.workspace = true
 description = "Megi Engine — reproducible end-to-end benchmarks (parse, style, layout, paint, PNG)"
 
 [dependencies]
-dom.workspace = true
+megi-core.workspace = true
 html.workspace = true
 css.workspace = true
 layout.workspace = true
 paint.workspace = true
 render.workspace = true
-image.workspace = true
-fonts = { workspace = true, optional = true }
+megi-image.workspace = true
+megi-fonts = { workspace = true, optional = true }
 
 [features]
 # The font benchmarks are opt-in: they need the bundled DejaVu fixture and the
 # `fonts` crate (still being migrated in the sprint branch). Enable with
 # `cargo run --release -p bench --features fonts`.
 default = []
-fonts = ["dep:fonts"]
+fonts = ["dep:megi-fonts"]
 
 [lints]
 workspace = true

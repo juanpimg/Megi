@@ -172,11 +172,11 @@ name = "bench"
 version = "0.1.0"
 dependencies = [
  "css",
- "dom",
- "fonts",
  "html",
- "image",
  "layout",
+ "megi-core",
+ "megi-fonts",
+ "megi-image",
  "paint",
  "render",
 ]
@@ -636,7 +636,7 @@ checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
 name = "css"
 version = "0.1.0"
 dependencies = [
- "dom",
+ "megi-core",
  "proptest",
 ]
 
@@ -730,10 +730,6 @@ checksum = "ab8ecd87370524b461f8557c119c405552c396ed91fc0a8eec68679eab26f94a"
 dependencies = [
  "libloading",
 ]
-
-[[package]]
-name = "dom"
-version = "0.1.0"
 
 [[package]]
 name = "downcast-rs"
@@ -901,17 +897,6 @@ dependencies = [
  "memmap2",
  "slotmap",
  "tinyvec",
-]
-
-[[package]]
-name = "fonts"
-version = "0.1.0"
-dependencies = [
- "ab_glyph",
- "fontdb",
- "rustybuzz",
- "ttf-parser",
- "woff2-patched",
 ]
 
 [[package]]
@@ -1087,7 +1072,7 @@ checksum = "e17592d60ebacc7d5e169f4663c5f84f9161cc90328abcfe8456f41e4dfcb284"
 name = "html"
 version = "0.1.0"
 dependencies = [
- "dom",
+ "megi-core",
  "proptest",
 ]
 
@@ -1222,10 +1207,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "image"
-version = "0.1.0"
-
-[[package]]
 name = "indexmap"
 version = "2.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1336,8 +1317,8 @@ version = "0.1.0"
 dependencies = [
  "boa_engine",
  "css",
- "dom",
  "html",
+ "megi-core",
 ]
 
 [[package]]
@@ -1356,8 +1337,8 @@ name = "layout"
 version = "0.1.0"
 dependencies = [
  "css",
- "dom",
- "fonts",
+ "megi-core",
+ "megi-fonts",
  "proptest",
 ]
 
@@ -1435,6 +1416,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
+name = "megi-core"
+version = "0.1.0"
+
+[[package]]
+name = "megi-fonts"
+version = "0.1.0"
+dependencies = [
+ "ab_glyph",
+ "fontdb",
+ "rustybuzz",
+ "ttf-parser",
+ "woff2-patched",
+]
+
+[[package]]
+name = "megi-image"
+version = "0.1.0"
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1489,8 +1489,8 @@ dependencies = [
 name = "net"
 version = "0.1.0"
 dependencies = [
- "image",
  "js",
+ "megi-image",
  "rcgen",
  "rustls",
  "webpki-roots",
@@ -1897,11 +1897,11 @@ name = "paint"
 version = "0.1.0"
 dependencies = [
  "css",
- "dom",
- "fonts",
  "html",
- "image",
  "layout",
+ "megi-core",
+ "megi-fonts",
+ "megi-image",
 ]
 
 [[package]]
@@ -2241,12 +2241,12 @@ name = "render"
 version = "0.1.0"
 dependencies = [
  "css",
- "dom",
- "fonts",
  "html",
- "image",
  "js",
  "layout",
+ "megi-core",
+ "megi-fonts",
+ "megi-image",
  "net",
  "paint",
  "rcgen",
@@ -2487,11 +2487,11 @@ name = "shell"
 version = "0.1.0"
 dependencies = [
  "css",
- "dom",
- "fonts",
  "html",
- "image",
  "layout",
+ "megi-core",
+ "megi-fonts",
+ "megi-image",
  "net",
  "paint",
  "render",
@@ -2665,8 +2665,8 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 name = "svg"
 version = "0.1.0"
 dependencies = [
- "fonts",
- "image",
+ "megi-fonts",
+ "megi-image",
 ]
 
 [[package]]
@@ -2760,9 +2760,9 @@ name = "test_harness"
 version = "0.1.0"
 dependencies = [
  "css",
- "dom",
  "html",
  "js",
+ "megi-core",
  "serde",
  "serde_json",
 ]

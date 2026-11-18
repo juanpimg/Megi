@@ -9,11 +9,11 @@ repository.workspace = true
 description = "Megi Engine — Decoupled Display Lists, CSS 2.2 painting order and 2D software rasterization"
 
 [dependencies]
-dom = { workspace = true }
+megi-core = { workspace = true }
 css = { workspace = true }
 layout = { workspace = true }
-fonts = { workspace = true }
-image = { workspace = true }
+megi-fonts = { workspace = true }
+megi-image = { workspace = true }
 
 [dev-dependencies]
 html = { workspace = true }

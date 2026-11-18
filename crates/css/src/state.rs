@@ -21,7 +21,7 @@
 
 use std::cell::Cell;
 
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 
 /// Interaction state supplied by the host for dynamic pseudo-class matching.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -235,7 +235,7 @@ pub(crate) fn is_modal(doc: &Document, node: NodeId) -> bool {
     let Some(el) = doc.node(node).as_element() else {
         return false;
     };
-    el.namespace == dom::Namespace::Html
+    el.namespace == megi_core::Namespace::Html
         && el.local_name.eq_ignore_ascii_case("dialog")
         && el.get_attribute("open").is_some()
         && el.get_attribute("data-megi-modal").is_some()

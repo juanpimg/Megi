@@ -7,7 +7,7 @@
 //! `overflow` clipping.
 
 use css::{Color, ComputedStyle, Display, Position};
-use dom::{Document, Namespace};
+use megi_core::{Document, Namespace};
 use layout::{BoxType, Dimensions, LayoutBox, Rect};
 use paint::{
     DisplayItem, DisplayList, Pixmap, RenderConfig, build_display_list,
@@ -18,7 +18,7 @@ const WIDTH: u32 = 100;
 const HEIGHT: u32 = 100;
 
 /// Creates a detached DOM document plus `count` element ids usable in boxes.
-fn node_ids(count: usize) -> (Document, Vec<dom::NodeId>) {
+fn node_ids(count: usize) -> (Document, Vec<megi_core::NodeId>) {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     document.append_child(document.root(), html);
@@ -43,7 +43,7 @@ fn style_with_transparent_background() -> ComputedStyle {
     block_style(Color::TRANSPARENT)
 }
 
-fn empty_box(document: &Document, id: dom::NodeId, style: ComputedStyle) -> LayoutBox {
+fn empty_box(document: &Document, id: megi_core::NodeId, style: ComputedStyle) -> LayoutBox {
     let _ = document;
     let mut layout_box = LayoutBox::new(BoxType::BlockNode(id), Some(style));
     layout_box.dimensions = Dimensions::default();
@@ -191,7 +191,7 @@ fn test_replaced_image_respects_opacity() {
 
     let mut images = std::collections::HashMap::new();
     let red_pixel = vec![255, 0, 0, 255];
-    let image = std::sync::Arc::new(image::RgbaImage::new(1, 1, red_pixel).expect("valid image"));
+    let image = std::sync::Arc::new(megi_image::RgbaImage::new(1, 1, red_pixel).expect("valid image"));
     images.insert(ids[2], image);
 
     let viewport = Rect::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32);

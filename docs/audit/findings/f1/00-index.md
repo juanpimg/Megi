@@ -7,7 +7,7 @@ next to this index and each finding that was worth tracking was filed as an issu
 | --- | --- | --- | --- | --- |
 | `crates/layout/tests` | 21 | 9,335 | `layout.md` | #1380–#1385 |
 | `crates/net/tests` | 28 | 9,251 | `net.md` | #1343–#1352 |
-| `crates/render/tests`, `crates/fonts/tests`, `crates/test_harness/tests`, `crates/dom/tests` | 42 | 8,665 | `render-fonts-th-dom.md` | #1386–#1390 |
+| `crates/render/tests`, `crates/fonts/tests`, `crates/test_harness/tests`, `crates/core/tests` | 42 | 8,665 | `render-fonts-th-dom.md` | #1386–#1390 |
 | `crates/paint/tests`, `crates/image/tests` | 31 | 9,456 | `paint-image.md` | #1363–#1371 |
 | `crates/js/tests`, `crates/shell/tests` | 22 | 7,614 | `js-shell.md` | #1372–#1379 |
 | `crates/css/tests`, `crates/svg/tests`, `crates/html/tests` | 27 | 7,163 | `css-svg-html.md` | #1353–#1362 |

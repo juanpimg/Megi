@@ -13,7 +13,7 @@ default = ["js"]
 js = ["dep:boa_engine"]
 
 [dependencies]
-dom.workspace = true
+megi-core.workspace = true
 html.workspace = true
 css.workspace = true
 boa_engine = { workspace = true, optional = true }

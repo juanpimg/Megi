@@ -139,8 +139,8 @@ El golden sólo debe regenerarse ante un cambio intencionado de renderizado y re
 Ejemplo del crate `fonts` (Fase 4) que carga la fuente DejaVu Sans empaquetada, imprime métricas a 16 px, mide con y sin shaping, y rasteriza un glifo para que los integradores de layout/paint comprueben sus números:
 
 ```bash
-cargo run -p fonts --example report
-cargo test -p fonts
+cargo run -p megi-fonts --example report
+cargo test -p megi-fonts
 ```
 
 ---
@@ -204,7 +204,7 @@ cargo run -p render -- file:///ruta/pagina.html /tmp/local.png --no-network
 `crates/image` (std puro, sin dependencias) decodifica PNG a RGBA8 straight y expone un inflate zlib/DEFLATE reutilizable:
 
 ```bash
-cargo test -p image                 # 121 tests + 1 doctest (PNG/JPEG/GIF/WebP/EXIF/inflate)
+cargo test -p megi-image                 # 121 tests + 1 doctest (PNG/JPEG/GIF/WebP/EXIF/inflate)
 cargo run -p render -- tests/fixtures/phase4/basic.html /tmp/basic.png 2>/dev/null || true
 # El test de integración decodifica el PNG generado por paint y lo compara con basic.rgba
 cargo test -p paint --test end_to_end_html
@@ -233,7 +233,7 @@ md5sum /tmp/megi-shot.png     # 7324e851… (idéntico al pipeline render)
 
 ```bash
 cargo run -p render -- tests/fixtures/render/images.html docs/images/images-e2e.png --width 640 --height 400
-cargo test -p paint -p image -p render
+cargo test -p paint -p megi-image -p render
 ```
 
 ### 2.13 Showcase de navegador real y controles del shell (rondas 7–8)
@@ -335,7 +335,7 @@ cargo test -p paint --test hit_testing   # 11 tests nuevos (108 paint)
 `crates/css` parsea `@font-face` (`Stylesheet.font_faces`), `crates/fonts` decodifica **WOFF2→sfnt** con la dependencia autorizada **`woff2-patched` 0.4** (Apache-2.0, pure Rust, sin C/FFI; **solo en `fonts`**) y `render` recoge las reglas de todas las hojas (incluido `@import`), deduplica, descarga con `ResourceLoader` (`--no-network`, caps **8 fuentes/8 MiB/32 MiB**), construye una **DB por render** para layout+paint y reporta `fonts_loaded/fonts_failed/font_bytes` + `timings.fonts` (fallos ⇒ warning no fatal). Fixtures OFL Open Sans (18.640 B) en `crates/fonts/tests/fixtures/` y `tests/fixtures/render/`.
 
 ```bash
-cargo test -p fonts -p css -p render
+cargo test -p megi-fonts -p css -p render
 cargo run -p render -- tests/fixtures/render/webfont.html /tmp/webfont.png --json      # md5 f38aed03…; fonts_loaded=1
 cargo run -p render -- tests/fixtures/render/webfont-fallback.html /tmp/fallback.png  # md5 e2d76dee…
 ```
@@ -416,7 +416,7 @@ cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/text.svg /tmp
 Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-spec-driven-dev/SKILL.md` (directorio ignorado en `.gitignore` para mantener limpio el árbol Git de metadatos de agentes, mientras su documentación permanente reside en este archivo `docs/TOOLING.md`). Esta skill estandariza el protocolo operativo para cualquier agente que trabaje en la Fase 1 y posteriores:
 1. Consultar primero la sección normativa con `./tools/whatwg_spec.py section <id>`.
 2. Inspeccionar los casos de prueba objetivo con `./tools/test_inspector.py show <file> <idx>`.
-3. Implementar la transición de estado o regla del árbol DOM en `crates/html` o `crates/dom`.
+3. Implementar la transición de estado o regla del árbol DOM en `crates/html` o `crates/core`.
 4. Verificar en bucle cerrado con `cargo test -p test_harness`.
 
 ---
@@ -449,7 +449,7 @@ cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basi
 python3 tools/png_check.py /tmp/basic.png
 cargo run -p render -- tests/fixtures/render/basic.html /tmp/render.png --width 640 --height 400 --json
 bash tools/render_fixture.sh
-cargo test -p net -p render -p image -p shell
+cargo test -p net -p render -p megi-image -p shell
 cargo test -p js && cargo test -p js --no-default-features
 cargo test -p paint --test hit_testing
 cargo test -p html --lib scripting      # WP-6.4: hook de scripts parser-inserted
@@ -542,7 +542,7 @@ Cifras de referencia en la ronda 21: **1345 tests** (bench 8, css 175, dom 28, f
 
 ```bash
 # JPEG/GIF desde cero (image + render por sniffing)
-cargo test -p image --test decode                    # PNG/JPEG/GIF (54 tests)
+cargo test -p megi-image --test decode                    # PNG/JPEG/GIF (54 tests)
 cargo run -p render -- tests/fixtures/render/jpeg_gif.html /tmp/jpeg_gif.png --json
 
 # Efectos SVG (clipPath/mask/filtros)
@@ -576,8 +576,8 @@ cargo run --release -p bench -- --filter build-display              # 7,34–7,7
 cargo run --release -p bench -- --filter pipeline/html-to-png      # 142,64 → 105,47 ms
 
 # EXIF orientation, JPEG progresivo y detección WebP
-cargo test -p image --test exif                                     # orientaciones 1–8
-cargo test -p image --test decode                                   # progresivo (gris exacto)
+cargo test -p megi-image --test exif                                     # orientaciones 1–8
+cargo test -p megi-image --test decode                                   # progresivo (gris exacto)
 cargo run -p render -- tests/fixtures/render/image_formats.html /tmp/image_formats.png --json
 
 # HTTP/2 flow control, multiplexado y SETTINGS
@@ -600,7 +600,7 @@ cargo run -p render -- tests/fixtures/render/object_fit.html /tmp/object_fit.png
 cargo run -p render -- tests/fixtures/render/backdrop_filter.html /tmp/backdrop.png --json # ff04fac9…
 cargo test -p layout --test aspect_ratio                                                 # layout 215
 # Imagen: progresivo color completo + WebP VP8L subset
-cargo test -p image --test decode
+cargo test -p megi-image --test decode
 cargo run -p render -- tests/fixtures/render/webp.html /tmp/webp.png --json
 # Shell: sesión persistente y descargas (headless)
 cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png --width 640 --height 400
@@ -631,10 +631,10 @@ Cifras de referencia en la ronda 25: **1594 tests** (bench 9, css 230, dom 28, f
 
 ```bash
 cargo test -p render --test module_scripts_tests      # <script type=module> inline/externo
-cargo test -p image --test scaled                     # decode_scaled
+cargo test -p megi-image --test scaled                     # decode_scaled
 cargo run -p render -- tests/fixtures/render/module_chain.html /tmp/modules.png --json
 cargo test -p net                                      # h2 bodies/trailers/100-continue + h1 POST
-cargo test -p dom && cargo test -p js                  # bug-bash DOM/JS
+cargo test -p megi-core && cargo test -p js                  # bug-bash DOM/JS
 cargo test -p svg --test filters_smil                  # feColorMatrix/Blend/Merge/Composite + SMIL
 cargo run --release -p bench -- --filter shell/save-png-encode-800x600
 ```
@@ -646,9 +646,9 @@ Cifras de referencia en la ronda 26: **1653 tests** (bench 9, css 230, dom 33, f
 ### 2.16t Ronda 27: fix PNG, h2 push/priorities/h2c, gaps DOM/JS, perf efectos y chrome
 
 ```bash
-cargo test -p image                                   # regresión PNG 6,54 ms y escalado
+cargo test -p megi-image                                   # regresión PNG 6,54 ms y escalado
 cargo test -p net --test h2_advanced                  # PUSH_PROMISE/priorities/h2c
-cargo test -p js --test gap_apis && cargo test -p dom --test gap_api
+cargo test -p js --test gap_apis && cargo test -p megi-core --test gap_api
 cargo run --release -p bench -- --filter pipeline/filter-fixture-300x260
 cargo run -p shell -- tests/fixtures/render/basic.html --chrome --screenshot /tmp/chrome.png --width 640 --height 400
 ```
@@ -660,7 +660,7 @@ Cifras de referencia en la ronda 27: **1695 tests** (bench 9, css 230, dom 36, f
 ### 2.16u Ronda 28: reduced IDCT/EXIF, push+uploads streaming, geometría JS, blur byte-safe y menú contextual
 
 ```bash
-cargo test -p image                                      # IDCT reducida y EXIF thumbnails
+cargo test -p megi-image                                      # IDCT reducida y EXIF thumbnails
 cargo test -p net --test h2_push_tests && cargo test -p net --test upload_streaming
 cargo test -p js --test gap_apis && cargo test -p render --test js_geometry_tests
 cargo run -p render -- tests/fixtures/render/js_geometry_fixed.html /tmp/geo.png --json
@@ -677,7 +677,7 @@ Cifras de referencia en la ronda 28: **1738 tests** (bench 9, css 230, dom 36, f
 cargo test -p net --test streaming_responses && cargo test -p net --test connection_reuse
 cargo test -p svg --test textpath_smil
 cargo test -p js --test es_modules
-cargo test -p image --test webp_lossy
+cargo test -p megi-image --test webp_lossy
 cargo run -p shell -- tests/fixtures/render/basic.html --chrome --screenshot /tmp/chrome.png --width 640 --height 400
 cd fuzz && cargo +nightly fuzz build   # 14/14
 ```
@@ -689,7 +689,7 @@ Cifras de referencia en la ronda 29: **1796 tests** (bench 9, css 230, dom 36, f
 ### 2.16w Ronda 30: VP8 lossy, container queries, PSL/trailers, workers, historial y chrome fast path
 
 ```bash
-cargo test -p image --test vp8
+cargo test -p megi-image --test vp8
 cargo test -p css && cargo test -p layout
 cargo test -p net --test psl && cargo test -p net --test trailers
 cargo test -p js --test workers && cargo test -p render --test worker_tests

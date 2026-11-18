@@ -14,12 +14,12 @@
 //!   `scripted_foster01` needs.
 //! * The epilogue stores the captured writes (and any thrown error) in marker elements
 //!   that the Rust side extracts and removes from the document with
-//!   [`dom::Document::remove_subtree`], so the serialized tree matches the fixtures.
+//!   [`megi_core::Document::remove_subtree`], so the serialized tree matches the fixtures.
 //!
 //! Each script runs in a fresh realm (`eval_on_document` semantics): html5lib's
 //! `scripted_*` cases are self-contained scripts, so no cross-script globals are needed.
 
-use dom::Document;
+use megi_core::Document;
 use html::{ScriptExecution, ScriptExecutor};
 use js::{Budget, JsRuntime};
 

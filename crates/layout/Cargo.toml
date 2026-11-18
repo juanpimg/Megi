@@ -9,9 +9,9 @@ repository.workspace = true
 description = "Megi Engine — CSS Box Tree, Block Formatting Context & Layout Engine"
 
 [dependencies]
-dom.workspace = true
+megi-core.workspace = true
 css.workspace = true
-fonts.workspace = true
+megi-fonts.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

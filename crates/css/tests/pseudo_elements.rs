@@ -4,7 +4,7 @@ use css::{
     Color, Content, ContentItem, MediaContext, PseudoElement, Specificity, parse_selectors,
     resolve_document_styles_with_pseudos, try_query_selector_all,
 };
-use dom::{Attribute, Document, Namespace};
+use megi_core::{Attribute, Document, Namespace};
 
 #[test]
 fn pseudo_element_selector_parsing_and_specificity() {

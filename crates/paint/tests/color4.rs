@@ -1,7 +1,7 @@
 //! Modern CSS colors reaching paint: background, gradients and color-mix (R159).
 
 use css::{Color, ComputedStyle, Display};
-use dom::{Document, Namespace};
+use megi_core::{Document, Namespace};
 use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use paint::{
     BackgroundImages, ImageStore, build_display_list_with_images_and_backgrounds,

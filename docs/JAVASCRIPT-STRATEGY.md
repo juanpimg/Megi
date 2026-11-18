@@ -24,7 +24,7 @@ Megi ha cerrado funcionalmente la Fase 4 (renderizado) y tiene un pipeline de na
 
 ### 1.2 Estado actual del stack DOM (lo que ya existe)
 
-- **Arena contigua** (`crates/dom`): `NodeId` de 4 bytes con **20 bits de slot + 12 de generación**, *free list* LIFO con reutilización, `remove_node`/`remove_subtree`, rechazo de handles *stale*/foráneos (`try_node`/`owns`), `validate_invariants()`, `estimate_bytes()` y presupuesto anti-DoS ya en el parser (`ParseOptions`).
+- **Arena contigua** (`crates/core`): `NodeId` de 4 bytes con **20 bits de slot + 12 de generación**, *free list* LIFO con reutilización, `remove_node`/`remove_subtree`, rechazo de handles *stale*/foráneos (`try_node`/`owns`), `validate_invariants()`, `estimate_bytes()` y presupuesto anti-DoS ya en el parser (`ParseOptions`).
 - **API de navegador**: `document_element`/`head`/`body`, `get_element_by_id`, `get_elements_by_tag_name`/`class_name`, factorías, atributos, `text_content`, manipulación de hijos y `DomError`; en `crates/html`: `parse_fragment_into`, `set_inner_html`, `set_outer_html` y `document_write`.
 - **Esto es exactamente lo que un binding necesita**: el ADR no requiere rediseñar el DOM, sino construir una **capa lateral** entre `NodeId` y los valores JS.
 

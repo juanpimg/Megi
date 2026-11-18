@@ -5,7 +5,7 @@
 //! painter to mask backgrounds through the element's glyphs.
 
 use css::{BackgroundClip, resolve_document_styles};
-use dom::{Attribute, Document, Namespace};
+use megi_core::{Attribute, Document, Namespace};
 
 fn computed_style(css_text: &str, inline: &str) -> css::ComputedStyle {
     let mut document = Document::new();

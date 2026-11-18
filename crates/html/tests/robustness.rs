@@ -401,11 +401,11 @@ fn selectedcontent_budget_is_counted_once_across_selects() {
 fn serialization_has_an_output_budget_and_reports_truncation() {
     // #647: `out: String` grew without bound, so a hostile DOM (one huge text node or a deep
     // chain) OOMed the caller with no error path.
-    let mut doc = dom::Document::new();
+    let mut doc = megi_core::Document::new();
     let root = doc.root();
-    let body = doc.create_element(dom::Namespace::Html, "body", Vec::new());
+    let body = doc.create_element(megi_core::Namespace::Html, "body", Vec::new());
     doc.append_child(root, body);
-    let div = doc.create_element(dom::Namespace::Html, "div", Vec::new());
+    let div = doc.create_element(megi_core::Namespace::Html, "div", Vec::new());
     doc.append_child(body, div);
     let text = doc.create_text_node(&"x".repeat(64 * 1024));
     doc.append_child(div, text);
@@ -434,13 +434,13 @@ fn serialization_has_an_output_budget_and_reports_truncation() {
 fn deep_serialization_does_not_allocate_per_node_indent() {
     // The canonical tree dump used `"  ".repeat(depth)` per node (O(n·depth) bytes). A 4k-deep
     // chain must still serialize, quickly, and mark truncation at the byte cap.
-    let mut doc = dom::Document::new();
+    let mut doc = megi_core::Document::new();
     let root = doc.root();
-    let body = doc.create_element(dom::Namespace::Html, "body", Vec::new());
+    let body = doc.create_element(megi_core::Namespace::Html, "body", Vec::new());
     doc.append_child(root, body);
     let mut parent = body;
     for _ in 0..4_000 {
-        let child = doc.create_element(dom::Namespace::Html, "div", Vec::new());
+        let child = doc.create_element(megi_core::Namespace::Html, "div", Vec::new());
         doc.append_child(parent, child);
         parent = child;
     }
@@ -490,11 +490,11 @@ fn table_text_buffer_is_bounded_by_the_text_budget() {
     );
 }
 
-fn collect_text_bytes(doc: &dom::Document, node: dom::NodeId, total: &mut usize, depth: usize) {
+fn collect_text_bytes(doc: &megi_core::Document, node: megi_core::NodeId, total: &mut usize, depth: usize) {
     if depth > 64 {
         return;
     }
-    if let dom::NodeKind::Text(text) = &doc.node(node).kind {
+    if let megi_core::NodeKind::Text(text) = &doc.node(node).kind {
         *total += text.len();
     }
     let mut child = doc.node(node).first_child;
@@ -505,7 +505,7 @@ fn collect_text_bytes(doc: &dom::Document, node: dom::NodeId, total: &mut usize,
 }
 
 /// Text of the first `<p>` in a parsed document (`text_content` on the root does not descend).
-fn paragraph_text(document: &dom::Document) -> String {
+fn paragraph_text(document: &megi_core::Document) -> String {
     document
         .get_elements_by_tag_name("p")
         .first()
@@ -645,7 +645,7 @@ fn self_writing_script_loops_are_fuelled() {
     // #639: a parser-inserted script can `document.write` another `<script>`, which executes in
     // turn and may write again — without a fuel cap the parse never finishes. Each execution and
     // each written byte must be budgeted.
-    use dom::Document;
+    use megi_core::Document;
     use html::scripting::{ScriptExecution, ScriptExecutor};
     use html::{ParseOptions, parse_document_with_options_and_executor};
 
@@ -695,7 +695,7 @@ fn many_small_document_writes_stay_linear() {
     // #639: every `document.write` re-inserted through `Tokenizer::insert_input`, which shifted
     // every line start and rebuilt the UTF-16 prefix table from scratch — quadratic in the
     // number of writes, which is exactly the normal `document.write` pattern.
-    use dom::Document;
+    use megi_core::Document;
     use html::scripting::{ScriptExecution, ScriptExecutor};
     use html::{ParseOptions, parse_document_with_options_and_executor};
 

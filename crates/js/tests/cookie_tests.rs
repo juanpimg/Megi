@@ -9,7 +9,7 @@ use js::{CookieProvider, JsRuntime};
 #[test]
 fn document_cookie_delegates_to_cookie_provider() {
     let mut runtime = JsRuntime::with_document(
-        dom::Document::new(),
+        megi_core::Document::new(),
         "https://app.example.test/checkout".to_owned(),
     )
     .expect("runtime");

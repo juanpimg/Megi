@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use css::{ComputedStyle, Display, Float, Length};
-use dom::{Document, Namespace, NodeId};
+use megi_core::{Document, Namespace, NodeId};
 use layout::block::MAX_FLOATS_PER_CONTEXT;
 use layout::{LayoutBox, Rect, layout_document};
 

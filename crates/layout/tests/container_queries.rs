@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use css::ComputedStyle;
-use dom::{Attribute, Document, Namespace, NodeId};
+use megi_core::{Attribute, Document, Namespace, NodeId};
 use layout::{LayoutBox, Rect, layout_document};
 
 struct Page {

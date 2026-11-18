@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use css::{ComputedStyle, Length, Origin, StyleCollection};
-use dom::{Attribute, Document, Namespace, NodeId};
+use megi_core::{Attribute, Document, Namespace, NodeId};
 
 fn page(css: &str) -> (Document, HashMap<NodeId, ComputedStyle>, NodeId) {
     let mut doc = Document::new();

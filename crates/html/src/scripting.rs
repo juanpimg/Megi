@@ -26,7 +26,7 @@
 //! * executor failures are non-fatal: they are recorded in
 //!   [`crate::ParseOutcome::script_errors`] and parsing continues.
 
-use dom::Document;
+use megi_core::Document;
 
 /// Result of executing one parser-inserted `<script>` element.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -59,7 +59,7 @@ pub trait ScriptExecutor {
 
 #[cfg(test)]
 mod parser_script_executor_tests {
-    use dom::{Attribute, Document, Namespace, NodeId};
+    use megi_core::{Attribute, Document, Namespace, NodeId};
 
     use super::{ScriptExecution, ScriptExecutor};
     use crate::{ParseOptions, ParseOutcome, serialize_dom_for_test};

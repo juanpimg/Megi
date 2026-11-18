@@ -198,9 +198,9 @@ impl SvgImage {
             .map(|p| [p[0], p[1], p[2], p[3]])
     }
 
-    /// Converts the image into an [`image::RgbaImage`].
-    pub fn into_rgba_image(self) -> Result<image::RgbaImage, SvgError> {
-        image::RgbaImage::new(self.width, self.height, self.data)
+    /// Converts the image into an [`megi_image::RgbaImage`].
+    pub fn into_rgba_image(self) -> Result<megi_image::RgbaImage, SvgError> {
+        megi_image::RgbaImage::new(self.width, self.height, self.data)
             .map_err(|error| SvgError::Internal(format!("invalid raster buffer: {error}")))
     }
 }

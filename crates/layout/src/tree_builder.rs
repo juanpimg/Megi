@@ -1,6 +1,6 @@
 //! # Layout Box Tree Construction
 //!
-//! Transforms a [`dom::Document`] and its resolved [`css::ComputedStyle`] map into
+//! Transforms a [`megi_core::Document`] and its resolved [`css::ComputedStyle`] map into
 //! a conformant CSS Box Tree per CSS 2.2 §9 and CSS Display Module Level 3.
 
 use std::collections::HashMap;
@@ -9,7 +9,7 @@ use std::sync::Arc;
 use css::{
     ComputedStyle, ContentItem, Display, Float, Overflow, Position, PseudoElement, PseudoStyles,
 };
-use dom::{Document, Namespace, NodeId, NodeKind};
+use megi_core::{Document, Namespace, NodeId, NodeKind};
 
 use crate::box_tree::{BoxType, LayoutBox, anonymous_style_from, is_collapsible_whitespace_box};
 
@@ -198,7 +198,7 @@ pub(crate) fn build_layout_tree_internal(
 const MAX_TREE_BUILD_DEPTH: usize = 256;
 
 /// Returns `true` if the node is an HTML `<br>` element.
-fn is_html_br(node: &dom::Node) -> bool {
+fn is_html_br(node: &megi_core::Node) -> bool {
     node.as_element().is_some_and(|el| {
         el.namespace == Namespace::Html && el.local_name.eq_ignore_ascii_case("br")
     })

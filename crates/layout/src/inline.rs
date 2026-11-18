@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use css::{ComputedStyle, Length, TextAlign, TextTransform, VerticalAlign, WhiteSpace};
-use dom::NodeId;
+use megi_core::NodeId;
 
 use crate::box_tree::{BoxType, LayoutBox};
 use crate::geometry::Rect;

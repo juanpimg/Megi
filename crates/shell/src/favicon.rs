@@ -10,7 +10,7 @@
 //! rasterization), the fallback dot is a plain square, and network favicons are only
 //! fetched when networking is enabled for the render.
 
-use dom::Document;
+use megi_core::Document;
 
 /// Favicon size in CSS pixels (drawn in the tab strip).
 pub const ICON_SIZE: u32 = 16;
@@ -175,7 +175,7 @@ pub fn color_for(key: &str) -> [u8; 3] {
 
 /// Decodes image bytes and nearest-neighbour resizes them to 16x16 RGBA8.
 pub fn decode_icon(bytes: &[u8]) -> Option<[u8; (ICON_SIZE * ICON_SIZE * 4) as usize]> {
-    let image = image::decode(bytes).ok()?;
+    let image = megi_image::decode(bytes).ok()?;
     if image.width == 0 || image.height == 0 {
         return None;
     }

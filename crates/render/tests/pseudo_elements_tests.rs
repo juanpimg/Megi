@@ -96,7 +96,7 @@ fn render_cache_distinguishes_changed_pseudo_element_styles() {
     let div_a = out_a.document.get_elements_by_tag_name("div")[0];
     let div_b = out_b.document.get_elements_by_tag_name("div")[0];
 
-    fn box_height(layout: &layout::LayoutBox, id: dom::NodeId) -> f32 {
+    fn box_height(layout: &layout::LayoutBox, id: megi_core::NodeId) -> f32 {
         if layout.node_id() == Some(id) && !layout.is_pseudo {
             return layout.dimensions.content.height;
         }

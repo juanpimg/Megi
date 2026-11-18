@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 use render::{RenderOptions, Viewport, render_url};
 
 fn fixture_dir() -> PathBuf {

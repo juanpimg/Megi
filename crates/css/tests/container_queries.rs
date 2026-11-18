@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use css::{ComputedStyle, ContainerType, Length};
-use dom::{Attribute, Document, Namespace, NodeId};
+use megi_core::{Attribute, Document, Namespace, NodeId};
 
 fn element(doc: &mut Document, tag: &str, attributes: Vec<Attribute>) -> NodeId {
     doc.create_element(Namespace::Html, tag, attributes)

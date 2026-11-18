@@ -48,7 +48,7 @@
 //! - [`fetch_streaming`] parses status/headers first (redirects are resolved without
 //!   invoking the callback) and delivers identity `Content-Length`/chunked bodies as
 //!   socket chunks arrive (R212); gzip/deflate bodies are buffered and decoded with the
-//!   incremental [`image::StreamingInflater`] (R218), so decompressed chunks reach the
+//!   incremental [`megi_image::StreamingInflater`] (R218), so decompressed chunks reach the
 //!   callback as the compressed bytes arrive; CRC-32/ISIZE/Adler are validated at the
 //!   trailer. brotli remains unsupported.
 //! - Compression covers single `gzip`/`deflate` codings; the response body is buffered
@@ -2283,7 +2283,7 @@ fn header_value<'a>(headers: &'a Headers, name: &str) -> Option<&'a str> {
 ///
 /// Identity bodies (`Content-Length`, chunked or read-to-EOF) are delivered as socket
 /// chunks arrive; gzip/deflate responses are decoded incrementally with
-/// [`image::StreamingInflater`] and delivered as decompressed chunks (CRC/ISIZE/Adler
+/// [`megi_image::StreamingInflater`] and delivered as decompressed chunks (CRC/ISIZE/Adler
 /// verified at the trailer). The returned body is always empty (the caller already
 /// consumed it); trailers are still returned for chunked bodies.
 fn stream_response_body(
@@ -2330,7 +2330,7 @@ fn stream_response_body(
 }
 
 /// Streams a gzip/deflate response, decompressing incrementally with
-/// [`image::StreamingInflater`] and delivering each decompressed chunk as it arrives.
+/// [`megi_image::StreamingInflater`] and delivering each decompressed chunk as it arrives.
 ///
 /// The anti-bomb caps run while decoding: the inflater is capped by the tighter of
 /// `max_response_bytes` and [`FetchOptions::compression_limits`]`::max_output`, and the
@@ -2350,10 +2350,10 @@ fn stream_encoded_body(
     let output_cap = compression.max_output.min(options.max_response_bytes);
     let mut inflater = match encoding {
         ContentEncoding::Gzip => {
-            image::StreamingInflater::new_gzip(image::InflateLimits::new(output_cap))
+            megi_image::StreamingInflater::new_gzip(megi_image::InflateLimits::new(output_cap))
         }
         ContentEncoding::Deflate => {
-            image::StreamingInflater::new_auto_deflate(image::InflateLimits::new(output_cap))
+            megi_image::StreamingInflater::new_auto_deflate(megi_image::InflateLimits::new(output_cap))
         }
         ContentEncoding::Identity => unreachable!("identity responses are streamed directly"),
     };
@@ -2419,9 +2419,9 @@ fn stream_encoded_body(
     Ok((Vec::new(), trailers))
 }
 
-fn map_stream_inflate_error(error: image::InflateError, options: &FetchOptions) -> FetchError {
+fn map_stream_inflate_error(error: megi_image::InflateError, options: &FetchOptions) -> FetchError {
     match error {
-        image::InflateError::OutputLimitExceeded { .. } => {
+        megi_image::InflateError::OutputLimitExceeded { .. } => {
             let compression = CompressionLimits::new(
                 options.compression_limits.max_output,
                 options.compression_limits.max_ratio,

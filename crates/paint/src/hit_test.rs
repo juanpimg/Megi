@@ -39,7 +39,7 @@
 //! sub-rectangle precision, `pointer-events`, transforms and stacking-context
 //! 3D effects are out of scope for Phase 7.
 
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 use layout::Rect;
 
 /// Coarse kind of painted primitive that produced a [`HitRegion`].
@@ -210,7 +210,7 @@ pub fn find_link_at(doc: &Document, regions: &[HitRegion], x: f32, y: f32) -> Op
     loop {
         if let Some(element) = doc.node(node).as_element()
             && element.local_name.eq_ignore_ascii_case("a")
-            && element.namespace == dom::Namespace::Html
+            && element.namespace == megi_core::Namespace::Html
             && let Some(href) = element
                 .get_attribute("href")
                 .map(str::trim)

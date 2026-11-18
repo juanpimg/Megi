@@ -1,6 +1,6 @@
 //! Round 27: DOM normalize/compareDocumentPosition primitives.
 
-use dom::{Document, Namespace, NodeKind};
+use megi_core::{Document, Namespace, NodeKind};
 
 #[test]
 fn normalize_merges_adjacent_text_nodes() {

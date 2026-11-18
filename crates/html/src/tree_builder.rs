@@ -6,7 +6,7 @@
 //! Parenting (§13.2.6.1), the Adoption Agency Algorithm (§13.2.6.4.7), `<template>`
 //! contents insertion, and Foreign Content (SVG/MathML) attribute/tag adjustments (§13.2.6.5).
 
-use dom::{Attribute, Document, Namespace, NodeId, NodeKind, QuirksMode};
+use megi_core::{Attribute, Document, Namespace, NodeId, NodeKind, QuirksMode};
 
 use crate::fast_hash::{FastMap, FastSet};
 use crate::scripting::{ScriptExecution, ScriptExecutor};
@@ -4263,7 +4263,7 @@ impl TreeBuilder {
     }
 }
 
-/// Parses a complete HTML document string into a [`dom::Document`] (§13.2) using the
+/// Parses a complete HTML document string into a [`megi_core::Document`] (§13.2) using the
 /// default anti-DoS [`ParseOptions`].
 ///
 /// The signature is unchanged for callers that only need the tree; use
@@ -4375,7 +4375,7 @@ pub fn parse_document_with_script_executor(
 }
 
 /// Parses an HTML fragment in the context of `(context_namespace, context_local_name)` (§13.4)
-/// and returns a [`dom::Document`] whose root contains the resulting fragment children,
+/// and returns a [`megi_core::Document`] whose root contains the resulting fragment children,
 /// using the default anti-DoS [`ParseOptions`].
 pub fn parse_fragment(
     input: &str,
@@ -4789,17 +4789,17 @@ mod robustness_regression_tests {
         }
 
         let default_boundary =
-            |el: &dom::ElementData| scope_boundary(el, DEFAULT_SCOPE_ELEMENTS, &[]);
+            |el: &megi_core::ElementData| scope_boundary(el, DEFAULT_SCOPE_ELEMENTS, &[]);
         let button_boundary =
-            |el: &dom::ElementData| scope_boundary(el, DEFAULT_SCOPE_ELEMENTS, &["button"]);
+            |el: &megi_core::ElementData| scope_boundary(el, DEFAULT_SCOPE_ELEMENTS, &["button"]);
         let list_boundary =
-            |el: &dom::ElementData| scope_boundary(el, DEFAULT_SCOPE_ELEMENTS, &["ol", "ul"]);
+            |el: &megi_core::ElementData| scope_boundary(el, DEFAULT_SCOPE_ELEMENTS, &["ol", "ul"]);
         let table_scope: &[(&str, Namespace)] = &[
             ("html", Namespace::Html),
             ("table", Namespace::Html),
             ("template", Namespace::Html),
         ];
-        let table_boundary = |el: &dom::ElementData| scope_boundary(el, table_scope, &[]);
+        let table_boundary = |el: &megi_core::ElementData| scope_boundary(el, table_scope, &[]);
 
         for target in ["p", "div", "table", "li", "select", "html"] {
             assert_eq!(
@@ -4826,7 +4826,7 @@ mod robustness_regression_tests {
     }
 
     fn scope_boundary(
-        el: &dom::ElementData,
+        el: &megi_core::ElementData,
         scope_list: &[(&str, Namespace)],
         extra_html_tags: &[&str],
     ) -> bool {
@@ -4841,7 +4841,7 @@ mod robustness_regression_tests {
     fn brute_force_scope(
         tb: &TreeBuilder,
         target_name: &str,
-        is_boundary: impl Fn(&dom::ElementData) -> bool,
+        is_boundary: impl Fn(&megi_core::ElementData) -> bool,
     ) -> bool {
         for &node_id in tb.open_elements.iter().rev() {
             let Some(el) = tb.doc.node(node_id).as_element() else {
