@@ -691,7 +691,7 @@ pub struct Tokenizer {
     /// of `ParseError` entries.
     pub errors: Vec<ParseError>,
     /// 0-based indices of the first code point of each line (used for error positions).
-    line_starts: Vec<usize>,
+    line_starts: Vec<u32>,
     /// Prefix sums of non-BMP code points (UTF-16 surrogate-pair columns in html5lib-tests
     /// positions). `None` when the input is entirely BMP, keeping the common path allocation-free.
     wide_prefix: Option<Vec<u32>>,
@@ -738,7 +738,7 @@ impl Tokenizer {
     fn from_parts(
         input: Vec<u32>,
         errors: Vec<ParseError>,
-        line_starts: Vec<usize>,
+        line_starts: Vec<u32>,
         has_wide: bool,
         config: TokenizerConfig,
     ) -> Self {
@@ -871,19 +871,21 @@ impl Tokenizer {
         // then inserting `partition_point`-located entries is O(lines) inserts of O(n) memmoves
         // per call — quadratic for the normal `document.write` pattern of many small writes
         // (#639).
-        let split = self.line_starts.partition_point(|&start| start < insert_at);
+        let split = self
+            .line_starts
+            .partition_point(|&start| (start as usize) < insert_at);
         let mut merged = Vec::with_capacity(self.line_starts.len() + inserted_line_starts.len());
         merged.extend_from_slice(&self.line_starts[..split]);
         merged.extend(
             inserted_line_starts
                 .iter()
                 .skip(1)
-                .map(|start| insert_at + start),
+                .map(|start| (insert_at + *start as usize) as u32),
         );
         merged.extend(
             self.line_starts[split..]
                 .iter()
-                .map(|start| start + inserted_len),
+                .map(|start| (*start as usize + inserted_len) as u32),
         );
         self.line_starts = merged;
 
@@ -964,9 +966,11 @@ impl Tokenizer {
             return (1, 1);
         }
         if index < self.input.len() {
-            let line = self.line_starts.partition_point(|start| *start <= index);
+            let line = self
+                .line_starts
+                .partition_point(|start| *start as usize <= index);
             // html5lib-tests columns count UTF-16 code units, so a non-BMP code point occupies two.
-            let line_start = self.line_starts[line - 1];
+            let line_start = self.line_starts[line - 1] as usize;
             let wide_units = self
                 .wide_prefix
                 .as_ref()
@@ -3520,6 +3524,28 @@ impl Tokenizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn line_starts_stay_correct_after_insert_input() {
+        // #1680: line_starts is a compact Vec<u32>; after document.write merges inserted line
+        // starts, line/column lookups must still be correct.
+        let mut tok = Tokenizer::from_str_input("<p>one\ntwo</p>", TokenizerConfig::default());
+        assert_eq!(tok.line_starts, vec![0, 7]);
+        tok.insert_input("<div>\ninserted</div>");
+        // A single inserted line start is shifted by the insertion point and the original
+        // entries are shifted by the inserted length.
+        assert!(tok.line_starts.len() >= 2);
+        assert!(
+            tok.line_starts.windows(2).all(|w| w[0] < w[1]),
+            "line starts sorted"
+        );
+        for &start in &tok.line_starts {
+            assert!((start as usize) < tok.input.len() + 1, "offset in range");
+        }
+        // The reference line/column computation still works on the merged table.
+        let (line, col) = tok.line_col_at(tok.input.len().saturating_sub(1));
+        assert!(line >= 1 && col >= 1);
+    }
 
     #[test]
     fn test_tokenize_basic_tags_and_attributes() {

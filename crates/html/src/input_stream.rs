@@ -46,14 +46,14 @@ pub fn preprocess_code_points(raw: &[u32]) -> (Vec<u32>, Vec<ParseError>) {
 /// Preprocesses an iterator of raw code points (WHATWG HTML §13.2.3.5) **in a single
 /// pass**, also returning the 0-based offsets of the line starts (used by the tokenizer for
 /// line/column lookups). This avoids materializing the input twice for `&str` inputs.
-pub(crate) fn preprocess_stream<I>(raw: I) -> (Vec<u32>, Vec<ParseError>, Vec<usize>, bool)
+pub(crate) fn preprocess_stream<I>(raw: I) -> (Vec<u32>, Vec<ParseError>, Vec<u32>, bool)
 where
     I: Iterator<Item = u32>,
 {
     let mut raw = raw.peekable();
     let mut out = Vec::new();
     let mut errors = Vec::new();
-    let mut line_starts = vec![0usize];
+    let mut line_starts = vec![0u32];
     let mut has_wide = false;
     let mut line = 1usize;
     let mut col = 0usize;
@@ -68,7 +68,7 @@ where
 
         if cp == 0x0A {
             out.push(cp);
-            line_starts.push(out.len());
+            line_starts.push(out.len() as u32);
             line += 1;
             col = 0;
             continue;
@@ -111,12 +111,12 @@ pub fn preprocess_str(input: &str) -> (Vec<u32>, Vec<ParseError>) {
 /// used by [`crate::tokenizer::Tokenizer::from_str_input`]).
 pub(crate) fn preprocess_str_with_line_starts(
     input: &str,
-) -> (Vec<u32>, Vec<ParseError>, Vec<usize>, bool) {
+) -> (Vec<u32>, Vec<ParseError>, Vec<u32>, bool) {
     // The `&str` yields consecutive code points without CRLF lookahead needs beyond one
     // character, and the byte length is a good capacity hint for the common ASCII case.
     let mut out = Vec::with_capacity(input.len());
     let mut errors = Vec::new();
-    let mut line_starts = vec![0usize];
+    let mut line_starts = vec![0u32];
     let mut has_wide = false;
     let mut line = 1usize;
     let mut col = 0usize;
@@ -151,7 +151,7 @@ pub(crate) fn preprocess_str_with_line_starts(
                 }
                 index += 1;
                 out.push(0x0A);
-                line_starts.push(out.len());
+                line_starts.push(out.len() as u32);
                 line += 1;
                 col = 0;
                 continue;
@@ -159,7 +159,7 @@ pub(crate) fn preprocess_str_with_line_starts(
             if byte == b'\n' {
                 index += 1;
                 out.push(0x0A);
-                line_starts.push(out.len());
+                line_starts.push(out.len() as u32);
                 line += 1;
                 col = 0;
                 continue;
