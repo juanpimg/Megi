@@ -276,9 +276,10 @@ impl WebSocketClient {
         let mut bytes = Vec::new();
         let mut buffer = [0u8; 4096];
         loop {
-            if let Ok((frames, _)) = decode_frames(&bytes, self.max_message)
-                && let Some(frame) = frames.into_iter().next()
-            {
+            // #1628: propagate protocol errors from a malformed buffered frame immediately
+            // instead of swallowing them and blocking until the read timeout.
+            let (frames, _) = decode_frames(&bytes, self.max_message)?;
+            if let Some(frame) = frames.into_iter().next() {
                 return Ok(frame);
             }
             let read = self.stream.read(&mut buffer).map_err(FetchError::Io)?;
@@ -496,8 +497,18 @@ pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, Fe
         return Err(protocol("fragmented control frame"));
     }
     // #1630: a Close frame carries either no payload or a 2-byte status code.
-    if opcode == Opcode::Close && length != 0 && length != 2 {
-        return Err(protocol("Close frame payload must be 0 or 2 bytes"));
+    // #1631: validate the incoming code — reserved codes (1005/1006/1015, ...) are illegal on
+    // the wire and must not propagate to callers as legitimate.
+    if opcode == Opcode::Close {
+        if length != 0 && length != 2 {
+            return Err(protocol("Close frame payload must be 0 or 2 bytes"));
+        }
+        if length == 2 {
+            let code = u16::from_be_bytes([bytes[offset], bytes[offset + 1]]);
+            if !close_code::is_valid_outgoing(code) {
+                return Err(protocol("reserved WebSocket close code from peer"));
+            }
+        }
     }
     if opcode.is_data() && length > max_payload as u64 {
         return Err(protocol("frame payload exceeds cap"));
@@ -510,6 +521,11 @@ pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, Fe
         .ok_or_else(|| protocol("frame length overflow"))?;
     if bytes.len() < end {
         return Err(protocol("truncated frame payload"));
+    }
+    // #1626: RFC 6455 §5.6 — a Text frame's payload MUST be valid UTF-8. Binary and
+    // continuation frames may carry arbitrary bytes (fragmented reassembly is separate).
+    if opcode == Opcode::Text && std::str::from_utf8(&bytes[offset..end]).is_err() {
+        return Err(protocol("text frame payload is not valid UTF-8"));
     }
     Ok(DecodedFrame {
         frame: Frame {
@@ -811,6 +827,30 @@ mod tests {
     }
 
     #[test]
+    fn incoming_close_codes_are_validated() {
+        // #1631: reserved close codes (1005/1006/1015) must be rejected on the wire.
+        let reserved = [0x88u8, 0x02, 0x03, 0xED]; // 1005
+        assert!(
+            decode_frame(&reserved, 1024).is_err(),
+            "1005 must be rejected"
+        );
+        let valid = [0x88u8, 0x02, 0x03, 0xE8]; // 1000
+        assert!(decode_frame(&valid, 1024).is_ok(), "1000 must be accepted");
+    }
+
+    #[test]
+    fn invalid_utf8_text_frames_are_rejected() {
+        // #1626: RFC 6455 §5.6 requires text frames to carry valid UTF-8.
+        assert!(
+            decode_frame(&[0x81, 0x02, 0xFF, 0xFE], 1024).is_err(),
+            "invalid UTF-8 text frame must be a protocol error"
+        );
+        assert!(decode_frame(&[0x81, 0x02, b'h', b'i'], 1024).is_ok());
+        // Binary frames may carry arbitrary bytes.
+        assert!(decode_frame(&[0x82, 0x02, 0xFF, 0xFE], 1024).is_ok());
+    }
+
+    #[test]
     fn reserved_bits_are_rejected() {
         // #1625: RSV1/2/3 must be zero when no extension negotiated them.
         assert!(decode_frame(&[0xC1, 0x00], 1024).is_err(), "RSV1 set");
@@ -1092,7 +1132,11 @@ impl WebSocket {
             let frame = self.inner.recv()?;
             match frame.opcode {
                 Opcode::Text | Opcode::Continuation => {
-                    return Ok(String::from_utf8_lossy(&frame.payload).into_owned());
+                    // #1626: never fabricate U+FFFD with a lossy decode — fail with a typed
+                    // error instead (decode_frame already rejects invalid UTF-8 Text frames).
+                    return String::from_utf8(frame.payload).map_err(|_| {
+                        WebSocketError::InvalidFrame("text payload is not UTF-8".into())
+                    });
                 }
                 Opcode::Ping => self.inner.pong()?,
                 Opcode::Pong => {}

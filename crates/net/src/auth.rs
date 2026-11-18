@@ -78,6 +78,22 @@ pub fn basic_authorization(user: &str, password: &str) -> String {
     )
 }
 
+/// Canonicalizes an origin key so an explicit default port matches the implicit one (#1629).
+/// Non-URL inputs are kept verbatim for backwards compatibility.
+fn normalize_origin(origin: &str) -> String {
+    match crate::Url::parse(origin) {
+        Ok(url) if !url.host().is_empty() => {
+            format!(
+                "{}://{}:{}",
+                url.scheme().as_str(),
+                url.host(),
+                url.port_or_default().unwrap_or(0)
+            )
+        }
+        _ => origin.to_owned(),
+    }
+}
+
 /// Per-origin credentials keyed by `scheme://host:port` (the URL's `origin()` shape).
 #[derive(Clone, Debug, Default)]
 pub struct CredentialStore {
@@ -92,18 +108,20 @@ impl CredentialStore {
 
     /// Stores credentials for `origin`, replacing any previous pair.
     pub fn set(&mut self, origin: &str, user: &str, password: &str) {
-        self.entries
-            .insert(origin.to_owned(), (user.to_owned(), password.to_owned()));
+        self.entries.insert(
+            normalize_origin(origin),
+            (user.to_owned(), password.to_owned()),
+        );
     }
 
     /// Returns the credentials previously stored for `origin`.
     pub fn get(&self, origin: &str) -> Option<(String, String)> {
-        self.entries.get(origin).cloned()
+        self.entries.get(&normalize_origin(origin)).cloned()
     }
 
     /// Removes the credentials for `origin`.
     pub fn clear(&mut self, origin: &str) {
-        self.entries.remove(origin);
+        self.entries.remove(&normalize_origin(origin));
     }
 }
 
@@ -161,5 +179,28 @@ mod tests {
         store.clear("http://a.test");
         assert_eq!(store.get("http://a.test"), None);
         assert_eq!(basic_authorization("u", "p"), "Basic dTpw");
+    }
+}
+
+#[cfg(test)]
+mod normalization_tests {
+    use super::*;
+
+    #[test]
+    fn default_port_is_normalized_for_credential_keys() {
+        // #1629: http://a.test and http://a.test:80 are the same origin.
+        let mut store = CredentialStore::new();
+        store.set("http://a.test", "u", "p");
+        assert_eq!(
+            store.get("http://a.test:80"),
+            Some(("u".to_owned(), "p".to_owned())),
+            "credentials must be found with the explicit default port"
+        );
+        store.clear("https://a.test:443");
+        // Different scheme is a different origin.
+        assert_eq!(
+            store.get("http://a.test"),
+            Some(("u".to_owned(), "p".to_owned()))
+        );
     }
 }
