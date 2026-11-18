@@ -1167,38 +1167,39 @@ impl ContextMenu {
         x: f32,
         y: f32,
     ) -> Self {
+        let strings = crate::i18n::strings(crate::i18n::Locale::current());
         let mut items = Vec::new();
         if target_link.is_some() {
             items.push(ContextMenuItem {
                 action: MenuAction::OpenLinkInNewTab,
-                label: "Open link in new tab",
+                label: strings.open_link_in_new_tab,
             });
             items.push(ContextMenuItem {
                 action: MenuAction::CopyLinkAddress,
-                label: "Copy link address",
+                label: strings.copy_link_address,
             });
         }
         if target_image.is_some() {
             items.push(ContextMenuItem {
                 action: MenuAction::SaveImage,
-                label: "Save image",
+                label: strings.save_image,
             });
             items.push(ContextMenuItem {
                 action: MenuAction::CopyImage,
-                label: "Copy image (not supported)",
+                label: strings.copy_image_unsupported,
             });
         }
         items.push(ContextMenuItem {
             action: MenuAction::Reload,
-            label: "Reload",
+            label: strings.reload,
         });
         items.push(ContextMenuItem {
             action: MenuAction::SavePagePng,
-            label: "Save page as PNG",
+            label: strings.save_page_as_png,
         });
         items.push(ContextMenuItem {
             action: MenuAction::SavePageHtml,
-            label: "Save page as HTML",
+            label: strings.save_page_as_html,
         });
         Self {
             target_link,
