@@ -481,22 +481,27 @@ fn peer_max_concurrent_streams_is_respected() {
         send_settings(&mut tcp, &[(settings::MAX_CONCURRENT_STREAMS, 1)]);
         let (first, _) = read_request_headers(&mut tcp);
         assert_eq!(first, 1);
-        // Before answering stream 1 no second HEADERS may be in flight (cap = 1).
-        tcp.set_read_timeout(Some(Duration::from_millis(150)))
-            .expect("short timeout");
-        // Ignore SETTINGS ACK/WINDOW_UPDATE/PING frames; only a second HEADERS would violate
-        // the peer MAX_CONCURRENT_STREAMS=1 cap before stream 1 response.
-        while let Ok(Some(frame)) =
-            FrameReader::new(&mut tcp, frame::DEFAULT_MAX_FRAME_SIZE).read_frame()
-        {
-            assert_ne!(
-                frame.header.kind,
-                kind::HEADERS,
-                "client opened a second stream despite MAX_CONCURRENT_STREAMS=1"
-            );
+
+        // Before answering stream 1, no second HEADERS may already be in flight: the peer cap is 1
+        // and stream 1 is still open. Drain immediately-available frames non-blocking so a violating
+        // eager send is caught deterministically, without a negative timing window (#1350).
+        tcp.set_nonblocking(true).expect("nonblocking");
+        loop {
+            match FrameReader::new(&mut tcp, frame::DEFAULT_MAX_FRAME_SIZE).read_frame() {
+                Ok(Some(frame)) => assert_ne!(
+                    frame.header.kind,
+                    kind::HEADERS,
+                    "client opened a second stream despite MAX_CONCURRENT_STREAMS=1"
+                ),
+                Ok(None) => break,
+                Err(FetchError::Timeout) => break,
+                Err(error) => panic!("unexpected error while draining pending frames: {error}"),
+            }
         }
+        tcp.set_nonblocking(false).expect("blocking");
         tcp.set_read_timeout(Some(Duration::from_secs(5)))
             .expect("restore timeout");
+
         send_frames(&mut tcp, &response_with_body(200, &[], 1, b"one"));
         let (second, _) = read_request_headers(&mut tcp);
         assert_eq!(
