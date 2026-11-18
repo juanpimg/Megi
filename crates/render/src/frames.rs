@@ -96,6 +96,19 @@ pub fn collect_frames(
         child_options.host_events = Vec::new();
         child_options.form_post = None;
         child_options.base_override = None;
+        // `sandbox` (#1544): without an explicit `allow-scripts` token the framed document
+        // cannot execute scripts. This is the core security guarantee of the attribute.
+        if let Some(tokens) = data.get_attribute("sandbox") {
+            let allows_scripts = tokens
+                .split_ascii_whitespace()
+                .any(|token| token.eq_ignore_ascii_case("allow-scripts"));
+            if !allows_scripts {
+                child_options.scripting = crate::ScriptingMode::Disabled;
+            }
+            // Sandboxed frames cannot navigate the top level or submit forms; the render
+            // pipeline has no top-level navigation from frames, but form POSTs are disabled.
+            child_options.form_post = None;
+        }
 
         match crate::render_url_inner(&child_input, &child_options, None, depth + 1) {
             Ok(child) => {

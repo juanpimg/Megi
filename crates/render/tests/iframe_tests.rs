@@ -116,3 +116,31 @@ fn iframe_without_srcdoc_paints_no_child_content() {
     );
     assert_eq!(count_color(&output.pixmap, RED), 0, "no child => no red");
 }
+
+#[test]
+fn iframe_sandbox_blocks_child_scripts() {
+    // Child script sets a red background; it only runs when sandbox allows scripts.
+    let script = "<script>document.body.setAttribute('style','margin:0;background:red')</script>";
+    let child = format!("<body style='margin:0'>{script}</body>");
+
+    // Default sandbox (no tokens) must block scripts.
+    let blocked_html = format!(
+        "<html><body style='margin:0'><iframe width='40' height='20' sandbox=\"{child}\" srcdoc=\"{child}\"></iframe></body></html>"
+    );
+    let blocked = render_page(&blocked_html);
+    assert_eq!(
+        count_color(&blocked.pixmap, RED),
+        0,
+        "sandboxed iframe must not execute the child script"
+    );
+
+    // allow-scripts must let it run.
+    let allowed_html = format!(
+        "<html><body style='margin:0'><iframe width='40' height='20' sandbox='allow-scripts' srcdoc=\"{child}\"></iframe></body></html>"
+    );
+    let allowed = render_page(&allowed_html);
+    assert!(
+        count_color(&allowed.pixmap, RED) > 100,
+        "allow-scripts must let the child script paint"
+    );
+}

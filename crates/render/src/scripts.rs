@@ -1018,6 +1018,14 @@ pub fn execute_scripts(
                 }
             }));
         }
+        // #1534: connect the JS WebSocket class to the real net WebSocket client. A pump
+        // thread handles receives; the transport is polled by the runtime's event loop. This
+        // is independent of worker support (WebSocket works in ordinary pages).
+        let ws_options = host.fetch_options.clone();
+        runtime.set_websocket_provider(Box::new(move |url| {
+            let transport = crate::ws_bridge::LiveWebSocketTransport::connect(url, &ws_options)?;
+            Ok(Box::new(transport) as Box<dyn js::host::WebSocketTransport>)
+        }));
         let worker_allow_file = document_url.is_file();
         let max_worker_bytes = limits.max_script_bytes;
         runtime.set_worker_loader(Box::new(move |url| {
@@ -1649,6 +1657,10 @@ fn run_event_loop(
     warnings: &mut Vec<String>,
 ) {
     loop {
+        // #1534: deliver any pending WebSocket events before running timers. When sockets are
+        // still open but no timer is due, pump briefly so a response can arrive before the
+        // render finalizes (bounded to keep the pipeline deterministic and non-hanging).
+        runtime.poll_websockets();
         drain_microtasks(runtime, warnings);
         let remaining = limits.max_tasks.saturating_sub(state.tasks);
         if remaining == 0 {
@@ -1680,6 +1692,16 @@ fn run_event_loop(
             }
         }
         if runtime.pending_timers() == 0 {
+            if runtime.has_websockets() {
+                for _ in 0..20 {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                    runtime.poll_websockets();
+                    drain_microtasks(runtime, warnings);
+                    if !runtime.has_websockets() {
+                        break;
+                    }
+                }
+            }
             return;
         }
         if state.virtual_time_ms.saturating_sub(VIRTUAL_EPOCH_MS) >= limits.max_virtual_time_ms {

@@ -212,6 +212,7 @@ pub mod scripts;
 pub mod stylesheets;
 mod svg_assets;
 pub mod webfonts;
+pub mod ws_bridge;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

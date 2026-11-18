@@ -1568,6 +1568,8 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("reset", 0, node_reset),
         ("attachShadow", 1, node_attach_shadow),
         ("getRootNode", 0, node_get_root_node),
+        ("assignedNodes", 0, slot_assigned_nodes),
+        ("assignedElements", 0, slot_assigned_elements),
         ("getContext", 1, canvas_get_context),
         ("show", 0, node_dialog_show),
         ("showModal", 0, node_dialog_show_modal),
@@ -6470,6 +6472,106 @@ fn node_shadow_root_get(
     }
 }
 
+/// Resolves the shadow host of a `<slot>`: walks up to the nearest registered shadow root and
+/// returns its host element (#1541).
+fn slot_host(slot: NodeId) -> Option<NodeId> {
+    with_host(|host| {
+        let mut current = Some(slot);
+        while let Some(id) = current {
+            if let Some(host_node) = host.shadow_hosts.get(&id) {
+                return Some(*host_node);
+            }
+            current = host.document.try_node(id).and_then(|node| node.parent);
+        }
+        None
+    })
+    .flatten()
+}
+
+/// `HTMLSlotElement.assignedNodes()` (#1541): returns the light-DOM children of the shadow host
+/// assigned to this slot. Named slots take children with a matching `slot` attribute; the
+/// default slot takes children without one. `flatten` is accepted for API compatibility.
+fn slot_assigned_nodes(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let slot = this_node(this, context)?;
+    let Some(host_node) = slot_host(slot) else {
+        return wrap_list(context, Vec::new());
+    };
+    let slot_name = with_host(|host| {
+        host.document
+            .try_node(slot)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute("name").map(str::to_owned))
+    })
+    .flatten()
+    .unwrap_or_default();
+    let _ = args; // `{ flatten: true }` does not change this subset's result.
+
+    let assigned = with_host(|host| {
+        let document = &host.document;
+        let mut children = Vec::new();
+        let mut child = document
+            .try_node(host_node)
+            .and_then(|node| node.first_child);
+        while let Some(id) = child {
+            let child_slot = document
+                .try_node(id)
+                .and_then(|node| node.as_element())
+                .and_then(|element| element.get_attribute("slot").map(str::to_owned))
+                .unwrap_or_default();
+            let matches = if slot_name.is_empty() {
+                child_slot.is_empty()
+            } else {
+                child_slot == slot_name
+            };
+            if matches {
+                children.push(id);
+            }
+            child = document.try_node(id).and_then(|node| node.next_sibling);
+        }
+        children
+    })
+    .unwrap_or_default();
+    wrap_list(context, assigned)
+}
+
+/// `HTMLSlotElement.assignedElements()` — like `assignedNodes()` but only element nodes.
+fn slot_assigned_elements(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let nodes = match slot_assigned_nodes(this, args, context)? {
+        value if value.as_object().is_some() => {
+            let array = value.as_object().expect("object");
+            let length = array
+                .get(js_string!("length"), context)
+                .ok()
+                .and_then(|value| value.as_number())
+                .unwrap_or(0.0) as u32;
+            let mut elements = Vec::new();
+            for index in 0..length {
+                if let Ok(value) = array.get(index, context)
+                    && let Some(object) = value.as_object()
+                    && object
+                        .get(js_string!("nodeType"), context)
+                        .ok()
+                        .and_then(|n| n.as_number())
+                        == Some(1.0)
+                {
+                    elements.push(JsValue::from(object));
+                }
+            }
+            return Ok(JsArray::from_iter(elements, context).into());
+        }
+        other => other,
+    };
+    Ok(nodes)
+}
+
 fn node_get_root_node(
     this: &JsValue,
     _args: &[JsValue],
@@ -7628,6 +7730,11 @@ impl JsRuntime {
     /// with a `QuotaExceededError` once the document reaches the budget.
     pub fn set_max_dom_nodes(&mut self, max_nodes: usize) {
         self.host.borrow_mut().max_dom_nodes = max_nodes;
+    }
+
+    /// Whether any live WebSocket transports remain (#1534).
+    pub fn has_websockets(&self) -> bool {
+        !self.host.borrow().websockets.is_empty()
     }
 
     /// Delivers pending WebSocket transport events to JS handlers (#1534).
