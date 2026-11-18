@@ -217,27 +217,7 @@ impl WebSocketClient {
             response.extend_from_slice(&buffer[..read]);
         }
         let head = String::from_utf8_lossy(&response);
-        let status_line = head.lines().next().unwrap_or("");
-        if !status_line.contains(" 101") {
-            return Err(protocol(&format!(
-                "unexpected handshake status: {status_line}"
-            )));
-        }
-        let accept = head
-            .lines()
-            .find_map(|line| {
-                line.split_once(':').and_then(|(name, value)| {
-                    if name.trim().eq_ignore_ascii_case("sec-websocket-accept") {
-                        Some(value.trim())
-                    } else {
-                        None
-                    }
-                })
-            })
-            .ok_or_else(|| protocol("missing Sec-WebSocket-Accept"))?;
-        if accept != accept_value(&key) {
-            return Err(protocol("Sec-WebSocket-Accept mismatch"));
-        }
+        validate_handshake_response(&head, &key)?;
 
         Ok(Self {
             stream,
@@ -563,6 +543,66 @@ fn protocol(reason: &str) -> FetchError {
     FetchError::InvalidResponse(format!("websocket: {reason}"))
 }
 
+/// Validates an HTTP upgrade response for `key` (RFC 6455 §4.1).
+///
+/// The status code must be exactly 101 (parsed as the second status-line token, so
+/// `200 OK ( 101 reasons)` is rejected), and the headers must include
+/// `Upgrade: websocket` plus a `Connection` token `Upgrade` (both case-insensitive),
+/// alongside the expected `Sec-WebSocket-Accept` value.
+pub fn validate_handshake_response(head: &str, key: &str) -> Result<(), FetchError> {
+    let mut lines = head.lines();
+    let status_line = lines.next().unwrap_or("");
+    let mut parts = status_line.split_whitespace();
+    let version = parts.next().unwrap_or("");
+    let code = parts.next().unwrap_or("");
+    let valid_status =
+        version.starts_with("HTTP/") && code.parse::<u16>().is_ok_and(|status| status == 101);
+    if !valid_status {
+        return Err(protocol(&format!(
+            "unexpected handshake status: {status_line}"
+        )));
+    }
+    let mut upgrade: Option<String> = None;
+    let mut connection: Option<String> = None;
+    let mut accept: Option<String> = None;
+    for line in lines {
+        if line.trim().is_empty() {
+            break;
+        }
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        if name.trim().eq_ignore_ascii_case("upgrade") {
+            upgrade = Some(value.trim().to_owned());
+        } else if name.trim().eq_ignore_ascii_case("connection") {
+            let entry = connection.get_or_insert_with(String::new);
+            if !entry.is_empty() {
+                entry.push(',');
+            }
+            entry.push_str(value.trim());
+        } else if name.trim().eq_ignore_ascii_case("sec-websocket-accept") {
+            accept = Some(value.trim().to_owned());
+        }
+    }
+    let upgrade_ok = upgrade.is_some_and(|value| value.eq_ignore_ascii_case("websocket"));
+    if !upgrade_ok {
+        return Err(protocol("missing or invalid Upgrade header"));
+    }
+    let connection_ok = connection.is_some_and(|value| {
+        value
+            .split(',')
+            .any(|token| token.trim().eq_ignore_ascii_case("upgrade"))
+    });
+    if !connection_ok {
+        return Err(protocol("missing or invalid Connection header"));
+    }
+    let accept = accept.ok_or_else(|| protocol("missing Sec-WebSocket-Accept"))?;
+    if accept != accept_value(key) {
+        return Err(protocol("Sec-WebSocket-Accept mismatch"));
+    }
+    Ok(())
+}
+
 /// Parses a WebSocket URL, normalizing it to the HTTP(S) URL the handshake is performed against.
 /// `ws://host/path` becomes `http://host/path` and `wss://host/path` becomes `https://host/path`
 /// (same default port handling), which the handshake uses to resolve the endpoint and `Host`
@@ -733,6 +773,106 @@ mod tests {
         assert!(close_code::is_valid_outgoing(4000));
         assert!(!close_code::is_valid_outgoing(close_code::ABNORMAL));
         assert!(!close_code::is_valid_outgoing(1004));
+    }
+
+    // w2-net-002 + w2-net-d01 (RED): strict handshake status + Upgrade/Connection checks.
+    fn serve_handshake_with(
+        build: impl FnOnce(String) -> String + Send + 'static,
+    ) -> (Url, std::thread::JoinHandle<()>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                .ok();
+            let mut bytes = Vec::new();
+            let mut byte = [0u8; 1];
+            while !bytes.ends_with(b"\r\n\r\n") && bytes.len() < 16 * 1024 {
+                match stream.read(&mut byte) {
+                    Ok(1) => bytes.push(byte[0]),
+                    _ => break,
+                }
+            }
+            let request = String::from_utf8_lossy(&bytes).into_owned();
+            let key = request
+                .lines()
+                .find_map(|line| {
+                    line.split_once(':').and_then(|(name, value)| {
+                        if name.trim().eq_ignore_ascii_case("sec-websocket-key") {
+                            Some(value.trim().to_owned())
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .unwrap_or_default();
+            let response = build(crate::websocket::accept_value(&key));
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+            // Keep the socket briefly so a successful handshake can return.
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        });
+        let url = Url::parse(&format!("http://127.0.0.1:{port}/chat")).expect("url");
+        (url, handle)
+    }
+
+    fn test_options() -> FetchOptions {
+        FetchOptions {
+            connect_timeout: std::time::Duration::from_secs(2),
+            read_timeout: std::time::Duration::from_secs(2),
+            ..FetchOptions::default()
+        }
+    }
+
+    #[test]
+    fn handshake_rejects_200_with_embedded_101() {
+        // `status_line.contains(" 101")` wrongly accepts `200 OK ( 101 reasons)`.
+        let (url, server) = serve_handshake_with(|accept| {
+            format!(
+                "HTTP/1.1 200 OK ( 101 reasons)\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
+            )
+        });
+        let result = WebSocketClient::connect(&url, &test_options());
+        let _ = server.join();
+        assert!(result.is_err(), "200 with embedded 101 must be rejected");
+    }
+
+    #[test]
+    fn handshake_rejects_missing_upgrade() {
+        let (url, server) = serve_handshake_with(|accept| {
+            format!(
+                "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
+            )
+        });
+        let result = WebSocketClient::connect(&url, &test_options());
+        let _ = server.join();
+        assert!(result.is_err(), "missing Upgrade header must be rejected");
+    }
+
+    #[test]
+    fn handshake_rejects_missing_connection() {
+        let (url, server) = serve_handshake_with(|accept| {
+            format!(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
+            )
+        });
+        let result = WebSocketClient::connect(&url, &test_options());
+        let _ = server.join();
+        assert!(result.is_err(), "missing Connection header must be rejected");
+    }
+
+    #[test]
+    fn handshake_accepts_rfc_valid_response() {
+        let (url, server) = serve_handshake_with(|accept| {
+            format!(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
+            )
+        });
+        let result = WebSocketClient::connect(&url, &test_options());
+        let _ = server.join();
+        assert!(result.is_ok(), "RFC-valid handshake must pass");
     }
 }
 
