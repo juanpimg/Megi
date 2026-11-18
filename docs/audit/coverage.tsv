@@ -240,14 +240,15 @@ crates/js/Cargo.toml	19	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest
 crates/js/src/canvas.rs	440	src	F2			pending		
 crates/js/src/error.rs	69	src	F2	wave1	2026-11-16	covered	#1134-#1147	
 crates/js/src/events.rs	1682	src	F2	wave1	2026-11-16	covered	#1134-#1147	
-crates/js/src/host.rs	963	src	F2	wave1	2026-11-16	covered	#1134-#1147	
+crates/js/src/host.rs	979	src	F2	wave1	2026-11-16	covered	#1134-#1147	
 crates/js/src/import_map.rs	415	src	F2	wave1	2026-11-16	covered	#1134-#1147	
 crates/js/src/lib.rs	292	src	F2	wave1	2026-11-16	covered	#1134-#1147	
-crates/js/src/runtime.rs	9287	src	F2	wave1	2026-11-16	covered	#1134-#1147	
+crates/js/src/runtime.rs	9308	src	F2	wave1	2026-11-16	covered	#1134-#1147	
 crates/js/src/xhr.rs	683	src	F2			pending		
 crates/js/tests/browser_api_tests.rs	362	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/browser_features_r24.rs	514	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/canvas_tests.rs	78	test	F1			pending		
+crates/js/tests/cookie_tests.rs	85	test	F1			pending		
 crates/js/tests/dialog_tests.rs	60	test	F1			pending		
 crates/js/tests/dom_edges_tests.rs	318	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/dom_normalize_tests.rs	44	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
@@ -294,10 +295,10 @@ crates/layout/tests/container_queries.rs	179	test	F1	waveF1	2026-11-17	covered	#
 crates/layout/tests/deep_tree.rs	120	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/flex.rs	526	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/float_budget.rs	168	test	F1			pending		
-crates/layout/tests/floats.rs	500	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
+crates/layout/tests/floats.rs	499	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/fonts_integration.rs	210	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/grid.rs	902	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
-crates/layout/tests/ifc_adversarial_tests.rs	837	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
+crates/layout/tests/ifc_adversarial_tests.rs	795	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/ifc_conformance2.rs	654	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/ifc_tests.rs	367	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/inline_block.rs	143	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
@@ -312,7 +313,7 @@ crates/net/data/public_suffix_list.dat	16610	fixture	F1	lead	2026-11-17	covered	
 crates/net/src/body.rs	106	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/cache.rs	353	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/compression.rs	651	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
-crates/net/src/cookies.rs	1174	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
+crates/net/src/cookies.rs	1267	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/cors.rs	661	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/csp.rs	498	src	F2			pending		
 crates/net/src/data.rs	249	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
@@ -405,9 +406,9 @@ crates/render/src/charset.rs	442	src	F2	wave1	2026-11-16	covered	#1212-#1227,#12
 crates/render/src/error.rs	135	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/images.rs	408	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/inline_svg.rs	273	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
-crates/render/src/lib.rs	2296	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
+crates/render/src/lib.rs	2297	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/main.rs	357	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
-crates/render/src/scripts.rs	1792	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
+crates/render/src/scripts.rs	1825	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/stylesheets.rs	408	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/svg_assets.rs	169	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/webfonts.rs	278	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
@@ -418,6 +419,7 @@ crates/render/tests/browser_api_tests.rs	220	test	F1	waveF1	2026-11-17	covered	#
 crates/render/tests/canvas_tests.rs	71	test	F1			pending		
 crates/render/tests/csp_tests.rs	312	test	F1			pending		
 crates/render/tests/css_state_tests.rs	133	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
+crates/render/tests/document_cookie_tests.rs	113	test	F1			pending		
 crates/render/tests/encode_png_tests.rs	62	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/event_loop_tests.rs	499	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/fetch_stream_tests.rs	51	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
