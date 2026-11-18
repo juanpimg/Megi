@@ -134,7 +134,7 @@ crates/image/src/png.rs	1079	src	F2	wave1	2026-11-16	covered	#1148-#1151
 crates/image/src/vp8.rs	182	src	F2	wave1	2026-11-16	covered	#1148-#1151	
 crates/image/src/vp8_decoder.rs	1855	src	F2	wave1	2026-11-16	covered	#1148-#1151	
 crates/image/src/vp8_tables.rs	500	src	F2	wave1	2026-11-16	covered	#1148-#1151	
-crates/image/src/webp.rs	1437	src	F2	wave1	2026-11-16	covered	#1148-#1151	
+crates/image/src/webp.rs	1489	src	F2	wave1	2026-11-16	covered	#1148-#1151	
 crates/image/tests/data/zlib_vectors.rs	258	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/decode.rs	338	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/exif.rs	207	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
@@ -245,7 +245,7 @@ crates/image/tests/jpeg_gif.rs	188	test	F1	waveF1	2026-11-17	covered	#1364,#1365
 crates/image/tests/jpeg_scaled.rs	161	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/png_validation.rs	166	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/scaled.rs	131	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
-crates/image/tests/webp_tests.rs	619	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
+crates/image/tests/webp_tests.rs	636	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/js/Cargo.toml	19	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/js/src/canvas.rs	440	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/js/src/error.rs	69	src	F2	wave1	2026-11-16	covered	#1134-#1147	
@@ -516,7 +516,7 @@ crates/shell/tests/fixtures/links.html	10	test	F1	waveF1	2026-11-17	covered	#137
 crates/shell/tests/shell_tests.rs	1694	test	F1	waveF1	2026-11-17	covered	#1379	
 crates/svg/Cargo.toml	13	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/svg/examples/svg_to_png.rs	114	example	F3	lead	2026-11-17	covered	example read	read in the F3/F4 pass
-crates/svg/src/color.rs	391	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
+crates/svg/src/color.rs	392	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/css.rs	532	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/document.rs	2936	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/gradient.rs	494	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
