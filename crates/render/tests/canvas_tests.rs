@@ -35,6 +35,7 @@ fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
 
 const RED: css::Color = css::Color::new(0xFF, 0x00, 0x00, 0xFF);
 
+#[cfg(feature = "js")]
 #[test]
 fn script_painted_canvas_is_blitted_into_the_page() {
     let output = render_page(
