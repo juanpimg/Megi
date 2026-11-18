@@ -57,7 +57,7 @@ use crate::error::JsError;
 use crate::host::{
     ConsoleEntry, HistoryAction, Host, HostScope, LocationAction, MAX_OBSERVERS, MutationKind,
     MutationRecord, ObserverRegistration, ObserverTarget, SandboxFlags, StorageKind,
-    StorageProvider, with_host,
+    StorageProvider, host_cell, host_ref, with_host,
 };
 
 impl From<BoaError> for JsError {
@@ -248,10 +248,17 @@ impl JsRuntime {
 
     /// Read-only access to the document.
     pub fn document(&self) -> std::cell::Ref<'_, Document> {
-        std::cell::Ref::map(self.host.borrow(), |host| &host.document)
+        // The host is installed in the Context at construction, so the outer
+        // borrow cannot fail; `borrow()` on the old cell only panicked on
+        // re-entry, which this path never does.
+        let host = host_ref(&self.context).expect("JavaScript host installed in context");
+        std::cell::Ref::map(host, |host| &host.document)
     }
 
     /// Mutable access to the document.
+    ///
+    /// Kept on the shared cell: this `&self` accessor hands out an `RefMut`
+    /// tied to the cell, and a `&mut Context` is not available here.
     pub fn document_mut(&self) -> std::cell::RefMut<'_, Document> {
         std::cell::RefMut::map(self.host.borrow_mut(), |host| &mut host.document)
     }
@@ -260,17 +267,19 @@ impl JsRuntime {
     pub fn canvas_surfaces(
         &self,
     ) -> std::collections::HashMap<megi_core::NodeId, crate::canvas::CanvasSurface> {
-        self.host.borrow().canvas_store.clone_surfaces()
+        host_ref(&self.context)
+            .map(|host| host.canvas_store.clone_surfaces())
+            .unwrap_or_default()
     }
 
     /// Drains the captured `console.*` entries.
     pub fn take_console(&mut self) -> Vec<ConsoleEntry> {
-        self.host.borrow_mut().take_console()
+        with_host_cell(&mut self.context, |host| host.take_console()).unwrap_or_default()
     }
 
     /// Sets `document.title`.
     pub fn set_title(&mut self, title: impl Into<String>) {
-        self.host.borrow_mut().title = title.into();
+        let _ = with_host_cell(&mut self.context, |host| host.title = title.into());
     }
 
     /// Returns the last JS exception message, if any.
@@ -395,34 +404,36 @@ impl JsRuntime {
 
     /// Current `document.readyState` (`loading` until the host changes it).
     pub fn ready_state(&self) -> String {
-        self.host.borrow().ready_state.clone()
+        host_ref(&self.context)
+            .map(|host| host.ready_state.clone())
+            .unwrap_or_default()
     }
 
     /// Sets `document.readyState` (`loading`, `interactive` or `complete`).
     pub fn set_ready_state(&mut self, state: impl Into<String>) {
-        self.host.borrow_mut().ready_state = state.into();
+        let _ = with_host_cell(&mut self.context, |host| host.ready_state = state.into());
     }
 
     /// Scroll offsets written by `window.scrollTo`/`scrollBy` (CSS pixels).
     pub fn scroll_position(&self) -> (f64, f64) {
-        let host = self.host.borrow();
-        (host.scroll_x, host.scroll_y)
+        host_ref(&self.context)
+            .map(|host| (host.scroll_x, host.scroll_y))
+            .unwrap_or_default()
     }
 
     /// Number of pending `requestAnimationFrame` callbacks.
     pub fn pending_animation_frames(&self) -> usize {
-        self.host
-            .borrow()
-            .timers
-            .iter()
-            .filter(|timer| timer.animation)
-            .count()
+        host_ref(&self.context)
+            .map(|host| host.timers.iter().filter(|timer| timer.animation).count())
+            .unwrap_or(0)
     }
 
     /// Takes the runtime's document out (the host keeps an empty one afterwards).
     pub fn take_document(&mut self) -> Document {
-        let mut host = self.host.borrow_mut();
-        std::mem::replace(&mut host.document, Document::new())
+        with_host_cell(&mut self.context, |host| {
+            std::mem::replace(&mut host.document, Document::new())
+        })
+        .expect("JavaScript host installed in context")
     }
 
     /// Evaluates `script` against a **borrowed** document without taking ownership.
@@ -511,7 +522,7 @@ impl JsRuntime {
 
     /// Updates `document.activeElement` from the host UI (e.g. shell focus changes, #1504).
     pub fn set_active_element(&mut self, node: Option<NodeId>) {
-        self.host.borrow_mut().active_element = node;
+        let _ = with_host_cell(&mut self.context, |host| host.active_element = node);
     }
 
     /// Pushes the runtime's configured budget into the Boa VM.
@@ -590,12 +601,16 @@ impl JsRuntime {
 
     /// Number of pending timers.
     pub fn pending_timers(&self) -> usize {
-        self.host.borrow().timers.len()
+        host_ref(&self.context)
+            .map(|host| host.timers.len())
+            .unwrap_or(0)
     }
 
     /// Current scheduler time in milliseconds (virtual clock after `advance`/`run_until`).
     pub fn now_ms(&self) -> u64 {
-        self.host.borrow().now_ms()
+        host_ref(&self.context)
+            .map(|host| host.now_ms())
+            .unwrap_or(0)
     }
 
     /// Last non-fatal exception thrown by an event listener, if any.
@@ -603,7 +618,9 @@ impl JsRuntime {
     /// Listener exceptions are also pushed to the console capture buffer and do not
     /// interrupt the remaining listeners.
     pub fn last_event_error(&self) -> Option<String> {
-        self.host.borrow().last_event_error.clone()
+        host_ref(&self.context)
+            .ok()
+            .and_then(|host| host.last_event_error.clone())
     }
 
     /// Rough estimate of the Rust-side (and JS host-side) memory used by the runtime.
@@ -613,7 +630,7 @@ impl JsRuntime {
     /// timers, console capture and the document title/URL strings. It deliberately
     /// excludes the JS heap allocated inside Boa itself (documented limitation).
     pub fn estimated_heap_bytes(&self) -> Option<usize> {
-        let host = self.host.borrow();
+        let host = host_ref(&self.context).ok()?;
         // Iterative: the estimate is also used for arbitrarily deep documents.
         let node_count = 1 + host
             .document
@@ -670,6 +687,18 @@ fn accessor_fn(
     f: fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>,
 ) -> boa_engine::object::builtins::JsFunction {
     FunctionObjectBuilder::new(context.realm(), native(f)).build()
+}
+
+/// Borrows the host attached to `context` for the duration of `f` (never TLS).
+///
+/// This is the mechanical migration adapter for leaf/DOM bindings that used to
+/// call `with_host`. It keeps the legacy `Option<R>` shape so each call site's
+/// fallback (`unwrap_or`, `ok_or_else`, …) is unchanged; the underlying
+/// [`host_cell`] borrow is a `RefMut` that is dropped as soon as `f` returns,
+/// so no borrow ever survives a call back into JavaScript. Re-entry is a typed
+/// Boa error (mapped to `None` here) instead of the old `already borrowed` panic.
+fn with_host_cell<R>(context: &mut Context, f: impl FnOnce(&mut Host) -> R) -> Option<R> {
+    host_cell(context).ok().map(|mut host| f(&mut host))
 }
 
 /// Installs only non-DOM worker globals (`console` and timers).
@@ -1903,8 +1932,8 @@ fn node_inner_html_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let html =
-        with_host(|host| megi_html::serialize_fragment(&host.document, node_id)).unwrap_or_default();
+    let html = with_host(|host| megi_html::serialize_fragment(&host.document, node_id))
+        .unwrap_or_default();
     Ok(JsValue::from(js_string!(html)))
 }
 
@@ -1947,8 +1976,8 @@ fn node_outer_html_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let html =
-        with_host(|host| megi_html::serialize_outer_html(&host.document, node_id)).unwrap_or_default();
+    let html = with_host(|host| megi_html::serialize_outer_html(&host.document, node_id))
+        .unwrap_or_default();
     Ok(JsValue::from(js_string!(html)))
 }
 
@@ -3571,7 +3600,8 @@ fn document_query_selector(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let selector = arg_string(args, 0, context)?;
-    let node = with_host(|host| megi_css::query::query_selector(&host.document, &selector)).flatten();
+    let node =
+        with_host(|host| megi_css::query::query_selector(&host.document, &selector)).flatten();
     wrap_optional(context, node)
 }
 
@@ -3947,8 +3977,8 @@ fn node_list_for_each(
 fn node_matches(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node = this_node(this, context)?;
     let selector = arg_string(args, 0, context)?;
-    let matched =
-        with_host(|host| megi_css::query::matches(&host.document, node, &selector)).unwrap_or(false);
+    let matched = with_host(|host| megi_css::query::matches(&host.document, node, &selector))
+        .unwrap_or(false);
     Ok(JsValue::from(matched))
 }
 
@@ -3979,7 +4009,8 @@ fn node_query_selector(
 ) -> JsResult<JsValue> {
     let node = this_node(this, context)?;
     let selector = arg_string(args, 0, context)?;
-    let found = with_host(|host| megi_css::query::query_selector_from(&host.document, node, &selector));
+    let found =
+        with_host(|host| megi_css::query::query_selector_from(&host.document, node, &selector));
     wrap_optional(context, found.flatten())
 }
 
@@ -8394,7 +8425,8 @@ fn ensure_iframe_state(node_id: NodeId) -> Result<(u32, Rc<RefCell<IframeState>>
 
     let (final_url, html, sandbox, opaque, same_origin, parent_depth, parent_origin) = meta;
     let parsed_doc =
-        megi_html::parse_document_with_options(&html, false, &megi_html::ParseOptions::DEFAULT).document;
+        megi_html::parse_document_with_options(&html, false, &megi_html::ParseOptions::DEFAULT)
+            .document;
 
     let inline_scripts: Vec<String> = if sandbox.allow_scripts {
         parsed_doc
@@ -10387,7 +10419,8 @@ fn node_selected_index_set(
                 .and_then(|node| node.as_element_mut())
             {
                 if position as i64 == index {
-                    element.set_attribute(megi_core::Attribute::new("selected", String::new()), true);
+                    element
+                        .set_attribute(megi_core::Attribute::new("selected", String::new()), true);
                 } else {
                     element
                         .attributes
