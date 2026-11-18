@@ -136,6 +136,31 @@ pub struct ModuleAsyncOutcome {
     pub limited: bool,
 }
 
+struct CspEvalHooks {
+    allow_eval: Rc<std::cell::Cell<bool>>,
+}
+
+impl boa_engine::context::HostHooks for CspEvalHooks {
+    fn ensure_can_compile_strings(
+        &self,
+        _realm: boa_engine::realm::Realm,
+        _parameters: &[boa_engine::JsString],
+        _body: &boa_engine::JsString,
+        _direct: bool,
+        _context: &mut Context,
+    ) -> JsResult<()> {
+        if self.allow_eval.get() {
+            Ok(())
+        } else {
+            Err(JsNativeError::eval()
+                .with_message(
+                    "Content-Security-Policy: 'unsafe-eval' is required for eval/Function",
+                )
+                .into())
+        }
+    }
+}
+
 /// Embedded JavaScript runtime bound to one DOM document.
 pub struct JsRuntime {
     /// Boa context (single realm).
@@ -144,6 +169,8 @@ pub struct JsRuntime {
     host: Rc<RefCell<Host>>,
     /// Execution budget applied before each `eval`.
     budget: Budget,
+    /// Whether `eval` / `new Function` are allowed by CSP (`'unsafe-eval'`).
+    allow_eval: Rc<std::cell::Cell<bool>>,
     /// Last JS exception message (diagnostics).
     last_error: Option<String>,
 }
@@ -179,8 +206,12 @@ impl JsRuntime {
             cache: RefCell::new(HashMap::new()),
             max_cache_entries: 256,
         });
+        let allow_eval = Rc::new(std::cell::Cell::new(true));
         let mut context = Context::builder()
             .module_loader(module_loader)
+            .host_hooks(Rc::new(CspEvalHooks {
+                allow_eval: Rc::clone(&allow_eval),
+            }))
             .build()
             .map_err(|error| JsError::Internal(error.to_string()))?;
         let host = Rc::new(RefCell::new(Host::new(document, url)));
@@ -194,8 +225,14 @@ impl JsRuntime {
             context,
             host,
             budget: Budget::default(),
+            allow_eval,
             last_error: None,
         })
+    }
+
+    /// Controls whether dynamic code evaluation (`eval`, `new Function`) is permitted (#1526).
+    pub fn set_allow_eval(&self, allow: bool) {
+        self.allow_eval.set(allow);
     }
 
     /// Replaces the execution budget used by subsequent `eval` calls.
