@@ -571,3 +571,107 @@ mod tests {
         assert!(!close_code::is_valid_outgoing(1004));
     }
 }
+
+// ---------------------------------------------------------------------------
+// Convenience API compatible with the concurrent `net` landing: typed errors and a small
+// synchronous `WebSocket` wrapper over `WebSocketClient`. Both share the framing core above.
+// ---------------------------------------------------------------------------
+
+/// The RFC 6455 GUID appended to a handshake key before hashing.
+pub fn accept_guid() -> &'static str {
+    "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+}
+
+/// Typed WebSocket errors for the convenience API.
+#[derive(Debug)]
+pub enum WebSocketError {
+    UnsupportedScheme,
+    Io(std::io::Error),
+    InvalidHandshake(String),
+    UpgradeRejected(u16),
+    InvalidFrame(String),
+    Closed,
+    UnsupportedOpcode(u8),
+    InvalidUrl(String),
+}
+
+impl std::fmt::Display for WebSocketError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedScheme => write!(f, "WebSocket requires the ws: scheme"),
+            Self::Io(error) => write!(f, "WebSocket I/O error: {error}"),
+            Self::InvalidHandshake(reason) => write!(f, "invalid WebSocket handshake: {reason}"),
+            Self::UpgradeRejected(status) => write!(f, "WebSocket upgrade rejected ({status})"),
+            Self::InvalidFrame(reason) => write!(f, "invalid WebSocket frame: {reason}"),
+            Self::Closed => write!(f, "WebSocket closed by peer"),
+            Self::UnsupportedOpcode(opcode) => write!(f, "unsupported WebSocket opcode {opcode}"),
+            Self::InvalidUrl(reason) => write!(f, "invalid WebSocket URL: {reason}"),
+        }
+    }
+}
+
+impl std::error::Error for WebSocketError {}
+
+impl From<std::io::Error> for WebSocketError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+impl From<FetchError> for WebSocketError {
+    fn from(error: FetchError) -> Self {
+        match error {
+            FetchError::Io(io) => Self::Io(io),
+            FetchError::InvalidResponse(reason) if reason.contains("connection closed") => {
+                Self::Closed
+            }
+            FetchError::InvalidResponse(reason) => Self::InvalidHandshake(reason),
+            FetchError::UnsupportedScheme(_) => Self::UnsupportedScheme,
+            other => Self::InvalidFrame(other.to_string()),
+        }
+    }
+}
+
+/// A connected WebSocket with a string-oriented API.
+pub struct WebSocket {
+    inner: WebSocketClient,
+}
+
+impl WebSocket {
+    pub fn connect(url: &str) -> Result<Self, WebSocketError> {
+        if !url.trim().to_ascii_lowercase().starts_with("ws://") {
+            return Err(WebSocketError::UnsupportedScheme);
+        }
+        let parsed =
+            parse_ws_url(url).map_err(|error| WebSocketError::InvalidUrl(error.to_string()))?;
+        let inner = WebSocketClient::connect(&parsed, &FetchOptions::default())?;
+        Ok(Self { inner })
+    }
+
+    pub fn send_text(&mut self, text: &str) -> Result<(), WebSocketError> {
+        self.inner.send_text(text).map_err(WebSocketError::from)
+    }
+
+    /// Reads the next text frame, replying to pings and skipping pongs. Returns `Closed` when
+    /// the peer sends a close frame or drops the connection.
+    pub fn recv_text(&mut self) -> Result<String, WebSocketError> {
+        loop {
+            let frame = self.inner.recv()?;
+            match frame.opcode {
+                Opcode::Text | Opcode::Continuation => {
+                    return Ok(String::from_utf8_lossy(&frame.payload).into_owned());
+                }
+                Opcode::Ping => self.inner.pong()?,
+                Opcode::Pong => {}
+                Opcode::Close => return Err(WebSocketError::Closed),
+                Opcode::Binary => return Err(WebSocketError::UnsupportedOpcode(0x2)),
+            }
+        }
+    }
+
+    pub fn close(&mut self) -> Result<(), WebSocketError> {
+        self.inner
+            .close(close_code::NORMAL)
+            .map_err(WebSocketError::from)
+    }
+}

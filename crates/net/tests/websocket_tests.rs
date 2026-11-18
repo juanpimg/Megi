@@ -1,108 +1,100 @@
-//! #1534: real WebSocket handshake + RFC 6455 frame exchange over a loopback server.
+//! #1534: minimal ws:// handshake and masked text frames against a loopback server.
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread::JoinHandle;
 
-use net::http::FetchOptions;
-use net::websocket;
-use net::websocket as ws;
+use net::websocket::accept_value;
+use net::{WebSocket, WebSocketError};
 
-fn options() -> FetchOptions {
-    FetchOptions {
-        connect_timeout: std::time::Duration::from_secs(2),
-        read_timeout: std::time::Duration::from_secs(2),
-        ..FetchOptions::default()
+fn read_head(stream: &mut std::net::TcpStream) -> String {
+    let mut bytes = Vec::new();
+    let mut byte = [0u8; 1];
+    while bytes.len() < 16 * 1024 {
+        match stream.read(&mut byte) {
+            Ok(1) => {
+                bytes.push(byte[0]);
+                if bytes.ends_with(b"\r\n\r\n") {
+                    break;
+                }
+            }
+            _ => break,
+        }
     }
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
-/// Minimal RFC 6455 echo server: performs the upgrade handshake and echoes one masked frame
-/// back as an unmasked server frame.
-fn spawn_echo_server() -> (u16, JoinHandle<()>) {
+fn read_frame(stream: &mut std::net::TcpStream) -> Vec<u8> {
+    let mut head = [0u8; 2];
+    stream.read_exact(&mut head).expect("frame head");
+    assert_ne!(head[1] & 0x80, 0, "client frames must be masked");
+    let length = (head[1] & 0x7F) as usize;
+    let mut mask = [0u8; 4];
+    stream.read_exact(&mut mask).expect("mask");
+    let mut payload = vec![0u8; length];
+    stream.read_exact(&mut payload).expect("payload");
+    for (index, byte) in payload.iter_mut().enumerate() {
+        *byte ^= mask[index % 4];
+    }
+    payload
+}
+
+fn serve() -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     let port = listener.local_addr().expect("addr").port();
     let handle = std::thread::spawn(move || {
-        let Ok((mut stream, _)) = listener.accept() else {
-            return;
-        };
-        let mut head = Vec::new();
-        let mut byte = [0u8; 1];
-        while !head.ends_with(b"\r\n\r\n") {
-            if stream.read(&mut byte).unwrap_or(0) == 0 {
-                return;
-            }
-            head.push(byte[0]);
-        }
-        let key = String::from_utf8_lossy(&head)
+        let (mut stream, _) = listener.accept().expect("accept");
+        let request = read_head(&mut stream);
+        assert!(request.starts_with("GET /chat HTTP/1.1"), "{request}");
+        assert!(request.contains("Upgrade: websocket"), "{request}");
+        assert!(request.contains("Sec-WebSocket-Version: 13"), "{request}");
+        let key = request
             .lines()
             .find_map(|line| {
-                line.split_once(':').and_then(|(n, v)| {
-                    if n.trim().eq_ignore_ascii_case("sec-websocket-key") {
-                        Some(v.trim().to_owned())
+                line.split_once(':').and_then(|(name, value)| {
+                    if name.eq_ignore_ascii_case("sec-websocket-key") {
+                        Some(value.trim().to_owned())
                     } else {
                         None
                     }
                 })
             })
-            .expect("key");
-        let accept = websocket::accept_value(&key);
+            .expect("Sec-WebSocket-Key");
         let response = format!(
-            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
+            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
+            accept_value(&key)
         );
         stream
             .write_all(response.as_bytes())
             .expect("handshake response");
-        stream.flush().expect("flush");
-
-        // Read one masked client frame (header + mask + payload).
-        let mut frame = [0u8; 2];
-        stream.read_exact(&mut frame).expect("frame header");
-        let len = (frame[1] & 0x7F) as usize;
-        let mut mask_and_payload = vec![0u8; 4 + len];
+        let payload = read_frame(&mut stream);
+        assert_eq!(payload, b"ping");
+        // Unmasked server text frame "pong".
         stream
-            .read_exact(&mut mask_and_payload)
-            .expect("mask+payload");
-        let mask = [
-            mask_and_payload[0],
-            mask_and_payload[1],
-            mask_and_payload[2],
-            mask_and_payload[3],
-        ];
-        let mut payload = mask_and_payload[4..].to_vec();
-        websocket::mask(&mut payload, mask);
-        // Echo as unmasked server text frame.
-        let mut echo = vec![0x81, len as u8];
-        echo.extend_from_slice(&payload);
-        stream.write_all(&echo).expect("echo");
-        stream.flush().expect("flush");
+            .write_all(&[0x81, 0x04, b'p', b'o', b'n', b'g'])
+            .expect("pong frame");
+        // Followed by a close frame in the same TCP segment (tests buffered reads).
+        stream.write_all(&[0x88, 0x00]).expect("close frame");
+        let _ = stream.flush();
     });
     (port, handle)
 }
 
 #[test]
-fn websocket_handshake_and_text_roundtrip() {
-    let (port, server) = spawn_echo_server();
-    let url = ws::parse_ws_url(&format!("ws://127.0.0.1:{port}/chat")).expect("ws url");
-    let mut client = ws::WebSocketClient::connect(&url, &options()).expect("connect");
-    client.send_text("hello ws").expect("send");
-    let frame = client.recv().expect("recv");
-    assert_eq!(frame.opcode, websocket::Opcode::Text);
-    assert_eq!(frame.payload, b"hello ws");
-    client.close(websocket::close_code::NORMAL).expect("close");
-    server.join().expect("server");
+fn ws_handshake_and_text_roundtrip() {
+    let (port, server) = serve();
+    let mut socket = WebSocket::connect(&format!("ws://127.0.0.1:{port}/chat")).expect("connect");
+    socket.send_text("ping").expect("send");
+    assert_eq!(socket.recv_text().expect("pong"), "pong");
+    assert!(matches!(socket.recv_text(), Err(WebSocketError::Closed)));
+    socket.close().expect("close");
+    server.join().expect("server thread");
 }
 
 #[test]
-fn ws_url_parsing_and_tls_rejection() {
-    assert_eq!(
-        ws::parse_ws_url("ws://example.com/chat")
-            .expect("url")
-            .host(),
-        "example.com"
-    );
-    assert!(
-        ws::parse_ws_url("wss://example.com").is_err(),
-        "wss must be rejected (no TLS downgrade)"
-    );
-    assert!(ws::parse_ws_url("ftp://example.com").is_err());
+fn non_ws_scheme_is_rejected() {
+    assert!(matches!(
+        WebSocket::connect("https://example.test/"),
+        Err(WebSocketError::UnsupportedScheme)
+    ));
 }

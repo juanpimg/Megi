@@ -2,7 +2,8 @@
 //!
 //! WHATWG Fetch / resource-loading pipeline slice: URL parsing, HTTP/1.1 with TLS
 //! 1.2/1.3 (`https:`), a real HTTP cache, `data:` URLs, `file://` access, MIME type
-//! sniffing and a [`ResourceLoader`].
+//! sniffing and a [`ResourceLoader`]. A minimal `ws://` WebSocket client (HTTP Upgrade +
+//! masked text frames) is available through [`WebSocket`] (#1534).
 //!
 //! ## Scope (what this crate does today)
 //!
@@ -195,3 +196,4 @@ pub use psl::{
 pub use range::{ByteRange, ContentRange, RangeError};
 pub use referrer::{ReferrerConfig, ReferrerPolicy, referer_value};
 pub use url::{Scheme, Url};
+pub use websocket::{WebSocket, WebSocketError, accept_guid};
