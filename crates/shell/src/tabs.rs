@@ -33,6 +33,10 @@ pub const BLANK_TAB_URL: &str = "data:text/html,%3Ctitle%3ENew%20Tab%3C%2Ftitle%
 /// Fallback title of a blank tab that has not rendered yet.
 pub const BLANK_TAB_TITLE: &str = "New Tab";
 
+fn blank_tab_title() -> &'static str {
+    crate::i18n::strings(crate::i18n::Locale::current()).new_tab
+}
+
 /// Result of [`TabsState::close`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CloseOutcome {
@@ -108,7 +112,7 @@ impl Tab {
             history_log: crate::history::HistoryLog::new(),
             last_download: None,
         });
-        tab.title = Some(BLANK_TAB_TITLE.to_string());
+        tab.title = Some(blank_tab_title().to_string());
         tab
     }
 
@@ -134,13 +138,13 @@ impl Tab {
         }
     }
 
-    /// Title used for the window title: document title, else the URL, else `New Tab`.
+    /// Title used for the window title: document title, else the URL, else the localized blank-tab title.
     pub fn display_title(&self) -> String {
         match self.title.as_deref() {
             Some(title) if !title.is_empty() => title.to_string(),
             _ => match self.navigation.current() {
                 Some(url) => url.as_str().to_string(),
-                None => BLANK_TAB_TITLE.to_string(),
+                None => blank_tab_title().to_string(),
             },
         }
     }
@@ -323,8 +327,9 @@ mod tests {
     #[test]
     fn blank_tab_is_renderable_and_titled() {
         let tab = Tab::blank();
+        let expected = crate::i18n::strings(crate::i18n::Locale::current()).new_tab;
         assert_eq!(tab.url, BLANK_TAB_URL);
-        assert_eq!(tab.display_title(), BLANK_TAB_TITLE);
+        assert_eq!(tab.display_title(), expected);
         assert!(net::Url::parse(BLANK_TAB_URL).is_ok());
     }
 
@@ -356,10 +361,11 @@ mod tests {
     #[test]
     fn closing_the_last_tab_resets_it_to_blank() {
         let mut state = TabsState::new("https://example.com/only");
+        let expected = crate::i18n::strings(crate::i18n::Locale::current()).new_tab;
         assert_eq!(state.close_active(), CloseOutcome::ResetLast);
         assert_eq!(state.len(), 1);
         assert_eq!(state.active().url, BLANK_TAB_URL);
-        assert_eq!(state.active().display_title(), BLANK_TAB_TITLE);
+        assert_eq!(state.active().display_title(), expected);
         assert_eq!(state.close(5), CloseOutcome::Invalid);
     }
 

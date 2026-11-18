@@ -2104,9 +2104,10 @@ fn paint_history_menu(
     let layout = history_menu_layout(menu, view.css_width, view.css_viewport_height);
     paint_panel(pixmap, layout.rect, scale, MENU_RADIUS, COLOR_MENU_BG);
     if menu.entries.is_empty() {
+        let strings = crate::i18n::strings(crate::i18n::Locale::current());
         draw_text(
             pixmap,
-            "No history yet",
+            strings.no_history_menu,
             layout.rect.x + 8.0,
             layout.rect.y + 6.0,
             scale,
