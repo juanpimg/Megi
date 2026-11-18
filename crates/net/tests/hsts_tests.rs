@@ -16,6 +16,10 @@ use rcgen::generate_simple_self_signed;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 
+// The global HSTS store is process-wide; serialize these tests so one test's
+// `clear()`/observation cannot race another's isolation assertions.
+static HSTS_TEST_LOCK: Mutex<()> = Mutex::new(());
+
 fn provider() -> Arc<rustls::crypto::CryptoProvider> {
     Arc::new(rustls::crypto::ring::default_provider())
 }
@@ -144,6 +148,7 @@ fn hsts_is_learned_from_https_and_http_is_upgraded() {
 
 #[test]
 fn hsts_is_learned_from_https_redirect_response() {
+    let _hsts_guard = HSTS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let store = Arc::new(Mutex::new(HstsStore::new()));
     let (cert, key) = test_certificate();
     let client = client_config_trusting(cert.clone());
@@ -175,6 +180,7 @@ fn hsts_is_learned_from_https_redirect_response() {
 
 #[test]
 fn hsts_ignores_ip_literals_over_https() {
+    let _hsts_guard = HSTS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let store = Arc::new(Mutex::new(HstsStore::new()));
     let (cert, key) = test_certificate_for("127.0.0.1");
     let client = client_config_trusting(cert.clone());
@@ -211,6 +217,7 @@ fn hsts_ignores_ip_literals_over_https() {
 
 #[test]
 fn session_hsts_store_isolates_from_global_and_applies_to_streaming_and_loader() {
+    let _hsts_guard = HSTS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     hsts::clear();
     let store = Arc::new(Mutex::new(HstsStore::new()));
     let (cert, key) = test_certificate();
