@@ -319,22 +319,55 @@ fn test_reverse_directions_mirror_placement() {
 
 #[test]
 fn test_baseline_alignment_uses_line_boxes() {
-    // Without text the baseline falls back to flex-start; this test only checks that
-    // the option is accepted and items stay inside the container.
-    let case = layout_case(
-        {
-            let mut style = flex_container_style(Length::Px(200.0), Length::Px(60.0));
-            style.align_items = AlignItems::Baseline;
-            style
-        },
-        vec![
-            item_style(Length::Px(50.0), Length::Px(20.0)),
-            item_style(Length::Px(50.0), Length::Px(20.0)),
-        ],
+    // Items with text at different font sizes must be aligned so their first-line
+    // baselines coincide (#1381).
+    fn first_line_baseline(layout_box: &LayoutBox) -> Option<f32> {
+        if matches!(layout_box.box_type, BoxType::LineBox) {
+            return Some(layout_box.dimensions.content.y + layout_box.baseline);
+        }
+        for child in &layout_box.children {
+            if let Some(baseline) = first_line_baseline(child) {
+                return Some(baseline);
+            }
+        }
+        None
+    }
+
+    let (mut doc, mut styles, html) = setup();
+    let mut container = flex_container_style(Length::Px(300.0), Length::Px(80.0));
+    container.align_items = AlignItems::Baseline;
+    let container_id = add_element(&mut doc, html, &mut styles, container);
+
+    let mut first_style = item_style(Length::Px(50.0), Length::Auto);
+    first_style.font_size = 10.0;
+    first_style.line_height = Some(12.0);
+    first_style.font_family = "monospace".to_string();
+    let first = add_element(&mut doc, container_id, &mut styles, first_style);
+    doc.append_text(first, "a");
+
+    let mut second_style = item_style(Length::Px(50.0), Length::Auto);
+    second_style.font_size = 30.0;
+    second_style.line_height = Some(36.0);
+    second_style.font_family = "monospace".to_string();
+    let second = add_element(&mut doc, container_id, &mut styles, second_style);
+    doc.append_text(second, "a");
+
+    let root = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)).expect("layout");
+    let first_box = find_box(&root, first);
+    let second_box = find_box(&root, second);
+
+    assert_eq!(second_box.dimensions.content.x, 50.0);
+
+    let first_baseline = first_line_baseline(first_box).expect("first item baseline");
+    let second_baseline = first_line_baseline(second_box).expect("second item baseline");
+    assert!(
+        (first_baseline - second_baseline).abs() < 0.01,
+        "baselines must coincide: first={first_baseline} second={second_baseline}"
     );
-    assert!(case.item(0).dimensions.content.y >= 0.0);
-    assert!(case.item(1).dimensions.content.y >= 0.0);
-    assert_eq!(case.item(1).dimensions.content.x, 50.0);
+    assert!(
+        (first_box.dimensions.content.y - second_box.dimensions.content.y).abs() > 0.1,
+        "different font sizes should yield different cross offsets when aligned by baseline"
+    );
 }
 
 #[test]

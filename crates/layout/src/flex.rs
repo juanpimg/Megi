@@ -632,7 +632,7 @@ pub(crate) fn layout_flex_children(
         }
         if let Some(max_baseline) = max_baseline {
             for (index, baseline) in baselines {
-                items[index].cross_offset = ((max_baseline - baseline) / 2.0).max(0.0);
+                items[index].cross_offset = (max_baseline - baseline).max(0.0);
             }
         }
         // Justify: used main length after flexible lengths.
