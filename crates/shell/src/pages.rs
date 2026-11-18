@@ -29,11 +29,25 @@ pub struct ListingEntry {
 /// title; an empty history renders a friendly placeholder. The page is plain HTML rendered
 /// through the normal pipeline from a `data:` URL.
 pub fn history_page(entries: &[crate::history::HistoryEntry]) -> String {
+    history_page_with_locale(entries, crate::i18n::Locale::current())
+}
+
+/// Locale-aware variant of [`history_page`].
+pub fn history_page_with_locale(
+    entries: &[crate::history::HistoryEntry],
+    locale: crate::i18n::Locale,
+) -> String {
+    let strings = crate::i18n::strings(locale);
+    let lang = locale.html_lang();
     let mut rows = String::new();
     if entries.is_empty() {
-        rows.push_str("<p class=\"empty\">No history yet. Navigate to some pages first.</p>");
+        let _ = write!(rows, "<p class=\"empty\">{}</p>", strings.no_history);
     } else {
-        rows.push_str("<table><thead><tr><th>#</th><th>Title</th><th>URL</th></tr></thead><tbody>");
+        let _ = write!(
+            rows,
+            "<table><thead><tr><th>#</th><th>{}</th><th>{}</th></tr></thead><tbody>",
+            strings.title_column, strings.url_column
+        );
         for entry in entries {
             let _ = write!(
                 rows,
@@ -48,35 +62,54 @@ pub fn history_page(entries: &[crate::history::HistoryEntry]) -> String {
         rows.push_str("</tbody></table>");
     }
     format!(
-        "<!DOCTYPE html>\n<html lang=\"es\" dir=\"ltr\"><head><meta charset=\"utf-8\"><title>History</title>\
+        "<!DOCTYPE html>\n<html lang=\"{lang}\" dir=\"ltr\"><head><meta charset=\"utf-8\"><title>{title}</title>\
          <style>body{{font-family:sans-serif;margin:16px;background:#fff;color:#1f2328;}}\
          h1{{font-size:20px}}table{{border-collapse:collapse;width:100%}}\
          th,td{{border-bottom:1px solid #d0d7de;padding:4px 8px;text-align:left;font-size:13px}}\
          a{{color:#1f6feb}}.empty{{color:#57606a}}</style></head>\
-         <body><h1>History</h1>{rows}</body></html>"
+         <body><h1>{title}</h1>{rows}</body></html>",
+        title = strings.history
     )
 }
 
 /// Builds the deterministic reader-mode page: centered 700 px column, serif fallback,
 /// escaped title/paragraphs and a source link; no scripts or timers.
 pub fn reader_page(title: &str, paragraphs: &[String], source_url: &str) -> String {
+    reader_page_with_locale(
+        title,
+        paragraphs,
+        source_url,
+        crate::i18n::Locale::current(),
+    )
+}
+
+/// Locale-aware variant of [`reader_page`].
+pub fn reader_page_with_locale(
+    title: &str,
+    paragraphs: &[String],
+    source_url: &str,
+    locale: crate::i18n::Locale,
+) -> String {
+    let strings = crate::i18n::strings(locale);
+    let lang = locale.html_lang();
     let mut body = String::new();
     for paragraph in paragraphs {
         let _ = write!(body, "<p>{}</p>", escape_html(paragraph));
     }
     format!(
-        "<!DOCTYPE html>\n<html lang=\"es\" dir=\"ltr\"><head><meta charset=\"utf-8\"><title>{}</title>\
+        "<!DOCTYPE html>\n<html lang=\"{lang}\" dir=\"ltr\"><head><meta charset=\"utf-8\"><title>{}</title>\
          <style>html{{background:#fbfbf8}}body{{max-width:700px;margin:32px auto;padding:0 20px;\
          font-family:Georgia,'Times New Roman',serif;font-size:19px;line-height:1.65;color:#222;}}\
          h1{{font-size:30px;line-height:1.2;margin:0 0 24px}}p{{margin:0 0 18px}}\
          .source{{font-family:sans-serif;font-size:13px;color:#666;margin-top:36px;\
          border-top:1px solid #ddd;padding-top:12px}}</style></head><body>\
-         <h1>{}</h1>{body}<div class=\"source\">Leído desde <a href=\"{}\">{}</a></div>\
+         <h1>{}</h1>{body}<div class=\"source\">{source} <a href=\"{}\">{}</a></div>\
          </body></html>",
         escape_html(title),
         escape_html(title),
         escape_html(source_url),
         escape_html(source_url),
+        source = strings.read_from,
     )
 }
 
@@ -186,6 +219,18 @@ pub fn read_directory(path: &Path) -> io::Result<Vec<ListingEntry>> {
 /// `base_url` must be the directory's `file://` URL (normally ending in `/`); links are
 /// built as absolute URLs from it so they keep working from the generated `data:` page.
 pub fn listing_html(base_url: &str, path: &Path, entries: &[ListingEntry]) -> String {
+    listing_html_with_locale(base_url, path, entries, crate::i18n::Locale::current())
+}
+
+/// Locale-aware variant of [`listing_html`].
+pub fn listing_html_with_locale(
+    base_url: &str,
+    path: &Path,
+    entries: &[ListingEntry],
+    locale: crate::i18n::Locale,
+) -> String {
+    let strings = crate::i18n::strings(locale);
+    let lang = locale.html_lang();
     let mut entries = entries.to_vec();
     entries.sort_by(|a, b| {
         (!a.is_dir, a.name.to_lowercase(), a.name.clone()).cmp(&(
@@ -201,11 +246,11 @@ pub fn listing_html(base_url: &str, path: &Path, entries: &[ListingEntry]) -> St
         format!("{base_url}/")
     };
     let display_path = path.display().to_string();
-    let title = format!("Index of {}", escape_html(&display_path));
+    let title = format!("{} {}", strings.index_of, escape_html(&display_path));
     let mut html = String::with_capacity(2048);
     let _ = write!(
         html,
-        "<!doctype html><html lang=\"es\" dir=\"ltr\"><head><meta charset=\"utf-8\"><title>{title}</title>\
+        "<!doctype html><html lang=\"{lang}\" dir=\"ltr\"><head><meta charset=\"utf-8\"><title>{title}</title>\
 <style>body{{font-family:sans-serif;margin:16px}}h1{{font-size:18px}}table{{border-collapse:collapse}}\
 td,th{{padding:2px 10px;text-align:left;font-size:13px}}a{{color:#0645ad;text-decoration:none}}\
 a:hover{{text-decoration:underline}}.size{{text-align:right;color:#555}}</style></head><body>"
@@ -233,11 +278,19 @@ a:hover{{text-decoration:underline}}.size{{text-align:right;color:#555}}</style>
         }
     }
     html.push_str("</div>");
-    html.push_str("<table><thead><tr><th>Name</th><th>Type</th><th>Size</th></tr></thead><tbody>");
+    let _ = write!(
+        html,
+        "<table><thead><tr><th>{}</th><th>{}</th><th>{}</th></tr></thead><tbody>",
+        strings.name, strings.kind, strings.size
+    );
     if let Some(parent) = path.parent() {
         html.push_str("<tr><td><a href=\"");
         html.push_str(&escape_html(&file_url(parent)));
-        html.push_str("/\">..</a></td><td>Directory</td><td class=\"size\">—</td></tr>");
+        let _ = write!(
+            html,
+            "/\">..</a></td><td>{}</td><td class=\"size\">—</td></tr>",
+            strings.directory
+        );
     }
     let mut truncated = entries.len() > MAX_LISTING_ENTRIES;
     for entry in entries.iter().take(MAX_LISTING_ENTRIES) {
@@ -250,7 +303,11 @@ a:hover{{text-decoration:underline}}.size{{text-align:right;color:#555}}</style>
             percent_encode_segment(&entry.name),
             if entry.is_dir { "/" } else { "" }
         );
-        let kind = if entry.is_dir { "Directory" } else { "File" };
+        let kind = if entry.is_dir {
+            strings.directory
+        } else {
+            strings.file
+        };
         let size = entry.size.map_or_else(|| "—".to_owned(), human_size);
         let _ = write!(
             html,
@@ -262,7 +319,8 @@ a:hover{{text-decoration:underline}}.size{{text-align:right;color:#555}}</style>
     if truncated {
         let _ = write!(
             html,
-            "<tr><td colspan=\"3\">… listing truncated (at most {MAX_LISTING_ENTRIES} entries / {MAX_LISTING_BYTES} bytes)</td></tr>"
+            "<tr><td colspan=\"3\">… {} (at most {MAX_LISTING_ENTRIES} entries / {MAX_LISTING_BYTES} bytes)</td></tr>",
+            strings.truncated
         );
     }
     html.push_str("</tbody></table></body></html>");
@@ -271,19 +329,35 @@ a:hover{{text-decoration:underline}}.size{{text-align:right;color:#555}}</style>
 
 /// Builds the deterministic browser error page for a failed load.
 pub fn error_html(url: &str, code: &str, message: &str) -> String {
+    error_html_with_locale(url, code, message, crate::i18n::Locale::current())
+}
+
+/// Locale-aware variant of [`error_html`].
+pub fn error_html_with_locale(
+    url: &str,
+    code: &str,
+    message: &str,
+    locale: crate::i18n::Locale,
+) -> String {
+    let strings = crate::i18n::strings(locale);
+    let lang = locale.html_lang();
     let escaped_url = escape_html(url);
     let escaped_code = escape_html(code);
     let escaped_message = escape_html(message);
     format!(
-        "<!doctype html><html lang=\"es\" dir=\"ltr\"><head><meta charset=\"utf-8\">\
-<title>Error loading page</title><style>body{{font-family:sans-serif;margin:32px;color:#222}}\
+        "<!doctype html><html lang=\"{lang}\" dir=\"ltr\"><head><meta charset=\"utf-8\">\
+<title>{error}</title><style>body{{font-family:sans-serif;margin:32px;color:#222}}\
 h1{{font-size:20px;color:#a00}}code{{background:#f2f2f2;padding:1px 4px}}\
 a.button{{display:inline-block;margin-top:12px;padding:6px 14px;background:#0645ad;color:#fff;\
 text-decoration:none;border-radius:3px}}</style></head><body>\
-<h1>Error loading page</h1><p><code>{escaped_url}</code></p>\
-<p>Error code: <code>{escaped_code}</code></p><p>{escaped_message}</p>\
-<a class=\"button\" href=\"{escaped_url}\">Reintentar</a>\
-<p>Pulsa <code>R</code> para reintentar.</p></body></html>"
+<h1>{error}</h1><p><code>{escaped_url}</code></p>\
+<p>{error_code}: <code>{escaped_code}</code></p><p>{escaped_message}</p>\
+<a class=\"button\" href=\"{escaped_url}\">{retry}</a>\
+<p>{press_r}</p></body></html>",
+        error = strings.error_loading,
+        error_code = strings.error_code,
+        retry = strings.retry,
+        press_r = strings.press_r
     )
 }
 
@@ -515,5 +589,34 @@ mod tests {
         let url = file_url(&temp);
         assert_eq!(prepare_input(&url), Ok(url));
         let _ = std::fs::remove_file(temp);
+    }
+}
+
+#[cfg(test)]
+mod i18n_tests {
+    use super::*;
+    use crate::i18n::{Locale, strings};
+
+    #[test]
+    fn error_page_uses_locale_strings_and_lang() {
+        let es = error_html_with_locale("http://x/", "HTTP", "boom", Locale::Es);
+        assert!(es.contains("lang=\"es\""));
+        assert!(es.contains(strings(Locale::Es).error_loading));
+        assert!(es.contains(">Reintentar</a>"));
+        let en = error_html_with_locale("http://x/", "HTTP", "boom", Locale::En);
+        assert!(en.contains("lang=\"en\""));
+        assert!(en.contains("Error loading page"));
+        assert!(en.contains(">Retry</a>"));
+        assert!(!en.contains("Reintentar"));
+    }
+
+    #[test]
+    fn reader_page_uses_locale_lang_and_source_label() {
+        let en = reader_page_with_locale("T", &["p".to_owned()], "http://x/", Locale::En);
+        assert!(en.contains("lang=\"en\""));
+        assert!(en.contains("Read from"));
+        let es = reader_page_with_locale("T", &["p".to_owned()], "http://x/", Locale::Es);
+        assert!(es.contains("lang=\"es\""));
+        assert!(es.contains("Leído desde"));
     }
 }

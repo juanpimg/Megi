@@ -187,6 +187,7 @@ pub mod find;
 pub mod forms;
 pub mod headless;
 pub mod history;
+pub mod i18n;
 pub mod images;
 pub mod links;
 pub mod navigation;
