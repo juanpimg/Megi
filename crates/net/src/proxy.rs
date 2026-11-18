@@ -33,6 +33,15 @@ use crate::FetchError;
 use crate::data::base64_encode;
 use crate::url::{Scheme, Url, percent_decode};
 
+/// One resolved proxy hop / failover route for a request.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ProxyRoute {
+    Direct,
+    Http(Url),
+    Socks5(crate::socks::SocksProxy),
+    Socks4(crate::socks::Socks4Proxy),
+}
+
 /// Proxy selection for HTTP(S) requests.
 ///
 /// `from_env()` builds one from the environment; [`crate::http::FetchOptions::proxy`]
@@ -119,6 +128,37 @@ impl ProxyConfig {
         } else {
             Some(proxy)
         }
+    }
+
+    /// Ordered failover route returned by PAC (`FindProxyForURL`) or static proxy config.
+    pub fn routes_for_url(&self, url: &Url) -> Vec<ProxyRoute> {
+        if !matches!(url.scheme(), Scheme::Http | Scheme::Https)
+            || self.bypasses(url.host(), url.port_or_default())
+        {
+            return vec![ProxyRoute::Direct];
+        }
+        #[cfg(feature = "pac")]
+        if let Some(pac_url) = &self.pac_url
+            && let Ok(directives) = crate::pac::resolve_directives(url, pac_url)
+            && !directives.is_empty()
+        {
+            return directives
+                .into_iter()
+                .map(|directive| match directive {
+                    crate::pac::PacDirective::Direct => ProxyRoute::Direct,
+                    crate::pac::PacDirective::Http(proxy) => ProxyRoute::Http(proxy),
+                    crate::pac::PacDirective::Socks5(socks) => ProxyRoute::Socks5(socks),
+                    crate::pac::PacDirective::Socks4(socks4) => ProxyRoute::Socks4(socks4),
+                })
+                .collect();
+        }
+        if let Some(socks) = self.socks_for(url) {
+            return vec![ProxyRoute::Socks5(socks.clone())];
+        }
+        if let Some(proxy) = self.proxy_for(url) {
+            return vec![ProxyRoute::Http(proxy.clone())];
+        }
+        vec![ProxyRoute::Direct]
     }
 
     /// Resolves the effective proxy for `url`: PAC (when configured and the `pac` feature

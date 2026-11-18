@@ -241,3 +241,135 @@ fn hex(byte: u8) -> Option<u8> {
         _ => None,
     }
 }
+
+/// A parsed `socks4://[user@]host:port` or `socks4a://[user@]host:port` proxy endpoint.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Socks4Proxy {
+    pub host: String,
+    pub port: u16,
+    pub user_id: Option<String>,
+}
+
+impl Socks4Proxy {
+    /// Parses a SOCKS4/SOCKS4a proxy URL (`socks4://` or `socks4a://`).
+    pub fn parse(value: &str) -> Option<Self> {
+        let value = value.trim();
+        let lower = value.to_ascii_lowercase();
+        let scheme_len = if lower.starts_with("socks4a://") {
+            "socks4a://".len()
+        } else if lower.starts_with("socks4://") {
+            "socks4://".len()
+        } else {
+            return None;
+        };
+        let rest = &value[scheme_len..];
+        if rest.contains('/') || rest.contains('?') || rest.contains('#') {
+            return None;
+        }
+        let (userinfo, host_port) = match rest.rsplit_once('@') {
+            Some((userinfo, host_port)) => (Some(userinfo), host_port),
+            None => (None, rest),
+        };
+        let user_id = userinfo.map(|info| {
+            let user = info.split_once(':').map_or(info, |(u, _)| u);
+            percent_decode(user)
+        });
+        let (host, port) = if let Some(rest) = host_port.strip_prefix('[') {
+            let (host, tail) = rest.split_once(']')?;
+            let port = tail.strip_prefix(':')?.parse().ok()?;
+            (host.to_owned(), port)
+        } else {
+            let (host, port) = host_port.rsplit_once(':')?;
+            if host.is_empty() {
+                return None;
+            }
+            (host.to_owned(), port.parse().ok()?)
+        };
+        if host.is_empty() || port == 0 {
+            return None;
+        }
+        Some(Self {
+            host,
+            port,
+            user_id,
+        })
+    }
+}
+
+/// Performs a SOCKS4 / SOCKS4a CONNECT handshake to `target_host:target_port`.
+pub fn connect_socks4(
+    stream: &mut TcpStream,
+    proxy: &Socks4Proxy,
+    target_host: &str,
+    target_port: u16,
+) -> Result<(), FetchError> {
+    let host = target_host.trim_start_matches('[').trim_end_matches(']');
+    if host.contains('\0') {
+        return Err(FetchError::ProxyConnect(
+            "SOCKS4 target host contains NUL byte".to_owned(),
+        ));
+    }
+    let user_bytes = proxy.user_id.as_deref().unwrap_or("").as_bytes();
+    if user_bytes.contains(&0) {
+        return Err(FetchError::ProxyConnect(
+            "SOCKS4 user id contains NUL byte".to_owned(),
+        ));
+    }
+    let mut request = Vec::with_capacity(16 + user_bytes.len() + host.len());
+    request.push(0x04);
+    request.push(0x01); // CONNECT
+    request.extend_from_slice(&target_port.to_be_bytes());
+    if let Ok(ipv4) = host.parse::<std::net::Ipv4Addr>() {
+        request.extend_from_slice(&ipv4.octets());
+        request.extend_from_slice(user_bytes);
+        request.push(0x00);
+    } else {
+        if host.len() > 255 {
+            return Err(FetchError::ProxyConnect(
+                "SOCKS4a target host longer than 255 bytes".to_owned(),
+            ));
+        }
+        // SOCKS4a extension: DSTIP = 0.0.0.1 followed by NUL-terminated domain.
+        request.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
+        request.extend_from_slice(user_bytes);
+        request.push(0x00);
+        request.extend_from_slice(host.as_bytes());
+        request.push(0x00);
+    }
+    stream
+        .write_all(&request)
+        .map_err(|error| FetchError::ProxyConnect(format!("SOCKS4 CONNECT write: {error}")))?;
+    let mut reply = [0u8; 8];
+    read_exact(stream, &mut reply, "SOCKS4 CONNECT reply")?;
+    if reply[0] != 0x00 {
+        return Err(FetchError::ProxyConnect(format!(
+            "SOCKS4 proxy returned invalid reply version {}",
+            reply[0]
+        )));
+    }
+    if reply[1] != 0x5A {
+        return Err(FetchError::ProxyConnect(format!(
+            "SOCKS4 CONNECT rejected with code {}",
+            reply[1]
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_socks4_and_socks4a_urls() {
+        let p4 = Socks4Proxy::parse("socks4://127.0.0.1:1080").expect("socks4");
+        assert_eq!(p4.host, "127.0.0.1");
+        assert_eq!(p4.port, 1080);
+        assert!(p4.user_id.is_none());
+
+        let p4a = Socks4Proxy::parse("socks4a://alice@proxy.test:1081").expect("socks4a");
+        assert_eq!(p4a.host, "proxy.test");
+        assert_eq!(p4a.port, 1081);
+        assert_eq!(p4a.user_id.as_deref(), Some("alice"));
+    }
+}
