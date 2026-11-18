@@ -107,5 +107,80 @@
     "crates/js/src/runtime.rs:9891": "host: Rc<RefCell<Option<Rc<RefCell<Host>>>>>,",
     "crates/js/src/runtime.rs:9899": "self: Rc<Self>,",
     "crates/js/src/runtime.rs:10012": "self: Rc<Self>,"
+  },
+  "edges": {
+    "dom": [],
+    "html": [
+      "dom"
+    ],
+    "css": [
+      "dom"
+    ],
+    "layout": [
+      "css",
+      "dom",
+      "fonts"
+    ],
+    "fonts": [],
+    "image": [],
+    "paint": [
+      "css",
+      "dom",
+      "fonts",
+      "image",
+      "layout"
+    ],
+    "net": [
+      "image",
+      "js"
+    ],
+    "render": [
+      "css",
+      "dom",
+      "fonts",
+      "html",
+      "image",
+      "js",
+      "layout",
+      "net",
+      "paint",
+      "svg"
+    ],
+    "shell": [
+      "css",
+      "dom",
+      "fonts",
+      "html",
+      "image",
+      "layout",
+      "net",
+      "paint",
+      "render"
+    ],
+    "js": [
+      "css",
+      "dom",
+      "html"
+    ],
+    "svg": [
+      "fonts",
+      "image"
+    ],
+    "test_harness": [
+      "css",
+      "dom",
+      "html",
+      "js"
+    ],
+    "bench": [
+      "css",
+      "dom",
+      "fonts",
+      "html",
+      "image",
+      "layout",
+      "paint",
+      "render"
+    ]
   }
 }

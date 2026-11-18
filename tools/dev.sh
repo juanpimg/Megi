@@ -22,6 +22,7 @@ case "$cmd" in
         cargo fmt --all -- --check
         cargo clippy --workspace --all-targets -- -D warnings
         python3 tools/check_docs_links.py
+        python3 tools/check_arch.py
         python3 tools/update_progress.py --check --no-gate --no-count
         python3 tools/update_coverage.py --check
         python3 tools/audit_coverage.py --check
@@ -38,6 +39,7 @@ case "$cmd" in
         echo "==> [2/5] Running clippy across workspace..."
         cargo clippy --workspace --all-targets -- -D warnings
         python3 tools/check_docs_links.py
+        python3 tools/check_arch.py
         python3 tools/update_progress.py --check --no-gate --no-count
         echo "==> [3/5] Running closed-loop workspace tests..."
         cargo test --workspace

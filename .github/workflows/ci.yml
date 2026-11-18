@@ -132,6 +132,10 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy (deny warnings)
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # Enforces the crate DAG, forbidden ownership patterns and file-size caps
+      # from docs/superpowers/specs/2026-11-18-megi-modular-architecture-design.md.
+      - name: Architecture DAG and file-size check
+        run: python3 tools/check_arch.py
       - name: Workspace tests
         run: |
           set -o pipefail
