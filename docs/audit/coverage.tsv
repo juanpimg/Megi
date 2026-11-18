@@ -557,6 +557,7 @@ crates/test_harness/src/tokenizer_harness.rs	469	src	F2	wave1	2026-11-16	covered
 crates/test_harness/src/tree_harness.rs	267	src	F2	wave1	2026-11-16	covered	#1240-#1251	
 crates/test_harness/tests/closed_loop.rs	553	test	F1	waveF1	2026-11-17	covered	#1389	
 deny.toml	43	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
+docs/AI-QUICKSTART.md	77	docs	F3	wave2	2026-11-18	covered	docs	AI quickstart prompt for agents
 docs/ARCHITECTURE.md	195	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
 docs/CONTRIBUTOR-ONBOARDING.md	93	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
 docs/FUZZING.md	289	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
@@ -1359,7 +1360,7 @@ tools/soak_fuzz.sh	121	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/test_audit_coverage.py	287	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_real_site_check.py	89	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/test_real_site_check.py	105	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_update_coverage.py	400	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_coverage.py	555	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	785	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
