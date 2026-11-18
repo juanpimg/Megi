@@ -107,9 +107,9 @@ proptest! {
     ) {
         let (doc, _) = build_random_dom(&specs);
         let styles = resolve_document_styles_with_viewport(&doc, None, vw, vh);
-        if let Some(root) = layout_document(&doc, &styles, Rect::new(0.0, 0.0, vw, vh)) {
-            assert_finite_non_negative_box_tree(&root);
-        }
+        let root = layout_document(&doc, &styles, Rect::new(0.0, 0.0, vw, vh))
+            .expect("layout must produce a root for a valid document");
+        assert_finite_non_negative_box_tree(&root);
     }
 
     #[test]
@@ -121,13 +121,12 @@ proptest! {
         let (doc, _) = build_random_dom(&specs);
         let styles = resolve_document_styles_with_viewport(&doc, None, vw, vh);
         let vp = Rect::new(0.0, 0.0, vw, vh);
-        let a = layout_document(&doc, &styles, vp);
-        let b = layout_document(&doc, &styles, vp);
-        prop_assert_eq!(a.is_some(), b.is_some());
-        if let (Some(la), Some(lb)) = (a, b) {
-            prop_assert_eq!(la.dimensions.content, lb.dimensions.content);
-            prop_assert_eq!(la.children.len(), lb.children.len());
-        }
+        let la = layout_document(&doc, &styles, vp)
+            .expect("layout must produce a root for a valid document");
+        let lb = layout_document(&doc, &styles, vp)
+            .expect("layout must produce a root for a valid document");
+        prop_assert_eq!(la.dimensions.content, lb.dimensions.content);
+        prop_assert_eq!(la.children.len(), lb.children.len());
     }
 
     #[test]
@@ -137,9 +136,9 @@ proptest! {
     ) {
         let (doc, _) = build_random_dom(&[(0, true), (1, true), (2, true)]);
         let styles = resolve_document_styles_with_viewport(&doc, None, vw, vh);
-        if let Some(root) = layout_document(&doc, &styles, Rect::new(0.0, 0.0, vw, vh)) {
-            assert_finite_non_negative_box_tree(&root);
-        }
+        let root = layout_document(&doc, &styles, Rect::new(0.0, 0.0, vw, vh))
+            .expect("layout must produce a root for a valid document");
+        assert_finite_non_negative_box_tree(&root);
     }
 
     #[test]
@@ -152,9 +151,9 @@ proptest! {
         for (id, disp) in ids.iter().zip(displays.iter()) {
             styles.entry(*id).or_insert_with(ComputedStyle::initial).display = *disp;
         }
-        if let Some(root) = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)) {
-            assert_finite_non_negative_box_tree(&root);
-        }
+        let root = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0))
+            .expect("layout must produce a root for a valid document");
+        assert_finite_non_negative_box_tree(&root);
     }
 
     #[test]
@@ -164,9 +163,9 @@ proptest! {
         let mut styles = resolve_document_styles_with_viewport(&doc, None, 800.0, 600.0);
         let hidden = ids[hide_idx];
         styles.entry(hidden).or_insert_with(ComputedStyle::initial).display = Display::None;
-        if let Some(root) = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)) {
-            prop_assert!(!contains_node(&root, hidden));
-        }
+        let root = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0))
+            .expect("layout must produce a root for a valid document");
+        prop_assert!(!contains_node(&root, hidden));
     }
 
     #[test]
@@ -185,9 +184,9 @@ proptest! {
         let txt = doc.create_text_node("deep");
         doc.append_child(cur, txt);
         let styles = resolve_document_styles_with_viewport(&doc, None, 800.0, 600.0);
-        if let Some(root) = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)) {
-            assert_finite_non_negative_box_tree(&root);
-        }
+        let root = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0))
+            .expect("layout must produce a root for a valid document");
+        assert_finite_non_negative_box_tree(&root);
     }
 
     #[test]
@@ -205,14 +204,14 @@ proptest! {
         let styles = resolve_document_styles_with_viewport(&doc, None, 800.0, 600.0);
         let mut replaced = HashMap::new();
         replaced.insert(img, (iw, ih));
-        if let Some(root) = layout_document_with_replaced_sizes(
+        let root = layout_document_with_replaced_sizes(
             &doc,
             &styles,
             Rect::new(0.0, 0.0, 800.0, 600.0),
             &replaced,
-        ) {
-            assert_finite_non_negative_box_tree(&root);
-        }
+        )
+        .expect("layout must produce a root for a valid document");
+        assert_finite_non_negative_box_tree(&root);
     }
 
     #[test]
@@ -235,9 +234,9 @@ proptest! {
             "#b {{ box-sizing: {bs}; width: {w}px; height: {h}px; padding: {pad}px; border: {border}px solid black; }}"
         );
         let styles = resolve_document_styles_with_viewport(&doc, Some(&css), 800.0, 600.0);
-        if let Some(root) = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)) {
-            assert_finite_non_negative_box_tree(&root);
-        }
+        let root = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0))
+            .expect("layout must produce a root for a valid document");
+        assert_finite_non_negative_box_tree(&root);
     }
 
     #[test]
@@ -261,9 +260,9 @@ proptest! {
         let css = format!("#p {{ width: 50px; height: 50px; top: {top}px; left: {left}px; }}");
         let mut styles = resolve_document_styles_with_viewport(&doc, Some(&css), 800.0, 600.0);
         styles.entry(div).or_insert_with(ComputedStyle::initial).position = pos;
-        if let Some(root) = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)) {
-            assert_finite_non_negative_box_tree(&root);
-        }
+        let root = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0))
+            .expect("layout must produce a root for a valid document");
+        assert_finite_non_negative_box_tree(&root);
     }
 
     #[test]
@@ -281,8 +280,8 @@ proptest! {
                 Display::Flex
             };
         }
-        if let Some(root) = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)) {
-            assert_finite_non_negative_box_tree(&root);
-        }
+        let root = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0))
+            .expect("layout must produce a root for a valid document");
+        assert_finite_non_negative_box_tree(&root);
     }
 }

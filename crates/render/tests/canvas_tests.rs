@@ -1,5 +1,7 @@
 //! #1545: end-to-end canvas 2D — a script paints into a `<canvas>` and the pixels appear in
 //! the rendered page.
+// Canvas painting requires the JS engine; this suite is meaningless in a no-JS build.
+#![cfg(feature = "js")]
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -35,6 +37,7 @@ fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
 
 const RED: css::Color = css::Color::new(0xFF, 0x00, 0x00, 0xFF);
 
+#[cfg(feature = "js")]
 #[test]
 fn script_painted_canvas_is_blitted_into_the_page() {
     let output = render_page(

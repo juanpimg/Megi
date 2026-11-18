@@ -1,5 +1,7 @@
 //! #1527: Subresource Integrity on external scripts — matching hashes execute, mismatched
 //! hashes fail closed (the script is skipped with a warning). Self-contained loopback server.
+// SRI on scripts requires the JS engine.
+#![cfg(feature = "js")]
 
 use std::io::{Read, Write};
 use std::net::TcpListener;

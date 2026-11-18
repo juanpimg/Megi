@@ -12,25 +12,6 @@ fn fixture_dir(name: &str) -> PathBuf {
     dir
 }
 
-fn render_html(html: &str, width: u32, height: u32) -> render::RenderOutput {
-    let encoded: String = html
-        .bytes()
-        .map(|byte| {
-            if byte.is_ascii_alphanumeric() || b"-_.~".contains(&byte) {
-                (byte as char).to_string()
-            } else {
-                format!("%{byte:02X}")
-            }
-        })
-        .collect();
-    let options = RenderOptions {
-        viewport: Viewport::new(width, height).expect("viewport"),
-        scripting: ScriptingMode::Enabled,
-        ..RenderOptions::default()
-    };
-    render::render_url(&format!("data:text/html,{encoded}"), &options).expect("render")
-}
-
 fn body_attribute(output: &render::RenderOutput, name: &str) -> Option<String> {
     let document = &output.document;
     let body = document.body()?;
@@ -65,30 +46,23 @@ fn import_map_remaps_a_bare_specifier_to_a_file_module() {
 #[test]
 fn dynamic_import_evaluates_an_extra_module_and_mutates_the_dom() {
     let dir = fixture_dir("dynamic");
-    let dynamic = dir.join("dyn.js");
     std::fs::write(
-        &dynamic,
+        dir.join("dyn.js"),
         "document.body.setAttribute('data-dynamic', 'loaded');\nexport const x = 1;\n",
     )
     .expect("write dyn");
-    let html = "<!DOCTYPE html><script type=\"module\">import('./dyn.js');</script><body></body>";
-    // Serve the document from the temp directory so relative dynamic imports resolve.
-    let document = dir.join("index.html");
-    std::fs::write(&document, html).expect("write document");
-    let output = render_html(html, 240, 160);
-    // data: documents cannot resolve ./dyn.js; assert either loaded (file base) or typed warning.
-    let loaded = body_attribute(&output, "data-dynamic");
-    if loaded.is_none() {
-        assert!(
-            output
-                .stats
-                .warnings
-                .iter()
-                .any(|warning| warning.contains("module")),
-            "{:?}",
-            output.stats.warnings
-        );
-    }
+    let output = render_file(
+        "<!DOCTYPE html><body><script type=\"module\">import('./dyn.js');</script></body>",
+        &dir,
+        240,
+        160,
+    );
+    assert_eq!(
+        body_attribute(&output, "data-dynamic").as_deref(),
+        Some("loaded"),
+        "warnings: {:?}",
+        output.stats.warnings
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -1936,6 +1936,14 @@ impl Write for Transport {
     }
 }
 
+/// Fuzzing/introspection entry point for the untrusted HTTP head parser (#1426).
+///
+/// Returns whether the status line and headers are well-formed without exposing
+/// the private `Headers`/`FetchError` types to callers outside this crate.
+pub fn parse_head_is_valid(head: &[u8]) -> bool {
+    parse_head(head).is_ok()
+}
+
 /// Reads and parses the status line and header fields.
 fn parse_head(head: &[u8]) -> Result<(u16, String, Headers), FetchError> {
     let (_, status, reason, headers) = parse_head_verbose(head)?;
@@ -2698,5 +2706,19 @@ mod header_encoding_tests {
                 .map(|(_, value)| value.as_str()),
             Some("Z\u{00FC}rich")
         );
+    }
+}
+
+#[cfg(test)]
+mod parse_head_validity_tests {
+    use super::*;
+
+    #[test]
+    fn head_validity_matches_parser() {
+        assert!(parse_head_is_valid(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+        ));
+        assert!(!parse_head_is_valid(b"garbage\r\n\r\n"));
+        assert!(!parse_head_is_valid(b""));
     }
 }

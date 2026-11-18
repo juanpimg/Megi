@@ -1,13 +1,15 @@
-//! #1532: XMLHttpRequest subset over the host fetch provider.
+//! Integration tests for `XMLHttpRequest`, `XMLHttpRequestUpload`, and `ProgressEvent` (#1532).
 
 #![cfg(feature = "js")]
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
+use js::error::JsError;
 use js::host::{FetchProvider, FetchRequest, FetchResult};
 use js::runtime::JsRuntime;
 
-fn runtime_with(result: FetchResult) -> (JsRuntime, Arc<Mutex<Vec<FetchRequest>>>) {
+fn mock_runtime(result: FetchResult) -> (JsRuntime, Arc<Mutex<Vec<FetchRequest>>>) {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let seen = Arc::clone(&calls);
     let mut runtime = JsRuntime::new().expect("runtime");
@@ -19,89 +21,255 @@ fn runtime_with(result: FetchResult) -> (JsRuntime, Arc<Mutex<Vec<FetchRequest>>
     (runtime, calls)
 }
 
-fn ok_result() -> FetchResult {
-    FetchResult {
+#[test]
+fn xhr_constants_and_initial_state() {
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            r#"
+            var xhr = new XMLHttpRequest();
+            [
+              XMLHttpRequest.UNSENT, XMLHttpRequest.OPENED,
+              XMLHttpRequest.HEADERS_RECEIVED, XMLHttpRequest.LOADING, XMLHttpRequest.DONE,
+              xhr.UNSENT, xhr.DONE, xhr.readyState, xhr.status, xhr.statusText,
+              xhr.responseType, xhr.responseText, xhr.response, xhr.timeout,
+              xhr.withCredentials, typeof xhr.upload
+            ].join('|');
+            "#,
+            "xhr",
+        )
+        .expect("eval");
+    assert_eq!(out, "0|1|2|3|4|0|4|0|0|||||0|false|object");
+}
+
+#[test]
+fn xhr_async_get_lifecycle_headers_and_progress_events() {
+    let (mut runtime, calls) = mock_runtime(FetchResult {
         status: 200,
         status_text: "OK".into(),
-        url: "https://example.test/data".into(),
-        headers: vec![("content-type".into(), "text/plain".into())],
-        body: b"hello xhr".to_vec(),
-    }
-}
-
-#[test]
-fn xhr_constructor_constants_and_initial_state() {
-    let mut runtime = JsRuntime::new().expect("runtime");
-    let out = runtime
-        .eval(
-            "var x = new XMLHttpRequest(); String([x.readyState === XMLHttpRequest.UNSENT, \
-             XMLHttpRequest.DONE === 4, typeof x.open === 'function', typeof x.send === 'function']);",
-            "t",
-        )
-        .expect("xhr");
-    assert_eq!(out, "true,true,true,true");
-}
-
-#[test]
-fn xhr_get_completes_with_status_and_response_text() {
-    let (mut runtime, calls) = runtime_with(ok_result());
+        url: "https://example.test/api/data.json".into(),
+        headers: vec![
+            ("Content-Type".into(), "application/json".into()),
+            ("X-Multi".into(), "one".into()),
+            ("X-Multi".into(), "two".into()),
+        ],
+        body: br#"{"ok":true,"n":7}"#.to_vec(),
+    });
     runtime
         .eval(
-            "globalThis.__states = []; globalThis.__loaded = false; \
-             var x = new XMLHttpRequest(); \
-             x.onreadystatechange = function () { __states.push(x.readyState); }; \
-             x.onload = function () { __loaded = true; }; \
-             x.open('GET', '/data'); x.send();",
-            "t",
+            r#"
+            window.__states = [];
+            window.__events = [];
+            window.__xhr = new XMLHttpRequest();
+            __xhr.onreadystatechange = function () { __states.push(__xhr.readyState); };
+            __xhr.addEventListener('loadstart', function (e) { __events.push('loadstart:' + (e instanceof ProgressEvent)); });
+            __xhr.addEventListener('progress', function (e) { __events.push('progress:' + e.lengthComputable + ':' + e.loaded + '/' + e.total); });
+            __xhr.onload = function (e) { __events.push('load:' + e.loaded); };
+            __xhr.addEventListener('loadend', function () { __events.push('loadend'); });
+            __xhr.open('get', 'https://example.test/api/data.json');
+            __xhr.setRequestHeader('X-Custom', 'alpha');
+            __xhr.setRequestHeader('X-Custom', 'beta');
+            // Forbidden headers must be ignored rather than crashing send().
+            __xhr.setRequestHeader('User-Agent', 'Forbidden');
+            __xhr.send();
+            "#,
+            "xhr",
         )
-        .expect("xhr");
+        .expect("eval");
     runtime.run_microtasks().expect("microtasks");
+    let summary = runtime
+        .eval(
+            r#"
+            __states.join(',') + '#' + __events.join(',') + '#' +
+            __xhr.status + ':' + __xhr.statusText + ':' + __xhr.responseURL + ':' +
+            __xhr.getResponseHeader('content-type') + ':' + __xhr.getResponseHeader('x-multi') + ':' +
+            JSON.parse(__xhr.responseText).n
+            "#,
+            "xhr",
+        )
+        .expect("summary");
     assert_eq!(
-        runtime.eval("String(__loaded)", "t").unwrap(),
-        "true",
-        "load event must fire"
+        summary,
+        "1,2,3,4#loadstart:true,progress:true:17/17,load:17,loadend#200:OK:https://example.test/api/data.json:application/json:one, two:7"
     );
-    assert_eq!(runtime.eval("String(x.status)", "t").unwrap(), "200");
-    assert_eq!(runtime.eval("x.responseText", "t").unwrap(), "hello xhr");
-    assert_eq!(runtime.eval("String(x.readyState)", "t").unwrap(), "4");
-    let seen = calls.lock().expect("lock");
-    assert_eq!(seen.len(), 1, "one request through the host provider");
-    assert_eq!(seen[0].method, "GET");
-    assert!(seen[0].url.ends_with("/data"), "url={}", seen[0].url);
-}
-
-#[test]
-fn xhr_send_post_carries_body_and_headers() {
-    let (mut runtime, calls) = runtime_with(ok_result());
-    runtime
-        .eval(
-            "var x = new XMLHttpRequest(); x.open('POST', '/submit'); \
-             x.setRequestHeader('Content-Type', 'text/plain'); x.send('payload');",
-            "t",
-        )
-        .expect("xhr");
-    runtime.run_microtasks().expect("microtasks");
-    let seen = calls.lock().expect("lock");
-    assert_eq!(seen.len(), 1);
-    assert_eq!(seen[0].method, "POST");
-    assert_eq!(seen[0].body.as_deref(), Some(b"payload".as_slice()));
+    let all_headers = runtime
+        .eval("__xhr.getAllResponseHeaders()", "xhr")
+        .expect("allHeaders");
+    assert_eq!(
+        all_headers,
+        "content-type: application/json\r\nx-multi: one, two\r\n"
+    );
+    let recorded = calls.lock().expect("lock");
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].method, "GET");
     assert!(
-        seen[0]
+        recorded[0]
             .headers
             .iter()
-            .any(|(name, value)| name.eq_ignore_ascii_case("content-type") && value == "text/plain")
+            .any(|(k, v)| k == "X-Custom" && v == "alpha, beta")
     );
 }
 
 #[test]
-fn xhr_sync_open_is_rejected() {
+fn xhr_post_response_types_json_and_arraybuffer() {
+    let (mut runtime, calls) = mock_runtime(FetchResult {
+        status: 201,
+        status_text: "Created".into(),
+        url: "https://example.test/items".into(),
+        headers: vec![("content-type".into(), "application/json".into())],
+        body: br#"{"id":99}"#.to_vec(),
+    });
+    runtime
+        .eval(
+            r#"
+            window.__uploadEvents = [];
+            window.__a = new XMLHttpRequest();
+            __a.open('POST', 'https://example.test/items');
+            __a.responseType = 'json';
+            __a.upload.onloadstart = function (e) { __uploadEvents.push('up_start:' + e.total); };
+            __a.upload.onload = function (e) { __uploadEvents.push('up_load:' + e.loaded); };
+            __a.send('{"name":"megi"}');
+
+            window.__b = new XMLHttpRequest();
+            __b.open('POST', 'https://example.test/items');
+            __b.responseType = 'arraybuffer';
+            __b.send(new Uint8Array([65, 66, 67]));
+            "#,
+            "xhr",
+        )
+        .expect("eval");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime
+            .eval(
+                "__a.status + ':' + __a.response.id + ':' + __uploadEvents.join(',')",
+                "xhr"
+            )
+            .unwrap(),
+        "201:99:up_start:15,up_load:15"
+    );
+    assert_eq!(
+        runtime
+            .eval(
+                "(__b.response instanceof ArrayBuffer) + ':' + __b.response.byteLength + ':' + new Uint8Array(__b.response)[1]",
+                "xhr"
+            )
+            .unwrap(),
+        "true:9:34"
+    );
+    let recorded = calls.lock().expect("lock");
+    assert_eq!(recorded.len(), 2);
+    assert_eq!(
+        recorded[0].body.as_deref(),
+        Some(br#"{"name":"megi"}"#.as_slice())
+    );
+    assert_eq!(recorded[1].body.as_deref(), Some(b"ABC".as_slice()));
+}
+
+#[test]
+fn xhr_abort_before_microtask_cancels_request_and_resets_to_unsent() {
+    let (mut runtime, calls) = mock_runtime(FetchResult {
+        status: 200,
+        status_text: "OK".into(),
+        url: "https://example.test/slow".into(),
+        headers: vec![],
+        body: b"ok".to_vec(),
+    });
+    runtime
+        .eval(
+            r#"
+            window.__log = [];
+            var x = new XMLHttpRequest();
+            x.onreadystatechange = function () { __log.push('rs:' + x.readyState); };
+            x.onabort = function () { __log.push('abort'); };
+            x.onloadend = function () { __log.push('end'); };
+            x.open('GET', 'https://example.test/slow');
+            x.send();
+            x.abort();
+            window.__afterAbortState = x.readyState;
+            "#,
+            "xhr",
+        )
+        .expect("eval");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime
+            .eval("__log.join(',') + '|' + __afterAbortState", "xhr")
+            .unwrap(),
+        "rs:1,rs:4,abort,end|0"
+    );
+    assert_eq!(calls.lock().expect("lock").len(), 0);
+}
+
+#[test]
+fn xhr_network_error_and_timeout_fire_expected_events() {
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime.set_fetch_provider(Box::new(|request| {
+        if request.url.contains("timeout") {
+            std::thread::sleep(Duration::from_millis(25));
+            return Ok(FetchResult {
+                status: 200,
+                status_text: "OK".into(),
+                url: request.url,
+                headers: vec![],
+                body: b"late".to_vec(),
+            });
+        }
+        Err(JsError::Runtime("connection refused".into()))
+    }));
+    runtime
+        .eval(
+            r#"
+            window.__errLog = [];
+            var errXhr = new XMLHttpRequest();
+            errXhr.onerror = function () { __errLog.push('error:' + errXhr.readyState + ':' + errXhr.status); };
+            errXhr.onloadend = function () { __errLog.push('loadend'); };
+            errXhr.open('GET', 'https://example.test/fail');
+            errXhr.send();
+
+            window.__toLog = [];
+            var toXhr = new XMLHttpRequest();
+            toXhr.timeout = 5;
+            toXhr.ontimeout = function () { __toLog.push('timeout:' + toXhr.readyState + ':' + toXhr.status); };
+            toXhr.onloadend = function () { __toLog.push('loadend'); };
+            toXhr.open('GET', 'https://example.test/timeout');
+            toXhr.send();
+            "#,
+            "xhr",
+        )
+        .expect("eval");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime
+            .eval("__errLog.join(',') + '|' + __toLog.join(',')", "xhr")
+            .unwrap(),
+        "error:4:0,loadend|timeout:4:0,loadend"
+    );
+}
+
+#[test]
+fn xhr_rejects_synchronous_and_invalid_state_operations() {
     let mut runtime = JsRuntime::new().expect("runtime");
     let out = runtime
         .eval(
-            "var x = new XMLHttpRequest(); var rejected = false; \
-             try { x.open('GET', '/x', false); } catch (e) { rejected = true; } String(rejected);",
-            "t",
+            r#"
+            var xhr = new XMLHttpRequest();
+            var syncName = '';
+            try { xhr.open('GET', 'https://example.test/sync', false); } catch (e) { syncName = e.name; }
+            var hdrErr = '';
+            try { xhr.setRequestHeader('X-A', '1'); } catch (e) { hdrErr = e.name; }
+            xhr.open('GET', 'https://example.test/ok');
+            xhr.responseType = 'json';
+            var rtErr = '';
+            try { var _t = xhr.responseText; } catch (e) { rtErr = e.name; }
+            xhr.responseType = 'invalid-type';
+            syncName + '|' + hdrErr + '|' + rtErr + '|' + xhr.responseType;
+            "#,
+            "xhr",
         )
-        .expect("xhr");
-    assert_eq!(out, "true");
+        .expect("eval");
+    assert_eq!(
+        out,
+        "NotSupportedError|InvalidStateError|InvalidStateError|json"
+    );
 }

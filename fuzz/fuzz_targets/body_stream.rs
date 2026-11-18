@@ -115,7 +115,11 @@ fuzz_target!(|data: &[u8]| {
             // A producer violating the contract must not reach the transport;
             // panic so the fuzzer records the violation rather than silently
             // dropping it (#470).
-            panic!("producer returned {} bytes for max {} (contract violation)", chunk.len(), max);
+            panic!(
+                "producer returned {} bytes for max {} (contract violation)",
+                chunk.len(),
+                max
+            );
         }
         pulled = pulled.saturating_add(chunk.len());
         max_bytes = max_bytes.max(chunk.len());

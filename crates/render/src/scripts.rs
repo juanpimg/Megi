@@ -356,6 +356,8 @@ pub struct ScriptExecution {
     /// Document after all scripts, microtasks and timer callbacks have run.
     pub document: Document,
     /// Canvas 2D surfaces created/filled by scripts (#1545), keyed by `<canvas>` node.
+    /// Only available when the `js` feature is enabled (no canvas without scripts).
+    #[cfg(feature = "js")]
     pub canvas_surfaces: std::collections::HashMap<dom::NodeId, js::canvas::CanvasSurface>,
     /// Scripts evaluated without an error.
     pub executed: usize,

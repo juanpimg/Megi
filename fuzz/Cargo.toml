@@ -60,6 +60,18 @@ name = "net_url"
 path = "fuzz_targets/net_url.rs"
 
 [[bin]]
+name = "http_head"
+path = "fuzz_targets/http_head.rs"
+bench = false
+
+[[bin]]
+name = "compression"
+path = "fuzz_targets/compression.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "net_surface"
 path = "fuzz_targets/net_surface.rs"
 bench = false

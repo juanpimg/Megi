@@ -223,12 +223,15 @@ fn test_closed_loop_tokenizer_all_14_files_exact_gate() {
 /// Every fixture case declares `errors: [{code, line, col}]` (2,769 annotations, checked once per
 /// initial state => 2,779 run-level expectations). The comparison is:
 /// - exact `(code, line, col)` multisets for every run (position encoding included);
-/// - exact sequence order except for the documented `KNOWN_TOKENIZER_ERROR_ORDER_GAPS` suites,
-///   where html5lib-tests interleaves input-stream and tokenizer errors differently;
+/// - exact sequence order except for the documented `KNOWN_TOKENIZER_ERROR_ORDER_GAPS` runs
+///   identified by `(suite, case_index, initial_state)`, where html5lib-tests interleaves
+///   input-stream and tokenizer errors differently;
 /// - `xmlViolation.test` asserts tokens only, but its U+FFFF input still legitimately raises one
 ///   `noncharacter-in-input-stream` error: counted and asserted, never silently dropped.
 #[test]
 fn test_closed_loop_tokenizer_parse_errors_gate() {
+    use std::collections::BTreeSet;
+
     let files = suite_files(&tokenizer_tests_dir(), "test");
     assert_eq!(
         files.len(),
@@ -241,8 +244,8 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
     let mut expected_total = 0usize;
     let mut actual_total = 0usize;
     let mut multiset_mismatches: Vec<String> = Vec::new();
-    let mut order_gaps_total = 0usize;
     let mut xml_violation_errors = 0usize;
+    let mut actual_order_gaps: BTreeSet<(String, usize, String)> = BTreeSet::new();
 
     for path in &files {
         let suite_name = path
@@ -256,7 +259,6 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
         let results = run_tokenizer_suite_file(path)
             .unwrap_or_else(|e| panic!("tokenizer suite {suite_name} failed to run: {e}"));
         let is_xml_violation = suite_name == "xmlViolation.test";
-        let mut suite_order_gaps = 0usize;
         for run in &results {
             expected_total += run.expected_errors.len();
             actual_total += run.actual_errors.len();
@@ -270,7 +272,11 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
                     ));
                 }
             } else if !run.errors_in_order {
-                suite_order_gaps += 1;
+                actual_order_gaps.insert((
+                    suite_name.to_string(),
+                    run.index,
+                    run.initial_state.clone(),
+                ));
             }
         }
 
@@ -281,14 +287,21 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
                 .sum::<usize>();
             continue;
         }
-        let allowed_order_gaps = allowed_failures(KNOWN_TOKENIZER_ERROR_ORDER_GAPS, suite_name);
+
+        let expected_suite: BTreeSet<(usize, String)> = KNOWN_TOKENIZER_ERROR_ORDER_GAPS
+            .iter()
+            .filter(|(name, _, _)| *name == suite_name)
+            .map(|(_, index, state)| (*index, (*state).to_string()))
+            .collect();
+        let actual_suite: BTreeSet<(usize, String)> = results
+            .iter()
+            .filter(|run| run.errors_passed && !run.errors_in_order)
+            .map(|run| (run.index, run.initial_state.clone()))
+            .collect();
         assert_eq!(
-            suite_order_gaps, allowed_order_gaps,
-            "Parse-error ORDER differs in {suite_name}: {suite_order_gaps} run(s) emit the same \
-             annotations in a different order, but the documented allowlist for this suite is \
-             {allowed_order_gaps}"
+            actual_suite, expected_suite,
+            "Parse-error ORDER differs in {suite_name}: expected documented runs {expected_suite:?}, got {actual_suite:?}"
         );
-        order_gaps_total += suite_order_gaps;
     }
 
     assert!(
@@ -318,13 +331,13 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
         "Tokenizer emitted an unexpected number of parse errors (xmlViolation.test contributes \
          {XML_VIOLATION_UNANNOTATED_ERRORS} documented unannotated input-stream error(s))"
     );
-    let documented_order_gaps: usize = KNOWN_TOKENIZER_ERROR_ORDER_GAPS
+    let expected_order_gaps: BTreeSet<(String, usize, String)> = KNOWN_TOKENIZER_ERROR_ORDER_GAPS
         .iter()
-        .map(|(_, count)| *count)
-        .sum();
+        .map(|(suite, index, state)| ((*suite).to_string(), *index, (*state).to_string()))
+        .collect();
     assert_eq!(
-        order_gaps_total, documented_order_gaps,
-        "Total documented parse-error order-only differences changed"
+        actual_order_gaps, expected_order_gaps,
+        "Total documented parse-error order-only differences changed (by identity)"
     );
     assert_eq!(
         xml_violation_errors, XML_VIOLATION_UNANNOTATED_ERRORS,

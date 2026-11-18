@@ -111,6 +111,9 @@ fn html(body: &str) -> Route {
 
 /// Serves `routes` keyed by request path for `connections` connections and returns the raw
 /// request heads captured for each connection.
+///
+/// Accepts with a deadline so a test that issues fewer requests than expected cannot hang
+/// forever; per-connection reads are also time-bounded.
 fn spawn_router(
     routes: HashMap<String, Route>,
     connections: usize,
@@ -118,11 +121,26 @@ fn spawn_router(
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback listener");
     let address = listener.local_addr().expect("listener address");
     let handle = std::thread::spawn(move || {
+        listener
+            .set_nonblocking(true)
+            .expect("set listener non-blocking");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         let mut requests = Vec::new();
         for _ in 0..connections {
-            let Ok((mut stream, _)) = listener.accept() else {
-                break;
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        if std::time::Instant::now() >= deadline {
+                            return requests;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                    Err(_) => return requests,
+                }
             };
+            let _ = stream.set_nonblocking(false);
+            let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(5)));
             let mut request = Vec::new();
             let mut buffer = [0u8; 1024];
             loop {

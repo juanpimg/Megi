@@ -1,5 +1,7 @@
 //! #1526: Content Security Policy — `script-src 'none'` blocks inline and external scripts.
 //! Self-contained loopback HTTP server serving the page with a CSP header.
+// CSP script-src enforcement requires the JavaScript engine.
+#![cfg(feature = "js")]
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
