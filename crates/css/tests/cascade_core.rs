@@ -112,3 +112,32 @@ fn style_collection_records_rules_for_each_group() {
     assert_eq!(stylesheet.rules.len(), 1);
     let _ = &collection;
 }
+
+#[test]
+fn lang_pseudo_class_matches_inherited_language_and_prefix_ranges() {
+    let mut doc = Document::new();
+    let root = doc.root();
+    let html = append(&mut doc, root, "html", &[("lang", "en-GB")]);
+    let body = append(&mut doc, html, "body", &[]);
+    let target = append(&mut doc, body, "p", &[]);
+    // `:lang(en)` matches the inherited `en-GB`; `:lang(en-GB)` matches exactly;
+    // `:lang(fr)` does not match.
+    for (selector, expected) in [
+        (":lang(en)", true),
+        (":lang(en-gb)", true),
+        (":lang(fr)", false),
+    ] {
+        assert_eq!(
+            parse_selectors(selector).matches(&doc, target),
+            expected,
+            "{selector}"
+        );
+    }
+    let styles = css::resolve_document_styles_with_viewport(
+        &doc,
+        Some(":lang(fr) { width: 1px; } :lang(en) { width: 9px; }"),
+        800.0,
+        600.0,
+    );
+    assert_eq!(styles.get(&target).expect("style").width, Length::Px(9.0));
+}
