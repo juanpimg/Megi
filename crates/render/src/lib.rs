@@ -833,6 +833,7 @@ fn render_url_inner(
         // `--base` should win over a missing `<base>`; keep the explicit value.
         base_url = override_base.clone().unwrap_or(document_url.clone());
     }
+    let csp = document_csp(&loaded.headers, &document);
 
     // Media context shared by the stylesheet cascade, the pre-script style snapshot and
     // the script `matchMedia`/viewport providers (same viewport as layout).
@@ -878,6 +879,7 @@ fn render_url_inner(
             &mut loader,
             options,
             &media_context,
+            csp.as_ref(),
             &mut pre_warnings,
         ) {
             pre_script_styles = Some(Arc::new(resolve_styles_with_state(
@@ -911,7 +913,6 @@ fn render_url_inner(
         let load_report = if script_candidates.is_empty() {
             scripts::ScriptLoadReport::default()
         } else {
-            let csp = net::csp::ContentSecurityPolicy::from_headers(&loaded.headers);
             scripts::load_scripts_with_csp(
                 &script_candidates,
                 &base_url,
@@ -954,6 +955,7 @@ fn render_url_inner(
         host_context.host_events = options.host_events.clone();
         host_context.fetch_options = loader.fetch_options().clone();
         host_context.no_network = options.no_network;
+        host_context.csp = csp.clone();
         let mut execution = scripts::execute_scripts(
             document,
             &document_url,
@@ -1046,6 +1048,7 @@ fn render_url_inner(
                 &mut loader,
                 options,
                 &media_context.clone(),
+                csp.as_ref(),
                 &mut warnings,
             )?
         }
@@ -1063,7 +1066,7 @@ fn render_url_inner(
     let styles_time = styles_start.elapsed();
 
     let fonts_start = Instant::now();
-    let loaded_webfonts = webfonts::load_webfonts_with_limits(
+    let loaded_webfonts = webfonts::load_webfonts_with_csp(
         &font_faces,
         &mut loader,
         options.no_network,
@@ -1072,12 +1075,13 @@ fn render_url_inner(
             max_web_font_bytes: options.max_web_font_bytes,
             max_total_web_font_bytes: options.max_total_web_font_bytes,
         },
+        csp.as_ref().map(|policy| (policy, &base_url)),
         &mut warnings,
     );
     let fonts_time = fonts_start.elapsed();
 
     let images_start = Instant::now();
-    let mut loaded_images = images::load_images(
+    let mut loaded_images = images::load_images_with_csp(
         &document,
         &base_url,
         &mut loader,
@@ -1089,6 +1093,7 @@ fn render_url_inner(
             max_total_decoded_pixels: options.max_total_decoded_pixels,
             max_image_dim: options.max_image_dim,
         },
+        csp.as_ref(),
         &mut warnings,
     );
     let images_time = images_start.elapsed();
@@ -1320,6 +1325,7 @@ fn render_svg_document(
         &mut loader,
         options,
         &media_context,
+        None,
         &mut warnings,
     )?;
     let styles = resolve_styles_with_state(
@@ -1607,6 +1613,8 @@ struct ImportWalk<'a> {
     loader: &'a mut ResourceLoader,
     options: &'a RenderOptions,
     media: &'a css::MediaContext,
+    base_url: &'a Url,
+    csp: Option<&'a net::csp::ContentSecurityPolicy>,
     warnings: &'a mut Vec<String>,
     visited: std::collections::HashSet<String>,
     loaded: usize,
@@ -1624,6 +1632,38 @@ struct ImportWalk<'a> {
     css_bytes: &'a mut usize,
 }
 
+/// Combines HTTP `Content-Security-Policy` headers with any `<meta http-equiv="Content-Security-Policy">`
+/// elements in `document` via CSP Level 3 policy intersection.
+fn document_csp(
+    headers: &[(String, String)],
+    document: &Document,
+) -> Option<net::csp::ContentSecurityPolicy> {
+    let mut combined = net::csp::ContentSecurityPolicy::from_headers(headers).unwrap_or_default();
+    for node_id in document.descendants(document.root()) {
+        let Some(element) = document.node(node_id).as_element() else {
+            continue;
+        };
+        if element.namespace != dom::Namespace::Html
+            || !element.local_name.eq_ignore_ascii_case("meta")
+        {
+            continue;
+        }
+        let is_csp = element
+            .get_attribute("http-equiv")
+            .is_some_and(|equiv| equiv.trim().eq_ignore_ascii_case("content-security-policy"));
+        if !is_csp {
+            continue;
+        }
+        if let Some(content) = element.get_attribute("content") {
+            let parsed = net::csp::ContentSecurityPolicy::parse(content);
+            if !parsed.is_empty() {
+                combined.merge(parsed);
+            }
+        }
+    }
+    (!combined.is_empty()).then_some(combined)
+}
+
 /// Builds the author [`css::StyleCollection`] in cascade order, resolving `@import`
 /// directives recursively (depth-limited, deduplicated, media-gated, non-fatal errors).
 /// Collects the author stylesheets and builds the cascade collection for `document`.
@@ -1636,6 +1676,7 @@ fn collect_styles(
     loader: &mut ResourceLoader,
     options: &RenderOptions,
     media: &css::MediaContext,
+    csp: Option<&net::csp::ContentSecurityPolicy>,
     warnings: &mut Vec<String>,
 ) -> Result<
     (
@@ -1650,7 +1691,7 @@ fn collect_styles(
         stylesheets::collect_stylesheets(document, base_url, media)
     });
     warnings.extend(collected.warnings.iter().cloned());
-    build_author_stylesheet_collection(&collected, base_url, loader, options, media, warnings)
+    build_author_stylesheet_collection(&collected, base_url, loader, options, media, csp, warnings)
 }
 
 /// Computes a content-and-attribute signature of stylesheet-producing elements (`<base>`,
@@ -1686,7 +1727,7 @@ fn stylesheet_signature(document: &Document) -> u64 {
             }
         } else if local.eq_ignore_ascii_case("style") {
             mix(&mut hash, b"S");
-            for attr_name in ["media", "type", "disabled"] {
+            for attr_name in ["media", "type", "disabled", "nonce"] {
                 if let Some(val) = element.get_attribute(attr_name) {
                     mix(&mut hash, attr_name.as_bytes());
                     mix(&mut hash, val.as_bytes());
@@ -1716,6 +1757,7 @@ fn build_author_stylesheet_collection(
     loader: &mut ResourceLoader,
     options: &RenderOptions,
     media: &css::MediaContext,
+    csp: Option<&net::csp::ContentSecurityPolicy>,
     warnings: &mut Vec<String>,
 ) -> Result<
     (
@@ -1742,6 +1784,8 @@ fn build_author_stylesheet_collection(
         loader,
         options,
         media,
+        base_url,
+        csp,
         warnings,
         visited: std::collections::HashSet::new(),
         loaded: 0,
@@ -1756,7 +1800,15 @@ fn build_author_stylesheet_collection(
 
     for source in &collected.sources {
         match source {
-            stylesheets::CssSource::Inline { text, .. } => {
+            stylesheets::CssSource::Inline { text, nonce, .. } => {
+                if let Some(policy) = walk.csp
+                    && !policy.allows_inline_style(nonce.as_deref(), text)
+                {
+                    walk.warnings.push(
+                        "skipping inline <style>: blocked by Content-Security-Policy".to_owned(),
+                    );
+                    continue;
+                }
                 summary.inline_stylesheets += 1;
                 if !account_css_bytes(walk.css_bytes, text.len(), options) {
                     if !summary.sheets_capped {
@@ -1791,6 +1843,14 @@ fn build_author_stylesheet_collection(
             stylesheets::CssSource::External {
                 url, crossorigin, ..
             } => {
+                if let Some(policy) = walk.csp
+                    && !policy.allows_external_style(url, base_url)
+                {
+                    walk.warnings.push(format!(
+                        "skipping stylesheet {url}: blocked by Content-Security-Policy"
+                    ));
+                    continue;
+                }
                 summary.external_stylesheets += 1;
                 let total_sheets = summary.external_stylesheets + walk.loaded;
                 if total_sheets > options.max_stylesheets {
@@ -1905,6 +1965,15 @@ fn walk_imports(
                 continue;
             }
         };
+        if let Some(policy) = walk.csp
+            && !policy.allows_external_style(&url, walk.base_url)
+        {
+            walk.skipped += 1;
+            walk.warnings.push(format!(
+                "skipping @import {url}: blocked by Content-Security-Policy"
+            ));
+            continue;
+        }
         if stylesheets::ensure_supported_scheme(&url).is_err() {
             walk.skipped += 1;
             walk.warnings

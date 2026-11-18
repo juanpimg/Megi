@@ -282,6 +282,8 @@ pub struct ScriptingHostContext {
     /// Events dispatched on `window` by the host after `load` (e.g. `hashchange`,
     /// `popstate`) so their listeners can mutate the DOM before the final re-render.
     pub host_events: Vec<String>,
+    /// Optional Content Security Policy enforced across `fetch`/`XHR`, modules, and `eval` (#1526).
+    pub csp: Option<net::csp::ContentSecurityPolicy>,
     /// Pre-script layout geometry (`NodeId → viewport rects`) installed into the JS
     /// runtime so scripts can measure the initial layout (viewport coords, scroll = 0).
     #[cfg(feature = "js")]
@@ -310,6 +312,7 @@ impl ScriptingHostContext {
             no_network: false,
             host_events: Vec::new(),
             enable_workers: true,
+            csp: None,
             #[cfg(feature = "js")]
             layout: None,
             #[cfg(feature = "js")]
@@ -329,6 +332,7 @@ impl ScriptingHostContext {
             no_network: false,
             host_events: Vec::new(),
             enable_workers: true,
+            csp: None,
             #[cfg(feature = "js")]
             layout: None,
             #[cfg(feature = "js")]
@@ -818,6 +822,9 @@ pub fn execute_scripts(
     {
         warnings.push(format!("invalid import map: {error}"));
     }
+    if let Some(policy) = &host.csp {
+        runtime.set_allow_eval(policy.allows_eval());
+    }
 
     // Browser-facing host providers (R96): getComputedStyle reads the pre-script snapshot,
     // matchMedia evaluates with the render's MediaContext (same viewport as the cascade),
@@ -865,6 +872,7 @@ pub fn execute_scripts(
                 options.mixed_content = Some(net::MixedContentPolicy::new(base.scheme(), true));
             }
             let no_network = host.no_network;
+            let fetch_csp = host.csp.clone();
             // `fetch` volume is budgeted per page: the per-call loader caps bound one response,
             // but a script could still issue thousands of calls (#660).
             let fetch_calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -891,6 +899,13 @@ pub fn execute_scripts(
                 };
                 let url = Url::parse(&request.url)
                     .map_err(|error| js::JsError::Runtime(format!("fetch URL: {error}")))?;
+                if let Some(policy) = &fetch_csp
+                    && !policy.allows_connect(&url, &base)
+                {
+                    return Err(js::JsError::Runtime(format!(
+                        "Content-Security-Policy: connect-src blocks {url}"
+                    )));
+                }
                 if matches!(url.scheme(), Scheme::Http | Scheme::Https) && no_network {
                     return Err(js::JsError::Runtime(
                         "network disabled (--no-network)".to_string(),
@@ -1128,6 +1143,8 @@ pub fn execute_scripts(
         module_loader_inner.set_mixed_content_context(Some(document_url.scheme()));
         let module_loader = Arc::new(Mutex::new(module_loader_inner));
         let no_network = host.no_network;
+        let module_csp = host.csp.clone();
+        let module_doc_url = document_url.clone();
         let max_module_bytes = limits.max_script_bytes;
         let total_module_bytes = Arc::new(Mutex::new(0usize));
         let max_total_module_bytes = limits.max_total_bytes;
@@ -1147,6 +1164,13 @@ pub fn execute_scripts(
                 let url = Url::parse(url_str).map_err(|error| {
                     js::JsError::ModuleNotFound(format!("invalid module URL {url_str}: {error}"))
                 })?;
+                if let Some(policy) = &module_csp
+                    && !policy.allows_external(&url, &module_doc_url)
+                {
+                    return Err(js::JsError::ModuleNotFound(format!(
+                        "Content-Security-Policy blocks module {url}"
+                    )));
+                }
                 if no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
                     return Err(js::JsError::ModuleNotFound(format!(
                         "cannot load module {url}: --no-network is set"
