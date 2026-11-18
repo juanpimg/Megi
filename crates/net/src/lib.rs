@@ -179,6 +179,7 @@ pub use integrity::{
 };
 pub use loader::{HEURISTIC_FRESHNESS, Resource, ResourceLoader};
 pub use mime::{MimeHint, resolve_content_type, sniff};
+pub use mixed_content::{MixedContentAction, MixedContentPolicy};
 pub use proxy::{ProxyConfig, proxy_authorization, proxy_authorization_for};
 pub use psl::{
     is_public_suffix, normalize_host, registrable_domain, same_origin, same_site, site_for_url,
