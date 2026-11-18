@@ -1,84 +1,4 @@
-//! End-to-end tests for the Phase 4 `HTML → styles → layout → display list →
-//! PNG` pipeline (WP-4.1).
-//!
-//! Rendering path under test (same one as `examples/html_to_png.rs`):
-//!
-//! ```text
-//! megi_html::parse_document
-//!   ├─ megi_paint::collect_style_text
-//!   ├─ megi_css::resolve_document_styles
-//!   ├─ megi_layout::layout_document
-//!   ├─ megi_paint::build_display_list
-//!   ├─ megi_paint::rasterize_display_list
-//!   └─ megi_paint::Pixmap::to_png
-//! ```
-
-mod common;
-
-use std::fs;
-use std::path::PathBuf;
-
-use common::{ihdr_fields, parse_png};
-use megi_css::Color;
-use megi_layout::{Rect, TextMeasurer};
-use megi_paint::{
-    DisplayItem, DisplayList, Pixmap, RenderConfig, build_display_list, rasterize_display_list,
-    rasterize_display_list_with_config, resolve_embedded_styles,
-};
-
-const VIEWPORT_WIDTH: u32 = 800;
-const VIEWPORT_HEIGHT: u32 = 600;
-
-/// Directory holding the versioned Phase 4 fixtures.
-fn fixture_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/phase4")
-}
-
-/// Loads a fixture by file name (e.g. `basic.html`).
-fn fixture(name: &str) -> String {
-    let path = fixture_dir().join(name);
-    fs::read_to_string(&path).unwrap_or_else(|error| {
-        panic!("cannot read fixture {}: {error}", path.display());
-    })
-}
-
-/// Runs the full pipeline for an in-memory HTML document.
-fn render(source: &str, width: u32, height: u32) -> (Pixmap, DisplayList) {
-    let doc = megi_html::parse_document(source, false);
-    let styles = resolve_embedded_styles(&doc);
-    let viewport = Rect::new(0.0, 0.0, width as f32, height as f32);
-    // Real typography with the deterministic bundled font (WP-4.4 phase 2).
-    let measurer = megi_layout::FontTextMeasurer::bundled().expect("bundled fonts must load");
-    let layout_root =
-        megi_layout::layout_document_with_measurer(&doc, &styles, viewport, &measurer)
-            .expect("layout must produce a root box");
-    let display_list = build_display_list(&layout_root, viewport);
-    let pixmap = rasterize_display_list(&display_list, width, height);
-    (pixmap, display_list)
-}
-
-/// Returns the first display item matching `predicate`.
-fn find_item(
-    display_list: &DisplayList,
-    predicate: impl Fn(&DisplayItem) -> bool,
-) -> Option<&DisplayItem> {
-    display_list.iter().find(|item| predicate(item))
-}
-
-/// Counts `SolidColor` items painted with `color` that cover the whole viewport.
-fn count_canvas_items(display_list: &DisplayList, color: Color, width: u32, height: u32) -> usize {
-    display_list
-        .iter()
-        .filter(|item| {
-            matches!(
-                item,
-                DisplayItem::SolidColor { rect, color: item_color }
-                    if *item_color == color
-                        && *rect == Rect::new(0.0, 0.0, width as f32, height as f32)
-            )
-        })
-        .count()
-}
+use super::support::*;
 
 #[test]
 fn test_render_basic_html_produces_expected_canvas_size() {
@@ -356,7 +276,7 @@ fn test_render_basic_html_produces_valid_png() {
         parsed.raw.len(),
         VIEWPORT_HEIGHT as usize * (1 + VIEWPORT_WIDTH as usize * 4)
     );
-    let decoded = common::rgba_from_scanlines(&parsed.raw, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    let decoded = rgba_from_scanlines(&parsed.raw, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
     assert_eq!(
         decoded,
         pixmap.to_rgba_bytes(),
@@ -386,7 +306,7 @@ fn test_fixture_png_is_compressed_below_400_kb() {
     let parsed = parse_png(&png);
     let (width, height, _, _) = ihdr_fields(&parsed);
     assert_eq!(
-        common::rgba_from_scanlines(&parsed.raw, width, height),
+        rgba_from_scanlines(&parsed.raw, width, height),
         pixmap.to_rgba_bytes()
     );
 }
@@ -426,134 +346,5 @@ fn test_render_basic_html_png_matches_golden() {
             golden.len(),
             differing
         );
-    }
-}
-
-/// Recursively collects text fragments of a laid-out tree: `(text, baseline)`.
-fn collect_text_baselines(layout_box: &megi_layout::LayoutBox, out: &mut Vec<(String, f32, f32)>) {
-    if let megi_layout::BoxType::TextNode(text) = &layout_box.box_type {
-        out.push((
-            text.clone(),
-            layout_box.baseline,
-            layout_box.dimensions.content.y,
-        ));
-    }
-    for child in &layout_box.children {
-        collect_text_baselines(child, out);
-    }
-}
-
-#[test]
-fn test_real_font_glyphs_are_antialiased_and_baseline_aware() {
-    // 32px black text on white, no margins: 'H' cap-height ink must start well
-    // below the top of the text box (the old 8x8 stub started at row 0).
-    let source = "<!doctype html><html><body style=\"margin:0;padding:0;color:#000;font-family:sans-serif;font-size:32px\"><p style=\"margin:0\">HH</p></body></html>";
-    let (pixmap, display_list) = render(source, 240, 120);
-
-    let (rect, baseline) = find_item(
-        &display_list,
-        |item| matches!(item, DisplayItem::Text { text, .. } if text == "HH"),
-    )
-    .map(|item| match item {
-        DisplayItem::Text { rect, baseline, .. } => (*rect, *baseline),
-        _ => unreachable!(),
-    })
-    .expect("expected a Text display item for HH");
-
-    // Real metrics: ascent/size for DejaVu Sans is ~0.928em.
-    assert!(
-        baseline > 0.8 * 32.0,
-        "baseline {baseline} must come from real ascent metrics"
-    );
-
-    let mut inked = 0u32;
-    let mut antialiased = 0u32;
-    let mut top_ink = u32::MAX;
-    let x0 = rect.x.max(0.0) as u32;
-    let y0 = rect.y.max(0.0) as u32;
-    let x1 = (rect.x + rect.width).min(pixmap.width as f32) as u32;
-    let y1 = (rect.y + rect.height).min(pixmap.height as f32) as u32;
-    for y in y0..y1 {
-        for x in x0..x1 {
-            let pixel = pixmap.pixel(x, y);
-            if pixel != Color::WHITE {
-                inked += 1;
-                top_ink = top_ink.min(y);
-                if pixel.r > 0 && pixel.r < 200 {
-                    antialiased += 1;
-                }
-            }
-        }
-    }
-    assert!(inked > 20, "expected real glyph coverage, got {inked} px");
-    assert!(
-        antialiased > 0,
-        "real rasterizer must produce antialiased (partial coverage) pixels"
-    );
-    assert!(
-        top_ink >= y0 + 2,
-        "glyph ink starts at row {top_ink} (text box top {y0}); a real 'H' leaves \
-         ascent-cap-height whitespace above it, the old stub did not"
-    );
-}
-
-#[test]
-fn test_text_baseline_is_propagated_per_line() {
-    let source = "<!doctype html><html><body style=\"margin:0;color:#000;font-family:sans-serif;font-size:16px\"><p style=\"margin:0\">one<br>two</p></body></html>";
-    let doc = megi_html::parse_document(source, false);
-    let styles = resolve_embedded_styles(&doc);
-    let viewport = Rect::new(0.0, 0.0, 200.0, 200.0);
-    let measurer = megi_layout::FontTextMeasurer::bundled().expect("bundled fonts");
-    let layout_root =
-        megi_layout::layout_document_with_measurer(&doc, &styles, viewport, &measurer)
-            .expect("layout root");
-    let mut fragments = Vec::new();
-    collect_text_baselines(&layout_root, &mut fragments);
-    assert_eq!(fragments.len(), 2, "two lines => two text fragments");
-    let metrics = measurer.font_metrics("sans-serif", 16.0, None);
-    for (text, baseline, _y) in &fragments {
-        assert!(
-            (baseline - metrics.ascent).abs() <= 0.01,
-            "fragment {text:?} baseline {baseline} must equal ascent {}",
-            metrics.ascent
-        );
-    }
-    // Absolute baseline positions differ by one line height.
-    let metrics_line = measurer.font_metrics("sans-serif", 16.0, None);
-    let absolute: Vec<f32> = fragments.iter().map(|(_, b, y)| y + b).collect();
-    assert!(
-        (absolute[1] - absolute[0] - metrics_line.line_height).abs() <= 0.01,
-        "line baselines must advance by line_height {}: {:?}",
-        metrics_line.line_height,
-        absolute
-    );
-}
-
-#[test]
-fn test_render_is_byte_deterministic_across_runs() {
-    let source = fixture("basic.html");
-    let (first, _) = render(&source, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
-    let (second, _) = render(&source, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
-    assert_eq!(
-        first.to_rgba_bytes(),
-        second.to_rgba_bytes(),
-        "two renders of the same input must be byte-identical"
-    );
-}
-
-#[test]
-fn test_bold_text_uses_bold_face_and_has_baseline() {
-    let source = fixture("basic.html");
-    let (_pixmap, display_list) = render(&source, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
-    let bold = find_item(
-        &display_list,
-        |item| matches!(item, DisplayItem::Text { text, font_weight, .. } if text.contains("propagated") && *font_weight == 700),
-    );
-    assert!(
-        bold.is_some(),
-        "the .accent span must paint with font-weight 700 from the bold face"
-    );
-    if let Some(DisplayItem::Text { baseline, rect, .. }) = bold {
-        assert!(*baseline > 0.0 && *baseline < rect.height);
     }
 }
