@@ -321,6 +321,13 @@ inline_handler_accessors!(
     ),
     (inline_onfocus_get, inline_onfocus_set, "onfocus", "focus"),
     (inline_onblur_get, inline_onblur_set, "onblur", "blur"),
+    (
+        inline_oninvalid_get,
+        inline_oninvalid_set,
+        "oninvalid",
+        "invalid"
+    ),
+    (inline_onreset_get, inline_onreset_set, "onreset", "reset"),
 );
 
 /// Inline handler accessor pairs shared with node/document wrappers.
@@ -681,6 +688,21 @@ pub(crate) fn dispatch_event_type(
         cancelable,
         JsValue::undefined(),
     );
+    let args = [event];
+    let result = dispatch_event(target, &args, context)?;
+    Ok(result.to_boolean())
+}
+
+/// Dispatches a cancelable, bubbling `submit` event with an optional `submitter` property (#1538).
+pub(crate) fn dispatch_submit_event(
+    target: &JsValue,
+    submitter: JsValue,
+    context: &mut Context,
+) -> JsResult<bool> {
+    let event = build_event(context, "submit", true, true, JsValue::undefined());
+    if let Some(obj) = event.as_object() {
+        let _ = obj.set(js_string!("submitter"), submitter, false, context);
+    }
     let args = [event];
     let result = dispatch_event(target, &args, context)?;
     Ok(result.to_boolean())
